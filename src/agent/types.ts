@@ -404,6 +404,8 @@ export interface AgentWorkspaceMutationResult {
 }
 
 export interface AgentToolBridgeRequest {
+  /** Host-only config binding, never accepted from bridge JSON/model arguments. */
+  imageProviderBinding?: { provider: 'novelai' | 'openai-images'; revision: string };
   /** In-process cancellation only; never accepted from bridge JSON. */
   signal?: AbortSignal;
   tool: string;

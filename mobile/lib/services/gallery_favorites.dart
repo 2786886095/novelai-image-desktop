@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'online_gallery_service.dart';
@@ -146,8 +147,9 @@ class GalleryFavoritesStore extends ChangeNotifier {
   Future<void> _writes = Future.value();
   Future<void> load() => _load ??= () async {
         try {
-          items = parseFavorites((await SharedPreferences.getInstance())
-              .getString(galleryFavoritesKey));
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.reload();
+          items = parseFavorites(prefs.getString(galleryFavoritesKey));
           error = null;
         } catch (e) {
           error = e;
@@ -156,11 +158,68 @@ class GalleryFavoritesStore extends ChangeNotifier {
       }();
   Future<void> toggle(GalleryFavorite item) {
     final result = _writes.catchError((_) {}).then((_) async {
-      await load();
-      if (error != null) throw error!;
+      await _refresh();
       final next = items.any((i) => i.key == item.key)
           ? items.where((i) => i.key != item.key).toList()
           : [item, ...items];
+      final ok = await (await SharedPreferences.getInstance()).setString(
+          galleryFavoritesKey,
+          jsonEncode(
+              {'version': 1, 'items': next.map((i) => i.toJson()).toList()}));
+      if (!ok) throw StateError('Favorites save failed');
+      items = next;
+      notifyListeners();
+    });
+    _writes = result;
+    return result;
+  }
+
+  Future<void> _refresh() async {
+    await load();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Legacy SharedPreferences updates its in-memory cache before the
+      // platform acknowledges a write. Never treat that cache as persistence.
+      await prefs.reload();
+      final before = revision;
+      items = parseFavorites(prefs.getString(galleryFavoritesKey));
+      error = null;
+      if (before != revision) notifyListeners();
+    } catch (e) {
+      error = e;
+      rethrow;
+    }
+  }
+
+  String get revision => sha256
+      .convert(utf8.encode(jsonEncode(items.map((i) => i.toJson()).toList())))
+      .toString();
+  Future<Map<String, dynamic>> snapshot() {
+    final result = _writes.catchError((_) {}).then((_) async {
+      await _refresh();
+      return <String, dynamic>{
+        'revision': revision,
+        'items': items.map((i) => {...i.toJson(), 'key': i.key}).toList()
+      };
+    });
+    _writes = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return result;
+  }
+
+  Future<void> mutate(
+      {required String expectedRevision,
+      GalleryFavorite? add,
+      String? removeKey}) {
+    final result = _writes.catchError((_) {}).then((_) async {
+      await _refresh();
+      if (revision != expectedRevision) throw StateError('收藏已变化，请重新读取');
+      if (add != null && items.any((i) => i.key == add.key)) return;
+      if (removeKey != null && !items.any((i) => i.key == removeKey)) {
+        throw StateError('在线书签不存在');
+      }
+      final next = add != null
+          ? [add, ...items]
+          : items.where((i) => i.key != removeKey).toList();
       final ok = await (await SharedPreferences.getInstance()).setString(
           galleryFavoritesKey,
           jsonEncode(

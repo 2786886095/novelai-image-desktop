@@ -528,3 +528,68 @@ it('audits typed mixed ratio and preserves explicit facts before returning text;
  axiosMock.post.mockResolvedValue({data:{choices:[{message:{content:JSON.stringify(good)},finish_reason:'stop'}]}});
  expect((await convertPromptText('白发女性','mixed')).ok).toBe(false);expect(axiosMock.post).toHaveBeenCalledTimes(3);
 });
+
+describe('reverse follows live saved templates',()=>{
+ const envelope=()=>({segments:[{units:[...Array.from({length:42},(_,i)=>({kind:'tag',text:i===0?'1girl':'fixture tag '+i})),...Array.from({length:18},(_,i)=>({kind:'natural',text:'her visible sleeve detail number '+i}))]}]});
+ const response=(content:string)=>({data:{choices:[{message:{content},finish_reason:'stop'}]}});
+ beforeEach(()=>{
+  axiosMock.post.mockReset();settingsRef.current={visionApiUrl:'https://example.test/v1',visionApiKey:'test-only',visionApiModel:'test',reversePromptTemplates:{tags:'',natural:'',mixed:'SAVED V5 有效语义单元 50–150；Tag 65–75%'},reversePromptTemplatesV45:{tags:'',natural:'CUSTOM V45 NATURAL {{input}}',mixed:''}};
+ });
+ it('audits both known-character variants and retries with the same image',async()=>{
+  const {reversePromptImage}=await import('./nai');const good=envelope();
+  axiosMock.post.mockResolvedValueOnce(response(JSON.stringify({namePrompt:good,featurePrompt:{segments:[{units:[{kind:'tag',text:'1girl'}]}]}})))
+   .mockResolvedValueOnce(response(JSON.stringify({namePrompt:good,featurePrompt:good})));
+  const result=await reversePromptImage(Buffer.from('fixture-image').toString('base64'),'mixed','full','only visible details',true,'v5');
+  expect(result.ok).toBe(true);expect(result.variants?.namePrompt.split(',')).toHaveLength(60);expect(result.variants?.featurePrompt.split(',')).toHaveLength(60);
+  expect(axiosMock.post).toHaveBeenCalledTimes(2);
+  const first=axiosMock.post.mock.calls[0][1],second=axiosMock.post.mock.calls[1][1];
+  expect(first.messages[0].content).toContain('SAVED V5');expect(first.max_tokens).toBeGreaterThanOrEqual(7000);
+  expect(second.messages[1].content[0]).toEqual(first.messages[1].content[0]);
+ });
+ it('stops after three invalid responses instead of returning a short success',async()=>{
+  const {reversePromptImage}=await import('./nai');axiosMock.post.mockResolvedValue(response('1girl, solo, cosplay'));
+  const result=await reversePromptImage(Buffer.from('fixture-image').toString('base64'),'mixed','full','',true,'v5');
+  expect(result.ok).toBe(false);expect(result.prompt).toBeUndefined();expect(axiosMock.post).toHaveBeenCalledTimes(3);
+ });
+ it('uses the chosen V4.5 natural template without imposing the V5 contract',async()=>{
+  const {reversePromptImage}=await import('./nai');axiosMock.post.mockResolvedValue(response('A woman stands beside the window. Her left hand rests on the frame while she looks towards the viewer.'));
+  const result=await reversePromptImage(Buffer.from('fixture-image').toString('base64'),'natural','full','visible scene',false,'v4.5');
+  expect(result.ok).toBe(true);expect(axiosMock.post.mock.calls[0][1].messages[0].content).toContain('CUSTOM V45 NATURAL');
+  expect(axiosMock.post.mock.calls[0][1].messages[0].content).not.toContain('SAVED V5');
+ });
+});
+
+it('legacy reverse callers without a version follow the live software selection',async()=>{
+ const {reversePromptImage}=await import('./nai');axiosMock.post.mockReset();
+ settingsRef.current={visionApiUrl:'https://example.test/v1',visionApiKey:'fixture',visionApiModel:'fixture',reversePromptTemplateVersion:'v4.5',reversePromptTemplatesV45:{tags:'SAVED V45 TAGS',natural:'',mixed:''},reversePromptTemplates:{tags:'WRONG V5',natural:'',mixed:''}};
+ axiosMock.post.mockResolvedValue({data:{choices:[{message:{content:'1girl, solo'},finish_reason:'stop'}]}});
+ expect((await reversePromptImage(Buffer.from('fixture').toString('base64'),'tags')).ok).toBe(true);
+ expect(axiosMock.post.mock.calls[0][1].messages[0].content).toContain('SAVED V45 TAGS');
+ settingsRef.current.reversePromptTemplatesV45!.tags='EDITED V45';
+ await reversePromptImage(Buffer.from('fixture').toString('base64'),'tags');
+ expect(axiosMock.post.mock.calls[1][1].messages[0].content).toContain('EDITED V45');
+});
+
+describe('prompt assistant derives selected conversion template',()=>{
+ beforeEach(()=>{axiosMock.post.mockReset();settingsRef.current={convertApiUrl:'https://example.test/v1',convertApiKey:'fixture',convertApiModel:'fixture',convertPromptTemplates:{tags:'CUSTOM V5 TAGS',natural:'',mixed:''},convertPromptTemplatesV45:{tags:'CUSTOM V45 TAGS',natural:'',mixed:''}};});
+ it('adds editing instructions to the selected live template without changing settings',async()=>{
+  const {convertPromptText}=await import('./nai');const before=JSON.stringify(settingsRef.current);
+  axiosMock.post.mockResolvedValue({data:{choices:[{message:{content:'1girl, white hair, rain'},finish_reason:'stop'}]}});
+  const r=await convertPromptText('1girl, white hair','tags',false,'v4.5',{kind:'custom',instruction:'增加雨夜街道背景'});
+  expect(r.ok).toBe(true);const messages=axiosMock.post.mock.calls[0][1].messages;
+  expect(messages[0].content).toContain('CUSTOM V45 TAGS');expect(messages[0].content).toContain('现有正面提示词的编辑助手');
+  expect(messages[1].content).toContain('增加雨夜街道背景');expect(messages[1].content).toContain('1girl, white hair');expect(JSON.stringify(settingsRef.current)).toBe(before);
+ });
+ it('invalid assistant input makes no network request',async()=>{
+  const {convertPromptText}=await import('./nai');expect((await convertPromptText('','tags',false,'v5',{kind:'optimize',instruction:''})).ok).toBe(false);expect(axiosMock.post).not.toHaveBeenCalled();
+ });
+ it('assistant still enforces the mixed count/ratio contract and explicit revised facts',async()=>{
+  const {convertPromptText}=await import('./nai');settingsRef.current.convertPromptTemplates!.mixed='有效语义单元 50–150；Tag 65–75%';
+  const envelope={segments:[{units:[...Array.from({length:42},(_,i)=>({kind:'tag',text:i===0?'black hair':'tag '+i})),...Array.from({length:18},(_,i)=>({kind:'natural',text:'her left arm rests gently '+i}))]}]};
+  axiosMock.post.mockResolvedValue({data:{choices:[{message:{content:JSON.stringify(envelope)},finish_reason:'stop'}]}});
+  const r=await convertPromptText('白发女性','mixed',false,'v5',{kind:'custom',instruction:'把发色改为黑发'});
+  expect(r.ok).toBe(true);expect(r.validation).toEqual({total:60,tags:42,natural:18,tagPercent:70});
+  axiosMock.post.mockClear();axiosMock.post.mockResolvedValue({data:{choices:[{message:{content:'short'},finish_reason:'stop'}]}});
+  expect((await convertPromptText('white hair','mixed',false,'v5',{kind:'optimize',instruction:''})).ok).toBe(false);expect(axiosMock.post).toHaveBeenCalledTimes(3);
+ });
+});

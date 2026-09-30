@@ -1,7 +1,24 @@
+import {PROMPT_OPTIMIZE_TEMPLATE, PROMPT_CUSTOM_TEMPLATE} from "./data/prompt-edit-templates";
+import {workflowText} from './workflow-text';
+import {focusedInpaintPlan} from './focused-inpaint';
+import './interaction-refinement.css';
+import {ImageFavoriteButton} from './components/ImageFavoriteButton';
+import {useStudioRegionMotion} from './use-studio-motion';
+import {InpaintPromptSource} from './components/InpaintPromptSource';
+import {PromptWeightPanel} from './components/PromptWeightPanel';
+import {takeRequestedSettingsSection} from './prompt-ui-settings';
+import {PromptToolsPopover} from './components/PromptToolsPopover';
+import {SlidingPromptToolbar,PromptResizeHandle} from './components/PromptEditorChrome';
+import {PromptAssistant} from './components/PromptAssistant';
+import {usePromptHistory} from './use-prompt-history';
+import {promptEditorText} from './prompt-editor-text';
+import type {PromptEditRequest} from './prompt-assistant';
+import './prompt-editor.css';
+import {CompactIconButton,FurryModeSwitch,ResolutionPicker,CapsuleEditor} from "./components/CompactPromptControls";
 import {useFeatureText} from "./feature-i18n";
 import {localizeStoreMessage} from './store-i18n';
 import {CompletionSoundSettings} from "./components/CompletionSoundSettings";
-import StyleLibrary, {StyleSortSelect,styleText} from "./StyleLibrary";
+import StyleLibrary from "./StyleLibrary";
 import {sortStyles} from "./style-library";
 import {countStyleUse} from "./style-library-client";
 import { planUpscale } from "./upscale-plan";
@@ -58,7 +75,6 @@ import {
   type NormalizeOptions,
 } from "./prompt-normalize";
 import {
-  COMIC_ANALYZE_SYSTEM_PROMPT,
   CONVERT_SYSTEM_PROMPTS,
   SCOPED_REVERSE_SYSTEM_PROMPTS,
 } from "./data/prompt-templates";
@@ -73,6 +89,8 @@ import {CharacterPresetControls} from './components/CharacterPresetControls';
 import { Icon, type IconName } from "./components/icons";
 import { AppMenuBar, AppTitleBar } from "./app/AppChrome";
 import AppTabBar from "./app/AppTabBar";
+import {WorksLibrary} from "./components/WorksLibrary";
+import {GalleryFavoritesLibrary} from "./components/GalleryFavorites";
 import { isActiveTab } from "./app/navigation";
 import { QualityPresetControl } from "./components/QualityPresetControl";
 import { PositivePromptPresetControl } from "./PositivePromptPresets";
@@ -758,8 +776,7 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
           <Button
             onClick={() => {
               for (const [key, value] of Object.entries(DEFAULT_PARAMS) as [keyof GenerateParams, any][]) {
-                if (key === "stylePrompt" && settings?.lockStylePrompt) continue;
-                if (key === "negativePrompt" && settings?.lockNegativePrompt) continue;
+                if (key === "stylePrompt" || key === "negativePrompt") continue;
                 setParam(key, value);
               }
             }}
@@ -1437,7 +1454,7 @@ export function StylePresetImagesModal({
 }
 
 // ── Prompt + Params ───────────────────────────────────────────────────────────
-function PromptAndParams({
+export function PromptAndParams({
   includeModel = true,
   imageToImage = false,
   promptOverride,
@@ -1517,9 +1534,20 @@ function PromptAndParams({
   // insert, weight adjust, translate, normalize) — negative prompt is always
   // shared, positive prompt goes through the override when present.
   function setPromptValue(value: string) {
-    if (promptKey === "positivePrompt") setPositivePromptValue(value);
-    else setParam("negativePrompt", value);
+    if (promptKey === "positivePrompt") positiveHistory.commit(value);
+    else negativeHistory.commit(value);
   }
+  const positiveHistory=usePromptHistory(effectivePositivePrompt,setPositivePromptValue,promptOverride?'inpaint-positive':'generate-positive');
+  const negativeHistory=usePromptHistory(params.negativePrompt,value=>setParam('negativePrompt',value),'negative');
+  const promptHistory=promptTab==='positive'?positiveHistory:negativeHistory;
+  const editorText=promptEditorText(settings?.language);
+  const [assistantKind,setAssistantKind]=useState<PromptEditRequest['kind']|null>(null);
+  const [showPromptMore,setShowPromptMore]=useState(false);
+  const latestPromptValues=useRef({positivePrompt:effectivePositivePrompt,negativePrompt:params.negativePrompt});
+  latestPromptValues.current={positivePrompt:effectivePositivePrompt,negativePrompt:params.negativePrompt};
+  const assistantMode=settings?.convertMode??'mixed';
+  const assistantVersion=settings?.convertPromptTemplateVersion??'v5';
+  const assistantContext=JSON.stringify([!!promptOverride,params.model,assistantMode,assistantVersion,settings?.convertPromptTemplates,settings?.convertPromptTemplatesV45,settings?.convertSystemPrompt,settings?.promptOptimizeTemplate,settings?.promptAssistantTemplate]);
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
   const stylePromptPresets: StylePromptPreset[] = settings?.stylePromptPresets ?? [];
   const stylePreviewRecoverySignature = stylePromptPresets
@@ -1610,7 +1638,7 @@ function PromptAndParams({
     const current = effectivePositivePrompt.trim();
     const parts = [tpl.prefix.trim(), current, tpl.suffix.trim()].filter(Boolean);
     setPositivePromptValue(parts.join(", "));
-    if (tpl.negativePrompt.trim() && !(settings?.lockNegativePrompt ?? false)) {
+    if (tpl.negativePrompt.trim()) {
       setParam("negativePrompt", tpl.negativePrompt.trim());
     }
     setToast(f("prompt.templateApplied", { name: tpl.name }));
@@ -1708,7 +1736,7 @@ function PromptAndParams({
     if (!preset) return;
     setStylePresetMenuOpen(false);
     setHoveredStylePresetId("");
-    setLockedAwareParam("stylePrompt", preset.prompt);
+    setPromptField("stylePrompt", preset.prompt);
     await countStyleUse(preset.id);
     setToast(f("prompt.stylePresetApplied", { name: preset.name }));
   }
@@ -1951,34 +1979,12 @@ function PromptAndParams({
     setToast(mode === "furry" ? t("prompt.modeFurryToast") : t("prompt.modeAnimeToast"));
   }
 
-  // Save + lock the style / negative prompt so it persists and survives
-  // resets / template applies.
-  async function toggleLock(which: "style" | "neg") {
-    const lockKey = which === "style" ? "lockStylePrompt" : "lockNegativePrompt";
-    const savedKey = which === "style" ? "savedStylePrompt" : "savedNegativePrompt";
-    const next = !(settings?.[lockKey] ?? false);
-    if (next) {
-      await window.naiDesktop.setSetting(savedKey, which === "style" ? params.stylePrompt : params.negativePrompt);
-    }
-    await window.naiDesktop.setSetting(lockKey, next);
-    await refreshSettings();
-    setToast(next ? t("prompt.lockedToast") : t("prompt.unlockedToast"));
+  // Persisted by the store for every edit; no separate locked snapshot.
+  function setPromptField(key: "stylePrompt" | "positivePrompt" | "negativePrompt", value: string) {
+    if (key === "positivePrompt") positiveHistory.commit(value);
+    else if(key === "negativePrompt") negativeHistory.commit(value);
+    else setParam(key, value);
   }
-  // Keep the saved copy in sync while a field is locked.
-  function setLockedAwareParam(key: "stylePrompt" | "positivePrompt" | "negativePrompt", value: string) {
-    if (key === "positivePrompt") {
-      setPositivePromptValue(value);
-      return;
-    }
-    setParam(key, value);
-    if (key === "stylePrompt" && settings?.lockStylePrompt) {
-      void window.naiDesktop.setSetting("savedStylePrompt", value);
-    } else if (key === "negativePrompt" && settings?.lockNegativePrompt) {
-      void window.naiDesktop.setSetting("savedNegativePrompt", value);
-    }
-  }
-  const styleLocked = settings?.lockStylePrompt ?? false;
-  const negLocked = settings?.lockNegativePrompt ?? false;
 
   async function translatePrompt() {
     const text = promptValue.trim();
@@ -1988,6 +1994,10 @@ function PromptAndParams({
     }
     setTranslating(true);
     const original = promptValue;
+    function applyTranslation(next:string) {
+      if(latestPromptValues.current[promptKey]!==original){setToast(editorText.stale);return false;}
+      setPromptValue(next);return true;
+    }
     try {
       if (settings?.translateProvider === "ai") {
         const result = await window.naiDesktop.translate(text, "en");
@@ -1996,7 +2006,7 @@ function PromptAndParams({
           return;
         }
         const translated = result.text.trim();
-        setPromptValue(translated + (translated.endsWith(",") ? " " : ", "));
+        if(!applyTranslation(translated + (translated.endsWith(",") ? " " : ", ")))return;
         setTranslateBackup((backup) => ({ ...backup, [promptKey]: original }));
         setToast(t("prompt.translateDone"));
         return;
@@ -2025,7 +2035,7 @@ function PromptAndParams({
         return;
       }
       const joined = translated.filter(Boolean).join(", ");
-      setPromptValue(joined + (joined.endsWith(",") ? " " : ", "));
+      if(!applyTranslation(joined + (joined.endsWith(",") ? " " : ", ")))return;
       setTranslateBackup((b) => ({ ...b, [promptKey]: original }));
       setToast(failed ? t("prompt.translatePartialFailed") : t("prompt.translateDone"));
     } catch {
@@ -2058,39 +2068,24 @@ function PromptAndParams({
   return (
     <>
       {includeModel && (
-        <label className="field">
-          <span>{generateText.prompt.model}</span>
-          <div className="model-mode-switch">
-            <button type="button" className={clsx(modelMode === "anime" && "active")} onClick={() => void switchModelMode("anime")}>
-              <Icon name="palette" /> {generateText.prompt.animeMode}
-            </button>
-            <button type="button" className={clsx(modelMode === "furry" && "active")} onClick={() => void switchModelMode("furry")}>
-              <Icon name="paw" /> {generateText.prompt.furryMode}
-            </button>
-          </div>
+        <div className="field">
+          <div className="compact-model-label"><span>{generateText.prompt.model}</span><FurryModeSwitch checked={modelMode === "furry"} label={generateText.prompt.furryMode} onChange={checked=>switchModelMode(checked?"furry":"anime").catch(error=>setToast(String(error)))}/></div>
           <SelectMenuCompat value={params.model} onChange={(e) => setParam("model", e.target.value as GenerateParams["model"])}>
             {NAI_MODELS.filter((m) => supportsNAIModelMode(m.value, modelMode)).map((m) => (
               <option value={m.value} key={m.value}>{localizedDesktopOptionLabel(settings?.language, m.value, m.label)}</option>
             ))}
           </SelectMenuCompat>
-        </label>
+        </div>
       )}
       <label className="field">
         <span className="field-label-row">
           {generateText.prompt.stylePrompt}
-          <button
-            type="button"
-            className={clsx("lock-btn", styleLocked && "locked")}
-            title={styleLocked ? generateText.prompt.lockSavedTitle : generateText.prompt.lockCurrentTitle}
-            onClick={() => void toggleLock("style")}
-          >
-            {styleLocked ? <><Icon name="lock" /> {generateText.prompt.locked}</> : <><Icon name="unlock" /> {generateText.prompt.lock}</>}
-          </button>
+
         </span>
         <input
           value={params.stylePrompt}
           placeholder={generateText.prompt.stylePlaceholder}
-          onChange={(e) => setLockedAwareParam("stylePrompt", e.target.value)}
+          onChange={(e) => setPromptField("stylePrompt", e.target.value)}
         />
       </label>
       <div className="style-preset-row">
@@ -2141,8 +2136,6 @@ function PromptAndParams({
             }}
           >
             <div className="style-preset-menu-list">
-              <StyleSortSelect/>
-              <Button onClick={()=>{setStylePresetMenuOpen(false);useAppStore.getState().setActiveTab("styles");}}>{styleText(settings?.language).title}</Button>
               {stylePromptPresetGroups.map((group) => {
                 const groupPresets = sortStyles(stylePromptPresets, settings?.stylePromptPresetSort).filter((preset) => (preset.group || "Default") === group);
                 const expanded = selectedStylePresetGroup === group;
@@ -2230,16 +2223,7 @@ function PromptAndParams({
           onClose={() => setStyleImageManagerPresetId("")}
         />
       )}
-      <div className={clsx("prompt-chip-zone", !chipOpen && "collapsed")}>
-        <button type="button" className="prompt-chip-head" aria-expanded={chipOpen} onClick={() => setChipOpen((v) => !v)}>
-          <span className="chip-head-title">
-            <Icon name="chevronRight" className={clsx("chip-caret", chipOpen && "open")} />
-            {generateText.prompt.capsuleTitle}
-          </span>
-          <small className="chip-head-hint">{chipOpen ? generateText.prompt.capsuleHintOpen : generateText.prompt.capsuleHintClosed}</small>
-        </button>
-        <AnimatedCollapse open={chipOpen} lazy>
-          <>
+      {chipOpen && <CapsuleEditor title={generateText.prompt.capsuleTitle} value={promptValue} onChange={value=>setPromptField(promptKey,value)} onAdd={appendChip} onClose={()=>setChipOpen(false)} language={settings?.language}>
             <div className="prompt-chip-toolbar">
               <input
                 className="prompt-chip-search"
@@ -2267,85 +2251,54 @@ function PromptAndParams({
                 </div>
               </div>
             )}
-          </>
-        </AnimatedCollapse>
-      </div>
+      </CapsuleEditor>}
       <div className="prompt-tabs">
         <button className={clsx(promptTab === "positive" && "active")} onClick={() => setPromptTab("positive")}>
           {generateText.prompt.positivePrompt}
         </button>
         <button className={clsx(promptTab === "negative" && "active")} onClick={() => setPromptTab("negative")}>
-          {generateText.prompt.negativePrompt}{negLocked ? <> <Icon name="lock" /></> : ""}
+          {generateText.prompt.negativePrompt}
         </button>
-        {promptTab === "negative" && (
-          <button
-            type="button"
-            className={clsx("lock-btn", negLocked && "locked")}
-            title={negLocked ? generateText.prompt.lockSavedTitle : generateText.prompt.lockCurrentTitle}
-            onClick={() => void toggleLock("neg")}
-          >
-            {negLocked ? <><Icon name="lock" /> {generateText.prompt.locked}</> : <><Icon name="unlock" /> {generateText.prompt.lock}</>}
-          </button>
-        )}
+
       </div>
+      <div className="prompt-editor" onKeyDownCapture={e=>{
+        if(!e.currentTarget.contains(e.target as Node)||e.nativeEvent.isComposing)return;
+        if(e.key==='Escape'&&showPromptMore){setShowPromptMore(false);return;}
+        if(!(e.target instanceof HTMLTextAreaElement)||!(e.ctrlKey||e.metaKey)||e.altKey)return;
+        const key=e.key.toLowerCase();
+        if(key==='z'||key==='y'){e.preventDefault();e.stopPropagation();if(key==='y'||e.shiftKey)promptHistory.redo();else promptHistory.undo();}
+      }}>
       <PromptTextarea
         value={promptValue}
-        onChange={(v) => setLockedAwareParam(promptKey, v)}
+        onChange={(v) => promptHistory.commit(v,true)}
         model={params.model}
         enabled={settings?.autoComplete ?? true}
         placeholder={promptTab === "positive" ? generateText.prompt.positivePlaceholder : generateText.prompt.negativePlaceholder}
       />
-      <div className="prompt-toolbar-row">
-        {promptTab === "positive" && (
-          <PositivePromptPresetControl
-            value={effectivePositivePrompt}
-            onApply={(value) => setLockedAwareParam("positivePrompt", value)}
-          />
-        )}
-        <button type="button" className="prompt-tool-btn weight-tool-btn" onClick={() => setShowWeights((v) => !v)} disabled={weightTags.length === 0}>
-          <Icon name="sliders" />
-          <span>{generateText.prompt.weightAdjust}{weightTags.length ? ` (${weightTags.length})` : ""}</span>
-          <Icon name="chevronDown" className={clsx("prompt-tool-chevron", showWeights && "open")} />
-        </button>
-        <button type="button" className="prompt-tool-btn" onClick={() => void translatePrompt()} disabled={translating}>
-          {translating ? generateText.prompt.translating : <><Icon name="globe" /> {generateText.prompt.translate}</>}
-        </button>
-        {translateBackup[promptKey] != null && (
-          <button type="button" className="prompt-tool-btn" onClick={restoreTranslate} disabled={translating} title={generateText.prompt.restoreTitle}>
-            <Icon name="sparkles" /> {generateText.prompt.restore}
-          </button>
-        )}
-        <button type="button" className="prompt-tool-btn" onClick={() => setShowNormalize(true)} disabled={!promptValue.trim()}>
-          <Icon name="sparkles" /> {generateText.prompt.normalize}
-        </button>
-        {promptTab === "positive" ? (
-          <div className="prompt-inline-tool-pair">
-            <button
-              type="button"
-              className={clsx("prompt-tool-btn", (settings?.autoComplete ?? true) && "tool-on")}
-              title={generateText.prompt.autocompleteTitle}
-              onClick={() => void toggleAutoComplete()}
-            >
-              <Icon name="bulb" /> {(settings?.autoComplete ?? true) ? generateText.prompt.autocompleteOn : generateText.prompt.autocompleteOff}
-            </button>
-            <PromptChunkControl
-              value={effectivePositivePrompt}
-              onApply={(value) => setLockedAwareParam("positivePrompt", value)}
-              placement="top-right"
-            />
-          </div>
-        ) : (
-          <button
-            type="button"
-            className={clsx("prompt-tool-btn", (settings?.autoComplete ?? true) && "tool-on")}
-            title={generateText.prompt.autocompleteTitle}
-            onClick={() => void toggleAutoComplete()}
-          >
-            <Icon name="bulb" /> {(settings?.autoComplete ?? true) ? generateText.prompt.autocompleteOn : generateText.prompt.autocompleteOff}
-          </button>
-        )}
+      <SlidingPromptToolbar language={settings?.language} onCollapse={()=>setShowPromptMore(false)}>
+      <div className="prompt-toolbar-row compact-prompt-toolbar" role="toolbar" aria-label={editorText.more}>
+        <CompactIconButton label={editorText.undo} icon="undo" disabled={!promptHistory.canUndo} onClick={()=>promptHistory.undo()}/>
+        <CompactIconButton label={editorText.redo} icon="redo" disabled={!promptHistory.canRedo} onClick={()=>promptHistory.redo()}/>
+        <CompactIconButton label={translating?generateText.prompt.translating:generateText.prompt.translate} icon="globe" onClick={()=>void translatePrompt()} disabled={translating}/>
+        {promptTab==='positive'&&<><CompactIconButton label={editorText.optimize} icon="wand" aria-haspopup="dialog" onClick={()=>setAssistantKind('optimize')} disabled={!effectivePositivePrompt.trim()}/><CompactIconButton label={editorText.custom} icon="sparkles" aria-haspopup="dialog" onClick={()=>setAssistantKind('custom')}/></>}
+        <CompactIconButton label={`${generateText.prompt.weightAdjust} (${weightTags.length})`} icon="sliders" aria-expanded={showWeights} aria-haspopup="dialog" onClick={()=>setShowWeights(v=>!v)} disabled={weightTags.length===0}/>
+        <CompactIconButton label={generateText.prompt.capsuleTitle} icon="dice" aria-haspopup="dialog" aria-expanded={chipOpen} onClick={()=>setChipOpen(true)}/>
+        <PromptToolsPopover label={editorText.more} open={showPromptMore} onOpenChange={setShowPromptMore}>
+          {promptTab === "positive" && <PositivePromptPresetControl compact value={effectivePositivePrompt} onApply={value=>setPromptField("positivePrompt",value)}/>}
+          <CompactIconButton label={generateText.prompt.normalize} icon="sparkles" onClick={()=>setShowNormalize(true)} disabled={!promptValue.trim()}/>
+          <CompactIconButton label={(settings?.autoComplete??true)?generateText.prompt.autocompleteOn:generateText.prompt.autocompleteOff} icon="bulb" role="switch" aria-checked={settings?.autoComplete??true} onClick={()=>void toggleAutoComplete()}/>
+          {promptTab==="positive"&&<PromptChunkControl compact value={effectivePositivePrompt} onApply={value=>setPromptField("positivePrompt",value)} placement="top-right"/>}
+          {translateBackup[promptKey]!=null&&<CompactIconButton label={generateText.prompt.restore} icon="undo" onClick={restoreTranslate} disabled={translating}/>}
+        </PromptToolsPopover>
       </div>
-      <AnimatedCollapse open={showWeights && weightTags.length > 0}>
+      </SlidingPromptToolbar>
+      <PromptResizeHandle language={settings?.language}/>
+      </div>
+      {assistantKind&&<PromptAssistant kind={assistantKind} currentValue={effectivePositivePrompt} context={assistantContext} mode={assistantMode} version={assistantVersion} language={settings?.language} onClose={()=>setAssistantKind(null)} onApply={(next,expected)=>{
+        if(latestPromptValues.current.positivePrompt!==expected)return false;
+        positiveHistory.commit(next);return true;
+      }}/>}
+      {showWeights && <PromptWeightPanel title={generateText.prompt.weightAdjust} closeLabel={editorText.cancel} onClose={()=>setShowWeights(false)}>
         <div className="weight-editor">
           <div className="weight-editor-hint">{generateText.prompt.weightHint}</div>
           <div className="weight-tag-list">
@@ -2361,12 +2314,7 @@ function PromptAndParams({
             ))}
           </div>
         </div>
-      </AnimatedCollapse>
-      <div className="prompt-helper">
-        {settings?.autoComplete ?? true
-          ? generateText.prompt.helperOn
-          : generateText.prompt.helperOff}
-      </div>
+      </PromptWeightPanel>}
       <div className="token-counter">
         {tagCount > 0 && (
           <>
@@ -2377,7 +2325,6 @@ function PromptAndParams({
           </>
         )}
       </div>
-      <QualityAndTransparencyControls />
       <div className="quick-actions">
         <Button onClick={() => setShowCharModal(true)}>
           <IconText icon="♙">{generateText.prompt.characterPrompt}{charCaptions.length > 0 ? ` · ${charCaptions.length}` : ""}</IconText>
@@ -2433,6 +2380,7 @@ function PromptAndParams({
           </small>
         </div>
       )}
+      <ResolutionPicker width={params.width} height={params.height} language={settings?.language} onChange={({width,height})=>{if(imageToImage)setI2ISizeMode("custom");setParam("width",width);setParam("height",height);}}>
       <div className="size-row">
         <CommittedNumberInput
           label={generateText.prompt.width}
@@ -2465,25 +2413,7 @@ function PromptAndParams({
         />
       </div>
       <small className="dimension-input-hint">{t("size.commitHint")}</small>
-      <div className="preset-row">
-        {[
-          [1024, 1024], [1216, 832], [832, 1216],
-          [1024, 1536], [1536, 1024], [1472, 1472],
-          [1088, 1920], [1920, 1088],
-          [512, 768], [768, 512], [640, 640],
-        ].map(([width, height]) => (
-          <button
-            key={`${width}x${height}`}
-            onClick={() => {
-              if (imageToImage) setI2ISizeMode("custom");
-              setParam("width", width);
-              setParam("height", height);
-            }}
-          >
-            {width}×{height}
-          </button>
-        ))}
-      </div>
+      </ResolutionPicker>
       <div className="seed-mode-switch">
         <button
           type="button"
@@ -2529,7 +2459,7 @@ function PromptAndParams({
           onClose={() => setStyleGroupPromptOpen(false)}
         />
       )}
-      <Button className="full" onClick={() => setShowAdvanced(true)}>
+      <Button className="full prompt-advanced-button" onClick={() => setShowAdvanced(true)}>
         <IconText icon="settings">{generateText.prompt.advancedParams}</IconText>
       </Button>
       {showAdvanced && <AdvancedParamsModal onClose={() => setShowAdvanced(false)} />}
@@ -2653,7 +2583,7 @@ function WorkbenchImageUpload() {
           <IconText icon={<Icon name="folderOpen" />}>{t("workbench.load")}</IconText>
         </Button>
       )}
-      <small className="wb-drop-hint">{t("workbench.dropHint")}</small>
+      
     </div>
   );
 }
@@ -3358,7 +3288,7 @@ function AccountAndRunButton({
 }
 
 // ── Generate panel (T2I) ──────────────────────────────────────────────────────
-function GeneratePanel({ openSettings }: { openSettings: () => void }) {
+function GeneratePanel({openSettings}:{openSettings:()=>void}) {
   const language = useAppStore((state) => state.settings?.language);
   const generate = useAppStore((state) => state.generate);
   const batchCount = useAppStore((state) => state.batchCount);
@@ -3389,7 +3319,7 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
           normalize={(value) => Math.max(0, Math.min(3600, Math.round(value)))}
           onCommit={setBatchIntervalSeconds}
         />
-        <small className="field-hint">{t("generate.batchIntervalHint")}</small>
+        
         <label className="field">
           <span>{t("generate.fileNamePrefix")}</span>
           <input
@@ -3437,9 +3367,7 @@ function GeneratePanel({ openSettings }: { openSettings: () => void }) {
             {t("history.create")}
           </button>
         </div>
-        <p className="wildcard-hint">
-          <Icon name="bulb" /> {f("generate.wildcardHint", { example: "{red|blue|green} hair", tag: "{tag}" })}
-        </p>
+
         <FeatureCostCard label={t("cost.beforeRun")} feature="generate" />
       </div>
       <AccountAndRunButton
@@ -3478,7 +3406,7 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
             <Button variant={i2iSourceMode === "original" ? "primary" : "secondary"} onClick={() => setI2ISourceMode("original")}>{t("inpaint.sourceOriginal")}</Button>
             <Button variant={i2iSourceMode === "latest" ? "primary" : "secondary"} onClick={() => setI2ISourceMode("latest")}>{t("inpaint.sourceLatest")}</Button>
           </div>
-          <small className="field-hint">{t("i2i.sourceHint")}</small>
+          
         </div>
         <SliderInput label={t("i2i.strength")} value={i2iParams.strength} min={0} max={1} step={0.01} onChange={(v) => setI2IParam("strength", v)} />
         <NumberInput label={t("i2i.extraNoiseSeed")} value={i2iParams.extraNoiseSeed} min={0} onChange={(v) => setI2IParam("extraNoiseSeed", v)} />
@@ -3493,7 +3421,7 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
           normalize={(value) => Math.max(0, Math.min(3600, Math.round(value)))}
           onCommit={setBatchIntervalSeconds}
         />
-        <small className="field-hint">{t("generate.batchIntervalHint")}</small>
+        
         <FeatureCostCard label={t("cost.beforeRun")} feature="i2i" />
       </div>
       <AccountAndRunButton
@@ -3507,7 +3435,7 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
 }
 
 // ── Inpaint panel ─────────────────────────────────────────────────────────────
-function InpaintPanel({ openSettings }: { openSettings: () => void }) {
+export function InpaintPanel({ openSettings }: { openSettings: () => void }) {
   const language = useAppStore((state) => state.settings?.language);
   const inpaintSourceMode = useAppStore((state) => state.inpaintSourceMode);
   const setInpaintSourceMode = useAppStore((state) => state.setInpaintSourceMode);
@@ -3528,6 +3456,8 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
   const brushShape = useAppStore((state) => state.brushShape);
   const setBrushShape = useAppStore((state) => state.setBrushShape);
   const clearInpaintMask = useAppStore((state) => state.clearInpaintMask);
+  const region = useAppStore(s=>s.inpaintRegion),source = useAppStore(s=>s.workbenchImage);
+  const focusedSize=region&&source?focusedInpaintPlan(region,source.width,source.height).size:undefined;
   const inpaint = useAppStore((state) => state.inpaint);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   return (
@@ -3540,7 +3470,7 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
             <Button variant={inpaintSourceMode === "original" ? "primary" : "secondary"} onClick={() => void setInpaintSourceMode("original")}>{t("inpaint.sourceOriginal")}</Button>
             <Button variant={inpaintSourceMode === "latest" ? "primary" : "secondary"} onClick={() => void setInpaintSourceMode("latest")}>{t("inpaint.sourceLatest")}</Button>
           </div>
-          <small className="field-hint">{t("inpaint.sourceHint")}</small>
+          
         </div>
         <label className="field">
           <span>{t("inpaint.model")}</span>
@@ -3609,16 +3539,17 @@ function InpaintPanel({ openSettings }: { openSettings: () => void }) {
             <span className="inpaint-shape-button-label"><span className="inpaint-shape-swatch square" />{t("inpaint.squareBrush")}</span>
           </Button>
         </div>
-        <small className="field-hint">{t("inpaint.precisionHint")}</small>
+        
         <Button className="full" onClick={clearInpaintMask}>
           <IconText icon={<Icon name="clear" />}>{t("inpaint.clearMask")}</IconText>
         </Button>
         <div className="panel-divider" />
+        <InpaintPromptSource/>
         <PromptAndParams
           includeModel={false}
           promptOverride={{ value: inpaintPositivePrompt, onChange: setInpaintPositivePrompt }}
         />
-        <FeatureCostCard label={t("cost.beforeRun")} feature="inpaint" />
+        <FeatureCostCard label={t("cost.beforeRun")} feature="inpaint" sizeOverride={focusedSize} />
       </div>
       <AccountAndRunButton label={t("inpaint.run")} onRun={() => void inpaint()} openSettings={openSettings} />
     </>
@@ -3961,7 +3892,6 @@ function SingleTemplateEditor({
           {t("template.restore")}
         </button>
       </div>
-      <small className="settings-hint">{t("template.comicHint")}</small>
     </div>
   );
 }
@@ -4479,9 +4409,6 @@ function PromptConverterPanel() {
           />
           <span>{t("convert.knownCharacter")}</span>
         </label>
-        <small className="prompt-character-hint">
-          {t("convert.knownCharacterHint")}
-        </small>
 
         <Button
           variant="primary"
@@ -4750,10 +4677,6 @@ function ZoomableImageStage({
     }
   }, []);
 
-  function resetView() {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  }
 
   function clampPanForZoom(nextPan: { x: number; y: number }, nextZoom: number) {
     if (!frameSize || shellSize.width <= 0 || shellSize.height <= 0) return nextPan;
@@ -4813,26 +4736,6 @@ function ZoomableImageStage({
     }
   }
 
-  function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
-    event.preventDefault();
-    const rect = frameRef.current?.getBoundingClientRect();
-    const next = clampNumber(zoom * (event.deltaY < 0 ? 1.16 : 1 / 1.16), 1, 8);
-    if (!rect || next === 1) {
-      setZoom(next);
-      setPan({ x: 0, y: 0 });
-      return;
-    }
-    const baseLeft = rect.left - pan.x;
-    const baseTop = rect.top - pan.y;
-    const imageX = clampNumber((event.clientX - rect.left) / zoom, 0, rect.width / zoom);
-    const imageY = clampNumber((event.clientY - rect.top) / zoom, 0, rect.height / zoom);
-    setZoom(next);
-    setPan(clampPanForZoom({
-      x: event.clientX - baseLeft - imageX * next,
-      y: event.clientY - baseTop - imageY * next,
-    }, next));
-  }
-
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     event.currentTarget.focus({preventScroll:true});
     if (zoom <= 1) return;
@@ -4866,11 +4769,8 @@ function ZoomableImageStage({
 
   return (
     <div className="image-stage">
-      <div className="image-viewer-toolbar">
-        <span>{Math.round(zoom * 100)}%</span>
-        <button type="button" className="btn btn-ghost btn-mini" onClick={resetView} disabled={zoom === 1 && pan.x === 0 && pan.y === 0}>
-          {t("viewer.reset")}
-        </button>
+      <div className="image-viewer-toolbar"><ImageFavoriteButton src={image.fileUrl}/>
+        <button type="button" className="btn btn-ghost btn-mini" onClick={()=>setFullscreen(true)}>{workflowText(language).preview}</button>
         {canCompare ? (
           <button
             type="button"
@@ -4884,6 +4784,7 @@ function ZoomableImageStage({
       <div
         ref={shellRef}
         data-image-copy-src={image.fileUrl}
+        onClick={event=>{if(!compareEnabled&&!(event.target as HTMLElement).closest("button"))setFullscreen(true);}}
         onDoubleClick={event=>{if(!(event.target as HTMLElement).closest("button"))setFullscreen(true);}}
         tabIndex={0}
         aria-label={alt}
@@ -4897,7 +4798,6 @@ function ZoomableImageStage({
           const next=state.history[index+delta];if(next)state.selectImage(next);
         }}
         className={clsx("zoom-frame-shell", zoom > 1 && "is-zoomed", isPanning && "is-panning")}
-        onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={stopPanning}
@@ -5501,7 +5401,7 @@ function HistoryPanel() {
           />
         </div>
       </div>
-      <div className="history-item-controls" onClick={(event) => event.stopPropagation()}>
+      <div className="history-item-controls" onClick={(event) => event.stopPropagation()}><ImageFavoriteButton src={item.fileUrl} compact/>
         <button className="history-metadata" title={t("history.metadataTitle")} aria-label={t("history.metadataTitle")} onClick={() => void inspectHistoryMetadata(item)}>
           <Icon name="eye" />
         </button>
@@ -5614,11 +5514,13 @@ function HistoryPanel() {
 const MemoizedHistoryPanel = memo(HistoryPanel);
 
 // ── Settings modal ────────────────────────────────────────────────────────────
-function SettingsModal({ onClose }: { onClose: () => void }) {
+export function SettingsModal({ onClose }: { onClose: () => void }) {
   const ft=useFeatureText();
   const [section, setSection] = useState(
-    () => new URLSearchParams(window.location.search).get("uiSettingsSection") ?? "api",
+    () => takeRequestedSettingsSection() ?? new URLSearchParams(window.location.search).get("uiSettingsSection") ?? "api",
   );
+  const sectionMotion=useStudioRegionMotion(section);
+  useEffect(()=>{const navigate=()=>{const next=takeRequestedSettingsSection();if(next)setSection(next);};window.addEventListener('studio:settings-section',navigate);return()=>window.removeEventListener('studio:settings-section',navigate);},[]);
   const settings = useAppStore((state) => state.settings);
   const account = useAppStore((state) => state.account);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
@@ -5926,7 +5828,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
               </button>
             ))}
           </nav>
-          <section className="settings-content">
+          <section ref={sectionMotion} className="settings-content">
             {Boolean(settings?.credentialIssues?.length) && (
               <p className="error-banner" role="alert">{credentialIssueMessage(settings?.language, settings?.credentialIssues ?? [])}</p>
             )}
@@ -5972,30 +5874,25 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 <label className="field">
                   <span>{t("settings.imageEndpoint")}</span>
                   <input value={settings.imageBaseUrl} placeholder="https://image.novelai.net" onChange={(e) => void update("imageBaseUrl", e.target.value)} />
-                  <small>https://image.novelai.net</small>
+                  <small>{t("settings.imageEndpointHint")}</small>
                 </label>
-                <label className="field-inline">
-                  <input
-                    type="checkbox"
-                    checked={settings.allowCustomEndpoint}
-                    onChange={(e) => void update("allowCustomEndpoint", e.target.checked)}
-                  />
-                  <span>
-                    {t("settings.allowCustomEndpoint")}
-                  </span>
-                </label>
-                {settings.allowCustomEndpoint && (
+                <div>
                   <label className="field-inline">
-                    <input
-                      type="checkbox"
-                      checked={settings.allowCustomEndpointFallback}
-                      onChange={(e) => void update("allowCustomEndpointFallback", e.target.checked)}
-                    />
-                    <span>
-                      {t("settings.allowCustomEndpointFallback")}
-                    </span>
+                    <input id="novelai-relay-opt-in" type="checkbox" checked={settings.allowCustomEndpoint}
+                      aria-describedby="novelai-relay-help" onChange={(e) => void update("allowCustomEndpoint", e.target.checked)} />
+                    <span>{t("settings.allowCustomEndpoint")}</span>
                   </label>
-                )}
+                  <p className="settings-hint" id="novelai-relay-help">{t("settings.allowCustomEndpointHint")}</p>
+                </div>
+                <div>
+                  <label className="field-inline">
+                    <input id="novelai-official-retry" type="checkbox" checked={settings.allowCustomEndpointFallback}
+                      disabled={!settings.allowCustomEndpoint} aria-describedby="novelai-official-retry-help"
+                      onChange={(e) => void update("allowCustomEndpointFallback", e.target.checked)} />
+                    <span>{t("settings.allowCustomEndpointFallback")}</span>
+                  </label>
+                  <p className="settings-hint" id="novelai-official-retry-help">{t("settings.allowCustomEndpointFallbackHint")}</p>
+                </div>
 
                 <div className="proxy-card">
                   <ProxyPresetControl mode={settings.proxyMode} value={settings.proxyUrl} onChange={(mode, value) => void updateProxy(mode, value)} />
@@ -6413,11 +6310,16 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   )}
                 />
                 <SingleTemplateEditor
-                  title={t("settings.comicAnalyzeTemplateTitle")}
-                  description={t("settings.singleTemplateShared")}
-                  value={settings.comicAnalyzePromptTemplate}
-                  defaultValue={COMIC_ANALYZE_SYSTEM_PROMPT}
-                  onChange={(next) => void update("comicAnalyzePromptTemplate", next)}
+                  title={promptEditorText(settings.language).optimize}
+                  value={settings.promptOptimizeTemplate ?? ""}
+                  defaultValue={PROMPT_OPTIMIZE_TEMPLATE}
+                  onChange={(next) => void update("promptOptimizeTemplate", next)}
+                />
+                <SingleTemplateEditor
+                  title={promptEditorText(settings.language).custom}
+                  value={settings.promptAssistantTemplate ?? ""}
+                  defaultValue={PROMPT_CUSTOM_TEMPLATE}
+                  onChange={(next) => void update("promptAssistantTemplate", next)}
                 />
               </div>
             )}
@@ -7159,13 +7061,14 @@ function PersistentTabView({
   resetKey?: unknown;
 }) {
   const [hasMounted, setHasMounted] = useState(active);
+  const viewMotion=useStudioRegionMotion(resetKey,active);
   useEffect(() => {
     if (active) setHasMounted(true);
   }, [active]);
   if (!hasMounted && !active) return null;
   return (
     <div
-      className={clsx("persistent-tools-view", className, active ? "is-active" : "is-hidden")}
+      ref={viewMotion} className={clsx("persistent-tools-view", className, active ? "is-active" : "is-hidden")}
       aria-hidden={!active}
     >
       <AppErrorBoundary scope={scope} resetKey={resetKey}>
@@ -7336,6 +7239,8 @@ function MainPage() {
             <MetadataInspector onBack={() => useAppStore.getState().setActiveTab("generate")} />
           </Suspense>
         </PersistentTabView>
+        <PersistentTabView active={activeTab === "works"} scope="tab:works"><WorksLibrary active={activeTab === "works"} /></PersistentTabView>
+        <PersistentTabView active={activeTab === "favorites"} scope="tab:favorites"><GalleryFavoritesLibrary embedded onClose={()=>useAppStore.getState().setActiveTab("generate")} /></PersistentTabView>
         <PersistentTabView active={activeTab === "onlineGallery"} scope="tab:onlineGallery">
           <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
             <OnlineGalleryPage />
@@ -7360,12 +7265,12 @@ function MainPage() {
       <ImageSaveFeedback language={language} />
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {displayToast && (
-        <div className="toast" role="alert">
+        <AppPortal><div className="toast" role="alert">
           <span>{displayToast}</span>
           <button type="button" aria-label={t("common.close")} title={t("common.close")} onClick={clearToast}>
             <Icon name="close" />
           </button>
-        </div>
+        </div></AppPortal>
       )}
     </div>
   );

@@ -49,11 +49,8 @@ export function detectiveStatus(): DetectiveSnapshot {
   }
   candidates.sort((a, b) => b.score - a.score);
   const selectedVariant=c.selectedVariant!,selected={...detectiveProfile(c,selectedVariant),variant:selectedVariant};
-  const runtimeValidation = detectiveRuntimeValidation(selected);
-  // One offline check per unchanged configuration, never competing with a running job.
-  if (ready(selected) && !running && !child && !clearing && !detectiveRuntimeChecking() && !detectiveDownloadStatus().busy && runtimeValidation.state === 'unchecked') {
-    try { assertPortableIdle(); void verifySelected(selectedVariant).catch(()=>{}); } catch { /* defer during backup/restore */ }
-  }
+  // Status reads (including startup and polling) never launch Python or load a
+  // model. Reuse persisted validation; an absent/stale record awaits an action.
   const models=Object.fromEntries((['full','light'] as const).map(v=>{const p=detectiveProfile(c,v);return [v,{...p,configured:ready(p),validation:detectiveRuntimeValidation({...p,variant:v})}];})) as NonNullable<DetectiveSnapshot['models']>;
   return { selectedVariant,activeVariant:c.python&&c.assets?c.variant:undefined,models,ready:ready(selected),runtimeValidation:detectiveRuntimeValidation(selected), running, stage: failure && !running ? "failed" : status?.stage ?? "idle",
     completed: status?.completed ?? 0, budget, rounds: detectiveRounds(budget),
@@ -69,9 +66,12 @@ export async function detectiveConfigure(kind: "python" | "assets") {
     ? { title: featureText(getSetting('language'),"选择已安装 Artist Detective 的 Python 3.12"), properties: ["openFile"], filters: [{ name: "Python", extensions: ["exe"] }] }
     : { title: featureText(getSetting('language'),"选择 novelai-desktop-assets 模型目录"), properties: ["openDirectory"] });
   if (!result.canceled && result.filePaths[0]) {
+    assertPortableIdle();
     const latest=config();
+    if(alive(latest.pid) || child || clearing || detectiveRuntimeChecking() || detectiveDownloadStatus().busy)throw Error('请等待当前任务或校验完成。');
     if(latest.selectedVariant!==c.selectedVariant)throw Error('Model selection changed; retry');
     save(updateDetectiveProfile(latest,c.selectedVariant!,{[kind]:result.filePaths[0]}));
+    await verifyUnseenSelection(c.selectedVariant!);
   }
   return detectiveStatus();
 }
@@ -146,6 +146,13 @@ async function verifySelected(variant:DetectiveModelVariant,force=false) {
     save({...latest,python:profile.python,assets:profile.assets,variant});
   return result;
 }
+async function verifyUnseenSelection(variant:DetectiveModelVariant) {
+  const selected={...detectiveProfile(config(),variant),variant};
+  // Only explicit configuration/selection may initiate a first check. Passed
+  // profiles survive restarts; failed checks require the manual retry button.
+  if(ready(selected) && detectiveRuntimeValidation(selected).state==='unchecked')
+    await verifySelected(variant);
+}
 export function detectiveSelectModel(value:DetectiveModelVariant) {
   assertPortableIdle();
   const c=config();
@@ -155,6 +162,7 @@ export function detectiveSelectModel(value:DetectiveModelVariant) {
   const latest=config();save({...latest,selectedVariant:value});
   const p=detectiveProfile(latest,value);
   if(detectiveRuntimeValidation({...p,variant:value}).state==='passed')save({...config(),python:p.python,assets:p.assets,variant:value});
+  void verifyUnseenSelection(value).catch(()=>{});
   return detectiveStatus();
 }
 

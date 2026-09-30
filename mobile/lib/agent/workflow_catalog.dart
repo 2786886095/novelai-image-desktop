@@ -2,6 +2,21 @@
 import 'dart:convert';
 final List<dynamic> softwareWorkflows=jsonDecode(r'''[
   {
+    "id": "resources",
+    "title": "管理本地标签与相关标签数据库",
+    "examples": [
+      "查看资源数据库和下载大小",
+      "下载标签数据库",
+      "暂停资源下载",
+      "恢复上一版标签库"
+    ],
+    "tools": [
+      "langbai_software_capabilities",
+      "langbai_software_action"
+    ],
+    "steps": "resources.list 读取当前端操作、来源、体积与 revision；download/restore 在 Agent 内确认，started 只代表启动。再次 list 核对 jobs 和实际安装版本，pause 只请求暂停，看到 paused 才停止。clearCache 仅清内存；桌面 openDirectory 打开目录；Android delete 需确认且不删除图片。不要猜测未列出的操作。"
+  },
+  {
     "id": "templates",
     "title": "共用提示词模板",
     "examples": [
@@ -51,7 +66,7 @@ final List<dynamic> softwareWorkflows=jsonDecode(r'''[
       "langbai_prepare_image_prompt",
       "langbai_generate_image"
     ],
-    "steps": "读取工作台→使用软件提示词模板→Agent 内确认→生成→返回图片；结果不明先查历史，不重复收费。"
+    "steps": "读取工作台→按当前软件模板一次完成提示词转换与生图；遵循会话策略：全自动不再确认，逐次确认模式仅对整条流程确认一次；失败停止，结果不明先查历史，不重复收费。"
   },
   {
     "id": "library",
@@ -98,12 +113,14 @@ final List<dynamic> softwareWorkflows=jsonDecode(r'''[
     "title": "整理历史图片和参考图",
     "examples": [
       "新建一个风景分组",
-      "把这张图片移到风景组"
+      "把这张图片移到风景组",
+      "把这张图重命名为雨夜",
+      "导出风景分组并打开或分享 ZIP"
     ],
     "tools": [
       "langbai_software_action"
     ],
-    "steps": "从 actions 清单选择对应 list，获得 ID 与 revision 后修改；删除前 Agent 确认。"
+    "steps": "从 actions 清单选择对应 list，获得 ID 与 revision 后修改；items.rename 重命名并回读实际文件名；groups.export 导出全部或指定分组（返回 ZIP ID、SHA256 与实际路径）；exports.list 读取导出列表后以 ID 调用 exports.open 打开或分享已校验 ZIP。普通整理和导出不反复确认，删除前 Agent 确认。"
   },
   {
     "id": "text",

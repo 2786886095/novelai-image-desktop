@@ -1,3 +1,4 @@
+import {cancelPortalExits,retainPortalExit,manageModalPortal,animatePortalEntry} from '../motion-system';
 import {RangeInput} from './RangeInput';
 // Shared presentational primitives used across the app's panels.
 import {
@@ -52,8 +53,10 @@ export function IconText({ icon, children }: { icon: ReactNode; children: ReactN
 }
 
 export function AppPortal({ children }: { children: ReactNode }) {
+  const portal=useRef<HTMLDivElement>(null);
+  useLayoutEffect(()=>{cancelPortalExits();const host=portal.current,release=manageModalPortal(host),stop=animatePortalEntry(host);return()=>{stop();retainPortalExit(host);release();};},[]);
   if (typeof document === "undefined") return <>{children}</>;
-  return createPortal(children, document.body);
+  return createPortal(<div ref={portal} data-studio-portal style={{display:"contents"}}>{children}</div>, document.body);
 }
 
 export type SelectMenuOption = { value: string; label: string; disabled?: boolean };
@@ -274,6 +277,12 @@ export function SelectMenu({
           }
         }}
         onKeyDown={(event) => {
+          if (event.key === "Escape" && open) {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(false);
+            return;
+          }
           if (event.key === "Tab" && open) {
             setOpen(false);
             return;

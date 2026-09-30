@@ -1,5 +1,5 @@
 import {it,expect} from "vitest";
-import sources from "./data/prompt-template-sources-20260926.json";
+import sources from "./data/prompt-template-v3.json";
 import {refreshShippedTemplates} from "./data/prompt-template-migration";
 import {REVERSE_SYSTEM_PROMPTS,CONVERT_SYSTEM_PROMPTS} from "./data/prompt-templates";
 import {PREVIOUS_REVERSE_SYSTEM_PROMPTS,PREVIOUS_CONVERT_SYSTEM_PROMPTS} from "./data/prompt-templates-previous-v5";
@@ -10,9 +10,9 @@ it.each(["reverse","convert"] as const)("updates exact defaults per mode, retain
  expect(refreshShippedTemplates(next,kind)).toEqual(next);
 });
 it('incorporates both supplied mixed templates and the fact-first exception',()=>{
- for(const [label,templates] of [['图片反推',REVERSE_SYSTEM_PROMPTS],['提示词转换',CONVERT_SYSTEM_PROMPTS]] as const){
+ for(const [label,templates] of [['reverse',REVERSE_SYSTEM_PROMPTS],['convert',CONVERT_SYSTEM_PROMPTS]] as const){
  const input=sources[label];
- expect(templates.mixed).toContain(input);expect(templates.mixed).toContain('事实与指定范围高于长度目标');
+ expect(templates.mixed).toBe(input);expect(templates.mixed).toMatch(/不虚构|不编|禁止/);
  expect(templates.tags).toContain('纯 Tag');expect(templates.natural).toContain('不套用 50–150');
  }
 });

@@ -31,3 +31,10 @@ it.each([[300,284,9],[304,288,9],[24,8,1]])('explains the linked image budget %i
  expect(html).toContain('最终复测：最多 16 张');
  expect(html).toContain('修改轮数会更新图片上限');
 });
+
+it('defaults old drafts to mixed and offers explicit output mode selection',()=>{
+ expect(render()).toContain('反推模式: 混合模式');
+});
+it('retains a saved natural-language choice',()=>{
+ saved.reverseMode='natural';expect(render()).toContain('反推模式: 自然语言');
+});

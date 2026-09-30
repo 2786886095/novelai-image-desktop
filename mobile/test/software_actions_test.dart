@@ -1,3 +1,7 @@
+import 'package:novelai_mobile/agent/batch_actions.dart';
+import 'package:novelai_mobile/agent/comic_actions.dart';
+import 'package:novelai_mobile/agent/collection_actions.dart';
+import 'package:novelai_mobile/agent/resource_actions.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
@@ -105,7 +109,13 @@ void main() {
       () async {
     expect(
         (await service.execute('langbai_software_capabilities', {}))['actions'],
-        softwareActionCatalog);
+        {
+          ...softwareActionCatalog,
+          ...resourceActionCatalog,
+          ...collectionActionCatalog,
+          ...comicActionCatalog,
+          ...batchActionCatalog
+        });
     await expectLater(call({'action': 'shell.exec'}), throwsStateError);
     await expectLater(
         call({'action': 'history.items.list', 'limit': 51}), throwsStateError);

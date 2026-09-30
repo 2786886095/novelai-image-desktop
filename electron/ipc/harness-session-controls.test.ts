@@ -32,3 +32,11 @@ it('returns actual registered preview images, never accepts caller file paths',a
  expect((await c.execute({tool:'studio_style_preview',args:{presetId:'unknown',filePath:file}})).ok).toBe(false);
  }finally{await fs.rm(root,{recursive:true,force:true});}
 });
+
+it('owned stop overrides global cancellation and stale lease end cannot clear a replacement',async()=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'studio-session-'));let global=0,owned=0;
+ try{const c=createSessionControls(root,()=>[],()=>{global++;});const old=c.begin('A',()=>{owned++;});c.end('A',old);const fresh=c.begin('A',()=>{owned++;});c.end('A',old);expect(()=>c.begin('B')).toThrow();
+ await c.execute({tool:'studio_stop_generation',sessionId:'B',args:{}});expect(owned).toBe(0);
+ await c.execute({tool:'studio_stop_generation',sessionId:'A',args:{}});expect(owned).toBe(1);expect(global).toBe(0);expect(fresh.aborted).toBe(true);c.end('A',fresh);const b=c.begin('B');c.end('B',b);
+ }finally{await fs.rm(root,{recursive:true,force:true});}
+});

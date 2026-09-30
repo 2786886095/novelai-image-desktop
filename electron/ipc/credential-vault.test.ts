@@ -47,3 +47,12 @@ describe("credential encryption context", () => {
     expect(vault.decode("blank", "")).toBe("");expect(vault.decode("zero", 0)).toBe(0);
   });
 });
+
+it('prepares explicit replacement without discarding recovery state before a durable commit',()=>{
+ const {vault}=create();vault.decode('imageApiKey',locked);
+ expect(vault.encode('imageApiKey','',true)).toBe('');expect(vault.issues()).toContain('imageApiKey');
+ expect(vault.encode('imageApiKey','')).toBe(locked);
+ const key='enc:v1:literal-api-key';const encoded=vault.encode('imageApiKey',key,true);
+ expect(encoded).not.toBe(key);expect(vault.decode('imageApiKey',encoded)).toBe(key);
+ const rewritten=vault.encode('imageApiKey',key);expect(rewritten).not.toBe(key);expect(vault.decode('imageApiKey',rewritten)).toBe(key);
+});

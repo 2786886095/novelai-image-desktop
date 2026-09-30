@@ -13,6 +13,7 @@ import 'package:novelai_mobile/tags/offline_tag_store.dart';
 class _ScriptedApi extends NaiApi {
   final List<Future<AiTextResult> Function()> convertResponses;
   final List<Future<AiTextResult> Function()> reverseResponses;
+  final captures=<Map<String,Object?>>[];
   int convertCalls = 0;
   int reverseCalls = 0;
 
@@ -28,6 +29,7 @@ class _ScriptedApi extends NaiApi {
     required bool knownCharacter,
     required String systemTemplate,
   }) {
+    captures.add({'mode':mode,'input':text,'version':settings.convertPromptTemplateVersion,'template':systemTemplate});
     final response = convertResponses[convertCalls];
     convertCalls++;
     return response();
@@ -83,6 +85,21 @@ void main() {
         storage: storage,
         offlineTags: _StubOfflineTags(),
       )..settings = AppSettings(proxyMode: 'direct');
+
+  test('captures template mode, explicit version and history input before awaiting keys',() async {
+    final complete=Completer<AiTextResult>();
+    final api=_ScriptedApi(convertResponses:[()=>complete.future]);
+    final state=buildState(api,_FakeStorage());addTearDown(state.dispose);
+    state.settings.convertPromptTemplatesV45={'mixed':'V45 selected'};
+    state.settings.convertPromptTemplateVersion='v5';state.convertInput='original';state.convertMode=ReversePromptMode.mixed;
+    final running=state.convertPrompt(templateVersion:'v4.5');
+    state.convertInput='next request';state.convertMode=ReversePromptMode.tags;
+    state.settings.convertPromptTemplatesV45={'mixed':'edited later'};
+    await Future<void>.delayed(Duration.zero);
+    expect(api.captures.single,{'mode':ReversePromptMode.mixed,'input':'original','version':'v4.5','template':'V45 selected'});
+    complete.complete(const AiTextResult(ok:true,message:'fixture',text:'result'));await running;
+    expect(state.convertHistory.first.input,'original');expect(state.convertHistory.first.mode,ReversePromptMode.mixed);
+  });
 
   test(
       'runs two convert submissions concurrently instead of blocking the second',

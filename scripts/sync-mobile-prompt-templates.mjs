@@ -7,9 +7,9 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 // Compile the actual exports, including composed/derived templates. Regex
 // extraction silently went stale once V4.5 exports became expressions.
 function exportsOf(name){
-  const code=ts.transpileModule(fs.readFileSync(path.join(root,"src/data",name),"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
+  const code=ts.transpileModule(fs.readFileSync(path.join(root,"src/data",name),"utf8"),{compilerOptions:{esModuleInterop:true,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
   const module={exports:{}};
-  Function("module","exports","require",code)(module,module.exports,createRequire(import.meta.url));
+  Function("module","exports","require",code)(module,module.exports,createRequire(path.join(root,"src/data",name)));
   return module.exports;
 }
 const current=exportsOf("prompt-templates.ts"),legacy=exportsOf("prompt-templates-v45.ts");

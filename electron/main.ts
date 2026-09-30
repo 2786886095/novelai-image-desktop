@@ -1,5 +1,11 @@
+import {prepareBatchImageService} from './ipc/batch-image-service';
+import {cancelBatchRedraw} from './ipc/nai';
+import {prepareComicImageService} from './ipc/comic-image-service';
+import {cancelTagComicGeneration} from './ipc/nai';
+import { registerCompatibleImageIpc } from "./ipc/compatible-settings-ipc";
+import {registerImageFavoritesIpc,favoriteContextMenuItem} from "./ipc/image-favorites-ipc";
 import {portableRecoveryPath, activatePortableRecovery, listPortableRecoveries} from './ipc/portable-projects';
-import {registerHarnessLauncher, harnessNeedsExitConfirmation, confirmHarnessExit} from "./ipc/harness-launcher";
+import {registerHarnessLauncher, harnessNeedsExitConfirmation, confirmHarnessExit, stopHarnessForUpdate,resetHarnessExitAfterUpdateFailure} from "./ipc/harness-launcher";
 import { detectiveStatus, detectiveConfigure, detectiveStart, detectiveStop, detectiveOpenResults, detectiveClearResults, detectiveVerifyRuntime, detectiveSelectModel } from "./ipc/artist-detective";
 import { detectiveDownloadStatus, detectiveDownloadStart, detectiveDownloadCancel, detectiveDownloadDirectory, detectiveDownloadVariant } from "./ipc/detective-download";
 import { recoverLegacyCredentials } from "./ipc/credential-recovery";
@@ -30,7 +36,6 @@ import {
 } from "./ipc/local-media-protocol";
 import {
   augmentImg,
-  analyzeComicScript,
   cancelGeneration,
   checkComicConsistency,
   clearAiCallLog,
@@ -162,7 +167,6 @@ import type {
   AugmentOptions,
   BatchExportFile,
   BatchRedrawRequest,
-  ComicAnalyzeRequest,
   ComicConsistencyRequest,
   ComicConvertRequest,
   ComicGeneratePanelRequest,
@@ -309,7 +313,7 @@ function attachEditContextMenu(win: BrowserWindow) {
       const labels: Record<string, string> = {"zh-CN":"复制图片", "zh-TW":"複製圖片", "ja-JP":"画像をコピー", "ko-KR":"이미지 복사"};
       Menu.buildFromTemplate([{label: labels[language] ?? "Copy image",
         click: () => { if (!win.isDestroyed()) win.webContents.copyImageAt(params.x, params.y); },
-      }]).popup({window: win});
+      }, favoriteContextMenuItem(params.srcURL, win)]).popup({window: win});
       return;
     }
     if (!isEditable && !hasSelection) return;
@@ -717,6 +721,8 @@ function createWindow() {
 }
 
 function registerIpc() {
+  registerImageFavoritesIpc();
+  registerCompatibleImageIpc(() => mainWindow);
   ipcMain.handle("agent:getWorkspace", () => readAgentWorkspace());
   ipcMain.handle("agent:saveWorkspace", (_event, workspace: AgentWorkspaceData) => saveTavernWorkspace(workspace));
   ipcMain.handle("agent:createConversation", (_event, title?: string) => createAgentConversation(title));
@@ -887,6 +893,7 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   ipcMain.handle("nai:quoteAnlas", (_event, request: AnlasQuoteRequest) =>
     quoteAnlasCost(request),
   );
+
   ipcMain.handle("nai:generate", (event, params, extras, previewRequestId?: string) => {
     const onPreview = typeof previewRequestId === "string" && previewRequestId
       ? (preview: Omit<GenerationPreviewEvent, "requestId">) => {
@@ -935,6 +942,8 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   ipcMain.handle("nai:generateI2I", (_event, params, i2i: I2IParams, extras) =>
     generateI2I(params, i2i, extras),
   );
+  ipcMain.handle("nai:batchRedrawPrepare", (_event, requests: BatchRedrawRequest[]) => prepareBatchImageService(requests));
+  ipcMain.handle("nai:batchRedrawCancel", (_event, runId: string) => cancelBatchRedraw(runId));
   ipcMain.handle("nai:redrawImage", (_event, request: BatchRedrawRequest) =>
     redrawImage(request),
   );
@@ -947,7 +956,8 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
       maskBase64: string,
       strength: number,
       noise: number,
-    ) => inpaintImage(params, inpaintModel, maskBase64, strength, noise),
+      region?: import('../src/focused-inpaint').InpaintRegion,
+    ) => inpaintImage(params, inpaintModel, maskBase64, strength, noise, region),
   );
     ipcMain.handle("nai:upscale", (_event, scale: UpscaleScale, model: string) =>
       upscaleImg(scale, model),
@@ -993,22 +1003,19 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
         scope,
         hint,
         knownCharacter,
-        templateVersion === "v4.5" ? "v4.5" : "v5",
+        templateVersion === "v4.5" || templateVersion === "v5" ? templateVersion : undefined,
       ),
   );
   ipcMain.handle(
     "nai:convertPrompt",
-    (_event, text: string, mode: string, knownCharacter?: boolean, templateVersion?: string) =>
+    (_event, text: string, mode: string, knownCharacter?: boolean, templateVersion?: string, assistant?: import("../src/prompt-assistant").PromptEditRequest) =>
       convertPromptText(
         text,
         (mode as "tags" | "natural" | "mixed") ?? "tags",
         knownCharacter,
         templateVersion === "v4.5" ? "v4.5" : "v5",
+        assistant,
       ),
-  );
-  ipcMain.handle(
-    "comic:analyzeScript",
-    (_event, request: ComicAnalyzeRequest) => analyzeComicScript(request),
   );
   ipcMain.handle(
     "comic:convertPanels",
@@ -1041,6 +1048,8 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
     "comic:generatePanel",
     (_event, request: ComicGeneratePanelRequest) => generateComicPanel(request),
   );
+  ipcMain.handle("tagComic:prepareImageService", (_event, requests: import("../src/types").TagComicGenerateRequest[]) => prepareComicImageService(requests));
+  ipcMain.handle("tagComic:cancelGeneration", (_event, runId: string) => cancelTagComicGeneration(runId));
   ipcMain.handle(
     "tagComic:generateCandidate",
     (_event, request: TagComicGenerateRequest) =>
@@ -1428,7 +1437,10 @@ app.whenReady().then(async () => {
   proxyRefreshTimer.unref();
   registerIpc();
   registerHarnessLauncher(() => mainWindow);
-  wireAutoUpdater(() => mainWindow);
+  wireAutoUpdater(() => mainWindow, async () => {
+    await stopHarnessForUpdate();
+    await stopAgentRuntime();
+  },resetHarnessExitAfterUpdateFailure);
   createWindow();
 
   app.on("activate", () => {

@@ -1,6 +1,6 @@
 import {PreviewImageViewer} from './components/PreviewImageViewer';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import gsap from "gsap";
+import { animateStudioEntry, motionReduced } from "./motion-system";
 import { AppPortal, Button, NumberInput, SelectMenu } from "./components/ui";
 import { confirmAction } from "./components/confirm";
 import { Icon } from "./components/icons";
@@ -300,9 +300,8 @@ export default function ReferencePresetManager({
   useEffect(() => { globalThis.localStorage?.setItem(LOCAL_GRID_COLUMNS_KEY, String(gridColumns)); }, [gridColumns]);
   useEffect(() => { globalThis.localStorage?.setItem(LOCAL_PAGE_SIZE_KEY, String(localPageSize)); }, [localPageSize]);
   useLayoutEffect(() => {
-    if (!sectionRef.current || document.hidden || document.documentElement.classList.contains("motion-reduced")) return;
-    const animation = gsap.fromTo(sectionRef.current, { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: 0.24, ease: "power2.out", clearProps: "transform,opacity,visibility" });
-    return () => { animation.kill(); };
+    if (!sectionRef.current || document.hidden || motionReduced()) return;
+    return animateStudioEntry(sectionRef.current, 150);
   }, [section]);
 
   const localizedPresetName = (preset: ReferencePreset) =>

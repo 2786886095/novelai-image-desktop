@@ -1,3 +1,7 @@
+import {comicProviderText,compatibleComicConfirmation} from './comic-provider-text';
+import {useComicGenerationQueue} from './use-comic-generation';
+import type {ComicQueueTask as QueueTask} from './generation-queue';
+import {useComicProject,comicPersistenceMessage} from './use-comic-project';
 import {RangeInput} from '../components/RangeInput';
 import {FilePicker} from '../components/FilePicker';
 import {AnimatedCollapse} from '../components/CharacterEditing';
@@ -19,8 +23,6 @@ import {
   isNAIV5Model,
   supportsNAIPreciseReference,
   type GenerateParams,
-  type TagComicCandidate,
-  type TagComicGenerateRequest,
   type TagComicPanel,
   type TagComicPanelReference,
   type TagComicProject,
@@ -28,11 +30,9 @@ import {
   type ReferencePreset,
 } from "../types";
 import {
-  TAG_COMIC_STORAGE_KEY,
   TAG_COMIC_SIZE_PRESETS,
   TagComicPanelRangeError,
   TagComicSizeImportError,
-  buildTagComicGenerateRequest,
   buildTagComicRegenerationTasks,
   createTagComicPanel,
   createTagComicProject,
@@ -53,8 +53,6 @@ import {
 } from "../nai-dimensions";
 
 type Step = "import" | "global" | "panels" | "generate";
-type QueueTask = { panelId: string; ordinal: number };
-type PreparedQueueTask = QueueTask & { request: TagComicGenerateRequest };
 
 const COPY = {
   "zh-CN": {
@@ -114,6 +112,8 @@ const COPY = {
     preciseStrength: "参考强度",
     preciseFidelity: "信息保真度",
     preciseRemove: "移除",
+    preciseRemoveConfirm: "移除这张漫画参考图？原工程会备份；已生成图片不受影响。",
+    preciseCleanupFailed: "参考记录已移除，但缓存文件清理未完成。",
     precisePanelHeading: "本分镜使用的精准参考",
     precisePanelHint: "勾选后可为当前分镜单独调整类型、强度和保真度。",
     preciseReset: "恢复全局值",
@@ -244,6 +244,8 @@ const COPY = {
     preciseStrength: "參考強度",
     preciseFidelity: "資訊保真度",
     preciseRemove: "移除",
+    preciseRemoveConfirm: "移除這張漫畫參考圖？原工程會備份；已生成圖片不受影響。",
+    preciseCleanupFailed: "參考記錄已移除，但快取檔案清理未完成。",
     precisePanelHeading: "本分鏡使用的精準參考",
     precisePanelHint: "勾選後可為目前分鏡單獨調整類型、強度與保真度。",
     preciseReset: "恢復全域值",
@@ -378,6 +380,8 @@ const COPY = {
     preciseStrength: "Reference strength",
     preciseFidelity: "Information fidelity",
     preciseRemove: "Remove",
+    preciseRemoveConfirm: "Remove this comic reference? The project will be backed up; generated images are retained.",
+    preciseCleanupFailed: "Reference removed; its cached file could not be cleaned up.",
     precisePanelHeading: "Precise references for this panel",
     precisePanelHint: "Select references and tune type, strength, and fidelity for this panel.",
     preciseReset: "Reset to global",
@@ -511,6 +515,8 @@ const COPY = {
     preciseStrength: "参照強度",
     preciseFidelity: "情報忠実度",
     preciseRemove: "削除",
+    preciseRemoveConfirm: "この漫画参照を削除しますか？プロジェクトはバックアップされ、生成済み画像は保持されます。",
+    preciseCleanupFailed: "参照は削除されましたが、キャッシュファイルの削除は未完了です。",
     precisePanelHeading: "このコマの精密参照",
     precisePanelHint: "選択後、このコマだけ種類・強度・忠実度を調整できます。",
     preciseReset: "共通値に戻す",
@@ -645,6 +651,8 @@ const COPY = {
     preciseStrength: "참조 강도",
     preciseFidelity: "정보 충실도",
     preciseRemove: "제거",
+    preciseRemoveConfirm: "이 만화 참조를 제거할까요? 프로젝트를 백업하며 생성된 이미지는 유지됩니다.",
+    preciseCleanupFailed: "참조는 제거되었지만 캐시 파일 정리는 완료되지 않았습니다.",
     precisePanelHeading: "이 컷의 정밀 참조",
     precisePanelHint: "선택 후 이 컷의 유형, 강도, 충실도를 개별 조정할 수 있습니다.",
     preciseReset: "전체 값으로 복원",
@@ -771,22 +779,17 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   const currentParams = useAppStore((state) => state.params);
   const settings = useAppStore((state) => state.settings);
   const account = useAppStore((state) => state.account);
-  const refreshAccount = useAppStore((state) => state.refreshAccount);
-  const refreshHistory = useAppStore((state) => state.refreshHistory);
   const setToast = useAppStore((state) => state.setToast);
   const language = settings?.language;
-  const [project, setProject] = useState<TagComicProject>(() => {
-    try {
-      const stored = localStorage.getItem(TAG_COMIC_STORAGE_KEY);
-      return stored
-        ? normalizeTagComicProject(JSON.parse(stored), currentParams, {
-            trustOutputs: true,
-          })
-        : createTagComicProject(currentParams);
-    } catch {
-      return createTagComicProject(currentParams);
-    }
-  });
+  const compatible=settings?.imageProvider==='openai-images';
+  const providerCopy=comicProviderText(language);
+  const providerNotice=<div className="tag-comic-params" role="note"><strong>{providerCopy.title} · {settings?.compatibleImage?.model} · {settings?.compatibleImage?.size}</strong><p>{providerCopy.hint}</p><small>{providerCopy.fees}</small></div>;
+  const {store:comicStore,snapshot:comicSnapshot}=useComicProject();
+  const project=comicSnapshot.project;
+  const setProject=(value:TagComicProject|((p:TagComicProject)=>TagComicProject),options:{expectedRevision?:string;backup?:boolean}={})=>{
+    try{comicStore.update(p=>typeof value==='function'?value(p):value,options);projectRef.current=comicStore.getSnapshot().project;return true;}
+    catch(error){projectRef.current=comicStore.getSnapshot().project;setToast(error instanceof Error?error.message:String(error));return false;}
+  };
   const [step, setStep] = useState<Step>("import");
   const [bulkText, setBulkText] = useState("");
   const [sizeText, setSizeText] = useState("");
@@ -800,29 +803,8 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   );
   const [preview, setPreview] = useState<string | null>(null);
   const previewItems=useMemo(()=>[...new Set(project.panels.flatMap(panel=>panel.candidates.flatMap(candidate=>candidate.outputUrl?[candidate.outputUrl]:[])))],[project.panels]);
-  const [queue, setQueue] = useState<{ total: number; done: number } | null>(
-    null,
-  );
-  const queueRef = useRef({ running: false, cancelled: false });
-  const mountedRef = useRef(true);
+  const {service:comicQueue,queue} = useComicGenerationQueue();
   const projectRef = useRef(project);
-
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-      if (queueRef.current.running) {
-        queueRef.current.cancelled = true;
-        void window.naiDesktop.cancel();
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      localStorage.setItem(TAG_COMIC_STORAGE_KEY, JSON.stringify(project));
-    }, 400);
-    return () => window.clearTimeout(timer);
-  }, [project]);
 
   useEffect(() => {
     projectRef.current = project;
@@ -838,7 +820,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     selectedCandidate(panel),
   ).length;
   const presetText = referencePresetTextFor(language);
-  const preciseModelSupported = supportsNAIPreciseReference(
+  const preciseModelSupported = !compatible && supportsNAIPreciseReference(
     project.globalParams.model,
   );
 
@@ -904,7 +886,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     }));
   }
 
-  async function replacePanels(items: Array<{ title: string; prompt: string }>) {
+  async function replacePanels(items: Array<{ title: string; prompt: string }>, expectedRevision=comicStore.read().revision) {
     if (!items.length) {
       setToast(text(language, "noTags"));
       return;
@@ -920,7 +902,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       width: project.globalParams.width,
       height: project.globalParams.height,
     };
-    patchProject({
+    if(!setProject(current=>({...current,
       panels: items.map((item, index) => ({
         ...createTagComicPanel(item.prompt, index + 1, item.title),
         imageSize: project.sizeMode === "perPanel" ? defaultSize : undefined,
@@ -931,18 +913,18 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
         scope: "all",
         scopePanelIds: [],
       })),
-    });
+    }),{expectedRevision,backup:true}))return false;
     setSizeText("");
     setReferenceRanges({});
     setActivePanelId("");
     setToast(format(language, "imported", { count: items.length }));
     setStep("global");
+    return true;
   }
 
   async function importText() {
     try {
-      await replacePanels(parseTagComicImport(bulkText));
-      setBulkText("");
+      if(await replacePanels(parseTagComicImport(bulkText)))setBulkText("");
     } catch (error) {
       setToast(
         error instanceof Error && error.message.includes("Old")
@@ -957,6 +939,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   async function importFile(file: File | null) {
     if (!file) return;
     try {
+      const expectedRevision=comicStore.read().revision;
       const raw = await file.text();
       if (file.name.toLowerCase().endsWith(".json")) {
         const parsed = JSON.parse(raw) as unknown;
@@ -969,14 +952,13 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
           const next = normalizeTagComicProject(parsed, currentParams, {
             trustOutputs: false,
           });
-          projectRef.current = next;
-          setProject(next);
+          if(!setProject(next,{expectedRevision,backup:true}))return;
           setActivePanelId("");
           setStep("global");
           return;
         }
       }
-      replacePanels(parseTagComicImport(raw, file.name));
+      await replacePanels(parseTagComicImport(raw, file.name),expectedRevision);
     } catch (error) {
       setToast(
         error instanceof Error &&
@@ -1010,10 +992,10 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   }
 
   async function newProject() {
+    const expectedRevision=comicStore.getSnapshot().revision;
     if (!(await confirmAction(text(language, "confirmNew")))) return;
     const next = createTagComicProject(currentParams);
-    projectRef.current = next;
-    setProject(next);
+    if(!setProject(next,{expectedRevision,backup:true}))return;
     setBulkText("");
     setSizeText("");
     setReferenceRanges({});
@@ -1054,10 +1036,13 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
 
   async function importPreciseReferences(files: FileList | null) {
     if (!files?.length) return;
+    const projectId=project.id;
     const capacity = Math.max(0, 5 - project.preciseReferences.length);
     for (const file of Array.from(files).slice(0, capacity)) {
+      const expectedRevision=comicStore.getSnapshot().revision;
+      if(comicStore.getSnapshot().project.id!==projectId)break;
       const result = await window.naiDesktop.tagComicImportReference({
-        projectId: project.id,
+        projectId,
         sourcePath: (file as File & { path?: string }).path || window.naiDesktop.getPathForFile(file),
       });
       if (!result.ok || !result.asset) {
@@ -1066,10 +1051,10 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
         );
         continue;
       }
-      setProject((current) => ({
+      if(!setProject((current) => ({
         ...current,
         preciseReferences: [...current.preciseReferences, result.asset!],
-      }));
+      }),{expectedRevision}))break;
     }
   }
 
@@ -1081,6 +1066,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       setToast(text(language, "preciseHint"));
       return;
     }
+    const expectedRevision=comicStore.getSnapshot().revision;
     const result = await window.naiDesktop.tagComicImportReference({
       projectId: projectRef.current.id,
       sourcePath: preset.filePath,
@@ -1102,7 +1088,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     setProject((current) => ({
       ...current,
       preciseReferences: [...current.preciseReferences, asset],
-    }));
+    }),{expectedRevision});
   }
 
   function patchPreciseReference(
@@ -1179,19 +1165,16 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   }
 
   async function removePreciseReference(referenceId: string) {
-    await window.naiDesktop.tagComicDeleteReference(project.id, referenceId);
-    setProject((current) => ({
-      ...current,
-      preciseReferences: current.preciseReferences.filter(
-        (item) => item.id !== referenceId,
-      ),
-      panels: current.panels.map((panel) => ({
-        ...panel,
-        preciseReferences: panel.preciseReferences.filter(
-          (item) => item.referenceId !== referenceId,
-        ),
-      })),
-    }));
+    const before=comicStore.read();if(before.busy)return;
+    if(!await confirmAction(text(language,"preciseRemoveConfirm")))return;
+    // Commit the detachment first. A write failure must never delete a still-used file.
+    const saved=setProject(current=>({...current,
+      preciseReferences:current.preciseReferences.filter(item=>item.id!==referenceId),
+      panels:current.panels.map(panel=>({...panel,preciseReferences:panel.preciseReferences.filter(item=>item.referenceId!==referenceId)})),
+    }),{expectedRevision:before.revision,backup:true});
+    if(!saved)return;
+    try{const result=await window.naiDesktop.tagComicDeleteReference(before.project.id,referenceId);if(!result.ok)setToast(text(language,"preciseCleanupFailed"));}
+    catch{setToast(text(language,"preciseCleanupFailed"));}
   }
 
   function togglePanelReference(
@@ -1377,193 +1360,16 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     }));
   }
 
-  async function quoteTasks(tasks: PreparedQueueTask[]) {
-    const cache = new Map<string, number>();
-    let amount = 0;
-    for (const task of tasks) {
-      const { params, preciseReferences } = task.request;
-      const key = JSON.stringify({
-        model: params.model,
-        width: params.width,
-        height: params.height,
-        steps: params.steps,
-        smea: params.smea,
-        smeaDyn: params.smeaDyn,
-        precise: preciseReferences.length > 0,
-      });
-      let value = cache.get(key);
-      if (value == null) {
-        const result = await window.naiDesktop.quoteAnlas({
-          feature: "generate",
-          params: {
-            ...params,
-            stylePrompt: "",
-            positivePrompt: "quote",
-            negativePrompt: "",
-          },
-          batchCount: 1,
-          extras: {
-            vibeImages: [],
-            charCaptions: [],
-            preciseReferences: preciseReferences.length
-              ? [
-                  {
-                    base64: "",
-                    type: "character",
-                    strength: 1,
-                    fidelity: 1,
-                    informationExtracted: 1,
-                  },
-                ]
-              : [],
-          },
-          account,
-        });
-        if (!result.ok || typeof result.amount !== "number") return null;
-        value = result.amount;
-        cache.set(key, value);
-      }
-      amount += value;
-    }
-    return amount;
-  }
-
-  async function generateCandidate(
-    task: PreparedQueueTask,
-    historyGroupId?: string,
-  ): Promise<string | undefined> {
-    const request = { ...task.request, historyGroupId };
-    patchPanel(request.panelId, (current) => ({
-      ...current,
-      status: "generating",
-      error: undefined,
-    }));
-    const before = useAppStore.getState().account.anlasBalance;
-    const result = await window.naiDesktop.tagComicGenerateCandidate(request);
-    const item = result.items[0];
-    if (!mountedRef.current) return item?.groupId;
-    if (queueRef.current.cancelled && (!result.ok || !item)) {
-      patchPanel(request.panelId, (current) => ({
-        ...current,
-        status: current.candidates.length ? "done" : "ready",
-        error: undefined,
-      }));
-      return item?.groupId;
-    }
-    const nextAccount = item
-      ? await refreshAccount()
-      : useAppStore.getState().account;
-    const after = nextAccount.anlasBalance;
-    const spent =
-      typeof before === "number" && typeof after === "number"
-        ? Math.max(0, before - after)
-        : undefined;
-    setProject((current) => ({
-      ...current,
-      historyGroupId: item?.groupId ?? current.historyGroupId,
-      panels: current.panels.map((currentPanel) => {
-        if (currentPanel.id !== request.panelId) return currentPanel;
-        if (!result.ok || !item) {
-          return { ...currentPanel, status: "failed", error: result.message };
-        }
-        const candidate: TagComicCandidate = {
-          id: crypto.randomUUID(),
-          historyItemId: item.id,
-          outputPath: item.filePath,
-          outputUrl: item.fileUrl,
-          createdAt: new Date().toISOString(),
-          actualAnlas: spent,
-        };
-        return {
-          ...currentPanel,
-          status: "done",
-          candidates: [...currentPanel.candidates, candidate],
-          selectedCandidateId: currentPanel.selectedCandidateId ?? candidate.id,
-          error: undefined,
-        };
-      }),
-    }));
-    if (item) {
-      await refreshHistory(item.date);
-      setToast(format(language, "generated", { index: request.panelIndex }));
-    }
-    return item?.groupId;
-  }
-
   async function startQueue(tasks: QueueTask[]) {
-    if (queueRef.current.running || !tasks.length) return;
-    const projectSnapshot = projectRef.current;
-    const snapshotPanels = [...projectSnapshot.panels].sort(
-      (left, right) => left.index - right.index,
-    );
-    if (
-      projectSnapshot.sizeMode === "perPanel" &&
-      snapshotPanels.some((panel) => !panel.imageSize)
-    ) {
-      setToast(text(language, "sizesIncomplete"));
-      return;
-    }
-    const prepared = tasks.flatMap((task) => {
-      const panel = snapshotPanels.find((item) => item.id === task.panelId);
-      return panel
-        ? [{ ...task, request: buildTagComicGenerateRequest(projectSnapshot, panel) }]
-        : [];
-    });
-    if (!prepared.length) return;
-    const invalidPreciseModel = prepared.some(
-      (task) =>
-        task.request.preciseReferences.length > 0 &&
-        !supportsNAIPreciseReference(task.request.params.model),
-    );
-    if (invalidPreciseModel) {
-      setToast(text(language, "preciseV45Only"));
-      return;
-    }
-    const missing = prepared.find((task) => !task.request.panelPrompt.trim());
-    if (missing) {
-      setToast(
-        format(language, "emptyPrompt", { index: missing.request.panelIndex }),
-      );
-      return;
-    }
-    const auth = await window.naiDesktop.hasToken();
-    if (!auth.hasToken) {
-      setToast(text(language, "needToken"));
-      return;
-    }
-    const quote = await quoteTasks(prepared);
-    const confirmed = await confirmAction(
-      quote == null
-        ? text(language, "quoteFailed")
-        : format(language, "confirmGenerate", {
-            count: prepared.length,
-            quote,
-          }),
-    );
-    if (!confirmed) return;
-    queueRef.current = { running: true, cancelled: false };
-    setQueue({ total: prepared.length, done: 0 });
     try {
-      let historyGroupId = projectSnapshot.historyGroupId;
-      for (let index = 0; index < prepared.length; index += 1) {
-        if (queueRef.current.cancelled) break;
-        const generatedGroupId = await generateCandidate(
-          prepared[index],
-          historyGroupId,
-        );
-        historyGroupId = generatedGroupId ?? historyGroupId;
-        if (!mountedRef.current) return;
-        if (queueRef.current.cancelled) break;
-        setQueue({ total: prepared.length, done: index + 1 });
-      }
-    } catch (error) {
-      if (mountedRef.current) {
-        setToast(error instanceof Error ? error.message : String(error));
-      }
-    } finally {
-      queueRef.current.running = false;
-      if (mountedRef.current) setQueue(null);
-    }
+      comicQueue.launch(tasks,{
+        expectedRevision:comicStore.read().revision,
+        confirm:summary=>confirmAction(summary.imageProvider==='openai-images'?compatibleComicConfirmation(language,summary):summary.quote===null?text(language,"quoteFailed"):format(language,"confirmGenerate",{count:summary.count,quote:summary.quote}),"请确认",undefined,summary.signal),
+      });
+      const result=await comicQueue.settled();
+      if(result.error)setToast(result.error);
+      else if(result.phase==='cancelled')setToast(text(language,"queueStopped"));
+    } catch(error) {setToast(error instanceof Error?error.message:String(error));}
   }
 
   function initialTasks() {
@@ -1584,9 +1390,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   }
 
   function stopQueue() {
-    queueRef.current.cancelled = true;
-    void window.naiDesktop.cancel();
-    setToast(text(language, "queueStopped"));
+    void comicQueue.stop().then(()=>setToast(text(language,"queueStopped"))).catch(error=>setToast(error instanceof Error?error.message:String(error)));
   }
 
   async function exportZip() {
@@ -1612,6 +1416,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
 
   return (
     <main className="tag-comic" aria-label={text(language, "title")}>
+      {comicSnapshot.error&&<p role="alert">{comicPersistenceMessage(language)}: {comicSnapshot.error}</p>}
       <header className="tag-comic-header">
         <div>
           <small>TAG COMIC WORKSPACE</small>
@@ -1671,18 +1476,15 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
             >
               {text(language, "importText")}
             </Button>
-            <label className="tag-comic-file-button">
-              <Icon name="folderOpen" />
-              <span>{text(language, "chooseFile")}</span>
-              <FilePicker
-                
-                accept=".txt,.json,.csv,text/plain,application/json,text/csv"
+            <FilePicker
+              compact
+              buttonLabel={<><Icon name="folderOpen" /><span>{text(language, "chooseFile")}</span></>}
+              accept=".txt,.json,.csv,text/plain,application/json,text/csv"
                 onChange={(event) => {
                   void importFile(event.target.files?.[0] ?? null);
                   event.currentTarget.value = "";
                 }}
-              />
-            </label>
+            />
           </div>
         </section>
       )}
@@ -1694,7 +1496,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
               <h3>{text(language, "stepGlobal")}</h3>
               <p>{text(language, "initialCountHint")}</p>
             </div>
-            <Button variant="secondary" onClick={syncParams}>
+            <Button variant="secondary" onClick={syncParams} disabled={compatible}>
               {text(language, "syncParams")}
             </Button>
           </div>
@@ -1708,17 +1510,14 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                 }
               />
             </label>
-            <div className="field">
-              <span>{text(language, "initialCount")}</span>
               <CommittedNumberInput
-                label=""
+                label={text(language, "initialCount")}
                 value={project.initialGenerationCount}
                 min={1}
                 max={10}
                 normalize={(value) => Math.max(1, Math.min(10, Math.round(value)))}
                 onCommit={(value) => patchProject({ initialGenerationCount: value })}
               />
-            </div>
             <label className="wide">
               <span>{text(language, "globalStyle")}</span>
               <textarea
@@ -1747,7 +1546,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                 {text(language, "sizePerPanel")}
               </button>
             </div>
-            <p>{text(language, "sizeModeHint")}</p>
+            <p>{compatible?providerCopy.hint:text(language, "sizeModeHint")}</p>
             {project.sizeMode === "perPanel" && (
               <>
                 <label>
@@ -1788,7 +1587,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                 <p>{text(language, "preciseHint")}</p>
               </div>
               <div className="tag-comic-reference-actions">
-                {!preciseModelSupported && (
+                {!compatible && !preciseModelSupported && (
                   <Button
                     variant="secondary"
                     onClick={() =>
@@ -1812,20 +1611,17 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                 >
                   {presetText.open}
                 </Button>
-                <label className={clsx("tag-comic-file-button", !preciseModelSupported && "disabled")}>
-                  <Icon name="folderOpen" />
-                  <span>{text(language, "preciseUpload")}</span>
-                  <FilePicker
-                    
-                    accept="image/png,image/jpeg,image/webp"
+            <FilePicker
+              compact
+              buttonLabel={<><Icon name="folderOpen" /><span>{text(language, "preciseUpload")}</span></>}
+              accept="image/png,image/jpeg,image/webp"
                     multiple
                     disabled={!preciseModelSupported || project.preciseReferences.length >= 5}
                     onChange={(event) => {
                       void importPreciseReferences(event.target.files);
                       event.currentTarget.value = "";
                     }}
-                  />
-                </label>
+            />
               </div>
             </div>
             {!project.preciseReferences.length ? (
@@ -1940,7 +1736,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
               </div>
             )}
           </div>
-          <GlobalParams
+          {compatible?providerNotice:<GlobalParams
             language={language}
             params={project.globalParams}
             patch={patchGlobalParam}
@@ -1950,12 +1746,13 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
             }
             expanded={showAdvanced}
             toggle={() => setShowAdvanced((value) => !value)}
-          />
+          />}
         </section>
       )}
 
       {step === "panels" && (
         <section className="tag-comic-card tag-comic-panels">
+          {compatible && providerNotice}
           <div className="tag-comic-section-heading">
             <div>
               <h3>{text(language, "panelsHeading")}</h3>
@@ -2188,7 +1985,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                     })}
                   </section>
                 )}
-                <Toggle
+                {!compatible && <Toggle
                   checked={activePanel.paramsOverride.enabled}
                   onChange={(enabled) =>
                     patchPanel(activePanel.id, (panel) => ({
@@ -2198,8 +1995,8 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                   }
                   label={text(language, "override")}
                   description={text(language, "overrideHint")}
-                />
-                {activePanel.paramsOverride.enabled && (
+                />}
+                {!compatible && activePanel.paramsOverride.enabled && (
                   <PanelParams
                     language={language}
                     params={mergeTagComicParams(project, activePanel)}
@@ -2216,13 +2013,14 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
 
       {step === "generate" && (
         <section className="tag-comic-card tag-comic-generate">
+          {compatible && providerNotice}
           <div className="tag-comic-section-heading">
             <div>
               <h3>{text(language, "generateHeading")}</h3>
               <p>{text(language, "exportHint")}</p>
             </div>
             <div className="tag-comic-balance">
-              {format(language, "balance", {
+              {compatible?providerCopy.fees:format(language, "balance", {
                 amount: account.anlasBalance ?? "—",
               })}
             </div>

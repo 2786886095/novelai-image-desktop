@@ -1,3 +1,5 @@
+import {workflowText} from './workflow-text';
+import {focusedInpaintPlan,type InpaintRegion} from './focused-inpaint';
 import {RangeInput} from './components/RangeInput';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "./components/icons";
@@ -44,6 +46,7 @@ function recolorMaskCanvas(
 
 export function InpaintCanvas() {
   const language = useAppStore((state) => state.settings?.language);
+  const workflow=workflowText(language);
   const workbenchImage = useAppStore((state) => state.workbenchImage);
   const currentImage = useAppStore((state) => state.currentImage);
   const comparisonBeforeImage = useAppStore((state) => state.comparisonBeforeImage);
@@ -59,6 +62,10 @@ export function InpaintCanvas() {
   const maskRevision = useAppStore((state) => state.maskRevision);
   const setInpaintMask = useAppStore((state) => state.setInpaintMask);
   const loadWorkbenchFromPath = useAppStore((state) => state.loadWorkbenchFromPath);
+  const region=useAppStore(s=>s.inpaintRegion),setRegion=useAppStore(s=>s.setInpaintRegion);
+  const [selectingRegion,setSelectingRegion]=useState(false),[draftRegion,setDraftRegion]=useState<InpaintRegion|null>(null);
+  const regionStart=useRef<{x:number;y:number}|null>(null);
+  useEffect(()=>{setSelectingRegion(false);setDraftRegion(null);regionStart.current=null;},[workbenchImage?.filePath]);
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const compareClipRef = useRef<HTMLDivElement>(null);
@@ -526,6 +533,8 @@ export function InpaintCanvas() {
         </div>
       )}
       <div className="inpaint-mask-toolbar">
+        <button type="button" className="btn" aria-pressed={selectingRegion||!!region} title={workflow.regionHint} onClick={()=>{setSelectingRegion(v=>!v);setCompareEnabled(false);setShowExportPreview(false);}}>{workflow.region}</button>
+        {region&&<button type="button" className="btn" onClick={()=>{setRegion(null);setDraftRegion(null);setSelectingRegion(false);}}>{workflow.clearRegion}</button>}
         <button
           type="button"
           className={`btn inpaint-icon-tool ${brushMode === "paint" ? "btn-primary" : "btn-ghost"}`}
@@ -706,10 +715,11 @@ export function InpaintCanvas() {
           style={{
             opacity: showExportPreview || (compareEnabled && canCompare) ? 0 : brushOpacity,
             pointerEvents: compareEnabled && canCompare ? "none" : undefined,
-            cursor: isPanning ? "grabbing" : spaceHeld ? "grab" : "none",
+            cursor: selectingRegion ? "crosshair" : isPanning ? "grabbing" : spaceHeld ? "grab" : "none",
             ...canvasZoomStyle,
           }}
           onPointerDown={(event) => {
+            if(selectingRegion&&event.button===0){event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);regionStart.current=getPoint(event.clientX,event.clientY);setDraftRegion(null);return;}
             if (event.button === 1 || spaceHeldRef.current) {
               event.preventDefault();
               event.currentTarget.setPointerCapture(event.pointerId);
@@ -736,6 +746,7 @@ export function InpaintCanvas() {
             drawSamples([event.nativeEvent]);
           }}
           onPointerMove={(event) => {
+            if(selectingRegion&&regionStart.current){const point=getPoint(event.clientX,event.clientY),start=regionStart.current;if(point){const x=Math.max(0,Math.min(workbenchImage.width,point.x)),y=Math.max(0,Math.min(workbenchImage.height,point.y));setDraftRegion({x:Math.min(start.x,x),y:Math.min(start.y,y),width:Math.abs(x-start.x),height:Math.abs(y-start.y)});}return;}
             if (panPointerRef.current === event.pointerId && panningRef.current) {
               const start = panStartRef.current;
               setStagePan({
@@ -750,12 +761,13 @@ export function InpaintCanvas() {
             drawSamples(native.getCoalescedEvents?.() ?? [native]);
           }}
           onPointerEnter={(event) => updateCursor(event.clientX, event.clientY)}
-          onPointerUp={(event) => finishPointer(event)}
-          onPointerCancel={(event) => finishPointer(event, true)}
+          onPointerUp={(event) => {if(selectingRegion&&regionStart.current){try{if(draftRegion)setRegion(focusedInpaintPlan(draftRegion,workbenchImage.width,workbenchImage.height).region);}catch(e){useAppStore.getState().setToast(String(e));}regionStart.current=null;setDraftRegion(null);setSelectingRegion(false);if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);return;}finishPointer(event);}}
+          onPointerCancel={(event) => {regionStart.current=null;setDraftRegion(null);finishPointer(event, true);}}
           onPointerLeave={() => {
             setCursor((current) => ({ ...current, visible: false }));
           }}
         />
+        {(draftRegion||region)&&!compareEnabled&&<svg className="inpaint-region-overlay" width={workbenchImage.width} height={workbenchImage.height} viewBox={`0 0 ${workbenchImage.width} ${workbenchImage.height}`} style={canvasZoomStyle} aria-label={workflow.regionLabel}><rect x={(draftRegion||region)!.x} y={(draftRegion||region)!.y} width={(draftRegion||region)!.width} height={(draftRegion||region)!.height} vectorEffect="non-scaling-stroke"/></svg>}
         {showExportPreview && previewMaskUrl ? (
           <img className="inpaint-export-preview" src={previewMaskUrl} alt={t("inpaint.maskPreviewAlt")} draggable={false} style={canvasZoomStyle} />
         ) : null}
@@ -768,7 +780,7 @@ export function InpaintCanvas() {
             height: cursor.size,
             borderRadius: brushShape === "round" ? "999px" : "3px",
             borderColor: brushColor,
-            opacity: cursor.visible && !showExportPreview && !spaceHeld && !isPanning ? 1 : 0,
+            opacity: cursor.visible && !selectingRegion && !showExportPreview && !spaceHeld && !isPanning ? 1 : 0,
           }}
         />
       </div>

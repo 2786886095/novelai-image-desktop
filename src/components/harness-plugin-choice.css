@@ -1,0 +1,42 @@
+.app-confirm-dialog.harness-plugin-choice {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  background: var(--bg-dialog);
+  color: var(--text-primary);
+  border-radius: 14px;
+}
+.harness-plugin-choice ul {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  max-height: 32vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.harness-plugin-choice li {
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  line-height: 1.6;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-panel);
+}
+.harness-plugin-choice .app-confirm-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.harness-plugin-choice .app-confirm-actions .btn {
+  width: 100%;
+  min-height: 38px;
+  height: auto;
+  padding: 8px 12px;
+  white-space: normal;
+  border-radius: 6px;
+}
+.harness-plugin-choice .app-confirm-actions .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+}

@@ -1,3 +1,4 @@
+import '../agent/compatible_proposal.dart';
 import '../ui/studio_dropdown.dart';
 import '../ui/zoomable_image.dart';
 import '../agent/scene_bindings.dart';
@@ -1609,7 +1610,9 @@ class _AgentScreenState extends State<AgentScreen> {
               ]),
         const SizedBox(height: 6),
         Text(
-          '${proposal.width ?? 1024}×${proposal.height ?? 1024} · ${proposal.steps ?? 28} steps · CFG ${proposal.scale ?? 5} · ×${proposal.count}',
+          controller.app.settings.imageProvider == 'openai-images'
+            ? "${controller.app.settings.compatibleImage['model']} · ${controller.app.settings.compatibleImage['size']} · ×${proposal.count}\n${compatibleProposalHint(controller.app.settings.language)}"
+            : '${proposal.width ?? 1024}×${proposal.height ?? 1024} · ${proposal.steps ?? 28} steps · CFG ${proposal.scale ?? 5} · ×${proposal.count}',
           style: Theme.of(context).textTheme.labelMedium,
         ),
         if (proposal.error != null)
@@ -3767,6 +3770,7 @@ class _AgentScreenState extends State<AgentScreen> {
   Future<void> _editImageProposal(AgentController controller,
       AgentMessage message, Map<String, String> text) async {
     final current = message.imageProposal!;
+    final compatible = controller.app.settings.imageProvider == 'openai-images';
     final positive = TextEditingController(text: current.positivePrompt);
     final width = TextEditingController(text: '${current.width ?? 1024}');
     final height = TextEditingController(text: '${current.height ?? 1024}');
@@ -3790,15 +3794,16 @@ class _AgentScreenState extends State<AgentScreen> {
                 child: Text(text['proposalHint']!),
               ),
               const SizedBox(height: 10),
-              Row(children: [
+              if (compatible) Text(compatibleProposalHint(controller.app.settings.language)),
+              if (!compatible) Row(children: [
                 Expanded(child: _field(width, text['width']!, number: true)),
                 const SizedBox(width: 8),
                 Expanded(child: _field(height, text['height']!, number: true)),
               ]),
               Row(children: [
-                Expanded(child: _field(steps, 'Steps', number: true)),
+                if (!compatible) Expanded(child: _field(steps, 'Steps', number: true)),
                 const SizedBox(width: 8),
-                Expanded(child: _field(scale, 'CFG', number: true)),
+                if (!compatible) Expanded(child: _field(scale, 'CFG', number: true)),
                 const SizedBox(width: 8),
                 Expanded(child: _field(count, text['quantity']!, number: true)),
               ]),

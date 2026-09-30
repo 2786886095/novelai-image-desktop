@@ -1,4 +1,5 @@
 import 'style_library_screen.dart';
+import 'compatible_images.dart';
 import '../models/style_library.dart';
 import '../i18n/style_library_text.dart';
 import 'dart:convert';
@@ -277,6 +278,7 @@ class GenerateScreen extends StatelessWidget {
         state.account.tierLevel == 3 && p.model.startsWith('nai-diffusion-5-');
 
     final preview = _PreviewCard(onPick: () => _pickImage(context));
+    if (state.settings.imageProvider == 'openai-images') return CompatibleGenerateScreen(preview:preview);
     final controls = <Widget>[
       _TagSearchBox(
         onInsert: (tag, negative) => state.setParam((params) {
@@ -884,11 +886,6 @@ class PromptEditorState extends State<PromptEditor> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final locked = widget.lockKind == 'style'
-        ? state.settings.lockStylePrompt
-        : widget.lockKind == 'negative'
-            ? state.settings.lockNegativePrompt
-            : false;
     final text = generateScreenTextFor(state.settings.language);
     final language = state.settings.language;
     return Column(
@@ -998,12 +995,7 @@ class PromptEditorState extends State<PromptEditor> {
                 icon: const Icon(Icons.hub_outlined, size: 18),
                 label: Text(text.relatedTag),
               ),
-            if (widget.lockKind != null)
-              IconButton(
-                tooltip: locked ? text.unlockPrompt : text.lockPrompt,
-                onPressed: () => state.setPromptLock(widget.lockKind!, !locked),
-                icon: Icon(locked ? Icons.lock : Icons.lock_open),
-              ),
+
           ],
         ),
       ],

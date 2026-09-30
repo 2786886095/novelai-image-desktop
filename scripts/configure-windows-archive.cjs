@@ -3,4 +3,5 @@
 // Keep this in the build hook so direct electron-builder calls and CI use the same codec.
 module.exports = async function(context) {
   if (context.electronPlatformName === 'win32') process.env.ELECTRON_BUILDER_7Z_FILTER = 'BCJ';
+  require('./prepare-agent-presentation.cjs')(context.packager.projectDir);
 };

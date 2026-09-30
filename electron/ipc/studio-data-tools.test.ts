@@ -1,4 +1,5 @@
 import {it,expect,vi,beforeEach} from 'vitest';
+import {EventEmitter} from 'node:events';
 const mock=vi.hoisted(()=>({handlers:new Map<string,Function>(),show:vi.fn(),settings:{theme:'system'} as Record<string,unknown>,set:vi.fn()}));
 vi.mock('electron',()=>({dialog:{showMessageBox:mock.show},ipcMain:{handle:(name:string,fn:Function)=>mock.handlers.set(name,fn)}}));
 vi.mock('./store',()=>({getSettings:()=>mock.settings,setSetting:(key:string,value:unknown)=>{mock.set(key,value);mock.settings[key]=value;}}));
@@ -41,4 +42,23 @@ it('compare-and-set commits once and rejects concurrent edits or replay',async()
   mock.settings.theme='system';await commit({sender:f.contents},id,'theme','system','dark');expect(mock.set).toHaveBeenCalledOnce();
   await expect(commit({sender:f.contents},id,'theme','dark','light')).rejects.toThrow();
   mock.handlers.get('studio-agent:reply')!({sender:f.contents},id,{ok:true,data:{persisted:true}});expect((await task).ok).toBe(true);
+});
+
+function waitingFixture(){
+ const sent:any[]=[];const contents=Object.assign(new EventEmitter(),{isDestroyed:()=>false,send:(_channel:string,request:any)=>sent.push(request)});
+ const owner={isDestroyed:()=>false,webContents:contents};return {sent,contents,tools:createStudioDataTools(()=>owner as any,20)};
+}
+it('run completion wait outlives ordinary IPC timeout and cleans sender lifecycle listeners',async()=>{
+ const f=waitingFixture();let settled=false;const waiting=f.tools.comicRunSettled('run').then(r=>{settled=true;return r;});
+ await new Promise(r=>setTimeout(r,50));expect(settled).toBe(false);expect(f.sent[0].args).toEqual({action:'_comic.generation.wait',runId:'run'});
+ expect(()=>mock.handlers.get('studio-agent:reply')!({sender:{}},f.sent[0].id,{ok:true,data:{phase:'completed'}})).toThrow();
+ mock.handlers.get('studio-agent:reply')!({sender:f.contents},f.sent[0].id,{ok:true,data:{phase:'completed'}});expect(await waiting).toEqual({phase:'completed'});expect(f.contents.eventNames()).toEqual([]);
+});
+it.each(['destroyed','render-process-gone','did-start-navigation'])('run wait rejects on %s rather than waiting forever',async event=>{
+ const f=waitingFixture(),waiting=f.tools.comicRunSettled('run');const rejection=expect(waiting).rejects.toThrow('未自动重试');f.contents.emit(event,{isMainFrame:true,isSameDocument:false});await rejection;expect(f.contents.eventNames()).toEqual([]);
+ expect(()=>mock.handlers.get('studio-agent:reply')!({sender:f.contents},f.sent[0].id,{ok:true})).toThrow();
+});
+it('same-document or subframe navigation does not interrupt a real run',async()=>{
+ const f=waitingFixture(),waiting=f.tools.comicRunSettled('run');f.contents.emit('did-start-navigation',{isMainFrame:true,isSameDocument:true});f.contents.emit('did-start-navigation',{isMainFrame:false,isSameDocument:false});
+ mock.handlers.get('studio-agent:reply')!({sender:f.contents},f.sent[0].id,{ok:true,data:{phase:'completed'}});expect(await waiting).toEqual({phase:'completed'});
 });

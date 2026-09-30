@@ -1,4 +1,8 @@
+import 'batch_actions.dart';
+import 'comic_actions.dart';
 import 'software_action_catalog.dart';
+import 'resource_actions.dart';
+import 'collection_actions.dart';
 
 const ordinaryAgentMutations = <String>{
   'langbai_update_studio_config',
@@ -26,7 +30,11 @@ bool requiresAgentConfirmation(String tool, Map<String, dynamic> args) {
             (args['categories'] as List).contains('apiCredentials'));
   }
   if (tool == 'langbai_software_action') {
-    final spec = softwareActionCatalog[args['action']];
+    final spec = softwareActionCatalog[args['action']] ??
+        resourceActionCatalog[args['action']] ??
+        collectionActionCatalog[args['action']] ??
+        comicActionCatalog[args['action']] ??
+        batchActionCatalog[args['action']];
     return spec == null || spec['effect'] == 'confirm';
   }
   if (ordinaryAgentMutations.contains(tool)) return false;

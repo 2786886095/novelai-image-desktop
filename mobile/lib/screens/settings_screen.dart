@@ -1,4 +1,5 @@
 import '../ui/settings_section.dart';
+import 'compatible_images.dart';
 import 'completion_sound_settings.dart';
 import '../i18n/parity_text.dart';
 import '../ui/zoomable_image.dart';
@@ -475,11 +476,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               trailing: state.updateInfo?.hasUpdate == true &&
                       state.updateInfo?.releaseUrl != null
                   ? FilledButton.tonal(
-                      onPressed: () => launchUrl(
+                      onPressed: state.updateInstalling ? null : Platform.isAndroid ? state.installAppUpdate : () => launchUrl(
                         Uri.parse(state.updateInfo!.releaseUrl!),
                         mode: LaunchMode.externalApplication,
                       ),
-                      child: Text(settingsText.view),
+                      child: Text(state.updateInstalling ? '${(state.updateProgress*100).round()}%' : Platform.isAndroid ? parityText(state.settings.language,'update.downloadInstall') : settingsText.view),
                     )
                   : IconButton(
                       tooltip: settingsText.checkUpdate,
@@ -540,6 +541,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   : settingsDetailText.networkTest),
             ),
           ]),
+          const CompatibleImageSettingsCard(),
           _Section(title: settingsText.novelAiSection, children: [
             _TextSetting(
                 label: 'API Base URL',
@@ -771,9 +773,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           false,
                   onTap: () => _editTemplate(context, 'convert', mode),
                 )),
-            const Divider(),
-            Text(settingsDetailText.comicTemplateTitle),
-            ...ReversePromptMode.values.map((mode)=>_TemplateTile(title:mode.label,customizedLabel:settingsDetailText.customized,builtInLabel:settingsDetailText.builtInTemplate,customized:s.comicAnalyzePromptTemplates[mode.value]?.trim().isNotEmpty??false,onTap:()=>_editTemplate(context,'comic',mode))),
             Text(settingsDetailText.restoreTemplateNote),
           ]),
           _Section(title: settingsText.promptShortcutsSection, children: [
@@ -977,18 +976,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: Text(appearanceText.tagAutocomplete),
                 value: s.autoComplete,
                 onChanged: (v) => state.setSettings((x) => x.autoComplete = v)),
-            SwitchListTile(
-              title: Text(appearanceText.lockStyleTitle),
-              subtitle: Text(appearanceText.lockStyleSubtitle),
-              value: s.lockStylePrompt,
-              onChanged: (value) => state.setPromptLock('style', value),
-            ),
-            SwitchListTile(
-              title: Text(appearanceText.lockNegativeTitle),
-              subtitle: Text(appearanceText.lockNegativeSubtitle),
-              value: s.lockNegativePrompt,
-              onChanged: (value) => state.setPromptLock('negative', value),
-            ),
             ListTile(
               leading: const Icon(Icons.security),
               title: Text(appearanceText.secureTitle),

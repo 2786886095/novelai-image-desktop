@@ -10,6 +10,9 @@ import 'operation_approval.dart';
 import 'operation_policy.dart';
 import 'session_controls.dart';
 import 'template_tools.dart';
+import 'template_generation.dart';
+import 'file_actions.dart';
+import 'image_provider.dart';
 
 typedef LocalToolExecutor = Future<AgentToolResult> Function(
     String tool, Map<String, dynamic> args);
@@ -25,6 +28,14 @@ class LocalAgentBridge {
       String, Map<String, dynamic>, String)? describeApproval;
   final Future<bool> Function(String, Map<String, dynamic>, String)?
       authorizeImage;
+  final Future<PreparedAgentImageOperation> Function(
+      String, Map<String, dynamic>, String)? prepareImage;
+  final void Function()? cancelImages;
+
+  /// Host-owned lifecycle operations perform their own single approval.
+  final bool Function(String, Map<String, dynamic>)? managesApproval;
+  final FutureOr<void> Function(String, Map<String, dynamic>, String, String,
+      Map<String, dynamic>, bool)? afterResponse;
   final String token = List.generate(32, (_) => Random.secure().nextInt(256))
       .map((n) => n.toRadixString(16).padLeft(2, '0'))
       .join();
@@ -39,7 +50,16 @@ class LocalAgentBridge {
       required this.execute,
       this.executeScoped,
       this.describeApproval,
-      this.authorizeImage});
+      this.authorizeImage,
+      this.prepareImage,
+      this.cancelImages,
+      this.managesApproval,
+      this.afterResponse});
+  Future<bool> approveOperation(String session, Map<String, dynamic> summary) =>
+      _approvals.wait(session, 'langbai_software_action', summary);
+  void cancelApprovals() => _approvals.close();
+  void cancelOperationApproval(String session, String action) =>
+      _approvals.cancelOperation(session, action);
   String get url => 'http://127.0.0.1:${_server!.port}';
   Future<void> start() async {
     await journal.create(recursive: true);
@@ -99,6 +119,12 @@ class LocalAgentBridge {
       }
       final tool = payload['tool'] as String,
           args = payload['args'] as Map<String, dynamic>;
+      final templateWorkflow = tool == templateGenerationTool;
+      final fileAction = tool == AgentFileActions.tool;
+      final generationArgs =
+          templateWorkflow ? templateGenerationArgs(args) : args;
+      final authorizationTool =
+          templateWorkflow ? 'langbai_generate_image' : tool;
       final uiTool = AgentSessionControls.tools.contains(tool) ||
           AgentTemplateTools.tools.contains(tool);
       final apiInputTool =
@@ -107,7 +133,9 @@ class LocalAgentBridge {
       final materialConfirm = tool == 'studio_material_confirm';
       final approvalTool = tool == 'studio_image_approval' ||
           tool == 'studio_resolve_image_approval';
-      if (!materialSource &&
+      if (!fileAction &&
+          !templateWorkflow &&
+          !materialSource &&
           !materialConfirm &&
           !approvalTool &&
           !apiInputTool &&
@@ -176,9 +204,27 @@ class LocalAgentBridge {
           .convert(utf8.encode(jsonEncode({'tool': tool, 'args': args})))
           .toString();
       final file = File('${journal.path}/$key.json');
+      final hostManaged = managesApproval?.call(tool, args) ?? false;
+      Future<void> replyResult(Map<String, dynamic> result) async {
+        var delivered = false;
+        try {
+          await _reply(request, 200, result);
+          delivered = true;
+        } finally {
+          // Schedule after this handler has removed itself from _handlers.
+          // The host may stop the Agent and close this very bridge.
+          Timer.run(() {
+            unawaited(Future<void>.sync(() => afterResponse?.call(
+                    tool, args, session, call, result, delivered))
+                .catchError((Object _) {}));
+          });
+        }
+      }
+
       final interrupt = tool == 'langbai_tasks' &&
           ['list', 'pause', 'cancel'].contains(args['action']);
-      final mutating = (materialConfirm ||
+      final mutating = (templateWorkflow ||
+              materialConfirm ||
               [
                 'studio_set_session_style',
                 'studio_generation_policy',
@@ -190,8 +236,17 @@ class LocalAgentBridge {
           !(tool == 'langbai_api' &&
               ['read', 'test'].contains(args['action'])) &&
           !(tool == 'langbai_tasks' && args['action'] == 'list') &&
-          !(tool == 'langbai_backup' && args['action'] == 'list');
-      final exclusive = mutating && !interrupt && !uiTool;
+          !(tool == 'langbai_backup' && args['action'] == 'list') &&
+          !(hostManaged &&
+              [
+                'component.status',
+                'component.check',
+                'app.update.status',
+                'app.update.check',
+                'comic.generation.status',
+                'batch.generation.status'
+              ].contains(args['action']));
+      final exclusive = mutating && !interrupt && !uiTool && !hostManaged;
       if (_pending.contains(key) || (exclusive && _mutation)) {
         await _reply(request, 409, {
           'ok': false,
@@ -202,12 +257,13 @@ class LocalAgentBridge {
       _pending.add(key);
       if (exclusive) _mutation = true;
       try {
+        PreparedAgentImageOperation? preparedImage;
         if (mutating && await file.exists()) {
           final prior =
               jsonDecode(await file.readAsString()) as Map<String, dynamic>;
           if (prior['digest'] == digest &&
               prior['result'] is Map<String, dynamic>) {
-            await _reply(request, 200, prior['result']);
+            await replyResult(Map<String, dynamic>.from(prior['result']));
             return;
           }
           await _reply(request, 409, {
@@ -222,21 +278,49 @@ class LocalAgentBridge {
           await file.writeAsString(
               jsonEncode({'digest': digest, 'state': 'pending'}),
               flush: true);
+          if (AgentSessionControls.paid.contains(authorizationTool) &&
+              prepareImage != null) {
+            try {
+              preparedImage = await prepareImage!(tool, args, session);
+            } catch (_) {
+              final result = <String, dynamic>{
+                'ok': false,
+                'output': '图片服务参数或配置未通过预检，请读取当前服务设置。未提交生图。'
+              };
+              await file.writeAsString(
+                  jsonEncode({'digest': digest, 'result': result}),
+                  flush: true);
+              await replyResult(result);
+              return;
+            }
+          }
           final automatic = !uiTool &&
-              AgentSessionControls.paid.contains(tool) &&
-              await (authorizeImage?.call(tool, args, session) ??
+              AgentSessionControls.paid.contains(authorizationTool) &&
+              await (authorizeImage?.call(
+                      authorizationTool, generationArgs, session) ??
                   Future.value(false));
           if ((!uiTool &&
+                  !hostManaged &&
                   !automatic &&
-                  requiresAgentConfirmation(tool, args) &&
+                  requiresAgentConfirmation(
+                      authorizationTool, generationArgs) &&
                   !await _approvals.wait(
                       session,
-                      tool,
+                      authorizationTool,
                       Map<String, dynamic>.from(StudioDataService.project(
-                          await (materialConfirm
-                              ? Future.value(args)
-                              : (describeApproval?.call(tool, args, session) ??
-                                  Future.value(args))))))) ||
+                          await (preparedImage != null
+                              ? Future.value(preparedImage.summary)
+                              : templateWorkflow
+                                  ? Future.value({
+                                      ...generationArgs,
+                                      'templateWorkflow': true,
+                                      'description': args['text'] ?? '参考图反推生图'
+                                    })
+                                  : materialConfirm
+                                      ? Future.value(args)
+                                      : (describeApproval?.call(
+                                              tool, args, session) ??
+                                          Future.value(args))))))) ||
               _closed) {
             final result = materialConfirm
                 ? <String, dynamic>{
@@ -265,8 +349,10 @@ class LocalAgentBridge {
                 ok: true,
                 title: '会话资料确认',
                 output: jsonEncode({'approved': true}))
-            : await (executeScoped?.call(tool, args, session) ??
-                execute(tool, args));
+            : preparedImage != null
+                ? await preparedImage.execute()
+                : await (executeScoped?.call(tool, args, session) ??
+                    execute(tool, args));
         final result = <String, dynamic>{
           'ok': output.ok,
           'title': output.title,
@@ -277,7 +363,9 @@ class LocalAgentBridge {
           'images':
               output.generatedImages.map((image) => image.toJson()).toList(),
           if (output.ok &&
-              (materialSource ||
+              (fileAction ||
+                  templateWorkflow ||
+                  materialSource ||
                   materialConfirm ||
                   uiTool ||
                   tool == 'langbai_templates' ||
@@ -295,7 +383,7 @@ class LocalAgentBridge {
               jsonEncode({'digest': digest, 'result': result}),
               flush: true);
         }
-        await _reply(request, 200, result);
+        await replyResult(result);
       } finally {
         _pending.remove(key);
         if (exclusive) _mutation = false;
@@ -315,6 +403,7 @@ class LocalAgentBridge {
   Future<void> close() async {
     _closed = true;
     _approvals.close();
+    cancelImages?.call();
     await _server?.close(force: true);
     _server = null;
     // Finish cancellation journals before disposing this bridge or its directory.

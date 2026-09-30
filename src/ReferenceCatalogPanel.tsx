@@ -1,6 +1,6 @@
 import {PreviewImageViewer} from './components/PreviewImageViewer';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import gsap from "gsap";
+import { animateStudioEntry, motionReduced } from "./motion-system";
 import { AppPortal, SelectMenu } from "./components/ui";
 import { Icon } from "./components/icons";
 import { useAppStore } from "./store";
@@ -105,7 +105,7 @@ function base64FromBytes(bytes: Uint8Array) {
 }
 
 function motionDisabled() {
-  return document.hidden || document.documentElement.classList.contains("motion-reduced");
+  return document.hidden || motionReduced();
 }
 
 function preloadCatalogImage(primaryUrl: string, fallbackUrl?: string) {
@@ -196,13 +196,7 @@ export default function ReferenceCatalogPanel({ library, onDownloaded }: { libra
 
   useLayoutEffect(() => {
     if (!panelRef.current || motionDisabled()) return;
-    const context = gsap.context(() => {
-      const timeline = gsap.timeline({ defaults: { ease: "power2.out" } });
-      timeline
-        .fromTo(headerRef.current, { autoAlpha: 0, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.32 })
-        .fromTo(".reference-catalog-stat", { autoAlpha: 0, y: 8 }, { autoAlpha: 1, y: 0, duration: 0.24, stagger: 0.04 }, "-=0.14");
-    }, panelRef);
-    return () => context.revert();
+    return animateStudioEntry(headerRef.current, 150);
   }, []);
 
   const gameOptions = useMemo(
@@ -327,30 +321,22 @@ export default function ReferenceCatalogPanel({ library, onDownloaded }: { libra
   useLayoutEffect(() => {
     if (!gridRef.current || motionDisabled()) return;
     const cards = gridRef.current.querySelectorAll(".reference-catalog-card");
-    const animation = gsap.fromTo(
-      cards,
-      { autoAlpha: 0, y: 12, scale: 0.992 },
-      { autoAlpha: 1, y: 0, scale: 1, duration: 0.3, stagger: { each: 0.024, from: "start", grid: "auto" }, ease: "power2.out", clearProps: "transform,opacity,visibility" },
-    );
-    return () => { animation.kill(); };
+    return animateStudioEntry(cards, 240);
   }, [category, game, page, pageAssets.length, query]);
 
   useLayoutEffect(() => {
     if (game === "__all__" || !seriesRef.current || motionDisabled()) return;
-    const animation = gsap.fromTo(seriesRef.current, { autoAlpha: 0, y: 10, scale: 0.995 }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.28, ease: "power2.out", clearProps: "transform,opacity,visibility" });
-    return () => { animation.kill(); };
+    return animateStudioEntry(seriesRef.current, 150);
   }, [game]);
 
   useLayoutEffect(() => {
     if (!previewAsset || !previewRef.current || motionDisabled()) return;
-    const animation = gsap.fromTo(previewRef.current, { autoAlpha: 0, scale: 0.96, y: 12 }, { autoAlpha: 1, scale: 1, y: 0, duration: 0.24, ease: "power2.out", clearProps: "transform,opacity,visibility" });
-    return () => { animation.kill(); };
+    return animateStudioEntry(previewRef.current, 200);
   }, [previewAsset]);
 
   useLayoutEffect(() => {
     if (!confirmSeries || !confirmRef.current || motionDisabled()) return;
-    const animation = gsap.fromTo(confirmRef.current, { autoAlpha: 0, scale: 0.94, y: 10 }, { autoAlpha: 1, scale: 1, y: 0, duration: 0.22, ease: "back.out(1.2)", clearProps: "transform,opacity,visibility" });
-    return () => { animation.kill(); };
+    return animateStudioEntry(confirmRef.current, 200);
   }, [confirmSeries]);
 
   const persistAsset = async (

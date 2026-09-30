@@ -17,9 +17,10 @@ export function createImageApprovals(timeoutMs=300000) {
       const id=session(request.sessionId);
       request.signal?.throwIfAborted();
       if(pending.has(id))throw Error('当前会话已有待确认操作');
-      const image=['langbai_generate_image','langbai_redraw_image','langbai_inpaint_image','langbai_upscale_image','langbai_director'].includes(request.tool);
-      const count=request.tool==='langbai_generate_image'?(request.args.count??1):1;
-      if(typeof count!=='number'||!Number.isInteger(count)||count<1||count>8)throw Error('生成张数必须为 1–8');
+      const comic=request.tool==='langbai_software_action'&&['comic.generation.start','batch.generation.start'].includes(String(request.args.action));
+      const image=comic||['langbai_generate_image','langbai_redraw_image','langbai_inpaint_image','langbai_upscale_image','langbai_director'].includes(request.tool);
+      const count=comic?request.args.plannedImages:request.tool==='langbai_generate_image'?(request.args.count??1):1;
+      if(typeof count!=='number'||!Number.isSafeInteger(count)||count<1||(!comic&&count>8))throw Error('生成张数必须为 1–8');
       return new Promise(resolve=>{
         let timer:ReturnType<typeof setTimeout>;
         const abort=()=>finish(false);

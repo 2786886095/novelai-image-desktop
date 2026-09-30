@@ -1,0 +1,88 @@
+.prompt-editor {position:relative;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-input);margin:8px 0;min-width:0;}
+.prompt-editor:focus-within {border-color:var(--accent);}
+.prompt-editor .prompt-ac-wrap {margin:0;}
+.prompt-editor .prompt-box {border:0!important;box-shadow:none!important;border-radius:var(--radius-md) var(--radius-md) 0 0;background:transparent!important;min-height:140px;resize:vertical;}
+.prompt-editor .prompt-toolbar-row.compact-prompt-toolbar {position:relative;margin:0;padding:5px;gap:3px;flex-wrap:wrap;border-top:1px solid var(--border);background:var(--bg-subtle);border-radius:0 0 var(--radius-md) var(--radius-md);}
+.prompt-editor .compact-icon-button,.prompt-editor .prompt-tool-btn {flex-basis:32px;width:32px;height:32px;min-height:32px;border-color:transparent;background:transparent;}
+.prompt-editor-more {position:absolute;bottom:calc(100% + 6px);right:0;display:flex;gap:5px;flex-wrap:wrap;padding:8px;max-width:100%;z-index:90;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-dialog);box-shadow:0 6px 20px #0002;}
+.modal-backdrop.prompt-assistant-backdrop {padding:12px;grid-template-columns:minmax(0,1fr);}
+.prompt-assistant-dialog {width:min(680px,calc(100vw - 24px));min-width:0;max-width:100%;max-height:90dvh;display:flex;flex-direction:column;background:var(--bg-dialog);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 18px 50px #0003;animation:compact-dialog-in 180ms cubic-bezier(.2,.8,.2,1);}
+.prompt-assistant-dialog header {display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);}
+.prompt-assistant-dialog h2 {margin:0;font-size:18px;}
+.prompt-assistant-body {padding:16px 20px;overflow:auto;min-height:0;}
+.prompt-assistant-body label {display:flex;flex-direction:column;gap:7px;margin-top:14px;font-size:13px;}
+.prompt-assistant-body textarea {width:100%;min-height:105px;resize:vertical;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;background:var(--bg-input);color:var(--text-primary);font:inherit;line-height:1.6;}
+.prompt-assistant-body textarea[readonly] {background:var(--bg-subtle);}
+.prompt-assistant-note,.prompt-assistant-body small {color:var(--text-secondary);font-size:12px;line-height:1.6;}
+.prompt-assistant-note {margin:0 0 8px;}
+.prompt-assistant-error {color:var(--danger);font-size:13px;overflow-wrap:anywhere;}
+.prompt-assistant-dialog footer {display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;padding:14px 20px;border-top:1px solid var(--border);}
+.prompt-assistant-dialog footer button {min-height:36px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;background:var(--bg-input);color:var(--text-primary);cursor:pointer;}
+.prompt-assistant-dialog footer .prompt-assistant-apply {background:var(--accent);color:var(--accent-text);border-color:var(--accent);}
+.prompt-assistant-dialog button:disabled {opacity:.45;cursor:default;}
+.prompt-assistant-dialog :is(button,textarea):focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+@media(pointer:coarse){.prompt-editor .compact-icon-button,.prompt-editor .prompt-tool-btn{width:40px;height:44px;min-height:44px;flex-basis:40px;}.prompt-assistant-dialog footer button{min-height:44px;}}
+
+.motion-reduced .prompt-assistant-dialog {animation:none;}
+
+/* Inset tools reveal from the anchored right edge without reflowing the form. */
+.prompt-editor {padding-bottom:14px;isolation:isolate;}
+.prompt-editor .prompt-box {height:var(--prompt-editor-height,180px)!important;min-height:140px;max-height:720px;resize:none;padding-bottom:52px!important;border-radius:var(--radius-md);}
+.prompt-toolbar-dock {position:absolute;right:6px;bottom:20px;left:6px;display:flex;align-items:flex-end;justify-content:flex-end;gap:2px;pointer-events:none;z-index:3;}
+.prompt-toolbar-reveal {display:grid;grid-template-columns:0fr;min-width:0;max-width:calc(100% - 34px);opacity:0;visibility:hidden;transform:translateX(10px);transition:grid-template-columns 220ms cubic-bezier(.2,.8,.2,1),opacity 160ms ease,transform 220ms cubic-bezier(.2,.8,.2,1),visibility 0s 220ms;}
+.prompt-toolbar-content {min-width:0;overflow:hidden;}
+.prompt-toolbar-dock[data-open=true] .prompt-toolbar-reveal {grid-template-columns:1fr;opacity:1;visibility:visible;transform:none;transition-delay:0s;pointer-events:auto;}
+.prompt-toolbar-dock[data-open=true] .prompt-toolbar-content {overflow:visible;}
+.prompt-editor .prompt-toolbar-row.compact-prompt-toolbar {flex-wrap:nowrap;gap:0;padding:2px;border:0;border-radius:var(--radius-sm);background:color-mix(in srgb,var(--bg-subtle) 76%,transparent);backdrop-filter:blur(10px);}
+.prompt-toolbar-dock .compact-icon-button,.prompt-toolbar-dock .prompt-tool-btn {width:30px;flex:0 0 30px;height:32px;min-height:32px;}
+.prompt-toolbar-dock .prompt-toolbar-toggle {pointer-events:auto;border:0;background:color-mix(in srgb,var(--bg-subtle) 76%,transparent);backdrop-filter:blur(10px);font-size:20px;border-radius:var(--radius-sm);}
+.prompt-toolbar-dock .compact-icon-button[data-tooltip]:hover::after {left:auto;right:0;white-space:normal;width:max-content;max-width:220px;}
+.prompt-editor-more {right:0;bottom:calc(100% + 6px);width:240px;max-width:calc(100vw - 48px);animation:compact-dialog-in 180ms cubic-bezier(.2,.8,.2,1);}
+.prompt-resize-handle {position:absolute;bottom:0;left:0;right:0;height:14px;display:flex;align-items:center;justify-content:center;cursor:ns-resize;touch-action:none;user-select:none;border-radius:0 0 var(--radius-md) var(--radius-md);}
+.prompt-resize-handle span {display:block;width:48px;height:3px;background:var(--text-muted);border-radius:3px;transition:width 180ms cubic-bezier(.2,.8,.2,1),background-color 180ms ease;}
+.prompt-resize-handle:hover span,.prompt-resize-handle:focus-visible span {width:64px;background:var(--accent);}
+.prompt-resize-handle:focus-visible {outline:2px solid var(--accent);outline-offset:1px;}
+/* Global .field span rules must not change the nested switch geometry. */
+.field .compact-model-label {min-height:38px;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.field .compact-furry-switch {flex:none;align-self:center;overflow:visible;min-height:32px;}
+.field .compact-furry-switch .compact-switch-track {display:block;box-sizing:border-box;width:28px;height:16px;padding:2px;margin:0;line-height:normal;flex:none;}
+.field .compact-furry-switch .compact-switch-track span {display:block;width:12px;height:12px;margin:0;padding:0;}
+.compact-furry-switch:hover::after,.compact-furry-switch:focus-visible::after {display:none;}
+.resolution-selectors {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;}
+.resolution-tier-picker .select-menu {min-width:0;}
+.resolution-tier-picker .select-menu-value {font-weight:400;color:var(--text-primary);}
+.resolution-actual {margin-top:8px;font-size:12px;font-weight:400;color:var(--text-secondary);font-variant-numeric:tabular-nums;}
+.resolution-cost-hint,.resolution-tier-note {display:block;margin:4px 0;color:var(--text-secondary);font-size:11px;line-height:1.5;}
+.resolution-tier-picker .dimension-input-hint {display:none;}
+@media(max-width:480px),(pointer:coarse){.prompt-editor .prompt-toolbar-row.compact-prompt-toolbar {flex-wrap:wrap;justify-content:flex-end;}.prompt-toolbar-dock .compact-icon-button {width:36px;flex-basis:36px;min-height:40px;height:40px;}.prompt-editor .prompt-box {padding-bottom:96px!important;}}
+
+.motion-reduced .prompt-toolbar-reveal,.motion-reduced .prompt-resize-handle span{transition:none!important;}
+
+.resolution-select-label {display:block;margin-bottom:4px;color:var(--text-secondary);font-size:11px;}
+.resolution-selectors .select-menu-trigger{width:100%;}
+
+/* Equal hit targets, a quiet collapsed affordance, and spacing between groups. */
+.prompt-editor {container-type:inline-size;}
+.prompt-editor .prompt-toolbar-dock :is(.compact-icon-button,.prompt-tool-btn) {box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;min-width:32px;min-height:32px;max-height:32px;flex:0 0 32px;padding:0;margin:0;vertical-align:middle;}
+.prompt-editor .prompt-toolbar-dock :is(.compact-icon-button,.prompt-tool-btn) svg {width:16px;height:16px;display:block;flex:none;}
+.prompt-editor .prompt-toolbar-row.compact-prompt-toolbar {padding:0;gap:2px;align-items:center;flex-wrap:wrap;}
+.prompt-toolbar-dock {align-items:flex-end;}
+.prompt-toolbar-dock[data-open=false] .prompt-toolbar-toggle {background:transparent;backdrop-filter:none;box-shadow:none;color:var(--text-secondary);}
+.prompt-toolbar-dock[data-open=false] .prompt-toolbar-toggle:hover,.prompt-toolbar-dock[data-open=false] .prompt-toolbar-toggle:focus-visible {background:var(--accent-soft);color:var(--accent);}
+.prompt-advanced-button {margin-top:12px!important;margin-bottom:4px;}
+.prompt-assistant-body>label:first-child {margin-top:0;}
+.prompt-api-required {padding:14px 0 20px;display:flex;flex-direction:column;align-items:flex-start;gap:12px;}
+.prompt-api-required p {margin:0;color:var(--text-secondary);}
+.prompt-weight-backdrop {padding:16px;}
+.prompt-weight-dialog {display:flex;flex-direction:column;width:min(640px,calc(100vw - 32px));max-height:80dvh;background:var(--bg-dialog);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-xl);animation:compact-dialog-in 180ms cubic-bezier(.2,.8,.2,1);}
+.prompt-weight-dialog header {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border);}
+.prompt-weight-dialog h2 {font-size:16px;margin:0;}
+.prompt-weight-body {overflow:auto;min-height:0;padding:16px 20px;}
+.prompt-weight-body .weight-editor {margin:0;padding:0;border:0;background:transparent;}
+.prompt-weight-body .weight-tag-list {max-height:none;}
+.prompt-weight-body .weight-tag {min-height:32px;}
+.prompt-weight-body .weight-tag-core {overflow-wrap:anywhere;min-width:0;}
+@container(max-width:320px){.prompt-editor .prompt-box{padding-bottom:88px!important;}}
+@media(pointer:coarse){.prompt-editor .prompt-toolbar-dock :is(.compact-icon-button,.prompt-tool-btn){width:40px;min-width:40px;height:40px;min-height:40px;max-height:40px;flex-basis:40px;}.prompt-toolbar-reveal{max-width:calc(100% - 42px);}}
+
+.motion-reduced .prompt-weight-dialog {animation:none;}

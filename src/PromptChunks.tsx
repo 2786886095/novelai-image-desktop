@@ -76,6 +76,7 @@ export function resolvePromptChunkTop(
 }
 
 export function PromptChunkControl({
+  compact = false,
   value,
   onApply,
   placement = "auto",
@@ -83,6 +84,7 @@ export function PromptChunkControl({
   value: string;
   onApply: (value: string) => void;
   placement?: PromptChunkPlacement;
+  compact?: boolean;
 }) {
   const language = useAppStore((state) => state.settings?.language ?? "zh-CN");
   const chunks = useAppStore((state) => state.settings?.promptChunks ?? EMPTY_PROMPT_CHUNKS);
@@ -210,8 +212,8 @@ export function PromptChunkControl({
   }
 
   return <>
-    <button ref={triggerRef} type="button" className={clsx("prompt-tool-btn", "prompt-chunk-trigger", open && "tool-on")} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
-      <Icon name="plus" /><span>{text.trigger}</span>
+    <button ref={triggerRef} type="button" title={text.trigger} aria-label={text.trigger} data-tooltip={text.trigger} className={clsx("prompt-tool-btn", "prompt-chunk-trigger", compact && "compact-icon-button", open && "tool-on")} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+      <Icon name="plus" />{!compact&&<span>{text.trigger}</span>}
     </button>
     {present && <AppPortal>
       <div ref={panelRef} className="prompt-chunk-popover disclosure-popover" {...disclosureAttributes(open)} role="dialog" aria-label={text.title} data-placement={position.placement} style={{ left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight }}>

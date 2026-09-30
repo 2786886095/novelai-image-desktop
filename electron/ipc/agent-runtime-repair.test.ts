@@ -6,10 +6,10 @@ import path from 'node:path';
 import sharp from 'sharp';
 import {Readable} from 'node:stream';
 import {createSoftwareImageStarterKit} from '../../src/tavern/builtins';
-const mocked=vi.hoisted(()=>({workspace:null as any,post:vi.fn(),generate:vi.fn(),events:[] as any[],protocol:"openai-chat"}));
+const mocked=vi.hoisted(()=>({workspace:null as any,post:vi.fn(),generate:vi.fn(),events:[] as any[],protocol:"openai-chat",imageSettings:{} as any}));
 vi.mock('axios',()=>({default:{post:mocked.post}}));
 vi.mock('./proxy',()=>({proxyConfig:()=>({})}));
-vi.mock('./store',()=>({getSettings:()=>({agentApiBaseUrl:'https://fixture.invalid',agentApiModel:'fixture',agentApiKey:'fixture-token',agentApiProtocol:mocked.protocol,agentMaxOutputTokens:1000,agentAutoCompact:false,reverseConvertDshEnabled:false})}));
+vi.mock('./store',()=>({getSettings:()=>({agentApiBaseUrl:'https://fixture.invalid',agentApiModel:'fixture',agentApiKey:'fixture-token',agentApiProtocol:mocked.protocol,agentMaxOutputTokens:1000,agentAutoCompact:false,reverseConvertDshEnabled:false,...mocked.imageSettings})}));
 vi.mock('./agent-store',()=>({readAgentWorkspace:()=>structuredClone(mocked.workspace),updateAgentConversation:(id:string,f:(v:any)=>void)=>{const c=mocked.workspace.conversations.find((c:any)=>c.id===id);if(c)f(c);}}));
 vi.mock('./agent-tools',()=>({executeAgentTool:mocked.generate}));
 vi.mock('./dsh-reverse-convert',()=>({injectDshImageAiSystemPrompt:({systemPrompt}:{systemPrompt:string})=>systemPrompt}));
@@ -21,7 +21,7 @@ const tempRoot=fs.realpathSync.native(os.tmpdir());
 let imageRoot='';
 afterEach(()=>{if(imageRoot){if(path.dirname(imageRoot)!==tempRoot||!path.basename(imageRoot).startsWith('nai-runtime-image-'))throw Error('unexpected fixture root');fs.rmSync(imageRoot,{recursive:true,force:true});imageRoot='';}});
 beforeEach(async()=>{
- vi.clearAllMocks();mocked.protocol="openai-chat";const kit=createSoftwareImageStarterKit();kit.character.visual={...kit.character.visual,stylePrompt:'',negativePrompt:'',width:1088,height:1920,scale:0};
+ vi.clearAllMocks();mocked.imageSettings={};mocked.protocol="openai-chat";const kit=createSoftwareImageStarterKit();kit.character.visual={...kit.character.visual,stylePrompt:'',negativePrompt:'',width:1088,height:1920,scale:0};
  mocked.workspace={characters:[kit.character],personas:[kit.persona],samplerPresets:[kit.sampler],lorebooks:[],conversations:[{id:'chat',status:'idle',characterIds:[kit.character.id],activeCharacterId:kit.character.id,samplerPresetId:kit.sampler.id,personaId:kit.persona.id,lorebookIds:[],generationMode:'auto',draftAttachments:[],messages:[{id:'old',role:'assistant',status:'complete',createdAt:'2026-09-09T00:00:00Z',content:'已有画面',attachments:[],tools:[],characterId:kit.character.id,imageProposal:{id:'base',status:'completed',createdAt:'2026-09-09T00:00:00Z',positivePrompt:'woman, red coat, white scarf, city street',stylePrompt:'',negativePrompt:'',count:1}}]}]};
  imageRoot=fs.mkdtempSync(path.join(tempRoot,'nai-runtime-image-'));
  const imagePath=path.join(imageRoot,'image.png');await sharp({create:{width:2,height:3,channels:3,background:'#7047d8'}}).png().toFile(imagePath);
@@ -213,4 +213,50 @@ describe('literal repeat image action',()=>{
   mocked.post.mockResolvedValue(block({scene:{version:1,revision:0,entities:[],facts:[{id:'setting',entityId:'scene',slot:'setting',prompt:'forest'}],relations:[]}}));
   await sendAgentMessage({conversationId:'chat',text:'重新生成'});expect(mocked.post).toHaveBeenCalled();
  });
+});
+
+for (const withScene of [false,true]) it(`compatible legacy proposal routes without native parameters: ${withScene}`,async()=>{
+ mocked.imageSettings={imageProvider:'openai-images',imageApiKey:'fixture-key',compatibleImage:{baseUrl:'https://image.invalid/v1',model:'independent-image',size:'1024x1024',responseFormat:'auto',extensions:{}}};
+ const old=mocked.workspace.conversations[0].messages[0];
+ if(withScene)old.imageProposal.scene=JSON.parse(fs.readFileSync('shared/tavern-scene-fixtures.json','utf8')).scene;
+ const {compatibleAgentInput,assertAgentImageProvider}=await import('./agent-image-provider');
+ mocked.generate.mockImplementation(async(req)=>{compatibleAgentInput(req.args,mocked.imageSettings);assertAgentImageProvider(mocked.imageSettings,req.imageProviderBinding);return {ok:true,output:'generated',generatedImages:[{id:'fixture',kind:'image',filePath:path.join(imageRoot,'image.png')}]};});
+ const result=await generateTavernImage({conversationId:'chat',messageId:old.id,proposal:old.imageProposal});
+ expect(result.ok).toBe(true);expect(old.attachments).toHaveLength(1);
+ expect(mocked.generate).toHaveBeenCalledTimes(1);
+ const request=mocked.generate.mock.calls[0][0];
+ expect(Object.keys(request.args).sort()).toEqual(['count','positivePrompt']);
+ expect(request.imageProviderBinding.provider).toBe('openai-images');
+ if(withScene){expect(request.args.positivePrompt).toContain('Wearing coat, red, leather.');expect(request.args.positivePrompt).toContain('Wearing jacket, blue.');}
+});
+
+it('legacy provider is bound before workspace notification can change configuration',async()=>{
+ mocked.imageSettings={imageProvider:'openai-images',imageApiKey:'fixture-key',compatibleImage:{baseUrl:'https://image.invalid/v1',model:'independent-image',size:'1024x1024',responseFormat:'auto',extensions:{}}};
+ const {assertAgentImageProvider}=await import('./agent-image-provider');
+ setAgentEventSink(e=>{if(e.kind==='workspace')mocked.imageSettings.imageProvider='novelai';});
+ mocked.generate.mockImplementation(async(req)=>{assertAgentImageProvider(mocked.imageSettings,req.imageProviderBinding);throw Error('must not submit');});
+ const old=mocked.workspace.conversations[0].messages[0];
+ const result=await generateTavernImage({conversationId:'chat',messageId:old.id,proposal:old.imageProposal});
+ expect(result.ok).toBe(false);expect(result.message).toContain('配置已变化');expect(old.attachments).toEqual([]);
+});
+it('auto legacy continuation uses compatible provider once and preserves canonical proposal',async()=>{
+ mocked.imageSettings={imageProvider:'openai-images',imageApiKey:'fixture-key',compatibleImage:{baseUrl:'https://image.invalid/v1',model:'independent-image',size:'1024x1024',responseFormat:'auto',extensions:{}}};
+ mocked.post.mockResolvedValueOnce(block(repaired));
+ const result=await send();expect(result.ok).toBe(true);expect(mocked.generate).toHaveBeenCalledTimes(1);
+ expect(Object.keys(mocked.generate.mock.calls[0][0].args).sort()).toEqual(['count','positivePrompt']);
+ expect(latest().imageProposal.positivePrompt).toContain('blue coat');expect(latest().imageProposal.status).toBe('completed');
+});
+
+it('first compatible image accepts a flat prompt without NAI scene repair',async()=>{
+ mocked.imageSettings={imageProvider:'openai-images',imageApiKey:'fixture-key',compatibleImage:{baseUrl:'https://image.invalid/v1',model:'nai-diffusion-5-full',size:'auto',responseFormat:'auto',extensions:{}}};
+ mocked.workspace.conversations[0].messages=[];mocked.post.mockResolvedValueOnce(block({positivePrompt:'An empty forest'}));
+ expect((await sendAgentMessage({conversationId:'chat',text:'Draw an empty forest'})).ok).toBe(true);
+ expect(mocked.post).toHaveBeenCalledTimes(1);expect(mocked.generate).toHaveBeenCalledTimes(1);expect(latest().imageProposal.status).toBe('completed');
+ const chatBody=JSON.stringify(mocked.post.mock.calls[0][1]);expect(chatBody).toContain('OpenAI Images compatible text-to-image');
+ expect(chatBody).not.toContain('A first image MUST use scene');
+});
+it('image provider changed during chat does not charge a different provider',async()=>{
+ mocked.imageSettings={imageProvider:'openai-images',imageApiKey:'fixture-key',compatibleImage:{baseUrl:'https://image.invalid/v1',model:'image',size:'auto',responseFormat:'auto',extensions:{}}};
+ mocked.post.mockImplementationOnce(async()=>{mocked.imageSettings.imageProvider='novelai';return block(repaired);});
+ await send();expect(mocked.generate).not.toHaveBeenCalled();expect(latest().imageProposal.status).toBe('error');expect(latest().imageProposal.error).toContain('配置已变化');
 });

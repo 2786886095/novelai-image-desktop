@@ -1,3 +1,5 @@
+import 'package:novelai_mobile/services/generation_scope.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -18,6 +20,8 @@ import 'package:novelai_mobile/state/app_state.dart';
 // after dispose() (a disposed ChangeNotifier throws on notifyListeners()),
 // and must actually stop the queue rather than let it keep running unattended.
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(()=>SharedPreferences.setMockInitialValues({}));
   test(
       'comic queue freezes confirmed settings but a later regeneration uses the new settings',
       () async {
@@ -94,6 +98,7 @@ void main() {
       params: app.params.copy(),
     );
 
+    controller.project.panels.add(panel);
     final queueDone = controller.addOne(panel);
     await _waitUntil(() => api.calls == 1);
     expect(controller.queueRunning, isTrue);
@@ -136,6 +141,7 @@ void main() {
       prompt: 'redraw me',
     );
 
+    controller.project.items.add(item);
     final queueDone = controller.startQueue([item]);
     await _waitUntil(() => api.calls == 1);
     expect(controller.queueRunning, isTrue);
@@ -495,12 +501,12 @@ class _SlowImg2ImgApi extends NaiApi {
 
 class _CancellableImg2ImgApi extends _SlowImg2ImgApi {
   _CancellableImg2ImgApi(super.pending);
-
-  @override
-  void cancelActiveGeneration() {
-    if (!pending.isCompleted) {
-      pending.completeError(const GenerationCancelledException());
-    }
+  @override Future<(List<Uint8List>, int)> img2img(String token, AppSettings settings, GenerateParams params, GenerateExtras extras, Uint8List sourceBytes, I2IParams i2i) async {
+    final detach = GenerationScope.current?.attach(() {
+      if (!pending.isCompleted) pending.completeError(const GenerationCancelledException());
+    });
+    try { return await super.img2img(token, settings, params, extras, sourceBytes, i2i); }
+    finally { detach?.call(); }
   }
 }
 

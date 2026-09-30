@@ -1,9 +1,9 @@
 import crypto from 'node:crypto';
 import type {HarnessDownload} from './harness-update';
 /** Short lived, one-use, bound to the exact size/hash shown before downloading. */
-export class HarnessDownloadConsent {
- private pending:{token:string;expires:number;kind:'component'|'official';reinstall:boolean;asset:HarnessDownload}|null=null;
- issue(asset:HarnessDownload,kind:'component'|'official',reinstall:boolean){
+export class HarnessDownloadConsent<T extends {version:string;bytes:number}=HarnessDownload> {
+ private pending:{token:string;expires:number;kind:'component'|'official';reinstall:boolean;asset:T}|null=null;
+ issue(asset:T,kind:'component'|'official',reinstall:boolean){
   const token=crypto.randomBytes(24).toString('hex');this.pending={token,expires:Date.now()+600000,asset,kind,reinstall};
   return {token,version:asset.version,bytes:asset.bytes};
  }

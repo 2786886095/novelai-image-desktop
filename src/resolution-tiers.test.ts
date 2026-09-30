@@ -1,0 +1,9 @@
+import {expect,it} from 'vitest';
+import {RESOLUTION_TIERS,RESOLUTION_RATIOS,resolutionForTier,nearestResolutionTier,nearestResolutionRatio,resolutionLabels} from './resolution-tiers';
+it('normal square is 1024² and large portrait is 1024×1536',()=>{expect(resolutionForTier(1,'1:1')).toEqual({width:1024,height:1024});expect(resolutionForTier(1.5,'2:3')).toEqual({width:1024,height:1536});});
+it('every tier and aspect fits its cap on the 64px lattice',()=>{for(const tier of RESOLUTION_TIERS)for(const ratio of RESOLUTION_RATIOS){const s=resolutionForTier(tier,ratio),[w,h]=ratio.split(':').map(Number);expect(s.width%64).toBe(0);expect(s.height%64).toBe(0);expect(s.width*s.height).toBeLessThanOrEqual(tier===0.4?409600:tier*1024*1024);expect(s.width*s.height).toBeGreaterThan((tier===0.4?409600:tier*1024*1024)*.75);expect(Math.abs(Math.log((s.width/s.height)/(w/h)))).toBeLessThan(.08);}});
+it('preserves the orientation and rejects invalid input',()=>{expect(resolutionForTier(1,'9:16').height).toBeGreaterThan(resolutionForTier(1,'9:16').width);for(const ratio of ['0:1','a','-2:3','1:0'])expect(()=>resolutionForTier(1,ratio)).toThrow();expect(()=>resolutionForTier(100,'1:1')).toThrow();});
+it('reflects existing and custom dimensions without changing them',()=>{expect(nearestResolutionTier(832,1216)).toBe(1);expect(nearestResolutionRatio(832,1216)).toBe('2:3');expect(nearestResolutionTier(64,64)).toBe('custom');expect(nearestResolutionRatio(64,512)).toBe('custom');});
+it('has labels in all five languages',()=>{for(const language of ['zh-CN','zh-TW','en-US','ja-JP','ko-KR']){const t=resolutionLabels(language);expect(t.tiers).toHaveLength(5);expect(t.normal).not.toBe(t.large);expect(t.resize).toBeTruthy();}});
+
+it('tier selection round-trips across every supported ratio',()=>{for(const tier of RESOLUTION_TIERS)for(const ratio of RESOLUTION_RATIOS){const s=resolutionForTier(tier,ratio);expect(nearestResolutionTier(s.width,s.height)).toBe(tier);}});

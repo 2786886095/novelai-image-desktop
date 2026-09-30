@@ -1,3 +1,6 @@
+import {selectBatchTasks} from './batch/generation-queue';
+import {BatchSizeImportError,parseBatchSizeImport} from './batch/size-import';
+import {getBatchGenerationQueue,getBatchProjectStore} from './batch/use-batch-generation';
 import {RangeInput} from './components/RangeInput';
 import {BatchRedrawPreview} from './components/BatchRedrawPreview';
 import { useEffect, useMemo, useState } from "react";
@@ -13,16 +16,12 @@ import {
 } from "./i18n";
 import { useAppStore } from "./store";
 import {
-  appendBatchRedrawCandidates,
   batchRedrawCandidates,
-  buildBatchRedrawRequest,
   normalizeBatchRedrawCandidateCount,
   retainBatchRedrawCandidates,
   resetBatchRedrawItemForParameterRevision,
-  resetInterruptedBatchItem,
   selectBatchRedrawCandidate,
   selectedBatchRedrawCandidate,
-  shouldStopBatchRedraw,
 } from "./batch-redraw-queue";
 import ReferencePresetManager, {
   referencePresetTextFor,
@@ -319,41 +318,6 @@ function selectedBatchOutputSize(
   return project.sizeMode === "perImage" && isNAIImageSize(explicitSize)
     ? explicitSize
     : { width: params.width, height: params.height };
-}
-
-type BatchSizeImportErrorCode = "empty" | "count" | "blank" | "format" | "unsupported";
-
-class BatchSizeImportError extends Error {
-  constructor(
-    readonly code: BatchSizeImportErrorCode,
-    readonly line?: number,
-    readonly expected?: number,
-    readonly actual?: number,
-  ) {
-    super(code);
-  }
-}
-
-function parseBatchSizeImport(text: string, expectedCount: number) {
-  const source = text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
-  if (!source.trim()) throw new BatchSizeImportError("empty");
-  // A trailing Enter is harmless, but leading/internal empty lines must remain
-  // visible so line N can never silently shift onto image N-1.
-  const lines = source.trimEnd().split("\n");
-  if (lines.length !== expectedCount) {
-    throw new BatchSizeImportError("count", undefined, expectedCount, lines.length);
-  }
-  return lines.map((raw, index) => {
-    const line = raw.trim();
-    if (!line) throw new BatchSizeImportError("blank", index + 1);
-    const match = line.match(/^(\d+)\s*[x×*]\s*(\d+)$/i);
-    if (!match) throw new BatchSizeImportError("format", index + 1);
-    const size = { width: Number(match[1]), height: Number(match[2]) };
-    if (!isNAIImageSize(size)) {
-      throw new BatchSizeImportError("unsupported", index + 1);
-    }
-    return size;
-  });
 }
 
 // Reusable parameter editor — drives both the global params and per-image overrides.
@@ -731,11 +695,8 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
   const running = useAppStore((state) => state.batchRunning);
   const cancelling = useAppStore((state) => state.batchCancelRequested);
   const progress = useAppStore((state) => state.batchProgress);
-  const setBatchRunning = useAppStore((state) => state.setBatchRunning);
-  const requestBatchCancel = useAppStore((state) => state.requestBatchCancel);
   const setToast = useAppStore((state) => state.setToast);
   const refreshHistory = useAppStore((state) => state.refreshHistory);
-  const refreshAccount = useAppStore((state) => state.refreshAccount);
   const { t, f } = useBatchLocale();
 
   const [aiFilling, setAiFilling] = useState(false);
@@ -745,24 +706,6 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
   const [resultFilter, setResultFilter] = useState<
     "all" | "done" | "failed" | "pending"
   >("all");
-  // Cancel signal lives in the global store (batchCancelRequested), not a local
-  // ref: a component-local ref only reaches the loop from THIS mount. If the
-  // user leaves this tab mid-run and comes back, the still-running loop is a
-  // closure from the OLD mount — only global state can still reach it.
-  const cancelRefCurrent = () => useAppStore.getState().batchCancelRequested;
-
-  useEffect(() => {
-    return () => {
-      // Leaving the tab mid-run must abort the in-flight paid request and let a
-      // future remount's "stop" still be able to reach this run — otherwise it
-      // keeps generating/billing in the background with no way to stop it.
-      if (useAppStore.getState().batchRunning) {
-        requestBatchCancel();
-        void window.naiDesktop.cancel();
-      }
-    };
-  }, [requestBatchCancel]);
-
   const { items, globalStrength, step } = project;
   const candidateCount = normalizeBatchRedrawCandidateCount(
     project.candidateCount,
@@ -1065,8 +1008,8 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
     const mode = useAppStore.getState().batchRedraw.aiMode;
     try {
       for (const it of targets) {
-        if (cancelRefCurrent()) break;
-        const res = await window.naiDesktop.reversePrompt(it.base64, mode);
+        if (useAppStore.getState().batchCancelRequested) break;
+        const res = await window.naiDesktop.reversePrompt(it.base64, mode, "full", "", false, useAppStore.getState().settings?.reversePromptTemplateVersion);
         if (res.ok && res.prompt)
           patchItem(it.id, { prompt: res.prompt.trim() });
       }
@@ -1120,173 +1063,18 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
       }
     }
     const runGroupName = localizedBatchGroupName(proj.groupName, t);
-    // Targets may come from a prior render. Resolve IDs against the current
-    // store before snapshotting so changing a parameter then pressing Retry
-    // never submits the pre-edit object captured by React.
-    const ready = targets
-      .map((target) => proj.items.find((item) => item.id === target.id))
-      .filter((item): item is BatchRedrawItem => Boolean(item?.prompt.trim()))
-      .map((item) => ({
-        id: item.id,
-        request: buildBatchRedrawRequest(proj, item, runGroupName),
-        candidateCount: normalizeBatchRedrawCandidateCount(
-          proj.candidateCount,
-        ),
-      }));
-    if (ready.length === 0) {
-      setToast(t("batch.toast.noReady"));
-      return;
-    }
-    const requestTotal = ready.reduce(
-      (total, target) => total + target.candidateCount,
-      0,
-    );
-    setBatchRunning(true, { done: 0, total: requestTotal });
-
-    let done = 0;
-    let failed = 0;
-    let attempted = 0;
-    let lastError = "";
-    // Everything below runs inside try/finally: a throw anywhere (IPC, network,
-    // history/account refresh) must never leave the UI stuck in "running" with
-    // every button disabled — finally always clears the running flag.
-    try {
-      try {
-        await window.naiDesktop.createHistoryGroup(runGroupName);
-      } catch {
-        /* group ensured by the main process anyway */
-      }
-
-      for (const target of ready) {
-        if (cancelRefCurrent()) break;
-        // Do not clear an earlier output while the replacement is running.
-        // This prevents a failed retry/cancel from visually discarding a good
-        // image and leaves it available in the persistent History panel.
-        patchItem(target.id, {
-          status: "generating",
-          error: undefined,
-        });
-        let generatedForItem = 0;
-        let failedForItem = 0;
-        for (
-          let candidateIndex = 0;
-          candidateIndex < target.candidateCount;
-          candidateIndex += 1
-        ) {
-          if (cancelRefCurrent()) break;
-          try {
-            const res = await window.naiDesktop.redrawImage(target.request);
-            // Cancellation controls the whole queue; it is not a failed image.
-            if (shouldStopBatchRedraw(cancelRefCurrent(), res.failureKind)) {
-              break;
-            }
-            attempted += 1;
-            const out = res.ok ? res.items[0] : undefined;
-            if (res.ok && out) {
-              setBatchRedraw((prev) => ({
-                ...prev,
-                items: prev.items.map((item) => {
-                  if (item.id !== target.id) return item;
-                  return {
-                    ...appendBatchRedrawCandidates(item, [
-                      {
-                        id: out.id,
-                        historyItemId: out.id,
-                        resultUrl: out.fileUrl,
-                        resultPath: out.filePath,
-                        createdAt: out.createdAt,
-                        actualSeed: out.actualSeed,
-                      },
-                    ]),
-                    status: "generating",
-                    error: undefined,
-                  };
-                }),
-              }));
-              generatedForItem += 1;
-              done += 1;
-            } else {
-              failedForItem += 1;
-              failed += 1;
-              lastError = res.message;
-            }
-          } catch (error) {
-            if (cancelRefCurrent()) break;
-            attempted += 1;
-            failedForItem += 1;
-            failed += 1;
-            lastError = error instanceof Error ? error.message : String(error);
-          }
-          setBatchRunning(true, { done: attempted, total: requestTotal });
-        }
-        const latest = useAppStore
-          .getState()
-          .batchRedraw.items.find((item) => item.id === target.id);
-        const hasCandidate = latest
-          ? batchRedrawCandidates(latest).length > 0
-          : generatedForItem > 0;
-        if (cancelRefCurrent()) {
-          setBatchRedraw((prev) => ({
-            ...prev,
-            items: prev.items.map((item) =>
-              item.id !== target.id
-                ? item
-                : hasCandidate
-                  ? { ...item, status: "done", error: undefined }
-                  : resetInterruptedBatchItem(item),
-            ),
-          }));
-          break;
-        }
-        patchItem(target.id, {
-          status: hasCandidate ? "done" : "failed",
-          error: hasCandidate
-            ? undefined
-            : lastError ||
-              (failedForItem > 0 ? t("batch.toast.unknownFailure") : undefined),
-        });
-      }
-    } catch (error) {
-      if (!cancelRefCurrent()) {
-        lastError = error instanceof Error ? error.message : String(error);
-        failed = Math.max(failed, requestTotal - done);
-      }
-    } finally {
-      if (cancelRefCurrent()) {
-        setBatchRedraw((prev) => ({
-          ...prev,
-          items: prev.items.map(resetInterruptedBatchItem),
-        }));
-      }
-      try {
-        await refreshHistory();
-      } catch {
-        /* keep going — never strand the running flag */
-      }
-      try {
-        await refreshAccount();
-      } catch {
-        /* ignore */
-      }
-      setBatchRunning(false, null);
-    }
-    setToast(
-      cancelRefCurrent()
-        ? f("batch.toast.stopped", { done })
-        : failed > 0
-          ? f("batch.toast.failed", { done, failed, message: lastError })
-          : f("batch.toast.allDone", { done, name: runGroupName }),
-    );
+    const ids=targets.map(target=>target.id).filter(id=>proj.items.some(item=>item.id===id&&item.prompt.trim()));
+    if(!ids.length){setToast(t("batch.toast.noReady"));return;}
+    try{
+      const store=getBatchProjectStore();store.update(p=>({...p,groupName:runGroupName}));
+      const current=store.read(),queue=getBatchGenerationQueue();
+      const receipt=queue.launch(selectBatchTasks(current.project,'all',ids),{expectedRevision:current.revision});
+      const result=await queue.wait(receipt.id);
+      setToast(result.phase==='cancelled'?f("batch.toast.stopped",{done:result.images}):result.phase==='failed'?f("batch.toast.failed",{done:result.images,failed:Math.max(1,result.total-result.done),message:result.error??''}):f("batch.toast.allDone",{done:result.images,name:runGroupName}));
+    }catch(error){setToast(error instanceof Error?error.message:String(error));}
   }
 
-  function stop() {
-    requestBatchCancel();
-    setBatchRedraw((prev) => ({
-      ...prev,
-      items: prev.items.map(resetInterruptedBatchItem),
-    }));
-    void window.naiDesktop.cancel();
-  }
+  function stop() {useAppStore.getState().requestBatchCancel();void getBatchGenerationQueue().stop().catch(error=>setToast(String(error)));}
 
   async function clearGeneratedResults() {
     if (running) return;

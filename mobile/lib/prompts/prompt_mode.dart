@@ -296,11 +296,11 @@ String knownCharacterRuntimeInstruction(
   // src/prompt-mode.ts knownCharacterRuntimeInstruction for the same fix.
   final versionLabel = templateVersion == 'v4.5' ? 'V4.5' : 'V5';
   final modeText = switch (mode) {
-    ReversePromptMode.natural => '使用简洁的英文自然语言 NovelAI $versionLabel 提示词。',
+    ReversePromptMode.natural => '使用准确的英文自然语言 NovelAI $versionLabel 提示词。',
     ReversePromptMode.mixed =>
-      '使用 NovelAI $versionLabel 混合提示词：约 80% Danbooru tag + 20% 简短英文自然语言，两部分都不得省略。',
+      '使用 NovelAI $versionLabel 混合提示词：约 ${templateVersion == 'v4.5' ? '80% Danbooru tag + 20%' : '70% Danbooru tag + 30%'} 简短英文自然语言，两部分都不得省略。具体长度与比例遵循所选模板，角色身份识别不改变模板要求。',
     ReversePromptMode.tags =>
-      '使用简洁的英文逗号分隔 Danbooru / NovelAI $versionLabel tag。',
+      '使用准确的英文逗号分隔 Danbooru / NovelAI $versionLabel tag。',
   };
   if (knownCharacter) {
     final identityRules = source == 'convert'
@@ -474,7 +474,7 @@ List<String> promptRuleViolations(
       issues.add('混合模式输出退化成了纯自然语言，缺少 Tag 主体');
     } else if (_looksLikeTagList(cleaned) &&
         !_hasMixedNaturalLanguage(cleaned)) {
-      issues.add('混合模式缺少约 20% 的自然语言关系短语');
+      issues.add('混合模式缺少所选模板要求的自然语言关系短语');
     }
   }
   final tokens = cleaned
@@ -543,3 +543,13 @@ String buildPromptRuleRepairUserText({
           : '本次没有可靠成熟 Tag 候选，请采用最短基础组合。',
       '只修复上述问题并执行最终去重、互斥检查；保留其余正确内容。',
     ].join('\n\n');
+
+/// Format check shared by template output acceptance, independent of optional repairs.
+bool modeNeedsRepair(ReversePromptMode mode,String output) {
+ final cleaned=cleanPromptOutput(output);
+ if(cleaned.isEmpty)return false;
+ if(mode==ReversePromptMode.natural)return _looksLikeTagList(cleaned);
+ if(mode==ReversePromptMode.tags)return _looksLikeNaturalLanguage(cleaned);
+ if(_looksLikeNaturalLanguage(cleaned)&&!_looksLikeTagList(cleaned))return true;
+ return _looksLikeTagList(cleaned)&&!_hasMixedNaturalLanguage(cleaned);
+}

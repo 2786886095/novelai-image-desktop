@@ -1,3 +1,5 @@
+import { compatibleProposalPrompt, compatibleProposalContext } from '../../src/tavern/compatible-proposal';
+import { bindAgentImageProvider, assertAgentImageProvider, type ImageProviderBinding } from './agent-image-provider';
 import { providerIssueMessage, responseIssue, type ProviderIssue } from "../../src/agent/provider-outcome";
 import { isRepeatImageRequest, explicitlyRequestsImage, imageOutcomeText, type ImageFailureStage } from "../../src/agent/image-outcome";
 import { repairImagePrompt, combineImageTurnUsage } from "../../src/tavern/image-repair";
@@ -603,10 +605,11 @@ function proposalFromRaw(
   character: ReturnType<typeof readAgentWorkspace>["characters"][number],
   defaults: TavernImageParameterDefaults,
   base?: TavernImageProposal,
+  compatible = false,
 ): TavernImageProposal | undefined {
   if (!raw) return undefined;
   const parameters = resolveTavernImageProposalParameters(raw, defaults);
-  const { positivePrompt, continuity, scene } = resolveImagePrompt(raw, base, parameters.model);
+  const { positivePrompt, continuity, scene } = resolveImagePrompt(raw, base, compatible ? undefined : parameters.model);
   if (!positivePrompt && !continuity.bindingError) return undefined;
   return {
     id: crypto.randomUUID(),
@@ -706,7 +709,7 @@ function failImageRequest(request: TavernImageRequest, message: string) {
   return notifyImageFailure(request.conversationId, request.messageId, message, "generation");
 }
 
-export async function generateTavernImage(request: TavernImageRequest) {
+export async function generateTavernImage(request: TavernImageRequest, expectedProvider?: ImageProviderBinding) {
   const workspace = readAgentWorkspace();
   const conversation = workspace.conversations.find((item) => item.id === request.conversationId);
   const message = conversation?.messages.find((item) => item.id === request.messageId);
@@ -721,9 +724,14 @@ export async function generateTavernImage(request: TavernImageRequest) {
     negativePrompt: character?.visual.negativePrompt ?? "",
     stylePrompt: character?.visual.stylePrompt ?? "",
   };
+  const imageProviderBinding = expectedProvider ?? bindAgentImageProvider(getSettings());
+  const compatible = imageProviderBinding.provider === "openai-images";
+  let compatiblePrompt: string | undefined;
   let bound: ReturnType<typeof compileSceneBindings> | undefined;
   try {
-    if (proposal.scene) {
+    assertAgentImageProvider(getSettings(), imageProviderBinding);
+    if (compatible) compatiblePrompt = compatibleProposalPrompt(proposal);
+    else if (proposal.scene) {
       const model = proposal.model ?? tavernImageDefaults(character).model!;
       bound = compileSceneForModel(proposal.scene,model);
       proposal.positivePrompt = bound.positivePrompt;
@@ -740,11 +748,12 @@ export async function generateTavernImage(request: TavernImageRequest) {
   try {
     const result = await executeAgentTool({
       tool: "langbai_generate_image",
+      imageProviderBinding,
       promptLocks: {
         stylePrompt: proposal.stylePrompt,
         negativePrompt: proposal.negativePrompt,
       },
-      args: {
+      args: compatible ? {positivePrompt: compatiblePrompt!, count: proposal.count} : {
         ...(bound ? {characterPrompts: bound.characterPrompts} : {}),
         positivePrompt: proposal.positivePrompt,
         negativePrompt: proposal.negativePrompt,
@@ -777,7 +786,7 @@ export async function generateTavernImage(request: TavernImageRequest) {
         name: "langbai_generate_image",
         title: "场景图片",
         status: result.ok ? "completed" : "error",
-        input: { positivePrompt: proposal.positivePrompt, count: proposal.count },
+        input: { positivePrompt: compatiblePrompt ?? proposal.positivePrompt, count: proposal.count, imageProvider: imageProviderBinding.provider },
         output: result.output,
         ...(!result.ok ? { error: failure } : {}),
         generatedImages: images,
@@ -805,6 +814,8 @@ export async function sendAgentMessage(request: AgentSendRequest) {
   let conversation = initial.conversations.find((item) => item.id === request.conversationId);
   if (!conversation) return { ok: false, message: "对话不存在。" };
   const settings = getSettings();
+  const imageProviderBinding = bindAgentImageProvider(settings);
+  const compatible = imageProviderBinding.provider === "openai-images";
   const previousMessage = conversation.messages.at(-1);
   const repeatImage = !request.regenerateMessageId && isRepeatImageRequest(request.text)
     && !request.attachmentIds?.length && !conversation.draftAttachments.length
@@ -921,7 +932,7 @@ export async function sendAgentMessage(request: AgentSendRequest) {
       const raw = { baseImageId: imageBase.id, ...(imageBase.scene
         ? { scenePatch: { revision: imageBase.scene.revision, operations: [] } }
         : { promptPatch: { replacements: [], append: [] } }) };
-      const pending = proposalFromRaw(raw, previousMessage, character, imageDefaults, imageBase);
+      const pending = proposalFromRaw(raw, previousMessage, character, imageDefaults, imageBase, compatible);
       if (pending && !pending.continuity?.reviewRequired) {
         controller.signal.throwIfAborted();
         const auto = activeConversation.generationMode === "auto";
@@ -937,7 +948,7 @@ export async function sendAgentMessage(request: AgentSendRequest) {
         });
         emitWorkspace();
         if (auto) {
-          const generated = await generateTavernImage({conversationId: request.conversationId, messageId, proposal: pending});
+          const generated = await generateTavernImage({conversationId: request.conversationId, messageId, proposal: pending}, imageProviderBinding);
           if (!generated.ok) return {ok: true, imageError: generated.message};
         }
         return {ok: true};
@@ -973,7 +984,7 @@ export async function sendAgentMessage(request: AgentSendRequest) {
         content: `Earlier roleplay summary and continuity notes:\n${activeConversation.lastSummary.trim()}`,
       });
     }
-    prompt.splice(1, 0, { role: "system", content: imageStateContext(imageBase, imageDefaults.model) });
+    prompt.splice(1, 0, { role: "system", content: imageStateContext(imageBase, compatible ? undefined : imageDefaults.model) + (compatible ? "\n" + compatibleProposalContext(settings.compatibleImage?.model, settings.compatibleImage?.size) : "") });
     const turn = await completeProvider(promptMessagesWithImages(prompt, request.conversationId), controller, (delta) => deltas.push(delta));
     deltas.flush();
     if (turn.issue || !turn.content.trim()) {
@@ -987,15 +998,15 @@ export async function sendAgentMessage(request: AgentSendRequest) {
     let proposalRaw = parsed.proposal;
     let repairStatus: "repaired" | "failed" | undefined;
     let usage = turn.usage;
-    if (proposalRaw && resolveImagePrompt(proposalRaw, imageBase, resolveTavernImageProposalParameters(proposalRaw, imageDefaults).model).continuity.reviewRequired) {
+    if (proposalRaw && resolveImagePrompt(proposalRaw, imageBase, compatible ? undefined : resolveTavernImageProposalParameters(proposalRaw, imageDefaults).model).continuity.reviewRequired) {
       const repair = await repairImagePrompt({
-        raw: proposalRaw, base: imageBase, model: resolveTavernImageProposalParameters(proposalRaw, imageDefaults).model, signal: controller.signal,
+        raw: proposalRaw, base: imageBase, model: compatible ? undefined : resolveTavernImageProposalParameters(proposalRaw, imageDefaults).model, signal: controller.signal,
         onStart: () => {
           updateAgentConversation(request.conversationId, target => {
             const assistant = target.messages.find(item => item.id === messageId);
             if (!assistant) return;
             assistant.content = parsed.visible || "……";
-            assistant.imageProposal = proposalFromRaw(proposalRaw, assistant, character, imageDefaults, imageBase);
+            assistant.imageProposal = proposalFromRaw(proposalRaw, assistant, character, imageDefaults, imageBase, compatible);
             if (assistant.imageProposal?.continuity) assistant.imageProposal.continuity.repairStatus = "repairing";
           });
           emitWorkspace();
@@ -1026,7 +1037,7 @@ export async function sendAgentMessage(request: AgentSendRequest) {
       swipes.push(assistant.content);
       assistant.swipes = swipes;
       assistant.swipeIndex = swipes.length - 1;
-      assistant.imageProposal = proposalFromRaw(proposalRaw, assistant, character, imageDefaults, imageBase);
+      assistant.imageProposal = proposalFromRaw(proposalRaw, assistant, character, imageDefaults, imageBase, compatible);
       if (assistant.imageProposal?.continuity && repairStatus) assistant.imageProposal.continuity.repairStatus = repairStatus;
       const snapshots = assistant.imageProposalSwipes ?? Array.from({ length: swipes.length - 1 }, () => null);
       snapshots[assistant.swipeIndex] = assistant.imageProposal ?? null;
@@ -1055,7 +1066,7 @@ export async function sendAgentMessage(request: AgentSendRequest) {
       return { ok: true, imageError: proposalIssue };
     }
     if (stored?.imageProposal?.status === "pending" && !stored.imageProposal.continuity?.reviewRequired && updated?.generationMode === "auto") {
-      const generated = await generateTavernImage({ conversationId: request.conversationId, messageId, proposal: stored.imageProposal });
+      const generated = await generateTavernImage({ conversationId: request.conversationId, messageId, proposal: stored.imageProposal }, imageProviderBinding);
       if (!generated.ok) return { ok: true, imageError: generated.message };
     }
     return { ok: true };

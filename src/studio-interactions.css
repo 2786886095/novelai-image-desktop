@@ -1,0 +1,46 @@
+/* Interaction vocabulary. Forms stay mounted; drawing and zoom never interpolate. */
+:root {--interaction-fast:140ms;--interaction-base:200ms;--interaction-enter:cubic-bezier(.2,.8,.2,1);--interaction-exit:cubic-bezier(.4,0,1,1);}
+html body :is(button,[role=button],summary):not(.ws-resizer):not(.works-thumbnail):not(.works-preview-open) {
+ transition:background-color var(--interaction-fast) var(--interaction-enter),border-color var(--interaction-fast) var(--interaction-enter),color var(--interaction-fast) var(--interaction-enter),box-shadow var(--interaction-fast) var(--interaction-enter),opacity var(--interaction-fast) var(--interaction-enter);
+}
+html body :is(button,[role=button],summary):focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+html body :is(.btn,.compact-icon-button,.image-favorite-action,.menu-action):active:not(:disabled) {filter:brightness(.95);}
+html body :is(input,textarea,select):not([type=range]) {transition:border-color 160ms var(--interaction-enter),box-shadow 160ms var(--interaction-enter),background-color 160ms var(--interaction-enter);}
+html .image-viewer-toolbar {
+ gap:2px;padding:4px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-panel);backdrop-filter:none;box-shadow:var(--shadow-sm);
+}
+html .image-viewer-toolbar :is(button,.btn,.image-favorite-action) {
+ min-height:34px;padding:6px 10px;border:0;background:transparent;box-shadow:none;border-radius:var(--radius-sm);color:var(--text-secondary);
+}
+html .image-viewer-toolbar button:hover:not(:disabled) {background:var(--accent-soft);color:var(--accent);}
+html .image-viewer-toolbar .image-favorite-action[aria-pressed=true] {background:var(--accent-soft);color:var(--accent);}
+html .image-viewer-toolbar .image-favorite-action::after {content:none;}
+html .image-preview-viewer .image-preview-controls {translate:0 0;}
+html .image-preview-controls button {transition:background-color 140ms var(--interaction-enter),color 140ms var(--interaction-enter),border-color 140ms var(--interaction-enter);}
+/* Retained menus already own their close lifecycle. Do not scale text or delay hits. */
+html .disclosure-popover {--disclosure-open:160ms;--disclosure-close:120ms;--disclosure-enter-ease:var(--interaction-enter);--disclosure-exit-ease:var(--interaction-exit);}
+html :is(.select-menu-chevron,.switch-thumb,.toggle-thumb,.toggle>span,.compact-switch-track>span,.tavern-toggle>span),html .toggle-switch::after {transition:transform 180ms var(--interaction-enter),background-color 140ms var(--interaction-enter);}
+html :is(.toggle,.toggle-switch,.compact-switch-track,[role=switch]) {transition:background-color 180ms var(--interaction-enter),border-color 140ms var(--interaction-enter);}
+html .toggle span::after {transition:left 180ms var(--interaction-enter),background-color 140ms var(--interaction-enter);}
+html .stream-preview-state i {transition:transform 180ms var(--interaction-enter),background-color 140ms var(--interaction-enter);}
+html .animated-collapse {transition:grid-template-rows 180ms var(--interaction-exit),opacity 140ms var(--interaction-exit),visibility 0s 180ms;}
+html .animated-collapse.is-open {transition:grid-template-rows 220ms var(--interaction-enter),opacity 180ms var(--interaction-enter),visibility 0s;}
+html details::details-content {interpolate-size:allow-keywords;transition:block-size 180ms var(--interaction-exit),opacity 140ms var(--interaction-exit),content-visibility 180ms allow-discrete;}
+html details[open]::details-content {transition-duration:220ms;transition-timing-function:var(--interaction-enter);}
+html :is(.context-menu,.tavern-composer-popover,.style-preset-item-popover) {animation:studio-menu-arrive 160ms var(--interaction-enter);}
+html .context-menu:empty {animation:none;}
+/* CSS covers non-portalled overlays; AppPortal also manages cancellable JS entry/exit. */
+html :is(.modal-backdrop,.reference-ui-mask,.toast,.error-banner,[role=alert]) {animation:studio-soft-arrive 200ms var(--interaction-enter);}
+html :is(.modal,.reference-ui-dialog,.app-confirm-dialog) > header :is(h1,h2,h3) {animation:studio-heading-arrive 220ms var(--interaction-enter);}
+html :is(.settings-content,.persistent-tools-view.is-active)>:is(.settings-form,.info-card,.account-card) {animation:studio-soft-arrive 200ms var(--interaction-enter);}
+html :is(.works-tile,.history-item,.tool-card,.aitag-card,.reference-preset-card) {transition:background-color 160ms var(--interaction-enter),border-color 160ms var(--interaction-enter),box-shadow 160ms var(--interaction-enter);}
+html :is(.progress-fill,.progress-bar-fill,.queue-progress-fill) {transition:width 180ms linear;}
+/* Keep exits explicit so an entry rule never masks a closing animation. */
+html .image-preview-dialog-backdrop[data-closing=true] {animation:studio-view-out 160ms var(--interaction-exit) forwards;pointer-events:none;}
+html .image-preview-dialog-backdrop[data-closing=true] .image-preview-dialog {animation:studio-view-out 160ms var(--interaction-exit) forwards;}
+@keyframes studio-soft-arrive {from{opacity:0}to{opacity:1}}
+@keyframes studio-heading-arrive {from{opacity:.6;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@keyframes studio-menu-arrive {from{opacity:0;clip-path:inset(0 0 12% 0)}to{opacity:1;clip-path:inset(0)}}
+html body :is(canvas,.inpaint-base-img,.inpaint-cursor,.inpaint-region-overlay,.inpaint-mask-canvas,.ws-resizer,.image-preview-stage>img,.image-preview-transform,.char-position-marker) {transition:none!important;}
+html.motion-reduced *,html.motion-reduced *::before,html.motion-reduced *::after,html.motion-reduced details::details-content {animation:none!important;transition:none!important;scroll-behavior:auto!important;}
+html.motion-reduced :is(.spinner,.tavern-spinner,.ui-icon-spin) {animation:spin 800ms linear infinite!important;}

@@ -1,4 +1,6 @@
+import {retainedPrompts} from "../../src/retained-prompts.js";
 import {templateSelection} from "./harness-prompt-templates";
+import { agentImageProviderState, assertAgentImageProvider, assertAgentImageTool, bindAgentImageProvider, compatibleAgentInput, PAID_IMAGE_TOOLS } from './agent-image-provider';
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -221,10 +223,7 @@ function generationInput(request: AgentToolBridgeRequest, args: Record<string, u
       return readBase64(attachment.filePath);
     },
   );
-  result.params = applyAgentPromptLocks(result.params, resolveAgentPromptLocks({
-    ...(settings.lockStylePrompt ? { stylePrompt: settings.savedStylePrompt } : {}),
-    ...(settings.lockNegativePrompt ? { negativePrompt: settings.savedNegativePrompt } : {}),
-  }, request.promptLocks));
+  result.params = applyAgentPromptLocks(result.params, resolveAgentPromptLocks(retainedPrompts(settings), request.promptLocks));
   return result;
 }
 
@@ -286,6 +285,11 @@ export async function executeAgentTool(
 ): Promise<AgentToolBridgeResponse> {
   const args = record(request.args);
   try {
+    if (PAID_IMAGE_TOOLS.has(request.tool)) {
+      request = { ...request, imageProviderBinding: request.imageProviderBinding ?? bindAgentImageProvider(getSettings()) };
+      assertAgentImageProvider(getSettings(), request.imageProviderBinding);
+      assertAgentImageTool(request.tool, getSettings());
+    }
     switch (request.tool) {
       case "langbai_get_generation_state": {
         const settings = getSettings();
@@ -294,8 +298,8 @@ export async function executeAgentTool(
           params,
           modelMode: settings.modelMode,
           generationGroupId: settings.generationGroupId,
-          lockedStylePrompt: settings.lockStylePrompt ? settings.savedStylePrompt : "",
-          lockedNegativePrompt: settings.lockNegativePrompt ? settings.savedNegativePrompt : "",
+          lockedStylePrompt: retainedPrompts(settings).stylePrompt,
+          lockedNegativePrompt: retainedPrompts(settings).negativePrompt,
           streamPreviewEnabled: settings.streamPreviewEnabled,
           referenceCapabilities: {
             maxCharacterPrompts: maxNAICharacterPrompts(params.model),
@@ -303,6 +307,7 @@ export async function executeAgentTool(
             preciseReference: supportsNAIPreciseReference(params.model),
             attachmentIdsRequiredForAgentReferences: true,
           },
+          ...agentImageProviderState(settings),
         });
       }
       case "langbai_search_tags": {
@@ -444,6 +449,14 @@ export async function executeAgentTool(
         });
       }
       case "langbai_generate_image": {
+        if (getSettings().imageProvider === 'openai-images') {
+          const input = compatibleAgentInput(args, getSettings());
+          const { generateConfiguredImages } = await import('./compatible-generation.js');
+          // The host-only binding is rechecked after module loading and before
+          // the backend captures settings. No native fallback on any failure.
+          const result = await generateConfiguredImages(input, { signal: request.signal, expectedProvider: request.imageProviderBinding });
+          return response(result.ok, result.ok ? '图片生成完成' : '生图未全部完成', { ...result, imageProvider: 'openai-images', retryable: false }, result.items.map(imageAttachment));
+        }
         const { params, extras } = generationInput(request, args);
         const count = Math.trunc(finite(args.count, 1, 1, 8));
         const items: HistoryItem[] = [];

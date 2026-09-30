@@ -1,7 +1,7 @@
 {
   "format": 1,
   "protocol": 1,
-  "version": "0.1.7",
+  "version": "0.1.8",
   "upstream": "0.1.7-rc.2",
   "platform": "android",
   "arch": "arm64",

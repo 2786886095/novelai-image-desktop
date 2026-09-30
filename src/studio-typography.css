@@ -1,0 +1,43 @@
+/* One desktop typography policy, including lazy views and body portals.
+ * Important declarations in a named layer outrank legacy unlayered !important
+ * weights, regardless of when a feature's stylesheet arrives. Keep this layer
+ * limited to typography; do not flatten semantic status or action colours. */
+@layer studio-typography {
+  :root {
+    --studio-weight-body: 500;
+    --studio-weight-title: 600;
+  }
+
+  body,
+  body :where(*),
+  body::before,
+  body::after,
+  body :where(*)::before,
+  body :where(*)::after {
+    font-weight: var(--studio-weight-body) !important;
+  }
+
+  /* Page and dialog headings retain a small amount of emphasis. Nested spans
+   * inherit that treatment; ordinary card headings (h3+) keep the body weight. */
+  body :where(h1, h2, h1 *, h2 *,
+    [role="heading"][aria-level="1"], [role="heading"][aria-level="2"],
+    .page-title, .page-title *, .modal-title, .modal-title *) {
+    font-weight: var(--studio-weight-title) !important;
+  }
+
+  /* Actions embedded in a heading are still controls, not title text. */
+  body :where(button, button *, input, textarea, select, option, summary,
+    [role="button"], [role="button"] *, [role="option"], [role="option"] *) {
+    font-weight: var(--studio-weight-body) !important;
+  }
+
+  /* Label text is quieter, not translucent: control values, icons and status
+   * colours keep their own tokens and disabled states keep their own opacity. */
+  body :where(label, .field > span:first-child, .field-label, .form-label,
+    .control-label, .setting-label, .select-menu-label, .resolution-select-label,
+    .compact-model-label, .weight-control-label):not(:where(
+      .active, .selected, .error, .warning, .danger, [role="alert"],
+      [aria-selected="true"], [aria-invalid="true"])) {
+    color: var(--text-secondary) !important;
+  }
+}

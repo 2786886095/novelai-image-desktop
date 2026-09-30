@@ -1,0 +1,121 @@
+[
+  {
+    "name": "original white hair preserved",
+    "source": "单人白发红眼女性，上半身",
+    "tags": [
+      "1girl",
+      "white hair",
+      "red eyes",
+      "upper body"
+    ],
+    "ok": true
+  },
+  {
+    "name": "unrequested hair change blocked",
+    "source": "单人白发红眼女性，上半身",
+    "tags": [
+      "1girl",
+      "black hair",
+      "red eyes",
+      "upper body"
+    ],
+    "ok": false
+  },
+  {
+    "name": "explicit latest hair overrides history",
+    "source": "之前白发。现在改成黑发。",
+    "tags": [
+      "1girl",
+      "black hair"
+    ],
+    "ok": true
+  },
+  {
+    "name": "unrequested boots conflict with upper crop",
+    "source": "单人白发女性蓝色长裙，上半身",
+    "tags": [
+      "1girl",
+      "white hair",
+      "long blue skirt",
+      "upper body",
+      "lace-up boots"
+    ],
+    "ok": false
+  },
+  {
+    "name": "explicit boots are not silently removed",
+    "source": "单人白发女性蓝色长裙和靴子，上半身",
+    "tags": [
+      "1girl",
+      "white hair",
+      "long blue skirt",
+      "upper body",
+      "lace-up boots"
+    ],
+    "ok": true
+  },
+  {
+    "name": "long skirt is not treated as full frame",
+    "source": "单人白发女性蓝色长裙，上半身",
+    "tags": [
+      "1girl",
+      "white hair",
+      "long blue skirt",
+      "upper body"
+    ],
+    "ok": true
+  },
+  {
+    "name": "rain night and transparent umbrella preserved",
+    "source": "单人雨夜透明伞，俯视机位全身",
+    "tags": [
+      "1girl",
+      "rain",
+      "night",
+      "transparent umbrella",
+      "from above",
+      "full body"
+    ],
+    "ok": true
+  },
+  {
+    "name": "lost rainy night blocked",
+    "source": "单人雨夜透明伞，俯视机位全身",
+    "tags": [
+      "1girl",
+      "sunset",
+      "transparent umbrella",
+      "from above",
+      "full body"
+    ],
+    "ok": false
+  },
+  {
+    "name": "latest sunset replaces prior rainy night",
+    "source": "之前雨夜全身。现在改成傍晚上半身。",
+    "tags": [
+      "1girl",
+      "sunset",
+      "upper body"
+    ],
+    "ok": true
+  },
+  {
+    "name": "extra people blocked",
+    "source": "单人白发女性",
+    "tags": [
+      "2girls",
+      "white hair"
+    ],
+    "ok": false
+  },
+  {
+    "name": "wrong camera blocked",
+    "source": "单人俯视机位",
+    "tags": [
+      "1girl",
+      "from below"
+    ],
+    "ok": false
+  }
+]

@@ -1,3 +1,6 @@
+import 'package:crypto/crypto.dart';
+import '../services/generation_scope.dart';
+import '../services/comic_image_service.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -25,6 +28,8 @@ import 'batch_redraw_models.dart';
 /// later retry can take a fresh snapshot without clearing existing results.
 class _BatchRedrawQueueJob {
   final BatchRedrawItem item;
+  final String sourceBase64;
+  final String sourceName;
   final GenerateParams params;
   final GenerateExtras extras;
   final double strength;
@@ -32,6 +37,8 @@ class _BatchRedrawQueueJob {
 
   const _BatchRedrawQueueJob({
     required this.item,
+    required this.sourceBase64,
+    required this.sourceName,
     required this.params,
     required this.extras,
     required this.strength,
@@ -53,15 +60,233 @@ class BatchRedrawController extends ChangeNotifier {
   String status = runtimeTextFor('zh-CN', 'common.ready');
   Timer? _saveTimer;
   bool _disposed = false;
+  bool _editing = false;
+  String? _agentReservation;
+  bool get editing => _editing || _agentReservation != null;
+  String? loadError;
+  String? persistenceError;
+  String? runId;
+  String runPhase = 'idle';
+  String? runError;
+  bool _journalLoaded = false;
+  Future<void>? _loading;
+  Future<void> _writes = Future.value();
+  Future<void> _work = Future.value();
+  GenerationScope? _scope;
+  Future<void> settled() => _work;
+  Map<String, dynamic> get runState => {
+        'id': runId,
+        'phase': runPhase,
+        'total': queueTotal,
+        'done': queueDone,
+        'error': runError,
+        'active': queueRunning &&
+            ['preparing', 'running', 'stopping'].contains(runPhase),
+      };
+  Future<void> _saveRun(String phase, {String? error}) async {
+    runPhase = phase;
+    runError = error;
+    await app.storage.setBatchRun(
+        {...runState, 'updatedAt': DateTime.now().toIso8601String()});
+    notifyListeners();
+  }
+
+  Future<void> _loadRun() async {
+    if (_journalLoaded) return;
+    final saved = await app.storage.getBatchRun();
+    if (saved != null) {
+      if (saved['id'] is! String ||
+          !RegExp(r'^[a-zA-Z0-9_-]{1,160}$').hasMatch(saved['id'] as String) ||
+          saved['total'] is! int ||
+          saved['done'] is! int ||
+          saved['total'] < 0 ||
+          saved['done'] < 0 ||
+          saved['done'] > saved['total'] ||
+          ![
+            'preparing',
+            'running',
+            'stopping',
+            'completed',
+            'cancelled',
+            'failed',
+            'interrupted'
+          ].contains(saved['phase'])) {
+        throw StateError('批量任务记录损坏，原记录已保留');
+      }
+      runId = saved['id'];
+      queueTotal = saved['total'];
+      queueDone = saved['done'];
+      runPhase = saved['phase'];
+      runError = saved['error'] as String?;
+      if (['preparing', 'running', 'stopping'].contains(runPhase)) {
+        await _saveRun('interrupted', error: '上次批量任务未核实完成，已保存图片保留，未自动重试');
+      }
+    }
+    _journalLoaded = true;
+  }
+
+  String get revision => sha256
+      .convert(utf8.encode(jsonEncode({
+        'project': project.toJson(),
+        if (project.reuseMainReferences) 'references': app.extras.toJson()
+      })))
+      .toString();
+  void assertRevision(String expected) {
+    if (loadError != null) throw StateError(loadError!);
+    if (_disposed ||
+        busy ||
+        queueRunning ||
+        _editing ||
+        _agentReservation != null ||
+        revision != expected) {
+      throw StateError('批量工程已变化或正在运行，请重新读取');
+    }
+  }
+
+  Future<void> commitProject(
+    String expected,
+    BatchRedrawProject next,
+  ) async {
+    assertRevision(expected);
+    _editing = true;
+    _saveTimer?.cancel();
+    final captured = BatchRedrawProject.fromJson(
+        jsonDecode(jsonEncode(next.toJson())), next.globalParams,
+        trustOutputs: true);
+    final transaction = _writes.then((_) async {
+      if (revision != expected || queueRunning) {
+        throw StateError('批量工程已变化，请重新读取');
+      }
+      await app.storage.setBatchRedrawProject(captured);
+      if (revision != expected || queueRunning) {
+        await app.storage.setBatchRedrawProject(project);
+        throw StateError('保存期间批量工程已变化，保留了软件端编辑，请重新读取');
+      }
+      project = captured;
+      persistenceError = null;
+      notifyListeners();
+    });
+    _writes = transaction.then<void>((_) {}, onError: (Object e) {
+      persistenceError = e.toString();
+      notifyListeners();
+    });
+    try {
+      await transaction;
+    } finally {
+      _editing = false;
+      notifyListeners();
+    }
+  }
+
+  void reserveAgentRun(String owner, String expected) {
+    assertRevision(expected);
+    _agentReservation = owner;
+  }
+
+  void checkAgentRun(String owner, String expected) {
+    if (_disposed ||
+        loadError != null ||
+        busy ||
+        queueRunning ||
+        _editing ||
+        _agentReservation != owner ||
+        revision != expected) {
+      throw StateError('批量工程已变化或正在运行，请重新读取');
+    }
+  }
+
+  void releaseAgentRun(String owner) {
+    if (_agentReservation == owner) _agentReservation = null;
+  }
+
+  List<BatchRedrawItem> agentPlan(String mode, List<String> ids) {
+    if (!['all', 'pending', 'failed', 'additional'].contains(mode) ||
+        ids.toSet().length != ids.length ||
+        ids.any((id) => !project.items.any((x) => x.id == id))) {
+      throw StateError('批量模式或图片ID无效');
+    }
+    if (app.settings.imageProvider != 'novelai') {
+      throw StateError('兼容图片服务未接入批量图生图；未自动回退');
+    }
+    final items = project.items
+        .where((x) =>
+            (ids.isEmpty || ids.contains(x.id)) &&
+            (mode != 'pending' || x.status != BatchItemStatus.done) &&
+            (mode != 'failed' || x.status == BatchItemStatus.failed))
+        .toList();
+    if (items.isEmpty || items.any((x) => x.prompt.trim().isEmpty)) {
+      throw StateError('没有待生成图片或缺少提示词');
+    }
+    if (project.sizeMode == 'perImage') {
+      parseBatchSizeImport(project.sizeBulk, project.items.length);
+    }
+    for (final job in _snapshotQueue(items)) {
+      if (base64Decode(job.sourceBase64).isEmpty) throw StateError('批量源图片为空');
+      if (job.extras.vibeImages.isNotEmpty &&
+              !job.params.supportsVibeTransfer ||
+          job.extras.preciseReferences.isNotEmpty &&
+              !job.params.supportsPreciseReference) {
+        throw StateError('当前模型不支持所选参考');
+      }
+    }
+    return [
+      for (final item in items)
+        for (var i = 0;
+            i <
+                (mode == 'additional'
+                    ? 1
+                    : normalizeBatchRedrawCandidateCount(
+                        project.candidateCount));
+            i++)
+          item
+    ];
+  }
+
+  Future<void> runAgent(List<String> ids,
+      {required String owner,
+      required String expected,
+      required void Function() guard,
+      required Future<void> Function() beforeImage}) {
+    checkAgentRun(owner, expected);
+    final targets =
+        ids.map((id) => project.items.firstWhere((x) => x.id == id)).toList();
+    return _runQueue(targets,
+        agentRunId: owner, guard: guard, beforeImage: beforeImage);
+  }
+
+  Future<void> flush() {
+    _saveTimer?.cancel();
+    if (loadError != null) return Future.error(StateError(loadError!));
+    if (_editing) {
+      final next =
+          _writes.then((_) => app.storage.setBatchRedrawProject(project));
+      _writes = next.then<void>((_) {}, onError: (Object e) {
+        persistenceError = '$e';
+        notifyListeners();
+      });
+      return next;
+    }
+    final snapshot = BatchRedrawProject.fromJson(
+        jsonDecode(jsonEncode(project.toJson())), project.globalParams,
+        trustOutputs: true);
+    final next =
+        _writes.then((_) => app.storage.setBatchRedrawProject(snapshot));
+    _writes = next.then<void>((_) {
+      persistenceError = null;
+    }, onError: (Object e) {
+      persistenceError = e.toString();
+      status = persistenceError!;
+      notifyListeners();
+    });
+    return next;
+  }
 
   BatchRedrawController(this.app) {
     BackgroundQueueService.addCancelHandler(cancelQueue);
   }
 
-  // The queue loop is a plain async function, not tied to widget lifecycle —
-  // leaving the batch screen mid-queue must not let it keep calling
-  // notifyListeners() on a disposed ChangeNotifier (Flutter throws on that),
-  // nor keep the paid request running unattended in the background.
+  // The application owns this controller. Navigation never disposes the paid
+  // queue; actual application shutdown cancels only this request-owned scope.
   @override
   void notifyListeners() {
     if (_disposed) return;
@@ -83,24 +308,40 @@ class BatchRedrawController extends ChangeNotifier {
           : status;
   String get displayGroupName => _projectName();
 
-  Future<void> load() async {
-    try {
-      project = await app.storage.getBatchRedrawProject(app.params);
-    } catch (_) {
-      project = BatchRedrawProject.empty(app.params);
-    }
-    loaded = true;
-    notifyListeners();
-  }
+  Future<void> load() => _loading ??= () async {
+        if (loaded) return;
+        try {
+          project = await app.storage.getBatchRedrawProject(app.params);
+          await _loadRun();
+          if (runError != null) status = runError!;
+          if (project.items
+              .any((item) => item.status == BatchItemStatus.generating)) {
+            for (final item in project.items) {
+              if (item.status == BatchItemStatus.generating) {
+                item.status = item.candidates.isEmpty
+                    ? BatchItemStatus.pending
+                    : BatchItemStatus.done;
+              }
+            }
+            await flush();
+          }
+        } catch (error) {
+          project = BatchRedrawProject.empty(app.params);
+          loadError = '批量工程读取失败，原始数据保留：$error';
+          status = loadError!;
+        }
+        loaded = true;
+        notifyListeners();
+      }();
 
   void changed([String? message]) {
     if (message != null) status = message;
     notifyListeners();
     _saveTimer?.cancel();
-    _saveTimer = Timer(
-      const Duration(milliseconds: 250),
-      () => app.storage.setBatchRedrawProject(project),
-    );
+    if (loadError != null || _disposed) return;
+    _saveTimer = Timer(const Duration(milliseconds: 250), () {
+      unawaited(flush().catchError((Object _) {}));
+    });
   }
 
   void setStep(BatchRedrawStep value) {
@@ -109,6 +350,9 @@ class BatchRedrawController extends ChangeNotifier {
   }
 
   void reset() {
+    if (queueRunning || busy || editing || loadError != null) {
+      throw StateError("批量工程正在运行或读取失败，未重置");
+    }
     project = BatchRedrawProject.empty(app.params);
     step = BatchRedrawStep.import;
     changed(_rt('batch.statusNew'));
@@ -378,6 +622,7 @@ class BatchRedrawController extends ChangeNotifier {
           hint: '',
           knownCharacter: false,
           systemTemplate: app.resolvedPromptTemplate('reverse', project.aiMode),
+          templateVersion: app.settings.reversePromptTemplateVersion,
         );
         if (result.ok) {
           item.prompt = result.text;
@@ -405,7 +650,8 @@ class BatchRedrawController extends ChangeNotifier {
   /// Freeze all mutable inputs for a confirmed queue.  Do not retain a
   /// reference to [project.globalParams], per-item params, prompts, strengths,
   /// or references: the editor remains available while the queue is running.
-  List<_BatchRedrawQueueJob> _snapshotQueue(List<BatchRedrawItem> targets) {
+  List<_BatchRedrawQueueJob> _snapshotQueue(List<BatchRedrawItem> targets,
+      {bool singleCandidate = false}) {
     final globalStyle = project.globalStyle;
     final globalNegative = project.globalNegative;
     final globalStrength = project.globalStrength;
@@ -454,11 +700,14 @@ class BatchRedrawController extends ChangeNotifier {
       }
       return _BatchRedrawQueueJob(
         item: item,
+        sourceBase64: item.base64,
+        sourceName: item.name,
         params: params,
         extras: referencesFor(sourceParams),
         strength: item.strength ?? globalStrength,
-        candidateCount:
-            normalizeBatchRedrawCandidateCount(project.candidateCount),
+        candidateCount: singleCandidate
+            ? 1
+            : normalizeBatchRedrawCandidateCount(project.candidateCount),
       );
     }).toList(growable: false);
   }
@@ -493,169 +742,230 @@ class BatchRedrawController extends ChangeNotifier {
     }
   }
 
-  Future<void> startQueue(List<BatchRedrawItem> targets) async {
-    if (targets.isEmpty || queueRunning) return;
-    if (project.sizeMode == 'perImage' &&
-        !applyPerImageSizes(announce: false)) {
-      return;
-    }
-    // Build this before awaiting or changing any item state.  Every item in
-    // the current run then receives the same confirmed global values, while a
-    // later clear/retry call starts from the latest editor values.
-    final jobs = _snapshotQueue(targets);
-    final amount = _quoteJobs(jobs);
-    final balance = app.account.anlasBalance;
-    if (balance != null && amount > balance) {
-      status = _rf('batch.insufficient', {
-        'amount': amount,
-        'balance': balance,
-      });
+  Future<void> startQueue(List<BatchRedrawItem> targets) => _runQueue(targets);
+  Future<void> _runQueue(List<BatchRedrawItem> targets,
+      {String? agentRunId,
+      void Function()? guard,
+      Future<void> Function()? beforeImage}) {
+    if (targets.isEmpty || queueRunning) return Future.value();
+    if (_disposed ||
+        _editing ||
+        (_agentReservation != null && _agentReservation != agentRunId) ||
+        loadError != null ||
+        busy ||
+        app.busy ||
+        app.generationQueueRunning) {
+      status = loadError ?? '图像任务正在运行或控制器已关闭';
       notifyListeners();
+      return Future.value();
     }
-    final vibeIncompatible = jobs.any((job) =>
-        job.extras.vibeImages.isNotEmpty && !job.params.supportsVibeTransfer);
-    if (vibeIncompatible) {
-      status = _rt('error.vibeUnsupportedV5');
+    List<_BatchRedrawQueueJob> jobs;
+    try {
+      if (app.settings.imageProvider != 'novelai') {
+        throw StateError('当前兼容图片服务未接入图生图，请切回 NovelAI；未自动回退');
+      }
+      if ((agentRunId == null && targets.toSet().length != targets.length) ||
+          targets.any((item) =>
+              !project.items.contains(item) || item.prompt.trim().isEmpty)) {
+        throw StateError('批量图片不存在、重复或缺少提示词');
+      }
+      if (project.sizeMode == 'perImage' &&
+          !applyPerImageSizes(announce: false)) return Future.value();
+      jobs = _snapshotQueue(targets, singleCandidate: agentRunId != null);
+      for (final job in jobs) {
+        if (base64Decode(job.sourceBase64).isEmpty) throw StateError('批量源图片为空');
+        if (job.extras.vibeImages.isNotEmpty &&
+            !job.params.supportsVibeTransfer) {
+          throw StateError(_rt('error.vibeUnsupportedV5'));
+        }
+        if (job.extras.preciseReferences.isNotEmpty &&
+            !job.params.supportsPreciseReference) {
+          throw StateError(_rt('error.preciseV45Only'));
+        }
+      }
+    } catch (error) {
+      runPhase = 'failed';
+      runError = error.toString();
+      status = runError!;
       notifyListeners();
-      return;
+      return Future.value();
     }
-    final incompatible = jobs.any((job) =>
-        job.extras.preciseReferences.isNotEmpty &&
-        !job.params.supportsPreciseReference);
-    if (incompatible) {
-      status = _rt('error.preciseV45Only');
-      notifyListeners();
-      return;
-    }
+    final sourceProject = project;
+    final expectedSource = comicImageBinding(app.settings);
+    final groupName = _projectName();
+    String? token;
+    // Reserve synchronously: another UI/Agent task cannot pass an async gap.
     queueRunning = true;
     queuePaused = false;
     queueCancelled = false;
-    queueDone = 0;
-    queueTotal = jobs.fold(
-      0,
-      (total, job) => total + job.candidateCount,
-    );
-    final queueGroupName = _projectName();
-    var queueHistoryGroupId = project.historyGroupId;
-    if (BackgroundQueueService.shouldWarnNoBackgroundSupport()) {
-      status = _rt('status.backgroundNotSupported');
-    }
-    try {
-      await BackgroundQueueService.start(
-        'batch-redraw',
-        title: _rt('notification.batchTitle'),
-        text: _rf('notification.prepare', {'total': queueTotal}),
-      );
-    } catch (_) {}
+    app.busy = true;
+    final scope = GenerationScope(beforeSubmit: () {
+      guard?.call();
+      if (comicImageBinding(app.settings) != expectedSource) {
+        throw StateError('图片服务配置已变化，未继续提交批量任务');
+      }
+      if (!identical(project, sourceProject)) throw StateError('批量工程已替换，未继续提交');
+    }, assertCredentials: (current, _) {
+      if (current != token) throw StateError('图片凭据已变化，未继续提交批量任务');
+    });
+    _scope = scope;
     notifyListeners();
-    for (final job in jobs) {
-      final item = job.item;
-      if (queueCancelled) break;
-      item
-        ..status = BatchItemStatus.generating
-        ..error = '';
-      var lastItemError = '';
-      for (var candidateIndex = 0;
-          candidateIndex < job.candidateCount;
-          candidateIndex++) {
-        while (queuePaused && !queueCancelled) {
-          await Future<void>.delayed(const Duration(milliseconds: 220));
+    app.notifyListeners();
+    return _work = () async {
+      var backgroundStarted = false;
+      try {
+        await _loadRun();
+        runId = agentRunId ?? _id();
+        queueDone = 0;
+        queueTotal = jobs.fold(0, (total, job) => total + job.candidateCount);
+        await flush();
+        await _saveRun('preparing');
+        scope.check();
+        token = await app.storage.getToken();
+        scope.check();
+        if (token == null || token!.isEmpty) {
+          throw StateError(_rt('error.naiTokenRequired'));
         }
-        if (queueCancelled) break;
-        changed(_rf('batch.generatingItem', {
-          'name': '${item.name} ${candidateIndex + 1}/${job.candidateCount}',
-        }));
-        unawaited(BackgroundQueueService.update(
-          title: _rt('notification.batchTitle'),
-          text: _rf('notification.generating', {
-            'current': queueDone + 1,
-            'total': queueTotal,
-          }),
-        ));
+        await _saveRun('running');
         try {
-          final history = await app.generateBatchRedrawItem(
-            sourceBytes: base64Decode(item.base64),
-            itemParams: job.params,
-            itemExtras: job.extras,
-            strength: job.strength,
-            groupName: queueGroupName,
-            historyGroupId: queueHistoryGroupId,
-            cancelled: () => queueCancelled,
-          );
-          if (queueCancelled) break;
-          queueHistoryGroupId = history.groupId;
-          project.historyGroupId = queueHistoryGroupId;
-          item.addCandidate(BatchRedrawCandidate(
-            id: history.id,
-            historyItemId: history.id,
-            outputPath: history.filePath,
-            createdAt: history.createdAt,
-            actualSeed: history.seed,
-          ));
-          queueDone++;
-          changed();
-        } catch (error) {
-          if (queueCancelled || error is GenerationCancelledException) {
-            queueCancelled = true;
-            break;
+          await BackgroundQueueService.start('batch-redraw',
+              title: _rt('notification.batchTitle'),
+              text: _rf('notification.prepare', {'total': queueTotal}));
+          backgroundStarted = true;
+        } catch (_) {}
+        var groupId = sourceProject.historyGroupId;
+        for (final job in jobs) {
+          final item = job.item;
+          for (var index = 0; index < job.candidateCount; index++) {
+            while (queuePaused && !queueCancelled) {
+              await Future<void>.delayed(const Duration(milliseconds: 220));
+            }
+            scope.check();
+            if (!project.items.contains(item)) {
+              throw StateError('批量图片已移除，未继续提交');
+            }
+            final currentToken = await app.storage.getToken();
+            scope.credentials(currentToken ?? '', app.settings);
+            item
+              ..status = BatchItemStatus.generating
+              ..error = '';
+            changed(_rf('batch.generatingItem', {
+              'name': '${job.sourceName} ${index + 1}/${job.candidateCount}'
+            }));
+            await flush();
+            scope.check();
+            try {
+              await BackgroundQueueService.update(
+                  title: _rt('notification.batchTitle'),
+                  text: _rf('notification.generating',
+                      {'current': queueDone + 1, 'total': queueTotal}));
+            } catch (_) {}
+            await beforeImage?.call();
+            scope.check();
+            List<HistoryItem> results;
+            Object? savedError;
+            try {
+              results = await scope.run(() => app.generateBatchRedrawItems(
+                  sourceBytes: base64Decode(job.sourceBase64),
+                  itemParams: job.params,
+                  itemExtras: job.extras,
+                  strength: job.strength,
+                  groupName: groupName,
+                  historyGroupId: groupId,
+                  cancelled: () => queueCancelled));
+            } on SavedBatchImagesException catch (error) {
+              results = error.items;
+              savedError = error;
+            } catch (error) {
+              item
+                ..status = queueCancelled
+                    ? BatchItemStatus.pending
+                    : BatchItemStatus.failed
+                ..error = queueCancelled ? '' : error.toString();
+              rethrow;
+            }
+            // Attach every durable output before interpreting stop/save failures.
+            for (final history in results) {
+              groupId = history.groupId;
+              sourceProject.historyGroupId = groupId;
+              item.addCandidate(BatchRedrawCandidate(
+                  id: history.id,
+                  historyItemId: history.id,
+                  outputPath: history.filePath,
+                  createdAt: history.createdAt,
+                  actualSeed: history.seed));
+            }
+            queueDone++;
+            item
+              ..status = savedError == null
+                  ? BatchItemStatus.done
+                  : BatchItemStatus.failed
+              ..error = savedError?.toString() ?? '';
+            changed();
+            await flush();
+            if (savedError != null) throw savedError;
+            if (queueCancelled) break;
+            scope.check();
+            await _saveRun('running');
           }
-          lastItemError = error.toString().replaceFirst('Exception: ', '');
-          queueDone++;
-          final lower = lastItemError.toLowerCase();
-          if (lower.contains('401') || lower.contains('unauthorized')) {
-            queueCancelled = true;
-            status = _rt('batch.authStopped');
-          }
-          changed();
           if (queueCancelled) break;
         }
+        await _saveRun(queueCancelled ? 'cancelled' : 'completed');
+      } catch (error) {
+        if (error is GenerationCancelledException) queueCancelled = true;
+        final stopped = queueCancelled &&
+            error is! SavedBatchImagesException &&
+            persistenceError == null;
+        runPhase = stopped ? 'cancelled' : 'failed';
+        runError = stopped ? null : error.toString();
+        if (_journalLoaded && runId != null) {
+          try {
+            await _saveRun(runPhase, error: runError);
+          } catch (journalError) {
+            runError = '$error; $journalError';
+          }
+        }
+      } finally {
+        if (backgroundStarted) {
+          try {
+            await BackgroundQueueService.stop('batch-redraw');
+          } catch (_) {}
+        }
+        for (final item in sourceProject.items) {
+          if (item.status == BatchItemStatus.generating) {
+            item.status = item.candidates.isEmpty
+                ? BatchItemStatus.pending
+                : BatchItemStatus.done;
+          }
+        }
+        if (loadError == null && _journalLoaded) {
+          try {
+            await flush();
+          } catch (error) {
+            runPhase = 'failed';
+            runError = error.toString();
+            if (runId != null) {
+              try {
+                await _saveRun('failed', error: runError);
+              } catch (_) {}
+            }
+          }
+        }
+        queueRunning = false;
+        queuePaused = false;
+        app.busy = false;
+        _scope = null;
+        status = runError ??
+            _rf(queueCancelled ? 'batch.queueCancelled' : 'batch.queueDone',
+                {'done': queueDone, 'total': queueTotal});
+        changed();
+        app.notifyListeners();
       }
-      if (item.candidates.isNotEmpty) {
-        item
-          ..status = BatchItemStatus.done
-          ..error = '';
-        item.syncSelectedCandidate();
-      } else if (queueCancelled) {
-        item
-          ..status = BatchItemStatus.pending
-          ..error = '';
-      } else {
-        item
-          ..status = BatchItemStatus.failed
-          ..error = lastItemError.isEmpty
-              ? _rt('error.noImagesReturned')
-              : lastItemError;
-      }
-      changed();
-      if (queueCancelled) break;
-    }
-    queueRunning = false;
-    queuePaused = false;
-    for (final item in project.items) {
-      if (item.status == BatchItemStatus.generating) {
-        item
-          ..status = item.candidates.isEmpty
-              ? BatchItemStatus.pending
-              : BatchItemStatus.done
-          ..error = '';
-      }
-    }
-    await BackgroundQueueService.stop('batch-redraw');
-    if (queueCancelled) {
-      status = _rf('batch.queueCancelled', {
-        'done': queueDone,
-        'total': queueTotal,
-      });
-    } else {
-      status = _rf('batch.queueDone', {
-        'done': queueDone,
-        'total': queueTotal,
-      });
-    }
-    changed();
+    }();
   }
 
   void togglePause() {
+    if (!queueRunning || queueCancelled) return;
     queuePaused = !queuePaused;
     notifyListeners();
   }
@@ -664,20 +974,10 @@ class BatchRedrawController extends ChangeNotifier {
     if (!queueRunning || queueCancelled) return;
     queueCancelled = true;
     queuePaused = false;
-    for (final item in project.items) {
-      if (item.status == BatchItemStatus.generating) {
-        item
-          ..status = item.candidates.isEmpty
-              ? BatchItemStatus.pending
-              : BatchItemStatus.done
-          ..error = '';
-      }
-    }
-    status = _rf('batch.queueCancelled', {
-      'done': queueDone,
-      'total': queueTotal,
-    });
-    app.api.cancelActiveGeneration();
+    runPhase = 'stopping';
+    _scope?.cancel();
+    status =
+        _rf('batch.queueCancelled', {'done': queueDone, 'total': queueTotal});
     notifyListeners();
   }
 

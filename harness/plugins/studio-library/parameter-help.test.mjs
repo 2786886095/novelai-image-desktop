@@ -6,4 +6,6 @@ test('every named parameter has a Chinese explanation rather than its internal k
  for(const key of Object.keys(labels)){assert.ok(descriptions[key]?.length>8,key);assert.match(parameterHelp(key),/[\u4e00-\u9fff]/);}
  assert.match(parameterHelp('steps',{type:'number',min:1,max:50,step:1}),/1～50；步长：1/);
  assert.match(parameterHelp('seed',{persistence:'session'}),/重启后不保留/);
+ assert.match(parameterHelp('model'),/普通参数保存后直接生效/);
+ assert.doesNotMatch(parameterHelp('model'),/仍需软件确认/);
 });

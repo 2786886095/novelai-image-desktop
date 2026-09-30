@@ -33,4 +33,27 @@ describe('Studio bridge authorization and paid-job deduplication',()=>{
     const result=await fetch(restarted.env.STUDIO_BRIDGE_URL+'/v1/tool',{method:'POST',headers:{Authorization:`Bearer ${restarted.env.STUDIO_BRIDGE_TOKEN}`},body:JSON.stringify(request)});
     expect(result.status).toBe(409);expect(execute).toHaveBeenCalledTimes(1);
   });
+  it('rejects conflicting concurrent input even before the first journal write completes',async()=>{
+    const {send,execute}=await setup();
+    const original=fs.readFile.bind(fs);let reads=0,release!:()=>void;
+    const barrier=new Promise<void>(resolve=>{release=resolve;});
+    const spy=vi.spyOn(fs,'readFile').mockImplementation((async(file:unknown,...args:unknown[])=>{
+      if(String(file).endsWith('.json')){
+        reads++;if(reads===2)release();await barrier;
+        throw Object.assign(new Error('fixture first read'),{code:'ENOENT'});
+      }
+      return (original as Function)(file,...args);
+    }) as typeof fs.readFile);
+    try{
+      const results=await Promise.all([send(request),send({...request,args:{positivePrompt:'other'}})]);
+      expect(results.map(r=>r.status).sort()).toEqual([200,409]);
+      expect(execute).toHaveBeenCalledTimes(1);
+    }finally{spy.mockRestore();}
+  });
+});
+
+it('advertises a loopback-only high port accepted by browser fetch',async()=>{
+ const {bridge,send}=await setup();const url=new URL(bridge.env.STUDIO_BRIDGE_URL);
+ expect(url.hostname).toBe('127.0.0.1');expect(Number(url.port)).toBeGreaterThanOrEqual(49152);expect(Number(url.port)).toBeLessThanOrEqual(65535);
+ expect((await send(request)).status).toBe(200);
 });

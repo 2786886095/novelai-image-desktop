@@ -23,6 +23,13 @@ class MainActivity : FlutterActivity() {
         private const val INCOMING_BACKUP_PENDING = "__incoming_backup_pending__"
     }
 
+    private val updateInstaller by lazy { VerifiedUpdateInstaller(this) }
+    override fun onResume(){super.onResume();updateInstaller.resume()}
+    @Deprecated("Used for the platform package installer result")
+    override fun onActivityResult(requestCode: Int,resultCode: Int,data: Intent?) {
+        if(updateInstaller.result(requestCode))return
+        super.onActivityResult(requestCode,resultCode,data)
+    }
     private val completionAudio by lazy { CompletionAudio(this) }
     override fun onDestroy(){completionAudio.stop();super.onDestroy()}
 
@@ -32,6 +39,16 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,"langbai.novelai/app_update").setMethodCallHandler { call,result ->
+            when(call.method) {
+                "status" -> result.success(updateInstaller.status())
+                "cancel" -> result.success(updateInstaller.cancel(call.argument<String>("id") ?: ""))
+                "install" -> updateInstaller.install(call.argument<String>("filePath") ?: "",call.argument<String>("id") ?: "",call.argument<String>("version") ?: "") { value,error ->
+                    if(error!=null)result.error("update_install",error.message,null) else result.success(value)
+                }
+                else -> result.notImplemented()
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,"langbai.novelai/completion_sound").setMethodCallHandler { call,result ->
             when(call.method){
                 "play" -> completionAudio.play(call.argument<String>("dataUrl")?:"",call.argument<Double>("volume")?:.5,result)
@@ -62,8 +79,11 @@ class MainActivity : FlutterActivity() {
                         }.start()
                         "open" -> {startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(agent.browserUrl())));result.success(null)}
                         "stop" -> {Thread {
-                            agent.stop()
-                            runOnUiThread {stopService(Intent(this,com.codex.novelai.novelai_mobile.agent.LocalAgentService::class.java));result.success(null)}
+                            val revision=agent.stop()
+                            runOnUiThread {
+                                if(args["handoff"]!=true)stopService(Intent(this,com.codex.novelai.novelai_mobile.agent.LocalAgentService::class.java))
+                                result.success(mapOf("stopRevision" to revision))
+                            }
                         }.start()}
                         "planDownload" -> Thread {
                             try {val value=agent.planDownload(args["kind"] as? String ?: "component",args["reinstall"]==true);runOnUiThread {result.success(value)}}

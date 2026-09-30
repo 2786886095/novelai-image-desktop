@@ -584,8 +584,22 @@ class _V5ArtistWeightRepairScreenState
 
   Future<void> _loadToolState() async {
     if (!mounted) return;
+    try {
+      await _restoreToolState();
+    } catch (error, stack) {
+      debugPrint('Artist draw restore failed: $error\n$stack');
+      if (mounted) {
+        setState(() {
+          _message = '抽卡设置读取失败，请恢复默认后重试；收藏文件已保留。';
+        });
+      }
+    }
+  }
+
+  Future<void> _restoreToolState() async {
     final app = context.read<AppState>();
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     final prefix = _prefsPrefix;
     _basePrompt.text =
         prefs.getString('${prefix}positivePrompt') ?? app.params.positivePrompt;

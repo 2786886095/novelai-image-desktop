@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import JSZip from 'jszip';
+import {updateFetch as fetch} from './download-request';
 import {chooseComponent} from './harness-update-check';
 import {safeBundlePath, validateManifest} from './harness-policy';
 
@@ -42,22 +43,56 @@ export async function queryCompatibleHarness(signal: AbortSignal) {
 }
 
 export type HarnessDownload = NonNullable<Awaited<ReturnType<typeof queryCompatibleHarness>>>;
+/** Bound inactivity separately from total time so a progressing slow download
+ * is not killed after five minutes. User stop always takes precedence. */
+export function componentDownloadDeadline(parent:AbortSignal,idleMs=120000,totalMs=3600000) {
+  const controller=new AbortController();
+  let idle:ReturnType<typeof setTimeout>;
+  const reset=()=>{clearTimeout(idle);if(!controller.signal.aborted)idle=setTimeout(()=>controller.abort(new Error('Agent 下载连续两分钟无数据，请检查网络后重试；现有组件未改变。')),idleMs);};
+  const total=setTimeout(()=>controller.abort(new Error('Agent 下载达到总时限，请检查网络后重试；现有组件未改变。')),totalMs);
+  const abort=()=>controller.abort(parent.reason);
+  parent.addEventListener('abort',abort,{once:true});
+  if(parent.aborted)abort();else reset();
+  return {signal:controller.signal,progress:reset,dispose(){clearTimeout(idle);clearTimeout(total);parent.removeEventListener('abort',abort);}};
+}
 export async function downloadCompatibleHarness(root:string, signal:AbortSignal, log:(text:string)=>void, approved?:HarnessDownload) {
   const selected=approved ?? await queryCompatibleHarness(signal);if(!selected)return null;
   const {asset}=selected,release={tag_name:selected.tag};
   const headers={'Accept':'application/vnd.github+json','User-Agent':'Langbai-Tavern-Agent'};
   log(`下载独立组件 ${release.tag_name}…`);
   if(!asset.url.startsWith('https://api.github.com/repos/2786886095/novelai-image-desktop/releases/assets/'))throw new Error('Unexpected update source');
-  const download=await fetch(asset.url,{headers:{...headers,Accept:'application/octet-stream'},signal:AbortSignal.any([signal,AbortSignal.timeout(300000)])});
-  if(!download.ok || !download.body)throw new Error(`下载失败 HTTP ${download.status}`);
+  const deadline=componentDownloadDeadline(signal);
+  let bytes:Buffer;
+  try {
   const chunks:Uint8Array[]=[];let total=0,lastPercent=-5;
-  for await(const chunk of download.body as unknown as AsyncIterable<Uint8Array>){
-    signal.throwIfAborted();total+=chunk.length;if(total>asset.size)throw new Error('Update size mismatch');chunks.push(chunk);
-    const percent=Math.floor(total/asset.size*100);
-    if(percent>=lastPercent+5){lastPercent=percent;log(`Agent 下载 ${percent}%（${(total/1048576).toFixed(1)} / ${(asset.size/1048576).toFixed(1)} MiB）`);}
+  // Resume transient transport failures inside this one approved download. Do
+  // not replay installation/approval, or retry user stop / invalid data / HTTP errors.
+  for(let attempt=0;attempt<3;attempt++){
+    try{
+      deadline.signal.throwIfAborted();
+      const offset=total;
+      const download=await fetch(asset.url,{headers:{...headers,Accept:'application/octet-stream',...(offset?{Range:`bytes=${offset}-`}:{})},signal:deadline.signal});
+      if(![200,206].includes(download.status)||!download.body)throw new Error(`下载失败 HTTP ${download.status}`);
+      if(download.status===206){
+        const range=/^bytes (\d+)-(\d+)\/(\d+)$/.exec(download.headers.get('content-range')??'');
+        if(!range||Number(range[1])!==offset||Number(range[2])!==asset.size-1||Number(range[3])!==asset.size){await download.body.cancel();throw Error('Agent 断点响应范围不符，未安装。');}
+      }else if(offset){chunks.length=0;total=0;lastPercent=-5;}
+      for await(const chunk of download.body as unknown as AsyncIterable<Uint8Array>){
+        deadline.signal.throwIfAborted();if(chunk.length)deadline.progress();total+=chunk.length;if(total>asset.size)throw new Error('Update size mismatch');chunks.push(chunk);
+        const percent=Math.floor(total/asset.size*100);
+        if(percent>=lastPercent+5){lastPercent=percent;log(`Agent 下载 ${percent}%（${(total/1048576).toFixed(1)} / ${(asset.size/1048576).toFixed(1)} MiB）`);}
+      }
+      break;
+    }catch(error){
+      deadline.signal.throwIfAborted();
+      if(!(error instanceof TypeError)||attempt===2)throw error;
+      log(`Agent 下载连接中断，继续传输已确认的同一组件（${attempt+1}/2；已接收 ${(total/1048576).toFixed(1)} MiB）`);
+    }
   }
-  const bytes=Buffer.concat(chunks);
+  bytes=Buffer.concat(chunks);
   chunks.length=0;
+  } finally {deadline.dispose();}
+  signal.throwIfAborted();
   if(bytes.length!==asset.size || `sha256:${crypto.createHash('sha256').update(bytes).digest('hex')}`!==asset.digest)throw new Error('Agent 更新包摘要校验失败。');
   const zip=await JSZip.loadAsync(bytes);
   const rawManifest=zip.file('manifest.json');if(!rawManifest)throw new Error('Missing component manifest');

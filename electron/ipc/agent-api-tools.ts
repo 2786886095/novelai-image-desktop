@@ -59,7 +59,7 @@ export function createApiTools(adapter:ApiAdapter,approve:(request:AgentToolBrid
 export function desktopApiAdapter():ApiAdapter {
  return {
   profiles:()=>Object.keys(API_PROFILES),
-  async read(p){const store=await import('./store.js'),s=store.getSettings() as unknown as Record<string,unknown>,spec=API_PROFILES[p];return {config:Object.fromEntries(Object.entries(spec.fields).map(([k,v])=>[k,s[v.key]])),secret:String(spec.secret==='token'?store.getToken()??'':s[spec.secret]??'')};},
+  async read(p){const store=await import('./store.js');const s=store.getSettings() as unknown as Record<string,unknown>,spec=API_PROFILES[p];return {config:Object.fromEntries(Object.entries(spec.fields).map(([k,v])=>[k,s[v.key]])),secret:String(spec.secret==='token'?store.getToken()??'':s[spec.secret]??'')};},
   async write(p,next,before){const store=await import('./store.js');if(!same(await this.read(p),before))throw Error('配置已变化');const spec=API_PROFILES[p];
    if(next.secret!==before.secret){if(spec.secret==='token'){if(next.secret)store.setToken(next.secret);else store.clearToken();}else store.setSetting(spec.secret as never,next.secret as never);}
    else {const current=store.readStore();store.writeStore({...current,settings:{...current.settings,...Object.fromEntries(Object.entries(next.config).map(([k,v])=>[spec.fields[k].key,v]))}});}
@@ -68,9 +68,16 @@ export function desktopApiAdapter():ApiAdapter {
    if(state.secret){if(protocol==='anthropic-messages'){headers['x-api-key']=state.secret;headers['anthropic-version']='2023-06-01';}else if(protocol==='google-gemini')headers['x-goog-api-key']=state.secret;else headers.Authorization='Bearer '+state.secret;}
    if(p==='novelai'&&!state.config.allowCustomEndpoint){const host=new URL(base).hostname;if(host!=='novelai.net'&&!host.endsWith('.novelai.net'))throw Error('自定义地址未确认');}
    const endpoint=p==='novelai'?base+'/user/subscription':p==='tags'?base:base+(protocol==='anthropic-messages'&&!base.endsWith('/v1')?'/v1/models':'/models');
-   const {proxyConfig}=await import('./proxy.js');const response=await axios.get(endpoint,{...proxyConfig(p==='novelai'?'nai':p==='tags'?'mcp':'ai'),headers,timeout:20000,maxRedirects:0,maxContentLength:1024*1024,validateStatus:()=>true});
+   const {proxyConfig}=await import('./proxy.js');
+   const controller=new AbortController();let rejectDeadline!:(error:Error)=>void;
+   const deadline=new Promise<never>((_,reject)=>{rejectDeadline=reject;});
+   const timer=setTimeout(()=>{controller.abort();rejectDeadline(Error('连接检查超时'));},20000);
+   try {
+   const route=await Promise.race([Promise.resolve(proxyConfig(p==='novelai'?'nai':p==='tags'?'mcp':'ai')),deadline]);
+   const response=await Promise.race([axios.get(endpoint,{...route,headers,timeout:20000,signal:controller.signal,maxRedirects:0,maxContentLength:1024*1024,validateStatus:()=>true}),deadline]);
    const rows=Array.isArray(response.data)?response.data:response.data?.data??response.data?.models??[];
    return {status:response.status,models:['novelai','tags'].includes(p)?[]:Array.isArray(rows)?rows.map((x:unknown)=>typeof x==='string'?x:typeof x==='object'&&x!==null?String((x as Record<string,unknown>).id??(x as Record<string,unknown>).name??''):'').filter(Boolean):[]};
+   } finally {clearTimeout(timer);}
   }
  };
 }

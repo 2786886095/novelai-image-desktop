@@ -95,6 +95,10 @@ type ActiveDownload = {
 };
 
 const activeDownloads = new Map<ResourceDatabaseId, ActiveDownload>();
+const resourceOperations = new Map<ResourceDatabaseId,'download'|'restore'>();
+const pausedDownloads = new Set<ResourceDatabaseId>();
+const committing = new Set<ResourceDatabaseId>();
+function checkDownloadStopped(id:ResourceDatabaseId){if(pausedDownloads.has(id))throw new axios.CanceledError('Download paused');}
 const queryCache = new Map<string, TagSuggestion[]>();
 let cacheHits = 0;
 let cacheMisses = 0;
@@ -250,7 +254,7 @@ async function installedStatus(definition: ResourceDefinition): Promise<Resource
     sizeBytes: await fileSize(live),
     downloadBytes: definition.downloadSize,
     databaseBytes: definition.databaseSize,
-    downloading: Boolean(active),
+    downloading: resourceOperations.get(definition.id)==='download'||Boolean(active),
     resumableBytes: await fileSize(partialPath(definition)),
     hasPrevious: await exists(previousPath(definition)),
     replacementRequiresConfirmation: true,
@@ -291,6 +295,7 @@ async function downloadToPartial(definition: ResourceDefinition) {
     initialBytes,
   };
   activeDownloads.set(definition.id, active);
+  checkDownloadStopped(definition.id);
   if (initialBytes === definition.downloadSize) {
     progress(definition.id, "verifying", initialBytes, definition.downloadSize, 0, "继续校验已完成的下载");
     return destination;
@@ -327,6 +332,7 @@ async function downloadToPartial(definition: ResourceDefinition) {
   const destinationStream = createWriteStream(destination, { flags: initialBytes > 0 ? "a" : "w" });
   await pipeline(source as any, async function* (chunks: AsyncIterable<Uint8Array>) {
       for await (const chunk of chunks) {
+        checkDownloadStopped(definition.id);
         const bytes = Buffer.from(chunk as Uint8Array);
         active.received += bytes.length;
         const now = Date.now();
@@ -386,10 +392,13 @@ export async function downloadResourceDatabase(
       message: `${definition.label}会替换当前本地补全/相关推荐数据库。图片、参考图、预设和历史记录不会被覆盖。`,
     };
   }
-  if (activeDownloads.has(id)) return { ok: false, message: "该资源正在下载" };
+  if (resourceOperations.has(id)) return { ok: false, message: "该资源正在处理" };
+  resourceOperations.set(id,'download');pausedDownloads.delete(id);
   try {
     const archive = await downloadToPartial(definition);
+    checkDownloadStopped(id);
     await verifyDownloadedFile(definition, archive, definition.downloadSize, definition.downloadSha256);
+    checkDownloadStopped(id);
     const staged = stagedPath(definition);
     await fs.rm(staged, { force: true });
     if (definition.compressed) {
@@ -397,12 +406,14 @@ export async function downloadResourceDatabase(
       await pipeline(createReadStream(archive), createGunzip(), createWriteStream(staged));
       await verifyDownloadedFile(definition, staged, definition.databaseSize, definition.databaseSha256);
     } else {
-      await fs.rename(archive, staged);
+      // Keep the verified partial until commit so pausing validation is resumable.
+      await fs.copyFile(archive, staged);
     }
     progress(id, "installing", definition.downloadSize, definition.downloadSize, 0, "正在验证并替换数据库");
     await validateDatabase(definition, staged, true);
+    checkDownloadStopped(id);committing.add(id);
     await atomicallyInstall(definition, staged);
-    if (definition.compressed) await fs.rm(archive, { force: true });
+    await fs.rm(archive, { force: true }).catch(()=>undefined);
     progress(id, "complete", definition.downloadSize, definition.downloadSize, 0, "安装完成");
     return { ok: true, message: `${definition.label}已安全安装；旧数据库已保留为可回滚副本。` };
   } catch (error) {
@@ -418,13 +429,15 @@ export async function downloadResourceDatabase(
     return { ok: false, paused, message };
   } finally {
     activeDownloads.delete(id);
+    resourceOperations.delete(id);pausedDownloads.delete(id);committing.delete(id);
   }
 }
 
 export function pauseResourceDatabaseDownload(id: ResourceDatabaseId) {
+  if(resourceOperations.get(id)!=='download'||committing.has(id))return {ok:false,message:'当前没有可暂停的下载，或正在提交已验证数据库'};
+  pausedDownloads.add(id);
   const active = activeDownloads.get(id);
-  if (!active) return { ok: false, message: "当前没有进行中的下载" };
-  active.controller.abort();
+  active?.controller.abort();
   return { ok: true, message: "正在暂停" };
 }
 
@@ -432,10 +445,12 @@ export async function restorePreviousResourceDatabase(id: ResourceDatabaseId, co
   const definition = DEFINITIONS[id];
   if (!definition) return { ok: false, message: "未知资源数据库" };
   if (!confirmed) return { ok: false, requiresConfirmation: true, message: "恢复旧数据库会替换当前资源数据库，但不会改动任何图片或用户记录。" };
+  if(resourceOperations.has(id))return {ok:false,message:'该资源正在处理，请稍后恢复'};
+  resourceOperations.set(id,'restore');
   const previous = previousPath(definition);
-  if (!await exists(previous)) return { ok: false, message: "没有可恢复的旧数据库" };
   const staged = stagedPath(definition);
   try {
+    if (!await exists(previous)) return { ok: false, message: "没有可恢复的旧数据库" };
     await fs.rm(staged, { force: true });
     await fs.copyFile(previous, staged);
     await validateDatabase(definition, staged, true, false);
@@ -447,7 +462,7 @@ export async function restorePreviousResourceDatabase(id: ResourceDatabaseId, co
     const message = error instanceof Error ? error.message : String(error);
     progress(id, "error", 0, definition.databaseSize, 0, message);
     return { ok: false, message: `恢复失败：${message}` };
-  }
+  }finally{resourceOperations.delete(id);}
 }
 
 export async function openResourceDatabaseDirectory() {

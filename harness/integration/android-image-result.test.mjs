@@ -12,7 +12,7 @@ test('actual Flutter bridge response renders an image through actual shared Harn
   for(const file of ['jev','jev-config'])source=source.replaceAll(`'@langbai/dsh-studio-library/${file}'`,JSON.stringify(pathToFileURL(path.resolve(`harness/plugins/studio-library/${file}.js`)).href));
   const plugin=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
   await plugin.apply({tools:{register:t=>registered.set(t.name,t)},get:key=>key==='attachments'?{saveImage:async image=>{assert.equal(image.mediaType,'image/png');assert.equal(image.data.subarray(0,8).toString('hex'),'89504e470d0a1a0a');saves++;return {id:'render-fixture',mediaType:image.mediaType};}}:undefined});
-  const tool=registered.get('langbai_generate_image');const result=await tool.execute({args:{count:1}},{callId:'fixture-only',agent:{session:{id:'one'}}});
+  const tool=registered.get('langbai_generate_image');const result=await tool.execute({args:{positivePrompt:'fixture scene',count:1}},{callId:'fixture-only',agent:{session:{id:'one'}}});
   assert.equal(requests,1);assert.equal(saves,1);assert.equal(result.studioImageAttachments[0].id,'render-fixture');
   assert.ok(tool.output.render({},result).some(x=>x.type==='image'&&x.attachment.id==='render-fixture'));assert.equal(result.previewWarnings,undefined);
  }finally{globalThis.fetch=originalFetch;for(const k of Object.keys(process.env))if(!(k in oldEnv))delete process.env[k];Object.assign(process.env,oldEnv);}

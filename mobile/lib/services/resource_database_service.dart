@@ -201,6 +201,12 @@ class ResourceDatabaseService {
   final _progress = StreamController<ResourceDatabaseProgress>.broadcast();
   final Map<ResourceDatabaseId, http.Client> _activeClients = {};
   final Set<ResourceDatabaseId> _paused = {};
+  final Map<ResourceDatabaseId,String> _operations = {};
+  final Set<ResourceDatabaseId> _committing = {};
+  final Map<ResourceDatabaseId,ResourceDatabaseProgress> _lastProgress = {};
+  String? operation(ResourceDatabaseId id)=>_operations[id];
+  ResourceDatabaseProgress? lastProgress(ResourceDatabaseId id)=>_lastProgress[id];
+  void _checkPaused(ResourceDatabaseId id){if(_paused.contains(id))throw const _PausedDownload();}
   final Map<String, List<ResourceTagSuggestion>> _queryCache = {};
   int _cacheHits = 0;
   int _cacheMisses = 0;
@@ -289,14 +295,16 @@ class ResourceDatabaseService {
     double speed = 0,
     String message = '',
   }) {
-    _progress.add(ResourceDatabaseProgress(
+    final event=ResourceDatabaseProgress(
       id: definition.id,
       phase: phase,
       receivedBytes: received,
       totalBytes: total ?? definition.downloadSize,
       speedBytesPerSecond: speed,
       message: message,
-    ));
+    );
+    _lastProgress[definition.id]=event;
+    _progress.add(event);
   }
 
   Future<String> _sha256(File file) async {
@@ -413,6 +421,7 @@ class ResourceDatabaseService {
 
   Future<File> _downloadToPartial(ResourceDatabaseDefinition definition) async {
     final partial = await _partial(definition);
+    _checkPaused(definition.id);
     var initial = _length(partial);
     if (initial > definition.downloadSize) {
       await partial.delete();
@@ -430,7 +439,7 @@ class ResourceDatabaseService {
 
     var client = http.Client();
     _activeClients[definition.id] = client;
-    _paused.remove(definition.id);
+    _checkPaused(definition.id);
     var response = await start(client, initial);
     if (initial > 0 && response.statusCode != 206) {
       client.close();
@@ -511,15 +520,16 @@ class ResourceDatabaseService {
 
   Future<String> install(ResourceDatabaseId id) async {
     final definition = resourceDatabaseDefinitions[id]!;
-    if (_activeClients.containsKey(id)) {
-      throw StateError('Download already running');
-    }
+    if (_operations.containsKey(id)) throw StateError('Resource operation already running');
+    _operations[id]='download';_paused.remove(id);
     try {
       final archive = await _downloadToPartial(definition);
+      _checkPaused(id);
       _emit(definition, ResourceDownloadPhase.verifying,
           received: _length(archive), message: 'Verifying download');
       await _verifyFile(
           archive, definition.downloadSize, definition.downloadSha256);
+      _checkPaused(id);
       final staged = await _staged(definition);
       if (staged.existsSync()) await staged.delete();
       if (definition.compressed) {
@@ -535,14 +545,16 @@ class ResourceDatabaseService {
         await _verifyFile(
             staged, definition.databaseSize, definition.databaseSha256);
       } else {
-        await archive.rename(staged.path);
+        // Preserve the partial until commit, including pauses during validation.
+        await archive.copy(staged.path);
       }
       _emit(definition, ResourceDownloadPhase.installing,
           received: definition.downloadSize,
           message: 'Validating and replacing database');
       await _validateDatabase(definition, staged, thorough: true);
+      _checkPaused(id);_committing.add(id);
       await _atomicInstall(definition, staged);
-      if (definition.compressed && archive.existsSync()) await archive.delete();
+      if(archive.existsSync()){try{await archive.delete();}catch(_){/* Verified live database remains usable. */}}
       _emit(definition, ResourceDownloadPhase.complete,
           received: definition.downloadSize, message: 'Installed');
       return '${definition.label} installed safely. The previous database is retained for rollback.';
@@ -567,15 +579,21 @@ class ResourceDatabaseService {
     } finally {
       _activeClients.remove(id)?.close();
       _paused.remove(id);
+      _operations.remove(id);_committing.remove(id);
     }
   }
 
-  void pause(ResourceDatabaseId id) {
+  bool pause(ResourceDatabaseId id) {
+    if(_operations[id]!='download'||_committing.contains(id))return false;
     _paused.add(id);
     _activeClients.remove(id)?.close();
+    return true;
   }
 
   Future<String> restorePrevious(ResourceDatabaseId id) async {
+    if(_operations.containsKey(id))throw StateError('Resource operation already running');
+    _operations[id]='restore';
+    try{
     final definition = resourceDatabaseDefinitions[id]!;
     final previous = await _previous(definition);
     if (!previous.existsSync()) {
@@ -592,11 +610,14 @@ class ResourceDatabaseService {
         total: definition.databaseSize,
         message: 'Previous database restored');
     return 'Previous database restored';
+    }finally{_operations.remove(id);}
   }
 
   Future<void> delete(ResourceDatabaseId id) async {
+    if(_operations.containsKey(id))throw StateError('Resource operation already running; pause and wait first');
+    _operations[id]='delete';
+    try{
     final definition = resourceDatabaseDefinitions[id]!;
-    pause(id);
     for (final file in [
       await _database(definition),
       await _previous(definition),
@@ -606,6 +627,7 @@ class ResourceDatabaseService {
       if (file.existsSync()) await file.delete();
     }
     clearMemoryCache();
+    }finally{_operations.remove(id);}
   }
 
   Future<List<ResourceTagSuggestion>> searchTagCatalog(String query,

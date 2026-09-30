@@ -1,0 +1,33 @@
+/* Standard actions share metrics; navigation cards and icon-only controls keep
+   their own size variants. Never force all labels to an arbitrary fixed width. */
+:root { --studio-action-height: 36px; --studio-action-gap: 8px; }
+.btn { box-sizing: border-box; min-height: var(--studio-action-height); }
+.file-picker.file-picker-compact {
+  display: inline-flex; flex: 0 0 auto; width: auto; max-width: 100%;
+  padding: 0; border: 0; border-radius: 0; background: transparent; gap: 0;
+}
+.file-picker.file-picker-compact > .btn { width: 100%; }
+.tag-comic :is(.tag-comic-header-actions, .tag-comic-actions,
+  .tag-comic-reference-actions, .tag-comic-generate-toolbar, .tag-comic-result-actions) {
+  align-items: center; gap: var(--studio-action-gap); flex-wrap: wrap;
+}
+.tag-comic .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: var(--studio-action-height); min-height: var(--studio-action-height);
+  padding: 0 12px; line-height: 20px; white-space: nowrap; flex-shrink: 0;
+  border-radius: 6px;
+}
+.tag-comic :is(.tag-comic-header-actions, .tag-comic-actions, .tag-comic-reference-actions) .btn {
+  min-width: 96px;
+}
+.tag-comic .tag-comic-global-grid > label { align-content: start; }
+.tag-comic .tag-comic-global-grid input:not([type="checkbox"]):not([type="range"]):not([type="file"]) {
+  box-sizing: border-box; height: 42px; min-height: 42px; padding: 0 12px; margin: 0;
+}
+.tag-comic .tag-comic-section-heading { flex-wrap: wrap; }
+@media (max-width: 720px) {
+  .tag-comic .tag-comic-reference-actions { width: 100%; }
+  .tag-comic :is(.tag-comic-actions, .tag-comic-reference-actions) > :is(.btn, .file-picker-compact) {
+    flex: 1 1 auto;
+  }
+}

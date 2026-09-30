@@ -1,3 +1,4 @@
+import {motionReduced} from '../motion-system';
 import {useLayoutEffect, useState, type RefObject} from "react";
 
 export const DISCLOSURE_MOTION = {open: 160, close: 120} as const;
@@ -19,7 +20,7 @@ export function useDisclosurePresence(open: boolean, element?: RefObject<HTMLEle
   });
   useLayoutEffect(() => {
     if (open) { setRetained(true); return; }
-    if (document.documentElement.classList.contains("motion-reduced")) {
+    if (motionReduced()) {
       setRetained(false); return;
     }
     const timer = window.setTimeout(() => setRetained(false), DISCLOSURE_MOTION.close);
@@ -31,7 +32,7 @@ export function useDisclosurePresence(open: boolean, element?: RefObject<HTMLEle
     node.dataset.disclosureSettled = "false";
     if (!open) return;
     const timer = window.setTimeout(() => { node.dataset.disclosureSettled = "true"; },
-      document.documentElement.classList.contains("motion-reduced") ? 0 : DISCLOSURE_MOTION.open);
+      motionReduced() ? 0 : DISCLOSURE_MOTION.open);
     return () => window.clearTimeout(timer);
   }, [open, element]);
   return open || retained;

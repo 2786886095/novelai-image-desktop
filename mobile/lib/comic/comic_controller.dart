@@ -1,14 +1,16 @@
-import 'package:path_provider/path_provider.dart';
-import '../services/unified_storage.dart';
+import '../services/comic_image_service.dart';
+import 'comic_asset_store.dart';
+import 'comic_project_transfer.dart';
+import 'package:crypto/crypto.dart';
+import '../services/generation_scope.dart';
+import '../services/storage.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:archive/archive.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../billing/anlas.dart';
 import '../i18n/app_locales.dart';
@@ -25,18 +27,25 @@ class _ComicGenerationTask {
   final ComicPanel panel;
   final GenerateParams params;
   final GenerateExtras extras;
+  final String? compatibleSize;
 
   const _ComicGenerationTask({
     required this.panel,
     required this.params,
     required this.extras,
+    this.compatibleSize,
   });
 }
 
 class ComicController extends ChangeNotifier {
   final AppState app;
 
-  ComicController(this.app) {
+  final ComicAssetStore assets;
+  bool exporting = false;
+  Map<String, dynamic>? lastExport;
+
+  ComicController(this.app, {ComicAssetStore? assets})
+      : assets = assets ?? ComicAssetStore() {
     BackgroundQueueService.addCancelHandler(cancelQueue);
   }
 
@@ -52,6 +61,146 @@ class ComicController extends ChangeNotifier {
   int queueTotal = 0;
   Timer? _saveTimer;
   bool _disposed = false;
+  bool _editing = false;
+  String? _agentReservation;
+  bool get editing => _editing;
+  String? loadError;
+  String? persistenceError;
+  String? runId;
+  String runPhase = 'idle';
+  String? runError;
+  bool _journalLoaded = false;
+  Future<void>? _loading;
+  Future<void> _writes = Future.value();
+  Future<void> _work = Future.value();
+  GenerationScope? _scope;
+  String get revision =>
+      sha256.convert(utf8.encode(jsonEncode(project.toJson()))).toString();
+  void assertRevision(String expected) {
+    if (loadError != null) throw StateError(loadError!);
+    if (queueRunning ||
+        _editing ||
+        _agentReservation != null ||
+        revision != expected) {
+      throw StateError('漫画工程已变化或正在运行，请重新读取');
+    }
+  }
+
+  Future<void> commitProject(String expected, ComicProject next,
+      {bool backup = false}) async {
+    assertRevision(expected);
+    _editing = true;
+    _saveTimer?.cancel();
+    final before = ComicProject.fromJson(
+        jsonDecode(jsonEncode(project.toJson())), project.globalParams,
+        trustOutputs: true);
+    final captured = ComicProject.fromJson(
+        jsonDecode(jsonEncode(next.toJson())), next.globalParams,
+        trustOutputs: true);
+    final transaction = _writes.then((_) async {
+      if (revision != expected || queueRunning) {
+        throw StateError('漫画工程已变化，请重新读取');
+      }
+      if (backup) await app.storage.setComicBackup(before);
+      if (revision != expected || queueRunning) {
+        throw StateError('备份期间漫画工程已变化，请重新读取');
+      }
+      await app.storage.setComicProject(captured);
+      if (revision != expected || queueRunning) {
+        await app.storage.setComicProject(project);
+        throw StateError('保存期间漫画工程已变化，保留了软件端编辑，请重新读取');
+      }
+      project = captured;
+      if (!project.panels.any((p) => p.id == activePanelId)) {
+        activePanelId = project.panels.isEmpty ? '' : project.panels.first.id;
+      }
+      persistenceError = null;
+      notifyListeners();
+    });
+    _writes = transaction.then<void>((_) {}, onError: (Object e) {
+      persistenceError = e.toString();
+      notifyListeners();
+    });
+    try {
+      await transaction;
+    } finally {
+      _editing = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> flush() {
+    _saveTimer?.cancel();
+    if (loadError != null) return Future.error(StateError(loadError!));
+    if (_editing) {
+      final next = _writes.then((_) => app.storage.setComicProject(project));
+      _writes = next.then<void>((_) {}, onError: (Object e) {
+        persistenceError = e.toString();
+        notifyListeners();
+      });
+      return next;
+    }
+    final snapshot = ComicProject.fromJson(
+        jsonDecode(jsonEncode(project.toJson())), project.globalParams,
+        trustOutputs: true);
+    final next = _writes.then((_) => app.storage.setComicProject(snapshot));
+    _writes = next.then<void>((_) {
+      persistenceError = null;
+    }, onError: (Object e) {
+      persistenceError = e.toString();
+      notifyListeners();
+    });
+    return next;
+  }
+
+  Map<String, dynamic> get runState => {
+        'id': runId,
+        'phase': runPhase,
+        'total': queueTotal,
+        'done': queueDone,
+        'error': runError,
+        'active': queueRunning
+      };
+  Future<void> _saveRun(String phase, {String? error}) async {
+    runPhase = phase;
+    runError = error;
+    await app.storage.setComicRun(
+        {...runState, 'updatedAt': DateTime.now().toIso8601String()});
+    notifyListeners();
+  }
+
+  Future<void> _loadRun() async {
+    if (_journalLoaded) return;
+    final saved = await app.storage.getComicRun();
+    if (saved != null) {
+      if (saved['id'] is! String ||
+          saved['total'] is! int ||
+          saved['done'] is! int ||
+          saved['total'] < 0 ||
+          saved['done'] < 0 ||
+          saved['done'] > saved['total'] ||
+          ![
+            'preparing',
+            'running',
+            'stopping',
+            'completed',
+            'cancelled',
+            'failed',
+            'interrupted'
+          ].contains(saved['phase'])) throw StateError('漫画任务记录损坏，原始记录保留');
+      runId = saved['id'];
+      queueTotal = saved['total'];
+      queueDone = saved['done'];
+      runPhase = saved['phase'];
+      runError = saved['error'] as String?;
+      if (['preparing', 'running', 'stopping'].contains(runPhase)) {
+        await _saveRun('interrupted', error: '上次漫画任务未核实完成；已保存图片保留，未自动重试。');
+      }
+    }
+    _journalLoaded = true;
+  }
+
+  Future<void> settled() => _work;
 
   String _t(String key) => mobileUiTextFor(app.settings.language, key);
   String get displayTitle =>
@@ -66,16 +215,19 @@ class ComicController extends ChangeNotifier {
     if (!_disposed) super.notifyListeners();
   }
 
-  Future<void> load() async {
-    try {
-      project = await app.storage.getComicProject(app.params);
-    } catch (_) {
-      project = ComicProject.empty(app.params);
-    }
-    activePanelId = project.panels.isEmpty ? '' : project.panels.first.id;
-    loaded = true;
-    notifyListeners();
-  }
+  Future<void> load() => _loading ??= () async {
+        if (loaded) return;
+        try {
+          project = await app.storage.getComicProject(app.params);
+          await _loadRun();
+        } catch (e) {
+          loadError = e.toString();
+          project = ComicProject.empty(app.params);
+        }
+        activePanelId = project.panels.isEmpty ? '' : project.panels.first.id;
+        loaded = true;
+        notifyListeners();
+      }();
 
   ComicPanel? get activePanel {
     for (final panel in project.panels) {
@@ -97,7 +249,9 @@ class ComicController extends ChangeNotifier {
     _saveTimer?.cancel();
     _saveTimer = Timer(
       const Duration(milliseconds: 250),
-      () => app.storage.setComicProject(project),
+      () {
+        unawaited(flush().catchError((Object _) {}));
+      },
     );
   }
 
@@ -219,19 +373,42 @@ class ComicController extends ChangeNotifier {
     await importText(utf8.decode(bytes), fileName: picked.name);
   }
 
-  Future<void> exportProjectJson() async {
-    final temp = await getTemporaryDirectory();
-    final file = File('${temp.path}/${_safeName(displayTitle)}.json');
-    await file.writeAsString(
-      const JsonEncoder.withIndent(' ')
-          .convert(project.toJson(includeLocalReferences: false)),
-      flush: true,
-    );
-    await Share.shareXFiles([XFile(file.path)], text: displayTitle);
-    changed('comic.jsonShared');
+  Future<void> exportProjectJson() => _export(false);
+
+  Future<void> _export(bool zip) async {
+    if (exporting) throw StateError('导出正在进行，请等待完成');
+    final expected = revision;
+    assertRevision(expected);
+    final snapshot = ComicProject.fromJson(
+        project.toJson(), project.globalParams,
+        trustOutputs: true);
+    exporting = true;
+    lastExport = null;
+    notifyListeners();
+    try {
+      final receipt = zip
+          ? await assets.exportSelected(snapshot,
+              portableComicProject(snapshot), () => assertRevision(expected))
+          : await assets.exportProject(
+              snapshot, () => assertRevision(expected));
+      lastExport = receipt;
+      if (receipt['shared'] != true) {
+        throw StateError('文件已保存，系统分享未完成：${receipt['filePath']}');
+      }
+      statusKey = zip ? 'comic.zipShared' : 'comic.jsonShared';
+      statusDetail = '';
+    } catch (error) {
+      statusDetail = error.toString();
+      rethrow;
+    } finally {
+      exporting = false;
+      notifyListeners();
+    }
   }
 
   Future<void> importProjectJson() async {
+    final expected = revision;
+    assertRevision(expected);
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['json'],
@@ -244,15 +421,21 @@ class ComicController extends ChangeNotifier {
     if (bytes == null) throw FormatException(_t('error.readFile'));
     final decoded = jsonDecode(utf8.decode(bytes));
     if (decoded is! Map) throw FormatException(_t('error.projectJsonRoot'));
-    project = ComicProject.fromJson(
-      Map<String, dynamic>.from(decoded),
-      app.params,
-    );
-    activePanelId = project.panels.isEmpty ? '' : project.panels.first.id;
-    changed('comic.projectImported');
+    assertRevision(expected);
+    final next =
+        ComicProject.fromJson(Map<String, dynamic>.from(decoded), app.params);
+    next.id = comicId();
+    for (final panel in next.panels) {
+      panel.id = comicId();
+    }
+    await commitProject(expected, next, backup: true);
+    statusKey = 'comic.projectImported';
+    statusDetail = '';
+    notifyListeners();
   }
 
-  GenerateParams paramsFor(ComicPanel panel) {
+  GenerateParams paramsFor(ComicPanel panel, {ComicProject? source}) {
+    final project = source ?? this.project;
     final params =
         (panel.overrideParams ? panel.params : project.globalParams).copy();
     params
@@ -269,83 +452,75 @@ class ComicController extends ChangeNotifier {
   }
 
   Future<void> pickPreciseReferences() async {
+    final expected = revision;
+    assertRevision(expected);
     final remaining = max(0, 5 - project.preciseReferences.length);
     if (remaining == 0) return;
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
       type: FileType.custom,
       allowedExtensions: const ['png', 'jpg', 'jpeg', 'webp'],
-      withData: true,
+      withData: false,
     );
-    if (result == null) return;
-    final documents = await UnifiedStorage.documents();
-    final root = Directory(
-        '${documents.path}${Platform.pathSeparator}comic-projects${Platform.pathSeparator}${project.id}${Platform.pathSeparator}references');
-    await root.create(recursive: true);
-    for (final picked in result.files.take(remaining)) {
-      final bytes = picked.bytes ??
-          (picked.path == null ? null : await File(picked.path!).readAsBytes());
-      if (bytes == null || bytes.isEmpty) continue;
-      final extension = picked.extension?.toLowerCase() ?? 'png';
-      final id = comicId();
-      final file = File('${root.path}${Platform.pathSeparator}$id.$extension');
-      await file.writeAsBytes(bytes, flush: true);
-      project.preciseReferences.add(ComicReferenceAsset(
-        id: id,
-        name: picked.name,
-        filePath: file.path,
-      ));
+    if (result == null || result.files.isEmpty) return;
+    assertRevision(expected);
+    if (result.files.length > remaining) throw StateError('最多5张漫画参考图，请减少选择');
+    final next = ComicProject.fromJson(project.toJson(), project.globalParams,
+        trustOutputs: true);
+    final imported = <ComicReferenceAsset>[];
+    try {
+      for (final picked in result.files) {
+        final path = picked.path;
+        if (path == null) throw StateError('图片文件不存在，请重新选择');
+        final asset = await assets.importImage(path, name: picked.name);
+        imported.add(asset);
+        assertRevision(expected);
+        next.preciseReferences.add(asset);
+      }
+      await commitProject(expected, next);
+    } catch (_) {
+      for (final asset in imported) {
+        await assets.removeImported(asset);
+      }
+      rethrow;
     }
-    changed('comic.preciseImported');
+    statusKey = 'comic.preciseImported';
+    statusDetail = '';
+    notifyListeners();
   }
 
   Future<String?> addPreciseReferencePreset(ReferencePreset preset) async {
     if (preset.kind != ReferencePresetKind.precise) return 'Unsupported preset';
     if (project.preciseReferences.length >= 5) return _t('comic.preciseHint');
+    ComicReferenceAsset? imported;
     try {
-      final source = File(preset.filePath);
-      final bytes = await source.readAsBytes();
-      final documents = await UnifiedStorage.documents();
-      final root = Directory(
-          '${documents.path}${Platform.pathSeparator}comic-projects${Platform.pathSeparator}${project.id}${Platform.pathSeparator}references');
-      await root.create(recursive: true);
-      final sourceExtension = preset.filePath.split('.').last.toLowerCase();
-      final extension =
-          const {'png', 'jpg', 'jpeg', 'webp'}.contains(sourceExtension)
-              ? sourceExtension
-              : 'png';
-      final id = comicId();
-      final file = File('${root.path}${Platform.pathSeparator}$id.$extension');
-      await file.writeAsBytes(bytes, flush: true);
-      project.preciseReferences.add(ComicReferenceAsset(
-        id: id,
-        name: preset.name,
-        filePath: file.path,
-        type: preset.preciseType,
-        strength: preset.strength,
-        fidelity: preset.fidelity,
-        informationExtracted: 1,
-      ));
-      changed('comic.preciseImported');
+      final expected = revision;
+      assertRevision(expected);
+      final next = ComicProject.fromJson(project.toJson(), project.globalParams,
+          trustOutputs: true);
+      imported = await assets.importImage(preset.filePath, name: preset.name);
+      assertRevision(expected);
+      imported
+        ..type = preset.preciseType
+        ..strength = preset.strength
+        ..fidelity = preset.fidelity;
+      next.preciseReferences.add(imported);
+      await commitProject(expected, next);
+      statusKey = 'comic.preciseImported';
+      statusDetail = '';
+      notifyListeners();
       return null;
-    } catch (_) {
-      return _t('error.readReference');
+    } catch (error) {
+      if (imported != null) await assets.removeImported(imported);
+      return '${_t('error.readReference')}: $error';
     }
   }
 
   Future<void> removePreciseReference(String referenceId) async {
-    final matches = project.preciseReferences
-        .where((item) => item.id == referenceId)
-        .toList();
-    for (final item in matches) {
-      await File(item.filePath).delete().catchError((_) => File(item.filePath));
-    }
-    project.preciseReferences.removeWhere((item) => item.id == referenceId);
-    for (final panel in project.panels) {
-      panel.preciseReferences
-          .removeWhere((item) => item.referenceId == referenceId);
-    }
-    changed();
+    final expected = revision;
+    assertRevision(expected);
+    final next = withoutComicReference(project, referenceId);
+    await commitProject(expected, next, backup: true);
   }
 
   void togglePanelReference(
@@ -436,13 +611,15 @@ class ComicController extends ChangeNotifier {
             : matches.first.enabled;
       }).length;
 
-  Future<GenerateExtras> extrasFor(ComicPanel panel) async {
+  Future<GenerateExtras> extrasFor(ComicPanel panel,
+      {ComicProject? source}) async {
+    final project = source ?? this.project;
     final precise = <PreciseReferenceItem>[];
     for (final selection in resolvedComicPanelReferences(project, panel)) {
       final assets = project.preciseReferences
           .where((item) => item.id == selection.referenceId)
           .toList();
-      if (assets.isEmpty) continue;
+      if (assets.isEmpty) throw StateError('漫画参考记录不存在，请重新选择参考图');
       final asset = assets.first;
       try {
         final bytes = await File(asset.filePath).readAsBytes();
@@ -454,7 +631,9 @@ class ComicController extends ChangeNotifier {
           fidelity: selection.fidelity,
           informationExtracted: selection.informationExtracted,
         ));
-      } catch (_) {}
+      } catch (_) {
+        throw StateError('漫画参考图不存在或读取失败，请重新选择目录或参考图：${asset.name}');
+      }
     }
     return GenerateExtras(preciseReferences: precise);
   }
@@ -517,7 +696,32 @@ class ComicController extends ChangeNotifier {
               size.width == panel.imageWidth &&
               size.height == panel.imageHeight));
 
-  Future<int> quoteTasks(Iterable<ComicPanel> panels, {int each = 1}) async {
+  bool get compatible => app.settings.imageProvider == 'openai-images';
+  Future<String> authorizationStamp() async {
+    final binding = _sourceBinding(),
+        key = await comicCredential(app.storage, app.settings);
+    if (_sourceBinding() != binding) throw StateError('图片服务配置已变化，请重新确认');
+    return sha256.convert(utf8.encode(jsonEncode([binding, key]))).toString();
+  }
+
+  void validateProviderPanel(ComicPanel panel, GenerateExtras extras,
+      {ComicProject? source}) {
+    if (compatible) {
+      compatibleComicRequest(
+          app.settings, paramsFor(panel, source: source), extras,
+          size: (source ?? project).sizeMode == ComicSizeMode.perPanel
+              ? '${panel.imageWidth}x${panel.imageHeight}'
+              : null);
+    }
+  }
+
+  Future<int?> quoteTasks(Iterable<ComicPanel> panels, {int each = 1}) async {
+    if (compatible) {
+      for (final panel in panels) {
+        validateProviderPanel(panel, await extrasFor(panel));
+      }
+      return null; // Provider billing is unknown, never report zero Anlas.
+    }
     final token = await app.storage.getToken();
     final officialCache = <String, int?>{};
     var total = 0;
@@ -556,63 +760,163 @@ class ComicController extends ChangeNotifier {
   }
 
   Future<_ComicGenerationTask> _captureGenerationTask(
-    ComicPanel panel,
-  ) async {
+      ComicPanel panel, ComicProject source,
+      {GenerateExtras? approvedExtras}) async {
+    final frozen = source.panels.firstWhere((p) => p.id == panel.id);
+    final extras =
+        (approvedExtras ?? await extrasFor(frozen, source: source)).copy();
+    validateProviderPanel(frozen, extras, source: source);
     return _ComicGenerationTask(
-      panel: panel,
-      params: paramsFor(panel).copy(),
-      extras: (await extrasFor(panel)).copy(),
-    );
+        panel: panel,
+        compatibleSize: source.sizeMode == ComicSizeMode.perPanel
+            ? '${frozen.imageWidth}x${frozen.imageHeight}'
+            : null,
+        params: paramsFor(frozen, source: source),
+        extras: extras);
   }
 
-  Future<void> _generateCandidate(_ComicGenerationTask task) async {
-    final panel = task.panel;
-    if (panel.prompt.trim().isEmpty) {
-      throw FormatException(_t('comic.emptyPrompt'));
+  Future<void> _generateCandidate(
+      _ComicGenerationTask task, ComicProject source) async {
+    final matches = project.panels.where((p) => p.id == task.panel.id);
+    if (project.id != source.id || matches.isEmpty) {
+      throw StateError('漫画工程或分镜已变化，后续任务未提交');
     }
+    final panel = matches.first;
     panel
       ..status = ComicPanelStatus.generating
       ..error = '';
     changed('comic.generatingPanel');
+    final before = app.account.anlasBalance;
     try {
-      final before = app.account.anlasBalance;
-      final item = await app.generateComicPanel(
-        panelParams: task.params,
-        panelExtras: task.extras,
-        projectTitle: displayTitle,
-        historyGroupId: project.historyGroupId,
-      );
-      project.historyGroupId = item.groupId;
-      final candidate = ComicCandidate(
-        id: comicId(),
-        historyItemId: item.id,
-        outputPath: item.filePath,
-        createdAt: item.createdAt,
-        actualAnlas: before != null && app.account.anlasBalance != null
-            ? max(0, before - app.account.anlasBalance!)
-            : null,
-      );
-      panel.candidates.add(candidate);
-      panel
-        ..selectedCandidateId ??= candidate.id
-        ..status = ComicPanelStatus.done;
-      changed('comic.generated');
-    } catch (error) {
-      if (queueCancelled) {
-        panel
-          ..status = panel.candidates.isEmpty
-              ? ComicPanelStatus.ready
-              : ComicPanelStatus.done
-          ..error = '';
-        changed('comic.queueStopped');
-        return;
+      List<HistoryItem> items;
+      Object? savedError;
+      try {
+        final item = await _scope!.run(() => compatible
+            ? app.generateCompatibleComicPanel(
+                panelParams: task.params,
+                panelExtras: task.extras,
+                projectTitle: source.title,
+                historyGroupId: project.historyGroupId,
+                size: task.compatibleSize)
+            : app.generateComicPanel(
+                panelParams: task.params,
+                panelExtras: task.extras,
+                projectTitle: source.title,
+                historyGroupId: project.historyGroupId));
+        items = [item];
+      } on SavedImageHistoryException catch (e) {
+        items = [e.item];
+        savedError = e;
+      } on SavedComicImagesException catch (e) {
+        items = e.items;
+        savedError = e;
       }
+      if (project.id != source.id ||
+          !project.panels.any((p) => identical(p, panel))) {
+        throw StateError('图片已保存到历史，但漫画工程已变化；已停止后续生成');
+      }
+      for (final item in items) {
+        project.historyGroupId = item.groupId;
+        final candidate = ComicCandidate(
+            id: comicId(),
+            historyItemId: item.id,
+            outputPath: item.filePath,
+            createdAt: item.createdAt,
+            actualAnlas: item.params['generationProvider'] != 'openai-images' &&
+                    before != null &&
+                    app.account.anlasBalance != null
+                ? max(0, before - app.account.anlasBalance!)
+                : null);
+        panel.candidates.add(candidate);
+        panel
+          ..selectedCandidateId ??= candidate.id
+          ..status = ComicPanelStatus.done;
+      }
+      changed('comic.generated');
+      await flush();
+      if (savedError != null) throw savedError;
+    } catch (e) {
       panel
-        ..status = ComicPanelStatus.failed
-        ..error = error.toString().replaceFirst('Exception: ', '');
-      changed('comic.panelFailed', panel.error);
+        ..status = queueCancelled
+            ? (panel.candidates.isEmpty
+                ? ComicPanelStatus.ready
+                : ComicPanelStatus.done)
+            : ComicPanelStatus.failed
+        ..error = queueCancelled ? '' : e.toString();
+      changed(queueCancelled ? 'comic.queueStopped' : 'comic.panelFailed',
+          panel.error);
       rethrow;
     }
+  }
+
+  List<ComicPanel> agentPlan(String mode, List<String> ids) {
+    if (!['initial', 'regenerate', 'additional'].contains(mode)) {
+      throw StateError('漫画生成模式无效');
+    }
+    if (ids.toSet().length != ids.length ||
+        ids.any((id) => !project.panels.any((p) => p.id == id))) {
+      throw StateError('分镜ID不存在或重复');
+    }
+    final panels = ids.isEmpty
+        ? project.panels
+        : ids
+            .map((id) => project.panels.firstWhere((p) => p.id == id))
+            .toList();
+    final result = <ComicPanel>[];
+    for (final p in panels) {
+      final count = mode == 'additional'
+          ? 1
+          : mode == 'regenerate'
+              ? project.initialGenerationCount
+              : max(0, project.initialGenerationCount - p.candidates.length);
+      for (var i = 0; i < count; i++) {
+        result.add(p);
+      }
+    }
+    if (result.isEmpty) throw StateError('没有待生成分镜，未提交图片');
+    if (!hasCompletePanelSizes || result.any((p) => p.prompt.trim().isEmpty)) {
+      throw StateError('漫画提示词或逐格尺寸未完整配置');
+    }
+    return result;
+  }
+
+  void reserveAgentRun(String owner, String expected) {
+    assertRevision(expected);
+    _agentReservation = owner;
+    notifyListeners();
+  }
+
+  void checkAgentRun(String owner, String expected) {
+    if (_disposed ||
+        loadError != null ||
+        _agentReservation != owner ||
+        revision != expected ||
+        queueRunning ||
+        _editing) throw StateError('漫画工程已变化或预留失效，未启动');
+  }
+
+  void releaseAgentRun(String owner) {
+    if (_agentReservation == owner) {
+      _agentReservation = null;
+      notifyListeners();
+    }
+  }
+
+  Future<void> runAgent(List<String> taskIds,
+      {required String owner,
+      required String expected,
+      required Map<String, GenerateExtras> references,
+      required Future<void> Function() beforeImage,
+      required void Function() guard}) {
+    checkAgentRun(owner, expected);
+    final tasks = taskIds
+        .map((id) => project.panels.firstWhere((p) => p.id == id))
+        .toList();
+    return _runQueue(tasks,
+        agentRunId: owner,
+        beforeImage: beforeImage,
+        guard: guard,
+        approvedReferences: Map.of(references));
   }
 
   Future<void> generateInitial() async {
@@ -641,52 +945,137 @@ class ComicController extends ChangeNotifier {
       _runQueue(List<ComicPanel>.from(project.panels));
   Future<void> addOne(ComicPanel panel) => _runQueue([panel]);
 
-  Future<void> _runQueue(List<ComicPanel> tasks) async {
-    if (queueRunning || tasks.isEmpty) return;
+  Future<void> _runQueue(List<ComicPanel> tasks,
+      {String? agentRunId,
+      Map<String, GenerateExtras>? approvedReferences,
+      Future<void> Function()? beforeImage,
+      void Function()? guard}) {
+    if (_disposed || loadError != null) {
+      throw StateError(loadError ?? '漫画控制器已关闭');
+    }
+    if (queueRunning ||
+        _editing ||
+        (_agentReservation != null && _agentReservation != agentRunId) ||
+        app.busy ||
+        app.generationQueueRunning) {
+      throw StateError('图像任务正在运行，请先停止并等待读回');
+    }
+    if (tasks.isEmpty) return Future.value();
     if (!hasCompletePanelSizes) {
       throw FormatException(_t('comic.sizesIncomplete'));
     }
-    if (tasks.any((panel) => panel.prompt.trim().isEmpty)) {
+    if (tasks.any((p) => p.prompt.trim().isEmpty)) {
       throw FormatException(_t('comic.emptyPrompt'));
     }
-    final planned = <_ComicGenerationTask>[];
-    for (final panel in tasks) {
-      planned.add(await _captureGenerationTask(panel));
+    if (tasks.any((p) => !project.panels.any((x) => x.id == p.id))) {
+      throw StateError('漫画分镜不存在');
     }
-    if (planned.any((task) =>
-        task.extras.preciseReferences.isNotEmpty &&
-        !task.params.supportsPreciseReference)) {
-      throw FormatException(_t('comic.preciseV45Only'));
-    }
+    final source = ComicProject.fromJson(
+        jsonDecode(jsonEncode(project.toJson())), project.globalParams,
+        trustOutputs: true);
+    final expectedSource = _sourceBinding();
+    String? token;
+    // Reserve before the first async file read so a second click cannot race it.
     queueRunning = true;
     queueCancelled = false;
-    queueDone = 0;
-    queueTotal = planned.length;
+    app.busy = true;
+    _scope = GenerationScope(beforeSubmit: () {
+      guard?.call();
+      if (_sourceBinding() != expectedSource) {
+        throw StateError('图片服务配置已变化，后续漫画图片未提交');
+      }
+    }, assertCredentials: (current, settings) {
+      if (current != token) throw StateError('图片凭据已变化，未提交漫画请求');
+    });
     notifyListeners();
-    try {
-      await BackgroundQueueService.start(
-        'comic-generation',
-        title: _t('notification.comicTitle'),
-        text: '${_t('comic.generateHeading')} 0/${planned.length}',
-      );
-    } catch (_) {}
-    for (final task in planned) {
-      if (queueCancelled) break;
+    app.notifyListeners();
+    _work = () async {
       try {
-        await _generateCandidate(task);
-      } catch (_) {}
-      queueDone++;
-      notifyListeners();
-    }
-    queueRunning = false;
-    await BackgroundQueueService.stop('comic-generation');
-    changed(queueCancelled ? 'comic.queueStopped' : 'comic.queueDone');
+        await _loadRun();
+        runId = agentRunId ?? comicId();
+        queueDone = 0;
+        queueTotal = tasks.length;
+        await flush();
+        await _saveRun('preparing');
+        _scope!.check();
+        token = await comicCredential(app.storage, app.settings);
+        if (token == null || token!.isEmpty) {
+          throw StateError(compatible ? '请先配置兼容图片服务密钥' : '请先配置 NovelAI Token');
+        }
+        _scope!.check();
+        final planned = <_ComicGenerationTask>[];
+        for (final panel in tasks) {
+          if (approvedReferences != null &&
+              !approvedReferences.containsKey(panel.id)) {
+            throw StateError('漫画授权参考快照缺失，未提交图片');
+          }
+          planned.add(await _captureGenerationTask(panel, source,
+              approvedExtras: approvedReferences?[panel.id]));
+          _scope!.check();
+        }
+        if (planned.any((task) =>
+            task.extras.preciseReferences.isNotEmpty &&
+            !task.params.supportsPreciseReference)) {
+          throw FormatException(_t('comic.preciseV45Only'));
+        }
+        await _saveRun('running');
+        _scope!.check();
+        try {
+          await BackgroundQueueService.start('comic-generation',
+              title: _t('notification.comicTitle'),
+              text: '${_t('comic.generateHeading')} 0/${planned.length}');
+        } catch (_) {}
+        for (final task in planned) {
+          _scope!.check();
+          final currentToken = await comicCredential(app.storage, app.settings);
+          _scope!.credentials(currentToken ?? '', app.settings);
+          await beforeImage?.call();
+          _scope!.check();
+          await _generateCandidate(task, source);
+          queueDone++;
+          await _saveRun(queueCancelled ? 'stopping' : 'running');
+          if (queueCancelled) break;
+        }
+        await _saveRun(queueCancelled ? 'cancelled' : 'completed');
+      } catch (e) {
+        runPhase = queueCancelled ? 'cancelled' : 'failed';
+        runError = e.toString();
+        if (!_journalLoaded) {
+          loadError = e.toString();
+        } else {
+          try {
+            await _saveRun(runPhase, error: runError);
+          } catch (_) {
+            runPhase = 'failed';
+            runError = '漫画运行记录保存失败：$e';
+          }
+        }
+      } finally {
+        try {
+          await BackgroundQueueService.stop('comic-generation');
+        } catch (_) {}
+        queueRunning = false;
+        app.busy = false;
+        _scope = null;
+        changed(
+            queueCancelled
+                ? 'comic.queueStopped'
+                : runPhase == 'completed'
+                    ? 'comic.queueDone'
+                    : 'comic.panelFailed',
+            runError ?? '');
+        app.notifyListeners();
+      }
+    }();
+    return _work;
   }
 
+  String _sourceBinding() => comicImageBinding(app.settings);
   void cancelQueue() {
     if (!queueRunning) return;
     queueCancelled = true;
-    app.api.cancelActiveGeneration();
+    _scope?.cancel();
+    // The currently executing request owns its own HTTP clients; never cancel unrelated work.
     changed('comic.queueStopped');
   }
 
@@ -696,51 +1085,12 @@ class ComicController extends ChangeNotifier {
     changed('comic.currentMain');
   }
 
-  Future<void> exportSelectedZip() async {
-    final selected = project.panels
-        .map((panel) => (panel, panel.selectedCandidate))
-        .where((entry) =>
-            entry.$2 != null && File(entry.$2!.outputPath).existsSync())
-        .toList();
-    if (selected.isEmpty) throw StateError(_t('comic.noCandidate'));
-    final archive = Archive();
-    final manifest = utf8.encode(
-      const JsonEncoder.withIndent('  ').convert(project.toJson()),
-    );
-    archive.addFile(ArchiveFile('project.json', manifest.length, manifest));
-    final prompts = StringBuffer('# $displayTitle\n\n');
-    for (final entry in selected) {
-      final panel = entry.$1;
-      final candidate = entry.$2!;
-      final bytes = await File(candidate.outputPath).readAsBytes();
-      final extension = _extension(candidate.outputPath);
-      archive.addFile(ArchiveFile(
-        'images/${panel.index.toString().padLeft(3, '0')}.$extension',
-        bytes.length,
-        bytes,
-      ));
-      prompts
-        ..writeln('## ${panel.index}. ${panel.title}')
-        ..writeln(panel.prompt)
-        ..writeln();
-    }
-    final promptBytes = utf8.encode(prompts.toString());
-    archive.addFile(ArchiveFile('prompts.md', promptBytes.length, promptBytes));
-    final zip = ZipEncoder().encode(archive);
-    if (zip == null) throw StateError(_t('error.zipEncode'));
-    final temp = await getTemporaryDirectory();
-    final file = File('${temp.path}/${_safeName(displayTitle)}.zip');
-    await file.writeAsBytes(zip, flush: true);
-    await Share.shareXFiles([XFile(file.path)], text: displayTitle);
-    changed('comic.zipShared');
-  }
+  Future<void> exportSelectedZip() => _export(true);
 
   @override
   void dispose() {
-    if (queueRunning) {
-      queueCancelled = true;
-      app.api.cancelActiveGeneration();
-    }
+    if (_disposed) return;
+    cancelQueue();
     _disposed = true;
     _saveTimer?.cancel();
     BackgroundQueueService.removeCancelHandler(cancelQueue);
@@ -857,9 +1207,3 @@ List<List<String>> _parseCsv(String text) {
 
 String _merge(String first, String second) =>
     [first.trim(), second.trim()].where((item) => item.isNotEmpty).join(', ');
-String _safeName(String value) =>
-    value.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
-String _extension(String path) {
-  final dot = path.lastIndexOf('.');
-  return dot < 0 ? 'png' : path.substring(dot + 1).toLowerCase();
-}

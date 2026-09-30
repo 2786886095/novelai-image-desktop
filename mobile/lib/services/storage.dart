@@ -1,5 +1,8 @@
 import 'unified_storage.dart';
+import 'openai_images.dart';
+import 'compatible_image_backup.dart';
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -8,6 +11,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:archive/archive.dart';
 import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path_util;
 
 import '../agent/agent_models.dart';
 import '../batch/batch_redraw_models.dart';
@@ -26,8 +30,39 @@ const int _kIsolateJsonThreshold = 64 * 1024;
 List<dynamic> _decodeJsonList(String raw) => jsonDecode(raw) as List<dynamic>;
 String _encodeJsonList(List<dynamic> data) => jsonEncode(data);
 
+class SavedImageHistoryException implements Exception {
+  final HistoryItem item;
+  SavedImageHistoryException(this.item);
+  @override
+  String toString() => 'Image saved but history could not be persisted';
+}
+
 class Storage {
-  void resetDataCaches(){_historyCache=null;_convertHistoryCache=null;_reverseHistoryCache=null;}
+  // All instances share one settings transaction queue. Secure-key writes and
+  // preference commits cannot interleave with UI, Agent or backup writes.
+  static Future<void>? _settingsTail;
+  static final Object _settingsZone = Object(), _imageCommitZone = Object();
+  Future<T> _settingsTransaction<T>(Future<T> Function() work) {
+    if (Zone.current[_settingsZone] == true) return work();
+    final previous = _settingsTail, done = Completer<void>();
+    _settingsTail = done.future;
+    return (() async {
+      if (previous != null) await previous;
+      try {
+        return await runZoned(work, zoneValues: {_settingsZone: true});
+      } finally {
+        if (identical(_settingsTail, done.future)) _settingsTail = null;
+        done.complete();
+      }
+    })();
+  }
+
+  void resetDataCaches() {
+    _historyCache = null;
+    _convertHistoryCache = null;
+    _reverseHistoryCache = null;
+  }
+
   static const _kParams = 'gen_params';
   static const _kHistory = 'history_index_v2';
   static const _kGroups = 'history_groups';
@@ -65,6 +100,185 @@ class Storage {
       _secure.write(key: _kToken, value: token);
   Future<void> clearToken() => _secure.delete(key: _kToken);
 
+  // Versioned secrets bind an immutable credential to one configuration snapshot.
+  // Older snapshots can finish while a newer endpoint/key is being saved.
+  Future<String?> getCompatibleImageKey(String id) async {
+    if (!RegExp(r'^[0-9]+-[a-z0-9]+$').hasMatch(id)) return null;
+    return _secure.read(key: 'compatible_image_key_$id');
+  }
+
+  Future<void> saveCompatibleConfiguration(AppSettings next, String apiKey,
+      {String? expectedCredentialId}) {
+    final requested = AppSettings.fromJson(
+        jsonDecode(jsonEncode(next.toJson())) as Map<String, dynamic>);
+    return _settingsTransaction(() async {
+      final c = requested.compatibleImage;
+      final config = CompatibleImageConfig(
+          baseUrl: c['baseUrl'] as String,
+          model: c['model'] as String,
+          apiKey: apiKey,
+          responseFormat: c['responseFormat'] as String? ?? 'auto');
+      compatibleImageEndpoint(config.baseUrl);
+      compatibleImageBody(config,
+          prompt: 'configuration validation',
+          size: c['size'] as String,
+          n: 1,
+          extensions: Map<String, Object?>.from(c['extensions'] as Map? ?? {}));
+      if (apiKey.trim().isEmpty ||
+          RegExp(r'[\r\n\x00]').hasMatch(apiKey) ||
+          apiKey.length > 8192) {
+        throw const FormatException('Invalid image key');
+      }
+      final before = await readCompatibleApiState();
+      if (expectedCredentialId != null &&
+          before['binding'] != expectedCredentialId) {
+        throw StateError('图片服务配置已变化，请重新读取后保存');
+      }
+      final saved = await writeCompatibleApiState(
+          before,
+          {
+            'enabled': requested.imageProvider == 'openai-images',
+            'baseUrl': config.baseUrl.trim(),
+            'model': config.model.trim(),
+            'size': c['size'],
+            'responseFormat': config.responseFormat,
+            'extensions':
+                Map<String, Object?>.from(c['extensions'] as Map? ?? {})
+          },
+          apiKey.trim());
+      next.compatibleImage = saved.compatibleImage;
+      next.imageProvider = saved.imageProvider;
+    });
+  }
+
+  Future<Map<String, dynamic>> readCompatibleApiState() =>
+      _settingsTransaction(() async {
+        final settings = await getSettings(), c = settings.compatibleImage;
+        final id = c['credentialId'] as String? ?? '';
+        return {
+          'config': {
+            'enabled': settings.imageProvider == 'openai-images',
+            'baseUrl': c['baseUrl'] ?? '',
+            'model': c['model'] ?? '',
+            'size': c['size'] ?? '1024x1024',
+            'responseFormat': c['responseFormat'] ?? 'auto',
+            'extensions':
+                jsonDecode(jsonEncode(c['extensions'] ?? <String, dynamic>{}))
+          },
+          'secret': await getCompatibleImageKey(id) ?? '',
+          'binding': id
+        };
+      });
+
+  Future<AppSettings> writeCompatibleApiState(Map<String, dynamic> before,
+          Map<String, dynamic> config, String secret) =>
+      _writeCompatibleApiState(before, config, secret);
+
+  /// Backup overwrite is explicit and restores a cleared-key state without enabling generation.
+  Future<void> restoreCompatibleImageBackup(AppSettings next,
+      Map<String, dynamic> api, Map<String, dynamic> before) async {
+    final profile = readImageSettingsBackup(api);
+    if (profile == null) {
+      throw const FormatException('Missing image backup profile');
+    }
+    final config = Map<String, dynamic>.from(profile['compatibleImage'] as Map)
+      ..['enabled'] = profile['imageProvider'] == 'openai-images';
+    final saved = await _writeCompatibleApiState(
+        before, config, profile['imageApiKey'] as String,
+        restoredSettings: next);
+    next.compatibleImage = saved.compatibleImage;
+    next.imageProvider = saved.imageProvider;
+  }
+
+  Future<AppSettings> _writeCompatibleApiState(
+      Map<String, dynamic> before, Map<String, dynamic> config, String secret,
+      {AppSettings? restoredSettings}) {
+    // Freeze caller-owned maps before queuing: later UI edits cannot mutate the transaction.
+    final restored = restoredSettings == null
+        ? null
+        : AppSettings.fromJson(jsonDecode(jsonEncode(restoredSettings.toJson()))
+            as Map<String, dynamic>);
+    final expected = jsonEncode(before);
+    final desired =
+        Map<String, dynamic>.from(jsonDecode(jsonEncode(config)) as Map);
+    return _settingsTransaction(() async {
+      final current = await readCompatibleApiState();
+      if (jsonEncode(current) != expected) throw StateError('图片服务配置已变化，请重新读取');
+      if (secret.length > 8192 || RegExp(r'[\r\n\x00]').hasMatch(secret)) {
+        throw StateError('图片密钥格式无效');
+      }
+      final enabled = desired['enabled'] == true;
+      final unchanged = desired.keys.where((k) => k != 'enabled').every(
+          (k) => jsonEncode(desired[k]) == jsonEncode(current['config'][k]));
+      if (restored == null &&
+          (!unchanged || enabled && current['config']['enabled'] != true)) {
+        final c = CompatibleImageConfig(
+            baseUrl: desired['baseUrl'] as String,
+            model: desired['model'] as String,
+            apiKey: secret,
+            responseFormat: desired['responseFormat'] as String);
+        compatibleImageEndpoint(c.baseUrl);
+        compatibleImageBody(c,
+            prompt: 'configuration validation',
+            size: desired['size'] as String,
+            n: 1,
+            extensions:
+                Map<String, Object?>.from(desired['extensions'] as Map));
+      }
+      if (restored == null &&
+          enabled &&
+          current['config']['enabled'] != true &&
+          secret.trim().isEmpty) throw StateError('请先通过私密输入保存独立图片密钥');
+      final latest = await getSettings();
+      final next = AppSettings.fromJson((restored ?? latest).toJson())
+        ..imageProvider = enabled ? 'openai-images' : 'novelai';
+      final id =
+          '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32).toRadixString(36)}';
+      // Whitelist projection: keys are never copied into preferences or ordinary backups.
+      next.compatibleImage = {
+        for (final k in [
+          'baseUrl',
+          'model',
+          'size',
+          'responseFormat',
+          'extensions'
+        ])
+          k: desired[k],
+        'credentialId': id
+      };
+      if (secret.isNotEmpty) {
+        await _secure.write(key: 'compatible_image_key_$id', value: secret);
+      }
+      try {
+        await runZoned(() => setSettings(next),
+            zoneValues: {_imageCommitZone: true});
+      } catch (_) {
+        // A platform write can report an error after updating its pointer. Do not
+        // delete the key still referenced by that pointer (or an unreadable one).
+        try {
+          if ((await getSettings()).compatibleImage['credentialId'] != id) {
+            await _secure.delete(key: 'compatible_image_key_$id');
+          }
+        } catch (_) {
+          /* Keep the version when persistence outcome is uncertain. */
+        }
+        rethrow;
+      }
+      // Explicit credential clearing also removes obsolete versions. Requests
+      // that already read a key own that snapshot; no request is redirected.
+      if (secret.isEmpty) {
+        final keys = await _secure.readAll();
+        for (final name in keys.keys
+            .where((k) =>
+                RegExp(r'^compatible_image_key_[0-9]+-[a-z0-9]+$').hasMatch(k))
+            .toList()) {
+          await _secure.delete(key: name);
+        }
+      }
+      return next;
+    });
+  }
+
   Future<String?> getVisionKey() => _secure.read(key: _kVisionKey);
   Future<void> setVisionKey(String value) =>
       _secure.write(key: _kVisionKey, value: value);
@@ -88,13 +302,34 @@ class Storage {
     try {
       return AppSettings.fromJson(jsonDecode(raw) as Map<String, dynamic>);
     } catch (_) {
-      if(UnifiedStorage.active!=null)rethrow;
+      if (UnifiedStorage.active != null) rethrow;
       return AppSettings();
     }
   }
 
-  Future<void> setSettings(AppSettings settings) async {
-    if(!await (await _prefs).setString(_kSettings, jsonEncode(settings.toJson())))throw StateError('Settings could not be saved.');
+  Future<void> setSettings(AppSettings settings) {
+    final snapshot = AppSettings.fromJson(
+        jsonDecode(jsonEncode(settings.toJson())) as Map<String, dynamic>);
+    final imageCommit = Zone.current[_imageCommitZone] == true;
+    return _settingsTransaction(() async {
+      final current = await getSettings();
+      // An unrelated settings save queued with an old image revision must not
+      // resurrect an old key/endpoint or undo an Agent provider change.
+      if (!imageCommit &&
+          (current.compatibleImage['credentialId'] as String? ?? '')
+              .isNotEmpty &&
+          current.compatibleImage['credentialId'] !=
+              snapshot.compatibleImage['credentialId']) {
+        snapshot.compatibleImage = current.compatibleImage;
+        snapshot.imageProvider = current.imageProvider;
+      }
+      if (!await (await _prefs)
+          .setString(_kSettings, jsonEncode(snapshot.toJson()))) {
+        throw StateError('Settings could not be saved.');
+      }
+      settings.compatibleImage = snapshot.compatibleImage;
+      settings.imageProvider = snapshot.imageProvider;
+    });
   }
 
   Future<AgentWorkspace> getAgentWorkspace() async {
@@ -105,16 +340,20 @@ class Storage {
         Map<String, dynamic>.from(jsonDecode(raw) as Map),
       );
     } catch (_) {
-      if(UnifiedStorage.active!=null)rethrow;
+      if (UnifiedStorage.active != null) rethrow;
       return AgentWorkspace();
     }
   }
 
   Future<AgentWorkspace> getAgentWorkspaceStrict() async {
-    final raw=(await _prefs).getString(_kAgentWorkspace);
-    if(raw==null||raw.trim().isEmpty)return AgentWorkspace();
-    try{return AgentWorkspace.fromJson(Map<String,dynamic>.from(jsonDecode(raw) as Map));}
-    catch(_){throw StateError('本机酒馆资料格式错误，请在软件内检查备份；未用空资料替代。');}
+    final raw = (await _prefs).getString(_kAgentWorkspace);
+    if (raw == null || raw.trim().isEmpty) return AgentWorkspace();
+    try {
+      return AgentWorkspace.fromJson(
+          Map<String, dynamic>.from(jsonDecode(raw) as Map));
+    } catch (_) {
+      throw StateError('本机酒馆资料格式错误，请在软件内检查备份；未用空资料替代。');
+    }
   }
 
   Future<void> setAgentWorkspace(AgentWorkspace workspace) async {
@@ -434,25 +673,62 @@ class Storage {
   Future<void> markNetworkOnboardingSeen() async =>
       (await _prefs).setBool(_kNetworkOnboarding, true);
 
+  /// Read before normalizing old params: missing differs from intentionally empty.
+  /// Legacy locks are only a migration fallback, not a second live text source.
+  Future<({String? stylePrompt, String? negativePrompt})> getRetainedPrompts(
+      AppSettings settings) async {
+    Map<String, dynamic> raw = {};
+    try {
+      final stored = (await _prefs).getString(_kParams);
+      if (stored != null) raw = jsonDecode(stored) as Map<String, dynamic>;
+    } on FormatException {
+      // Recover the legacy text when the old params JSON is damaged.
+    } on TypeError {
+      // A non-object legacy value contains no usable prompt fields.
+    }
+    return (
+      stylePrompt: raw['stylePrompt'] is String
+          ? raw['stylePrompt'] as String
+          : settings.lockStylePrompt
+              ? settings.savedStylePrompt
+              : null,
+      negativePrompt: raw['negativePrompt'] is String
+          ? raw['negativePrompt'] as String
+          : settings.lockNegativePrompt
+              ? settings.savedNegativePrompt
+              : null,
+    );
+  }
+
   Future<GenerateParams> getParams() async {
     final raw = (await _prefs).getString(_kParams);
-    if (raw == null) return GenerateParams();
+    Map<String, dynamic> decoded = {};
     try {
-      final decoded = jsonDecode(raw) as Map<String, dynamic>;
-      final repaired = GenerateParams.fromJson(decoded);
-      if (jsonEncode(decoded) != jsonEncode(repaired.toJson())) {
-        await setParams(repaired);
-      }
-      return repaired;
-    } catch (_) {
-      final repaired = GenerateParams();
-      await setParams(repaired);
-      return repaired;
+      if (raw != null) decoded = jsonDecode(raw) as Map<String, dynamic>;
+    } on FormatException {
+      // Keep legacy prompt recovery available for damaged parameter JSON.
+    } on TypeError {
+      // Non-object values have no generation fields.
     }
+    final repaired = GenerateParams.fromJson(decoded);
+    if (decoded['stylePrompt'] is! String ||
+        decoded['negativePrompt'] is! String) {
+      final retained = await getRetainedPrompts(await getSettings());
+      repaired.stylePrompt = retained.stylePrompt ?? repaired.stylePrompt;
+      repaired.negativePrompt =
+          retained.negativePrompt ?? repaired.negativePrompt;
+    }
+    if (raw == null || jsonEncode(decoded) != jsonEncode(repaired.toJson())) {
+      await setParams(repaired);
+    }
+    return repaired;
   }
 
   Future<void> setParams(GenerateParams p) async {
-    if(!await (await _prefs).setString(_kParams, jsonEncode(p.normalized().toJson())))throw StateError('Generation parameters could not be saved.');
+    if (!await (await _prefs)
+        .setString(_kParams, jsonEncode(p.normalized().toJson()))) {
+      throw StateError('Generation parameters could not be saved.');
+    }
   }
 
   Future<List<CharCaptionItem>> getCharacterPrompts() async {
@@ -480,40 +756,78 @@ class Storage {
   }
 
   Future<ComicProject> getComicProject(GenerateParams fallbackParams) async {
-    final raw = (await _prefs).getString(_kComicProject);
+    final prefs = await _prefs;
+    await prefs.private.reload();
+    final raw = prefs.getString(_kComicProject);
     if (raw == null) return ComicProject.empty(fallbackParams);
+    // Preserve malformed original data instead of replacing it with an empty project.
+    return ComicProject.fromJson(
+        jsonDecode(raw) as Map<String, dynamic>, fallbackParams,
+        trustOutputs: true);
+  }
+
+  Future<void> _saveComicString(String key, String value, String error) async {
+    final prefs = await _prefs;
     try {
-      return ComicProject.fromJson(
-        jsonDecode(raw) as Map<String, dynamic>,
-        fallbackParams,
-        trustOutputs: true,
-      );
+      if (!await prefs.setString(key, value)) throw StateError(error);
+      await prefs.private.reload();
+      if (prefs.getString(key) != value) throw StateError('$error：回读不一致');
     } catch (_) {
-      return ComicProject.empty(fallbackParams);
+      await prefs.private.reload();
+      rethrow;
     }
   }
 
-  Future<void> setComicProject(ComicProject project) async =>
-      (await _prefs).setString(_kComicProject, jsonEncode(project.toJson()));
+  Future<void> setComicProject(ComicProject project) {
+    final value = jsonEncode(project.toJson());
+    return _saveComicString(_kComicProject, value, '漫画工程保存失败');
+  }
+
+  Future<void> setComicBackup(ComicProject project) {
+    final value = jsonEncode(project.toJson());
+    return _saveComicString('comic_project_agent_backup_v1', value, '漫画工程备份失败');
+  }
+
+  Future<Map<String, dynamic>?> getComicRun() async {
+    final raw = (await _prefs).getString('comic_run_v1');
+    return raw == null
+        ? null
+        : Map<String, dynamic>.from(jsonDecode(raw) as Map);
+  }
+
+  Future<void> setComicRun(Map<String, dynamic> run) {
+    final value = jsonEncode(run);
+    return _prefs.then((prefs) async {
+      if (!await prefs.setString('comic_run_v1', value)) {
+        throw StateError('漫画任务记录保存失败');
+      }
+    });
+  }
 
   Future<BatchRedrawProject> getBatchRedrawProject(
       GenerateParams fallbackParams) async {
     final raw = (await _prefs).getString(_kBatchRedrawProject);
     if (raw == null) return BatchRedrawProject.empty(fallbackParams);
-    try {
-      return BatchRedrawProject.fromJson(
-        jsonDecode(raw) as Map<String, dynamic>,
-        fallbackParams,
-        trustOutputs: true,
-      );
-    } catch (_) {
-      return BatchRedrawProject.empty(fallbackParams);
-    }
+    return BatchRedrawProject.fromJson(
+      jsonDecode(raw) as Map<String, dynamic>,
+      fallbackParams,
+      trustOutputs: true,
+    );
   }
 
-  Future<void> setBatchRedrawProject(BatchRedrawProject project) async =>
-      (await _prefs)
-          .setString(_kBatchRedrawProject, jsonEncode(project.toJson()));
+  Future<void> setBatchRedrawProject(BatchRedrawProject project) =>
+      _saveComicString(
+          _kBatchRedrawProject, jsonEncode(project.toJson()), '批量工程保存失败');
+
+  Future<Map<String, dynamic>?> getBatchRun() async {
+    final raw = (await _prefs).getString('batch_run_v1');
+    return raw == null
+        ? null
+        : Map<String, dynamic>.from(jsonDecode(raw) as Map);
+  }
+
+  Future<void> setBatchRun(Map<String, dynamic> run) =>
+      _saveComicString('batch_run_v1', jsonEncode(run), '批量任务记录保存失败');
 
   Future<List<HistoryItem>> getHistory() async {
     if (_historyCache != null) return List.of(_historyCache!);
@@ -539,13 +853,16 @@ class Storage {
   }
 
   Future<void> writeHistory(List<HistoryItem> items) async {
-    _historyCache = List.of(items);
-    final data = items.map((e) => e.toJson()).toList();
+    final committed = List<HistoryItem>.of(items);
+    final data = committed.map((e) => e.toJson()).toList();
     // Encode off the UI isolate when the list is large enough to matter.
     final raw = items.length > 200
         ? await compute(_encodeJsonList, data)
         : _encodeJsonList(data);
-    await (await _prefs).setString(_kHistory, raw);
+    if (!await (await _prefs).setString(_kHistory, raw)) {
+      throw StateError('History could not be saved');
+    }
+    _historyCache = committed;
   }
 
   Future<List<TextToolHistoryItem>> getConvertHistory() => _getTextToolHistory(
@@ -728,9 +1045,55 @@ class Storage {
       params: p.toJson(),
     );
 
-    final history = await getHistory();
-    history.insert(0, item);
-    await writeHistory(history);
+    try {
+      final history = List<HistoryItem>.of(await getHistory())..insert(0, item);
+      await writeHistory(history);
+    } catch (_) {
+      // The image is already durable; callers must retain it even if indexing fails.
+      throw SavedImageHistoryException(item);
+    }
+    return item;
+  }
+
+  Future<HistoryItem> saveCompatibleImage(
+      Uint8List bytes, Map<String, Object> request, AppSettings snapshot,
+      {String? groupId}) async {
+    final now = DateTime.now();
+    final date = '${now.year}-${_pad(now.month)}-${_pad(now.day)}';
+    final id =
+        '${now.microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
+    final dir = await _imageSaveDir(snapshot, date, groupId);
+    final filePath = await _uniqueFilePath(dir, 'compatible-$date-$id', 'png');
+    await File(filePath).writeAsBytes(bytes, flush: true);
+    final header =
+        bytes.buffer.asByteData(bytes.offsetInBytes, bytes.lengthInBytes);
+    final item = HistoryItem(
+        id: id,
+        filePath: filePath,
+        date: date,
+        createdAt: now.toIso8601String(),
+        seed: -1,
+        model: request['model'] as String,
+        width: header.getUint32(16),
+        height: header.getUint32(20),
+        prompt: request['prompt'] as String,
+        feature: 'openai-images',
+        groupId: groupId,
+        params: {
+          'generationProvider': 'openai-images',
+          'compatibleRequest': request
+        });
+    try {
+      final history = List<HistoryItem>.of(await getHistory())..insert(0, item);
+      await writeHistory(history);
+    } catch (_) {
+      throw SavedImageHistoryException(item);
+    }
+    if (snapshot.saveToGallery) {
+      try {
+        await Gal.putImage(filePath, album: 'Langbai NovelAI Studio');
+      } catch (_) {/* App-private copy remains. */}
+    }
     return item;
   }
 
@@ -782,11 +1145,19 @@ class Storage {
   Future<void> deleteHistory(String id) async {
     final history = await getHistory();
     final item = history.where((e) => e.id == id).firstOrNull;
-    if (item != null) {
-      try {
-        final f = File(item.filePath);
-        if (f.existsSync()) await f.delete();
-      } catch (_) {}
+    final shared = item != null &&
+        history.any((e) => e.id != id && e.filePath == item.filePath);
+    if (item != null && !shared) {
+      final type =
+          await FileSystemEntity.type(item.filePath, followLinks: false);
+      if (type != FileSystemEntityType.notFound) {
+        if (type != FileSystemEntityType.file) {
+          throw FileSystemException('图片路径不是普通文件，历史记录保留', item.filePath);
+        }
+        // Do not hide permission/IO errors: AppState restores its optimistic
+        // removal when this fails, and the on-disk record stays available.
+        await File(item.filePath).delete();
+      }
     }
     history.removeWhere((e) => e.id == id);
     await writeHistory(history);
@@ -798,12 +1169,19 @@ class Storage {
   Future<void> deleteHistoryFiles(Iterable<String> filePaths) async {
     final targets = filePaths.where((path) => path.isNotEmpty).toSet();
     if (targets.isEmpty) return;
+    // Reject directories and links before deleting anything. A failed deletion
+    // must not silently remove its history entry or be reported as successful.
+    for (final path in targets) {
+      final type = await FileSystemEntity.type(path, followLinks: false);
+      if (type != FileSystemEntityType.file &&
+          type != FileSystemEntityType.notFound) {
+        throw FileSystemException('Expected a regular image file', path);
+      }
+    }
     final history = await getHistory();
     for (final path in targets) {
-      try {
-        final file = File(path);
-        if (file.existsSync()) await file.delete();
-      } catch (_) {}
+      final file = File(path);
+      if (await file.exists()) await file.delete();
     }
     history.removeWhere((item) => targets.contains(item.filePath));
     await writeHistory(history);
@@ -814,27 +1192,42 @@ class Storage {
     String requestedName,
   ) async {
     final source = File(item.filePath);
-    if (!source.existsSync()) {
-      throw StateError('Local image does not exist and cannot be renamed');
+    if (await FileSystemEntity.type(source.path, followLinks: false) !=
+        FileSystemEntityType.file) {
+      throw StateError('图片已移动或不是普通文件');
     }
-
     final sourceName = source.uri.pathSegments.last;
     final dot = sourceName.lastIndexOf('.');
     final extension = dot >= 0 ? sourceName.substring(dot) : '.png';
     final stem = safeFileStem(requestedName);
     final directory = source.parent;
-    var target = File('${directory.path}/$stem$extension');
+    var target = File(path_util.join(directory.path, '$stem$extension'));
+    bool samePath(String a, String b) =>
+        Platform.isWindows ? a.toLowerCase() == b.toLowerCase() : a == b;
+    if (samePath(target.path, source.path)) return item;
     var suffix = 2;
-    while (target.path.toLowerCase() != source.path.toLowerCase() &&
-        target.existsSync()) {
-      target = File('${directory.path}/$stem-$suffix$extension');
-      suffix++;
+    while (true) {
+      try {
+        await target.create(exclusive: true);
+        break;
+      } on FileSystemException {
+        if (await FileSystemEntity.type(target.path, followLinks: false) ==
+            FileSystemEntityType.notFound) rethrow;
+        target =
+            File(path_util.join(directory.path, '$stem-${suffix++}$extension'));
+      }
     }
-
-    final renamed = target.path.toLowerCase() == source.path.toLowerCase()
-        ? source
-        : await source.rename(target.path);
-    return HistoryItem.fromJson({...item.toJson(), 'filePath': renamed.path});
+    try {
+      await target.writeAsBytes(await source.readAsBytes(), flush: true);
+    } catch (_) {
+      try {
+        await target.delete();
+      } catch (_) {}
+      rethrow;
+    }
+    // The caller commits the history index before cleaning up the old path.
+    // This also keeps other history rows that share the source image usable.
+    return HistoryItem.fromJson({...item.toJson(), 'filePath': target.path});
   }
 
   Future<String> exportHistoryZip(
@@ -853,8 +1246,10 @@ class Storage {
       language,
     );
     final temp = await getTemporaryDirectory();
-    final stamp = DateTime.now().millisecondsSinceEpoch;
-    final file = File('${temp.path}/${safeFileStem(archiveName)}-$stamp.zip');
+    final exportDirectory =
+        await Directory('${temp.path}/studio-history-export-').createTemp();
+    final file =
+        File('${exportDirectory.path}/${safeFileStem(archiveName)}.zip');
     await file.writeAsBytes(bytes, flush: true);
     return file.path;
   }

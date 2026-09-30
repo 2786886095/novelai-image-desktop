@@ -110,11 +110,12 @@ void main() {
     expect(instruction, contains('65–75%'));
   });
 
-  test('bundled reverse and convert templates use the current desktop V5 contract',
+  test(
+      'bundled reverse and convert templates use the current desktop V5 contract',
       () async {
     final library = await PromptTemplateLibrary.load();
     for (final kind in ['scopedReverse', 'convert']) {
-      for (final mode in ReversePromptMode.values) {
+      for (final mode in [ReversePromptMode.tags, ReversePromptMode.natural]) {
         final template = library.get(kind, mode);
         expect(template, contains('NovelAI V5'));
         expect(template.length, inInclusiveRange(1000, 12000));
@@ -134,7 +135,7 @@ void main() {
       () async {
     final library = await PromptTemplateLibrary.load();
     for (final kind in ['scopedReverse', 'convert']) {
-      for (final mode in [ReversePromptMode.tags, ReversePromptMode.mixed]) {
+      for (final mode in [ReversePromptMode.tags]) {
         final template = library.get(kind, mode);
         expect(template, contains('不得留下孤立锚点'));
         expect(template, contains('1.2::tag ::'));
@@ -147,7 +148,7 @@ void main() {
       expect(natural, contains('text, <language> text'));
       expect(natural, contains('不复述文字内容'));
       expect(natural, isNot(contains('reads OPEN')));
-      for (final mode in ReversePromptMode.values) {
+      for (final mode in [ReversePromptMode.tags, ReversePromptMode.natural]) {
         final template = library.get(kind, mode);
         expect(template, isNot(contains('base 最末、第一个 | 之前')));
         expect(template, isNot(contains('不写 portrait、landscape')));
@@ -155,14 +156,6 @@ void main() {
         expect(template, contains('不视为互斥'));
       }
     }
-    expect(
-      library.get('scopedReverse', ReversePromptMode.mixed),
-      contains('无成熟 Tag 的关键可见状态或表情'),
-    );
-    expect(
-      library.get('scopedReverse', ReversePromptMode.mixed),
-      contains('其他关系短语紧跟被限定的 Tag 或动作'),
-    );
     expect(
       library.get('scopedReverse', ReversePromptMode.tags),
       contains('本模式允许省略且不得混入自然语言'),
@@ -175,18 +168,30 @@ void main() {
       library.get('convert', ReversePromptMode.tags),
       contains('mutual#holding hands'),
     );
-    expect(
-      library.get('convert', ReversePromptMode.mixed),
-      contains('mutual#holding hands'),
-    );
-    expect(
-      library.get('convert', ReversePromptMode.mixed),
-      contains('无成熟 Tag 的关键可见状态或表情'),
-    );
-    expect(
-      library.get('convert', ReversePromptMode.mixed),
-      allOf(contains('70%'), contains('30%'), contains('{{input}}')),
-    );
+  });
+
+  test(
+      'mixed v3 templates retain paired anchors, closed weights and input contract',
+      () async {
+    final library = await PromptTemplateLibrary.load();
+    for (final kind in ['scopedReverse', 'convert']) {
+      final template = library.get(kind, ReversePromptMode.mixed);
+      expect(template, contains('NovelAI Diffusion V5 Full'));
+      expect(template.length, inInclusiveRange(1000, 12000));
+      for (final rule in [
+        '{{input}}',
+        '65–75%',
+        '25–35%',
+        'source#giving',
+        'target#giving',
+        'Text:',
+        '锚点成对',
+        '权重已闭合 ::'
+      ]) {
+        expect(template, contains(rule));
+      }
+      expect(template, contains('50–150'));
+    }
   });
 
   test('rule validator detects duplicate and mature tag decomposition', () {
@@ -211,7 +216,7 @@ void main() {
         '2girls, cafe, indoors, evening, upper body, counter, cake | girl, black hair, green eyes, holding plate | girl, red hair, blue eyes, reaching';
     expect(
       promptRuleViolations(ReversePromptMode.mixed, tags),
-      contains('混合模式缺少约 20% 的自然语言关系短语'),
+      contains('混合模式缺少所选模板要求的自然语言关系短语'),
     );
     expect(
       promptRuleViolations(

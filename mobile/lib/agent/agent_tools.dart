@@ -1,5 +1,7 @@
+import 'image_provider.dart';
 import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 
 import '../artist/artist_recipe.dart';
 import '../images/png_metadata.dart';
@@ -18,6 +20,8 @@ import 'api_tools.dart';
 import 'session_controls.dart';
 import 'template_tools.dart';
 import 'template_workflow.dart';
+import 'template_generation.dart';
+import 'file_actions.dart';
 
 const agentReadTools = <String>{
   'langbai_software_capabilities',
@@ -294,17 +298,69 @@ List<Map<String, dynamic>> agentToolSchemas() => [
           '使用功能清单中的 action。修改前先读取同类资料取得 revision，传入 expectedRevision。收费、删除、覆盖、恢复、更新需在 Agent 内确认；禁止伪造 confirmed。',
           {
             'action': _string('功能清单中的准确操作 ID'),
+            'mode': {
+              'type': 'string',
+              'enum': [
+                'initial',
+                'regenerate',
+                'additional',
+                'all',
+                'pending',
+                'failed'
+              ],
+              'description':
+                  '漫画用initial/regenerate/additional；批量重绘用all/pending/failed/additional'
+            },
+            'itemIds': {
+              'type': 'array',
+              'items': {'type': 'string'},
+              'description': '批量图片ID；空数组表示全部'
+            },
+            'panelIds': {
+              'type': 'array',
+              'items': {'type': 'string'},
+              'description': '指定漫画分镜ID；空数组表示全部分镜'
+            },
+            'runId': _string('comic/batch.generation.status返回的当前会话拥有的任务ID'),
+            'patch': {
+              'type': 'object',
+              'description': '漫画全局、逐格或参考图的字段更新；仅使用能力清单列出的字段'
+            },
+            'project': {
+              'type': 'object',
+              'description': '便携漫画工程JSON；本地路径和候选图片不从外部工程导入'
+            },
+            'text': _string('分镜文本、JSON、CSV，或尺寸模板'),
+            'order': {
+              'type': 'array',
+              'items': {'type': 'string'},
+              'description': '完整且无重复的分镜ID顺序'
+            },
+            'candidateId': _string('当前分镜中已登记的候选图片ID'),
+            'referenceId': _string('漫画工程中已登记的参考图ID'),
+            'source': {
+              'type': 'string',
+              'enum': ['history', 'reference', 'attachment']
+            },
+            'sourceId': _string('软件历史、参考图库或当前会话附件中的图片ID，不是文件路径'),
+            'item': {
+              'type': 'object',
+              'description':
+                  '在线收藏书签：使用画廊搜索所得 source/id/title/images[{url,thumb}] 及可选元数据；不下载原图。'
+            },
             'expectedRevision': _string('最近读取返回的 revision'),
             'id': _string('资料 ID'),
             'name': _string('名称'),
-            'group': _string('目标分组 ID 或名称；空字符串表示取消分组'),
+            'group':
+                _string('分组 ID 或名称；移动时空字符串取消分组；导出时空字符串为全部，__ungrouped 为未分组'),
             'offset': _integer('起始位置', 0, 1000000),
             'limit': _integer('读取条数', 1, 50)
           },
           required: [
             'action'
           ]),
-      _function('langbai_get_generation_state', '读取当前模型、提示词、尺寸、锁定项与生成设置。', {}),
+      _function('langbai_get_generation_state',
+          '读取当前图片服务、模型、尺寸与实际能力；兼容服务不应用原生风格锁和参考图。', {}),
       _function(
         'langbai_search_tags',
         '按中文、英文、角色、动作、表情、构图或物体检索准确 Tag。',
@@ -366,7 +422,7 @@ List<Map<String, dynamic>> agentToolSchemas() => [
       ),
       _function(
         'langbai_generate_image',
-        '按当前设置及高级参数生成图片，支持多角色、Vibe Transfer 与精准参考图。会消耗 NovelAI 免费额度或 Anlas。',
+        '按软件所选图片服务生成。先读 generation_state；openai-images 仅传 positivePrompt/count，模型、尺寸和扩展用软件配置，不应用原生锁或参考图、不回退原生。原生模式支持高级参数并消耗NovelAI额度；兼容服务按提供商计费。',
         {
           ..._generationProperties(),
           'count': _integer('生成数量', 1, 8),
@@ -631,6 +687,8 @@ class _AgentAppSnapshot {
 }
 
 class AgentToolExecutor {
+  late final AgentFileActions fileActions = AgentFileActions(
+      historyPaths: () => app.history.map((item) => item.filePath));
   late final AgentSessionControls sessions = AgentSessionControls(app);
   late final AgentTemplateTools templates = AgentTemplateTools(app);
   late final AgentTemplateWorkflow templateWorkflow =
@@ -641,15 +699,19 @@ class AgentToolExecutor {
   late final AgentBackupTools backups = AgentBackupTools(app);
   Future<Map<String, dynamic>> approvalSummary(
           String tool, Map<String, dynamic> args, String session) async =>
-      tool == 'langbai_templates'
-          ? templateWorkflow.approvalSummary(args)
-          : tool == 'langbai_api'
-              ? apiTools.approvalSummary(args)
-              : tool == 'langbai_library'
-                  ? libraries.approvalSummary(args)
-                  : tool == 'langbai_backup'
-                      ? backups.approvalSummary(args, session)
-                      : args;
+      tool == 'langbai_software_action' &&
+              softwareActions.resources
+                  .handles(args['action']?.toString() ?? '')
+          ? softwareActions.resources.approvalSummary(args)
+          : tool == 'langbai_templates'
+              ? templateWorkflow.approvalSummary(args)
+              : tool == 'langbai_api'
+                  ? apiTools.approvalSummary(args)
+                  : tool == 'langbai_library'
+                      ? libraries.approvalSummary(args)
+                      : tool == 'langbai_backup'
+                          ? backups.approvalSummary(args, session)
+                          : args;
   late final StudioDataService studioData = StudioDataService(app);
   late final SoftwareActions softwareActions = SoftwareActions(app);
   final AppState app;
@@ -663,6 +725,66 @@ class AgentToolExecutor {
     required this.upsertMemory,
     required this.deleteMemory,
   });
+
+  Future<PreparedAgentImageOperation> prepareImageOperation(
+      String tool, Map<String, dynamic> args, List<AgentAttachment> available,
+      {String sessionId = 'legacy'}) async {
+    final input = jsonDecode(jsonEncode(args)) as Map<String, dynamic>;
+    final binding = AgentImageBinding(app.settings, app.generationGroupId);
+    final template = tool == templateGenerationTool;
+    final name = template ? 'langbai_generate_image' : tool;
+    final generation = template ? templateGenerationArgs(input) : input;
+    assertAgentImageTool(name, app.settings);
+    if (app.settings.imageProvider == 'openai-images') {
+      compatibleAgentInput(generation, app.settings, requirePrompt: !template);
+      String? key;
+      try {
+        key = await app.storage.getCompatibleImageKey(
+            app.settings.compatibleImage['credentialId'] as String? ?? '');
+      } catch (_) {
+        throw StateError('独立图片密钥读取未完成，请在软件设置中重新保存。');
+      }
+      if (key == null || key.trim().isEmpty) {
+        throw StateError('请先在软件设置中填写独立图片 API Key。');
+      }
+    }
+    binding.ensureCurrent(app.settings, app.generationGroupId);
+    return PreparedAgentImageOperation(
+        summary: {
+          ...generation,
+          if (app.settings.imageProvider == 'openai-images')
+            'imageService':
+                agentImageProviderState(app.settings)['imageService'],
+          if (template) ...{
+            'templateWorkflow': true,
+            'description': input['text'] ?? '参考图反推生图'
+          },
+        },
+        execute: () => execute(tool, input, List.of(available),
+            sessionId: sessionId, imageBinding: binding));
+  }
+
+  Future<Map<String, dynamic>> _imageProviderState() async {
+    final binding = AgentImageBinding(app.settings, app.generationGroupId);
+    final result = agentImageProviderState(app.settings);
+    if (app.settings.imageProvider == 'openai-images') {
+      var configured = false;
+      try {
+        configured = (await app.storage.getCompatibleImageKey(
+                    app.settings.compatibleImage['credentialId'] as String? ??
+                        ''))
+                ?.trim()
+                .isNotEmpty ??
+            false;
+      } catch (_) {
+        /* Show unavailable credentials, never raw platform errors. */
+      }
+      binding.ensureCurrent(app.settings, app.generationGroupId);
+      (result['imageService'] as Map<String, dynamic>)['credentialConfigured'] =
+          configured;
+    }
+    return result;
+  }
 
   String _text(Object? value, [int maxLength = 100000]) {
     final text = value?.toString().trim() ?? '';
@@ -773,6 +895,8 @@ class AgentToolExecutor {
   Future<void> _applyGenerationInput(
       Map<String, dynamic> args, List<AgentAttachment> available,
       {bool applyStudioPromptLocks = true}) async {
+    final retainedStyle = app.params.stylePrompt;
+    final retainedNegative = app.params.negativePrompt;
     app.setParam((params) {
       params.positivePrompt = _text(args['positivePrompt']);
       if (args['negativePrompt'] is String) {
@@ -833,11 +957,9 @@ class AgentToolExecutor {
       if (args['fileNamePrefix'] is String) {
         params.fileNamePrefix = _text(args['fileNamePrefix'], 80);
       }
-      if (applyStudioPromptLocks && app.settings.lockStylePrompt) {
-        params.stylePrompt = app.settings.savedStylePrompt;
-      }
-      if (applyStudioPromptLocks && app.settings.lockNegativePrompt) {
-        params.negativePrompt = app.settings.savedNegativePrompt;
+      if (applyStudioPromptLocks) {
+        params.stylePrompt = retainedStyle;
+        params.negativePrompt = retainedNegative;
       }
     });
 
@@ -935,11 +1057,82 @@ class AgentToolExecutor {
 
   Future<AgentToolResult> execute(
       String tool, Map<String, dynamic> args, List<AgentAttachment> available,
-      {bool applyStudioPromptLocks = true, String sessionId = 'legacy'}) async {
+      {bool applyStudioPromptLocks = true,
+      String sessionId = 'legacy',
+      AgentImageBinding? imageBinding}) async {
+    if (tool == AgentFileActions.tool) return fileActions.execute(args);
+    if (tool != templateGenerationTool) {
+      return _executeTool(tool, args, available,
+          applyStudioPromptLocks: applyStudioPromptLocks,
+          sessionId: sessionId,
+          imageBinding: imageBinding);
+    }
+    var began = false;
+    try {
+      final generation = templateGenerationArgs(args);
+      imageBinding ??= AgentImageBinding(app.settings, app.generationGroupId);
+      imageBinding.ensureCurrent(app.settings, app.generationGroupId);
+      assertAgentImageTool('langbai_generate_image', app.settings);
+      if (app.settings.imageProvider == 'openai-images') {
+        compatibleAgentInput(generation, app.settings, requirePrompt: false);
+      }
+      sessions.begin(sessionId);
+      began = true;
+      String revision() => jsonEncode([
+            app.params.toJson(),
+            app.settings.lockStylePrompt,
+            app.settings.savedStylePrompt,
+            app.settings.lockNegativePrompt,
+            app.settings.savedNegativePrompt,
+            app.settings.agentPromptTemplateMode,
+            app.settings.convertPromptTemplateVersion,
+            app.settings.reversePromptTemplateVersion,
+            app.settings.convertPromptTemplates,
+            app.settings.convertPromptTemplatesV45,
+            app.settings.reversePromptTemplates,
+            app.settings.reversePromptTemplatesV45,
+          ]);
+      final initial = revision();
+      final selected = await templates.execute('studio_prompt_template', {
+        'kind': args['imageAttachmentId'] == null ? 'convert' : 'reverse',
+        if (args['mode'] != null) 'mode': args['mode'],
+        if (args['templateVersion'] != null)
+          'templateVersion': args['templateVersion'],
+      });
+      return await runTemplateGeneration(
+          args,
+          (name, input) => _executeTool(name, input, available,
+              applyStudioPromptLocks: applyStudioPromptLocks,
+              sessionId: sessionId,
+              inTemplateWorkflow: true,
+              imageBinding: imageBinding), () {
+        imageBinding!.ensureCurrent(app.settings, app.generationGroupId);
+        sessions.ensureActive(sessionId);
+        if (revision() != initial) throw StateError('模板或工作台参数已变化；未继续提交生图');
+      }, template: {
+        for (final key in ['mode', 'templateVersion']) key: selected[key],
+        'bodySha256':
+            sha256.convert(utf8.encode(selected['body'] as String)).toString()
+      });
+    } catch (error) {
+      return AgentToolResult(ok: false, title: '模板生图未完成', output: '$error');
+    } finally {
+      if (began) sessions.end(sessionId);
+    }
+  }
+
+  Future<AgentToolResult> _executeTool(
+      String tool, Map<String, dynamic> args, List<AgentAttachment> available,
+      {bool applyStudioPromptLocks = true,
+      String sessionId = 'legacy',
+      bool inTemplateWorkflow = false,
+      AgentImageBinding? imageBinding}) async {
     final title = agentToolTitle(tool);
     bool began = false;
     Map<String, dynamic>? sessionState;
-    final snapshot = _agentTransientTools.contains(tool)
+    final snapshot = _agentTransientTools.contains(tool) &&
+            !(tool == 'langbai_generate_image' &&
+                app.settings.imageProvider == 'openai-images')
         ? _AgentAppSnapshot.capture(app)
         : null;
     try {
@@ -962,11 +1155,23 @@ class AgentToolExecutor {
             output: _json(await templates.execute(tool, args)));
       }
       if (AgentSessionControls.paid.contains(tool)) {
-        sessions.begin(sessionId);
-        began = true;
+        imageBinding ??= AgentImageBinding(app.settings, app.generationGroupId);
+        imageBinding.ensureCurrent(app.settings, app.generationGroupId);
+        assertAgentImageTool(tool, app.settings);
+        if (app.settings.imageProvider == 'openai-images') {
+          compatibleAgentInput(args, app.settings);
+        }
+        if (inTemplateWorkflow) {
+          sessions.ensureActive(sessionId);
+        } else {
+          sessions.begin(sessionId);
+          began = true;
+        }
         if (sessionId != 'legacy') {
           sessionState = await sessions.read(sessionId);
         }
+        imageBinding.ensureCurrent(app.settings, app.generationGroupId);
+        sessions.ensureActive(sessionId);
         if (tool != 'langbai_generate_image') app.setBatchCount(1);
       }
       if (tool == 'langbai_get_generation_state') {
@@ -1011,7 +1216,8 @@ class AgentToolExecutor {
         return AgentToolResult(
             ok: true,
             title: '软件操作',
-            output: _json(await softwareActions.execute(tool, args)));
+            output: _json(await softwareActions.execute(tool, args,
+                attachments: available)));
       }
       if (StudioDataService.tools.contains(tool)) {
         return AgentToolResult(
@@ -1030,18 +1236,15 @@ class AgentToolExecutor {
                 if (sessionState?['style'] != null)
                   'stylePrompt': sessionState!['style']['prompt']
               },
-              if (sessionState?['style'] != null)
+              if (sessionState?['style'] != null &&
+                  app.settings.imageProvider != 'openai-images')
                 'sessionStyle': sessionState!['style'],
               'modelMode': app.settings.modelMode,
               'generationGroupId': app.generationGroupId,
               'lockedStylePrompt': sessionState?['style'] != null
                   ? sessionState!['style']['prompt']
-                  : app.settings.lockStylePrompt
-                      ? app.settings.savedStylePrompt
-                      : '',
-              'lockedNegativePrompt': app.settings.lockNegativePrompt
-                  ? app.settings.savedNegativePrompt
-                  : '',
+                  : app.params.stylePrompt,
+              'lockedNegativePrompt': app.params.negativePrompt,
               'streamPreviewEnabled': app.settings.streamPreviewEnabled,
               'references': {
                 'vibeCount': app.extras.vibeImages.length,
@@ -1056,6 +1259,7 @@ class AgentToolExecutor {
                 'preciseReference': app.params.supportsPreciseReference,
                 'attachmentIdsRequiredForAgentReferences': true,
               },
+              ...await _imageProviderState(),
             }),
           );
         case 'langbai_search_tags':
@@ -1283,6 +1487,36 @@ class AgentToolExecutor {
             generatedImages: items.map(_historyAttachment).toList(),
           );
         case 'langbai_generate_image':
+          if (app.settings.imageProvider == 'openai-images') {
+            final input = compatibleAgentInput(args, app.settings);
+            final outcome = await app.generateCompatibleForAgent(
+                prompt: input.prompt,
+                count: input.count,
+                ensureCurrent: () {
+                  imageBinding!
+                      .ensureCurrent(app.settings, app.generationGroupId);
+                  sessions.ensureActive(sessionId);
+                });
+            final images = outcome.items.map(_historyAttachment).toList();
+            return AgentToolResult(
+                ok: outcome.ok,
+                title: title,
+                generatedImages: images,
+                output: _json({
+                  'imageProvider': 'openai-images',
+                  'saved': images.length,
+                  'images': images
+                      .map((item) => {
+                            'attachmentId': item.id,
+                            'name': item.name,
+                            'width': item.width,
+                            'height': item.height
+                          })
+                      .toList(),
+                  'status': outcome.message,
+                  'retryable': false
+                }));
+          }
           final before = app.history.map((item) => item.id).toSet();
           await _applyGenerationInput(
             args,
@@ -1478,7 +1712,9 @@ class AgentToolExecutor {
     } finally {
       if (began) sessions.end(sessionId);
       if (snapshot != null &&
-          (!AgentSessionControls.paid.contains(tool) || began)) {
+          (!AgentSessionControls.paid.contains(tool) ||
+              began ||
+              inTemplateWorkflow)) {
         // Desktop tools operate on isolated inputs. Mirror that behavior on
         // mobile so an Agent run cannot silently replace the user's current
         // prompt, workbench image, batch size, or tool selections. The

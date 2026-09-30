@@ -131,10 +131,10 @@ export function knownCharacterRuntimeInstruction(
   const versionLabel = templateVersion === "v4.5" ? "V4.5" : "V5";
   const modeText =
     mode === "natural"
-      ? `使用简洁的英文自然语言 NovelAI ${versionLabel} 提示词。`
+      ? `使用准确的英文自然语言 NovelAI ${versionLabel} 提示词。`
       : mode === "mixed"
-        ? `使用 NovelAI ${versionLabel} 混合提示词：约 ${templateVersion === "v4.5" ? "80% Danbooru tag + 20%" : "70% Danbooru tag + 30%"} 简短英文自然语言，两部分都不得省略。`
-        : `使用简洁的英文逗号分隔 Danbooru / NovelAI ${versionLabel} tag。`;
+        ? `使用 NovelAI ${versionLabel} 混合提示词：约 ${templateVersion === "v4.5" ? "80% Danbooru tag + 20%" : "70% Danbooru tag + 30%"} 简短英文自然语言，两部分都不得省略。具体长度与比例遵循所选模板，角色身份识别不改变模板要求。`
+        : `使用准确的英文逗号分隔 Danbooru / NovelAI ${versionLabel} tag。`;
 
   if (knownCharacter) {
     const identityRules =
@@ -383,7 +383,7 @@ export function promptRuleViolations(
         ? "输出不是以逗号分隔的 Danbooru Tag 格式"
         : isLikelyNaturalLanguagePrompt(cleaned)
           ? "混合模式输出退化成了纯自然语言，缺少 Tag 主体"
-          : "混合模式缺少约 20% 的自然语言关系短语",
+          : "混合模式缺少所选模板要求的自然语言关系短语",
     );
   }
   const tokens = cleaned

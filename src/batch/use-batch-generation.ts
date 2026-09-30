@@ -1,0 +1,6 @@
+import {useAppStore} from '../store';
+import {createBatchProjectStore} from './project-store';
+import {createBatchGenerationQueue} from './generation-queue';
+let store:ReturnType<typeof createBatchProjectStore>|undefined,queue:ReturnType<typeof createBatchGenerationQueue>|undefined;
+export function getBatchProjectStore(){return store??=createBatchProjectStore({get:()=>({project:useAppStore.getState().batchRedraw,busy:useAppStore.getState().batchRunning}),update:project=>useAppStore.getState().setBatchRedraw(()=>project),busy:value=>useAppStore.getState().setBatchRunning(value,value?undefined:null)});}
+export function getBatchGenerationQueue(){return queue??=createBatchGenerationQueue({store:getBatchProjectStore(),storage:localStorage,prepare:requests=>window.naiDesktop.batchRedrawPrepare(requests),generate:r=>window.naiDesktop.redrawImage(r),cancel:id=>window.naiDesktop.batchRedrawCancel(id),changed:s=>{if(s.phase==='stopping')useAppStore.getState().requestBatchCancel();if(['running','stopping'].includes(s.phase))useAppStore.getState().setBatchRunning(true,{done:s.done,total:s.total});},afterSaved:async()=>{try{await useAppStore.getState().refreshHistory();}catch{}try{await useAppStore.getState().refreshAccount();}catch{}}});}

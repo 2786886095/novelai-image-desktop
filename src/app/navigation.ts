@@ -11,6 +11,8 @@ export const ACTIVE_TABS = [
   "agent",
   "records",
   "styles",
+  "works",
+  "favorites",
 ] as const;
 
 export type ActiveTab = (typeof ACTIVE_TABS)[number];
@@ -29,4 +31,6 @@ export const WIDE_WORKSPACE_TABS = new Set<ActiveTab>([
   "agent",
   "records",
   "styles",
+  "works",
+  "favorites",
 ]);

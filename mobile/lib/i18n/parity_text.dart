@@ -2,6 +2,9 @@ import 'app_locales.dart';
 
 String parityText(Object? locale, String key) {
   const words = {
+    'update.downloadInstall':['下载并安装','下載並安裝','Download and install','ダウンロードしてインストール','다운로드 및 설치'],
+    'update.allowSystemInstall':['请在系统中允许安装，返回后自动继续。','請在系統中允許安裝，返回後自動繼續。','Allow installation in system settings; it will resume when you return.','システム設定でインストールを許可すると、自動的に続行します。','시스템에서 설치를 허용하면 돌아올 때 자동으로 계속됩니다.'],
+    'update.systemInstallerOpened':['已交给系统安装器，请完成系统安装。','已交給系統安裝程式，請完成系統安裝。','The system installer is open. Complete installation there.','システムインストーラーでインストールを完了してください。','시스템 설치 프로그램에서 설치를 완료하세요.'],
     'sound': ['提示音', '提示音', 'Sounds', '通知音', '알림음'],
     'enabled': [
       '生成完成提示音',

@@ -51,3 +51,19 @@ it('changed plugins invalidate approval; existing active version remains',async(
 it('renderer offers confirmation for both routes and removes check-only copy',async()=>{
  const source=await fs.readFile('src/HarnessPage.tsx','utf8');expect(source).toContain("prepare('official')");expect(source).toContain("prepare('component')");expect(source).toContain('await confirmAction');expect(source).not.toContain('仅检测 · 不直接安装');
 });
+
+it('official-only update preserves component version and backs up before activation',async()=>{
+ const {engine,home,seed,manifest}=await fixture();manifest.version='0.1.0';await fs.writeFile(path.join(seed,'manifest.json'),JSON.stringify(manifest));
+ const before=await fs.readFile(path.join(home,'active.json'),'utf8');
+ const proposal=await engine.prepareUpdate('official',async()=>seed);expect(proposal.status).toBe('ready');expect(proposal.version).toBe('0.1.0');
+ expect(await fs.readFile(path.join(home,'active.json'),'utf8')).toBe(before);
+ await engine.applyPreparedUpdate(proposal.token!);expect(engine.snapshot()).toMatchObject({version:'0.1.0',installedUpstream:'0.1.7'});expect((await fs.readdir(path.join(home,'backups'))).length).toBe(1);
+});
+it('official compatibility failure preserves the original active slot',async()=>{
+ const {engine,home,seed,manifest,probe}=await fixture();manifest.version='0.1.0';await fs.writeFile(path.join(seed,'manifest.json'),JSON.stringify(manifest));probe.mockRejectedValue(Error('incompatible'));
+ const before=await fs.readFile(path.join(home,'active.json'),'utf8');expect((await engine.prepareUpdate('official',async()=>seed)).status).toBe('blocked');expect(await fs.readFile(path.join(home,'active.json'),'utf8')).toBe(before);
+});
+it('a component reinstall cannot downgrade an independently upgraded runtime',async()=>{
+ const {engine,home,seed,manifest}=await fixture();manifest.upstream='0.1.4';await fs.writeFile(path.join(seed,'manifest.json'),JSON.stringify(manifest));
+ const before=await fs.readFile(path.join(home,'active.json'),'utf8');const result=await engine.prepareUpdate('component',async()=>seed,true);expect(result.status).toBe('blocked');expect(result.message).toContain('较旧');expect(await fs.readFile(path.join(home,'active.json'),'utf8')).toBe(before);
+});

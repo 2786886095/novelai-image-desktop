@@ -577,6 +577,7 @@ export function buildTagComicGenerateRequest(
     panelId: panel.id,
     panelIndex: panel.index,
     params,
+    ...(project.sizeMode === "perPanel" && panel.imageSize ? {imageSize: {...panel.imageSize}} : {}),
     globalStylePrompt: project.globalStylePrompt,
     panelPrompt: panel.prompt,
     globalNegativePrompt: project.globalNegativePrompt,

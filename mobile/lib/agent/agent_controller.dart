@@ -1,3 +1,5 @@
+import 'compatible_proposal.dart';
+import 'image_provider.dart';
 import 'provider_outcome.dart';
 import 'image_repair.dart';
 import '../models/nai_models.dart';
@@ -628,7 +630,7 @@ class AgentController extends ChangeNotifier {
     messages.add({
       'role': 'system',
       'content': imageStateContext(latestImageState(conversation.messages,
-          characterId: active.id, resetAt: conversation.imageStateResetAt), model: _tavernImageDefaults(active).model)
+          characterId: active.id, resetAt: conversation.imageStateResetAt), model: app.settings.imageProvider == 'openai-images' ? null : _tavernImageDefaults(active).model) + (app.settings.imageProvider == 'openai-images' ? '\n${compatibleProposalContext(app.settings.compatibleImage['model'], app.settings.compatibleImage['size'])}' : '')
     });
     if (conversation.lastSummary?.trim().isNotEmpty == true) {
       messages.add({
@@ -665,6 +667,8 @@ class AgentController extends ChangeNotifier {
   }
 
   Future<void> send(String rawText) async {
+    final turnImageBinding = AgentImageBinding(app.settings, app.generationGroupId);
+    final compatible = app.settings.imageProvider == 'openai-images';
     final conversation = selectedConversation;
     final text = rawText.trim();
     if (conversation == null || sending || compacting) return;
@@ -784,10 +788,10 @@ class AgentController extends ChangeNotifier {
         final base=latestImageState(conversation.messages,characterId:character.id,resetAt:conversation.imageStateResetAt);
         final raw=parsedProposal.toJson();
         applyAuthoritativeTavernImageDefaults(parsedProposal,_tavernImageDefaults(character));
-        final repair=await repairImagePrompt(raw:raw,base:base,model:parsedProposal.model,
+        final repair=await repairImagePrompt(raw:raw,base:base,model:compatible ? null : parsedProposal.model,
           checkCancelled:_throwIfAborted,abortRequest:provider.abort,
           onStart:(){
-            final initial=resolveImagePrompt(raw,base,model:parsedProposal.model);
+            final initial=resolveImagePrompt(raw,base,model:compatible ? null : parsedProposal.model);
             assistant.imageProposal=parsedProposal;
             parsedProposal.continuity={...initial.continuity,'repairStatus':'repairing'};
             _notify();
@@ -800,7 +804,7 @@ class AgentController extends ChangeNotifier {
               'maxOutputTokens':preset.maxOutputTokens??app.settings.agentMaxOutputTokens,'stop':preset.stop,'reasoningEffort':conversation.reasoningEffort}),
         );
         if(repair.usage!=null) usage.add(repair.usage!);
-        final resolved = resolveImagePrompt(repair.raw,base,model:parsedProposal.model);
+        final resolved = resolveImagePrompt(repair.raw,base,model:compatible ? null : parsedProposal.model);
         if(repair.state!='unchanged') resolved.continuity['repairStatus']=repair.state;
         parsedProposal
           ..positivePrompt = resolved.positivePrompt
@@ -842,6 +846,7 @@ class AgentController extends ChangeNotifier {
           conversation,
           assistant,
           assistant.imageProposal!,
+          expectedBinding: turnImageBinding,
         );
       }
       compactAfterTurn = shouldAutoCompactAgent(
@@ -887,6 +892,10 @@ class AgentController extends ChangeNotifier {
     final character = activeCharacter;
     final negative = character?.visual.negativePrompt ?? '';
     final style = character?.visual.stylePrompt ?? '';
+    if (app.settings.imageProvider == 'openai-images') {
+      final copy = TavernImageProposal.fromJson(proposal.toJson())..stylePrompt = style..negativePrompt = negative;
+      return {'positivePrompt': compatibleProposalPrompt(copy), 'count': proposal.count};
+    }
     final compiled=proposal.scene == null?null:compileSceneBindings(proposal.scene!);
     if(compiled!=null){
       final params=GenerateParams.fromJson({...app.params.toJson(),'model':proposal.model??app.params.model});
@@ -910,20 +919,24 @@ class AgentController extends ChangeNotifier {
   Future<void> _generateTavernImageInternal(
     AgentConversation conversation,
     AgentMessage message,
-    TavernImageProposal proposal,
-  ) async {
+    TavernImageProposal proposal, {
+    AgentImageBinding? expectedBinding,
+  }) async {
     if (proposal.continuity?['reviewRequired'] == true) return;
-    if (proposal.positivePrompt.trim().isEmpty) {
+    if (proposal.scene == null && proposal.positivePrompt.trim().isEmpty) {
       proposal
         ..status = 'error'
         ..error = '正面提示词不能为空。';
       return;
     }
+    final imageBinding = expectedBinding ?? AgentImageBinding(app.settings, app.generationGroupId);
+    final compatible = app.settings.imageProvider == 'openai-images';
     Map<String,dynamic> arguments;
     try {
+      imageBinding.ensureCurrent(app.settings, app.generationGroupId);
       arguments = _imageArguments(proposal);
-      if (proposal.scene != null) proposal.positivePrompt = arguments['positivePrompt'] as String;
-      proposal..stylePrompt=arguments['stylePrompt'] as String..negativePrompt=arguments['negativePrompt'] as String;
+      if (!compatible && proposal.scene != null) proposal.positivePrompt = arguments['positivePrompt'] as String;
+      proposal..stylePrompt=activeCharacter?.visual.stylePrompt ?? ''..negativePrompt=activeCharacter?.visual.negativePrompt ?? '';
     } catch (error) { proposal..status = 'error'..error = error.toString(); await _persist(); _notify(); return; }
     final execution = AgentToolExecution(
       id: agentId('tool'),
@@ -949,6 +962,7 @@ class AgentController extends ChangeNotifier {
         arguments,
         _availableAttachments(conversation),
         applyStudioPromptLocks: false,
+        imageBinding: imageBinding,
       );
       execution
         ..status = result.ok ? 'completed' : 'error'

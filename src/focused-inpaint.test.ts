@@ -1,0 +1,4 @@
+import {it,expect} from 'vitest';
+import {focusedInpaintPlan} from './focused-inpaint';
+it('requests a 64-aligned approximately 1MP crop rather than changing the original canvas',()=>{for(const [width,height] of [[128,128],[64,96],[96,64],[200,100]]){const p=focusedInpaintPlan({x:10,y:20,width,height},2048,2048);expect(p.region).toEqual({x:10,y:20,width,height});expect(p.size.width%64).toBe(0);expect(p.size.height%64).toBe(0);expect(p.size.width*p.size.height).toBeLessThanOrEqual(1048576);expect(p.size.width*p.size.height).toBeGreaterThan(900000);}});
+it('clips edge regions and rejects malformed or empty selections',()=>{expect(focusedInpaintPlan({x:90,y:90,width:40,height:40},100,100).region.width).toBe(10);for(const width of [0,NaN,Infinity,-1,7])expect(()=>focusedInpaintPlan({x:0,y:0,width,height:10},100,100)).toThrow();expect(()=>focusedInpaintPlan({x:200,y:0,width:20,height:20},100,100)).toThrow();});

@@ -817,8 +817,24 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
+    try {
+      await _restoreToolState();
+    } catch (error, stack) {
+      debugPrint('Artist tool restore failed: $error\n$stack');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _message = '抽卡设置读取失败，请恢复抽卡默认后重试；收藏文件已保留。';
+        });
+      }
+    }
+  }
+
+  Future<void> _restoreToolState() async {
     final app = context.read<AppState>();
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     _base.text =
         prefs.getString('${_prefsPrefix}base') ?? app.params.positivePrompt;
     _auxiliary.text = prefs.getString('${_prefsPrefix}aux') ?? '';
@@ -1082,6 +1098,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       );
 
   Future<void> _loadPool(bool force) async {
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _message = '';
@@ -1090,9 +1107,10 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       final app = context.read<AppState>();
       _onlinePool = await _service.popular(app.settings,
           limit: _poolLimit(), force: force);
+      if (!mounted) return;
       setState(() => _planned = _buildPlan());
     } catch (error) {
-      setState(() => _message = error.toString());
+      if (mounted) setState(() => _message = error.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }

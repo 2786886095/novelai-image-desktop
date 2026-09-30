@@ -16,6 +16,16 @@ it('remembers success across restart without launching Python again',async()=>{
  let m=await reload();expect((await m.validateDetectiveRuntime(c)).state).toBe('passed');m=await reload();
  expect(m.detectiveRuntimeValidation(c).state).toBe('passed');expect((await m.validateDetectiveRuntime(c)).state).toBe('passed');expect(mock.exec).toHaveBeenCalledTimes(1);
 });
+it('repeated restarts and status polling retain the original validation timestamp',async()=>{
+ let m=await reload();const first=await m.validateDetectiveRuntime(c);
+ const file=path.join(mock.root,'artist-detective-validation.json'),saved=fs.readFileSync(file,'utf8');
+ for(let restart=0;restart<5;restart++){
+  m=await reload();
+  for(let poll=0;poll<5;poll++)expect(m.detectiveRuntimeValidation(c)).toEqual(first);
+  expect(await m.validateDetectiveRuntime(c)).toEqual(first);
+ }
+ expect(mock.exec).toHaveBeenCalledTimes(1);expect(fs.readFileSync(file,'utf8')).toBe(saved);
+});
 it('keeps full and light remembered independently across restart',async()=>{
  let m=await reload();await m.validateDetectiveRuntime(c);mock.exec.mockImplementation((_e,_a,_o,cb)=>cb(null,{stdout:success('PE-Spatial-L14-448'),stderr:''}));await m.validateDetectiveRuntime({...c,variant:'light'});m=await reload();
  expect(m.detectiveRuntimeValidation(c).state).toBe('passed');expect(m.detectiveRuntimeValidation({...c,variant:'light'}).state).toBe('passed');expect(mock.exec).toHaveBeenCalledTimes(2);

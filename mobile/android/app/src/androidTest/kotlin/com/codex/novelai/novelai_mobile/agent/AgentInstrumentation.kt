@@ -21,6 +21,51 @@ class AgentInstrumentation: Instrumentation() {
             check(targetContext.packageName.endsWith(".agenttest")){"QA package isolation required"}
             agent=LocalAgentRuntime.get(targetContext)
             val home=File(targetContext.filesDir,"TavernAgent/user-home")
+            if(arguments.getString("handoffOnly")=="true"){
+                val first=agent.stop();val second=agent.stop()
+                check(second>first && agent.snapshot()["stopRevision"]==second)
+                pass("native-stop-revision-increments")
+                for(command in listOf("prepare","confirm","uninstall")){
+                    val error=runCatching{agent.command(command,mapOf("expectedStopRevision" to first,"confirmed" to true))}.exceptionOrNull()
+                    check(error?.message?.contains("stopped after handoff")==true){"Stale handoff was not rejected before $command"}
+                }
+                pass("stale-handoff-rejected-before-all-component-mutations")
+                check(agent.snapshot()["running"]==false && agent.snapshot()["busy"]==false)
+                pass("native-guard-does-not-download-or-start-runtime")
+                evidence.put("checks",checks).put("status","passed")
+                File(targetContext.filesDir,"qa-device-evidence.json").writeText(evidence.toString(2))
+                finish(Activity.RESULT_OK,Bundle().apply{putString("stream","ANDROID HANDOFF QA PASS\n")})
+                return
+            }
+            if(arguments.getString("overlayOnly")=="true"){
+                val fixture=File(targetContext.filesDir,"overlay-qa-${java.util.UUID.randomUUID()}")
+                val slot=File(fixture,"slot");val data=File(fixture,"data")
+                val installed=File(data,"profiles/node_modules/@langbai/dsh-studio-tools")
+                val seeded=File(slot,"opt/agent/plugins/studio-tools")
+                for(name in listOf("package.json","index.js")){
+                    val bytes=targetContext.assets.open("agent-presentation/tools/$name").use{it.readBytes()}
+                    File(installed,name).apply{parentFile!!.mkdirs();writeBytes(bytes)}
+                    File(seeded,name).apply{parentFile!!.mkdirs();writeBytes(bytes)}
+                }
+                val method=LocalAgentRuntime::class.java.getDeclaredMethod("presentation",File::class.java,File::class.java)
+                method.isAccessible=true
+                val managed=method.invoke(agent,slot,data) as File
+                check(File(managed,"presentation.patch.yml").readText().contains("studio-tools-managed"))
+                check(File(managed,"tools/index.js").readText().contains("createDecisionJournal"))
+                check(File(managed,"tools/index.js").readBytes().contentEquals(File(seeded,"index.js").readBytes()))
+                pass("apk-current-tools-overlay-and-durable-jev-receipts")
+                File(installed,"index.js").appendText("\n// user-owned change\n")
+                val preserved=method.invoke(agent,slot,data) as File
+                check(!File(preserved,"presentation.patch.yml").readText().contains("studio-tools-managed"))
+                check(File(installed,"index.js").readText().endsWith("// user-owned change\n"))
+                pass("custom-tools-preserved-without-shadowing")
+                check(agent.snapshot()["running"]==false)
+                pass("overlay-test-does-not-download-or-start-runtime")
+                evidence.put("checks",checks).put("status","passed")
+                File(targetContext.filesDir,"qa-device-evidence.json").writeText(evidence.toString(2))
+                finish(Activity.RESULT_OK,Bundle().apply{putString("stream","ANDROID OVERLAY QA PASS\n")})
+                return
+            }
             if(arguments.getString("resumeOnly")=="true"){
                 check(File(home,"user-added-plugin/fixture.txt").readText()=="user-owned-plugin")
                 check(File(home,"session-fixture.jsonl").readText()=="original-session")
@@ -31,13 +76,14 @@ class AgentInstrumentation: Instrumentation() {
                 val activity=openTestActivity()
                 sendStatus(0,Bundle().apply{putString("stream","QA: activity ready; preparing runtime\n")})
                 targetContext.startForegroundService(Intent(targetContext,LocalAgentService::class.java))
-                agent.command("prepare");waitIdle(agent,600000)
+                val download=agent.planDownload("component",false)
+                agent.command("prepare",mapOf("kind" to "component","downloadToken" to download["token"]));waitIdle(agent,600000)
                 check(agent.snapshot()["phase"]=="awaiting_confirmation"){agent.snapshot()["logs"].toString()}
                 check(agent.snapshot()["installed"]==null){"Fresh QA install required"}
                 pass("prepare-does-not-activate-before-confirmation")
                 @Suppress("UNCHECKED_CAST") val proposal=agent.snapshot()["proposal"] as Map<String,Any?>
                 agent.command("confirm",mapOf("token" to proposal["token"]));waitIdle(agent,60000)
-                check(agent.snapshot()["installed"]=="0.1.2")
+                check(agent.snapshot()["installed"]==download["version"])
                 pass("confirmed-activation")
                 File(home,"user-added-plugin").mkdirs();File(home,"user-added-plugin/fixture.txt").writeText("user-owned-plugin")
                 File(home,"session-fixture.jsonl").writeText("original-session")

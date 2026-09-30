@@ -64,6 +64,11 @@ Var installCompleted
 
 ; Also run in .onInit: elevated inner installers skip CHECK_APP_RUNNING.
 !macro customInit
+  ; 2.4.3 and older updaters pass --updated without /S. Honor that intent here
+  ; as well, so their very next upgrade skips the assisted-install pages.
+  ${If} ${isUpdated}
+    SetSilent silent
+  ${EndIf}
   InitPluginsDir
   File /oname=$PLUGINSDIR\protect-update-data.ps1 "${BUILD_RESOURCES_DIR}\protect-update-data.ps1"
   File /oname=$PLUGINSDIR\backup-agent-workspace.ps1 "${BUILD_RESOURCES_DIR}\backup-agent-workspace.ps1"

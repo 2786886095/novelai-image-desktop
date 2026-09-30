@@ -1,3 +1,6 @@
+import {focusedInpaintPlan,type InpaintRegion} from './focused-inpaint';
+import {retainedPrompts} from "./retained-prompts";
+import { mergeImageSettings, mergeFullSettings } from "./compatible-image-settings-sync";
 import {localizedStoreText} from "./store-i18n";
 import {playCompletionSound} from "./completion-sound";
 import { restoreSavedStyle } from "./style-prompt-restore";
@@ -75,6 +78,7 @@ type StoreIpcListenerRegistry = {
   owner: object;
   removeGenerationPreview?: () => void;
   removeUpdateEvent?: () => void;
+  removeImageServiceChanged?: () => void;
 };
 
 function revokeInspectObjectUrl(url: string) {
@@ -183,6 +187,8 @@ interface AppState {
   brushMode: BrushMode;
   brushShape: InpaintBrushShape;
   inpaintMask: string | null;
+  inpaintRegion: InpaintRegion | null;
+  setInpaintRegion: (region:InpaintRegion|null)=>void;
   maskRevision: number;
   upscaleScale: UpscaleScale;
   directorTool: DirectorTool;
@@ -487,6 +493,18 @@ function showCompletedImage(
       }));
     });
   }
+}
+
+/** A failed save can still contain paid, durable outputs. Keep them visible
+ * without replacing them with an empty/stale history index or reporting success. */
+function showPartialImages(
+  set: (state: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
+  get: () => AppState,
+  result: GenerateResult,
+  options: { compareBefore?: WorkingImage | null; comparisonSurface?: CanvasSurface } = {},
+) {
+  if (result.ok) return;
+  for (const item of [...result.items].reverse()) showCompletedImage(set, get, item, options);
 }
 
 async function runAfterImageRefresh(
@@ -866,7 +884,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   brushColor: "#ffffff",
   brushMode: "paint",
   brushShape: "round",
-  inpaintMask: null,
+  inpaintMask: null, inpaintRegion: null,
   maskRevision: 0,
   upscaleScale: 4,
   directorTool: "bg-removal",
@@ -929,6 +947,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (listenerRegistry?.owner !== storeIpcListenerOwner) {
       listenerRegistry?.removeGenerationPreview?.();
       listenerRegistry?.removeUpdateEvent?.();
+      listenerRegistry?.removeImageServiceChanged?.();
       const removeGenerationPreview = window.naiDesktop.onGenerationPreview((event) => {
         const state = get();
         if (
@@ -942,8 +961,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       });
       const removeUpdateEvent = window.naiDesktop.onUpdateEvent((event) => set({ updateProgress: event }));
+      const removeImageServiceChanged = window.naiDesktop.onImageServiceChanged?.(() => {
+        void window.naiDesktop.getSettings().then((incoming) => {
+          if ((listenerHost[storeIpcListenerRegistryKey] as StoreIpcListenerRegistry | undefined)?.owner !== storeIpcListenerOwner) return;
+          set((state) => ({ settings: mergeImageSettings(state.settings, incoming) }));
+        }).catch(() => { /* A failed refresh leaves drafts intact; host CAS still rejects stale writes. */ });
+      });
       listenerHost[storeIpcListenerRegistryKey] = {
         owner: storeIpcListenerOwner,
+        removeImageServiceChanged: typeof removeImageServiceChanged === "function" ? removeImageServiceChanged : undefined,
         removeGenerationPreview: typeof removeGenerationPreview === "function" ? removeGenerationPreview : undefined,
         removeUpdateEvent: typeof removeUpdateEvent === "function" ? removeUpdateEvent : undefined,
       } satisfies StoreIpcListenerRegistry;
@@ -1022,14 +1048,12 @@ export const useAppStore = create<AppState>((set, get) => ({
           : state.augmentOptions,
       }));
     }
-    // Locks only protect fields from template/reset overwrites; persistence uses lastGenerationState.
-    const restored: Partial<GenerateParams> = {};
-    if (settings.lockStylePrompt) restored.stylePrompt = settings.savedStylePrompt ?? "";
-    if (settings.lockNegativePrompt) restored.negativePrompt = settings.savedNegativePrompt ?? "";
-    set((state) => ({ params: { ...state.params, ...restored } }));
+    // Style/negative text persists independently of the numeric-parameter opt-out.
+    // Old lock snapshots must not overwrite a newer edit (including an empty one).
+    set((state) => ({ params: { ...state.params, ...retainedPrompts(settings, state.params) } }));
     set({
       bootDone: true,
-      settings,
+      settings: mergeFullSettings(get().settings, settings),
       account,
       // Never let a refresh-triggered load() (e.g. the onboarding output-dir
       // step toggling a setting) close an onboarding wizard that's open: keep
@@ -1289,7 +1313,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async refreshSettings() {
     const settings = await window.naiDesktop.getSettings();
-    set({ settings });
+    set((state) => ({ settings: mergeFullSettings(state.settings, settings) }));
   },
 
   async refreshAccount() {
@@ -1310,7 +1334,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         i2iOriginalImage: result.image,
         inputPreviewAnchor: {result: get().currentImage},
         comparisonBeforeImage: null,
-        inpaintMask: null,
+        inpaintMask: null, inpaintRegion: null,
         maskRevision: get().maskRevision + 1,
         statusText: storeFormat(get().settings, "status.imageLoaded", { width: result.image.width, height: result.image.height }),
       });
@@ -1355,7 +1379,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (options?.silent || get().isGenerating) {
         set({
           workbenchImage: result.image,
-          inpaintMask: null,
+          inpaintMask: null, inpaintRegion: null,
           maskRevision: get().maskRevision + 1,
         });
         return;
@@ -1369,7 +1393,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         i2iOriginalImage: result.image,
         inputPreviewAnchor: {result: get().currentImage},
         comparisonBeforeImage: null,
-        inpaintMask: null,
+        inpaintMask: null, inpaintRegion: null,
         maskRevision: get().maskRevision + 1,
         statusText: storeFormat(get().settings, "status.imageLoaded", { width: result.image.width, height: result.image.height }),
         toast: storeFormat(get().settings, "toast.imageLoaded", { width: result.image.width, height: result.image.height }),
@@ -1401,7 +1425,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   inputPreviewAnchor: null,
       i2iOriginalImage: null,
       comparisonBeforeImage: null,
-      inpaintMask: null,
+      inpaintMask: null, inpaintRegion: null,
       maskRevision: get().maskRevision + 1,
       statusText: storeText(get().settings, "status.workbenchCleared"),
     });
@@ -1454,7 +1478,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((current) => ({
       inpaintSourceMode: mode,
       workbenchImage: result.image!,
-      inpaintMask: null,
+      inpaintMask: null, inpaintRegion: null,
       maskRevision: current.maskRevision + 1,
     }));
   },
@@ -1508,12 +1532,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     persistGenerationState(get);
   },
 
+  setInpaintRegion(region) {set({inpaintRegion:region});},
   setInpaintMask(mask) {
     set({ inpaintMask: mask });
   },
 
   clearInpaintMask() {
-    set({ inpaintMask: null, maskRevision: get().maskRevision + 1 });
+    set({ inpaintMask: null, inpaintRegion: null, maskRevision: get().maskRevision + 1 });
   },
 
   setUpscaleScale(scale) {
@@ -1615,6 +1640,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ batchRedraw: updater(get().batchRedraw) });
   },
   resetBatchRedraw() {
+    if(get().batchRunning)throw Error("批量重绘进行中，请先停止并等待结束");
     set({
       batchRedraw: createDefaultBatchRedraw(get().params),
       batchRunning: false,
@@ -1626,7 +1652,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       batchRunning: running,
       batchProgress: progress === undefined ? get().batchProgress : progress,
-      batchCancelRequested: running ? false : get().batchCancelRequested,
+      batchCancelRequested: running && !get().batchRunning ? false : get().batchCancelRequested,
     });
   },
   requestBatchCancel() {
@@ -2278,6 +2304,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       if (get().activeGenerationRunId !== runId) return;
 
+      showPartialImages(set, get, result);
       if (result.ok && result.items.length > 0) {
         completed++;
         const current = result.items[0];
@@ -2288,7 +2315,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         // failures below stop only the requests known to share that cause.
         failed++;
         lastError = compactStoreError(get().settings, result.message);
-        if (result.statusCode === 401 || result.statusCode === 403) {
+        if (result.failureKind === "storage" || result.statusCode === 401 || result.statusCode === 403) {
           // The same credentials back every queued request; continuing would
           // only repeat a deterministic authentication failure.
           skipInitial = true;
@@ -2490,6 +2517,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       if (get().activeGenerationRunId !== runId) return;
 
+      showPartialImages(set, get, result, { compareBefore: sourceImage, comparisonSurface: state.activeCanvasSurface });
       if (result.ok && result.items.length > 0) {
         completed += 1;
         await refreshAfterImageInBackground(set, get, result.items[0], {
@@ -2501,6 +2529,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         failed += 1;
         lastError = compactStoreError(get().settings, result.message);
         if (
+          result.failureKind === "storage" ||
           result.statusCode === 400 ||
           result.statusCode === 401 ||
           result.statusCode === 403 ||
@@ -2553,6 +2582,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async inpaint() {
     const state = get();
+    if(state.isGenerating)return;
     if (!requireToken(set, state.account.hasToken, state.settings)) return;
     if (!state.workbenchImage) {
       set({ toast: storeText(state.settings, "toast.needOriginal"), statusText: storeText(state.settings, "status.needOriginal") });
@@ -2591,6 +2621,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const inpaintParams: GenerateParams = {
       ...state.params,
       positivePrompt: state.inpaintPositivePrompt,
+      ...(state.inpaintRegion?focusedInpaintPlan(state.inpaintRegion,sourceImage.width,sourceImage.height).size:{}),
     };
     // Enter the generating state BEFORE the balance refresh and price quote so a
     // fast double-click can't sneak a second paid request in before the button
@@ -2643,11 +2674,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         state.inpaintMask!,
         state.inpaintStrength,
         0,
+        state.inpaintRegion ?? undefined,
       ),
       anlasBefore,
       "status.inpaintFailed",
     );
     if (!result) return;
+    showPartialImages(set, get, result, { compareBefore: sourceImage, comparisonSurface: "inpaint" });
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
       await refreshAfterImage(set, get, current, {
@@ -2788,6 +2821,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       "status.postFailed",
     );
     if (!result) return;
+    showPartialImages(set, get, result, { compareBefore: state.workbenchImage, comparisonSurface: "postprocess:director" });
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
       await refreshAfterImage(set, get, current, {

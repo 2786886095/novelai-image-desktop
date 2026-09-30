@@ -64,6 +64,8 @@ type MainTabLocale = Record<
 
 const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
   "zh-CN": {
+    works: {label: "作品", title: "作品", desc: "作品"},
+    favorites: {label: "收藏夹", title: "收藏夹", desc: "收藏夹"},
     styles: {label: "风格管理", title: "风格管理", desc: "风格管理"},
     generate: {
       label: "生成",
@@ -118,6 +120,8 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
     },
   },
   "zh-TW": {
+    works: {label: "作品", title: "作品", desc: "作品"},
+    favorites: {label: "收藏夾", title: "收藏夾", desc: "收藏夾"},
     styles: {label: "風格管理", title: "風格管理", desc: "風格管理"},
     generate: {
       label: "生成",
@@ -172,6 +176,8 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
     },
   },
   "en-US": {
+    works: {label: "Works", title: "Works", desc: "Works"},
+    favorites: {label: "Favorites", title: "Favorites", desc: "Favorites"},
     styles: {label: "Styles", title: "Styles", desc: "Styles"},
     generate: {
       label: "Generate",
@@ -230,6 +236,8 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
     },
   },
   "ja-JP": {
+    works: {label: "作品", title: "作品", desc: "作品"},
+    favorites: {label: "お気に入り", title: "お気に入り", desc: "お気に入り"},
     styles: {label: "スタイル管理", title: "スタイル管理", desc: "スタイル管理"},
     generate: {
       label: "生成",
@@ -288,6 +296,8 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
     },
   },
   "ko-KR": {
+    works: {label: "작품", title: "작품", desc: "작품"},
+    favorites: {label: "즐겨찾기", title: "즐겨찾기", desc: "즐겨찾기"},
     styles: {label: "스타일 관리", title: "스타일 관리", desc: "스타일 관리"},
     generate: {
       label: "생성",
@@ -1241,7 +1251,7 @@ const SETTINGS_SECTION_TEXT = {
       themeDark: "深色",
       themeSystem: "跟随系统",
       reduceMotion: "减少动态效果",
-      reduceMotionHint: "关闭页面转场、弹层和反馈动画。默认关闭，不跟随 Windows 的“动画效果”开关。",
+      reduceMotionHint: "减少页面、弹层和反馈动画；系统请求减少动态效果时也会生效。",
       workspaceLayout: "工作台布局",
       resetWorkspace: "恢复默认分栏宽度",
       workspaceHint:
@@ -1281,7 +1291,7 @@ const SETTINGS_SECTION_TEXT = {
       themeDark: "深色",
       themeSystem: "跟隨系統",
       reduceMotion: "減少動態效果",
-      reduceMotionHint: "關閉頁面轉場、彈層與回饋動畫。預設關閉，不跟隨 Windows 的「動畫效果」開關。",
+      reduceMotionHint: "減少頁面、彈層與回饋動畫；系統要求減少動態效果時也會生效。",
       workspaceLayout: "工作台版面",
       resetWorkspace: "恢復預設分欄寬度",
       workspaceHint:
@@ -1321,7 +1331,7 @@ const SETTINGS_SECTION_TEXT = {
       themeDark: "Dark",
       themeSystem: "System",
       reduceMotion: "Reduce motion",
-      reduceMotionHint: "Disable page, overlay, and feedback motion. Off by default and independent from Windows Animation effects.",
+      reduceMotionHint: "Reduce page, overlay, and feedback motion. The system’s reduced-motion preference is also respected.",
       workspaceLayout: "Workspace Layout",
       resetWorkspace: "Reset column widths",
       workspaceHint:
@@ -1366,7 +1376,7 @@ const SETTINGS_SECTION_TEXT = {
       themeDark: "ダーク",
       themeSystem: "システムに合わせる",
       reduceMotion: "モーションを減らす",
-      reduceMotionHint: "ページ遷移、ポップアップ、フィードバックのアニメーションを無効にします。既定はオフで、Windows のアニメーション設定とは連動しません。",
+      reduceMotionHint: "ページ、ポップアップ、フィードバックの動きを減らします。システムの動きを減らす設定にも従います。",
       workspaceLayout: "ワークスペース配置",
       resetWorkspace: "列幅を初期値に戻す",
       workspaceHint:
@@ -1410,7 +1420,7 @@ const SETTINGS_SECTION_TEXT = {
       themeDark: "다크",
       themeSystem: "시스템 설정",
       reduceMotion: "동작 줄이기",
-      reduceMotionHint: "페이지 전환, 팝업, 피드백 애니메이션을 끕니다. 기본값은 꺼짐이며 Windows 애니메이션 효과 설정과 독립적입니다.",
+      reduceMotionHint: "페이지, 팝업, 피드백 동작을 줄입니다. 시스템의 동작 줄이기 설정도 따릅니다.",
       workspaceLayout: "작업공간 레이아웃",
       resetWorkspace: "열 너비 초기화",
       workspaceHint:
@@ -5651,11 +5661,12 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.tokenGuide": "如何获取 Token",
     "settings.logout": "退出 API 登录",
     "settings.accountEndpoint": "API Endpoint（账户接口）",
-    "settings.imageEndpoint": "Image Endpoint（图片接口）",
-    "settings.allowCustomEndpoint":
-      "允许向非官方 Endpoint 发送 Token（默认关闭）。关闭时，若 Endpoint 不是 *.novelai.net，会自动改用官方地址以防 Token 泄露。",
-    "settings.allowCustomEndpointFallback":
-      "自定义生图 Endpoint 鉴权失败（401/403）时，自动改用官方地址重试（默认关闭）。开启后重试会用你的官方账号计费，请确认这是你想要的。",
+    "settings.imageEndpoint": "图片接口（NovelAI 官方 / 兼容中转）",
+    "settings.imageEndpointHint": "使用 NovelAI 协议的图片接口；沿用上方 Token，不使用 OpenAI Images 协议。",
+    "settings.allowCustomEndpoint": "允许使用非官方接口（默认开启）",
+    "settings.allowCustomEndpointHint": "开启后，将上方 Token 发给你填写的非官方接口。关闭后使用官方地址。请只填写你信任的中转地址。",
+    "settings.allowCustomEndpointFallback": "中转鉴权失败后改用官方重试（默认关闭）",
+    "settings.allowCustomEndpointFallbackHint": "仅在中转返回 401/403 时，用同一个 Token 向官方重试。官方 Token 可能消耗 Anlas；仅适用于中转的密钥通常不能用于官方。",
     "settings.proxyHint":
       "自动模式会读取系统代理和 PAC；若启用 TUN / 虚拟网卡则自动直连交给 VPN 路由。只有手动代理模式需要填写正确端口。",
     "settings.proxyScopeTitle": "走代理的请求（关掉则该项直连）",
@@ -5831,11 +5842,12 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.tokenGuide": "如何取得 Token",
     "settings.logout": "登出 API",
     "settings.accountEndpoint": "API Endpoint（帳號介面）",
-    "settings.imageEndpoint": "Image Endpoint（圖片介面）",
-    "settings.allowCustomEndpoint":
-      "允許向非官方 Endpoint 傳送 Token（預設關閉）。關閉時，若 Endpoint 不是 *.novelai.net，會自動改用官方地址以防 Token 外洩。",
-    "settings.allowCustomEndpointFallback":
-      "自訂生圖 Endpoint 驗證失敗（401/403）時，自動改用官方地址重試（預設關閉）。開啟後重試會用你的官方帳號計費，請確認這是你要的行為。",
+    "settings.imageEndpoint": "圖片介面（NovelAI 官方 / 相容中轉）",
+    "settings.imageEndpointHint": "使用 NovelAI 協議的圖片介面；沿用上方 Token，不使用 OpenAI Images 協議。",
+    "settings.allowCustomEndpoint": "允許使用非官方介面（預設開啟）",
+    "settings.allowCustomEndpointHint": "開啟後，將上方 Token 傳送至你填寫的非官方介面。關閉後使用官方地址。請只填寫你信任的中轉地址。",
+    "settings.allowCustomEndpointFallback": "中轉驗證失敗後改用官方重試（預設關閉）",
+    "settings.allowCustomEndpointFallbackHint": "僅在中轉傳回 401/403 時，使用相同 Token 向官方重試。官方 Token 可能消耗 Anlas；僅適用於中轉的金鑰通常不能用於官方。",
     "settings.proxyHint":
       "自動模式會讀取系統代理與 PAC；啟用 TUN / 虛擬網卡時會以直連交由 VPN 路由。只有手動代理需要正確連接埠。",
     "settings.proxyScopeTitle": "走代理的請求（關掉則該項直連）",
@@ -6011,11 +6023,12 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.tokenGuide": "How to get Token",
     "settings.logout": "Sign out of API",
     "settings.accountEndpoint": "API Endpoint (account)",
-    "settings.imageEndpoint": "Image Endpoint",
-    "settings.allowCustomEndpoint":
-      "Allow sending Token to non-official endpoints (off by default). When off, endpoints outside *.novelai.net are replaced with official URLs to avoid Token leaks.",
-    "settings.allowCustomEndpointFallback":
-      "When the custom image endpoint fails auth (401/403), automatically retry against the official one (off by default). Enabling this bills the retry to your official account — make sure that's what you want.",
+    "settings.imageEndpoint": "Image endpoint (NovelAI official / compatible relay)",
+    "settings.imageEndpointHint": "Uses the NovelAI protocol and the Token above, not the OpenAI Images protocol.",
+    "settings.allowCustomEndpoint": "Allow non-official endpoints (on by default)",
+    "settings.allowCustomEndpointHint": "Sends the Token above to your configured endpoint when enabled. Uses official URLs when disabled. Use only a relay you trust.",
+    "settings.allowCustomEndpointFallback": "Retry official endpoint after relay authentication failure (off by default)",
+    "settings.allowCustomEndpointFallbackHint": "Retries only on 401/403 using the same Token. Official Tokens may spend Anlas; relay-only keys usually do not work with the official service.",
     "settings.proxyHint":
       "Automatic mode reads the system proxy and PAC. With a VPN/TUN adapter it uses direct sockets for the VPN to route. Only manual proxy mode needs a port.",
     "settings.proxyScopeTitle":
@@ -6196,11 +6209,12 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.tokenGuide": "Token の取得方法",
     "settings.logout": "API からサインアウト",
     "settings.accountEndpoint": "API Endpoint（アカウント）",
-    "settings.imageEndpoint": "Image Endpoint",
-    "settings.allowCustomEndpoint":
-      "非公式 Endpoint へ Token 送信を許可（既定はオフ）。オフの場合、*.novelai.net 以外は Token 漏洩防止のため公式 URL に置換されます。",
-    "settings.allowCustomEndpointFallback":
-      "カスタム画像 Endpoint の認証が失敗（401/403）した場合、自動的に公式 URL で再試行します（既定はオフ）。有効にすると再試行はあなたの公式アカウントに課金されます。",
+    "settings.imageEndpoint": "画像Endpoint（NovelAI公式／互換中継）",
+    "settings.imageEndpointHint": "NovelAIプロトコルと上記Tokenを使用します。OpenAI Imagesプロトコルではありません。",
+    "settings.allowCustomEndpoint": "非公式Endpointを許可（既定はオン）",
+    "settings.allowCustomEndpointHint": "オンの場合、設定した非公式Endpointへ上記Tokenを送信します。オフの場合は公式URLを使用します。信頼できる中継先のみ設定してください。",
+    "settings.allowCustomEndpointFallback": "中継認証失敗時に公式へ再試行（既定はオフ）",
+    "settings.allowCustomEndpointFallbackHint": "401/403の場合のみ、同じTokenで公式へ再試行します。公式TokenではAnlasを消費する場合があります。中継専用キーは通常公式では使えません。",
     "settings.proxyHint":
       "自動モードはシステムプロキシと PAC を読み取ります。VPN/TUN 利用時は直接ソケットを VPN に任せ、手動プロキシ時のみポート入力が必要です。",
     "settings.proxyScopeTitle": "プロキシを使うリクエスト（オフなら直接接続）",
@@ -6380,11 +6394,12 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.tokenGuide": "Token 가져오는 방법",
     "settings.logout": "API 로그아웃",
     "settings.accountEndpoint": "API Endpoint(계정)",
-    "settings.imageEndpoint": "Image Endpoint",
-    "settings.allowCustomEndpoint":
-      "비공식 Endpoint로 Token 전송 허용(기본 꺼짐). 꺼져 있으면 *.novelai.net 외 Endpoint는 Token 유출 방지를 위해 공식 주소로 대체됩니다.",
-    "settings.allowCustomEndpointFallback":
-      "커스텀 이미지 Endpoint 인증이 실패(401/403)하면 자동으로 공식 주소로 재시도합니다(기본 꺼짐). 활성화하면 재시도 비용이 공식 계정에 청구되니 원하는 동작인지 확인하세요.",
+    "settings.imageEndpoint": "이미지 Endpoint (NovelAI 공식 / 호환 중계)",
+    "settings.imageEndpointHint": "위 Token과 NovelAI 프로토콜을 사용합니다. OpenAI Images 프로토콜은 사용하지 않습니다.",
+    "settings.allowCustomEndpoint": "비공식 Endpoint 허용 (기본 켜짐)",
+    "settings.allowCustomEndpointHint": "켜면 입력한 비공식 Endpoint로 위 Token을 전송합니다. 끄면 공식 주소를 사용합니다. 신뢰하는 중계 주소만 입력하세요.",
+    "settings.allowCustomEndpointFallback": "중계 인증 실패 시 공식 주소로 재시도 (기본 꺼짐)",
+    "settings.allowCustomEndpointFallbackHint": "401/403일 때만 같은 Token으로 공식 주소에 재시도합니다. 공식 Token은 Anlas를 소비할 수 있으며 중계 전용 키는 일반적으로 공식 서비스에 사용할 수 없습니다.",
     "settings.proxyHint":
       "자동 모드는 시스템 프록시와 PAC를 읽습니다. VPN/TUN 사용 시 직접 소켓을 VPN이 라우팅하며 수동 프록시에서만 포트가 필요합니다.",
     "settings.proxyScopeTitle":

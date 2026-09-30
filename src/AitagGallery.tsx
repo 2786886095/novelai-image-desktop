@@ -1317,7 +1317,6 @@ function WorkCard({
 export default function AitagGallery({ onBack }: { onBack?: () => void }) {
   const pageRef = useRef<HTMLElement>(null);
   const language = normalizeAppLanguage(useAppStore((state) => state.settings?.language));
-  const settings = useAppStore((state) => state.settings);
   const applyParams = useAppStore((state) => state.applyParams);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const text = TEXT[language];
@@ -1506,7 +1505,6 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
   const applyCompatible = () => {
     if (!report || !selectedCompatibleEntries.length) return;
     const patch = Object.fromEntries(selectedCompatibleEntries) as Partial<ImportedParams>;
-    if (settings?.lockNegativePrompt) delete patch.negativePrompt;
     applyParams(patch);
     setActiveTab("generate");
   };

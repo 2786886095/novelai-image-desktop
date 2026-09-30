@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { createImageSaveTracker, type ImageSaveNotice } from "../src/image-save-feedback";
 import type {
+  CompatibleGenerationRequest,
+  CompatibleImageSettings,
   AnlasQuoteRequest,
   AppSettings,
   ArtistStyleCatalogResult,
@@ -10,7 +12,6 @@ import type {
   AugmentOptions,
   BatchExportFile,
   BatchRedrawRequest,
-  ComicAnalyzeRequest,
   ComicConvertRequest,
   ComicConsistencyRequest,
   ComicGeneratePanelRequest,
@@ -62,6 +63,16 @@ import type {
 const imageSaves = createImageSaveTracker();
 
 contextBridge.exposeInMainWorld("naiDesktop", {
+  favoritesStatus:(src:string)=>ipcRenderer.invoke('favorites:status',src),
+  favoritesList: () => ipcRenderer.invoke('favorites:list'),
+  favoritesAdd: (src:string) => ipcRenderer.invoke('favorites:add',src),
+  favoritesRename: (id:string,name:string) => ipcRenderer.invoke('favorites:rename',id,name),
+  favoritesRemove: (id:string) => ipcRenderer.invoke('favorites:remove',id),
+  favoritesChooseDirectory: () => ipcRenderer.invoke('favorites:directory'),
+  onFavoritesChanged: (callback:(notice:{message:string})=>void) => {
+    const listener=(_event:Electron.IpcRendererEvent,notice:{message:string})=>callback(notice);
+    ipcRenderer.on('favorites:changed',listener);return ()=>ipcRenderer.removeListener('favorites:changed',listener);
+  },
   onStudioAgentRequest: (callback:(request:import('../src/studio-agent-contract').StudioAgentRequest)=>void) => {
     const listener=(_event:Electron.IpcRendererEvent,request:import('../src/studio-agent-contract').StudioAgentRequest)=>callback(request);
     ipcRenderer.on('studio-agent:request',listener);
@@ -69,12 +80,14 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   },
   replyStudioAgent: (id:string,reply:import('../src/studio-agent-contract').StudioAgentReply) => ipcRenderer.invoke('studio-agent:reply',id,reply),
   commitStudioSetting: (id:string,key:SettingKey,expected:AppSettings[SettingKey],value:AppSettings[SettingKey]) => ipcRenderer.invoke('studio-agent:commit',id,key,expected,value),
+  harnessSetAutoPluginUpdates: (enabled:boolean) => ipcRenderer.invoke('harness:setAutoPluginUpdates',enabled),
+  harnessCheckPluginUpdates: () => ipcRenderer.invoke('harness:checkPluginUpdates'),
   harnessSnapshot: () => ipcRenderer.invoke("harness:snapshot"),
   harnessStart: () => ipcRenderer.invoke("harness:start"),
   harnessStop: () => ipcRenderer.invoke("harness:stop"),
   harnessPlanDownload: (kind: 'component' | 'official', reinstall = false) => ipcRenderer.invoke("harness:planDownload", kind, reinstall),
   harnessUninstall: (confirmed: boolean) => ipcRenderer.invoke("harness:uninstall", confirmed),
-  harnessPrepareUpdate: (kind: 'component' | 'official', token: string) => ipcRenderer.invoke("harness:prepareUpdate", kind, token),
+  harnessPrepareUpdate: (kind: 'component' | 'official', token: string, disablePlugins: string[] = []) => ipcRenderer.invoke("harness:prepareUpdate", kind, token, disablePlugins),
   harnessApplyPreparedUpdate: (token: string) => ipcRenderer.invoke("harness:applyPreparedUpdate", token),
   harnessCheckUpdates: () => ipcRenderer.invoke("harness:checkUpdates"),
   harnessUpdate: () => ipcRenderer.invoke("harness:update"),
@@ -254,6 +267,15 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   clearToken: () => ipcRenderer.invoke("nai:clearToken"),
   quoteAnlas: (request: AnlasQuoteRequest) =>
     ipcRenderer.invoke("nai:quoteAnlas", request),
+  generateCompatible: (request: CompatibleGenerationRequest) => ipcRenderer.invoke("images:generateCompatible", request),
+  saveCompatibleImageSettings: (config: CompatibleImageSettings, apiKey: string, provider: "novelai" | "openai-images", expectedRevision: string) =>
+    ipcRenderer.invoke("images:saveCompatibleSettings", config, apiKey, provider, expectedRevision),
+  setCompatibleImageProvider: (provider: "novelai", expectedRevision: string) => ipcRenderer.invoke("images:setCompatibleProvider", provider, expectedRevision),
+  onImageServiceChanged: (callback: (notice: { revision: string; version: number }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, notice: { revision: string; version: number }) => callback(notice);
+    ipcRenderer.on("images:settingsChanged", listener);
+    return () => ipcRenderer.removeListener("images:settingsChanged", listener);
+  },
   generate: (
     params: GenerateParams,
     extras: GenerateExtras,
@@ -285,6 +307,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     i2i: I2IParams,
     extras: GenerateExtras,
   ) => ipcRenderer.invoke("nai:generateI2I", params, i2i, extras),
+  batchRedrawPrepare: (requests: BatchRedrawRequest[]) => ipcRenderer.invoke("nai:batchRedrawPrepare",requests),
+  batchRedrawCancel: (runId: string) => ipcRenderer.invoke("nai:batchRedrawCancel",runId),
   redrawImage: (request: BatchRedrawRequest) =>
     ipcRenderer.invoke("nai:redrawImage", request),
   inpaint: (
@@ -293,6 +317,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     maskBase64: string,
     strength: number,
     noise: number,
+    region?: import("../src/focused-inpaint").InpaintRegion,
   ) =>
     ipcRenderer.invoke(
       "nai:inpaint",
@@ -301,6 +326,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
       maskBase64,
       strength,
       noise,
+      region,
     ),
   upscaleImage: (scale: UpscaleScale, model: string) =>
     ipcRenderer.invoke("nai:upscale", scale, model),
@@ -324,10 +350,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
       knownCharacter,
       templateVersion,
     ),
-  convertPrompt: (text: string, mode: string, knownCharacter?: boolean, templateVersion?: string) =>
-    ipcRenderer.invoke("nai:convertPrompt", text, mode, knownCharacter, templateVersion),
-  comicAnalyzeScript: (request: ComicAnalyzeRequest) =>
-    ipcRenderer.invoke("comic:analyzeScript", request),
+  convertPrompt: (text: string, mode: string, knownCharacter?: boolean, templateVersion?: string, assistant?: import("../src/prompt-assistant").PromptEditRequest) =>
+    ipcRenderer.invoke("nai:convertPrompt", text, mode, knownCharacter, templateVersion, assistant),
   comicConvertPanels: (request: ComicConvertRequest) =>
     ipcRenderer.invoke("comic:convertPanels", request),
   comicCheckConsistency: (request: ComicConsistencyRequest) =>
@@ -349,6 +373,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ),
   comicGeneratePanel: (request: ComicGeneratePanelRequest) =>
     ipcRenderer.invoke("comic:generatePanel", request),
+  tagComicCancelGeneration: (runId: string) => ipcRenderer.invoke("tagComic:cancelGeneration", runId),
+  tagComicPrepareImageService: (requests: TagComicGenerateRequest[]) => ipcRenderer.invoke("tagComic:prepareImageService", requests),
   tagComicGenerateCandidate: (request: TagComicGenerateRequest) =>
     ipcRenderer.invoke("tagComic:generateCandidate", request),
   tagComicImportReference: (request: TagComicReferenceImportRequest) =>

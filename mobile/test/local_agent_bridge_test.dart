@@ -53,6 +53,57 @@ void main() {
     client = HttpClient();
     client.connectionTimeout = const Duration(seconds: 5);
   });
+  test('image path UI endpoint returns platform capabilities without image approval', () async {
+    var approvals = 0;
+    bridge = LocalAgentBridge(journal: dir, authorizeImage: (_, __, ___) async {
+      approvals++; return false;
+    }, execute: (tool, args) async {
+      expect(tool, 'studio_reveal_image');
+      return const AgentToolResult(ok: true, title: 'image',
+          output: '{"reveal":true,"label":"查看或分享图片"}');
+    });
+    await bridge.start();
+    final result = await call('file-capabilities', tool: 'studio_reveal_image',
+        args: {'action': 'capabilities'});
+    expect(result.$1, 200);
+    expect(result.$2['data']['reveal'], true);
+    expect(approvals, 0);
+    expect((await call('file-pending', tool: 'studio_image_approval')).$2['data'], isNull);
+  });
+  test('shared template-generation endpoint uses one authorization and durable replay',() async {
+    int authorizations=0,executions=0;
+    bridge=LocalAgentBridge(journal:dir,authorizeImage:(tool,args,session) async {
+      authorizations++;expect(tool,'langbai_generate_image');expect(args,{'count':1});return true;
+    },execute:(tool,args) async {
+      executions++;expect(tool,'studio_generate_from_description');
+      return const AgentToolResult(ok:true,title:'pipeline',output:'{"positivePrompt":"template result"}');
+    });
+    await bridge.start();
+    const args={'text':'scene','generate':{'count':1}};
+    final first=await call('pipeline',tool:'studio_generate_from_description',args:args);
+    expect(first.$1,200);expect(first.$2['data']['positivePrompt'],'template result');
+    expect((await call('pipeline',tool:'studio_generate_from_description',args:args)).$2,first.$2);
+    expect(authorizations,1);expect(executions,1);
+    expect((await call('pipeline',tool:'studio_generate_from_description',args:{...args,'text':'changed'})).$1,409);
+    expect(executions,1);
+  });
+  for(final approved in [true,false]) {
+    test('shared pipeline confirmation occurs once; approved=$approved',() async {
+      int executions=0;
+      bridge=LocalAgentBridge(journal:dir,authorizeImage:(_,__,___) async=>false,
+        execute:(_,__) async {executions++;return const AgentToolResult(ok:true,title:'fixture',output:'{}');});
+      await bridge.start();
+      const args={'text':'scene','generate':{'count':1}};
+      final work=call('once',tool:'studio_generate_from_description',args:args);
+      final p=await pending();expect(p['tool'],'langbai_generate_image');
+      await decide(approved);
+      final result=await work;expect(result.$2['ok'],approved);
+      expect(executions,approved?1:0);
+      expect((await call('once',tool:'studio_generate_from_description',args:args)).$2,result.$2);
+      expect(executions,approved?1:0);
+      expect((await call('after',tool:'studio_image_approval')).$2['data'],isNull);
+    });
+  }
   tearDown(() async {
     await bridge.close();
     client.close(force: true);

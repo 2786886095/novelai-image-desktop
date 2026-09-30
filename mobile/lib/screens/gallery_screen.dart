@@ -515,12 +515,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
         ..smeaDyn = params.smeaDyn
         ..variety = params.variety
         ..fileNamePrefix = params.fileNamePrefix;
-      if (!state.settings.lockStylePrompt) {
-        current.stylePrompt = params.stylePrompt;
-      }
-      if (!state.settings.lockNegativePrompt) {
-        current.negativePrompt = params.negativePrompt;
-      }
+      current.stylePrompt = params.stylePrompt;
+      current.negativePrompt = params.negativePrompt;
     });
   }
 

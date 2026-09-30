@@ -796,7 +796,7 @@ function parameterHelp(key, rule = {}) {
 	const lines = [descriptions[key] ?? "此选项由当前工作台提供。修改前请核对当前模型是否支持；保存不会立即生成图片。"];
 	if (rule.type === "number") lines.push(`允许范围：${rule.min ?? "未限定"}～${rule.max ?? "未限定"}${rule.step ? `；步长：${rule.step}` : ""}。`);
 	if (rule.enum) lines.push(`请从下拉列表中的 ${rule.enum.length} 个有效选项选择。`);
-	lines.push(rule.persistence === "session" ? "只对当前会话生效，重启后不保留。" : "保存时仍需软件确认。");
+	lines.push(rule.persistence === "session" ? "只对当前会话生效，重启后不保留。" : "普通参数保存后直接生效，不会触发生图。需要确认的操作会在 Agent 内提示。");
 	return lines.join("\n");
 }
 //#endregion
@@ -1342,6 +1342,88 @@ const categoryLabels = {
 };
 function approvalSummary(pending) {
 	const p = pending.parameters ?? {};
+	if (pending.tool === "langbai_software_action" && ["comic.generation.start", "batch.generation.start"].includes(p.action)) {
+		const count = p.plannedImages ?? p.count;
+		return {
+			title: p.action === "batch.generation.start" ? "确认批量重绘" : "确认漫画整批生图",
+			description: p.imageProvider === "openai-images" ? "本次确认覆盖整批兼容图片服务生成，费用以服务商为准；软件不会再次逐张确认。失败会停止后续提交，已生成图片保留。" : "本次确认覆盖整批图片生成，可能消耗 Anlas；软件不会再次逐张确认。失败会停止后续提交，已生成图片保留。",
+			target: [
+				p.imageProvider === "openai-images" ? p.model : null,
+				p.imageProvider === "openai-images" ? p.size : null,
+				p.projectTitle,
+				(p.action === "batch.generation.start" ? {
+					all: "所选图片全部重绘",
+					pending: "未完成图片",
+					failed: "失败图片",
+					additional: "每图追加一张"
+				} : {
+					initial: "补足初始候选",
+					regenerate: "重做候选",
+					additional: "每格追加一张"
+				})[p.mode],
+				Number.isSafeInteger(count) && count > 0 ? `${count} 张图片` : "请核对计划张数",
+				p.imageProvider !== "openai-images" && Number.isFinite(p.estimatedAnlas) ? `预估 ${p.estimatedAnlas} Anlas` : null
+			].filter(Boolean).join(" · "),
+			confirm: "确认本批生成"
+		};
+	}
+	if (pending.tool === "langbai_software_action" && [
+		"comic.project.new",
+		"comic.project.import",
+		"comic.panels.replace",
+		"comic.panels.remove"
+	].includes(p.action)) return {
+		title: p.title ?? "修改漫画工程",
+		description: "本次修改前保存工程快照；已有图片文件保留，不重新生成。确认后替换对应工程或分镜记录。",
+		target: p.id ?? "当前漫画工程",
+		confirm: "确认修改工程"
+	};
+	if (pending.tool === "langbai_software_action" && ["favorites.local.remove", "favorites.online.remove"].includes(p.action)) return {
+		title: "移出收藏",
+		description: p.action === "favorites.local.remove" ? "只移除收藏记录，原图和收藏目录中的图片都保留。" : "只移除在线书签，不影响本地收藏和生成图片。",
+		target: p.id ?? "",
+		confirm: "确认移出收藏"
+	};
+	if (pending.tool === "langbai_software_action" && p.action === "navigation.reset") return {
+		title: "恢复顶栏默认顺序",
+		description: "只恢复功能标签排列，不删除收藏、图片、参数或对话。",
+		target: "软件顶栏",
+		confirm: "恢复默认顺序"
+	};
+	if (pending.tool === "langbai_software_action" && p.action === "app.update.install" && p.platform === "android") return {
+		title: "更新 Android 软件",
+		description: "一次确认包括下载、完整性校验、停止当前 Agent 和安装交接。对话和图片保留；Android 系统可能要求安装权限或确认。打开安装器不代表更新成功，重新打开软件后核对版本。",
+		target: [
+			`${p.currentVersion ?? ""} → ${p.version ?? ""}`,
+			Number.isFinite(p.downloadBytes) ? `${(p.downloadBytes / 1048576).toFixed(1)} MiB` : null,
+			p.sourceUrl
+		].filter(Boolean).join(" · "),
+		confirm: "确认更新软件"
+	};
+	if (pending.tool === "langbai_software_action" && p.action === "app.update.install") return {
+		title: "更新软件并自动重启",
+		description: "一次确认包括下载、完整性校验、停止当前任务和安装重启。对话和图片保留；安装程序启动不等于更新完成，重启后核对版本。",
+		target: [
+			`${p.currentVersion ?? ""} → ${p.version ?? ""}`,
+			Number.isFinite(p.downloadBytes) ? `${(p.downloadBytes / 1048576).toFixed(1)} MiB` : null,
+			p.sourceUrl
+		].filter(Boolean).join(" · "),
+		confirm: "确认更新并重启"
+	};
+	if (pending.tool === "langbai_software_action" && String(p.action).startsWith("resources.")) {
+		const r = p.resource ?? {}, download = p.action === "resources.download", remove = p.action === "resources.delete";
+		return {
+			title: download ? "下载并安装资源数据库" : remove ? "删除本机资源数据库" : "恢复上一版资源数据库",
+			description: (download ? "将下载并验证完整性，再替换数据库；旧版保留用于恢复。" : remove ? "删除此资源数据库、旧版与下载断点。" : "用已保留的旧版替换当前资源数据库。") + " 不改动图片、角色、预设或对话。",
+			target: [
+				r.label ?? p.id,
+				download && Number.isFinite(r.downloadBytes) ? `${(r.downloadBytes / 1048576).toFixed(1)} MiB` : null,
+				r.sourceUrl,
+				r.license
+			].filter(Boolean).join(" · "),
+			confirm: download ? "确认下载安装" : remove ? "确认删除" : "确认恢复"
+		};
+	}
 	if (p.templateWorkflow) return {
 		title: "确认本次模板生图任务",
 		description: "一次确认包含提示词转换、最多两次格式校正，以及所列张数的生图；可能产生模型费用和 Anlas 消耗。校验失败会停止，不重复弹确认。",
@@ -1680,6 +1762,7 @@ function JevSettings({ call }) {
 function installFileLinks(root, call) {
 	let closed = false, queued = false;
 	const records = /* @__PURE__ */ new Map();
+	let label = "打开所在文件夹并选中图片", openedText = "已请求打开所在文件夹";
 	const filePath = (node) => {
 		const value = node.textContent?.trim() ?? "";
 		return value.length <= 4096 && /^(?:[A-Za-z]:[\\/]|\/)[^\r\n\x00]+\.(?:png|jpe?g|webp|gif|avif)$/i.test(value) ? value : null;
@@ -1701,7 +1784,7 @@ function installFileLinks(root, call) {
 			};
 			node.setAttribute("role", "button");
 			node.setAttribute("tabindex", "0");
-			node.setAttribute("title", "打开所在文件夹并选中图片");
+			node.setAttribute("title", label);
 			node.classList.add("studio-file-link");
 			const status = document.createElement("span");
 			status.className = "studio-file-link-status";
@@ -1722,7 +1805,7 @@ function installFileLinks(root, call) {
 						action: "reveal",
 						filePath: value
 					});
-					status.textContent = " 已请求打开所在文件夹";
+					status.textContent = " " + openedText;
 				} catch (error) {
 					status.textContent = " " + error.message;
 				} finally {
@@ -1749,6 +1832,8 @@ function installFileLinks(root, call) {
 	});
 	call("studio_reveal_image", { action: "capabilities" }).then((data) => {
 		if (closed || !data?.reveal) return;
+		if (typeof data.label === "string" && data.label.length <= 80) label = data.label;
+		if (typeof data.openedText === "string" && data.openedText.length <= 120) openedText = data.openedText;
 		scan();
 		observer.observe(root, {
 			childList: true,

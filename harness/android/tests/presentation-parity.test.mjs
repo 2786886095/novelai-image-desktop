@@ -26,3 +26,14 @@ test('candidate seed migrator ships in rootfs and executes before active descrip
   assert.ok(confirm.includes('homeFingerprint()==p.before'));assert.ok(confirm.includes('preserved.toPath()'));
   assert.ok(source.includes('val previous=if(data!=home)'));
 });
+
+test('Android APK applies current tools to untouched seed copies and preserves custom tools',async()=>{
+ const gradle=await read('mobile/android/app/build.gradle');
+ assert.ok(gradle.includes("from(rootProject.file('../../harness/plugins/studio-tools'))"));
+ assert.ok(gradle.includes("into 'tools'"));
+ const source=await read('mobile/android/app/src/main/kotlin/com/codex/novelai/novelai_mobile/agent/LocalAgentRuntime.kt');
+ assert.ok(source.includes('val standardTools=toolsNames.all'));
+ assert.ok(source.includes('user.readBytes().contentEquals(original.readBytes())'));
+ assert.ok(source.includes('studio-tools\\n  disabled: true\\n- insert:\\n    - id: studio-tools-managed'));
+ assert.ok(source.includes('if(standardTools)toolsNames.map'));
+});

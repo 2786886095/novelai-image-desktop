@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import {execFileSync,spawnSync} from 'node:child_process';
 const call=(command,args)=>execFileSync(command,args,{encoding:'utf8',timeout:600000,maxBuffer:8*1024*1024}).trim();
 const version=JSON.parse(fs.readFileSync('package.json','utf8')).version;
-if(version!=='2.4.3')throw Error('This publication script is version-specific');
+if(version!=='2.4.4')throw Error('This publication script is version-specific');
 const tag='v'+version, sha=call('git',['rev-parse','HEAD']);
 const buildRun=process.env.BUILD_RUN;
 if(!/^\d+$/.test(buildRun??''))throw Error('A verified desktop build run is required');

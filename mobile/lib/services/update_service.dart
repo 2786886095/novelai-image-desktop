@@ -12,6 +12,8 @@ class UpdateInfo {
   final String? latestVersion;
   final String? releaseUrl;
   final String? error;
+  final String? apkSha256;
+  final int? apkSize;
 
   const UpdateInfo({
     required this.hasUpdate,
@@ -19,6 +21,8 @@ class UpdateInfo {
     this.latestVersion,
     this.releaseUrl,
     this.error,
+    this.apkSha256,
+    this.apkSize,
   });
 }
 
@@ -132,7 +136,11 @@ Future<UpdateInfo> _checkGithubApi(
   if (hasUpdate && isAndroid && installerUrl == null) {
     throw Exception('GitHub release is missing app-release.apk');
   }
+  final apk=(json['assets'] is List ? json['assets'] as List : const []).whereType<Map>().where((item)=>item['name']=='app-release.apk').firstOrNull;
+  final digest=apk?['digest']?.toString();
   return UpdateInfo(
+    apkSha256: digest?.startsWith('sha256:')==true ? digest!.substring(7).toLowerCase() : null,
+    apkSize: apk?['size'] is int ? apk!['size'] as int : null,
     hasUpdate: hasUpdate,
     currentVersion: current,
     latestVersion: latest,

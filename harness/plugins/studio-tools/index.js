@@ -1,10 +1,74 @@
 import {pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
 import fs from 'node:fs/promises';
+import path from 'node:path';
+import {createHash,randomUUID} from 'node:crypto';
 export const name='studio-tools';
 export const inject=['tools','workspaceRegistry'];
+const digest=value=>createHash('sha256').update(value).digest('hex');
+const canonicalInput=value=>JSON.stringify(value,(_key,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
+function createSettledCallCache(){
+ const entries=new Map();
+ return (key,args,work)=>{
+  const fingerprint=digest(canonicalInput(args)),existing=entries.get(key);
+  if(existing){if(existing.fingerprint!==fingerprint)throw Error('同一调用标识的参数已变化，请使用新调用');return existing.pending;}
+  const pending=Promise.resolve().then(work),entry={fingerprint,pending,settled:false};entries.set(key,entry);
+  void pending.finally(()=>{
+   entry.settled=true;let count=[...entries.values()].filter(x=>x.settled).length;
+   for(const [id,item] of entries){if(count<=128)break;if(item.settled){entries.delete(id);count--;}}
+  }).catch(()=>{});
+  return pending;
+ };
+}
+// Native bridges journal image jobs; Jev analysis is a separate potentially paid
+// request. Its receipt must survive cache eviction and process restart as well.
+export function createDecisionJournal(home){
+ const cache=new Map();
+ const trim=()=>{let settled=[...cache.values()].filter(x=>x.settled).length;for(const [key,entry] of cache){if(settled<=128)break;if(entry.settled){cache.delete(key);settled--;}}};
+ const durableWrite=async(file,body)=>{
+  const handle=await fs.open(file,'wx',0o600);
+  try{await handle.writeFile(body,'utf8');await handle.sync();}finally{await handle.close();}
+ };
+ return async(session,id,args,work)=>{
+  if(!home||!path.isAbsolute(home))throw Error('缺少有效 DSH_HOME；未调用 Jev');
+  const key=digest(JSON.stringify([session,id])),fingerprint=digest(canonicalInput(args));
+  if(cache.has(key)){
+   const entry=cache.get(key);if(entry.fingerprint!==fingerprint)throw Error('同一调用标识的参数已变化，请使用新调用');
+   return structuredClone(await entry.pending);
+  }
+  const pending=(async()=>{
+   const directory=path.join(home,'studio-jev-receipts'),file=path.join(directory,key+'.json');
+   await fs.mkdir(directory,{recursive:true,mode:0o700});
+   const receipt={version:1,fingerprint,state:'pending'};
+   try{await durableWrite(file,JSON.stringify(receipt));}
+   catch(error){
+    if(error.code!=='EEXIST')throw error;
+    const info=await fs.lstat(file);
+    if(!info.isFile()||info.isSymbolicLink()||info.size>16*1024*1024)throw Error('Jev 回执无效；未重新提交');
+    let saved;try{saved=JSON.parse(await fs.readFile(file,'utf8'));}catch{throw Error('Jev 回执损坏；未重新提交');}
+    if(saved?.version!==1||typeof saved.fingerprint!=='string')throw Error('Jev 回执无效；未重新提交');
+    if(saved.fingerprint!==fingerprint)throw Error('同一调用标识的参数已变化，请使用新调用');
+    if(saved.state!=='complete'||!saved.result||typeof saved.result!=='object')throw Error('Jev 上次调用未确认完成；请核对结果，不要自动重试收费请求');
+    return saved.result;
+   }
+   // A crash, cancellation or uncertain network outcome leaves the pending
+   // receipt in place. Never delete it and silently retry a possibly paid call.
+   const result=await work();
+   if(!result||typeof result!=='object')throw Error('Jev 未返回有效结果');
+   const body=JSON.stringify({...receipt,state:'complete',result});
+   if(Buffer.byteLength(body)>16*1024*1024)throw Error('Jev 回执超出保存大小；未重新提交');
+   const temp=file+'.'+randomUUID()+'.tmp';
+   await durableWrite(temp,body);
+   await fs.rename(temp,file);
+   return result;
+  })();
+  const entry={fingerprint,pending,settled:false};cache.set(key,entry);
+  void pending.finally(()=>{entry.settled=true;trim();}).catch(()=>{});
+  return structuredClone(await pending);
+ };
+}
 const descriptions={
-  get_generation_state:'Read current Studio generation parameters, locked style and negative prompt. Call before generating; retain user locks.',
+  get_generation_state:'Read the current selected imageProvider and generation capabilities before generating. In native mode retain locked style and negative prompt. In openai-images mode use the saved imageService model/size/extensions and send positivePrompt/count only; native locks and reference controls do not apply.',
   search_tags:'Search mature image tags. args: query:string, limit?:number.',
   search_artist_styles:'Search artist/style catalog. args: query?:string, scope?:string, limit?:number.',
   search_online_gallery:'Search public gallery. args: source:danbooru|safebooru|gelbooru|quicktag, query:string, page?:number, safeOnly?:boolean.',
@@ -12,7 +76,7 @@ const descriptions={
   list_reference_presets:'List reusable reference images and attachment IDs. args: query?:string, limit?:number.',
   read_image_metadata:'Read image generation metadata. args: attachmentId:string from Studio history/reference tools.',
   list_history:'List generated images with attachment IDs for redraw, inpaint and metadata. args: limit?:number.',
-  generate_image:'Generate via NovelAI, consumes Anlas. For natural-language requests use langbai_prepare_image_prompt with text and optional generate:{count:1}; it reads the software templates live (default mixed). A direct call also uses the software conversion template unless it exactly matches a prompt already prepared in this session. Show each generatedImages.filePath as inline code in the final response so the user can click to reveal the file. Do not reconstruct candidates/evidence for routine image requests. The advanced Jev compiler is opt-in and retains its saved setting. args: positivePrompt:string, model?:string, width?:number, height?:number, steps?:number, cfgScale?:number, count?:number. Preserve locked style and negative prompt; use get_generation_state first. Do not repeat a successful or uncertain paid call just to display the image.',
+  generate_image:'Generate with the provider selected in the software. Read get_generation_state first: openai-images uses the saved independent endpoint/key/model/size/extensions; send positivePrompt and count only (do not send native model/width/steps/style/reference fields). Never switch providers or fall back to NovelAI on failure. Native NovelAI consumes Anlas; compatible-provider billing is provider-specific. For natural-language requests use langbai_prepare_image_prompt with text and optional generate:{count:1}; it reads the software templates live (default mixed). A direct call also uses the software conversion template unless it exactly matches a prompt already prepared in this session. Show each generatedImages.filePath as inline code in the final response so the user can click to reveal the file. Do not reconstruct candidates/evidence for routine image requests. The advanced Jev compiler is opt-in and retains its saved setting. args: positivePrompt:string, model?:string, width?:number, height?:number, steps?:number, cfgScale?:number, count?:number. In native NovelAI mode preserve locked style and negative prompt; compatible mode applies only its saved extension parameters, not native locks. Do not repeat a successful or uncertain paid call just to display the image.',
   redraw_image:'Image-to-image via NovelAI, consumes Anlas. args: attachmentId:string, positivePrompt:string, width?:number, height?:number, strength?:number, noise?:number.',
   inpaint_image:'Masked inpainting, consumes Anlas. args: attachmentId:string, maskAttachmentId:string, positivePrompt:string, width?:number, height?:number, strength?:number.',
   upscale_image:'Upscale an existing Studio attachment, consumes Anlas. args: attachmentId:string, scale:2|4.',
@@ -109,13 +173,23 @@ export async function apply(ctx) {
   const {readJevConfig,jevStatus}=await import(libraryModule('@langbai/dsh-studio-library/jev-config'));
   ctx.tools.register(defineTool({name:'langbai_jev_status',description:'ADVANCED OPT-IN: inspect Jev configuration only when the user asks about Jev. Ordinary image requests MUST use langbai_prepare_image_prompt and the software template; this status tool is not an image workflow prerequisite. Returns no key.',parameters:{},output:{schema:{type:'json'},render:(_a,v)=>[{type:'text',text:JSON.stringify(v)}]},execute:()=>jevStatus()}));
   const prepared=new Map();let prepareImagePrompt;
+  const trimPrepared=()=>{
+    // This is a memory cache, not a lifetime image quota. Completed/uncertain
+    // paid calls are durably journaled by both native bridges under the same ID.
+    // Never evict in-flight entries; a replay of an old settled entry must go
+    // through that journal, which rejects changed input and uncertain outcomes.
+    let settled=[...prepared.values()].filter(entry=>entry.settled).length;
+    for(const [key,entry] of prepared){
+      if(settled<=128)break;
+      if(entry.settled){prepared.delete(key);settled--;}
+    }
+  };
   ctx.tools.register(prepareImagePrompt=defineTool({name:'langbai_prepare_image_prompt',description:'DEFAULT image-prompt workflow. When the user requests an image, use generate:{count:1} IN THIS CALL: the current session policy covers conversion, bounded repair and generation; automatic mode requires no extra confirmation. Do not request standalone conversion first. If a workflow returns failure, report it and stop; never repeatedly request confirmation under new call IDs. Reads the SAME live software templates: text -> conversion template; imageAttachmentId -> reverse template. Defaults to the saved Agent template mode (mixed initially); users may choose tags/natural/mixed and v4.5/v5. Provide the complete user scene request in text, not only the latest short message. Do not invent candidates/evidence. With generate omitted this only prepares a prompt and never generates an image. With generate it forwards to the existing session-policy-controlled paid image tool. Do not repeat successful or uncertain generation. Advanced Jev analysis is a separate opt-in tool; this route does not change its setting.',
    parameters:{args:{type:'object',required:true,additionalProperties:false,properties:{text:{type:'string',description:'Complete user scene description; for an image, optional reverse hint.'},imageAttachmentId:{type:'string',description:'Existing Studio attachment ID when reversing an image.'},mode:{type:'string',enum:['mixed','tags','natural']},templateVersion:{type:'string',enum:['v5','v4.5']},generate:{type:'object',additionalProperties:false,properties:{count:{type:'integer'},width:{type:'integer'},height:{type:'integer'},steps:{type:'integer'},cfgScale:{type:'number'},model:{type:'string'}}}}}},output:{schema:{type:'json'},render},
    async execute({args},exec){
     const id=String(exec.callId??'');if(!id)throw Error('Missing stable call identity');
     const key=String(exec.agent?.session?.id??'studio')+':'+id,fingerprint=JSON.stringify(args);
     if(prepared.has(key)){const entry=prepared.get(key);if(entry.fingerprint!==fingerprint)throw Error('同一调用标识的参数已变化，请使用新调用');return entry.pending;}
-    if(prepared.size>=128)throw Error('本次调用记录已满，请重启 Agent 后继续');
     const pending=(async()=>{
      if(exec.signal?.aborted)throw Error('提示词任务已取消；未调用生图');
      const image=args.imageAttachmentId;
@@ -138,26 +212,32 @@ export async function apply(ctx) {
      if(!args.generate)return prompt;
      const generated=await attachImages(await callStudio('langbai_generate_image',{...args.generate,positivePrompt},id+'-generate',exec));
      return {...prompt,ok:generated.ok,generation:generated,studioImageAttachments:generated.studioImageAttachments??[]};
-    })();prepared.set(key,{fingerprint,pending});return pending;
+    })();const entry={fingerprint,pending,settled:false};prepared.set(key,entry);
+    void pending.finally(()=>{entry.settled=true;trimPrepared();}).catch(()=>{});
+    return pending;
    }
   }));
-  const decisions=new Map();
+  const decision=createDecisionJournal(process.env.DSH_HOME);
+  const advancedCalls=createSettledCallCache();
   ctx.tools.register(defineTool({name:'langbai_decide_prompt',description:'ADVANCED OPT-IN Jev candidate analysis only; requires workflow:"advanced-jev" and an explicit user request. Old calls without this flag are routed to the software template, not the candidate compiler. For ordinary requests, use langbai_prepare_image_prompt, which reads the software templates. Do not loop on evidence errors or replace the software templates with this compiler. ',parameters:{args:{...PROMPT_ARGUMENTS,properties:{...PROMPT_ARGUMENTS.properties,workflow:{type:'string',enum:['advanced-jev'],description:'Set only when the user explicitly requests advanced Jev analysis; omitted means the software template workflow.'}}}},output:{schema:{type:'json'},render},
    async execute({args},exec){
     if(args.workflow!=='advanced-jev')return prepareImagePrompt.execute({args:{text:args.description,...(args.generate?{generate:args.generate}:{})}},exec);
-    const id=String(exec.callId??'');if(!id)throw Error('Missing stable call identity');const key=String(exec.agent?.session?.id??'studio')+':'+id;
-    if(decisions.has(key))return decisions.get(key);
-    if(decisions.size>=128)throw Error('Jev 本次运行调用记录已满，请重启 Agent 后继续');
-    const pending=(async()=>{let lookupSequence=0;const prompt=await decidePrompt({...args,format:'hybrid'},{config:await readJevConfig(),signal:exec.signal,lookup:async(tag,signal)=>{
+    const id=String(exec.callId??'');if(!id)throw Error('Missing stable call identity');
+    exec.signal?.throwIfAborted();
+    return advancedCalls(JSON.stringify([String(exec.agent?.session?.id??'studio'),id]),args,async()=>{
+    const prompt=await decision(String(exec.agent?.session?.id??'studio'),id,args,async()=>{
+     exec.signal?.throwIfAborted();
+     let lookupSequence=0;return decidePrompt({...args,format:'hybrid'},{config:await readJevConfig(),signal:exec.signal,lookup:async(tag,signal)=>{
      const r=await fetch(endpoint+'/v1/tool',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({tool:'langbai_search_tags',args:{query:tag,limit:100},callId:id+'-tag-'+(++lookupSequence),sessionId:String(exec.agent?.session?.id??'studio')}),signal});
      const data=await r.json();if(!r.ok||!data.ok)throw Error('Studio Tag 词典读取失败');return data.data;
-    }});
+    }});});
     if(!args.generate)return prompt;
     // The native bridge still owns confirmation, per-session limits, style locks and idempotence.
     // Stable child call ID means reopening a result cannot submit a second paid job.
+    exec.signal?.throwIfAborted();
     const generated=await attachImages(await callStudio('langbai_generate_image',{...args.generate,positivePrompt:prompt.positivePrompt},id+'-generate',exec));
     return {...prompt,generation:generated,studioImageAttachments:generated.studioImageAttachments??[]};
-    })();decisions.set(key,pending);return pending;
+    });
    }
   }));
   console.info('[Studio] Image tool plugin registered; general Harness tools remain enabled.');

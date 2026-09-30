@@ -1,3 +1,4 @@
+import { compatibleProposalHint } from "./tavern/compatible-proposal";
 import {useDisclosurePresence, disclosureAttributes} from "./components/disclosure-motion";
 import {AnimatedCollapse} from './components/CharacterEditing';
 import {PreviewImageViewer} from './components/PreviewImageViewer';
@@ -1814,6 +1815,8 @@ export function ImageProposalCard({ proposal, onOpenScene, autoMode, setProposal
   language: unknown;
 }) {
   const tx = (key: TavernUiKey, values?: Record<string, string | number>) => tavernUiText(language, key, values);
+  const imageSettings = useAppStore(state => state.settings);
+  const compatible = imageSettings?.imageProvider === "openai-images";
   const [parametersOpen, setParametersOpen] = useState(false);
   const parametersId = useId();
   const repairing = proposal.continuity?.repairStatus === "repairing";
@@ -1840,6 +1843,7 @@ export function ImageProposalCard({ proposal, onOpenScene, autoMode, setProposal
   return (
     <section className={`tavern-image-proposal is-${proposal.status}`}>
       <header><span><MagicIcon /></span><strong>{tx("proposal")}</strong><small role="status">{submitting ? proposalStatus("running", language) : repairing ? tx("repairingImage") : autoMode && needsReview ? tx("autoImagePaused") : autoMode && proposal.status === "pending" ? tx("autoImageReady") : proposalStatus(proposal.status, language)}</small></header>
+      {compatible && <p className="muted" role="status">{imageSettings?.compatibleImage?.model} · {imageSettings?.compatibleImage?.size}<br />{compatibleProposalHint(language)}</p>}
       {repairing && <p role="status" className="muted">{tx("repairingImageHint")}</p>}
       {autoMode && needsReview && !repairing && <p role="alert" className="muted">{tx("autoImagePausedHint")}</p>}
       {onOpenScene&&<div className="tavern-scene-summary"><small className="muted">{sceneRailText(language).summary}</small><button type="button" className="btn tavern-scene-link" onClick={onOpenScene}><MagicIcon />{sceneRailText(language).open}</button></div>}
@@ -1864,10 +1868,12 @@ export function ImageProposalCard({ proposal, onOpenScene, autoMode, setProposal
           <footer><button type="button" className="is-ghost" disabled={busy} onClick={onCancel}><CloseIcon />{tx("cancel")}</button>{(!autoMode || !needsReview) && <button type="button" className="is-primary" onClick={() => void submit(proposal)} aria-busy={submitting || undefined} disabled={busy || !proposal.positivePrompt.trim() || proposal.continuity?.reviewRequired}><ImageIcon />{autoMode ? tx(proposal.status === "error" ? "retryImage" : "generateNow") : tx("confirmGenerate")}</button>}</footer>
         ) : null}
         <AnimatedCollapse open={parametersOpen}>{<div id={parametersId} className="tavern-parameter-grid">
+            {!compatible && <>
             <Field label={tx("widthShort")}><NumericField readOnly={busy} label={tx("widthShort")} value={proposal.width ?? 1024} min={64} max={49152} onCommit={(value) => setProposal({ ...proposal, width: Math.round(value) })} /></Field>
             <Field label={tx("heightShort")}><NumericField readOnly={busy} label={tx("heightShort")} value={proposal.height ?? 1024} min={64} max={49152} onCommit={(value) => setProposal({ ...proposal, height: Math.round(value) })} /></Field>
             <Field label={tx("steps")}><NumericField readOnly={busy} label={tx("steps")} value={proposal.steps ?? 28} min={1} max={50} onCommit={(value) => setProposal({ ...proposal, steps: Math.round(value) })} /></Field>
             <Field label="CFG"><NumericField readOnly={busy} label="CFG" value={proposal.scale ?? 5} min={0} max={10} step={0.1} onCommit={(value) => setProposal({ ...proposal, scale: value })} /></Field>
+            </>}
             <Field label={tx("imageCount")}><NumericField readOnly={busy} label={tx("imageCount")} value={proposal.count} min={1} max={8} onCommit={(value) => setProposal({ ...proposal, count: Math.round(value) })} /></Field>
           </div>}</AnimatedCollapse>
       </div>

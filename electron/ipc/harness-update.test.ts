@@ -1,3 +1,4 @@
+vi.mock('./download-request',()=>({updateFetch:(...args:any[])=>globalThis.fetch(args[0],args[1])}));
 import {afterEach,it,expect,vi} from 'vitest';
 import fs from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import crypto from 'node:crypto';import JSZip from 'jszip';
 import {downloadCompatibleHarness} from './harness-update';

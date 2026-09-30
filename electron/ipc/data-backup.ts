@@ -1,4 +1,7 @@
 import { app, dialog, shell } from "electron";
+import {exportImageSettings, readImageSettingsBackup} from "../../src/compatible-image-backup";
+import {SENSITIVE_SETTING_KEYS} from "./credential-vault";
+import {imageSettingsStamp} from "./image-settings-events";
 import crypto, { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -34,6 +37,7 @@ import type {
 import { DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS } from "../../src/types";
 import {
   defaultSettings,
+  credentialIssues,
   readStore,
   writeStore,
   type PersistedData,
@@ -65,6 +69,7 @@ const MAX_JSON_BYTES = 128 * 1024 * 1024;
 const MAX_ASSET_BYTES = 256 * 1024 * 1024;
 const ALL_CATEGORIES: DataBackupCategory[] = [...CATEGORY_CONTRACT];
 const API_SETTING_KEYS: Array<keyof AppSettings> = [
+  "imageProvider", "compatibleImage", "imageApiKey",
   "apiBaseUrl",
   "imageBaseUrl",
   "allowCustomEndpoint",
@@ -264,7 +269,7 @@ function pickSettings(settings: AppSettings, keys: Array<keyof AppSettings>) {
 
 function portableConfiguration(settings: AppSettings) {
   const result = cloneJson(settings) as unknown as Record<string, unknown>;
-  for (const key of [...API_SETTING_KEYS, ...PRESET_SETTING_KEYS]) delete result[key];
+  for (const key of [...API_SETTING_KEYS, ...PRESET_SETTING_KEYS, "imageServiceRevision", "imageServiceVersion", "credentialIssues"]) delete result[key];
   return result;
 }
 
@@ -491,7 +496,7 @@ async function buildArchive(
     const payload = {
       token: data.token ?? "",
       account: data.account ?? null,
-      settings: pickSettings(data.settings, API_SETTING_KEYS),
+      settings: { ...pickSettings(data.settings, API_SETTING_KEYS), ...exportImageSettings({...data.settings, credentialIssues: credentialIssues()}) },
     };
     zip.file("data/api-credentials.json", JSON.stringify(payload));
     summaries.push(summary("apiCredentials", API_SETTING_KEYS.length + (data.token ? 1 : 0)));
@@ -1379,11 +1384,18 @@ export async function importDataBackup(
     return { ok: false, message: "请至少选择一类数据。", imported: 0, skipped: 0, renamed: 0 };
   }
 
+  const imageRevision = imageSettingsStamp(readStore().settings).revision;
+  let imageBackup: ReturnType<typeof readImageSettingsBackup> = null;
   let archive: Awaited<ReturnType<typeof loadArchive>>;
   let portable: Awaited<ReturnType<typeof inspectPortableProjects>>;
   try {
     archive = await loadArchive(request.path);
     portable = await inspectPortableProjects(archive.zip, new Set(categories));
+    if (categories.includes("apiCredentials")) {
+      const payload = await readJsonEntry<{ settings?: Record<string, unknown> } | null>(archive.zip, "data/api-credentials.json", null);
+      if (!payload || !payload.settings || typeof payload.settings !== 'object' || Array.isArray(payload.settings)) throw new Error('备份缺少有效的 API 配置。');
+      imageBackup = readImageSettingsBackup(payload.settings);
+    }
   } catch (error: any) {
     return { ok: false, message: `无法读取备份：${error?.message ?? String(error)}`, imported: 0, skipped: 0, renamed: 0 };
   }
@@ -1405,6 +1417,7 @@ export async function importDataBackup(
   }
 
   const selected = new Set(categories);
+  const replaceCredentials: string[] = [];
   const counters = { count: 0, skipped: 0, renamed: 0 };
   try {
     const current = readStore();
@@ -1547,12 +1560,15 @@ export async function importDataBackup(
         throw new Error("备份缺少有效的 API 与敏感数据，未执行覆盖。");
       }
       for (const key of API_SETTING_KEYS) {
+        if (["imageProvider", "compatibleImage", "imageApiKey"].includes(key)) continue;
         if (incoming.settings && key in incoming.settings) {
           (next.settings as unknown as Record<string, unknown>)[key] = cloneJson(incoming.settings[key]);
+          if ((SENSITIVE_SETTING_KEYS as readonly string[]).includes(key)) replaceCredentials.push(key);
           counters.count += 1;
         }
       }
-      if (typeof incoming.token === "string") next.token = incoming.token;
+      if (imageBackup) replaceCredentials.push("imageApiKey");
+      if (typeof incoming.token === "string") { next.token = incoming.token; replaceCredentials.push("token"); }
       if (incoming.account && typeof incoming.account === "object") next.account = incoming.account;
     }
 
@@ -1583,7 +1599,17 @@ export async function importDataBackup(
       }
     }
     const recoveries = await restorePortableProjects(app.getPath('userData'), portable!);
-    writeStore(next);
+    // Keep the compare-and-write synchronous after the final asynchronous restore.
+    const latestImageSettings = readStore().settings;
+    if (imageBackup && imageSettingsStamp(latestImageSettings).revision !== imageRevision) throw new Error('导入期间图片服务配置已变化，未覆盖新的配置；请重新读取后导入。');
+    if (imageBackup) Object.assign(next.settings, imageBackup);
+    else for (const key of ["imageProvider", "compatibleImage", "imageApiKey"] as const) {
+      if (Object.prototype.hasOwnProperty.call(latestImageSettings, key)) (next.settings as unknown as Record<string, unknown>)[key] = cloneJson(latestImageSettings[key]);
+      else delete next.settings[key];
+    }
+    delete next.settings.imageServiceRevision;
+    delete next.settings.imageServiceVersion;
+    writeStore(next, replaceCredentials);
 
     const workspaceData = selected.has("workspaceData")
       ? await readJsonEntry<Record<string, string>>(archive.zip, "data/workspace.json", {})

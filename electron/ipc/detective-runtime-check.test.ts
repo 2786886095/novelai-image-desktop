@@ -25,6 +25,11 @@ it('reports CUDA/import failures without falsely marking loaded',async()=>{
  mock.exec.mockImplementation((_e,_a,_o,cb)=>cb(new Error('CUDA unavailable')));
  const v=await validateDetectiveRuntime(c);expect(v.state).toBe('failed');expect(v.message).toContain('CUDA unavailable');
 });
+it('explains full-only legacy runtime with light assets without bypassing integrity checks',async()=>{
+ mock.exec.mockImplementation((_e,_a,_o,cb)=>cb(new Error('ValueError: Asset manifest is not the verified desktop distribution')));
+ const result=await validateDetectiveRuntime(c);
+ expect(result.state).toBe('failed');expect(result.message).toContain('使用已有运行环境');expect(result.message).toContain('不要删除另一模型');
+});
 it('rejects exit-zero without scoring evidence',async()=>{
  mock.exec.mockImplementation((_e,_a,_o,cb)=>cb(null,{stdout:'files exist',stderr:''}));
  expect((await validateDetectiveRuntime(c)).state).toBe('failed');

@@ -382,10 +382,17 @@ class ComicPanel {
                   ComicPanelReference.fromJson(Map<String, dynamic>.from(item)))
               .toList()
           : <ComicPanelReference>[],
-      overrideParams: json['paramsOverride'] == true,
-      params: json['params'] is Map
-          ? GenerateParams.fromJson(Map<String, dynamic>.from(json['params']))
-          : globalParams.copy(),
+      overrideParams: json['paramsOverride'] is Map
+          ? json['paramsOverride']['enabled'] == true
+          : json['paramsOverride'] == true,
+      params: json['paramsOverride'] is Map &&
+              json['paramsOverride']['params'] is Map
+          ? GenerateParams.fromJson(
+              Map<String, dynamic>.from(json['paramsOverride']['params']))
+          : json['params'] is Map
+              ? GenerateParams.fromJson(
+                  Map<String, dynamic>.from(json['params']))
+              : globalParams.copy(),
       status:
           candidates.isEmpty ? ComicPanelStatus.ready : ComicPanelStatus.done,
       candidates: candidates,

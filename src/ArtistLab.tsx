@@ -124,6 +124,8 @@ function previewSizeForTarget(target: TargetImage | null) {
 export function TargetArtistLab({ onBack }: { onBack: () => void }) {
   const language = useAppStore((state) => state.settings?.language ?? "zh-CN");
   const params = useAppStore((state) => state.params);
+  const reverseMode = useAppStore(state => state.reversePromptMode);
+  const templateVersion = useAppStore(state => state.settings?.reversePromptTemplateVersion);
   const applyParams = useAppStore((state) => state.applyParams);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
   const refreshHistory = useAppStore((state) => state.refreshHistory);
@@ -154,7 +156,7 @@ export function TargetArtistLab({ onBack }: { onBack: () => void }) {
     setReversing(true);
     try {
       const response = await fetch(session.target.fileUrl);
-      const result = await window.naiDesktop.reversePrompt(bytesToBase64(new Uint8Array(await response.arrayBuffer())), "tags", "full", "只提取主体、构图、环境与动作；不要输出 artist 标签、画师名或纯画风词。", false);
+      const result = await window.naiDesktop.reversePrompt(bytesToBase64(new Uint8Array(await response.arrayBuffer())), reverseMode, "full", "只提取主体、构图、环境与动作；不要输出 artist 标签、画师名或纯画风词。", false, templateVersion);
       if (!result.ok || !result.prompt) throw new Error(result.message);
       patch({ basePrompt: result.prompt });
       setMessage("");

@@ -1,3 +1,14 @@
+import {prepareFocusedInpaintInput,compositeFocusedPatch} from './focused-inpaint';
+import {preparePromptAssistance,type PromptEditRequest} from "../../src/prompt-assistant.js";
+import {authorizeAgentBatchRequest} from './batch-run-authorization';
+import {currentBatchImageBinding,assertBatchImageBinding,prepareBatchImageService} from './batch-image-service';
+import {compatibleComicInput} from '../../src/comic/compatible-comic';
+import {currentComicImageBinding,assertComicImageBinding} from './comic-image-service';
+import {generateConfiguredImages} from './compatible-generation';
+import {bindAgentImageProvider} from './agent-image-provider';
+import {authorizeAgentComicRequest} from './comic-run-authorization';
+import {readComicImage,readComicReferences,buildComicSelectedZip,writeComicZip} from './comic-assets';
+import {reverseTemplateProtocol} from "../../src/reverse-template";
 import { planUpscale } from "../../src/upscale-plan";
 import {matchingVibeEncoding, validateVibeModel} from "../../src/vibe-file";
 import {normalizeNovelAiEndpoint} from '../../src/nai-endpoint';
@@ -32,13 +43,10 @@ import {
   type AiCallLogEntry,
   type AugmentOptions,
   type AiModelListResult,
-  type ComicAnalyzeRequest,
-  type ComicAnalyzeResult,
   type ComicConsistencyRequest,
   type ComicConsistencyResult,
   type ComicConvertRequest,
   type ComicConvertResult,
-  type ComicDesiredPanelCount,
   type ComicGeneratePanelRequest,
   type ComicReferenceKind,
   type TagComicExportZipRequest,
@@ -89,7 +97,6 @@ import { proxyConfig } from "./proxy";
 import { injectDshImageAiSystemPrompt } from "./dsh-reverse-convert";
 import { selectedImageTaskPromptPreset } from "../../src/tavern/image-task-preset";
 import {
-  COMIC_ANALYZE_SYSTEM_PROMPT,
   CONVERT_SYSTEM_PROMPTS,
   REVERSE_SYSTEM_PROMPTS,
   SCOPED_REVERSE_SYSTEM_PROMPTS,
@@ -110,7 +117,7 @@ import {
   parsePromptVariantResponse,
   resolveModePrompt,
 } from "../../src/prompt-mode";
-import {auditMixedEnvelope,mixedTemplateContract,mixedEnvelopeInstruction,patchMixedEnvelope} from '../../src/prompt-template-audit';
+import {auditMixedEnvelope,mixedTemplateContract,mixedEnvelopeInstruction,patchMixedEnvelope,normalizeMixedEnvelope} from '../../src/prompt-template-audit';
 import { beginJob, cancelAllJobs } from "./job-registry";
 import { NaiSseFrameDecoder, NaiStreamFrameDecoder, type NaiStreamFrame } from "./nai-stream";
 
@@ -955,10 +962,19 @@ export function countCachedVibes(
  * NOTE: needs verification against a live V4.5 token — the encode-vibe payload
  * shape is based on the NovelAI web client and may need adjustment.
  */
+type NativeSubmissionGuard = () => void | Promise<void>;
+
+async function checkNativeSubmission(signal?: AbortSignal, beforeSubmit?: NativeSubmissionGuard) {
+  signal?.throwIfAborted();
+  await beforeSubmit?.();
+  signal?.throwIfAborted();
+}
+
 export async function prepareExtras(
   params: GenerateParams,
   extras?: GenerateExtras,
   signal?: AbortSignal,
+  beforeSubmit?: NativeSubmissionGuard,
 ): Promise<GenerateExtras | undefined> {
   if (!extras) return extras;
   // Validate the entire bundle before image decoding or any paid encoding call.
@@ -1016,8 +1032,9 @@ export async function prepareExtras(
       if (cached) return { ...vibe, base64: cached };
       try {
         const res = await requestWithRetry(
-          () =>
-            axios.post(
+          async () => {
+            await checkNativeSubmission(signal, beforeSubmit);
+            return axios.post(
               `${imageBaseUrl}/ai/encode-vibe`,
               {
                 image: rawBase64,
@@ -1034,7 +1051,8 @@ export async function prepareExtras(
                 signal,
                 ...proxyConfig("nai"),
               },
-            ),
+            );
+          },
           // encode-vibe is a paid endpoint; only retry pre-charge 429s.
           { retries: 2, signal, retryStatuses: [429] },
         );
@@ -1959,6 +1977,20 @@ export function prepareImageBufferForSave(
   return keepImageMetadata ? buffer : stripPngMetadata(buffer);
 }
 
+/** A paid response may already have durable files even though the batch failed. */
+class ImageSaveError extends Error {
+  constructor(
+    readonly items: HistoryItem[],
+    readonly actualSeed: number,
+    readonly expected: number,
+    readonly fileError: boolean,
+    readonly historyError: boolean,
+  ) {
+    super(`结果保存未全部完成，已落盘 ${items.length}/${expected} 张。${fileError ? "请检查输出目录和剩余空间。" : ""}${historyError ? "历史记录未保存，请检查历史存储；已落盘文件仍保留。" : ""}没有自动重新生成。`);
+    this.name = "ImageSaveError";
+  }
+}
+
 async function saveBuffers(
   buffers: Buffer[],
   params: GenerateParams,
@@ -1986,44 +2018,56 @@ async function saveBuffers(
     : activeGroup
       ? path.join(settings.outputDir, date, activeGroup.folderName)
       : path.join(settings.outputDir, date);
-  await fs.mkdir(dir, { recursive: true });
-
   const items: HistoryItem[] = [];
-  for (let index = 0; index < buffers.length; index += 1) {
-    const id = crypto.randomUUID();
-    const ext = detectExt(buffers[index]);
-    const safeModel = (modelOverride ?? params.model).replace(/[^\w.-]+/g, "-");
-    const base = buildImageFileName(settings.imageNameTemplate, {
-      date,
-      now,
-      seq: index + 1,
-      seed: actualSeed,
-      model: safeModel,
-      prefix,
-      name: params.fileNamePrefix,
-    });
-    // Optionally strip embedded generation metadata before writing to disk.
-    const outBuffer = prepareImageBufferForSave(
-      buffers[index],
-      settings.keepImageMetadata !== false,
-    );
-    const filePath = await writeUniqueImageFile(dir, base, ext, outBuffer);
-    const actualSize = saveOptions?.actualImageSize ? readImageDimensions(outBuffer) : params;
-    items.push({
-      id,
-      filePath,
-      fileUrl: toLocalMediaUrl(filePath, id),
-      date,
-      createdAt: now.toISOString(),
-      params: { ...params, seed: actualSeed },
-      actualSeed,
-      model: modelOverride ?? params.model,
-      width: actualSize.width,
-      height: actualSize.height,
-      groupId: activeGroup?.groupId,
-    });
+  let fileError = false;
+  let historyError = false;
+  try {
+    await fs.mkdir(dir, { recursive: true });
+    for (let index = 0; index < buffers.length; index += 1) {
+      const id = crypto.randomUUID();
+      const ext = detectExt(buffers[index]);
+      const safeModel = (modelOverride ?? params.model).replace(/[^\w.-]+/g, "-");
+      const base = buildImageFileName(settings.imageNameTemplate, {
+        date,
+        now,
+        seq: index + 1,
+        seed: actualSeed,
+        model: safeModel,
+        prefix,
+        name: params.fileNamePrefix,
+      });
+      // Optionally strip embedded generation metadata before writing to disk.
+      const outBuffer = prepareImageBufferForSave(
+        buffers[index],
+        settings.keepImageMetadata !== false,
+      );
+      const actualSize = saveOptions?.actualImageSize ? readImageDimensions(outBuffer) : params;
+      const filePath = await writeUniqueImageFile(dir, base, ext, outBuffer);
+      items.push({
+        id,
+        filePath,
+        fileUrl: toLocalMediaUrl(filePath, id),
+        date,
+        createdAt: now.toISOString(),
+        params: { ...params, seed: actualSeed },
+        actualSeed,
+        model: modelOverride ?? params.model,
+        width: actualSize.width,
+        height: actualSize.height,
+        groupId: activeGroup?.groupId,
+      });
+    }
+  } catch {
+    fileError = true;
   }
-  if (!saveOptions?.temporary) addHistory(items);
+  // Index the successfully committed prefix even if a later file failed. Never
+  // retry a paid generation or a potentially partially committed history write.
+  if (!saveOptions?.temporary && items.length) {
+    try { addHistory(items); } catch { historyError = true; }
+  }
+  if (fileError || historyError) {
+    throw new ImageSaveError(items, actualSeed, buffers.length, fileError, historyError);
+  }
   return items;
 }
 
@@ -2156,6 +2200,7 @@ export function buildGenerateImageHttpBody(
 async function postGenerateImage(
   payload: ReturnType<typeof buildPayload>,
   signal?: AbortSignal,
+  beforeSubmit?: NativeSubmissionGuard,
 ) {
   const token = getToken();
   if (!token) throw new Error("请先配置 API Token。");
@@ -2167,7 +2212,8 @@ async function postGenerateImage(
 
   const postTo = (baseUrl: string) =>
     requestWithRetry(
-      () => {
+      async () => {
+        await checkNativeSubmission(signal, beforeSubmit);
         // FormData is a one-shot stream. Rebuild it for every 429 attempt or
         // custom-endpoint fallback; reusing the consumed stream produces an
         // empty/partial multipart request and misleading server errors.
@@ -2464,6 +2510,7 @@ async function postGenerateImageStream(
   payload: ReturnType<typeof buildPayload>,
   signal: AbortSignal | undefined,
   onPreview: GenerationPreviewCallback,
+  beforeSubmit?: NativeSubmissionGuard,
 ): Promise<Buffer[] | null> {
   const token = getToken();
   if (!token) throw new Error("请先配置 API Token。");
@@ -2476,7 +2523,8 @@ async function postGenerateImageStream(
     let response;
     try {
       response = await requestWithRetry(
-        () => {
+        async () => {
+          await checkNativeSubmission(signal, beforeSubmit);
           const form = buildGenerateImageStreamHttpBody(payload);
           return axios.post(`${baseUrl}/ai/generate-image-stream`, form, {
             headers: {
@@ -2551,6 +2599,7 @@ async function postGenerateImageWithOptionalPreview(
   payload: ReturnType<typeof buildPayload>,
   signal: AbortSignal | undefined,
   onPreview?: GenerationPreviewCallback,
+  beforeSubmit?: NativeSubmissionGuard,
 ) {
   const settings = getSettings();
   if (
@@ -2558,10 +2607,10 @@ async function postGenerateImageWithOptionalPreview(
     settings.streamPreviewEnabled !== false &&
     supportsSafeStreamTransport(payload)
   ) {
-    const streamed = await postGenerateImageStream(payload, signal, onPreview);
+    const streamed = await postGenerateImageStream(payload, signal, onPreview, beforeSubmit);
     if (streamed) return streamed;
   }
-  return postGenerateImage(payload, signal);
+  return postGenerateImage(payload, signal, beforeSubmit);
 }
 
 export function extractEmbeddedGenerationMetadata(buffer: Buffer): LoadImageResult["metadata"] | undefined {
@@ -3210,7 +3259,7 @@ export async function reversePromptImage(
   scope: string = "full",
   hint: string = "",
   knownCharacter = false,
-  templateVersion: "v4.5" | "v5" = "v5",
+  templateVersion?: "v4.5" | "v5",
 ): Promise<{
   ok: boolean;
   prompt?: string;
@@ -3236,7 +3285,7 @@ export async function reversePromptImage(
   ]
     .filter(Boolean)
     .join("\n");
-  const safeTemplateVersion = templateVersion === "v4.5" ? "v4.5" : "v5";
+  const safeTemplateVersion = (templateVersion ?? settings.reversePromptTemplateVersion) === "v4.5" ? "v4.5" : "v5";
   const builtInTemplates =
     safeTemplateVersion === "v4.5"
       ? safeScope === "full"
@@ -3303,34 +3352,30 @@ export async function reversePromptImage(
     },
   ];
 
-  const result = await callVisionApi(
-    systemPrompt,
-    firstUserContent,
-    knownCharacter ? 1100 : 760,
-    `AI 反推 · ${safeTemplateVersion} · ${mode} · ${scopeLabel}`,
-    true,
-  );
-  if (!result.ok) return { ok: false, message: `反推失败：${result.message}` };
-
-  const parsed = parsePromptVariantResponse(result.content ?? "", knownCharacter);
-  let content = parsed.primary;
-  let variants = parsed.variants;
-  if (
-    knownCharacter &&
-    (!variants?.namePrompt.trim() || !variants.featurePrompt.trim())
-  ) {
-    const fallback = content.trim();
-    const namePrompt =
-      variants?.namePrompt.trim() || fallback || variants?.featurePrompt.trim() || "";
-    const featurePrompt =
-      variants?.featurePrompt.trim() ||
-      stripIdentityTagsForFeaturePrompt(fallback) ||
-      fallback ||
-      namePrompt;
-    variants = { namePrompt, featurePrompt };
-    content = namePrompt;
+  // Read the saved template, not a hard-coded abbreviated character caption.
+  const selectedTemplate = resolveModePrompt(mode,
+    safeTemplateVersion === "v5" ? settings.reversePromptTemplates : settings.reversePromptTemplatesV45,
+    settings.visionSystemPrompt, builtInTemplates);
+  const protocol = reverseTemplateProtocol(selectedTemplate, mode, knownCharacter);
+  const effectiveSystem = systemPrompt + (protocol ? "\n\n" + protocol.instruction : "");
+  let feedback = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const contentForAttempt = feedback ? [...firstUserContent, {type:"text", text:
+      `上次结果未通过模板校验：${feedback}。请重新对照同一图片输出完整结果。仅修正格式、数量和比例；不要新增图中不可见内容。`}] : firstUserContent;
+    const result = await callVisionApi(effectiveSystem, contentForAttempt,
+      knownCharacter ? 7000 : 4000,
+      `AI 反推 · ${safeTemplateVersion} · ${mode} · ${scopeLabel}`, true);
+    if (!result.ok) return {ok:false,message:`反推失败：${result.message}`};
+    try {
+      if (protocol) return {ok:true,...protocol.parse(result.content ?? ""),message:"反推成功"};
+      const parsed = parsePromptVariantResponse(result.content ?? "", knownCharacter);
+      const outputs = knownCharacter ? [parsed.variants?.namePrompt,parsed.variants?.featurePrompt] : [parsed.primary];
+      if(outputs.some(value=>!value?.trim() || modeNeedsRepair(mode,value)))
+        throw Error("输出缺少完整结果或不符合所选模式；网络角色的两个版本均需符合模板");
+      return {ok:true,prompt:parsed.primary,variants:parsed.variants,message:"反推成功"};
+    } catch(error) {feedback=error instanceof Error ? error.message : String(error);}
   }
-  return { ok: true, prompt: content, variants, message: "反推成功" };
+  return {ok:false,message:`反推未通过模板校验，已保留原提示词：${feedback}`};
 }
 
 const CJK_RE = /[一-鿿぀-ゟ゠-ヿ]/;
@@ -3426,181 +3471,6 @@ function extractJsonObject(text: string): any | null {
       return null;
     }
   }
-}
-
-function normalizeComicTarget(value: ComicDesiredPanelCount): number | null {
-  if (typeof value === "number" && Number.isFinite(value) && value > 0)
-    return Math.min(500, Math.round(value));
-  return null;
-}
-
-function inferPanelCountFromRanges(script: string): number | null {
-  const ends = [...script.matchAll(/(\d+)\s*[-~]\s*(\d+)/g)]
-    .map((match) => Number(match[2]))
-    .filter(Number.isFinite);
-  if (!ends.length) return null;
-  return Math.min(500, Math.max(...ends));
-}
-
-function fallbackComicPanelsV2(
-  script: string,
-  desiredPanelCount: ComicDesiredPanelCount = "auto",
-) {
-  const panels: Array<{
-    narration: string;
-    cnPrompt: string;
-    contextSummary: string;
-  }> = [];
-  const lines = script
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  for (const line of lines) {
-    const range = line.match(/^(\d+)\s*[-~]\s*(\d+)\s*[.。:：、]?\s*(.+)$/);
-    if (!range) continue;
-    const start = Number(range[1]);
-    const end = Number(range[2]);
-    const desc = range[3].trim();
-    if (
-      !Number.isFinite(start) ||
-      !Number.isFinite(end) ||
-      end < start ||
-      end - start > 1000
-    )
-      continue;
-    for (let i = start; i <= end; i += 1) {
-      panels.push({
-        narration: desc,
-        cnPrompt: `第 ${i} 格：${desc}。补足镜头动作、场景、人物状态、构图、情绪和连续性。`,
-        contextSummary: desc.slice(0, 180),
-      });
-    }
-  }
-  if (panels.length > 0) return panels;
-
-  const target = normalizeComicTarget(desiredPanelCount);
-  const chunks = script
-    .split(/(?<=[。！？!?])\s*/)
-    .map((x) => x.trim())
-    .filter(Boolean);
-  const source = chunks.length ? chunks : [script.trim()];
-  const count = target ?? source.length;
-  for (let i = 0; i < count; i += 1) {
-    const chunk =
-      source[
-        Math.min(
-          source.length - 1,
-          Math.floor((i / Math.max(1, count)) * source.length),
-        )
-      ] ?? script.trim();
-    panels.push({
-      narration: chunk,
-      cnPrompt: `第 ${i + 1} 格：${chunk}。设计成独立漫画分镜，包含镜头景别、人物动作、场景细节、构图和情绪递进。`,
-      contextSummary: chunk.slice(0, 180),
-    });
-  }
-  return panels;
-}
-
-async function analyzeComicScriptV2(
-  request: ComicAnalyzeRequest,
-): Promise<ComicAnalyzeResult> {
-  const text = request.script.trim();
-  if (!text) return { ok: false, message: "请先输入漫画故事或分镜文本。" };
-  const settings = getSettings();
-  const targetCount =
-    normalizeComicTarget(request.desiredPanelCount) ??
-    inferPanelCountFromRanges(text);
-  const localPanels = fallbackComicPanelsV2(
-    text,
-    targetCount ?? request.desiredPanelCount,
-  );
-  if (!settings.convertApiKey.trim() || !settings.convertApiUrl.trim()) {
-    const referenceText =
-      request.referencePrompts?.filter(Boolean).join("\n") || "";
-    return {
-      ok: true,
-      message: "未配置转换 API，已使用本地规则解析分镜。",
-      title: "未命名漫画项目",
-      globalPrompt: text,
-      globalCharacterSetting: referenceText,
-      continuityBible: "",
-      panels: localPanels,
-    };
-  }
-
-  const referenceText =
-    request.referencePrompts?.filter(Boolean).join("\n") || "(none)";
-  const systemPrompt = [
-    settings.comicAnalyzePromptTemplate?.trim() || COMIC_ANALYZE_SYSTEM_PROMPT,
-    targetCount
-      ? `Target panel count: ${targetCount}. Keep the final panels as close to this count as possible.`
-      : "Panel count: auto.",
-    `Later prompt mode: ${request.mode}. Make each panel detailed enough for that mode.`,
-    "Use the reference-image notes below to build the global character / scene / object setting.",
-    "Safety: keep all panels non-explicit, non-gory, and suitable for general image generation.",
-  ].join("\n\n");
-  const result = await callConvertApi(
-    systemPrompt,
-    [
-      "用户故事：",
-      text,
-      "",
-      "参考图反推 / 用户说明：",
-      referenceText,
-      "",
-      "请只返回 JSON。字段：title, globalPrompt, globalCharacterSetting, continuityBible, panels。panels 每项必须包含 narration, cnPrompt, contextSummary；narration 是该镜对应的小说/字幕原文片段，cnPrompt 是可用于生图的画面描述。",
-    ].join("\n"),
-    4000,
-    "漫画拆分镜",
-  );
-  if (!result.ok) {
-    return {
-      ok: true,
-      message: `AI 拆分失败，已回退本地解析：${result.message}`,
-      title: "未命名漫画项目",
-      globalPrompt: text,
-      globalCharacterSetting:
-        request.referencePrompts?.filter(Boolean).join("\n") || "",
-      continuityBible: "",
-      panels: localPanels,
-    };
-  }
-
-  const parsed = extractJsonObject(result.content ?? "");
-  const panels = (Array.isArray(parsed?.panels) ? parsed.panels : [])
-    .map((p: any) => ({
-      narration: String(
-        p?.narration ?? p?.originalText ?? p?.sourceText ?? p?.text ?? "",
-      ).trim(),
-      cnPrompt: String(p?.cnPrompt ?? p?.prompt ?? "").trim(),
-      contextSummary: String(p?.contextSummary ?? p?.summary ?? "").trim(),
-    }))
-    .filter((p: any) => p.cnPrompt);
-  const finalPanels =
-    panels.length > 0 &&
-    (!targetCount ||
-      panels.length >= Math.max(1, Math.floor(targetCount * 0.6)))
-      ? panels
-      : localPanels;
-  return {
-    ok: true,
-    message: `已拆分 ${finalPanels.length} 个分镜。`,
-    title: String(parsed?.title ?? "未命名漫画项目").trim(),
-    globalPrompt: String(parsed?.globalPrompt ?? text).trim(),
-    globalCharacterSetting:
-      String(parsed?.globalCharacterSetting ?? "").trim() ||
-      request.referencePrompts?.filter(Boolean).join("\n") ||
-      "",
-    continuityBible: String(parsed?.continuityBible ?? "").trim(),
-    panels: finalPanels,
-  };
-}
-
-export async function analyzeComicScript(
-  request: ComicAnalyzeRequest,
-): Promise<ComicAnalyzeResult> {
-  return analyzeComicScriptV2(request);
 }
 
 export async function convertComicPanels(
@@ -3991,6 +3861,13 @@ export async function generateComicPanel(
             request.localNegativePrompt,
           ),
   };
+  if (getSettings().imageProvider === 'openai-images') {
+    if (request.inheritPreviousFrame || request.references.some(ref=>ref.useForGeneration!==false && Boolean(ref.base64)))
+      return {ok:false,items:[],message:'兼容漫画接口未接入参考图与前帧继承；请先取消这些输入，未发送生成请求。'};
+    try {
+      return await generateCompatibleComicCandidate({...request,preciseReferences:[]}, new AbortController().signal);
+    } catch(error) { return {ok:false,items:[],message:error instanceof Error?error.message:String(error)}; }
+  }
   const extras = comicReferencesToExtras(request);
   // Ensure the comic's history group UP FRONT so panels are saved INTO its disk
   // subfolder (outputDir/<date>/<group>/) and tagged with its groupId at save
@@ -4027,9 +3904,26 @@ export async function generateComicPanel(
   return result;
 }
 
-export async function generateTagComicCandidate(
-  request: TagComicGenerateRequest,
+const comicRuns=new Map<string,{controller:AbortController;done:Promise<void>}>();
+export async function waitTagComicGeneration(runId:string){await comicRuns.get(runId)?.done;}
+export function cancelTagComicGeneration(runId:string){
+  const owned=comicRuns.get(runId);owned?.controller.abort(Error('漫画任务已停止'));
+  return {ok:true,requested:Boolean(owned)};
+}
+export async function generateTagComicCandidate(request:TagComicGenerateRequest):Promise<GenerateResult>{
+  const runId=request.runId??crypto.randomUUID();
+  if(typeof runId!=='string'||!/^[a-zA-Z0-9_-]{1,160}$/.test(runId)||comicRuns.has(runId))return {ok:false,items:[],message:'漫画任务标识无效或该任务已有请求进行中'};
+  const controller=new AbortController();let settled!:()=>void;const done=new Promise<void>(resolve=>settled=resolve);comicRuns.set(runId,{controller,done});
+  try{return await generateTagComicCandidateRequest(request,controller.signal);}
+  catch(error){return {ok:false,items:[],message:error instanceof Error?error.message:String(error)};}
+  finally{if(comicRuns.get(runId)?.controller===controller)comicRuns.delete(runId);settled();}
+}
+async function generateTagComicCandidateRequest(
+  request: TagComicGenerateRequest, signal:AbortSignal,
 ): Promise<GenerateResult> {
+  // Bind the selected provider before asynchronous file preparation or authorization.
+  if (request.imageServiceBinding) assertComicImageBinding(request.imageServiceBinding);
+  if (getSettings().imageProvider === 'openai-images') return generateCompatibleComicCandidate(request,signal);
   const params: GenerateParams = {
     ...request.params,
     fileNamePrefix:
@@ -4038,6 +3932,11 @@ export async function generateTagComicCandidate(
     stylePrompt: "",
     negativePrompt: request.globalNegativePrompt,
   };
+  let preciseReferences: PreciseReferenceItem[];
+  try { preciseReferences = await readComicReferences(request, tagComicReferenceRoot(request.projectId)); }
+  catch(error) { return {ok:false,items:[],message:error instanceof Error?error.message:String(error)}; }
+  signal.throwIfAborted();
+  const beforeSubmit=await authorizeAgentComicRequest(request);signal.throwIfAborted();
   const historyGroup = ensureHistoryGroup(
     request.projectTitle,
     request.historyGroupId,
@@ -4046,51 +3945,42 @@ export async function generateTagComicCandidate(
     groupId: historyGroup.id,
     folderName: sanitizeGroupFolderName(historyGroup.name),
   };
-  const preciseReferences: PreciseReferenceItem[] = [];
-  for (const reference of request.preciseReferences ?? []) {
-    try {
-      const filePath = path.resolve(reference.filePath);
-      const root = tagComicReferenceRoot(request.projectId);
-      if (!isInsideDir(filePath, root)) continue;
-      const buffer = await fs.readFile(filePath);
-      if (!isImageBuffer(buffer)) continue;
-      preciseReferences.push({
-        base64: buffer.toString("base64"),
-        type: reference.type,
-        strength: reference.strength,
-        fidelity: reference.fidelity,
-        informationExtracted: reference.informationExtracted,
-      });
-    } catch {
-      // A moved/deleted project resource is ignored; the renderer keeps the
-      // selection visible so the user can replace it deliberately.
-    }
-  }
   const result = await generateImage(
     params,
     { vibeImages: [], charCaptions: [], preciseReferences },
-    { groupOverride },
+    { groupOverride,signal,beforeSubmit:async()=>{
+      if(request.imageServiceBinding)assertComicImageBinding(request.imageServiceBinding);
+      await beforeSubmit?.();
+      if(request.imageServiceBinding)assertComicImageBinding(request.imageServiceBinding);
+    } },
   );
-  if (result.ok && result.items.length > 0) {
-    result.items = result.items.map((item) => {
-      const updated = updateHistoryItem(item.id, {
-        feature: "comic",
-        groupId: historyGroup.id,
-        comicProjectId: request.projectId,
-        comicPanelNo: request.panelIndex,
-      });
-      return (
-        updated ?? {
-          ...item,
-          feature: "comic",
-          groupId: historyGroup.id,
-          comicProjectId: request.projectId,
-          comicPanelNo: request.panelIndex,
-        }
-      );
-    });
-  }
+  annotateComicImages(result,request,historyGroup.id);
   return result;
+}
+
+/** Preserve durable outputs even when metadata annotation fails or upstream returns partial success. */
+function annotateComicImages(result:GenerateResult,request:TagComicGenerateRequest,groupId:string){
+  let failed=false;
+  result.items=result.items.map(item=>{
+    const fields={feature:'comic' as const,groupId,comicProjectId:request.projectId,comicPanelNo:request.panelIndex};
+    try {return updateHistoryItem(item.id,fields)??{...item,...fields};}
+    catch {failed=true;return {...item,...fields};}
+  });
+  if(failed){result.ok=false;result.message='漫画图片已保存，历史标注未完成；请检查历史存储。没有自动重新生成。';}
+}
+async function generateCompatibleComicCandidate(request:TagComicGenerateRequest,signal:AbortSignal):Promise<GenerateResult>{
+  const settings=structuredClone(getSettings());
+  const binding=request.imageServiceBinding??currentComicImageBinding();
+  assertComicImageBinding(binding);
+  const input=compatibleComicInput(settings,request);signal.throwIfAborted();
+  const guard=await authorizeAgentComicRequest(request);signal.throwIfAborted();
+  assertComicImageBinding(binding);
+  const group=ensureHistoryGroup(request.projectTitle,request.historyGroupId);
+  const result=await generateConfiguredImages({prompt:input.prompt,n:1,historyGroupId:group.id,fileNamePrefix:request.params.fileNamePrefix||`comic-${request.panelIndex}`},{
+    signal,size:input.size,expectedProvider:bindAgentImageProvider(settings),
+    beforeSubmit:async()=>{signal.throwIfAborted();assertComicImageBinding(binding);await guard?.();signal.throwIfAborted();assertComicImageBinding(binding);},
+  });
+  annotateComicImages(result,request,group.id);return result;
 }
 
 function safeComicProjectId(projectId: unknown): string {
@@ -4115,16 +4005,13 @@ export async function importTagComicReference(
 ): Promise<TagComicReferenceImportResult> {
   try {
     const sourcePath = path.resolve(String(request?.sourcePath ?? ""));
-    const buffer = await fs.readFile(sourcePath);
-    if (!isImageBuffer(buffer)) {
-      return { ok: false, message: "Unsupported image file." };
-    }
+    const {bytes:buffer,extension:ext} = await readComicImage(sourcePath);
     const root = tagComicReferenceRoot(request.projectId);
     await fs.mkdir(root, { recursive: true });
     const id = crypto.randomUUID();
-    const ext = detectExt(buffer);
     const filePath = path.join(root, `${id}.${ext}`);
-    await fs.writeFile(filePath, buffer);
+    await fs.writeFile(filePath, buffer, {flag:'wx'});
+    if(!(await fs.readFile(filePath)).equals(buffer))throw Error('参考图写入读回不一致');
     return {
       ok: true,
       message: "Reference imported.",
@@ -4156,11 +4043,14 @@ export async function deleteTagComicReference(
   try {
     if (!/^[a-f0-9-]{20,}$/i.test(referenceId)) return { ok: false };
     const root = tagComicReferenceRoot(projectId);
-    const names = await fs.readdir(root).catch(() => []);
+    const realRoot=await fs.realpath(root).catch(error=>{if(error.code==='ENOENT')return null;throw error;});
+    if(!realRoot)return {ok:true};
+    if(!isInsideDir(realRoot,await fs.realpath(app.getPath('userData'))))return {ok:false};
+    const names = await fs.readdir(realRoot);
     await Promise.all(
       names
         .filter((name) => name.startsWith(`${referenceId}.`))
-        .map((name) => fs.unlink(path.join(root, name)).catch(() => undefined)),
+        .map((name) => fs.unlink(path.join(realRoot!, name)).catch(error=>{if(error.code!=='ENOENT')throw error;})),
     );
     return { ok: true };
   } catch {
@@ -4245,100 +4135,14 @@ export async function clearArtistLabTemporary(): Promise<{ ok: boolean }> {
   return { ok: true };
 }
 
-export async function exportTagComicSelectedZip(
-  request: TagComicExportZipRequest,
-): Promise<{ ok: boolean; message: string; path?: string }> {
-  const project = request?.project;
-  if (
-    !project ||
-    project.schemaVersion !== 2 ||
-    !Array.isArray(project.panels)
-  ) {
-    return { ok: false, message: "漫画项目格式无效。" };
-  }
-  const selected = [...project.panels]
-    .sort((a, b) => a.index - b.index)
-    .map((panel) => ({
-      panel,
-      candidate: panel.candidates.find(
-        (item) => item.id === panel.selectedCandidateId,
-      ),
-    }))
-    .filter((item) => Boolean(item.candidate?.outputPath));
-  if (!selected.length)
-    return { ok: false, message: "请先为至少一个分镜选择主图。" };
-
-  const outputRoot = path.resolve(getSettings().outputDir);
-  const result = await dialog.showSaveDialog({
-    title: "导出漫画主图 ZIP",
-    defaultPath: `${safeZipName(project.title)}.zip`,
-    filters: [{ name: "ZIP 压缩包", extensions: ["zip"] }],
-  });
-  if (result.canceled || !result.filePath)
-    return { ok: false, message: "已取消导出。" };
-
-  const zip = new JSZip();
-  const images = zip.folder("images");
-  const manifest: Array<Record<string, unknown>> = [];
-  let imageCount = 0;
-  for (const { panel, candidate } of selected) {
-    if (!candidate || !isInsideDir(candidate.outputPath, outputRoot)) continue;
-    try {
-      const buffer = await fs.readFile(candidate.outputPath);
-      if (!isImageBuffer(buffer)) continue;
-      const fileName = `${String(panel.index).padStart(3, "0")}.${detectExt(buffer)}`;
-      images?.file(fileName, buffer);
-      manifest.push({
-        index: panel.index,
-        title: panel.title,
-        prompt: panel.prompt,
-        selectedCandidateId: candidate.id,
-        file: `images/${fileName}`,
-      });
-      imageCount += 1;
-    } catch {
-      // Missing or moved outputs are skipped; only valid selected main images ship.
-    }
-  }
-  if (!imageCount)
-    return { ok: false, message: "选中的主图已被移动或删除，无法导出。" };
-
-  zip.file(
-    "project.json",
-    JSON.stringify(
-      {
-        schemaVersion: 2,
-        title: project.title,
-        globalStylePrompt: project.globalStylePrompt,
-        globalNegativePrompt: project.globalNegativePrompt,
-        panels: manifest,
-      },
-      null,
-      2,
-    ),
-  );
-  zip.file(
-    "prompts.md",
-    [
-      `# ${project.title || "Comic Project"}`,
-      "",
-      ...manifest.flatMap((item) => [
-        `## ${String(item.index).padStart(3, "0")} · ${item.title || "Panel"}`,
-        "",
-        String(item.prompt || ""),
-        "",
-      ]),
-    ].join("\n"),
-  );
-  await fs.writeFile(
-    result.filePath,
-    await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }),
-  );
-  return {
-    ok: true,
-    message: `已导出 ${imageCount} 张当前主图。`,
-    path: result.filePath,
-  };
+export async function exportTagComicSelectedZip(request:TagComicExportZipRequest):Promise<{ok:boolean;message:string;path?:string}>{
+ try{
+  const built=await buildComicSelectedZip(request?.project,path.resolve(getSettings().outputDir));
+  const result=await dialog.showSaveDialog({title:'导出漫画主图 ZIP',defaultPath:`${safeZipName(request.project.title)}.zip`,filters:[{name:'ZIP 压缩包',extensions:['zip']}]});
+  if(result.canceled||!result.filePath)return {ok:false,message:'已取消导出。'};
+  await writeComicZip(result.filePath,built.bytes,true);
+  return {ok:true,message:`已导出 ${built.imageCount} 张当前主图。`,path:result.filePath};
+ }catch(error){return {ok:false,message:error instanceof Error?error.message:String(error)};}
 }
 
 function safeZipName(name: string) {
@@ -4348,23 +4152,6 @@ function safeZipName(name: string) {
       .replace(/\s+/g, "_")
       .slice(0, 80) || "comic-project"
   );
-}
-
-// Strict image-magic check (detectExt() defaults to "png" and is NOT a validator).
-function isImageBuffer(buffer: Buffer): boolean {
-  if (buffer.length < 6) return false;
-  if (
-    buffer
-      .subarray(0, 8)
-      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
-  )
-    return true; // png
-  if (buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff])))
-    return true; // jpeg
-  if (buffer.subarray(0, 4).toString("ascii") === "RIFF") return true; // webp
-  const gif = buffer.subarray(0, 6).toString("ascii");
-  if (gif === "GIF87a" || gif === "GIF89a") return true;
-  return false;
 }
 
 // True only when `child` resolves to a path inside `parent` (blocks `..`
@@ -4379,6 +4166,7 @@ export async function convertPromptText(
   mode: "tags" | "natural" | "mixed" = "tags",
   knownCharacter = false,
   templateVersion: "v4.5" | "v5" = "v5",
+  assistant?: PromptEditRequest,
 ): Promise<{
   ok: boolean;
   result?: string;
@@ -4387,6 +4175,14 @@ export async function convertPromptText(
   message: string;
 }> {
   const settings = getSettings();
+  let assistance: ReturnType<typeof preparePromptAssistance> | undefined;
+  if (assistant !== undefined) {
+    try { assistance=preparePromptAssistance(chineseText,assistant,settings); }
+    catch(error) {return {ok:false,message:error instanceof Error?error.message:String(error)};}
+    // A single edited positive prompt, not the dual-character variant route.
+    knownCharacter=false;
+  }
+  const auditText=assistance?.auditText ?? chineseText;
   const safeTemplateVersion = templateVersion === "v4.5" ? "v4.5" : "v5";
   const baseSystemPrompt = resolveModePrompt(
     mode,
@@ -4410,6 +4206,7 @@ export async function convertPromptText(
     ),
     systemPrompt: [
       baseSystemPrompt,
+      assistance?.systemSuffix,
       knownCharacterRuntimeInstruction(
         mode,
         "convert",
@@ -4421,7 +4218,7 @@ export async function convertPromptText(
       .join("\n\n"),
   });
   const userText = buildConvertUserText(
-    chineseText,
+    assistance?.userText ?? chineseText,
     mode,
     "",
     knownCharacter,
@@ -4438,8 +4235,8 @@ export async function convertPromptText(
       const reply=await callConvertApi(internalSystem+correction,userText+(attempt?`\n上次验收问题：${problems.join('；')}。只修正这些问题并保留用户明确要求及已合格单元。不得删除事实换取凑数。\n上一版：${previous}`:''),7000,`提示词转换 · mixed · ${attempt?'校正'+attempt:'模板验收'}`,true,false);
       if(!reply.ok)return {ok:false,message:'转换失败：'+reply.message};
       try{
-        previous=delta?patchMixedEnvelope(previous,reply.content??''):reply.content??'';
-        const audit=auditMixedEnvelope(previous,chineseText,contract);problems=audit.issues;stats=audit.stats;
+        previous=normalizeMixedEnvelope(delta?patchMixedEnvelope(previous,reply.content??''):reply.content??'');
+        const audit=auditMixedEnvelope(previous,auditText,contract);problems=audit.issues;stats=audit.stats;
         if(!problems.length)return {ok:true,result:audit.prompt,validation:audit.stats,message:`转换成功：${audit.stats.total}单元，Tag ${audit.stats.tags} / 自然语言 ${audit.stats.natural}`};
       }catch(e){problems=[e instanceof Error?e.message:String(e)];}
     }
@@ -4465,11 +4262,11 @@ export async function convertPromptText(
       const problems:string[]=[];
       if(count<min||count>max)problems.push(`有 ${count} 个逗号分隔单元，模板要求 ${min}–${max} 个`);
       if(/[\u4e00-\u9fff]/.test(value))problems.push('只输出英文提示词，删除中文前言、说明和标题');
-      if(/俯视(?:机位|视角|镜头)|从上(?:方|往下)|from above/i.test(chineseText)&&(!/\bfrom above\b/.test(base)||/\b(?:from below|low angle)\b/.test(base)))problems.push('用户指定俯视机位：必须是 from above，删除 from below 和 low angle；人物仰视镜头只用 looking up，不改变机位');
+      if(/俯视(?:机位|视角|镜头)|从上(?:方|往下)|from above/i.test(auditText)&&(!/\bfrom above\b/.test(base)||/\b(?:from below|low angle)\b/.test(base)))problems.push('用户指定俯视机位：必须是 from above，删除 from below 和 low angle；人物仰视镜头只用 looking up，不改变机位');
       if(/holding (?:the )?umbrella with one hand/i.test(value)&&/both hands (?:gripping|holding)/i.test(value))problems.push('一只手持伞与双手握伞互斥，请只保留一种不违背用户要求的握持方式');
 
       if(/\b(?:from above|high angle|overhead view)\b/.test(base)&&/\b(?:from below|low angle|worm.s eye)\b/.test(base))problems.push('俯视机位与仰视机位互斥；角色抬头 looking up 不等于镜头 from below，请保留用户要求的机位');
-      if(/\bText\s*:/i.test(value)&&!/文字|字样|写着|写上|字幕|标语|牌上|text|lettering|saying|reads/i.test(chineseText))problems.push('用户未要求画面文字，请去掉 Text: 与新增文字内容，不要添加标语');
+      if(/\bText\s*:/i.test(value)&&!/文字|字样|写着|写上|字幕|标语|牌上|text|lettering|saying|reads/i.test(auditText))problems.push('用户未要求画面文字，请去掉 Text: 与新增文字内容，不要添加标语');
       return problems;
     };
     let problems=issues();
@@ -4536,6 +4333,8 @@ export async function generateImage(
     ignoreActiveGroup?: boolean;
     groupOverride?: { groupId: string; folderName: string };
     temporary?: boolean;
+    signal?: AbortSignal;
+    beforeSubmit?: NativeSubmissionGuard;
     onPreview?: GenerationPreviewCallback;
   },
 ): Promise<GenerateResult> {
@@ -4555,6 +4354,9 @@ export async function generateImage(
       `cfg=${params.cfgScale} vibe=${extras?.vibeImages?.length ?? 0} precise=${extras?.preciseReferences?.length ?? 0}`,
   );
   const job = beginJob();
+  const abortOwned=()=>job.controller.abort(saveOptions?.signal?.reason);
+  saveOptions?.signal?.addEventListener('abort',abortOwned,{once:true});
+  if(saveOptions?.signal?.aborted)abortOwned();
 
   // "fixed" mode honors the chosen seed; "random" (or seed<=0) rolls a new one.
   const useFixedSeed = params.seedMode !== "random" && params.seed >= 0;
@@ -4563,10 +4365,12 @@ export async function generateImage(
     : crypto.randomInt(1, 2_147_483_647);
 
   try {
+    job.controller.signal.throwIfAborted();
     const preparedExtras = await prepareExtras(
       params,
       extras,
       job.controller.signal,
+      saveOptions?.beforeSubmit,
     );
     const payload = buildPayload(params, actualSeed, preparedExtras);
     let buffers: Buffer[];
@@ -4575,6 +4379,7 @@ export async function generateImage(
         payload,
         job.controller.signal,
         saveOptions?.onPreview,
+        saveOptions?.beforeSubmit,
       );
     } catch (error: any) {
       if (
@@ -4592,6 +4397,7 @@ export async function generateImage(
         pipePayload,
         job.controller.signal,
         saveOptions?.onPreview,
+        saveOptions?.beforeSubmit,
       );
     }
     if (buffers.length === 0)
@@ -4626,6 +4432,7 @@ export async function generateImage(
   } catch (error: any) {
     return handleGenerateError(error, "图片生成失败");
   } finally {
+    saveOptions?.signal?.removeEventListener('abort',abortOwned);
     job.end();
   }
 }
@@ -4722,8 +4529,18 @@ export async function generateI2I(
 // Batch redraw = img2img on an EXPLICIT source image (not the workbench image),
 // saved into a named history group (created if missing) on disk + in history.
 // Driven serially by the 图片批量重绘 tool, one call per image.
-export async function redrawImage(
+const batchRuns=new Map<string,{controller:AbortController;done:Promise<void>}>();
+export async function waitBatchRedraw(runId:string){await batchRuns.get(runId)?.done;}
+export function cancelBatchRedraw(runId:string){const owned=batchRuns.get(runId);owned?.controller.abort(Error('批量重绘已停止'));return {ok:true,requested:Boolean(owned)};}
+export async function redrawImage(request:BatchRedrawRequest):Promise<GenerateResult>{
+ const id=request.runId??crypto.randomUUID();if(typeof id!=='string'||!/^[a-zA-Z0-9_-]{1,160}$/.test(id)||batchRuns.has(id))return {ok:false,items:[],message:'批量重绘运行标识无效或正在提交'};
+ const controller=new AbortController();let release!:()=>void;const done=new Promise<void>(r=>release=r);batchRuns.set(id,{controller,done});
+ try{prepareBatchImageService([request]);return await redrawImageRequest(request,controller.signal);}catch(error){return handleGenerateError(error,"批量重绘失败");}finally{if(batchRuns.get(id)?.controller===controller)batchRuns.delete(id);release();}
+}
+
+async function redrawImageRequest(
   request: BatchRedrawRequest,
+  signal: AbortSignal,
 ): Promise<GenerateResult> {
   const params = normalizeGenerateParams({
     ...request.params,
@@ -4738,16 +4555,18 @@ export async function redrawImage(
     return { ok: false, message: "该图片缺少提示词。", items: [] };
 
   const job = beginJob();
+  const abortOwned=()=>job.controller.abort(signal.reason);
+  signal.addEventListener('abort',abortOwned,{once:true});if(signal.aborted)abortOwned();
   const actualSeed =
     params.seedMode !== "random" && params.seed >= 0
       ? params.seed
       : crypto.randomInt(1, 2_147_483_647);
   try {
-    const preparedExtras = await prepareExtras(
-      params,
-      request.extras,
-      job.controller.signal,
-    );
+    job.controller.signal.throwIfAborted();
+    prepareBatchImageService([request]);
+    const binding=request.imageServiceBinding??currentBatchImageBinding();assertBatchImageBinding(binding);
+    const guard=await authorizeAgentBatchRequest(request);
+    const beforeSubmit=async()=>{job.controller.signal.throwIfAborted();assertBatchImageBinding(binding);await guard?.();assertBatchImageBinding(binding);job.controller.signal.throwIfAborted();};
     const srcBuffer = Buffer.from(
       stripBase64Prefix(request.imageBase64),
       "base64",
@@ -4757,6 +4576,12 @@ export async function redrawImage(
       params.width,
       params.height,
     ).toString("base64");
+    const preparedExtras = await prepareExtras(
+      params,
+      request.extras,
+      job.controller.signal,
+      beforeSubmit,
+    );
     const strength = clamp01(request.strength, 0.4);
     const group = ensureHistoryGroup(request.groupName);
     const groupOverride = {
@@ -4778,6 +4603,7 @@ export async function redrawImage(
       buffers = await postGenerateImage(
         applyI2I(buildPayload(params, actualSeed, preparedExtras)),
         job.controller.signal,
+        beforeSubmit,
       );
     } catch (error: any) {
       if (!shouldRetryCharCaptionsAsPipe(error, params, preparedExtras))
@@ -4785,6 +4611,7 @@ export async function redrawImage(
       buffers = await postGenerateImage(
         applyI2I(buildPayload(params, actualSeed, preparedExtras, "pipe")),
         job.controller.signal,
+        beforeSubmit,
       );
     }
     if (buffers.length === 0)
@@ -4810,6 +4637,7 @@ export async function redrawImage(
   } catch (error: any) {
     return handleGenerateError(error, "批量重绘失败");
   } finally {
+    signal.removeEventListener('abort',abortOwned);
     job.end();
   }
 }
@@ -4820,6 +4648,7 @@ export async function inpaintImage(
   maskBase64: string,
   strength = 1,
   noise = 0,
+  region?: import("../../src/focused-inpaint").InpaintRegion,
 ): Promise<GenerateResult> {
   params = normalizeGenerateParams(params);
   const token = getToken();
@@ -4835,7 +4664,10 @@ export async function inpaintImage(
 
   try {
     const { buffer } = await readWorkbenchImage();
-    const preparedAssets = prepareInpaintAssets(buffer, maskBase64, params);
+    const focused = region ? prepareFocusedInpaintInput(bufferToPng(buffer),Buffer.from(stripBase64Prefix(maskBase64),'base64'),region) : null;
+    const preparedAssets = focused
+      ? prepareInpaintAssets(focused.crop,focused.cropMask.toString('base64'),focused.size)
+      : prepareInpaintAssets(buffer, maskBase64, params);
     const actualSeed =
       params.seedMode !== "random" && params.seed >= 0
         ? params.seed
@@ -4900,16 +4732,17 @@ export async function inpaintImage(
       throw lastError ?? new Error("重绘请求未返回结果。");
     if (buffers.length === 0)
       return { ok: false, message: "重绘成功但无图片返回。", items: [] };
-    const outputBuffers = compositeInpaintBuffers(buffers, preparedAssets);
+    let outputBuffers = compositeInpaintBuffers(buffers, preparedAssets);
+    if(focused) outputBuffers=outputBuffers.map(patch=>compositeFocusedPatch(patch,focused,resizeImageBufferToPng));
     const items = await saveBuffers(
       outputBuffers,
-      chosen.historyParams,
+      focused ? {...chosen.historyParams,width:focused.source.width,height:focused.source.height} : chosen.historyParams,
       actualSeed,
       "inpaint",
       chosen.model,
     );
     void refreshStoredAccount();
-    const resizedNote = preparedAssets.resized
+    const resizedNote = !focused && preparedAssets.resized
       ? `重绘输出尺寸 ${preparedAssets.originalWidth}×${preparedAssets.originalHeight} → ${preparedAssets.width}×${preparedAssets.height}。`
       : "";
     return {
@@ -5187,6 +5020,11 @@ function looksLikeReferenceError(detail: string): boolean {
 }
 
 function handleGenerateError(error: any, prefix: string): GenerateResult {
+  if (error instanceof ImageSaveError) {
+    logError(prefix, error.message);
+    return { ok: false, message: error.message, items: error.items,
+      actualSeed: error.actualSeed, failureKind: "storage" };
+  }
   if (axios.isCancel(error) || error?.code === "ERR_CANCELED") {
     return {
       ok: false,

@@ -50,12 +50,15 @@ class LocalAgentRuntime private constructor(private val context: Context) {
     @Volatile private var auxiliary: Process? = null
     @Volatile private var cancelled = false
     @Volatile private var stopping = false
+    @Volatile private var stopRevision = 0L
     @Volatile private var portableLock: String? = null
     @Volatile private var launchUrl: String? = null
     private data class DownloadPlan(val token:String,val kind:String,val meta:JSONObject,val expires:Long,val reinstall:Boolean)
     private var downloadConsent:DownloadPlan?=null
     fun planDownload(kind:String,reinstall:Boolean):Map<String,Any?> {
-        synchronized(this){check(!busy && !stopping && child==null && portableLock==null);busy=true;downloadConsent=null}
+        // Metadata/consent planning does not modify runtime or stop the child.
+        // An Agent may approve its own update before Studio takes over.
+        synchronized(this){check(!busy && !stopping && portableLock==null);busy=true;downloadConsent=null}
         try {
             require(kind in listOf("component","official"));checkUpdates("both")
             val meta=JSONObject((update ?: seed()).toString());validate(meta)
@@ -63,7 +66,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
             if(kind=="official")check(!officialFailed && upstream==meta.getString("upstream")){"No compatible component for the official version"}
             val p=DownloadPlan(UUID.randomUUID().toString(),kind,meta,System.currentTimeMillis()+600000,reinstall)
             synchronized(this){downloadConsent=p}
-            return mapOf("token" to p.token,"bytes" to meta.getLong("bytes"),"version" to meta.getString("version"))
+            return mapOf("token" to p.token,"bytes" to meta.getLong("bytes"),"version" to meta.getString("version"),"sha256" to meta.getString("sha256"))
         } finally {busy=false}
     }
     private var browserHandoff: AgentBrowserHandoff? = null
@@ -104,12 +107,16 @@ class LocalAgentRuntime private constructor(private val context: Context) {
         "componentFailed" to componentFailed,"officialFailed" to officialFailed,
         "componentCheckedAt" to componentCheckedAt,"officialCheckedAt" to officialCheckedAt,
         "running" to (child?.isAlive == true && phase == "running"),
+        "stopRevision" to stopRevision,
         "installed" to active()?.optString("version"), "installedUpstream" to active()?.optString("upstream"),
         "official" to upstream, "candidate" to update?.optString("version"),
         "dataDirectory" to home.absolutePath, "backupDirectory" to backupRoot().absolutePath,
         "logs" to logs.toList(), "proposal" to proposal?.let { mapOf("token" to it.token,"version" to it.seed.getString("version"),"upstream" to it.seed.getString("upstream"),"kind" to it.kind) }
     )
     @Synchronized fun command(name: String, args: Map<String, Any?> = emptyMap()) {
+        args["expectedStopRevision"]?.let {
+            check(it is Number && it.toLong()==stopRevision) { "Agent was stopped after handoff; component operation cancelled" }
+        }
         check(!busy && !stopping && portableLock==null) { "Another Agent operation or backup is in progress" }
         require(Build.VERSION.SDK_INT >= 26 && Build.SUPPORTED_ABIS.contains("arm64-v8a")) { "Local Agent requires Android 8+ and ARM64" }
         if (name != "check") check(child == null) { "Stop Agent before changing runtime or data" }
@@ -377,9 +384,16 @@ class LocalAgentRuntime private constructor(private val context: Context) {
         val extra="panel-layout-store.js"
         val custom=File(installed,extra);val original=File(seeded,extra)
         val standard=baseStandard && (!custom.exists() || (custom.isFile && original.isFile && custom.readBytes().contentEquals(original.readBytes())))
-        val names=listOf("package.json","index.js","lib/client.js")+if(standard)(libraryNames+extra).map {"library/$it"} else emptyList()
+        val toolsNames=listOf("package.json","index.js")
+        val toolsInstalled=File(data,"profiles/node_modules/@langbai/dsh-studio-tools")
+        val toolsSeeded=File(slot,"opt/agent/plugins/studio-tools")
+        val standardTools=toolsNames.all { name ->
+            val user=File(toolsInstalled,name);val original=File(toolsSeeded,name)
+            user.isFile && original.isFile && user.readBytes().contentEquals(original.readBytes())
+        }
+        val names=listOf("package.json","index.js","lib/client.js")+(if(standard)(libraryNames+extra).map {"library/$it"} else emptyList())+(if(standardTools)toolsNames.map {"tools/$it"} else emptyList())
         val sources=names.associateWith { context.assets.open("agent-presentation/$it").use { input -> input.readBytes() } }
-        val hash=java.security.MessageDigest.getInstance("SHA-256").apply { update("presentation-library-disable-insert-v3".toByteArray()) }
+        val hash=java.security.MessageDigest.getInstance("SHA-256").apply { update("presentation-tools-disable-insert-v4".toByteArray()) }
         for((name,bytes) in sources){hash.update(name.toByteArray());hash.update(bytes)}
         val directory=File(root,"presentation/"+hash.digest().joinToString(""){"%02x".format(it)})
         // Content-addressed app files, never user-home, profiles, plugins or sessions.
@@ -389,7 +403,7 @@ class LocalAgentRuntime private constructor(private val context: Context) {
             check(target.readBytes().contentEquals(bytes)){"Presentation component checksum mismatch"}
         }
         val patch=File(directory,"presentation.patch.yml")
-        val content="- insert:\n    - id: studio-responsive\n      name: \"/studio-presentation/index.js\"\n" + if(standard) "- id: studio-library\n  disabled: true\n- insert:\n    - id: studio-library-managed\n      name: \"/studio-presentation/library/index.js\"\n" else ""
+        val content="- insert:\n    - id: studio-responsive\n      name: \"/studio-presentation/index.js\"\n" + (if(standard) "- id: studio-library\n  disabled: true\n- insert:\n    - id: studio-library-managed\n      name: \"/studio-presentation/library/index.js\"\n" else "") + (if(standardTools) "- id: studio-tools\n  disabled: true\n- insert:\n    - id: studio-tools-managed\n      name: \"/studio-presentation/tools/index.js\"\n" else "")
         if(!patch.exists())patch.writeText(content)
         check(patch.readText()==content){"Presentation patch checksum mismatch"}
         return directory
@@ -487,15 +501,17 @@ class LocalAgentRuntime private constructor(private val context: Context) {
         return AgentBrowserHandoff(openUrl()).also { browserHandoff=it }.url()
     }
     @Synchronized fun openUrl(): String { check(phase=="running" && child?.isAlive==true);return launchUrl ?: error("Agent is not ready") }
-    fun stop() {
+    fun stop(): Long {
         val owned=synchronized(this){
-            if(stopping)return
+            val revision=++stopRevision
+            if(stopping)return revision
             stopping=true;cancelled=true;val processes=listOfNotNull(child,auxiliary).distinct()
             browserHandoff?.close();browserHandoff=null
-            child=null;auxiliary=null;launchUrl=null;phase="stopped";processes
+            child=null;auxiliary=null;launchUrl=null;phase="stopped";Pair(revision,processes)
         }
-        try{downloader.cancel();for(process in owned)terminate(process);log("Agent stopped by user")}
+        try{downloader.cancel();for(process in owned.second)terminate(process);log("Agent stopped by user")}
         finally{stopping=false}
+        return owned.first
     }
     private fun terminate(process: Process) { if(process.isAlive){process.destroy();if(!process.waitFor(5,TimeUnit.SECONDS))process.destroyForcibly()} }
 }

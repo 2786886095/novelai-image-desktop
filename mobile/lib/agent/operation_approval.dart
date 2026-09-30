@@ -69,7 +69,16 @@ class AgentOperationApprovals {
     final item = _pending[session];
     if (item != null &&
         (item.data['kind'] == 'image' ||
-            item.data['tool'] == 'langbai_tasks')) {
+            item.data['tool'] == 'langbai_tasks' ||
+            item.data['parameters']?['action'] == 'comic.generation.start')) {
+      _finish(session, false);
+    }
+  }
+
+  void cancelOperation(String session, String action) {
+    final item = _pending[session];
+    if (item?.data['tool'] == 'langbai_software_action' &&
+        item?.data['parameters']?['action'] == action) {
       _finish(session, false);
     }
   }

@@ -1,5 +1,6 @@
 import 'unified_storage.dart';
 import 'dart:convert';
+import 'compatible_image_backup.dart';
 import 'dart:io';
 import 'dart:math';
 
@@ -159,6 +160,7 @@ class DataBackupService {
     'agent_always_allowed_tools_v1',
   };
   static const _apiSettingKeys = <String>{
+    'imageProvider', 'compatibleImage',
     'apiBaseUrl',
     'imageBaseUrl',
     'allowCustomEndpoint',
@@ -568,12 +570,15 @@ class DataBackupService {
     }
 
     if (requested.contains(DataBackupCategory.apiCredentials)) {
+      final image = await storage.readCompatibleApiState();
+      final imageConfig = Map<String,dynamic>.from(image['config'] as Map)..remove('enabled');
       final apiSettings = <String, dynamic>{
         for (final key in _apiSettingKeys)
           if (settingsJson.containsKey(key)) key: settingsJson[key],
         'visionApiKey': await storage.getVisionKey() ?? '',
         'convertApiKey': await storage.getConvertKey() ?? '',
         'agentApiKey': await storage.getAgentApiKey() ?? '',
+        ...exportImageSettings({'imageProvider': image['config']['enabled'] == true ? 'openai-images' : 'novelai', 'compatibleImage': imageConfig, 'imageApiKey': image['secret']}),
         'tagServerApiKey': await storage.getTagKey() ?? '',
         'baiduSecret': await storage.getBaiduSecret() ?? '',
       };
@@ -1740,7 +1745,14 @@ class DataBackupService {
       throw StateError(
           'Configuration overwrite requires a second confirmation.');
     }
+    final imageBefore = await storage.readCompatibleApiState();
     final bundle = await _loadArchive(filePath);
+    Map<String,dynamic>? imageBackup;
+    if (requested.contains(DataBackupCategory.apiCredentials)) {
+      final payload = _readJson(bundle, 'data/api-credentials.json');
+      if (payload is! Map || payload['settings'] is! Map) throw const FormatException('Backup has no valid API settings.');
+      imageBackup = readImageSettingsBackup(Map<String,dynamic>.from(payload['settings'] as Map));
+    }
     final portable = PortableProjects.inspect(
         bundle.archive, requested.map((c) => c.id).toSet());
     // No write is permitted until a complete rescue archive reaches disk.
@@ -1897,9 +1909,11 @@ class DataBackupService {
           : <String, dynamic>{};
       final merged = settings.toJson();
       for (final key in _apiSettingKeys) {
+        if (key == "imageProvider" || key == "compatibleImage") continue;
         if (api.containsKey(key)) merged[key] = api[key];
       }
       settings = AppSettings.fromJson(merged);
+
       if (json['token'] is String) {
         await storage.setToken(json['token'] as String);
       }
@@ -1921,7 +1935,11 @@ class DataBackupService {
       counters.imported += api.length + 1;
     }
 
-    await storage.setSettings(settings);
+    if (imageBackup != null) {
+      await storage.restoreCompatibleImageBackup(settings, imageBackup, imageBefore);
+    } else {
+      await storage.setSettings(settings);
+    }
     history.sort((left, right) => right.createdAt.compareTo(left.createdAt));
     await storage.writeHistory(history);
 

@@ -1,3 +1,4 @@
+vi.mock('./download-request',()=>({updateFetch:(...args:any[])=>globalThis.fetch(args[0],args[1])}));
 import {afterEach,it,expect,vi} from 'vitest';
 import {chooseComponent,checkHarnessUpdates} from './harness-update-check';
 import {isNewerBundle} from './harness-policy';

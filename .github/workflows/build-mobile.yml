@@ -65,6 +65,9 @@ jobs:
       - name: Prepare verified Android native executables
         working-directory: .
         run: node harness/android/prepare-native.mjs
+      - name: Install Agent presentation build dependencies
+        working-directory: .
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Fetch same-build runtime for separate component publication
         uses: actions/download-artifact@v4
         with:

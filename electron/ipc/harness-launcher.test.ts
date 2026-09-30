@@ -1,8 +1,8 @@
 import {beforeEach,describe,it,expect,vi} from 'vitest';
-const mock=vi.hoisted(()=>({language:'zh-CN',busy:true,stop:vi.fn(async()=>{}),show:vi.fn(),handlers:new Map<string,Function>()}));
-vi.mock('./harness-exit-dialog',()=>({showCenteredExitConfirmation:(_owner:unknown,options:unknown)=>mock.show(options)}));
-vi.mock('./store',()=>({getSetting:()=>mock.language,getSettings:()=>({}),setSetting:vi.fn()}));
-vi.mock('electron',()=>({app:{once:vi.fn(),getPath:()=>'/tmp/studio-test',getAppPath:()=>'/tmp/studio-test',isPackaged:false},dialog:{showMessageBox:mock.show},shell:{openExternal:vi.fn()},ipcMain:{handle:(key:string,fn:Function)=>mock.handlers.set(key,fn)}}));
+const mock=vi.hoisted(()=>({language:'zh-CN',theme:'light',systemDark:false,shownDark:false,busy:true,stop:vi.fn(async()=>{}),show:vi.fn(),handlers:new Map<string,Function>()}));
+vi.mock('./harness-exit-dialog',()=>({showCenteredExitConfirmation:(_owner:unknown,options:unknown,dark:boolean)=>{mock.shownDark=dark;return mock.show(options);}}));
+vi.mock('./store',()=>({getSetting:(key:string)=>key==='theme'?mock.theme:mock.language,getSettings:()=>({}),setSetting:vi.fn()}));
+vi.mock('electron',()=>({nativeTheme:{get shouldUseDarkColors(){return mock.systemDark;}},app:{once:vi.fn(),getPath:()=>'/tmp/studio-test',getAppPath:()=>'/tmp/studio-test',isPackaged:false},dialog:{showMessageBox:mock.show},shell:{openExternal:vi.fn()},ipcMain:{handle:(key:string,fn:Function)=>mock.handlers.set(key,fn)}}));
 vi.mock('./harness-engine',()=>({HarnessEngine:class{get busy(){return mock.busy;}stop=mock.stop;checkUpdates=vi.fn(async()=>{});snapshot=()=>({phase:'running'});}}));
 vi.mock('./agent-tools',()=>({AGENT_TOOL_NAMES:[],executeAgentTool:vi.fn()}));
 beforeEach(()=>{vi.resetModules();mock.busy=true;mock.stop.mockClear();mock.show.mockReset();mock.handlers.clear();});
@@ -28,4 +28,21 @@ describe('Native close confirmation',()=>{
     const m=await import('./harness-launcher');m.registerHarnessLauncher(()=>null);
     await expect(mock.handlers.get('harness:start')!({sender:{}})).rejects.toThrow('Unknown launcher sender');
   });
+});
+
+it('stops the agent for an authorized update without another confirmation',async()=>{
+ const m=await import('./harness-launcher');m.registerHarnessLauncher(()=>null);
+ await m.stopHarnessForUpdate();expect(mock.stop).toHaveBeenCalledTimes(1);
+ expect(mock.show).not.toHaveBeenCalled();expect(m.harnessNeedsExitConfirmation()).toBe(false);
+});
+it('restores exit confirmation if the installer fails and the agent later runs again',async()=>{
+ const m=await import('./harness-launcher');m.registerHarnessLauncher(()=>null);
+ await m.stopHarnessForUpdate();expect(m.harnessNeedsExitConfirmation()).toBe(false);
+ m.resetHarnessExitAfterUpdateFailure();expect(m.harnessNeedsExitConfirmation()).toBe(true);
+});
+
+it('exit card follows system dark theme, while explicit light/dark choices win',async()=>{
+ const m=await import('./harness-launcher');m.registerHarnessLauncher(()=>null);mock.show.mockResolvedValue({response:0});
+ for(const [theme,systemDark,expected] of [['system',true,true],['system',false,false],['light',true,false],['dark',false,true]] as const){mock.theme=theme;mock.systemDark=systemDark;await m.confirmHarnessExit(null);expect(mock.shownDark).toBe(expected);}
+ mock.theme='light';mock.systemDark=false;
 });

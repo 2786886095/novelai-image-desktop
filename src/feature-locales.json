@@ -2105,5 +2105,341 @@
     "Not configured",
     "未設定",
     "미설정"
+  ],
+  "混合模式": [
+    "混合模式",
+    "混合模式",
+    "Mixed mode",
+    "混合モード",
+    "혼합 모드"
+  ],
+  "自然语言": [
+    "自然语言",
+    "自然語言",
+    "Natural language",
+    "自然言語",
+    "자연어"
+  ],
+  "Danbooru 标签": [
+    "Danbooru 标签",
+    "Danbooru 標籤",
+    "Danbooru tags",
+    "Danbooru タグ",
+    "Danbooru 태그"
+  ],
+  "反推模式": [
+    "反推模式",
+    "反推模式",
+    "Caption mode",
+    "逆プロンプトの形式",
+    "역추론 모드"
+  ],
+  "使用软件设置中保存的 {version} 对应模式模板；网络角色选项不改变模板要求。": [
+    "使用软件设置中保存的 {version} 对应模式模板；网络角色选项不改变模板要求。",
+    "使用軟體設定中儲存的 {version} 對應模式範本；網路角色選項不改變範本要求。",
+    "Uses the saved {version} template for this mode. Character recognition does not override the template.",
+    "設定に保存された {version} の選択形式のテンプレートを使用します。キャラクター認識はテンプレート要件を変更しません。",
+    "설정에 저장된 {version} 모드별 템플릿을 사용합니다. 캐릭터 인식은 템플릿 요건을 변경하지 않습니다."
+  ],
+  "检查并升级官方版本": [
+    "检查并升级官方版本",
+    "檢查並升級官方版本",
+    "Check & upgrade Harness",
+    "公式版の確認・更新",
+    "공식 버전 확인 및 업데이트"
+  ],
+  "检测到官方新版；点击上方按钮检查适配包并确认升级。": [
+    "检测到官方新版；点击上方按钮检查适配包并确认升级。",
+    "偵測到官方新版；點擊上方按鈕檢查適配套件並確認升級。",
+    "A newer Harness version was detected. Check the compatible package above, then confirm the upgrade.",
+    "公式の新バージョンがあります。上のボタンで対応パッケージを確認し、更新を承認してください。",
+    "새 공식 버전이 있습니다. 위 버튼으로 호환 패키지를 확인한 후 업데이트를 승인하세요."
+  ],
+  "Harness 运行环境已是当前检测到的最新版本。": [
+    "Harness 运行环境已是当前检测到的最新版本。",
+    "Harness 執行環境已是目前偵測到的最新版本。",
+    "The installed Harness runtime is up to date with this check.",
+    "Harness 実行環境は今回確認した最新版です。",
+    "설치된 Harness 런타임은 이번 확인 기준 최신 버전입니다."
+  ],
+  "Studio 适配组件已是当前检测到的最新版本。": [
+    "Studio 适配组件已是当前检测到的最新版本。",
+    "Studio 適配元件已是目前偵測到的最新版本。",
+    "The Studio adapter is up to date with this check.",
+    "Studio 対応コンポーネントは今回確認した最新版です。",
+    "Studio 호환 구성 요소는 이번 확인 기준 최신 버전입니다."
+  ],
+  "请先安装 Studio 适配组件，再检查 Harness 官方更新。": [
+    "请先安装 Studio 适配组件，再检查 Harness 官方更新。",
+    "請先安裝 Studio 適配元件，再檢查 Harness 官方更新。",
+    "Install the Studio adapter before checking a Harness upgrade.",
+    "先に Studio 対応コンポーネントをインストールしてください。",
+    "먼저 Studio 호환 구성 요소를 설치하세요."
+  ],
+  "检测到 Harness {official}，当前为 {installed}；暂无更新的 Studio 适配包，尚未下载或升级。": [
+    "检测到 Harness {official}，当前为 {installed}；暂无更新的 Studio 适配包，尚未下载或升级。",
+    "偵測到 Harness {official}，目前為 {installed}；暫無更新的 Studio 適配套件，尚未下載或升級。",
+    "Harness {official} was detected; installed: {installed}. No newer Studio adapter package is available. Nothing was downloaded or upgraded.",
+    "Harness {official} が見つかりました（現在 {installed}）。新しい Studio 対応パッケージがないため、ダウンロード・更新は行っていません。",
+    "Harness {official}이 확인되었습니다(설치됨: {installed}). 새 Studio 호환 패키지가 없어 다운로드나 업데이트를 수행하지 않았습니다."
+  ],
+  "已发布组件早于当前安装版本，保留当前组件。": [
+    "已发布组件早于当前安装版本，保留当前组件。",
+    "已發布元件早於目前安裝版本，保留目前元件。",
+    "The published component is older than the installed version. Keeping the current component.",
+    "公開コンポーネントはインストール済みより古いため、現在の版を維持します。",
+    "게시된 구성 요소가 설치된 버전보다 이전 버전이므로 현재 버전을 유지합니다."
+  ],
+  "立即更新": [
+    "立即更新",
+    "立即更新",
+    "Update now",
+    "今すぐ更新",
+    "지금 업데이트"
+  ],
+  "稍后": [
+    "稍后",
+    "稍後",
+    "Later",
+    "後で",
+    "나중에"
+  ],
+  "检查完成，是否立即更新？": [
+    "检查完成，是否立即更新？",
+    "檢查完成，是否立即更新？",
+    "Checks complete. Update now?",
+    "確認完了。今すぐ更新しますか？",
+    "확인 완료. 지금 업데이트할까요?"
+  ],
+  "已选择稍后更新，尚未下载或修改组件。": [
+    "已选择稍后更新，尚未下载或修改组件。",
+    "已選擇稍後更新，尚未下載或修改元件。",
+    "Update postponed. No component was downloaded or changed.",
+    "更新を延期しました。ダウンロードや変更はありません。",
+    "업데이트를 미뤘습니다. 다운로드하거나 변경하지 않았습니다."
+  ],
+  "部分更新检查失败，请重试。": [
+    "部分更新检查失败，请重试。",
+    "部分更新檢查失敗，請重試。",
+    "Some update checks failed. Please retry.",
+    "一部の更新確認に失敗しました。再試行してください。",
+    "일부 업데이트 확인에 실패했습니다. 다시 시도하세요."
+  ],
+  "两项检查完成，暂无可安装更新。": [
+    "两项检查完成，暂无可安装更新。",
+    "兩項檢查完成，暫無可安裝更新。",
+    "Both checks completed. No installable update is available.",
+    "両方の確認が完了しました。インストール可能な更新はありません。",
+    "두 확인이 완료되었습니다. 설치 가능한 업데이트가 없습니다."
+  ],
+  "检测到更新，请先关闭 Agent 后再检查更新。": [
+    "检测到更新，请先关闭 Agent 后再检查更新。",
+    "偵測到更新，請先關閉 Agent 後再檢查更新。",
+    "An update is available. Stop the Agent, then check again.",
+    "更新があります。Agent を停止してから再確認してください。",
+    "업데이트가 있습니다. Agent를 중지한 후 다시 확인하세요."
+  ],
+  "两项检查完成。\nStudio 组件：{installedComponent} → {component}\nHarness 官方：{installedOfficial} → {official}\n\n可下载适配组件 {version}，大小 {size} MiB。选择立即更新后下载并检查兼容性；现有资料保留。": [
+    "两项检查完成。\nStudio 组件：{installedComponent} → {component}\nHarness 官方：{installedOfficial} → {official}\n\n可下载适配组件 {version}，大小 {size} MiB。选择立即更新后下载并检查兼容性；现有资料保留。",
+    "兩項檢查完成。\nStudio 元件：{installedComponent} → {component}\nHarness 官方：{installedOfficial} → {official}\n\n可下載適配元件 {version}，大小 {size} MiB。選擇立即更新後下載並檢查相容性；現有資料保留。",
+    "Both checks completed.\nStudio component: {installedComponent} → {component}\nOfficial Harness: {installedOfficial} → {official}\n\nCompatible package candidate: {version}, {size} MiB. Update now downloads it for compatibility testing; existing data is retained.",
+    "両方の確認が完了しました。\nStudio: {installedComponent} → {component}\n公式 Harness: {installedOfficial} → {official}\n\n対応パッケージ候補: {version}、{size} MiB。「今すぐ更新」でダウンロードして互換性を確認します。既存データは保持します。",
+    "두 확인이 완료되었습니다.\nStudio: {installedComponent} → {component}\n공식 Harness: {installedOfficial} → {official}\n\n호환 패키지 후보: {version}, {size} MiB. 지금 업데이트를 선택하면 다운로드 후 호환성을 확인하며 기존 데이터는 유지됩니다."
+  ],
+  "下载并升级官方运行环境": [
+    "下载并升级官方运行环境",
+    "下載並升級官方執行環境",
+    "Download and upgrade the official runtime",
+    "公式ランタイムをダウンロードして更新",
+    "공식 런타임 다운로드 및 업데이트"
+  ],
+  "检测到官方新版；可独立下载，兼容检查通过后确认升级。": [
+    "检测到官方新版；可独立下载，兼容检查通过后确认升级。",
+    "偵測到官方新版；可獨立下載，相容性檢查通過後確認升級。",
+    "A newer official runtime is available. Download independently, then confirm installation after compatibility checks.",
+    "公式の新しいバージョンがあります。単独でダウンロードし、互換性の確認後に更新を確定します。",
+    "공식 새 버전이 있습니다. 독립적으로 다운로드하고 호환성 검사 후 설치를 확인하세요."
+  ],
+  "两项检查完成：Studio {component}；Harness {official}。": [
+    "两项检查完成：Studio {component}；Harness {official}。",
+    "兩項檢查完成：Studio {component}；Harness {official}。",
+    "Both checks complete: Studio {component}; Harness {official}.",
+    "両方の確認が完了：Studio {component}、Harness {official}。",
+    "두 항목 확인 완료: Studio {component}; Harness {official}."
+  ],
+  "将独立下载 Harness 官方 {version} 及其依赖，下载大小由依赖决定。Studio 适配组件版本保持不变。下载走软件更新代理，先隔离检查兼容性，通过后确认备份和安装。是否立即更新？": [
+    "将独立下载 Harness 官方 {version} 及其依赖，下载大小由依赖决定。Studio 适配组件版本保持不变。下载走软件更新代理，先隔离检查兼容性，通过后确认备份和安装。是否立即更新？",
+    "將獨立下載 Harness 官方 {version} 及其相依套件，下載大小由相依套件決定。Studio 適配元件版本保持不變。下載使用軟體更新代理，先隔離檢查相容性，通過後確認備份和安裝。是否立即更新？",
+    "Download official Harness {version} and its dependencies independently; download size depends on the dependencies. The Studio component version stays unchanged. Downloads use the software-update proxy. Compatibility is tested in isolation before confirming backup and installation. Update now?",
+    "Harness 公式 {version} と依存パッケージを単独でダウンロードします。サイズは依存関係によります。Studio コンポーネントのバージョンは変わりません。ソフトウェア更新プロキシを使用し、隔離環境で互換性を確認してからバックアップとインストールを確定します。今すぐ更新しますか？",
+    "공식 Harness {version} 및 종속성을 독립적으로 다운로드합니다. 용량은 종속성에 따라 달라집니다. Studio 구성 요소 버전은 유지됩니다. 소프트웨어 업데이트 프록시를 사용하며 격리된 호환성 검사 후 백업과 설치를 확인합니다. 지금 업데이트할까요?"
+  ],
+  "选择插件兼容处理方式": [
+    "选择插件兼容处理方式",
+    "選擇外掛相容處理方式",
+    "Choose how to handle plugin compatibility",
+    "プラグインの互換性への対応を選択",
+    "플러그인 호환성 처리 방법 선택"
+  ],
+  "禁用会暂停所列插件提供的功能，不删除插件和配置。其余插件仍需通过兼容检查；安装前备份，可从“更新备份与恢复”还原原来的插件和运行环境。": [
+    "禁用会暂停所列插件提供的功能，不删除插件和配置。其余插件仍需通过兼容检查；安装前备份，可从“更新备份与恢复”还原原来的插件和运行环境。",
+    "停用會暫停所列外掛的功能，不刪除外掛與設定。其餘外掛仍須通過相容檢查；安裝前備份，可從「更新備份與還原」還原原來的外掛與執行環境。",
+    "Disabling suspends these plugins without deleting their files or settings. Remaining plugins must still pass compatibility checks. A pre-install backup lets you restore the previous plugins and runtime under Update backup and restore.",
+    "無効化すると対象機能は停止しますが、ファイルや設定は保持されます。残りのプラグインも互換性確認が必要です。インストール前のバックアップから元の環境を復元できます。",
+    "비활성화하면 해당 기능이 중지되지만 파일과 설정은 유지됩니다. 나머지 플러그인도 호환성 검사를 통과해야 합니다. 설치 전 백업으로 이전 플러그인과 실행 환경을 복원할 수 있습니다."
+  ],
+  "暂不更新，保留现状": [
+    "暂不更新，保留现状",
+    "暫不更新，保留現狀",
+    "Not now — keep current setup",
+    "更新せず現状を維持",
+    "나중에 — 현재 상태 유지"
+  ],
+  "禁用未适配插件，其余升级后继续": [
+    "禁用未适配插件，其余升级后继续",
+    "停用未適配外掛，其餘升級後繼續",
+    "Disable unavailable plugins, upgrade the rest",
+    "未対応を無効化、残りを更新して続行",
+    "미지원 플러그인 비활성화 후 나머지 업그레이드"
+  ],
+  "禁用所列冲突插件并继续": [
+    "禁用所列冲突插件并继续",
+    "停用列出的衝突外掛並繼續",
+    "Disable listed conflicting plugins and continue",
+    "一覧の競合プラグインを無効化して続行",
+    "표시된 충돌 플러그인 비활성화 후 계속"
+  ],
+  "升级兼容插件并继续": [
+    "升级兼容插件并继续",
+    "升級相容外掛並繼續",
+    "Upgrade compatible plugins and continue",
+    "互換性のあるプラグインを更新して続行",
+    "호환 플러그인 업그레이드 후 계속"
+  ],
+  "禁用（保留插件和配置）": [
+    "禁用（保留插件和配置）",
+    "停用（保留外掛與設定）",
+    "Disabled (files and settings retained)",
+    "無効化（ファイルと設定を保持）",
+    "비활성화 (파일 및 설정 유지)"
+  ],
+  "插件自动更新": [
+    "插件自动更新",
+    "插件自動更新",
+    "Automatic plugin updates",
+    "プラグイン自動更新",
+    "플러그인 자동 업데이트"
+  ],
+  "检查并更新插件": [
+    "检查并更新插件",
+    "檢查並更新插件",
+    "Check and update plugins",
+    "プラグインを確認・更新",
+    "플러그인 확인 및 업데이트"
+  ],
+  "自动检查并安装兼容的插件更新": [
+    "自动检查并安装兼容的插件更新",
+    "自動檢查並安裝相容的插件更新",
+    "Automatically check and install compatible plugin updates",
+    "互換性のあるプラグイン更新を自動確認・インストール",
+    "호환되는 플러그인 업데이트 자동 확인 및 설치"
+  ],
+  "启动后及每 6 小时检查；Agent 运行时等待关闭。更新前备份并隔离测试，不自动禁用插件。": [
+    "启动后及每 6 小时检查；Agent 运行时等待关闭。更新前备份并隔离测试，不自动禁用插件。",
+    "啟動後及每 6 小時檢查；Agent 執行時等待關閉。更新前備份並隔離測試，不自動停用插件。",
+    "Checks after startup and every 6 hours. Waits until Agent stops; backs up and tests in isolation before updating. Never disables plugins automatically.",
+    "起動後と6時間ごとに確認。Agent停止後、バックアップと隔離テストを行って更新します。自動で無効化はしません。",
+    "시작 후 및 6시간마다 확인합니다. Agent 종료 후 백업과 격리 테스트를 거쳐 업데이트하며 자동으로 비활성화하지 않습니다."
+  ],
+  "插件检查详情": [
+    "插件检查详情",
+    "插件檢查詳情",
+    "Plugin check details",
+    "プラグイン確認の詳細",
+    "플러그인 확인 세부 정보"
+  ],
+  "Agent 已启动，但部分插件未加载": [
+    "Agent 已启动，但部分插件未加载",
+    "Agent 已啟動，但部分插件未載入",
+    "Agent is running, but some plugins did not load",
+    "Agentは起動しましたが、一部のプラグインは未読込です",
+    "Agent가 실행 중이지만 일부 플러그인이 로드되지 않았습니다"
+  ],
+  "插件自动检查尚未开始": [
+    "插件自动检查尚未开始",
+    "插件自動檢查尚未開始",
+    "Automatic plugin check has not started",
+    "自動確認はまだ開始していません",
+    "플러그인 자동 확인이 아직 시작되지 않았습니다"
+  ],
+  "插件自动更新已关闭": [
+    "插件自动更新已关闭",
+    "插件自動更新已關閉",
+    "Automatic plugin updates are off",
+    "自動更新はオフです",
+    "플러그인 자동 업데이트가 꺼져 있습니다"
+  ],
+  "正在检查已启用插件的兼容更新…": [
+    "正在检查已启用插件的兼容更新…",
+    "正在檢查已啟用插件的相容更新…",
+    "Checking enabled plugins for compatible updates…",
+    "有効なプラグインの互換更新を確認中…",
+    "활성 플러그인의 호환 업데이트 확인 중…"
+  ],
+  "部分插件尚无兼容新版，保留现状；没有自动禁用。": [
+    "部分插件尚无兼容新版，保留现状；没有自动禁用。",
+    "部分插件尚無相容新版，保留現狀；沒有自動停用。",
+    "Some plugins have no compatible update. Kept unchanged; none disabled.",
+    "互換版がないプラグインがあります。変更や自動無効化はしていません。",
+    "일부 플러그인에 호환 버전이 없어 기존 상태를 유지했습니다. 자동 비활성화하지 않았습니다."
+  ],
+  "插件检查完成，暂无可安装的兼容更新。": [
+    "插件检查完成，暂无可安装的兼容更新。",
+    "插件檢查完成，暫無可安裝的相容更新。",
+    "Check complete; no compatible updates available.",
+    "確認完了。インストール可能な互換更新はありません。",
+    "확인 완료. 설치 가능한 호환 업데이트가 없습니다."
+  ],
+  "发现插件更新，等待 Agent 关闭后自动处理。": [
+    "发现插件更新，等待 Agent 关闭后自动处理。",
+    "發現插件更新，等待 Agent 關閉後自動處理。",
+    "Plugin updates found; waiting for Agent to stop.",
+    "更新が見つかりました。Agentの停止を待っています。",
+    "플러그인 업데이트가 있습니다. Agent 종료를 기다립니다."
+  ],
+  "正在备份、隔离检查并更新插件…": [
+    "正在备份、隔离检查并更新插件…",
+    "正在備份、隔離檢查並更新插件…",
+    "Backing up, testing in isolation and updating plugins…",
+    "バックアップ・隔離テスト・プラグイン更新中…",
+    "플러그인 백업, 격리 테스트 및 업데이트 중…"
+  ],
+  "插件更新完成，原插件和配置已备份。": [
+    "插件更新完成，原插件和配置已备份。",
+    "插件更新完成，原插件和設定已備份。",
+    "Plugins updated; previous plugins and settings are backed up.",
+    "更新完了。元のプラグインと設定はバックアップ済みです。",
+    "업데이트 완료. 기존 플러그인과 설정은 백업되었습니다."
+  ],
+  "插件更新检查未完成，请检查网络后重试；原插件保持不变。": [
+    "插件更新检查未完成，请检查网络后重试；原插件保持不变。",
+    "插件更新檢查未完成，請檢查網路後重試；原插件保持不變。",
+    "Plugin check failed. Check your connection and retry; plugins are unchanged.",
+    "確認が完了しませんでした。ネット接続を確認してください。元のプラグインは未変更です。",
+    "확인을 완료하지 못했습니다. 네트워크 확인 후 다시 시도하세요. 기존 플러그인은 그대로입니다."
+  ],
+  "插件自动更新已停止；未提交的更新已取消。": [
+    "插件自动更新已停止；未提交的更新已取消。",
+    "插件自動更新已停止；未提交的更新已取消。",
+    "Plugin updater stopped; uncommitted changes cancelled.",
+    "自動更新を停止し、未確定の変更を取り消しました。",
+    "자동 업데이트를 중지하고 적용 전 변경 사항을 취소했습니다."
+  ],
+  "插件更新未完成，保留原有环境：{reason}": [
+    "插件更新未完成，保留原有环境：{reason}",
+    "插件更新未完成，保留原有環境：{reason}",
+    "Plugin update failed; original environment retained: {reason}",
+    "更新未完了。元の環境を保持：{reason}",
+    "업데이트 실패. 기존 환경 유지: {reason}"
   ]
 }

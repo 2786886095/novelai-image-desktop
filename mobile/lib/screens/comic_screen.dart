@@ -1,3 +1,5 @@
+import '../i18n/comic_provider_text.dart';
+import 'compatible_images.dart';
 import '../ui/studio_dropdown.dart';
 import '../ui/zoomable_image.dart';
 import 'dart:io';
@@ -28,8 +30,8 @@ class ComicScreen extends StatelessWidget {
         child: _ComicBody(onBack: onBack),
       );
     }
-    return ChangeNotifierProvider(
-      create: (_) => ComicController(context.read<AppState>())..load(),
+    return ChangeNotifierProvider.value(
+      value: context.read<AppState>().comic,
       child: _ComicBody(onBack: onBack),
     );
   }
@@ -45,6 +47,9 @@ class _ComicBody extends StatelessWidget {
     final t = _text(context);
     if (!controller.loaded) {
       return Scaffold(body: Center(child: Text(t('comic.loading'))));
+    }
+    if (controller.loadError != null) {
+      return Scaffold(body: Center(child: Text(controller.loadError!)));
     }
     return Scaffold(
       appBar: AppBar(
@@ -74,7 +79,9 @@ class _ComicBody extends StatelessWidget {
           ),
           IconButton(
             tooltip: t('comic.saveProjectJson'),
-            onPressed: () => _run(context, controller.exportProjectJson),
+            onPressed: controller.exporting
+                ? null
+                : () => _run(context, controller.exportProjectJson),
             icon: const Icon(Icons.save_alt),
           ),
           IconButton(
@@ -331,7 +338,8 @@ class _GlobalStep extends StatelessWidget {
           _SectionCard(
             title: t('comic.globalHeading'),
             action: OutlinedButton.icon(
-              onPressed: controller.syncCurrentParams,
+              onPressed:
+                  controller.compatible ? null : controller.syncCurrentParams,
               icon: const Icon(Icons.sync),
               label: Text(t('comic.syncParams')),
             ),
@@ -408,13 +416,15 @@ class _PreciseReferenceSection extends StatelessWidget {
     final t = _text(context);
     return _SectionCard(
       title: t('comic.preciseHeading'),
-      subtitle: t('comic.preciseHint'),
+      subtitle: controller.compatible
+          ? comicProviderText(controller.app.settings.language, 'references')
+          : t('comic.preciseHint'),
       action: Wrap(
         spacing: 8,
         runSpacing: 8,
         children: [
           OutlinedButton.icon(
-            onPressed: refs.length >= 5
+            onPressed: controller.compatible || refs.length >= 5
                 ? null
                 : () => showReferencePresetLibrary(
                       context,
@@ -425,7 +435,7 @@ class _PreciseReferenceSection extends StatelessWidget {
             label: Text(t('referencePresets.title')),
           ),
           OutlinedButton.icon(
-            onPressed: refs.length >= 5
+            onPressed: controller.compatible || refs.length >= 5
                 ? null
                 : () => _run(context, controller.pickPreciseReferences),
             icon: const Icon(Icons.add_photo_alternate_outlined),
@@ -970,11 +980,15 @@ class _PanelEditor extends StatelessWidget {
             title: Text(t('comic.override')),
             subtitle: Text(t('comic.overrideHint')),
             value: panel.overrideParams,
-            onChanged: (value) {
-              panel.overrideParams = value;
-              if (value) panel.params = controller.project.globalParams.copy();
-              controller.changed();
-            },
+            onChanged: controller.compatible
+                ? null
+                : (value) {
+                    panel.overrideParams = value;
+                    if (value) {
+                      panel.params = controller.project.globalParams.copy();
+                    }
+                    controller.changed();
+                  },
           ),
           if (panel.overrideParams) ...[
             const SizedBox(height: 8),
@@ -1152,6 +1166,10 @@ class _GenerateStep extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (controller.compatible) ...[
+                      const _CompatibleComicNotice(),
+                      const SizedBox(height: 10)
+                    ],
                     if (controller.queueRunning) ...[
                       LinearProgressIndicator(
                         value: controller.queueTotal == 0
@@ -1215,8 +1233,9 @@ class _GenerateStep extends StatelessWidget {
                             label: Text(t('comic.stop')),
                           ),
                         OutlinedButton.icon(
-                          onPressed: panels
-                                  .any((item) => item.selectedCandidate != null)
+                          onPressed: !controller.exporting &&
+                                  panels.any(
+                                      (item) => item.selectedCandidate != null)
                               ? () =>
                                   _run(context, controller.exportSelectedZip)
                               : null,
@@ -1385,6 +1404,9 @@ class _ParamsEditor extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = _text(context);
     final language = context.watch<AppState>().settings.language;
+    if (context.watch<AppState>().settings.imageProvider == 'openai-images') {
+      return const _CompatibleComicNotice();
+    }
     return _SectionCard(
       title: t('comic.paramsHeading'),
       child: LayoutBuilder(builder: (context, constraints) {
@@ -1788,29 +1810,77 @@ Future<void> _confirmAndRun(
   BuildContext context,
   ComicController controller,
   Future<void> Function() action,
-  Future<int> Function() loadQuote,
-) async {
-  final t = _text(context);
-  final quote = await loadQuote();
-  if (!context.mounted) return;
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(t('comic.confirmGenerate')),
-      content: Text('${t('comic.quote')}: $quote Anlas'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: Text(t('common.cancel')),
+  Future<int?> Function() loadQuote,
+) =>
+    _run(context, () async {
+      final language = context.read<AppState>().settings.language;
+      String t(String key) => mobileUiTextFor(language, key);
+      final revision = controller.revision;
+      controller.assertRevision(revision);
+      final authorization = await controller.authorizationStamp();
+      final quote = await loadQuote();
+      controller.assertRevision(revision);
+      if (authorization != await controller.authorizationStamp()) {
+        throw StateError('图片服务或凭据已变化，请重新确认');
+      }
+      if (!context.mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(t('comic.confirmGenerate')),
+          content: Text(controller.compatible
+              ? '${controller.app.settings.compatibleImage['model']} · ${controller.app.settings.compatibleImage['size']}\n${comicProviderText(controller.app.settings.language, 'billing')}'
+              : '${t('comic.quote')}: $quote Anlas'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(t('common.cancel'))),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(t('comic.confirm'))),
+          ],
         ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: Text(t('comic.confirm')),
-        ),
-      ],
-    ),
-  );
-  if (confirmed == true && context.mounted) await _run(context, action);
+      );
+      if (confirmed == true && context.mounted) {
+        controller.assertRevision(revision);
+        if (authorization != await controller.authorizationStamp()) {
+          throw StateError('图片服务或凭据已变化，请重新确认');
+        }
+        controller.assertRevision(revision);
+        await action();
+      }
+    });
+
+class _CompatibleComicNotice extends StatelessWidget {
+  const _CompatibleComicNotice();
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppState>(), c = app.settings.compatibleImage;
+    String text(String key) => comicProviderText(app.settings.language, key);
+    return _SectionCard(
+        title: text('title'),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('${c['model']} · ${c['size']}'),
+          const SizedBox(height: 8),
+          Text(text('rules')),
+          const SizedBox(height: 8),
+          Text(text('billing')),
+          TextButton(
+              onPressed: app.busy
+                  ? null
+                  : () => showModalBottomSheet<void>(
+                      context: context,
+                      isScrollControlled: true,
+                      builder: (_) => ChangeNotifierProvider.value(
+                          value: app,
+                          child: const SafeArea(
+                              child: SingleChildScrollView(
+                                  padding: EdgeInsets.all(16),
+                                  child:
+                                      CompatibleImageSettingsCard())))),
+              child: Text(text('settings'))),
+        ]));
+  }
 }
 
 Future<void> _preview(BuildContext context, String path) async {

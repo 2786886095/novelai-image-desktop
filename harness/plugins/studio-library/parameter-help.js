@@ -77,6 +77,6 @@ export function parameterHelp(key,rule={}){
  const lines=[descriptions[key]??'此选项由当前工作台提供。修改前请核对当前模型是否支持；保存不会立即生成图片。'];
  if(rule.type==='number')lines.push(`允许范围：${rule.min??'未限定'}～${rule.max??'未限定'}${rule.step?`；步长：${rule.step}`:''}。`);
  if(rule.enum)lines.push(`请从下拉列表中的 ${rule.enum.length} 个有效选项选择。`);
- lines.push(rule.persistence==='session'?'只对当前会话生效，重启后不保留。':'保存时仍需软件确认。');
+ lines.push(rule.persistence==='session'?'只对当前会话生效，重启后不保留。':'普通参数保存后直接生效，不会触发生图。需要确认的操作会在 Agent 内提示。');
  return lines.join('\n');
 }

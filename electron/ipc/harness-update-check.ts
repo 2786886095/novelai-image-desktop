@@ -1,4 +1,5 @@
 import {isNewerBundle} from './harness-policy';
+import {updateFetch as fetch} from './download-request';
 export interface HarnessUpdateCheck { checkedAt:string; component:string|null; official:string|null; plugins:Record<string,string>; errors:string[]; componentFailed?:boolean; officialFailed?:boolean; bundledComponent?:string; bundledUpdate?:boolean }
 const headers={'Accept':'application/vnd.github+json','User-Agent':'Langbai-Tavern-Agent'};
 export function chooseComponent(releases:unknown, platform=process.platform, arch=process.arch):string|null {

@@ -1,0 +1,12 @@
+.compatible-images { padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--bg-panel); color:var(--text-primary); }
+.compatible-images h3 { margin:0 0 12px; font-size:15px; }
+.compatible-images p { line-height:1.6; }
+.compatible-images details { margin:12px 0; }
+.compatible-images summary { cursor:pointer; color:var(--accent); padding:8px 0; }
+.compatible-images .field { margin:12px 0; }
+.compatible-images small,.compatible-generation .settings-hint { color:var(--text-secondary); line-height:1.6; }
+.compatible-generation { display:flex; flex-direction:column; flex:1; min-height:0; color:var(--text-primary); }
+body :is(.compatible-images,.compatible-generation) .field :is(input,textarea,select) { color:var(--text-primary); background:var(--bg-canvas); border:1px solid var(--border); border-radius:6px; }
+body :is(.compatible-images,.compatible-generation) .btn-secondary { color:var(--text-primary); background:var(--bg-canvas); border-color:var(--border); }
+body :is(.compatible-images,.compatible-generation) .btn-primary { background:var(--accent); color:var(--accent-contrast,#fff); }
+:is(.compatible-images,.compatible-generation) .btn:disabled { opacity:.55; }

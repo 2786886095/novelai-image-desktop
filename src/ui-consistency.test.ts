@@ -44,13 +44,13 @@ describe("desktop UI consistency guards", () => {
     expect(finalRule).toContain("flex: 0 0 var(--ui-icon-size, 16px)");
   });
 
-  it("centers weight text and provides direct character-position dragging", () => {
+  it("labels compact weight control and provides direct character-position dragging", () => {
     const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
-    const styles = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
-    expect(source).toContain('className="prompt-tool-btn weight-tool-btn"');
-    expect(source).toContain('<span>{generateText.prompt.weightAdjust}');
-    expect(styles).toContain(".weight-tool-btn");
-    expect(styles).toContain("grid-template-columns: 15px minmax(0, 1fr) 15px");
+    expect(source).toContain('label={`${generateText.prompt.weightAdjust} (${weightTags.length})`}');
+    expect(source).toContain('icon="sliders" aria-expanded={showWeights}');
+    const compact = fs.readFileSync(path.join(projectRoot, "src", "compact-prompt.css"), "utf8");
+    expect(compact).toContain('.compact-icon-button');
+    expect(compact).toContain('justify-content:center');
     expect(source).toContain('className="char-position-stage"');
     const marker = fs.readFileSync(path.join(projectRoot,"src/components/CharacterEditing.tsx"),"utf8");
     expect(source).toContain('<CharacterPositionMarker');
@@ -667,7 +667,10 @@ describe("desktop UI consistency guards", () => {
     expect(main).toContain('<AppErrorBoundary scope="app" root>');
     expect(app).toContain('scope={`tab:${activeTab}`}');
     expect(boundary).toContain("getDerivedStateFromError");
-    expect(comic).toMatch(/try \{[\s\S]*generateCandidate[\s\S]*finally \{[\s\S]*queueRef\.current\.running = false/);
+    const comicQueue = fs.readFileSync(path.join(projectRoot, "src", "comic", "generation-queue.ts"), "utf8");
+    expect(comic).toContain('useComicGenerationQueue()');
+    expect(comicQueue).toContain('result=await deps.generate(request)');
+    expect(comicQueue).toMatch(/finally\s*\{[\s\S]*deps\.store\.setBusy\(false\)/);
     expect(tavern).toMatch(/catch \(error\) \{\s*if \(sceneRequest === undefined\) setComposer\(text\)/);
     expect(store).toMatch(/catch \(error\) \{[\s\S]*status: "failed"/);
     expect(updater).toContain("mainWindow.webContents.isDestroyed()");

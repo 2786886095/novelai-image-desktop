@@ -1,7 +1,14 @@
+import {getBatchGenerationQueue,getBatchProjectStore} from './batch/use-batch-generation';
+import {createBatchProjectActions} from './agent/batch-project-actions';
+import {getComicGenerationQueue} from './comic/use-comic-generation';
+import {mergeFullSettings} from "./compatible-image-settings-sync";
+import {getComicProjectStore} from './comic/use-comic-project';
+import {createComicProjectActions} from './agent/comic-project-actions';
 import {collectPortableWorkspaceData,mergePortableWorkspaceData} from './features/settings/data-backup-workspace';
 import {flushArtistFavoritePersistence,hydrateArtistFavoriteLibrary} from './artist-favorite-library';
 import {validateTaskRequest} from './agent/task-contract';
 import {useAppStore} from './store';
+import {createRendererCollections} from './agent/renderer-collections';
 import {normalizeGenerateParams, type AppSettings, type LastGenerationState, type SettingKey, type StylePromptPreset} from './types';
 import {projectStudioData,STUDIO_WRITABLE,validateStudioPatch,validateStyleInput,type StudioAgentRequest,type StudioAgentReply} from './studio-agent-contract';
 
@@ -18,6 +25,8 @@ export interface StudioAgentDependencies {
   notifyReferenceChange?:()=>void;
 }
 export function createStudioAgentService(deps:StudioAgentDependencies) {
+  let rendererCollections:ReturnType<typeof createRendererCollections>|undefined;
+  const collections=()=>rendererCollections??=createRendererCollections({storage:localStorage,getTab:()=>deps.getState().activeTab,setTab:activeTab=>deps.setState({activeTab}),changed:group=>window.dispatchEvent(new CustomEvent('studio:collections-changed',{detail:group}))});
   let fingerprint='',sequence=0,taskFingerprint='',taskSequence=0;
   function tasks(){const s=deps.getState();const fp=JSON.stringify([s.isGenerating,s.isGenerateQueueRunning,s.queuePaused,s.generationQueue?.map(x=>x.id)]);if(fp!==taskFingerprint){taskFingerprint=fp;taskSequence++;}return {revision:`${instance}:tasks:${taskSequence}`,running:s.isGenerating,queueRunning:s.isGenerateQueueRunning,paused:s.queuePaused,progress:s.queueProgress,items:projectStudioData(s.generationQueue??[]),status:s.statusText,error:s.lastError,scope:'软件生成队列；暂停在当前图片结束后生效，取消不能撤销已完成的收费调用。'};}
   const instance=deps.uuid();
@@ -65,6 +74,30 @@ export function createStudioAgentService(deps:StudioAgentDependencies) {
   async function handle(request:StudioAgentRequest):Promise<StudioAgentReply> {
     try {
       const args=request.args;
+      if(request.action==='batch-project'){
+        const action=String(args.action),project=createBatchProjectActions(getBatchProjectStore());
+        if(action==='_batch.snapshot')return {ok:true,data:project.snapshot(args.expectedRevision)};
+        if(action==='_batch.generation.preview')return {ok:true,data:await getBatchGenerationQueue().preview(args.tasks as import('./batch/generation-queue').BatchTask[],String(args.expectedRevision))};
+        if(action==='_batch.generation.launch')return {ok:true,data:getBatchGenerationQueue().launch(args.tasks as import('./batch/generation-queue').BatchTask[],{runId:String(args.runId),expectedRevision:String(args.expectedRevision)})};
+        if(action==='_batch.generation.wait')return {ok:true,data:await getBatchGenerationQueue().wait(String(args.runId))};
+        if(action==='_batch.generation.status'||action==='_batch.generation.stop'){const queue=getBatchGenerationQueue();const stopped=action==='_batch.generation.stop'?await queue.stop(String(args.runId)):null;return {ok:true,data:{...queue.getSnapshot(),active:queue.active,...(stopped?{cancellationRequested:stopped.requested}:{})}};}
+        return {ok:true,data:project.execute(args)};
+      }
+      if(request.action==='comic-project'){
+        if(args.action==='_comic.generation.preview')return {ok:true,data:await getComicGenerationQueue().preview(args.tasks as import('./comic/generation-queue').ComicQueueTask[],String(args.expectedRevision))};
+        if(args.action==='_comic.generation.launch')return {ok:true,data:getComicGenerationQueue().launch(args.tasks as import('./comic/generation-queue').ComicQueueTask[],{runId:String(args.runId),expectedRevision:String(args.expectedRevision),confirm:async()=>true})};
+        if(args.action==='_comic.generation.wait')return {ok:true,data:await getComicGenerationQueue().wait(String(args.runId))};
+
+        if(args.action==='_comic.generation.status'||args.action==='_comic.generation.stop'){
+          const queue=getComicGenerationQueue();const stopped=args.action==='_comic.generation.stop'?await queue.stop(String(args.runId)):null;
+          return {ok:true,data:{...queue.getSnapshot(),active:queue.active,...(stopped?{cancellationRequested:stopped.requested}:{}),scope:'漫画生成队列；保留已完成图片，不自动重试未核实请求'}};
+        }
+        const comic=createComicProjectActions(getComicProjectStore(),()=>deps.getState().params);return {ok:true,data:String(args.action).startsWith('_comic.')?comic.internal(args):comic.execute(args)};}
+      if(request.action==='collections'){
+        if(args.operation==='read')return {ok:true,data:collections().read(String(args.group))};
+        if(args.operation==='apply'){const {operation:_,...input}=args;return {ok:true,data:collections().apply(input)};}
+        throw Error('未知收藏或导航请求');
+      }
       if(request.action==='tasks') {
         const input=validateTaskRequest(args),before=tasks(),s=deps.getState();
         if(input.action==='list')return {ok:true,data:before};
@@ -153,7 +186,6 @@ export function createStudioAgentService(deps:StudioAgentDependencies) {
           detail={target,key,before:projectStudioData(settings[settingKey],key),after:projectStudioData(value,key)};
         } else {
           if(state.isGenerating||state.isGenerateQueueRunning||state.batchRunning)throw new Error('图片任务正在运行；请等待完成后修改生成参数。');
-          if(target==='params'&&((key==='stylePrompt'&&settings.lockStylePrompt)||(key==='negativePrompt'&&settings.lockNegativePrompt)))throw new Error('提示词已锁定，请先明确解除对应锁定。');
           if(target==='params') {
             const candidate={...state.params,[key]:value};
             if(key==='qualityToggle')candidate.qualityPreset=value?(state.params.qualityPreset==='none'?'standard':state.params.qualityPreset):'none';
@@ -180,7 +212,7 @@ export function createStudioAgentService(deps:StudioAgentDependencies) {
         throw new Error('保存失败；未被后续编辑改变的界面字段已恢复。请重新读取状态。');
       }
       const saved=await deps.api.getSettings();
-      deps.setState({settings:saved});
+      deps.setState({settings:mergeFullSettings(deps.getState().settings,saved)});
       if(JSON.stringify(saved[settingKey])!==JSON.stringify(settingValue))throw new Error('保存后回读发生冲突，请重新读取状态；未宣称写入成功。');
       const live=deps.getState();
       if(Object.keys(patch).some(k=>JSON.stringify(live[k as keyof State])!==JSON.stringify(patch[k as keyof State])))throw new Error('写入期间用户修改了界面，已保留用户最新输入；请重新读取。');

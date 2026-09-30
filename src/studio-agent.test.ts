@@ -58,8 +58,8 @@ describe('Studio confirmed mutation service',()=>{
     r=await f.call('apply',{expectedRevision:await f.revision(),operation:'style',id:preset.id,name:'Edited',prompt:'ink',group:'Test',rating:5});
     expect(r.ok).toBe(true);expect(f.settings.stylePromptPresets).toHaveLength(2);expect(f.settings.stylePromptPresets[0].previewImages).toHaveLength(1);expect(f.settings.stylePromptPresets[1].name).toBe('other');
   });
-  it('honors prompt locks and active generation',async()=>{
-    const f=fixture();f.configure({lockStylePrompt:true});expect((await f.call('apply',{expectedRevision:await f.revision(),target:'params',patch:{stylePrompt:'new'}})).ok).toBe(false);
+  it('allows explicit prompt edits despite legacy locks but blocks active generation',async()=>{
+    const f=fixture();f.configure({lockStylePrompt:true});expect((await f.call('apply',{expectedRevision:await f.revision(),target:'params',patch:{stylePrompt:'new'}})).ok).toBe(true);f.commit.mockClear();
     f.change({isGenerating:true});expect((await f.call('apply',{expectedRevision:await f.revision(),target:'params',patch:{steps:31}})).ok).toBe(false);expect(f.commit).not.toHaveBeenCalled();
   });
   it('restores live state after disk failure',async()=>{
@@ -92,4 +92,16 @@ it('gateway refresh reloads affected collections without overwriting generation 
  expect((await f.call('read',{refreshCollections:'text.convert'})).ok).toBe(true);expect(loadConvertHistory).toHaveBeenCalledOnce();
  expect((await f.call('read',{refreshCollections:'text.reverse'})).ok).toBe(true);expect(loadReverseHistory).toHaveBeenCalledOnce();
  expect((await f.call('read',{refreshCollections:'unknown'})).ok).toBe(false);expect(f.state.params.positivePrompt).toBe(prompt);expect(f.commit).not.toHaveBeenCalled();
+});
+
+it('a delayed ordinary Agent settings read does not rewind a newer image service notification',async()=>{
+ const f=fixture();f.configure({imageServiceVersion:1,imageServiceRevision:'old',imageApiKey:'old-key'});f.change({settings:{...f.settings}});
+ const read=f.api.getSettings;
+ f.api.getSettings=async()=>{
+  const snapshot=await read();
+  if(f.commit.mock.calls.length){f.change({settings:{...f.state.settings!,imageServiceVersion:2,imageServiceRevision:'new',imageApiKey:'new-key'}});}
+  return snapshot;
+ };
+ expect((await f.call('apply',{expectedRevision:await f.revision(),target:'settings',patch:{theme:'dark'}})).ok).toBe(true);
+ expect(f.state.settings?.theme).toBe('dark');expect(f.state.settings?.imageApiKey).toBe('new-key');expect(f.state.settings?.imageServiceVersion).toBe(2);
 });

@@ -32,3 +32,12 @@
 .harness-update-note summary span { margin-left:12px; color:var(--text-muted); }
 .harness-update-note p { margin:6px 0 0; overflow-wrap:anywhere; }
 @media(max-width:720px) { .harness-update-grid { grid-template-columns:minmax(0,1fr); } }
+
+.harness-plugin-card{grid-column:1/-1;}
+.harness-plugin-toggle{display:flex;align-items:center;gap:8px;margin:8px 0;}
+.harness-plugin-card li{overflow-wrap:anywhere;margin:6px 0;}
+
+.harness-plugin-summary{cursor:pointer;line-height:1.6;color:var(--text-primary);}
+.harness-plugin-status{margin-left:12px;font-size:12px;color:var(--text-secondary);overflow-wrap:anywhere;}
+.harness-plugin-body{justify-content:flex-end;margin-top:8px;}
+@media(max-width:720px){.harness-plugin-status{display:block;margin-left:16px;}}

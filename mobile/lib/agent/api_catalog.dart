@@ -1,6 +1,48 @@
 // Generated from src/agent/api-contract.ts; do not edit.
 import 'dart:convert';
 final Map<String,dynamic> apiProfiles=Map<String,dynamic>.from(jsonDecode(r'''{
+  "compatible-image": {
+    "title": "自定义兼容图片 API",
+    "secret": "imageApiKey",
+    "mobile": true,
+    "fields": {
+      "enabled": {
+        "key": "imageProvider",
+        "title": "使用兼容图片服务（关闭后使用 NovelAI）",
+        "type": "boolean"
+      },
+      "baseUrl": {
+        "key": "baseUrl",
+        "title": "图片 API 地址或完整 generations 地址",
+        "type": "url"
+      },
+      "model": {
+        "key": "model",
+        "title": "图片模型",
+        "type": "text"
+      },
+      "size": {
+        "key": "size",
+        "title": "尺寸 WIDTHxHEIGHT 或 auto",
+        "type": "text"
+      },
+      "responseFormat": {
+        "key": "responseFormat",
+        "title": "返回格式",
+        "type": "choice",
+        "values": [
+          "auto",
+          "b64_json",
+          "url"
+        ]
+      },
+      "extensions": {
+        "key": "extensions",
+        "title": "网关扩展参数（仅受支持字段）",
+        "type": "json"
+      }
+    }
+  },
   "novelai": {
     "title": "NovelAI 生图",
     "secret": "token",

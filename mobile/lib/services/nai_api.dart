@@ -1,3 +1,5 @@
+import 'generation_scope.dart';
+import '../prompts/reverse_template.dart';
 import '../images/upscale_plan.dart';
 import 'dart:convert';
 import 'dart:math';
@@ -1029,7 +1031,7 @@ class NaiApi {
     required String hint,
     required bool knownCharacter,
     required String systemTemplate,
-    String templateVersion = 'v5',
+    String templateVersion = '',
   }) async {
     if (apiKey.trim().isEmpty) {
       return const AiTextResult(
@@ -1037,20 +1039,23 @@ class NaiApi {
         message: 'Enter the AI inspect API Key first',
       );
     }
+    final selectedVersion=['v4.5','v5'].contains(templateVersion) ? templateVersion : settings.reversePromptTemplateVersion;
+    final saved=(selectedVersion=='v4.5' ? settings.reversePromptTemplatesV45 : settings.reversePromptTemplates)[mode.value]?.trim() ?? '';
+    final effectiveTemplate=saved.isNotEmpty?saved:systemTemplate;
     final baseSystem = [
-      systemTemplate.trim().isEmpty
-          ? _modeSystemPrompt(mode, reverse: true)
-          : systemTemplate
+      effectiveTemplate.trim().isEmpty
+          ? _modeSystemPrompt(mode, reverse: true, templateVersion:selectedVersion)
+          : effectiveTemplate
               .trim()
               .replaceAll('{{image}}', '<uploaded image>')
               .replaceAll('{{input}}', '<provided in the user message>'),
       knownCharacterRuntimeInstruction(
-          mode, 'reverse', knownCharacter, templateVersion),
+          mode, 'reverse', knownCharacter, selectedVersion),
     ].where((item) => item.trim().isNotEmpty).join('\n\n');
     final system = injectDshImageAiSystemPrompt(
       task: DshImageAiTask.reverse,
       systemPrompt: baseSystem,
-      enabled: settings.reverseConvertDshEnabled,
+      enabled: saved.isNotEmpty ? false : settings.reverseConvertDshEnabled,
       mode: settings.reverseConvertDshMode,
       sharedPreset: _reverseConvertPromptPreset(settings),
       useDefaultSharedPreset: false,
@@ -1086,12 +1091,26 @@ class NaiApi {
             mode,
             'reverse',
             knownCharacter: knownCharacter,
-            templateVersion: templateVersion,
+            templateVersion: selectedVersion,
           ),
           if (tagHints.isNotEmpty) tagHints,
         ].join('\n')
       }
     ];
+    final protocol=ReverseTemplateProtocol.resolve(effectiveTemplate,mode,knownCharacter);
+    if(protocol!=null) {
+      var feedback='';
+      for(var attempt=0;attempt<3;attempt++) {
+        final response=await _chat(settings,settings.visionApiUrl,apiKey,settings.visionApiModel,
+          '$system\n\n${protocol.instruction}',
+          [...user,if(feedback.isNotEmpty){'type':'text','text':'上次未通过模板校验：$feedback。请对照同一图片重写完整结果，不补不可见内容。'}],
+          maxTokens:knownCharacter?7000:4000,label:'AI reverse · $selectedVersion · ${mode.value}',apiKind:'vision',preserveRaw:true);
+        if(!response.ok)return response;
+        try {final parsed=protocol.parse(response.text);return AiTextResult(ok:true,message:'Success',text:parsed.prompt,variants:parsed.variants);}
+        catch(error){feedback=error.toString();}
+      }
+      return AiTextResult(ok:false,message:'反推未通过模板校验，已保留原提示词：$feedback');
+    }
     final first = await _promptChat(
       settings: settings,
       apiUrl: settings.visionApiUrl,
@@ -1151,7 +1170,7 @@ class NaiApi {
         if (enhancement.context.isNotEmpty) enhancement.context,
         '这是法典增强的第二阶段。请以初步反推结果为事实边界，只校正结构、Tag、角色归属、互动方向、权重和冲突。不要新增图中未确认的主体、服装、动作或分级内容。',
         knownCharacterRuntimeInstruction(
-            mode, 'reverse', knownCharacter, templateVersion),
+            mode, 'reverse', knownCharacter, selectedVersion),
       ].join('\n\n');
       final refineUser = [
         '初步反推结果：',
@@ -1160,7 +1179,7 @@ class NaiApi {
           mode,
           'reverse',
           knownCharacter: knownCharacter,
-          templateVersion: templateVersion,
+          templateVersion: selectedVersion,
         ),
         '请只输出精修后的最终结果。',
       ].join('\n\n');
@@ -1202,6 +1221,7 @@ class NaiApi {
       }.toList();
       if (violations.isNotEmpty) {
         final repairSystem = [
+          system,
           promptRuleRepairSystemPrompt(mode, knownCharacter, templateVersion),
           if (enhancement.context.isNotEmpty) enhancement.context,
           if (knownCharacter)
@@ -1296,6 +1316,8 @@ class NaiApi {
         codexMatches: enhancement.matches,
       );
     }
+    final outputs=knownCharacter ? [current.variants?.namePrompt ?? '',current.variants?.featurePrompt ?? ''] : [current.text];
+    if(outputs.any((text)=>text.trim().isEmpty||modeNeedsRepair(mode,text)))return const AiTextResult(ok:false,message:'反推结果不符合所选模板模式，已保留原提示词');
     final finalResult = AiTextResult(
       ok: true,
       message: settings.promptCodexEnhanceEnabled
@@ -1375,10 +1397,13 @@ class NaiApi {
             matureTags: matureTags,
           )
         : const PromptCodexEnhancement(matches: [], context: '');
+    final savedTemplate=(settings.convertPromptTemplateVersion=='v4.5'
+        ? settings.convertPromptTemplatesV45 : settings.convertPromptTemplates)[mode.value]?.trim() ?? '';
+    final effectiveTemplate=savedTemplate.isNotEmpty?savedTemplate:systemTemplate;
     final baseSystem = [
-      systemTemplate.trim().isEmpty
-          ? _modeSystemPrompt(mode, reverse: false)
-          : systemTemplate
+      effectiveTemplate.trim().isEmpty
+          ? _modeSystemPrompt(mode, reverse: false, templateVersion:settings.convertPromptTemplateVersion)
+          : effectiveTemplate
               .trim()
               .replaceAll('{{input}}', '<provided in the user message>'),
       if (enhancement.context.isNotEmpty) enhancement.context,
@@ -1396,6 +1421,22 @@ class NaiApi {
     );
     final ruleRepairEnabled = settings.promptRuleAutoRepairEnabled &&
         mode != ReversePromptMode.natural;
+    final protocol=ReverseTemplateProtocol.resolve(effectiveTemplate,mode,knownCharacter);
+    if(protocol!=null) {
+      var feedback='';
+      for(var attempt=0;attempt<3;attempt++) {
+        final response=await _chat(settings,settings.convertApiUrl,apiKey,settings.convertApiModel,
+          '$system\n\n${protocol.instruction}\n原始用户要求优先；保留明确人数、发色、瞳色、场景和构图。未指定细节可合理补充，但不能新增与要求冲突的内容。',
+          '$user${feedback.isEmpty?'':'\n上次未通过模板校验：$feedback。按原始要求返回完整合格结果，不改变已指定事实。'}',
+          maxTokens:knownCharacter?7000:4000,label:'Prompt conversion · ${settings.convertPromptTemplateVersion} · ${mode.value}',apiKind:'convert',preserveRaw:true);
+        if(!response.ok)return response;
+        try {
+          final parsed=protocol.parse(response.text,source:text);
+          return AiTextResult(ok:true,message:'Success',text:parsed.prompt,variants:parsed.variants,codexMatches:enhancement.matches);
+        }catch(error){feedback=error.toString();}
+      }
+      return AiTextResult(ok:false,message:'转换未通过模板校验，已保留原提示词，未提交生图：$feedback',codexMatches:enhancement.matches);
+    }
     final result = await _promptChat(
       settings: settings,
       apiUrl: settings.convertApiUrl,
@@ -1568,6 +1609,7 @@ class NaiApi {
       label: source == 'reverse' ? 'AI inspect' : 'Prompt conversion',
       apiKind: source == 'reverse' ? 'vision' : 'convert',
       recordLog: recordLog,
+      maxTokens: knownCharacter ? 7000 : 4000,
     );
     if (!raw.ok) return raw;
     // Pair completeness is enforced by reversePrompt/convertPrompt, where the
@@ -1811,8 +1853,11 @@ class NaiApi {
         !_supportsSafeStreamTransport(payload)) {
       return null;
     }
+    final scope=GenerationScope.current;
+    scope?.credentials(token,settings);
     final client = createProxyHttpClient(settings, scope: ProxyScope.nai);
     _activeGenerationClients.add(client);
+    final detach=scope?.attach((){_activeGenerationClients.remove(client);client.close();});
     bool cancelled() => !_activeGenerationClients.contains(client);
     final uri = Uri.parse(
       '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/ai/generate-image-stream',
@@ -1820,6 +1865,7 @@ class NaiApi {
     try {
       for (var attempt = 0; attempt <= 3; attempt++) {
         if (cancelled()) throw const GenerationCancelledException();
+        scope?.credentials(token,settings);
         final request = http.MultipartRequest('POST', uri)
           ..headers['Authorization'] = 'Bearer $token'
           ..headers['Accept'] =
@@ -1839,6 +1885,7 @@ class NaiApi {
               await client.send(request).timeout(const Duration(seconds: 180));
         } catch (_) {
           if (cancelled()) throw const GenerationCancelledException();
+        scope?.credentials(token,settings);
           rethrow;
         }
         if (response.statusCode == 200 || response.statusCode == 201) {
@@ -1871,6 +1918,7 @@ class NaiApi {
       }
       return null;
     } finally {
+      detach?.call();
       _activeGenerationClients.remove(client);
       client.close();
     }
@@ -1884,8 +1932,11 @@ class NaiApi {
 
   Future<Uint8List> _postGenerate(
       String token, AppSettings settings, Map<String, dynamic> payload) async {
+    final scope=GenerationScope.current;
+    scope?.credentials(token,settings);
     final client = createProxyHttpClient(settings, scope: ProxyScope.nai);
     _activeGenerationClients.add(client);
+    final detach=scope?.attach((){_activeGenerationClients.remove(client);client.close();});
     bool cancelled() => !_activeGenerationClients.contains(client);
     final uri = Uri.parse(
       '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/ai/generate-image',
@@ -1896,6 +1947,7 @@ class NaiApi {
     try {
       for (var attempt = 0; attempt <= 3; attempt++) {
         if (cancelled()) throw const GenerationCancelledException();
+        scope?.credentials(token,settings);
         try {
           final response =
               await _sendGenerate(client, uri, token, payload, useMultipart)
@@ -1914,11 +1966,13 @@ class NaiApi {
           await Future.delayed(Duration(milliseconds: min(waitMs, 30000)));
         } catch (_) {
           if (cancelled()) throw const GenerationCancelledException();
+        scope?.credentials(token,settings);
           rethrow;
         }
       }
       throw StateError('Generation request did not complete');
     } finally {
+      detach?.call();
       _activeGenerationClients.remove(client);
       client.close();
     }
@@ -1946,7 +2000,7 @@ class NaiApi {
       {int maxTokens = 2000,
       String label = 'AI call',
       String apiKind = 'convert',
-      bool recordLog = true}) async {
+      bool recordLog = true, bool preserveRaw = false}) async {
     final effectiveModel = model.trim().isEmpty ? 'gpt-4o-mini' : model.trim();
     final userSummary = _summarizeAiUser(user);
     try {
@@ -2003,16 +2057,16 @@ class NaiApi {
           finish = data['choices']?[0]?['finish_reason']?.toString();
         }
       }
-      final result = content.isEmpty
+      final result = content.isEmpty || finish == 'length'
           ? AiTextResult(
               ok: false,
               message: finish == 'length'
-                  ? 'The API response was truncated and empty. This model spent the budget on reasoning; use a non-reasoning model or raise max output tokens.'
+                  ? 'The API response was truncated. No partial prompt was accepted.'
                   : 'AI returned empty content')
           : AiTextResult(
               ok: true,
               message: 'Success',
-              text: _cleanPrompt(content),
+              text: preserveRaw ? content.trim() : _cleanPrompt(content),
             );
       if (recordLog) {
         _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
@@ -2243,16 +2297,18 @@ class NaiApi {
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
 
-  String _modeSystemPrompt(ReversePromptMode mode, {required bool reverse}) {
+  String _modeSystemPrompt(ReversePromptMode mode, {required bool reverse,String templateVersion="v5"}) {
+    final version=templateVersion=="v4.5"?"V4.5":"V5";
+    final ratio=templateVersion=="v4.5"?"80% Danbooru tags + 20%":"70% Danbooru tags + 30%";
     final task =
         reverse ? 'infer from the image' : 'convert the user input into';
     switch (mode) {
       case ReversePromptMode.natural:
-        return 'You are a NovelAI V4.5 prompt expert. Please $task a 100% English natural-language prompt. Output one line only, with no explanation and no Danbooru tag list. For multiple characters, use base scene | character 1 | character 2.';
+        return 'You are a NovelAI $version prompt expert. Please $task a 100% English natural-language prompt. Output one line only, with no explanation and no Danbooru tag list. For multiple characters, use base scene | character 1 | character 2.';
       case ReversePromptMode.mixed:
-        return 'You are a NovelAI V4.5 / Danbooru prompt expert. Please $task a mixed prompt: 80% Danbooru tags + 20% concise natural language. Output one line only.';
+        return 'You are a NovelAI $version / Danbooru prompt expert. Please $task a mixed prompt: $ratio concise natural language. Output one line only.';
       case ReversePromptMode.tags:
-        return 'You are a NovelAI V4.5 / Danbooru prompt expert. Please $task an English Danbooru-tag prompt. Output one line only, separated by English commas.';
+        return 'You are a NovelAI $version / Danbooru prompt expert. Please $task an English Danbooru-tag prompt. Output one line only, separated by English commas.';
     }
   }
 

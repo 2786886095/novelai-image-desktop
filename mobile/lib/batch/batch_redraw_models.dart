@@ -385,3 +385,13 @@ List<(int, int)> parseBatchSizeImport(String text, int expectedCount) {
 
 var _counter = 0;
 String _id() => '${DateTime.now().microsecondsSinceEpoch}-${_counter++}';
+
+/// Durable results are carried across save/index failures, never regenerated.
+class SavedBatchImagesException implements Exception {
+  final List<HistoryItem> items;
+  final String message;
+  SavedBatchImagesException(List<HistoryItem> items, this.message)
+      : items = List.unmodifiable(items);
+  @override
+  String toString() => message;
+}

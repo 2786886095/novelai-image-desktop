@@ -1,3 +1,5 @@
+import '../agent/batch_generation_actions.dart';
+import '../agent/comic_generation_actions.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -5,6 +7,10 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../agent/agent_controller.dart';
 import '../agent/local_agent_bridge.dart';
+import '../agent/component_actions.dart';
+import '../agent/app_update_actions.dart';
+import '../agent/agent_models.dart';
+import 'dart:convert';
 import '../i18n/local_agent_text.dart';
 import '../state/app_state.dart';
 import 'agent_screen.dart';
@@ -24,10 +30,20 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
   bool _request = false, _reading = false, _checked = false, _launching = false;
   String? _error;
   LocalAgentBridge? _bridge;
+  ComponentActions? _components;
+  AppUpdateActions? _updates;
+  ComicGenerationActions? _comics;
+  BatchGenerationActions? _batches;
+  bool _readingUpdates = false;
   AgentController? _controller;
   String t(String key) =>
       localAgentText(context.read<AppState>().settings.language, key);
-  bool get busy => _request || _launching || _state['busy'] == true;
+  bool get busy =>
+      _request ||
+      _launching ||
+      _state['busy'] == true ||
+      _components?.busy == true ||
+      _updates?.pending == true;
   bool get running => _state['running'] == true;
   @override
   void initState() {
@@ -53,6 +69,81 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
     try {
       final state = await _native.invokeMapMethod<String, dynamic>('status');
       final backups = await _native.invokeListMethod<String>('backups');
+      if (!mounted) return;
+      final home = state?['dataDirectory'];
+      if (_updates == null && home is String) {
+        final app = context.read<AppState>();
+        _updates = AppUpdateActions(
+            root: Directory(home).parent,
+            port: DeviceAppUpdatePort(
+                settings: () => app.settings,
+                beforeReserve: () {
+                  if (_components?.busy == true ||
+                      (_comics?.busy == true || _batches?.busy == true) ||
+                      app.busy ||
+                      _request ||
+                      _state['busy'] == true) throw StateError('组件或运行时任务尚未结束');
+                },
+                beforeInstall: () async {
+                  // Host-owned afterResponse job: do not call _act('stop'), which
+                  // would cancel this same job and wait on itself.
+                  final stopped = await _native
+                      .invokeMapMethod<String, dynamic>(
+                          'stop', {'handoff': true});
+                  final state =
+                      await _native.invokeMapMethod<String, dynamic>('status');
+                  if (stopped?['stopRevision'] is! num ||
+                      state?['stopRevision'] != stopped?['stopRevision'] ||
+                      state?['running'] == true ||
+                      state?['busy'] == true) {
+                    throw StateError('Agent 停止状态未核实，未打开安装器');
+                  }
+                }),
+            approve: (session, args) =>
+                _bridge?.approveOperation(session, args) ?? Future.value(false),
+            cancelApproval: (session) =>
+                _bridge?.cancelOperationApproval(session, 'app.update.install'),
+            changed: () {
+              if (mounted) setState(() {});
+            });
+      }
+      // Journal IO must not stall component status, controls or metadata check.
+      if (_updates != null && !_readingUpdates) {
+        _readingUpdates = true;
+        unawaited(_updates!.refresh().catchError((Object e) {
+          if (mounted) setState(() => _error = '$e');
+        }).whenComplete(() => _readingUpdates = false));
+      }
+      if (_components == null && home is String) {
+        final notification = {
+          'notificationTitle': t('title'),
+          'notificationBody': t('notification'),
+          'stopLabel': t('stop')
+        };
+        _components = ComponentActions(
+            root: Directory(home).parent,
+            invoke: (name, args) async {
+              if (name == 'status' ||
+                  name == 'planDownload' ||
+                  name == 'stop') {
+                return await _native.invokeMapMethod<String, dynamic>(
+                        name, args) ??
+                    {};
+              }
+              await _native.invokeMethod(name, {...args, ...notification});
+              return {};
+            },
+            approve: (session, args) =>
+                _bridge?.approveOperation(session, args) ?? Future.value(false),
+            changed: () {
+              if (mounted) setState(() {});
+            });
+        // Reading the durable receipt must not delay the native status/UI.
+        // Agent mutations still await initialize() before they can execute.
+        unawaited(_components!.initialize().catchError((Object e) {
+          if (mounted) setState(() => _error = '$e');
+        }));
+      }
       if (mounted) {
         setState(() {
           _state = state ?? {};
@@ -81,12 +172,22 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
   }
 
   Future<void> _act(String name, [Map<String, dynamic> args = const {}]) async {
+    if ((_components?.busy == true || _updates?.pending == true) &&
+        name != 'stop' &&
+        name != 'open') return;
     if (_request) return;
     setState(() {
       _request = true;
       _error = null;
     });
     try {
+      if (name == 'stop') {
+        _comics?.cancel();
+        _batches?.cancel();
+        _bridge?.cancelApprovals();
+        await _updates?.cancel();
+        await _components?.cancel();
+      }
       await _native.invokeMethod(name, {
         ...args,
         'notificationTitle': t('title'),
@@ -105,16 +206,24 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
     if (busy || running) return;
     setState(() => _request = true);
     try {
-      final plan = await _native.invokeMapMethod<String, dynamic>('planDownload', {'kind':kind, 'reinstall':reinstall});
+      final plan = await _native.invokeMapMethod<String, dynamic>(
+          'planDownload', {'kind': kind, 'reinstall': reinstall});
       if (!mounted || plan == null) return;
       final size = ((plan['bytes'] as num) / 1048576).toStringAsFixed(1);
-      if (!await _confirm(t(reinstall ? 'reinstall' : 'install'), '${t('downloadSize')}: $size MiB · ${plan['version']}\n${t('downloadConsent')}')) return;
+      if (!await _confirm(t(reinstall ? 'reinstall' : 'install'),
+          '${t('downloadSize')}: $size MiB · ${plan['version']}\n${t('downloadConsent')}')) {
+        return;
+      }
       if (!mounted) return;
       setState(() => _request = false);
-      await _act('prepare', {'kind':kind,'downloadToken':plan['token']});
-    } catch(e) {if(mounted) setState(() => _error = '$e');}
-    finally {if(mounted) setState(() => _request = false);}
+      await _act('prepare', {'kind': kind, 'downloadToken': plan['token']});
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _request = false);
+    }
   }
+
   Future<void> _start() async {
     if (busy) return;
     final app = context.read<AppState>();
@@ -125,14 +234,114 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
       await _controller!.load();
       final home = _state['dataDirectory'] as String?;
       if (home == null) return;
+      _comics = ComicGenerationActions(
+          app: app,
+          sessions: _controller!.tools.sessions,
+          root: Directory(home).parent,
+          approve: (session, args) =>
+              _bridge?.approveOperation(session, args) ?? Future.value(false),
+          cancelApproval: (session) => _bridge?.cancelOperationApproval(
+              session, 'comic.generation.start'));
+      _batches = BatchGenerationActions(
+          app: app,
+          sessions: _controller!.tools.sessions,
+          root: Directory(home).parent,
+          approve: (session, args) =>
+              _bridge?.approveOperation(session, args) ?? Future.value(false),
+          cancelApproval: (session) => _bridge?.cancelOperationApproval(
+              session, 'batch.generation.start'));
       _bridge = LocalAgentBridge(
           journal: Directory('$home/studio-tool-journal'),
+          managesApproval: (tool, args) =>
+              ComponentActions.handles(tool, args) ||
+              AppUpdateActions.handles(tool, args) ||
+              ComicGenerationActions.handles(tool, args) ||
+              BatchGenerationActions.handles(tool, args),
+          afterResponse: (tool, args, session, call, result, delivered) {
+            _batches?.afterResponse(
+                tool, args, session, call, result, delivered);
+            _comics?.afterResponse(
+                tool, args, session, call, result, delivered);
+            _components?.afterResponse(
+                tool, args, session, call, result, delivered);
+            _updates?.afterResponse(
+                tool, args, session, call, result, delivered);
+          },
           authorizeImage: (tool, args, session) =>
               _controller!.tools.sessions.authorize(tool, args, session),
+          prepareImage: (tool, args, session) => _controller!.tools
+              .prepareImageOperation(tool, args, const [], sessionId: session),
+          cancelImages: () {
+            _comics?.cancel();
+            _batches?.cancel();
+            _controller?.tools.sessions.close();
+          },
           describeApproval: (tool, args, session) =>
               _controller!.tools.approvalSummary(tool, args, session),
-          executeScoped: (tool, args, session) => _controller!.tools
-              .execute(tool, args, const [], sessionId: session),
+          executeScoped: (tool, args, session) async {
+            if (ComicGenerationActions.handles(tool, args)) {
+              if (args['action'] == 'comic.generation.start' &&
+                  (_components?.busy == true ||
+                      _updates?.pending == true ||
+                      _request)) {
+                return const AgentToolResult(
+                    ok: false,
+                    title: '软件生命周期任务进行中',
+                    output: '请先等待组件或软件更新结束，再启动漫画生成。');
+              }
+              return _comics!.execute(tool, args, session);
+            }
+            if (BatchGenerationActions.handles(tool, args)) {
+              if (args['action'] == 'batch.generation.start' &&
+                  (_components?.busy == true ||
+                      _updates?.pending == true ||
+                      _request)) {
+                return const AgentToolResult(
+                    ok: false,
+                    title: '软件生命周期任务进行中',
+                    output: '请先等待组件或软件更新结束，再启动批量生成。');
+              }
+              return _batches!.execute(tool, args, session);
+            }
+            if (tool == 'studio_stop_generation') {
+              _comics?.cancelOwned(session);
+              _batches?.cancelOwned(session);
+            }
+
+            if (AppUpdateActions.handles(tool, args)) {
+              return _updates!.execute(tool, args, session);
+            }
+            if (ComponentActions.handles(tool, args)) {
+              if ((_updates?.pending == true ||
+                      (_comics?.busy == true || _batches?.busy == true)) &&
+                  !['component.status', 'component.check']
+                      .contains(args['action'])) {
+                return const AgentToolResult(
+                    ok: false, title: '软件更新进行中', output: '请先停止软件更新或完成系统安装。');
+              }
+              return _components!.execute(tool, args, session);
+            }
+            final result = await _controller!.tools
+                .execute(tool, args, const [], sessionId: session);
+            if (tool == 'langbai_software_capabilities' && result.ok) {
+              final data = jsonDecode(result.output) as Map<String, dynamic>;
+              return AgentToolResult(
+                  ok: true,
+                  title: result.title,
+                  output: jsonEncode({
+                    ...batchGenerationCapabilities(
+                        comicGenerationCapabilities(data)),
+                    'actions': {
+                      ...Map<String, dynamic>.from(data['actions']),
+                      ...componentActionCatalog,
+                      ...appUpdateActionCatalog,
+                      ...comicGenerationCatalog,
+                      ...batchGenerationCatalog
+                    }
+                  }));
+            }
+            return result;
+          },
           execute: (tool, args) =>
               _controller!.tools.execute(tool, args, const []));
       await _bridge!.start();
@@ -151,6 +360,10 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
   Future<void> _closeBridge() async {
     await _bridge?.close();
     _bridge = null;
+    await _batches?.close();
+    _batches = null;
+    await _comics?.close();
+    _comics = null;
     _controller?.tools.sessions.close();
     _controller?.tools.apiTools.close();
     _controller?.dispose();
@@ -212,8 +425,11 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
                         !supported || busy || running || !checked || failed
                             ? null
                             : () => _prepareConfirmed(kind),
-                    child: Text(
-                        t(official ? 'officialPrepare' : (_state['installed'] == null ? 'install' : 'componentPrepare')))),
+                    child: Text(t(official
+                        ? 'officialPrepare'
+                        : (_state['installed'] == null
+                            ? 'install'
+                            : 'componentPrepare')))),
               ]),
             ])));
   }
@@ -222,7 +438,14 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
   void dispose() {
     widget.visible.removeListener(_visible);
     _poll?.cancel();
-    _closeBridge();
+    _bridge?.cancelApprovals();
+    unawaited(() async {
+      try {
+        await _updates?.cancel();
+      } catch (_) {/* The Android installer owns its pending interaction. */}
+      await _components?.cancel();
+      await _closeBridge();
+    }());
     super.dispose();
   }
 
@@ -274,12 +497,26 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
                     },
               child: Text(t('confirm'))),
       ]),
-      Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(t('retainData'))),
+      Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(t('retainData'))),
       Wrap(spacing: 8, runSpacing: 8, children: [
-        OutlinedButton(onPressed: !supported || busy || running || _state['installed'] == null ? null : () => _prepareConfirmed('component', reinstall:true), child: Text(t('reinstall'))),
-        OutlinedButton(onPressed: !supported || busy || running || _state['installed'] == null ? null : () async {
-          if(await _confirm(t('uninstall'), t('retainData'))) await _act('uninstall', {'confirmed':true});
-        }, child: Text(t('uninstall'))),
+        OutlinedButton(
+            onPressed:
+                !supported || busy || running || _state['installed'] == null
+                    ? null
+                    : () => _prepareConfirmed('component', reinstall: true),
+            child: Text(t('reinstall'))),
+        OutlinedButton(
+            onPressed:
+                !supported || busy || running || _state['installed'] == null
+                    ? null
+                    : () async {
+                        if (await _confirm(t('uninstall'), t('retainData'))) {
+                          await _act('uninstall', {'confirmed': true});
+                        }
+                      },
+            child: Text(t('uninstall'))),
       ]),
       ExpansionTile(title: Text(t('updateHelp')), children: [
         Text(t('about')),
@@ -316,7 +553,10 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
         Expanded(child: Text(t('${_state['phase'] ?? 'stopped'}'))),
         if (running)
           TextButton(onPressed: () => _act('open'), child: Text(t('open'))),
-        if (running || _state['phase'] == 'starting')
+        if (running ||
+            _state['phase'] == 'starting' ||
+            _components?.busy == true ||
+            _updates?.pending == true)
           OutlinedButton(
               onPressed: () async {
                 await _act('stop');
@@ -332,6 +572,18 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
       ]),
       const SizedBox(height: 8),
       Text(t('logs'), style: Theme.of(context).textTheme.titleSmall),
+      if (_updates?.operation != null)
+        Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: SelectableText(
+                '${_updates!.operation!['state']} · ${_updates!.operation!['message']}')),
+      if (_updates?.busy == true)
+        LinearProgressIndicator(value: _updates!.progress),
+      if (_components?.operation != null)
+        Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: SelectableText(
+                '${_components!.operation!['state']} · ${_components!.operation!['message']}')),
       Container(
           key: const ValueKey('agent-runtime-log'),
           constraints: const BoxConstraints(minHeight: 240),

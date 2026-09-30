@@ -1,4 +1,4 @@
-export type ApiField={key:string;title:string;type:'url'|'text'|'boolean'|'choice';values?:string[]};
+export type ApiField={key:string;title:string;type:'url'|'text'|'boolean'|'choice'|'json';values?:string[]};
 const field=(key:string,title:string,type:ApiField['type']='text',values?:string[]):ApiField=>({key,title,type,...(values?{values}:{})});
 export const API_PROFILES:Record<string,{title:string;secret:string;mobile:boolean;fields:Record<string,ApiField>}>= {
  novelai:{title:'NovelAI 生图',secret:'token',mobile:true,fields:{baseUrl:field('apiBaseUrl','账户 API 地址','url'),imageUrl:field('imageBaseUrl','图片 API 地址','url'),allowCustomEndpoint:field('allowCustomEndpoint','允许自定义服务接收凭据','boolean'),allowCustomEndpointFallback:field('allowCustomEndpointFallback','自定义失败后尝试官方收费服务','boolean')}},
@@ -27,6 +27,14 @@ export function validateApiRequest(args:Record<string,unknown>) {
   for(const [key,value] of Object.entries(patch)){
    const rule=Object.hasOwn(API_PROFILES[profile].fields,key)?API_PROFILES[profile].fields[key]:undefined;if(!rule)throw Error('未知 API 字段');
    if(rule.type==='boolean'){if(typeof value!=='boolean')throw Error('开关值无效');}
+   else if(rule.type==='json'){
+    if(!value||typeof value!=='object'||Array.isArray(value)||JSON.stringify(value).length>16384)throw Error('扩展参数须为不超过 16 KiB 的对象');
+    for(const [name,v] of Object.entries(value)){
+     if(['negative_prompt','sampler'].includes(name)){if(typeof v!=='string'||v.length>12000||/\x00/.test(v))throw Error('扩展参数类型无效');}
+     else if(['steps','scale','seed'].includes(name)){if(typeof v!=='number'||!Number.isFinite(v)||name!=='scale'&&!Number.isSafeInteger(v))throw Error('扩展参数数值无效');}
+     else throw Error('未支持的网关扩展字段');
+    }
+   }
    else if(rule.type==='url')apiUrl(value);
    else if(typeof value!=='string'||!value.trim()||value.length>200||/[\r\n\x00]/.test(value)||rule.values&&!rule.values.includes(value))throw Error('API 字段值无效');
   }

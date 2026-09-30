@@ -124,9 +124,9 @@ export function configureSystemProxyResolver(
   automaticProxy.clear();
 }
 
-async function resolveAutomaticProxy(category: ProxyCategory, settings: AppSettings): Promise<string> {
+async function resolveAutomaticProxy(category: ProxyCategory, settings: AppSettings, target?: string): Promise<string> {
   if (!systemProxyResolver) return "";
-  const result = parseSystemProxyResult(await systemProxyResolver(CATEGORY_TARGET[category](settings)));
+  const result = parseSystemProxyResult(await systemProxyResolver(target ?? CATEGORY_TARGET[category](settings)));
   for (const candidate of result.proxies) {
     if (await reachabilityProbe(candidate)) return candidate;
   }
@@ -184,6 +184,18 @@ function agentsFor(proxy: string): { http: unknown; https: unknown } {
   }
   agentCache.set(proxy, result);
   return result;
+}
+
+/** Request-local PAC resolution for custom endpoints and their image-CDN redirects. */
+export async function proxyConfigForUrl(category: ProxyCategory, url: string, settings: AppSettings) {
+  if (settings[CATEGORY_FLAG[category]] === false || settings.proxyMode === "direct") return { proxy: false as const };
+  const proxy = settings.proxyMode === "auto"
+    ? await resolveAutomaticProxy(category, settings, url)
+    : normalizeProxyUrl(settings.proxyUrl);
+  if (!proxy) return { proxy: false as const };
+  const { http, https } = agentsFor(proxy);
+  if (!http || !https) throw new Error("代理配置无效");
+  return { httpAgent: http, httpsAgent: https, proxy: false as const };
 }
 
 /** Axios request-config fragment for manual or automatically resolved proxy. */

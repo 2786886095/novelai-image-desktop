@@ -9,7 +9,7 @@ import { imagePasteProps } from "./image-paste";
 import { detectiveRoundBudget, detectiveRounds, detectiveParameters, resetDetectiveDraft, type DetectiveParameters, type DetectiveSnapshot } from "./artist-detective-contract";
 
 type Target = { filePath: string; fileUrl: string; name: string };
-type Draft = { target: Target | null; prompt: string; style: string; subjectHint: string; knownCharacter: boolean; budget: number; parameters: DetectiveParameters };
+type Draft = { target: Target | null; prompt: string; style: string; subjectHint: string; knownCharacter: boolean; reverseMode: "tags" | "natural" | "mixed"; budget: number; parameters: DetectiveParameters };
 type Download = Awaited<ReturnType<Window["naiDesktop"]["artistDetectiveDownloadStatus"]>>;
 const bytes = (value: number) => value >= 1024 ** 3 ? `${(value / 1024 ** 3).toFixed(2)} GiB` : `${(value / 1024 ** 2).toFixed(1)} MiB`;
 const DOWNLOAD_STAGE: Record<string, string> = { idle: "按需下载", downloading: "下载中", verifying: "校验 SHA-256", extracting: "解压中", checking: "检查 CUDA 与模型", complete: "安装完成", cancelled: "已取消，可继续", failed: "安装失败" };
@@ -21,10 +21,11 @@ function restore(): Draft {
       detectiveRounds(value.budget);
       return { target: value.target ?? null, prompt: value.prompt, style: value.style,
         subjectHint: typeof value.subjectHint === "string" ? value.subjectHint : "", knownCharacter: value.knownCharacter === true,
+        reverseMode: value.reverseMode === "tags" || value.reverseMode === "natural" ? value.reverseMode : "mixed",
         budget: value.budget, parameters: detectiveParameters(value.parameters) };
     }
   } catch { /* new or invalid settings */ }
-  return { target: null, prompt: "", style: "", subjectHint: "", knownCharacter: false, budget: 300, parameters: detectiveParameters() };
+  return { target: null, prompt: "", style: "", subjectHint: "", knownCharacter: false, reverseMode: "mixed", budget: 300, parameters: detectiveParameters() };
 }
 const STAGE: Record<string, string> = { idle: "未开始", loading: "校验与加载本地模型", retrieving: "检索相似画师组合", generating: "正在生成", generated: "图片已保存", scoring: "本地评分", scored: "本轮评分完成", complete: "迭代完成", failed: "任务已停止" };
 
@@ -37,6 +38,7 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const applyParams = useAppStore(s => s.applyParams);
+  const templateVersion = useAppStore(s => s.settings?.reversePromptTemplateVersion) === "v4.5" ? "v4.5" : "v5";
   const runtimeVerified = snapshot?.runtimeValidation?.state === 'passed';
   const runtimeChecking = snapshot?.runtimeValidation?.state === 'checking';
   const active = !!snapshot?.running || busy || !!download?.busy || runtimeChecking;
@@ -93,7 +95,7 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
     });
     const hint = ["只提取人物、服装、动作、镜头与场景。不写画师名或 artist 标签；不复制对话文字。",
       draft.subjectHint.trim() ? `用户的目标/角色提示：${draft.subjectHint.trim()}` : ""].filter(Boolean).join("\n");
-    const result = await window.naiDesktop.reversePrompt(data, "tags", "full", hint, draft.knownCharacter);
+    const result = await window.naiDesktop.reversePrompt(data, draft.reverseMode, "full", hint, draft.knownCharacter, templateVersion);
     const prompt = (draft.knownCharacter ? result.variants?.namePrompt : undefined) || result.prompt;
     if (!result.ok || !prompt) throw new Error(result.message);
     patch({ prompt });
@@ -151,6 +153,10 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
         </details>}
         <label><span>{ft("固定内容提示词")}</span><textarea disabled={active} value={draft.prompt} onChange={e => patch({ prompt: e.target.value })} /></label>
         <section className="detective-caption-options" aria-label={ft("反推范围与角色")}>
+          <SelectMenu label={ft("反推模式")} ariaLabel={ft("反推模式")} disabled={active} value={draft.reverseMode} options={[
+            {value:"mixed",label:ft("混合模式")},{value:"tags",label:ft("Danbooru 标签")},{value:"natural",label:ft("自然语言")}
+          ]} onChange={value=>patch({reverseMode:value as Draft["reverseMode"]})}/>
+          <small>{ft("使用软件设置中保存的 {version} 对应模式模板；网络角色选项不改变模板要求。",{version:templateVersion.toUpperCase()})}</small>
           <label><span>{ft("目标/角色提示（可选）")}</span><input disabled={active} value={draft.subjectHint} onChange={e => patch({subjectHint:e.target.value})} placeholder={ft("例如：这是芙宁娜 / 只反推右侧角色 / 只反推桌上的物品")} aria-describedby="detective-subject-help" /></label>
           <label className="checkbox-line prompt-character-toggle"><input type="checkbox" disabled={active} checked={draft.knownCharacter} onChange={e => patch({knownCharacter:e.target.checked})} aria-describedby="detective-subject-help" /><span>{ft("网络角色：优先使用角色 Tag")}</span></label>
           <p id="detective-subject-help">{ft("提示用于告诉视觉模型要识别谁、看哪里；留空则分析整张图。开启网络角色后，仅在能可靠识别时优先使用角色 Tag；识别不确定时仍描述外貌，不猜角色名。")}</p>

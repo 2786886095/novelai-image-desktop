@@ -14,6 +14,7 @@ export function createSessionControls(directory:string,presets:()=>StylePromptPr
   let tail:Promise<unknown>=Promise.resolve();
   let activeSession:string|null=null;
   let controller:AbortController|null=null;
+  let ownedStop:(()=>void|Promise<void>)|null=null;
   const valid=(id:string)=>{if(!/^[a-zA-Z0-9_.:-]{1,160}$/.test(id)||id==='studio-library-ui')throw Error('请先选择一个已创建的酒馆会话');return id;};
   const file=(id:string)=>path.join(directory,createHash('sha256').update(valid(id)).digest('hex')+'.json');
   async function read(id:string):Promise<State>{
@@ -60,7 +61,7 @@ export function createSessionControls(directory:string,presets:()=>StylePromptPr
             }else throw Error('请选择确认生成或全自动');
             return write(id,state);
           }
-          if(req.tool==='studio_stop_generation'){state.mode='confirm';state.remaining=0;await write(id,state);if(activeSession===id){controller?.abort();stop();}return state;}
+          if(req.tool==='studio_stop_generation'){state.mode='confirm';state.remaining=0;await write(id,state);if(activeSession===id){controller?.abort();if(ownedStop)await ownedStop();else stop();}return state;}
           return state;
         });
         return {ok:true,title:'当前会话生图设置',output:JSON.stringify(data),data};
@@ -74,7 +75,7 @@ export function createSessionControls(directory:string,presets:()=>StylePromptPr
       if(count>state.remaining)throw Error('本次自动生成额度不足；请在侧栏重新授权或改为确认生成');
       state.remaining-=count;await write(req.sessionId??'',state);return true;
     });},
-    begin(id:string){if(activeSession!==null)throw Error('另一个会话正在生成，请等待完成');activeSession=valid(id);controller=new AbortController();return controller.signal;},
-    end(id:string){if(activeSession===id){activeSession=null;controller=null;}},
+    begin(id:string,stopOwned?:()=>void|Promise<void>){if(activeSession!==null)throw Error('另一个会话正在生成，请等待完成');activeSession=valid(id);controller=new AbortController();ownedStop=stopOwned??null;return controller.signal;},
+    end(id:string,signal?:AbortSignal){if(activeSession===id&&(!signal||signal===controller?.signal)){activeSession=null;controller=null;ownedStop=null;}},
   };
 }

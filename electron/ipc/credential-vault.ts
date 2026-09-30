@@ -1,6 +1,6 @@
 export const CREDENTIAL_PREFIX = "enc:v1:";
 export const SENSITIVE_SETTING_KEYS = [
-  "visionApiKey", "convertApiKey", "agentApiKey", "tagServerApiKey", "baiduSecret", "translateAiApiKey",
+  "visionApiKey", "convertApiKey", "agentApiKey", "tagServerApiKey", "baiduSecret", "translateAiApiKey", "imageApiKey",
 ] as const;
 
 type Cryptography = {
@@ -28,10 +28,10 @@ export class CredentialVault {
       return "";
     }
   }
-  encode(key: string, value: unknown): unknown {
+  encode(key: string, value: unknown, replace = false): unknown {
     // An unrelated settings/history save must preserve an unrecovered secret.
-    if ((value == null || value === "") && this.locked.has(key)) return this.locked.get(key);
-    if (typeof value !== "string" || !value || value.startsWith(CREDENTIAL_PREFIX)) return value;
+    if (!replace && (value == null || value === "") && this.locked.has(key)) return this.locked.get(key);
+    if (typeof value !== "string" || !value) return value;
     if (!this.crypto.isEncryptionAvailable()) throw new Error("本地凭据加密暂不可用，请稍后重试。");
     return CREDENTIAL_PREFIX + this.crypto.encryptString(value).toString("base64");
   }

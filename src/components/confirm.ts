@@ -1,8 +1,9 @@
 import {useAppStore} from '../store';
 import {featureKey,featureText} from '../feature-text';
 /** Promise-based in-app confirmation used instead of blocking browser dialogs. */
-export function confirmAction(message: string, title = "请确认", choice?:{label:string;onChange:(checked:boolean)=>void}): Promise<boolean> {
+export function confirmAction(message: string, title = "请确认", choice?:{label:string;onChange:(checked:boolean)=>void}, signal?:AbortSignal, buttonLabels?:{confirm:string;cancel:string}): Promise<boolean> {
   return new Promise((resolve) => {
+    if(signal?.aborted){resolve(false);return;}
     let settled = false;
     const backdrop = document.createElement("div");
     backdrop.className = "app-confirm-backdrop";
@@ -31,8 +32,8 @@ export function confirmAction(message: string, title = "请确认", choice?:{lab
       if (heading) heading.textContent = featureText(language,titleKey);
       if (body) body.textContent = featureText(language,messageKey);
       if(option && choice)option.querySelector('span')!.textContent=featureText(language,featureKey(choice.label));
-      backdrop.querySelector('[data-result="cancel"]')!.textContent=featureText(language,'取消');
-      backdrop.querySelector('[data-result="confirm"]')!.textContent=featureText(language,'确认');
+      backdrop.querySelector('[data-result="cancel"]')!.textContent=featureText(language,featureKey(buttonLabels?.cancel??'取消'));
+      backdrop.querySelector('[data-result="confirm"]')!.textContent=featureText(language,featureKey(buttonLabels?.confirm??'确认'));
     };
     render();const unsubscribe=useAppStore.subscribe(render);
     const previousFocus=document.activeElement as HTMLElement | null;
@@ -40,6 +41,7 @@ export function confirmAction(message: string, title = "请确认", choice?:{lab
       if (settled) return;
       settled = true;
       unsubscribe();
+      signal?.removeEventListener('abort',abort);
       backdrop.classList.add("is-leaving");
       window.setTimeout(() => backdrop.remove(), 130);
       resolve(value);
@@ -58,8 +60,11 @@ export function confirmAction(message: string, title = "请确认", choice?:{lab
         event.preventDefault();buttons[(index+(event.shiftKey?-1:1)+buttons.length)%buttons.length].focus();
       }
     });
+    const abort=()=>finish(false);
+    signal?.addEventListener('abort',abort,{once:true});
     document.body.appendChild(backdrop);
     window.requestAnimationFrame(() => backdrop.classList.add("is-visible"));
     (backdrop.querySelector('[role="alertdialog"]') as HTMLElement | null)?.focus();
+    if(signal?.aborted)abort();
   });
 }

@@ -80,7 +80,14 @@ android {
 
 // Tiny app-owned presentation overlay, separate from the downloaded runtime and
 // user-installed/customised plugins. No model/runtime archive enters the APK.
+def buildAgentPresentation = tasks.register('buildAgentPresentation', Exec) {
+    workingDir rootProject.file('../..')
+    commandLine(System.getenv('STUDIO_NODE_BINARY') ?: 'node', 'scripts/prepare-agent-presentation.cjs')
+    // Run even when generated files exist: a stale checked-in web bundle must
+    // never silently turn a fixed source tree into an old Android UI.
+}
 def stageAgentPresentation = tasks.register('stageAgentPresentation', Sync) {
+    dependsOn(buildAgentPresentation)
     from(rootProject.file('../../harness/plugins/studio-responsive')) {
         include 'index.js', 'package.json', 'lib/client.js'
     }
@@ -88,6 +95,10 @@ def stageAgentPresentation = tasks.register('stageAgentPresentation', Sync) {
     from(rootProject.file('../../harness/plugins/studio-library')) {
         include 'package.json', 'index.js', 'protocol.js', 'jev-config.js', 'panel-layout-store.js', 'lib/client.js'
         into 'library'
+    }
+    from(rootProject.file('../../harness/plugins/studio-tools')) {
+        include 'package.json', 'index.js'
+        into 'tools'
     }
 }
 tasks.named('preBuild').configure { dependsOn(stageAgentPresentation) }
@@ -104,4 +115,7 @@ tasks.configureEach { task ->
 
 flutter {
     source = "../.."
+}
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
 }

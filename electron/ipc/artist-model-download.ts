@@ -2,7 +2,7 @@ import axios from 'axios';
 import fs from 'node:fs';
 import path from 'node:path';
 import {pipeline} from 'node:stream/promises';
-import {proxyConfig} from './proxy';
+import {downloadRequest} from './download-request';
 
 const pending = new Map<string, Promise<void>>();
 /** Download only the public scorer assets. Never replace a valid file with a partial response. */
@@ -22,7 +22,8 @@ export async function prepareArtistModel(root: string, modelId: string, quantize
    const temporary=`${target}.${process.pid}.pending`;
    const url=`https://huggingface.co/${modelId}/resolve/main/${file}`;
    try {
-    const response=await axios.get(url,{...proxyConfig('ai'),responseType:'stream',timeout:60000,signal:AbortSignal.timeout(10*60*1000),maxRedirects:8,headers:{'User-Agent':'Langbai-NovelAI-Studio/Artist-Scorer'}});
+    const response=await downloadRequest('ai',url,{signal:AbortSignal.timeout(10*60*1000),headers:{'User-Agent':'Langbai-NovelAI-Studio/Artist-Scorer'}});
+    if(response.status!==200){response.data.destroy();throw new Error(`模型下载 HTTP ${response.status}`);}
     await pipeline(response.data,fs.createWriteStream(temporary));
     const stat=await fs.promises.stat(temporary);
     const expected=Number(response.headers['content-length']);
@@ -33,7 +34,7 @@ export async function prepareArtistModel(root: string, modelId: string, quantize
    } catch(error) {
     await fs.promises.rm(temporary,{force:true});
     const status=axios.isAxiosError(error)?error.response?.status:undefined;
-    throw new Error(`Artist scorer download failed (${modelId}/${file}${status?`, HTTP ${status}`:''}). Check the AI proxy in Settings and retry. Existing downloaded files are retained.`);
+    throw new Error(`评分模型下载失败 (${modelId}/${file}${status?`, HTTP ${status}`:''})：${error instanceof Error?error.message:'连接异常'}。请检查“AI 反推 / 转换”代理及 Hugging Face/CDN 连通性后重试；已完成的模型文件保留。`);
    }
   })();pending.set(target,download);
   return download.finally(()=>pending.delete(target));

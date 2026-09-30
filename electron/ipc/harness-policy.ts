@@ -1,22 +1,15 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import {validatePluginChanges,type PluginChange} from './harness-plugin-update';
 
 export const HARNESS_PROTOCOL = 1;
-export function isNewerBundle(candidate: string, current: string) {
-  const valid=/^(\d+)\.(\d+)\.(\d+)(?:-([a-z0-9.-]+))?$/i;
-  const a=valid.exec(candidate),b=valid.exec(current);if(!a||!b)return false;
-  for(let i=1;i<=3;i++)if(Number(a[i])!==Number(b[i]))return Number(a[i])>Number(b[i]);
-  if(a[4]===b[4])return false;if(!a[4])return true;if(!b[4])return false;
-  const x=a[4].split('.'),y=b[4].split('.');for(let i=0;i<Math.max(x.length,y.length);i++){
-    if(x[i]===y[i])continue;if(x[i]===undefined)return false;if(y[i]===undefined)return true;
-    const an=/^\d+$/.test(x[i]),bn=/^\d+$/.test(y[i]);if(an&&bn)return Number(x[i])>Number(y[i]);if(an!==bn)return !an;return x[i]>y[i];
-  }return false;
-}
+export {isNewerBundle} from '../../src/harness-version';
 export interface HarnessManifest {
   format: 1; protocol: 1; version: string; upstream: string;
   platform: string; arch: string; node: string; cli: string;
   files: Record<string, string>;
+  pluginChanges?: PluginChange[];
 }
 export function safeBundlePath(root: string, relative: string) {
   if (!relative || relative.includes('\\') || relative.includes(':') || relative.split('/').some(x => !x || x === '.' || x === '..')) throw new Error('Invalid component path');
@@ -35,6 +28,7 @@ export function validateManifest(value: unknown, platform = process.platform, ar
     if (typeof hash !== 'string' || !/^[a-f0-9]{64}$/.test(hash)) throw new Error('Invalid component digest');
   }
   if (!m.files[m.node] || !m.files[m.cli]) throw new Error('Missing engine entry points');
+  if(m.pluginChanges)validatePluginChanges(m.pluginChanges);
   return m;
 }
 export async function verifyBundle(root: string, manifest: HarnessManifest, signal?: AbortSignal) {

@@ -136,6 +136,7 @@ function imageSignature(images: readonly StylePromptPreviewImage[]) {
 }
 
 export function PositivePromptPresetControl({
+  compact = false,
   value,
   onApply,
   variant = "toolbar",
@@ -144,6 +145,7 @@ export function PositivePromptPresetControl({
   value: string;
   onApply: (prompt: string) => void;
   variant?: "toolbar" | "field";
+  compact?: boolean;
   character?: CharCaptionItem;
   onApplyCharacters?: (captions: CharCaptionItem[]) => void;
 }) {
@@ -514,7 +516,8 @@ export function PositivePromptPresetControl({
   return <>
     <button
       type="button"
-      className={variant === "toolbar" ? "prompt-tool-btn" : "btn btn-secondary positive-preset-field-trigger"}
+      className={`${compact ? "compact-icon-button " : ""}${variant === "toolbar" ? "prompt-tool-btn" : "btn btn-secondary positive-preset-field-trigger"}`}
+      title={text.trigger} aria-label={text.trigger} data-tooltip={text.trigger}
       aria-haspopup="dialog"
       onClick={() => {
         setOpen(true);
@@ -522,7 +525,7 @@ export function PositivePromptPresetControl({
         setHoverPreview(null);
         setStatus("");
       }}
-    ><Icon name="template" /><span>{text.trigger}</span></button>
+    ><Icon name="template" />{!compact&&<span>{text.trigger}</span>}</button>
     {open && <AppPortal>
       <div className="modal-backdrop positive-preset-backdrop" onMouseDown={() => setOpen(false)}>
         <section

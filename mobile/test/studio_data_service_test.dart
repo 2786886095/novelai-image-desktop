@@ -102,16 +102,16 @@ void main() {
         }),
         throwsStateError);
   });
-  test('locked prompts, running tasks and invalid steps are unchanged',
+  test('explicit prompt edits ignore legacy locks; running tasks and invalid steps are blocked',
       () async {
     app.settings.lockStylePrompt = true;
-    await expectLater(
-        service.mutate({
-          'expectedRevision': service.revision,
-          'target': 'params',
-          'patch': {'stylePrompt': 'changed'}
-        }),
-        throwsStateError);
+    await service.mutate({
+      'expectedRevision': service.revision,
+      'target': 'params',
+      'patch': {'stylePrompt': 'changed'}
+    });
+    expect(app.params.stylePrompt, 'changed');
+    storage.saved = null;
     await expectLater(
         service.mutate({
           'expectedRevision': service.revision,

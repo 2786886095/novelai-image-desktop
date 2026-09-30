@@ -357,10 +357,6 @@ class StudioDataService {
         rethrow;
       }
     } else if (target == 'params') {
-      if (key == 'stylePrompt' && app.settings.lockStylePrompt ||
-          key == 'negativePrompt' && app.settings.lockNegativePrompt) {
-        throw StateError('提示词已锁定，请先解除锁定');
-      }
       final raw = {...app.params.toJson(), '$key': value};
       if (key == 'qualityToggle') {
         raw['qualityPreset'] = value == true ? 'standard' : 'none';

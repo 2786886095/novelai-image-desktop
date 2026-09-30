@@ -39,13 +39,17 @@ function remember(key:string,value?:DetectiveRuntimeValidation) {
 function previous(key:string) {loadRecords();return cache.get(key) ?? records.get(key);}
 function checkError(error:unknown,c:Paths) {
   const e=error as NodeJS.ErrnoException;
+  const message=error instanceof Error?error.message:String(error);
+  if(/Asset manifest is not (?:the|a) verified desktop distribution/.test(message)) {
+    return '模型包与运行环境版本不匹配，或模型包校验未通过。请通过“使用已有运行环境”选择支持当前模型的环境；仍失败时重新下载当前版本，不要删除另一模型。';
+  }
   if(e?.code==='ENOENT' || e?.code==='ENOTDIR') {
     const missing=e.path ? String(e.path) : '';
     return c.python && missing && path.resolve(missing)===path.resolve(c.python)
       ? '运行环境文件不存在或已移动，请点击“使用已有运行环境”重新选择 Python。'
       : '模型文件不存在或目录已移动，请点击“使用已有模型目录”重新选择完整的模型目录。';
   }
-  return error instanceof Error?error.message:String(error);
+  return message;
 }
 let pendingKey:string|undefined;
 let pending:Promise<DetectiveRuntimeValidation>|undefined;

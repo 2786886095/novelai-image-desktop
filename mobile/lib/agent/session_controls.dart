@@ -28,6 +28,9 @@ class AgentSessionControls {
   };
   final AppState app;
   String? _active;
+  bool _stopped = false;
+  void Function()? _cancelActive;
+  final Map<String, int> _policyEpoch = {};
   Future<void> _tail = Future.value();
   AgentSessionControls(this.app);
   String _key(String id) {
@@ -45,7 +48,9 @@ class AgentSessionControls {
   Future<Map<String, dynamic>> read(String id) async {
     final raw = (await UnifiedStorage.preferences()).getString(_key(id));
     dynamic style;
-    final saved = raw == null ? <String,dynamic>{} : jsonDecode(raw) as Map<String,dynamic>;
+    final saved = raw == null
+        ? <String, dynamic>{}
+        : jsonDecode(raw) as Map<String, dynamic>;
     style = saved['style'];
     if (style != null &&
         (style is! Map ||
@@ -54,9 +59,16 @@ class AgentSessionControls {
             style['prompt'] is! String)) throw StateError('会话风格数据无效');
     return {
       'style': style,
+      'policyVersion':
+          saved['policyVersion'] is int ? saved['policyVersion'] : 0,
       'mode': saved['mode'] == 'confirm' ? 'confirm' : 'auto',
-      'limit': saved['limit'] is int && saved['limit'] >= 0 && saved['limit'] <= 100 ? saved['limit'] : 0,
-      'remaining': saved['remaining'] is int && saved['remaining'] >= 0 ? saved['remaining'] : 0
+      'limit':
+          saved['limit'] is int && saved['limit'] >= 0 && saved['limit'] <= 100
+              ? saved['limit']
+              : 0,
+      'remaining': saved['remaining'] is int && saved['remaining'] >= 0
+          ? saved['remaining']
+          : 0
     };
   }
 
@@ -67,42 +79,93 @@ class AgentSessionControls {
     }
   }
 
-  void begin(String id) {
+  void begin(String id, {void Function()? cancel}) {
     _key(id);
     if (_active != null || app.busy || app.generationQueueRunning) {
       throw StateError('另一个图像任务正在运行，请等待完成');
     }
     _active = id;
+    _cancelActive = cancel;
+    _stopped = false;
+  }
+
+  void ensureActive(String id) {
+    if (_active != id || _stopped) throw StateError('任务已停止；未继续提交生图');
   }
 
   void end(String id) {
-    if (_active == id) _active = null;
+    if (_active == id) {
+      _active = null;
+      _cancelActive = null;
+    }
   }
 
   void close() {
+    _stopped = true;
     if (_active != null) {
-      app.cancelGeneration();
-      app.api.cancelActiveGeneration();
+      if (_cancelActive != null) {
+        _cancelActive!();
+      } else {
+        app.cancelGeneration();
+        app.api.cancelActiveGeneration();
+      }
     }
     _active = null;
   }
 
-  Future<bool> authorize(
-      String tool, Map<String, dynamic> args, String id) => _serial(() async {
-    if (!paid.contains(tool)) return false;
-    _key(id);
-    final grant = await read(id);
-    if (grant['mode'] != 'auto') return false;
-    final count = tool == 'langbai_generate_image' ? (args['count'] ?? 1) : 1;
-    if (count is! int || count < 1 || count > 8) throw StateError('生成张数必须为1–8');
-    if (grant['limit'] == 0) return true;
-    if (count > grant['remaining']) {
-      throw StateError('本次自动生成额度不足；请重新授权或改为确认生成');
+  Future<Map<String, dynamic>> comicGrant(String id, int count) async {
+    final state = await read(id);
+    ensureActive(id);
+    if (state['mode'] == 'auto' &&
+        state['limit'] != 0 &&
+        count > state['remaining']) throw StateError('本次自动生成额度不足，未提交漫画图片');
+    return {...state, 'epoch': _policyEpoch[id] ?? 0};
+  }
+
+  void ensureComicGrant(String id, Map<String, dynamic> grant) {
+    ensureActive(id);
+    if ((_policyEpoch[id] ?? 0) != grant['epoch']) {
+      throw StateError('会话授权已变化，漫画任务停止');
     }
-    grant['remaining'] = grant['remaining'] - count;
-    await _save(id, grant);
-    return true;
-  });
+  }
+
+  Future<void> consumeComicAttempt(String id, Map<String, dynamic> grant) =>
+      _serial(() async {
+        ensureComicGrant(id, grant);
+        final now = await read(id);
+        ensureComicGrant(id, grant);
+        if (now['mode'] != grant['mode'] ||
+            now['limit'] != grant['limit'] ||
+            now['policyVersion'] != grant['policyVersion']) {
+          throw StateError('会话授权已变化，漫画任务停止');
+        }
+        if (now['mode'] == 'auto' && now['limit'] != 0) {
+          if (now['remaining'] < 1) throw StateError('自动生成额度已耗尽');
+          now['remaining']--;
+          await _save(id, now);
+          ensureComicGrant(id, grant);
+        }
+      });
+
+  Future<bool> authorize(String tool, Map<String, dynamic> args, String id) =>
+      _serial(() async {
+        if (!paid.contains(tool)) return false;
+        _key(id);
+        final grant = await read(id);
+        if (grant['mode'] != 'auto') return false;
+        final count =
+            tool == 'langbai_generate_image' ? (args['count'] ?? 1) : 1;
+        if (count is! int || count < 1 || count > 8) {
+          throw StateError('生成张数必须为1–8');
+        }
+        if (grant['limit'] == 0) return true;
+        if (count > grant['remaining']) {
+          throw StateError('本次自动生成额度不足；请重新授权或改为确认生成');
+        }
+        grant['remaining'] = grant['remaining'] - count;
+        await _save(id, grant);
+        return true;
+      });
 
   Future<Map<String, dynamic>> execute(
       String tool, Map<String, dynamic> args, String id) {
@@ -130,25 +193,38 @@ class AgentSessionControls {
             p == null ? null : {'id': p.id, 'name': p.name, 'prompt': p.prompt};
         await _save(id, state);
       } else if (tool == 'studio_generation_policy') {
+        _policyEpoch[id] = (_policyEpoch[id] ?? 0) + 1;
+        state['policyVersion'] = (state['policyVersion'] as int) + 1;
         if (args['mode'] == 'confirm') {
-          state['mode'] = 'confirm'; state['remaining'] = 0;
+          state['mode'] = 'confirm';
+          state['remaining'] = 0;
         } else if (args['mode'] == 'auto') {
           final n = args['limit'];
           if (n is! int || n < 0 || n > 100) {
             throw StateError('自动生成上限必须为0–100张，0表示不限');
           }
-          state['mode'] = 'auto'; state['limit'] = n; state['remaining'] = n;
+          state['mode'] = 'auto';
+          state['limit'] = n;
+          state['remaining'] = n;
         } else {
           throw StateError('请选择确认生成或全自动');
         }
       } else if (tool == 'studio_stop_generation') {
-        state['mode'] = 'confirm'; state['remaining'] = 0;
+        _policyEpoch[id] = (_policyEpoch[id] ?? 0) + 1;
+        state['policyVersion'] = (state['policyVersion'] as int) + 1;
+        state['mode'] = 'confirm';
+        state['remaining'] = 0;
         if (_active == id) {
-          app.cancelGeneration();
-          app.api.cancelActiveGeneration();
+          _stopped = true;
+          if (_cancelActive != null) {
+            _cancelActive!();
+          } else {
+            app.cancelGeneration();
+            app.api.cancelActiveGeneration();
+          }
         }
       }
-      await _save(id,state);
+      await _save(id, state);
       return read(id);
     });
   }

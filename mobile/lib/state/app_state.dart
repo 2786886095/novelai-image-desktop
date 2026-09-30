@@ -1,3 +1,12 @@
+import '../batch/batch_redraw_controller.dart';
+import '../batch/batch_redraw_models.dart';
+import '../services/comic_image_service.dart';
+import '../comic/comic_controller.dart';
+import '../services/generation_scope.dart';
+import '../i18n/parity_text.dart';
+import '../i18n/compatible_image_text.dart';
+import '../services/openai_images.dart';
+import '../services/apk_update.dart';
 import '../services/completion_sound.dart';
 import '../images/style_prompt_restore.dart';
 import '../images/upscale_plan.dart';
@@ -70,7 +79,109 @@ bool looksLikeReferenceGenerationError(Object error) {
       message.contains('controlnet');
 }
 
+class CompatibleGenerationOutcome {
+  final bool ok;
+  final List<HistoryItem> items;
+  final String message;
+  CompatibleGenerationOutcome(this.ok, List<HistoryItem> items, this.message)
+      : items = List.unmodifiable(items);
+}
+
 class AppState extends ChangeNotifier {
+  BatchRedrawController? _batchRedraw;
+  BatchRedrawController get batchRedraw {
+    if (_batchRedraw == null) {
+      _batchRedraw = BatchRedrawController(this);
+      unawaited(_batchRedraw!.load());
+    }
+    return _batchRedraw!;
+  }
+
+  ComicController? _comic;
+  ComicController get comic {
+    if(_comic==null){_comic=ComicController(this);unawaited(_comic!.load());}
+    return _comic!;
+  }
+  @override void notifyListeners(){if(!_compatibleDisposed)super.notifyListeners();}
+  CompatibleImageCancellation? _compatibleCancellation;
+  bool _compatibleDisposed = false;
+
+  Future<void> saveCompatibleSettings(Map<String, dynamic> config, String key,
+      {String? expectedCredentialId}) async {
+    final next = AppSettings.fromJson(settings.toJson())
+      ..compatibleImage = Map<String, dynamic>.from(config)
+      ..imageProvider = 'openai-images';
+    await storage.saveCompatibleConfiguration(next, key,
+      expectedCredentialId: expectedCredentialId ?? settings.compatibleImage['credentialId'] as String? ?? '');
+    // Unrelated in-memory edits made while secure storage was writing are retained.
+    settings.compatibleImage = next.compatibleImage;
+    settings.imageProvider = next.imageProvider;
+    generationQuote = null;
+    notifyListeners();
+  }
+
+  Future<void> switchToNativeImages() async {
+    final before = await storage.readCompatibleApiState();
+    final next = await storage.writeCompatibleApiState(before,
+      {...Map<String, dynamic>.from(before['config'] as Map), 'enabled': false}, before['secret'] as String);
+    settings.imageProvider = next.imageProvider;
+    settings.compatibleImage = next.compatibleImage;
+    notifyListeners();
+    _scheduleGenerationQuote();
+  }
+
+  /// Agent inputs never overwrite the user's current prompt, batch or workbench.
+  Future<CompatibleGenerationOutcome> generateCompatibleForAgent({required String prompt,
+      required int count, required VoidCallback ensureCurrent}) async {
+    ensureCurrent();
+    if (busy) throw StateError('另一个图像任务正在运行，请稍后重试。');
+    if (settings.imageProvider != 'openai-images') throw StateError('图片服务配置已变化，未提交生图。');
+    return _generateCompatible(promptOverride: prompt, countOverride: count, ensureCurrent: ensureCurrent);
+  }
+
+  Future<CompatibleGenerationOutcome> _generateCompatible({String? promptOverride, int? countOverride, VoidCallback? ensureCurrent}) async {
+    final snapshot = AppSettings.fromJson(jsonDecode(jsonEncode(settings.toJson())) as Map<String, dynamic>);
+    final c = snapshot.compatibleImage;
+    final prompt = promptOverride ?? params.positivePrompt, count = countOverride ?? batchCount, group = generationGroupId;
+    final text = compatibleImageText(snapshot.language);
+    final cancel = CompatibleImageCancellation();
+    _compatibleCancellation = cancel;
+    busy = true; generationQueueRunning = false; lastAnlasSpent = null;
+    _clearGenerationPreview(notify: false); status = text['requesting']!; notifyListeners();
+    final items = <HistoryItem>[];
+    var complete = false;
+    try {
+      final key = await storage.getCompatibleImageKey(c['credentialId'] as String? ?? '');
+      if (cancel.cancelled) { status = text['stopped']!; return CompatibleGenerationOutcome(false, items, status); }
+      ensureCurrent?.call();
+      final config = CompatibleImageConfig(baseUrl: c['baseUrl'] as String? ?? '', model: c['model'] as String? ?? '',
+        apiKey: key ?? '', responseFormat: c['responseFormat'] as String? ?? 'auto');
+      final body = compatibleImageBody(config, prompt: prompt, size: c['size'] as String? ?? 'auto', n: count,
+        extensions: Map<String, Object?>.from(c['extensions'] as Map? ?? {}));
+      try { await BackgroundQueueService.start('compatible-generation', title:text['panel']!,text:text['requesting']!); } catch (_) { /* Foreground generation still works. */ }
+      final batch = await generateCompatibleImages(config, prompt: prompt, size: c['size'] as String? ?? 'auto', n: count,
+        extensions: Map<String, Object?>.from(c['extensions'] as Map? ?? {}), cancellation: cancel,
+        clientForUri: (uri) => createProxyHttpClientForUri(snapshot, uri, scope: ProxyScope.ai));
+      for (final bytes in batch.images) {
+        try { items.add(await storage.saveCompatibleImage(bytes, body, snapshot, groupId: group.ifEmptyNull)); }
+        on SavedImageHistoryException catch (error) { items.add(error.item); rethrow; }
+      }
+      if (!_compatibleDisposed && items.isNotEmpty) await _commitCompletedHistory(items);
+      complete = batch.complete;
+      status = batch.complete ? '${text['done']} ${items.length}' : '${batch.cancelled ? text['stopped'] : text['failed']} ${batch.error?.status ?? ''} · ${text['savedCount']} ${items.length}';
+    } on SavedImageHistoryException {
+      if (!_compatibleDisposed && items.isNotEmpty) await _commitCompletedHistory(items);
+      status = '${text['historyFailed']} ${items.length}';
+    } catch (_) {
+      if (!_compatibleDisposed && items.isNotEmpty) await _commitCompletedHistory(items);
+      status = '${text['failed']} · ${text['savedCount']} ${items.length}';
+    } finally {
+      try { await BackgroundQueueService.stop('compatible-generation'); } catch (_) { /* Notification cleanup is best effort. */ }
+      if (_compatibleCancellation == cancel) { _compatibleCancellation = null; busy = false; }
+      if (!_compatibleDisposed) notifyListeners();
+    }
+    return CompatibleGenerationOutcome(complete, items, status);
+  }
   final NaiApi api;
   final Storage storage;
   final OfflineTagStore offlineTags;
@@ -169,7 +280,10 @@ class AppState extends ChangeNotifier {
   int? lastAnlasSpent;
   OfflineTagStatus offlineTagStatus = const OfflineTagStatus();
   bool offlineTagBusy = false;
+  final _textJobTimers=<Timer>{};
   UpdateInfo? updateInfo;
+  bool updateInstalling=false;
+  double updateProgress=0;
   bool updateChecking = false;
 
   Timer? _quoteTimer;
@@ -213,8 +327,9 @@ class AppState extends ChangeNotifier {
       status = _rt('common.ready');
       // Per-tool persistence opt-out: when a toggle is off, that tool keeps
       // its hardcoded defaults instead of restoring the last-used values.
+      final savedParams = await storage.getParams();
       if (settings.persistGenerateParams) {
-        params = await storage.getParams();
+        params = savedParams;
         final savedBatch=settings.lastGenerationState['batchCount'];
         if(savedBatch is num && savedBatch.isFinite)batchCount=savedBatch.toInt().clamp(1,999);
         extras.charCaptions = await storage.getCharacterPrompts();
@@ -312,12 +427,9 @@ class AppState extends ChangeNotifier {
       )
           ? settings.generationGroupId
           : '';
-      if (settings.lockStylePrompt) {
-        params.stylePrompt = settings.savedStylePrompt;
-      }
-      if (settings.lockNegativePrompt) {
-        params.negativePrompt = settings.savedNegativePrompt;
-      }
+      // Always retain edited prompt text, even when numeric persistence is off.
+      params.stylePrompt = savedParams.stylePrompt;
+      params.negativePrompt = savedParams.negativePrompt;
       try {
         offlineTagStatus = await offlineTags.status();
       } catch (_) {
@@ -416,20 +528,8 @@ class AppState extends ChangeNotifier {
       params.qualityToggle = params.qualityPreset != 'none';
       params.transparentBackground = false;
     }
-    var settingsChanged = false;
-    if (settings.lockStylePrompt &&
-        settings.savedStylePrompt != params.stylePrompt) {
-      settings.savedStylePrompt = params.stylePrompt;
-      settingsChanged = true;
-    }
-    if (settings.lockNegativePrompt &&
-        settings.savedNegativePrompt != params.negativePrompt) {
-      settings.savedNegativePrompt = params.negativePrompt;
-      settingsChanged = true;
-    }
     notifyListeners();
     storage.setParams(params);
-    if (settingsChanged) storage.setSettings(settings);
     _scheduleGenerationQuote();
   }
 
@@ -646,20 +746,6 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setPromptLock(String kind, bool locked) async {
-    if (kind == 'style') {
-      settings
-        ..lockStylePrompt = locked
-        ..savedStylePrompt = locked ? params.stylePrompt : '';
-    } else {
-      settings
-        ..lockNegativePrompt = locked
-        ..savedNegativePrompt = locked ? params.negativePrompt : '';
-    }
-    await storage.setSettings(settings);
-    notifyListeners();
-  }
-
   Future<void> addPromptShortcut({
     required String name,
     required String prefix,
@@ -695,8 +781,7 @@ class AppState extends ChangeNotifier {
         template.suffix,
       ].where((value) => value.trim().isNotEmpty).join(', ');
       params.positivePrompt = positive;
-      if (!settings.lockNegativePrompt &&
-          template.negativePrompt.trim().isNotEmpty) {
+      if (template.negativePrompt.trim().isNotEmpty) {
         params.negativePrompt = [
           params.negativePrompt,
           template.negativePrompt,
@@ -1043,8 +1128,6 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    final lockedStyle = params.stylePrompt;
-    final lockedNegative = params.negativePrompt;
     imported.applyTo(params);
     if (imported.stylePrompt == '' && imported.positivePrompt != null) {
       final split = restoreSavedStyle(imported.positivePrompt!, settings.stylePromptPresets.map((p) => p.prompt));
@@ -1052,12 +1135,6 @@ class AppState extends ChangeNotifier {
         params.stylePrompt = split.style;
         params.positivePrompt = split.positive;
       }
-    }
-    if (!exact && settings.lockStylePrompt) {
-      params.stylePrompt = lockedStyle;
-    }
-    if (!exact && settings.lockNegativePrompt) {
-      params.negativePrompt = lockedNegative;
     }
     if (exact) {
       final restoredCaptions = (characterCaptions ?? const [])
@@ -1703,6 +1780,9 @@ class AppState extends ChangeNotifier {
 
   Future<void> refreshGenerationQuote() async {
     final version = ++_quoteVersion;
+    if (settings.imageProvider == 'openai-images' && workbenchImage == null) {
+      generationQuote = null; quoteLoading = false; notifyListeners(); return;
+    }
     final token = await storage.getToken();
     if (token == null || token.isEmpty || !account.hasToken) {
       if (version == _quoteVersion) {
@@ -1756,6 +1836,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> generate() async {
     if (busy) return;
+    if (settings.imageProvider == 'openai-images') { await _generateCompatible(); return; }
     final token = await storage.getToken();
     if (token == null || token.isEmpty) {
       status = _rt('error.tokenRequired');
@@ -2179,6 +2260,10 @@ class AppState extends ChangeNotifier {
   }
 
   void cancelGeneration() {
+    _comic?.cancelQueue();
+    if (_compatibleCancellation != null) {
+      _compatibleCancellation!.cancel(); status = compatibleImageText(settings.language)['stopped']!; notifyListeners(); return;
+    }
     if (!generationQueueRunning) return;
     _cancelGenerationRequested = true;
     generationQueue.clear();
@@ -2664,16 +2749,19 @@ class AppState extends ChangeNotifier {
   Future<void> reversePrompt({String? templateVersion}) async {
     if(templateVersion != null && !['v5','v4.5'].contains(templateVersion)) throw ArgumentError('Invalid template version');
     final chosenVersion = templateVersion ?? settings.reversePromptTemplateVersion;
-    final image = await _workbenchBytes();
+    final chosenMode=reverseMode, chosenScope=reverseScope, chosenHint=reverseHint, chosenKnown=reverseKnownCharacter;
+    final requestSettings=AppSettings.fromJson(settings.toJson())..reversePromptTemplateVersion=chosenVersion;
+    final templateBody=resolvedPromptTemplate('reverse',chosenMode,scoped:chosenScope!=ReversePromptScope.full,templateVersion:chosenVersion);
     final sourcePath = workbenchImage?.filePath;
+    final image = await _workbenchBytes();
     final key = await storage.getVisionKey() ?? '';
     final job = TextToolJob(
       id: '${DateTime.now().microsecondsSinceEpoch}',
-      label: reverseHint.trim().isNotEmpty
-          ? reverseHint.trim()
+      label: chosenHint.trim().isNotEmpty
+          ? chosenHint.trim()
           : _rt('job.reverseLabel'),
-      mode: reverseMode,
-      knownCharacter: reverseKnownCharacter,
+      mode: chosenMode,
+      knownCharacter: chosenKnown,
       status: TextToolJobStatus.processing,
       addedAt: DateTime.now(),
     );
@@ -2691,15 +2779,14 @@ class AppState extends ChangeNotifier {
       // Notification permission or OEM restrictions must not block the request.
     }
     final res = await api.reversePrompt(
-      settings: settings,
+      settings: requestSettings,
       apiKey: key,
       image: image,
-      mode: reverseMode,
-      scope: reverseScope,
-      hint: reverseHint,
-      knownCharacter: reverseKnownCharacter,
-      systemTemplate: resolvedPromptTemplate('reverse', reverseMode,
-          scoped: reverseScope != ReversePromptScope.full, templateVersion: chosenVersion),
+      mode: chosenMode,
+      scope: chosenScope,
+      hint: chosenHint,
+      knownCharacter: chosenKnown,
+      systemTemplate: templateBody,
       templateVersion: chosenVersion,
     );
     await BackgroundQueueService.stop(owner);
@@ -2718,9 +2805,9 @@ class AppState extends ChangeNotifier {
       status = _rt('status.reverseDone');
       final historyItem = TextToolHistoryItem(
         id: job.id,
-        mode: reverseMode,
-        knownCharacter: reverseKnownCharacter,
-        input: reverseHint,
+        mode: chosenMode,
+        knownCharacter: chosenKnown,
+        input: chosenHint,
         sourceImagePath: sourcePath,
         result: res.text,
         variants: res.variants,
@@ -2729,7 +2816,7 @@ class AppState extends ChangeNotifier {
       );
       reverseHistory = [historyItem, ...reverseHistory];
       unawaited(storage.setReverseHistory(reverseHistory));
-      Timer(_textToolDoneAutoDismiss, () => removeReverseJob(job.id));
+      _scheduleTextJobDismiss(() => removeReverseJob(job.id));
     } else {
       job.status = TextToolJobStatus.failed;
       job.message = res.message;
@@ -2742,14 +2829,17 @@ class AppState extends ChangeNotifier {
   Future<void> convertPrompt({String? templateVersion}) async {
     if(templateVersion != null && !['v5','v4.5'].contains(templateVersion)) throw ArgumentError('Invalid template version');
     final chosenVersion = templateVersion ?? settings.convertPromptTemplateVersion;
+    final chosenMode=convertMode, chosenInput=convertInput, chosenKnown=convertKnownCharacter;
+    final requestSettings=AppSettings.fromJson(settings.toJson())..convertPromptTemplateVersion=chosenVersion;
+    final templateBody=resolvedPromptTemplate('convert',chosenMode,templateVersion:chosenVersion);
     final key = await storage.getConvertKey() ?? '';
     final job = TextToolJob(
       id: '${DateTime.now().microsecondsSinceEpoch}',
-      label: convertInput.trim().length > 60
-          ? convertInput.trim().substring(0, 60)
-          : convertInput.trim(),
-      mode: convertMode,
-      knownCharacter: convertKnownCharacter,
+      label: chosenInput.trim().length > 60
+          ? chosenInput.trim().substring(0, 60)
+          : chosenInput.trim(),
+      mode: chosenMode,
+      knownCharacter: chosenKnown,
       status: TextToolJobStatus.processing,
       addedAt: DateTime.now(),
     );
@@ -2767,12 +2857,12 @@ class AppState extends ChangeNotifier {
       // Notification permission or OEM restrictions must not block the request.
     }
     final res = await api.convertPrompt(
-      settings: settings,
+      settings: requestSettings,
       apiKey: key,
-      text: convertInput,
-      mode: convertMode,
-      knownCharacter: convertKnownCharacter,
-      systemTemplate: resolvedPromptTemplate('convert', convertMode, templateVersion: chosenVersion),
+      text: chosenInput,
+      mode: chosenMode,
+      knownCharacter: chosenKnown,
+      systemTemplate: templateBody,
     );
     await BackgroundQueueService.stop(owner);
     // See reversePrompt: a removed job is treated as cancelled.
@@ -2788,9 +2878,9 @@ class AppState extends ChangeNotifier {
       status = _rt('status.convertDone');
       final historyItem = TextToolHistoryItem(
         id: job.id,
-        mode: convertMode,
-        knownCharacter: convertKnownCharacter,
-        input: convertInput,
+        mode: chosenMode,
+        knownCharacter: chosenKnown,
+        input: chosenInput,
         result: res.text,
         variants: res.variants,
         codexMatches: res.codexMatches,
@@ -2798,13 +2888,19 @@ class AppState extends ChangeNotifier {
       );
       convertHistory = [historyItem, ...convertHistory];
       unawaited(storage.setConvertHistory(convertHistory));
-      Timer(_textToolDoneAutoDismiss, () => removeConvertJob(job.id));
+      _scheduleTextJobDismiss(() => removeConvertJob(job.id));
     } else {
       job.status = TextToolJobStatus.failed;
       job.message = res.message;
       status = res.message;
     }
     notifyListeners();
+  }
+
+  void _scheduleTextJobDismiss(void Function() action) {
+    late final Timer timer;
+    timer=Timer(_textToolDoneAutoDismiss,(){_textJobTimers.remove(timer);action();});
+    _textJobTimers.add(timer);
   }
 
   void toggleReverseQueueCollapsed() {
@@ -3059,6 +3155,16 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<void> installAppUpdate() async {
+    if(updateInstalling||updateInfo?.hasUpdate!=true)return;
+    updateInstalling=true;updateProgress=0;notifyListeners();
+    try {
+      final stage=await ApkUpdate.install(settings,updateInfo!, (value){updateProgress=value;notifyListeners();});
+      status=stage=='permission_required' ? parityText(settings.language,'update.allowSystemInstall') : parityText(settings.language,'update.systemInstallerOpened');
+    }catch(error){status='${_rt('status.updateFailedShort')}: $error';}
+    finally{updateInstalling=false;notifyListeners();}
+  }
+
   Future<void> checkUpdate({bool manual = false}) async {
     if (updateChecking) return;
     updateChecking = true;
@@ -3170,16 +3276,48 @@ class AppState extends ChangeNotifier {
     return group.id;
   }
 
+  Future<HistoryItem> generateCompatibleComicPanel({required GenerateParams panelParams,
+      required GenerateExtras panelExtras, required String projectTitle, String? historyGroupId, String? size}) async {
+    final snapshot=AppSettings.fromJson(jsonDecode(jsonEncode(settings.toJson())) as Map<String,dynamic>);
+    final binding=comicImageBinding(snapshot);
+    void guard(){
+      if(_compatibleDisposed || settings.imageProvider!='openai-images' || comicImageBinding(settings)!=binding) {
+        throw StateError('漫画图片服务配置已变化，未继续提交');
+      }
+      GenerationScope.current?.check();
+    }
+    guard();
+    compatibleComicRequest(snapshot,panelParams,panelExtras,size:size);
+    final groupId=await ensureHistoryGroup(projectTitle,historyGroupId);
+    guard();
+    List<HistoryItem> items;
+    Object? savedError;
+    try {
+      items=await generateCompatibleComicImages(storage:storage,snapshot:snapshot,params:panelParams,
+        extras:panelExtras,groupId:groupId,ensureCurrent:guard,size:size);
+    } on SavedComicImagesException catch(e){items=e.items;savedError=e;}
+    lastAnlasSpent=null;
+    try {await _commitCompletedHistory(items);}catch(_){savedError=SavedComicImagesException(items,'图片已保存，但历史写入失败，已停止后续漫画请求');}
+    notifyListeners();
+    if(savedError!=null)throw savedError;
+    return items.single;
+  }
+
   Future<HistoryItem> generateComicPanel({
     required GenerateParams panelParams,
     required GenerateExtras panelExtras,
     required String projectTitle,
     String? historyGroupId,
   }) async {
+    if(settings.imageProvider=='openai-images') {
+      return generateCompatibleComicPanel(panelParams:panelParams,panelExtras:panelExtras,
+        projectTitle:projectTitle,historyGroupId:historyGroupId);
+    }
     final token = await storage.getToken();
     if (token == null || token.isEmpty) {
       throw Exception(_rt('error.naiTokenRequired'));
     }
+    GenerationScope.current?.credentials(token,settings);
     final taskParams = panelParams.normalized();
     account = await _fetchAccountPreservingLast(token);
     final quote = calculateImageGenerationAnlas(
@@ -3202,6 +3340,7 @@ class AppState extends ChangeNotifier {
     final extrasToUse = panelExtras.copy();
     late List<Uint8List> images;
     late int seed;
+    GenerationScope.current?.credentials(token,settings);
     (images, seed) = await api.generate(
       token,
       settings,
@@ -3216,7 +3355,7 @@ class AppState extends ChangeNotifier {
       feature: 'comic',
       groupId: groupId,
     );
-    await _commitCompletedHistory([item]);
+    try{await _commitCompletedHistory([item]);}catch(_){throw SavedImageHistoryException(item);}
     // The panel image is already saved at this point — a balance-refresh hiccup
     // here must not make the caller (comic_controller's generateOne) report an
     // already-successful panel as failed.
@@ -3280,7 +3419,7 @@ class AppState extends ChangeNotifier {
   Future<void> deleteArtistLabTemporary(HistoryItem temporary) =>
       storage.deleteArtistLabTemporaryImage(temporary.filePath);
 
-  Future<HistoryItem> generateBatchRedrawItem({
+  Future<List<HistoryItem>> generateBatchRedrawItems({
     required Uint8List sourceBytes,
     required GenerateParams itemParams,
     required GenerateExtras itemExtras,
@@ -3295,12 +3434,17 @@ class AppState extends ChangeNotifier {
       }
     }
 
+    if (settings.imageProvider != 'novelai') {
+      throw StateError('当前兼容图片服务未接入图生图；请切回 NovelAI，未自动回退或提交');
+    }
+    final snapshot = AppSettings.fromJson(jsonDecode(jsonEncode(settings.toJson())));
     throwIfCancelled();
     final token = await storage.getToken();
     throwIfCancelled();
     if (token == null || token.isEmpty) {
       throw Exception(_rt('error.naiTokenRequired'));
     }
+    GenerationScope.current?.credentials(token, snapshot);
     final taskParams = itemParams.copy()
       ..positivePrompt = expandPromptWildcards(itemParams.positivePrompt)
       ..negativePrompt = expandPromptWildcards(itemParams.negativePrompt);
@@ -3332,37 +3476,61 @@ class AppState extends ChangeNotifier {
     }
     final groupId = await ensureHistoryGroup(groupName, historyGroupId);
     throwIfCancelled();
+    GenerationScope.current?.credentials(token, snapshot);
     final (images, seed) = await api.img2img(
       token,
-      settings,
+      snapshot,
       taskParams,
       itemExtras.copy(),
       sourceBytes,
       I2IParams(strength: strength),
     );
-    throwIfCancelled();
+    // The response was paid for: do not discard it on a late cancellation.
     if (images.isEmpty) throw Exception(_rt('error.noImagesReturned'));
-    final item = await storage.saveImage(
-      images.first,
-      taskParams,
-      seed,
-      feature: 'batch-redraw',
-      groupId: groupId,
-    );
-    await _commitCompletedHistory([item]);
-    // The redrawn image is already saved at this point — a balance-refresh
-    // hiccup here must not make the caller report an already-successful item
-    // as failed.
-    try {
-      account = await _fetchAccountPreservingLast(token);
-    } catch (_) {
-      /* balance will catch up on the next natural refresh */
+    final items = <HistoryItem>[];
+    String? saveError;
+    for (final bytes in images) {
+      try {
+        items.add(await storage.saveImage(bytes, taskParams, seed,
+            feature: 'batch-redraw', groupId: groupId));
+      } on SavedImageHistoryException catch (error) {
+        items.add(error.item);
+        saveError = '图片已保存，但历史记录写入失败';
+      } catch (_) {
+        saveError = '图片保存未全部完成，请检查输出目录和剩余空间';
+        break;
+      }
     }
+    await _commitCompletedHistory(items);
+    // Balance refresh is best effort, uses the captured service, and cannot hide
+    // already saved results or overwrite a newly selected provider's balance.
+    try {
+      if (cancelled?.call() != true && comicImageBinding(settings) == comicImageBinding(snapshot)
+          && await storage.getToken() == token) {
+        final fresh = await api.fetchAccount(token, snapshot);
+        if (comicImageBinding(settings) == comicImageBinding(snapshot)) {
+          account = fresh.stale && account.hasToken ? account.copyWith(stale: true) : fresh;
+        }
+      }
+    } catch (_) {}
     notifyListeners();
-    return item;
+    if (saveError != null) {
+      throw SavedBatchImagesException(items, '$saveError；已落盘 ${items.length}/${images.length} 张，没有自动重新生成');
+    }
+    return items;
   }
 
+  /// Kept for existing callers; the shared queue consumes every returned image.
+  Future<HistoryItem> generateBatchRedrawItem({
+    required Uint8List sourceBytes, required GenerateParams itemParams,
+    required GenerateExtras itemExtras, required double strength,
+    required String groupName, String? historyGroupId, bool Function()? cancelled,
+  }) async => (await generateBatchRedrawItems(sourceBytes: sourceBytes,
+      itemParams: itemParams, itemExtras: itemExtras, strength: strength,
+      groupName: groupName, historyGroupId: historyGroupId, cancelled: cancelled)).first;
+
   Future<void> moveHistory(String id, String? groupId) async {
+    if(_historyFileOperations.contains(id))throw StateError('该图片正在处理，请稍后重试');
     history = history
         .map((item) => item.id == id
             ? HistoryItem.fromJson({...item.toJson(), 'groupId': groupId})
@@ -3375,22 +3543,31 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  final Set<String> _historyFileOperations = {};
   Future<void> renameHistory(String id, String name) async {
-    final index = history.indexWhere((item) => item.id == id);
-    if (index < 0 || name.trim().isEmpty) return;
-    final oldPath = history[index].filePath;
-    final renamed = await storage.renameHistoryFile(history[index], name);
-    history[index] = renamed;
-    if (current?.id == id) current = renamed;
-    if (workbenchImage?.filePath == oldPath) {
-      workbenchImage = WorkingImage(
-        filePath: renamed.filePath,
-        width: renamed.width,
-        height: renamed.height,
-      );
-    }
-    await storage.writeHistory(history);
-    notifyListeners();
+    if (!_historyFileOperations.add(id)) throw StateError('该图片正在处理，请稍后重试');
+    try {
+      final original=history.where((item)=>item.id==id).firstOrNull;
+      if (original==null || name.trim().isEmpty) throw StateError('图片记录或名称无效');
+      final renamed=await storage.renameHistoryFile(original,name);
+      if (renamed.filePath==original.filePath) return;
+      final live=history.where((item)=>item.id==id).firstOrNull;
+      if(live==null||live.filePath!=original.filePath){await File(renamed.filePath).delete();throw StateError('图片记录已变化，请重新读取');}
+      final committed=HistoryItem.fromJson({...live.toJson(),'filePath':renamed.filePath});
+      history=history.map((item)=>item.id==id?committed:item).toList();
+      try { await storage.writeHistory(history); }
+      catch (_) {
+        history=history.map((item)=>item.id==id&&item.filePath==renamed.filePath?HistoryItem.fromJson({...item.toJson(),'filePath':original.filePath}):item).toList();
+        try {await File(renamed.filePath).delete();}catch(_){}
+        rethrow;
+      }
+      if (current?.id==id) current=committed;
+      if(workbenchImage?.filePath==original.filePath)workbenchImage=WorkingImage(filePath:committed.filePath,width:committed.width,height:committed.height);
+      if(!history.any((item)=>item.id!=id&&item.filePath==original.filePath)){
+        try{await File(original.filePath).delete();}catch(_){/* Durable new name remains authoritative; retain old copy on cleanup failure. */}
+      }
+      notifyListeners();
+    } finally { _historyFileOperations.remove(id); }
   }
 
   Future<String> exportHistory(
@@ -3410,6 +3587,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> deleteHistory(String id) async {
+    if(_historyFileOperations.contains(id))throw StateError('该图片正在处理，请稍后重试');
     final previousIndex = history.indexWhere((item) => item.id == id);
     final removed = previousIndex >= 0 ? history[previousIndex] : null;
     final previousCurrent = current;
@@ -3430,6 +3608,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> deleteHistoryFiles(Iterable<String> filePaths) async {
     final targets = filePaths.where((path) => path.isNotEmpty).toSet();
+    if(history.any((item)=>targets.contains(item.filePath)&&_historyFileOperations.contains(item.id)))throw StateError('图片正在处理，请稍后重试');
     if (targets.isEmpty) return;
     final removed = <({int index, HistoryItem item})>[
       for (var index = 0; index < history.length; index++)
@@ -3572,6 +3751,7 @@ class AppState extends ChangeNotifier {
     bool useAsWorkbench = false,
   }) async {
     await _preloadCompletedItems(items);
+    if (_compatibleDisposed) return;
     _prependHistory(items, useAsWorkbench: useAsWorkbench);
   }
 
@@ -3581,6 +3761,12 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _comic?.dispose();
+    _batchRedraw?.dispose();
+    _compatibleDisposed = true;
+    _compatibleCancellation?.cancel();
+    for(final timer in _textJobTimers){timer.cancel();}
+    _textJobTimers.clear();
     _quoteTimer?.cancel();
     _toolPersistTimer?.cancel();
     _opusUsageTimer?.cancel();

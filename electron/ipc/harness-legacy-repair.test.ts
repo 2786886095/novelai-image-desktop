@@ -23,7 +23,7 @@ it('repairs only a complete known legacy package even when the active version al
 it('entering the persistent Agent tab checks metadata without installing or starting',async()=>{
  const ui=await fs.readFile('src/HarnessPage.tsx','utf8'),app=await fs.readFile('src/App.tsx','utf8');
  expect(app).toContain('<AgentPage active={activeTab === "agent"} />');
- const entry=ui.match(/useEffect\(\(\)=>\{([\s\S]*?)\},\[active\]\);/)?.[1] ?? '';
+ const entry=[...ui.matchAll(/useEffect\(\(\)=>\{([\s\S]*?)\},\[active\]\);/g)].map(m=>m[1]).find(body=>body.includes('harnessCheckUpdates()'))??'';
  expect(entry).toContain('if(!active)return;');
  expect(entry).toContain('harnessCheckUpdates()');
  expect(entry).not.toMatch(/harness(?:Start|ApplyPreparedUpdate)\(/);

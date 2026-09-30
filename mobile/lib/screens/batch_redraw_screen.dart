@@ -65,8 +65,8 @@ class BatchRedrawScreen extends StatelessWidget {
         child: _BatchBody(onBack: onBack),
       );
     }
-    return ChangeNotifierProvider(
-      create: (_) => BatchRedrawController(context.read<AppState>())..load(),
+    return ChangeNotifierProvider.value(
+      value: context.read<AppState>().batchRedraw,
       child: _BatchBody(onBack: onBack),
     );
   }
@@ -83,6 +83,9 @@ class _BatchBody extends StatelessWidget {
     String t(String key) => mobileUiTextFor(language, key);
     if (!controller.loaded) {
       return Scaffold(body: Center(child: Text(t('batch.loading'))));
+    }
+    if (controller.loadError != null) {
+      return Scaffold(body: Center(child: Text(controller.loadError!)));
     }
     return Scaffold(
       appBar: AppBar(

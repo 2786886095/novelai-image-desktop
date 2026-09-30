@@ -1,4 +1,5 @@
 import {normalizeCompletionSound} from "../../src/completion-sound";
+import {normalizeNovelAiSettings,NOVELAI_ONLY_MESSAGE} from '../../src/novelai-only-settings';
 import { refreshShippedTemplates } from "../../src/data/prompt-template-migration";
 import {STYLE_SORTS,styleMetadata} from "../../src/style-library";
 import {mergeCharacterPresets} from "../../src/positive-prompt-presets";
@@ -8,11 +9,12 @@ import { assertSafeDataDirectory, PROTECTED_DIRECTORY_KEYS } from "./update-outp
 import { migrateInstalledOutputData } from "./output-recovery";
 import { app, safeStorage } from "electron";
 import crypto from "crypto";
+import { imageSettingsStamp, commitImageSettings } from "./image-settings-events";
 import fs from "fs";
 import path from "path";
 import { toLocalMediaUrl } from "./local-media-protocol";
 import type { AccountSummary, AppSettings, HistoryGroup, HistoryItem, SettingKey, TextToolHistoryItem } from "../../src/types";
-import { COMIC_ANALYZE_SYSTEM_PROMPT, SCOPED_REVERSE_SYSTEM_PROMPTS } from "../../src/data/prompt-templates";
+import { SCOPED_REVERSE_SYSTEM_PROMPTS } from "../../src/data/prompt-templates";
 import { installedAppDir } from "./app-mode";
 import {
   adaptiveAgentCompactThreshold,
@@ -58,13 +60,15 @@ function normalizeLanguage(value: unknown): AppSettings["language"] {
   return typeof value === "string" && SUPPORTED_LANGUAGES.has(value) ? (value as AppSettings["language"]) : "zh-CN";
 }
 
-function encryptForDisk(data: PersistedData): PersistedData {
+function encryptForDisk(data: PersistedData, replacements: ReadonlySet<string> = new Set()): PersistedData {
   const clone: PersistedData = { ...data, settings: { ...data.settings } };
-  clone.token = credentialVault.encode("token", clone.token) as string;
+  clone.token = credentialVault.encode("token", clone.token, replacements.has("token")) as string;
   delete clone.settings.credentialIssues;
+  delete clone.settings.imageServiceRevision;
+  delete clone.settings.imageServiceVersion;
   const settings = clone.settings as unknown as Record<string, unknown>;
   for (const key of SENSITIVE_SETTING_KEYS) {
-    settings[key] = credentialVault.encode(key, settings[key]);
+    settings[key] = credentialVault.encode(key, settings[key], replacements.has(key));
   }
   return clone;
 }
@@ -163,7 +167,11 @@ export function defaultSettings(): AppSettings {
     logDir: "",
     apiBaseUrl: "https://api.novelai.net",
     imageBaseUrl: "https://image.novelai.net",
-    allowCustomEndpoint: false,
+    imageProvider: "novelai",
+    imageApiKey: "",
+    compatibleImage: { baseUrl: "", model: "", size: "1024x1024", responseFormat: "auto" },
+    harnessAutoUpdatePlugins: true,
+    allowCustomEndpoint: true,
     allowCustomEndpointFallback: false,
     proxyMode: "auto",
     proxyUrl: "",
@@ -205,7 +213,9 @@ export function defaultSettings(): AppSettings {
     reverseConvertPromptPresets: [createDefaultImageTaskPromptPreset()],
     reverseConvertPromptPresetId: createDefaultImageTaskPromptPreset().id,
     comicAnalyzePromptTemplates: { tags: "", natural: "", mixed: "" },
-    comicAnalyzePromptTemplate: COMIC_ANALYZE_SYSTEM_PROMPT,
+    comicAnalyzePromptTemplate: "",
+    promptOptimizeTemplate: "",
+    promptAssistantTemplate: "",
     convertApiUrl: "https://api.openai.com/v1",
     convertApiKey: "",
     convertApiModel: "gpt-4o-mini",
@@ -265,7 +275,7 @@ export function defaultSettings(): AppSettings {
 function normalize(raw: Partial<PersistedData> | null): PersistedData {
   const defaults = defaultSettings();
   const rawSettings = (raw?.settings ?? {}) as Partial<AppSettings>;
-  const settings = { ...defaults, ...rawSettings };
+  const settings = normalizeNovelAiSettings({ ...defaults, ...rawSettings });
   settings.agentApiProtocol = normalizeAgentProviderProtocol(settings.agentApiProtocol);
   settings.agentApiBaseUrl = typeof settings.agentApiBaseUrl === "string"
     ? normalizeAgentApiBaseUrl(settings.agentApiBaseUrl)
@@ -617,16 +627,23 @@ export function readStore(): PersistedData {
   return cache;
 }
 
-export function writeStore(next: PersistedData) {
+export function credentialIssues() { return credentialVault.issues(); }
+
+export function writeStore(next: PersistedData, replaceCredentials: readonly string[] = []) {
+  next={...next,settings:normalizeNovelAiSettings(next.settings)};
   const file = storePath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
   rotateBackupsSync(file);
-  atomicWriteFileSync(file, JSON.stringify(encryptForDisk(next), null, 2));
+  atomicWriteFileSync(file, JSON.stringify(encryptForDisk(next, new Set(replaceCredentials)), null, 2));
+  for (const key of replaceCredentials) credentialVault.forget(key);
   cache = next; // commit cache only after persistence succeeds
+  commitImageSettings(next.settings);
 }
 
 export function getSettings(): AppSettings {
-  return { ...readStore().settings, credentialIssues: credentialVault.issues() };
+  const settings = normalizeNovelAiSettings(readStore().settings);
+  const stamp = imageSettingsStamp(settings);
+  return { ...settings, credentialIssues: credentialVault.issues(), imageServiceRevision: stamp.revision, imageServiceVersion: stamp.version };
 }
 
 export function getSetting<K extends SettingKey>(key: K): AppSettings[K] {
@@ -634,18 +651,27 @@ export function getSetting<K extends SettingKey>(key: K): AppSettings[K] {
 }
 
 export function setSetting<K extends SettingKey>(key: K, value: AppSettings[K]): AppSettings[K] {
+  if(key==='imageProvider'&&value!=='novelai')throw Error(NOVELAI_ONLY_MESSAGE);
   if (key === "outputDir" && (typeof value !== "string" || !value.trim())) throw new Error("请选择图片保存目录，保存位置不可留空。");
   if ((PROTECTED_DIRECTORY_KEYS as readonly string[]).includes(key) && typeof value === "string") {
     assertSafeDataDirectory(value, installedAppDir());
   }
   const data = { ...readStore() }; // Failed persistence must not mutate the live settings cache.
-  if ((SENSITIVE_SETTING_KEYS as readonly string[]).includes(key)) credentialVault.forget(key);
+  const replaceCredential = (SENSITIVE_SETTING_KEYS as readonly string[]).includes(key);
   data.settings = {
     ...data.settings,
     [key]: key === "language" ? normalizeLanguage(value) : key === "completionSound" ? normalizeCompletionSound(value) : value,
   };
-  writeStore(data);
+  writeStore(data, replaceCredential ? [key] : []);
   return data.settings[key];
+}
+
+/** Commit endpoint, model and its independent credential together, never field-by-field. */
+export function setCompatibleImageSettings(config: NonNullable<AppSettings["compatibleImage"]>, apiKey: string, provider: NonNullable<AppSettings["imageProvider"]>) {
+  if(provider!=='novelai')throw Error(NOVELAI_ONLY_MESSAGE);
+  const data = { ...readStore() };
+  data.settings = { ...data.settings, compatibleImage: config, imageApiKey: apiKey, imageProvider: provider };
+  writeStore(data, ["imageApiKey"]);
 }
 
 export function completeSetup() {
@@ -657,18 +683,15 @@ export function getToken() {
 }
 
 export function setToken(token: string) {
-  const data = readStore();
-  credentialVault.forget("token");
-  data.token = token;
-  writeStore(data);
+  const data = { ...readStore(), token };
+  writeStore(data, ["token"]);
 }
 
 export function clearToken() {
-  const data = readStore();
-  credentialVault.forget("token");
+  const data = { ...readStore() };
   delete data.token;
   delete data.account;
-  writeStore(data);
+  writeStore(data, ["token"]);
 }
 
 export function getAccountSummary(): AccountSummary {
@@ -1045,7 +1068,7 @@ export function removeHistory(id: string): HistoryItem | null {
 }
 
 export function updateHistoryItem(id: string, patch: Partial<HistoryItem>): HistoryItem | null {
-  const data = readStore();
+  const data = {...readStore()};
   let updated: HistoryItem | null = null;
   data.history = data.history.map((item) => {
     if (item.id !== id) return item;

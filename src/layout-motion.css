@@ -1,0 +1,187 @@
+/* Final scoped layout layer; loaded after legacy application styles. */
+/* prompt dock: reserved row, never over scrolled text. */
+html .prompt-editor {padding-bottom:14px;}
+html .prompt-editor .prompt-box {padding-bottom:12px!important;}
+html .prompt-editor .prompt-toolbar-dock {position:relative;inset:auto;min-height:36px;margin:4px 6px 6px;align-items:flex-end;}
+html .prompt-editor .prompt-toolbar-reveal {position:absolute;right:36px;bottom:0;width:calc(100% - 36px);max-width:none;display:block;clip-path:inset(0 0 0 100%);transform:none;}
+html .prompt-editor .prompt-toolbar-dock[data-open=true] .prompt-toolbar-reveal {clip-path:inset(0);}
+html .prompt-editor .prompt-toolbar-row.compact-prompt-toolbar {background:var(--bg-input);backdrop-filter:none;border:1px solid var(--border);padding:2px;gap:2px;}
+html .prompt-editor .prompt-toolbar-dock .prompt-toolbar-toggle {background:var(--bg-input);backdrop-filter:none;border:1px solid var(--border);box-shadow:none;}
+@container(max-width:320px){html .prompt-editor .prompt-toolbar-dock{min-height:72px;}}
+/* reorder: all destinations remain reachable, and the workspace starts below. */
+html .app-shell {grid-template-rows:38px auto 44px auto minmax(0,1fr) 26px;}
+html .responsive-tab-navigation {min-height:54px;max-height:42dvh;overflow-y:auto;background:var(--bg-panel);}
+html .responsive-tab-navigation .tab-navigation-row {min-height:54px;}
+html .responsive-tab-navigation[data-editing=true] .tab-navigation-row {align-items:flex-start;}
+html .responsive-tab-navigation[data-editing=true] .tab-navigation-row .tab-bar {height:auto;min-height:54px;flex-wrap:wrap;overflow:visible;align-content:flex-start;gap:8px;padding-block:10px;}
+html .responsive-tab-navigation[data-editing=true] .tab-active-indicator {display:none;}
+html .responsive-tab-navigation[data-editing=true] .tab-arrange-toggle {margin-top:10px;}
+html .tab-reorder-help {flex-wrap:wrap;}
+/* The actual header/scroll boundary is opaque, not a glass overlay. */
+html .left-panel .panel-head,html .generate-mode-switcher {background:var(--bg-panel);position:relative;z-index:1;}
+/* Local library and the online-gallery bookmark modal have separate entries. */
+html .favorites-workspace .gallery-favorites-modal {height:auto;min-height:100%;max-height:none;}
+html .favorites-directory>div:first-child {min-width:0;flex:1 1 240px;}
+html .favorites-directory p {overflow-wrap:anywhere;}
+html .gallery-favorites-body {flex:1 1 auto;min-height:0;}
+html .gallery-favorites-filters {align-items:start;grid-auto-rows:auto;}
+html .gallery-favorites-filters :is(input,.select-menu-trigger),html .gallery-favorites-modal footer input {height:38px;min-height:38px;max-height:38px;min-width:0;box-sizing:border-box;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);color:var(--text-primary);}
+html .gallery-favorites-modal footer {flex:0 0 auto;min-height:58px;}
+html .gallery-favorites-search {width:100%;}
+html .gallery-favorites-page {width:72px;}
+html .favorites-filter .select-menu {min-width:140px;}
+html .works-toolbar>.select-menu {flex:0 1 150px;min-width:120px;max-width:100%;}
+/* inpaint: wrap all actions; no invisible sideways command strip. */
+html .inpaint-mask-toolbar {width:fit-content;max-width:calc(100% - 24px);flex-wrap:wrap;justify-content:center;overflow:visible;border-radius:var(--radius-md);background:var(--bg-panel);backdrop-filter:none;}
+html .inpaint-mask-toolbar .inpaint-toolbar-range {flex:0 1 72px;min-width:48px;}
+html .inpaint-mask-toolbar .inpaint-toolbar-divider {display:none;}
+/* Shared viewport preview is portalled outside clipped/animated ancestors. */
+html .image-preview-dialog {width:min(1280px,calc(100vw - 32px));min-width:0;height:calc(100dvh - 32px);max-height:calc(100dvh - 32px);background:var(--bg-dialog);}
+html .image-preview-dialog .image-preview-stage img {max-width:100%;max-height:100%;object-fit:contain;}
+html .image-preview-dialog-backdrop {z-index:var(--z-overlay-top);}
+
+/* Kimi K3 complete design, 2026-09-29: one desktop interaction system. */
+:root {--studio-enter:cubic-bezier(0,0,.2,1);--studio-exit:cubic-bezier(.4,0,1,1);--studio-change:cubic-bezier(.2,0,0,1);--ease-out:var(--studio-enter);--ease-spring:var(--studio-change);--disclosure-open:160ms;--disclosure-close:120ms;--disclosure-enter-ease:var(--studio-enter);--disclosure-exit-ease:var(--studio-exit);}
+/* All desktop shared surfaces/controls use the same opaque semantic hierarchy. */
+html :is(.modal,.settings-modal,.advanced-modal,.prompt-assistant-dialog,.prompt-weight-dialog,.select-menu-popover,.menu-pop,.prompt-editor-more,.context-menu) {background:var(--bg-dialog);color:var(--text-primary);border-color:var(--border);border-radius:var(--radius-lg);backdrop-filter:none;}
+html :is(.select-menu-popover,.menu-pop,.prompt-editor-more,.context-menu) {border-radius:var(--radius-md);box-shadow:var(--shadow-md);}
+html :is(.left-panel,.history-panel,.canvas-area,.ai-log-panel,.panel-head,.left-footer) {background:var(--bg-panel);border-color:var(--border);backdrop-filter:none;}
+html :is(button.btn,.menu-action,.compact-icon-button,.prompt-tool-btn) {border-radius:var(--radius-sm);transition:background-color 120ms var(--studio-change),border-color 120ms var(--studio-change),color 120ms var(--studio-change),box-shadow 120ms var(--studio-change);}
+html :is(button.btn,.menu-action,.compact-icon-button,.prompt-tool-btn):active:not(:disabled) {transform:none;filter:brightness(.96);}
+html :is(button,input,select,textarea,[tabindex]):focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+html :is(input,select,textarea) {font-family:inherit;accent-color:var(--accent);}
+html input.prompt-box {height:38px!important;min-height:38px!important;max-height:38px;resize:none;}
+html :is(input:not([type=range]):not([type=checkbox]):not([type=radio]),select,textarea) {border-color:var(--border);border-radius:var(--radius-sm);color:var(--text-primary);background-color:var(--bg-input);transition:border-color 120ms var(--studio-change),box-shadow 120ms var(--studio-change);}
+html [aria-invalid=true] {border-color:var(--danger)!important;}
+html :is(button,input):disabled {opacity:.5;cursor:default;}
+/* Desktop page hierarchy: feature pages share typography, not identical layouts. */
+:root {--studio-page-title:24px;--studio-section-title:16px;--studio-control-height:34px;}
+html :is(.tools-hero,.aitag-header,.artist-lab-hero,.prompt-codex-header,.tag-comic-header,.reference-catalog-header,.works-header,.style-library-header) {gap:16px;padding:20px;background:var(--bg-panel);border-color:var(--border);border-radius:var(--radius-lg);box-shadow:none;backdrop-filter:none;}
+html :is(.tools-hero,.aitag-header,.artist-lab-hero,.prompt-codex-header,.tag-comic-header,.reference-catalog-header,.works-header,.style-library-header) :is(h1,h2,h3) {font-size:var(--studio-page-title);font-weight:650;line-height:1.3;letter-spacing:-.02em;margin:0 0 6px;color:var(--text-primary);}
+html :is(.tools-hero,.aitag-header,.artist-lab-hero,.prompt-codex-header,.tag-comic-header,.reference-catalog-header,.works-header,.style-library-header) p {font-size:13px;line-height:1.6;color:var(--text-secondary);margin:0;}
+html :is(.modal,.settings-modal,.advanced-modal)>header h2 {font-size:18px;line-height:1.4;letter-spacing:0;margin:0;}
+html :is(.settings-content,.tool-card,.artist-lab-mode-card,.info-card) h3 {font-size:var(--studio-section-title);line-height:1.4;}
+html :is(.tool-card,.artist-lab-mode-card,.info-card,.aitag-search-panel,.account-card,.settings-card) {background:var(--bg-panel);border-color:var(--border);border-radius:var(--radius-md);box-shadow:none;backdrop-filter:none;}
+html :is(.settings-nav button,.menu-action,.select-menu-option) {border-radius:var(--radius-sm);min-height:var(--studio-control-height);}
+html :is(.settings-nav button.active,.menu-action:hover,.select-menu-option.is-active) {background:var(--accent-soft);color:var(--accent);}
+html :is(.settings-content,.modal-body) {color:var(--text-primary);}
+html :is(.modal,.settings-modal)>header,html :is(.modal,.settings-modal)>footer {background:var(--bg-dialog);border-color:var(--border);}
+html .gallery-favorites-modal>header h2 {font-size:24px;line-height:1.3;}
+html :is(.btn,.select-menu-trigger) {min-height:var(--studio-control-height);}
+html :is(.artist-lab,.v5-artist-repair,.prompt-codex,.tag-comic,.redraw-wizard) {background:var(--bg-window);}
+html :is(.artist-lab-panel,.v5-artist-repair-card,.tag-comic-card,.redraw-card,.prompt-codex-filters,.prompt-codex-entry,.random-generation-settings) {background:var(--bg-panel);border-color:var(--border);border-radius:var(--radius-md);box-shadow:none;backdrop-filter:none;}
+html :is(.artist-lab-panel,.v5-artist-repair-card,.tag-comic-card,.redraw-card)>h3 {font-size:var(--studio-section-title);}
+html :is(.tavern-message.is-entering,.tavern-composer-popover,.tavern-copy-feedback,.image-save-notice) {animation:studio-view-in 160ms var(--studio-enter);}
+html .tavern-page {--tavern-motion-ease:var(--studio-enter);--tavern-motion-base:160ms;}
+html.theme-dark {--accent-text:#171122;}
+html .btn.btn-primary {background:var(--accent);color:var(--accent-text);border-color:var(--accent);box-shadow:none;}
+html .btn.btn-primary:hover:not(:disabled) {background:var(--accent-hover);border-color:var(--accent-hover);}
+html :is(.tab-bar button,.menu-bar .btn,.btn-primary) .ui-icon {background:transparent;border:0;box-shadow:none;color:inherit;}
+html :is(.btn,.tab-bar button,.menu-action) :is(.btn-icon,.tab-icon),html.theme-dark :is(.btn,.tab-bar button,.menu-action) :is(.btn-icon,.tab-icon) {background:transparent;border:0;box-shadow:none;color:inherit;padding:0;}
+html :is(.error-banner,.reference-catalog-error) {background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger);border-radius:var(--radius-md);padding:12px;overflow-wrap:anywhere;}
+html :is(.reference-preset-hero,.redraw-page-heading) {background:var(--bg-panel);border-color:var(--border);border-radius:var(--radius-lg);box-shadow:none;padding:20px;}
+html .reference-preset-hero h2,html .redraw-page-title strong {font-size:var(--studio-page-title);line-height:1.3;}
+html :is(.reference-catalog-panel,.reference-preset-manager,.tag-comic,.artist-lab) {background:var(--bg-window);}
+html :is(.reference-catalog-panel,.panel-card,.redraw-wizard .redraw-card,.tag-comic-card,.tag-comic-steps button,.comic-step-btn,.redraw-import-hero,.redraw-project-card) {border-radius:var(--radius-md);background:var(--bg-panel);border-color:var(--border);box-shadow:none;}
+html :is(.tag-comic-steps button.active,.comic-step-btn.active) {background:var(--accent-soft);border-color:var(--accent);}
+html :is(.reference-ui-dialog,.reference-preset-manager-modal,.reference-preset-create-modal,.app-confirm-dialog) {border-radius:var(--radius-lg);background:var(--bg-dialog);color:var(--text-primary);border-color:var(--border);}
+html :is(.reference-ui-mask,.reference-ui-dialog) {animation:studio-view-in 200ms var(--studio-enter);}
+@media(max-width:720px){:root{--studio-page-title:20px;}html :is(.tools-hero,.aitag-header,.artist-lab-hero,.prompt-codex-header,.tag-comic-header,.reference-catalog-header,.works-header,.style-library-header){padding:14px;gap:12px;}}
+/* 1. Leftward toolbar entry/exit. Permanent row means no form reflow. */
+html .prompt-editor .prompt-toolbar-reveal {transition:clip-path 180ms var(--studio-exit),opacity 180ms var(--studio-exit),visibility 0s 180ms;}
+html .prompt-editor .prompt-toolbar-dock[data-open=true] .prompt-toolbar-reveal {transition:clip-path 240ms var(--studio-enter),opacity 240ms var(--studio-enter),visibility 0s;}
+/* 2. Existing retained dropdown state provides real closing frames. */
+html .disclosure-popover {transition-timing-function:var(--studio-enter);}
+/* 3. Page/tool changes fade, without transforming a containing block. */
+html .persistent-tools-view.is-active>* {animation:studio-view-in 150ms var(--studio-enter);}
+html :is(.redraw-wizard,.comic-generator)>section {animation:studio-view-in 150ms var(--studio-enter);}
+/* 4. Reorder panel feedback: wrap, instant drop, subtle accent target. */
+html .responsive-tab-navigation[data-editing=true] .tab-navigation-row {animation:studio-view-in 200ms var(--studio-enter);}
+html [data-reorder-over=true] {transition:background-color 120ms var(--studio-change);}
+/* 5/6. Portalled overlays never transform an ancestor of fixed content. */
+html :is(.modal-backdrop,.image-preview-dialog-backdrop,.style-image-lightbox,.gallery-favorite-lightbox) {animation:studio-view-in 200ms var(--studio-enter);}
+html :is(.modal,.prompt-assistant-dialog,.prompt-weight-dialog,.image-preview-dialog) {animation:studio-view-in 200ms var(--studio-enter);}
+html .image-preview-dialog-backdrop[data-closing=true],html .image-preview-dialog-backdrop[data-closing=true] .image-preview-dialog {animation:studio-view-out 160ms var(--studio-exit) forwards;}
+html .studio-motion-ghost,html .studio-motion-ghost * {pointer-events:none!important;animation:none!important;transition:none!important;}
+html .image-preview-stage :is(img,.image-preview-transform) {transition:none!important;}
+/* 7. State changes immediately; only the decorative feedback ring animates. */
+html .image-favorite-action {position:relative;}
+html .image-favorite-action[aria-pressed=true] .ui-icon {animation:none;}
+html .image-favorite-action[aria-pressed=true]::after {content:'';position:absolute;inset:2px;border:1px solid var(--accent);border-radius:inherit;pointer-events:none;animation:studio-feedback 200ms var(--studio-enter) forwards;}
+/* 8/9. Buttons use color, switches preserve spatial continuity. */
+html .compact-switch-track span {transition:transform 160ms var(--studio-change);}
+html :is(.prompt-editor-tabs,.segmented-control,.generate-mode-switcher) button {transition:background-color 160ms var(--studio-change),color 120ms var(--studio-change);}
+/* 10. Native details retain closing content via discrete visibility. */
+html details {interpolate-size:allow-keywords;}
+html details::details-content {block-size:0;opacity:0;overflow:clip;transition:block-size 180ms var(--studio-exit),opacity 180ms var(--studio-exit),content-visibility 180ms allow-discrete;}
+html details[open]::details-content {block-size:auto;opacity:1;transition-duration:220ms;transition-timing-function:var(--studio-enter);}
+html summary .ui-icon {transition:rotate 180ms var(--studio-change);}
+/* 11. Toast lifecycle uses the same retained portal exit. */
+html .toast {animation:studio-view-in 200ms var(--studio-enter);background:var(--bg-dialog);border:1px solid var(--border);border-radius:var(--radius-md);}
+/* 12. Cards do not jump under the pointer; loaded thumbs fade in place. */
+html :is(.tool-card,.history-item,.aitag-card,.works-tile,.local-favorites-grid article) {transition:background-color 120ms var(--studio-change),border-color 120ms var(--studio-change),box-shadow 120ms var(--studio-change);}
+html :is(.tool-card:hover,.tool-card:active,.history-item:hover img,.aitag-card:hover .aitag-card-image img) {transform:none;}
+html :is(.history-item,.aitag-card,.works-tile,.favorite-image) img {animation:none;}
+/* 13. Progress is essential state; smooth only its visual value. */
+html :is(.progress-fill,.progress-bar-fill,.queue-progress-fill) {transition:width 200ms linear,transform 200ms linear;}
+/* 14/15. Themes, pointer drawing, zoom and resizing must respond immediately. */
+html[data-studio-theme-changing] *,html[data-studio-theme-changing] *::before,html[data-studio-theme-changing] *::after {transition:none!important;}
+html :is(canvas,.inpaint-base-img,.inpaint-cursor,.inpaint-region-overlay,.inpaint-mask-canvas,.ws-resizer) {transition:none!important;animation:none!important;}
+@keyframes studio-view-in {from{opacity:0}to{opacity:1}}
+@keyframes studio-view-out {from{opacity:1}to{opacity:0}}
+@keyframes studio-feedback {from{opacity:.65;scale:.8}to{opacity:0;scale:1.15}}
+
+html.motion-reduced *,html.motion-reduced *::before,html.motion-reduced *::after,html.motion-reduced details::details-content {animation:none!important;transition:none!important;scroll-behavior:auto!important;}
+/* Loading remains perceivable without decorative movement. */
+
+html.motion-reduced :is(.spinner,.tavern-spinner,.ui-icon-spin) {animation:spin 800ms linear infinite!important;}
+
+/* Interaction repair: one right-anchored action rail, root popovers, image-first previews. */
+html .prompt-editor .prompt-toolbar-dock {min-height:36px;margin:2px 6px 4px;align-items:center;}
+html .prompt-editor .prompt-toolbar-reveal {right:36px;width:calc(100% - 36px);bottom:0;}
+html .prompt-editor .prompt-toolbar-row.compact-prompt-toolbar {display:flex;flex-wrap:nowrap;align-items:center;justify-content:space-evenly;height:36px;padding:0;gap:0;background:transparent;border:0;border-radius:var(--radius-sm) 0 0 var(--radius-sm);}
+html .prompt-editor .prompt-toolbar-dock .compact-icon-button {flex:1 1 0;width:auto;min-width:0;height:36px;min-height:36px;max-height:36px;padding:0;border:0;background:transparent;box-shadow:none;}
+html .prompt-editor .prompt-toolbar-dock .compact-icon-button .ui-icon {width:18px;height:18px;}
+html .prompt-editor .prompt-toolbar-dock .prompt-toolbar-toggle {flex:0 0 36px;width:36px;margin-left:auto;align-self:center;background:transparent;border:0;}
+html .prompt-editor .prompt-toolbar-dock .compact-icon-button:hover:not(:disabled) {background:var(--accent-soft);color:var(--accent);}
+html .prompt-editor .prompt-toolbar-reveal {transition:clip-path 180ms cubic-bezier(.4,0,1,1),opacity 180ms cubic-bezier(.4,0,1,1),visibility 0s 180ms;}
+html .prompt-editor .prompt-toolbar-dock[data-open=true] .prompt-toolbar-reveal {transition:clip-path 280ms cubic-bezier(.2,0,0,1),opacity 240ms cubic-bezier(.2,0,0,1),visibility 0s;}
+@container(max-width:280px){html .prompt-editor .prompt-toolbar-dock{min-height:72px;}html .prompt-editor .prompt-toolbar-row.compact-prompt-toolbar{height:72px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));}html .prompt-editor .prompt-toolbar-dock .prompt-toolbar-toggle{align-self:flex-end;}}
+html .prompt-tools-popover {position:fixed;z-index:1200;display:flex;gap:4px;align-items:center;flex-wrap:wrap;width:max-content;max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);overflow:auto;padding:8px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-dialog);color:var(--text-primary);box-shadow:0 8px 24px #0003;transform-origin:bottom right;animation:prompt-tools-in 240ms cubic-bezier(.2,0,0,1);}
+html .prompt-tools-popover .compact-icon-button {width:36px;height:36px;min-height:36px;background:transparent;border-color:transparent;}
+html .prompt-tools-popover .compact-icon-button:hover {background:var(--accent-soft);}
+html .prompt-tools-popover[data-disclosure-open=false] {pointer-events:none;animation:prompt-tools-out 120ms cubic-bezier(.4,0,1,1) forwards;}
+@keyframes prompt-tools-in {from{opacity:0;translate:8px 6px;clip-path:inset(0 0 0 85%)}to{opacity:1;translate:0 0;clip-path:inset(0)}}
+@keyframes prompt-tools-out {to{opacity:0;translate:6px 4px}}
+html .image-preview-dialog-backdrop {padding:0;background:rgb(8 8 17 / 78%);backdrop-filter:none;}
+html .image-preview-dialog {width:100%;max-width:none;height:100dvh;max-height:100dvh;min-height:0;padding:54px 20px 20px;background:transparent;border:0;border-radius:0;box-shadow:none;overflow:hidden;display:flex;}
+html .image-preview-dialog .image-preview-viewer {display:flex;flex-direction:column;gap:12px;width:100%;height:100%;min-height:0;max-width:none;}
+html .image-preview-dialog .image-preview-controls {position:relative;flex:0 0 auto;translate:none;transform:none;max-width:100%;margin:0 auto;padding:8px;gap:8px;}
+html .image-preview-dialog .image-preview-stage {flex:1 1 0;min-height:0;height:0;width:100%;background:transparent;}
+html .image-preview-dialog .image-preview-stage>img {height:100%;width:auto;max-width:100%;max-height:100%;object-fit:contain;}
+html .image-preview-dialog .image-preview-close {position:absolute;top:12px;right:16px;width:36px;height:36px;z-index:2;background:transparent;color:#fff;border:0;font-size:28px;}
+html .image-preview-dialog .image-preview-close:hover {background:rgb(255 255 255 / 14%);}
+html .prompt-assistant-dialog {width:min(960px,calc(100vw - 32px));max-height:calc(100dvh - 40px);animation:prompt-surface-in 240ms cubic-bezier(.2,0,0,1);}
+html .prompt-assistant-body {display:grid;gap:18px;padding:22px 24px;}
+html .prompt-assistant-body label {margin:0;min-width:0;}
+html .prompt-assistant-body textarea {min-height:220px;height:clamp(220px,32dvh,340px);font-size:14px;line-height:1.7;}
+html .prompt-assistant-dialog[data-kind=custom] .prompt-assistant-body {grid-template-columns:1fr 1fr;}
+html .prompt-assistant-dialog[data-kind=custom] .prompt-assistant-body :is(p,.prompt-assistant-result,.prompt-api-required) {grid-column:1/-1;}
+html .prompt-assistant-dialog[data-ready=false] {width:min(540px,calc(100vw - 32px));}
+html .prompt-assistant-dialog header,html .prompt-assistant-dialog footer {padding:18px 24px;flex-shrink:0;}
+@keyframes prompt-surface-in {from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
+@media(max-width:620px){html .prompt-assistant-dialog[data-kind=custom] .prompt-assistant-body {grid-template-columns:minmax(0,1fr);}html .prompt-assistant-body{padding:16px;}html .prompt-assistant-body textarea{min-height:160px;height:24dvh;}html .image-preview-dialog{padding:52px 8px 8px;}html .image-preview-dialog .image-preview-controls{gap:4px;padding:6px;}}
+@media(pointer:coarse){html .prompt-editor .prompt-toolbar-dock{min-height:88px;}html .prompt-editor .prompt-toolbar-row.compact-prompt-toolbar{height:88px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));}html .prompt-editor .prompt-toolbar-dock .compact-icon-button,html .prompt-tools-popover .compact-icon-button{min-height:44px;height:44px;max-height:44px;}html .prompt-editor .prompt-toolbar-dock .prompt-toolbar-toggle{align-self:flex-end;}}
+
+/* Reference interaction: the launcher sits inside the editor, not in a spare row. */
+html .prompt-editor {padding-bottom:14px;}
+html .prompt-editor .prompt-box {display:block;margin:0;height:var(--prompt-editor-height,240px)!important;padding-bottom:12px!important;}
+html .prompt-editor:has(.prompt-toolbar-dock[data-open=true]) .prompt-box {padding-bottom:56px!important;}
+html .prompt-editor .prompt-toolbar-dock {position:absolute;left:8px;right:8px;bottom:14px;margin:0;min-height:40px;align-items:center;}
+html .prompt-editor .prompt-toolbar-reveal {right:36px;bottom:0;width:calc(100% - 36px);}
+html .prompt-editor .prompt-toolbar-row.compact-prompt-toolbar {height:40px;background:color-mix(in srgb,var(--bg-panel) 90%,var(--border));border:0;border-radius:10px 0 0 10px;padding:2px 4px;}
+html .prompt-editor .prompt-toolbar-dock .compact-icon-button {height:36px;min-height:36px;max-height:36px;}
+html .prompt-editor .prompt-toolbar-dock .prompt-toolbar-toggle {height:40px;min-height:40px;max-height:40px;border-radius:10px;background:transparent;}
+html .prompt-editor .prompt-toolbar-dock[data-open=true] .prompt-toolbar-toggle {border-radius:0 10px 10px 0;background:color-mix(in srgb,var(--bg-panel) 90%,var(--border));}
+@container(max-width:280px){html .prompt-editor .prompt-toolbar-dock{min-height:80px;}html .prompt-editor .prompt-toolbar-row.compact-prompt-toolbar{height:80px;grid-template-columns:repeat(4,minmax(0,1fr));}html .prompt-editor:has(.prompt-toolbar-dock[data-open=true]) .prompt-box{padding-bottom:96px!important;}}
+@media(pointer:coarse){html .prompt-editor .prompt-toolbar-dock{min-height:88px;}html .prompt-editor .prompt-toolbar-row.compact-prompt-toolbar{height:88px;}html .prompt-editor .prompt-toolbar-dock .compact-icon-button{height:44px;min-height:44px;max-height:44px;}html .prompt-editor:has(.prompt-toolbar-dock[data-open=true]) .prompt-box{padding-bottom:104px!important;}}

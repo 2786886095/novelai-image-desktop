@@ -331,6 +331,8 @@ export interface I2IParams {
 
 /** One image's batch-redraw (img2img) request, sent per image to the main process. */
 export interface BatchRedrawRequest {
+  runId?: string;
+  imageServiceBinding?: string;
   imageBase64: string; // source image (pure base64)
   params: GenerateParams; // model/size/sampler/steps/seed/cfg + merged positive/negative prompt
   strength: number; // img2img change strength (0–1, default 0.4)
@@ -547,7 +549,7 @@ export type ComicPanelStatus =
   "draft" | "converted" | "generating" | "done" | "failed";
 export type ComicDesiredPanelCount = "auto" | number;
 export type GenerateFailureKind =
-  "auth" | "reference" | "validation" | "api" | "cancelled";
+  "auth" | "reference" | "validation" | "api" | "cancelled" | "storage";
 
 export interface ComicReferenceAsset {
   id: string;
@@ -603,26 +605,6 @@ export interface ComicProject {
   globalParams: GenerateParams;
   references: ComicReferenceAsset[];
   panels: ComicPanel[];
-}
-
-export interface ComicAnalyzeRequest {
-  script: string;
-  adultBranch: boolean;
-  mode: ReversePromptMode;
-  desiredPanelCount: ComicDesiredPanelCount;
-  referencePrompts?: string[];
-}
-
-export interface ComicAnalyzeResult {
-  ok: boolean;
-  message: string;
-  title?: string;
-  globalPrompt?: string;
-  globalCharacterSetting?: string;
-  continuityBible?: string;
-  panels?: Array<
-    Pick<ComicPanel, "cnPrompt" | "contextSummary"> & { narration?: string }
-  >;
 }
 
 export interface ComicConvertPanelInput {
@@ -777,7 +759,18 @@ export interface TagComicProject {
   panels: TagComicPanel[];
 }
 
+export interface ComicImageService {
+  binding: string;
+  provider: "novelai" | "openai-images";
+  model?: string;
+  size?: string;
+}
+
 export interface TagComicGenerateRequest {
+  /** Explicit per-panel dimensions; absence uses the saved compatible service size. */
+  imageSize?: { width: number; height: number };
+  imageServiceBinding?: string;
+  runId?: string;
   projectId: string;
   projectTitle: string;
   historyGroupId?: string;
@@ -955,6 +948,9 @@ export interface AnlasQuoteResult {
 }
 
 export interface HistoryItem {
+  /** Compatible-provider request receipt. No URL or credential is persisted here. */
+  generationProvider?: "openai-images";
+  compatibleRequest?: Record<string, unknown>;
   id: string;
   filePath: string;
   fileUrl: string;
@@ -1355,7 +1351,31 @@ export interface OutputMigrationNotice {
   id: string; status: "recovered" | "failed"; sourcePaths: string[]; targetPath: string; copiedFiles: number; error?: string;
 }
 
+export interface CompatibleImageSettings {
+  baseUrl: string;
+  model: string;
+  size: string;
+  responseFormat: "auto" | "b64_json" | "url";
+  extensions?: Record<string, unknown>;
+}
+
+export interface CompatibleGenerationRequest {
+  /** Renderer snapshot binding; trusted Agent callers use their separate provider binding. */
+  expectedImageServiceRevision?: string;
+  prompt: string;
+  n: number;
+  historyGroupId?: string;
+  fileNamePrefix?: string;
+}
+
 export interface AppSettings {
+  /** Applies to ordinary text-to-image only; other NovelAI tools retain their own provider. */
+  imageProvider?: "novelai" | "openai-images";
+  compatibleImage?: CompatibleImageSettings;
+  imageApiKey?: string;
+  /** Process-local revision: never persisted or included in provider requests. */
+  imageServiceRevision?: string;
+  imageServiceVersion?: number;
   /** Runtime-only fields whose original ciphertext is retained for recovery. */
   credentialIssues?: string[];
   outputMigrationNotice?: OutputMigrationNotice | null;
@@ -1370,9 +1390,10 @@ export interface AppSettings {
   logDir: string;
   apiBaseUrl: string;
   imageBaseUrl: string;
-  // Opt-in to sending the NovelAI Bearer token to a non-official endpoint host.
-  // Default false: a custom (non *.novelai.net) endpoint is refused to avoid
-  // leaking the token to an untrusted server.
+  // Allow sending the NovelAI Bearer token to the configured relay endpoint.
+  // Default true for new settings; preserve explicitly saved false values.
+  // When false, non-official endpoints are replaced with official URLs.
+  harnessAutoUpdatePlugins?: boolean;
   allowCustomEndpoint: boolean;
   // Opt-in to retrying a failed (401/403) custom image endpoint against the
   // official one. Default false: without this, a custom-endpoint failure just
@@ -1445,7 +1466,10 @@ export interface AppSettings {
   // Legacy per-mode comic storyboard templates. Kept for migration only.
   comicAnalyzePromptTemplates: ModePromptTemplates;
   // Current single storyboard analysis template used by the comic generator.
+  /** Retained only for importing legacy backups; no splitting endpoint. */
   comicAnalyzePromptTemplate: string;
+  promptOptimizeTemplate: string;
+  promptAssistantTemplate: string;
   // Text-only prompt conversion API, intentionally separated from vision reverse-prompt.
   convertApiUrl: string;
   convertApiKey: string;
@@ -1593,15 +1617,24 @@ export interface ImportedParams {
 }
 
 export interface NaiDesktopApi {
+  favoritesStatus: (src:string) => Promise<import('./favorites-types').ImageFavorite|null>;
+  favoritesList: () => Promise<import('./favorites-types').ImageFavoriteLibrary>;
+  favoritesAdd: (src:string) => Promise<{item:import('./favorites-types').ImageFavorite;duplicate:boolean}>;
+  favoritesRename: (id:string,name:string) => Promise<import('./favorites-types').ImageFavorite>;
+  favoritesRemove: (id:string) => Promise<{removed:boolean;filesRetained:boolean}>;
+  favoritesChooseDirectory: () => Promise<string|null>;
+  onFavoritesChanged: (callback:(notice:{message:string})=>void) => ()=>void;
   onStudioAgentRequest?: (callback:(request:import('./studio-agent-contract').StudioAgentRequest)=>void) => ()=>void;
   replyStudioAgent: (id:string,reply:import('./studio-agent-contract').StudioAgentReply) => Promise<void>;
   commitStudioSetting: (id:string,key:SettingKey,expected:AppSettings[SettingKey],value:AppSettings[SettingKey]) => Promise<void>;
+  harnessSetAutoPluginUpdates: (enabled:boolean) => Promise<import("./harness-types").HarnessPluginAutoState>;
+  harnessCheckPluginUpdates: () => Promise<import("./harness-types").HarnessPluginAutoState>;
   harnessSnapshot: () => Promise<import("./harness-types").HarnessSnapshot>;
   harnessStart: () => Promise<import("./harness-types").HarnessSnapshot>;
   harnessStop: () => Promise<import("./harness-types").HarnessSnapshot>;
-  harnessPlanDownload: (kind: 'component' | 'official', reinstall?: boolean) => Promise<{token:string;version:string;bytes:number;current?:boolean}>;
+  harnessPlanDownload: (kind: 'component' | 'official', reinstall?: boolean) => Promise<{token:string;version:string;bytes:number;official?:boolean;pluginUpdates?:import("./harness-types").HarnessPluginChoice[];current?:boolean;blocked?:boolean;message?:string}>;
   harnessUninstall: (confirmed: boolean) => Promise<import("./harness-types").HarnessSnapshot>;
-  harnessPrepareUpdate: (kind: 'component' | 'official', token: string) => Promise<import("./harness-types").HarnessUpdateProposal>;
+  harnessPrepareUpdate: (kind: 'component' | 'official', token: string, disablePlugins?: string[]) => Promise<import("./harness-types").HarnessUpdateProposal>;
   harnessApplyPreparedUpdate: (token: string) => Promise<import("./harness-types").HarnessSnapshot>;
   harnessCheckUpdates: () => Promise<import("./harness-types").HarnessSnapshot>;
   harnessUpdate: () => Promise<import("./harness-types").HarnessSnapshot>;
@@ -1838,6 +1871,10 @@ export interface NaiDesktopApi {
     extras: GenerateExtras,
     previewRequestId?: string,
   ) => Promise<GenerateResult>;
+  generateCompatible: (request: CompatibleGenerationRequest) => Promise<GenerateResult>;
+  saveCompatibleImageSettings: (config: CompatibleImageSettings, apiKey: string, provider: "novelai" | "openai-images", expectedRevision: string) => Promise<{ ok: boolean; message: string; code?: string; revision?: string }>;
+  setCompatibleImageProvider: (provider: "novelai", expectedRevision: string) => Promise<{ ok: boolean; message: string; code?: string; revision?: string }>;
+  onImageServiceChanged: (callback: (notice: { revision: string; version: number }) => void) => () => void;
   onGenerationPreview: (
     callback: (event: GenerationPreviewEvent) => void,
   ) => () => void;
@@ -1868,12 +1905,15 @@ export interface NaiDesktopApi {
     extras: GenerateExtras,
   ) => Promise<GenerateResult>;
   redrawImage: (request: BatchRedrawRequest) => Promise<GenerateResult>;
+  batchRedrawPrepare: (requests: BatchRedrawRequest[]) => Promise<ComicImageService>;
+  batchRedrawCancel: (runId: string) => Promise<{ok:boolean;requested:boolean}>;
   inpaint: (
     params: GenerateParams,
     inpaintModel: NAIInpaintModel,
     maskBase64: string,
     strength: number,
     noise: number,
+    region?: import("./focused-inpaint").InpaintRegion,
   ) => Promise<GenerateResult>;
   upscaleImage: (scale: UpscaleScale, model: string) => Promise<SingleImageResult>;
   augmentImage: (
@@ -1941,10 +1981,12 @@ export interface NaiDesktopApi {
     mode: ReversePromptMode,
     knownCharacter?: boolean,
     templateVersion?: ReversePromptTemplateVersion,
+    assistant?: import("./prompt-assistant").PromptEditRequest,
   ) => Promise<{
     ok: boolean;
     result?: string;
     variants?: PromptVariants;
+    validation?: {total:number;tags:number;natural:number;tagPercent:number};
       message: string;
   }>;
   getConvertHistory: () => Promise<TextToolHistoryItem[]>;
@@ -1960,9 +2002,6 @@ export interface NaiDesktopApi {
   deleteReverseHistoryItem: (id: string) => Promise<{ ok: boolean }>;
   clearReverseHistory: () => Promise<{ ok: boolean }>;
   pruneMissingReverseHistoryItem: (id: string) => Promise<boolean>;
-  comicAnalyzeScript: (
-    request: ComicAnalyzeRequest,
-  ) => Promise<ComicAnalyzeResult>;
   comicConvertPanels: (
     request: ComicConvertRequest,
   ) => Promise<ComicConvertResult>;
@@ -1984,9 +2023,11 @@ export interface NaiDesktopApi {
   comicGeneratePanel: (
     request: ComicGeneratePanelRequest,
   ) => Promise<GenerateResult>;
+  tagComicPrepareImageService: (requests: TagComicGenerateRequest[]) => Promise<ComicImageService>;
   tagComicGenerateCandidate: (
     request: TagComicGenerateRequest,
   ) => Promise<GenerateResult>;
+  tagComicCancelGeneration: (runId: string) => Promise<{ ok: boolean; requested: boolean }>;
   tagComicImportReference: (
     request: TagComicReferenceImportRequest,
   ) => Promise<TagComicReferenceImportResult>;

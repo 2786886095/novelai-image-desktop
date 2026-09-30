@@ -17,24 +17,28 @@ async function packageFiles(directory:string):Promise<Record<string,string>> {
 /** Inventory is a change detector, not an allow-list. Actual retained plugins must
  * boot with the candidate in a separate home before approval can be offered. */
 export async function userPluginFingerprint(root:string,_current:HarnessManifest|null,_next:HarnessManifest,_previewSource?:string){
- const home=path.join(root,'user-home/profiles/node_modules');
- const state:Record<string,unknown>={};
- const inspect=async(name:string)=>{
-  const dir=path.join(home,name),st=await fs.lstat(dir);
-  if(st.isSymbolicLink()){
-   const target=await fs.realpath(dir),relative=path.relative(path.resolve(root,'versions'),target);
-   if(!runtimeLinkRelative(relative))throw Error(`插件链接需要单独适配：${name}。原插件保持不变。`);
-   state[name]=target;return;
+ const home=path.join(root,'user-home'),state:Record<string,unknown>={};
+ const walk=async(dir:string)=>{
+  let entries;try{entries=await fs.readdir(dir,{withFileTypes:true});}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return;throw e;}
+  for(const entry of entries){
+   const full=path.join(dir,entry.name),relative=path.relative(home,full).split(path.sep).join('/');
+   if(entry.isSymbolicLink()){
+    const target=await fs.realpath(full),runtime=path.relative(path.resolve(root,'versions'),target);
+    if(!runtimeLinkRelative(runtime))throw Error(`插件链接需要单独适配：${relative}。原插件保持不变。`);
+    state[relative]=target;
+   }else if(entry.isDirectory()){
+    if(path.basename(dir)==='node_modules'&&!entry.name.startsWith('@'))state[relative]=await packageFiles(full);
+    else if(path.basename(path.dirname(dir))==='node_modules'&&path.basename(dir).startsWith('@'))state[relative]=await packageFiles(full);
+    else await walk(full);
+   }else if(entry.isFile())state[relative]=hash(await fs.readFile(full));
   }
-  if(!st.isDirectory())return;
-  state[name]=await packageFiles(dir);
  };
- let entries;
- try{entries=await fs.readdir(home,{withFileTypes:true});}
- catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return hash('{}');throw e;}
- for(const entry of entries){
-  if(entry.name.startsWith('@')&&!entry.isSymbolicLink())for(const name of await fs.readdir(path.join(home,entry.name)))await inspect(`${entry.name}/${name}`);
-  else await inspect(entry.name);
+ await walk(path.join(home,'profiles'));
+ // Launcher patches and settings influence the enabled graph even when package bytes do not change.
+ for(const name of await fs.readdir(home).catch(e=>{if(e.code==='ENOENT')return [] as string[];throw e;})){
+  if(!/\.(?:ya?ml|json)$/.test(name))continue;
+  const file=path.join(home,name),stat=await fs.lstat(file);if(stat.isSymbolicLink())throw Error('插件配置含链接：'+name);
+  if(stat.isFile())state[name]=hash(await fs.readFile(file));
  }
  return hash(JSON.stringify(Object.fromEntries(Object.entries(state).sort(([a],[b])=>a.localeCompare(b)))));
 }

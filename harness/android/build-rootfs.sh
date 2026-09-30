@@ -32,6 +32,7 @@ sudo chroot "$ROOT" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -euc '
 sudo cp "$REPO/harness/android/runtime/"package*.json "$ROOT/opt/agent/"
 sudo chroot "$ROOT" /bin/bash -euc 'cd /opt/agent && /usr/local/bin/npm ci --omit=dev --no-audit --no-fund'
 # All community sources are integrity-checked by this existing adapter.
+node "$REPO/scripts/prepare-agent-presentation.cjs"
 node "$REPO/harness/build-community.mjs"
 sudo cp -a "$REPO/.tmp/harness-community" "$ROOT/opt/agent/community"
 sudo cp -a "$REPO/harness/plugins" "$ROOT/opt/agent/plugins"

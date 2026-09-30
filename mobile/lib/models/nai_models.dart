@@ -16,7 +16,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.4.3';
+const appVersion = '2.4.4';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -864,6 +864,8 @@ class HistoryItem {
 }
 
 class AppSettings {
+  String imageProvider;
+  Map<String, dynamic> compatibleImage;
   CompletionSound completionSound;
   bool persistI2IParams;
   Map<String, dynamic> lastGenerationState;
@@ -981,6 +983,8 @@ class AppSettings {
   int autoBackupAssetPolicyVersion;
 
   AppSettings({
+    this.imageProvider = 'novelai',
+    this.compatibleImage = const {},
     this.completionSound = const CompletionSound(),
     this.persistI2IParams = true,
     this.lastGenerationState = const {},
@@ -1104,6 +1108,8 @@ class AppSettings {
 
   Map<String, dynamic> toJson() => {
         'apiBaseUrl': apiBaseUrl,
+        'imageProvider': imageProvider,
+        'compatibleImage': compatibleImage,
         'imageBaseUrl': imageBaseUrl,
         'allowCustomEndpoint': allowCustomEndpoint,
         'visionApiUrl': visionApiUrl,
@@ -1210,6 +1216,8 @@ class AppSettings {
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> j) => AppSettings(
+        imageProvider: j['imageProvider'] == 'openai-images' ? 'openai-images' : 'novelai',
+        compatibleImage: j['compatibleImage'] is Map ? Map<String, dynamic>.from(j['compatibleImage']) : {},
         apiBaseUrl: j['apiBaseUrl'] ?? 'https://api.novelai.net',
         imageBaseUrl: j['imageBaseUrl'] ?? 'https://image.novelai.net',
         allowCustomEndpoint: j['allowCustomEndpoint'] ?? false,

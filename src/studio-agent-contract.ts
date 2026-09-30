@@ -1,7 +1,7 @@
 import {NAI_MODELS, NAI_SAMPLERS, NAI_INPAINT_MODELS, DIRECTOR_TOOLS} from './types';
 import {STYLE_SORTS} from './style-library';
 
-export interface StudioAgentRequest { id:string; action:'read'|'list'|'prepare'|'apply'|'backup-capture'|'backup-restore'|'tasks'; args:Record<string,unknown>; }
+export interface StudioAgentRequest { id:string; action:'read'|'list'|'prepare'|'apply'|'backup-capture'|'backup-restore'|'tasks'|'collections'|'comic-project'|'batch-project'; args:Record<string,unknown>; }
 export interface StudioAgentReply { ok:boolean; data?:unknown; error?:string; }
 export interface FieldRule { type:'string'|'boolean'|'number'|'enum'; min?:number; max?:number; step?:number; enum?:readonly (string|number)[]; }
 const str:FieldRule={type:'string',max:30000};
@@ -38,7 +38,7 @@ export const STUDIO_WRITABLE:Record<string,Record<string,FieldRule>>={
     agentAutoCompact:bool,agentVisionEnabled:bool,
     reversePromptMode:choice('tags','natural','mixed'),convertMode:choice('tags','natural','mixed'),
     reversePromptTemplateVersion:choice('v4.5','v5'),convertPromptTemplateVersion:choice('v4.5','v5'),
-    reverseConvertDshEnabled:bool,reverseConvertDshMode:choice('focused','strict'),comicAnalyzePromptTemplate:str,
+    reverseConvertDshEnabled:bool,reverseConvertDshMode:choice('focused','strict'),promptOptimizeTemplate:str,promptAssistantTemplate:str,
     translateProvider:choice('google','baidu','ai'),translateAiModel:str,
     stylePromptPresetSort:choice(...STYLE_SORTS),
   },

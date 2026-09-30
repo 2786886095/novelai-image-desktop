@@ -1,8 +1,9 @@
+import {applyPluginUpgrades} from './harness-plugin-update';
 import {userPluginFingerprint,copyHarnessProbeHome} from './harness-compatibility';
 import {startHarnessBridge} from './harness-bridge';
 import type {HarnessUpdateProposal} from '../../src/harness-types';
 import {planLegacyPluginRepair} from './harness-legacy-repair';
-import {isHarnessBootFailure} from './harness-readiness';
+import {isHarnessBootFailure,disabledHarnessPlugin} from './harness-readiness';
 import {checkHarnessUpdates,type HarnessUpdateCheck} from './harness-update-check';
 import {backupHarnessHome} from './harness-backup';
 import {recoverHarnessHome} from './harness-recovery';
@@ -32,6 +33,7 @@ export class HarnessEngine {
   private version: string | null = null;
   private installedUpstream: string | null = null;
   private logs: HarnessLog[] = [];
+  private disabledPlugins: string[] = [];
   private sequence = 0;
   private child: ChildProcess | null = null;
   private abort: AbortController | null = null;
@@ -58,9 +60,19 @@ export class HarnessEngine {
     return this.checking;
   }
   constructor(private readonly options: EngineOptions) {}
+  /** Read the durable installation independently of remote update availability. */
+  async refreshInstalledState() {
+    if(this.busy)return this.snapshot();
+    const active=await this.readActive();
+    this.version=active?.manifest.version??null;
+    this.installedUpstream=active?.manifest.upstream??null;
+    return this.snapshot();
+  }
   get busy() { return !!this.child || !!this.action; }
-  snapshot(): HarnessSnapshot { return {phase: this.phase, version: this.version, installedUpstream:this.installedUpstream, logs: [...this.logs], dataDirectory: this.options.root, updateInfo:this.updateInfo,checkingUpdates:!!this.checking}; }
+  snapshot(): HarnessSnapshot { return {phase: this.phase, version: this.version, installedUpstream:this.installedUpstream, logs: [...this.logs], disabledPlugins:[...this.disabledPlugins], dataDirectory: this.options.root, updateInfo:this.updateInfo,checkingUpdates:!!this.checking}; }
   log(text: string, level: HarnessLog['level'] = 'info') {
+    const disabled=disabledHarnessPlugin(redactHarnessLog(text));
+    if(disabled){level='warn';if(this.disabledPlugins.includes(disabled))return;this.disabledPlugins.push(disabled);if(this.disabledPlugins.length>100)this.disabledPlugins.shift();}
     // Bounded, escaped by React. Never expose a bootstrap token to the renderer/log files.
     this.logs.push({id: ++this.sequence, time: new Date().toISOString(), level, text: redactHarnessLog(text).slice(0, 4000)});
     if (this.logs.length > 800) this.logs.splice(0, this.logs.length - 800);
@@ -238,8 +250,10 @@ export class HarnessEngine {
     });
     signal.throwIfAborted();
     const previous = await this.readActive() ?? await this.readUninstalled();
-    const migration = previous ? await upgradeBundledUserFiles(this.options.root, previous.manifest, slot, manifest) : null;
+    const pluginMigration=await applyPluginUpgrades(this.options.root,slot,manifest);
+    let migration:Awaited<ReturnType<typeof upgradeBundledUserFiles>>|null=null;
     try {
+    migration = previous ? await upgradeBundledUserFiles(this.options.root, previous.manifest, slot, manifest) : null;
     await this.seedUserFiles(slot);
     if(migration)this.log(`组件兼容迁移：更新 ${migration.changed} 个未修改文件、${migration.links} 个组件链接；保留 ${migration.custom} 个自定义文件。`);
     // Retain the previous active descriptor and every old engine slot for recovery.
@@ -249,7 +263,7 @@ export class HarnessEngine {
     const temp = active + '.tmp';
     await fs.writeFile(temp, JSON.stringify({slot:id, version:manifest.version}));
     await fs.rename(temp, active);
-    } catch(error) {await migration?.rollback();throw error;}
+    } catch(error) {try{await migration?.rollback();}finally{await pluginMigration.rollback();}throw error;}
     this.version = manifest.version;
     this.log('组件校验完成。用户配置、插件及对话目录未覆盖。');
     try{if(await discardHarnessDownload(this.options.root,source))this.log('已清理本次下载的临时副本；已安装组件、备份和用户资料保留。');}
@@ -339,9 +353,9 @@ export class HarnessEngine {
   async uninstallComponent(){
     if(this.busy)throw Error('请先关闭 Agent，再卸载组件。');
     this.prepared=null;
-    return this.runAction(async()=>{
+    return this.runAction(async signal=>{
       this.phase='updating';await this.backupUserHome();
-      const result=await removeHarnessComponent(this.options.root);this.version=null;this.installedUpstream=null;
+      const result=await removeHarnessComponent(this.options.root,signal,(phase,done,total)=>this.log(`${phase==='scan'?'检查组件文件':'移除已校验组件文件'}：${done}/${total}`));this.version=null;this.installedUpstream=null;
       this.phase='stopped';this.log(`组件已卸载（${result.removed} 个文件）；对话、角色卡、预设、图片、设置和备份保留。`);
       if(result.preserved)this.log('自定义或未知组件文件已保留，未删除。','warn');
     });
@@ -349,6 +363,7 @@ export class HarnessEngine {
   async start() {
     if (this.child || this.action) return;
     return this.runAction(async signal => {
+      this.disabledPlugins=[];
       this.phase = 'installing';
       let active = await this.readActive();
       if (!active) {
@@ -455,6 +470,8 @@ export class HarnessEngine {
     await fs.writeFile(path.join(root,'active.json'),JSON.stringify({slot:'candidate'}));
     const current=await this.readActive();
     await copyHarnessProbeHome(this.options.root,path.join(root,'user-home'),source);
+    const candidateManifest=validateManifest(JSON.parse(await fs.readFile(path.join(source,'manifest.json'),'utf8')));
+    await applyPluginUpgrades(root,source,candidateManifest);
     // Mirror the real upgrade: migrate only wholly unchanged bundled packages.
     // Custom/new packages and their enabled/disabled configuration are copied intact.
     if(current){
@@ -466,11 +483,35 @@ export class HarnessEngine {
     const cancel=()=>{void probe.stop().catch(()=>{});};signal.addEventListener('abort',cancel,{once:true});
     try{
       signal.throwIfAborted();await probe.start();signal.throwIfAborted();
-      if(probe.snapshot().phase!=='running'){
-        for(const entry of probe.snapshot().logs.filter(line=>line.level==='error').slice(-8))this.log(`兼容检查：${entry.text}`,'warn');
+      if(probe.snapshot().phase!=='running'||probe.snapshot().disabledPlugins?.length){
+        for(const entry of probe.snapshot().logs.filter(line=>line.level==='error'||line.level==='warn').slice(-8))this.log(`兼容检查：${entry.text}`,'warn');
         throw Error('候选组件与当前插件组合启动检查未通过，请查看日志；现有酒馆保持不变。');
       }
     }finally{signal.removeEventListener('abort',cancel);await probe.stop();}
+  }
+  /** Plugin-only transaction; never stops a live Agent or upgrades the runtime. */
+  async updatePlugins(download:(signal:AbortSignal)=>Promise<string>,external:AbortSignal){
+    if(this.busy)throw Error('Agent 正在运行或处理其他操作，请关闭后再更新插件。');
+    external.throwIfAborted();this.prepared=null;
+    let failure:unknown;
+    await this.runAction(async own=>{
+      const signal=AbortSignal.any([own,external]);this.phase='updating';
+      try{
+        const active=await this.readActive();if(!active)throw Error('请先安装 Agent 组件。');
+        const stamp=await this.activeStamp();
+        const before=await userPluginFingerprint(this.options.root,active.manifest,active.manifest);
+        await this.backupUserHome();signal.throwIfAborted();
+        const source=await download(signal);signal.throwIfAborted();
+        const manifest=validateManifest(JSON.parse(await fs.readFile(path.join(source,'manifest.json'),'utf8')));
+        if(manifest.version!==active.manifest.version||manifest.upstream!==active.manifest.upstream||!manifest.pluginChanges?.length||manifest.pluginChanges.some(p=>p.action!=='upgrade'))throw Error('插件更新候选与当前环境不符。');
+        await verifyBundle(source,manifest,signal);
+        await this.probePreparedBundle(source,signal);signal.throwIfAborted();
+        if(stamp!==await this.activeStamp()||before!==await userPluginFingerprint(this.options.root,active.manifest,manifest))throw Error('插件或配置在检查期间发生变化，请重新检查。');
+        await this.install(source,signal);
+        this.disabledPlugins=[];this.phase='stopped';this.log('插件自动更新完成；Harness 版本和用户配置保持不变。');
+      }catch(error){failure=error;throw error;}
+    });
+    if(failure)throw failure;
   }
   async prepareUpdate(kind:'component'|'official', approvedDownload?: (signal:AbortSignal)=>Promise<string|null>, reinstall=false):Promise<HarnessUpdateProposal>{
     if(kind!=='component'&&kind!=='official')throw Error('Invalid update kind');
@@ -490,8 +531,9 @@ export class HarnessEngine {
         if(!source){result={status:kind==='official'?'blocked':'current',kind,message:kind==='official'?'官方新版尚无匹配的兼容组件，请等待适配。':'暂无可安装的适配更新。'};return;}
         const raw=await fs.readFile(path.join(source,'manifest.json'),'utf8'),manifest=validateManifest(JSON.parse(raw));
         if(kind==='official'&&manifest.upstream!==official)throw Error('官方新版尚无匹配的兼容组件，请等待适配。');
-        if(active&&!isNewerBundle(manifest.version,active.manifest.version)&&!reinstall){
-          result={status:kind==='official'?'blocked':'current',kind,message:kind==='official'?'官方新版尚无匹配的兼容组件，请等待适配。':'当前已是最新版本。'};return;
+        if(active&&isNewerBundle(active.manifest.upstream,manifest.upstream))throw Error('候选组件包含较旧的 Harness，保留当前运行环境。');
+        if(kind==='component'&&active&&!isNewerBundle(manifest.version,active.manifest.version)&&!reinstall){
+          result={status:'current',kind,message:'当前已是最新版本。'};return;
         }
         await verifyBundle(source,manifest,signal);
         const plugins=await userPluginFingerprint(this.options.root,active?.manifest??null,manifest,this.options.previewSource);
@@ -500,7 +542,7 @@ export class HarnessEngine {
         if(plugins!==await userPluginFingerprint(this.options.root,active?.manifest??null,manifest,this.options.previewSource))throw Error('检查后插件发生变化，请重新检查。');
         const token=crypto.randomBytes(24).toString('hex');
         this.prepared={token,source,digest:crypto.createHash('sha256').update(raw).digest('hex'),active:await this.activeStamp(),plugins,expires:Date.now()+600000,version:manifest.version,upstream:manifest.upstream};
-        result={status:'ready',kind,message:'兼容检查通过，等待确认升级。',token,version:manifest.version,upstream:manifest.upstream,fromVersion:active?.manifest.version,fromUpstream:active?.manifest.upstream};
+        result={status:'ready',kind,message:'兼容检查通过，等待确认升级。',token,version:manifest.version,upstream:manifest.upstream,fromVersion:active?.manifest.version,fromUpstream:active?.manifest.upstream,pluginUpdates:manifest.pluginChanges};
       }catch(e){result={status:'blocked',kind,message:e instanceof Error?e.message:String(e)};this.log(result.message,'warn');}
       finally{this.phase='stopped';}
     });return result;
