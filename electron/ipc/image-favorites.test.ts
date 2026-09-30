@@ -6,7 +6,7 @@ import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {createImageFavorites} from './image-favorites';
 let root:string,bytes:Buffer,source:string;
 const service=()=>createImageFavorites({indexPath:path.join(root,'profile','favorites.json'),defaultDirectory:path.join(root,'favorites'),now:()=>new Date('2026-09-28T12:00:00Z')});
-beforeEach(async()=>{root=await fs.mkdtemp(path.join(os.tmpdir(),'studio-favorites-'));source=path.join(root,'original.png');bytes=await sharp({create:{width:10,height:15,channels:4,background:'#7367aa'}}).withMetadata({exif:{IFD0:{ImageDescription:'NovelAI prompt fixture'}}}).png().toBuffer();await fs.writeFile(source,bytes);});
+beforeEach(async()=>{root=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'studio-favorites-')));source=path.join(root,'original.png');bytes=await sharp({create:{width:10,height:15,channels:4,background:'#7367aa'}}).withMetadata({exif:{IFD0:{ImageDescription:'NovelAI prompt fixture'}}}).png().toBuffer();await fs.writeFile(source,bytes);});
 afterEach(()=>fs.rm(root,{recursive:true,force:true}));
 it('copies original bytes and metadata into a flat directory, persists and deduplicates',async()=>{
  const api=service();const added=await api.add(source);expect(added.item.prefix).toBe('20260928_10x15_01');expect(await fs.readFile(added.item.filePath)).toEqual(bytes);expect(path.dirname(added.item.filePath)).toBe(path.join(root,'favorites'));

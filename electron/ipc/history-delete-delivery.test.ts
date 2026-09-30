@@ -8,7 +8,7 @@ import {addHistory,getHistory,setSetting,writeStore,readStore} from './store';
 import {deleteHistoryItem,renameHistoryItem} from './storage';
 import {createSoftwareActions} from './software-actions';
 import {createImageApprovals} from './harness-image-approval';
-fixture.root=await fs.mkdtemp(path.join(os.tmpdir(),'studio-delete-delivery-'));
+fixture.root=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'studio-delete-delivery-')));
 let output:string;
 beforeEach(async()=>{output=await fs.mkdtemp(path.join(fixture.root,'output-'));setSetting('outputDir',output);writeStore({...readStore(),history:[]});});
 afterAll(()=>fs.rm(fixture.root,{recursive:true,force:true}));

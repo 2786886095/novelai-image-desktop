@@ -6,7 +6,7 @@ import {addHistory,getHistory,setSetting,writeStore,readStore,createHistoryGroup
 import {renameHistoryItem} from './storage';
 import {createSoftwareActions} from './software-actions';
 import {startHarnessBridge} from './harness-bridge';
-fixture.root=await fs.mkdtemp(path.join(os.tmpdir(),'studio-agent-history-'));let output:string;
+fixture.root=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'studio-agent-history-')));let output:string;
 beforeEach(async()=>{output=await fs.mkdtemp(path.join(fixture.root,'output-'));setSetting('outputDir',output);writeStore({...readStore(),history:[],historyGroups:[]});fixture.reveal.mockClear();});
 afterAll(()=>fs.rm(fixture.root,{recursive:true,force:true}));
 async function record(id:string,groupId?:string){const filePath=path.join(output,id+'.png');await fs.writeFile(filePath,'original metadata '+id);addHistory([{id,filePath,fileUrl:'',model:'fixture',width:2,height:3,date:'2026-09-28',createdAt:new Date().toISOString(),groupId,params:{prompt:'synthetic',apiKey:'not-exported'}} as any]);return filePath;}
