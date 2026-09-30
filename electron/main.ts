@@ -1,3 +1,5 @@
+import { registerNaiAccountsIpc, ensureNaiAccountsLoaded } from './ipc/nai-accounts';
+import { withNaiAccountOperation, rememberNaiProposal, assertNaiProposalAccount } from './ipc/nai-accounts-runtime';
 import {prepareBatchImageService} from './ipc/batch-image-service';
 import {cancelBatchRedraw} from './ipc/nai';
 import {prepareComicImageService} from './ipc/comic-image-service';
@@ -256,6 +258,7 @@ import {
   compactAgentConversation,
   getAgentPendingPermissions,
   getAgentRuntimeStatus,
+  hasActiveAgentRequests,
   respondAgentPermission,
   restartAgentRuntime,
   sendAgentMessage,
@@ -720,36 +723,53 @@ function createWindow() {
   }
 }
 
+function accountBoundHandle(channel: string, listener: Parameters<typeof ipcMain.handle>[1]) {
+  ipcMain.handle(channel, (event, ...args) => {
+    ensureNaiAccountsLoaded();
+    if (channel !== 'nai:clearToken' && /^(nai:|agent:|tagComic:|comic:|batch)/.test(channel)) return withNaiAccountOperation(async () => {
+      if(channel==='agent:generateImage') assertNaiProposalAccount(args[0]?.conversationId,args[0]?.messageId);
+      const priorMessageIds=channel==='agent:send' ? new Set(readAgentWorkspace().conversations.find(c=>c.id===args[0]?.conversationId)?.messages.map(m=>m.id) ?? []) : undefined;
+      const result=await listener(event,...args);
+      if(channel==='agent:send') {
+        const conversation=readAgentWorkspace().conversations.find(c=>c.id===args[0]?.conversationId);
+        for(const message of conversation?.messages ?? []) if(message.imageProposal?.status==='pending' && !priorMessageIds?.has(message.id)) rememberNaiProposal(conversation!.id,message.id);
+      }
+      return result;
+    });
+    return listener(event, ...args);
+  });
+}
 function registerIpc() {
+  registerNaiAccountsIpc();
   registerImageFavoritesIpc();
   registerCompatibleImageIpc(() => mainWindow);
-  ipcMain.handle("agent:getWorkspace", () => readAgentWorkspace());
-  ipcMain.handle("agent:saveWorkspace", (_event, workspace: AgentWorkspaceData) => saveTavernWorkspace(workspace));
-  ipcMain.handle("agent:createConversation", (_event, title?: string) => createAgentConversation(title));
-  ipcMain.handle("agent:selectConversation", (_event, conversationId: string) => selectAgentConversation(conversationId));
-  ipcMain.handle("agent:renameConversation", (_event, conversationId: string, title: string) => renameAgentConversation(conversationId, title));
-  ipcMain.handle("agent:deleteConversation", (_event, conversationId: string) => deleteAgentConversation(conversationId));
-  ipcMain.handle("agent:importFiles", (_event, conversationId: string, sourcePaths?: string[]) => importAgentFiles(conversationId, sourcePaths));
-  ipcMain.handle("agent:deleteAttachment", (_event, conversationId: string, attachmentId: string) => deleteAgentAttachment(conversationId, attachmentId));
-  ipcMain.handle("agent:exportAttachment", (_event, conversationId: string, messageId: string, attachmentId: string) => exportAgentAttachment(conversationId, messageId, attachmentId));
-  ipcMain.handle("agent:send", (_event, request: AgentSendRequest) => sendAgentMessage(request));
-  ipcMain.handle("agent:generateImage", (_event, request: TavernImageRequest) => generateTavernImage(request));
-  ipcMain.handle("agent:importCards", (_event, sourcePaths?: string[]) => importTavernCards(sourcePaths));
-  ipcMain.handle("agent:exportCard", (_event, request: TavernCardExportRequest) => exportTavernCard(request));
-  ipcMain.handle("agent:importVisual", (_event, kind: "avatar" | "background", sourcePath?: string) => importTavernVisualAsset(kind, sourcePath));
-  ipcMain.handle("agent:abort", (_event, conversationId: string) => abortAgentMessage(conversationId));
-  ipcMain.handle("agent:compact", (_event, conversationId: string) => compactAgentConversation(conversationId));
-  ipcMain.handle("agent:respondPermission", (_event, permissionId: string, response: "once" | "always" | "reject") => respondAgentPermission(permissionId, response));
-  ipcMain.handle("agent:upsertSkill", (_event, skill: Partial<AgentSkill> & Pick<AgentSkill, "name" | "instructions">) => upsertAgentSkill(skill));
-  ipcMain.handle("agent:deleteSkill", (_event, skillId: string) => deleteAgentSkill(skillId));
-  ipcMain.handle("agent:upsertMemory", (_event, memory: Partial<AgentMemory> & Pick<AgentMemory, "title" | "content" | "scope">) => upsertAgentMemory(memory));
-  ipcMain.handle("agent:deleteMemory", (_event, memoryId: string) => deleteAgentMemory(memoryId));
-  ipcMain.handle("agent:runtimeStatus", () => getAgentRuntimeStatus());
-  ipcMain.handle("agent:pendingPermissions", () => getAgentPendingPermissions());
-  ipcMain.handle("agent:restartRuntime", () => restartAgentRuntime());
-  ipcMain.handle("agent:discoverModels", (_event, probe: AgentProviderProbe) => discoverAgentModels(probe));
-  ipcMain.handle("agent:workspaceLocation", () => getAgentWorkspaceLocation());
-  ipcMain.handle("agent:openWorkspace", () => openAgentWorkspaceDirectory());
+  accountBoundHandle("agent:getWorkspace", () => readAgentWorkspace());
+  accountBoundHandle("agent:saveWorkspace", (_event, workspace: AgentWorkspaceData) => saveTavernWorkspace(workspace));
+  accountBoundHandle("agent:createConversation", (_event, title?: string) => createAgentConversation(title));
+  accountBoundHandle("agent:selectConversation", (_event, conversationId: string) => selectAgentConversation(conversationId));
+  accountBoundHandle("agent:renameConversation", (_event, conversationId: string, title: string) => renameAgentConversation(conversationId, title));
+  accountBoundHandle("agent:deleteConversation", (_event, conversationId: string) => deleteAgentConversation(conversationId));
+  accountBoundHandle("agent:importFiles", (_event, conversationId: string, sourcePaths?: string[]) => importAgentFiles(conversationId, sourcePaths));
+  accountBoundHandle("agent:deleteAttachment", (_event, conversationId: string, attachmentId: string) => deleteAgentAttachment(conversationId, attachmentId));
+  accountBoundHandle("agent:exportAttachment", (_event, conversationId: string, messageId: string, attachmentId: string) => exportAgentAttachment(conversationId, messageId, attachmentId));
+  accountBoundHandle("agent:send", (_event, request: AgentSendRequest) => sendAgentMessage(request));
+  accountBoundHandle("agent:generateImage", (_event, request: TavernImageRequest) => generateTavernImage(request));
+  accountBoundHandle("agent:importCards", (_event, sourcePaths?: string[]) => importTavernCards(sourcePaths));
+  accountBoundHandle("agent:exportCard", (_event, request: TavernCardExportRequest) => exportTavernCard(request));
+  accountBoundHandle("agent:importVisual", (_event, kind: "avatar" | "background", sourcePath?: string) => importTavernVisualAsset(kind, sourcePath));
+  accountBoundHandle("agent:abort", (_event, conversationId: string) => abortAgentMessage(conversationId));
+  accountBoundHandle("agent:compact", (_event, conversationId: string) => compactAgentConversation(conversationId));
+  accountBoundHandle("agent:respondPermission", (_event, permissionId: string, response: "once" | "always" | "reject") => respondAgentPermission(permissionId, response));
+  accountBoundHandle("agent:upsertSkill", (_event, skill: Partial<AgentSkill> & Pick<AgentSkill, "name" | "instructions">) => upsertAgentSkill(skill));
+  accountBoundHandle("agent:deleteSkill", (_event, skillId: string) => deleteAgentSkill(skillId));
+  accountBoundHandle("agent:upsertMemory", (_event, memory: Partial<AgentMemory> & Pick<AgentMemory, "title" | "content" | "scope">) => upsertAgentMemory(memory));
+  accountBoundHandle("agent:deleteMemory", (_event, memoryId: string) => deleteAgentMemory(memoryId));
+  accountBoundHandle("agent:runtimeStatus", () => getAgentRuntimeStatus());
+  accountBoundHandle("agent:pendingPermissions", () => getAgentPendingPermissions());
+  accountBoundHandle("agent:restartRuntime", () => restartAgentRuntime());
+  accountBoundHandle("agent:discoverModels", (_event, probe: AgentProviderProbe) => discoverAgentModels(probe));
+  accountBoundHandle("agent:workspaceLocation", () => getAgentWorkspaceLocation());
+  accountBoundHandle("agent:openWorkspace", () => openAgentWorkspaceDirectory());
   ipcMain.handle("promptCodex:cache", () => loadPromptCodexCache());
   ipcMain.handle("promptCodex:bundled", () => loadBundledPromptCodex());
   ipcMain.handle("promptCodex:update", () => updatePromptCodex());
@@ -875,7 +895,7 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   ipcMain.handle("online-gallery:cache-image", (_event, source: unknown, url: unknown, days: unknown, force: unknown) =>
     cacheOnlineGalleryImage(source, url, days, force),
   );
-  ipcMain.handle("nai:hasToken", async () => {
+  accountBoundHandle("nai:hasToken", async () => {
     const summary = getAccountSummary();
     if (!summary.hasToken) return summary;
     return refreshStoredAccount();
@@ -883,18 +903,18 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   // Local-only summary (token presence + last cached balance), no network. Used
   // at boot so a slow/blocked NovelAI connection can't delay app startup; the
   // renderer refreshes the live balance via nai:hasToken after the first frame.
-  ipcMain.handle("nai:accountCached", () => getAccountSummary());
+  accountBoundHandle("nai:accountCached", () => getAccountSummary());
   ipcMain.handle("nai:storedToken", () => getToken());
-  ipcMain.handle("nai:verify", (_event, token: string) => verifyToken(token));
-  ipcMain.handle("nai:clearToken", () => {
+  accountBoundHandle("nai:verify", (_event, token: string) => verifyToken(token));
+  accountBoundHandle("nai:clearToken", () => {
     clearToken();
     return { ok: true };
   });
-  ipcMain.handle("nai:quoteAnlas", (_event, request: AnlasQuoteRequest) =>
+  accountBoundHandle("nai:quoteAnlas", (_event, request: AnlasQuoteRequest) =>
     quoteAnlasCost(request),
   );
 
-  ipcMain.handle("nai:generate", (event, params, extras, previewRequestId?: string) => {
+  accountBoundHandle("nai:generate", (event, params, extras, previewRequestId?: string) => {
     const onPreview = typeof previewRequestId === "string" && previewRequestId
       ? (preview: Omit<GenerationPreviewEvent, "requestId">) => {
           if (event.sender.isDestroyed()) return;
@@ -906,7 +926,7 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
       : undefined;
     return generateImage(params, extras, { onPreview });
   });
-  ipcMain.handle("nai:generateArtistLab", (_event, params, extras, mode) =>
+  accountBoundHandle("nai:generateArtistLab", (_event, params, extras, mode) =>
     generateArtistLabImage(params, extras, mode),
   );
   ipcMain.handle("artistLab:promoteFavorite", (_event, item) =>
@@ -939,15 +959,15 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
     deleteArtistLabTemporary(filePath),
   );
   ipcMain.handle("artistLab:clearTemporary", () => clearArtistLabTemporary());
-  ipcMain.handle("nai:generateI2I", (_event, params, i2i: I2IParams, extras) =>
+  accountBoundHandle("nai:generateI2I", (_event, params, i2i: I2IParams, extras) =>
     generateI2I(params, i2i, extras),
   );
-  ipcMain.handle("nai:batchRedrawPrepare", (_event, requests: BatchRedrawRequest[]) => prepareBatchImageService(requests));
-  ipcMain.handle("nai:batchRedrawCancel", (_event, runId: string) => cancelBatchRedraw(runId));
-  ipcMain.handle("nai:redrawImage", (_event, request: BatchRedrawRequest) =>
+  accountBoundHandle("nai:batchRedrawPrepare", (_event, requests: BatchRedrawRequest[]) => prepareBatchImageService(requests));
+  accountBoundHandle("nai:batchRedrawCancel", (_event, runId: string) => cancelBatchRedraw(runId));
+  accountBoundHandle("nai:redrawImage", (_event, request: BatchRedrawRequest) =>
     redrawImage(request),
   );
-  ipcMain.handle(
+  accountBoundHandle(
     "nai:inpaint",
     (
       _event,
@@ -959,18 +979,18 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
       region?: import('../src/focused-inpaint').InpaintRegion,
     ) => inpaintImage(params, inpaintModel, maskBase64, strength, noise, region),
   );
-    ipcMain.handle("nai:upscale", (_event, scale: UpscaleScale, model: string) =>
+    accountBoundHandle("nai:upscale", (_event, scale: UpscaleScale, model: string) =>
       upscaleImg(scale, model),
     );
-  ipcMain.handle(
+  accountBoundHandle(
     "nai:augment",
     (_event, tool: DirectorTool, options: AugmentOptions) =>
       augmentImg(tool, options),
   );
   ipcMain.handle("imageInput:readClipboard", () => readClipboardImageFiles());
   ipcMain.handle("imageInput:save", (_event, images: unknown) => savePastedImageFiles(images));
-  ipcMain.handle("nai:loadImage", () => loadImageFile());
-  ipcMain.handle("nai:loadImageFromPath", (_event, filePath: string) =>
+  accountBoundHandle("nai:loadImage", () => loadImageFile());
+  accountBoundHandle("nai:loadImageFromPath", (_event, filePath: string) =>
     loadImageFromPath(filePath),
   );
   ipcMain.handle("metadata:saveSnapshot", (_event, payload: MetadataSnapshotPayload) =>
@@ -985,8 +1005,8 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   ipcMain.handle("metadata:loadSnapshot", () =>
     loadMetadataSnapshotFile(app.getPath("userData")),
   );
-  ipcMain.handle("nai:clearWorkbenchImage", () => clearWorkbenchImage());
-  ipcMain.handle(
+  accountBoundHandle("nai:clearWorkbenchImage", () => clearWorkbenchImage());
+  accountBoundHandle(
     "nai:reversePrompt",
     (
       _event,
@@ -1006,7 +1026,7 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
         templateVersion === "v4.5" || templateVersion === "v5" ? templateVersion : undefined,
       ),
   );
-  ipcMain.handle(
+  accountBoundHandle(
     "nai:convertPrompt",
     (_event, text: string, mode: string, knownCharacter?: boolean, templateVersion?: string, assistant?: import("../src/prompt-assistant").PromptEditRequest) =>
       convertPromptText(
@@ -1017,16 +1037,16 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
         assistant,
       ),
   );
-  ipcMain.handle(
+  accountBoundHandle(
     "comic:convertPanels",
     (_event, request: ComicConvertRequest) => convertComicPanels(request),
   );
-  ipcMain.handle(
+  accountBoundHandle(
     "comic:checkConsistency",
     (_event, request: ComicConsistencyRequest) =>
       checkComicConsistency(request),
   );
-  ipcMain.handle(
+  accountBoundHandle(
     "comic:reverseAsset",
     (
       _event,
@@ -1044,58 +1064,58 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
         knownCharacter,
       ),
   );
-  ipcMain.handle(
+  accountBoundHandle(
     "comic:generatePanel",
     (_event, request: ComicGeneratePanelRequest) => generateComicPanel(request),
   );
-  ipcMain.handle("tagComic:prepareImageService", (_event, requests: import("../src/types").TagComicGenerateRequest[]) => prepareComicImageService(requests));
-  ipcMain.handle("tagComic:cancelGeneration", (_event, runId: string) => cancelTagComicGeneration(runId));
-  ipcMain.handle(
+  accountBoundHandle("tagComic:prepareImageService", (_event, requests: import("../src/types").TagComicGenerateRequest[]) => prepareComicImageService(requests));
+  accountBoundHandle("tagComic:cancelGeneration", (_event, runId: string) => cancelTagComicGeneration(runId));
+  accountBoundHandle(
     "tagComic:generateCandidate",
     (_event, request: TagComicGenerateRequest) =>
       generateTagComicCandidate(request),
   );
-  ipcMain.handle(
+  accountBoundHandle(
     "tagComic:importReference",
     (_event, request: TagComicReferenceImportRequest) =>
       importTagComicReference(request),
   );
-  ipcMain.handle(
+  accountBoundHandle(
     "tagComic:deleteReference",
     (_event, projectId: string, referenceId: string) =>
       deleteTagComicReference(projectId, referenceId),
   );
-  ipcMain.handle(
+  accountBoundHandle(
     "tagComic:exportSelectedZip",
     (_event, request: TagComicExportZipRequest) =>
       exportTagComicSelectedZip(request),
   );
   ipcMain.handle("ai:getLog", () => getAiCallLog());
   ipcMain.handle("ai:clearLog", () => clearAiCallLog());
-  ipcMain.handle("nai:listModels", (_event, kind: "reverse" | "convert" | "translate") =>
+  accountBoundHandle("nai:listModels", (_event, kind: "reverse" | "convert" | "translate") =>
     listAiModels(kind),
   );
-  ipcMain.handle("nai:testTagServer", (_event, query: string) =>
+  accountBoundHandle("nai:testTagServer", (_event, query: string) =>
     testTagServer(query),
   );
-  ipcMain.handle("nai:suggestTags", (_event, model: string, prompt: string) =>
+  accountBoundHandle("nai:suggestTags", (_event, model: string, prompt: string) =>
     suggestTags(model, prompt),
   );
-  ipcMain.handle(
+  accountBoundHandle(
     "nai:searchTagServer",
     (_event, query: string, limit?: number) => searchTagServer(query, limit),
   );
-  ipcMain.handle("nai:danbooruStatus", () => danbooruStatus());
-  ipcMain.handle("nai:downloadDanbooru", () => downloadDanbooruTags());
-  ipcMain.handle(
+  accountBoundHandle("nai:danbooruStatus", () => danbooruStatus());
+  accountBoundHandle("nai:downloadDanbooru", () => downloadDanbooruTags());
+  accountBoundHandle(
     "nai:danbooruBrowse",
     (_event, category: number, offset: number, limit: number) =>
       browseDanbooru(category, offset, limit),
   );
-  ipcMain.handle("nai:danbooruSearch", (_event, query: string, limit: number) =>
+  accountBoundHandle("nai:danbooruSearch", (_event, query: string, limit: number) =>
     searchDanbooru(query, limit),
   );
-  ipcMain.handle(
+  accountBoundHandle(
     "nai:artistStyleCatalog",
     (_event, scope: import("../src/types").ArtistStyleCatalogScope, query: string, offset: number, limit: number) =>
       artistStyleCatalog(scope, query, offset, limit),
@@ -1115,10 +1135,10 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   ipcMain.handle("resource-database:related-tags", (_event, tags: string[], limit?: number) =>
     relatedResourceTags(Array.isArray(tags) ? tags : [], limit),
   );
-  ipcMain.handle("nai:translate", (_event, text: string, target?: string) =>
+  accountBoundHandle("nai:translate", (_event, text: string, target?: string) =>
     translateText(text, target),
   );
-  ipcMain.handle("nai:cancel", () => cancelGeneration());
+  accountBoundHandle("nai:cancel", () => cancelGeneration());
 
   ipcMain.handle(
     "storage:getHistory",
@@ -1436,7 +1456,7 @@ app.whenReady().then(async () => {
   }, 30_000);
   proxyRefreshTimer.unref();
   registerIpc();
-  registerHarnessLauncher(() => mainWindow);
+  registerHarnessLauncher(() => mainWindow,{isBusy:hasActiveAgentRequests,stop:stopAgentRuntime});
   wireAutoUpdater(() => mainWindow, async () => {
     await stopHarnessForUpdate();
     await stopAgentRuntime();

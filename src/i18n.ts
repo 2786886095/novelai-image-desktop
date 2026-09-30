@@ -109,9 +109,9 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       desc: "浏览公开作品并提取提示词与原参数",
     },
     agent: {
-      label: "酒馆Agent",
-      title: "酒馆Agent",
-      desc: "启动、关闭与更新通用 Agent，查看实时运行日志",
+      label: "生图智能体",
+      title: "生图智能体",
+      desc: "聊天、参考图、提示词与 NovelAI 生图",
     },
     records: {
       label: "记录",
@@ -165,9 +165,9 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       desc: "瀏覽公開作品並擷取提示詞與原始參數",
     },
     agent: {
-      label: "酒館Agent",
-      title: "酒館Agent",
-      desc: "啟動、關閉與更新 Agent，查看即時日誌",
+      label: "生圖智能體",
+      title: "生圖智能體",
+      desc: "對話、參考圖、提示詞與 NovelAI 生圖",
     },
     records: {
       label: "記錄",
@@ -225,8 +225,8 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       desc: "Browse public works and reuse prompts and original parameters",
     },
     agent: {
-      label: "Tavern Agent",
-      title: "Tavern Agent",
+      label: "Image Agent",
+      title: "Image Agent",
       desc: "Conversational prompting, tag search, style analysis, and NovelAI image generation",
     },
     records: {
@@ -285,8 +285,8 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       desc: "公開作品を閲覧し、プロンプトと元パラメータを利用",
     },
     agent: {
-      label: "Tavern Agent",
-      title: "酒場Agent",
+      label: "画像エージェント",
+      title: "画像エージェント",
       desc: "会話でプロンプト整理、Tag 検索、画風分析、NovelAI 画像生成",
     },
     records: {
@@ -345,8 +345,8 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       desc: "공개 작품을 탐색하고 프롬프트와 원본 설정을 활용",
     },
     agent: {
-      label: "Tavern Agent",
-      title: "Tavern Agent",
+      label: "이미지 에이전트",
+      title: "이미지 에이전트",
       desc: "대화형 프롬프트 정리, Tag 검색, 화풍 분석과 NovelAI 이미지 생성",
     },
     records: {
@@ -4910,6 +4910,9 @@ const DESKTOP_MAIN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "history.emptyTitle": "暂无历史记录",
     "history.emptyHint": "生成、重绘、超分、后期处理完成后会自动保存到这里。",
     "history.thumbAlt": "历史缩略图",
+    "history.moreActions": "图片操作",
+    "history.menuMetadata": "查看原数据",
+    "history.menuDelete": "删除图片",
     "history.dragTitle": "可拖出到桌面 / 资源管理器 / 其他程序",
     "history.itemGroupTitle": "设置素材分组",
     "history.renameImageTitle": "重命名图片（同步本地文件）",
@@ -4977,6 +4980,9 @@ const DESKTOP_MAIN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "history.emptyTitle": "暫無歷史記錄",
     "history.emptyHint": "生成、重繪、超分、後期處理完成後會自動保存到這裡。",
     "history.thumbAlt": "歷史縮圖",
+    "history.moreActions": "圖片操作",
+    "history.menuMetadata": "查看原資料",
+    "history.menuDelete": "刪除圖片",
     "history.dragTitle": "可拖出到桌面 / 檔案總管 / 其他程式",
     "history.itemGroupTitle": "設定素材分組",
     "history.renameImageTitle": "重新命名圖片（同步本地檔案）",
@@ -5045,6 +5051,9 @@ const DESKTOP_MAIN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "history.emptyHint":
       "Generation, inpaint, upscale, and post-processing results are saved here automatically.",
     "history.thumbAlt": "History thumbnail",
+    "history.moreActions": "Image actions",
+    "history.menuMetadata": "Image data",
+    "history.menuDelete": "Delete image",
     "history.dragTitle": "Drag to Desktop / File Explorer / other apps",
     "history.itemGroupTitle": "Set asset group",
     "history.renameImageTitle": "Rename image (also renames the local file)",
@@ -5114,6 +5123,9 @@ const DESKTOP_MAIN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "history.emptyHint":
       "生成、再描画、拡大、後処理の結果はここに自動保存されます。",
     "history.thumbAlt": "履歴サムネイル",
+    "history.moreActions": "画像の操作",
+    "history.menuMetadata": "画像情報",
+    "history.menuDelete": "画像を削除",
     "history.dragTitle":
       "デスクトップ / エクスプローラー / 他アプリへドラッグ可能",
     "history.itemGroupTitle": "素材グループを設定",
@@ -5184,6 +5196,9 @@ const DESKTOP_MAIN_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "history.emptyHint":
       "생성, 리드로우, 업스케일, 후처리 결과가 자동으로 여기에 저장됩니다.",
     "history.thumbAlt": "기록 썸네일",
+    "history.moreActions": "이미지 작업",
+    "history.menuMetadata": "이미지 정보",
+    "history.menuDelete": "이미지 삭제",
     "history.dragTitle": "데스크톱 / 파일 탐색기 / 다른 앱으로 드래그 가능",
     "history.itemGroupTitle": "소재 그룹 설정",
     "history.renameImageTitle": "이미지 이름 변경(로컬 파일도 함께 변경)",

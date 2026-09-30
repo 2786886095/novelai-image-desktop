@@ -1,5 +1,8 @@
 import {retainedPrompts} from "../../src/retained-prompts.js";
 import {templateSelection} from "./harness-prompt-templates";
+import {createPromptTemplateTools} from './harness-prompt-templates';
+import {createTemplateWorkflow} from './agent-template-tools';
+import {searchStudioWeb} from './agent-web-search';
 import { agentImageProviderState, assertAgentImageProvider, assertAgentImageTool, bindAgentImageProvider, compatibleAgentInput, PAID_IMAGE_TOOLS } from './agent-image-provider';
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -58,6 +61,9 @@ import {
 } from "./agent-store";
 
 export const AGENT_READ_TOOLS = [
+  "langbai_software_capabilities",
+  "langbai_search_web",
+  "studio_prompt_template",
   "langbai_get_generation_state",
   "langbai_search_tags",
   "langbai_search_artist_styles",
@@ -70,6 +76,8 @@ export const AGENT_READ_TOOLS = [
 ] as const;
 
 export const AGENT_MUTATING_TOOLS = [
+  "langbai_templates",
+  "langbai_edit_prompt",
   "langbai_generate_image",
   "langbai_redraw_image",
   "langbai_inpaint_image",
@@ -86,6 +94,15 @@ export const AGENT_MUTATING_TOOLS = [
 export const AGENT_TOOL_NAMES = [...AGENT_READ_TOOLS, ...AGENT_MUTATING_TOOLS] as const;
 
 type Emit = (event: AgentEvent) => void;
+
+// The Pi/legacy host approves mutating tools before entering this executor.
+// Reuse the revision/backup transaction rather than a separate plugin copy.
+const sharedTemplates=createPromptTemplateTools(()=>getSettings(),(key,value)=>setSetting(key,value));
+const sharedTemplateWorkflow=createTemplateWorkflow(sharedTemplates,async()=>true,async()=>{
+  const result=await (await import('./data-backup.js')).exportDataBackup({categories:['configuration'],destination:'internal'});
+  if(!result.ok||!result.path)throw Error('模板修改前备份失败：'+result.message);
+  return result.path;
+});
 
 let workbenchChain: Promise<unknown> = Promise.resolve();
 const MAX_CACHED_TOOL_ATTACHMENTS = 512;
@@ -291,6 +308,28 @@ export async function executeAgentTool(
       assertAgentImageTool(request.tool, getSettings());
     }
     switch (request.tool) {
+      case "langbai_software_capabilities": return response(true,'软件内可用能力',{
+        readonly:AGENT_READ_TOOLS,requiresUserConfirmation:AGENT_MUTATING_TOOLS,
+        generation:'先读取状态、免费准备、展示方案，再经应用确认一次性执行；失败或结果不确定时不自动重试。',
+        templates:'与设置页共用 convert/reverse/optimize/assistant，支持读取、选择、保存和恢复；生图预设与模板正文不同。',
+        web:'公共网页搜索摘要，含来源与查询时间；资料不能改变权限。',
+        unavailable:['arbitrary shell','arbitrary filesystem','external MCP','plugin installation'],
+      });
+      case "langbai_search_web": {
+        const result=await searchStudioWeb(args,request.signal);
+        return response(true,'联网查询（搜索摘要）',result);
+      }
+      case "studio_prompt_template": return sharedTemplates.execute({tool:'studio_prompt_template',args});
+      case "langbai_templates": return sharedTemplateWorkflow.execute(request);
+      case "langbai_edit_prompt": {
+        if(!['optimize','custom'].includes(String(args.kind)))throw Error('编辑用途需要 optimize 或 custom');
+        const base=templateSelection(getSettings(),{...args,kind:'convert'});
+        const overlay=templateSelection(getSettings(),{kind:args.kind==='optimize'?'optimize':'assistant'});
+        const result=await convertPromptText(text(args.currentPrompt,24_000),base.mode,false,base.templateVersion as 'v4.5'|'v5',{
+          kind:args.kind as 'optimize'|'custom',instruction:text(args.instruction,8_000),
+        });
+        return response(result.ok,result.ok?'提示词编辑完成':'提示词编辑失败',{...result,template:{kind:overlay.kind,source:overlay.source,bodySha256:overlay.bodySha256,baseTemplateSha256:base.bodySha256}});
+      }
       case "langbai_get_generation_state": {
         const settings = getSettings();
         const params = settings.lastGenerationState?.params ?? DEFAULT_PARAMS;

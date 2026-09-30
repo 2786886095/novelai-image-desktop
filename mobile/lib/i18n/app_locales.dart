@@ -3046,7 +3046,7 @@ List<String> mainDestinationLabelsFor(Object? value) {
         '工具',
         '參考預設',
         '線上畫廊',
-        '酒館 AI 生圖',
+        '生圖智能體',
         '圖庫',
         '記錄',
         '設定'
@@ -3062,7 +3062,7 @@ List<String> mainDestinationLabelsFor(Object? value) {
         'Tools',
         'Presets',
         'Online Gallery',
-        'Tavern AI Image',
+        'Image Agent',
         'Gallery',
         'Logs',
         'Settings'
@@ -3078,7 +3078,7 @@ List<String> mainDestinationLabelsFor(Object? value) {
         'ツール',
         'プリセット',
         'オンラインギャラリー',
-        'Tavern AI 画像生成',
+        '画像エージェント',
         'ギャラリー',
         '履歴',
         '設定'
@@ -3094,7 +3094,7 @@ List<String> mainDestinationLabelsFor(Object? value) {
         '도구',
         '프리셋',
         '온라인 갤러리',
-        'Tavern AI 이미지',
+        '이미지 에이전트',
         '갤러리',
         '기록',
         '설정'
@@ -3110,7 +3110,7 @@ List<String> mainDestinationLabelsFor(Object? value) {
         '工具',
         '预设',
         '在线画廊',
-        '酒馆AI生图',
+        '生图智能体',
         '图库',
         '记录',
         '设置'

@@ -5,6 +5,7 @@ import {
   effectiveContextMessages,
   estimateTextTokens,
   shouldAutoCompact,
+  planContextCompaction,
 } from "./context";
 import type { AgentMessage } from "./types";
 
@@ -54,4 +55,31 @@ describe("agent context accounting", () => {
     expect(result.map((item) => item.content)).toEqual(["continuity summary", "recent turn"]);
     expect([old, recent]).toHaveLength(2);
   });
+});
+
+it('retains equal-timestamp messages, images and failed tool receipts even behind an old boundary', () => {
+  const old = { ...message('old'), createdAt: new Date(0).toISOString() };
+  const image = { ...old, id: 'image', attachments: [{ id: 'asset', kind: 'image' } as any] };
+  const failed = { ...old, id: 'failed', status: 'aborted' as const };
+  const equal = { ...message('equal'), createdAt: new Date(1000).toISOString() };
+  expect(effectiveContextMessages([old, image, failed, equal], 'summary', equal.createdAt).map(m => m.id))
+    .toEqual([`context-summary-${equal.createdAt}`, 'image', 'failed', 'equal']);
+});
+
+it('compacts ordinary text around protected records without hiding them or the recent six', () => {
+  const messages = Array.from({ length: 20 }, (_, i) => ({ ...message(`item-${i}`), createdAt: new Date(i * 1000).toISOString() }));
+  messages[2].tools = [{ id: 'receipt', name: 'paid', title: 'paid', status: 'error', output: 'uncertain' }];
+  const plan = planContextCompaction({ messages })!;
+  expect(plan.messages).toHaveLength(13);
+  expect(plan.transcript).not.toContain('item-2\n');
+  const visible = effectiveContextMessages(messages, 'summary', plan.boundary);
+  expect(visible.map(m => m.id)).toEqual([`context-summary-${plan.boundary}`, 'item-2', ...messages.slice(14).map(m => m.id)]);
+});
+
+it('refuses unsafe timestamp ordering and never cuts off a same-timestamp group', () => {
+  const messages = Array.from({ length: 10 }, (_, i) => ({ ...message(`item-${i}`), createdAt: new Date(i * 1000).toISOString() }));
+  messages[3].createdAt = messages[4].createdAt;
+  expect(planContextCompaction({ messages })?.messages).toHaveLength(3);
+  messages[9].createdAt = new Date(0).toISOString();
+  expect(planContextCompaction({ messages })).toBeUndefined();
 });

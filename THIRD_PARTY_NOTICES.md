@@ -1,5 +1,30 @@
 # Third-party notices
 
+## NovelAI account authentication utilities
+
+- `hash-wasm` 4.12.0, https://github.com/Daninet/hash-wasm, MIT (Dani Biro).
+  Used for local BLAKE2b-128 and Argon2id access-key derivation on desktop.
+- Flutter `cryptography` 2.9.0, https://pub.dev/packages/cryptography,
+  Apache-2.0. Used for equivalent local access-key derivation on Android/iOS.
+- Authentication algorithm and wire format were checked against the reference
+  implementation https://github.com/Aedial/novelai-api (utils.py, _high_level.py,
+  _low_level.py). This is not an official NovelAI support guarantee.
+- Official email/password input is transient. Derived keys are sent only to the
+  fixed official HTTPS login endpoint. Passwords are not stored or sent to relay
+  accounts; the resulting token is stored using the platform credential vault.
+
+## Pi Agent Core / Pi AI
+
+- Packages: `@earendil-works/pi-agent-core` and `@earendil-works/pi-ai` 0.84.4
+- Project: https://github.com/earendil-works/pi
+- License: MIT; package license files are distributed with `node_modules`.
+- Use: desktop Agent loop and model protocol adapters. The Flutter client uses
+  an independent Dart adaptation of the bounded tool-loop pattern.
+
+The Studio Agent interaction design was informed by
+https://github.com/Aaalice233/Aaalice_NAI_Launcher (MIT). No Launcher source
+files or artwork are copied into this application.
+
 ## DSH plugin manager trial integration
 
 `dsh-plugin-mgr` 0.2.10 (https://github.com/oxlyn/dsh-plugin-mgr), MIT, is bundled with its LICENSE. Its js-yaml dependency is bundled with LICENSE.js-yaml. The local adapter lists Studio-seeded integrations as protected components so generic updates do not overwrite user customizations. The upstream manager controls additional profile-installed plugins.

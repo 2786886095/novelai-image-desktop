@@ -19,7 +19,7 @@ function subscribe(refresh:()=>void){
 }
 
 /** Toggling a bookmark never removes the original or archived image bytes. */
-export function ImageFavoriteButton({src,compact=false}:{src:string;compact?:boolean}) {
+export function ImageFavoriteButton({src,compact=false,menuItem=false}:{src:string;compact?:boolean;menuItem?:boolean}) {
  const [item,setItem]=useState<ImageFavorite|null>(null),[busy,setBusy]=useState(false),[checking,setChecking]=useState(true),[error,setError]=useState('');
  const revision=useRef(0),pending=useRef(false);
  const language=useAppStore(s=>s.settings?.language),zh=String(language??'zh-CN').startsWith('zh');
@@ -41,5 +41,5 @@ export function ImageFavoriteButton({src,compact=false}:{src:string;compact?:boo
   }catch(e){const message=e instanceof Error?e.message:String(e);if(token===revision.current)setError(message);useAppStore.getState().setToast(message);window.dispatchEvent(new Event('studio:favorites-changed'));}
   finally{mutations.delete(src);if(token===revision.current){pending.current=false;setBusy(false);}}
  }
- return <button type="button" className={`image-favorite-action${compact?' is-compact':''}`} aria-label={label} title={error||label} aria-pressed={saved} disabled={!src||checking||busy} aria-busy={busy||checking} onClick={e=>{e.stopPropagation();void toggle();}}><Icon name={saved?'check':'star'}/>{!compact&&label}</button>;
+ return <button type="button" className={`image-favorite-action${compact?' is-compact':''}`} role={menuItem?"menuitemcheckbox":undefined} aria-checked={menuItem?saved:undefined} aria-label={label} title={error||label} aria-pressed={menuItem?undefined:saved} disabled={!src||checking||busy} aria-busy={busy||checking} onClick={e=>{e.stopPropagation();void toggle();}}><Icon name={saved?'check':'star'}/>{!compact&&label}</button>;
 }

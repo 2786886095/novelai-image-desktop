@@ -1,0 +1,54 @@
+import { beforeEach, afterEach, it, expect, vi } from 'vitest';
+import fs from 'node:fs';import path from 'node:path';import os from 'node:os';
+const fixture=vi.hoisted(()=>({root:'',handlers:new Map<string,Function>()}));
+vi.mock('electron',()=>({app:{isPackaged:false,getPath:(name:string)=>name==="exe"?path.join(fixture.root,"app","desktop.exe"):name==="pictures"?path.join(fixture.root,"pictures"):fixture.root,getAppPath:()=>path.join(fixture.root,"app")},ipcMain:{handle:(name:string,fn:Function)=>fixture.handlers.set(name,fn)},safeStorage:{isEncryptionAvailable:()=>true,encryptString:(s:string)=>Buffer.from(s.split('').reverse().join('')),decryptString:(b:Buffer)=>b.toString().split('').reverse().join('')}}));
+beforeEach(()=>{fixture.root=fs.mkdtempSync(path.join(os.tmpdir(),'nai-accounts-integration-'));fixture.handlers.clear();vi.resetModules();});
+afterEach(()=>{vi.restoreAllMocks();if(path.dirname(fixture.root)!==path.resolve(os.tmpdir())||!path.basename(fixture.root).startsWith('nai-accounts-integration-'))throw Error('Invalid cleanup');fs.rmSync(fixture.root,{recursive:true,force:true});});
+it('activates root getToken/getSettings atomically, preserves legacy bytes, migrates idempotently',async()=>{
+ const store=await import('./store');store.setToken('synthetic-legacy-token');
+ store.setSetting('apiBaseUrl','https://api.novelai.net');store.setSetting('imageBaseUrl','https://image.novelai.net');
+ const file=path.join(fixture.root,'novelai-image-desktop.json'),original=fs.readFileSync(file);
+ const accountModule=await import('./nai-accounts');accountModule.registerNaiAccountsIpc();
+ const call=(name:string,...args:unknown[])=>fixture.handlers.get(name)!({},...args);
+ const migration=call('naiAccounts:migrate');expect(migration.migrated).toBe(true);expect(call('naiAccounts:migrate').migrated).toBe(false);
+ const relay=call('naiAccounts:add',{label:'relay',method:'relay',token:'synthetic-relay-token',apiBaseUrl:'https://relay.invalid/prefix',imageBaseUrl:'https://relay.invalid/images'});
+ call('naiAccounts:select',relay.id);expect(store.getToken()).toBe('synthetic-relay-token');expect(store.getSettings()).toMatchObject({apiBaseUrl:'https://relay.invalid/prefix',imageBaseUrl:'https://relay.invalid/images',allowCustomEndpoint:true,allowCustomEndpointFallback:false,streamPreviewEnabled:false});
+ expect(store.readStore().settings.imageBaseUrl).toBe('https://image.novelai.net');expect(fs.readFileSync(file)).toEqual(original);
+ expect(fs.readFileSync(path.join(fixture.root,'nai-accounts-v1.json'),'utf8')).not.toContain('synthetic-relay-token');
+ expect(await call('naiAccounts:probe',relay.id)).toMatchObject({status:0,subscription:'skipped',protocol:'unverified'});
+ const runtime=await import('./nai-accounts-runtime');await runtime.withNaiAccountOperation(async()=>{expect(()=>call('naiAccounts:select','legacy-official-v1')).toThrow();await Promise.resolve();expect(store.getToken()).toBe('synthetic-relay-token');});
+ call('naiAccounts:select',undefined);expect(store.getToken()).toBe('synthetic-legacy-token');expect(fs.readFileSync(file)).toEqual(original);
+});
+it('keeps legacy token and endpoints bound across asynchronous settings writes',async()=>{
+ const store=await import('./store');store.setToken('legacy-A');const runtime=await import('./nai-accounts-runtime');await runtime.withNaiAccountOperation(async()=>{store.setToken('legacy-B');await Promise.resolve();expect(store.getToken()).toBe('legacy-A');});expect(store.getToken()).toBe('legacy-B');
+});
+it('restores selected encrypted account on restart without changing legacy store',async()=>{
+ let store=await import('./store');store.setToken('fixture-original-token');
+ let accountModule=await import('./nai-accounts');accountModule.registerNaiAccountsIpc();
+ const profile=fixture.handlers.get('naiAccounts:add')!({}, {label:'saved',method:'token',token:'fixture-selected-token',apiBaseUrl:'https://api.novelai.net',imageBaseUrl:'https://image.novelai.net'});
+ fixture.handlers.get('naiAccounts:select')!({},profile.id);
+ const original=fs.readFileSync(path.join(fixture.root,'novelai-image-desktop.json'));
+ vi.resetModules();fixture.handlers.clear();store=await import('./store');
+ expect(store.getToken()).toBe('fixture-selected-token');expect(store.getSettings().naiAccountId).toBe(profile.id);
+ accountModule=await import('./nai-accounts');accountModule.registerNaiAccountsIpc();expect(fixture.handlers.get('naiAccounts:state')!({}).selectedId).toBe(profile.id);
+ expect(fs.readFileSync(path.join(fixture.root,'novelai-image-desktop.json'))).toEqual(original);
+});
+it('all three methods activate actual root credentials; official login honors proxy while relay selected',async()=>{
+ const store=await import('./store');store.setToken('fixture-original-token');const module=await import('./nai-accounts');module.registerNaiAccountsIpc();
+ const proxy=await import('./proxy');const resolver=vi.spyOn(proxy,'proxyConfigForUrl').mockResolvedValue({proxy:false});const axios=(await import('axios')).default;
+ const post=vi.spyOn(axios,'post').mockResolvedValue({status:201,data:{accessToken:'fixture-official-login-token'}});
+ const call=(name:string,...args:unknown[])=>fixture.handlers.get(name)!({},...args);
+ const token=call('naiAccounts:add',{label:'token',method:'token',token:'fixture-api-token',apiBaseUrl:'https://api.novelai.net',imageBaseUrl:'https://image.novelai.net'});
+ call('naiAccounts:select',token.id);expect(store.getToken()).toBe('fixture-api-token');
+ const relay=call('naiAccounts:add',{label:'relay',method:'relay',token:'fixture-relay-token',apiBaseUrl:'https://relay.invalid/raw',imageBaseUrl:'https://relay.invalid/raw'});
+ call('naiAccounts:select',relay.id);expect(store.getToken()).toBe('fixture-relay-token');
+ const input={label:'login',email:'fixture@example.invalid',password:'synthetic-password'};
+ const login=await call('naiAccounts:login',input);expect(login.ok).toBe(true);expect(input.password).toBe('');expect(store.getToken()).toBe('fixture-relay-token');
+ expect(post).toHaveBeenCalledWith('https://api.novelai.net/user/login',{key:'PDlYfmFO5NKm1QKszD4ivqZONVkfOylv5uNuaWZrMaU5P_3Sb4Rw7cLfU1sLZJW9'},expect.objectContaining({proxy:false,maxRedirects:0}));
+ expect(resolver).toHaveBeenCalledWith('nai','https://api.novelai.net/user/login',expect.objectContaining({apiBaseUrl:'https://relay.invalid/raw'}));
+ call('naiAccounts:select',login.account.id);expect(store.getToken()).toBe('fixture-official-login-token');expect(store.getSettings().imageBaseUrl).toBe('https://image.novelai.net');
+ const get=vi.spyOn(axios,'get').mockResolvedValue({status:200,data:{}});expect(await call('naiAccounts:probe',login.account.id)).toMatchObject({status:200,subscription:'available',protocol:'unverified'});
+ expect(get).toHaveBeenCalledWith('https://api.novelai.net/user/subscription',expect.objectContaining({proxy:false,maxRedirects:0,timeout:8000,maxContentLength:256*1024,headers:{Authorization:'Bearer fixture-official-login-token'}}));
+ const disk=fs.readFileSync(path.join(fixture.root,'nai-accounts-v1.json'),'utf8');expect(disk).not.toContain('fixture-official-login-token');expect(disk).not.toContain('synthetic-password');expect(disk).not.toContain('fixture@example.invalid');
+ call('naiAccounts:select',undefined);expect(store.getToken()).toBe('fixture-original-token');
+});

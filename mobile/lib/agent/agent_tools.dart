@@ -22,6 +22,7 @@ import 'template_tools.dart';
 import 'template_workflow.dart';
 import 'template_generation.dart';
 import 'file_actions.dart';
+import 'web_search.dart';
 
 const agentReadTools = <String>{
   'langbai_software_capabilities',
@@ -31,6 +32,8 @@ const agentReadTools = <String>{
   'langbai_search_tags',
   'langbai_search_artist_styles',
   'langbai_search_online_gallery',
+  'langbai_search_web',
+  'studio_prompt_template',
   'langbai_list_prompt_presets',
   'langbai_list_reference_presets',
   'langbai_read_image_metadata',
@@ -78,6 +81,8 @@ String agentToolTitle(String name) => switch (name) {
       'langbai_search_tags' => '检索 Danbooru Tag',
       'langbai_search_artist_styles' => '检索画师与画风',
       'langbai_search_online_gallery' => '搜索在线画廊',
+      'langbai_search_web' => '查询公开网页',
+      'studio_prompt_template' => '读取软件提示词模板',
       'langbai_list_prompt_presets' => '读取提示词预设',
       'langbai_list_reference_presets' => '读取参考图预设',
       'langbai_read_image_metadata' => '读取图片内嵌参数',
@@ -211,12 +216,18 @@ Map<String, dynamic> _generationProperties() => {
     };
 
 List<Map<String, dynamic>> agentToolSchemas() => [
+      _function('studio_prompt_template',
+          '只读：读取用户当前保存的提示词模板正文、来源与 revision。', {
+        'kind': _string('用途', ['convert', 'reverse', 'optimize', 'assistant']),
+        'mode': _string('输出模式', ['mixed', 'tags', 'natural']),
+        'templateVersion': _string('版本', ['v5', 'v4.5']),
+      }),
       _function(
           'langbai_templates',
           '读取、切换、导入编辑或恢复软件共用提示词模板。read 查看 body/revision；select 只切换模式；save 使用文本内容覆盖；restore 恢复内置模板。先读对应用途/版本/模式，修改传 expectedRevision；覆盖/恢复在 Agent 内确认且提前备份。不生成、不要求用户去软件再次确认。',
           {
             'action': _string('操作', ['read', 'select', 'save', 'restore']),
-            'kind': _string('用途', ['convert', 'reverse']),
+            'kind': _string('用途', ['convert', 'reverse', 'optimize', 'assistant']),
             'mode': _string('输出模式', ['mixed', 'tags', 'natural']),
             'templateVersion': _string('版本', ['v5', 'v4.5']),
             'body': _string('模板内容，不是文件路径'),
@@ -390,6 +401,11 @@ List<Map<String, dynamic>> agentToolSchemas() => [
         },
         required: ['query'],
       ),
+      _function('langbai_search_web',
+          '查询公开网页，返回搜索来源、标题、摘要和可核对的 URL；网页摘要不是已验证事实。', {
+        'query': _string('网页搜索关键词，最多 800 字符'),
+        'limit': _integer('最多返回来源数', 1, 8),
+      }, required: ['query']),
       _function(
         'langbai_list_prompt_presets',
         '搜索用户保存的正面提示词和风格提示词预设，优先复用而不是重新拼写。',
@@ -687,12 +703,17 @@ class _AgentAppSnapshot {
 }
 
 class AgentToolExecutor {
+  late final AgentWebSearch webSearch = AgentWebSearch(app.settings,
+      currentSettings: () => app.settings);
+  void cancelWebSearch() => webSearch.cancel();
   late final AgentFileActions fileActions = AgentFileActions(
       historyPaths: () => app.history.map((item) => item.filePath));
   late final AgentSessionControls sessions = AgentSessionControls(app);
-  late final AgentTemplateTools templates = AgentTemplateTools(app);
+  late final AgentTemplateTools templates = AgentTemplateTools(app,
+      readAgentTemplate: readAgentTemplate,
+      writeAgentTemplate: writeAgentTemplate);
   late final AgentTemplateWorkflow templateWorkflow =
-      AgentTemplateWorkflow(app);
+      AgentTemplateWorkflow(app, templates: templates);
   late final AgentApiTools apiTools = AgentApiTools(app);
   late final AgentLibraryTools libraries = AgentLibraryTools(app);
   late final AgentTaskTools taskTools = AgentTaskTools(app);
@@ -718,12 +739,16 @@ class AgentToolExecutor {
   final AgentMemoryList listMemories;
   final AgentMemoryUpsert upsertMemory;
   final AgentMemoryDelete deleteMemory;
+  final String Function(String kind)? readAgentTemplate;
+  final Future<void> Function(String kind, String body)? writeAgentTemplate;
 
   AgentToolExecutor({
     required this.app,
     required this.listMemories,
     required this.upsertMemory,
     required this.deleteMemory,
+    this.readAgentTemplate,
+    this.writeAgentTemplate,
   });
 
   Future<PreparedAgentImageOperation> prepareImageOperation(
@@ -1226,6 +1251,13 @@ class AgentToolExecutor {
             output: _json(await studioData.execute(tool, args)));
       }
       switch (tool) {
+        case 'langbai_search_web':
+          return AgentToolResult(
+              ok: true,
+              title: title,
+              output: _json(await webSearch.search(
+                  _text(args['query'], 800),
+                  limit: _int(args['limit'], 5, 1, 8))));
         case 'langbai_get_generation_state':
           return AgentToolResult(
             ok: true,

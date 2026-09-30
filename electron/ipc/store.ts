@@ -1,4 +1,6 @@
 import {normalizeCompletionSound} from "../../src/completion-sound";
+import { currentNaiAccount, naiAccountsBusy, configureLegacyNaiBinding, boundLegacyNaiAccount, naiAccountRevision } from './nai-accounts-runtime';
+import { ensureNaiAccountsLoaded } from './nai-accounts';
 import {normalizeNovelAiSettings,NOVELAI_ONLY_MESSAGE} from '../../src/novelai-only-settings';
 import { refreshShippedTemplates } from "../../src/data/prompt-template-migration";
 import {STYLE_SORTS,styleMetadata} from "../../src/style-library";
@@ -42,6 +44,7 @@ export interface PersistedData {
 }
 
 let cache: PersistedData | null = null;
+configureLegacyNaiBinding(()=>{const data=readStore();return {token:data.token,apiBaseUrl:data.settings.apiBaseUrl,imageBaseUrl:data.settings.imageBaseUrl,allowCustomEndpoint:data.settings.allowCustomEndpoint,allowCustomEndpointFallback:data.settings.allowCustomEndpointFallback};});
 
 function storePath() {
   return path.join(app.getPath("userData"), "novelai-image-desktop.json");
@@ -66,6 +69,8 @@ function encryptForDisk(data: PersistedData, replacements: ReadonlySet<string> =
   delete clone.settings.credentialIssues;
   delete clone.settings.imageServiceRevision;
   delete clone.settings.imageServiceVersion;
+  delete clone.settings.naiAccountId;
+  delete clone.settings.naiAccountRevision;
   const settings = clone.settings as unknown as Record<string, unknown>;
   for (const key of SENSITIVE_SETTING_KEYS) {
     settings[key] = credentialVault.encode(key, settings[key], replacements.has(key));
@@ -641,9 +646,15 @@ export function writeStore(next: PersistedData, replaceCredentials: readonly str
 }
 
 export function getSettings(): AppSettings {
-  const settings = normalizeNovelAiSettings(readStore().settings);
+  ensureNaiAccountsLoaded();
+  const settings = { ...normalizeNovelAiSettings(readStore().settings) };
+  const selected=currentNaiAccount();
+  const legacy=boundLegacyNaiAccount();
+  if(legacy) { const {token:_token,...endpoints}=legacy; Object.assign(settings,endpoints); }
+  if(selected) Object.assign(settings,{apiBaseUrl:selected.apiBaseUrl,imageBaseUrl:selected.imageBaseUrl,allowCustomEndpoint:selected.method==='relay',allowCustomEndpointFallback:false});
+  if(selected?.method==='relay') settings.streamPreviewEnabled=false; // No paid stream-capability probe on an unverified relay.
   const stamp = imageSettingsStamp(settings);
-  return { ...settings, credentialIssues: credentialVault.issues(), imageServiceRevision: stamp.revision, imageServiceVersion: stamp.version };
+  return { ...settings, naiAccountId:selected?.id, naiAccountRevision:naiAccountRevision(), credentialIssues: credentialVault.issues(), imageServiceRevision: stamp.revision, imageServiceVersion: stamp.version };
 }
 
 export function getSetting<K extends SettingKey>(key: K): AppSettings[K] {
@@ -651,6 +662,7 @@ export function getSetting<K extends SettingKey>(key: K): AppSettings[K] {
 }
 
 export function setSetting<K extends SettingKey>(key: K, value: AppSettings[K]): AppSettings[K] {
+  if(['apiBaseUrl','imageBaseUrl','allowCustomEndpoint','allowCustomEndpointFallback'].includes(key) && (currentNaiAccount() || naiAccountsBusy())) throw Error('账户接口由所选账户绑定；操作期间不能修改。');
   if(key==='imageProvider'&&value!=='novelai')throw Error(NOVELAI_ONLY_MESSAGE);
   if (key === "outputDir" && (typeof value !== "string" || !value.trim())) throw new Error("请选择图片保存目录，保存位置不可留空。");
   if ((PROTECTED_DIRECTORY_KEYS as readonly string[]).includes(key) && typeof value === "string") {
@@ -679,15 +691,20 @@ export function completeSetup() {
 }
 
 export function getToken() {
+  ensureNaiAccountsLoaded();
+  const selected=currentNaiAccount(); if(selected) return selected.token;
+  const legacy=boundLegacyNaiAccount(); if(legacy) return legacy.token;
   return readStore().token;
 }
 
 export function setToken(token: string) {
+  if(currentNaiAccount()) throw Error('请通过账户管理新增 Token；不会覆盖已选账户。');
   const data = { ...readStore(), token };
   writeStore(data, ["token"]);
 }
 
 export function clearToken() {
+  if(currentNaiAccount() || naiAccountsBusy()) throw Error('请先在账户管理切回原账户，且等待操作完成。');
   const data = { ...readStore() };
   delete data.token;
   delete data.account;
@@ -695,11 +712,14 @@ export function clearToken() {
 }
 
 export function getAccountSummary(): AccountSummary {
+  ensureNaiAccountsLoaded();
+  if(currentNaiAccount()) return {hasToken:true,stale:true};
   const data = readStore();
   return { hasToken: Boolean(data.token), ...(data.account ?? {}) };
 }
 
 export function setAccountSummary(account: Omit<AccountSummary, "hasToken">) {
+  if(currentNaiAccount()) return;
   const data = readStore();
   // V5 Opus allowance is live telemetry. Persisting its minute-by-minute value
   // would rewrite and fsync the entire history store on every poll. Keep only

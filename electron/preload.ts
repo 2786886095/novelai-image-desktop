@@ -605,3 +605,5 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     }>,
   readLog: () => ipcRenderer.invoke("log:read") as Promise<string>,
 });
+
+contextBridge.exposeInMainWorld('naiAccounts', { list: () => ipcRenderer.invoke('naiAccounts:list'), state: () => ipcRenderer.invoke('naiAccounts:state'), select: (id?: string) => ipcRenderer.invoke('naiAccounts:select', id), login: (input: import('./ipc/nai-accounts-login').OfficialLoginInput) => ipcRenderer.invoke('naiAccounts:login', input), migrate: () => ipcRenderer.invoke('naiAccounts:migrate'), add: (input: import('../src/nai-accounts').NaiAccountInput) => ipcRenderer.invoke('naiAccounts:add', input), remove: (id: string) => ipcRenderer.invoke('naiAccounts:remove', id), probe: (id: string) => ipcRenderer.invoke('naiAccounts:probe', id) });

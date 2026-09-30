@@ -11,9 +11,41 @@ class AgentTemplateTools {
     'studio_save_prompt_template'
   };
   final AppState app;
-  AgentTemplateTools(this.app);
+  final String Function(String kind)? readAgentTemplate;
+  final Future<void> Function(String kind, String body)? writeAgentTemplate;
+  AgentTemplateTools(this.app, {this.readAgentTemplate, this.writeAgentTemplate});
+  Future<String> _readExtra(String kind) async =>
+      readAgentTemplate?.call(kind) ??
+      (await app.storage.getAgentWorkspace()).agentTemplates[kind] ?? '';
+
+  Future<void> _writeExtra(String kind, String body) async {
+    if (writeAgentTemplate != null) return writeAgentTemplate!(kind, body);
+    final workspace = await app.storage.getAgentWorkspace();
+    if (body.isEmpty) {
+      workspace.agentTemplates.remove(kind);
+    } else {
+      workspace.agentTemplates[kind] = body;
+    }
+    await app.storage.setAgentWorkspace(workspace);
+  }
   Future<Map<String, dynamic>> _selection(
       AppSettings s, Map<String, dynamic> args) async {
+    final extraKind = args['kind'];
+    if (extraKind == 'optimize' || extraKind == 'assistant') {
+      if (args.containsKey('mode') || args.containsKey('templateVersion')) {
+        throw StateError('优化/助手模板不使用模式或版本。');
+      }
+      final custom = (await _readExtra(extraKind as String)).trim();
+      final builtin = extraKind == 'optimize'
+          ? 'Optimize the NovelAI prompt while preserving the user’s explicit subject, composition, style and constraints. Do not invent unsupported facts.'
+          : 'Help revise the NovelAI prompt according to the user’s request. Preserve explicit constraints and explain uncertain changes.';
+      return {
+        'kind': extraKind,
+        'body': custom.isNotEmpty ? custom : builtin,
+        'source': custom.isNotEmpty ? 'custom' : 'builtin',
+        'revision': sha256.convert(utf8.encode(jsonEncode([extraKind, custom]))).toString(),
+      };
+    }
     final kind = args['kind'] ?? 'convert',
         mode = args['mode'] ?? s.agentPromptTemplateMode;
     if (!['convert', 'reverse'].contains(kind) ||
@@ -90,6 +122,17 @@ class AgentTemplateTools {
               body.length > 60000 ||
               (body.trim().isEmpty && args['restoreDefault'] != true))) {
         throw StateError('模板应为不超过 60000 字的文本；恢复默认请使用恢复按钮');
+      }
+      if (selected['kind'] == 'optimize' || selected['kind'] == 'assistant') {
+        if (body != null || args['restoreDefault'] == true) {
+          await _writeExtra(selected['kind'] as String,
+              args['restoreDefault'] == true ? '' : (body as String).trim());
+        }
+        final after = await _selection(settings, args);
+        if (body is String && body.trim().isNotEmpty && after['body'] != body.trim()) {
+          throw StateError('模板保存后回读不符');
+        }
+        return after;
       }
       final raw = (await app.storage.getSettings()).toJson();
       if ((await _selection(AppSettings.fromJson(raw), args))['revision'] !=

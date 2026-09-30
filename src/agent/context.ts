@@ -127,7 +127,7 @@ export function effectiveContextMessages(
       createdAt: boundary,
       completedAt: boundary,
     },
-    ...messages.filter((message) => message.createdAt.localeCompare(boundary) > 0),
+    ...messages.filter((message) => message.createdAt.localeCompare(boundary) >= 0 || protectContextMessage(message)),
   ];
 }
 
@@ -171,4 +171,36 @@ export function shouldAutoCompact(
 ): boolean {
   if (!enabled || snapshot.limit <= 0) return false;
   return snapshot.used >= snapshot.limit * clampCompactThreshold(thresholdValue);
+}
+
+/** Never hide images, tool receipts, failed/cancelled work, or unresolved paid actions. */
+export function protectContextMessage(message: AgentMessage): boolean {
+  return message.status !== "complete" || message.attachments.length > 0
+    || message.tools.length > 0 || Boolean(message.imageProposal)
+    || Boolean(message.imageProposalSwipes?.some(Boolean))
+    || Boolean(message.swipeAttachments?.some(items => items.length));
+}
+
+/** Summarize ordinary text in an old prefix; protected records and six recent messages stay verbatim.
+ * The boundary is the first retained timestamp, not completion wall time. Equal
+ * timestamps stay visible, including a user message sent in the same millisecond.
+ */
+export function planContextCompaction(conversation: {
+  messages: AgentMessage[]; lastSummary?: string; lastCompactedAt?: string;
+}) {
+  const effective = effectiveContextMessages(conversation.messages, conversation.lastSummary, conversation.lastCompactedAt)
+    .filter(message => !message.id.startsWith('context-summary-'));
+  let end = Math.max(0, effective.length - 6);
+  const boundary = effective[end]?.createdAt;
+  if (!boundary || !Number.isFinite(Date.parse(boundary))) return undefined;
+  // Imported histories may not be chronologically sorted. Refuse to hide any
+  // record unless the prefix exactly matches the timestamp-based view.
+  while (end > 0 && effective[end - 1].createdAt >= boundary) end--;
+  if (!end || effective.slice(end).some(message => message.createdAt < boundary)
+    || effective.slice(0, end).some(message => !Number.isFinite(Date.parse(message.createdAt)) || message.createdAt >= boundary)) return undefined;
+  const messages = effective.slice(0, end).filter(message => !protectContextMessage(message));
+  if (!messages.length) return undefined;
+  const transcript = [conversation.lastSummary ? `Previous summary:\n${conversation.lastSummary}` : '',
+    ...messages.map(message => `${message.role}: ${message.content}`)].filter(Boolean).join('\n\n');
+  return { boundary, messages, transcript };
 }

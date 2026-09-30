@@ -1,3 +1,4 @@
+import 'novelai_accounts_screen.dart';
 import '../ui/settings_section.dart';
 import 'completion_sound_settings.dart';
 import '../i18n/parity_text.dart';
@@ -249,12 +250,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _saveToken() async {
     setState(() => verifying = true);
     final appState = context.read<AppState>();
-    final detailText = settingsDetailTextFor(appState.settings.language);
     final err = await appState.setToken(tokenCtrl.text);
     if (!mounted) return;
     setState(() => verifying = false);
     ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(err ?? detailText.tokenVerifiedSuccess)));
+        SnackBar(content: Text(err ?? '账号已保存（未进行付费测试）')));
     if (err == null) tokenCtrl.clear();
   }
 
@@ -445,6 +445,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: EdgeInsets.fromLTRB(
             16, 16, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
         children: [
+          const NovelAiAccountSelector(),
           Card(
             child: ListTile(
               leading: Icon(
@@ -572,7 +573,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onPressed: verifying ? null : _saveToken,
                 child: Text(verifying
                     ? settingsDetailText.verifying
-                    : settingsDetailText.verifyAndSaveToken)),
+                    : '保存为官方账号并激活（不发测试请求）')),
             OutlinedButton.icon(
               onPressed: () => _showTokenGuide(context),
               icon: const Icon(Icons.help_outline),
@@ -580,7 +581,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             if (account.hasToken)
               OutlinedButton(
-                  onPressed: state.clearToken,
+                  onPressed: state.naiAccountLocked ? null : () async {
+                    try { await state.clearToken(); } catch (_) { /* Busy race is denied by AppState. */ }
+                  },
                   child: Text(settingsDetailText.clearToken)),
           ]),
           _Section(title: settingsText.reverseSection, children: [

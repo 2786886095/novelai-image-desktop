@@ -1369,6 +1369,9 @@ export interface CompatibleGenerationRequest {
 }
 
 export interface AppSettings {
+  /** Runtime-only account identity and process-keyed credential/endpoint revision; no secret. */
+  naiAccountId?: string;
+  naiAccountRevision?: string;
   /** Applies to ordinary text-to-image only; other NovelAI tools retain their own provider. */
   imageProvider?: "novelai" | "openai-images";
   compatibleImage?: CompatibleImageSettings;

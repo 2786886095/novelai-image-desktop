@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({ api: {} as Record<string, (...args: any[]) => any>, invoke: vi.fn() }));
-vi.mock("electron", () => ({ contextBridge: { exposeInMainWorld: (_name: string, api: typeof mock.api) => { mock.api = api; } }, ipcRenderer: { invoke: mock.invoke }, webUtils: {} }));
+vi.mock("electron", () => ({ contextBridge: { exposeInMainWorld: (name: string, api: typeof mock.api) => { if(name==='naiDesktop')mock.api = api; } }, ipcRenderer: { invoke: mock.invoke }, webUtils: {} }));
 beforeEach(async () => { vi.resetModules(); mock.invoke.mockReset(); await import("./preload"); });
 
 it.each([

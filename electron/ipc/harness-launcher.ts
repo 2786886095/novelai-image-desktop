@@ -55,7 +55,10 @@ let component:ReturnType<typeof createComponentActions>|null=null;
 let appUpdate:ReturnType<typeof createAppUpdateActions>|null=null;
 let confirming:Promise<boolean> | null=null;
 let quitting=false;
-export function registerHarnessLauncher(window:()=>BrowserWindow|null) {
+type AssistantExitLifecycle={isBusy:()=>boolean;stop:()=>unknown};
+let assistantExit:AssistantExitLifecycle={isBusy:()=>false,stop:()=>undefined};
+export function registerHarnessLauncher(window:()=>BrowserWindow|null,assistant?:AssistantExitLifecycle) {
+  if(assistant)assistantExit=assistant;
   const files=createFileActions(()=>getHistoryReferenceItems(),file=>shell.showItemInFolder(file));
   const approvals=createImageApprovals();
   const native=createNativeSoftwareActions(desktopNativeAdapter(window),request=>approvals.wait(request));
@@ -275,16 +278,16 @@ export function registerHarnessLauncher(window:()=>BrowserWindow|null) {
     });
   }
 }
-export function harnessNeedsExitConfirmation() {return !quitting && (!!engine?.busy||!!component?.busy||!!appUpdate?.busy||!!comicRun?.busy||!!batchRun?.busy);}
+export function harnessNeedsExitConfirmation() {return !quitting && (assistantExit.isBusy()||!!engine?.busy||!!component?.busy||!!appUpdate?.busy||!!comicRun?.busy||!!batchRun?.busy);}
 export async function confirmHarnessExit(window:BrowserWindow|null) {
   if(!harnessNeedsExitConfirmation())return true;
   if(confirming)return confirming;
   confirming=(async()=>{
-    const options={type:'question' as const,title:ft('酒馆 Agent 仍在运行'),message:ft('退出软件会同时关闭酒馆 Agent。'),detail:ft('正在执行的 Agent 任务会中断。是否关闭 Agent 并退出？'),buttons:[ft('取消退出'),ft('关闭 Agent 并退出')],defaultId:0,cancelId:0,noLink:true};
+    const options={type:'question' as const,title:ft('退出软件确认'),message:ft('退出软件？'),detail:ft('仍有任务正在运行。退出会停止助手和本地任务，已保存的聊天与图片不会删除。已提交的生图请求可能继续计费，重新打开后请先查看历史。'),buttons:[ft('取消退出'),ft('停止任务并退出')],defaultId:0,cancelId:0,noLink:true};
     const theme=getSetting('theme');
     const result=await showCenteredExitConfirmation(window,options,theme==='dark'||(theme==='system'&&nativeTheme.shouldUseDarkColors));
     if(result.response!==1)return false;
-    try{quitting=true;await pluginAuto?.dispose();await appUpdate?.cancel();await component?.cancel();await engine!.stop();return true;}
+    try{quitting=true;await assistantExit.stop();await pluginAuto?.dispose();await appUpdate?.cancel();await component?.cancel();await engine?.stop();return true;}
     catch(error){quitting=false;engine?.log(`停止失败：${String(error)}`,'error');return false;}
   })();
   try{return await confirming;}finally{confirming=null;}

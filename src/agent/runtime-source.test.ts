@@ -77,5 +77,10 @@ it("keeps current image state outside compaction and blocks unreviewed automatic
   expect(runtime).toContain("imageStateContext(imageBase, compatible ? undefined : imageDefaults.model)");
   expect(runtime).toContain("!stored.imageProposal.continuity?.reviewRequired");
   expect(runtime).toContain("request.proposal.continuity?.reviewRequired");
-  expect(runtime).toContain("Image prompt snapshot:");
+  // Exact image state now remains a protected record, not a lossy text snippet
+  // inside the model-generated summary. Behavioral coverage lives in the Pi
+  // outgoing-prompt and image-continuity compaction tests.
+  expect(runtime).toContain("planContextCompaction(conversation)");
+  expect(runtime).toContain("effectiveContextMessages(current.messages, current.lastSummary, current.lastCompactedAt)");
+  expect(runtime).toContain("JSON.stringify(item.imageProposal)");
 });

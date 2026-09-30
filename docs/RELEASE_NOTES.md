@@ -1,13 +1,14 @@
-## Langbai NovelAI Studio 2.4.5
+## Langbai NovelAI Studio 2.4.6（本地候选，尚未发布）
 
-### v2.4.5 更新内容
-- Android / iOS 共用的 Flutter 界面新增本地原图收藏、提示词优化与助手、可保存的导航排序；保留原图与既有资料。
-- 生图沿用 NovelAI 官方或兼容中转的现有 Token 与图片接口，不再显示独立 OpenAI Images 生图面板；旧选择器自动迁回 NovelAI，旧配置元数据不被删除。
-- 非官方图片接口允许开关默认开启；仅在用户另行启用时，中转返回 401/403 才会用相同 Token 向官方重试。官方 Token 可能消耗 Anlas，真实付费请求未经自动化调用。
-- Android Agent 的内置插件随经过验证的 ARM64 适配组件升级：先复制资料、探测完整插件组合，确认后备份激活；自定义或改动过的插件不被静默覆盖，也**不会**独立自动 npm 更新。iOS 没有本地 Harness，沿用远端 Agent。
-- Android 正式 APK 须用连续签名验证后才能覆盖旧版；iOS 构建包仍为无签名 IPA，需自行签名或侧载。自动化构建不等于真机验收。
+### v2.4.6 更新内容
+- 工作台增加多账号选择与三种添加方式：官方 Persistent API Token、官方邮箱密码本地派生登录、独立 NovelAI 协议中转 Token。账号名称与端点、凭据一起绑定；不保存密码，不向中转发送官方密码。
+- 原单账号凭据保留；任务固定计费账号，运行中禁止切换；旧生图方案遇到账户/凭据/端点变化必须重新准备。中转订阅、费用未知时不伪造余额、免费额度或协议验证成功。
+- 桌面 Pi Agent Core 与 Android/iOS 共用原生助手界面：输入区模型选择、上下文压缩、四类软件共用模板、带来源时间和警告的公开搜索、持久工具过程和确认后生图。模板草稿不自动发送或生图。
+- 修复启动样式中的高优先级全局焦点框导致图片预览/画布紫边；真实工具按钮仍保留键盘焦点环。
+- 登录和账户刷新沿用当前 NovelAI 代理，官方登录地址固定；新多账号操作禁止转发、官方回退及收费请求自动重试。遇到额外验证时提示改用官方 Token。
 
-### 下载与平台
-- Windows x64：`Langbai-NovelAI-Studio-Setup-2.4.5.exe`（安装版）、`Langbai-NovelAI-Studio-2.4.5.exe`（便携版）。
-- macOS：通用 DMG / ZIP，未签名；Linux x64：AppImage。
-- Android：`app-release.apk`；iOS：`novelai-mobile-unsigned.ipa`，需自行签名或侧载。
+### 构建与已知边界
+- Windows 本地便携目标：`Langbai-NovelAI-Studio-2.4.6.exe`。本轮未发布 GitHub Release，也未构建 NSIS/macOS/Linux 成品。
+- Android：本地 `app-release.apk` 使用测试签名（没有发布签名配置），不保证覆盖已安装的不同签名正式版；请勿卸载旧版以绕过，先保留数据。
+- iOS：共用功能源码已修改并通过 Flutter 离线回归；Windows 主机无 iOS 构建目标，仍需 macOS/Xcode 实机和签名验收。
+- 没有使用真实账号/密码/Token或发起收费生成。指定 SunAPI 后台需要登录，API 前缀、NovelAI 协议与计费尚无可核对的公开证据。不能称为该站实号适配验证完成。

@@ -7,11 +7,18 @@ import 'template_tools.dart';
 class AgentTemplateWorkflow {
   final AgentTemplateTools templates;
   final Future<String> Function() backup;
-  AgentTemplateWorkflow(AppState app, {Future<String> Function()? backup})
-      : templates = AgentTemplateTools(app),
+  final Future<String> Function() agentBackup;
+  AgentTemplateWorkflow(AppState app, {Future<String> Function()? backup,
+      Future<String> Function()? agentBackup, AgentTemplateTools? templates})
+      : templates = templates ?? AgentTemplateTools(app),
         backup = backup ??
             (() async => (await DataBackupService(app.storage).createBackup(
                     {DataBackupCategory.configuration},
+                    internal: true))
+                .path),
+        agentBackup = agentBackup ??
+            (() async => (await DataBackupService(app.storage).createBackup(
+                    {DataBackupCategory.agentWorkspace},
                     internal: true))
                 .path);
 
@@ -30,8 +37,8 @@ class AgentTemplateWorkflow {
     ];
     if (args.keys.any((k) => !allowed.contains(k))) throw StateError('未知模板参数');
     if (args['kind'] != null &&
-        !['convert', 'reverse'].contains(args['kind'])) {
-      throw StateError('模板用途应为 convert/reverse');
+        !['convert', 'reverse', 'optimize', 'assistant'].contains(args['kind'])) {
+      throw StateError('模板用途应为 convert/reverse/optimize/assistant');
     }
     if (args['mode'] != null &&
         !['mixed', 'natural', 'tags'].contains(args['mode'])) {
@@ -86,7 +93,8 @@ class AgentTemplateWorkflow {
     }
     String? backupPath;
     if (['save', 'restore'].contains(args['action'])) {
-      backupPath = await backup();
+      backupPath = ['optimize', 'assistant'].contains(before['kind'])
+          ? await agentBackup() : await backup();
       if (backupPath.isEmpty) throw StateError('修改前备份未完成');
     }
     final after = await templates.execute('studio_save_prompt_template', {
@@ -100,7 +108,9 @@ class AgentTemplateWorkflow {
       'saved': true,
       if (backupPath != null) ...{
         'backupPath': backupPath,
-        'restoreInstructions': '在 Agent 备份列表检查此文件，仅选择配置分类，再确认恢复。也可重新读取模板后保存旧内容。'
+        'restoreInstructions': ['optimize', 'assistant'].contains(before['kind'])
+            ? '在 Agent 备份列表检查此文件，选择智能体工作区分类后确认恢复。'
+            : '在 Agent 备份列表检查此文件，仅选择配置分类，再确认恢复。也可重新读取模板后保存旧内容。'
       }
     };
   }

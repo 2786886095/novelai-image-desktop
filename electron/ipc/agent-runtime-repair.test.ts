@@ -19,8 +19,9 @@ const invalid={positivePrompt:'woman, blue coat',promptMode:'new',scale:8};
 const repaired={baseImageId:'base',promptPatch:{replacements:[{from:'red coat',to:'blue coat'}],append:[]},width:1024,scale:9};
 const tempRoot=fs.realpathSync.native(os.tmpdir());
 let imageRoot='';
-afterEach(()=>{if(imageRoot){if(path.dirname(imageRoot)!==tempRoot||!path.basename(imageRoot).startsWith('nai-runtime-image-'))throw Error('unexpected fixture root');fs.rmSync(imageRoot,{recursive:true,force:true});imageRoot='';}});
+afterEach(()=>{delete process.env.LANGBAI_PI_AGENT;if(imageRoot){if(path.dirname(imageRoot)!==tempRoot||!path.basename(imageRoot).startsWith('nai-runtime-image-'))throw Error('unexpected fixture root');fs.rmSync(imageRoot,{recursive:true,force:true});imageRoot='';}});
 beforeEach(async()=>{
+ process.env.LANGBAI_PI_AGENT='0';
  vi.clearAllMocks();mocked.imageSettings={};mocked.protocol="openai-chat";const kit=createSoftwareImageStarterKit();kit.character.visual={...kit.character.visual,stylePrompt:'',negativePrompt:'',width:1088,height:1920,scale:0};
  mocked.workspace={characters:[kit.character],personas:[kit.persona],samplerPresets:[kit.sampler],lorebooks:[],conversations:[{id:'chat',status:'idle',characterIds:[kit.character.id],activeCharacterId:kit.character.id,samplerPresetId:kit.sampler.id,personaId:kit.persona.id,lorebookIds:[],generationMode:'auto',draftAttachments:[],messages:[{id:'old',role:'assistant',status:'complete',createdAt:'2026-09-09T00:00:00Z',content:'已有画面',attachments:[],tools:[],characterId:kit.character.id,imageProposal:{id:'base',status:'completed',createdAt:'2026-09-09T00:00:00Z',positivePrompt:'woman, red coat, white scarf, city street',stylePrompt:'',negativePrompt:'',count:1}}]}]};
  imageRoot=fs.mkdtempSync(path.join(tempRoot,'nai-runtime-image-'));

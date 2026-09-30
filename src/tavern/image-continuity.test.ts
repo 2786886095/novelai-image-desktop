@@ -2,7 +2,7 @@ import drawFixtures from "../../shared/tavern-style-draw-fixtures.json";
 import { describe, expect, it } from "vitest";
 import fixtures from "../../shared/tavern-continuity-fixtures.json";
 import type { AgentMessage, TavernImageProposal } from "../agent/types";
-import { effectiveContextMessages, createContextSnapshot, shouldAutoCompact } from "../agent/context";
+import { effectiveContextMessages, createContextSnapshot, shouldAutoCompact, planContextCompaction } from "../agent/context";
 import { imageStateContext, latestImageState, resolveImagePrompt, selectImageSwipe } from "./image-continuity";
 import { appendStylePrompt, drawStyleTags } from "./style-draw";
 const base = fixtures[0].base as TavernImageProposal;
@@ -14,10 +14,51 @@ describe("native image continuity contract", () => {
     for(let i=0;i<30;i++) {const r=resolveImagePrompt({baseImageId:current.id,promptPatch:{replacements:[],append:[`scene detail ${i}`]}},current);current=JSON.parse(JSON.stringify({...current,...r,id:`image-${i}`}));expect(current.positivePrompt).toContain("red coat, white shirt");}
     const snapshot=createContextSnapshot([message("latest",current)],1048576,0.88); expect(snapshot.percent).toBeLessThan(40);expect(shouldAutoCompact(snapshot,true,0.88)).toBe(false);
   });
-  it("injects exact latest image independently of text compaction", () => {
-    const history=[message("old",base)]; expect(effectiveContextMessages(history,"A short summary","2026-09-08T01:00:00.000Z")).toHaveLength(1);
-    expect(imageStateContext(latestImageState(history))).toContain(base.positivePrompt);
-    expect(latestImageState(history,undefined,undefined,"2026-09-08T01:00:00.000Z")).toBeUndefined();
+  it("retains exact image state while compacting ordinary text and still honors an explicit image reset", () => {
+    const exact = { ...base, positivePrompt: 'red coat, white shirt, 1.25::precise tag::',
+      stylePrompt: '0.8::watercolor::', negativePrompt: 'blur, extra fingers', width: 832, height: 1216 };
+    const history = [message('ordinary'), message('image', exact)];
+    const before = structuredClone(history);
+    const boundary = '2026-09-08T01:00:00.000Z';
+    const effective = effectiveContextMessages(history, 'A short summary', boundary);
+    expect(effective.map(item => item.id)).toEqual([`context-summary-${boundary}`, 'image']);
+    expect(effective[1].imageProposal).toEqual(exact);
+    expect(history).toEqual(before);
+    expect(imageStateContext(latestImageState(effective))).toContain(exact.positivePrompt);
+    expect(latestImageState(effective)).toEqual(latestImageState(history));
+    expect(latestImageState(effective, undefined, undefined, boundary)).toBeUndefined();
+    // Reset controls image selection; it must not delete the durable receipt.
+    expect(effective[1].imageProposal).toEqual(exact);
+    expect(createContextSnapshot(effective, 8192, 0.8).used)
+      .toBeGreaterThan(createContextSnapshot(effective.slice(0, 1), 8192, 0.8).used);
+  });
+  it.each(['cancelled', 'error', 'review-required'] as const)("retains %s image receipts but never promotes them to the authoritative image after compaction", state => {
+    const candidate: TavernImageProposal = { ...base, id: 'unsafe', positivePrompt: 'unconfirmed blue coat',
+      status: state === 'review-required' ? 'pending' : state,
+      ...(state === 'review-required' ? { continuity: { reviewRequired: true, changes: [] } } : {}) };
+    const history = [message('valid', base), message('unsafe', candidate),
+      { ...message('cancelled-tool'), status: 'aborted' as const, tools: [{ id: 'paid', name: 'langbai_generate_image', title: 'paid', status: 'error' as const, output: 'uncertain; do not retry' }] }];
+    const saved = JSON.parse(JSON.stringify(history));
+    const effective = effectiveContextMessages(saved, 'Summary cannot authorize an image', '2026-09-08T01:00:00.000Z');
+    expect(effective.slice(1)).toEqual(history);
+    expect(latestImageState(effective)?.id).toBe(base.id);
+    expect(effective.at(-1)?.tools[0].output).toBe('uncertain; do not retry');
+  });
+  it("the actual compaction plan excludes protected images and preserves their exact state through save/load", () => {
+    const history = Array.from({ length: 20 }, (_, index) => ({ ...message(`turn-${index}`, index === 2 ? base : undefined),
+      content: `ordinary text ${index}`, createdAt: new Date(Date.UTC(2026, 8, 8, 0, index)).toISOString() }));
+    const before = structuredClone(history);
+    const plan = planContextCompaction({ messages: history })!;
+    expect(plan.messages).toHaveLength(13);
+    expect(plan.messages.some(item => item.id === 'turn-2')).toBe(false);
+    expect(plan.transcript).toContain('ordinary text 0');
+    expect(plan.transcript).not.toContain('ordinary text 2\n');
+    const saved = JSON.parse(JSON.stringify({ messages: history, lastSummary: 'compressed ordinary text', lastCompactedAt: plan.boundary }));
+    const effective = effectiveContextMessages(saved.messages, saved.lastSummary, saved.lastCompactedAt);
+    expect(effective.slice(1).map(item => item.id)).toEqual(['turn-2', ...history.slice(14).map(item => item.id)]);
+    expect(effective[1].imageProposal).toEqual(base);
+    expect(latestImageState(effective)).toEqual(base);
+    expect(history).toEqual(before);
   });
   it("holds invalid candidate out of the next image state", () => {const pending={...base,id:"bad",continuity:{reviewRequired:true,changes:[]}};expect(latestImageState([message("old",base),message("pending",pending)])?.id).toBe("base");});
   it("does not use later images when regenerating an older reply",()=>expect(latestImageState([message("old",base),message("target"),message("future",{...base,id:"future"})],undefined,"target")?.id).toBe("base"));

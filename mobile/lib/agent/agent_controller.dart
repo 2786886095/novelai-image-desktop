@@ -21,6 +21,7 @@ import 'agent_models.dart';
 import 'agent_provider.dart';
 import 'agent_provider_catalog.dart';
 import 'agent_tools.dart';
+import 'studio_generation_preparations.dart';
 import 'tavern_builtins.dart';
 import 'tavern_card_service.dart';
 import 'tavern_prompt.dart';
@@ -31,6 +32,7 @@ class AgentController extends ChangeNotifier {
   final AgentProviderClient provider;
   final TavernCardService cardService = const TavernCardService();
   late final AgentToolExecutor tools;
+  final StudioGenerationPreparations _generationPreparations = StudioGenerationPreparations();
 
   AgentWorkspace workspace = AgentWorkspace();
   AgentPermissionRequest? pendingPermission;
@@ -54,6 +56,16 @@ class AgentController extends ChangeNotifier {
       listMemories: _memoryJson,
       upsertMemory: _upsertMemoryFromTool,
       deleteMemory: deleteMemory,
+      readAgentTemplate: (kind) => workspace.agentTemplates[kind] ?? '',
+      writeAgentTemplate: (kind, body) async {
+        if (body.isEmpty) {
+          workspace.agentTemplates.remove(kind);
+        } else {
+          workspace.agentTemplates[kind] = body;
+        }
+        await _persist();
+        _notify();
+      },
     );
   }
 
@@ -117,6 +129,13 @@ class AgentController extends ChangeNotifier {
       }
       for (final message in conversation.messages) {
         if (message.status == 'streaming') message.status = 'aborted';
+        for (final tool in message.tools) {
+          if (const {'pending', 'running'}.contains(tool.status)) {
+            tool.status = 'error';
+            tool.error = '上次运行已中断；结果未确认，请检查状态后重试。';
+            tool.completedAt = agentNow();
+          }
+        }
       }
     }
     if (workspace.conversations.isEmpty) {
@@ -195,6 +214,57 @@ class AgentController extends ChangeNotifier {
         }));
       }
     });
+  }
+
+  void updateDraft(String conversationId, String text) {
+    final matches = workspace.conversations.where((c) => c.id == conversationId);
+    if (matches.isEmpty) return;
+    final conversation = matches.first;
+    if (conversation.draftText == text) return;
+    conversation.draftText = text.length > 30000 ? text.substring(0, 30000) : text;
+    _schedulePersist();
+  }
+
+  Future<void> selectPromptTemplate(String kind,
+      {String? mode, String? version}) async {
+    final conversation = selectedConversation;
+    if (conversation == null) return;
+    if (!const {'convert', 'reverse', 'optimize', 'assistant'}.contains(kind)) {
+      throw ArgumentError.value(kind, 'kind');
+    }
+    if (kind == 'optimize' || kind == 'assistant') {
+      if ((workspace.agentTemplates[kind] ?? '').trim().isEmpty) {
+        throw StateError('所选模板未保存。');
+      }
+    } else {
+      if (!const {'mixed', 'tags', 'natural'}.contains(mode) ||
+          !const {'v5', 'v4.5'}.contains(version) ||
+          (app.promptOverrides(kind, templateVersion: version)[mode] ?? '')
+              .trim().isEmpty) {
+        throw StateError('所选模板未保存。');
+      }
+    }
+    conversation
+      ..selectedTemplateKind = kind
+      ..selectedTemplateMode = mode
+      ..selectedTemplateVersion = version;
+    await _persist();
+    _notify();
+  }
+
+  String? _selectedPromptTemplate(AgentConversation conversation) {
+    final kind = conversation.selectedTemplateKind;
+    if (kind == null) return null;
+    if (kind == 'optimize' || kind == 'assistant') {
+      return workspace.agentTemplates[kind]?.trim();
+    }
+    if (kind == 'convert' || kind == 'reverse') {
+      final mode = conversation.selectedTemplateMode;
+      final version = conversation.selectedTemplateVersion;
+      if (mode == null || version == null) return null;
+      return app.promptOverrides(kind, templateVersion: version)[mode]?.trim();
+    }
+    return null;
   }
 
   String _uniqueConversationTitle(String requested) {
@@ -415,6 +485,57 @@ class AgentController extends ChangeNotifier {
     await _persist();
     _notify();
     return imported;
+  }
+
+  /// Copies an image already registered in this app into the conversation.
+  /// IDs resolve only against the current canvas, reference library or history.
+  Future<AgentAttachment> attachAppImage(String source, String id) async {
+    final conversation = selectedConversation;
+    if (conversation == null || sending) throw StateError('当前无法添加附件。');
+    String? path;
+    int? width, height;
+    if (source == 'canvas' && id == 'current') {
+      final image = app.workbenchImage;
+      path = image?.filePath;
+      width = image?.width;
+      height = image?.height;
+    } else if (source == 'reference') {
+      final matches = app.referencePresets.where((item) => item.id == id);
+      if (matches.isNotEmpty) {
+        path = matches.first.filePath;
+        width = matches.first.width;
+        height = matches.first.height;
+      }
+    } else if (source == 'gallery') {
+      final matches = app.history.where((item) => item.id == id);
+      if (matches.isNotEmpty) {
+        path = matches.first.filePath;
+        width = matches.first.width;
+        height = matches.first.height;
+      }
+    }
+    if (path == null) throw StateError('所选图片已不可用。');
+    final file = File(path);
+    final size = await file.length();
+    if (size <= 0 || size > 48 * 1024 * 1024) {
+      throw StateError('图片大小超出附件限制。');
+    }
+    final directory = await app.storage.agentAttachmentsDirectory(conversation.id);
+    final extension = p.extension(path).toLowerCase();
+    final safeExtension = const {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.avif'}
+            .contains(extension) ? extension : '.png';
+    final target = File(p.join(directory.path,
+        '${agentId('attachment')}$safeExtension'));
+    await file.copy(target.path);
+    final attachment = AgentAttachment(
+        id: agentId('attachment'), name: p.basename(target.path),
+        mime: _mime(safeExtension), size: size, kind: 'image',
+        filePath: target.path, width: width, height: height);
+    conversation.draftAttachments.add(attachment);
+    conversation.updatedAt = agentNow();
+    await _persist();
+    _notify();
+    return attachment;
   }
 
   Future<void> removeDraftAttachment(String id) async {
@@ -664,6 +785,272 @@ class AgentController extends ChangeNotifier {
     _permissionCompleter = null;
     completer.complete(response == 'reject' ? 'reject' : response);
     _notify();
+  }
+
+  /// Flutter cannot load the Node Pi package. This is the corresponding
+  /// bounded Pi-style turn loop over the same application-owned tool set.
+  Future<void> sendStudio(String rawText) async {
+    final conversation = selectedConversation;
+    final text = rawText.trim();
+    if (conversation == null || sending || compacting) return;
+    if (text.isEmpty && conversation.draftAttachments.isEmpty) return;
+    error = null;
+    _abortRequested = false;
+    final apiKey = await app.storage.getAgentApiKey() ?? '';
+    if (!providerConfigured ||
+        (agentApiKeyRequired(app.settings.agentApiProtocol,
+                app.settings.agentApiBaseUrl) && apiKey.trim().isEmpty)) {
+      error = '请先配置智能体对话模型与所需 API Key。';
+      _notify();
+      return;
+    }
+    final attachments = List<AgentAttachment>.from(conversation.draftAttachments);
+    conversation.draftAttachments.clear();
+    final user = AgentMessage(id: agentId('message'), role: 'user',
+        content: text, attachments: attachments);
+    final assistant = AgentMessage(id: agentId('message'), role: 'assistant',
+        status: 'streaming');
+    conversation.messages.addAll([user, assistant]);
+    if (conversation.messages.where((m) => m.role == 'user').length == 1) {
+      final title = text.isNotEmpty ? text : attachments.first.name;
+      final cleanTitle = title.replaceAll(RegExp(r'[\r\n]+'), ' ').trim();
+      conversation.title = cleanTitle.substring(0, min(36, cleanTitle.length));
+    }
+    conversation.status = 'running';
+    sending = true;
+    final usage = AgentTokenUsage();
+    final binding = AgentImageBinding(app.settings, app.generationGroupId);
+    // Schemas are the application's bounded capability catalog. Do not silently
+    // remove library, template, task or software actions from Studio mode.
+    final baseSchemas = agentToolSchemas();
+    final allowed = baseSchemas
+        .map((schema) => (schema['function'] as Map)['name']?.toString() ?? '')
+        .where((name) => name.isNotEmpty)
+        .toSet()..add('langbai_prepare_generation');
+    const paid = <String>{'langbai_generate_image', 'langbai_redraw_image',
+      'langbai_inpaint_image', 'langbai_upscale_image', 'langbai_director'};
+    final generationParameters = (baseSchemas.firstWhere((schema) =>
+        (schema['function'] as Map)['name'] == 'langbai_generate_image')['function']
+        as Map)['parameters'];
+    final schemas = baseSchemas.where((schema) {
+      final function = schema['function'];
+      return function is Map && allowed.contains(function['name']);
+    }).map((schema) {
+      final function = schema['function'] as Map;
+      if (function['name'] != 'langbai_generate_image') return schema;
+      return <String, dynamic>{'type': 'function', 'function': {
+        'name': 'langbai_generate_image',
+        'description': '只执行准备好的生图。传 langbai_prepare_generation 返回的一次性 preparationId；必须由用户确认，不自动重试。',
+        'parameters': {'type': 'object', 'properties': {
+          'preparationId': {'type': 'string'},
+        }, 'required': ['preparationId']},
+      }};
+    }).toList()..add({'type': 'function', 'function': {
+      'name': 'langbai_prepare_generation',
+      'description': '免费准备生图并返回一次性 preparationId、参数摘要与费用估算；不会生成图片。先读取当前生图状态。',
+      'parameters': generationParameters,
+    }});
+    try {
+      await _persist();
+      _notify();
+      final previous = _messagesForContext(conversation)
+          .where((m) => m.id != assistant.id && m.status == 'complete' && m.role != 'system')
+          .toList().reversed.take(40).toList().reversed;
+      final messages = <Map<String, dynamic>>[
+        {'role': 'system', 'content':
+            'You are the Langbai Studio NovelAI image assistant. Use only the '
+            'provided application tools. Read the current generation state '
+            'before generating. Call langbai_prepare_generation first; '
+            'langbai_generate_image only accepts its one-use preparationId. '
+            'Never assume model text is user approval. '
+            'Paid and mutating actions require the app confirmation. Never '
+            'retry an uncertain paid operation automatically. Answer in the '
+            'user language. Shell, arbitrary files, Skills and external MCP '
+            'are unavailable.'},
+        if (_selectedPromptTemplate(conversation) case final template?)
+          if (template.isNotEmpty)
+            {'role': 'system', 'content':
+              'The user selected a saved ${conversation.selectedTemplateKind} prompt template. Apply it to relevant prompt work, while preserving the current user request and app safety gates:\n$template'},
+        if (conversation.lastSummary?.trim().isNotEmpty == true)
+          {'role': 'system', 'content': 'Earlier conversation summary:\n${conversation.lastSummary}'},
+        for (final message in previous) await _messageForProvider(message),
+      ];
+      var toolCalls = 0;
+      var paidAttempted = false;
+      for (var round = 0; round < 8; round++) {
+        _throwIfAborted();
+        final turn = await provider.complete(
+          settings: app.settings, apiKey: apiKey, messages: messages,
+          tools: schemas, toolsEnabled: true,
+          onDelta: (delta) {
+            assistant.content += delta;
+            _notifyStreaming();
+          },
+        );
+        _throwIfAborted();
+        usage.add(turn.usage);
+        if (turn.issue != null) {
+          throw AgentProviderException(
+              providerIssueMessage(app.settings.language, turn.issue!));
+        }
+        if (turn.reasoning.isNotEmpty) {
+          assistant.reasoning = '${assistant.reasoning ?? ''}${turn.reasoning}';
+        }
+        if (turn.content.isNotEmpty && !assistant.content.endsWith(turn.content)) {
+          assistant.content += turn.content;
+        }
+        if (turn.toolCalls.isEmpty) {
+          if (turn.content.trim().isEmpty) {
+            throw const AgentProviderException('智能体没有返回有效内容。');
+          }
+          break;
+        }
+        messages.add({
+          'role': 'assistant', 'content': turn.content,
+          'tool_calls': [for (final call in turn.toolCalls) {
+            'id': call.id, 'type': 'function',
+            'function': {'name': call.name, 'arguments': jsonEncode(call.arguments)}
+          }],
+        });
+        var paidFailure = false;
+        for (final call in turn.toolCalls) {
+          _throwIfAborted();
+          if (++toolCalls > 12) throw const AgentProviderException('单轮工具调用超过上限。');
+          if (!allowed.contains(call.name)) {
+            throw AgentProviderException('模型请求了未授权工具：${call.name}');
+          }
+          if (paid.contains(call.name) && paidAttempted) {
+            throw const AgentProviderException('单轮已尝试过付费操作，请先检查结果再发送新消息。');
+          }
+          final execution = AgentToolExecution(
+            id: call.id, name: call.name, title: agentToolTitle(call.name),
+            status: 'pending', input: call.arguments, startedAt: agentNow(),
+          );
+          assistant.tools.add(execution);
+          if (call.name == 'langbai_prepare_generation') {
+            AgentToolResult result;
+            try {
+              final preview = studioGenerationPreview(app, call.arguments);
+              final prepared = _generationPreparations.prepare(conversation.id,
+                  call.arguments, await studioGenerationFingerprint(app), preview);
+              result = AgentToolResult(ok: true, title: '生图准备', output: jsonEncode(prepared));
+            } catch (caught) {
+              result = AgentToolResult(ok: false, title: '生图准备失败', output: '$caught');
+            }
+            execution..status = result.ok ? 'completed' : 'error'
+              ..output = result.output..completedAt = agentNow();
+            messages.add({'role': 'tool', 'tool_call_id': call.id, 'content': result.output});
+            await _persist(); _notify();
+            continue;
+          }
+          StudioGenerationPreparation? generationPlan;
+          PreparedAgentImageOperation? stagedImage;
+          try {
+            if (call.name == 'langbai_generate_image') {
+              generationPlan = _generationPreparations.inspect(conversation.id,
+                  call.arguments['preparationId'], await studioGenerationFingerprint(app));
+            }
+            if (paid.contains(call.name)) {
+              stagedImage = await tools.prepareImageOperation(call.name,
+                generationPlan?.arguments ?? call.arguments,
+                _availableAttachments(conversation), sessionId: conversation.id);
+            }
+          } catch (caught) {
+            final detail = '$caught';
+            execution..status = 'error'..output = detail..completedAt = agentNow();
+            messages.add({'role': 'tool', 'tool_call_id': call.id, 'content': detail});
+            await _persist(); _notify();
+            continue;
+          }
+          if (!agentReadTools.contains(call.name) &&
+              call.name != 'langbai_prepare_generation') {
+            final completer = Completer<String>();
+            _permissionCompleter = completer;
+            pendingPermission = AgentPermissionRequest(
+              id: agentId('permission'), conversationId: conversation.id,
+              tool: call.name, title: agentToolTitle(call.name),
+              arguments: generationPlan?.preview ?? stagedImage?.summary ?? call.arguments,
+            );
+            conversation.status = 'waiting-permission';
+            _notify();
+            final decision = await completer.future;
+            _throwIfAborted();
+            conversation.status = 'running';
+            if (decision == 'reject') {
+              execution..status = 'denied'..completedAt = agentNow();
+              assistant.content = '${assistant.content}\n操作已取消，未执行。'.trim();
+              break;
+            }
+          }
+          execution.status = 'running';
+          _notify();
+          if (paid.contains(call.name)) paidAttempted = true;
+          final result = stagedImage != null
+              ? await (() async {
+                  if (generationPlan != null) {
+                    _generationPreparations.consume(conversation.id,
+                        generationPlan.id, await studioGenerationFingerprint(app));
+                  }
+                  return stagedImage!.execute();
+                })()
+              : await tools.execute(call.name, call.arguments,
+                  _availableAttachments(conversation),
+                  sessionId: conversation.id, imageBinding: binding);
+          _throwIfAborted();
+          execution
+            ..status = result.ok ? 'completed' : 'error'
+            ..output = result.output
+            ..generatedImages = result.generatedImages
+            ..completedAt = agentNow();
+          assistant.attachments.addAll(result.generatedImages);
+          messages.add({'role': 'tool', 'tool_call_id': call.id,
+            'content': result.output});
+          await _persist();
+          _notify();
+          if (paid.contains(call.name) && !result.ok) {
+            assistant.content = '${assistant.content}\n操作未完成：${result.output}。未自动重试。'.trim();
+            paidFailure = true;
+            break;
+          }
+        }
+        if (paidFailure || assistant.tools.any((tool) => tool.status == 'denied')) break;
+        if (round == 7) throw const AgentProviderException('智能体循环达到上限，已停止继续调用工具。');
+      }
+      assistant
+        ..content = assistant.content.trim().isEmpty ? '操作已完成。' : assistant.content.trim()
+        ..status = 'complete'
+        ..usage = usage
+        ..completedAt = agentNow();
+      conversation..status = 'idle'..lastTurnUsage = usage;
+    } catch (caught) {
+      final detail = caught.toString().replaceFirst('Exception: ', '');
+      final aborted = _abortRequested;
+      assistant
+        ..status = aborted ? 'aborted' : 'error'
+        ..error = aborted ? null : detail
+        ..completedAt = agentNow();
+      conversation.status = aborted ? 'idle' : 'error';
+      error = aborted ? null : detail;
+    } finally {
+      _streamNotifyTimer?.cancel();
+      _streamNotifyTimer = null;
+      final completer = _permissionCompleter;
+      if (completer != null && !completer.isCompleted) completer.complete('reject');
+      _permissionCompleter = null;
+      pendingPermission = null;
+      sending = false;
+      _abortRequested = false;
+      conversation.updatedAt = agentNow();
+      conversation.context = createAgentContextSnapshot(
+        _messagesForContext(conversation), app.settings.agentContextWindow,
+        app.settings.agentAutoCompactThreshold, conversation.lastTurnUsage);
+      await _persist();
+      _notify();
+    }
+    if (shouldAutoCompactAgent(conversation.context,
+        app.settings.agentAutoCompact, app.settings.agentAutoCompactThreshold)) {
+      await compact(conversation.id, automatic: true);
+    }
   }
 
   Future<void> send(String rawText) async {
@@ -1264,6 +1651,7 @@ class AgentController extends ChangeNotifier {
   void abort() {
     _abortRequested = true;
     provider.abort();
+    tools.cancelWebSearch();
     if (app.generationQueueRunning) {
       app.cancelGeneration();
     } else if (app.busy) {
@@ -1297,7 +1685,7 @@ class AgentController extends ChangeNotifier {
     return [
       if (conversation.lastSummary?.trim().isNotEmpty == true)
         'Previous continuity summary:\n${conversation.lastSummary!.trim()}',
-      if (recent.isNotEmpty) 'New roleplay transcript:\n$recent',
+      if (recent.isNotEmpty) 'New conversation transcript:\n$recent',
     ].join('\n\n');
   }
 
@@ -1327,7 +1715,7 @@ class AgentController extends ChangeNotifier {
             {
               'role': 'system',
               'content':
-                  'Compress this fictional roleplay into concise continuity notes. Preserve character identities, appearance, personality and speaking style; relationships; current time, place and physical state; established world facts; promises, possessions and unresolved story hooks; and exact NovelAI visual tags or image parameters only when explicitly established. Do not invent facts. Return only the summary in the user language.',
+                  'Compress this conversation into concise continuity notes. Preserve user goals, approved operations, tool results, source URLs, unresolved tasks, exact NovelAI visual tags and image parameters, and character continuity when relevant. Distinguish confirmed facts from uncertain claims. Do not invent facts. Return only the summary in the user language.',
             },
             {
               'role': 'user',
@@ -1533,6 +1921,7 @@ class AgentController extends ChangeNotifier {
     _persistTimer?.cancel();
     _streamNotifyTimer?.cancel();
     provider.abort();
+    tools.cancelWebSearch();
     super.dispose();
   }
 }

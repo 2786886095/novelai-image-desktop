@@ -74,6 +74,12 @@ AgentMergeResult mergeAgentWorkspaces(
   var imported = 0;
   var skipped = 0;
   var renamed = 0;
+  for (final kind in const ['optimize', 'assistant']) {
+    final body = source.agentTemplates[kind];
+    if (body != null && body.trim().isNotEmpty) {
+      output.agentTemplates[kind] = body;
+    }
+  }
 
   final lorebookMap = <String, String>{};
   final lorebookIds = output.lorebooks.map((item) => item.id).toSet();

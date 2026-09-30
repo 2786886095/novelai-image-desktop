@@ -1,0 +1,26 @@
+[
+  {
+    "email": "test@example.invalid",
+    "password": "correct horse battery staple",
+    "saltHex": "812663f9cd77de2fd2834847828e5488",
+    "accessKey": "omuax_zZyM5Vx2WwrYx9RoB2tIKDiyXns3jsSwUI8yOVTU7jvQGcfkiuEv6mvtwC"
+  },
+  {
+    "email": "Mixed.Case@example.invalid",
+    "password": "abc",
+    "saltHex": "534066a957824991903d7bf6f9637200",
+    "accessKey": "peyIdOJcSppiBFe3lIm95LlEYcwgcU3FP79AzJmDZczOpr7wLQtG9jhLkpDKShIF"
+  },
+  {
+    "email": "unicode@example.invalid",
+    "password": "😀🦊汉字é🙂abcdef",
+    "saltHex": "3fe4661980ee18a6fc1775cc679cf9bc",
+    "accessKey": "jub-Zim-WrzFxUxduwuKSYB0z8OBioVCJir1N1lU4fk_ERvh6IdOcOmI54jla_21"
+  },
+  {
+    "email": " whitespace@example.invalid ",
+    "password": "  pass word  ",
+    "saltHex": "ad8be87448b57d5c413fb58b72cc8196",
+    "accessKey": "W0ZtCrIePFpAbVVsp7_x7JBwJJEBDM1nx46mY7AYMioanVmQHrUh2nRl3PC6LD3A"
+  }
+]

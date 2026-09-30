@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import { Icon } from "../components/icons";
 import { IconText } from "../components/ui";
@@ -48,7 +48,7 @@ export function AppTitleBar() {
   );
 }
 
-export function AppMenuBar({ openSettings }: { openSettings: () => void }) {
+export function AppMenuBar({ openSettings, children }: { openSettings: () => void; children?: ReactNode }) {
   const settings = useAppStore((state) => state.settings);
   const refreshSettings = useAppStore((state) => state.refreshSettings);
   const [streamUpdating, setStreamUpdating] = useState(false);
@@ -68,6 +68,7 @@ export function AppMenuBar({ openSettings }: { openSettings: () => void }) {
 
   return (
     <nav className="menu-bar compact-toolbar">
+      {children}
       <div className="menu-actions-row">
         <button
           type="button"

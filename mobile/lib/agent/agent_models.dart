@@ -364,6 +364,10 @@ class AgentConversation {
   String title;
   List<AgentMessage> messages;
   List<AgentAttachment> draftAttachments;
+  String draftText;
+  String? selectedTemplateKind;
+  String? selectedTemplateMode;
+  String? selectedTemplateVersion;
   String status;
   AgentContextSnapshot context;
   AgentTokenUsage? lastTurnUsage;
@@ -389,6 +393,10 @@ class AgentConversation {
     required this.title,
     List<AgentMessage>? messages,
     List<AgentAttachment>? draftAttachments,
+    this.draftText = '',
+    this.selectedTemplateKind,
+    this.selectedTemplateMode,
+    this.selectedTemplateVersion,
     this.status = 'idle',
     AgentContextSnapshot? context,
     this.lastTurnUsage,
@@ -428,6 +436,10 @@ class AgentConversation {
             .whereType<Map>()
             .map((item) => AgentAttachment.fromJson(_map(item)))
             .toList(),
+        draftText: _text(json['draftText'], ''),
+        selectedTemplateKind: json['selectedTemplateKind']?.toString(),
+        selectedTemplateMode: json['selectedTemplateMode']?.toString(),
+        selectedTemplateVersion: json['selectedTemplateVersion']?.toString(),
         status: const {'idle', 'running', 'waiting-permission', 'error'}
                 .contains(json['status'])
             ? json['status'].toString()
@@ -469,6 +481,13 @@ class AgentConversation {
         'messages': messages.map((item) => item.toJson()).toList(),
         'draftAttachments':
             draftAttachments.map((item) => item.toJson()).toList(),
+        'draftText': draftText,
+        if (selectedTemplateKind != null)
+          'selectedTemplateKind': selectedTemplateKind,
+        if (selectedTemplateMode != null)
+          'selectedTemplateMode': selectedTemplateMode,
+        if (selectedTemplateVersion != null)
+          'selectedTemplateVersion': selectedTemplateVersion,
         'status': status,
         'context': context.toJson(),
         if (lastTurnUsage != null) 'lastTurnUsage': lastTurnUsage!.toJson(),
@@ -588,6 +607,7 @@ class AgentWorkspace {
   List<AgentConversation> conversations;
   List<AgentSkill> skills;
   List<AgentMemory> memories;
+  Map<String, String> agentTemplates;
   List<TavernCharacter> characters;
   List<TavernPersona> personas;
   List<TavernLorebook> lorebooks;
@@ -604,6 +624,7 @@ class AgentWorkspace {
     List<AgentConversation>? conversations,
     List<AgentSkill>? skills,
     List<AgentMemory>? memories,
+    Map<String, String>? agentTemplates,
     List<TavernCharacter>? characters,
     List<TavernPersona>? personas,
     List<TavernLorebook>? lorebooks,
@@ -616,6 +637,7 @@ class AgentWorkspace {
   })  : conversations = conversations ?? [],
         skills = skills ?? defaultAgentSkills(),
         memories = memories ?? [],
+        agentTemplates = agentTemplates ?? {},
         characters = characters ?? [createSoftwareImageCharacter()],
         personas = personas ?? [createSoftwareImagePersona()],
         lorebooks = lorebooks ?? [createSoftwareImageLorebook()],
@@ -746,6 +768,8 @@ class AgentWorkspace {
           .map((item) => AgentMemory.fromJson(_map(item)))
           .where((item) => item.content.trim().isNotEmpty)
           .toList(),
+      agentTemplates: (json['agentTemplates'] as Map? ?? const {})
+          .map((key, value) => MapEntry(key.toString(), value.toString())),
       characters: characters,
       personas: personas,
       lorebooks: lorebooks,
@@ -771,6 +795,7 @@ class AgentWorkspace {
         'conversations': conversations.map((item) => item.toJson()).toList(),
         'skills': skills.map((item) => item.toJson()).toList(),
         'memories': memories.map((item) => item.toJson()).toList(),
+        'agentTemplates': agentTemplates,
         'characters': characters.map((item) => item.toJson()).toList(),
         'personas': personas.map((item) => item.toJson()).toList(),
         'lorebooks': lorebooks.map((item) => item.toJson()).toList(),

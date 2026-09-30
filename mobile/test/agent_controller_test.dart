@@ -16,6 +16,9 @@ class _ControllerStorage extends Storage {
   int failures = 0;
   Completer<void>? pauseNext;
 
+  @override
+  Future<String?> getToken() async => null;
+
 
   @override
   Future<AgentWorkspace> getAgentWorkspace() async => workspace;
@@ -64,6 +67,35 @@ class _QueuedProvider extends AgentProviderClient {
     final turn = turns[calls++];
     if (turn.content.isNotEmpty) onDelta(turn.content);
     return turn;
+  }
+}
+
+class _PreparedGenerationProvider extends AgentProviderClient {
+  int calls = 0;
+
+  @override
+  Future<AgentProviderTurn> complete({
+    required AppSettings settings,
+    required String apiKey,
+    required List<Map<String, dynamic>> messages,
+    required List<Map<String, dynamic>> tools,
+    required void Function(String delta) onDelta,
+    bool toolsEnabled = true,
+    Map<String, dynamic>? generationConfig,
+  }) async {
+    calls++;
+    if (calls == 1) {
+      return AgentProviderTurn(toolCalls: const [AgentProviderToolCall(
+        id: 'prepare-1', name: 'langbai_prepare_generation',
+        arguments: {'positivePrompt': '1girl, rain', 'width': 832, 'height': 1216},
+      )], usage: AgentTokenUsage());
+    }
+    final toolOutput = messages.last['content'] as String;
+    final id = (jsonDecode(toolOutput) as Map<String, dynamic>)['preparationId'] as String;
+    return AgentProviderTurn(toolCalls: [AgentProviderToolCall(
+      id: 'generate-1', name: 'langbai_generate_image',
+      arguments: {'preparationId': id},
+    )], usage: AgentTokenUsage());
   }
 }
 
@@ -308,6 +340,95 @@ void main() {
     expect(controller.error, isNotEmpty);
     expect(controller.selectedConversation!.messages.last.tools, isEmpty);
     expect(controller.pendingPermission, isNull);
+  });
+
+  test('studio loop executes only an allowlisted read tool and continues', () async {
+    final storage = _ControllerStorage();
+    final provider = _QueuedProvider([
+      AgentProviderTurn(toolCalls: const [AgentProviderToolCall(
+        id: 'state-1', name: 'langbai_get_generation_state', arguments: {},
+      )], usage: AgentTokenUsage(input: 10, output: 4, total: 14)),
+      AgentProviderTurn(content: '当前配置已读取。',
+        usage: AgentTokenUsage(input: 15, output: 7, total: 22)),
+    ]);
+    final controller = AgentController(app: _app(storage), provider: provider);
+    addTearDown(controller.dispose);
+    await controller.load();
+    await controller.sendStudio('查看当前生图设置');
+    expect(provider.calls, 2);
+    expect(controller.selectedConversation!.messages.last.tools.single.name,
+      'langbai_get_generation_state');
+    expect(controller.selectedConversation!.messages.last.status, 'complete');
+    expect(provider.requests[1].last['role'], 'tool');
+  });
+
+  test('studio loop asks before mutation and reject leaves prompt intact', () async {
+    final storage = _ControllerStorage();
+    final app = _app(storage);
+    app.params.positivePrompt = 'original';
+    final provider = _QueuedProvider([
+      AgentProviderTurn(toolCalls: const [AgentProviderToolCall(
+        id: 'apply-1', name: 'langbai_apply_prompt',
+        arguments: {'positivePrompt': 'changed'},
+      )], usage: AgentTokenUsage(input: 10, output: 4, total: 14)),
+    ]);
+    final controller = AgentController(app: app, provider: provider);
+    addTearDown(controller.dispose);
+    await controller.load();
+    final running = controller.sendStudio('替换提示词');
+    for (var i = 0; i < 100 && controller.pendingPermission == null; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(controller.pendingPermission?.tool, 'langbai_apply_prompt');
+    expect(app.params.positivePrompt, 'original');
+    await controller.respondPermission('reject');
+    await running;
+    expect(app.params.positivePrompt, 'original');
+    expect(controller.selectedConversation!.messages.last.tools.single.status,
+      'denied');
+  });
+
+  test('studio generation without a prepared ID never reaches approval or billing', () async {
+    final storage = _ControllerStorage();
+    final app = _CaptureSceneApp(storage: storage)..settings = _app(storage).settings;
+    final provider = _QueuedProvider([
+      AgentProviderTurn(toolCalls: const [AgentProviderToolCall(
+        id: 'unprepared-1', name: 'langbai_generate_image',
+        arguments: {'positivePrompt': '1girl'},
+      )], usage: AgentTokenUsage()),
+      AgentProviderTurn(content: '需要先准备生图。', usage: AgentTokenUsage()),
+    ]);
+    final controller = AgentController(app: app, provider: provider);
+    addTearDown(controller.dispose);
+    await controller.load();
+    await controller.sendStudio('画一张图');
+    expect(app.requests, isEmpty);
+    expect(controller.pendingPermission, isNull);
+    expect(controller.selectedConversation!.messages.last.tools.single.status, 'error');
+    expect(provider.calls, 2);
+  });
+
+  test('studio prepared generation shows frozen preview and rejection spends nothing', () async {
+    final storage = _ControllerStorage();
+    final app = _CaptureSceneApp(storage: storage)..settings = _app(storage).settings;
+    final provider = _PreparedGenerationProvider();
+    final controller = AgentController(app: app, provider: provider);
+    addTearDown(controller.dispose);
+    await controller.load();
+    final running = controller.sendStudio('画一张竖图');
+    for (var i = 0; i < 100 && controller.pendingPermission == null; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    final pending = controller.pendingPermission;
+    expect(pending?.tool, 'langbai_generate_image');
+    expect(pending?.arguments['positivePrompt'], '1girl, rain');
+    expect(pending?.arguments['width'], 832);
+    expect(pending?.arguments['estimateSource'], isNotNull);
+    expect(app.requests, isEmpty);
+    await controller.respondPermission('reject');
+    await running;
+    expect(app.requests, isEmpty);
+    expect(controller.selectedConversation!.messages.last.tools.last.status, 'denied');
   });
 
   test('image directive becomes a confirmation proposal without generating',

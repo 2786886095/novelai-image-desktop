@@ -48,7 +48,11 @@ html :is(.select-menu-popover,.menu-pop,.prompt-editor-more,.context-menu) {bord
 html :is(.left-panel,.history-panel,.canvas-area,.ai-log-panel,.panel-head,.left-footer) {background:var(--bg-panel);border-color:var(--border);backdrop-filter:none;}
 html :is(button.btn,.menu-action,.compact-icon-button,.prompt-tool-btn) {border-radius:var(--radius-sm);transition:background-color 120ms var(--studio-change),border-color 120ms var(--studio-change),color 120ms var(--studio-change),box-shadow 120ms var(--studio-change);}
 html :is(button.btn,.menu-action,.compact-icon-button,.prompt-tool-btn):active:not(:disabled) {transform:none;filter:brightness(.96);}
-html :is(button,input,select,textarea,[tabindex]):focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+/* Image/canvas wrappers receive focus programmatically for navigation/panning.
+   They are not viewport-sized controls. Keep rings on actual toolbar controls,
+   including controls with tabindex, irrespective of stylesheet load order. */
+html :is(button,input,select,textarea,[tabindex]:not(.image-preview-viewer):not(.zoom-frame-shell):not(.canvas-area)):focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+html :is(.image-preview-viewer,.zoom-frame-shell,.canvas-area):focus-visible {outline:none;box-shadow:none;}
 html :is(input,select,textarea) {font-family:inherit;accent-color:var(--accent);}
 html input.prompt-box {height:38px!important;min-height:38px!important;max-height:38px;resize:none;}
 html :is(input:not([type=range]):not([type=checkbox]):not([type=radio]),select,textarea) {border-color:var(--border);border-radius:var(--radius-sm);color:var(--text-primary);background-color:var(--bg-input);transition:border-color 120ms var(--studio-change),box-shadow 120ms var(--studio-change);}

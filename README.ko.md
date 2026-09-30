@@ -1,5 +1,7 @@
 # Langbai NovelAI Studio
 
+> 2.4.6 후보: 공식 토큰, 공식 이메일/비밀번호, NovelAI 호환 중계 다중 계정과 새 도우미. 아직 출시되지 않았습니다. iOS 공통 코드는 연결되었지만 macOS 빌드/서명은 미검증입니다. Android 로컬 빌드는 테스트 서명을 사용합니다.
+
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
 

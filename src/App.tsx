@@ -1,3 +1,5 @@
+import { NaiAccountManager } from './components/NaiAccountManager';
+import {HistoryItemMenu} from './components/HistoryItemMenu';
 import {PROMPT_OPTIMIZE_TEMPLATE, PROMPT_CUSTOM_TEMPLATE} from "./data/prompt-edit-templates";
 import {workflowText} from './workflow-text';
 import {focusedInpaintPlan} from './focused-inpaint';
@@ -47,9 +49,9 @@ import { format } from "date-fns";
 const loadToolsHub = () => import("./ToolsHub");
 const ToolsHub = lazy(loadToolsHub);
 const loadOnlineGalleryPage = () => import("./features/online-gallery/OnlineGalleryPage");
-// Native Harness component is currently distributed for Windows x64 only.
-// Keep the existing Tavern working on other desktop platforms until native bundles ship.
-const loadAgentPage = () => window.naiDesktop.platform === "win32" ? import("./HarnessPage") : import("./AgentPage");
+// The Agent surface is platform-neutral; the old Harness/Tavern data is retained
+// for migration but no longer owns this tab.
+const loadAgentPage = () => import("./PiAgentPage");
 const loadInpaintCanvas = () => import("./InpaintCanvas").then((m) => ({ default: m.InpaintCanvas }));
 const loadMetadataInspector = () => import("./MetadataInspector");
 const OnlineGalleryPage = lazy(loadOnlineGalleryPage);
@@ -5367,7 +5369,7 @@ function HistoryPanel() {
 
   const renderHistoryItem = (item: HistoryItem) => (
     <div className="history-item" key={item.id}>
-      <button onClick={() => selectImage(item)}>
+      <button type="button" aria-label={t("history.thumbAlt")} onClick={() => selectImage(item)}>
         <div className="history-thumb-frame">
           <img
             src={item.fileUrl}
@@ -5401,17 +5403,10 @@ function HistoryPanel() {
           />
         </div>
       </div>
-      <div className="history-item-controls" onClick={(event) => event.stopPropagation()}><ImageFavoriteButton src={item.fileUrl} compact/>
-        <button className="history-metadata" title={t("history.metadataTitle")} aria-label={t("history.metadataTitle")} onClick={() => void inspectHistoryMetadata(item)}>
-          <Icon name="eye" />
-        </button>
-        <button className="history-rename" title={t("history.renameImageTitle")} aria-label={t("history.renameImageTitle")} onClick={() => renameItem(item)}>
-          <Icon name="brush" />
-        </button>
-        <button className="history-delete" title={t("history.deleteImageTitle")} aria-label={t("history.deleteImageTitle")} onClick={() => void deleteItem(item)}>
-          <Icon name="close" />
-        </button>
-      </div>
+      <HistoryItemMenu src={item.fileUrl} label={t("history.moreActions")}
+        metadataLabel={t("history.menuMetadata")} renameLabel={t("history.rename")} deleteLabel={t("history.menuDelete")}
+        metadataTitle={t("history.metadataTitle")} renameTitle={t("history.renameImageTitle")} deleteTitle={t("history.deleteImageTitle")}
+        onMetadata={() => void inspectHistoryMetadata(item)} onRename={() => renameItem(item)} onDelete={() => void deleteItem(item)}/>
     </div>
   );
 
@@ -7198,7 +7193,9 @@ function MainPage() {
         <WorkspaceMigrationNotice />
       </div>
       <V5MigrationNotice />
-      <AppMenuBar openSettings={() => setShowSettings(true)} />
+      <AppMenuBar openSettings={() => setShowSettings(true)}>
+        <NaiAccountManager />
+      </AppMenuBar>
       <AppTabBar />
       <div
         className="workspace"

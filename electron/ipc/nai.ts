@@ -1,4 +1,5 @@
 import {prepareFocusedInpaintInput,compositeFocusedPatch} from './focused-inpaint';
+import { currentNaiAccount } from './nai-accounts-runtime';
 import {preparePromptAssistance,type PromptEditRequest} from "../../src/prompt-assistant.js";
 import {authorizeAgentBatchRequest} from './batch-run-authorization';
 import {currentBatchImageBinding,assertBatchImageBinding,prepareBatchImageService} from './batch-image-service';
@@ -151,6 +152,12 @@ export function isOfficialNaiHost(baseUrl: string): boolean {
 // Returns a token-safe base URL: the configured endpoint when it is trusted (or
 // the user opted into custom endpoints), otherwise the official fallback.
 function tokenSafeBaseUrl(rawUrl: string, fallback: string): string {
+  const selected=currentNaiAccount();
+  if(selected) {
+    const expected=fallback==='https://api.novelai.net'?selected.apiBaseUrl:selected.imageBaseUrl;
+    if(normalizeBaseUrl(rawUrl, '')!==normalizeBaseUrl(expected, '')) throw Error('账户绑定接口不匹配；未回退到其他主机。');
+    return expected.replace(/\/+$/,'');
+  }
   const resolved = normalizeBaseUrl(rawUrl, fallback);
   if (isOfficialNaiHost(resolved)) {
     try {
@@ -325,6 +332,7 @@ export function parseAccount(data: any): Omit<AccountSummary, "hasToken"> {
 async function fetchAccount(
   token: string,
 ): Promise<Omit<AccountSummary, "hasToken">> {
+  if(currentNaiAccount()?.method==='relay') throw Error('中转订阅接口未经验证，已跳过。');
   const settings = getSettings();
   // NovelAI now rejects /user/data on api.novelai.net for at least some accounts
   // with a 400 telling third-party tools to "update to the image URL" — confirmed
@@ -337,11 +345,13 @@ async function fetchAccount(
     headers: { Authorization: `Bearer ${token}` },
     timeout: 15_000,
     ...proxyConfig("nai"),
+      maxRedirects: currentNaiAccount() ? 0 : undefined,
   });
   return parseAccount(res.data);
 }
 
 export async function verifyToken(token: string): Promise<TokenStatus> {
+  if(currentNaiAccount()) return {valid:false,message:'请在账户管理中新增或验证所选账户；旧设置页不会覆盖该账户。'};
   const normalized = token.trim();
   if (!normalized) {
     return { valid: false, message: "请输入 NovelAI Persistent API Token。" };
@@ -569,6 +579,7 @@ function shouldRetryCharCaptionsAsPipe(
   params: GenerateParams,
   extras?: GenerateExtras,
 ) {
+  if(currentNaiAccount()) return false;
   const status = error?.response?.status;
   return (
     !params.preservePromptText &&
@@ -1050,6 +1061,7 @@ export async function prepareExtras(
                 timeout: 60_000,
                 signal,
                 ...proxyConfig("nai"),
+      maxRedirects: currentNaiAccount() ? 0 : undefined,
               },
             );
           },
@@ -1488,6 +1500,7 @@ async function requestOfficialGenerationPrice(
   params: GenerateParams,
   extras?: GenerateExtras,
 ) {
+  if(currentNaiAccount()?.method==='relay') return undefined; // Relay quote route and billing are not publicly verified.
   const token = getToken();
   if (!token) return undefined;
   const settings = getSettings();
@@ -1518,6 +1531,7 @@ async function requestOfficialGenerationPrice(
         },
         timeout: 12_000,
         ...proxyConfig("nai"),
+      maxRedirects: currentNaiAccount() ? 0 : undefined,
       },
     );
     return extractOfficialAnlasPrice(response.data);
@@ -2113,6 +2127,7 @@ async function requestWithRetry<T>(
     retryPreflightNetworkFailures?: boolean;
   } = {},
 ): Promise<T> {
+  if(currentNaiAccount()) return fn(); // Selected accounts never automatically repeat paid requests.
   let attempt = 0;
   for (;;) {
     try {
@@ -2230,6 +2245,7 @@ async function postGenerateImage(
           maxContentLength: Infinity,
           signal,
           ...proxyConfig("nai"),
+      maxRedirects: currentNaiAccount() ? 0 : undefined,
         });
       },
       // A paid generate POST may have already produced (and charged for) an image
@@ -2540,6 +2556,7 @@ async function postGenerateImageStream(
             maxContentLength: Infinity,
             signal,
             ...proxyConfig("nai"),
+      maxRedirects: currentNaiAccount() ? 0 : undefined,
           });
         },
         {
@@ -4707,7 +4724,7 @@ export async function inpaintImage(
     let chosen: ReturnType<typeof buildInpaintPayload> | null = null;
     let buffers: Buffer[] | null = null;
     let lastError: any = null;
-    const candidates = inpaintModelCandidates(inpaintModel);
+    const candidates = currentNaiAccount() ? [inpaintModel] : inpaintModelCandidates(inpaintModel);
     for (let index = 0; index < candidates.length; index += 1) {
       chosen = buildInpaintPayload(candidates[index]);
       try {
@@ -4808,6 +4825,7 @@ export async function upscaleImg(
               timeout: 180_000,
               signal: abort.signal,
               ...proxyConfig("nai"),
+      maxRedirects: currentNaiAccount() ? 0 : undefined,
             },
           ),
         // Paid upscale POST — only retry pre-charge 429s, never 5xx.
@@ -4965,6 +4983,7 @@ export async function augmentImg(
       timeout: 180_000,
       signal: job.controller.signal,
       ...proxyConfig("nai"),
+      maxRedirects: currentNaiAccount() ? 0 : undefined,
     });
 
     const buffers = await extractImages(res.data);
@@ -5125,6 +5144,7 @@ export async function suggestTags(
         headers: { Authorization: `Bearer ${token}` },
         timeout: 5000,
         ...proxyConfig("nai"),
+      maxRedirects: currentNaiAccount() ? 0 : undefined,
       },
     );
     const tags = (res.data?.tags ?? []) as TagSuggestion[];

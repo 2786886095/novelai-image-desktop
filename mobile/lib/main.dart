@@ -1,3 +1,4 @@
+import 'screens/novelai_accounts_screen.dart';
 import 'screens/style_library_screen.dart';
 import 'i18n/style_library_text.dart';
 import 'dart:io';
@@ -15,8 +16,7 @@ import 'screens/gallery_screen.dart';
 import 'screens/local_favorites_screen.dart';
 import 'i18n/local_favorites_text.dart';
 import 'screens/ai_log_screen.dart';
-import 'screens/agent_screen.dart';
-import 'screens/local_agent_screen.dart';
+import 'screens/studio_agent_screen.dart';
 import 'screens/data_backup_settings.dart';
 import 'screens/generate_screen.dart';
 import 'screens/inspect_screen.dart';
@@ -116,7 +116,6 @@ class _HomeShellState extends State<HomeShell> {
 
   int _index = 0;
   List<int>? _navigationOrder;
-  final _agentVisible = ValueNotifier<bool>(false);
   bool _onboardingScheduled = false;
   bool _v5NoticeScheduled = false;
   bool _incomingBackupInitialChecked = !Platform.isAndroid && !Platform.isIOS;
@@ -154,7 +153,7 @@ class _HomeShellState extends State<HomeShell> {
     super.initState();
     _loadNavigationOrder();
     _pages = [
-      const GenerateScreen(),
+      const Column(children: [SafeArea(bottom: false, child: NovelAiAccountSelector()), Expanded(child: GenerateScreen())]),
       const ToolsScreen(kind: ToolPageKind.inpaint),
       const ToolsScreen(kind: ToolPageKind.postprocess),
       const InspectScreen(kind: InspectPageKind.reverse),
@@ -177,9 +176,7 @@ class _HomeShellState extends State<HomeShell> {
         ),
       ),
       const OnlineGalleryScreen(),
-      Platform.isAndroid
-          ? LocalAgentScreen(visible: _agentVisible)
-          : const AgentScreen(),
+      const StudioAgentScreen(),
       GalleryScreen(
         onOpenMetadata: () {
           if (mounted) setState(() => _index = 5);
@@ -229,7 +226,6 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   void dispose() {
-    _agentVisible.dispose();
     _incomingBackupChannel.setMethodCallHandler(null);
     super.dispose();
   }
@@ -372,7 +368,6 @@ class _HomeShellState extends State<HomeShell> {
     return StudioAdaptiveShell(
       selectedIndex: _index,
       onDestinationSelected: (index) {
-        _agentVisible.value = index == 9;
         FocusManager.instance.primaryFocus?.unfocus();
         setState(() => _index = index);
       },

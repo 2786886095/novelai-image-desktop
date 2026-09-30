@@ -46,3 +46,21 @@ it('exit card follows system dark theme, while explicit light/dark choices win',
  for(const [theme,systemDark,expected] of [['system',true,true],['system',false,false],['light',true,false],['dark',false,true]] as const){mock.theme=theme;mock.systemDark=systemDark;await m.confirmHarnessExit(null);expect(mock.shownDark).toBe(expected);}
  mock.theme='light';mock.systemDark=false;
 });
+
+it('idle new assistant does not show an exit warning',async()=>{
+ const m=await import('./harness-launcher');mock.busy=false;
+ const assistant={isBusy:()=>false,stop:vi.fn()};m.registerHarnessLauncher(()=>null,assistant);
+ expect(m.harnessNeedsExitConfirmation()).toBe(false);expect(await m.confirmHarnessExit(null)).toBe(true);
+ expect(mock.show).not.toHaveBeenCalled();expect(assistant.stop).not.toHaveBeenCalled();
+});
+it('Pi permission wait is protected; cancel preserves the task and confirm stops once',async()=>{
+ const m=await import('./harness-launcher');mock.busy=false;let active=true;
+ const assistant={isBusy:()=>active,stop:vi.fn(()=>{active=false;})};m.registerHarnessLauncher(()=>null,assistant);
+ mock.show.mockResolvedValue({response:0});expect(await m.confirmHarnessExit(null)).toBe(false);
+ expect(assistant.stop).not.toHaveBeenCalled();expect(m.harnessNeedsExitConfirmation()).toBe(true);
+ const options=mock.show.mock.calls.at(-1)![0];expect(options.message).toBe('退出软件？');
+ expect(options.detail).toContain('可能继续计费');expect(options.buttons).toEqual(['取消退出','停止任务并退出']);
+ mock.show.mockResolvedValue({response:1});await Promise.all([m.confirmHarnessExit(null),m.confirmHarnessExit(null)]);
+ expect(assistant.stop).toHaveBeenCalledTimes(1);expect(mock.stop).toHaveBeenCalledTimes(1);
+ expect(m.harnessNeedsExitConfirmation()).toBe(false);
+});

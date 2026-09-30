@@ -1,0 +1,14 @@
+.nai-account-manager{position:relative;display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:4px 12px;color:var(--text)}
+.compact-toolbar>.nai-account-manager{padding:0;min-width:0;flex:0 0 auto}
+.nai-account-manager>label{display:flex;align-items:center;gap:8px}
+.nai-account-manager>label select{background:var(--panel-2,var(--bg-input));color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px;max-width:320px}
+.nai-account-manager button,.nai-account-overlay button{background:var(--panel-2,var(--bg-panel));color:var(--text);border:1px solid var(--border);border-radius:7px;padding:6px 11px}
+.nai-account-overlay{position:fixed;inset:0;z-index:var(--z-overlay);display:grid;place-items:center;padding:20px;background:color-mix(in srgb,var(--text) 26%,transparent);backdrop-filter:blur(6px);color:var(--text)}
+.nai-account-panel{position:relative;box-sizing:border-box;width:min(560px,100%);max-height:calc(100dvh - 40px);overflow:auto;overscroll-behavior:contain;background:var(--panel,var(--bg-dialog));border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:var(--shadow-xl)}
+.nai-account-dialog-header{display:flex;align-items:center;justify-content:space-between;gap:12px}.nai-account-dialog-header h3{margin:0;color:var(--text)}
+.nai-account-method-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:15px 0}.nai-account-method-tabs button[aria-selected=true]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.nai-account-panel label{display:grid;gap:5px;margin:10px 0;color:var(--text)}.nai-account-panel input{box-sizing:border-box;width:100%;background:var(--panel-2,var(--bg-input));color:var(--text);border:1px solid var(--border);padding:9px;border-radius:7px}
+.nai-account-note{font-size:12px;color:var(--muted);line-height:1.5}.nai-account-panel .nai-account-primary{width:100%;background:var(--accent);color:var(--accent-text);border-color:var(--accent);margin-top:10px}
+.nai-account-list{list-style:none;padding:0;margin:15px 0;max-height:170px;overflow:auto}.nai-account-list li{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid var(--border)}.nai-account-list li span{min-width:0;overflow-wrap:anywhere}.nai-account-list li div{display:flex;gap:6px;flex-shrink:0}
+.nai-account-manager button:disabled,.nai-account-manager select:disabled,.nai-account-overlay button:disabled{opacity:.55;cursor:not-allowed}.nai-account-overlay :focus-visible,.nai-account-manager :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:520px){.nai-account-overlay{padding:10px}.nai-account-panel{max-height:calc(100dvh - 20px);padding:14px}.nai-account-method-tabs button{padding:8px 4px;font-size:12px}.nai-account-list li{align-items:flex-start;flex-direction:column}.nai-account-manager>label select{max-width:180px}}

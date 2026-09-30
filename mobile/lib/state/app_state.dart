@@ -1,3 +1,6 @@
+import '../services/novelai_accounts.dart';
+import '../services/novelai_account_api.dart';
+import '../services/novelai_official_auth.dart';
 import '../batch/batch_redraw_controller.dart';
 import '../batch/batch_redraw_models.dart';
 import '../services/comic_image_service.dart';
@@ -88,6 +91,51 @@ class CompatibleGenerationOutcome {
 }
 
 class AppState extends ChangeNotifier {
+  NovelAiAccounts get naiAccounts => storage is NovelAiAccountStorage
+      ? (storage as NovelAiAccountStorage).accounts : NovelAiAccounts.shared;
+  int _naiOperationCount = 0;
+  bool _naiChanging = false;
+  bool get naiAccountLocked => _naiChanging || _naiOperationCount > 0 || busy ||
+      generationQueueRunning || queueAdding || naiAccounts.locked ||
+      (api is NovelAiAccountApi && (api as NovelAiAccountApi).inFlight);
+  void _applyNaiAccount() {
+    final active = naiAccounts.active;
+    if (active == null) return;
+    settings
+      ..apiBaseUrl = active.profile.apiBaseUrl
+      ..imageBaseUrl = active.profile.imageBaseUrl
+      ..allowCustomEndpoint = active.profile.relay
+      ..allowCustomEndpointFallback = false;
+  }
+  Future<void> _changeNaiAccount(Future<void> Function() action) async {
+    if (naiAccountLocked) throw StateError('任务进行中，禁止切换、删除或替换账号');
+    _naiChanging = true;
+    notifyListeners();
+    try {
+      if (storage is NovelAiAccountStorage) await (storage as NovelAiAccountStorage).ready();
+      await action();
+      _applyNaiAccount();
+      account = AccountSummary(hasToken: naiAccounts.active != null);
+      _opusUsageTimer?.cancel();
+      _quoteTimer?.cancel();
+      _quoteVersion++;
+      generationQuote = null;
+      lastAnlasSpent = null;
+    } finally { _naiChanging = false; notifyListeners(); }
+  }
+  Future<void> activateNaiAccount(String? id) => _changeNaiAccount(() => naiAccounts.activate(id));
+  Future<void> removeNaiAccount(String id) => _changeNaiAccount(() => naiAccounts.remove(id));
+  Future<void> addNaiAccount({required String label, required String method, String token = '',
+      String email = '', String password = '', String apiBaseUrl = 'https://api.novelai.net',
+      String imageBaseUrl = 'https://image.novelai.net'}) => _changeNaiAccount(() async {
+    final secret = method == 'official-login' ? await NovelAiOfficialAuth(settingsProvider: () => settings).login(email, password) : token;
+    final profile = await naiAccounts.add(label: label, method: method, token: secret,
+      apiBaseUrl: method == 'relay' ? apiBaseUrl : 'https://api.novelai.net',
+      imageBaseUrl: method == 'relay' ? imageBaseUrl : 'https://image.novelai.net');
+    await naiAccounts.activate(profile.id);
+  });
+
+
   BatchRedrawController? _batchRedraw;
   BatchRedrawController get batchRedraw {
     if (_batchRedraw == null) {
@@ -192,11 +240,24 @@ class AppState extends ChangeNotifier {
     Storage? storage,
     OfflineTagStore? offlineTags,
     CompletedImagePreloader? preloadCompletedImage,
-  })  : api = api ?? NaiApi(),
-        storage = storage ?? Storage(),
+  })  : api = api ?? NovelAiAccountApi(NovelAiAccounts.shared),
+        storage = storage ?? NovelAiAccountStorage(NovelAiAccounts.shared),
         offlineTags = offlineTags ?? OfflineTagStore(),
         _preloadCompletedImage =
             preloadCompletedImage ?? preloadCompletedFileImage {
+    if (this.storage is NovelAiAccountStorage) {
+      naiAccounts.hostBusy = () => busy || _naiOperationCount > 0 || generationQueueRunning || queueAdding ||
+          (this.api is NovelAiAccountApi && (this.api as NovelAiAccountApi).inFlight);
+      naiAccounts.onCommitted = () {
+        if (_compatibleDisposed) return;
+        _applyNaiAccount();
+        account = AccountSummary(hasToken: naiAccounts.active != null);
+        _quoteVersion++;
+        generationQuote = null;
+        lastAnlasSpent = null;
+        notifyListeners();
+      };
+    }
     BackgroundQueueService.addCancelHandler(cancelGeneration);
   }
 
@@ -314,6 +375,10 @@ class AppState extends ChangeNotifier {
     try {
       promptTemplates = await PromptTemplateLibrary.load();
       settings = await storage.getSettings();
+      if (storage is NovelAiAccountStorage) {
+        await (storage as NovelAiAccountStorage).ready();
+        _applyNaiAccount();
+      }
       if (settings.imageProvider != 'novelai') {
         // The separate OpenAI Images generator is retired. Keep its credential
         // and configuration for backup/rollback, but never silently submit a
@@ -498,6 +563,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _refreshAccountAtBoot() async {
+    if (_naiChanging) throw StateError('账号正在切换，未提交请求');
+    _naiOperationCount++;
+    try {
     final token = await storage.getToken();
     if (token == null || token.isEmpty) return;
     try {
@@ -513,6 +581,7 @@ class AppState extends ChangeNotifier {
     }
     notifyListeners();
     _scheduleGenerationQuote();
+    } finally { _naiOperationCount--; notifyListeners(); }
   }
 
   Future<void> dismissNetworkOnboarding() async {
@@ -616,31 +685,15 @@ class AppState extends ChangeNotifier {
   }
 
   Future<String?> setToken(String token) async {
-    try {
-      final summary = await api.verifyToken(token, settings);
-      await storage.setToken(token.trim());
-      account = summary;
-      _scheduleOpusUsageRefresh();
-      notifyListeners();
-      _scheduleGenerationQuote();
-      return null;
-    } catch (e) {
-      if (e is NaiNetworkException) {
-        return _rt('error.naiNetworkRetryFailed');
-      }
-      return e.toString().replaceFirst('Exception: ', '');
-    }
+    try { await addNaiAccount(label: 'NovelAI Token', method: 'token', token: token); return null; }
+    catch (_) { return '保存账号失败；请检查输入、系统凭据库和运行中任务'; }
   }
-
-  Future<void> clearToken() async {
-    await storage.clearToken();
-    account = const AccountSummary(hasToken: false);
-    _opusUsageTimer?.cancel();
-    generationQuote = null;
-    notifyListeners();
-  }
+  Future<void> clearToken() => activateNaiAccount(null);
 
   Future<void> refreshAnlas() async {
+    if (_naiChanging) throw StateError('账号正在切换，未提交请求');
+    _naiOperationCount++;
+    try {
     final token = await storage.getToken();
     if (token == null) return;
     try {
@@ -656,6 +709,7 @@ class AppState extends ChangeNotifier {
     }
     notifyListeners();
     _scheduleGenerationQuote();
+    } finally { _naiOperationCount--; notifyListeners(); }
   }
 
   void _scheduleOpusUsageRefresh() {
@@ -668,6 +722,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _refreshOpusUsageSilently() async {
+    if (_naiChanging) throw StateError('账号正在切换，未提交请求');
+    _naiOperationCount++;
+    try {
     if (_opusUsageRefreshRunning) return;
     final token = await storage.getToken();
     if (token == null || token.isEmpty) return;
@@ -690,6 +747,7 @@ class AppState extends ChangeNotifier {
     } finally {
       _opusUsageRefreshRunning = false;
     }
+    } finally { _naiOperationCount--; notifyListeners(); }
   }
 
   Future<String?> translateText(String text, {String target = 'en'}) async {
@@ -1786,6 +1844,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> refreshGenerationQuote() async {
+    if (_naiChanging) throw StateError('账号正在切换，未提交请求');
+    _naiOperationCount++;
+    try {
     final version = ++_quoteVersion;
     if (settings.imageProvider == 'openai-images' && workbenchImage == null) {
       generationQuote = null; quoteLoading = false; notifyListeners(); return;
@@ -1839,9 +1900,13 @@ class AppState extends ChangeNotifier {
     generationQuote = quote;
     quoteLoading = false;
     notifyListeners();
+    } finally { _naiOperationCount--; notifyListeners(); }
   }
 
   Future<void> generate() async {
+    if (_naiChanging) throw StateError('账号正在切换，未提交请求');
+    _naiOperationCount++;
+    try {
     if (busy) return;
     if (settings.imageProvider == 'openai-images') { await _generateCompatible(); return; }
     final token = await storage.getToken();
@@ -2129,9 +2194,13 @@ class AppState extends ChangeNotifier {
       _scheduleGenerationQuote();
       await BackgroundQueueService.stop('main-generation');
     }
+    } finally { _naiOperationCount--; notifyListeners(); }
   }
 
   Future<void> enqueueGeneration() async {
+    if (_naiChanging) throw StateError('账号正在切换，未提交请求');
+    _naiOperationCount++;
+    try {
     if (!generationQueueRunning || !busy || queueAdding) return;
     if (params.positivePrompt.trim().isEmpty) {
       status = _rt('status.enqueuePositiveRequired');
@@ -2218,6 +2287,7 @@ class AppState extends ChangeNotifier {
       queueAdding = false;
       notifyListeners();
     }
+    } finally { _naiOperationCount--; notifyListeners(); }
   }
 
   void removeQueueJob(String id) {
@@ -2298,6 +2368,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> generateI2I() async {
+    if (_naiChanging) throw StateError('账号正在切换，未提交请求');
+    _naiOperationCount++;
+    try {
     if (busy) return;
     await _withTokenRun((token) async {
       if (params.positivePrompt.trim().isEmpty) {
@@ -2506,9 +2579,13 @@ class AppState extends ChangeNotifier {
         await BackgroundQueueService.stop('i2i-generation');
       }
     });
+    } finally { _naiOperationCount--; notifyListeners(); }
   }
 
   Future<void> enhance() async {
+    if (_naiChanging) throw StateError('账号正在切换，未提交请求');
+    _naiOperationCount++;
+    try {
     if (busy || workbenchImage == null) return;
     final source = workbenchImage!;
     final requestedTarget = resolveNaiEnhanceOutputSize(
@@ -2578,9 +2655,13 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       _scheduleGenerationQuote();
     }
+    } finally { _naiOperationCount--; notifyListeners(); }
   }
 
   Future<void> inpaint(Uint8List maskBytes) async {
+    if (_naiChanging) throw StateError('账号正在切换，未提交请求');
+    _naiOperationCount++;
+    try {
     await _withTokenRun((token) async {
       final source = inpaintSourceMode == 'original'
           ? (i2iOriginalImage ?? workbenchImage)
@@ -2651,9 +2732,13 @@ class AppState extends ChangeNotifier {
         'spent': await _finishQuotedRun(token, before),
       });
     });
+    } finally { _naiOperationCount--; notifyListeners(); }
   }
 
   Future<void> upscale() async {
+    if (_naiChanging) throw StateError('账号正在切换，未提交请求');
+    _naiOperationCount++;
+    try {
     await _withTokenRun((token) async {
       final image = await _workbenchBytes();
       final dims = workbenchImage;
@@ -2684,9 +2769,13 @@ class AppState extends ChangeNotifier {
       status = _rf('status.upscaleDone',
           {'spent': await _finishQuotedRun(token, before)});
     });
+    } finally { _naiOperationCount--; notifyListeners(); }
   }
 
   Future<void> augment() async {
+    if (_naiChanging) throw StateError('账号正在切换，未提交请求');
+    _naiOperationCount++;
+    try {
     await _withTokenRun((token) async {
       final image = await _workbenchBytes();
       final dims = workbenchImage;
@@ -2746,6 +2835,7 @@ class AppState extends ChangeNotifier {
         'spent': await _finishQuotedRun(token, before),
       });
     });
+    } finally { _naiOperationCount--; notifyListeners(); }
   }
 
   // Concurrent — every call fires its API request immediately and updates
@@ -3331,6 +3421,9 @@ class AppState extends ChangeNotifier {
     required String projectTitle,
     String? historyGroupId,
   }) async {
+    if (_naiChanging) throw StateError('账号正在切换，未提交请求');
+    _naiOperationCount++;
+    try {
     if(settings.imageProvider=='openai-images') {
       return generateCompatibleComicPanel(panelParams:panelParams,panelExtras:panelExtras,
         projectTitle:projectTitle,historyGroupId:historyGroupId);
@@ -3391,12 +3484,16 @@ class AppState extends ChangeNotifier {
     }
     notifyListeners();
     return item;
+    } finally { _naiOperationCount--; notifyListeners(); }
   }
 
   Future<HistoryItem> generateArtistLabTemporary({
     required GenerateParams panelParams,
     required GenerateExtras panelExtras,
   }) async {
+    if (_naiChanging) throw StateError('账号正在切换，未提交请求');
+    _naiOperationCount++;
+    try {
     final token = await storage.getToken();
     if (token == null || token.isEmpty) {
       throw Exception(_rt('error.naiTokenRequired'));
@@ -3417,6 +3514,7 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     } catch (_) {}
     return item;
+    } finally { _naiOperationCount--; notifyListeners(); }
   }
 
   Future<HistoryItem> saveArtistLabFavorite(HistoryItem temporary) async {
@@ -3450,6 +3548,9 @@ class AppState extends ChangeNotifier {
     String? historyGroupId,
     bool Function()? cancelled,
   }) async {
+    if (_naiChanging) throw StateError('账号正在切换，未提交请求');
+    _naiOperationCount++;
+    try {
     void throwIfCancelled() {
       if (cancelled?.call() == true) {
         throw const GenerationCancelledException();
@@ -3540,6 +3641,7 @@ class AppState extends ChangeNotifier {
       throw SavedBatchImagesException(items, '$saveError；已落盘 ${items.length}/${images.length} 张，没有自动重新生成');
     }
     return items;
+    } finally { _naiOperationCount--; notifyListeners(); }
   }
 
   /// Kept for existing callers; the shared queue consumes every returned image.
