@@ -1,9 +1,22 @@
 // Real download/install/start/restart against an isolated profile. No model or paid image calls.
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
+// The production downloader now uses Electron's settings/system-proxy APIs.
+// Run that real transport in an isolated Electron main process, not plain Node.
+if(!process.versions.electron){
+ const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
+ const child=require('node:child_process').spawnSync(require('electron'),[__filename,...process.argv.slice(2)],{env,stdio:'inherit',windowsHide:true,timeout:300000});
+ if(child.error)console.error(child.error.message);
+ process.exit(child.status??1);
+}
+const {app}=require('electron');
+const profileBase=path.resolve(process.argv[2]??'artifacts/repair-2.4.1/live-agent');
+require('node:fs').mkdirSync(profileBase,{recursive:true});
+app.setPath('userData',require('node:fs').mkdtempSync(path.join(profileBase,'electron-profile-')));
 const {HarnessEngine}=require('../dist-electron/electron/ipc/harness-engine.js');
 const {downloadCompatibleHarness,queryCompatibleHarness}=require('../dist-electron/electron/ipc/harness-update.js');
 const {startHarnessBridge}=require('../dist-electron/electron/ipc/harness-bridge.js');
 (async()=>{
+ await app.whenReady();
  const base=path.resolve(process.argv[2]??'artifacts/repair-2.4.1/live-agent');await fs.mkdir(base,{recursive:true});
  const root=await fs.mkdtemp(path.join(base,'profile-'));let downloads=0,opened=0;
  const result={root,checks:[],paidCalls:0};
@@ -38,4 +51,4 @@ const {startHarnessBridge}=require('../dist-electron/electron/ipc/harness-bridge
   result.version=engine.snapshot().version;result.pass=true;
  }finally{clearTimeout(stop);await engine.stop();await fs.writeFile(path.join(base,'verification.json'),JSON.stringify(result,null,2));}
  console.log(JSON.stringify(result));
-})().catch(e=>{console.error(e.message);process.exitCode=1;});
+})().then(()=>app.exit(0)).catch(e=>{console.error(e.stack??e.message);app.exit(1);});
