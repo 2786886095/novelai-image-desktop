@@ -1,5 +1,4 @@
 import '../i18n/comic_provider_text.dart';
-import 'compatible_images.dart';
 import '../ui/studio_dropdown.dart';
 import '../ui/zoomable_image.dart';
 import 'dart:io';
@@ -1166,10 +1165,6 @@ class _GenerateStep extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (controller.compatible) ...[
-                      const _CompatibleComicNotice(),
-                      const SizedBox(height: 10)
-                    ],
                     if (controller.queueRunning) ...[
                       LinearProgressIndicator(
                         value: controller.queueTotal == 0
@@ -1404,9 +1399,6 @@ class _ParamsEditor extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = _text(context);
     final language = context.watch<AppState>().settings.language;
-    if (context.watch<AppState>().settings.imageProvider == 'openai-images') {
-      return const _CompatibleComicNotice();
-    }
     return _SectionCard(
       title: t('comic.paramsHeading'),
       child: LayoutBuilder(builder: (context, constraints) {
@@ -1850,38 +1842,6 @@ Future<void> _confirmAndRun(
         await action();
       }
     });
-
-class _CompatibleComicNotice extends StatelessWidget {
-  const _CompatibleComicNotice();
-  @override
-  Widget build(BuildContext context) {
-    final app = context.watch<AppState>(), c = app.settings.compatibleImage;
-    String text(String key) => comicProviderText(app.settings.language, key);
-    return _SectionCard(
-        title: text('title'),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${c['model']} · ${c['size']}'),
-          const SizedBox(height: 8),
-          Text(text('rules')),
-          const SizedBox(height: 8),
-          Text(text('billing')),
-          TextButton(
-              onPressed: app.busy
-                  ? null
-                  : () => showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (_) => ChangeNotifierProvider.value(
-                          value: app,
-                          child: const SafeArea(
-                              child: SingleChildScrollView(
-                                  padding: EdgeInsets.all(16),
-                                  child:
-                                      CompatibleImageSettingsCard())))),
-              child: Text(text('settings'))),
-        ]));
-  }
-}
 
 Future<void> _preview(BuildContext context, String path) async {
   final paths = context

@@ -1936,7 +1936,10 @@ class DataBackupService {
     }
 
     if (imageBackup != null) {
-      await storage.restoreCompatibleImageBackup(settings, imageBackup, imageBefore);
+      // Retain the legacy endpoint and private key for export/rollback, but
+      // never reactivate the retired independent generator from an old backup.
+      await storage.restoreCompatibleImageBackup(settings,
+          {...imageBackup, 'imageProvider': 'novelai'}, imageBefore);
     } else {
       await storage.setSettings(settings);
     }

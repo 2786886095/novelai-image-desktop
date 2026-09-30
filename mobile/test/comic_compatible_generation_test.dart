@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:novelai_mobile/screens/comic_screen.dart';
 import 'package:novelai_mobile/i18n/comic_provider_text.dart';
-import 'package:novelai_mobile/i18n/app_locales.dart';
 import 'package:novelai_mobile/services/openai_images.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -495,7 +494,7 @@ void main() {
     }
   });
   testWidgets(
-      'comic UI shows compatible controls and provider confirmation instead of a zero Anlas quote',
+      'comic UI no longer exposes the retired independent image provider',
       (tester) async {
     app.comic.step = ComicStep.generate;
     await tester.pumpWidget(ChangeNotifierProvider.value(
@@ -503,30 +502,10 @@ void main() {
         child: MaterialApp(home: ComicScreen(controller: app.comic))));
     await tester.pumpAndSettle();
     expect(find.text(comicProviderText(app.settings.language, 'title')),
-        findsOneWidget);
-    expect(find.text('fixture-image-model · 1024x1024'), findsOneWidget);
-    final generate = find
-        .text(mobileUiTextFor(app.settings.language, 'comic.generateInitial'));
-    await tester.ensureVisible(generate);
-    await tester.tap(generate);
-    // Secure storage and quote futures are exercised without sending a billed request.
-    await tester.runAsync(() async {
-      await Future<void>.delayed(const Duration(milliseconds: 30));
-    });
-    await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog), findsOneWidget,
-        reason: tester
-            .widgetList<Text>(find.descendant(
-                of: find.byType(SnackBar), matching: find.byType(Text)))
-            .map((t) => t.data)
-            .join(' | '));
-    expect(find.textContaining('0 Anlas'), findsWidgets);
-    expect(find.textContaining(': 0 Anlas'), findsNothing);
+        findsNothing);
+    expect(find.text('fixture-image-model · 1024x1024'), findsNothing);
     expect(posts, 0);
     expect(storage.nativeReads, 0);
-    await tester.tap(
-        find.text(mobileUiTextFor(app.settings.language, 'common.cancel')));
-    await tester.pumpAndSettle();
     await tester.pumpWidget(const SizedBox());
   });
 }

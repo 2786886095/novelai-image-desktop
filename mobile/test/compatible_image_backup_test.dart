@@ -58,7 +58,7 @@ void main(){
   final input=await archive({'imageProvider':'openai-images','compatibleImage':{...config,'model':'restored-cleared'},'imageApiKey':''});
   await service.importBackup(input.path,{DataBackupCategory.apiCredentials},confirmConfigurationOverwrite:true);
   final state=await storage.readCompatibleApiState();
-  expect(state['config']['model'],'restored-cleared');expect(state['config']['enabled'],true);expect(state['secret'],'');
+  expect(state['config']['model'],'restored-cleared');expect(state['config']['enabled'],false);expect(state['secret'],'');
  });
  test('portable API export omits device-specific credential pointers',() async {
   final input=await service.createBackup({DataBackupCategory.apiCredentials},includeAssets:false);
@@ -136,7 +136,7 @@ void main(){
    final expected=readImageSettingsBackup(await exported(source));
    await service.importBackup(source.path,{DataBackupCategory.apiCredentials},confirmConfigurationOverwrite:true);
    final output=await service.createBackup({DataBackupCategory.apiCredentials},includeAssets:false);
-   expect(exportImageSettings(await exported(output)),expected);
+   expect(exportImageSettings(await exported(output)),{...expected!,'imageProvider':'novelai'});
    await output.copy('$directory/mobile-$name.naisbackup');
   }
  });
