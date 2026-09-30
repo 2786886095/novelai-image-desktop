@@ -42,6 +42,20 @@ String localAgentText(Object? locale, String key) {
       "更新と実行の説明",
       "업데이트 및 실행 안내"
     ],
+    "pluginUpdateTitle": [
+      "插件更新（随 Android 适配组件）",
+      "外掛更新（隨 Android 適配元件）",
+      "Plugin updates (with Android component)",
+      "プラグイン更新（Android コンポーネントに同梱）",
+      "플러그인 업데이트 (Android 구성 요소와 함께)"
+    ],
+    "pluginUpdateDetails": [
+      "进入本页会检查适配组件与官方版本。有新适配组件时，确认升级后会先在资料副本上更新未改动的随包插件，并启动完整插件组合做兼容探测；通过后再备份、激活。自定义或改动过的插件不会被覆盖，也不会在后台单独运行 npm 更新；若不兼容，请查看日志并自行决定更新或禁用该插件。",
+      "進入本頁會檢查適配元件與官方版本。有新元件時，確認升級後會先在資料副本更新未修改的隨附外掛，並測試完整外掛組合；通過後才備份並啟用。自訂或修改過的外掛不會被覆蓋，也不會在背景單獨執行 npm 更新；若不相容，請查看日誌自行決定更新或停用。",
+      "Opening this page checks the compatible component and official version. After you confirm an available component upgrade, unchanged bundled plugins are updated in a data copy and the full plugin set is probed before backup and activation. Custom or edited plugins are not overwritten or silently updated with npm. If one is incompatible, inspect the log and choose whether to update or disable it.",
+      "この画面で互換コンポーネントと公式版を確認します。更新を承認すると、データのコピーで未編集の同梱プラグインを更新し、全プラグインを検証してからバックアップ・有効化します。カスタム／編集済みプラグインは上書きせず、バックグラウンドで npm 更新もしません。非互換時はログを確認し、更新または無効化を選んでください。",
+      "이 화면에서 호환 구성 요소와 공식 버전을 확인합니다. 업데이트를 승인하면 데이터 복사본에서 수정하지 않은 번들 플러그인을 갱신하고 전체 플러그인을 검사한 뒤 백업·활성화합니다. 사용자 플러그인은 덮어쓰거나 백그라운드에서 npm으로 갱신하지 않습니다. 호환되지 않으면 로그를 보고 업데이트 또는 비활성화를 결정하세요."
+    ],
     "current": ["当前", "目前", "Current", "現在", "현재"],
     "latest": ["最新", "最新", "Latest", "最新", "최신"],
     "checkFailed": [

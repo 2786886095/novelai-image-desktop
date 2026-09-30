@@ -476,6 +476,16 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
       const SizedBox(height: 8),
       for (final kind in ['component', 'official'])
         _channelCard(kind, supported),
+      ExpansionTile(
+        key: const ValueKey('agent-plugin-update-details'),
+        title: Text(t('pluginUpdateTitle')),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Text(t('pluginUpdateDetails')),
+          ),
+        ],
+      ),
       Wrap(spacing: 8, runSpacing: 8, children: [
         TextButton.icon(
             onPressed: !supported || busy ? null : () => _act('check'),
