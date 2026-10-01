@@ -4,7 +4,7 @@ import { relayDashboardOrigin, nextNaiAccountLabel, NAI_ACCOUNT_METHODS, naiAcco
 import { naiAccountText, type NaiAccountTextKey } from '../nai-accounts-locales';
 import { useAppStore } from '../store';
 import { SelectMenuCompat } from './ui';
-import { LuKeyRound, LuMail, LuGlobe, LuPlus, LuX, LuUserRound, LuEye, LuEyeOff, LuCopy, LuCircleCheck, LuCircleAlert, LuLoaderCircle, LuInfo } from 'react-icons/lu';
+import { LuKeyRound, LuMail, LuGlobe, LuPlus, LuX, LuUserRound, LuEye, LuEyeOff, LuCopy, LuCircleCheck, LuCircleAlert, LuLoaderCircle, LuInfo, LuChevronDown } from 'react-icons/lu';
 import {confirmAction} from './confirm';
 import { motionReduced } from '../motion-system';
 import './NaiAccountManager.css';
@@ -16,9 +16,12 @@ export function NaiAccountFeedback({message,httpStatus,nt}:{message:NaiAccountTe
  const pending=message==='validating';
  const kind=passed?'success':failed?'error':pending?'pending':'info';
  const title=passed?nt(message==='saved'?'validationSaved':'validationSuccess'):failed?nt('validationFailure'):nt(message);
+ const icon=passed?<LuCircleCheck aria-hidden/>:failed?<LuCircleAlert aria-hidden/>:pending?<LuLoaderCircle aria-hidden/>:<LuInfo aria-hidden/>;
  return <div className={`nai-account-feedback nai-account-feedback--${kind}`} role={failed?'alert':'status'} aria-live={failed?'assertive':'polite'} aria-atomic="true" aria-busy={pending||undefined}>
- {passed?<LuCircleCheck aria-hidden/>:failed?<LuCircleAlert aria-hidden/>:pending?<LuLoaderCircle aria-hidden/>:<LuInfo aria-hidden/>}
- <div className="nai-account-feedback-body"><strong>{title}</strong>{(passed||failed||httpStatus!==undefined)&&<details><summary tabIndex={0}>{nt('validationDetails')}</summary><p>{httpStatus!==undefined?`HTTP ${httpStatus}: `:''}{nt(message)}</p></details>}</div>
+ {(passed||failed||httpStatus!==undefined)?<details className="nai-account-feedback-details" key={message}>
+ <summary tabIndex={0}>{icon}<strong>{title}</strong><span className="nai-account-feedback-toggle">{nt('validationDetails')}<LuChevronDown aria-hidden/></span></summary>
+ <p>{httpStatus!==undefined?`HTTP ${httpStatus}: `:''}{nt(message)}</p>
+ </details>:<div className="nai-account-feedback-heading">{icon}<strong>{title}</strong></div>}
  </div>;
 }
 function bridge(): NaiAccountsBridge | undefined { return (window as unknown as { naiAccounts?: NaiAccountsBridge }).naiAccounts; }
