@@ -6,6 +6,10 @@ on:
     tags: ['v*']
   workflow_dispatch:
     inputs:
+      candidate_build_only:
+        description: Build private delivery candidates only; skip additional tests and forbid release publication
+        type: boolean
+        default: false
       publish_after_verification:
         description: Publish the release only after all gates pass
         type: boolean
@@ -75,6 +79,7 @@ jobs:
         run: npx electron --version
 
       - name: Validate desktop source
+        if: ${{ !inputs.candidate_build_only }}
         run: npm run typecheck && npm test
 
       - name: Install both macOS sharp architectures
@@ -88,14 +93,15 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
       - name: Install CJK fonts for Linux UI verification
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && !inputs.candidate_build_only
         run: sudo apt-get update -qq && sudo apt-get install -y fonts-noto-cjk
 
       - name: Verify packaged native runtime and startup
+        if: ${{ !inputs.candidate_build_only }}
         run: node scripts/verify-packaged-runtime.mjs
 
       - name: Decode final Windows installers with the actual NSIS decoder
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && !inputs.candidate_build_only
         shell: pwsh
         run: |
           Get-ChildItem release/*.exe | ForEach-Object {
@@ -104,18 +110,18 @@ jobs:
           }
 
       - name: Verify Windows clean installation and upgrade from 2.4.0
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && !inputs.candidate_build_only
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/verify-windows-upgrade.ps1
 
       - name: Verify real on-demand Agent download, startup and offline reuse
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && !inputs.candidate_build_only
         run: node scripts/verify-agent-on-demand.cjs release/agent-smoke
 
       - name: Upload packaged smoke evidence
-        if: always()
+        if: always() && !inputs.candidate_build_only
         uses: actions/upload-artifact@v4
         with:
           name: packaged-smoke-${{ matrix.name }}
@@ -137,7 +143,7 @@ jobs:
           if-no-files-found: error
 
       - name: Attach to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && !inputs.candidate_build_only
         uses: softprops/action-gh-release@v2
         with:
           body_path: docs/RELEASE_NOTES.md
@@ -146,6 +152,7 @@ jobs:
           files: ${{ matrix.artifacts }}
 
   mac-intel-smoke:
+    if: ${{ !inputs.candidate_build_only }}
     needs: build
     runs-on: macos-15-intel
     timeout-minutes: 15
@@ -174,7 +181,7 @@ jobs:
 
   publish-verified:
     needs: [build, mac-intel-smoke]
-    if: always() && github.event_name == 'workflow_dispatch' && inputs.publish_after_verification && (inputs.verified_build_run || (needs.build.result == 'success' && needs.mac-intel-smoke.result == 'success'))
+    if: always() && !inputs.candidate_build_only && github.event_name == 'workflow_dispatch' && inputs.publish_after_verification && (inputs.verified_build_run || (needs.build.result == 'success' && needs.mac-intel-smoke.result == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:

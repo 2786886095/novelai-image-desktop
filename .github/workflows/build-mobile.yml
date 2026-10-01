@@ -5,6 +5,11 @@ on:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      candidate_build_only:
+        description: Build private delivery candidates only; skip additional tests and forbid release publication
+        type: boolean
+        default: false
 
 # Needed for softprops/action-gh-release to create/attach to Releases on v* tags.
 permissions:
@@ -25,6 +30,7 @@ jobs:
       - name: Install adapter build dependencies (no desktop binaries)
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Check Android publication and file policy
+        if: ${{ !inputs.candidate_build_only }}
         run: |
           node --test harness/android/tests/*.test.mjs
           mkdir -p /tmp/studio-agent-tests
@@ -100,6 +106,7 @@ jobs:
         run: flutter pub get
 
       - name: Validate mobile source
+        if: ${{ !inputs.candidate_build_only }}
         run: flutter analyze --no-pub && flutter test --no-pub
 
       # Sign the release APK with a STABLE key (from repo secrets) so every
@@ -147,7 +154,7 @@ jobs:
           if-no-files-found: error
 
       - name: Attach to Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && !inputs.candidate_build_only
         uses: softprops/action-gh-release@v2
         with:
           draft: true
@@ -177,6 +184,7 @@ jobs:
         run: flutter pub get
 
       - name: Validate mobile source
+        if: ${{ !inputs.candidate_build_only }}
         run: flutter analyze --no-pub && flutter test --no-pub
 
       # No Apple Developer cert in CI: build without code signing. The resulting
@@ -202,7 +210,7 @@ jobs:
           if-no-files-found: error
 
       - name: Attach to Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && !inputs.candidate_build_only
         uses: softprops/action-gh-release@v2
         with:
           draft: true

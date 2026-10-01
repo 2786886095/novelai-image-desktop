@@ -1,6 +1,6 @@
-## Langbai NovelAI Studio 2.4.7（本地候选，尚未发布）
+## Langbai NovelAI Studio 2.4.6（本地候选，尚未发布）
 
-### v2.4.7 更新内容
+### v2.4.6 更新内容
 - 设置内直接管理与顶部同步的多账户；统一紫色菜单、三种接入方式和轻量动画，旧凭据继续保留。
 - 生图助手使用简洁标题、会话副标题、流程指示和紧凑方案卡；正常回复优先简短结论，不重复技术标识。
 - Android / iOS 同步账户入口与助手流程，修复小屏流程标签溢出。
@@ -11,7 +11,7 @@
 - 登录和账户刷新沿用当前 NovelAI 代理，官方登录地址固定；新多账号操作禁止转发、官方回退及收费请求自动重试。遇到额外验证时提示改用官方 Token。
 
 ### 构建与已知边界
-- Windows 本地便携目标：`Langbai-NovelAI-Studio-2.4.7.exe`。本轮未发布 GitHub Release，也未构建 NSIS/macOS/Linux 成品。
+- Windows 本地便携目标：`Langbai-NovelAI-Studio-2.4.6.exe`。本轮未发布 GitHub Release，也未构建 NSIS/macOS/Linux 成品。
 - Android：本地 `app-release.apk` 使用测试签名（没有发布签名配置），不保证覆盖已安装的不同签名正式版；请勿卸载旧版以绕过，先保留数据。
 - iOS：共用功能源码已修改并通过 Flutter 离线回归；Windows 主机无 iOS 构建目标，仍需 macOS/Xcode 实机和签名验收。
 - 没有使用真实账号/密码/Token或发起收费生成。指定 SunAPI 后台需要登录，API 前缀、NovelAI 协议与计费尚无可核对的公开证据。不能称为该站实号适配验证完成。
