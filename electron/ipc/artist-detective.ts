@@ -11,6 +11,7 @@ import {detectiveRuntimeChecking, detectiveRuntimeValidation, validateDetectiveR
 import {readDetectiveConfig,saveDetectiveConfig,detectiveProfile,updateDetectiveProfile,validDetectiveVariant,type DetectiveConfig,type DetectiveModelVariant} from './detective-models';
 import {detectiveDownloadVariant} from './detective-download';
 import { detectiveBudget, detectiveParameters, detectiveRounds, type DetectiveRunRequest, type DetectiveSnapshot } from "../../src/artist-detective-contract";
+import {resolveNovelAiGenerationBaseUrl} from './nai';
 
 import {assertPortableIdle, registerPortableBusy} from './portable-projects';
 type Config = DetectiveConfig;
@@ -91,6 +92,9 @@ export async function detectiveStart(value: DetectiveRunRequest) {
   const parameters = detectiveParameters(value.parameters);
   const budget = detectiveBudget(value.budget), token = getToken();
   if (!token) throw new Error("请先配置 NovelAI API。");
+  // Freeze the configured generation endpoint alongside this run's token.
+  // Passing it over stdin avoids credentials in argv, env, or persisted config.
+  const imageBaseUrl = resolveNovelAiGenerationBaseUrl();
   const directory = path.join(app.getPath("userData"), "artist-detective-runs", randomUUID());
   fs.mkdirSync(directory, { recursive: true });
   const root = app.getAppPath();
@@ -116,7 +120,8 @@ export async function detectiveStart(value: DetectiveRunRequest) {
   });
   // The renderer never receives the decrypted API token.
   active.stdin!.end(JSON.stringify({ output: directory, assets: c.assets, image: value.image,
-    prompt: value.prompt.trim(), style: value.style.trim(), budget, parameters, token }));
+    prompt: value.prompt.trim(), style: value.style.trim(), budget, parameters, token,
+    imageBaseUrl, language: getSetting('language') }));
   return detectiveStatus();
 }
 

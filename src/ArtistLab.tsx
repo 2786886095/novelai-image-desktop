@@ -325,9 +325,10 @@ type ArtistLabScreen = "home" | "target" | "random";
 export default function ArtistLab({ onBack }: { onBack: () => void }) {
   const language = useAppStore((state) => state.settings?.language ?? "zh-CN");
   const [screen, setScreen] = useState<ArtistLabScreen>("home");
-  // Navigation is deliberately not persisted; drafts and backend jobs remain independent.
+  // ToolsHub stays mounted across top-level tabs. Keep this subpage and its
+  // in-memory draft alive; only an explicit Back action returns to the index.
+  // A fresh application session still starts on the lightweight home screen.
   const open = setScreen;
-  useEffect(()=>useAppStore.subscribe((s,p)=>{if(s.activeTab!==p.activeTab && s.activeTab==="tools")setScreen("home");}),[]);
   if (screen === "target") return <DetectiveArtistLab onBack={() => open("home")} />;
   if (screen === "random") return <RandomArtistLab onBack={() => open("home")} />;
   const text = HOME[language];

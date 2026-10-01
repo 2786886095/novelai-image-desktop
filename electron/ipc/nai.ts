@@ -193,6 +193,12 @@ export function resolveUpscaleBaseUrl(rawImageBaseUrl: string): string {
   return tokenSafeBaseUrl(rawImageBaseUrl, "https://image.novelai.net");
 }
 
+/** Bind external generation workers to the same account/endpoint policy as
+ * the workbench. This resolves locally; it never probes or submits a request. */
+export function resolveNovelAiGenerationBaseUrl(): string {
+  return tokenSafeBaseUrl(getSettings().imageBaseUrl, "https://image.novelai.net");
+}
+
 const UPSCALE_MODEL = "nai-diffusion-5-curated";
 const UPSCALE_DECLARED_BLUR_SIGMA = 0;
 

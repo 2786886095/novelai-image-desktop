@@ -14,6 +14,7 @@ import time
 import zipfile
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 from PIL import Image
@@ -60,8 +61,43 @@ def configure_parameters(value=None):
     return p
 
 
+def generation_request_url(base):
+    """Validate the frozen, host-approved endpoint without making any request."""
+    if not isinstance(base, str):
+        raise ValueError("Invalid generation endpoint")
+    parts = urlsplit(base.strip())
+    local = parts.hostname in {"localhost", "127.0.0.1", "::1"}
+    if (not parts.hostname or parts.username is not None or parts.password is not None
+            or parts.query or parts.fragment or not (parts.scheme == "https" or (parts.scheme == "http" and local))):
+        raise ValueError("Generation endpoint must use HTTPS (or local HTTP), without URL credentials, query or fragment")
+    # Accessing port also rejects malformed authority fields before any paid call.
+    _ = parts.port
+    prefix = parts.path.rstrip("/")
+    for suffix in ("/ai/generate-image-stream", "/ai/generate-image"):
+        if prefix.endswith(suffix):
+            prefix = prefix[:-len(suffix)]
+            break
+    return urlunsplit((parts.scheme, parts.netloc, prefix + "/ai/generate-image", "", ""))
+
+
+def transport_failure_message(status, request_url, language="en-US"):
+    parts = urlsplit(request_url)
+    origin = parts.scheme + "://" + parts.netloc
+    if status in (401, 403):
+        texts = {
+            "zh-CN": "生图接口 {origin} 拒绝鉴权（HTTP {status}）。请检查当前账户的 Token 是否有效、是否属于该接口。未自动切换官方、未重发付费请求；已生成图片保留。",
+            "zh-TW": "生圖介面 {origin} 拒絕驗證（HTTP {status}）。請檢查目前帳戶的 Token 是否有效、是否屬於該介面。未自動切換官方、未重送付費請求；已生成圖片保留。",
+            "en-US": "Generation endpoint {origin} rejected authorization (HTTP {status}). Check that the current account token is valid for this endpoint. No automatic switch to the official service or paid-request retry; completed images retained.",
+            "ja-JP": "生成先 {origin} が認証を拒否しました（HTTP {status}）。現在のアカウントの Token がこの接続先で有効か確認してください。公式サービスへの自動切替・有料リクエストの再送は行わず、生成済み画像は保持します。",
+            "ko-KR": "생성 서버 {origin}에서 인증이 거부되었습니다(HTTP {status}). 현재 계정 Token이 이 서버에서 유효한지 확인하세요. 공식 서버 자동 전환이나 유료 요청 재전송은 하지 않으며, 생성된 이미지는 유지됩니다.",
+        }
+        return texts.get(language, texts["en-US"]).format(origin=origin, status=status)
+    return f"Generation endpoint {origin}: HTTP {status}; paid request not retried; completed images retained"
+
+
 class LiveGenerator(NovelAIGenerator):
-    def __init__(self, root, catalog, budget, token, check, progress):
+    def __init__(self, root, catalog, budget, token, check, progress,
+                 image_base_url="https://image.novelai.net", language="en-US"):
         # The upstream spool scans every requests/*.json as a render request.
         # Keep transport diagnostics outside that directory, including old runs.
         root = Path(root)
@@ -73,8 +109,10 @@ class LiveGenerator(NovelAIGenerator):
             old_error.unlink()
         super().__init__(root, None, catalog, max_renders=budget)
         self.token, self.check, self.progress = token, check, progress
+        self.request_url = generation_request_url(image_base_url)
+        self.language = language
         self.client = httpx.Client(trust_env=False, timeout=httpx.Timeout(180, connect=30),
-                                   limits=httpx.Limits(max_keepalive_connections=0))
+                                   limits=httpx.Limits(max_keepalive_connections=0), follow_redirects=False)
         self.next_request_at = 0.0
 
     def wait(self, seconds):
@@ -104,7 +142,7 @@ class LiveGenerator(NovelAIGenerator):
                 self.wait(max(0, self.next_request_at - time.monotonic()))
                 try:
                     response = self.client.post(
-                        "https://image.novelai.net/ai/generate-image",
+                        self.request_url,
                         headers={"Authorization": "Bearer " + self.token}, json=payload,
                     )
                     self.next_request_at = time.monotonic() + 3.0
@@ -163,7 +201,7 @@ class LiveGenerator(NovelAIGenerator):
             error_marker.unlink(missing_ok=True)
             if response.status_code != 200:
                 atomic_json(error_marker, {"status": response.status_code})
-                raise RuntimeError(f"NovelAI HTTP {response.status_code}; paid request not retried")
+                raise RuntimeError(transport_failure_message(response.status_code, self.request_url, self.language))
             if len(response.content) > 64 * 1024 * 1024:
                 raise RuntimeError("Generation response exceeded image size bound")
             with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
@@ -191,6 +229,8 @@ class LiveGenerator(NovelAIGenerator):
 
 
 def main(command):
+    # Validate routing before loading large local models. Do not send anything.
+    generation_request_url(command.get("imageBaseUrl", "https://image.novelai.net"))
     out = Path(command["output"]).resolve()
     out.mkdir(parents=True, exist_ok=True)
     # Scale the run watchdog with the user's budget; per-request timeout stays 180s.
@@ -239,7 +279,9 @@ def main(command):
             encoder=resources.scorer.encoder, proposal_index=resources.proposals, features=features)
         atomic_json(proposal_path, proposed)
     score, reference = resources.scorer.bind(image)
-    generator = LiveGenerator(out / "spool", asset / "retrieval/catalog.json", budget, command.pop("token"), check, progress)
+    generator = LiveGenerator(out / "spool", asset / "retrieval/catalog.json", budget, command.pop("token"), check, progress,
+                              image_base_url=command.get("imageBaseUrl", "https://image.novelai.net"),
+                              language=command.get("language", "en-US"))
     generator.prompt_budget = NovelAIPromptBudget(asset / "tokenizers/t5")
     initial = proposed["targets"][0]["initializers"]
     rank = resources.surrogate.for_target(hypothesis["content_tags"], hypothesis["style_tags"], reference)

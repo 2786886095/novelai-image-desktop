@@ -2,7 +2,7 @@ import {NAI_MAX_PIXEL_AREA} from './nai-dimensions';
 
 // Product tiers use the 1024² normal canvas as 1 MP; show actual decimal MP too.
 export const RESOLUTION_TIERS = [0.4, 1, 1.5, 2, 3] as const;
-export const RESOLUTION_RATIOS = ['1:1','2:3','3:2','3:4','4:3','9:16','16:9'] as const;
+export const RESOLUTION_RATIOS = ['1:1','2:3','3:2','3:4','4:3','9:16','16:9','1:2','2:1','1:3','3:1','21:9','9:21'] as const;
 export function resolutionForTier(tier:number,ratio:string) {
   if(!RESOLUTION_TIERS.includes(tier as typeof RESOLUTION_TIERS[number])) throw Error('Unknown resolution tier');
   const parts=ratio.split(':').map(Number), aspect=parts[0]/parts[1];

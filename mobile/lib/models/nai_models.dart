@@ -110,6 +110,14 @@ const sizePresets = <SizePreset>[
   SizePreset('Small portrait 512×768', 512, 768),
   SizePreset('Small landscape 768×512', 768, 512),
   SizePreset('Small square 640×640', 640, 640),
+  // Match desktop's normal pixel tier, on NovelAI's 64px dimension lattice.
+  // Approximate aspect ratios always display the actual generated dimensions.
+  SizePreset('1:2 704×1408', 704, 1408),
+  SizePreset('2:1 1408×704', 1408, 704),
+  SizePreset('1:3 576×1728', 576, 1728),
+  SizePreset('3:1 1728×576', 1728, 576),
+  SizePreset('21:9 1472×640', 1472, 640),
+  SizePreset('9:21 640×1472', 640, 1472),
 ];
 
 class GenerateParams {
