@@ -1,4 +1,6 @@
 import {prepareFocusedInpaintInput,compositeFocusedPatch} from './focused-inpaint';
+import {parseNaiAccountSummary} from './nai-account-summary';
+import {validateNaiAccountReadOnly,requireNaiAccountValidation} from './nai-accounts-validation';
 import { currentNaiAccount } from './nai-accounts-runtime';
 import {preparePromptAssistance,type PromptEditRequest} from "../../src/prompt-assistant.js";
 import {authorizeAgentBatchRequest} from './batch-run-authorization';
@@ -256,89 +258,15 @@ export function resolveUpscaleOutputSize(
   };
 }
 
-function tierName(tier?: number) {
-  return tier === 3
-    ? "Opus"
-    : tier === 2
-      ? "Scroll"
-      : tier === 1
-        ? "Tablet"
-        : tier === 0
-          ? "Paper"
-          : "未知";
-}
-
-function readNumber(value: unknown): number | undefined {
-  if (typeof value === "number" && Number.isFinite(value))
-    return Math.round(value);
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return Math.round(parsed);
-  }
-  return undefined;
-}
-
-function readFinite(value: unknown): number | undefined {
-  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
 export function parseAccount(data: any): Omit<AccountSummary, "hasToken"> {
-  // The website payload has changed wrappers before. Read the same
-  // subscription object whether /user/data returns it at the top level or
-  // inside `information`/`data`, without inventing allowance values.
-  const sub =
-    data?.subscription ??
-    data?.information?.subscription ??
-    data?.data?.subscription ??
-    data?.data?.information?.subscription ??
-    {};
-  const tierLevel = readNumber(sub?.tier);
-  const active = typeof sub?.active === "boolean" ? sub.active : true;
-  let anlasBalance: number | undefined;
-
-  if (typeof sub?.trainingStepsLeft === "object" && sub.trainingStepsLeft) {
-    anlasBalance =
-      (readNumber(sub.trainingStepsLeft.fixedTrainingStepsLeft) ?? 0) +
-      (readNumber(sub.trainingStepsLeft.purchasedTrainingSteps) ?? 0);
-  } else {
-    anlasBalance = readNumber(sub?.trainingStepsLeft);
-  }
-
-  let expiresAt: string | undefined;
-  const rawExpires = readNumber(sub?.expiresAt);
-  if (rawExpires) {
-    const seconds =
-      rawExpires > 10_000_000_000 ? Math.floor(rawExpires / 1000) : rawExpires;
-    expiresAt = new Date(seconds * 1000).toISOString().slice(0, 10);
-  }
-
-  const rawUsage = sub?.usage;
-  const usagePercent = readFinite(rawUsage?.percent);
-  const usageSeconds = readFinite(rawUsage?.timeUntilNextPercent);
-  const opusUsage = rawUsage && usagePercent !== undefined && usageSeconds !== undefined
-    ? {
-        percent: usagePercent,
-        isNegative: rawUsage.isNegative === true,
-        timeUntilNextPercent: Math.max(0, usageSeconds),
-      }
-    : undefined;
-
-  return {
-    tierName: tierName(tierLevel),
-    tierLevel,
-    anlasBalance,
-    expiresAt,
-    hasActiveSubscription: Boolean(active && tierLevel && tierLevel > 0),
-    opusUsage,
-    opusUsageUpdatedAt: opusUsage ? Date.now() : undefined,
-  };
+  return parseNaiAccountSummary(data);
 }
 
 async function fetchAccount(
   token: string,
 ): Promise<Omit<AccountSummary, "hasToken">> {
-  if(currentNaiAccount()?.method==='relay') throw Error('中转订阅接口未经验证，已跳过。');
+  const selected=currentNaiAccount();
+  if(selected){const result=await validateNaiAccountReadOnly(selected,true);requireNaiAccountValidation(result);return result.account??{};}
   const settings = getSettings();
   // NovelAI now rejects /user/data on api.novelai.net for at least some accounts
   // with a 400 telling third-party tools to "update to the image URL" — confirmed
@@ -392,10 +320,11 @@ export async function refreshStoredAccount(): Promise<AccountSummary> {
   try {
     const account = await fetchAccount(token);
     setAccountSummary(account);
-    return { hasToken: true, ...account };
+    return currentNaiAccount()?getAccountSummary():{ hasToken: true, ...account };
   } catch {
     // Live refresh failed — return the last known summary but flag it as stale so
     // the UI can show "缓存余额" instead of presenting an outdated number as current.
+    if(currentNaiAccount())setAccountSummary({});
     return { ...getAccountSummary(), stale: true };
   }
 }

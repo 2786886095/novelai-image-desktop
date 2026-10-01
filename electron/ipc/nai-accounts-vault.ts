@@ -1,15 +1,23 @@
 import { validateAccountProfile, normalizeNaiAccountInput, type NaiAccountInput, type NaiAccountProfile } from '../../src/nai-accounts';
+import {stableNaiAccountSummary,type NaiAccountSummary} from './nai-account-summary';
 interface Cipher { isEncryptionAvailable(): boolean; getSelectedStorageBackend?(): string; encryptString(value: string): Buffer; decryptString(value: Buffer): string }
 export function accountCipherAvailable(cipher: Cipher): boolean {
   try { return cipher.isEncryptionAvailable() && cipher.getSelectedStorageBackend?.() !== 'basic_text'; }
   catch { return false; }
 }
-export interface AccountVaultDocument { version: 1; selectedId?: string; legacyMigrated?:boolean; managed?:boolean; accounts: Array<NaiAccountProfile & { encryptedToken: string }> }
+export interface AccountVaultDocument { version: 1; selectedId?: string; legacyMigrated?:boolean; managed?:boolean; accounts: Array<NaiAccountProfile & { encryptedToken: string; accountSummary?: NaiAccountSummary }> }
 /** Secrets never enter list results. Failed decryption does not rewrite ciphertext. */
 export class NaiAccountsVault {
   private leases = 0;
   constructor(private document: AccountVaultDocument, private cipher: Cipher, private persist: (document: AccountVaultDocument) => void) {}
   list(): NaiAccountProfile[] { return this.document.accounts.map(a => ({id:a.id,label:a.label,method:a.method,apiBaseUrl:a.apiBaseUrl,imageBaseUrl:a.imageBaseUrl,...(a.legacyConfiguration?{legacyConfiguration:{...a.legacyConfiguration}}:{})})); }
+  accountSummary(id:string){const value=this.document.accounts.find(a=>a.id===id)?.accountSummary;return value?stableNaiAccountSummary(value):undefined;}
+  rememberAccountSummary(id:string,summary:NaiAccountSummary){
+    const account=this.document.accounts.find(a=>a.id===id);if(!account)return;
+    const stable=stableNaiAccountSummary(summary);if(JSON.stringify(account.accountSummary)===JSON.stringify(stable))return;
+    const next={...this.document,accounts:this.document.accounts.map(a=>a.id===id?{...a,accountSummary:stable}:a)};
+    this.persist(next);this.document=next;
+  }
   legacyMigrated(){return this.document.legacyMigrated===true;}
   managed(){return this.document.managed===true||this.document.legacyMigrated===true||this.document.accounts.length>0;}
   /** Identity is the main API endpoint + key, not a display label, login method or ciphertext. */
@@ -77,7 +85,7 @@ export class NaiAccountsVault {
     if(!account.legacyConfiguration)validateAccountProfile({ ...account, token });
     else {if(!token.trim()||/[\r\n]/.test(token))throw Error('Invalid legacy token');for(const raw of [account.apiBaseUrl,account.imageBaseUrl]){const url=new URL(raw);if((url.protocol!=='https:'&&!(url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname)))||url.username||url.password||url.search||url.hash)throw Error('Invalid legacy endpoint');}}
     this.leases++; let ended = false;
-    const { encryptedToken: _secret, ...profile } = account;
+    const { encryptedToken: _secret, accountSummary: _summary, ...profile } = account;
     return { snapshot: Object.freeze({ ...profile, token }), release: () => { if (!ended) { ended = true; this.leases--; } } };
   }
 }

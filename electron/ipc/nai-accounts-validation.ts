@@ -1,4 +1,5 @@
 import axios from 'axios';
+import {parseNaiAccountSummary} from './nai-account-summary';
 import {normalizeNaiAccountInput,validateAccountProfile,type NaiAccountInput,type NaiAccountValidationResult} from '../../src/nai-accounts';
 import {proxyConfigForUrl} from './proxy';
 import {getSettings} from './store';
@@ -40,7 +41,9 @@ export async function validateNaiAccountReadOnly(input:NaiAccountInput,preserveL
    if([301,302,303,307,308,404,405,501].includes(status))return {ok:false,code:'unsupported',status};
    if(status!==200)return {ok:false,code:'http',status};
    if(!compatibleSubscription(response.data,true))return {ok:false,code:'invalid-response',status};
-   return {ok:true,code:'passed',status};
+   const summary=parseNaiAccountSummary(response.data);
+   // Relay balances are returned in the compatible account format, not proof of official free allowances.
+   return {ok:true,code:'passed',status,account:relay?{...summary,hasActiveSubscription:false,opusUsage:undefined,opusUsageUpdatedAt:undefined}:summary};
   }
   return {ok:false,code:'unsupported',status:0};
  }catch{return {ok:false,code:'network',status:0};}

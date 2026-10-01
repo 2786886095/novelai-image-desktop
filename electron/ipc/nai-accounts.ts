@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import { NaiAccountsVault, accountCipherAvailable, type AccountVaultDocument } from './nai-accounts-vault';
 import type { NaiAccountInput } from '../../src/nai-accounts';
 import { officialNovelAiLogin, type OfficialLoginInput } from './nai-accounts-login';
-import { activateNaiAccount, restoreNaiAccount, naiAccountsBusy } from './nai-accounts-runtime';
+import { activateNaiAccount, restoreNaiAccount, naiAccountsBusy, configureNaiAccountSummaries, rememberNaiAccountSummary, forgetNaiAccountSummary } from './nai-accounts-runtime';
 import { readStore } from './store';
 import {migrateLegacyNaiAccount} from './nai-accounts-migration';
 import {validateNaiAccountReadOnly,requireNaiAccountValidation} from './nai-accounts-validation';
@@ -25,6 +25,7 @@ function getVault() {
     finally { if (fs.existsSync(temporary)) fs.unlinkSync(temporary); }
   });
   try{migrateLegacyNaiAccount(candidate,readStore());}catch{migrationIssue='旧账户自动迁移未完成；原凭据和接口配置未删除。请从账户管理重新保存。';}
+  configureNaiAccountSummaries({read:id=>candidate.accountSummary(id),write:(id,value)=>candidate.rememberAccountSummary(id,value)});
   const selectedId=candidate.selectedId();
   if(selectedId) { const lease=candidate.bind(selectedId); try{restoreNaiAccount(lease.snapshot,candidate.managed());}finally{lease.release();} }
   else restoreNaiAccount(undefined,candidate.managed());
@@ -55,6 +56,7 @@ export function registerNaiAccountsIpc() {
     if(!validation.ok)return {ok:false,code:'validation',message:'账户验证未通过，未保存。',validation};
     if(naiAccountsBusy())throw Error('账户操作正在执行');
     const account=getVault().add(crypto.randomUUID(),candidate);
+    if(validation.account)rememberNaiAccountSummary({...account,token:candidate.token},validation.account);
     return {ok:true,account};
   });
   ipcMain.handle('naiAccounts:migrate',()=>{const v=getVault();const result=migrateLegacyNaiAccount(v,readStore());const id=v.selectedId();if(id){const lease=v.bind(id);try{activateNaiAccount(lease.snapshot,()=>{});}finally{lease.release();}}return {migrated:result.migrated,message:'旧配置已自动迁移至账户列表；原存储保留。'};});
@@ -63,13 +65,16 @@ export function registerNaiAccountsIpc() {
     if(!accountCipherAvailable(safeStorage))throw Error('OS credential encryption unavailable');
     const candidate={...input};
     getVault().assertUnique(candidate);
-    requireNaiAccountValidation(await validateNaiAccountReadOnly(candidate));
+    const validation=await validateNaiAccountReadOnly(candidate);requireNaiAccountValidation(validation);
     if(naiAccountsBusy())throw Error('账户操作正在执行');
-    return getVault().add(crypto.randomUUID(),candidate);
+    const account=getVault().add(crypto.randomUUID(),candidate);
+    if(validation.account)rememberNaiAccountSummary({...account,token:candidate.token},validation.account);
+    return account;
   });
   ipcMain.handle('naiAccounts:remove', (_event, id: string) => {
     if(naiAccountsBusy())throw Error('账户操作正在执行');
     const v=getVault();
+    forgetNaiAccountSummary(id);
     if(v.selectedId()!==id){if(v.selectedId())v.remove(id);else activateNaiAccount(undefined,()=>v.remove(id));return;}
     const next=v.list().find(account=>account.id!==id);
     const lease=next?v.bind(next.id):undefined;
@@ -80,7 +85,7 @@ export function registerNaiAccountsIpc() {
   ipcMain.handle('naiAccounts:reveal',(_event,id:string)=>{const lease=getVault().bind(id);try{return lease.snapshot.token;}finally{lease.release();}});
   ipcMain.handle('naiAccounts:probe', async (_event, id: string) => {
     const lease=getVault().bind(id);
-    try{const result=await validateNaiAccountReadOnly(lease.snapshot,true);return {...result,subscription:result.ok?'available':'skipped',protocol:'unverified',message:'Read-only API authentication only. Image generation protocol and billing are not tested.'};}
+    try{const result=await validateNaiAccountReadOnly(lease.snapshot,true);rememberNaiAccountSummary(lease.snapshot,result.account??{});return {...result,subscription:result.ok?'available':'skipped',protocol:'unverified',message:'Read-only API authentication only. Image generation protocol and billing are not tested.'};}
     finally{lease.release();}
   });
 }

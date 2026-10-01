@@ -1,3 +1,4 @@
+import {naiAccountSummaryMatches} from './nai-accounts';
 import {focusedInpaintPlan,type InpaintRegion} from './focused-inpaint';
 import {retainedPrompts} from "./retained-prompts";
 import { mergeImageSettings, mergeFullSettings } from "./compatible-image-settings-sync";
@@ -1319,6 +1320,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   async refreshAccount() {
     const account = await window.naiDesktop.hasToken();
     const settings = get().settings;
+    if(!naiAccountSummaryMatches(account,settings?.naiAccountId))return get().account;
     set({ account, statusText: account.hasToken ? storeText(settings, "status.apiConfigured") : storeText(settings, "status.needApiToken") });
     return account;
   },
@@ -2369,7 +2371,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // The balance label and exact-spend text settle in the background, guarded
     // by a revision so this old run cannot overwrite a newer one.
     void window.naiDesktop.hasToken().then((finalAccount) => {
-      if (generationSettlementRevision !== settlementRevision || get().isGenerating) return;
+      if (generationSettlementRevision !== settlementRevision || get().isGenerating || !naiAccountSummaryMatches(finalAccount,get().settings?.naiAccountId)) return;
       const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
       const spentText = spent != null
         ? storeFormat(get().settings, "generate.spent", { spent })
@@ -2565,7 +2567,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       toast: finalMsg,
     });
     void window.naiDesktop.hasToken().then((finalAccount) => {
-      if (generationSettlementRevision !== settlementRevision || get().isGenerating) return;
+      if (generationSettlementRevision !== settlementRevision || get().isGenerating || !naiAccountSummaryMatches(finalAccount,get().settings?.naiAccountId)) return;
       const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
       const spentText = spent != null
         ? storeFormat(get().settings, "generate.spent", { spent })

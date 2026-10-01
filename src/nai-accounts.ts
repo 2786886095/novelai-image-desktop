@@ -1,3 +1,5 @@
+import type { AccountSummary } from './types';
+export function naiAccountSummaryMatches(summary:AccountSummary,id?:string){return summary.accountId===id;}
 export type NaiAccountMethod = 'token' | 'official-login' | 'relay';
 export const NAI_ACCOUNT_METHODS: readonly NaiAccountMethod[]=['token','official-login','relay'];
 export function naiAccountTabKey(method:NaiAccountMethod,key:string):NaiAccountMethod {
@@ -29,7 +31,8 @@ export function validateAccountProfile(input: NaiAccountInput): void {
     if (input.method === 'relay' && (url.hostname === 'novelai.net' || url.hostname.endsWith('.novelai.net'))) throw new Error('Relay credentials cannot use official endpoints');
   }
 }
-export interface NaiAccountValidationResult {ok:boolean;code:'passed'|'auth'|'unsupported'|'network'|'invalid-input'|'invalid-response'|'http';status:number}
+export interface NaiAccountValidationResult {
+  account?: Omit<AccountSummary,'hasToken'|'accountId'>;ok:boolean;code:'passed'|'auth'|'unsupported'|'network'|'invalid-input'|'invalid-response'|'http';status:number}
 export interface NaiAccountsBridge {
   list(): Promise<NaiAccountProfile[]>;
   add(input: NaiAccountInput): Promise<NaiAccountProfile>;

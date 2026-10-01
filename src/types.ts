@@ -892,6 +892,8 @@ export interface OpusGenerationUsage {
 }
 
 export interface AccountSummary {
+  /** Managed account identity, never a credential. Reject late results for another account. */
+  accountId?: string;
   hasToken: boolean;
   tierName?: string;
   tierLevel?: number;
