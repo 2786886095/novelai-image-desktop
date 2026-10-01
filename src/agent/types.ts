@@ -198,11 +198,21 @@ export interface AgentToolExecution {
   generatedImages?: AgentAttachment[];
 }
 
+export interface AgentComposerAction {
+  kind: 'web-search' | 'template-read' | 'template-save' | 'template-apply' | 'prompt-preset';
+  templateKind?: 'convert' | 'reverse' | 'optimize' | 'assistant';
+  mode?: 'mixed' | 'tags' | 'natural';
+  templateVersion?: 'v5' | 'v4.5';
+  templateId?: string;
+}
+
 export interface AgentMessage {
   id: string;
   runtimeMessageId?: string;
   role: "user" | "assistant" | "system";
   content: string;
+  /** Named UI selections; bodies/parameters stay out of visible messages. */
+  actions?: AgentComposerAction[];
   reasoning?: string;
   attachments: AgentAttachment[];
   tools: AgentToolExecution[];
@@ -357,6 +367,7 @@ export type AgentEvent =
 export interface AgentSendRequest {
   conversationId: string;
   text: string;
+  actions?: AgentComposerAction[];
   attachmentIds?: string[];
   characterId?: string;
   regenerateMessageId?: string;

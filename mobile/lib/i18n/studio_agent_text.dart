@@ -1,6 +1,36 @@
 import 'app_locales.dart';
 
 const _rows = <String, List<String>>{
+  "menuReadTemplate": ["查看模板", "查看模板", "View templates", "テンプレートを見る", "템플릿 보기"],
+  "menuApplyTemplate": [
+    "应用模板",
+    "套用模板",
+    "Apply template",
+    "テンプレートを適用",
+    "템플릿 적용"
+  ],
+  "menuSaveTemplate": ["保存模板", "儲存模板", "Save template", "テンプレートを保存", "템플릿 저장"],
+  "presetTemplate": ["预设模板", "預設模板", "Saved preset", "保存したプリセット", "저장된 프리셋"],
+  "chooseTemplate": ["选择模板", "選擇模板", "Choose template", "テンプレートを選択", "템플릿 선택"],
+  "stageAction": [
+    "加入本次操作",
+    "加入本次操作",
+    "Add to this message",
+    "今回の操作に追加",
+    "이번 작업에 추가"
+  ],
+  "selectedActions": ["本次操作", "本次操作", "Selected actions", "今回の操作", "선택한 작업"],
+  "removeAction": ["移除操作", "移除操作", "Remove action", "操作を外す", "작업 제거"],
+  "actionPanelHint": [
+    "仅添加操作标签，不改写输入内容；发送后才执行。生图和保存仍需确认。",
+    "只加入操作標籤，不改寫輸入；傳送後才執行。生圖與儲存仍須確認。",
+    "Adds an action chip without replacing your draft. Runs only when sent. Images and writes still require confirmation.",
+    "入力は書き換えず操作タグを追加します。送信後に実行。画像生成・保存は別途確認します。",
+    "입력을 바꾸지 않고 작업 태그만 추가합니다. 전송 후 실행하며 생성과 저장은 확인이 필요합니다."
+  ],
+  "mode_mixed": ["标签＋描述", "標籤＋描述", "Tags + description", "タグ＋説明", "태그 + 설명"],
+  "mode_tags": ["标签", "標籤", "Tags", "タグ", "태그"],
+  "mode_natural": ["自然语言", "自然語言", "Natural language", "自然言語", "자연어"],
   'activeChats': ['对话', '對話', 'Chats', '会話', '대화'],
   'archivedChats': ['已归档', '已歸檔', 'Archived', 'アーカイブ', '보관함'],
   'archiveChat': ['归档', '歸檔', 'Archive', 'アーカイブ', '보관'],

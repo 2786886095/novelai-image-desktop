@@ -105,6 +105,10 @@ flutter:
     - assets/icon/app_icon.png
     - assets/about/
     - assets/token_guide/
+    - assets/provider-logos/light/
+    - assets/provider-logos/dark/
+    - assets/provider-logos/LICENSE.lobe-icons.txt
+    - assets/provider-logos/PROVENANCE.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:

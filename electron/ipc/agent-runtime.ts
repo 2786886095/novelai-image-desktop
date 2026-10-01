@@ -1,3 +1,4 @@
+import { studioComposerTurn } from '../../src/agent/composer-actions';
 import { compatibleProposalPrompt, compatibleProposalContext } from '../../src/tavern/compatible-proposal';
 import { bindAgentImageProvider, assertAgentImageProvider, type ImageProviderBinding } from './agent-image-provider';
 import { providerIssueMessage, responseIssue, type ProviderIssue } from "../../src/agent/provider-outcome";
@@ -801,8 +802,10 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
   const conversation = readAgentWorkspace().conversations.find((item) => item.id === request.conversationId);
   if (!conversation) return { ok: false, message: '对话不存在。' };
   if (conversation.archivedAt) return { ok: false, message: '此对话已归档，请先恢复后再继续。' };
+  const turnInput = studioComposerTurn(request.text, request.actions, getSettings());
+  const userMessageId = crypto.randomUUID();
   const selected = new Set(request.attachmentIds ?? conversation.draftAttachments.map((item) => item.id));
-  if (!request.text.trim() && !conversation.draftAttachments.some((item) => selected.has(item.id))) {
+  if (!request.text.trim() && !turnInput.actions.length && !conversation.draftAttachments.some((item) => selected.has(item.id))) {
     return { ok: false, message: '请输入消息或添加图片。' };
   }
   const messageId = crypto.randomUUID();
@@ -813,7 +816,7 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
     const settings = getSettings();
     const snapshot = createContextSnapshot(effectiveContextMessages(conversation.messages, conversation.lastSummary, conversation.lastCompactedAt),
       settings.agentContextWindow, settings.agentAutoCompactThreshold, conversation.lastTurnUsage);
-    snapshot.used += estimateTextTokens(request.text) + conversation.draftAttachments.filter(item => selected.has(item.id)).length * 1_200;
+    snapshot.used += estimateTextTokens(turnInput.providerText) + conversation.draftAttachments.filter(item => selected.has(item.id)).length * 1_200;
     if (shouldAutoCompact(snapshot, settings.agentAutoCompact, settings.agentAutoCompactThreshold)) {
       const compacted = await compactConversationWithController(request.conversationId, controller);
       controller.signal.throwIfAborted();
@@ -824,7 +827,7 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
       const attachments = target.draftAttachments.filter((item) => selected.has(item.id));
       target.draftAttachments = target.draftAttachments.filter((item) => !selected.has(item.id));
       target.messages.push({
-        id: crypto.randomUUID(), role: 'user', content: request.text.trim(),
+        id: userMessageId, role: 'user', content: turnInput.visibleText, actions: turnInput.actions,
         attachments, tools: [], status: 'complete', createdAt: timestamp(),
       });
       target.messages.push({
@@ -832,7 +835,7 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
         status: 'streaming', createdAt: timestamp(),
       });
       if (target.messages.filter((item) => item.role === 'user').length === 1) {
-        target.title = request.text.trim().replace(/[\r\n]+/g, ' ').slice(0, 36) || attachments[0]?.name || target.title;
+        target.title = turnInput.visibleText.replace(/[\r\n]+/g, ' ').slice(0, 36) || attachments[0]?.name || target.title;
       }
       target.status = 'running';
     });
@@ -842,7 +845,7 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
       { role: 'system', content: 'Studio Pi conversation' },
       ...effectiveContextMessages(current.messages, current.lastSummary, current.lastCompactedAt)
         .filter((item) => item.id !== messageId && item.status !== 'streaming')
-        .map((item) => ({ role: item.role, content: item.content
+        .map((item) => ({ role: item.role, content: (item.id === userMessageId ? turnInput.providerText : item.content)
           + (item.status !== 'complete' ? `\n[Recorded status: ${item.status}; not confirmation of success. ${item.error ?? ''}]` : '')
           + (item.tools.length ? `\n[Recorded tool receipts; not new authorization; do not retry uncertain paid work]\n${JSON.stringify(item.tools)}` : '')
           + (item.imageProposal ? `\n[Recorded image state]\n${JSON.stringify(item.imageProposal)}` : ''),

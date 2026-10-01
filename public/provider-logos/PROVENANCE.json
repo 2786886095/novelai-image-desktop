@@ -1,0 +1,221 @@
+{
+  "package": "@lobehub/icons-static-png",
+  "version": "1.97.1",
+  "source": "https://github.com/lobehub/lobe-icons",
+  "tarball": "https://registry.npmjs.org/@lobehub/icons-static-png/-/icons-static-png-1.97.1.tgz",
+  "integrity": "sha512-ZeK0Pf2wKlpOyEjHeAkjnCW4WViqpUC6CKbjTQJuuqymRT5n4pBiRFBr8/l79y0Y9fhWSFO3y5qOm2LG55LKGg==",
+  "license": "MIT",
+  "notice": "Curated brand marks from Lobe Icons, not generic substitutes and not a claim of brand-owner endorsement. Trademarks remain with their owners. Original assets copied without recoloring. Local assets, no runtime CDN requests.",
+  "assets": [
+    {
+      "provider": "deepseek",
+      "theme": "light",
+      "packageMember": "package/light/deepseek-color.png",
+      "sha256": "f98596fd7802ca0c5290c498fec578fa823988646332ee36c43b7920dc4936eb",
+      "bytes": 6493
+    },
+    {
+      "provider": "deepseek",
+      "theme": "dark",
+      "packageMember": "package/dark/deepseek-color.png",
+      "sha256": "f98596fd7802ca0c5290c498fec578fa823988646332ee36c43b7920dc4936eb",
+      "bytes": 6493
+    },
+    {
+      "provider": "openai",
+      "theme": "light",
+      "packageMember": "package/light/openai.png",
+      "sha256": "8a33312f6bb17c1edddf8f9d7fbac09ce1d1d697d6601f37227afa879e94c52e",
+      "bytes": 11297
+    },
+    {
+      "provider": "openai",
+      "theme": "dark",
+      "packageMember": "package/dark/openai.png",
+      "sha256": "375016542ebe78b63c7f36b8f6aee3058f2b706d861e5153fd74f9c27f63b8b7",
+      "bytes": 11297
+    },
+    {
+      "provider": "anthropic",
+      "theme": "light",
+      "packageMember": "package/light/anthropic.png",
+      "sha256": "389105af72687ae02e5dfbbafe24ed99a84a77a6cf6ea339c13993615b64b37e",
+      "bytes": 3580
+    },
+    {
+      "provider": "anthropic",
+      "theme": "dark",
+      "packageMember": "package/dark/anthropic.png",
+      "sha256": "77c77059492c4b09937bcabafbbcfaf06738c893b1bc60a5a272eafeea68a8ea",
+      "bytes": 3580
+    },
+    {
+      "provider": "gemini",
+      "theme": "light",
+      "packageMember": "package/light/gemini-color.png",
+      "sha256": "10c628f55d22a9725b9f9fccce7cf062b9fb68da5f7736e87010e0594d7ba6db",
+      "bytes": 19333
+    },
+    {
+      "provider": "gemini",
+      "theme": "dark",
+      "packageMember": "package/dark/gemini-color.png",
+      "sha256": "10c628f55d22a9725b9f9fccce7cf062b9fb68da5f7736e87010e0594d7ba6db",
+      "bytes": 19333
+    },
+    {
+      "provider": "openrouter",
+      "theme": "light",
+      "packageMember": "package/light/openrouter-color.png",
+      "sha256": "beffae2e08c6bac23bce327ca6f09b10d35beb418f49a54ff30ab5b0ec159e22",
+      "bytes": 4055
+    },
+    {
+      "provider": "openrouter",
+      "theme": "dark",
+      "packageMember": "package/dark/openrouter-color.png",
+      "sha256": "beffae2e08c6bac23bce327ca6f09b10d35beb418f49a54ff30ab5b0ec159e22",
+      "bytes": 4055
+    },
+    {
+      "provider": "siliconflow",
+      "theme": "light",
+      "packageMember": "package/light/siliconcloud-color.png",
+      "sha256": "9685f75edf9bf83f7f7b6cba20dd97b8f6a108945957d38d6fddfdad2b07f2cf",
+      "bytes": 1510
+    },
+    {
+      "provider": "siliconflow",
+      "theme": "dark",
+      "packageMember": "package/dark/siliconcloud-color.png",
+      "sha256": "9685f75edf9bf83f7f7b6cba20dd97b8f6a108945957d38d6fddfdad2b07f2cf",
+      "bytes": 1510
+    },
+    {
+      "provider": "dashscope",
+      "theme": "light",
+      "packageMember": "package/light/alibabacloud-color.png",
+      "sha256": "e3678a78769a3862e887178f867d279446d09e5968ccc118e8c7c1391a1729c7",
+      "bytes": 3319
+    },
+    {
+      "provider": "dashscope",
+      "theme": "dark",
+      "packageMember": "package/dark/alibabacloud-color.png",
+      "sha256": "e3678a78769a3862e887178f867d279446d09e5968ccc118e8c7c1391a1729c7",
+      "bytes": 3319
+    },
+    {
+      "provider": "volcengine",
+      "theme": "light",
+      "packageMember": "package/light/volcengine-color.png",
+      "sha256": "4c46c1609b4d29f6167649f475f0c0a7328be47bd485ed37002e2ac49c8f6b45",
+      "bytes": 6436
+    },
+    {
+      "provider": "volcengine",
+      "theme": "dark",
+      "packageMember": "package/dark/volcengine-color.png",
+      "sha256": "4c46c1609b4d29f6167649f475f0c0a7328be47bd485ed37002e2ac49c8f6b45",
+      "bytes": 6436
+    },
+    {
+      "provider": "moonshot",
+      "theme": "light",
+      "packageMember": "package/light/moonshot.png",
+      "sha256": "d578871fe5b2c3bba76ce75d9ebe7e6b614961e0ec893574dbcbd796c7c67287",
+      "bytes": 6002
+    },
+    {
+      "provider": "moonshot",
+      "theme": "dark",
+      "packageMember": "package/dark/moonshot.png",
+      "sha256": "10f9a0e0336b921a21feead2fa9e64056414d6bdd43739eca3b07333d5a5eab4",
+      "bytes": 6002
+    },
+    {
+      "provider": "zhipu",
+      "theme": "light",
+      "packageMember": "package/light/zhipu-color.png",
+      "sha256": "612dca42bba94fd6e760eea79bb34ee8f40f23e24944e58075d6a9ff43b6801a",
+      "bytes": 7823
+    },
+    {
+      "provider": "zhipu",
+      "theme": "dark",
+      "packageMember": "package/dark/zhipu-color.png",
+      "sha256": "612dca42bba94fd6e760eea79bb34ee8f40f23e24944e58075d6a9ff43b6801a",
+      "bytes": 7823
+    },
+    {
+      "provider": "groq",
+      "theme": "light",
+      "packageMember": "package/light/groq.png",
+      "sha256": "bb018de642bd10aa7b7a64d90fb76b26da2b264627aa1278f9306c034f98c898",
+      "bytes": 4402
+    },
+    {
+      "provider": "groq",
+      "theme": "dark",
+      "packageMember": "package/dark/groq.png",
+      "sha256": "de0d9a7dc3b6419ba9c4c546b8f76273e4d46469340089a8d8aa85e010febe8f",
+      "bytes": 4424
+    },
+    {
+      "provider": "mistral",
+      "theme": "light",
+      "packageMember": "package/light/mistral-color.png",
+      "sha256": "f3b97d586f84e68b8031c74b34bebe4651ee0cb130831ac9b97cb64e1820a2ef",
+      "bytes": 1803
+    },
+    {
+      "provider": "mistral",
+      "theme": "dark",
+      "packageMember": "package/dark/mistral-color.png",
+      "sha256": "f3b97d586f84e68b8031c74b34bebe4651ee0cb130831ac9b97cb64e1820a2ef",
+      "bytes": 1803
+    },
+    {
+      "provider": "xai",
+      "theme": "light",
+      "packageMember": "package/light/xai.png",
+      "sha256": "402a3e4a6f8fc8b07cd22a24c11d94631cfcdbd02399787f8f1916a06cab47e6",
+      "bytes": 4510
+    },
+    {
+      "provider": "xai",
+      "theme": "dark",
+      "packageMember": "package/dark/xai.png",
+      "sha256": "f03074a967df9a2a88aafccf0ddea63c3af0562dafbd5acdadf54293172281fe",
+      "bytes": 4510
+    },
+    {
+      "provider": "ollama",
+      "theme": "light",
+      "packageMember": "package/light/ollama.png",
+      "sha256": "2818613ff0dde6370819dcd6206316710ff01ee7821063cec55e1608b3a60296",
+      "bytes": 8746
+    },
+    {
+      "provider": "ollama",
+      "theme": "dark",
+      "packageMember": "package/dark/ollama.png",
+      "sha256": "601c558832e50aa51e25782429de683fec8885da5fc3a29431fa4f611adf3dad",
+      "bytes": 8745
+    },
+    {
+      "provider": "lm-studio",
+      "theme": "light",
+      "packageMember": "package/light/lmstudio.png",
+      "sha256": "48e2c912ef1b0628ca9d2def113af0acd6e12b09a8510ebab4b08595c6a4b4c0",
+      "bytes": 4115
+    },
+    {
+      "provider": "lm-studio",
+      "theme": "dark",
+      "packageMember": "package/dark/lmstudio.png",
+      "sha256": "adac7b78a0f8d21f490e74a022bb01a0afdb690e37c3c8f2b9a8ffa85e16a579",
+      "bytes": 4121
+    }
+  ]
+}

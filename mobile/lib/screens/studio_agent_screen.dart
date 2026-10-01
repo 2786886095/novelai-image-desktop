@@ -1,3 +1,4 @@
+import '../agent/studio_composer_actions.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -15,18 +16,20 @@ import '../i18n/studio_agent_text.dart';
 import '../state/app_state.dart';
 import 'studio_agent_components.dart';
 
-IconData _providerIcon(String id) => switch (id) {
-      'deepseek' || 'mistral' => Icons.waves,
-      'openrouter' => Icons.hub_outlined,
-      'gemini' || 'xai' => Icons.auto_awesome,
-      'ollama' || 'lm-studio' => Icons.computer_outlined,
-      'volcengine' => Icons.local_fire_department_outlined,
-      'moonshot' => Icons.nightlight_outlined,
-      'groq' => Icons.bolt,
-      'custom' => Icons.tune,
-      'dashscope' || 'siliconflow' => Icons.cloud_outlined,
-      _ => Icons.smart_toy_outlined,
-    };
+Widget _providerMark(String id, BuildContext context) {
+  if (id == 'custom') return const Icon(Icons.tune, size: 18);
+  final theme =
+      Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light';
+  return Image.asset('assets/provider-logos/$theme/$id.png',
+      width: 18, height: 18, excludeFromSemantics: true);
+}
+
+Widget _agentBrandMenuLabel(String id, BuildContext context, String text) =>
+    Row(children: [
+      _providerMark(id, context),
+      const SizedBox(width: 10),
+      Expanded(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis))
+    ]);
 
 Widget _agentMenuLabel(IconData icon, String text) => Row(children: [
       Icon(icon, size: 18),
@@ -48,6 +51,9 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
   final _focus = FocusNode();
   final _scroll = ScrollController();
   final _drafts = <String, String>{};
+  final _draftActions = <String, List<AgentComposerAction>>{};
+  List<AgentComposerAction> get _selectedActions =>
+      _draftActions[_chatId] ?? const [];
   final _readingPositions = <String, double>{};
   final _readingAway = <String>{};
   bool _restoringScroll = false;
@@ -140,70 +146,190 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
     _focus.requestFocus();
   }
 
-  Future<void> _showTemplates() async {
+  void _stageAction(AgentComposerAction action) {
+    final chat = _agent?.selectedConversation;
+    if (chat == null || chat.archivedAt != null || _agent!.sending) return;
+    final actions =
+        List<AgentComposerAction>.from(_draftActions[chat.id] ?? const []);
+    if (actions.any(
+        (a) => jsonEncode(a.toJson()) == jsonEncode(action.toJson()))) return;
+    if (actions.length >= 4) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('最多选择四项操作，请先移除已有标签。')));
+      return;
+    }
+    setState(() => _draftActions[chat.id] = [...actions, action]);
+    _focus.requestFocus();
+  }
+
+  Future<void> _showActionPanel(String intent) async {
+    var kind = 'convert', mode = 'mixed', version = 'v5', presetId = '';
     final app = _agent!.app;
-    final entries = <(String, String, String, String)>[];
-    for (final kind in ['convert', 'reverse']) {
-      for (final version in ['v5', 'v4.5']) {
-        for (final mode in ReversePromptMode.values) {
-          final body =
-              app.promptOverrides(kind, templateVersion: version)[mode.value];
-          if (body != null && body.trim().isNotEmpty) {
-            entries.add((kind, version, mode.value, body));
-          }
-        }
-      }
-    }
-    for (final kind in ['optimize', 'assistant']) {
-      final body = _agent!.workspace.agentTemplates[kind];
-      if (body != null && body.trim().isNotEmpty) {
-        entries.add((kind, '', '', body));
-      }
-    }
     await showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
-        builder: (sheetContext) => SafeArea(
-            child: ConstrainedBox(
-                constraints: BoxConstraints(
-                    maxHeight: MediaQuery.sizeOf(sheetContext).height * .7),
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  ListTile(title: Text(_t('savedTemplates'))),
-                  Flexible(
-                      child: entries.isEmpty
-                          ? Center(
-                              child: Padding(
-                                  padding: const EdgeInsets.all(24),
-                                  child: Text(_t('noSavedTemplates'))))
-                          : ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: entries.length,
-                              itemBuilder: (context, index) {
-                                final entry = entries[index];
-                                return ListTile(
-                                    title: Text(entry.$2.isEmpty
-                                        ? entry.$1
-                                        : '${entry.$1} · ${entry.$2} · ${entry.$3}'),
-                                    subtitle: Text(entry.$4,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis),
-                                    onTap: () async {
-                                      Navigator.pop(sheetContext);
-                                      await _agent!.selectPromptTemplate(
-                                          entry.$1,
-                                          mode: entry.$3.isEmpty
-                                              ? null
-                                              : entry.$3,
-                                          version: entry.$2.isEmpty
-                                              ? null
-                                              : entry.$2);
-                                      if (mounted) {
-                                        _prefill(
-                                            '${_t('useSavedTemplate')} ${entry.$1}${entry.$2.isEmpty ? '' : ' ${entry.$2} ${entry.$3}'}。');
-                                      }
-                                    });
-                              }))
-                ]))));
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (sheetContext) =>
+            StatefulBuilder(builder: (sheetContext, change) {
+              final title = _t(intent == 'read'
+                  ? 'menuReadTemplate'
+                  : intent == 'save'
+                      ? 'menuSaveTemplate'
+                      : intent == 'preset'
+                          ? 'presetTemplate'
+                          : 'menuApplyTemplate');
+              final body = ['convert', 'reverse'].contains(kind)
+                  ? app.promptOverrides(kind, templateVersion: version)[mode] ??
+                      ''
+                  : _agent!.workspace.agentTemplates[kind] ?? '';
+              return Padding(
+                  padding: EdgeInsets.only(
+                      bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
+                  child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                          maxHeight:
+                              MediaQuery.sizeOf(sheetContext).height * .82),
+                      child: SingleChildScrollView(
+                          child: Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                              child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(title,
+                                        style: Theme.of(sheetContext)
+                                            .textTheme
+                                            .titleMedium),
+                                    const SizedBox(height: 8),
+                                    Text(_t('actionPanelHint')),
+                                    const SizedBox(height: 16),
+                                    if (intent == 'preset')
+                                      StudioDropdownButtonFormField<String>(
+                                          value: presetId,
+                                          isExpanded: true,
+                                          decoration: InputDecoration(
+                                              labelText: _t('presetTemplate')),
+                                          items: [
+                                            DropdownMenuItem(
+                                                value: '',
+                                                child: _agentMenuLabel(
+                                                    Icons.description_outlined,
+                                                    _t('chooseTemplate'))),
+                                            for (final p
+                                                in app.settings.promptShortcuts)
+                                              DropdownMenuItem(
+                                                  value: p.id,
+                                                  child: _agentMenuLabel(
+                                                      Icons
+                                                          .description_outlined,
+                                                      p.name))
+                                          ],
+                                          onChanged: (value) => change(
+                                              () => presetId = value ?? ''))
+                                    else ...[
+                                      StudioDropdownButtonFormField<String>(
+                                          value: kind,
+                                          isExpanded: true,
+                                          decoration: InputDecoration(
+                                              labelText: _t('templateKind')),
+                                          items: [
+                                            for (final k in [
+                                              'convert',
+                                              'reverse',
+                                              'optimize',
+                                              'assistant'
+                                            ].where((k) =>
+                                                intent != 'apply' ||
+                                                k != 'reverse'))
+                                              DropdownMenuItem(
+                                                  value: k,
+                                                  child: _agentMenuLabel(
+                                                      Icons.tune,
+                                                      _t('templateKind_$k')))
+                                          ],
+                                          onChanged: (value) => change(
+                                              () => kind = value ?? 'convert')),
+                                      if (['convert', 'reverse']
+                                          .contains(kind)) ...[
+                                        const SizedBox(height: 12),
+                                        StudioDropdownButtonFormField<String>(
+                                            value: mode,
+                                            isExpanded: true,
+                                            decoration: InputDecoration(
+                                                labelText: _t('templateMode')),
+                                            items: [
+                                              for (final m in [
+                                                'mixed',
+                                                'tags',
+                                                'natural'
+                                              ])
+                                                DropdownMenuItem(
+                                                    value: m,
+                                                    child: _agentMenuLabel(
+                                                        Icons.text_fields,
+                                                        _t('mode_$m')))
+                                            ],
+                                            onChanged: (value) => change(
+                                                () => mode = value ?? 'mixed')),
+                                        const SizedBox(height: 12),
+                                        StudioDropdownButtonFormField<String>(
+                                            value: version,
+                                            isExpanded: true,
+                                            decoration: InputDecoration(
+                                                labelText:
+                                                    _t('templateVersion')),
+                                            items: [
+                                              for (final v in ['v5', 'v4.5'])
+                                                DropdownMenuItem(
+                                                    value: v,
+                                                    child: _agentMenuLabel(
+                                                        Icons.layers_outlined,
+                                                        v.toUpperCase()))
+                                            ],
+                                            onChanged: (value) => change(
+                                                () => version = value ?? 'v5')),
+                                      ],
+                                      const SizedBox(height: 12),
+                                      ExpansionTile(
+                                          title: Text(_t('readTemplate')),
+                                          children: [
+                                            Padding(
+                                                padding:
+                                                    const EdgeInsets.all(12),
+                                                child: SelectableText(
+                                                    body.isEmpty
+                                                        ? _t('builtinTemplate')
+                                                        : body))
+                                          ]),
+                                    ],
+                                    const SizedBox(height: 12),
+                                    FilledButton.icon(
+                                        onPressed: intent == 'preset' &&
+                                                presetId.isEmpty
+                                            ? null
+                                            : () {
+                                                Navigator.pop(sheetContext);
+                                                _stageAction(intent == 'preset'
+                                                    ? AgentComposerAction(
+                                                        'prompt-preset',
+                                                        templateId: presetId)
+                                                    : AgentComposerAction(
+                                                        intent == 'read'
+                                                            ? 'template-read'
+                                                            : intent == 'save'
+                                                                ? 'template-save'
+                                                                : 'template-apply',
+                                                        templateKind: kind,
+                                                        mode: mode,
+                                                        templateVersion:
+                                                            version));
+                                              },
+                                        icon: const Icon(Icons.add),
+                                        label: Text(_t('stageAction'))),
+                                  ])))));
+            }));
   }
 
   Future<void> _showContext() async {
@@ -305,14 +431,18 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
         agent.sending ||
         !agent.providerConfigured) return;
     final text = _input.text;
-    if (text.trim().isEmpty && chat.draftAttachments.isEmpty) return;
+    if (text.trim().isEmpty &&
+        _selectedActions.isEmpty &&
+        chat.draftAttachments.isEmpty) return;
     final before = chat.messages.where((m) => m.role == 'user').length;
     final id = chat.id;
+    final actions = List<AgentComposerAction>.from(_selectedActions);
+    _draftActions[id] = [];
     _input.clear();
     _focus.unfocus();
     _followLatest = true;
     try {
-      await agent.sendStudio(text);
+      await agent.sendStudio(text, actions: actions);
     } catch (error) {
       if (mounted) setState(() => agent.error = '$error');
     }
@@ -320,6 +450,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
         agent.error != null &&
         chat.messages.where((m) => m.role == 'user').length == before) {
       _drafts[id] = text;
+      _draftActions[id] = actions;
       if (_chatId == id) _input.text = text;
     }
   }
@@ -393,8 +524,9 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                       for (final preset in agentProviderPresets)
                                         DropdownMenuItem(
                                             value: preset.id,
-                                            child: _agentMenuLabel(
-                                                _providerIcon(preset.id),
+                                            child: _agentBrandMenuLabel(
+                                                preset.id,
+                                                context,
                                                 preset.label)),
                                     ],
                                     onChanged: saving
@@ -678,6 +810,15 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                     mode: LaunchMode.externalApplication);
                               }
                             }),
+                      if (message.actions.isNotEmpty)
+                        Wrap(spacing: 6, runSpacing: 4, children: [
+                          for (final action in message.actions)
+                            Chip(
+                                avatar:
+                                    const Icon(Icons.build_outlined, size: 14),
+                                label: Text(studioComposerActionLabel(
+                                    action, _agent!.app)))
+                        ]),
                       if (message.error != null) ...[
                         Text(message.error!,
                             style: TextStyle(color: color.error)),
@@ -790,7 +931,11 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                               label: Text(_t('copy'))),
                           if (message.role == 'user')
                             TextButton.icon(
-                                onPressed: () => _prefill(message.content),
+                                onPressed: () {
+                                  _prefill(message.content);
+                                  setState(() => _draftActions[_chatId!] =
+                                      List.from(message.actions));
+                                },
                                 icon: const Icon(Icons.edit_outlined, size: 16),
                                 label: Text(_t('editRequest')))
                         ]),
@@ -1040,6 +1185,24 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
             child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
                 child: Column(children: [
+                  if (_selectedActions.isNotEmpty)
+                    Align(
+                        alignment: Alignment.centerLeft,
+                        child: Wrap(spacing: 6, runSpacing: 4, children: [
+                          for (final action in _selectedActions)
+                            InputChip(
+                                avatar:
+                                    const Icon(Icons.build_outlined, size: 16),
+                                label: Text(studioComposerActionLabel(
+                                    action, agent.app)),
+                                onDeleted: agent.sending || archived
+                                    ? null
+                                    : () => setState(() => _draftActions[
+                                            chat.id] =
+                                        _selectedActions
+                                            .where((a) => !identical(a, action))
+                                            .toList()))
+                        ])),
                   Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
                     IconButton(
                         tooltip: _t('addAttachment'),
@@ -1076,6 +1239,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                             : archived ||
                                     !agent.providerConfigured ||
                                     (_input.text.trim().isEmpty &&
+                                        _selectedActions.isEmpty &&
                                         chat.draftAttachments.isEmpty)
                                 ? null
                                 : _send)
@@ -1123,15 +1287,45 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                           size: 18),
                                     ]))),
                         const Spacer(),
-                        IconButton(
+                        PopupMenuButton<String>(
                             key: const ValueKey('agent-template-selector'),
-                            visualDensity: VisualDensity.compact,
-                            tooltip: _t('savedTemplates'),
-                            onPressed: agent.sending || archived
-                                ? null
-                                : _showTemplates,
-                            icon: const Icon(Icons.description_outlined,
-                                size: 18)),
+                            tooltip: _t('actions'),
+                            enabled: !agent.sending && !archived,
+                            icon: const Icon(Icons.auto_awesome_outlined,
+                                size: 18),
+                            onSelected: (value) {
+                              if (value == 'web')
+                                _stageAction(
+                                    const AgentComposerAction('web-search'));
+                              else
+                                _showActionPanel(value);
+                            },
+                            itemBuilder: (_) => [
+                                  PopupMenuItem(
+                                      value: 'web',
+                                      child: _agentMenuLabel(
+                                          Icons.search, _t('webQuery'))),
+                                  PopupMenuItem(
+                                      value: 'read',
+                                      child: _agentMenuLabel(
+                                          Icons.description_outlined,
+                                          _t('menuReadTemplate'))),
+                                  PopupMenuItem(
+                                      value: 'apply',
+                                      child: _agentMenuLabel(
+                                          Icons.auto_fix_high,
+                                          _t('menuApplyTemplate'))),
+                                  PopupMenuItem(
+                                      value: 'save',
+                                      child: _agentMenuLabel(
+                                          Icons.save_outlined,
+                                          _t('menuSaveTemplate'))),
+                                  PopupMenuItem(
+                                      value: 'preset',
+                                      child: _agentMenuLabel(
+                                          Icons.description_outlined,
+                                          _t('presetTemplate'))),
+                                ]),
                         TextButton.icon(
                             key: const ValueKey('agent-context-control'),
                             style: TextButton.styleFrom(

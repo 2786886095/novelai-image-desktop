@@ -1,3 +1,4 @@
+import 'studio_composer_actions.dart';
 import 'compatible_proposal.dart';
 import 'image_provider.dart';
 import 'provider_outcome.dart';
@@ -684,8 +685,9 @@ class AgentController extends ChangeNotifier {
     return {'type': 'text', 'text': metadata};
   }
 
-  Future<Map<String, dynamic>> _messageForProvider(AgentMessage message) async {
-    var text = visibleTavernMessageContent(message);
+  Future<Map<String, dynamic>> _messageForProvider(AgentMessage message,
+      {String? contentOverride}) async {
+    var text = contentOverride ?? visibleTavernMessageContent(message);
     if (message.role == 'assistant' && message.tools.isNotEmpty) {
       final summaries = message.tools.map((tool) =>
           '[${tool.title}: ${tool.status}] ${tool.output ?? tool.error ?? ''}');
@@ -851,14 +853,25 @@ class AgentController extends ChangeNotifier {
 
   /// Flutter cannot load the Node Pi package. This is the corresponding
   /// bounded Pi-style turn loop over the same application-owned tool set.
-  Future<void> sendStudio(String rawText) async {
+  Future<void> sendStudio(String rawText,
+      {List<AgentComposerAction> actions = const []}) async {
     final conversation = selectedConversation;
     final text = rawText.trim();
+    final selectedActions =
+        normalizeAgentComposerActions(actions.map((a) => a.toJson()).toList());
     if (conversation == null ||
         conversation.archivedAt != null ||
         sending ||
         compacting) return;
-    if (text.isEmpty && conversation.draftAttachments.isEmpty) return;
+    if (text.isEmpty &&
+        selectedActions.isEmpty &&
+        conversation.draftAttachments.isEmpty) return;
+    final providerText = studioComposerProviderText(text, selectedActions, app);
+    final visibleText = text.isNotEmpty
+        ? text
+        : selectedActions
+            .map((a) => studioComposerActionLabel(a, app))
+            .join(' · ');
     error = null;
     _abortRequested = false;
     final apiKey = await app.storage.getAgentApiKey() ?? '';
@@ -876,13 +889,15 @@ class AgentController extends ChangeNotifier {
     final user = AgentMessage(
         id: agentId('message'),
         role: 'user',
-        content: text,
+        content: visibleText,
+        actions: selectedActions,
         attachments: attachments);
     final assistant = AgentMessage(
         id: agentId('message'), role: 'assistant', status: 'streaming');
     conversation.messages.addAll([user, assistant]);
     if (conversation.messages.where((m) => m.role == 'user').length == 1) {
-      final title = text.isNotEmpty ? text : attachments.first.name;
+      final title =
+          visibleText.isNotEmpty ? visibleText : attachments.first.name;
       final cleanTitle = title.replaceAll(RegExp(r'[\r\n]+'), ' ').trim();
       conversation.title = cleanTitle.substring(0, min(36, cleanTitle.length));
     }
@@ -965,20 +980,15 @@ class AgentController extends ChangeNotifier {
               'user language. Keep ordinary replies brief: conclusion first, at most three short bullets unless detail is requested. Explain visible settings, not tool identifiers, attachmentIds or raw JSON. Do not repeat app plan cards. If asked only to inspect or not generate, finish without preparing a generation or asking to generate. Do not end every reply with a generic follow-up question. Shell, arbitrary files, Skills and external MCP '
               'are unavailable.'
         },
-        if (_selectedPromptTemplate(conversation) case final template?)
-          if (template.isNotEmpty)
-            {
-              'role': 'system',
-              'content':
-                  'The user selected a saved ${conversation.selectedTemplateKind} prompt template. Apply it to relevant prompt work, while preserving the current user request and app safety gates:\n$template'
-            },
         if (conversation.lastSummary?.trim().isNotEmpty == true)
           {
             'role': 'system',
             'content':
                 'Earlier conversation summary:\n${conversation.lastSummary}'
           },
-        for (final message in previous) await _messageForProvider(message),
+        for (final message in previous)
+          await _messageForProvider(message,
+              contentOverride: message.id == user.id ? providerText : null),
       ];
       var toolCalls = 0;
       var paidAttempted = false;

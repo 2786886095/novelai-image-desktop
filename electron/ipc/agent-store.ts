@@ -1,3 +1,4 @@
+import { normalizeStudioComposerActions } from '../../src/agent/composer-actions';
 import { recoverInterruptedImageRepairs } from "../../src/tavern/image-repair";
 import { readSceneBindings } from "../../src/tavern/scene-bindings";
 import { dialog } from "electron";
@@ -249,6 +250,7 @@ function normalizeMessage(raw: Partial<AgentMessage>): AgentMessage | null {
     ...(typeof raw.runtimeMessageId === "string" ? { runtimeMessageId: raw.runtimeMessageId } : {}),
     role: raw.role as AgentMessage["role"],
     content: typeof raw.content === "string" ? raw.content : "",
+    ...(raw.role === "user" && Array.isArray(raw.actions) ? {actions: normalizeStudioComposerActions(raw.actions)} : {}),
     ...(typeof raw.reasoning === "string" ? { reasoning: raw.reasoning } : {}),
     attachments: (Array.isArray(raw.attachments) ? raw.attachments : [])
       .map((item) => rehydrateAttachment(item))

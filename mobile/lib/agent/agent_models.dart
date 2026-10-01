@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'tavern_builtins.dart';
@@ -243,10 +244,66 @@ class AgentToolExecution {
       };
 }
 
+class AgentComposerAction {
+  final String kind;
+  final String templateKind, mode, templateVersion;
+  final String? templateId;
+  const AgentComposerAction(this.kind,
+      {this.templateKind = 'convert',
+      this.mode = 'mixed',
+      this.templateVersion = 'v5',
+      this.templateId});
+  Map<String, dynamic> toJson() => {
+        'kind': kind,
+        if (kind == 'prompt-preset') 'templateId': templateId,
+        if (kind != 'web-search' && kind != 'prompt-preset') ...{
+          'templateKind': templateKind,
+          'mode': mode,
+          'templateVersion': templateVersion
+        }
+      };
+}
+
+List<AgentComposerAction> normalizeAgentComposerActions(dynamic raw) {
+  final output = <AgentComposerAction>[];
+  if (raw is! List) return output;
+  for (final item in raw.take(4)) {
+    if (item is! Map) continue;
+    final kind = item['kind'];
+    if (![
+      'web-search',
+      'template-read',
+      'template-save',
+      'template-apply',
+      'prompt-preset'
+    ].contains(kind)) continue;
+    final templateKind = ['convert', 'reverse', 'optimize', 'assistant']
+            .contains(item['templateKind'])
+        ? item['templateKind'] as String
+        : 'convert';
+    if (kind == 'template-apply' && templateKind == 'reverse') continue;
+    final id = item['templateId'];
+    if (kind == 'prompt-preset' &&
+        (id is! String || id.trim().isEmpty || id.length > 200)) continue;
+    final action = AgentComposerAction(kind as String,
+        templateKind: templateKind,
+        mode: ['mixed', 'tags', 'natural'].contains(item['mode'])
+            ? item['mode'] as String
+            : 'mixed',
+        templateVersion: item['templateVersion'] == 'v4.5' ? 'v4.5' : 'v5',
+        templateId: kind == 'prompt-preset' ? id as String : null);
+    if (!output
+        .any((a) => jsonEncode(a.toJson()) == jsonEncode(action.toJson())))
+      output.add(action);
+  }
+  return output;
+}
+
 class AgentMessage {
   String id;
   String role;
   String content;
+  List<AgentComposerAction> actions;
   String? reasoning;
   List<AgentAttachment> attachments;
   List<AgentToolExecution> tools;
@@ -266,6 +323,7 @@ class AgentMessage {
     required this.id,
     required this.role,
     this.content = '',
+    List<AgentComposerAction>? actions,
     this.reasoning,
     List<AgentAttachment>? attachments,
     List<AgentToolExecution>? tools,
@@ -280,7 +338,8 @@ class AgentMessage {
     this.imageProposal,
     this.imageProposalSwipes,
     this.swipeAttachments,
-  })  : attachments = attachments ?? [],
+  })  : actions = actions ?? [],
+        attachments = attachments ?? [],
         tools = tools ?? [],
         swipes = swipes ?? [],
         createdAt = createdAt ?? agentNow();
@@ -291,6 +350,7 @@ class AgentMessage {
             ? json['role'].toString()
             : 'assistant',
         content: _text(json['content']),
+        actions: normalizeAgentComposerActions(json['actions']),
         reasoning: json['reasoning']?.toString(),
         attachments: (json['attachments'] as List? ?? const [])
             .whereType<Map>()
@@ -337,6 +397,8 @@ class AgentMessage {
         'id': id,
         'role': role,
         'content': content,
+        if (actions.isNotEmpty)
+          'actions': actions.map((a) => a.toJson()).toList(),
         if (reasoning != null && reasoning!.isNotEmpty) 'reasoning': reasoning,
         'attachments': attachments.map((item) => item.toJson()).toList(),
         'tools': tools.map((item) => item.toJson()).toList(),
