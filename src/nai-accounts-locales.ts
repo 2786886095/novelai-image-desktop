@@ -1,5 +1,7 @@
 import type { AppLanguage } from './types';
 export const NAI_ACCOUNT_LOCALES = {
+ noAccount:['未添加账户','尚未新增帳戶','No account yet','アカウント未追加','계정 없음'],
+ migrationFailed:['旧账户自动迁移未完成；原凭据和接口未删除，请在账户管理重新保存。','舊帳戶自動遷移未完成；原憑據與介面未刪除，請重新儲存。','Automatic account migration incomplete. Original credentials and endpoints remain; save the account here.','自動移行が未完了です。認証情報と接続先は保持されています。ここで再保存してください。','자동 이전 미완료. 기존 인증 정보와 주소가 유지됩니다. 여기에서 다시 저장하세요.'],
  addAccount:['添加账户','新增帳戶','Add account','アカウントを追加','계정 추가'],
  useAccount:['使用此账户','使用此帳戶','Use account','このアカウントを使用','이 계정 사용'],
  current:['当前使用','目前使用','Active','使用中','사용 중'],

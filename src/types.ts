@@ -1665,6 +1665,7 @@ export interface NaiDesktopApi {
   getAgentWorkspace: () => Promise<import("./agent/types").AgentWorkspaceData>;
   saveTavernWorkspace: (workspace: import("./agent/types").AgentWorkspaceData) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
   setStudioConversationOptions: (conversationId:string,patch:Partial<import('./agent/workspace-controls').StudioConversationOptions>)=>Promise<import('./agent/types').AgentWorkspaceMutationResult>;
+  importStudioResources: (kind:'presets'|'worldbooks'|'characters')=>Promise<import('./agent/types').AgentWorkspaceMutationResult & {cancelled?:boolean}>;
   createAgentConversation: (title?: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
   selectAgentConversation: (conversationId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
   renameAgentConversation: (conversationId: string, title: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;

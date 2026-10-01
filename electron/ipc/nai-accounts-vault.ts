@@ -4,12 +4,25 @@ export function accountCipherAvailable(cipher: Cipher): boolean {
   try { return cipher.isEncryptionAvailable() && cipher.getSelectedStorageBackend?.() !== 'basic_text'; }
   catch { return false; }
 }
-export interface AccountVaultDocument { version: 1; selectedId?: string; accounts: Array<NaiAccountProfile & { encryptedToken: string }> }
+export interface AccountVaultDocument { version: 1; selectedId?: string; legacyMigrated?:boolean; accounts: Array<NaiAccountProfile & { encryptedToken: string }> }
 /** Secrets never enter list results. Failed decryption does not rewrite ciphertext. */
 export class NaiAccountsVault {
   private leases = 0;
   constructor(private document: AccountVaultDocument, private cipher: Cipher, private persist: (document: AccountVaultDocument) => void) {}
-  list(): NaiAccountProfile[] { return this.document.accounts.map(a => ({id:a.id,label:a.label,method:a.method,apiBaseUrl:a.apiBaseUrl,imageBaseUrl:a.imageBaseUrl})); }
+  list(): NaiAccountProfile[] { return this.document.accounts.map(a => ({id:a.id,label:a.label,method:a.method,apiBaseUrl:a.apiBaseUrl,imageBaseUrl:a.imageBaseUrl,...(a.legacyConfiguration?{legacyConfiguration:{...a.legacyConfiguration}}:{})})); }
+  legacyMigrated(){return this.document.legacyMigrated===true;}
+  importLegacy(id:string,input:NaiAccountInput,configuration:NonNullable<NaiAccountProfile['legacyConfiguration']>):NaiAccountProfile{
+    if(this.leases)throw Error('Account operation in flight');
+    if(this.document.legacyMigrated)throw Error('Legacy configuration already migrated');
+    if(!input.token.trim()||/[\r\n]/.test(input.token)||input.token.length>16384)throw Error('Invalid legacy token');
+    for(const raw of [input.apiBaseUrl,input.imageBaseUrl!]){const url=new URL(raw);if((url.protocol!=='https:'&&!(url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname)))||url.username||url.password||url.search||url.hash)throw Error('Invalid legacy endpoint');}
+    if(!accountCipherAvailable(this.cipher))throw Error('OS credential encryption unavailable');
+    const profile:NaiAccountProfile={id,label:input.label,method:input.method,apiBaseUrl:input.apiBaseUrl,imageBaseUrl:input.imageBaseUrl!,legacyConfiguration:{...configuration}};
+    const old=this.document.accounts.find(a=>a.id===id);if(old)throw Error('Duplicate legacy account');
+    const account={...profile,encryptedToken:this.cipher.encryptString(input.token.trim()).toString('base64')};
+    const next:AccountVaultDocument={...this.document,legacyMigrated:true,selectedId:this.document.selectedId??id,accounts:[...this.document.accounts,account]};
+    this.persist(next);this.document=next;return profile;
+  }
   add(id: string, input: NaiAccountInput): NaiAccountProfile {
     const normalized=normalizeNaiAccountInput(input);
     validateAccountProfile(input);
@@ -39,7 +52,8 @@ export class NaiAccountsVault {
     if (!account) throw new Error('Unknown account');
     if (!accountCipherAvailable(this.cipher)) throw new Error('OS credential encryption unavailable');
     const token = this.cipher.decryptString(Buffer.from(account.encryptedToken, 'base64'));
-    validateAccountProfile({ ...account, token });
+    if(!account.legacyConfiguration)validateAccountProfile({ ...account, token });
+    else {if(!token.trim()||/[\r\n]/.test(token))throw Error('Invalid legacy token');for(const raw of [account.apiBaseUrl,account.imageBaseUrl]){const url=new URL(raw);if((url.protocol!=='https:'&&!(url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname)))||url.username||url.password||url.search||url.hash)throw Error('Invalid legacy endpoint');}}
     this.leases++; let ended = false;
     const { encryptedToken: _secret, ...profile } = account;
     return { snapshot: Object.freeze({ ...profile, token }), release: () => { if (!ended) { ended = true; this.leases--; } } };

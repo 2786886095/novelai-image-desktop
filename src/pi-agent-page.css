@@ -165,3 +165,15 @@ html.motion-reduced .pi-agent button{transition:none}
 @media(max-width:760px){.pi-sidebar-top{display:block;position:absolute;top:8px;right:8px}.pi-sidebar.is-open>button:first-of-type{margin-right:44px}.pi-composer-shell{max-height:50dvh}.pi-composer-shell .pi-compose-meta{gap:4px;padding:4px}.pi-composer-shell .pi-compose-meta .pi-model-chip{max-width:50%}}
 @media(pointer:coarse){.pi-composer-grip{flex-basis:24px}.pi-agent .pi-execution-modes button,.pi-agent .pi-option-toggle,.pi-agent .pi-resource-toggle,.pi-agent .pi-resource-tabs button,.pi-agent .pi-resource-item>button,.pi-resource-check{min-height:44px}.pi-agent .pi-resource-toggle{width:44px;min-width:44px}.pi-agent .pi-resource-panel>header .pi-icon{width:44px;min-width:44px;min-height:44px}}
 html.motion-reduced .pi-resource-panel{animation:none}
+
+/* v9: edge controls, no input-footer resource button; right drawer starts closed. */
+.pi-sidebar[hidden]{display:none!important}
+.pi-agent .pi-side-toggle{align-self:flex-start;flex:0 0 30px;width:30px;min-width:30px;min-height:34px;margin-top:10px;padding:5px;border:0;background:transparent;border-radius:8px;color:var(--pi-muted);z-index:32}
+.pi-side-toggle svg{width:17px;height:17px}.pi-agent .pi-side-toggle[aria-expanded=true]{color:var(--pi-accent);background:var(--accent-soft)}
+.pi-agent .pi-resource-import{width:100%;min-height:34px;margin-bottom:8px;justify-content:flex-start;padding:5px 8px;font-size:12px}
+.pi-resource-panel>header{margin-bottom:8px}.pi-resource-item p{margin:5px 3px}.pi-resource-item>button{box-shadow:none}.pi-resource-panel h4{font-size:12px;color:var(--pi-muted);margin:14px 0 4px}
+@media(max-width:1100px){.pi-resource-panel{right:32px;width:min(320px,calc(100% - 64px));z-index:31}.pi-agent .pi-right-toggle{position:absolute;right:0;top:0}.pi-main{padding-right:30px}}
+@media(max-width:760px){.pi-sidebar.is-open{left:32px;width:min(250px,calc(100% - 64px));z-index:31}.pi-agent .pi-sidebar-scrim{z-index:30}.pi-agent .pi-left-toggle{position:relative;z-index:32}}
+@media(pointer:coarse){.pi-agent .pi-side-toggle{flex-basis:44px;width:44px;min-width:44px;min-height:44px}.pi-agent .pi-resource-import{min-height:44px}}
+@media(max-width:1100px) and (pointer:coarse){.pi-resource-panel{right:44px;width:min(320px,calc(100% - 88px))}.pi-main{padding-right:44px}}
+@media(max-width:760px) and (pointer:coarse){.pi-sidebar.is-open{left:44px;width:min(250px,calc(100% - 88px))}}

@@ -651,7 +651,7 @@ export function getSettings(): AppSettings {
   const selected=currentNaiAccount();
   const legacy=boundLegacyNaiAccount();
   if(legacy) { const {token:_token,...endpoints}=legacy; Object.assign(settings,endpoints); }
-  if(selected) Object.assign(settings,{apiBaseUrl:selected.apiBaseUrl,imageBaseUrl:selected.imageBaseUrl,allowCustomEndpoint:selected.method==='relay',allowCustomEndpointFallback:false});
+  if(selected) Object.assign(settings,{apiBaseUrl:selected.apiBaseUrl,imageBaseUrl:selected.imageBaseUrl,allowCustomEndpoint:selected.legacyConfiguration?.allowCustomEndpoint??(selected.method==='relay'),allowCustomEndpointFallback:selected.legacyConfiguration?.allowCustomEndpointFallback??false});
   if(selected?.method==='relay') settings.streamPreviewEnabled=false; // No paid stream-capability probe on an unverified relay.
   const stamp = imageSettingsStamp(settings);
   return { ...settings, naiAccountId:selected?.id, naiAccountRevision:naiAccountRevision(), credentialIssues: credentialVault.issues(), imageServiceRevision: stamp.revision, imageServiceVersion: stamp.version };

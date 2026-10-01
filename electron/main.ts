@@ -247,6 +247,7 @@ import {
   deleteAgentMemory,
   deleteAgentSkill,
   importAgentFiles,
+  importStudioPresetFiles,
   exportAgentAttachment,
   readAgentWorkspace,
   renameAgentConversation,
@@ -750,6 +751,12 @@ function registerIpc() {
   accountBoundHandle('agent:setStudioOptions',(_event,id:string,patch:Partial<import('../src/agent/workspace-controls').StudioConversationOptions>)=>{
     if(hasActiveAgentRequests())return {ok:false,message:'请先停止智能体任务再修改对话选项。',workspace:readAgentWorkspace()};
     return setStudioConversationOptions(id,patch);
+  });
+  accountBoundHandle('agent:importStudioResources',(_event,kind:'presets'|'worldbooks'|'characters')=>{
+    if(hasActiveAgentRequests())return {ok:false,message:'请先停止智能体任务再导入资源。',workspace:readAgentWorkspace()};
+    if(kind==='presets')return importStudioPresetFiles();
+    if(kind==='worldbooks'||kind==='characters')return importTavernCards();
+    return {ok:false,message:'无效的资源类别。',workspace:readAgentWorkspace()};
   });
   accountBoundHandle("agent:createConversation", (_event, title?: string) => createAgentConversation(title));
   accountBoundHandle("agent:selectConversation", (_event, conversationId: string) => selectAgentConversation(conversationId));

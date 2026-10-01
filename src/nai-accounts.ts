@@ -11,6 +11,8 @@ export function naiAccountTabKey(method:NaiAccountMethod,key:string):NaiAccountM
 export interface NaiAccountProfile {
   id: string; label: string; method: NaiAccountMethod;
   apiBaseUrl: string; imageBaseUrl: string;
+  /** Backend-only provenance for an unchanged pre-multi-account configuration. */
+  legacyConfiguration?: {allowCustomEndpoint:boolean;allowCustomEndpointFallback:boolean};
 }
 export interface NaiAccountInput extends Omit<NaiAccountProfile, 'id'|'imageBaseUrl'> { token: string; imageBaseUrl?:string }
 export function normalizeNaiAccountInput(input:NaiAccountInput):NaiAccountInput & {imageBaseUrl:string} {
@@ -31,11 +33,14 @@ export interface NaiAccountsBridge {
   list(): Promise<NaiAccountProfile[]>;
   add(input: NaiAccountInput): Promise<NaiAccountProfile>;
   remove(id: string): Promise<void>;
-  state(): Promise<{ selectedId?: string; busy: boolean }>;
+  state(): Promise<{ selectedId?: string; busy: boolean; migrationIssue?:string }>;
   select(id?: string): Promise<{ selectedId?: string }>;
   login(input: {label:string;email:string;password:string;otp?:string}): Promise<{ok:true;account:NaiAccountProfile} | {ok:false;code:string;message:string}>;
   migrate(): Promise<{ migrated: boolean; message: string }>;
   probe(id: string): Promise<{ status: number; subscription: 'skipped' | 'available'; protocol: 'unverified'; message: string }>;
+}
+export function nextNaiAccountLabel(accounts:ReadonlyArray<Pick<NaiAccountProfile,'label'>>):string {
+  let n=1;const names=new Set(accounts.map(a=>a.label));while(names.has('用户'+n))n++;return '用户'+n;
 }
 /** Explicit relay profile only: dashboard normalization is not protocol discovery. */
 export function relayDashboardOrigin(value: string): string {

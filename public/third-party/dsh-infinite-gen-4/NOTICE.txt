@@ -1,0 +1,5 @@
+Minglink / dsh-infinite-gen-4
+Source: https://github.com/Minglink/dsh-infinite-gen-4
+Pinned commit: 9097ccc1d22596087d47c732c317c29407c752ff
+License: CC BY-NC-SA 4.0, including the upstream non-commercial terms (LICENSE.txt).
+Studio adaptation: direct, compact image delivery; actual image tools replace offline security-documentation tasks. No upstream installer or plugin runtime is installed. The original prompt is preserved alongside this notice. Adapted preset contributions are shared under the same non-commercial license. This local candidate is not a commercial redistribution.

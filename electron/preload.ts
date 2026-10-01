@@ -143,6 +143,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   setStudioConversationOptions: (conversationId:string,patch:Partial<import('../src/agent/workspace-controls').StudioConversationOptions>)=>ipcRenderer.invoke('agent:setStudioOptions',conversationId,patch),
   deleteAgentConversation: (conversationId: string) => ipcRenderer.invoke("agent:deleteConversation", conversationId),
   importAgentFiles: (conversationId: string, sourcePaths?: string[]) => ipcRenderer.invoke("agent:importFiles", conversationId, sourcePaths),
+  importStudioResources: (kind:'presets'|'worldbooks'|'characters') => ipcRenderer.invoke('agent:importStudioResources',kind),
   deleteAgentAttachment: (conversationId: string, attachmentId: string) => ipcRenderer.invoke("agent:deleteAttachment", conversationId, attachmentId),
   exportAgentAttachment: (conversationId: string, messageId: string, attachmentId: string) => imageSaves.run(`agent:${conversationId}:${messageId}:${attachmentId}`, "image", () => ipcRenderer.invoke("agent:exportAttachment", conversationId, messageId, attachmentId), 1),
   sendAgentMessage: (request: AgentSendRequest) => ipcRenderer.invoke("agent:send", request),

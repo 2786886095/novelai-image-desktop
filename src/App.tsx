@@ -1,5 +1,4 @@
 import { NaiAccountManager } from './components/NaiAccountManager';
-import { naiAccountText } from './nai-accounts-locales';
 import {HistoryItemMenu} from './components/HistoryItemMenu';
 import {PROMPT_OPTIMIZE_TEMPLATE, PROMPT_CUSTOM_TEMPLATE} from "./data/prompt-edit-templates";
 import {workflowText} from './workflow-text';
@@ -5518,15 +5517,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const sectionMotion=useStudioRegionMotion(section);
   useEffect(()=>{const navigate=()=>{const next=takeRequestedSettingsSection();if(next)setSection(next);};window.addEventListener('studio:settings-section',navigate);return()=>window.removeEventListener('studio:settings-section',navigate);},[]);
   const settings = useAppStore((state) => state.settings);
-  const account = useAppStore((state) => state.account);
-  const refreshAccount = useAppStore((state) => state.refreshAccount);
   const refreshSettings = useAppStore((state) => state.refreshSettings);
   const setShowOnboarding = useAppStore((state) => state.setShowOnboarding);
   const [reverseTemplateDefaults, setReverseTemplateDefaults] = useState(SCOPED_REVERSE_SYSTEM_PROMPTS);
-  const [managedAccountId,setManagedAccountId]=useState<string|undefined>();
-  const [token, setToken] = useState("");
-  const [status, setStatus] = useState<TokenStatus | null>(null);
-  const [checking, setChecking] = useState(false);
   const [showTokenGuide, setShowTokenGuide] = useState(false);
   const [newTplName, setNewTplName] = useState("");
   const [newTplPrefix, setNewTplPrefix] = useState("");
@@ -5566,7 +5559,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   }, []);
 
   useEffect(() => {
-    void window.naiDesktop.storedToken().then(setToken).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -5658,13 +5650,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     await window.naiDesktop.setSetting("proxyMode", mode);
     await window.naiDesktop.setSetting("proxyUrl", value);
     await refreshSettings();
-  };
-  const verify = async () => {
-    setChecking(true);
-    const result = await window.naiDesktop.verifyToken(token);
-    setStatus(result);
-    setChecking(false);
-    await refreshAccount();
   };
   const selectDir = async () => {
     try { await window.naiDesktop.selectOutputDir(); await refreshSettings(); }
@@ -5831,72 +5816,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             )}
             {section === "api" && (
               <div className="settings-form">
-                <NaiAccountManager variant="settings" onSelectionChange={setManagedAccountId} />
-                <details className="nai-account-legacy"><summary>{naiAccountText(settings.language,'legacySettings')}</summary>
-                {managedAccountId&&<p className="settings-hint">{naiAccountText(settings.language,'legacyLocked')}</p>}
-                <fieldset disabled={Boolean(managedAccountId)}>
-
-                <div className="account-card">
-                  <strong>{t("settings.accountTitle")}</strong>
-                  <span>{account.hasToken ? `${account.tierName ?? t("settings.verified")} · Anlas ${account.anlasBalance ?? t("title.unknown")}` : t("settings.noToken")}</span>
-                </div>
-                <SecretInput
-                  label={t("settings.apiTokenLabel")}
-                  value={token}
-                  placeholder={t("settings.apiTokenPlaceholder")}
-                  onChange={(e) => setToken(e.target.value)}
-                  showLabel={t("settings.showKey")}
-                  hideLabel={t("settings.hideKey")}
-                />
-                <div className="row-actions">
-                  <Button variant="primary" disabled={checking} onClick={verify}>
-                    {checking ? <IconText icon="…">{t("settings.verifying")}</IconText> : <IconText icon="✓">{t("settings.verifySave")}</IconText>}
-                  </Button>
-                  <Button onClick={() => setShowTokenGuide(true)}>
-                    <IconText icon="❔">{t("settings.tokenGuide")}</IconText>
-                  </Button>
-                  <Button
-                    variant="danger"
-                    onClick={async () => {
-                      await window.naiDesktop.clearToken();
-                      setToken("");
-                      setStatus(null);
-                      await refreshAccount();
-                    }}
-                  >
-                    <IconText icon="⇥">{t("settings.logout")}</IconText>
-                  </Button>
-                </div>
-                {status && <div className={clsx("status-box", status.valid ? "ok" : "bad")}>{status.message}</div>}
-                <label className="field">
-                  <span>{t("settings.accountEndpoint")}</span>
-                  <input value={settings.apiBaseUrl} placeholder="https://api.novelai.net" onChange={(e) => void update("apiBaseUrl", e.target.value)} />
-                  <small>https://api.novelai.net</small>
-                </label>
-                <label className="field">
-                  <span>{t("settings.imageEndpoint")}</span>
-                  <input value={settings.imageBaseUrl} placeholder="https://image.novelai.net" onChange={(e) => void update("imageBaseUrl", e.target.value)} />
-                  <small>{t("settings.imageEndpointHint")}</small>
-                </label>
-                <div>
-                  <label className="field-inline">
-                    <input id="novelai-relay-opt-in" type="checkbox" checked={settings.allowCustomEndpoint}
-                      aria-describedby="novelai-relay-help" onChange={(e) => void update("allowCustomEndpoint", e.target.checked)} />
-                    <span>{t("settings.allowCustomEndpoint")}</span>
-                  </label>
-                  <p className="settings-hint" id="novelai-relay-help">{t("settings.allowCustomEndpointHint")}</p>
-                </div>
-                <div>
-                  <label className="field-inline">
-                    <input id="novelai-official-retry" type="checkbox" checked={settings.allowCustomEndpointFallback}
-                      disabled={!settings.allowCustomEndpoint} aria-describedby="novelai-official-retry-help"
-                      onChange={(e) => void update("allowCustomEndpointFallback", e.target.checked)} />
-                    <span>{t("settings.allowCustomEndpointFallback")}</span>
-                  </label>
-                  <p className="settings-hint" id="novelai-official-retry-help">{t("settings.allowCustomEndpointFallbackHint")}</p>
-                </div>
-
-                </fieldset></details>
+                <NaiAccountManager variant="settings" />
+                <Button onClick={() => setShowTokenGuide(true)}><IconText icon="❔">{t("settings.tokenGuide")}</IconText></Button>
                 <div className="proxy-card">
                   <ProxyPresetControl mode={settings.proxyMode} value={settings.proxyUrl} onChange={(mode, value) => void updateProxy(mode, value)} />
                   <p className="settings-hint" style={{ margin: "2px 0 8px" }}>

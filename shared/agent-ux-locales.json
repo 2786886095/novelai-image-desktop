@@ -1230,5 +1230,89 @@
     "Execution mode",
     "実行モード",
     "실행 모드"
+  ],
+  "presetInfinite": [
+    "无限四代（生图适配）",
+    "無限四代（生圖適配）",
+    "Infinite Gen 4 (image workflow)",
+    "無限四代（画像生成向け）",
+    "Infinite Gen 4 (이미지용)"
+  ],
+  "presetInfiniteBody": [
+    "默认预设：直接、简洁地整理提示词和执行生图；基于 Minglink 无限四代，非商业许可。",
+    "預設：直接精簡地整理提示詞與生圖；基於 Minglink 無限四代，非商業授權。",
+    "Default: direct, compact prompting and image execution. Adapted from Minglink; non-commercial license.",
+    "直接・簡潔なプロンプトと画像生成。Minglink 原作、非商用ライセンス。",
+    "간결한 프롬프트와 이미지 실행. Minglink 기반, 비상업 라이선스."
+  ],
+  "presetComplete": [
+    "综合生图预设",
+    "綜合生圖預設",
+    "Unified image preset",
+    "統合画像プリセット",
+    "통합 이미지 프리셋"
+  ],
+  "presetCompleteBody": [
+    "合并生图导演、提示词策划、参考图分析与夏瑾 天琴座 Beta 3.8。",
+    "合併生圖導演、提示詞策劃、參考圖分析與夏瑾 天琴座 Beta 3.8。",
+    "Combines image directing, prompt planning, reference analysis and Lyra Beta 3.8.",
+    "画像演出・プロンプト・参考画像分析・Lyra Beta 3.8を統合。",
+    "이미지 연출, 프롬프트, 참조 분석, Lyra Beta 3.8 통합."
+  ],
+  "import_presets": [
+    "导入预设",
+    "匯入預設",
+    "Import preset",
+    "プリセットを読み込む",
+    "프리셋 가져오기"
+  ],
+  "import_worldbooks": [
+    "导入世界书",
+    "匯入世界書",
+    "Import lorebook",
+    "ワールド情報を読み込む",
+    "로어북 가져오기"
+  ],
+  "import_characters": [
+    "导入角色卡",
+    "匯入角色卡",
+    "Import character card",
+    "キャラクターカードを読み込む",
+    "캐릭터 카드 가져오기"
+  ],
+  "importedPresets": [
+    "我的预设",
+    "我的預設",
+    "My presets",
+    "自分のプリセット",
+    "내 프리셋"
+  ],
+  "collapseChats": [
+    "折叠对话列表",
+    "摺疊對話清單",
+    "Collapse conversations",
+    "会話を折りたたむ",
+    "대화 접기"
+  ],
+  "expandChats": [
+    "展开对话列表",
+    "展開對話清單",
+    "Expand conversations",
+    "会話を開く",
+    "대화 펼치기"
+  ],
+  "collapseResources": [
+    "折叠创作资源",
+    "摺疊創作資源",
+    "Collapse resources",
+    "リソースを折りたたむ",
+    "리소스 접기"
+  ],
+  "expandResources": [
+    "展开创作资源",
+    "展開創作資源",
+    "Expand resources",
+    "リソースを開く",
+    "리소스 펼치기"
   ]
 }

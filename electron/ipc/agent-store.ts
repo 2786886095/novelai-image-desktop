@@ -1,5 +1,6 @@
 import { normalizeStudioComposerActions } from '../../src/agent/composer-actions';
-import {studioBuiltinPreset,type StudioConversationOptions} from '../../src/agent/workspace-controls';
+import {studioBuiltinPreset,studioPresetId,STUDIO_DEFAULT_PRESET_ID,type StudioConversationOptions} from '../../src/agent/workspace-controls';
+import {importTavernSamplerPresetJson} from '../../src/tavern/preset-import';
 import { recoverInterruptedImageRepairs } from "../../src/tavern/image-repair";
 import { readSceneBindings } from "../../src/tavern/scene-bindings";
 import { dialog } from "electron";
@@ -355,7 +356,7 @@ export function normalizeAgentWorkspace(raw: unknown): AgentWorkspaceData {
         studioApprovalMode: conversation.studioApprovalMode==='auto'?'auto' as const:'confirm' as const,
         studioWebSearchEnabled: conversation.studioWebSearchEnabled===true,
         studioTemplateEnabled: conversation.studioTemplateEnabled!==false,
-        studioPresetId: typeof conversation.studioPresetId==='string'&&(studioBuiltinPreset(conversation.studioPresetId)||conversation.studioPresetId.startsWith('tavern:')&&samplerPresets.some(p=>'tavern:'+p.id===conversation.studioPresetId))?conversation.studioPresetId:'studio-director',
+        studioPresetId: typeof conversation.studioPresetId==='string'&&(studioBuiltinPreset(conversation.studioPresetId)||conversation.studioPresetId.startsWith('tavern:')&&samplerPresets.some(p=>'tavern:'+p.id===conversation.studioPresetId))?studioPresetId(conversation.studioPresetId):STUDIO_DEFAULT_PRESET_ID,
         reasoningEffort: (["low", "medium", "high"].includes(String(conversation.reasoningEffort))
           ? conversation.reasoningEffort
           : "auto") as AgentConversation["reasoningEffort"],
@@ -623,6 +624,31 @@ export function setStudioConversationOptions(conversationId:string,patch:Partial
 function safeFileName(name: string) {
   const cleaned = path.basename(name).replace(/[\u0000-\u001f<>:"/\\|?*]+/g, "_").trim();
   return cleaned.slice(0, 160) || "attachment";
+}
+
+/** Explicit UI file picker; imported instructions remain declarative preset data. */
+export async function importStudioPresetFiles():Promise<AgentWorkspaceMutationResult & {cancelled?:boolean}>{
+ const picked=await dialog.showOpenDialog({title:'导入生图预设',properties:['openFile','multiSelections'],filters:[{name:'JSON / Markdown / Text 预设',extensions:['json','md','txt']}]});
+ const workspace=readAgentWorkspace();
+ if(picked.canceled)return {ok:true,cancelled:true,workspace};
+ const errors:string[]=[],imported:TavernSamplerPreset[]=[];
+ for(const file of picked.filePaths){try{
+  const stat=fs.statSync(file);if(!stat.isFile()||stat.size<=0||stat.size>2*1024*1024)throw Error('文件为空或超过 2 MB。');
+  const text=fs.readFileSync(file,'utf8').replace(/^\uFEFF/,'');
+  let preset:TavernSamplerPreset;
+  if(path.extname(file).toLowerCase()==='.json'){
+   const raw=JSON.parse(text);
+   if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('无效的预设 JSON。');
+   if(!Array.isArray(raw.prompts)&&typeof raw.systemPrompt!=='string'&&typeof raw.system_prompt!=='string')throw Error('此 JSON 不是预设；角色卡和世界书请从对应页签导入。');
+   if(typeof raw.systemPrompt==='string'||typeof raw.system_prompt==='string')preset=normalizeTavernSamplerPreset({...raw,systemPrompt:raw.systemPrompt??raw.system_prompt,jailbreakPrompt:raw.jailbreakPrompt??raw.jailbreak_prompt??''});
+   else {const result=importTavernSamplerPresetJson(text,path.basename(file));if(!result.importedPromptCount)throw Error('没有可用的提示词块。');if(result.warnings.length)errors.push(...result.warnings);preset=result.preset;}
+  }else preset=normalizeTavernSamplerPreset({name:path.basename(file,path.extname(file)),systemPrompt:text,jailbreakPrompt:''});
+  preset.id=crypto.randomUUID();preset.source='sillytavern-json';preset.sourceName=path.basename(file);preset.sourceHash=crypto.createHash('sha256').update(text).digest('hex');
+  imported.push(preset);
+ }catch(error){errors.push(path.basename(file)+'：'+String(error));}}
+ if(!imported.length)return {ok:false,message:errors.join('\n')||'没有导入内容。',workspace};
+ workspace.samplerPresets.push(...imported);
+ return {ok:true,workspace:writeAgentWorkspace(workspace),message:`已导入 ${imported.length} 个预设。${errors.length?'\n'+errors.join('\n'):''}`};
 }
 
 function uniquePath(directory: string, fileName: string) {

@@ -9,7 +9,9 @@ import { officialNovelAiLogin, type OfficialLoginInput } from './nai-accounts-lo
 import { activateNaiAccount, restoreNaiAccount, naiAccountsBusy } from './nai-accounts-runtime';
 import { readStore, getSettings } from './store';
 import { proxyConfigForUrl } from './proxy';
+import {migrateLegacyNaiAccount} from './nai-accounts-migration';
 let vault: NaiAccountsVault | undefined;
+let migrationIssue:string|undefined;
 function getVault() {
   if (vault) return vault;
   const file = path.join(app.getPath('userData'), 'nai-accounts-v1.json');
@@ -23,7 +25,9 @@ function getVault() {
     try { fs.writeFileSync(temporary, JSON.stringify(next), { mode: 0o600, flag: 'wx' }); fs.renameSync(temporary, file); }
     finally { if (fs.existsSync(temporary)) fs.unlinkSync(temporary); }
   });
-  if(document.selectedId) { const lease=candidate.bind(document.selectedId); try{restoreNaiAccount(lease.snapshot);}finally{lease.release();} }
+  try{migrateLegacyNaiAccount(candidate,readStore());}catch{migrationIssue='旧账户自动迁移未完成；原凭据和接口配置未删除。请从账户管理重新保存。';}
+  const selectedId=candidate.selectedId();
+  if(selectedId) { const lease=candidate.bind(selectedId); try{restoreNaiAccount(lease.snapshot);}finally{lease.release();} }
   vault=candidate;
   return vault;
 }
@@ -31,8 +35,9 @@ export function ensureNaiAccountsLoaded() { getVault(); }
 export function registerNaiAccountsIpc() {
   // Lazy initialization: no real credentials are accessed by unit tests.
   ipcMain.handle('naiAccounts:list', () => getVault().list());
-  ipcMain.handle('naiAccounts:state',()=>({selectedId:getVault().selectedId(),busy:naiAccountsBusy()}));
+  ipcMain.handle('naiAccounts:state',()=>({selectedId:getVault().selectedId(),busy:naiAccountsBusy(),migrationIssue}));
   ipcMain.handle('naiAccounts:select',(_event,id?:string)=>{
+    if(!id)throw Error('请选择已保存账户。');
     const v=getVault(); const lease=id?v.bind(id):undefined;
     try { const snapshot=lease?.snapshot; lease?.release(); activateNaiAccount(snapshot,()=>v.select(id)); return {selectedId:id}; }
     finally {lease?.release();}
@@ -46,13 +51,7 @@ export function registerNaiAccountsIpc() {
     const account=getVault().add(crypto.randomUUID(),{label:input.label,method:'official-login',token:result.token,apiBaseUrl:'https://api.novelai.net',imageBaseUrl:'https://image.novelai.net'});
     return {ok:true,account};
   });
-  ipcMain.handle('naiAccounts:migrate',()=>{
-    const v=getVault(); if(v.list().some(a=>a.id==='legacy-official-v1')) return {migrated:false,message:'旧 Token 已复制，原存储保留。'};
-    const data=readStore(); if(!data.token) return {migrated:false,message:'没有可复制的旧 Token。'};
-    if(data.settings.apiBaseUrl.replace(/\/+$/,'')!=='https://api.novelai.net'||data.settings.imageBaseUrl.replace(/\/+$/,'')!=='https://image.novelai.net') return {migrated:false,message:'旧凭据使用自定义地址，来源未知；未自动复制到其他主机，请手动确认。'};
-    v.add('legacy-official-v1',{label:'原官方账户',method:'token',token:data.token,apiBaseUrl:'https://api.novelai.net',imageBaseUrl:'https://image.novelai.net'});
-    return {migrated:true,message:'旧 Token 已加密复制；原凭据与设置保留，未自动激活。'};
-  });
+  ipcMain.handle('naiAccounts:migrate',()=>{const v=getVault();const result=migrateLegacyNaiAccount(v,readStore());const id=v.selectedId();if(id){const lease=v.bind(id);try{activateNaiAccount(lease.snapshot,()=>{});}finally{lease.release();}}return {migrated:result.migrated,message:'旧配置已自动迁移至账户列表；原存储保留。'};});
   ipcMain.handle('naiAccounts:add', (_event, input: NaiAccountInput) => getVault().add(crypto.randomUUID(), input));
   ipcMain.handle('naiAccounts:remove', (_event, id: string) => { if(naiAccountsBusy()) throw Error('账户操作正在执行'); getVault().remove(id); });
   ipcMain.handle('naiAccounts:probe', async (_event, id: string) => {
