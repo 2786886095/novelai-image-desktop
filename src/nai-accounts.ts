@@ -29,6 +29,7 @@ export function validateAccountProfile(input: NaiAccountInput): void {
     if (input.method === 'relay' && (url.hostname === 'novelai.net' || url.hostname.endsWith('.novelai.net'))) throw new Error('Relay credentials cannot use official endpoints');
   }
 }
+export interface NaiAccountValidationResult {ok:boolean;code:'passed'|'auth'|'unsupported'|'network'|'invalid-input'|'invalid-response'|'http';status:number}
 export interface NaiAccountsBridge {
   list(): Promise<NaiAccountProfile[]>;
   add(input: NaiAccountInput): Promise<NaiAccountProfile>;
@@ -36,9 +37,9 @@ export interface NaiAccountsBridge {
   reveal(id:string):Promise<string>;
   state(): Promise<{ selectedId?: string; busy: boolean; migrationIssue?:string }>;
   select(id?: string): Promise<{ selectedId?: string }>;
-  login(input: {label:string;email:string;password:string;otp?:string}): Promise<{ok:true;account:NaiAccountProfile} | {ok:false;code:string;message:string}>;
+  login(input: {label:string;email:string;password:string;otp?:string}): Promise<{ok:true;account:NaiAccountProfile} | {ok:false;code:string;message:string;validation?:NaiAccountValidationResult}>;
   migrate(): Promise<{ migrated: boolean; message: string }>;
-  probe(id: string): Promise<{ status: number; subscription: 'skipped' | 'available'; protocol: 'unverified'; message: string }>;
+  probe(id: string): Promise<{ ok?:boolean;code?:NaiAccountValidationResult['code'];status: number; subscription: 'skipped' | 'available'; protocol: 'unverified'; message: string }>;
 }
 export function nextNaiAccountLabel(accounts:ReadonlyArray<Pick<NaiAccountProfile,'label'>>):string {
   let n=1;const names=new Set(accounts.map(a=>a.label));while(names.has('用户'+n))n++;return '用户'+n;

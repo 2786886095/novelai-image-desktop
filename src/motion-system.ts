@@ -50,7 +50,15 @@ export function manageModalPortal(host:HTMLElement|null){
   const index=nodes.indexOf(document.activeElement as HTMLElement);if(!nodes.length)return;
   if(event.shiftKey&&index<=0){event.preventDefault();nodes.at(-1)?.focus();}else if(!event.shiftKey&&(index<0||index===nodes.length-1)){event.preventDefault();nodes[0].focus();}
  };document.addEventListener('keydown',key);
- return()=>{document.removeEventListener('keydown',key);const index=modals.indexOf(host);if(index>=0)modals.splice(index,1);if(!modals.length&&root)root.inert=rootWasInert;if(previous?.isConnected&&!previous.closest('[inert]'))previous.focus({preventScroll:true});};
+ let released=false;
+ return()=>{
+  if(released)return;released=true;document.removeEventListener('keydown',key);
+  const index=modals.indexOf(host),wasTop=index>=0&&index===modals.length-1;
+  if(index>=0)modals.splice(index,1);if(!modals.length&&root)root.inert=rootWasInert;
+  const focused=document.activeElement;
+  // A background dialog closing must not steal focus from a newer dialog or user input.
+  if(wasTop&&(!focused||focused===document.body||!focused.isConnected||host.contains(focused))&&previous?.isConnected&&!previous.closest('[inert]'))previous.focus({preventScroll:true});
+ };
 }
 export function cancelPortalExits(){clearGhosts();}
 export function retainPortalExit(host:HTMLElement|null){

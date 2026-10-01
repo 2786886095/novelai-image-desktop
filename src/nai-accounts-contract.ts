@@ -9,10 +9,13 @@
  * login success saves encrypted accessToken, does not automatically activate.
  * migrate() -> {migrated:boolean,message:string}; copies only exact-official legacy
  * credentials once as legacy-official-v1, preserves original bytes, never auto-activates.
- * remove(id) -> void; selected accounts/leased accounts cannot be removed.
+ * remove(id) -> void; current accounts may be removed atomically; the last removal signs out. Leased accounts cannot be removed.
  * probe(id) -> {status:number,subscription:'skipped'|'available',protocol:'unverified',message:string}.
- * status=0 means skipped/no network, not auth success; relay model/subscription GET
- * is skipped pending publicly verified read-only routes. Official bounded GET
+ * probe also returns ok/code: auth, unsupported, network, invalid-input, invalid-response, http, passed.
+ * add/login must pass read-only verification before persistence; failure preserves stored accounts.
+ * Relay uses its own API base + /user/subscription, with an anonymous 401/403 gate
+ * before authenticated GET. Public HTML/200 is not authentication success. No host fallback.
+ * Unsupported routes fail explicitly and do not save, retry or invoke paid generation. Official bounded GET
  * /user/subscription has 8s timeout, 256KiB response bound and no redirects/retries.
  * IPC names use naiAccounts:<method>; window.naiAccounts exposes corresponding methods.
  * Native mobile must provide equivalent encrypted storage; this contract is not evidence
@@ -35,6 +38,7 @@
  * Root settings expose runtime-only naiAccountId and keyed naiAccountRevision (no token).
  * Native agent IPC records new pending proposal account revisions; a saved proposal on
  * another account or an unknown pre-restart proposal is refused, requiring regeneration.
+ * Shared asynchronous in-app confirmation releases inert/hit-testing before resolving.
  * Fixed official login/subscription URL honors proxyConfigForUrl(nai, actual URL, settings).
  * Windows safeStorage synthetic round-trip was observed (no real user store).
  * Mobile HANDOFF read-only parity inspection + its four synthetic vectors passed here.

@@ -2,14 +2,13 @@ import { app, ipcMain, safeStorage } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import axios from 'axios';
 import { NaiAccountsVault, accountCipherAvailable, type AccountVaultDocument } from './nai-accounts-vault';
 import type { NaiAccountInput } from '../../src/nai-accounts';
 import { officialNovelAiLogin, type OfficialLoginInput } from './nai-accounts-login';
 import { activateNaiAccount, restoreNaiAccount, naiAccountsBusy } from './nai-accounts-runtime';
-import { readStore, getSettings } from './store';
-import { proxyConfigForUrl } from './proxy';
+import { readStore } from './store';
 import {migrateLegacyNaiAccount} from './nai-accounts-migration';
+import {validateNaiAccountReadOnly,requireNaiAccountValidation} from './nai-accounts-validation';
 let vault: NaiAccountsVault | undefined;
 let migrationIssue:string|undefined;
 function getVault() {
@@ -44,16 +43,28 @@ export function registerNaiAccountsIpc() {
     finally {lease?.release();}
   });
   ipcMain.handle('naiAccounts:login',async(_event,input:OfficialLoginInput)=>{
+    if(naiAccountsBusy())throw Error('账户操作正在执行');
     if(!input?.label?.trim() || input.label.length>120) return {ok:false,code:'auth',message:'请填写账户名称。'};
     if(!accountCipherAvailable(safeStorage)) throw Error('OS credential encryption unavailable');
     let result: Awaited<ReturnType<typeof officialNovelAiLogin>>;
     try {result=await officialNovelAiLogin(input);} finally {input.password='';input.otp=undefined;}
     if(!result.ok) return result;
-    const account=getVault().add(crypto.randomUUID(),{label:input.label,method:'official-login',token:result.token,apiBaseUrl:'https://api.novelai.net',imageBaseUrl:'https://image.novelai.net'});
+    const candidate:NaiAccountInput={label:input.label,method:'official-login',token:result.token,apiBaseUrl:'https://api.novelai.net',imageBaseUrl:'https://image.novelai.net'};
+    const validation=await validateNaiAccountReadOnly(candidate);
+    if(!validation.ok)return {ok:false,code:'validation',message:'账户验证未通过，未保存。',validation};
+    if(naiAccountsBusy())throw Error('账户操作正在执行');
+    const account=getVault().add(crypto.randomUUID(),candidate);
     return {ok:true,account};
   });
   ipcMain.handle('naiAccounts:migrate',()=>{const v=getVault();const result=migrateLegacyNaiAccount(v,readStore());const id=v.selectedId();if(id){const lease=v.bind(id);try{activateNaiAccount(lease.snapshot,()=>{});}finally{lease.release();}}return {migrated:result.migrated,message:'旧配置已自动迁移至账户列表；原存储保留。'};});
-  ipcMain.handle('naiAccounts:add', (_event, input: NaiAccountInput) => getVault().add(crypto.randomUUID(), input));
+  ipcMain.handle('naiAccounts:add', async (_event, input: NaiAccountInput) => {
+    if(naiAccountsBusy())throw Error('账户操作正在执行');
+    if(!accountCipherAvailable(safeStorage))throw Error('OS credential encryption unavailable');
+    const candidate={...input};
+    requireNaiAccountValidation(await validateNaiAccountReadOnly(candidate));
+    if(naiAccountsBusy())throw Error('账户操作正在执行');
+    return getVault().add(crypto.randomUUID(),candidate);
+  });
   ipcMain.handle('naiAccounts:remove', (_event, id: string) => {
     if(naiAccountsBusy())throw Error('账户操作正在执行');
     const v=getVault();
@@ -66,22 +77,8 @@ export function registerNaiAccountsIpc() {
   // Deliberate local UI action only: not returned by list/state or exposed to Agent tools.
   ipcMain.handle('naiAccounts:reveal',(_event,id:string)=>{const lease=getVault().bind(id);try{return lease.snapshot.token;}finally{lease.release();}});
   ipcMain.handle('naiAccounts:probe', async (_event, id: string) => {
-    const lease = getVault().bind(id);
-    try {
-      const a = lease.snapshot;
-      const relay = a.method === 'relay';
-      if (relay) return { status: 0, subscription: 'skipped', protocol: 'unverified',
-        message: 'Relay saved as manual NovelAI raw-API profile (/ai/generate-image). Subscription and model probes skipped: no publicly verified read-only endpoint. No network request performed.' };
-      const url='https://api.novelai.net/user/subscription';
-      const proxy=await proxyConfigForUrl('nai',url,{...getSettings()});
-      const response = await axios.get(url, {
-        ...proxy,
-        headers: { Authorization: `Bearer ${a.token}` }, timeout: 8000, maxRedirects: 0,
-        maxContentLength: 256 * 1024, validateStatus: () => true,
-      });
-      return { status: response.status, subscription: relay ? 'skipped' : response.status === 200 ? 'available' : 'skipped',
-        protocol: 'unverified', message: 'GET only; model-list success does not establish NovelAI image protocol support.' };
-    } catch { throw new Error('Bounded account GET failed; no retry or endpoint fallback performed'); }
-    finally { lease.release(); }
+    const lease=getVault().bind(id);
+    try{const result=await validateNaiAccountReadOnly(lease.snapshot);return {...result,subscription:result.ok?'available':'skipped',protocol:'unverified',message:'Read-only API authentication only. Image generation protocol and billing are not tested.'};}
+    finally{lease.release();}
   });
 }

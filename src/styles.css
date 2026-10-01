@@ -19665,7 +19665,7 @@ button.prompt-chip-head::after,
   transition: opacity 160ms ease, backdrop-filter 160ms ease;
 }
 .app-confirm-backdrop.is-visible { opacity: 1; backdrop-filter: blur(8px); }
-.app-confirm-backdrop.is-leaving { opacity: 0; }
+.app-confirm-backdrop.is-leaving { opacity: 0; pointer-events: none; }
 .app-confirm-dialog {
   width: min(420px, calc(100vw - 32px));
   padding: 22px;
@@ -19692,7 +19692,7 @@ button.prompt-chip-head::after,
   border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
   background: color-mix(in srgb, var(--accent-soft) 42%, var(--surface));
 }
-.app-confirm-actions .primary { color: #fff; border-color: #7447ed; background: #7447ed; }
+.app-confirm-actions .primary { color: var(--accent-text, #fff); border-color: var(--accent); background: var(--accent); }
 .postprocess-mode-switcher {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -20427,3 +20427,10 @@ input[type="range"].studio-range::-moz-range-thumb { width:12px; height:12px; bo
 input[type="range"].studio-range:focus-visible { outline:2px solid var(--accent); outline-offset:2px; box-shadow:var(--focus-ring); }
 input[type="range"].studio-range:disabled { opacity:.5; cursor:not-allowed; }
 @media(forced-colors:active) { input[type="range"].studio-range { appearance:auto; -webkit-appearance:auto; } input[type="range"].studio-range::-webkit-slider-thumb { appearance:auto; -webkit-appearance:auto; } }
+
+/* Confirmation is above settings/account dialogs; closing surfaces never intercept input. */
+.app-confirm-backdrop{z-index:calc(var(--z-overlay,1000) + 20)}
+.app-confirm-backdrop.is-leaving,.app-confirm-backdrop.is-leaving *{pointer-events:none!important}
+.app-confirm-dialog :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+html.motion-reduced .app-confirm-backdrop,html.motion-reduced .app-confirm-dialog{transition:none}
+@media(pointer:coarse){.app-confirm-actions button{min-height:44px}}
