@@ -289,6 +289,7 @@ export interface AgentMemory {
 
 export interface AgentWorkspaceData {
   version: typeof AGENT_WORKSPACE_VERSION;
+  studioDefaults?: Partial<import("./workspace-controls").StudioConversationOptions>;
   selectedConversationId?: string;
   conversations: AgentConversation[];
   skills: AgentSkill[];

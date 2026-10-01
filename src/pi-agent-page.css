@@ -209,3 +209,14 @@ html.motion-reduced .pi-agent,html.motion-reduced .pi-pane-slot,html.motion-redu
 .pi-question-card footer{display:flex;justify-content:space-between;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--pi-line)}.pi-question-card footer>div{display:flex;gap:8px}.pi-question-card footer button{min-height:44px;display:flex;align-items:center;justify-content:center;gap:6px}
 @media(max-width:760px){.pi-question-card{padding:12px}.pi-question-card>header{align-items:flex-start;flex-direction:column;gap:4px}.pi-question-card footer{flex-wrap:wrap}.pi-question-card footer>div{margin-left:auto}}
 @media(prefers-reduced-motion:reduce){.pi-question-card{animation:none}}html.motion-reduced .pi-question-card{animation:none}
+
+/* Closing phases are visual-only: no hidden modal or menu retains focus. */
+.pi-dialog-mask{position:fixed;inset:0;z-index:1100;display:grid;place-items:center;background:#14102088;padding:16px}
+.pi-dialog-mask .pi-modal{display:block;position:relative;height:auto;max-height:calc(100dvh - 40px);width:min(560px,100%);margin:0;overflow:auto;animation:none}
+.pi-motion-disclosure{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows 120ms ease-in,opacity 120ms ease-in}
+.pi-motion-disclosure[data-disclosure-open=true]{grid-template-rows:1fr;opacity:1;transition-duration:160ms;transition-timing-function:ease-out}
+.pi-motion-disclosure>div{min-height:0;overflow:hidden}
+.pi-motion-disclosure[data-disclosure-open=false]{pointer-events:none}
+.pi-resource-details-toggle svg{transition:transform 160ms ease-out}
+.pi-resource-details-toggle[aria-expanded=true] svg{transform:rotate(180deg)}
+html.motion-reduced .pi-motion-disclosure,html.motion-reduced .pi-resource-details-toggle svg{transition:none}

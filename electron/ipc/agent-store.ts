@@ -1,3 +1,4 @@
+import {normalizeStudioDefaults} from '../../src/agent/preferences';
 import { normalizeStudioComposerActions } from '../../src/agent/composer-actions';
 import {studioBuiltinPreset,studioPresetId,STUDIO_DEFAULT_PRESET_ID,type StudioConversationOptions} from '../../src/agent/workspace-controls';
 import {importTavernSamplerPresetJson} from '../../src/tavern/preset-import';
@@ -400,6 +401,7 @@ export function normalizeAgentWorkspace(raw: unknown): AgentWorkspaceData {
     : conversations.find(item => !item.archivedAt)?.id;
   return {
     version: AGENT_WORKSPACE_VERSION,
+    studioDefaults: normalizeStudioDefaults(input.studioDefaults),
     ...(selectedConversationId ? { selectedConversationId } : {}),
     conversations,
     skills: [...skillById.values()],
@@ -509,6 +511,14 @@ export function createAgentConversation(title?: string): AgentWorkspaceMutationR
     autoPlayGroup: false,
     pinned: false,
   };
+  const defaults=normalizeStudioDefaults(workspace.studioDefaults);
+  const defaultCharacters=defaults.characterIds?.filter(id=>workspace.characters.some(c=>c.id===id));
+  if(defaultCharacters?.length){conversation.characterIds=defaultCharacters;conversation.activeCharacterId=defaultCharacters.includes(defaults.activeCharacterId??'')?defaults.activeCharacterId:defaultCharacters[0];}
+  if(defaults.lorebookIds)conversation.lorebookIds=defaults.lorebookIds.filter(id=>workspace.lorebooks.some(b=>b.id===id));
+  if(defaults.studioApprovalMode)conversation.studioApprovalMode=defaults.studioApprovalMode;
+  if(defaults.studioWebSearchEnabled!==undefined)conversation.studioWebSearchEnabled=defaults.studioWebSearchEnabled;
+  if(defaults.studioTemplateEnabled!==undefined)conversation.studioTemplateEnabled=defaults.studioTemplateEnabled;
+  if(defaults.studioPresetId&&(studioBuiltinPreset(defaults.studioPresetId)||workspace.samplerPresets.some(p=>'tavern:'+p.id===defaults.studioPresetId)))conversation.studioPresetId=defaults.studioPresetId;
   workspace.conversations.unshift(conversation);
   workspace.selectedConversationId = conversation.id;
   return mutation(workspace);
@@ -554,11 +564,14 @@ export function deleteAgentConversation(conversationId: string): AgentWorkspaceM
   if (!workspace.conversations.some((item) => item.id === conversationId)) {
     return { ok: false, message: "对话不存在或已经删除。", workspace };
   }
+  const deleting=workspace.conversations.find(item=>item.id===conversationId)!;
+  if(["running","waiting-permission"].includes(deleting.status))return {ok:false,message:"请先停止该对话的任务再删除。",workspace};
   workspace.conversations = workspace.conversations.filter((item) => item.id !== conversationId);
   workspace.memories = workspace.memories.filter((item) => item.conversationId !== conversationId);
-  if (workspace.selectedConversationId === conversationId) workspace.selectedConversationId = workspace.conversations[0]?.id;
+  if (workspace.selectedConversationId === conversationId) workspace.selectedConversationId = workspace.conversations.find(item=>!item.archivedAt)?.id;
   try {
-    fs.rmSync(path.join(agentAttachmentsDirectory(), conversationId), { recursive: true, force: true });
+    const base=path.resolve(agentAttachmentsDirectory()),target=path.resolve(base,conversationId);
+    if(target.startsWith(base+path.sep))fs.rmSync(target, { recursive: true, force: true });
   } catch {
     // Metadata deletion should still succeed if an antivirus temporarily holds a file.
   }
@@ -618,6 +631,7 @@ export function setStudioConversationOptions(conversationId:string,patch:Partial
  if(patch.studioPresetId!==undefined){const id=patch.studioPresetId;if(typeof id!=='string'||!studioBuiltinPreset(id)&&!workspace.samplerPresets.some(p=>'tavern:'+p.id===id))return {ok:false,message:'预设不存在。',workspace};chat.studioPresetId=id;}
  if(patch.characterIds!==undefined){if(!Array.isArray(patch.characterIds))return {ok:false,message:'无效的角色选择。',workspace};const ids=[...new Set(patch.characterIds.filter(id=>workspace.characters.some(c=>c.id===id)))];if(!ids.length)return {ok:false,message:'请选择一个角色卡。',workspace};chat.characterIds=ids;chat.activeCharacterId=ids.includes(patch.activeCharacterId??'')?patch.activeCharacterId:ids[0];}
  if(patch.lorebookIds!==undefined){if(!Array.isArray(patch.lorebookIds))return {ok:false,message:'无效的世界书选择。',workspace};chat.lorebookIds=[...new Set(patch.lorebookIds.filter(id=>workspace.lorebooks.some(b=>b.id===id)))];}
+ workspace.studioDefaults=normalizeStudioDefaults({studioApprovalMode:chat.studioApprovalMode,studioWebSearchEnabled:chat.studioWebSearchEnabled,studioTemplateEnabled:chat.studioTemplateEnabled,studioPresetId:chat.studioPresetId,characterIds:chat.characterIds,activeCharacterId:chat.activeCharacterId,lorebookIds:chat.lorebookIds});
  chat.updatedAt=now();return mutation(workspace);
 }
 

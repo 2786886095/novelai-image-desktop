@@ -3,14 +3,18 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
-import { LuArrowDown, LuArrowUp, LuCheck, LuChevronDown, LuCopy, LuImage, LuLoaderCircle, LuMessageSquare, LuPencil, LuPlus, LuSearch, LuSettings, LuSparkles, LuSquare, LuArchive, LuArchiveRestore, LuEllipsis, LuX, LuUserRound, LuBot, LuNetwork, LuWrench, LuGauge, LuFileText, LuShieldCheck, LuZap, LuPanelLeftOpen, LuPanelLeftClose, LuPanelRightOpen, LuPanelRightClose } from 'react-icons/lu';
+import { LuArrowDown, LuArrowUp, LuCheck, LuChevronDown, LuCopy, LuImage, LuLoaderCircle, LuMessageSquare, LuPencil, LuPlus, LuSearch, LuSettings, LuSparkles, LuSquare, LuArchive, LuArchiveRestore, LuTrash2, LuEllipsis, LuX, LuUserRound, LuBot, LuNetwork, LuWrench, LuGauge, LuFileText, LuShieldCheck, LuZap, LuPanelLeftOpen, LuPanelLeftClose, LuPanelRightOpen, LuPanelRightClose } from 'react-icons/lu';
 import type { AgentComposerAction, AgentConversation, AgentDiscoveredModel, AgentAttachment, AgentEvent, AgentMessage, AgentPermissionRequest, AgentWorkspaceData } from './agent/types';
 import { AGENT_PROVIDER_PRESETS, agentProviderRequiresApiKey, inferAgentProviderPreset } from './agent/provider-catalog';
 import { studioSourceUrl, studioWebSources, studioContextMeter, preparedStudioPreview, shouldFollowStudioScroll, studioToolStatus, studioUxText, validStudioModelConfig } from './agent/ux';
 import { clampCompactThreshold } from './agent/context';
 import type { AppSettings } from './types';
 import { useAppStore } from './store';
-import { SelectMenu, SelectMenuCompat } from './components/ui';
+import {confirmAction} from './components/confirm';
+import {MotionDisclosure} from './components/MotionDisclosure';
+import {useStudioRegionMotion} from './use-studio-motion';
+import {normalizeAgentUiPreferences,type AgentUiPreferences} from './agent/preferences';
+import { AppPortal, SelectMenu, SelectMenuCompat } from './components/ui';
 import './pi-agent-page.css';
 import {useDisclosurePresence,disclosureAttributes} from './components/disclosure-motion';
 import {AgentQuestionCards} from './components/AgentQuestionCards';
@@ -24,11 +28,13 @@ function providerIcon(id: string): ReactNode {
 }
 
 function AgentDialog({title, children, close}: {title: string; children: ReactNode; close: () => void}) {
-  const ref = useRef<HTMLDialogElement>(null); const id = useId();
-  useEffect(() => { ref.current?.showModal(); return () => ref.current?.close(); }, []);
-  return <dialog ref={ref} className="pi-modal" aria-labelledby={id} onCancel={(event) => { event.preventDefault(); close(); }}>
+  const ref=useRef<HTMLElement>(null),id=useId();
+  useLayoutEffect(()=>{ref.current?.querySelector<HTMLElement>('[autofocus],input,button')?.focus({preventScroll:true});},[]);
+  return <AppPortal><div className="modal-backdrop pi-dialog-mask" onMouseDown={event=>{if(event.target===event.currentTarget)close();}} onKeyDown={event=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();close();}}}>
+    <section ref={ref} className="pi-agent pi-modal" role="dialog" aria-modal="true" aria-labelledby={id}>
     <header><h2 id={id}>{title}</h2><button type="button" className="pi-icon" aria-label={studioUxText(useAppStore.getState().settings?.language, 'close')} onClick={close}><LuX /></button></header>{children}
-  </dialog>;
+    </section></div></AppPortal>;
+
 }
 
 function AgentToolGroup({message, language, children}: {message: AgentMessage; language: unknown; children: ReactNode}) {
@@ -38,7 +44,7 @@ function AgentToolGroup({message, language, children}: {message: AgentMessage; l
   const open = expanded ?? attention;
   return <section className="pi-tool-group"><button type="button" className="pi-tool-toggle" aria-expanded={open} aria-controls={id} onClick={()=>setExpanded(!open)}>
     {message.tools.some(tool=>tool.status==='error')?<LuX aria-hidden/>:attention?<LuLoaderCircle aria-hidden/>:<LuCheck aria-hidden/>}<span>{studioUxText(language,'toolProgress',String(message.tools.length))}</span><LuChevronDown className={open?'is-expanded':''} aria-hidden/>
-  </button><div id={id} hidden={!open} className="pi-tools">{children}</div></section>;
+  </button><MotionDisclosure id={id} open={open}><div className="pi-tools">{children}</div></MotionDisclosure></section>;
 }
 
 export function AgentWebSources({preview, language, onOpen}: {preview: ReturnType<typeof studioWebSources>; language: unknown; onOpen: (url: string) => void}) {
@@ -56,7 +62,7 @@ export default function PiAgentPage({ active }: { active: boolean }) {
   const latestWorkspace = useRef<AgentWorkspaceData | undefined>(undefined);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [search, setSearch] = useState('');
-  const [archivedView, setArchivedView] = useState(false);
+  const [archivedView, setArchivedView] = useState(settings?.agentUiPreferences?.archivedView??false);
   const [error, setError] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [modelDraft, setModelDraft] = useState<Partial<AppSettings>>({});
@@ -79,12 +85,26 @@ export default function PiAgentPage({ active }: { active: boolean }) {
   const [configError, setConfigError] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(()=>window.innerWidth>760);
-  const [resourcesOpen,setResourcesOpen]=useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(()=>settings?.agentUiPreferences?.sidebarOpen??window.innerWidth>760);
+  const [resourcesOpen,setResourcesOpen]=useState(settings?.agentUiPreferences?.resourcesOpen??false);
+  const [resourceTab,setResourceTab]=useState<NonNullable<AgentUiPreferences['resourceTab']>>(settings?.agentUiPreferences?.resourceTab??'presets');
   const sidebarPresent=useDisclosurePresence(sidebarOpen),resourcesPresent=useDisclosurePresence(resourcesOpen);
   const leftToggle=useRef<HTMLButtonElement>(null),rightToggle=useRef<HTMLButtonElement>(null);
   const [optionsBusy,setOptionsBusy]=useState(false);
-  const [composerHeight,setComposerHeight]=useState(()=>{try{return Math.max(108,Math.min(420,Number(localStorage.getItem('studio-agent-composer-height'))||154));}catch{return 154;}});
+  const [composerHeight,setComposerHeight]=useState(()=>{if(settings?.agentUiPreferences?.composerHeight)return settings.agentUiPreferences.composerHeight;try{return Math.max(108,Math.min(420,Number(localStorage.getItem('studio-agent-composer-height'))||154));}catch{return 154;}});
+  const preferencesReady=useRef(!!settings),preferenceWrite=useRef(Promise.resolve());
+  const flushPreferences=useRef<(()=>void)|undefined>(undefined);
+  useEffect(()=>()=>{flushPreferences.current?.();},[]);
+  useEffect(()=>{if(settings&&!preferencesReady.current){const value=normalizeAgentUiPreferences(settings.agentUiPreferences);setSidebarOpen(value.sidebarOpen??window.innerWidth>760);setResourcesOpen(value.resourcesOpen??false);setArchivedView(value.archivedView??false);setResourceTab(value.resourceTab??'presets');if(value.composerHeight)setComposerHeight(value.composerHeight);preferencesReady.current=true;}},[settings]);
+  useEffect(()=>{
+    if(!preferencesReady.current)return;
+    const value=normalizeAgentUiPreferences({sidebarOpen,resourcesOpen,archivedView,resourceTab,composerHeight});
+    const save=()=>{preferenceWrite.current=preferenceWrite.current.then(async()=>{await window.naiDesktop.setSetting('agentUiPreferences',value);useAppStore.setState(state=>({settings:state.settings?{...state.settings,agentUiPreferences:value}:state.settings}));}).catch(reason=>{useAppStore.getState().setToast(String(reason));});};
+    // Debounce dragging, flush on unmount; serialize writes so old replies cannot win.
+    flushPreferences.current=save;
+    const timer=window.setTimeout(()=>{save();flushPreferences.current=undefined;},200);
+    return()=>{window.clearTimeout(timer);};
+  },[sidebarOpen,resourcesOpen,archivedView,resourceTab,composerHeight]);
   const resizePress=useRef<{y:number;height:number}|null>(null);
   const [questions,setQuestions]=useState<AgentQuestionRequest[]>([]);
   const [permissions, setPermissions] = useState<AgentPermissionRequest[]>([]);
@@ -303,13 +323,19 @@ export default function PiAgentPage({ active }: { active: boolean }) {
     {message.content && <footer className="pi-message-actions"><button title={t('copy')} onClick={()=>void copy(message.content,message.id)}><LuCopy/>{t(copied===message.id?'copied':'copy')}</button>{message.role==='user' && <button onClick={()=>{prefill(message.content);setChatActions(message.actions??[])}}><LuPencil/>{t('editRequest')}</button>}</footer>}
   </article>;
   const meter = studioContextMeter(chat?.context);
+  const chatListMotion=useStudioRegionMotion(archivedView);
   const chats = workspace?.conversations.filter(item=>!!item.archivedAt===archivedView).filter((item)=>item.title.toLocaleLowerCase().includes(search.toLocaleLowerCase())) ?? [];
 
   const changeArchived = async (id: string, value: boolean) => {
     if (running) return;
     try {const result=await window.naiDesktop.setAgentConversationArchived(id,value);if(result.ok){updateWorkspace(result.workspace);if(!value)setArchivedView(false);}else setError(result.message??t('statusError'));}catch(reason){setError(String(reason));}
   };
-  const rowAction = (item: AgentConversation, action: string) => {if(action==='rename'){setChatName(item.title);setChatAction(item);}else void changeArchived(item.id,action==='archive');};
+  const deleteChat=async(item:AgentConversation)=>{
+    if(running||['running','waiting-permission'].includes(item.status))return;
+    if(!await confirmAction(t('deleteChatConfirm',item.title),t('deleteChat'),undefined,undefined,{confirm:t('deleteChat'),cancel:t('cancel')}))return;
+    await mutateChat(window.naiDesktop.deleteAgentConversation(item.id));
+  };
+  const rowAction = (item: AgentConversation, action: string) => {if(action==='rename'){setChatName(item.title);setChatAction(item);}else if(action==='delete')void deleteChat(item);else void changeArchived(item.id,action==='archive');};
 
   return <div className={`pi-agent${sidebarOpen?' has-left-pane':''}${resourcesOpen?' has-right-pane':''}`}>
     <div id="pi-conversations-pane" className="pi-pane-slot pi-pane-left" {...disclosureAttributes(sidebarOpen)} onKeyDown={event=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();setSidebarOpen(false);leftToggle.current?.focus();}}}>
@@ -317,7 +343,7 @@ export default function PiAgentPage({ active }: { active: boolean }) {
       <button disabled={running} title={running?t('busySwitch'):undefined} onClick={()=>{setArchivedView(false);void mutateChat(window.naiDesktop.createAgentConversation(t('newChat')))}}><LuPlus/>{t('newChat')}</button>
       <label className="pi-search"><LuSearch aria-hidden/><input aria-label={t('searchChats')} placeholder={t('searchChats')} value={search} onChange={(event)=>setSearch(event.target.value)}/></label>
       <div className="pi-chat-scope" aria-label={t('chats')}><button aria-pressed={!archivedView} onClick={()=>setArchivedView(false)}><LuMessageSquare/>{t('activeChats')}</button><button aria-pressed={archivedView} onClick={()=>setArchivedView(true)}><LuArchive/>{t('archivedChats')}</button></div>
-      <nav>{chats.map(item=><div className={`pi-chat-row${item.id===chat?.id?' is-active':''}`} key={item.id}><button className="pi-chat-select" aria-current={item.id===chat?.id?'page':undefined} disabled={running} title={running?t('busySwitch'):item.title} onClick={()=>void mutateChat(window.naiDesktop.selectAgentConversation(item.id))}>{item.archivedAt?<LuArchive/>:<LuMessageSquare/>}<span>{item.title}</span></button><SelectMenu value="" minMenuWidth={148} ariaLabel={`${t('chatActions')}: ${item.title}`} label={<LuEllipsis/>} className="pi-chat-more" popoverClassName="pi-chat-menu" disabled={running} options={[{value:'rename',label:t('rename'),icon:<LuPencil/>},item.archivedAt?{value:'restore',label:t('restoreChat'),icon:<LuArchiveRestore/>}:{value:'archive',label:t('archiveChat'),icon:<LuArchive/>}]} onChange={action=>rowAction(item,action)}/></div>)}{!chats.length&&<p>{t(archivedView?'noArchivedChats':'noChats')}</p>}</nav>
+      <nav ref={chatListMotion}>{chats.map(item=><div className={`pi-chat-row${item.id===chat?.id?' is-active':''}`} key={item.id}><button className="pi-chat-select" aria-current={item.id===chat?.id?'page':undefined} disabled={running} title={running?t('busySwitch'):item.title} onClick={()=>void mutateChat(window.naiDesktop.selectAgentConversation(item.id))}>{item.archivedAt?<LuArchive/>:<LuMessageSquare/>}<span>{item.title}</span></button><SelectMenu value="" minMenuWidth={148} ariaLabel={`${t('chatActions')}: ${item.title}`} label={<LuEllipsis/>} className="pi-chat-more" popoverClassName="pi-chat-menu" disabled={running} options={[{value:'rename',label:t('rename'),icon:<LuPencil/>},item.archivedAt?{value:'restore',label:t('restoreChat'),icon:<LuArchiveRestore/>}:{value:'archive',label:t('archiveChat'),icon:<LuArchive/>},{value:'delete',label:t('deleteChat'),icon:<LuTrash2/>,disabled:['running','waiting-permission'].includes(item.status)}]} onChange={action=>rowAction(item,action)}/></div>)}{!chats.length&&<p>{t(archivedView?'noArchivedChats':'noChats')}</p>}</nav>
       <div className="pi-sidebar-footer"><span className={`pi-model-dot ${configured?'is-ready':''}`}/><span role="status">{pending?t('statusPending'):running?t('statusRunning'):t(configured?'ready':'missingModel')}</span><button className="pi-icon" disabled={running} aria-label={t('modelSettings')} title={t('modelSettings')} onClick={openSettings}><LuSettings/></button></div>
     </aside>}
     </div>
@@ -356,7 +382,7 @@ export default function PiAgentPage({ active }: { active: boolean }) {
     <button ref={rightToggle} className="pi-side-toggle pi-right-toggle" aria-label={t(resourcesOpen?'collapseResources':'expandResources')} title={t(resourcesOpen?'collapseResources':'expandResources')} aria-expanded={resourcesOpen} aria-controls="pi-creative-resources-pane" onClick={()=>{if(window.innerWidth<=1100)setSidebarOpen(false);setResourcesOpen(!resourcesOpen)}}>{resourcesOpen?<LuPanelRightClose/>:<LuPanelRightOpen/>}</button>
     {resourcesOpen&&<button className="pi-resource-scrim" aria-label={t('close')} onClick={()=>{setResourcesOpen(false);rightToggle.current?.focus()}}/>}
     <div id="pi-creative-resources-pane" className="pi-pane-slot pi-pane-right" {...disclosureAttributes(resourcesOpen)} onKeyDown={event=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();setResourcesOpen(false);rightToggle.current?.focus();}}}>
-    {resourcesPresent&&<AgentResourcePanel workspace={workspace} chat={chat} language={settings?.language} disabled={archived||running||!chat} onChange={patch=>void saveOptions(patch)} onImport={kind=>void importResources(kind)}/> }
+    {resourcesPresent&&<AgentResourcePanel tab={resourceTab} onTab={setResourceTab} workspace={workspace} chat={chat} language={settings?.language} disabled={archived||running||!chat} onChange={patch=>void saveOptions(patch)} onImport={kind=>void importResources(kind)}/> }
     </div>
     {modelPickerOpen&&<AgentDialog title={t('modelSettings')} close={()=>{if(!saving&&!discovering)setModelPickerOpen(false)}}><p>{settings?.agentApiProtocol} · {settings?.agentApiModel||t('missingModel')}</p><button disabled={discovering||saving||running||!configured} onClick={()=>void discoverModels()}>{t(discovering?'statusRunning':discoveryState==='error'||discoveryState==='empty'?'retryModels':'loadModels')}</button>{discoveryState!=='idle'&&<p className={discoveryState==='error'?'pi-notice pi-notice-error':'pi-notice'} role={discoveryState==='error'?'alert':'status'}>{t(discoveryState==='empty'?'emptyModels':discoveryState==='error'?'failedModels':'foundModels')} {discoveryMessage}</p>}<div className="pi-model-list">{models.map(model=><button disabled={saving||running} key={model.id} aria-pressed={model.id===settings?.agentApiModel} onClick={()=>void chooseModel(model.id)}><LuBot aria-hidden/><span>{model.displayName}</span>{model.id===settings?.agentApiModel&&<LuCheck aria-hidden/>}<small>{model.id} · {t('modelSource_'+model.metadataSource)}</small></button>)}</div><footer><button disabled={saving||discovering||running} onClick={()=>{setModelPickerOpen(false);openSettings()}}><LuSettings/>{t('advancedSettings')}</button></footer></AgentDialog>}
     {settingsOpen&&<AgentDialog title={t('modelSettings')} close={()=>{if(!saving)setSettingsOpen(false)}}><p>{t('configureHint')}</p><p className="pi-notice">{t('imageApi')}</p><label>{t('providerPreset')}<SelectMenu ariaLabel={t('providerPreset')} popoverClassName="pi-provider-menu" disabled={saving} value={providerPreset} options={[{value:'',label:t('selectProvider'),icon:<LuNetwork/>},...AGENT_PROVIDER_PRESETS.map(preset=>({value:preset.id,label:preset.label,icon:providerIcon(preset.id)}))]} onChange={id=>{const preset=AGENT_PROVIDER_PRESETS.find(item=>item.id===id);setProviderPreset(id);if(preset)setModelDraft({...modelDraft,agentApiProtocol:preset.protocol,agentApiBaseUrl:preset.baseUrl,agentApiModel:preset.model,agentProviderName:preset.providerName,agentContextWindow:preset.contextWindow,agentMaxOutputTokens:preset.maxOutputTokens,agentVisionEnabled:preset.vision,agentApiKey:''})}}/></label><label>{t('apiAddress')}<input autoFocus placeholder="https://your-provider.example/v1" value={modelDraft.agentApiBaseUrl??''} onChange={e=>setModelDraft({...modelDraft,agentApiBaseUrl:e.target.value})}/></label><label>{t('modelId')}<input value={modelDraft.agentApiModel??''} onChange={e=>setModelDraft({...modelDraft,agentApiModel:e.target.value})}/></label><label>{t('apiKey')}<input type="password" autoComplete="off" value={modelDraft.agentApiKey??''} onChange={e=>setModelDraft({...modelDraft,agentApiKey:e.target.value})}/></label><details><summary>{t('details')}</summary><label>{t('protocol')}<SelectMenu ariaLabel={t('protocol')} popoverClassName="pi-provider-menu" disabled={saving} value={modelDraft.agentApiProtocol??'openai-compatible'} options={[{value:'openai-compatible',label:'OpenAI Chat Completions',icon:providerIcon('openai')},{value:'openai-responses',label:'OpenAI Responses',icon:providerIcon('openai')},{value:'anthropic-messages',label:'Anthropic Messages',icon:providerIcon('anthropic')},{value:'google-gemini',label:'Google Gemini',icon:providerIcon('gemini')}]} onChange={protocol=>setModelDraft({...modelDraft,agentApiProtocol:protocol as AppSettings['agentApiProtocol']})}/></label><label className="pi-check"><input type="checkbox" checked={modelDraft.agentVisionEnabled!==false} onChange={e=>setModelDraft({...modelDraft,agentVisionEnabled:e.target.checked})}/>{t('imageAnalysis')}</label></details>{configError&&<p role="alert" className="pi-error">{configError}</p>}<footer><button disabled={saving} onClick={()=>setSettingsOpen(false)}>{t('cancel')}</button><button className="pi-primary" disabled={saving} onClick={()=>void saveModel()}>{t(saving?'saveBusy':'save')}</button></footer></AgentDialog>}

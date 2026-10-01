@@ -1398,5 +1398,12 @@
     "Answer not submitted. Try again.",
     "未送信です。再試行してください。",
     "제출되지 않았습니다. 다시 시도하세요."
+  ],
+  "deleteChatConfirm": [
+    "永久删除“{name}”及其对话记录和附件？此操作无法撤销。",
+    "永久刪除「{name}」及其對話紀錄和附件？此操作無法復原。",
+    "Permanently delete “{name}”, its messages and attachments? This cannot be undone.",
+    "「{name}」とメッセージ・添付を削除しますか？元に戻せません。",
+    "“{name}” 대화 및 첨부 파일을 영구 삭제할까요? 되돌릴 수 없습니다."
   ]
 }

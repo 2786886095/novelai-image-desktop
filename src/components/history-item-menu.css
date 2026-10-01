@@ -3,7 +3,7 @@ html .history-item > .history-more-button {position:absolute;top:6px;right:6px;z
 html .history-item:is(:hover,:focus-within) > .history-more-button,html .history-item > .history-more-button[aria-expanded=true] {opacity:1;}
 html .history-item > .history-more-button .ui-icon {width:18px;height:18px;}
 html .history-item > .history-more-button:focus-visible,html .history-action-menu button:focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
-html .history-action-menu {position:fixed;z-index:1200;width:min(104px,calc(100vw - 16px));box-sizing:border-box;display:flex;flex-direction:column;gap:1px;padding:2px;border:1px solid var(--border);border-radius:9px;background:var(--bg-dialog);box-shadow:var(--shadow-md,0 8px 28px #0003);max-height:calc(100dvh - 16px);overflow-y:auto;}
+html .history-action-menu {position:fixed;z-index:1200;width:min(160px,calc(100vw - 16px));box-sizing:border-box;display:flex;flex-direction:column;gap:1px;padding:2px;border:1px solid var(--border);border-radius:9px;background:var(--bg-dialog);box-shadow:var(--shadow-md,0 8px 28px #0003);max-height:calc(100dvh - 16px);overflow-y:auto;}
 html .history-action-menu > button {position:static;display:flex;align-items:center;justify-content:flex-start;gap:6px;width:100%;min-width:0;min-height:24px;height:auto;padding:2px 4px;border:0;border-radius:8px;background:transparent;color:var(--text-primary);font:inherit;font-size:12px;line-height:1.4;text-align:left;cursor:pointer;}
 html .history-action-menu > button .ui-icon {width:14px;height:14px;flex:0 0 14px;}
 html .history-action-menu > button:hover:not(:disabled) {background:var(--accent-soft);}
@@ -11,3 +11,10 @@ html .history-action-menu > button.is-danger {color:var(--danger,#df4343);}
 html .history-action-menu > button:disabled {opacity:.5;cursor:wait;}
 @media(hover:none),(pointer:coarse){html .history-item > .history-more-button{opacity:1;width:40px;height:40px;min-width:40px;min-height:40px;}html .history-action-menu > button{min-height:44px;}}
 html.motion-reduced .history-item > .history-more-button {transition:none;}
+
+html .history-action-menu[data-disclosure-open=true]{animation:history-menu-enter 160ms ease-out both}
+html .history-action-menu[data-disclosure-open=false]{pointer-events:none;animation:history-menu-exit 120ms ease-in both}
+@keyframes history-menu-enter{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+@keyframes history-menu-exit{from{opacity:1}to{opacity:0;transform:translateY(-3px)}}
+html.motion-reduced .history-action-menu{animation:none}
+.history-path-dialog textarea{box-sizing:border-box;width:100%;resize:vertical;min-height:88px;padding:12px;border:1px solid var(--border);border-radius:9px;background:var(--bg-input);color:var(--text-primary);font:inherit;overflow-wrap:anywhere}

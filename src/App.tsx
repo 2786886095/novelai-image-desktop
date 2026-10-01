@@ -1,4 +1,5 @@
 import { NaiAccountManager } from './components/NaiAccountManager';
+import {FilePathDialog} from './components/FilePathDialog';
 import {HistoryItemMenu} from './components/HistoryItemMenu';
 import {PROMPT_OPTIMIZE_TEMPLATE, PROMPT_CUSTOM_TEMPLATE} from "./data/prompt-edit-templates";
 import {workflowText} from './workflow-text';
@@ -5306,6 +5307,7 @@ function HistoryPanel() {
   const [renameTarget, setRenameTarget] = useState<
     { kind: "item" | "group"; id: string; initial: string; title: string; label: string } | null
   >(null);
+  const [filePathTarget,setFilePathTarget]=useState<string>();
   const historyScrollRef = useRef<HTMLDivElement>(null);
   const virtualizeHistory = history.length >= 80 && !isGenerating;
   const historyRowVirtualizer = useVirtualizer({
@@ -5403,7 +5405,7 @@ function HistoryPanel() {
           />
         </div>
       </div>
-      <HistoryItemMenu src={item.fileUrl} label={t("history.moreActions")}
+      <HistoryItemMenu src={item.fileUrl} label={t("history.moreActions")} filePathLabel={t("history.viewFilePath")} onFilePath={()=>setFilePathTarget(item.filePath)}
         metadataLabel={t("history.menuMetadata")} renameLabel={t("history.rename")} deleteLabel={t("history.menuDelete")}
         metadataTitle={t("history.metadataTitle")} renameTitle={t("history.renameImageTitle")} deleteTitle={t("history.deleteImageTitle")}
         onMetadata={() => void inspectHistoryMetadata(item)} onRename={() => renameItem(item)} onDelete={() => void deleteItem(item)}/>
@@ -5492,6 +5494,7 @@ function HistoryPanel() {
           </div>
         ) : history.map(renderHistoryItem)}
       </div>
+      {filePathTarget!==undefined&&<FilePathDialog path={filePathTarget} title={t("history.viewFilePath")} copyLabel={t("aiLog.copy")} copiedLabel={t("convert.copied")} closeLabel={t("common.close")} unavailable={t("history.pathUnavailable")} onClose={()=>setFilePathTarget(undefined)}/>}
       {renameTarget && (
         <InputModal
           title={renameTarget.title}

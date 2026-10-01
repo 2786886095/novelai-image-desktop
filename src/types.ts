@@ -1489,6 +1489,7 @@ export interface AppSettings {
   agentProviderName: string;
   agentContextWindow: number;
   agentMaxOutputTokens: number;
+  agentUiPreferences?: import("./agent/preferences").AgentUiPreferences;
   agentAutoCompact: boolean;
   agentAutoCompactThreshold: number;
   agentVisionEnabled: boolean;

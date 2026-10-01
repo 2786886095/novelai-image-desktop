@@ -1,3 +1,4 @@
+import {normalizeAgentUiPreferences} from '../../src/agent/preferences';
 import {normalizeCompletionSound} from "../../src/completion-sound";
 import { currentNaiAccount, getNaiAccountSummary, rememberNaiAccountSummary, naiAccountsBusy, configureLegacyNaiBinding, boundLegacyNaiAccount, legacyNaiBindingAllowed, naiAccountRevision } from './nai-accounts-runtime';
 import { ensureNaiAccountsLoaded } from './nai-accounts';
@@ -20,6 +21,7 @@ import { SCOPED_REVERSE_SYSTEM_PROMPTS } from "../../src/data/prompt-templates";
 import { installedAppDir } from "./app-mode";
 import {
   adaptiveAgentCompactThreshold,
+  clampCompactThreshold,
   clampContextWindow,
   DEFAULT_AGENT_COMPACT_THRESHOLD,
 } from "../../src/agent/context";
@@ -296,13 +298,12 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
     settings.agentContextWindow,
     Math.trunc(Number(settings.agentMaxOutputTokens) || defaults.agentMaxOutputTokens),
   ));
+  settings.agentUiPreferences = normalizeAgentUiPreferences(settings.agentUiPreferences);
   settings.agentAutoCompact = settings.agentAutoCompact !== false;
-  // The threshold is an implementation detail, not a user preference. Always
-  // derive it from the effective model limits, including after backup import.
-  settings.agentAutoCompactThreshold = adaptiveAgentCompactThreshold(
-    settings.agentContextWindow,
-    settings.agentMaxOutputTokens,
-  );
+  // Preserve the explicitly selected threshold; derive only for older stores.
+  settings.agentAutoCompactThreshold = typeof rawSettings.agentAutoCompactThreshold === "number" && Number.isFinite(rawSettings.agentAutoCompactThreshold)
+    ? clampCompactThreshold(rawSettings.agentAutoCompactThreshold)
+    : adaptiveAgentCompactThreshold(settings.agentContextWindow, settings.agentMaxOutputTokens);
   settings.agentVisionEnabled = settings.agentVisionEnabled !== false;
   // v2.0.2 enabled full-library image archives for every installation. On a
   // large gallery that can consume hundreds of MB and starve both Electron
@@ -672,7 +673,7 @@ export function setSetting<K extends SettingKey>(key: K, value: AppSettings[K]):
   const replaceCredential = (SENSITIVE_SETTING_KEYS as readonly string[]).includes(key);
   data.settings = {
     ...data.settings,
-    [key]: key === "language" ? normalizeLanguage(value) : key === "completionSound" ? normalizeCompletionSound(value) : value,
+    [key]: key === "agentUiPreferences" ? normalizeAgentUiPreferences(value) : key === "language" ? normalizeLanguage(value) : key === "completionSound" ? normalizeCompletionSound(value) : value,
   };
   writeStore(data, replaceCredential ? [key] : []);
   return data.settings[key];
