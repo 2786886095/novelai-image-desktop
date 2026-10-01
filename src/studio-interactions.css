@@ -25,8 +25,9 @@ html .toggle span::after {transition:left 180ms var(--interaction-enter),backgro
 html .stream-preview-state i {transition:transform 180ms var(--interaction-enter),background-color 140ms var(--interaction-enter);}
 html .animated-collapse {transition:grid-template-rows 180ms var(--interaction-exit),opacity 140ms var(--interaction-exit),visibility 0s 180ms;}
 html .animated-collapse.is-open {transition:grid-template-rows 220ms var(--interaction-enter),opacity 180ms var(--interaction-enter),visibility 0s;}
-html details::details-content {interpolate-size:allow-keywords;transition:block-size 180ms var(--interaction-exit),opacity 140ms var(--interaction-exit),content-visibility 180ms allow-discrete;}
-html details[open]::details-content {transition-duration:220ms;transition-timing-function:var(--interaction-enter);}
+/* A transition alone has no effect: specify both closed and open values. */
+html details:not(.pi-context)::details-content {block-size:0;opacity:0;overflow:clip;interpolate-size:allow-keywords;transition:block-size 180ms var(--interaction-exit),opacity 140ms var(--interaction-exit),content-visibility 180ms allow-discrete;}
+html details:not(.pi-context)[open]::details-content {block-size:auto;opacity:1;transition-duration:220ms;transition-timing-function:var(--interaction-enter);}
 html :is(.context-menu,.tavern-composer-popover,.style-preset-item-popover) {animation:studio-menu-arrive 160ms var(--interaction-enter);}
 html .context-menu:empty {animation:none;}
 /* CSS covers non-portalled overlays; AppPortal also manages cancellable JS entry/exit. */
