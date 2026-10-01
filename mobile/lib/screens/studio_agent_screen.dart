@@ -552,36 +552,40 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
   }
 
   Future<void> _chatAction(AgentConversation chat, String action) async {
-    if (_agent!.sending) return;
+    if (_agent!.sending || _agent!.compacting) return;
+    if (action == 'archive' || action == 'restore') {
+      try {
+        await _agent!.setConversationArchived(chat.id, action == 'archive');
+      } catch (reason) {
+        if (mounted)
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('$reason')));
+      }
+      return;
+    }
     final name = TextEditingController(text: chat.title);
     final chatRoute = DialogRoute<bool>(
         context: context,
         builder: (context) => AlertDialog(
-                title: Text(_t(action == 'rename' ? 'rename' : 'deleteChat')),
-                content: action == 'rename'
-                    ? TextField(
-                        controller: name,
-                        maxLength: 100,
-                        autofocus: true,
-                        decoration: InputDecoration(labelText: _t('chatName')))
-                    : Text(_t('deleteHint')),
+                title: Text(_t('rename')),
+                content: TextField(
+                    controller: name,
+                    maxLength: 100,
+                    autofocus: true,
+                    decoration: InputDecoration(labelText: _t('chatName'))),
                 actions: [
                   TextButton(
                       onPressed: () => Navigator.pop(context, false),
                       child: Text(_t('cancel'))),
                   FilledButton(
                       onPressed: () => Navigator.pop(context, true),
-                      child:
-                          Text(_t(action == 'rename' ? 'save' : 'deleteChat')))
+                      child: Text(_t('save')))
                 ]));
     final accepted = await Navigator.of(context).push(chatRoute);
     await chatRoute.completed;
     if (accepted == true && mounted) {
       if (action == 'rename') {
         _agent!.renameConversation(chat.id, name.text);
-      } else {
-        await _agent!.deleteConversation(chat.id);
-        _drafts.remove(chat.id);
       }
     }
     name.dispose();
@@ -899,6 +903,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
     if (agent == null || !agent.loaded || chat == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+    final archived = chat.archivedAt != null;
     final wide = MediaQuery.sizeOf(context).width >= 840;
     final color = Theme.of(context).colorScheme;
     final main = LayoutBuilder(builder: (context, constraints) {
@@ -908,7 +913,26 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
           ((constraints.maxHeight - (compact ? 100 : 140)) * .44)
               .clamp(120.0, 320.0);
       return Column(children: [
-        if (!agent.providerConfigured)
+        if (archived)
+          Material(
+              color: color.surfaceContainerLow,
+              child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: Row(children: [
+                    const Icon(Icons.archive_outlined, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                        child: Text(_t('archivedReadOnly'),
+                            style: const TextStyle(fontSize: 12))),
+                    TextButton(
+                        onPressed: agent.sending
+                            ? null
+                            : () =>
+                                agent.setConversationArchived(chat.id, false),
+                        child: Text(_t('restoreChat')))
+                  ]))),
+        if (!agent.providerConfigured && !archived)
           Container(
               color: color.primaryContainer,
               padding: const EdgeInsets.all(12),
@@ -1019,12 +1043,14 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                   Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
                     IconButton(
                         tooltip: _t('addAttachment'),
-                        onPressed:
-                            agent.sending ? null : _showAttachmentSources,
+                        onPressed: agent.sending || archived
+                            ? null
+                            : _showAttachmentSources,
                         icon: const Icon(Icons.add)),
                     Expanded(
                         child: TextField(
                             controller: _input,
+                            readOnly: archived,
                             focusNode: _focus,
                             minLines: 1,
                             maxLines: compact ? 3 : 5,
@@ -1047,7 +1073,8 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                             agent.sending ? Icons.stop : Icons.arrow_upward),
                         onPressed: agent.sending
                             ? agent.abort
-                            : !agent.providerConfigured ||
+                            : archived ||
+                                    !agent.providerConfigured ||
                                     (_input.text.trim().isEmpty &&
                                         chat.draftAttachments.isEmpty)
                                 ? null
@@ -1100,7 +1127,9 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                             key: const ValueKey('agent-template-selector'),
                             visualDensity: VisualDensity.compact,
                             tooltip: _t('savedTemplates'),
-                            onPressed: agent.sending ? null : _showTemplates,
+                            onPressed: agent.sending || archived
+                                ? null
+                                : _showTemplates,
                             icon: const Icon(Icons.description_outlined,
                                 size: 18)),
                         TextButton.icon(
@@ -1186,6 +1215,7 @@ class _StudioChatList extends StatefulWidget {
 
 class _StudioChatListState extends State<_StudioChatList> {
   String search = '';
+  bool archivedView = false;
   String t(String key) => studioAgentText(widget.language, key);
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -1209,6 +1239,7 @@ class _StudioChatListState extends State<_StudioChatList> {
                 onPressed: widget.agent.sending
                     ? null
                     : () {
+                        setState(() => archivedView = false);
                         widget.agent.createConversation(t('newChat'));
                         widget.close?.call();
                       },
@@ -1222,10 +1253,38 @@ class _StudioChatListState extends State<_StudioChatList> {
                     border: const OutlineInputBorder()),
                 onChanged: (value) => setState(() => search = value)),
             const SizedBox(height: 8),
+            SegmentedButton<bool>(
+                showSelectedIcon: false,
+                segments: [
+                  ButtonSegment(
+                      value: false,
+                      icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                      label: Text(t('activeChats'))),
+                  ButtonSegment(
+                      value: true,
+                      icon: const Icon(Icons.archive_outlined, size: 16),
+                      label: Text(t('archivedChats')))
+                ],
+                selected: {archivedView},
+                onSelectionChanged: (value) =>
+                    setState(() => archivedView = value.first)),
+            const SizedBox(height: 6),
             Expanded(
                 child: ListView(children: [
+              if (!widget.agent.workspace.conversations.any((c) =>
+                  (c.archivedAt != null) == archivedView &&
+                  c.title.toLowerCase().contains(search.toLowerCase())))
+                Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(t(archivedView ? 'noArchivedChats' : 'noChats'),
+                        style: TextStyle(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant))),
               for (final chat in widget.agent.workspace.conversations.where(
-                  (c) => c.title.toLowerCase().contains(search.toLowerCase())))
+                  (c) =>
+                      (c.archivedAt != null) == archivedView &&
+                      c.title.toLowerCase().contains(search.toLowerCase())))
                 ListTile(
                     contentPadding: EdgeInsets.zero,
                     selected: chat.id == widget.agent.selectedConversation?.id,
@@ -1240,17 +1299,29 @@ class _StudioChatListState extends State<_StudioChatList> {
                           },
                     trailing: PopupMenuButton<String>(
                         tooltip: t('chatActions'),
-                        enabled: !widget.agent.sending,
-                        onSelected: (action) => widget.onAction(chat, action),
+                        enabled:
+                            !widget.agent.sending && !widget.agent.compacting,
+                        onSelected: (action) async {
+                          await widget.onAction(chat, action);
+                          if (mounted && action == 'restore')
+                            setState(() => archivedView = false);
+                        },
                         itemBuilder: (_) => [
                               PopupMenuItem(
                                   value: 'rename',
                                   child: _agentMenuLabel(
                                       Icons.edit_outlined, t('rename'))),
                               PopupMenuItem(
-                                  value: 'delete',
+                                  value: chat.archivedAt == null
+                                      ? 'archive'
+                                      : 'restore',
                                   child: _agentMenuLabel(
-                                      Icons.delete_outline, t('deleteChat')))
+                                      chat.archivedAt == null
+                                          ? Icons.archive_outlined
+                                          : Icons.unarchive_outlined,
+                                      t(chat.archivedAt == null
+                                          ? 'archiveChat'
+                                          : 'restoreChat')))
                             ]))
             ]))
           ])));

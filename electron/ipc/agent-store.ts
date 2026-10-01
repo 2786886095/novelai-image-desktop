@@ -329,6 +329,7 @@ export function normalizeAgentWorkspace(raw: unknown): AgentWorkspaceData {
         id: conversation.id,
         ...(typeof conversation.runtimeSessionId === "string" ? { runtimeSessionId: conversation.runtimeSessionId } : {}),
         title: typeof conversation.title === "string" && conversation.title.trim() ? conversation.title.trim().slice(0, 100) : "新对话",
+        ...(typeof conversation.archivedAt === "string" && Number.isFinite(Date.parse(conversation.archivedAt)) ? { archivedAt: conversation.archivedAt } : {}),
         messages,
         draftAttachments: (Array.isArray(conversation.draftAttachments) ? conversation.draftAttachments : [])
           .map((item) => rehydrateAttachment(item))
@@ -388,7 +389,7 @@ export function normalizeAgentWorkspace(raw: unknown): AgentWorkspaceData {
     }));
   const selectedConversationId = typeof input.selectedConversationId === "string" && conversations.some((item) => item.id === input.selectedConversationId)
     ? input.selectedConversationId
-    : conversations[0]?.id;
+    : conversations.find(item => !item.archivedAt)?.id;
   return {
     version: AGENT_WORKSPACE_VERSION,
     ...(selectedConversationId ? { selectedConversationId } : {}),
@@ -523,6 +524,21 @@ export function renameAgentConversation(conversationId: string, title: string): 
   conversation.title = trimmed;
   conversation.updatedAt = now();
   return mutation(workspace);
+}
+
+/** Archive only metadata. Messages, memories and attachment bytes are never deleted. */
+export function setAgentConversationArchived(conversationId: string, archived: boolean): AgentWorkspaceMutationResult {
+  const workspace = readAgentWorkspace();
+  const conversation = workspace.conversations.find(item => item.id === conversationId);
+  if (!conversation || typeof archived !== "boolean") return { ok: false, message: "对话不存在或归档状态无效。", workspace };
+  if (["running", "waiting-permission"].includes(conversation.status)) return { ok: false, message: "请等待当前任务结束后再归档或恢复。", workspace };
+  if (archived) conversation.archivedAt ??= now();
+  else delete conversation.archivedAt;
+  conversation.updatedAt = now();
+  if (!archived) workspace.selectedConversationId = conversation.id;
+  else if (workspace.selectedConversationId === conversation.id) workspace.selectedConversationId = workspace.conversations.find(item => !item.archivedAt)?.id;
+  const result = mutation(workspace);
+  return archived && result.ok && !result.workspace.conversations.some(item => !item.archivedAt) ? createAgentConversation() : result;
 }
 
 export function deleteAgentConversation(conversationId: string): AgentWorkspaceMutationResult {

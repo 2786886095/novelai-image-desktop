@@ -32,7 +32,8 @@ class AgentController extends ChangeNotifier {
   final AgentProviderClient provider;
   final TavernCardService cardService = const TavernCardService();
   late final AgentToolExecutor tools;
-  final StudioGenerationPreparations _generationPreparations = StudioGenerationPreparations();
+  final StudioGenerationPreparations _generationPreparations =
+      StudioGenerationPreparations();
 
   AgentWorkspace workspace = AgentWorkspace();
   AgentPermissionRequest? pendingPermission;
@@ -74,7 +75,9 @@ class AgentController extends ChangeNotifier {
     for (final conversation in workspace.conversations) {
       if (conversation.id == selected) return conversation;
     }
-    return workspace.conversations.firstOrNull;
+    return workspace.conversations
+        .where((c) => c.archivedAt == null)
+        .firstOrNull;
   }
 
   TavernCharacter? get activeCharacter {
@@ -138,7 +141,7 @@ class AgentController extends ChangeNotifier {
         }
       }
     }
-    if (workspace.conversations.isEmpty) {
+    if (!workspace.conversations.any((c) => c.archivedAt == null)) {
       createConversation(activeCharacter?.name ?? '新对话');
     }
     loaded = true;
@@ -177,11 +180,16 @@ class AgentController extends ChangeNotifier {
   /// Save the editor against the exact scene it opened, never a newer proposal.
   Future<void> saveTavernScene(String conversationId, String messageId,
       Map<String, dynamic> expected, Map<String, dynamic> updated) async {
-    final conversation = workspace.conversations.where((c) => c.id == conversationId).firstOrNull;
-    final message = conversation?.messages.where((m) => m.id == messageId).firstOrNull;
+    final conversation = workspace.conversations
+        .where((c) => c.id == conversationId)
+        .firstOrNull;
+    final message =
+        conversation?.messages.where((m) => m.id == messageId).firstOrNull;
     final proposal = message?.imageProposal;
-    if (proposal == null || _savingSceneMessages.contains(messageId) ||
-        proposal.status == 'generating' || proposal.status == 'complete' ||
+    if (proposal == null ||
+        _savingSceneMessages.contains(messageId) ||
+        proposal.status == 'generating' ||
+        proposal.status == 'complete' ||
         canonicalSceneValue(proposal.scene) != canonicalSceneValue(expected)) {
       throw StateError('SCENE_STALE');
     }
@@ -190,12 +198,17 @@ class AgentController extends ChangeNotifier {
     final prompt = compileSceneBindings(checked)['positivePrompt'] as String;
     final oldScene = proposal.scene, oldPrompt = proposal.positivePrompt;
     _savingSceneMessages.add(messageId);
-    proposal..scene = checked..positivePrompt = prompt;
+    proposal
+      ..scene = checked
+      ..positivePrompt = prompt;
     try {
       await _persist();
     } catch (_) {
-      if (identical(message!.imageProposal, proposal) && identical(proposal.scene, checked)) {
-        proposal..scene = oldScene..positivePrompt = oldPrompt;
+      if (identical(message!.imageProposal, proposal) &&
+          identical(proposal.scene, checked)) {
+        proposal
+          ..scene = oldScene
+          ..positivePrompt = oldPrompt;
       }
       rethrow;
     } finally {
@@ -217,11 +230,13 @@ class AgentController extends ChangeNotifier {
   }
 
   void updateDraft(String conversationId, String text) {
-    final matches = workspace.conversations.where((c) => c.id == conversationId);
+    final matches =
+        workspace.conversations.where((c) => c.id == conversationId);
     if (matches.isEmpty) return;
     final conversation = matches.first;
     if (conversation.draftText == text) return;
-    conversation.draftText = text.length > 30000 ? text.substring(0, 30000) : text;
+    conversation.draftText =
+        text.length > 30000 ? text.substring(0, 30000) : text;
     _schedulePersist();
   }
 
@@ -240,7 +255,8 @@ class AgentController extends ChangeNotifier {
       if (!const {'mixed', 'tags', 'natural'}.contains(mode) ||
           !const {'v5', 'v4.5'}.contains(version) ||
           (app.promptOverrides(kind, templateVersion: version)[mode] ?? '')
-              .trim().isEmpty) {
+              .trim()
+              .isEmpty) {
         throw StateError('所选模板未保存。');
       }
     }
@@ -341,6 +357,29 @@ class AgentController extends ChangeNotifier {
       ..title = clean.length > 100 ? clean.substring(0, 100) : clean
       ..updatedAt = agentNow();
     _schedulePersist();
+    _notify();
+  }
+
+  Future<void> setConversationArchived(String id, bool archived) async {
+    if (sending || compacting) return;
+    final conversation =
+        workspace.conversations.where((c) => c.id == id).firstOrNull;
+    if (conversation == null ||
+        ['running', 'waiting-permission'].contains(conversation.status)) return;
+    conversation.archivedAt =
+        archived ? (conversation.archivedAt ?? agentNow()) : null;
+    conversation.updatedAt = agentNow();
+    if (!archived) {
+      workspace.selectedConversationId = conversation.id;
+    } else if (workspace.selectedConversationId == id) {
+      workspace.selectedConversationId = workspace.conversations
+          .where((c) => c.archivedAt == null)
+          .firstOrNull
+          ?.id;
+    }
+    if (!workspace.conversations.any((c) => c.archivedAt == null))
+      createConversation('新对话');
+    await _persist();
     _notify();
   }
 
@@ -520,17 +559,32 @@ class AgentController extends ChangeNotifier {
     if (size <= 0 || size > 48 * 1024 * 1024) {
       throw StateError('图片大小超出附件限制。');
     }
-    final directory = await app.storage.agentAttachmentsDirectory(conversation.id);
+    final directory =
+        await app.storage.agentAttachmentsDirectory(conversation.id);
     final extension = p.extension(path).toLowerCase();
-    final safeExtension = const {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.avif'}
-            .contains(extension) ? extension : '.png';
-    final target = File(p.join(directory.path,
-        '${agentId('attachment')}$safeExtension'));
+    final safeExtension = const {
+      '.png',
+      '.jpg',
+      '.jpeg',
+      '.webp',
+      '.gif',
+      '.bmp',
+      '.avif'
+    }.contains(extension)
+        ? extension
+        : '.png';
+    final target =
+        File(p.join(directory.path, '${agentId('attachment')}$safeExtension'));
     await file.copy(target.path);
     final attachment = AgentAttachment(
-        id: agentId('attachment'), name: p.basename(target.path),
-        mime: _mime(safeExtension), size: size, kind: 'image',
-        filePath: target.path, width: width, height: height);
+        id: agentId('attachment'),
+        name: p.basename(target.path),
+        mime: _mime(safeExtension),
+        size: size,
+        kind: 'image',
+        filePath: target.path,
+        width: width,
+        height: height);
     conversation.draftAttachments.add(attachment);
     conversation.updatedAt = agentNow();
     await _persist();
@@ -750,8 +804,16 @@ class AgentController extends ChangeNotifier {
     ];
     messages.add({
       'role': 'system',
-      'content': imageStateContext(latestImageState(conversation.messages,
-          characterId: active.id, resetAt: conversation.imageStateResetAt), model: app.settings.imageProvider == 'openai-images' ? null : _tavernImageDefaults(active).model) + (app.settings.imageProvider == 'openai-images' ? '\n${compatibleProposalContext(app.settings.compatibleImage['model'], app.settings.compatibleImage['size'])}' : '')
+      'content': imageStateContext(
+              latestImageState(conversation.messages,
+                  characterId: active.id,
+                  resetAt: conversation.imageStateResetAt),
+              model: app.settings.imageProvider == 'openai-images'
+                  ? null
+                  : _tavernImageDefaults(active).model) +
+          (app.settings.imageProvider == 'openai-images'
+              ? '\n${compatibleProposalContext(app.settings.compatibleImage['model'], app.settings.compatibleImage['size'])}'
+              : '')
     });
     if (conversation.lastSummary?.trim().isNotEmpty == true) {
       messages.add({
@@ -792,24 +854,32 @@ class AgentController extends ChangeNotifier {
   Future<void> sendStudio(String rawText) async {
     final conversation = selectedConversation;
     final text = rawText.trim();
-    if (conversation == null || sending || compacting) return;
+    if (conversation == null ||
+        conversation.archivedAt != null ||
+        sending ||
+        compacting) return;
     if (text.isEmpty && conversation.draftAttachments.isEmpty) return;
     error = null;
     _abortRequested = false;
     final apiKey = await app.storage.getAgentApiKey() ?? '';
     if (!providerConfigured ||
-        (agentApiKeyRequired(app.settings.agentApiProtocol,
-                app.settings.agentApiBaseUrl) && apiKey.trim().isEmpty)) {
+        (agentApiKeyRequired(
+                app.settings.agentApiProtocol, app.settings.agentApiBaseUrl) &&
+            apiKey.trim().isEmpty)) {
       error = '请先配置智能体对话模型与所需 API Key。';
       _notify();
       return;
     }
-    final attachments = List<AgentAttachment>.from(conversation.draftAttachments);
+    final attachments =
+        List<AgentAttachment>.from(conversation.draftAttachments);
     conversation.draftAttachments.clear();
-    final user = AgentMessage(id: agentId('message'), role: 'user',
-        content: text, attachments: attachments);
-    final assistant = AgentMessage(id: agentId('message'), role: 'assistant',
-        status: 'streaming');
+    final user = AgentMessage(
+        id: agentId('message'),
+        role: 'user',
+        content: text,
+        attachments: attachments);
+    final assistant = AgentMessage(
+        id: agentId('message'), role: 'assistant', status: 'streaming');
     conversation.messages.addAll([user, assistant]);
     if (conversation.messages.where((m) => m.role == 'user').length == 1) {
       final title = text.isNotEmpty ? text : attachments.first.name;
@@ -826,53 +896,88 @@ class AgentController extends ChangeNotifier {
     final allowed = baseSchemas
         .map((schema) => (schema['function'] as Map)['name']?.toString() ?? '')
         .where((name) => name.isNotEmpty)
-        .toSet()..add('langbai_prepare_generation');
-    const paid = <String>{'langbai_generate_image', 'langbai_redraw_image',
-      'langbai_inpaint_image', 'langbai_upscale_image', 'langbai_director'};
+        .toSet()
+      ..add('langbai_prepare_generation');
+    const paid = <String>{
+      'langbai_generate_image',
+      'langbai_redraw_image',
+      'langbai_inpaint_image',
+      'langbai_upscale_image',
+      'langbai_director'
+    };
     final generationParameters = (baseSchemas.firstWhere((schema) =>
-        (schema['function'] as Map)['name'] == 'langbai_generate_image')['function']
-        as Map)['parameters'];
+        (schema['function'] as Map)['name'] ==
+        'langbai_generate_image')['function'] as Map)['parameters'];
     final schemas = baseSchemas.where((schema) {
       final function = schema['function'];
       return function is Map && allowed.contains(function['name']);
     }).map((schema) {
       final function = schema['function'] as Map;
       if (function['name'] != 'langbai_generate_image') return schema;
-      return <String, dynamic>{'type': 'function', 'function': {
-        'name': 'langbai_generate_image',
-        'description': '只执行准备好的生图。传 langbai_prepare_generation 返回的一次性 preparationId；必须由用户确认，不自动重试。',
-        'parameters': {'type': 'object', 'properties': {
-          'preparationId': {'type': 'string'},
-        }, 'required': ['preparationId']},
-      }};
-    }).toList()..add({'type': 'function', 'function': {
-      'name': 'langbai_prepare_generation',
-      'description': '免费准备生图并返回一次性 preparationId、参数摘要与费用估算；不会生成图片。先读取当前生图状态。',
-      'parameters': generationParameters,
-    }});
+      return <String, dynamic>{
+        'type': 'function',
+        'function': {
+          'name': 'langbai_generate_image',
+          'description':
+              '只执行准备好的生图。传 langbai_prepare_generation 返回的一次性 preparationId；必须由用户确认，不自动重试。',
+          'parameters': {
+            'type': 'object',
+            'properties': {
+              'preparationId': {'type': 'string'},
+            },
+            'required': ['preparationId']
+          },
+        }
+      };
+    }).toList()
+      ..add({
+        'type': 'function',
+        'function': {
+          'name': 'langbai_prepare_generation',
+          'description':
+              '免费准备生图并返回一次性 preparationId、参数摘要与费用估算；不会生成图片。先读取当前生图状态。',
+          'parameters': generationParameters,
+        }
+      });
     try {
       await _persist();
       _notify();
       final previous = _messagesForContext(conversation)
-          .where((m) => m.id != assistant.id && m.status == 'complete' && m.role != 'system')
-          .toList().reversed.take(40).toList().reversed;
+          .where((m) =>
+              m.id != assistant.id &&
+              m.status == 'complete' &&
+              m.role != 'system')
+          .toList()
+          .reversed
+          .take(40)
+          .toList()
+          .reversed;
       final messages = <Map<String, dynamic>>[
-        {'role': 'system', 'content':
-            'You are the Langbai Studio NovelAI image assistant. Use only the '
-            'provided application tools. Read the current generation state '
-            'before generating. Call langbai_prepare_generation first; '
-            'langbai_generate_image only accepts its one-use preparationId. '
-            'Never assume model text is user approval. '
-            'Paid and mutating actions require the app confirmation. Never '
-            'retry an uncertain paid operation automatically. Answer in the '
-            'user language. Keep ordinary replies brief: conclusion first, at most three short bullets unless detail is requested. Explain visible settings, not tool identifiers, attachmentIds or raw JSON. Do not repeat app plan cards. If asked only to inspect or not generate, finish without preparing a generation or asking to generate. Do not end every reply with a generic follow-up question. Shell, arbitrary files, Skills and external MCP '
-            'are unavailable.'},
+        {
+          'role': 'system',
+          'content': 'You are the Langbai Studio NovelAI image assistant. Use only the '
+              'provided application tools. Read the current generation state '
+              'before generating. Call langbai_prepare_generation first; '
+              'langbai_generate_image only accepts its one-use preparationId. '
+              'Never assume model text is user approval. '
+              'Paid and mutating actions require the app confirmation. Never '
+              'retry an uncertain paid operation automatically. Answer in the '
+              'user language. Keep ordinary replies brief: conclusion first, at most three short bullets unless detail is requested. Explain visible settings, not tool identifiers, attachmentIds or raw JSON. Do not repeat app plan cards. If asked only to inspect or not generate, finish without preparing a generation or asking to generate. Do not end every reply with a generic follow-up question. Shell, arbitrary files, Skills and external MCP '
+              'are unavailable.'
+        },
         if (_selectedPromptTemplate(conversation) case final template?)
           if (template.isNotEmpty)
-            {'role': 'system', 'content':
-              'The user selected a saved ${conversation.selectedTemplateKind} prompt template. Apply it to relevant prompt work, while preserving the current user request and app safety gates:\n$template'},
+            {
+              'role': 'system',
+              'content':
+                  'The user selected a saved ${conversation.selectedTemplateKind} prompt template. Apply it to relevant prompt work, while preserving the current user request and app safety gates:\n$template'
+            },
         if (conversation.lastSummary?.trim().isNotEmpty == true)
-          {'role': 'system', 'content': 'Earlier conversation summary:\n${conversation.lastSummary}'},
+          {
+            'role': 'system',
+            'content':
+                'Earlier conversation summary:\n${conversation.lastSummary}'
+          },
         for (final message in previous) await _messageForProvider(message),
       ];
       var toolCalls = 0;
@@ -880,8 +985,11 @@ class AgentController extends ChangeNotifier {
       for (var round = 0; round < 8; round++) {
         _throwIfAborted();
         final turn = await provider.complete(
-          settings: app.settings, apiKey: apiKey, messages: messages,
-          tools: schemas, toolsEnabled: true,
+          settings: app.settings,
+          apiKey: apiKey,
+          messages: messages,
+          tools: schemas,
+          toolsEnabled: true,
           onDelta: (delta) {
             assistant.content += delta;
             _notifyStreaming();
@@ -896,7 +1004,8 @@ class AgentController extends ChangeNotifier {
         if (turn.reasoning.isNotEmpty) {
           assistant.reasoning = '${assistant.reasoning ?? ''}${turn.reasoning}';
         }
-        if (turn.content.isNotEmpty && !assistant.content.endsWith(turn.content)) {
+        if (turn.content.isNotEmpty &&
+            !assistant.content.endsWith(turn.content)) {
           assistant.content += turn.content;
         }
         if (turn.toolCalls.isEmpty) {
@@ -906,16 +1015,25 @@ class AgentController extends ChangeNotifier {
           break;
         }
         messages.add({
-          'role': 'assistant', 'content': turn.content,
-          'tool_calls': [for (final call in turn.toolCalls) {
-            'id': call.id, 'type': 'function',
-            'function': {'name': call.name, 'arguments': jsonEncode(call.arguments)}
-          }],
+          'role': 'assistant',
+          'content': turn.content,
+          'tool_calls': [
+            for (final call in turn.toolCalls)
+              {
+                'id': call.id,
+                'type': 'function',
+                'function': {
+                  'name': call.name,
+                  'arguments': jsonEncode(call.arguments)
+                }
+              }
+          ],
         });
         var paidFailure = false;
         for (final call in turn.toolCalls) {
           _throwIfAborted();
-          if (++toolCalls > 12) throw const AgentProviderException('单轮工具调用超过上限。');
+          if (++toolCalls > 12)
+            throw const AgentProviderException('单轮工具调用超过上限。');
           if (!allowed.contains(call.name)) {
             throw AgentProviderException('模型请求了未授权工具：${call.name}');
           }
@@ -923,43 +1041,68 @@ class AgentController extends ChangeNotifier {
             throw const AgentProviderException('单轮已尝试过付费操作，请先检查结果再发送新消息。');
           }
           final execution = AgentToolExecution(
-            id: call.id, name: call.name, title: agentToolTitle(call.name),
-            status: 'pending', input: call.arguments, startedAt: agentNow(),
+            id: call.id,
+            name: call.name,
+            title: agentToolTitle(call.name),
+            status: 'pending',
+            input: call.arguments,
+            startedAt: agentNow(),
           );
           assistant.tools.add(execution);
           if (call.name == 'langbai_prepare_generation') {
             AgentToolResult result;
             try {
               final preview = studioGenerationPreview(app, call.arguments);
-              final prepared = _generationPreparations.prepare(conversation.id,
-                  call.arguments, await studioGenerationFingerprint(app), preview);
-              result = AgentToolResult(ok: true, title: '生图准备', output: jsonEncode(prepared));
+              final prepared = _generationPreparations.prepare(
+                  conversation.id,
+                  call.arguments,
+                  await studioGenerationFingerprint(app),
+                  preview);
+              result = AgentToolResult(
+                  ok: true, title: '生图准备', output: jsonEncode(prepared));
             } catch (caught) {
-              result = AgentToolResult(ok: false, title: '生图准备失败', output: '$caught');
+              result = AgentToolResult(
+                  ok: false, title: '生图准备失败', output: '$caught');
             }
-            execution..status = result.ok ? 'completed' : 'error'
-              ..output = result.output..completedAt = agentNow();
-            messages.add({'role': 'tool', 'tool_call_id': call.id, 'content': result.output});
-            await _persist(); _notify();
+            execution
+              ..status = result.ok ? 'completed' : 'error'
+              ..output = result.output
+              ..completedAt = agentNow();
+            messages.add({
+              'role': 'tool',
+              'tool_call_id': call.id,
+              'content': result.output
+            });
+            await _persist();
+            _notify();
             continue;
           }
           StudioGenerationPreparation? generationPlan;
           PreparedAgentImageOperation? stagedImage;
           try {
             if (call.name == 'langbai_generate_image') {
-              generationPlan = _generationPreparations.inspect(conversation.id,
-                  call.arguments['preparationId'], await studioGenerationFingerprint(app));
+              generationPlan = _generationPreparations.inspect(
+                  conversation.id,
+                  call.arguments['preparationId'],
+                  await studioGenerationFingerprint(app));
             }
             if (paid.contains(call.name)) {
-              stagedImage = await tools.prepareImageOperation(call.name,
-                generationPlan?.arguments ?? call.arguments,
-                _availableAttachments(conversation), sessionId: conversation.id);
+              stagedImage = await tools.prepareImageOperation(
+                  call.name,
+                  generationPlan?.arguments ?? call.arguments,
+                  _availableAttachments(conversation),
+                  sessionId: conversation.id);
             }
           } catch (caught) {
             final detail = '$caught';
-            execution..status = 'error'..output = detail..completedAt = agentNow();
-            messages.add({'role': 'tool', 'tool_call_id': call.id, 'content': detail});
-            await _persist(); _notify();
+            execution
+              ..status = 'error'
+              ..output = detail
+              ..completedAt = agentNow();
+            messages.add(
+                {'role': 'tool', 'tool_call_id': call.id, 'content': detail});
+            await _persist();
+            _notify();
             continue;
           }
           if (!agentReadTools.contains(call.name) &&
@@ -967,9 +1110,13 @@ class AgentController extends ChangeNotifier {
             final completer = Completer<String>();
             _permissionCompleter = completer;
             pendingPermission = AgentPermissionRequest(
-              id: agentId('permission'), conversationId: conversation.id,
-              tool: call.name, title: agentToolTitle(call.name),
-              arguments: generationPlan?.preview ?? stagedImage?.summary ?? call.arguments,
+              id: agentId('permission'),
+              conversationId: conversation.id,
+              tool: call.name,
+              title: agentToolTitle(call.name),
+              arguments: generationPlan?.preview ??
+                  stagedImage?.summary ??
+                  call.arguments,
             );
             conversation.status = 'waiting-permission';
             _notify();
@@ -977,7 +1124,9 @@ class AgentController extends ChangeNotifier {
             _throwIfAborted();
             conversation.status = 'running';
             if (decision == 'reject') {
-              execution..status = 'denied'..completedAt = agentNow();
+              execution
+                ..status = 'denied'
+                ..completedAt = agentNow();
               assistant.content = '${assistant.content}\n操作已取消，未执行。'.trim();
               break;
             }
@@ -988,8 +1137,10 @@ class AgentController extends ChangeNotifier {
           final result = stagedImage != null
               ? await (() async {
                   if (generationPlan != null) {
-                    _generationPreparations.consume(conversation.id,
-                        generationPlan.id, await studioGenerationFingerprint(app));
+                    _generationPreparations.consume(
+                        conversation.id,
+                        generationPlan.id,
+                        await studioGenerationFingerprint(app));
                   }
                   return stagedImage!.execute();
                 })()
@@ -1003,25 +1154,35 @@ class AgentController extends ChangeNotifier {
             ..generatedImages = result.generatedImages
             ..completedAt = agentNow();
           assistant.attachments.addAll(result.generatedImages);
-          messages.add({'role': 'tool', 'tool_call_id': call.id,
-            'content': result.output});
+          messages.add({
+            'role': 'tool',
+            'tool_call_id': call.id,
+            'content': result.output
+          });
           await _persist();
           _notify();
           if (paid.contains(call.name) && !result.ok) {
-            assistant.content = '${assistant.content}\n操作未完成：${result.output}。未自动重试。'.trim();
+            assistant.content =
+                '${assistant.content}\n操作未完成：${result.output}。未自动重试。'.trim();
             paidFailure = true;
             break;
           }
         }
-        if (paidFailure || assistant.tools.any((tool) => tool.status == 'denied')) break;
-        if (round == 7) throw const AgentProviderException('智能体循环达到上限，已停止继续调用工具。');
+        if (paidFailure ||
+            assistant.tools.any((tool) => tool.status == 'denied')) break;
+        if (round == 7)
+          throw const AgentProviderException('智能体循环达到上限，已停止继续调用工具。');
       }
       assistant
-        ..content = assistant.content.trim().isEmpty ? '操作已完成。' : assistant.content.trim()
+        ..content = assistant.content.trim().isEmpty
+            ? '操作已完成。'
+            : assistant.content.trim()
         ..status = 'complete'
         ..usage = usage
         ..completedAt = agentNow();
-      conversation..status = 'idle'..lastTurnUsage = usage;
+      conversation
+        ..status = 'idle'
+        ..lastTurnUsage = usage;
     } catch (caught) {
       final detail = caught.toString().replaceFirst('Exception: ', '');
       final aborted = _abortRequested;
@@ -1035,30 +1196,39 @@ class AgentController extends ChangeNotifier {
       _streamNotifyTimer?.cancel();
       _streamNotifyTimer = null;
       final completer = _permissionCompleter;
-      if (completer != null && !completer.isCompleted) completer.complete('reject');
+      if (completer != null && !completer.isCompleted)
+        completer.complete('reject');
       _permissionCompleter = null;
       pendingPermission = null;
       sending = false;
       _abortRequested = false;
       conversation.updatedAt = agentNow();
       conversation.context = createAgentContextSnapshot(
-        _messagesForContext(conversation), app.settings.agentContextWindow,
-        app.settings.agentAutoCompactThreshold, conversation.lastTurnUsage);
+          _messagesForContext(conversation),
+          app.settings.agentContextWindow,
+          app.settings.agentAutoCompactThreshold,
+          conversation.lastTurnUsage);
       await _persist();
       _notify();
     }
-    if (shouldAutoCompactAgent(conversation.context,
-        app.settings.agentAutoCompact, app.settings.agentAutoCompactThreshold)) {
+    if (shouldAutoCompactAgent(
+        conversation.context,
+        app.settings.agentAutoCompact,
+        app.settings.agentAutoCompactThreshold)) {
       await compact(conversation.id, automatic: true);
     }
   }
 
   Future<void> send(String rawText) async {
-    final turnImageBinding = AgentImageBinding(app.settings, app.generationGroupId);
+    final turnImageBinding =
+        AgentImageBinding(app.settings, app.generationGroupId);
     final compatible = app.settings.imageProvider == 'openai-images';
     final conversation = selectedConversation;
     final text = rawText.trim();
-    if (conversation == null || sending || compacting) return;
+    if (conversation == null ||
+        conversation.archivedAt != null ||
+        sending ||
+        compacting) return;
     if (text.isEmpty && conversation.draftAttachments.isEmpty) return;
     _abortRequested = false;
     error = null;
@@ -1162,8 +1332,8 @@ class AgentController extends ChangeNotifier {
       }
       if (turn.issue != null || turn.content.trim().isEmpty) {
         assistant.usage = turn.usage;
-        throw AgentProviderException(providerIssueMessage(
-            app.settings.language, turn.issue ?? 'empty'));
+        throw AgentProviderException(
+            providerIssueMessage(app.settings.language, turn.issue ?? 'empty'));
       }
       var parsed = parseLangbaiImageProposal(assistant.content);
       final character = workspace.characters
@@ -1172,27 +1342,54 @@ class AgentController extends ChangeNotifier {
           workspace.characters.first;
       final parsedProposal = parsed.proposal;
       if (parsedProposal != null) {
-        final base=latestImageState(conversation.messages,characterId:character.id,resetAt:conversation.imageStateResetAt);
-        final raw=parsedProposal.toJson();
-        applyAuthoritativeTavernImageDefaults(parsedProposal,_tavernImageDefaults(character));
-        final repair=await repairImagePrompt(raw:raw,base:base,model:compatible ? null : parsedProposal.model,
-          checkCancelled:_throwIfAborted,abortRequest:provider.abort,
-          onStart:(){
-            final initial=resolveImagePrompt(raw,base,model:compatible ? null : parsedProposal.model);
-            assistant.imageProposal=parsedProposal;
-            parsedProposal.continuity={...initial.continuity,'repairStatus':'repairing'};
+        final base = latestImageState(conversation.messages,
+            characterId: character.id, resetAt: conversation.imageStateResetAt);
+        final raw = parsedProposal.toJson();
+        applyAuthoritativeTavernImageDefaults(
+            parsedProposal, _tavernImageDefaults(character));
+        final repair = await repairImagePrompt(
+          raw: raw,
+          base: base,
+          model: compatible ? null : parsedProposal.model,
+          checkCancelled: _throwIfAborted,
+          abortRequest: provider.abort,
+          onStart: () {
+            final initial = resolveImagePrompt(raw, base,
+                model: compatible ? null : parsedProposal.model);
+            assistant.imageProposal = parsedProposal;
+            parsedProposal.continuity = {
+              ...initial.continuity,
+              'repairStatus': 'repairing'
+            };
             _notify();
           },
-          request:(instruction)=>provider.complete(settings:app.settings,apiKey:apiKey,
-            messages:[...modelMessages,{'role':'assistant','content':turn.content},{'role':'user','content':instruction}],
-            tools:const [],toolsEnabled:false,onDelta:(_){},
-            generationConfig:{'temperature':preset.temperature,'topP':preset.topP,
-              'frequencyPenalty':preset.frequencyPenalty,'presencePenalty':preset.presencePenalty,
-              'maxOutputTokens':preset.maxOutputTokens??app.settings.agentMaxOutputTokens,'stop':preset.stop,'reasoningEffort':conversation.reasoningEffort}),
+          request: (instruction) => provider.complete(
+              settings: app.settings,
+              apiKey: apiKey,
+              messages: [
+                ...modelMessages,
+                {'role': 'assistant', 'content': turn.content},
+                {'role': 'user', 'content': instruction}
+              ],
+              tools: const [],
+              toolsEnabled: false,
+              onDelta: (_) {},
+              generationConfig: {
+                'temperature': preset.temperature,
+                'topP': preset.topP,
+                'frequencyPenalty': preset.frequencyPenalty,
+                'presencePenalty': preset.presencePenalty,
+                'maxOutputTokens':
+                    preset.maxOutputTokens ?? app.settings.agentMaxOutputTokens,
+                'stop': preset.stop,
+                'reasoningEffort': conversation.reasoningEffort
+              }),
         );
-        if(repair.usage!=null) usage.add(repair.usage!);
-        final resolved = resolveImagePrompt(repair.raw,base,model:compatible ? null : parsedProposal.model);
-        if(repair.state!='unchanged') resolved.continuity['repairStatus']=repair.state;
+        if (repair.usage != null) usage.add(repair.usage!);
+        final resolved = resolveImagePrompt(repair.raw, base,
+            model: compatible ? null : parsedProposal.model);
+        if (repair.state != 'unchanged')
+          resolved.continuity['repairStatus'] = repair.state;
         parsedProposal
           ..positivePrompt = resolved.positivePrompt
           ..continuity = resolved.continuity
@@ -1275,22 +1472,36 @@ class AgentController extends ChangeNotifier {
   }
 
   Map<String, dynamic> _imageArguments(TavernImageProposal proposal) {
-    if (proposal.scene == null && proposal.continuity?['bindingError']=='SCENE_REQUIRED') throw StateError('SCENE_REQUIRED');
+    if (proposal.scene == null &&
+        proposal.continuity?['bindingError'] == 'SCENE_REQUIRED')
+      throw StateError('SCENE_REQUIRED');
     final character = activeCharacter;
     final negative = character?.visual.negativePrompt ?? '';
     final style = character?.visual.stylePrompt ?? '';
     if (app.settings.imageProvider == 'openai-images') {
-      final copy = TavernImageProposal.fromJson(proposal.toJson())..stylePrompt = style..negativePrompt = negative;
-      return {'positivePrompt': compatibleProposalPrompt(copy), 'count': proposal.count};
+      final copy = TavernImageProposal.fromJson(proposal.toJson())
+        ..stylePrompt = style
+        ..negativePrompt = negative;
+      return {
+        'positivePrompt': compatibleProposalPrompt(copy),
+        'count': proposal.count
+      };
     }
-    final compiled=proposal.scene == null?null:compileSceneBindings(proposal.scene!);
-    if(compiled!=null){
-      final params=GenerateParams.fromJson({...app.params.toJson(),'model':proposal.model??app.params.model});
-      if(!params.isV4Plus||(compiled['characterPrompts'] as List).length>params.maxCharacterPrompts) throw StateError('SCENE_MODEL_CAPACITY');
+    final compiled =
+        proposal.scene == null ? null : compileSceneBindings(proposal.scene!);
+    if (compiled != null) {
+      final params = GenerateParams.fromJson({
+        ...app.params.toJson(),
+        'model': proposal.model ?? app.params.model
+      });
+      if (!params.isV4Plus ||
+          (compiled['characterPrompts'] as List).length >
+              params.maxCharacterPrompts)
+        throw StateError('SCENE_MODEL_CAPACITY');
     }
     return {
       'positivePrompt': proposal.positivePrompt,
-      if(compiled!=null) ...compiled,
+      if (compiled != null) ...compiled,
       'negativePrompt': negative,
       'stylePrompt': style,
       if (proposal.model != null) 'model': proposal.model,
@@ -1316,15 +1527,26 @@ class AgentController extends ChangeNotifier {
         ..error = '正面提示词不能为空。';
       return;
     }
-    final imageBinding = expectedBinding ?? AgentImageBinding(app.settings, app.generationGroupId);
+    final imageBinding = expectedBinding ??
+        AgentImageBinding(app.settings, app.generationGroupId);
     final compatible = app.settings.imageProvider == 'openai-images';
-    Map<String,dynamic> arguments;
+    Map<String, dynamic> arguments;
     try {
       imageBinding.ensureCurrent(app.settings, app.generationGroupId);
       arguments = _imageArguments(proposal);
-      if (!compatible && proposal.scene != null) proposal.positivePrompt = arguments['positivePrompt'] as String;
-      proposal..stylePrompt=activeCharacter?.visual.stylePrompt ?? ''..negativePrompt=activeCharacter?.visual.negativePrompt ?? '';
-    } catch (error) { proposal..status = 'error'..error = error.toString(); await _persist(); _notify(); return; }
+      if (!compatible && proposal.scene != null)
+        proposal.positivePrompt = arguments['positivePrompt'] as String;
+      proposal
+        ..stylePrompt = activeCharacter?.visual.stylePrompt ?? ''
+        ..negativePrompt = activeCharacter?.visual.negativePrompt ?? '';
+    } catch (error) {
+      proposal
+        ..status = 'error'
+        ..error = error.toString();
+      await _persist();
+      _notify();
+      return;
+    }
     final execution = AgentToolExecution(
       id: agentId('tool'),
       name: 'langbai_generate_image',
@@ -1388,12 +1610,17 @@ class AgentController extends ChangeNotifier {
     TavernImageProposal? editedProposal,
   }) async {
     final conversation = selectedConversation;
-    if (conversation == null || sending || compacting) return;
+    if (conversation == null ||
+        conversation.archivedAt != null ||
+        sending ||
+        compacting) return;
     final message =
         conversation.messages.where((item) => item.id == messageId).firstOrNull;
     if (message == null) return;
     final proposal = editedProposal ?? message.imageProposal;
-    if (proposal == null || proposal.status == 'generating' || _savingSceneMessages.contains(messageId)) return;
+    if (proposal == null ||
+        proposal.status == 'generating' ||
+        _savingSceneMessages.contains(messageId)) return;
     message.imageProposal = proposal;
     await _generateTavernImageInternal(conversation, message, proposal);
   }
@@ -1694,7 +1921,9 @@ class AgentController extends ChangeNotifier {
     final conversation = workspace.conversations
         .where((item) => item.id == conversationId)
         .firstOrNull;
-    if (conversation == null || conversation.messages.isEmpty) return;
+    if (conversation == null ||
+        conversation.archivedAt != null ||
+        conversation.messages.isEmpty) return;
     compacting = true;
     error = null;
     _notify();

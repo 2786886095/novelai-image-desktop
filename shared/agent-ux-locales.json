@@ -943,5 +943,47 @@
     "Current conversation",
     "現在の会話",
     "현재 대화"
+  ],
+  "activeChats": [
+    "对话",
+    "對話",
+    "Chats",
+    "会話",
+    "대화"
+  ],
+  "archivedChats": [
+    "已归档",
+    "已歸檔",
+    "Archived",
+    "アーカイブ",
+    "보관함"
+  ],
+  "archiveChat": [
+    "归档",
+    "歸檔",
+    "Archive",
+    "アーカイブ",
+    "보관"
+  ],
+  "restoreChat": [
+    "恢复对话",
+    "恢復對話",
+    "Restore chat",
+    "会話を復元",
+    "대화 복원"
+  ],
+  "noArchivedChats": [
+    "暂无已归档对话",
+    "暫無已歸檔對話",
+    "No archived chats",
+    "アーカイブ済みの会話はありません",
+    "보관된 대화가 없습니다"
+  ],
+  "archivedReadOnly": [
+    "此对话已归档，恢复后可继续。",
+    "此對話已歸檔，恢復後可繼續。",
+    "Archived chat. Restore to continue.",
+    "アーカイブ済みの会話です。復元して続けられます。",
+    "보관된 대화입니다. 복원하면 계속할 수 있습니다."
   ]
 }

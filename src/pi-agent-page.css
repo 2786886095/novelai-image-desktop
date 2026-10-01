@@ -99,3 +99,14 @@ html.motion-reduced .pi-message,html.motion-reduced .pi-plan,html.motion-reduced
 html.motion-reduced .pi-modal{animation:none}
 
 html.motion-reduced .pi-agent button{transition:none}
+
+
+/* Conversation-local actions, not a detached footer toolbar. */
+.pi-chat-scope{display:flex;gap:4px}.pi-agent .pi-chat-scope button{flex:1;min-width:0;min-height:32px;padding:4px 6px;border:0;background:transparent;color:var(--pi-muted);font-size:12px;gap:5px}.pi-chat-scope svg{width:14px;height:14px}.pi-agent .pi-chat-scope button[aria-pressed=true]{background:var(--accent-soft);color:var(--pi-accent)}
+.pi-chat-row{display:flex;align-items:center;min-width:0;gap:2px;border-radius:10px;padding-right:4px}.pi-chat-row.is-active{background:var(--accent-soft);color:var(--pi-accent)}
+.pi-sidebar nav .pi-chat-select{flex:1;min-width:0;background:transparent;border:0;padding:8px 10px;gap:8px}.pi-chat-select svg{width:16px;height:16px;flex-shrink:0}.pi-chat-select span{flex:1;text-align:left}
+.pi-sidebar nav .pi-chat-more{width:28px;min-width:28px;min-height:28px;flex:0 0 28px;justify-content:center;padding:4px;border:0;background:transparent;border-radius:7px;opacity:.55}
+.pi-chat-row:hover .pi-chat-more,.pi-chat-row:focus-within .pi-chat-more,.pi-chat-row.is-active .pi-chat-more{opacity:1}.pi-chat-more .select-menu-value,.pi-chat-more .select-menu-chevron{display:none}.pi-chat-more .select-menu-label{display:flex;color:inherit}.pi-chat-more svg{width:16px;height:16px}
+.pi-chat-menu .select-menu-option{min-height:34px;padding:6px 8px;font-size:12px;gap:6px;font-weight:500}.pi-chat-menu .select-menu-option-content{gap:6px}.pi-chat-menu .select-menu-option-icon{width:16px;flex-basis:16px}
+.pi-archive-banner{display:flex;align-items:center;gap:8px;padding:6px 16px;font-size:12px;color:var(--pi-muted);background:var(--pi-card);border-bottom:1px solid var(--pi-line)}.pi-archive-banner>svg{width:16px;height:16px}.pi-archive-banner>span{flex:1}.pi-agent .pi-archive-banner button{min-height:30px;padding:3px 8px;font-size:12px;border:0;color:var(--pi-accent);background:var(--accent-soft)}
+@media(max-width:760px),(pointer:coarse){.pi-agent .pi-chat-scope button,.pi-chat-menu .select-menu-option,.pi-agent .pi-archive-banner button{min-height:44px}.pi-sidebar nav .pi-chat-more{width:44px;min-width:44px;min-height:44px;flex-basis:44px;opacity:1}}

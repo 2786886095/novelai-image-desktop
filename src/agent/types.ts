@@ -225,6 +225,8 @@ export interface AgentConversation {
   id: string;
   runtimeSessionId?: string;
   title: string;
+  /** Archived conversations remain intact and are restored by clearing this timestamp. */
+  archivedAt?: string;
   messages: AgentMessage[];
   /** Files staged in the composer but not sent yet. */
   draftAttachments: AgentAttachment[];

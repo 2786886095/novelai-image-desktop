@@ -1667,6 +1667,7 @@ export interface NaiDesktopApi {
   createAgentConversation: (title?: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
   selectAgentConversation: (conversationId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
   renameAgentConversation: (conversationId: string, title: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
+  setAgentConversationArchived: (conversationId: string, archived: boolean) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
   deleteAgentConversation: (conversationId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
   importAgentFiles: (conversationId: string, sourcePaths?: string[]) => Promise<import("./agent/types").AgentImportFilesResult>;
   deleteAgentAttachment: (conversationId: string, attachmentId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;

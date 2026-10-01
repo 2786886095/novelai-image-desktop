@@ -119,11 +119,13 @@ export function SelectMenu({
   disabled = false,
   defaultOpen = false,
   popoverClassName,
+  minMenuWidth = 220,
   id,
 }: {
   value: string;
   options: SelectMenuOption[];
   popoverClassName?: string;
+  minMenuWidth?: number;
   onChange: (value: string) => void;
   label?: ReactNode;
   ariaLabel: string;
@@ -157,7 +159,7 @@ export function SelectMenu({
     const rect = trigger.getBoundingClientRect();
     const viewportGap = 8;
     const gap = 6;
-    const width = Math.min(Math.max(rect.width, 220), window.innerWidth - viewportGap * 2);
+    const width = Math.min(Math.max(rect.width, minMenuWidth), window.innerWidth - viewportGap * 2);
     const estimatedHeight = Math.min(320, options.length * 44 + 8);
     const below = window.innerHeight - rect.bottom - viewportGap;
     const above = rect.top - viewportGap;
@@ -166,7 +168,7 @@ export function SelectMenu({
     const left = Math.min(Math.max(viewportGap, rect.left), window.innerWidth - width - viewportGap);
     const top = opensUp ? Math.max(viewportGap, rect.top - Math.min(estimatedHeight, maxHeight) - gap) : rect.bottom + gap;
     setPosition({ left, top, width, maxHeight, opensUp, bottom: window.innerHeight - rect.top + gap });
-  }, [options.length]);
+  }, [options.length, minMenuWidth]);
 
 
   useLayoutEffect(() => {

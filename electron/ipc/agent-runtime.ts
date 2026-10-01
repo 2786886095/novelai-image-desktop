@@ -800,6 +800,7 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
   if (request.regenerateMessageId) return { ok: false, message: 'Pi 模式暂不支持覆盖旧回复，请发送新消息。' };
   const conversation = readAgentWorkspace().conversations.find((item) => item.id === request.conversationId);
   if (!conversation) return { ok: false, message: '对话不存在。' };
+  if (conversation.archivedAt) return { ok: false, message: '此对话已归档，请先恢复后再继续。' };
   const selected = new Set(request.attachmentIds ?? conversation.draftAttachments.map((item) => item.id));
   if (!request.text.trim() && !conversation.draftAttachments.some((item) => selected.has(item.id))) {
     return { ok: false, message: '请输入消息或添加图片。' };
@@ -943,6 +944,7 @@ export async function sendAgentMessage(request: AgentSendRequest) {
   let initial = readAgentWorkspace();
   let conversation = initial.conversations.find((item) => item.id === request.conversationId);
   if (!conversation) return { ok: false, message: "对话不存在。" };
+  if (conversation.archivedAt) return { ok: false, message: "此对话已归档，请先恢复后再继续。" };
   const settings = getSettings();
   const imageProviderBinding = bindAgentImageProvider(settings);
   const compatible = imageProviderBinding.provider === "openai-images";
@@ -1240,6 +1242,7 @@ export function abortAgentMessage(conversationId: string) {
 async function compactConversationWithController(conversationId: string, controller: AbortController) {
   const conversation = readAgentWorkspace().conversations.find(item => item.id === conversationId);
   if (!conversation) return { ok: false, message: "对话不存在。" };
+  if (conversation.archivedAt) return { ok: false, message: "此对话已归档，请先恢复后再继续。" };
   const plan = planContextCompaction(conversation);
   if (!plan) return { ok: true, message: "没有可安全压缩的旧消息；最近对话、图片和操作记录保持原样。" };
   if (!providerConfigured()) return { ok: false, message: "请先配置摘要模型；历史未更改。" };

@@ -240,6 +240,7 @@ import {
 } from "./ipc/logger";
 import {
   createAgentConversation,
+  setAgentConversationArchived,
   deleteAgentAttachment,
   deleteAgentConversation,
   deleteAgentMemory,
@@ -748,6 +749,10 @@ function registerIpc() {
   accountBoundHandle("agent:createConversation", (_event, title?: string) => createAgentConversation(title));
   accountBoundHandle("agent:selectConversation", (_event, conversationId: string) => selectAgentConversation(conversationId));
   accountBoundHandle("agent:renameConversation", (_event, conversationId: string, title: string) => renameAgentConversation(conversationId, title));
+  accountBoundHandle("agent:setConversationArchived", (_event, conversationId: string, archived: boolean) => {
+    if (hasActiveAgentRequests()) return { ok: false, message: "请等待智能体任务结束后再归档或恢复。", workspace: readAgentWorkspace() };
+    return setAgentConversationArchived(conversationId, archived);
+  });
   accountBoundHandle("agent:deleteConversation", (_event, conversationId: string) => deleteAgentConversation(conversationId));
   accountBoundHandle("agent:importFiles", (_event, conversationId: string, sourcePaths?: string[]) => importAgentFiles(conversationId, sourcePaths));
   accountBoundHandle("agent:deleteAttachment", (_event, conversationId: string, attachmentId: string) => deleteAgentAttachment(conversationId, attachmentId));

@@ -362,6 +362,7 @@ class AgentMessage {
 class AgentConversation {
   String id;
   String title;
+  String? archivedAt;
   List<AgentMessage> messages;
   List<AgentAttachment> draftAttachments;
   String draftText;
@@ -391,6 +392,7 @@ class AgentConversation {
   AgentConversation({
     required this.id,
     required this.title,
+    this.archivedAt,
     List<AgentMessage>? messages,
     List<AgentAttachment>? draftAttachments,
     this.draftText = '',
@@ -428,6 +430,10 @@ class AgentConversation {
       AgentConversation(
         id: _text(json['id'], agentId('conversation')),
         title: _text(json['title'], '新对话'),
+        archivedAt: json['archivedAt'] is String &&
+                DateTime.tryParse(json['archivedAt']) != null
+            ? json['archivedAt'] as String
+            : null,
         messages: (json['messages'] as List? ?? const [])
             .whereType<Map>()
             .map((item) => AgentMessage.fromJson(_map(item)))
@@ -478,6 +484,7 @@ class AgentConversation {
   Map<String, dynamic> toJson() => {
         'id': id,
         'title': title,
+        if (archivedAt != null) 'archivedAt': archivedAt,
         'messages': messages.map((item) => item.toJson()).toList(),
         'draftAttachments':
             draftAttachments.map((item) => item.toJson()).toList(),
@@ -760,7 +767,7 @@ class AgentWorkspace {
     return AgentWorkspace(
       selectedConversationId: conversations.any((item) => item.id == selected)
           ? selected
-          : conversations.firstOrNull?.id,
+          : conversations.where((c) => c.archivedAt == null).firstOrNull?.id,
       conversations: conversations,
       skills: byId.values.toList(),
       memories: (json['memories'] as List? ?? const [])
