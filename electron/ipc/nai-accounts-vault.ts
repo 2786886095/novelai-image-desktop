@@ -12,6 +12,22 @@ export class NaiAccountsVault {
   list(): NaiAccountProfile[] { return this.document.accounts.map(a => ({id:a.id,label:a.label,method:a.method,apiBaseUrl:a.apiBaseUrl,imageBaseUrl:a.imageBaseUrl,...(a.legacyConfiguration?{legacyConfiguration:{...a.legacyConfiguration}}:{})})); }
   legacyMigrated(){return this.document.legacyMigrated===true;}
   managed(){return this.document.managed===true||this.document.legacyMigrated===true||this.document.accounts.length>0;}
+  /** Identity is the main API endpoint + key, not a display label, login method or ciphertext. */
+  assertUnique(input: NaiAccountInput): void {
+    let candidate:ReturnType<typeof normalizeNaiAccountInput>;
+    try{candidate=normalizeNaiAccountInput(input);validateAccountProfile(candidate);}
+    catch{throw Error('NAI_ACCOUNT_VALIDATION:invalid-input:0');}
+    if(!accountCipherAvailable(this.cipher))throw Error('OS credential encryption unavailable');
+    const endpoint=(value:string)=>new URL(value.trim()).href.replace(/\/+$/,'');
+    const address=endpoint(candidate.apiBaseUrl),key=candidate.token.trim();
+    for(const account of this.document.accounts){
+      if(endpoint(account.apiBaseUrl)!==address)continue;
+      let storedKey:string;
+      try{storedKey=this.cipher.decryptString(Buffer.from(account.encryptedToken,'base64')).trim();}
+      catch{throw Error('Stored account key unavailable');}
+      if(storedKey===key)throw Error('NAI_ACCOUNT_DUPLICATE');
+    }
+  }
   importLegacy(id:string,input:NaiAccountInput,configuration:NonNullable<NaiAccountProfile['legacyConfiguration']>):NaiAccountProfile{
     if(this.leases)throw Error('Account operation in flight');
     if(this.document.legacyMigrated)throw Error('Legacy configuration already migrated');
@@ -29,6 +45,8 @@ export class NaiAccountsVault {
     validateAccountProfile(input);
     if (this.document.accounts.some(a => a.id === id)) throw new Error('Duplicate account id');
     if (!accountCipherAvailable(this.cipher)) throw new Error('OS credential encryption unavailable');
+    // Recheck at the synchronous write boundary, including concurrent IPC additions.
+    this.assertUnique(normalized);
     const token=input.token;
     const profile={label:normalized.label,method:normalized.method,apiBaseUrl:normalized.apiBaseUrl,imageBaseUrl:normalized.imageBaseUrl};
     const account = { ...profile, id, encryptedToken: this.cipher.encryptString(token.trim()).toString('base64') };

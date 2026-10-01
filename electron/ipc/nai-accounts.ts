@@ -50,6 +50,7 @@ export function registerNaiAccountsIpc() {
     try {result=await officialNovelAiLogin(input);} finally {input.password='';input.otp=undefined;}
     if(!result.ok) return result;
     const candidate:NaiAccountInput={label:input.label,method:'official-login',token:result.token,apiBaseUrl:'https://api.novelai.net',imageBaseUrl:'https://image.novelai.net'};
+    getVault().assertUnique(candidate);
     const validation=await validateNaiAccountReadOnly(candidate);
     if(!validation.ok)return {ok:false,code:'validation',message:'账户验证未通过，未保存。',validation};
     if(naiAccountsBusy())throw Error('账户操作正在执行');
@@ -61,6 +62,7 @@ export function registerNaiAccountsIpc() {
     if(naiAccountsBusy())throw Error('账户操作正在执行');
     if(!accountCipherAvailable(safeStorage))throw Error('OS credential encryption unavailable');
     const candidate={...input};
+    getVault().assertUnique(candidate);
     requireNaiAccountValidation(await validateNaiAccountReadOnly(candidate));
     if(naiAccountsBusy())throw Error('账户操作正在执行');
     return getVault().add(crypto.randomUUID(),candidate);
