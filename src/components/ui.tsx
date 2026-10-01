@@ -52,14 +52,14 @@ export function IconText({ icon, children }: { icon: ReactNode; children: ReactN
   );
 }
 
-export function AppPortal({ children }: { children: ReactNode }) {
+export function AppPortal({ children, container }: { children: ReactNode; container?: Element }) {
   const portal=useRef<HTMLDivElement>(null);
   useLayoutEffect(()=>{cancelPortalExits();const host=portal.current,release=manageModalPortal(host),stop=animatePortalEntry(host);return()=>{stop();retainPortalExit(host);release();};},[]);
   if (typeof document === "undefined") return <>{children}</>;
-  return createPortal(<div ref={portal} data-studio-portal style={{display:"contents"}}>{children}</div>, document.body);
+  return createPortal(<div ref={portal} data-studio-portal style={{display:"contents"}}>{children}</div>, container ?? document.body);
 }
 
-export type SelectMenuOption = { value: string; label: string; disabled?: boolean };
+export type SelectMenuOption = { value: string; label: string; icon?: ReactNode; disabled?: boolean };
 
 export function findTypeaheadOptionIndex(
   options: SelectMenuOption[],
@@ -118,10 +118,12 @@ export function SelectMenu({
   className,
   disabled = false,
   defaultOpen = false,
+  popoverClassName,
   id,
 }: {
   value: string;
   options: SelectMenuOption[];
+  popoverClassName?: string;
   onChange: (value: string) => void;
   label?: ReactNode;
   ariaLabel: string;
@@ -136,6 +138,7 @@ export function SelectMenu({
   const generatedId = useId();
   const menuId = `${id ?? `select-menu-${generatedId.replace(/:/g, "")}`}-listbox`;
   const [open, setOpen] = useState(defaultOpen);
+  const [portalContainer, setPortalContainer] = useState<Element>();
   const renderMenu = useDisclosurePresence(open, menuRef);
   const [activeIndex, setActiveIndex] = useState(0);
   const [position, setPosition] = useState({ left: 0, top: 0, width: 220, maxHeight: 320, opensUp: false, bottom: 0 });
@@ -149,6 +152,8 @@ export function SelectMenu({
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
     if (!trigger) return;
+    // Native modal dialogs make body portals inert; keep the menu in the active top layer.
+    setPortalContainer(trigger.closest("dialog[open]") ?? undefined);
     const rect = trigger.getBoundingClientRect();
     const viewportGap = 8;
     const gap = 6;
@@ -298,13 +303,14 @@ export function SelectMenu({
         }}
       >
         {label != null && <span className="select-menu-label">{label}</span>}
+        {selected?.icon && <span className="select-menu-option-icon" aria-hidden="true">{selected.icon}</span>}
         <strong className="select-menu-value">{selected?.label ?? ""}</strong>
         <Icon name="chevronDown" className={clsx("select-menu-chevron", open && "open")} />
       </button>
-      {renderMenu && <AppPortal><div
+      {renderMenu && <AppPortal container={portalContainer}><div
         ref={menuRef}
         id={menuId}
-        className="select-menu-popover disclosure-popover"
+        className={clsx("select-menu-popover disclosure-popover", popoverClassName)}
         {...disclosureAttributes(open)}
         role={open ? "listbox" : undefined}
         aria-label={ariaLabel}
@@ -328,7 +334,7 @@ export function SelectMenu({
             setActiveIndex(next);
             menuRef.current?.querySelectorAll<HTMLButtonElement>("[role=option]")[next]?.focus();
           }
-          else if (event.key === "Escape") { event.preventDefault(); setOpen(false); triggerRef.current?.focus(); }
+          else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setOpen(false); triggerRef.current?.focus(); }
           else if (event.key.length === 1 && event.key !== " " && !event.altKey && !event.ctrlKey && !event.metaKey) {
             event.preventDefault();
             typeahead(event.key, false);
@@ -346,7 +352,7 @@ export function SelectMenu({
           onFocus={() => setActiveIndex(index)}
           onClick={() => choose(option)}
         >
-          <span>{option.label}</span>
+          <span className="select-menu-option-content">{option.icon && <span className="select-menu-option-icon" aria-hidden="true">{option.icon}</span>}<span>{option.label}</span></span>
           {option.value === value && <Icon name="check" />}
         </button>)}</div>
       </div></AppPortal>}

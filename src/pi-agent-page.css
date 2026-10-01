@@ -58,14 +58,44 @@ html.motion-reduced .pi-tool-toggle svg{transition:none}
 
 /* Content-led conversation, same restrained motion as account surfaces. */
 .pi-header{padding:12px 22px;gap:12px}.pi-header-title{min-width:0;flex:1}.pi-header-title h2{font-size:16px;font-weight:600;margin:0}.pi-header .pi-conversation-subtitle{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:650px;font-size:12px;color:var(--pi-muted)}.pi-header-status{flex-shrink:0;font-size:12px;color:var(--pi-muted);padding:4px 10px;border-radius:20px;background:var(--pi-bg)}.pi-header-status.is-busy{color:var(--pi-accent);background:var(--accent-soft)}
-.pi-flow{display:flex;align-items:center;justify-content:center;gap:24px;list-style:none;margin:0;padding:10px 18px;border-bottom:1px solid var(--pi-line);color:var(--pi-muted);font-size:12px;background:var(--pi-card)}.pi-flow li{display:flex;align-items:center;gap:7px;transition:color 180ms}.pi-flow li>span{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--pi-bg);font-size:11px}.pi-flow li[aria-current=step]{color:var(--pi-accent)}.pi-flow li[aria-current=step]>span{background:var(--accent-soft);color:var(--pi-accent)}
+
 .pi-transcript{padding:22px max(22px,calc((100% - 810px)/2)) 26px}.pi-message{margin:0 auto 24px;max-width:810px;animation:pi-flow-enter 180ms ease-out both}.pi-message-role{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;margin-bottom:8px;color:var(--pi-muted)}.pi-message-avatar{display:grid;place-items:center;width:26px;height:26px;border-radius:9px;color:var(--pi-accent);background:var(--accent-soft)}.pi-message-avatar svg{width:14px;height:14px}.pi-message-user{width:fit-content;min-width:180px;max-width:min(650px,90%);margin-left:auto;margin-right:0;background:var(--accent-soft);border-radius:16px 16px 4px 16px;padding:12px 16px}.pi-message-body{font-weight:500;line-height:1.75}.pi-message-body h1,.pi-message-body h2,.pi-message-body h3{font-size:16px;font-weight:600;line-height:1.5;margin:16px 0 8px}.pi-message-body p{margin:8px 0}.pi-message-body ul,.pi-message-body ol{padding-left:22px;margin:8px 0}.pi-message-actions{opacity:.7}.pi-message:hover .pi-message-actions,.pi-message:focus-within .pi-message-actions{opacity:1}
 .pi-empty{max-width:620px;padding:32px 16px;margin:auto;min-height:0}.pi-empty-icon{width:32px;height:32px}.pi-empty h3{font-size:22px;margin:14px 0 8px}.pi-empty p{font-weight:500;color:var(--pi-muted)}.pi-plan{animation:pi-flow-enter 180ms ease-out both}.pi-plan dl{font-weight:500}.pi-modal{animation:pi-flow-enter 180ms ease-out both}.pi-agent button{transition:background-color 160ms,border-color 160ms,opacity 160ms}.pi-agent button:active:not(:disabled){transform:translateY(1px)}
 @keyframes pi-flow-enter{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
-@media(max-width:760px){.pi-header{padding:10px 12px}.pi-header-status{font-size:11px;padding:3px 7px}.pi-header .pi-conversation-subtitle{max-width:210px}.pi-flow{gap:16px;padding:8px}.pi-flow li{font-size:11px}.pi-transcript{padding:16px 12px}.pi-message-user{max-width:94%}.pi-empty{padding:24px 6px}.pi-empty h3{font-size:20px}}
-html.motion-reduced .pi-message,html.motion-reduced .pi-plan,html.motion-reduced .pi-modal{animation:none}html.motion-reduced .pi-flow li,html.motion-reduced .pi-agent button{transition:none}html.motion-reduced .pi-agent button:active:not(:disabled){transform:none}
+@media(max-width:760px){.pi-header{padding:10px 12px}.pi-header-status{font-size:11px;padding:3px 7px}.pi-header .pi-conversation-subtitle{max-width:210px}.pi-transcript{padding:16px 12px}.pi-message-user{max-width:94%}.pi-empty{padding:24px 6px}.pi-empty h3{font-size:20px}}
+html.motion-reduced .pi-message,html.motion-reduced .pi-plan,html.motion-reduced .pi-modal{animation:none}html.motion-reduced .pi-agent button:active:not(:disabled){transform:none}
 
 /* Keep a readable conversation above the pinned confirmation card. */
 .pi-decision-tray{max-height:min(260px,36dvh)}
 .pi-message{margin-bottom:8px}
-.pi-flow{flex-shrink:0}
+
+
+
+/* Compact v3: conversation chrome belongs to the left; one input + one control row. */
+.pi-sidebar-actions{display:flex;align-items:center;gap:4px;border-top:1px solid var(--pi-line);padding-top:8px;min-width:0}
+.pi-sidebar-actions>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--pi-muted)}
+.pi-agent .pi-sidebar-actions .pi-icon,.pi-agent .pi-sidebar-footer .pi-icon{width:30px;min-width:30px;min-height:30px;padding:6px;border:0;background:transparent;border-radius:8px}
+.pi-sidebar-actions svg,.pi-sidebar-footer svg{width:14px;height:14px}.pi-sidebar-footer>span:nth-child(2){flex:1}
+.pi-mobile-bar{display:none}.pi-compose-area{padding:8px max(16px,calc((100% - 810px)/2)) 6px;flex-shrink:0}
+.pi-composer{padding:5px;gap:6px;border-radius:12px;align-items:flex-end}.pi-composer textarea{min-height:32px;line-height:1.55;padding:5px 6px}
+.pi-agent .pi-composer .pi-icon{width:32px;min-width:32px;min-height:32px;padding:7px;border-radius:9px}.pi-composer svg{width:16px;height:16px}
+.pi-compose-meta{display:flex;align-items:center;gap:4px;min-width:0;margin-top:3px;height:28px}
+.pi-agent .pi-compose-meta .pi-model-chip{min-height:28px;max-width:50%;padding:2px 4px;font-size:12px;border:0;background:transparent;color:var(--pi-muted);justify-content:flex-start;gap:6px}
+.pi-compose-meta .pi-model-chip>span:last-of-type{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pi-compose-meta .pi-model-chip svg{width:12px;height:12px}
+.pi-context{position:relative;margin:0 0 0 auto;flex-shrink:0}.pi-context summary{display:flex;align-items:center;gap:5px;min-height:28px;line-height:28px;padding:0 5px;list-style:none;cursor:pointer;border-radius:8px}
+.pi-context summary::-webkit-details-marker{display:none}.pi-context summary:hover{background:var(--bg-hover)}.pi-context summary svg{width:14px;height:14px}
+.pi-context-panel{position:absolute;bottom:calc(100% + 10px);right:0;width:min(390px,calc(100vw - 32px));max-height:min(300px,50dvh);overflow:auto;z-index:8;padding:12px;border:1px solid var(--pi-line);border-radius:12px;background:var(--pi-card);box-shadow:0 8px 24px #20143822}
+.pi-context-panel>p{margin:0 0 4px}.pi-context-panel>progress{width:100%;height:5px}.pi-context-controls{gap:8px}.pi-context-controls>small{flex-basis:100%}
+.pi-action-picker{margin:0;flex-shrink:0}.pi-agent .pi-compose-meta .pi-action-picker>button{min-height:28px;padding:2px 5px;font-size:12px;gap:5px;border:0;color:var(--pi-muted)}
+.pi-action-picker>button svg{width:14px;height:14px}.pi-action-list{position:absolute;right:0;bottom:calc(100% + 10px);width:min(420px,calc(100vw - 32px));max-height:min(330px,50dvh);z-index:8;background:var(--pi-card);box-shadow:0 8px 24px #20143822}
+.pi-action-list .select-menu-trigger,.pi-context-panel .select-menu-trigger{width:auto;min-height:32px;font-size:12px}.pi-action-list .select-menu-value{font-weight:500}.pi-template-info label{flex-wrap:wrap}
+.select-menu-option-content{display:flex;align-items:center;gap:9px;min-width:0}.select-menu-option-icon{display:inline-flex;align-items:center;justify-content:center;width:20px;flex:0 0 20px;color:var(--accent)}
+.select-menu-option-icon svg{width:16px;height:16px}.pi-provider-menu .select-menu-option{min-height:36px;font-size:13px;font-weight:500;padding:7px 10px}.pi-provider-menu .select-menu-option.selected{font-weight:600}
+.pi-modal{animation:pi-modal-fade 160ms ease-out both;transform:none}.pi-modal .select-menu-trigger{justify-content:flex-start;font-weight:500}.pi-modal .select-menu-value{font-weight:500}
+.pi-model-list button{display:grid;grid-template-columns:20px minmax(0,1fr) 16px;text-align:left;gap:6px}.pi-model-list small{grid-column:2/4;font-size:12px}.pi-model-list svg{width:16px;height:16px}
+@keyframes pi-modal-fade{from{opacity:0}to{opacity:1}}
+@media(max-width:760px),(pointer:coarse){.pi-agent .pi-sidebar-actions .pi-icon,.pi-agent .pi-sidebar-footer .pi-icon,.pi-agent .pi-composer .pi-icon{width:44px;min-width:44px;min-height:44px}.pi-compose-meta{height:44px}.pi-agent .pi-compose-meta .pi-model-chip,.pi-context summary,.pi-agent .pi-compose-meta .pi-action-picker>button{min-height:44px}.pi-provider-menu .select-menu-option{min-height:44px}.pi-compose-meta .pi-model-chip{max-width:55%}.pi-compose-meta .pi-action-picker>button>span,.pi-compose-meta .pi-action-picker>button>svg:last-child{display:none}.pi-agent .pi-compose-meta .pi-action-picker>button{min-width:44px}.pi-action-list .select-menu-trigger,.pi-context-panel .select-menu-trigger{min-height:44px}}
+@media(max-width:760px){.pi-mobile-bar{display:flex;align-items:center;gap:8px;padding:0 8px;height:44px;flex-shrink:0;border-bottom:1px solid var(--pi-line);background:var(--pi-card)}.pi-mobile-bar>span{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pi-agent .pi-mobile-bar .pi-icon{border:0;background:transparent;width:44px;min-width:44px;min-height:44px}.pi-compose-area{padding:6px 8px max(4px,env(safe-area-inset-bottom))}.pi-composer textarea{min-height:44px}}
+html.motion-reduced .pi-modal{animation:none}
+
+html.motion-reduced .pi-agent button{transition:none}

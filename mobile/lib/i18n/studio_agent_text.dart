@@ -1,6 +1,20 @@
 import 'app_locales.dart';
 
 const _rows = <String, List<String>>{
+  'providerPreset': [
+    '提供商预设',
+    '提供商預設',
+    'Provider preset',
+    'プロバイダー設定',
+    '제공자 프리셋'
+  ],
+  'selectProvider': [
+    '选择预设（仅填入，不保存）',
+    '選擇預設（僅填入，不儲存）',
+    'Choose preset (prefill only)',
+    'プリセットを選択（入力のみ）',
+    '프리셋 선택 (입력만)'
+  ],
   'savedTemplates': [
     '已保存模板',
     '已儲存模板',

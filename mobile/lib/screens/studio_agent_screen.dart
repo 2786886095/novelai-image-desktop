@@ -8,10 +8,31 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../agent/agent_controller.dart';
 import '../agent/agent_models.dart';
+import '../agent/agent_provider_catalog.dart';
+import '../ui/studio_dropdown.dart';
 import '../models/nai_models.dart';
 import '../i18n/studio_agent_text.dart';
 import '../state/app_state.dart';
 import 'studio_agent_components.dart';
+
+IconData _providerIcon(String id) => switch (id) {
+      'deepseek' || 'mistral' => Icons.waves,
+      'openrouter' => Icons.hub_outlined,
+      'gemini' || 'xai' => Icons.auto_awesome,
+      'ollama' || 'lm-studio' => Icons.computer_outlined,
+      'volcengine' => Icons.local_fire_department_outlined,
+      'moonshot' => Icons.nightlight_outlined,
+      'groq' => Icons.bolt,
+      'custom' => Icons.tune,
+      'dashscope' || 'siliconflow' => Icons.cloud_outlined,
+      _ => Icons.smart_toy_outlined,
+    };
+
+Widget _agentMenuLabel(IconData icon, String text) => Row(children: [
+      Icon(icon, size: 18),
+      const SizedBox(width: 10),
+      Expanded(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis))
+    ]);
 
 /// A bounded software-tool assistant; legacy Tavern data remains on disk.
 class StudioAgentScreen extends StatefulWidget {
@@ -329,6 +350,10 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
     }
     var protocol = settings.agentApiProtocol;
     var vision = settings.agentVisionEnabled;
+    var presetId = '';
+    var providerName = settings.agentProviderName;
+    var contextWindow = settings.agentContextWindow;
+    var maxOutputTokens = settings.agentMaxOutputTokens;
     var saving = false;
     String? error;
     final settingsRoute = DialogRoute<void>(
@@ -354,6 +379,47 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                             .colorScheme
                                             .primary)),
                                 const SizedBox(height: 16),
+                                StudioDropdownButtonFormField<String>(
+                                    value: presetId,
+                                    isExpanded: true,
+                                    decoration: InputDecoration(
+                                        labelText: _t('providerPreset')),
+                                    items: [
+                                      DropdownMenuItem(
+                                          value: '',
+                                          child: _agentMenuLabel(
+                                              Icons.cloud_outlined,
+                                              _t('selectProvider'))),
+                                      for (final preset in agentProviderPresets)
+                                        DropdownMenuItem(
+                                            value: preset.id,
+                                            child: _agentMenuLabel(
+                                                _providerIcon(preset.id),
+                                                preset.label)),
+                                    ],
+                                    onChanged: saving
+                                        ? null
+                                        : (id) {
+                                            final preset = agentProviderPresets
+                                                .where((p) => p.id == id)
+                                                .firstOrNull;
+                                            if (preset == null) return;
+                                            change(() {
+                                              presetId = preset.id;
+                                              protocol = preset.protocol;
+                                              base.text = preset.baseUrl;
+                                              model.text = preset.model;
+                                              key.clear();
+                                              vision = preset.vision;
+                                              providerName =
+                                                  preset.providerName;
+                                              contextWindow =
+                                                  preset.contextWindow;
+                                              maxOutputTokens =
+                                                  preset.maxOutputTokens;
+                                            });
+                                          }),
+                                const SizedBox(height: 12),
                                 TextField(
                                     controller: base,
                                     keyboardType: TextInputType.url,
@@ -380,27 +446,32 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                     tilePadding: EdgeInsets.zero,
                                     title: Text(_t('details')),
                                     children: [
-                                      DropdownButtonFormField<String>(
+                                      StudioDropdownButtonFormField<String>(
                                           value: protocol,
                                           isExpanded: true,
                                           decoration: InputDecoration(
                                               labelText: _t('protocol')),
-                                          items: const [
+                                          items: [
                                             DropdownMenuItem(
                                                 value: 'openai-compatible',
-                                                child: Text(
+                                                child: _agentMenuLabel(
+                                                    Icons.chat_bubble_outline,
                                                     'OpenAI Chat Completions')),
                                             DropdownMenuItem(
                                                 value: 'openai-responses',
-                                                child:
-                                                    Text('OpenAI Responses')),
+                                                child: _agentMenuLabel(
+                                                    Icons.smart_toy_outlined,
+                                                    'OpenAI Responses')),
                                             DropdownMenuItem(
                                                 value: 'anthropic-messages',
-                                                child:
-                                                    Text('Anthropic Messages')),
+                                                child: _agentMenuLabel(
+                                                    Icons.auto_awesome,
+                                                    'Anthropic Messages')),
                                             DropdownMenuItem(
                                                 value: 'google-gemini',
-                                                child: Text('Google Gemini'))
+                                                child: _agentMenuLabel(
+                                                    Icons.auto_awesome,
+                                                    'Google Gemini'))
                                           ],
                                           onChanged: saving
                                               ? null
@@ -451,11 +522,9 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                       baseUrl: base.text.trim(),
                                       apiKey: key.text.trim(),
                                       model: model.text.trim(),
-                                      providerName: settings.agentProviderName,
-                                      contextWindow:
-                                          settings.agentContextWindow,
-                                      maxOutputTokens:
-                                          settings.agentMaxOutputTokens,
+                                      providerName: providerName,
+                                      contextWindow: contextWindow,
+                                      maxOutputTokens: maxOutputTokens,
                                       autoCompact: settings.agentAutoCompact,
                                       compactThreshold:
                                           settings.agentAutoCompactThreshold,
@@ -519,17 +588,11 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
   }
 
   Widget _chatList({VoidCallback? close}) => _StudioChatList(
-      agent: _agent!, language: _language, onAction: _chatAction, close: close);
-  void _chooseChat() {
-    showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        builder: (context) => SafeArea(
-            child: SizedBox(
-                height: MediaQuery.sizeOf(context).height * .75,
-                child: _chatList(close: () => Navigator.pop(context)))));
-  }
-
+      agent: _agent!,
+      language: _language,
+      onAction: _chatAction,
+      onConfigure: _configure,
+      close: close);
   Future<void> _preview(AgentAttachment image) async {
     await showDialog<void>(
         context: context,
@@ -590,7 +653,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                     color: message.role == 'user'
                         ? color.primaryContainer
                         : color.surface,
-                    borderRadius: BorderRadius.circular(16)),
+                    borderRadius: BorderRadius.circular(12)),
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -844,54 +907,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
       final decisionHeight =
           ((constraints.maxHeight - (compact ? 100 : 140)) * .44)
               .clamp(120.0, 320.0);
-      final latestReply =
-          chat.messages.where((m) => m.role == 'assistant').lastOrNull;
-      final flow = agent.pendingPermission != null
-          ? 1
-          : latestReply?.tools.any((t) =>
-                      t.name == 'langbai_generate_image' &&
-                      ['running', 'completed'].contains(t.status)) ==
-                  true
-              ? 2
-              : latestReply?.tools.any((t) =>
-                          t.name == 'langbai_prepare_generation' &&
-                          t.status == 'completed') ==
-                      true
-                  ? 1
-                  : 0;
       return Column(children: [
-        if (!compact)
-          Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    for (var i = 0; i < 3; i++)
-                      AnimatedContainer(
-                          duration: MediaQuery.of(context).disableAnimations
-                              ? Duration.zero
-                              : const Duration(milliseconds: 180),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 5),
-                          decoration: BoxDecoration(
-                              color: i == flow
-                                  ? color.primaryContainer
-                                  : color.surface,
-                              borderRadius: BorderRadius.circular(20)),
-                          child: Text(
-                              '${i + 1} · ${_t([
-                                'flowChat',
-                                'flowPlan',
-                                'flowResult'
-                              ][i])}',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: i == flow
-                                      ? color.primary
-                                      : color.onSurfaceVariant)))
-                  ])),
         if (!agent.providerConfigured)
           Container(
               color: color.primaryContainer,
@@ -1000,65 +1016,6 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
             child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
                 child: Column(children: [
-                  SizedBox(
-                      height: 36,
-                      child: Row(children: [
-                        PopupMenuButton<String>(
-                            key: const ValueKey('agent-model-selector'),
-                            tooltip: _t('modelSettings'),
-                            enabled: !agent.sending,
-                            onSelected: (_) => _configure(),
-                            itemBuilder: (_) => [
-                                  PopupMenuItem(
-                                      value: 'configure',
-                                      child: Text(_t('modelSettings')))
-                                ],
-                            child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 8),
-                                child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.auto_awesome, size: 15),
-                                      const SizedBox(width: 4),
-                                      ConstrainedBox(
-                                          constraints: BoxConstraints(
-                                              maxWidth:
-                                                  MediaQuery.sizeOf(context)
-                                                              .width <
-                                                          380
-                                                      ? 88
-                                                      : 150),
-                                          child: Text(
-                                              agent.app.settings.agentApiModel
-                                                      .isEmpty
-                                                  ? _t('setup')
-                                                  : agent.app.settings
-                                                      .agentApiModel,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis)),
-                                      const Icon(Icons.arrow_drop_down,
-                                          size: 18),
-                                    ]))),
-                        const Spacer(),
-                        IconButton(
-                            key: const ValueKey('agent-template-selector'),
-                            visualDensity: VisualDensity.compact,
-                            tooltip: _t('savedTemplates'),
-                            onPressed: agent.sending ? null : _showTemplates,
-                            icon: const Icon(Icons.description_outlined,
-                                size: 20)),
-                        TextButton.icon(
-                            key: const ValueKey('agent-context-control'),
-                            style: TextButton.styleFrom(
-                                visualDensity: VisualDensity.compact),
-                            onPressed: _showContext,
-                            icon: Icon(Icons.data_usage,
-                                size: 16,
-                                color:
-                                    chat.context.danger ? color.error : null),
-                            label: Text('${chat.context.percent.round()}%')),
-                      ])),
                   Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
                     IconButton(
                         tooltip: _t('addAttachment'),
@@ -1096,46 +1053,92 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                 ? null
                                 : _send)
                   ]),
-                  const SizedBox(height: 4),
-                  Text(_t(agent.sending ? 'busySwitch' : 'confirmationHint'),
-                      style: TextStyle(
-                          fontSize: 11, color: color.onSurfaceVariant),
-                      textAlign: TextAlign.center)
+                  SizedBox(
+                      height: 44,
+                      child: Row(children: [
+                        PopupMenuButton<String>(
+                            key: const ValueKey('agent-model-selector'),
+                            tooltip: _t('modelSettings'),
+                            enabled: !agent.sending,
+                            onSelected: (_) => _configure(),
+                            itemBuilder: (_) => [
+                                  PopupMenuItem(
+                                      value: 'configure',
+                                      child: _agentMenuLabel(
+                                          Icons.settings_outlined,
+                                          _t('modelSettings')))
+                                ],
+                            child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.auto_awesome, size: 15),
+                                      const SizedBox(width: 4),
+                                      ConstrainedBox(
+                                          constraints: BoxConstraints(
+                                              maxWidth:
+                                                  MediaQuery.sizeOf(context)
+                                                              .width <
+                                                          380
+                                                      ? 88
+                                                      : 150),
+                                          child: Text(
+                                              agent.app.settings.agentApiModel
+                                                      .isEmpty
+                                                  ? _t('setup')
+                                                  : agent.app.settings
+                                                      .agentApiModel,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis)),
+                                      const Icon(Icons.arrow_drop_down,
+                                          size: 18),
+                                    ]))),
+                        const Spacer(),
+                        IconButton(
+                            key: const ValueKey('agent-template-selector'),
+                            visualDensity: VisualDensity.compact,
+                            tooltip: _t('savedTemplates'),
+                            onPressed: agent.sending ? null : _showTemplates,
+                            icon: const Icon(Icons.description_outlined,
+                                size: 18)),
+                        TextButton.icon(
+                            key: const ValueKey('agent-context-control'),
+                            style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact),
+                            onPressed: _showContext,
+                            icon: Icon(Icons.data_usage,
+                                size: 16,
+                                color:
+                                    chat.context.danger ? color.error : null),
+                            label: Text('${chat.context.percent.round()}%')),
+                      ])),
                 ]))),
       ]);
     });
     return Scaffold(
-        appBar: AppBar(
-            title:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(_t('title'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w600)),
-              Text(chat.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style:
-                      TextStyle(fontSize: 12, color: color.onSurfaceVariant)),
-            ]),
-            actions: [
-              if (!wide)
-                IconButton(
-                    tooltip: _t('chats'),
-                    icon: const Icon(Icons.chat_bubble_outline),
-                    onPressed: agent.sending ? null : _chooseChat),
-              PopupMenuButton<String>(
-                  tooltip: _t('chatActions'),
-                  enabled: !agent.sending,
-                  onSelected: (action) => _chatAction(chat, action),
-                  itemBuilder: (_) => [
-                        PopupMenuItem(
-                            value: 'rename', child: Text(_t('rename'))),
-                        PopupMenuItem(
-                            value: 'delete', child: Text(_t('deleteChat')))
-                      ]),
-            ]),
+        drawer: wide
+            ? null
+            : Drawer(
+                child: SafeArea(
+                    child: Builder(
+                        builder: (drawerContext) => _chatList(
+                            close: () => Navigator.pop(drawerContext))))),
+        appBar: wide
+            ? null
+            : AppBar(
+                toolbarHeight: 44,
+                leading: Builder(
+                    builder: (barContext) => IconButton(
+                        tooltip: _t('chats'),
+                        icon: const Icon(Icons.chat_bubble_outline, size: 20),
+                        onPressed: () => Scaffold.of(barContext).openDrawer())),
+                title: Text(chat.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w500))),
         body: wide
             ? Row(children: [
                 SizedBox(width: 228, child: _chatList()),
@@ -1170,10 +1173,12 @@ class _StudioChatList extends StatefulWidget {
       {required this.agent,
       required this.language,
       required this.onAction,
+      required this.onConfigure,
       this.close});
   final AgentController agent;
   final String language;
   final Future<void> Function(AgentConversation, String) onAction;
+  final VoidCallback onConfigure;
   final VoidCallback? close;
   @override
   State<_StudioChatList> createState() => _StudioChatListState();
@@ -1188,6 +1193,18 @@ class _StudioChatListState extends State<_StudioChatList> {
       builder: (context, _) => Padding(
           padding: const EdgeInsets.all(12),
           child: Column(children: [
+            Row(children: [
+              const Icon(Icons.auto_awesome, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: Text(t('title'),
+                      style: const TextStyle(fontWeight: FontWeight.w600))),
+              IconButton(
+                  tooltip: t('modelSettings'),
+                  onPressed: widget.agent.sending ? null : widget.onConfigure,
+                  icon: const Icon(Icons.settings_outlined, size: 20))
+            ]),
+            const SizedBox(height: 4),
             FilledButton.tonalIcon(
                 onPressed: widget.agent.sending
                     ? null
@@ -1227,9 +1244,13 @@ class _StudioChatListState extends State<_StudioChatList> {
                         onSelected: (action) => widget.onAction(chat, action),
                         itemBuilder: (_) => [
                               PopupMenuItem(
-                                  value: 'rename', child: Text(t('rename'))),
+                                  value: 'rename',
+                                  child: _agentMenuLabel(
+                                      Icons.edit_outlined, t('rename'))),
                               PopupMenuItem(
-                                  value: 'delete', child: Text(t('deleteChat')))
+                                  value: 'delete',
+                                  child: _agentMenuLabel(
+                                      Icons.delete_outline, t('deleteChat')))
                             ]))
             ]))
           ])));
