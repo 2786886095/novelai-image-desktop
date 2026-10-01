@@ -13,9 +13,13 @@
  * probe(id) -> {status:number,subscription:'skipped'|'available',protocol:'unverified',message:string}.
  * probe also returns ok/code: auth, unsupported, network, invalid-input, invalid-response, http, passed.
  * add/login must pass read-only verification before persistence; failure preserves stored accounts.
- * Relay uses its own API base + /user/subscription, with an anonymous 401/403 gate
- * before authenticated GET. Public HTML/200 is not authentication success. No host fallback.
- * Unsupported routes fail explicitly and do not save, retry or invoke paid generation. Official bounded GET
+ * Relay first uses its declared image base + /user/data, matching the legacy verifier.
+ * Missing-route 404/405/501 alone permits its declared API base + /user/subscription.
+ * Both requests carry the independent relay Key; no anonymous-status gate is required.
+ * Successful responses require compatible account data, not merely HTTP 200 or an HTML page.
+ * Saved migrated custom-image profiles probe their preserved image host only; no Key or method is rewritten.
+ * No redirect or fallback to official/undeclared hosts. Unsupported routes fail explicitly and do not save
+ * or invoke paid generation. Official bounded GET
  * /user/subscription has 8s timeout, 256KiB response bound and no redirects/retries.
  * IPC names use naiAccounts:<method>; window.naiAccounts exposes corresponding methods.
  * Native mobile must provide equivalent encrypted storage; this contract is not evidence

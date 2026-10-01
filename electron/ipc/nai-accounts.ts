@@ -78,7 +78,7 @@ export function registerNaiAccountsIpc() {
   ipcMain.handle('naiAccounts:reveal',(_event,id:string)=>{const lease=getVault().bind(id);try{return lease.snapshot.token;}finally{lease.release();}});
   ipcMain.handle('naiAccounts:probe', async (_event, id: string) => {
     const lease=getVault().bind(id);
-    try{const result=await validateNaiAccountReadOnly(lease.snapshot);return {...result,subscription:result.ok?'available':'skipped',protocol:'unverified',message:'Read-only API authentication only. Image generation protocol and billing are not tested.'};}
+    try{const result=await validateNaiAccountReadOnly(lease.snapshot,true);return {...result,subscription:result.ok?'available':'skipped',protocol:'unverified',message:'Read-only API authentication only. Image generation protocol and billing are not tested.'};}
     finally{lease.release();}
   });
 }

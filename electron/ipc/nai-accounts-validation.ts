@@ -3,28 +3,46 @@ import {normalizeNaiAccountInput,validateAccountProfile,type NaiAccountInput,typ
 import {proxyConfigForUrl} from './proxy';
 import {getSettings} from './store';
 
-/** The documented NovelAI subscription route only. No model/generation probes, retries or host fallback. */
-export async function validateNaiAccountReadOnly(input:NaiAccountInput):Promise<NaiAccountValidationResult>{
+function compatibleSubscription(data:unknown,legacyRelay:boolean):boolean {
+ const body=data as any;
+ const sub=body?.subscription??body?.information?.subscription??body?.data?.subscription??body?.data?.information?.subscription??body;
+ if(!sub||typeof sub!=='object'||Array.isArray(sub))return false;
+ // Older /user/data relays can omit active or encode tier as a decimal string.
+ const tier=typeof sub.tier==='number'?sub.tier:legacyRelay&&typeof sub.tier==='string'&&/^\d+$/.test(sub.tier)?Number(sub.tier):NaN;
+ return Number.isSafeInteger(tier)&&tier>=0&&(typeof sub.active==='boolean'||legacyRelay&&sub.active===undefined);
+}
+
+/** Authenticated read-only account routes. Never probes generation, follows redirects, or sends relay Keys to official hosts. */
+export async function validateNaiAccountReadOnly(input:NaiAccountInput,preserveLegacyImageRoute=false):Promise<NaiAccountValidationResult>{
  let account:ReturnType<typeof normalizeNaiAccountInput>;
- try{account=normalizeNaiAccountInput(input);validateAccountProfile(account);}catch{return {ok:false,code:'invalid-input',status:0};}
- const url=account.apiBaseUrl.replace(/\/+$/,'')+'/user/subscription';
  try{
-  const proxy=await proxyConfigForUrl('nai',url,{...getSettings()});
-  const options={...proxy,timeout:8000,maxRedirects:0,maxContentLength:256*1024,responseType:'json' as const,validateStatus:()=>true};
-  if(account.method==='relay'){
-   // A public 200 page cannot establish that this endpoint checks the supplied Key.
-   const anonymous=await axios.get(url,{...options,headers:{Accept:'application/json'}});
-   if(anonymous.status!==401&&anonymous.status!==403)return {ok:false,code:'unsupported',status:anonymous.status};
+  account=normalizeNaiAccountInput(input);
+  // Only the backend probe of a saved migrated profile opts into its preserved custom image route.
+  if(preserveLegacyImageRoute&&account.legacyConfiguration?.allowCustomEndpoint){
+   const host=new URL(account.imageBaseUrl).hostname.toLowerCase();
+   if(host!=='novelai.net'&&!host.endsWith('.novelai.net'))account={...account,method:'relay',apiBaseUrl:account.imageBaseUrl};
   }
-  const response=await axios.get(url,{...options,headers:{Accept:'application/json',Authorization:`Bearer ${account.token.trim()}`}});
-  const status=response.status;
-  if(status===401||status===403)return {ok:false,code:'auth',status};
-  if([301,302,303,307,308,404,405,501].includes(status))return {ok:false,code:'unsupported',status};
-  if(status!==200)return {ok:false,code:'http',status};
-  const data=response.data;
-  const sub=data?.subscription??data?.information?.subscription??data?.data?.subscription??data;
-  if(!sub||typeof sub!=='object'||Array.isArray(sub)||typeof sub.active!=='boolean'||typeof sub.tier!=='number'||!Number.isFinite(sub.tier)||sub.tier<0)return {ok:false,code:'invalid-response',status};
-  return {ok:true,code:'passed',status};
+  validateAccountProfile(account);
+ }catch{return {ok:false,code:'invalid-input',status:0};}
+ const relay=account.method==='relay';
+ const urls=relay
+  ? [account.imageBaseUrl.replace(/\/+$/,'')+'/user/data',account.apiBaseUrl.replace(/\/+$/,'')+'/user/subscription']
+  : [account.apiBaseUrl.replace(/\/+$/,'')+'/user/subscription'];
+ try{
+  const settings={...getSettings()};
+  for(let index=0;index<urls.length;index++){
+   const url=urls[index],proxy=await proxyConfigForUrl('nai',url,settings);
+   const response=await axios.get(url,{...proxy,timeout:8000,maxRedirects:0,maxContentLength:256*1024,responseType:'json' as const,validateStatus:()=>true,headers:{Accept:'application/json',Authorization:`Bearer ${account.token.trim()}`}});
+   const status=response.status;
+   if(status===401||status===403)return {ok:false,code:'auth',status};
+   // Only a missing/unsupported read route permits the second declared relay address.
+   if([404,405,501].includes(status)&&index+1<urls.length)continue;
+   if([301,302,303,307,308,404,405,501].includes(status))return {ok:false,code:'unsupported',status};
+   if(status!==200)return {ok:false,code:'http',status};
+   if(!compatibleSubscription(response.data,relay))return {ok:false,code:'invalid-response',status};
+   return {ok:true,code:'passed',status};
+  }
+  return {ok:false,code:'unsupported',status:0};
  }catch{return {ok:false,code:'network',status:0};}
 }
 
