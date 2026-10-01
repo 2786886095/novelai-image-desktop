@@ -1,5 +1,9 @@
 import type { AppLanguage } from './types';
 export const NAI_ACCOUNT_LOCALES = {
+ validationSuccess:["API Token 验证成功。", "API Token 驗證成功。", "API token verified.", "API Token の検証成功。", "API Token 검증 성공."],
+ validationSaved:["验证成功，账号已保存。", "驗證成功，帳戶已儲存。", "Verified; account saved.", "検証成功・保存済み。", "검증 성공, 계정 저장됨."],
+ validationFailure:["验证未通过", "驗證未通過", "Verification failed", "検証失敗", "검증 실패"],
+ validationDetails:["详情", "詳情", "Details", "詳細", "상세"],
  validationHttp:["接口验证未通过，未保存新账号。", "介面驗證未通過，未儲存新帳戶。", "Endpoint verification failed. New account not saved.", "接続先検証失敗。新規保存なし。", "주소 검증 실패. 새 계정 저장 안 함."],
  validationResponse:["接口返回内容不是兼容的账户数据，未保存新账号。", "介面回傳不是相容帳戶資料，未儲存新帳戶。", "Response is not compatible account data. New account not saved.", "互換アカウントデータではありません。新規保存なし。", "호환 계정 데이터가 아닙니다. 새 계정 저장 안 함."],
  validationInput:["账号信息或接口地址无效，未保存新账号。", "帳戶資訊或介面位址無效，未儲存新帳戶。", "Invalid account fields or endpoint address. New account not saved.", "アカウント情報・接続先が無効。新規保存なし。", "계정 정보 또는 주소가 잘못되었습니다. 새 계정 저장 안 함."],

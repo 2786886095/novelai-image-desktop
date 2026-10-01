@@ -27,3 +27,12 @@ html.motion-reduced .nai-account-overlay,html.motion-reduced .nai-account-panel,
 .nai-account-actions{display:flex;gap:6px;flex-shrink:0}.nai-key-field,.nai-saved-key{display:flex;align-items:center;gap:6px;min-width:0}.nai-key-field input,.nai-saved-key input{flex:1;min-width:0}
 .nai-key-field button,.nai-saved-key button{width:36px;min-width:36px;padding:6px}.nai-saved-key input{font-family:ui-monospace,monospace;font-size:12px;min-height:36px;padding:7px 9px}
 @media(max-width:760px){.nai-account-row{align-items:flex-start;flex-wrap:wrap}.nai-account-actions{flex-wrap:wrap}.nai-key-field button,.nai-saved-key button{min-width:44px;min-height:44px}}
+
+/* Obvious outcomes without losing the bounded verification details. */
+.nai-account-feedback{position:relative;display:flex;align-items:flex-start;gap:8px;box-sizing:border-box;min-height:44px;margin:12px 0 0;padding:10px 14px;border:1px solid var(--border);border-radius:12px;background:var(--panel-2,var(--bg-input));color:var(--text);font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.nai-account-feedback>svg{width:16px;height:16px;flex-shrink:0;margin-top:2px}.nai-account-feedback-body{flex:1;min-width:0}.nai-account-feedback strong{display:block;padding-right:72px;font-size:13px;font-weight:500}
+.nai-account-feedback--success{background:var(--success-soft);border-color:color-mix(in srgb,var(--success) 55%,var(--border));color:color-mix(in srgb,var(--success) 75%,var(--text) 25%)}
+.nai-account-feedback--error{background:var(--danger-soft);border-color:color-mix(in srgb,var(--danger) 45%,var(--border));color:color-mix(in srgb,var(--danger) 65%,var(--text) 35%)}
+.nai-account-feedback details{margin:0}.nai-account-feedback summary{position:absolute;top:0;right:8px;box-sizing:border-box;min-width:44px;min-height:44px;padding:0 6px;font-size:12px;line-height:44px;cursor:pointer}.nai-account-feedback details p{margin:6px 0 0;font-size:12px;line-height:1.6;color:var(--text)}
+.nai-account-feedback--pending>svg{animation:nai-account-verifying 1s linear infinite}@keyframes nai-account-verifying{to{transform:rotate(360deg)}}
+html.motion-reduced .nai-account-feedback--pending>svg{animation:none}@media(prefers-reduced-motion:reduce){.nai-account-feedback--pending>svg{animation:none}}

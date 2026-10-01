@@ -4,11 +4,23 @@ import { relayDashboardOrigin, nextNaiAccountLabel, NAI_ACCOUNT_METHODS, naiAcco
 import { naiAccountText, type NaiAccountTextKey } from '../nai-accounts-locales';
 import { useAppStore } from '../store';
 import { SelectMenuCompat } from './ui';
-import { LuKeyRound, LuMail, LuGlobe, LuPlus, LuX, LuUserRound, LuEye, LuEyeOff, LuCopy } from 'react-icons/lu';
+import { LuKeyRound, LuMail, LuGlobe, LuPlus, LuX, LuUserRound, LuEye, LuEyeOff, LuCopy, LuCircleCheck, LuCircleAlert, LuLoaderCircle, LuInfo } from 'react-icons/lu';
 import {confirmAction} from './confirm';
 import { motionReduced } from '../motion-system';
 import './NaiAccountManager.css';
 function validationText(code:NaiAccountValidationResult['code']):NaiAccountTextKey {return code==='passed'?'validationPassed':code==='auth'?'validationAuth':code==='unsupported'?'validationUnsupported':code==='network'?'validationNetwork':code==='invalid-input'?'validationInput':code==='invalid-response'?'validationResponse':'validationHttp';}
+export function NaiAccountFeedback({message,httpStatus,nt}:{message:NaiAccountTextKey|'';httpStatus?:number;nt:(key:NaiAccountTextKey)=>string}) {
+ if(!message)return null;
+ const passed=message==='validationPassed'||message==='saved';
+ const failed=message.startsWith('validation')&&!passed;
+ const pending=message==='validating';
+ const kind=passed?'success':failed?'error':pending?'pending':'info';
+ const title=passed?nt(message==='saved'?'validationSaved':'validationSuccess'):failed?nt('validationFailure'):nt(message);
+ return <div className={`nai-account-feedback nai-account-feedback--${kind}`} role={failed?'alert':'status'} aria-live={failed?'assertive':'polite'} aria-atomic="true" aria-busy={pending||undefined}>
+ {passed?<LuCircleCheck aria-hidden/>:failed?<LuCircleAlert aria-hidden/>:pending?<LuLoaderCircle aria-hidden/>:<LuInfo aria-hidden/>}
+ <div className="nai-account-feedback-body"><strong>{title}</strong>{(passed||failed||httpStatus!==undefined)&&<details><summary tabIndex={0}>{nt('validationDetails')}</summary><p>{httpStatus!==undefined?`HTTP ${httpStatus}: `:''}{nt(message)}</p></details>}</div>
+ </div>;
+}
 function bridge(): NaiAccountsBridge | undefined { return (window as unknown as { naiAccounts?: NaiAccountsBridge }).naiAccounts; }
 export function NaiAccountDialogFrame({children,title,closeLabel,titleId,panelRef,onClose,closing=false}:{closing?:boolean;children:ReactNode;title:string;closeLabel:string;titleId:string;panelRef:RefObject<HTMLDivElement|null>;onClose:()=>void}) {
  return <div className={`nai-account-overlay${closing?' is-leaving':''}`} onMouseDown={event=>{if(event.target===event.currentTarget)onClose();}}><div className="nai-account-panel" ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}><header className="nai-account-dialog-header"><h3 id={titleId}>{title}</h3><button type="button" aria-label={closeLabel} onClick={onClose}><LuX aria-hidden/></button></header>{children}</div></div>;
@@ -82,10 +94,10 @@ export function NaiAccountManager({variant='toolbar',onSelectionChange}:{variant
  <button type="button" className="nai-account-primary" disabled={locked||!label||(method==='official-login'?!email||!password:!token)} onClick={()=>void add()}>{busy?nt('validating'):nt(method==='official-login'?'saveLogin':'save')}</button>
  </div>
  <ul className="nai-account-list">{accounts.map(a=><li key={a.id}>
- <div className="nai-account-row"><div className="nai-account-identity"><strong>{a.label}</strong><span className="nai-login-badge" title={nt('loginMethod')}>{a.method==='relay'?<LuGlobe/>:a.method==='official-login'?<LuMail/>:<LuKeyRound/>}{nt(a.method==='token'?'officialToken':a.method==='relay'?'relay':'login')}</span></div><div className="nai-account-actions"><button type="button" aria-pressed={a.id===selected} disabled={locked||a.id===selected} onClick={()=>void select(a.id)}>{nt(a.id===selected?'current':'useAccount')}</button><button type="button" disabled={locked} onClick={()=>void action(async()=>{const r=await bridge()!.probe(a.id);setHttpStatus(r.status===0?undefined:r.status);setMessage(r.code?validationText(r.code):r.status===200?'validationPassed':r.status===401||r.status===403?'validationAuth':'validationHttp');})}>{nt('probe')}</button><button type="button" disabled={locked} onClick={()=>void removeAccount(a)}>{nt('remove')}</button></div></div>
+ <div className="nai-account-row"><div className="nai-account-identity"><strong>{a.label}</strong><span className="nai-login-badge" title={nt('loginMethod')}>{a.method==='relay'?<LuGlobe/>:a.method==='official-login'?<LuMail/>:<LuKeyRound/>}{nt(a.method==='token'?'officialToken':a.method==='relay'?'relay':'login')}</span></div><div className="nai-account-actions"><button type="button" aria-pressed={a.id===selected} disabled={locked||a.id===selected} onClick={()=>void select(a.id)}>{nt(a.id===selected?'current':'useAccount')}</button><button type="button" disabled={locked} onClick={()=>void action(async()=>{setMessage('validating');const r=await bridge()!.probe(a.id);setHttpStatus(r.status===0?undefined:r.status);setMessage(r.code?validationText(r.code):r.status===200?'validationPassed':r.status===401||r.status===403?'validationAuth':'validationHttp');})}>{nt('probe')}</button><button type="button" disabled={locked} onClick={()=>void removeAccount(a)}>{nt('remove')}</button></div></div>
  <div className="nai-saved-key"><input readOnly type={revealed?.id===a.id?'text':'password'} aria-label={`${a.label} Key`} autoComplete="off" spellCheck={false} value={revealed?.id===a.id?revealed.value:'••••••••••••'}/><button type="button" disabled={locked} aria-label={`${nt(revealed?.id===a.id?'hideKey':'viewKey')}: ${a.label}`} title={nt(revealed?.id===a.id?'hideKey':'viewKey')} aria-pressed={revealed?.id===a.id} onClick={()=>void keyAction(a.id)}>{revealed?.id===a.id?<LuEyeOff/>:<LuEye/>}</button><button type="button" disabled={locked} aria-label={`${nt('copyKey')}: ${a.label}`} title={nt('copyKey')} onClick={()=>void keyAction(a.id,true)}><LuCopy/></button></div>
  </li>)}</ul>
- <p role="status" aria-live="polite">{httpStatus!==undefined?`HTTP ${httpStatus}: `:''}{message?nt(message):''}</p>
+ <NaiAccountFeedback message={message} httpStatus={httpStatus} nt={nt}/>
  </div>;
  if(variant==='settings')return <section className="nai-account-settings" aria-label={nt('title')}><header><div><h3>{nt('title')}</h3><p className="nai-account-note">{nt('settingsHint')}</p></div></header>{selector}{content}</section>;
  return <section className="nai-account-manager">{selector}<button ref={trigger} type="button" aria-haspopup="dialog" aria-expanded={open} onClick={()=>{setClosing(false);setOpen(true)}}><LuPlus aria-hidden/>{nt('manage')}</button>
