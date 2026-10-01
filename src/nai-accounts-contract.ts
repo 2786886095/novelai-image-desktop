@@ -19,8 +19,8 @@
  * Successful responses require compatible account data, not merely HTTP 200 or an HTML page.
  * Saved migrated custom-image profiles probe their preserved image host only; no Key or method is rewritten.
  * No redirect or fallback to official/undeclared hosts. Unsupported routes fail explicitly and do not save
- * or invoke paid generation. Official bounded GET
- * /user/subscription has 8s timeout, 256KiB response bound and no redirects/retries.
+ * or invoke paid generation. Official Token and derived-login verification use image.novelai.net/user/data,
+ * matching the legacy account reader, with 8s timeout, 256KiB bound and no redirects/retries.
  * IPC names use naiAccounts:<method>; window.naiAccounts exposes corresponding methods.
  * Native mobile must provide equivalent encrypted storage; this contract is not evidence
  * of mobile implementation or runtime DPAPI verification.
@@ -43,7 +43,7 @@
  * Native agent IPC records new pending proposal account revisions; a saved proposal on
  * another account or an unknown pre-restart proposal is refused, requiring regeneration.
  * Shared asynchronous in-app confirmation releases inert/hit-testing before resolving.
- * Fixed official login/subscription URL honors proxyConfigForUrl(nai, actual URL, settings).
+ * Fixed official login/account-data URL honors proxyConfigForUrl(nai, actual URL, settings).
  * Windows safeStorage synthetic round-trip was observed (no real user store).
  * Mobile HANDOFF read-only parity inspection + its four synthetic vectors passed here.
  * Real login, real relay protocol/billing, OTP and signed all-client integration remain untested.

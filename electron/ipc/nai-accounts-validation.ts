@@ -3,13 +3,13 @@ import {normalizeNaiAccountInput,validateAccountProfile,type NaiAccountInput,typ
 import {proxyConfigForUrl} from './proxy';
 import {getSettings} from './store';
 
-function compatibleSubscription(data:unknown,legacyRelay:boolean):boolean {
+function compatibleSubscription(data:unknown,legacyFormat:boolean):boolean {
  const body=data as any;
  const sub=body?.subscription??body?.information?.subscription??body?.data?.subscription??body?.data?.information?.subscription??body;
  if(!sub||typeof sub!=='object'||Array.isArray(sub))return false;
- // Older /user/data relays can omit active or encode tier as a decimal string.
- const tier=typeof sub.tier==='number'?sub.tier:legacyRelay&&typeof sub.tier==='string'&&/^\d+$/.test(sub.tier)?Number(sub.tier):NaN;
- return Number.isSafeInteger(tier)&&tier>=0&&(typeof sub.active==='boolean'||legacyRelay&&sub.active===undefined);
+ // The legacy /user/data contract can omit active or encode tier as a decimal string.
+ const tier=typeof sub.tier==='number'?sub.tier:legacyFormat&&typeof sub.tier==='string'&&/^\d+$/.test(sub.tier)?Number(sub.tier):NaN;
+ return Number.isSafeInteger(tier)&&tier>=0&&(typeof sub.active==='boolean'||legacyFormat&&sub.active===undefined);
 }
 
 /** Authenticated read-only account routes. Never probes generation, follows redirects, or sends relay Keys to official hosts. */
@@ -27,7 +27,7 @@ export async function validateNaiAccountReadOnly(input:NaiAccountInput,preserveL
  const relay=account.method==='relay';
  const urls=relay
   ? [account.imageBaseUrl.replace(/\/+$/,'')+'/user/data',account.apiBaseUrl.replace(/\/+$/,'')+'/user/subscription']
-  : [account.apiBaseUrl.replace(/\/+$/,'')+'/user/subscription'];
+  : [account.imageBaseUrl.replace(/\/+$/,'')+'/user/data'];
  try{
   const settings={...getSettings()};
   for(let index=0;index<urls.length;index++){
@@ -39,7 +39,7 @@ export async function validateNaiAccountReadOnly(input:NaiAccountInput,preserveL
    if([404,405,501].includes(status)&&index+1<urls.length)continue;
    if([301,302,303,307,308,404,405,501].includes(status))return {ok:false,code:'unsupported',status};
    if(status!==200)return {ok:false,code:'http',status};
-   if(!compatibleSubscription(response.data,relay))return {ok:false,code:'invalid-response',status};
+   if(!compatibleSubscription(response.data,true))return {ok:false,code:'invalid-response',status};
    return {ok:true,code:'passed',status};
   }
   return {ok:false,code:'unsupported',status:0};
