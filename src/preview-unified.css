@@ -19,3 +19,15 @@ html .gallery-favorite-lightbox:has(.image-preview-viewer)>section>button {
 }
 html :is(.artist-ranking-lightbox,.artist-result-preview,.reference-catalog-preview,.reference-preset-preview,.redraw-preview-content,.gallery-favorite-lightbox>section)>:is(footer,nav,p,h3),html :is(.style-image-lightbox,.tavern-image-lightbox,.positive-preset-lightbox)>:is(footer,span,.favorite-style-preview-actions) {flex:0 0 auto;max-height:20dvh;overflow:auto;margin:0;align-self:center;}
 @media(max-width:620px){html :is(.image-preview-dialog-backdrop,.style-image-lightbox,.token-guide-preview,.positive-preset-lightbox,.redraw-lightbox,.tavern-image-lightbox,.gallery-favorite-lightbox,.artist-ranking-lightbox-backdrop,.artist-result-preview-backdrop,.reference-catalog-preview-backdrop,.reference-preset-preview-backdrop):has(.image-preview-viewer){padding:50px 8px 8px;}html .image-preview-viewer .image-preview-controls{gap:4px;padding:6px;}}
+
+/* Gallery controls share one viewer toolbar; source/download actions stay outside it. */
+html :is(.gallery-favorite-lightbox,.artist-ranking-lightbox-backdrop):has(.image-preview-viewer) :is(.image-preview-close,.artist-ranking-lightbox-close) {
+ top:max(8px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));width:44px;height:44px;min-height:44px;padding:10px;font-size:20px;white-space:nowrap;
+}
+html :is(.gallery-favorite-lightbox,.artist-ranking-lightbox-backdrop):has(.image-preview-viewer) :is(.image-preview-close,.artist-ranking-lightbox-close):hover {background:color-mix(in srgb,var(--accent) 32%,transparent);}
+html .gallery-favorite-lightbox .gallery-preview-title {max-width:calc(100% - 96px);color:white;font-size:14px;line-height:1.4;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;}
+html :is(.gallery-favorite-lightbox>section,.artist-ranking-lightbox)>.gallery-preview-actions {display:flex;flex:0 0 auto;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px;width:fit-content;max-width:100%;max-height:20dvh;margin:0 auto;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--bg-panel);color:var(--text-secondary);overflow:auto;}
+html .gallery-favorite-lightbox .gallery-preview-prompt {flex:0 0 auto;align-self:center;width:min(840px,100%);min-width:0;max-height:min(18dvh,160px);margin:0;color:white;font-size:12px;overflow:auto;}
+html .gallery-favorite-lightbox .gallery-preview-prompt summary {width:fit-content;cursor:pointer;padding:6px 8px;}
+html .gallery-favorite-lightbox .gallery-preview-prompt p {max-width:100%;margin:6px 8px;white-space:pre-wrap;overflow-wrap:anywhere;}
+@media(pointer:coarse){html :is(.gallery-favorite-lightbox,.artist-ranking-lightbox-backdrop) .image-preview-controls button,html .gallery-preview-actions button,html .gallery-preview-prompt summary {min-width:44px;min-height:44px;}}

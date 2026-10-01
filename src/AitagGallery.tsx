@@ -4,6 +4,7 @@ import {favoriteFromGallery,type GalleryFavorite} from './gallery-favorites';
 import {galleryLibraryText,localizedGalleryTag,galleryTagQuery} from './gallery-labels';
 import {tagsGalleryLabels,tagsGalleryUi} from "./tags-gallery";
 import {PreviewImageViewer} from './components/PreviewImageViewer';
+import {Icon} from './components/icons';
 import { formatAitagFailure } from "./aitag-error";
 import { galleryDownloadFeedback } from "./gallery-download";
 import quickTagLabels from "../shared/quicktag-ui.json";
@@ -396,6 +397,9 @@ function CopyButton({ value, text }: { value: string; text: GalleryText }) {
 function GalleryImageLightbox({
   label,
   image,
+  imageSrc,
+  favoriteAction,
+  prompt,
   index,
   total,
   onClose,
@@ -409,6 +413,9 @@ function GalleryImageLightbox({
 }: {
   label: string;
   image: ReactNode;
+  imageSrc: string;
+  favoriteAction?: ReactNode;
+  prompt?: string;
   index: number;
   total: number;
   onClose: () => void;
@@ -420,28 +427,16 @@ function GalleryImageLightbox({
   downloadBusy?: boolean;
   text: GalleryText;
 }) {
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-      else if ((event.key === "ArrowLeft" || event.key === "ArrowUp") && onPrevious) onPrevious();
-      else if ((event.key === "ArrowRight" || event.key === "ArrowDown") && onNext) onNext();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, onNext, onPrevious]);
-
   return <AppPortal>
-    <div className="modal-backdrop artist-ranking-lightbox-backdrop" onClick={onClose}>
+    <div className="modal-backdrop artist-ranking-lightbox-backdrop" onClick={event=>{event.stopPropagation();if(event.target===event.currentTarget)onClose();}}>
       <section className="artist-ranking-lightbox online-gallery-lightbox" role="dialog" aria-modal="true" aria-label={label} onClick={(event) => event.stopPropagation()}>
-        <button type="button" className="artist-ranking-lightbox-close" aria-label={text.closePreview} onClick={onClose}>×</button>
-        <PreviewImageViewer onBackgroundClick={onClose} images={[{src:`${label}:${index}`,alt:label}]} index={0} onIndex={()=>{}} showNavigation={false} renderImage={image}/>
-        <footer>
-          <button type="button" disabled={!onPrevious} onClick={onPrevious}>{text.previousImage}</button>
-          <span>{index + 1} / {total}</span>
+        <button type="button" className="artist-ranking-lightbox-close" aria-label={text.closePreview} title={text.closePreview} onClick={onClose}><Icon name="close"/></button>
+        <PreviewImageViewer onBackgroundClick={onClose} images={[{src:imageSrc,alt:label}]} index={0} onIndex={()=>{}} favoriteAction={favoriteAction} navigation={{index,total,onPrevious,onNext}} renderImage={image}/>
+        <footer className="gallery-preview-actions">
           {onDownloadCurrent ? <button type="button" disabled={downloadBusy} onClick={onDownloadCurrent}>{downloadBusy ? text.downloading : text.downloadCurrent}</button> : null}
           {onDownloadAll && total > 1 ? <button type="button" disabled={downloadBusy} onClick={onDownloadAll}>{text.downloadSeries}</button> : null}
           {sourceUrl ? <button type="button" onClick={() => void window.naiDesktop.openExternal(sourceUrl)}>{text.openSourcePage}</button> : null}
-          <button type="button" disabled={!onNext} onClick={onNext}>{text.nextImage}</button>
+          <CopyButton value={prompt||''} text={text}/>
         </footer>
       </section>
     </div>
@@ -754,15 +749,13 @@ function ArtistRankingGallery({
       {previewLightbox ? <AppPortal>
         <div className="modal-backdrop artist-ranking-lightbox-backdrop" onClick={() => setPreviewLightbox(null)}>
           <section className="artist-ranking-lightbox" role="dialog" aria-modal="true" aria-label={formatText(text.artistLightbox, { artist: previewLightbox.artist })} onClick={(event) => event.stopPropagation()}>
-            <button type="button" className="artist-ranking-lightbox-close" aria-label={text.closePreview} onClick={() => setPreviewLightbox(null)}>×</button>
+            <button type="button" className="artist-ranking-lightbox-close" aria-label={text.closePreview} title={text.closePreview} onClick={() => setPreviewLightbox(null)}><Icon name="close"/></button>
             <PreviewImageViewer onBackgroundClick={()=>setPreviewLightbox(null)} images={previewLightbox.items.map(item=>({src:item.imageUrl,alt:formatText(text.artistLightbox,{artist:previewLightbox.artist})}))} index={previewLightbox.index} onIndex={index=>setPreviewLightbox(current=>current?{...current,index}:current)}/>
-            <footer>
-              <button type="button" disabled={previewLightbox.index <= 0} onClick={() => setPreviewLightbox((current) => current ? { ...current, index: Math.max(0, current.index - 1) } : current)}>{text.previousImage}</button>
-              <span>{previewLightbox.index + 1} / {previewLightbox.items.length} · {previewLightbox.items[previewLightbox.index].width}×{previewLightbox.items[previewLightbox.index].height}</span>
+            <footer className="gallery-preview-actions">
+              <span>{previewLightbox.items[previewLightbox.index].width}×{previewLightbox.items[previewLightbox.index].height}</span>
               <button type="button" disabled={previewDownloadBusy} onClick={() => void downloadArtistPreviews(false)}>{previewDownloadBusy ? text.downloading : text.downloadCurrent}</button>
               <button type="button" disabled={previewDownloadBusy || previewLightbox.items.length <= 1} onClick={() => void downloadArtistPreviews(true)}>{text.downloadSeries}</button>
               <button type="button" onClick={() => void window.naiDesktop.openExternal(previewLightbox.items[previewLightbox.index].postUrl || previewLightbox.items[previewLightbox.index].sourceUrl)}>{text.openSourcePage}</button>
-              <button type="button" disabled={previewLightbox.index >= previewLightbox.items.length - 1} onClick={() => setPreviewLightbox((current) => current ? { ...current, index: Math.min(current.items.length - 1, current.index + 1) } : current)}>{text.nextImage}</button>
             </footer>
           </section>
         </div>
@@ -1141,6 +1134,9 @@ function ExternalGallery({
         </section>
         {detailPreviewOpen ? <GalleryImageLightbox
           label={selected.item.title || `#${selected.item.id}`}
+          imageSrc={media.displayUrl}
+          favoriteAction={<GalleryFavoriteButton item={favoriteFromGallery(selected.item,selected)}/>}
+          prompt={selected.prompt}
           image={<OnlineCachedImage source={source} text={text} src={media.displayUrl} alt={selected.item.title} />}
           index={selectedMedia}
           total={selected.media.length || 1}
@@ -1176,8 +1172,10 @@ function ExternalGallery({
         </div>
       </header>
       <section className="aitag-search-panel">
-        {source === "tags-gallery" && <SelectMenu label={galleryLibraryText(language).sort} ariaLabel={galleryLibraryText(language).sort} value={tagsSort} options={galleryLibraryText(language).tagSorts.map((label,i)=>({label,value:['score','count','name'][i]}))} onChange={value=>{setTagsSort(value);void search(1,collectionId,queryValue,safeOnly,pageSize,categoryPath,searchAll,collectionType,value);}}/>}
-        {source === "tags-gallery" && <SelectMenu className="tags-gallery-category" label={tagsGalleryUi(language).category} ariaLabel={tagsGalleryUi(language).category} value={categoryPath[0]||"artist"} options={tagsGalleryLabels(language)} onChange={value=>void search(1,"",queryValue,safeOnly,pageSize,[value],false,"")} />}
+        {source === "tags-gallery" && <div className="online-gallery-type-filters">
+          <SelectMenu label={galleryLibraryText(language).sort} ariaLabel={galleryLibraryText(language).sort} value={tagsSort} options={galleryLibraryText(language).tagSorts.map((label,i)=>({label,value:['score','count','name'][i]}))} onChange={value=>{setTagsSort(value);void search(1,collectionId,queryValue,safeOnly,pageSize,categoryPath,searchAll,collectionType,value);}}/>
+          <SelectMenu className="tags-gallery-category" label={tagsGalleryUi(language).category} ariaLabel={tagsGalleryUi(language).category} value={categoryPath[0]||"artist"} options={tagsGalleryLabels(language)} onChange={value=>void search(1,"",queryValue,safeOnly,pageSize,[value],false,"")} />
+        </div>}
         {source === "quicktag" && <QuickTagNavigation navigation={result.navigation} collectionId={collectionId} searchAll={searchAll} loading={loading} language={language}
           onGroup={(type)=>{setQueryValue("");setSearchAll(false);void search(1,"","",safeOnly,pageSize,[],false,type);}}
           onSelect={(id,path)=>{setQueryValue("");setSearchAll(false);void search(1,id,"",safeOnly,pageSize,path,false);}}
@@ -1675,6 +1673,9 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
         </section>
         {detailPreviewOpen && imageUrl ? <GalleryImageLightbox
           label={interpolate(text.image, "index", selectedImage + 1)}
+          imageSrc={imageUrl}
+          favoriteAction={<GalleryFavoriteButton item={favoriteFromAitag(selected.work,selected.images.map(i=>({url:aitagImageUrl(config,i),thumb:aitagImageUrl(config,i)})),image?.promptText||'')}/>}
+          prompt={image?.promptText||''}
           image={<AitagCachedImage src={imageUrl} alt={interpolate(text.image, "index", selectedImage + 1)} />}
           index={selectedImage}
           total={selected.images.length}

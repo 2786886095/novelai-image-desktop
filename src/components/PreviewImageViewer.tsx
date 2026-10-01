@@ -7,7 +7,7 @@ import {useAppStore} from '../store';
 import {historyPickerText} from './HistoryImagePicker';
 import {desktopUiText} from '../i18n';
 export type PreviewImage={src:string;alt:string};
-export function PreviewImageViewer({images,index,onIndex,renderImage,showNavigation=true,onBackgroundClick}:{images:PreviewImage[];index:number;onIndex:(index:number)=>void;renderImage?:ReactNode;showNavigation?:boolean;onBackgroundClick:()=>void}) {
+export function PreviewImageViewer({images,index,onIndex,renderImage,favoriteAction,navigation,showNavigation=true,onBackgroundClick}:{images:PreviewImage[];index:number;onIndex:(index:number)=>void;renderImage?:ReactNode;favoriteAction?:ReactNode;navigation?:{index:number;total:number;onPrevious?:()=>void;onNext?:()=>void};showNavigation?:boolean;onBackgroundClick:()=>void}) {
  const language=useAppStore(s=>s.settings?.language),text=historyPickerText(language);
  const zoomLabels:Record<string,string[]>={'zh-CN':['缩小','放大'],'zh-TW':['縮小','放大'],'ja-JP':['縮小','拡大'],'ko-KR':['축소','확대']};
  const zoomText=zoomLabels[String(language)]??['Zoom out','Zoom in'];
@@ -28,7 +28,7 @@ export function PreviewImageViewer({images,index,onIndex,renderImage,showNavigat
   const key=(event:Event)=>{const e=event as KeyboardEvent;
    if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closePreview.current();return;}
    if(e.key==='Tab'){
-    const nodes=[...surface?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),a[href],[tabindex="0"]')??[]].filter(n=>n!==root.current&&n.getClientRects().length&&!n.closest('[inert]'));
+    const nodes=[...surface?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),a[href],summary,[tabindex="0"]')??[]].filter(n=>n!==root.current&&n.getClientRects().length&&!n.closest('[inert]'));
     e.preventDefault();e.stopPropagation();if(!nodes.length)return;
     const current=nodes.indexOf(document.activeElement as HTMLElement);
     const next=current<0?(e.shiftKey?nodes.length-1:0):(current+(e.shiftKey?-1:1)+nodes.length)%nodes.length;
@@ -38,7 +38,7 @@ export function PreviewImageViewer({images,index,onIndex,renderImage,showNavigat
   surface?.addEventListener('keydown',key,true);root.current?.focus({preventScroll:true});
   return()=>{surface?.removeEventListener('keydown',key,true);if(previous?.isConnected&&!previous.closest('[inert]'))previous.focus({preventScroll:true});};
  },[]);
- function move(delta:number){const next=index+delta;if(next>=0&&next<images.length)onIndex(next);}
+ function move(delta:number){if(navigation){(delta<0?navigation.onPrevious:navigation.onNext)?.();return;}const next=index+delta;if(next>=0&&next<images.length)onIndex(next);}
  function zoom(next:number){setScale(Math.min(8,Math.max(1,next)));setPan({x:0,y:0});}
  return <div ref={root} className="image-preview-viewer" tabIndex={0} onPointerDownCapture={e=>{moved.current=false;pointerStart.current={x:e.clientX,y:e.clientY};backgroundPress.current=e.button===0&&isBlank(e.target);}} onPointerMoveCapture={e=>{const start=pointerStart.current;if(start&&Math.hypot(e.clientX-start.x,e.clientY-start.y)>4)moved.current=true;}} onPointerCancel={()=>{pointerStart.current=null;backgroundPress.current=false;}} onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();if(e.detail>1)return;if(moved.current){moved.current=false;return;}if(backgroundPress.current&&isBlank(e.target))onBackgroundClick();backgroundPress.current=false;}} onKeyDown={e=>{
   if((e.target as HTMLElement).closest('input,textarea,[contenteditable="true"]'))return;
@@ -46,7 +46,7 @@ export function PreviewImageViewer({images,index,onIndex,renderImage,showNavigat
   const delta=e.key==='ArrowRight'||e.key==='ArrowDown'?1:e.key==='ArrowLeft'||e.key==='ArrowUp'?-1:0;
   if(delta&&showNavigation){e.preventDefault();e.stopPropagation();move(delta);}
  }}>
- <div className="image-preview-controls">{image&&<ImageFavoriteButton src={image.src}/>}{showNavigation&&<><Button disabled={index<=0} onClick={()=>move(-1)}>{text[1]}</Button><span>{index+1} / {images.length}</span><Button disabled={index+1>=images.length} onClick={()=>move(1)}>{text[2]}</Button></>}<Button aria-label={zoomText[0]} disabled={scale<=1} onClick={()=>zoom(scale/1.25)}>−</Button><span>{Math.round(scale*100)}%</span><Button aria-label={zoomText[1]} disabled={scale>=8} onClick={()=>zoom(scale*1.25)}>+</Button><Button onClick={reset}>{desktopUiText(language,'viewer.reset')}</Button></div>
+ <div className="image-preview-controls">{favoriteAction!==undefined?favoriteAction:image&&<ImageFavoriteButton src={image.src}/>}{showNavigation&&<><Button disabled={navigation?!navigation.onPrevious:index<=0} onClick={()=>move(-1)}>{text[1]}</Button><span>{(navigation?.index??index)+1} / {navigation?.total??images.length}</span><Button disabled={navigation?!navigation.onNext:index+1>=images.length} onClick={()=>move(1)}>{text[2]}</Button></>}<Button aria-label={zoomText[0]} disabled={scale<=1} onClick={()=>zoom(scale/1.25)}>−</Button><span>{Math.round(scale*100)}%</span><Button aria-label={zoomText[1]} disabled={scale>=8} onClick={()=>zoom(scale*1.25)}>+</Button><Button onClick={reset}>{desktopUiText(language,'viewer.reset')}</Button></div>
  <div ref={stage} className="image-preview-stage" style={{cursor:scale>1?'grab':'default'}} onPointerDown={e=>{
   moved.current=false;root.current?.focus({preventScroll:true});if(scale<=1||e.button!==0)return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);drag.current={x:e.clientX,y:e.clientY,px:pan.x,py:pan.y};
  }} onPointerMove={e=>{const element=img.current??stage.current?.querySelector("img");if(!drag.current||!element||!stage.current)return;const d=drag.current; if(Math.abs(e.clientX-d.x)+Math.abs(e.clientY-d.y)>4)moved.current=true; const maxX=Math.max(0,(element.offsetWidth*scale-stage.current.clientWidth)/2),maxY=Math.max(0,(element.offsetHeight*scale-stage.current.clientHeight)/2);setPan({x:Math.max(-maxX,Math.min(maxX,d.px+e.clientX-d.x)),y:Math.max(-maxY,Math.min(maxY,d.py+e.clientY-d.y))});}} onPointerUp={()=>{drag.current=null;}} onPointerCancel={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}}>
