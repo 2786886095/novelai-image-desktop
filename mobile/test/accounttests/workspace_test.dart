@@ -110,12 +110,16 @@ void main() {
     await tester.tap(find.text('管理'));
     await tester.pumpAndSettle();
     expect(find.text('NovelAI 多账号工作区'), findsOneWidget);
-    await tester.ensureVisible(find.byType(DropdownButtonFormField<String>));
-    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.ensureVisible(find.byType(SegmentedButton<String>));
+    expect(find.text('Token'), findsOneWidget);
+    expect(find.text('邮箱密码'), findsOneWidget);
+    expect(find.text('中转'), findsOneWidget);
+    await tester.tap(find.text('邮箱密码'));
     await tester.pumpAndSettle();
-    expect(find.text('官方邮箱 + 密码'), findsOneWidget);
-    expect(find.text('第三方 NovelAI 兼容 Token'), findsOneWidget);
-    expect(find.text('官方 Persistent API Token'), findsWidgets);
+    expect(find.widgetWithText(TextField, '密码（仅本次使用，不保存）'), findsOneWidget);
+    await tester.tap(find.text('中转'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextField, '此第三方服务自己的 Bearer Token'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

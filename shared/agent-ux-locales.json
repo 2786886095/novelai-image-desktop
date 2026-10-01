@@ -908,5 +908,40 @@
     "Run this software prompt tool using the selected actual template. Confirm costs before calling the model; do not generate images. Fill uppercase placeholders first.",
     "選択した実際のテンプレートで次のツールを実行してください。モデル呼び出し前に料金を確認し、画像は生成しないでください。大文字の入力欄を埋めてください。",
     "선택한 실제 템플릿으로 다음 도구를 실행하세요. 모델 호출 전 비용을 확인하고 이미지는 생성하지 마세요. 대문자 입력 자리표시자를 먼저 채우세요."
+  ],
+  "flowChat": [
+    "交流想法",
+    "交流想法",
+    "Chat",
+    "相談",
+    "대화"
+  ],
+  "flowPlan": [
+    "确认方案",
+    "確認方案",
+    "Review plan",
+    "プラン確認",
+    "계획 확인"
+  ],
+  "flowResult": [
+    "查看结果",
+    "查看結果",
+    "View result",
+    "結果を見る",
+    "결과 보기"
+  ],
+  "flowLabel": [
+    "生图流程",
+    "生圖流程",
+    "Image workflow",
+    "画像生成の流れ",
+    "이미지 생성 흐름"
+  ],
+  "conversation": [
+    "当前对话",
+    "目前對話",
+    "Current conversation",
+    "現在の会話",
+    "현재 대화"
   ]
 }

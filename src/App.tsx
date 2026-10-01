@@ -1,4 +1,5 @@
 import { NaiAccountManager } from './components/NaiAccountManager';
+import { naiAccountText } from './nai-accounts-locales';
 import {HistoryItemMenu} from './components/HistoryItemMenu';
 import {PROMPT_OPTIMIZE_TEMPLATE, PROMPT_CUSTOM_TEMPLATE} from "./data/prompt-edit-templates";
 import {workflowText} from './workflow-text';
@@ -5522,6 +5523,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const refreshSettings = useAppStore((state) => state.refreshSettings);
   const setShowOnboarding = useAppStore((state) => state.setShowOnboarding);
   const [reverseTemplateDefaults, setReverseTemplateDefaults] = useState(SCOPED_REVERSE_SYSTEM_PROMPTS);
+  const [managedAccountId,setManagedAccountId]=useState<string|undefined>();
   const [token, setToken] = useState("");
   const [status, setStatus] = useState<TokenStatus | null>(null);
   const [checking, setChecking] = useState(false);
@@ -5829,6 +5831,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             )}
             {section === "api" && (
               <div className="settings-form">
+                <NaiAccountManager variant="settings" onSelectionChange={setManagedAccountId} />
+                <details className="nai-account-legacy"><summary>{naiAccountText(settings.language,'legacySettings')}</summary>
+                {managedAccountId&&<p className="settings-hint">{naiAccountText(settings.language,'legacyLocked')}</p>}
+                <fieldset disabled={Boolean(managedAccountId)}>
+
                 <div className="account-card">
                   <strong>{t("settings.accountTitle")}</strong>
                   <span>{account.hasToken ? `${account.tierName ?? t("settings.verified")} · Anlas ${account.anlasBalance ?? t("title.unknown")}` : t("settings.noToken")}</span>
@@ -5889,6 +5896,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   <p className="settings-hint" id="novelai-official-retry-help">{t("settings.allowCustomEndpointFallbackHint")}</p>
                 </div>
 
+                </fieldset></details>
                 <div className="proxy-card">
                   <ProxyPresetControl mode={settings.proxyMode} value={settings.proxyUrl} onChange={(mode, value) => void updateProxy(mode, value)} />
                   <p className="settings-hint" style={{ margin: "2px 0 8px" }}>

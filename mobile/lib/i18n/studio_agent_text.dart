@@ -1,13 +1,40 @@
 import 'app_locales.dart';
 
 const _rows = <String, List<String>>{
-  'savedTemplates': ['已保存模板', '已儲存模板', 'Saved templates', '保存済みテンプレート', '저장된 템플릿'],
-  'noSavedTemplates': ['暂无自定义模板；可在提示词工具中保存。', '暫無自訂模板；可在提示詞工具中儲存。', 'No custom templates saved yet.', '保存済みのカスタムテンプレートはありません。', '저장된 사용자 템플릿이 없습니다.'],
-  'useSavedTemplate': ['请读取并使用我保存的模板：', '請讀取並使用我儲存的模板：', 'Read and use my saved template:', '保存済みテンプレートを読み込んで使用：', '저장된 템플릿을 읽고 사용:'],
+  'savedTemplates': [
+    '已保存模板',
+    '已儲存模板',
+    'Saved templates',
+    '保存済みテンプレート',
+    '저장된 템플릿'
+  ],
+  'noSavedTemplates': [
+    '暂无自定义模板；可在提示词工具中保存。',
+    '暫無自訂模板；可在提示詞工具中儲存。',
+    'No custom templates saved yet.',
+    '保存済みのカスタムテンプレートはありません。',
+    '저장된 사용자 템플릿이 없습니다.'
+  ],
+  'useSavedTemplate': [
+    '请读取并使用我保存的模板：',
+    '請讀取並使用我儲存的模板：',
+    'Read and use my saved template:',
+    '保存済みテンプレートを読み込んで使用：',
+    '저장된 템플릿을 읽고 사용:'
+  ],
+  'flowChat': ['交流想法', '交流想法', 'Chat', '相談', '대화'],
+  'flowPlan': ['确认方案', '確認方案', 'Review plan', 'プラン確認', '계획 확인'],
+  'flowResult': ['查看结果', '查看結果', 'View result', '結果を見る', '결과 보기'],
   'contextUsage': ['上下文用量', '上下文用量', 'Context usage', 'コンテキスト使用量', '컨텍스트 사용량'],
   'tokens': ['tokens', 'tokens', 'tokens', 'トークン', '토큰'],
   'estimated': ['估算', '估算', 'estimated', '推定', '추정'],
-  'autoCompact': ['自动压缩上下文', '自動壓縮上下文', 'Auto-compact context', 'コンテキストを自動圧縮', '컨텍스트 자동 압축'],
+  'autoCompact': [
+    '自动压缩上下文',
+    '自動壓縮上下文',
+    'Auto-compact context',
+    'コンテキストを自動圧縮',
+    '컨텍스트 자동 압축'
+  ],
   'compactNow': ['立即压缩', '立即壓縮', 'Compact now', '今すぐ圧縮', '지금 압축'],
   'currentCanvas': ['当前画布', '目前畫布', 'Current canvas', '現在のキャンバス', '현재 캔버스'],
   'galleryImage': ['历史图片', '歷史圖片', 'History image', '履歴画像', '기록 이미지'],

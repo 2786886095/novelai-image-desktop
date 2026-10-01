@@ -95,7 +95,8 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
       }
       _restoringScroll = true;
       _chatId = id;
-      _input.text = _drafts[id] ?? _agent?.selectedConversation?.draftText ?? '';
+      _input.text =
+          _drafts[id] ?? _agent?.selectedConversation?.draftText ?? '';
       _followLatest = !_readingAway.contains(id);
     }
     setState(() {});
@@ -124,7 +125,8 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
     for (final kind in ['convert', 'reverse']) {
       for (final version in ['v5', 'v4.5']) {
         for (final mode in ReversePromptMode.values) {
-          final body = app.promptOverrides(kind, templateVersion: version)[mode.value];
+          final body =
+              app.promptOverrides(kind, templateVersion: version)[mode.value];
           if (body != null && body.trim().isNotEmpty) {
             entries.add((kind, version, mode.value, body));
           }
@@ -146,30 +148,40 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                     maxHeight: MediaQuery.sizeOf(sheetContext).height * .7),
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   ListTile(title: Text(_t('savedTemplates'))),
-                  Flexible(child: entries.isEmpty
-                      ? Center(child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(_t('noSavedTemplates'))))
-                      : ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: entries.length,
-                          itemBuilder: (context, index) {
-                            final entry = entries[index];
-                            return ListTile(
-                                title: Text(entry.$2.isEmpty ? entry.$1
-                                    : '${entry.$1} · ${entry.$2} · ${entry.$3}'),
-                                subtitle: Text(entry.$4, maxLines: 2,
-                                    overflow: TextOverflow.ellipsis),
-                                onTap: () async {
-                                  Navigator.pop(sheetContext);
-                                  await _agent!.selectPromptTemplate(entry.$1,
-                                      mode: entry.$3.isEmpty ? null : entry.$3,
-                                      version: entry.$2.isEmpty ? null : entry.$2);
-                                  if (mounted) {
-                                    _prefill('${_t('useSavedTemplate')} ${entry.$1}${entry.$2.isEmpty ? '' : ' ${entry.$2} ${entry.$3}'}。');
-                                  }
-                                });
-                          }))
+                  Flexible(
+                      child: entries.isEmpty
+                          ? Center(
+                              child: Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Text(_t('noSavedTemplates'))))
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: entries.length,
+                              itemBuilder: (context, index) {
+                                final entry = entries[index];
+                                return ListTile(
+                                    title: Text(entry.$2.isEmpty
+                                        ? entry.$1
+                                        : '${entry.$1} · ${entry.$2} · ${entry.$3}'),
+                                    subtitle: Text(entry.$4,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis),
+                                    onTap: () async {
+                                      Navigator.pop(sheetContext);
+                                      await _agent!.selectPromptTemplate(
+                                          entry.$1,
+                                          mode: entry.$3.isEmpty
+                                              ? null
+                                              : entry.$3,
+                                          version: entry.$2.isEmpty
+                                              ? null
+                                              : entry.$2);
+                                      if (mounted) {
+                                        _prefill(
+                                            '${_t('useSavedTemplate')} ${entry.$1}${entry.$2.isEmpty ? '' : ' ${entry.$2} ${entry.$3}'}。');
+                                      }
+                                    });
+                              }))
                 ]))));
   }
 
@@ -178,33 +190,47 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
     final chat = agent.selectedConversation!;
     await showModalBottomSheet<void>(
         context: context,
-        builder: (sheetContext) => SafeArea(child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(_t('contextUsage'), style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Text('${chat.context.used} / ${chat.context.limit} ${_t('tokens')}${chat.context.estimated ? ' · ${_t('estimated')}' : ''}'),
-              const SizedBox(height: 8),
-              LinearProgressIndicator(value: chat.context.percent / 100),
-              SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(_t('autoCompact')),
-                  value: agent.app.settings.agentAutoCompact,
-                  onChanged: agent.sending || agent.compacting ? null : (value) async {
-                    await agent.app.setSettings((s) => s.agentAutoCompact = value);
-                    if (sheetContext.mounted) Navigator.pop(sheetContext);
-                    if (mounted) setState(() {});
-                  }),
-              FilledButton.tonalIcon(
-                  onPressed: agent.sending || agent.compacting || chat.messages.isEmpty
-                      ? null : () async {
-                    Navigator.pop(sheetContext);
-                    await agent.compact(chat.id);
-                  },
-                  icon: const Icon(Icons.compress),
-                  label: Text(_t('compactNow'))),
-            ]))));
+        builder: (sheetContext) => SafeArea(
+            child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_t('contextUsage'),
+                          style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      Text(
+                          '${chat.context.used} / ${chat.context.limit} ${_t('tokens')}${chat.context.estimated ? ' · ${_t('estimated')}' : ''}'),
+                      const SizedBox(height: 8),
+                      LinearProgressIndicator(
+                          value: chat.context.percent / 100),
+                      SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(_t('autoCompact')),
+                          value: agent.app.settings.agentAutoCompact,
+                          onChanged: agent.sending || agent.compacting
+                              ? null
+                              : (value) async {
+                                  await agent.app.setSettings(
+                                      (s) => s.agentAutoCompact = value);
+                                  if (sheetContext.mounted) {
+                                    Navigator.pop(sheetContext);
+                                  }
+                                  if (mounted) setState(() {});
+                                }),
+                      FilledButton.tonalIcon(
+                          onPressed: agent.sending ||
+                                  agent.compacting ||
+                                  chat.messages.isEmpty
+                              ? null
+                              : () async {
+                                  Navigator.pop(sheetContext);
+                                  await agent.compact(chat.id);
+                                },
+                          icon: const Icon(Icons.compress),
+                          label: Text(_t('compactNow'))),
+                    ]))));
   }
 
   Future<void> _showAttachmentSources() async {
@@ -221,32 +247,33 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
     await showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
-        builder: (sheetContext) => SafeArea(child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight:
-                MediaQuery.sizeOf(sheetContext).height * .7),
-            child: ListView(shrinkWrap: true, children: [
-              ListTile(
-                  leading: const Icon(Icons.upload_file),
-                  title: Text(_t('chooseFile')),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    agent.pickAttachments();
-                  }),
-              for (final source in sources)
-                ListTile(
-                    leading: const Icon(Icons.image_outlined),
-                    title: Text(source.$3, maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                    subtitle: Text(source.$1),
-                    onTap: () async {
-                      Navigator.pop(sheetContext);
-                      try {
-                        await agent.attachAppImage(source.$1, source.$2);
-                      } catch (error) {
-                        if (mounted) setState(() => agent.error = '$error');
-                      }
-                    }),
-            ]))));
+        builder: (sheetContext) => SafeArea(
+            child: ConstrainedBox(
+                constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(sheetContext).height * .7),
+                child: ListView(shrinkWrap: true, children: [
+                  ListTile(
+                      leading: const Icon(Icons.upload_file),
+                      title: Text(_t('chooseFile')),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        agent.pickAttachments();
+                      }),
+                  for (final source in sources)
+                    ListTile(
+                        leading: const Icon(Icons.image_outlined),
+                        title: Text(source.$3,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(source.$1),
+                        onTap: () async {
+                          Navigator.pop(sheetContext);
+                          try {
+                            await agent.attachAppImage(source.$1, source.$2);
+                          } catch (error) {
+                            if (mounted) setState(() => agent.error = '$error');
+                          }
+                        }),
+                ]))));
   }
 
   Future<void> _send() async {
@@ -533,14 +560,15 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
         for (final source in sources)
           if (Uri.tryParse(source['url']?.toString() ?? '') case final uri?)
             if (const {'http', 'https'}.contains(uri.scheme) &&
-                uri.host.isNotEmpty && uri.userInfo.isEmpty)
+                uri.host.isNotEmpty &&
+                uri.userInfo.isEmpty)
               ListTile(
                   dense: true,
                   title: Text(source['title']?.toString() ?? uri.host),
                   subtitle: Text('${source['snippet'] ?? ''}\n$uri',
                       maxLines: 4, overflow: TextOverflow.ellipsis),
-                  onTap: () => launchUrl(uri,
-                      mode: LaunchMode.externalApplication)),
+                  onTap: () =>
+                      launchUrl(uri, mode: LaunchMode.externalApplication)),
       ]);
     } catch (_) {
       return null;
@@ -648,7 +676,8 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                       title: Text(_t('details'),
                                           style: const TextStyle(fontSize: 12)),
                                       children: [
-                                        if (_webSources(tool) case final sources?)
+                                        if (_webSources(tool)
+                                            case final sources?)
                                           sources,
                                         SelectableText(
                                             tool.error ?? tool.output ?? '',
@@ -815,7 +844,54 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
       final decisionHeight =
           ((constraints.maxHeight - (compact ? 100 : 140)) * .44)
               .clamp(120.0, 320.0);
+      final latestReply =
+          chat.messages.where((m) => m.role == 'assistant').lastOrNull;
+      final flow = agent.pendingPermission != null
+          ? 1
+          : latestReply?.tools.any((t) =>
+                      t.name == 'langbai_generate_image' &&
+                      ['running', 'completed'].contains(t.status)) ==
+                  true
+              ? 2
+              : latestReply?.tools.any((t) =>
+                          t.name == 'langbai_prepare_generation' &&
+                          t.status == 'completed') ==
+                      true
+                  ? 1
+                  : 0;
       return Column(children: [
+        if (!compact)
+          Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    for (var i = 0; i < 3; i++)
+                      AnimatedContainer(
+                          duration: MediaQuery.of(context).disableAnimations
+                              ? Duration.zero
+                              : const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 5),
+                          decoration: BoxDecoration(
+                              color: i == flow
+                                  ? color.primaryContainer
+                                  : color.surface,
+                              borderRadius: BorderRadius.circular(20)),
+                          child: Text(
+                              '${i + 1} · ${_t([
+                                'flowChat',
+                                'flowPlan',
+                                'flowResult'
+                              ][i])}',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: i == flow
+                                      ? color.primary
+                                      : color.onSurfaceVariant)))
+                  ])),
         if (!agent.providerConfigured)
           Container(
               color: color.primaryContainer,
@@ -924,46 +1000,70 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
             child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
                 child: Column(children: [
-                  SizedBox(height: 36, child: Row(children: [
-                    PopupMenuButton<String>(
-                        key: const ValueKey('agent-model-selector'),
-                        tooltip: _t('modelSettings'),
-                        enabled: !agent.sending,
-                        onSelected: (_) => _configure(),
-                        itemBuilder: (_) => [PopupMenuItem(
-                            value: 'configure', child: Text(_t('modelSettings')))],
-                        child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              const Icon(Icons.auto_awesome, size: 15),
-                              const SizedBox(width: 4),
-                              ConstrainedBox(
-                                  constraints: BoxConstraints(maxWidth:
-                                      MediaQuery.sizeOf(context).width < 380 ? 88 : 150),
-                                  child: Text(agent.app.settings.agentApiModel.isEmpty
-                                      ? _t('setup') : agent.app.settings.agentApiModel,
-                                      maxLines: 1, overflow: TextOverflow.ellipsis)),
-                              const Icon(Icons.arrow_drop_down, size: 18),
-                            ]))),
-                    const Spacer(),
-                    IconButton(
-                        key: const ValueKey('agent-template-selector'),
-                        visualDensity: VisualDensity.compact,
-                        tooltip: _t('savedTemplates'),
-                        onPressed: agent.sending ? null : _showTemplates,
-                        icon: const Icon(Icons.description_outlined, size: 20)),
-                    TextButton.icon(
-                        key: const ValueKey('agent-context-control'),
-                        style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                        onPressed: _showContext,
-                        icon: Icon(Icons.data_usage, size: 16,
-                            color: chat.context.danger ? color.error : null),
-                        label: Text('${chat.context.percent.round()}%')),
-                  ])),
+                  SizedBox(
+                      height: 36,
+                      child: Row(children: [
+                        PopupMenuButton<String>(
+                            key: const ValueKey('agent-model-selector'),
+                            tooltip: _t('modelSettings'),
+                            enabled: !agent.sending,
+                            onSelected: (_) => _configure(),
+                            itemBuilder: (_) => [
+                                  PopupMenuItem(
+                                      value: 'configure',
+                                      child: Text(_t('modelSettings')))
+                                ],
+                            child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.auto_awesome, size: 15),
+                                      const SizedBox(width: 4),
+                                      ConstrainedBox(
+                                          constraints: BoxConstraints(
+                                              maxWidth:
+                                                  MediaQuery.sizeOf(context)
+                                                              .width <
+                                                          380
+                                                      ? 88
+                                                      : 150),
+                                          child: Text(
+                                              agent.app.settings.agentApiModel
+                                                      .isEmpty
+                                                  ? _t('setup')
+                                                  : agent.app.settings
+                                                      .agentApiModel,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis)),
+                                      const Icon(Icons.arrow_drop_down,
+                                          size: 18),
+                                    ]))),
+                        const Spacer(),
+                        IconButton(
+                            key: const ValueKey('agent-template-selector'),
+                            visualDensity: VisualDensity.compact,
+                            tooltip: _t('savedTemplates'),
+                            onPressed: agent.sending ? null : _showTemplates,
+                            icon: const Icon(Icons.description_outlined,
+                                size: 20)),
+                        TextButton.icon(
+                            key: const ValueKey('agent-context-control'),
+                            style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact),
+                            onPressed: _showContext,
+                            icon: Icon(Icons.data_usage,
+                                size: 16,
+                                color:
+                                    chat.context.danger ? color.error : null),
+                            label: Text('${chat.context.percent.round()}%')),
+                      ])),
                   Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
                     IconButton(
                         tooltip: _t('addAttachment'),
-                        onPressed: agent.sending ? null : _showAttachmentSources,
+                        onPressed:
+                            agent.sending ? null : _showAttachmentSources,
                         icon: const Icon(Icons.add)),
                     Expanded(
                         child: TextField(
@@ -1008,20 +1108,16 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
         appBar: AppBar(
             title:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(chat.title,
+              Text(_t('title'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       fontSize: 18, fontWeight: FontWeight.w600)),
-              Text(
-                  _t(agent.pendingPermission != null
-                      ? 'statusPending'
-                      : agent.sending
-                          ? 'statusRunning'
-                          : agent.providerConfigured
-                              ? 'ready'
-                              : 'missingModel'),
-                  style: TextStyle(fontSize: 12, color: color.onSurfaceVariant))
+              Text(chat.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      TextStyle(fontSize: 12, color: color.onSurfaceVariant)),
             ]),
             actions: [
               if (!wide)

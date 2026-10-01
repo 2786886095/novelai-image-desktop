@@ -541,7 +541,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   : settingsDetailText.networkTest),
             ),
           ]),
-          _Section(title: settingsText.novelAiSection, children: [
+          ExpansionTile(title: const Text('旧单账号配置（兼容保留）'), children: [
+            if(state.naiAccounts.active != null) const Padding(padding:EdgeInsets.all(12),child:Text('当前使用已保存账户；切回原有账户后可编辑旧配置。')),
+            AbsorbPointer(absorbing:state.naiAccounts.active != null,child:Opacity(opacity:state.naiAccounts.active != null ? .55 : 1,child:
+_Section(title: settingsText.novelAiSection, children: [
             _TextSetting(
                 label: 'API Base URL',
                 value: s.apiBaseUrl,
@@ -585,6 +588,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     try { await state.clearToken(); } catch (_) { /* Busy race is denied by AppState. */ }
                   },
                   child: Text(settingsDetailText.clearToken)),
+          ])
+            )),
           ]),
           _Section(title: settingsText.reverseSection, children: [
             _sharedPromptPresetCard(state),

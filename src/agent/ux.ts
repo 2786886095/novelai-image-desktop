@@ -89,3 +89,11 @@ export function studioTemplateApplyRequest(kind: 'convert'|'optimize'|'assistant
     ? {tool: 'langbai_convert_prompt', args: {text: currentPrompt.trim() || 'CURRENT_PROMPT', mode, templateVersion}}
     : {tool: 'langbai_edit_prompt', args: {currentPrompt: currentPrompt.trim() || 'CURRENT_PROMPT', kind: kind === 'assistant' ? 'custom' : 'optimize', ...(kind === 'assistant' ? {instruction: 'INSTRUCTION'} : {}), mode, templateVersion}}, null, 2);
 }
+
+/** Uploaded reference attachments are not proof that generation succeeded. */
+export function studioFlowStage(tools: readonly Pick<AgentToolExecution,'name'|'status'>[] = [], pending = false): 0|1|2 {
+  if (pending) return 1;
+  if (tools.some(tool => tool.name === 'langbai_generate_image' && ['running','completed'].includes(tool.status))) return 2;
+  if (tools.some(tool => tool.name === 'langbai_prepare_generation' && tool.status === 'completed')) return 1;
+  return 0;
+}

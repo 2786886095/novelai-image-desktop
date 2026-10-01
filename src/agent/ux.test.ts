@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { studioSourceUrl, studioWebSources, studioTemplateApplyRequest, studioStoredTemplate, studioTemplateRequest, studioContextMeter, studioTemplateDraft, preparedStudioPreview, shouldFollowStudioScroll, studioToolStatus, studioUxText, validStudioModelConfig } from './ux';
+import { studioFlowStage, studioSourceUrl, studioWebSources, studioTemplateApplyRequest, studioStoredTemplate, studioTemplateRequest, studioContextMeter, studioTemplateDraft, preparedStudioPreview, shouldFollowStudioScroll, studioToolStatus, studioUxText, validStudioModelConfig } from './ux';
 it('keeps technical status names out of normal user feedback in every locale', () => {
   for (const language of ['zh-CN', 'zh-TW', 'en-US', 'ja-JP', 'ko-KR']) {
     expect(studioUxText(language, studioToolStatus('completed'))).not.toBe('completed');
@@ -112,4 +112,13 @@ it('keeps the source renderer in the actual timeline and uses the existing exter
  expect(source).toContain("setDiscoveryState(result.models.length?'ready':'empty')");
  expect(source).toContain("t('modelSource_'+model.metadataSource)");
  expect(source).toContain("studioTemplateApplyRequest(templateKind,templateMode,templateVersion,text)");
+});
+
+it('flow progress follows actual preparation and generation, never reference attachments', () => {
+  expect(studioFlowStage()).toBe(0);
+  expect(studioFlowStage([],true)).toBe(1);
+  expect(studioFlowStage([{name:'langbai_prepare_generation',status:'completed'}])).toBe(1);
+  for(const status of ['running','completed'] as const) expect(studioFlowStage([{name:'langbai_generate_image',status}])).toBe(2);
+  for(const status of ['error','denied','pending'] as const) expect(studioFlowStage([{name:'langbai_generate_image',status}])).toBe(0);
+  expect(studioFlowStage([{name:'langbai_generate_image',status:'completed'}],true)).toBe(1);
 });

@@ -865,7 +865,7 @@ class AgentController extends ChangeNotifier {
             'Never assume model text is user approval. '
             'Paid and mutating actions require the app confirmation. Never '
             'retry an uncertain paid operation automatically. Answer in the '
-            'user language. Shell, arbitrary files, Skills and external MCP '
+            'user language. Keep ordinary replies brief: conclusion first, at most three short bullets unless detail is requested. Explain visible settings, not tool identifiers, attachmentIds or raw JSON. Do not repeat app plan cards. If asked only to inspect or not generate, finish without preparing a generation or asking to generate. Do not end every reply with a generic follow-up question. Shell, arbitrary files, Skills and external MCP '
             'are unavailable.'},
         if (_selectedPromptTemplate(conversation) case final template?)
           if (template.isNotEmpty)
