@@ -153,6 +153,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   importTavernVisualAsset: (kind: "avatar" | "background", sourcePath?: string) => ipcRenderer.invoke("agent:importVisual", kind, sourcePath),
   abortAgentMessage: (conversationId: string) => ipcRenderer.invoke("agent:abort", conversationId),
   compactAgentConversation: (conversationId: string) => ipcRenderer.invoke("agent:compact", conversationId),
+  getAgentPendingQuestions:()=>ipcRenderer.invoke("agent:pendingQuestions"),
+  respondAgentQuestion:(response:import("../src/agent/types").AgentQuestionResponse)=>ipcRenderer.invoke("agent:respondQuestion",response),
   respondAgentPermission: (permissionId: string, response: "once" | "always" | "reject") => ipcRenderer.invoke("agent:respondPermission", permissionId, response),
   upsertAgentSkill: (skill: Partial<AgentSkill> & Pick<AgentSkill, "name" | "instructions">) => ipcRenderer.invoke("agent:upsertSkill", skill),
   deleteAgentSkill: (skillId: string) => ipcRenderer.invoke("agent:deleteSkill", skillId),

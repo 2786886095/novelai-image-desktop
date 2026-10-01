@@ -13,6 +13,8 @@ import { useAppStore } from './store';
 import { SelectMenu, SelectMenuCompat } from './components/ui';
 import './pi-agent-page.css';
 import {useDisclosurePresence,disclosureAttributes} from './components/disclosure-motion';
+import {AgentQuestionCards} from './components/AgentQuestionCards';
+import type {AgentQuestionRequest} from './agent/types';
 import {AgentResourcePanel} from './components/AgentResourcePanel';
 import {studioSessionOptions,type StudioConversationOptions} from './agent/workspace-controls';
 
@@ -84,6 +86,7 @@ export default function PiAgentPage({ active }: { active: boolean }) {
   const [optionsBusy,setOptionsBusy]=useState(false);
   const [composerHeight,setComposerHeight]=useState(()=>{try{return Math.max(108,Math.min(420,Number(localStorage.getItem('studio-agent-composer-height'))||154));}catch{return 154;}});
   const resizePress=useRef<{y:number;height:number}|null>(null);
+  const [questions,setQuestions]=useState<AgentQuestionRequest[]>([]);
   const [permissions, setPermissions] = useState<AgentPermissionRequest[]>([]);
   const [answering, setAnswering] = useState(false);
   const [image, setImage] = useState<AgentAttachment>();
@@ -103,13 +106,15 @@ export default function PiAgentPage({ active }: { active: boolean }) {
     if (!active) return;
     let alive = true;
     setLoading(true);
-    void Promise.all([window.naiDesktop.getAgentWorkspace(), window.naiDesktop.getAgentPendingPermissions()])
-      .then(([value, pending]) => { if (alive) { updateWorkspace(value); setPermissions(pending); setError(''); } })
+    void Promise.all([window.naiDesktop.getAgentWorkspace(), window.naiDesktop.getAgentPendingPermissions(),window.naiDesktop.getAgentPendingQuestions?.()??Promise.resolve([])])
+      .then(([value, pending, pendingQuestions]) => { if (alive) { updateWorkspace(value); setPermissions(pending);setQuestions(pendingQuestions); setError(''); } })
       .catch((reason) => { if (alive) setError(String(reason)); }).finally(() => { if (alive) setLoading(false); });
     const unsubscribe = window.naiDesktop.onAgentEvent((event: AgentEvent) => {
       if (!alive) return;
       if (event.kind === 'workspace') updateWorkspace(event.workspace);
       if (event.kind === 'error' && (!event.conversationId || event.conversationId === selectedId.current)) setError(event.message);
+      if(event.kind==='question')setQuestions(current=>[...current.filter(q=>q.id!==event.request.id),event.request]);
+      if(event.kind==='question-resolved')setQuestions(current=>current.filter(q=>q.id!==event.requestId));
       if (event.kind === 'permission') setPermissions((current) => [...current.filter((item) => item.id !== event.request.id), event.request]);
       if (event.kind === 'permission-resolved') setPermissions((current) => current.filter((item) => item.id !== event.permissionId));
       if (event.kind === 'message-delta') {
@@ -128,8 +133,9 @@ export default function PiAgentPage({ active }: { active: boolean }) {
   selectedId.current = chat?.id;
   const configured = !!settings?.agentApiBaseUrl?.trim() && !!settings.agentApiModel?.trim() &&
     (!agentProviderRequiresApiKey(settings.agentApiProtocol, settings.agentApiBaseUrl) || !!settings.agentApiKey?.trim());
+  const pendingQuestion=questions.find(q=>q.conversationId===chat?.id);
   const pending = permissions.find((item) => item.conversationId === chat?.id);
-  const running = busy || compacting || optionsBusy || !!pending || chat?.status === 'running' || chat?.status === 'waiting-permission';
+  const running = busy || compacting || optionsBusy || !!pending || !!pendingQuestion || chat?.status === 'running' || chat?.status === 'waiting-permission';
   const sessionOptions=studioSessionOptions(chat);
   const text = chat ? drafts[chat.id] ?? '' : '';
   const selectedActions = chat ? draftActions[chat.id] ?? [] : [];
@@ -151,7 +157,7 @@ export default function PiAgentPage({ active }: { active: boolean }) {
   useEffect(() => {
     const el = transcript.current;
     if (following.current && el) el.scrollTop = el.scrollHeight;
-  }, [chat?.id, chat?.messages, pending]);
+  }, [chat?.id, chat?.messages, pending, pendingQuestion?.id]);
   const resizeMax=()=>Math.max(108,Math.min(420,(inputRef.current?.closest('.pi-main')?.clientHeight??window.innerHeight)*.5));
   const effectiveComposerHeight=Math.min(composerHeight,resizeMax());
   const resizeComposer=(value:number)=>{const next=Math.round(Math.max(108,Math.min(resizeMax(),value)));setComposerHeight(next);try{localStorage.setItem('studio-agent-composer-height',String(next));}catch{/* Optional layout preference. */}};
@@ -324,7 +330,12 @@ export default function PiAgentPage({ active }: { active: boolean }) {
         {loading ? <p role="status">{t('statusRunning')}</p> : !chat?.messages.length && <div className="pi-empty"><LuSparkles className="pi-empty-icon"/><h3>{t('heroTitle')}</h3><p>{t('heroBody')}</p><div className="pi-starters"><button onClick={()=>prefill(t('quickSettingsDraft'))}><LuSettings/>{t('quickSettings')}</button><button onClick={()=>prefill(t('quickPromptDraft'))}><LuPencil/>{t('quickPrompt')}</button><button onClick={()=>{prefill(t('quickReferenceDraft'));void importAttachments()}}><LuImage/>{t('quickReference')}</button></div></div>}
         {chat?.messages.filter(item=>item.role!=='system').map(renderMessage)}
 
-        {running&&!pending && <div className="pi-working" role="status"><span className="pi-pulse"/><span>{t('workingBody')}</span></div>}
+        {pendingQuestion&&<AgentQuestionCards key={pendingQuestion.id} request={pendingQuestion} language={settings?.language} onRespond={async response=>{
+          const result=await window.naiDesktop.respondAgentQuestion?.(response)??{ok:false};
+          if(!result.ok)setQuestions(await window.naiDesktop.getAgentPendingQuestions?.()??[]);
+          return result;
+        }}/>}
+        {running&&!pending&&!pendingQuestion && <div className="pi-working" role="status"><span className="pi-pulse"/><span>{t('workingBody')}</span></div>}
       </main>{away&&<button className="pi-latest" onClick={()=>{following.current=true;setAway(false);if(transcript.current)transcript.current.scrollTop=transcript.current.scrollHeight}}><LuArrowDown/>{t('latest')}</button>}</div>
       {pending && <div className="pi-decision-tray" aria-label={t("decisionArea")}>{pending.type==='langbai_generate_image'?plan(pending.metadata??{},true):<section className="pi-plan"><header><strong>{t('confirmTool',pending.title)}</strong></header><div className="pi-plan-body"><p>{t('confirmationHint')}</p>{pending.metadata?.positivePrompt!=null&&<p>{String(pending.metadata.positivePrompt)}</p>}{Boolean(pending.metadata?.paid)&&<p className="pi-cost">{typeof pending.metadata?.estimatedAnlas==='number'?t('estimatedCost',String(pending.metadata.estimatedAnlas)):t('unknownCost')} {t('paidWarning')}</p>}<details><summary>{t('details')}</summary><pre>{JSON.stringify(pending.metadata,null,2)}</pre></details></div><footer><button disabled={answering} onClick={()=>void respond('reject')}>{t('cancel')}</button><button className="pi-primary" disabled={answering} onClick={()=>void respond('once')}>{t('confirm')}</button></footer></section>}</div>}
       {error && <div role="alert" className="pi-notice pi-notice-error pi-global-error"><span>{error}</span><button className="pi-icon" aria-label={t('close')} onClick={()=>setError('')}><LuX/></button></div>}

@@ -358,11 +358,19 @@ export interface AgentPermissionRequest {
   createdAt: string;
 }
 
+export interface AgentQuestion {id:string;prompt:string;options:Array<{id:string;label:string;description?:string;recommended?:boolean}>}
+export interface AgentQuestionRequest {id:string;conversationId:string;messageId:string;questions:AgentQuestion[]}
+export interface AgentQuestionAnswer {questionId:string;optionId?:string;text?:string}
+export interface AgentQuestionResponse {requestId:string;conversationId:string;answers?:AgentQuestionAnswer[];cancel?:boolean}
+export interface AgentQuestionResult {cancelled:boolean;answers:Array<AgentQuestionAnswer & {question:string;label?:string}>}
+
 export type AgentEvent =
   | { kind: "workspace"; workspace: AgentWorkspaceData }
   | { kind: "runtime"; status: AgentRuntimeStatus }
   | { kind: "message-delta"; conversationId: string; messageId: string; delta: string }
   | { kind: "message-reasoning-delta"; conversationId: string; messageId: string; delta: string }
+  | { kind: "question"; request: AgentQuestionRequest }
+  | { kind: "question-resolved"; requestId:string; conversationId:string; status:"answered"|"cancelled"|"aborted" }
   | { kind: "permission"; request: AgentPermissionRequest }
   | { kind: "permission-resolved"; permissionId: string; response: "once" | "always" | "reject" }
   | { kind: "apply-prompt"; positivePrompt: string; negativePrompt?: string; stylePrompt?: string }

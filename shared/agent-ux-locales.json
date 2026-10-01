@@ -1314,5 +1314,89 @@
     "Expand resources",
     "リソースを開く",
     "리소스 펼치기"
+  ],
+  "questionProgress": [
+    "问题 {name}",
+    "問題 {name}",
+    "Question {name}",
+    "質問 {name}",
+    "질문 {name}"
+  ],
+  "questionManual": [
+    "选好后手动提交，不会自动回答",
+    "選好後手動提交，不會自動回答",
+    "Submit manually; no automatic answers",
+    "選択後に手動送信。自動回答なし",
+    "선택 후 직접 제출 · 자동 답변 없음"
+  ],
+  "questionChoose": [
+    "选择一个选项，或自定义回答",
+    "選擇一個選項，或自訂回答",
+    "Choose an option or write your own answer",
+    "選択肢または自由回答",
+    "선택지 또는 직접 답변"
+  ],
+  "questionRecommended": [
+    "推荐",
+    "推薦",
+    "Recommended",
+    "おすすめ",
+    "추천"
+  ],
+  "questionCustom": [
+    "自定义",
+    "自訂",
+    "Custom answer",
+    "自由回答",
+    "직접 입력"
+  ],
+  "questionCustomHint": [
+    "输入你的方向或要求…",
+    "輸入你的方向或要求…",
+    "Your preference or requirements…",
+    "希望や条件を入力…",
+    "원하는 방향이나 요구사항…"
+  ],
+  "questionPrevious": [
+    "上一题",
+    "上一題",
+    "Previous",
+    "前の質問",
+    "이전"
+  ],
+  "questionNext": [
+    "下一题",
+    "下一題",
+    "Next",
+    "次の質問",
+    "다음"
+  ],
+  "questionSubmit": [
+    "提交回答",
+    "提交回答",
+    "Submit answers",
+    "回答を送信",
+    "답변 제출"
+  ],
+  "questionSubmitting": [
+    "提交中…",
+    "提交中…",
+    "Submitting…",
+    "送信中…",
+    "제출 중…"
+  ],
+  "questionCancel": [
+    "取消提问",
+    "取消提問",
+    "Cancel question",
+    "質問をキャンセル",
+    "질문 취소"
+  ],
+  "questionFailed": [
+    "回答未提交，请重试",
+    "回答未提交，請重試",
+    "Answer not submitted. Try again.",
+    "未送信です。再試行してください。",
+    "제출되지 않았습니다. 다시 시도하세요."
   ]
 }

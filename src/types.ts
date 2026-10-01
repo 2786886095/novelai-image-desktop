@@ -1685,6 +1685,8 @@ export interface NaiDesktopApi {
   importTavernVisualAsset: (kind: "avatar" | "background", sourcePath?: string) => Promise<{ ok: boolean; cancelled?: boolean; message?: string; dataUrl?: string; fileName?: string }>;
   abortAgentMessage: (conversationId: string) => Promise<{ ok: boolean; message?: string }>;
   compactAgentConversation: (conversationId: string) => Promise<{ ok: boolean; message?: string }>;
+  getAgentPendingQuestions?:()=>Promise<import("./agent/types").AgentQuestionRequest[]>;
+  respondAgentQuestion?:(response:import("./agent/types").AgentQuestionResponse)=>Promise<{ok:boolean;message?:string}>;
   respondAgentPermission: (
     permissionId: string,
     response: "once" | "always" | "reject",

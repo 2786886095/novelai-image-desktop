@@ -1,3 +1,7 @@
+import {studioQuestions} from './pi-agent-questions';
+import type {AgentQuestionResponse} from '../../src/agent/types';
+export function getAgentPendingQuestions(){return studioQuestions.list();}
+export function respondAgentQuestion(response:AgentQuestionResponse){return studioQuestions.respond(response);}
 import { studioComposerTurn } from '../../src/agent/composer-actions';
 import { compatibleProposalPrompt, compatibleProposalContext } from '../../src/tavern/compatible-proposal';
 import { bindAgentImageProvider, assertAgentImageProvider, type ImageProviderBinding } from './agent-image-provider';
@@ -879,6 +883,7 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
         });
         emitWorkspace();
       },
+      askQuestion:(args,signal)=>studioQuestions.request(args,{conversationId:request.conversationId,messageId},signal,emit),
       authorize: async (name, args, signal) => {
         signal.throwIfAborted();
         const image = ['langbai_generate_image', 'langbai_redraw_image', 'langbai_inpaint_image', 'langbai_upscale_image', 'langbai_director'].includes(name);

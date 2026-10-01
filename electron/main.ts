@@ -259,6 +259,8 @@ import {
 import {
   abortAgentMessage,
   compactAgentConversation,
+  getAgentPendingQuestions,
+  respondAgentQuestion,
   getAgentPendingPermissions,
   getAgentRuntimeStatus,
   hasActiveAgentRequests,
@@ -776,6 +778,8 @@ function registerIpc() {
   accountBoundHandle("agent:importVisual", (_event, kind: "avatar" | "background", sourcePath?: string) => importTavernVisualAsset(kind, sourcePath));
   accountBoundHandle("agent:abort", (_event, conversationId: string) => abortAgentMessage(conversationId));
   accountBoundHandle("agent:compact", (_event, conversationId: string) => compactAgentConversation(conversationId));
+  ipcMain.handle("agent:pendingQuestions",()=>getAgentPendingQuestions());
+  ipcMain.handle("agent:respondQuestion",(_event,response:import("../src/agent/types").AgentQuestionResponse)=>respondAgentQuestion(response));
   accountBoundHandle("agent:respondPermission", (_event, permissionId: string, response: "once" | "always" | "reject") => respondAgentPermission(permissionId, response));
   accountBoundHandle("agent:upsertSkill", (_event, skill: Partial<AgentSkill> & Pick<AgentSkill, "name" | "instructions">) => upsertAgentSkill(skill));
   accountBoundHandle("agent:deleteSkill", (_event, skillId: string) => deleteAgentSkill(skillId));

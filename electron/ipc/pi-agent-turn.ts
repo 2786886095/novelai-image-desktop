@@ -5,6 +5,8 @@ import type { AssistantMessage, Message, UserMessage } from '@earendil-works/pi-
 import { runStudioPiAgent } from './pi-agent-core';
 import { studioPiModel, studioPiStream } from './pi-agent-provider';
 import { createStudioPiTools } from './pi-studio-tools';
+import {agentQuestionToolSchema} from '../../src/agent/questions';
+import type {AgentQuestionResult} from '../../src/agent/types';
 import type {studioSessionOptions} from '../../src/agent/workspace-controls';
 
 const emptyUsage: AssistantMessage['usage'] = {
@@ -20,7 +22,13 @@ preparationIds or raw JSON. The app already shows plan/confirmation/result cards
 do not repeat those cards verbatim. Never claim this style instruction guarantees
 model compliance. If the user asks only to inspect settings or says not to
 create an image, finish that inspection without preparing a generation, asking
-for generation confirmation or proposing a paid action. Don't end every answer
+for generation confirmation or proposing a paid action. When a material choice is missing, call langbai_ask_question with one to three
+short questions and two to six concrete options each. Mark at most one option
+as recommended, with a brief reason in its description. The UI always supports
+custom text. Wait for actual manual answers; never invent an answer or treat
+a recommendation, cancellation or answer as paid-tool authorization. After
+cancellation do not repeat the same question. Do not ask for API keys/passwords.
+Don't end every answer
 with a generic follow-up question. Preserve source citations and uncertainty.
 Use only the Studio tools offered for this session. Use the read-only
 langbai_software_capabilities catalog to check actual software capabilities when
@@ -111,6 +119,7 @@ export async function completeStudioPiTurn(options: {
   onText: (delta: string) => void;
   onTool: (tool: AgentToolExecution) => void;
   emit: (event: AgentEvent) => void;
+  askQuestion?: (args:Record<string,unknown>,signal:AbortSignal)=>Promise<AgentQuestionResult>;
   authorize: (name: string, args: Record<string, unknown>, signal: AbortSignal) => Promise<boolean>;
 }): Promise<{ content: string; reasoning: string; usage: AgentTokenUsage }> {
   const { history, current } = piMessages(options.prompt, options.settings);
@@ -140,6 +149,11 @@ export async function completeStudioPiTurn(options: {
         generatedImages: response.generatedImages,
       });
     },
+  });
+  if(options.askQuestion)tools.push({
+    name:'langbai_ask_question',description:'询问必要的用户偏好，展示推荐选项和自定义回答。参数 args={questions:[{prompt,options:[{label,description?,recommended?}]}]}。手动提交前等待，不自动回答，不授予生图权限。',
+    readonly:true,parameters:agentQuestionToolSchema,
+    async execute(args,signal){const answer=await options.askQuestion!(args,signal);const output=JSON.stringify(answer);if(activeToolId)publish(activeToolId,{name:'langbai_ask_question',title:'回答问题',input:args,output});return {ok:true,output,data:answer};},
   });
   const result = await runStudioPiAgent({
     model: studioPiModel(options.settings),
