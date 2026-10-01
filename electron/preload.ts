@@ -140,6 +140,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   selectAgentConversation: (conversationId: string) => ipcRenderer.invoke("agent:selectConversation", conversationId),
   renameAgentConversation: (conversationId: string, title: string) => ipcRenderer.invoke("agent:renameConversation", conversationId, title),
   setAgentConversationArchived: (conversationId: string, archived: boolean) => ipcRenderer.invoke("agent:setConversationArchived", conversationId, archived),
+  setStudioConversationOptions: (conversationId:string,patch:Partial<import('../src/agent/workspace-controls').StudioConversationOptions>)=>ipcRenderer.invoke('agent:setStudioOptions',conversationId,patch),
   deleteAgentConversation: (conversationId: string) => ipcRenderer.invoke("agent:deleteConversation", conversationId),
   importAgentFiles: (conversationId: string, sourcePaths?: string[]) => ipcRenderer.invoke("agent:importFiles", conversationId, sourcePaths),
   deleteAgentAttachment: (conversationId: string, attachmentId: string) => ipcRenderer.invoke("agent:deleteAttachment", conversationId, attachmentId),

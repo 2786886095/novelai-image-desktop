@@ -1664,6 +1664,7 @@ export interface NaiDesktopApi {
   openBackupDirectory: () => Promise<{ ok: boolean; message?: string }>;
   getAgentWorkspace: () => Promise<import("./agent/types").AgentWorkspaceData>;
   saveTavernWorkspace: (workspace: import("./agent/types").AgentWorkspaceData) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
+  setStudioConversationOptions: (conversationId:string,patch:Partial<import('./agent/workspace-controls').StudioConversationOptions>)=>Promise<import('./agent/types').AgentWorkspaceMutationResult>;
   createAgentConversation: (title?: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
   selectAgentConversation: (conversationId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
   renameAgentConversation: (conversationId: string, title: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;

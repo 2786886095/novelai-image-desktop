@@ -1,4 +1,5 @@
 import { normalizeStudioComposerActions } from '../../src/agent/composer-actions';
+import {studioBuiltinPreset,type StudioConversationOptions} from '../../src/agent/workspace-controls';
 import { recoverInterruptedImageRepairs } from "../../src/tavern/image-repair";
 import { readSceneBindings } from "../../src/tavern/scene-bindings";
 import { dialog } from "electron";
@@ -351,6 +352,10 @@ export function normalizeAgentWorkspace(raw: unknown): AgentWorkspaceData {
         lorebookIds,
         ...(samplerPresetId ? { samplerPresetId } : {}),
         generationMode: (conversation.generationMode === "auto" ? "auto" : "confirm") as AgentConversation["generationMode"],
+        studioApprovalMode: conversation.studioApprovalMode==='auto'?'auto' as const:'confirm' as const,
+        studioWebSearchEnabled: conversation.studioWebSearchEnabled===true,
+        studioTemplateEnabled: conversation.studioTemplateEnabled!==false,
+        studioPresetId: typeof conversation.studioPresetId==='string'&&(studioBuiltinPreset(conversation.studioPresetId)||conversation.studioPresetId.startsWith('tavern:')&&samplerPresets.some(p=>'tavern:'+p.id===conversation.studioPresetId))?conversation.studioPresetId:'studio-director',
         reasoningEffort: (["low", "medium", "high"].includes(String(conversation.reasoningEffort))
           ? conversation.reasoningEffort
           : "auto") as AgentConversation["reasoningEffort"],
@@ -598,6 +603,21 @@ export function saveTavernWorkspace(input: AgentWorkspaceData): AgentWorkspaceMu
     ok: true,
     workspace: writeAgentWorkspace(normalizeAgentWorkspace(input)),
   };
+}
+
+/** Merge a narrow UI patch into the latest store; never replace messages with renderer snapshots. */
+export function setStudioConversationOptions(conversationId:string,patch:Partial<StudioConversationOptions>):AgentWorkspaceMutationResult{
+ const workspace=readAgentWorkspace(),chat=workspace.conversations.find(c=>c.id===conversationId);
+ if(!chat||chat.archivedAt)return {ok:false,message:'对话不存在或已归档。',workspace};
+ if(['running','waiting-permission'].includes(chat.status))return {ok:false,message:'请先停止当前任务再修改执行模式或资源。',workspace};
+ if(!patch||typeof patch!=='object'||Array.isArray(patch))return {ok:false,message:'无效的对话选项。',workspace};
+ if(patch.studioApprovalMode!==undefined){if(!['confirm','auto'].includes(patch.studioApprovalMode))return {ok:false,message:'无效的执行模式。',workspace};chat.studioApprovalMode=patch.studioApprovalMode;}
+ if(patch.studioWebSearchEnabled!==undefined&&typeof patch.studioWebSearchEnabled==='boolean')chat.studioWebSearchEnabled=patch.studioWebSearchEnabled;
+ if(patch.studioTemplateEnabled!==undefined&&typeof patch.studioTemplateEnabled==='boolean')chat.studioTemplateEnabled=patch.studioTemplateEnabled;
+ if(patch.studioPresetId!==undefined){const id=patch.studioPresetId;if(typeof id!=='string'||!studioBuiltinPreset(id)&&!workspace.samplerPresets.some(p=>'tavern:'+p.id===id))return {ok:false,message:'预设不存在。',workspace};chat.studioPresetId=id;}
+ if(patch.characterIds!==undefined){if(!Array.isArray(patch.characterIds))return {ok:false,message:'无效的角色选择。',workspace};const ids=[...new Set(patch.characterIds.filter(id=>workspace.characters.some(c=>c.id===id)))];if(!ids.length)return {ok:false,message:'请选择一个角色卡。',workspace};chat.characterIds=ids;chat.activeCharacterId=ids.includes(patch.activeCharacterId??'')?patch.activeCharacterId:ids[0];}
+ if(patch.lorebookIds!==undefined){if(!Array.isArray(patch.lorebookIds))return {ok:false,message:'无效的世界书选择。',workspace};chat.lorebookIds=[...new Set(patch.lorebookIds.filter(id=>workspace.lorebooks.some(b=>b.id===id)))];}
+ chat.updatedAt=now();return mutation(workspace);
 }
 
 function safeFileName(name: string) {

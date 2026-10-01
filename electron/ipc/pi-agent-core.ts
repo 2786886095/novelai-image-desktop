@@ -32,6 +32,8 @@ export interface StudioPiRun {
   onEvent?: (event: AgentEvent) => void | Promise<void>;
   thinkingLevel?: "low" | "medium" | "high";
   signal?: AbortSignal;
+  /** Only the persisted application UI mode can grant this, never model arguments. */
+  fullAuto?: boolean;
 }
 
 export interface StudioPiResult {
@@ -51,6 +53,7 @@ export async function runStudioPiAgent(input: StudioPiRun): Promise<StudioPiResu
   ]);
   const allowed = new Map(input.tools.map((tool) => [tool.name, tool]));
   let paidAttempted = false;
+  let paidFailed = false;
   let toolCalls = 0;
   const tools: AgentTool[] = input.tools.map((entry) => ({
     name: entry.name,
@@ -65,8 +68,9 @@ export async function runStudioPiAgent(input: StudioPiRun): Promise<StudioPiResu
       signal?.throwIfAborted();
       input.onToolRunning?.(_id, entry.name, args);
       if (entry.paid) paidAttempted = true;
-      const result = await entry.execute(args, signal ?? new AbortController().signal);
-      if (!result.ok) throw new Error(result.output);
+      let result:Awaited<ReturnType<StudioPiTool['execute']>>;
+      try{result=await entry.execute(args, signal ?? new AbortController().signal);if(!result.ok)throw new Error(result.output);}
+      catch(error){if(entry.paid)paidFailed=true;throw error;}
       return { content: [{ type: 'text', text: result.output }], details: result };
     },
   }));
@@ -81,10 +85,11 @@ export async function runStudioPiAgent(input: StudioPiRun): Promise<StudioPiResu
     streamFn: input.streamFn,
     toolExecution: 'sequential',
     beforeToolCall: async ({ toolCall, args }, signal) => {
-      if (++toolCalls > 12) return { block: true, reason: '单轮工具调用超过上限。', terminate: true };
+      if (++toolCalls > 12 && !input.fullAuto) return { block: true, reason: '单轮工具调用超过上限。', terminate: true };
       const tool = allowed.get(toolCall.name);
       if (!tool) return { block: true, reason: '未授权的软件工具。', terminate: true };
-      if (tool.paid && paidAttempted) {
+      if(tool.paid&&paidFailed)return {block:true,reason:'付费请求失败或结果不确定；保留结果，停止自动重发以免重复扣费。',terminate:true};
+      if (tool.paid && paidAttempted && !input.fullAuto) {
         return { block: true, reason: '单轮已尝试过付费操作；请用户检查结果后另发一条消息。', terminate: true };
       }
       if (tool.readonly) return undefined;

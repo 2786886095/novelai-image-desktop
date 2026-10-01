@@ -255,6 +255,11 @@ export interface AgentConversation {
   lorebookIds: string[];
   samplerPresetId?: string;
   generationMode: TavernGenerationMode;
+  /** Pi-only choices: never migrate legacy auto-generation into tool authorization. */
+  studioApprovalMode?: 'confirm'|'auto';
+  studioWebSearchEnabled?: boolean;
+  studioTemplateEnabled?: boolean;
+  studioPresetId?: string;
   reasoningEffort?: AgentReasoningEffort;
   autoPlayGroup: boolean;
   backgroundDataUrl?: string;

@@ -6,6 +6,7 @@ import {Button} from './ui';
 import {useAppStore} from '../store';
 import {historyPickerText} from './HistoryImagePicker';
 import {desktopUiText} from '../i18n';
+import {previewImageContainsPoint} from '../preview-hit';
 export type PreviewImage={src:string;alt:string};
 export function PreviewImageViewer({images,index,onIndex,renderImage,favoriteAction,navigation,showNavigation=true,onBackgroundClick}:{images:PreviewImage[];index:number;onIndex:(index:number)=>void;renderImage?:ReactNode;favoriteAction?:ReactNode;navigation?:{index:number;total:number;onPrevious?:()=>void;onNext?:()=>void};showNavigation?:boolean;onBackgroundClick:()=>void}) {
  const language=useAppStore(s=>s.settings?.language),text=historyPickerText(language);
@@ -16,7 +17,11 @@ export function PreviewImageViewer({images,index,onIndex,renderImage,favoriteAct
  const moved=useRef(false);
  const backgroundPress=useRef(false);
  const pointerStart=useRef<{x:number;y:number}|null>(null);
- const isBlank=(target:EventTarget)=>target instanceof Element&&!target.closest("img,button,a,input,textarea,select,video,canvas,[role=button],.image-preview-controls span");
+ const isBlank=(target:EventTarget,x:number,y:number)=>{
+  if(!(target instanceof Element)||target.closest('button,a,input,textarea,select,video,canvas,[role=button],.image-preview-controls'))return false;
+  const picture=target.closest('img')??img.current??stage.current?.querySelector('img');
+  return !picture||!previewImageContainsPoint(picture.getBoundingClientRect(),picture.naturalWidth,picture.naturalHeight,x,y,getComputedStyle(picture).objectFit==='contain');
+ };
  const image=images[index];
  const closePreview=useRef(onBackgroundClick);closePreview.current=onBackgroundClick;
  useEffect(()=>{const el=stage.current;if(!el)return;const wheel=(e:WheelEvent)=>{e.preventDefault();e.stopPropagation();if(!e.deltaY)return;setScale(value=>{const next=Math.min(8,Math.max(1,value*Math.exp(-Math.max(-100,Math.min(100,e.deltaY))*.002))),bounds=el.getBoundingClientRect(),picture=img.current??el.querySelector('img');const x=e.clientX-bounds.left-bounds.width/2,y=e.clientY-bounds.top-bounds.height/2;setPan(previous=>{const maxX=Math.max(0,((picture?.offsetWidth??0)*next-bounds.width)/2),maxY=Math.max(0,((picture?.offsetHeight??0)*next-bounds.height)/2);return{x:Math.max(-maxX,Math.min(maxX,x-(x-previous.x)*next/value)),y:Math.max(-maxY,Math.min(maxY,y-(y-previous.y)*next/value))};});return next;});};el.addEventListener('wheel',wheel,{passive:false});return()=>el.removeEventListener('wheel',wheel);},[]);
@@ -40,7 +45,7 @@ export function PreviewImageViewer({images,index,onIndex,renderImage,favoriteAct
  },[]);
  function move(delta:number){if(navigation){(delta<0?navigation.onPrevious:navigation.onNext)?.();return;}const next=index+delta;if(next>=0&&next<images.length)onIndex(next);}
  function zoom(next:number){setScale(Math.min(8,Math.max(1,next)));setPan({x:0,y:0});}
- return <div ref={root} className="image-preview-viewer" tabIndex={0} onPointerDownCapture={e=>{moved.current=false;pointerStart.current={x:e.clientX,y:e.clientY};backgroundPress.current=e.button===0&&isBlank(e.target);}} onPointerMoveCapture={e=>{const start=pointerStart.current;if(start&&Math.hypot(e.clientX-start.x,e.clientY-start.y)>4)moved.current=true;}} onPointerCancel={()=>{pointerStart.current=null;backgroundPress.current=false;}} onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();if(e.detail>1)return;if(moved.current){moved.current=false;return;}if(backgroundPress.current&&isBlank(e.target))onBackgroundClick();backgroundPress.current=false;}} onKeyDown={e=>{
+ return <div ref={root} className="image-preview-viewer" tabIndex={0} onPointerDownCapture={e=>{moved.current=false;pointerStart.current={x:e.clientX,y:e.clientY};backgroundPress.current=e.button===0&&isBlank(e.target,e.clientX,e.clientY);}} onPointerMoveCapture={e=>{const start=pointerStart.current;if(start&&Math.hypot(e.clientX-start.x,e.clientY-start.y)>4)moved.current=true;}} onPointerCancel={()=>{pointerStart.current=null;backgroundPress.current=false;}} onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();if(e.detail>1)return;if(moved.current){moved.current=false;backgroundPress.current=false;return;}if(backgroundPress.current&&isBlank(e.target,e.clientX,e.clientY))onBackgroundClick();backgroundPress.current=false;}} onKeyDown={e=>{
   if((e.target as HTMLElement).closest('input,textarea,[contenteditable="true"]'))return;
   if(e.key==='Escape'){e.preventDefault();e.stopPropagation();onBackgroundClick();return;}
   const delta=e.key==='ArrowRight'||e.key==='ArrowDown'?1:e.key==='ArrowLeft'||e.key==='ArrowUp'?-1:0;

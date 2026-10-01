@@ -1069,5 +1069,166 @@
     "Natural language",
     "自然言語",
     "자연어"
+  ],
+  "resources": [
+    "创作资源",
+    "創作資源",
+    "Creative resources",
+    "創作リソース",
+    "창작 자료"
+  ],
+  "resource_presets": [
+    "预设",
+    "預設",
+    "Presets",
+    "プリセット",
+    "프리셋"
+  ],
+  "resource_worldbooks": [
+    "世界书",
+    "世界書",
+    "Worldbooks",
+    "ワールドブック",
+    "월드북"
+  ],
+  "resource_characters": [
+    "角色卡",
+    "角色卡",
+    "Characters",
+    "キャラクター",
+    "캐릭터"
+  ],
+  "presetDirector": [
+    "生图导演",
+    "生圖導演",
+    "Image director",
+    "画像ディレクター",
+    "이미지 디렉터"
+  ],
+  "presetDirectorBody": [
+    "理解想法、整理画面并使用实际生图工具。",
+    "理解想法、整理畫面並使用實際生圖工具。",
+    "Plan images and use real generation tools.",
+    "構想を整理し実際の画像ツールを使います。",
+    "아이디어를 정리하고 실제 생성 도구를 사용합니다."
+  ],
+  "presetPrompts": [
+    "提示词策划",
+    "提示詞策劃",
+    "Prompt planner",
+    "プロンプト設計",
+    "프롬프트 설계"
+  ],
+  "presetPromptsBody": [
+    "整理主体、动作、光影与构图，保留明确约束。",
+    "整理主體、動作、光影與構圖，保留明確約束。",
+    "Compose subject, action, lighting and framing.",
+    "被写体・動作・光・構図を整理します。",
+    "주제, 동작, 조명과 구도를 정리합니다."
+  ],
+  "presetReference": [
+    "参考图分析",
+    "參考圖分析",
+    "Reference analyst",
+    "参考画像分析",
+    "참조 이미지 분석"
+  ],
+  "presetReferenceBody": [
+    "区分看见的细节与推测，保留你指定的特征。",
+    "區分看見的細節與推測，保留你指定的特徵。",
+    "Separate visible details from inference.",
+    "観察と推測を区別し指定の特徴を保ちます。",
+    "관찰과 추측을 구분하고 지정한 특징을 유지합니다."
+  ],
+  "presetSwitchHint": [
+    "仅在开启“预设模板”时使用所选预设；不会把正文复制到输入框。",
+    "僅在開啟「預設模板」時使用所選預設；不會把正文複製到輸入框。",
+    "The preset toggle enables the selected preset; its body stays out of the composer.",
+    "プリセットをオンにすると選択内容を使います。本文は入力欄に貼りません。",
+    "프리셋이 켜져 있을 때만 적용되며 본문을 입력창에 붙이지 않습니다."
+  ],
+  "tavernPresets": [
+    "酒馆现有预设",
+    "酒館現有預設",
+    "Existing Tavern presets",
+    "既存のTavernプリセット",
+    "기존 Tavern 프리셋"
+  ],
+  "worldEntry": [
+    "世界书条目",
+    "世界書條目",
+    "World entry",
+    "エントリー",
+    "항목"
+  ],
+  "noResources": [
+    "暂无资源，已有数据不会删除。",
+    "暫無資源，既有資料不會刪除。",
+    "No resources; existing data is preserved.",
+    "リソースなし。既存データは保持します。",
+    "자료가 없으며 기존 데이터는 보존됩니다."
+  ],
+  "confirmMode": [
+    "每次确认",
+    "每次確認",
+    "Confirm",
+    "毎回確認",
+    "매번 확인"
+  ],
+  "autoMode": [
+    "全自动",
+    "全自動",
+    "Full auto",
+    "全自動",
+    "완전 자동"
+  ],
+  "confirmModeHint": [
+    "写入及可能付费的操作逐次确认。",
+    "寫入及可能付費的操作逐次確認。",
+    "Confirm each write or potentially paid action.",
+    "書き込み・有料操作を毎回確認します。",
+    "쓰기와 유료 작업마다 확인합니다."
+  ],
+  "autoModeHint": [
+    "直接执行软件内工具和生图，不设额外费用或次数上限；可随时停止。",
+    "直接執行軟體內工具和生圖，不設額外費用或次數上限；可隨時停止。",
+    "Run app tools and images without extra spending or count limits; Stop remains available.",
+    "追加の費用・回数上限なしでアプリ内ツールと画像生成を実行。停止できます。",
+    "추가 비용·횟수 한도 없이 앱 도구와 이미지 생성을 실행하며 중지할 수 있습니다."
+  ],
+  "autoCostNote": [
+    "可能消耗 Anlas",
+    "可能消耗 Anlas",
+    "May spend Anlas",
+    "Anlasを消費する可能性",
+    "Anlas 사용 가능"
+  ],
+  "presetToggle": [
+    "预设模板",
+    "預設模板",
+    "Preset",
+    "プリセット",
+    "프리셋"
+  ],
+  "webToggleHint": [
+    "开启后允许助手按需查询公开网页摘要；不会自动复制长指令。",
+    "開啟後允許助手按需查詢公開網頁摘要；不會自動複製長指令。",
+    "Allow public web search when needed; no instruction is pasted.",
+    "必要に応じ公開ウェブを検索します。長い指示は貼りません。",
+    "필요한 공개 웹 검색을 허용하며 긴 지시문을 붙이지 않습니다."
+  ],
+  "resizeComposer": [
+    "上下拖动调整输入区高度；方向键调整。",
+    "上下拖曳調整輸入區高度；方向鍵調整。",
+    "Drag vertically to resize the composer, or use arrow keys.",
+    "上下ドラッグまたは矢印キーで入力欄の高さを調整。",
+    "위아래 드래그 또는 방향키로 입력 높이를 조절합니다."
+  ],
+  "approvalMode": [
+    "执行模式",
+    "執行模式",
+    "Execution mode",
+    "実行モード",
+    "실행 모드"
   ]
 }

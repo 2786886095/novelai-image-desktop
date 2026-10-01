@@ -43,6 +43,8 @@ import { executeAgentTool } from "./agent-tools";
 import { completeStudioPiTurn, completeStudioPiSummary } from "./pi-agent-turn";
 import { studioGenerationFingerprint, studioGenerationPreparations } from './pi-studio-tools';
 import { StudioPiApprovals } from './pi-agent-approval';
+import {studioSessionOptions,studioCreativeReferenceData} from '../../src/agent/workspace-controls';
+import {activeLorebookEntries} from '../../src/tavern/prompt';
 
 type EventSink = (event: AgentEvent) => void;
 type ProviderTurn = {
@@ -814,9 +816,14 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
   const deltas = smoothEmitter(request.conversationId, messageId);
   try {
     const settings = getSettings();
+    const referenceWorkspace=readAgentWorkspace(),referenceChat=structuredClone(conversation);
+    referenceChat.messages.push({id:userMessageId,role:'user',content:turnInput.visibleText,attachments:[],tools:[],status:'complete',createdAt:timestamp()});
+    const sessionOptions=studioSessionOptions(conversation);
+    const lore=activeLorebookEntries(referenceWorkspace.lorebooks.filter(b=>conversation.lorebookIds.includes(b.id)),referenceChat.messages,settings.lastGenerationState?.params.model);
+    const resourceContext=studioCreativeReferenceData(referenceWorkspace,referenceChat,lore);
     const snapshot = createContextSnapshot(effectiveContextMessages(conversation.messages, conversation.lastSummary, conversation.lastCompactedAt),
       settings.agentContextWindow, settings.agentAutoCompactThreshold, conversation.lastTurnUsage);
-    snapshot.used += estimateTextTokens(turnInput.providerText) + conversation.draftAttachments.filter(item => selected.has(item.id)).length * 1_200;
+    snapshot.used += estimateTextTokens(turnInput.providerText)+estimateTextTokens(resourceContext) + conversation.draftAttachments.filter(item => selected.has(item.id)).length * 1_200;
     if (shouldAutoCompact(snapshot, settings.agentAutoCompact, settings.agentAutoCompactThreshold)) {
       const compacted = await compactConversationWithController(request.conversationId, controller);
       controller.signal.throwIfAborted();
@@ -855,6 +862,7 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
     const turn = await completeStudioPiTurn({
       settings: getSettings(), conversationId: request.conversationId, messageId,
       reasoningEffort: current.reasoningEffort,
+      sessionOptions,resourceContext,
       prompt: promptMessagesWithImages(transcript, request.conversationId),
       signal: controller.signal, onText: (delta) => { streamed += delta; deltas.push(delta); }, emit,
       onTool: (tool) => {
@@ -877,6 +885,7 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
         const preparation = name === 'langbai_generate_image'
           ? studioGenerationPreparations.inspect(request.conversationId, args.preparationId, studioGenerationFingerprint())
           : undefined;
+        if(sessionOptions.approvalMode==='auto')return true;
         const detail = JSON.stringify(preparation ? preparation.preview : args, null, 2);
         if (detail.length > 20_000) throw new Error('操作参数过长，未显示完整内容，已拒绝执行。');
         updateAgentConversation(request.conversationId, (target) => { target.status = 'waiting-permission'; });

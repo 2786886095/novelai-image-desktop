@@ -241,6 +241,7 @@ import {
 import {
   createAgentConversation,
   setAgentConversationArchived,
+  setStudioConversationOptions,
   deleteAgentAttachment,
   deleteAgentConversation,
   deleteAgentMemory,
@@ -746,6 +747,10 @@ function registerIpc() {
   registerCompatibleImageIpc(() => mainWindow);
   accountBoundHandle("agent:getWorkspace", () => readAgentWorkspace());
   accountBoundHandle("agent:saveWorkspace", (_event, workspace: AgentWorkspaceData) => saveTavernWorkspace(workspace));
+  accountBoundHandle('agent:setStudioOptions',(_event,id:string,patch:Partial<import('../src/agent/workspace-controls').StudioConversationOptions>)=>{
+    if(hasActiveAgentRequests())return {ok:false,message:'请先停止智能体任务再修改对话选项。',workspace:readAgentWorkspace()};
+    return setStudioConversationOptions(id,patch);
+  });
   accountBoundHandle("agent:createConversation", (_event, title?: string) => createAgentConversation(title));
   accountBoundHandle("agent:selectConversation", (_event, conversationId: string) => selectAgentConversation(conversationId));
   accountBoundHandle("agent:renameConversation", (_event, conversationId: string, title: string) => renameAgentConversation(conversationId, title));

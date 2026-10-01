@@ -427,9 +427,10 @@ function GalleryImageLightbox({
   downloadBusy?: boolean;
   text: GalleryText;
 }) {
+  const blankPress=useRef<{x:number;y:number}|null>(null);
   return <AppPortal>
-    <div className="modal-backdrop artist-ranking-lightbox-backdrop" onClick={event=>{event.stopPropagation();if(event.target===event.currentTarget)onClose();}}>
-      <section className="artist-ranking-lightbox online-gallery-lightbox" role="dialog" aria-modal="true" aria-label={label} onClick={(event) => event.stopPropagation()}>
+    <div className="modal-backdrop artist-ranking-lightbox-backdrop" onPointerDownCapture={event=>{blankPress.current=event.button===0?{x:event.clientX,y:event.clientY}:null;}} onPointerCancel={()=>{blankPress.current=null;}} onClick={event=>{event.stopPropagation();const start=blankPress.current;if(event.target===event.currentTarget&&start&&Math.hypot(event.clientX-start.x,event.clientY-start.y)<=4)onClose();}}>
+      <section className="artist-ranking-lightbox online-gallery-lightbox" role="dialog" aria-modal="true" aria-label={label} onClick={event=>{event.stopPropagation();const start=blankPress.current;if(event.target===event.currentTarget&&start&&Math.hypot(event.clientX-start.x,event.clientY-start.y)<=4)onClose();}}>
         <button type="button" className="artist-ranking-lightbox-close" aria-label={text.closePreview} title={text.closePreview} onClick={onClose}><Icon name="close"/></button>
         <PreviewImageViewer onBackgroundClick={onClose} images={[{src:imageSrc,alt:label}]} index={0} onIndex={()=>{}} favoriteAction={favoriteAction} navigation={{index,total,onPrevious,onNext}} renderImage={image}/>
         <footer className="gallery-preview-actions">

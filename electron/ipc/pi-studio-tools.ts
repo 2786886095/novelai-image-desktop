@@ -10,6 +10,7 @@ import type { StudioPiTool } from './pi-agent-core';
 import { StudioGenerationPreparations, type StudioGenerationPreview } from './pi-generation-preparation';
 import {studioPiToolSchema} from './pi-studio-tool-schema';
 import {currentNaiAccount,naiAccountRevision} from './nai-accounts-runtime';
+import {studioToolEnabled} from '../../src/agent/workspace-controls';
 
 export const studioGenerationPreparations = new StudioGenerationPreparations();
 
@@ -82,12 +83,15 @@ const descriptions: Record<string, string> = {
 
 export function createStudioPiTools(options: {
   sessionId: string;
+  webSearchEnabled?:boolean;
+  fullAuto?:boolean;
   emit: (event: AgentEvent) => void;
   onExecuted?: (name: string, args: Record<string, unknown>, response: AgentToolBridgeResponse) => void;
 }): StudioPiTool[] {
-  return ['langbai_prepare_generation', ...AGENT_READ_TOOLS, ...AGENT_MUTATING_TOOLS].map((name) => ({
+  const names=['langbai_prepare_generation', ...AGENT_READ_TOOLS, ...AGENT_MUTATING_TOOLS].filter(name=>studioToolEnabled(name,options.webSearchEnabled===true));
+  return names.map((name) => ({
     name,
-    description: descriptions[name],
+    description: descriptions[name].replace(/每次必须确认|每次必须由用户确认|必须由用户确认|需用户确认|每次要确认/g,'按应用当前执行模式授权'),
     parameters:studioPiToolSchema(name),
     readonly: name === 'langbai_prepare_generation' || (AGENT_READ_TOOLS as readonly string[]).includes(name),
     paid: ['langbai_generate_image', 'langbai_redraw_image', 'langbai_inpaint_image',
@@ -108,6 +112,7 @@ export function createStudioPiTools(options: {
       const response = await executeAgentTool({
         tool: name, args: executionArgs, sessionId: options.sessionId, signal,
       }, options.emit);
+      if(name==='langbai_software_capabilities'&&response.ok){response.data={...(response.data as Record<string,unknown>),readonly:names.filter(n=>n==='langbai_prepare_generation'||(AGENT_READ_TOOLS as readonly string[]).includes(n)),requiresUserConfirmation:options.fullAuto?[]:AGENT_MUTATING_TOOLS,approvalMode:options.fullAuto?'auto':'confirm',webSearchEnabled:options.webSearchEnabled===true,generation:'读取状态并免费准备，然后按应用选定的确认/全自动模式执行；全自动无额外费用或次数上限，失败或结果不确定时不静默重发。'};response.output=JSON.stringify(response.data);}
       options.onExecuted?.(name, executionArgs, response);
       return { ok: response.ok, output: response.output, data: response.data };
     },
