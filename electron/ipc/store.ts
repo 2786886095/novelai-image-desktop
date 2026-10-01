@@ -1,5 +1,5 @@
 import {normalizeCompletionSound} from "../../src/completion-sound";
-import { currentNaiAccount, naiAccountsBusy, configureLegacyNaiBinding, boundLegacyNaiAccount, naiAccountRevision } from './nai-accounts-runtime';
+import { currentNaiAccount, naiAccountsBusy, configureLegacyNaiBinding, boundLegacyNaiAccount, legacyNaiBindingAllowed, naiAccountRevision } from './nai-accounts-runtime';
 import { ensureNaiAccountsLoaded } from './nai-accounts';
 import {normalizeNovelAiSettings,NOVELAI_ONLY_MESSAGE} from '../../src/novelai-only-settings';
 import { refreshShippedTemplates } from "../../src/data/prompt-template-migration";
@@ -694,7 +694,7 @@ export function getToken() {
   ensureNaiAccountsLoaded();
   const selected=currentNaiAccount(); if(selected) return selected.token;
   const legacy=boundLegacyNaiAccount(); if(legacy) return legacy.token;
-  return readStore().token;
+  return legacyNaiBindingAllowed()?readStore().token:undefined;
 }
 
 export function setToken(token: string) {
@@ -714,12 +714,13 @@ export function clearToken() {
 export function getAccountSummary(): AccountSummary {
   ensureNaiAccountsLoaded();
   if(currentNaiAccount()) return {hasToken:true,stale:true};
+  if(!legacyNaiBindingAllowed())return {hasToken:false};
   const data = readStore();
   return { hasToken: Boolean(data.token), ...(data.account ?? {}) };
 }
 
 export function setAccountSummary(account: Omit<AccountSummary, "hasToken">) {
-  if(currentNaiAccount()) return;
+  if(currentNaiAccount()||!legacyNaiBindingAllowed()) return;
   const data = readStore();
   // V5 Opus allowance is live telemetry. Persisting its minute-by-minute value
   // would rewrite and fsync the entire history store on every poll. Keep only

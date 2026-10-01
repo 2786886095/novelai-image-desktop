@@ -4,13 +4,14 @@ export function accountCipherAvailable(cipher: Cipher): boolean {
   try { return cipher.isEncryptionAvailable() && cipher.getSelectedStorageBackend?.() !== 'basic_text'; }
   catch { return false; }
 }
-export interface AccountVaultDocument { version: 1; selectedId?: string; legacyMigrated?:boolean; accounts: Array<NaiAccountProfile & { encryptedToken: string }> }
+export interface AccountVaultDocument { version: 1; selectedId?: string; legacyMigrated?:boolean; managed?:boolean; accounts: Array<NaiAccountProfile & { encryptedToken: string }> }
 /** Secrets never enter list results. Failed decryption does not rewrite ciphertext. */
 export class NaiAccountsVault {
   private leases = 0;
   constructor(private document: AccountVaultDocument, private cipher: Cipher, private persist: (document: AccountVaultDocument) => void) {}
   list(): NaiAccountProfile[] { return this.document.accounts.map(a => ({id:a.id,label:a.label,method:a.method,apiBaseUrl:a.apiBaseUrl,imageBaseUrl:a.imageBaseUrl,...(a.legacyConfiguration?{legacyConfiguration:{...a.legacyConfiguration}}:{})})); }
   legacyMigrated(){return this.document.legacyMigrated===true;}
+  managed(){return this.document.managed===true||this.document.legacyMigrated===true||this.document.accounts.length>0;}
   importLegacy(id:string,input:NaiAccountInput,configuration:NonNullable<NaiAccountProfile['legacyConfiguration']>):NaiAccountProfile{
     if(this.leases)throw Error('Account operation in flight');
     if(this.document.legacyMigrated)throw Error('Legacy configuration already migrated');
@@ -31,14 +32,17 @@ export class NaiAccountsVault {
     const token=input.token;
     const profile={label:normalized.label,method:normalized.method,apiBaseUrl:normalized.apiBaseUrl,imageBaseUrl:normalized.imageBaseUrl};
     const account = { ...profile, id, encryptedToken: this.cipher.encryptString(token.trim()).toString('base64') };
-    const next: AccountVaultDocument = { ...this.document, accounts: [...this.document.accounts, account] };
+    const next: AccountVaultDocument = { ...this.document, managed:true, accounts: [...this.document.accounts, account] };
     this.persist(next); this.document = next;
     return { ...profile, id };
   }
   remove(id: string): void {
     if (this.leases) throw new Error('Account operation in flight');
-    if(this.document.selectedId===id) throw new Error('请先切换账户，再删除当前账户。');
-    const next: AccountVaultDocument = { ...this.document, accounts: this.document.accounts.filter(a => a.id !== id) };
+    if(!this.document.accounts.some(a=>a.id===id))throw Error('Unknown account');
+    const accounts=this.document.accounts.filter(a=>a.id!==id);
+    const selectedId=this.document.selectedId===id?accounts[0]?.id:this.document.selectedId;
+    // A durable tombstone prevents deleted credentials from being reimported on restart.
+    const next: AccountVaultDocument = { ...this.document, managed:true, legacyMigrated:true, selectedId, accounts };
     this.persist(next); this.document = next;
   }
   selectedId() { return this.document.selectedId; }

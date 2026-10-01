@@ -27,7 +27,8 @@ function getVault() {
   });
   try{migrateLegacyNaiAccount(candidate,readStore());}catch{migrationIssue='旧账户自动迁移未完成；原凭据和接口配置未删除。请从账户管理重新保存。';}
   const selectedId=candidate.selectedId();
-  if(selectedId) { const lease=candidate.bind(selectedId); try{restoreNaiAccount(lease.snapshot);}finally{lease.release();} }
+  if(selectedId) { const lease=candidate.bind(selectedId); try{restoreNaiAccount(lease.snapshot,candidate.managed());}finally{lease.release();} }
+  else restoreNaiAccount(undefined,candidate.managed());
   vault=candidate;
   return vault;
 }
@@ -53,7 +54,17 @@ export function registerNaiAccountsIpc() {
   });
   ipcMain.handle('naiAccounts:migrate',()=>{const v=getVault();const result=migrateLegacyNaiAccount(v,readStore());const id=v.selectedId();if(id){const lease=v.bind(id);try{activateNaiAccount(lease.snapshot,()=>{});}finally{lease.release();}}return {migrated:result.migrated,message:'旧配置已自动迁移至账户列表；原存储保留。'};});
   ipcMain.handle('naiAccounts:add', (_event, input: NaiAccountInput) => getVault().add(crypto.randomUUID(), input));
-  ipcMain.handle('naiAccounts:remove', (_event, id: string) => { if(naiAccountsBusy()) throw Error('账户操作正在执行'); getVault().remove(id); });
+  ipcMain.handle('naiAccounts:remove', (_event, id: string) => {
+    if(naiAccountsBusy())throw Error('账户操作正在执行');
+    const v=getVault();
+    if(v.selectedId()!==id){if(v.selectedId())v.remove(id);else activateNaiAccount(undefined,()=>v.remove(id));return;}
+    const next=v.list().find(account=>account.id!==id);
+    const lease=next?v.bind(next.id):undefined;
+    try{const snapshot=lease?.snapshot;lease?.release();activateNaiAccount(snapshot,()=>v.remove(id));}
+    finally{lease?.release();}
+  });
+  // Deliberate local UI action only: not returned by list/state or exposed to Agent tools.
+  ipcMain.handle('naiAccounts:reveal',(_event,id:string)=>{const lease=getVault().bind(id);try{return lease.snapshot.token;}finally{lease.release();}});
   ipcMain.handle('naiAccounts:probe', async (_event, id: string) => {
     const lease = getVault().bind(id);
     try {

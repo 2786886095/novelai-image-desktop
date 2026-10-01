@@ -1141,11 +1141,11 @@
     "관찰과 추측을 구분하고 지정한 특징을 유지합니다."
   ],
   "presetSwitchHint": [
-    "仅在开启“预设模板”时使用所选预设；不会把正文复制到输入框。",
-    "僅在開啟「預設模板」時使用所選預設；不會把正文複製到輸入框。",
-    "The preset toggle enables the selected preset; its body stays out of the composer.",
-    "プリセットをオンにすると選択内容を使います。本文は入力欄に貼りません。",
-    "프리셋이 켜져 있을 때만 적용되며 본문을 입력창에 붙이지 않습니다."
+    "启用右侧选中的对话预设，影响回复与提示词处理；不会把正文填入输入框，也不改变执行确认方式。",
+    "啟用右側所選的對話預設，影響回覆與提示詞處理；不填入輸入框，也不變更執行確認方式。",
+    "Use the selected conversational preset for replies and prompt processing. It does not paste into the input or change execution approval.",
+    "右側の会話プリセットを応答・プロンプト処理に使用。入力欄への貼付けや実行承認の変更はしません。",
+    "선택한 대화 프리셋을 답변과 프롬프트 처리에 사용합니다. 입력란에 붙여 넣거나 실행 승인 방식을 바꾸지 않습니다."
   ],
   "tavernPresets": [
     "酒馆现有预设",
@@ -1204,11 +1204,11 @@
     "Anlas 사용 가능"
   ],
   "presetToggle": [
-    "预设模板",
-    "預設模板",
-    "Preset",
-    "プリセット",
-    "프리셋"
+    "使用预设",
+    "使用預設",
+    "Use preset",
+    "プリセット使用",
+    "프리셋 사용"
   ],
   "webToggleHint": [
     "开启后允许助手按需查询公开网页摘要；不会自动复制长指令。",

@@ -18,3 +18,12 @@
 @media(max-width:760px){.nai-account-selector-label{display:none}.nai-account-selector .select-menu-trigger{width:180px}.nai-account-list li{align-items:flex-start;flex-direction:column}.nai-account-list li>div{flex-wrap:wrap}}
 @media(max-width:520px){.nai-account-overlay{padding:10px}.nai-account-panel{max-height:calc(100dvh - 20px);padding:14px}.nai-account-settings{padding:14px}.nai-account-manager button,.nai-account-surface button{min-height:44px}.nai-account-method-tabs button{min-height:56px}.nai-account-selector .select-menu-trigger{min-height:44px}}
 html.motion-reduced .nai-account-overlay,html.motion-reduced .nai-account-panel,html.motion-reduced .nai-account-fields,html.motion-reduced .nai-account-overlay.is-leaving,html.motion-reduced .nai-account-overlay.is-leaving .nai-account-panel{animation:none}html.motion-reduced .nai-account-manager button,html.motion-reduced .nai-account-surface button,html.motion-reduced .nai-account-surface input{transition:none}
+
+/* Deliberate key viewing and explicit, persistent login-method badges. */
+.nai-account-list{max-height:360px}.nai-account-list li{display:flex;flex-direction:column;align-items:stretch;gap:10px}
+.nai-account-list li>div{flex-shrink:1}.nai-account-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+.nai-account-identity{display:flex;flex-direction:column;gap:5px;min-width:0}.nai-account-identity strong{font-size:13px;overflow-wrap:anywhere}
+.nai-login-badge{display:inline-flex;align-items:center;gap:5px;width:fit-content;max-width:100%;font-size:11px;line-height:1.5;color:var(--accent);background:var(--accent-soft);padding:3px 6px;border-radius:6px}.nai-login-badge svg{width:13px;height:13px}
+.nai-account-actions{display:flex;gap:6px;flex-shrink:0}.nai-key-field,.nai-saved-key{display:flex;align-items:center;gap:6px;min-width:0}.nai-key-field input,.nai-saved-key input{flex:1;min-width:0}
+.nai-key-field button,.nai-saved-key button{width:36px;min-width:36px;padding:6px}.nai-saved-key input{font-family:ui-monospace,monospace;font-size:12px;min-height:36px;padding:7px 9px}
+@media(max-width:760px){.nai-account-row{align-items:flex-start;flex-wrap:wrap}.nai-account-actions{flex-wrap:wrap}.nai-key-field button,.nai-saved-key button{min-width:44px;min-height:44px}}

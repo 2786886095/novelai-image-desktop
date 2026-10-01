@@ -33,6 +33,7 @@ export interface NaiAccountsBridge {
   list(): Promise<NaiAccountProfile[]>;
   add(input: NaiAccountInput): Promise<NaiAccountProfile>;
   remove(id: string): Promise<void>;
+  reveal(id:string):Promise<string>;
   state(): Promise<{ selectedId?: string; busy: boolean; migrationIssue?:string }>;
   select(id?: string): Promise<{ selectedId?: string }>;
   login(input: {label:string;email:string;password:string;otp?:string}): Promise<{ok:true;account:NaiAccountProfile} | {ok:false;code:string;message:string}>;
