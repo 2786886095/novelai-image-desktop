@@ -37,11 +37,7 @@ jobs:
       - name: Verify packaged native runtime and startup
         run: node scripts/verify-packaged-runtime.mjs
       - name: Verify packaged Tavern label and preserved defaults
-        shell: pwsh
-        run: |
-          $env:ELECTRON_RUN_AS_NODE='1'
-          & './release/win-unpacked/Langbai NovelAI Studio.exe' scripts/packaged-tavern-defaults-probe.cjs release/win-unpacked/resources/app.asar '使用酒馆'
-          if ($LASTEXITCODE -ne 0) { throw 'Packaged label/defaults verification failed' }
+        run: node scripts/run-packaged-tavern-probe.cjs
       - name: Decode final Windows installers with the actual NSIS decoder
         shell: pwsh
         run: |
