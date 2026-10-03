@@ -1,7 +1,7 @@
 const fs=require('node:fs');
 const path=require('node:path');
 const assert=require('node:assert/strict');
-const asar=process.argv[2];
+const asar=path.resolve(process.argv[2]);
 const rows=require(path.join(asar,'dist-electron/shared/agent-ux-locales.json'));
 const {studioSessionOptions}=require(path.join(asar,'dist-electron/src/agent/workspace-controls.js'));
 const fresh=studioSessionOptions(undefined);
