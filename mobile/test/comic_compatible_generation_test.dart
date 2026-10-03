@@ -1,3 +1,6 @@
+import 'package:http/testing.dart';
+import 'package:novelai_mobile/services/novelai_image_envelope.dart';
+import 'package:novelai_mobile/services/nai_api.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
@@ -55,6 +58,12 @@ class ComicStorage extends Storage {
   }
 }
 
+Future<void> fixtureVerifyEnvelope(AppSettings settings,Map<String,dynamic> config,String key) async {
+ final client=MockClient((request)async {if(request.method!='GET'||!request.url.path.endsWith('/models'))throw StateError('Not readonly');return http.Response(jsonEncode({'data':[{'id':config['model']}]}),200);});
+ try {await verifyNovelAiImageEnvelope(client,config,key);}finally{client.close();}
+}
+class _VerifiedFixtureApi extends NaiApi {@override Future<void> verifyCompatibleNovelAi(AppSettings s,Map<String,dynamic> c,String key)=>fixtureVerifyEnvelope(s,c,key);}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory root;
@@ -104,12 +113,12 @@ void main() {
       await req.response.close();
     });
     storage = ComicStorage();
-    app = AppState(storage: storage, preloadCompletedImage: (_) async {})
+    app = AppState(api:_VerifiedFixtureApi(),storage: storage, preloadCompletedImage: (_) async {})
       ..settings = AppSettings(proxyMode: 'direct', saveToGallery: false);
     await storage.setSettings(app.settings);
     await app.saveCompatibleSettings({
       'baseUrl': 'http://127.0.0.1:${server.port}/v1',
-      'model': 'fixture-image-model',
+      'model': 'nai-diffusion-5-full',
       'size': '1024x1024',
       'responseFormat': 'auto',
       'extensions': <String, dynamic>{}
@@ -161,7 +170,7 @@ void main() {
     expect(storage.nativeReads, 0);
     expect(app.comic.project.panels.map((p) => p.candidates.length), [1, 1]);
     expect(bodies.first, {
-      'model': 'fixture-image-model',
+      'model': 'nai-diffusion-5-full',
       'prompt': 'ink, forest 0',
       'size': '1024x1024',
       'n': 1
@@ -248,7 +257,7 @@ void main() {
     await app.comic.generateInitial();
     expect(app.comic.runPhase, 'completed');
     expect(bodies.first, {
-      'model': 'fixture-image-model',
+      'model': 'nai-diffusion-5-full',
       'prompt': 'ink, forest 0',
       'size': '832x1216',
       'n': 1,
@@ -389,7 +398,7 @@ void main() {
         {app.comic.project.historyGroupId});
     expect(
         app.history
-            .every((i) => i.model == 'fixture-image-model' && i.seed == -1),
+            .every((i) => i.model == 'nai-diffusion-5-full' && i.seed == -1),
         true);
   });
   test(

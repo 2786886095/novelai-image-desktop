@@ -15,6 +15,12 @@ class _MemoryMetadataStorage extends Storage {
   String? savedName;
 
   @override
+  Future<void> setParams(GenerateParams params) async {}
+
+  @override
+  Future<void> setCharacterPrompts(List<CharCaptionItem> captions) async {}
+
+  @override
   Future<({File file, String name})> saveMetadataInspectorImage(
     Uint8List bytes,
     String originalName,
@@ -26,6 +32,42 @@ class _MemoryMetadataStorage extends Storage {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  for (final applyMetadata in [false, true]) {
+    test(
+        'image load preserves parameters unless explicitly restored: $applyMetadata',
+        () async {
+      final directory =
+          Directory.systemTemp.createTempSync('workbench-metadata-');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      final image =
+          File('${directory.path}${Platform.pathSeparator}source.png');
+      image.writeAsBytesSync(_metadataPng());
+      final state = AppState(storage: _MemoryMetadataStorage());
+      addTearDown(state.dispose);
+      state.params
+        ..positivePrompt = 'keep my prompt'
+        ..seed = 1234
+        ..steps = 20
+        ..cfgScale = 5
+        ..width = 1024
+        ..height = 1024;
+
+      await state.setWorkbenchPath(image.path, applyMetadata: applyMetadata);
+
+      expect(state.workbenchImage?.filePath, image.path);
+      expect(state.workbenchImportedParams?.seed, 20261002);
+      expect(state.params.positivePrompt,
+          applyMetadata ? 'embedded mountain lake' : 'keep my prompt');
+      expect(state.params.seed, applyMetadata ? 20261002 : 1234);
+      expect(state.params.steps, applyMetadata ? 28 : 20);
+      expect(state.params.cfgScale, applyMetadata ? 6 : 5);
+      expect(state.params.width, applyMetadata ? 832 : 1024);
+      expect(state.params.height, applyMetadata ? 1216 : 1024);
+    });
+  }
+
   testWidgets('grouped history image can be opened in metadata inspector',
       (tester) async {
     tester.view.devicePixelRatio = 1;
@@ -95,4 +137,38 @@ void main() {
     expect(storage.savedName, 'grouped.png');
     expect(storage.savedBytes, orderedEquals(bytes));
   });
+}
+
+Uint8List _metadataPng() {
+  final png = base64Decode(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
+  final payload = <int>[
+    ...ascii.encode('tEXt'),
+    ...utf8.encode('Comment'),
+    0,
+    ...utf8.encode(jsonEncode({
+      'prompt': 'embedded mountain lake',
+      'seed': 20261002,
+      'steps': 28,
+      'scale': 6,
+      'width': 832,
+      'height': 1216
+    }))
+  ];
+  final chunk = BytesBuilder()
+    ..add((ByteData(4)..setUint32(0, payload.length - 4)).buffer.asUint8List())
+    ..add(payload);
+  var crc = 0xffffffff;
+  for (final byte in payload) {
+    crc ^= byte;
+    for (var bit = 0; bit < 8; bit++) {
+      crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xedb88320 : crc >> 1;
+    }
+  }
+  chunk.add((ByteData(4)..setUint32(0, crc ^ 0xffffffff)).buffer.asUint8List());
+  return Uint8List.fromList([
+    ...png.sublist(0, png.length - 12),
+    ...chunk.toBytes(),
+    ...png.sublist(png.length - 12)
+  ]);
 }

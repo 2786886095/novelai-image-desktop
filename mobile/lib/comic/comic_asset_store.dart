@@ -23,12 +23,17 @@ class ComicAssetStore {
                 'comic-assets'))),
         share = share ??
             ((file) async {
-              await Share.shareXFiles([
+              final result = await Share.shareXFiles([
                 XFile(file.path,
                     mimeType: file.path.endsWith('.zip')
                         ? 'application/zip'
                         : 'application/json')
               ]);
+              // Closing the sheet (or an unknown platform result) is not a
+              // confirmed destination selection. Keep the verified file below.
+              if (result.status != ShareResultStatus.success) {
+                throw StateError('系统分享未确认完成');
+              }
             });
 
   Future<Uint8List> _image(String filename) async {
@@ -172,7 +177,7 @@ class ComicAssetStore {
       await share(file);
       receipt['shared'] = true;
     } catch (_) {
-      receipt['shareError'] = '图片包已保存，系统分享未完成';
+      receipt['shareError'] = '导出文件已保存，系统分享未确认完成';
     }
     return receipt;
   }

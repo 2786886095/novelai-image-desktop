@@ -117,7 +117,7 @@ void main() {
     for (final kind in ['scopedReverse', 'convert']) {
       for (final mode in [ReversePromptMode.tags, ReversePromptMode.natural]) {
         final template = library.get(kind, mode);
-        expect(template, contains('NovelAI V5'));
+        expect(template, matches(RegExp(r'NovelAI (?:Diffusion )?V5')));
         expect(template.length, inInclusiveRange(1000, 12000));
         expect(template, contains('fur dataset'));
         expect(template, contains('background dataset'));
@@ -142,12 +142,12 @@ void main() {
         expect(template, contains('source#giving/target#giving'));
         expect(template, isNot(contains('source#handing item')));
         expect(template, contains('交接中的道具不算共享道具'));
-        expect(template, contains('属于关键互动'));
+        expect(template, matches(RegExp(r'(?:属于)?关键互动')));
       }
       final natural = library.get(kind, ReversePromptMode.natural);
       expect(natural, contains('text, <language> text'));
       expect(natural, contains('不复述文字内容'));
-      expect(natural, isNot(contains('reads OPEN')));
+      expect(natural, contains('渲染文字保持原文和载体'));
       for (final mode in [ReversePromptMode.tags, ReversePromptMode.natural]) {
         final template = library.get(kind, mode);
         expect(template, isNot(contains('base 最末、第一个 | 之前')));
@@ -158,11 +158,11 @@ void main() {
     }
     expect(
       library.get('scopedReverse', ReversePromptMode.tags),
-      contains('本模式允许省略且不得混入自然语言'),
+      contains('没有可靠 Tag 时保留最短准确词组'),
     );
     expect(
       library.get('convert', ReversePromptMode.tags),
-      contains('空间关系优先由角色段顺序表达'),
+      contains('动作、空间、哪只手、注视目标及光源关系'),
     );
     expect(
       library.get('convert', ReversePromptMode.tags),

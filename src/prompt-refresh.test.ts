@@ -13,7 +13,7 @@ it('incorporates both supplied mixed templates and the fact-first exception',()=
  for(const [label,templates] of [['reverse',REVERSE_SYSTEM_PROMPTS],['convert',CONVERT_SYSTEM_PROMPTS]] as const){
  const input=sources[label];
  expect(templates.mixed).toBe(input);expect(templates.mixed).toMatch(/不虚构|不编|禁止/);
- expect(templates.tags).toContain('纯 Tag');expect(templates.natural).toContain('不套用 50–150');
+ expect(templates.tags).toContain('纯 Tag');expect(templates.natural).toContain('不要求 Tag 数量、逗号单元总数或混合比例');
  }
 });
 it('runtime and repair use the new V5 ratio without changing V4.5 ratio',()=>{

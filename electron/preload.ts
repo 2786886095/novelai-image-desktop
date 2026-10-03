@@ -394,6 +394,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("settings:getReverseDefaults"),
   listAiModels: (kind: "reverse" | "convert" | "translate") =>
     ipcRenderer.invoke("nai:listModels", kind),
+  listMcpTools: () => ipcRenderer.invoke("nai:listMcpTools"),
   testTagServer: (query: string) =>
     ipcRenderer.invoke("nai:testTagServer", query),
   suggestTags: (model: string, prompt: string) =>

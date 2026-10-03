@@ -1,0 +1,31 @@
+import fs from 'node:fs';import path from 'node:path';import {it,expect,vi,beforeAll,afterAll} from 'vitest';
+const fixture=vi.hoisted(()=>({fail:false,dir:''}));
+vi.mock('electron',()=>({dialog:{},app:{},shell:{}}));
+vi.mock('./agent-workspace-location',()=>({agentWorkspaceDirectory:()=>fixture.dir,rebaseAgentWorkspaceFile:()=>{}}));
+vi.mock('./local-media-protocol',()=>({toLocalMediaUrl:(s:string)=>s}));
+vi.mock('./store',()=>({getSettings:()=>({agentContextWindow:128000,agentAutoCompactThreshold:.88,outputDir:fixture.dir}),getHistoryReferenceItems:()=>[],fileExistsWithDirectoryCache:()=>false,rotateBackupsSync:()=>{},readWithBackupRecoverySync:()=>undefined,atomicWriteFileSync:(p:string,s:string)=>{if(fixture.fail)throw Error('fixture disk failure');fs.writeFileSync(p,s)}}));
+import {createEmptyAgentWorkspace,writeAgentWorkspace,readAgentWorkspace,setStudioConversationOptions,updateAgentConversation,setAgentConversationArchived} from './agent-store';
+function reset(){fixture.fail=false;const ws=createEmptyAgentWorkspace();const base=ws.conversations[0];ws.conversations=[{...structuredClone(base),id:'recent',updatedAt:'2026-10-02T00:00:00.000Z',status:'idle'},{...structuredClone(base),id:'older',updatedAt:'2026-10-01T00:00:00.000Z',status:'idle'}];ws.selectedConversationId='older';return writeAgentWorkspace(ws)}
+it('actual desktop store preferences preserve activity timestamps and order',()=>{reset();for(const patch of [{studioWebSearchEnabled:true},{studioTemplateEnabled:false},{studioPresetId:'studio-complete'}]){const before=readAgentWorkspace();const result=setStudioConversationOptions('older',patch);console.log('DESKTOP_PREFERENCE',JSON.stringify({patch,before:before.conversations.map(c=>[c.id,c.updatedAt]),after:result.workspace.conversations.map(c=>[c.id,c.updatedAt])}));expect(result.ok).toBe(true);expect(result.workspace.conversations.map(c=>[c.id,c.updatedAt])).toEqual(before.conversations.map(c=>[c.id,c.updatedAt]));}});
+it('actual store write failure rolls back, archive/running locks stay, message updates remain activity',()=>{reset();const before=readAgentWorkspace();fixture.fail=true;expect(()=>setStudioConversationOptions('older',{studioWebSearchEnabled:true})).toThrow('fixture disk failure');fixture.fail=false;expect(readAgentWorkspace()).toEqual(before);const w=readAgentWorkspace();w.conversations.find(c=>c.id==='older')!.status='running';writeAgentWorkspace(w);console.log('PREEXISTING_STORE_STATUS_NORMALIZATION',readAgentWorkspace().conversations.find(c=>c.id==='older')!.status);w.conversations.find(c=>c.id==='older')!.status='idle';w.conversations.find(c=>c.id==='older')!.archivedAt='2026-10-01';writeAgentWorkspace(w);expect(setStudioConversationOptions('older',{studioWebSearchEnabled:true}).ok).toBe(false);reset();updateAgentConversation('older',chat=>{chat.messages.push({id:'fixture',role:'user',content:'Activity',attachments:[],tools:[],status:'complete',createdAt:'2026-10-03'})});expect(readAgentWorkspace().conversations[0].id).toBe('older');expect(readAgentWorkspace().conversations[0].updatedAt).not.toBe('2026-10-01T00:00:00.000Z');});
+import {mergeAgentWorkspaces} from '../../src/agent/merge';
+import ts from 'typescript';
+it('real preference result survives renderer callback at equal activity time; import merge keeps conflicts',()=>{
+ reset();updateAgentConversation('older',chat=>{chat.messages.push({id:'retained',role:'user',content:'Retained message',attachments:[],tools:[],status:'complete',createdAt:'2026-10-03'});chat.draftAttachments=[];});
+ const seeded=readAgentWorkspace();seeded.conversations.find(c=>c.id==='older')!.updatedAt='2026-10-01T00:00:00.000Z';writeAgentWorkspace(seeded);
+ const before=readAgentWorkspace();const old=before.conversations.find(c=>c.id==='older')!;
+ const result=setStudioConversationOptions('older',{studioWebSearchEnabled:!old.studioWebSearchEnabled});expect(result.ok).toBe(true);
+ const after=result.workspace.conversations.find(c=>c.id==='older')!;
+ expect(after.updatedAt).toBe(old.updatedAt);expect(after.messages).toEqual(old.messages);expect(after.draftAttachments).toEqual(old.draftAttachments);
+ const source=fs.readFileSync(path.resolve('src/PiAgentPage.tsx'),'utf8');const ast=ts.createSourceFile('page.tsx',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);let callback:ts.Node|undefined;
+ function visit(n:ts.Node){if(ts.isVariableDeclaration(n)&&n.name.getText(ast)==='updateWorkspace'&&n.initializer&&ts.isCallExpression(n.initializer))callback=n.initializer.arguments[0];ts.forEachChild(n,visit)}visit(ast);expect(callback).toBeDefined();
+ const js=ts.transpileModule('const extracted='+callback!.getText(ast)+';', {compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+ let rendered=before;const latestWorkspace={current:before};const composerDraft='Unsaved composer draft';
+ const apply=new Function('latestWorkspace','setWorkspace',js+'return extracted;')(latestWorkspace,(v:typeof before)=>{rendered=v});
+ apply(result.workspace);expect(rendered).toBe(result.workspace);expect(latestWorkspace.current).toBe(result.workspace);expect(rendered.conversations.find(c=>c.id==='older')!.studioWebSearchEnabled).toBe(after.studioWebSearchEnabled);expect(composerDraft).toBe('Unsaved composer draft');
+ const merged=mergeAgentWorkspaces(before,result.workspace);expect(merged.workspace.conversations.find(c=>c.id==='older')).toEqual(old);const imported=merged.workspace.conversations.find(c=>!before.conversations.some(b=>b.id===c.id))!;expect(imported.studioWebSearchEnabled).toBe(after.studioWebSearchEnabled);expect(imported.messages).toEqual(old.messages);expect(imported.draftAttachments).toEqual(old.draftAttachments);
+ console.log('EQUAL_UPDATED_AT_REFRESH',JSON.stringify({before:old.updatedAt,after:after.updatedAt,applied:rendered===result.workspace,messages:after.messages,draftAttachments:after.draftAttachments,composerDraft,callback:callback!.getText(ast),imported:merged.imported,mergeSemantics:'conflict-copy not refresh',scope:'actual store + actual AST-extracted renderer callback, not mounted whole page'}));
+});
+
+beforeAll(()=>{fixture.dir=fs.mkdtempSync(path.join(require("node:os").tmpdir(),"agent-options-regression-"));});
+afterAll(()=>{if(fixture.dir)fs.rmSync(fixture.dir,{recursive:true,force:true});});

@@ -102,9 +102,9 @@ void main() {
             throwsStateError);
       }, createHttpClient: (_) => native);
       expect(native.routes.single, enabled ? 'PROXY 127.0.0.1:5678' : 'DIRECT');
-      expect(native.opened.single.host, 'api.novelai.net');
+      expect(native.opened.single.host, 'image.novelai.net');
     }
-    expect(queries, ['https://api.novelai.net/user/login']);
+    expect(queries, ['https://image.novelai.net/user/login']);
   });
   test('read-only account refresh already follows the real nai proxy factory',
       () async {

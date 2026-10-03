@@ -22,6 +22,27 @@ it('file dialog updates the same canvas and clearing input removes its preview',
  await useAppStore.getState().loadWorkbenchImage();expect(resolveCanvasImage(useAppStore.getState())).toBe(next);
  await useAppStore.getState().clearWorkbenchImage();expect(resolveCanvasImage(useAppStore.getState())).toBeNull();
 });
+it.each(['picker','path'] as const)('loading a %s image does not silently replace current generation parameters',async(source)=>{
+ const next=image('metadata-input');
+ const metadata={imported:{positivePrompt:'embedded prompt',seed:20261002,steps:28,cfgScale:6,width:832,height:1216},characterCaptions:[]};
+ const reply={ok:true,image:next,metadata};
+ vi.stubGlobal('window',{naiDesktop:{loadImage:vi.fn().mockResolvedValue(reply),loadImageFromPath:vi.fn().mockResolvedValue(reply)}});
+ const params={...useAppStore.getState().params,positivePrompt:'keep my prompt',seed:1234,steps:20,cfgScale:5,width:1024,height:1024};
+ useAppStore.setState({activeTab:'generate',params,inpaintMask:'old mask',inpaintRegion:{x:0,y:0,width:16,height:16}});
+ if(source==='picker')await useAppStore.getState().loadWorkbenchImage();
+ else await useAppStore.getState().loadWorkbenchFromPath(next.filePath);
+ expect(useAppStore.getState().params).toEqual(params);
+ expect(resolveCanvasImage(useAppStore.getState())).toBe(next);
+ expect(useAppStore.getState().inpaintMask).toBeNull();
+ expect(useAppStore.getState().inpaintRegion).toBeNull();
+});
+it('restores embedded generation parameters only when explicitly requested',async()=>{
+ const imported={positivePrompt:'embedded prompt',seed:20261002,steps:28,cfgScale:6,width:832,height:1216};
+ vi.stubGlobal('window',{naiDesktop:{loadImageFromPath:vi.fn().mockResolvedValue({ok:true,image:image('explicit'),metadata:{imported,characterCaptions:[]}})}});
+ useAppStore.setState({activeTab:'generate'});
+ await useAppStore.getState().loadWorkbenchFromPath('explicit.png',{restoreMetadata:true});
+ expect(useAppStore.getState().params).toMatchObject(imported);
+});
 it('a delayed older paste cannot overwrite the latest image or canvas',async()=>{
  let done!:(v:any)=>void;const pending=new Promise(r=>{done=r;});const newer=image('newer');
  vi.stubGlobal('window',{naiDesktop:{loadImageFromPath:vi.fn().mockReturnValueOnce(pending).mockResolvedValueOnce({ok:true,image:newer})}});

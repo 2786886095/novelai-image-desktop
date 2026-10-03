@@ -18,6 +18,10 @@ const API = {
 export function studioPiFetch(settings: AppSettings): typeof fetch {
   return async (input, init) => {
     const request = new Request(input, init);
+    // Keep the caller's signal: Request's dependent signal can lose its parent
+    // after the temporary Request is collected while the response is streaming.
+    const signal = init?.signal !== undefined ? init.signal ?? undefined
+      : input instanceof Request ? input.signal : undefined;
     if (!settings.agentApiKey.trim() && !agentProviderRequiresApiKey(settings.agentApiProtocol, settings.agentApiBaseUrl)) request.headers.delete('authorization');
     const body = request.body ? Readable.fromWeb(request.body as import('node:stream/web').ReadableStream) : undefined;
     const response = await axios.request<Readable>({
@@ -26,7 +30,7 @@ export function studioPiFetch(settings: AppSettings): typeof fetch {
       data: body,
       headers: Object.fromEntries(request.headers.entries()),
       responseType: 'stream',
-      signal: request.signal,
+      signal,
       timeout: 10 * 60 * 1000,
       maxBodyLength: 64 * 1024 * 1024,
       maxContentLength: 64 * 1024 * 1024,

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../i18n/runtime_text.dart';
+import '../i18n/app_locales.dart';
 import '../state/app_state.dart';
 
 Future<void> showGalleryImagePreview(BuildContext context,
@@ -265,7 +266,7 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer> {
                       widget.actionsBuilder!(context, index),
                     IconButton.filledTonal(
                         tooltip:
-                            runtimeTextFor(widget.language, 'common.close'),
+                            mobileUiTextFor(widget.language, 'common.close'),
                         onPressed: () => Navigator.pop(context),
                         icon: const Icon(Icons.close))
                   ]))),

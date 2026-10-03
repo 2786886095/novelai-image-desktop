@@ -1,8 +1,13 @@
+import 'studio_question_cards.dart';
+import 'studio_resources.dart';
+import '../agent/studio_options.dart';
+import '../agent/tavern_builtins.dart';
 import '../agent/studio_composer_actions.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:provider/provider.dart';
@@ -10,8 +15,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../agent/agent_controller.dart';
 import '../agent/agent_models.dart';
 import '../agent/agent_provider_catalog.dart';
-import '../ui/studio_dropdown.dart';
 import '../models/nai_models.dart';
+import '../ui/studio_dropdown.dart';
+import '../ui/zoomable_image.dart';
 import '../i18n/studio_agent_text.dart';
 import '../state/app_state.dart';
 import 'studio_agent_components.dart';
@@ -59,6 +65,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
   bool _restoringScroll = false;
   String? _chatId, _loadError;
   bool _followLatest = true, _answering = false;
+  ScrollDirection _userScrollDirection = ScrollDirection.idle;
   String get _language => context.read<AppState>().settings.language;
   String _t(String key, {String? name}) =>
       studioAgentText(_language, key, name: name);
@@ -95,11 +102,33 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
     if (mounted) setState(() {});
   }
 
+  void _pinLatest() {
+    if (!mounted || !_followLatest || !_scroll.hasClients) return;
+    _restoringScroll = true;
+    _scroll.jumpTo(_scroll.position.maxScrollExtent);
+    _restoringScroll = false;
+  }
+
   void _onScroll() {
     if (!_scroll.hasClients || _restoringScroll) return;
-    final following = _scroll.position.maxScrollExtent - _scroll.offset <= 100;
+    if (_chatId != null) _readingPositions[_chatId!] = _scroll.offset;
+  }
+
+  bool _userScrolled(UserScrollNotification notification) {
+    if (notification.depth != 0 || _restoringScroll) return false;
+    if (notification.direction != ScrollDirection.idle) {
+      _userScrollDirection = notification.direction;
+    }
+    // Idle near the bottom is not permission to undo an upward wheel/drag.
+    final atBottom = notification.metrics.maxScrollExtent -
+            notification.metrics.pixels <=
+        1;
+    final following = notification.direction == ScrollDirection.idle &&
+        atBottom &&
+        (_followLatest ||
+            _userScrollDirection == ScrollDirection.reverse ||
+            notification.metrics.maxScrollExtent <= 0);
     if (_chatId != null) {
-      _readingPositions[_chatId!] = _scroll.offset;
       if (following) {
         _readingAway.remove(_chatId);
       } else {
@@ -109,6 +138,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
     if (following != _followLatest && mounted) {
       setState(() => _followLatest = following);
     }
+    return false;
   }
 
   void _changed() {
@@ -122,6 +152,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
       }
       _restoringScroll = true;
       _chatId = id;
+      _userScrollDirection = ScrollDirection.idle;
       _input.text =
           _drafts[id] ?? _agent?.selectedConversation?.draftText ?? '';
       _followLatest = !_readingAway.contains(id);
@@ -133,7 +164,12 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
           final target = _followLatest
               ? _scroll.position.maxScrollExtent
               : (_readingPositions[id] ?? 0);
-          _scroll.jumpTo(target.clamp(0.0, _scroll.position.maxScrollExtent));
+          // A lazy ListView can briefly underestimate extent during restoration.
+          _scroll.jumpTo(target.clamp(
+              0.0,
+              _followLatest
+                  ? _scroll.position.maxScrollExtent
+                  : double.infinity));
           _restoringScroll = false;
         }
       });
@@ -180,9 +216,12 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                           ? 'presetTemplate'
                           : 'menuApplyTemplate');
               final body = ['convert', 'reverse'].contains(kind)
-                  ? app.promptOverrides(kind, templateVersion: version)[mode] ??
-                      ''
-                  : _agent!.workspace.agentTemplates[kind] ?? '';
+                  ? app.resolvedPromptTemplate(kind,
+                      ReversePromptMode.values.byName(mode),
+                      templateVersion: version)
+                  : kind == 'optimize'
+                      ? app.settings.promptOptimizeTemplate
+                      : app.settings.promptAssistantTemplate;
               return Padding(
                   padding: EdgeInsets.only(
                       bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
@@ -695,6 +734,31 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
       }
       return;
     }
+    if (action == 'delete') {
+      final accepted = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+                  title: Text(_t('deleteChat')),
+                  content: Text(chat.title),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: Text(_t('cancel'))),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: Text(_t('deleteChat')))
+                  ]));
+      if (accepted == true && mounted) {
+        try {
+          await _agent!.deleteConversation(chat.id);
+        } catch (_) {
+          if (mounted)
+            ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(_t('deleteChat') + '：未完成，请重试。')));
+        }
+      }
+      return;
+    }
     final name = TextEditingController(text: chat.title);
     final chatRoute = DialogRoute<bool>(
         context: context,
@@ -730,23 +794,12 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
       onConfigure: _configure,
       close: close);
   Future<void> _preview(AgentAttachment image) async {
-    await showDialog<void>(
-        context: context,
-        builder: (context) => Dialog.fullscreen(
-            child: Scaffold(
-                appBar: AppBar(
-                    title: Text(_t('preview')),
-                    leading: IconButton(
-                        tooltip: _t('close'),
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context))),
-                body: Center(
-                    child: InteractiveViewer(
-                        minScale: .5,
-                        maxScale: 5,
-                        child: Image.file(File(image.filePath),
-                            errorBuilder: (_, __, ___) =>
-                                Text(_t('missingImage'))))))));
+    await showGalleryImagePreview(context, images: [
+      Image.file(File(image.filePath),
+          errorBuilder: (_, __, ___) => Text(_t('missingImage')))
+    ], captions: [
+      image.name
+    ]);
   }
 
   Widget? _webSources(AgentToolExecution tool) {
@@ -1058,6 +1111,14 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
           ((constraints.maxHeight - (compact ? 100 : 140)) * .44)
               .clamp(120.0, 320.0);
       return Column(children: [
+        if (wide)
+          Align(
+              alignment: Alignment.centerRight,
+              child: Builder(
+                  builder: (ctx) => IconButton(
+                      tooltip: _t('expandResources'),
+                      icon: const Icon(Icons.menu_book_outlined),
+                      onPressed: () => Scaffold.of(ctx).openEndDrawer()))),
         if (archived)
           Material(
               color: color.surfaceContainerLow,
@@ -1097,34 +1158,57 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
               ])),
         Expanded(
             child: Stack(children: [
-          ListView(
-              controller: _scroll,
-              padding: const EdgeInsets.all(16),
-              children: [
-                if (chat.messages.isEmpty) _empty(),
-                for (final message
-                    in chat.messages.where((m) => m.role != 'system'))
-                  _message(message),
-                if (agent.sending && agent.pendingPermission == null)
-                  Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Row(children: [
-                        const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2)),
-                        const SizedBox(width: 12),
-                        Expanded(child: Text(_t('workingBody')))
-                      ]))
-              ]),
+          NotificationListener<UserScrollNotification>(
+              onNotification: _userScrolled,
+              child: NotificationListener<ScrollMetricsNotification>(
+                  onNotification: (n) {
+                    if (_followLatest)
+                      WidgetsBinding.instance
+                          .addPostFrameCallback((_) => _pinLatest());
+                    return false;
+                  },
+                  child: ListView(
+                      controller: _scroll,
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        if (chat.messages.isEmpty) _empty(),
+                        for (final message
+                            in chat.messages.where((m) => m.role != 'system'))
+                          _message(message),
+                        if (agent.pendingQuestion case final request?)
+                          StudioQuestionCards(
+                              key: ValueKey(request.id),
+                              request: request,
+                              language: _language,
+                              onRespond: agent.respondQuestion),
+                        if (agent.sending &&
+                            agent.pendingPermission == null &&
+                            agent.pendingQuestion == null)
+                          Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Row(children: [
+                                const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2)),
+                                const SizedBox(width: 12),
+                                Expanded(child: Text(_t('workingBody')))
+                              ]))
+                      ]))),
           if (!_followLatest)
             Positioned(
                 right: 12,
                 bottom: 8,
                 child: FilledButton.tonalIcon(
                     onPressed: () {
-                      setState(() => _followLatest = true);
-                      _scroll.jumpTo(_scroll.position.maxScrollExtent);
+                      setState(() {
+                        _followLatest = true;
+                        _userScrollDirection = ScrollDirection.idle;
+                        _readingAway.remove(_chatId);
+                      });
+                      WidgetsBinding.instance
+                          .addPostFrameCallback((_) => _pinLatest());
                     },
                     icon: const Icon(Icons.arrow_downward, size: 16),
                     label: Text(_t('latest'))))
@@ -1165,12 +1249,13 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                           padding: const EdgeInsets.only(right: 8),
                           child: InputChip(
                               avatar: file.kind == 'image'
-                                  ? GestureDetector(
-                                      onTap: () => _preview(file),
-                                      child: Image.file(File(file.filePath),
-                                          errorBuilder: (_, __, ___) =>
-                                              const Icon(Icons.image_outlined)))
+                                  ? Image.file(File(file.filePath),
+                                      errorBuilder: (_, __, ___) =>
+                                          const Icon(Icons.image_outlined))
                                   : const Icon(Icons.attachment),
+                              onPressed: file.kind == 'image'
+                                  ? () => _preview(file)
+                                  : null,
                               label: ConstrainedBox(
                                   constraints:
                                       const BoxConstraints(maxWidth: 160),
@@ -1180,6 +1265,92 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                   ? null
                                   : () => agent.removeDraftAttachment(file.id)))
                   ])),
+        SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              for (final mode in ['confirm', 'auto'])
+                MergeSemantics(
+                    child: Semantics(
+                        label: _t(mode == 'auto' ? 'autoMode' : 'confirmMode'),
+                        selected: chat.studioApprovalMode == mode,
+                        child: TextButton.icon(
+                            onPressed: agent.sending || archived || agent.studioOptionsSaving
+                                ? null
+                                : () =>
+                                    agent.setStudioOptions(approvalMode: mode),
+                            icon: Icon(mode == 'auto' ? Icons.bolt : Icons.verified_user_outlined,
+                                size: 16),
+                            label: ExcludeSemantics(
+                                child: Text(_t(mode == 'auto'
+                                    ? 'autoMode'
+                                    : 'confirmMode'))),
+                            style: TextButton.styleFrom(
+                                backgroundColor: chat.studioApprovalMode == mode
+                                    ? color.primaryContainer
+                                    : null)))),
+              MergeSemantics(
+                  child: Semantics(
+                      label: _t('webQuery'),
+                      toggled: chat.studioWebSearchEnabled,
+                      child: TextButton.icon(
+                          onPressed: agent.sending ||
+                                  archived ||
+                                  agent.studioOptionsSaving
+                              ? null
+                              : () => agent.setStudioOptions(
+                                  webSearchEnabled:
+                                      !chat.studioWebSearchEnabled),
+                          icon: const Icon(Icons.search, size: 16),
+                          label: ExcludeSemantics(child: Text(_t('webQuery'))),
+                          style: TextButton.styleFrom(
+                              backgroundColor: chat.studioWebSearchEnabled
+                                  ? color.primaryContainer
+                                  : null)))),
+              MergeSemantics(
+                  child: Semantics(
+                      label: _t('presetToggle'),
+                      toggled: chat.studioTemplateEnabled,
+                      child: TextButton.icon(
+                          onPressed: agent.sending ||
+                                  archived ||
+                                  agent.studioOptionsSaving
+                              ? null
+                              : () => agent.setStudioOptions(
+                                  templateEnabled: !chat.studioTemplateEnabled),
+                          icon:
+                              const Icon(Icons.description_outlined, size: 16),
+                          label:
+                              ExcludeSemantics(child: Text(_t('presetToggle'))),
+                          style: TextButton.styleFrom(
+                              backgroundColor: chat.studioTemplateEnabled
+                                  ? color.primaryContainer
+                                  : null)))),
+              PopupMenuButton<String>(
+                  key: const ValueKey('agent-preset-selector'),
+                  tooltip: _t('presetToggle'),
+                  enabled:
+                      !agent.sending && !archived && !agent.studioOptionsSaving,
+                  onSelected: (id) => agent.setStudioOptions(presetId: id),
+                  itemBuilder: (_) => [
+                        for (final id in [
+                          studioDefaultPresetId,
+                          studioCompletePresetId
+                        ])
+                          CheckedPopupMenuItem(
+                              value: id,
+                              checked: chat.studioPresetId == id,
+                              child: Text(_t(id == studioDefaultPresetId
+                                  ? 'presetInfinite'
+                                  : 'presetComplete'))),
+                        for (final preset in agent.workspace.samplerPresets
+                            .where((p) => p.id != lyraImageSamplerId))
+                          CheckedPopupMenuItem(
+                              value: 'tavern:${preset.id}',
+                              checked:
+                                  chat.studioPresetId == 'tavern:${preset.id}',
+                              child: Text(preset.name))
+                      ])
+            ])),
         SafeArea(
             top: false,
             child: Padding(
@@ -1341,6 +1512,8 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
       ]);
     });
     return Scaffold(
+        endDrawer:
+            Drawer(child: StudioResources(agent: agent, language: _language)),
         drawer: wide
             ? null
             : Drawer(
@@ -1361,7 +1534,15 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w500))),
+                        fontSize: 14, fontWeight: FontWeight.w500)),
+                actions: [
+                    Builder(
+                        builder: (ctx) => IconButton(
+                            tooltip: _t('expandResources'),
+                            icon:
+                                const Icon(Icons.menu_book_outlined, size: 20),
+                            onPressed: () => Scaffold.of(ctx).openEndDrawer()))
+                  ]),
         body: wide
             ? Row(children: [
                 SizedBox(width: 228, child: _chatList()),
@@ -1515,7 +1696,11 @@ class _StudioChatListState extends State<_StudioChatList> {
                                           : Icons.unarchive_outlined,
                                       t(chat.archivedAt == null
                                           ? 'archiveChat'
-                                          : 'restoreChat')))
+                                          : 'restoreChat'))),
+                              PopupMenuItem(
+                                  value: 'delete',
+                                  child: _agentMenuLabel(
+                                      Icons.delete_outline, t('deleteChat')))
                             ]))
             ]))
           ])));

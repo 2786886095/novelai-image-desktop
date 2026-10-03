@@ -393,7 +393,7 @@ class ComicController extends ChangeNotifier {
               snapshot, () => assertRevision(expected));
       lastExport = receipt;
       if (receipt['shared'] != true) {
-        throw StateError('文件已保存，系统分享未完成：${receipt['filePath']}');
+        throw StateError('文件已保存，系统分享未确认完成：${receipt['filePath']}');
       }
       statusKey = zip ? 'comic.zipShared' : 'comic.jsonShared';
       statusDetail = '';

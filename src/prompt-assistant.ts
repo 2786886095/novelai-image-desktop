@@ -5,6 +5,12 @@ import {PROMPT_OPTIMIZE_TEMPLATE, PROMPT_CUSTOM_TEMPLATE} from './data/prompt-ed
 export const PROMPT_ASSISTANT_POLICY = PROMPT_OPTIMIZE_TEMPLATE;
 type EditingTemplates = {promptOptimizeTemplate?:string;promptAssistantTemplate?:string};
 
+export function resolvePromptAssistantMode(settings?: {promptAssistantMode?:unknown;convertMode?:unknown}|null):'tags'|'natural'|'mixed' {
+ const mode=settings?.promptAssistantMode;
+ return mode==='tags'||mode==='natural'||mode==='mixed'?mode:'mixed';
+}
+export function isSparsePromptEditSource(value:string){return value.trim().length<=120&&value.split(/[,，|]/).filter(part=>part.trim()).length<=3;}
+
 export function preparePromptAssistance(currentPrompt:string,request:PromptEditRequest,templates:EditingTemplates={}) {
  if (!request || !['optimize','custom'].includes(request.kind) || typeof request.instruction!=='string' || typeof currentPrompt!=='string') throw new Error('Invalid prompt assistant request');
  if(currentPrompt.length>24000||request.instruction.length>8000)throw new Error('Prompt or instruction is too long');
@@ -13,5 +19,5 @@ export function preparePromptAssistance(currentPrompt:string,request:PromptEditR
  if(!instruction)throw new Error('Enter your requested changes');
  const custom=request.kind==='optimize'?templates.promptOptimizeTemplate:templates.promptAssistantTemplate;
  const systemSuffix=custom?.trim() || (request.kind==='optimize'?PROMPT_OPTIMIZE_TEMPLATE:PROMPT_CUSTOM_TEMPLATE);
- return {systemSuffix,userText:JSON.stringify({task:request.kind,currentPrompt,instruction}),auditText:request.kind==='optimize'?currentPrompt:instruction};
+ return {systemSuffix,userText:JSON.stringify({task:request.kind,currentPrompt,instruction}),auditText:request.kind==='optimize'?currentPrompt:currentPrompt+'\n'+instruction};
 }

@@ -12,9 +12,11 @@ export function resolutionForTier(tier:number,ratio:string) {
   // Search the 64px lattice instead of independently rounding past the pixel cap.
   for(let width=64;width<=cap/64;width+=64) {
     const ideal=width/aspect;
-    for(const height of [Math.floor(ideal/64)*64,Math.ceil(ideal/64)*64]) {
+    for(const height of [Math.floor(ideal/64)*64,Math.ceil(ideal/64)*64,Math.floor(cap/width/64)*64,Math.floor(ideal*Math.exp(.079)/64)*64,Math.ceil(ideal*Math.exp(-.079)/64)*64]) {
       if(height<64||width*height>cap)continue;
-      const error=4*Math.abs(Math.log((width/height)/aspect))+Math.abs(Math.log(width*height/cap));
+      const ratioError=Math.abs(Math.log((width/height)/aspect));
+      const usable=width*height>=cap*.80&&ratioError<.08;
+      const error=(usable?0:100)+4*ratioError+Math.abs(Math.log(width*height/cap));
       if(error<score){score=error;best={width,height};}
     }
   }

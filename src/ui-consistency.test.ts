@@ -541,7 +541,7 @@ describe("desktop UI consistency guards", () => {
     expect(types).toContain('TranslateProvider = "google" | "baidu" | "ai"');
     expect(main).toContain('ipcMain.handle("nai:storedToken", () => getToken())');
     expect(preload).toContain('storedToken: () => ipcRenderer.invoke("nai:storedToken")');
-    expect(app).toContain("window.naiDesktop.storedToken().then(setToken)");
+    const accounts=fs.readFileSync('src/components/NaiAccountManager.tsx','utf8');expect(accounts).toContain('bridge()!.reveal(id)');expect(accounts).toContain('navigator.clipboard.writeText(value)');
     expect(app).toContain('<option value="ai">{t("settings.aiTranslate")}</option>');
     expect(app).toContain('detectModels("translate")');
     expect(app).toContain('update("translateAiModel", e.target.value)');
@@ -740,7 +740,7 @@ describe("desktop UI consistency guards", () => {
     // Save notifications require one semantic layer above fullscreen previews.
     expect(new Set(zValues)).toEqual(new Set([
       "base", "behind", "dropdown", "floating", "help", "overlay", "overlay-raised",
-      "overlay-top", "raised", "sticky", "notification",
+      "overlay-top", "raised", "sticky", "notification", "confirm",
     ].map(name => `var(--z-${name})`)));
     expect(zValues.every((value) => /^var\(--z-[\w-]+\)$/.test(value))).toBe(true);
     const breakpoints = new Set(

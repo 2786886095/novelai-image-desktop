@@ -216,8 +216,9 @@ class _ReversePanelState extends State<_ReversePanel> {
             onDelete: s.deleteReverseHistoryItem,
             onClear: s.clearReverseHistory,
             onUse: (text) {
+              if (text.trim().isEmpty) return;
               s.reverseResult = text;
-              s.markChanged();
+              s.applyPrompt(text);
             },
           ),
           const SizedBox(height: 8),
@@ -279,7 +280,7 @@ class _ConvertPanelState extends State<_ConvertPanel> {
             },
           ),
           const SizedBox(height: 12),
-          _ReverseTemplateVersionSelector(value:s.settings.convertPromptTemplateVersion,onChanged:(v)=>s.setSettings((x)=>x.convertPromptTemplateVersion=v)),
+          _ReverseTemplateVersionSelector(titleKey:'convert.templateVersionTitle',value:s.settings.convertPromptTemplateVersion,onChanged:(v)=>s.setSettings((x)=>x.convertPromptTemplateVersion=v)),
           const SizedBox(height:12),
           _ModeSelector(
               value: s.convertMode,
@@ -351,8 +352,9 @@ class _ConvertPanelState extends State<_ConvertPanel> {
             onDelete: s.deleteConvertHistoryItem,
             onClear: s.clearConvertHistory,
             onUse: (text) {
+              if (text.trim().isEmpty) return;
               s.convertResult = text;
-              s.markChanged();
+              s.applyPrompt(text);
             },
           ),
           const SizedBox(height: 8),
@@ -527,6 +529,34 @@ class _TextToolJobList extends StatelessWidget {
 // Persisted reverse/convert history. Kept collapsed by default via local
 // state (separate from the job list's store-backed collapse flag) since
 // browsing old results is secondary to watching active jobs.
+// Explicit semantics expose small history actions without duplicate announcements.
+class _TextToolHistoryAction extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final double size;
+  final VoidCallback? onPressed;
+  const _TextToolHistoryAction({
+    required this.label,
+    required this.icon,
+    this.size = 24,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: label,
+    button: true,
+    enabled: onPressed != null,
+    onTap: onPressed,
+    excludeSemantics: true,
+    child: IconButton(
+      icon: Icon(icon, size: size),
+      tooltip: label,
+      onPressed: onPressed,
+    ),
+  );
+}
+
 class _TextToolHistoryList extends StatefulWidget {
   final List<TextToolHistoryItem> items;
   final ValueChanged<String> onDelete;
@@ -590,9 +620,9 @@ class _TextToolHistoryListState extends State<_TextToolHistoryList> {
                   },
                   child: Text(t('textTool.historyClear')),
                 ),
-                IconButton(
-                  icon:
-                      Icon(_collapsed ? Icons.expand_more : Icons.expand_less),
+                _TextToolHistoryAction(
+                  label: t(_collapsed ? 'textTool.historyExpand' : 'textTool.historyCollapse'),
+                  icon: _collapsed ? Icons.expand_more : Icons.expand_less,
                   onPressed: () => setState(() => _collapsed = !_collapsed),
                 ),
               ],
@@ -627,8 +657,10 @@ class _TextToolHistoryListState extends State<_TextToolHistoryList> {
                           Icon(_expandedIds.contains(item.id)
                               ? Icons.expand_less
                               : Icons.expand_more),
-                          IconButton(
-                            icon: const Icon(Icons.close, size: 18),
+                          _TextToolHistoryAction(
+                            label: t('textTool.historyDelete'),
+                            icon: Icons.close,
+                            size: 18,
                             onPressed: () => widget.onDelete(item.id),
                           ),
                         ],
@@ -648,10 +680,13 @@ class _TextToolHistoryListState extends State<_TextToolHistoryList> {
                             ),
                           _ => Align(
                               alignment: Alignment.centerLeft,
-                              child: IconButton(
-                                icon: const Icon(Icons.send_outlined, size: 18),
-                                tooltip: t('inspect.reuseToGenerate'),
-                                onPressed: () => widget.onUse(item.result),
+                              child: _TextToolHistoryAction(
+                                label: t('inspect.reuseToGenerate'),
+                                icon: Icons.send_outlined,
+                                size: 18,
+                                onPressed: item.result.trim().isEmpty
+                                    ? null
+                                    : () => widget.onUse(item.result),
                               ),
                             ),
                         },
@@ -814,10 +849,12 @@ class _ModeSelector extends StatelessWidget {
 }
 
 class _ReverseTemplateVersionSelector extends StatelessWidget {
+  final String titleKey;
   final String value;
   final ValueChanged<String> onChanged;
 
   const _ReverseTemplateVersionSelector({
+    this.titleKey = 'inspect.templateVersionTitle',
     required this.value,
     required this.onChanged,
   });
@@ -835,7 +872,7 @@ class _ReverseTemplateVersionSelector extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              t('inspect.templateVersionTitle'),
+              t(titleKey),
               style: Theme.of(context).textTheme.titleSmall,
             ),
             const SizedBox(height: 8),

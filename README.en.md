@@ -1,6 +1,6 @@
 # Langbai NovelAI Studio
 
-> Candidate 2.4.6: workbench multi-account support (official token, official email/password, NovelAI-compatible relay) and the new bounded Studio Agent. Not published; iOS shared code is integrated but has not been built/signed on macOS. Local Android build uses a test signing key, not a guaranteed update over an existing release.
+> v2.4.7: Windows x64 installer and portable release. Shared Android/iOS features are synchronized in source; no new mobile binaries or physical-device/signing acceptance are included in this release.
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 

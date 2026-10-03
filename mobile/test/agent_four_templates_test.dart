@@ -24,6 +24,8 @@ class _Vault extends Storage {
 
 class _CaptureProvider extends AgentProviderClient {
   final requests = <List<Map<String, dynamic>>>[];
+  String kind = 'convert';
+  bool requestedRead = false;
   @override
   Future<AgentProviderTurn> complete({
     required AppSettings settings,
@@ -35,6 +37,16 @@ class _CaptureProvider extends AgentProviderClient {
     Map<String, dynamic>? generationConfig,
   }) async {
     requests.add(messages);
+    if (!requestedRead) {
+      requestedRead = true;
+      return AgentProviderTurn(usage: AgentTokenUsage(), toolCalls: [
+        AgentProviderToolCall(id: 'read-$kind', name: 'studio_prompt_template',
+            arguments: {'kind': kind,
+              if (kind == 'convert' || kind == 'reverse') ...{
+                'mode': 'mixed', 'templateVersion': 'v5'
+              }})
+      ]);
+    }
     return AgentProviderTurn(content: 'fixture answer', usage: AgentTokenUsage());
   }
 }
@@ -58,7 +70,7 @@ void main() {
     final tools = AgentTemplateTools(app);
     final workflow = AgentTemplateWorkflow(app,
         templates: tools,
-        agentBackup: () async => '/fixture/agent-workspace.backup');
+        backup: () async => '/fixture/configuration.backup');
     for (final kind in ['optimize', 'assistant']) {
       final before = await workflow.execute({'action': 'read', 'kind': kind});
       expect(before['source'], 'builtin');
@@ -69,42 +81,46 @@ void main() {
       });
       expect(saved['source'], 'custom');
       expect(saved['body'], 'saved $kind instruction');
-      expect(storage.saved.agentTemplates[kind], 'saved $kind instruction');
+      expect(kind == 'optimize' ? app.settings.promptOptimizeTemplate
+          : app.settings.promptAssistantTemplate, 'saved $kind instruction');
       final restored = await workflow.execute({
         'action': 'restore', 'kind': kind,
         'expectedRevision': saved['revision'],
       });
       expect(restored['source'], 'builtin');
-      expect(storage.saved.agentTemplates.containsKey(kind), false);
+      expect(kind == 'optimize' ? app.settings.promptOptimizeTemplate
+          : app.settings.promptAssistantTemplate, isEmpty);
     }
     app.dispose();
   });
 
-  test('selection injects the actual saved body for all four kinds', () async {
+  test('explicit template actions inject saved bodies for all four kinds', () async {
     final storage = _Vault();
     final app = AppState(storage: storage)
       ..settings = AppSettings(
         agentApiBaseUrl: 'https://example.invalid/v1',
         agentApiModel: 'fixture',
         convertPromptTemplates: {'mixed': 'saved convert body'},
-        reversePromptTemplates: {'mixed': 'saved reverse body'});
+        reversePromptTemplates: {'mixed': 'saved reverse body'},
+        promptOptimizeTemplate: 'saved optimize body',
+        promptAssistantTemplate: 'saved assistant body');
     final provider = _CaptureProvider();
+    await storage.setSettings(app.settings);
     final controller = AgentController(app: app, provider: provider)
       ..workspace = AgentWorkspace(
         conversations: [AgentConversation(id: 'chat', title: 'Fixture')],
-        selectedConversationId: 'chat',
-        agentTemplates: {
-          'optimize': 'saved optimize body',
-          'assistant': 'saved assistant body'
-        })
+        selectedConversationId: 'chat')
       ..loaded = true;
     for (final kind in ['convert', 'reverse', 'optimize', 'assistant']) {
+      provider..kind = kind..requestedRead = false;
       await controller.selectPromptTemplate(kind,
           mode: kind == 'convert' || kind == 'reverse' ? 'mixed' : null,
           version: kind == 'convert' || kind == 'reverse' ? 'v5' : null);
-      await controller.sendStudio('use selected template');
+      await controller.sendStudio('use selected template', actions: [
+        AgentComposerAction(kind == 'reverse' ? 'template-read' : 'template-apply',
+            templateKind: kind, mode: 'mixed', templateVersion: 'v5')
+      ]);
       expect(provider.requests.last
-          .where((message) => message['role'] == 'system')
           .map((message) => message['content'].toString())
           .join('\n'), contains('saved $kind body'));
     }

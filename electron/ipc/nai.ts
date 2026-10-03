@@ -2,7 +2,7 @@ import {prepareFocusedInpaintInput,compositeFocusedPatch} from './focused-inpain
 import {parseNaiAccountSummary} from './nai-account-summary';
 import {validateNaiAccountReadOnly,requireNaiAccountValidation} from './nai-accounts-validation';
 import { currentNaiAccount } from './nai-accounts-runtime';
-import {preparePromptAssistance,type PromptEditRequest} from "../../src/prompt-assistant.js";
+import {preparePromptAssistance,isSparsePromptEditSource,type PromptEditRequest} from "../../src/prompt-assistant.js";
 import {authorizeAgentBatchRequest} from './batch-run-authorization';
 import {currentBatchImageBinding,assertBatchImageBinding,prepareBatchImageService} from './batch-image-service';
 import {compatibleComicInput} from '../../src/comic/compatible-comic';
@@ -15,9 +15,10 @@ import {reverseTemplateProtocol} from "../../src/reverse-template";
 import { planUpscale } from "../../src/upscale-plan";
 import {matchingVibeEncoding, validateVibeModel} from "../../src/vibe-file";
 import {normalizeNovelAiEndpoint} from '../../src/nai-endpoint';
-import { processableImage } from "./image-codec";
+import { processableImage, validateImage, MAX_IMAGE_BYTES, isWebp } from "./image-codec";
 import { writeUniqueImageFile } from "./image-output";
 import { app, dialog, nativeImage } from "electron";
+import { Readable } from "node:stream";
 import axios from "axios";
 import FormData from "form-data";
 import JSZip from "jszip";
@@ -92,7 +93,8 @@ import {
   updateHistoryItem,
 } from "./store";
 import { TAG_DICTIONARY } from "../data/tag-dictionary";
-import { mcpSearch } from "./mcp-client";
+import { mcpSearch, mcpListTools } from "./mcp-client";
+import {configuredMcpTagTools} from "../../src/mcp-tools";
 import { searchDanbooru } from "./danbooru-tags";
 import { logError, logInfo, appendLog } from "./logger";
 import { zhForTag } from "../../src/prompt-data";
@@ -120,7 +122,7 @@ import {
   parsePromptVariantResponse,
   resolveModePrompt,
 } from "../../src/prompt-mode";
-import {auditMixedEnvelope,mixedTemplateContract,mixedEnvelopeInstruction,patchMixedEnvelope,normalizeMixedEnvelope} from '../../src/prompt-template-audit';
+import {cameraIntentSource,auditMixedEnvelope,mixedTemplateContract,mixedEnvelopeInstruction,patchMixedEnvelope,normalizeMixedEnvelope} from '../../src/prompt-template-audit';
 import { beginJob, cancelAllJobs } from "./job-registry";
 import { NaiSseFrameDecoder, NaiStreamFrameDecoder, type NaiStreamFrame } from "./nai-stream";
 
@@ -288,7 +290,7 @@ export async function verifyToken(token: string): Promise<TokenStatus> {
   if(currentNaiAccount()) return {valid:false,message:'请在账户管理中新增或验证所选账户；旧设置页不会覆盖该账户。'};
   const normalized = token.trim();
   if (!normalized) {
-    return { valid: false, message: "请输入 NovelAI Persistent API Token。" };
+    return { valid: false, message: "请输入 NovelAI API Token。" };
   }
 
   try {
@@ -1021,17 +1023,80 @@ export async function prepareExtras(
   return { ...extras, vibeImages: encoded, preciseReferences };
 }
 
+function nativeImageBytes(bytes: Buffer) {
+  return bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) ||
+    bytes.subarray(0, 3).equals(Buffer.from([255, 216, 255])) || isWebp(bytes);
+}
+
+async function validateNativeNaiImage(bytes: Buffer, signal?: AbortSignal) {
+  try {
+    signal?.throwIfAborted();
+    if (!nativeImageBytes(bytes)) throw new Error("Invalid image");
+    const meta = await validateImage(bytes);
+    if (!["png", "jpg", "webp"].includes(meta.extension)) throw new Error("Invalid image");
+    signal?.throwIfAborted();
+    // Keep original bytes and embedded metadata, not a re-encoded thumbnail.
+    return bytes;
+  } catch {
+    signal?.throwIfAborted();
+    throw new Error("服务未返回有效图片；为避免重复扣费，未自动重发请求。");
+  }
+}
+
 async function extractImages(
   zipBytes: ArrayBuffer | Buffer,
+  signal?: AbortSignal,
 ): Promise<Buffer[]> {
-  const zip = await JSZip.loadAsync(zipBytes);
-  const images: Buffer[] = [];
-  const files = Object.values(zip.files).filter((file) => !file.dir);
-  for (const file of files) {
-    const bytes = await file.async("nodebuffer");
-    if (bytes.length > 0) images.push(bytes);
+  const invalid = () => new Error("服务未返回有效图片；为避免重复扣费，未自动重发请求。");
+  try {
+    signal?.throwIfAborted();
+    const body = Buffer.isBuffer(zipBytes) ? zipBytes : Buffer.from(zipBytes);
+    if (!body.length || body.length > MAX_NAI_GENERATION_RESPONSE_BYTES) throw invalid();
+    if (nativeImageBytes(body)) return [await validateNativeNaiImage(body, signal)];
+    // JSON/HTML is not a native image response. Never guess a relay wrapper or
+    // fetch a URL from it using the selected account's credentials.
+    if (!body.subarray(0, 4).equals(Buffer.from([80, 75, 3, 4]))) throw invalid();
+    const zip = await JSZip.loadAsync(body);
+    const files = Object.values(zip.files).filter((file) => !file.dir);
+    if (files.length > 1024) throw invalid();
+    const images: Buffer[] = [];
+    let total = 0;
+    for (const file of files) {
+      signal?.throwIfAborted();
+      if (typeof file.unixPermissions === "number" && (file.unixPermissions & 0xf000) === 0xa000) throw invalid();
+      const chunks: Buffer[] = [];
+      let length = 0;
+      // JSZip uses readable-stream v2, which has no async iterator. Wrap its
+      // event source in Node's Readable while retaining chunked backpressure.
+      const source = file.nodeStream("nodebuffer");
+      const stream = new Readable().wrap(source);
+      const abort = () => stream.destroy(new Error("已取消"));
+      signal?.addEventListener("abort", abort, {once: true});
+      try {
+        // Bound actual inflated bytes, not an untrusted ZIP size declaration.
+        for await (const chunk of stream) {
+          signal?.throwIfAborted();
+          length += chunk.length;
+          total += chunk.length;
+          if (length > MAX_IMAGE_BYTES || total > MAX_NAI_GENERATION_RESPONSE_BYTES) throw invalid();
+          chunks.push(chunk);
+        }
+      } finally {
+        signal?.removeEventListener("abort", abort);
+        stream.destroy();
+        source.pause();
+      }
+      const bytes = Buffer.concat(chunks, length);
+      if (nativeImageBytes(bytes)) images.push(await validateNativeNaiImage(bytes, signal));
+      else if (/\.(png|jpe?g|webp)$/i.test(file.name)) throw invalid();
+    }
+    if (!images.length) throw invalid();
+    return images;
+  } catch {
+    signal?.throwIfAborted();
+    // Decoder/remote content is deliberately not echoed to the user.
+    throw invalid();
   }
-  return images;
 }
 
 function dateStamp(date = new Date()) {
@@ -2147,6 +2212,10 @@ export function buildGenerateImageHttpBody(
   return { body, bodyHeaders, useMultipart };
 }
 
+// Match the shared mobile final-response bound. This is a transport limit,
+// not a quota, and does not trigger another paid submission on overflow.
+const MAX_NAI_GENERATION_RESPONSE_BYTES = 128 * 1024 * 1024;
+
 async function postGenerateImage(
   payload: ReturnType<typeof buildPayload>,
   signal?: AbortSignal,
@@ -2177,7 +2246,7 @@ async function postGenerateImage(
           responseType: "arraybuffer",
           timeout: 180_000,
           maxBodyLength: Infinity,
-          maxContentLength: Infinity,
+          maxContentLength: MAX_NAI_GENERATION_RESPONSE_BYTES,
           signal,
           ...proxyConfig("nai"),
       maxRedirects: currentNaiAccount() ? 0 : undefined,
@@ -2219,7 +2288,7 @@ async function postGenerateImage(
       throw error;
     }
   }
-  return extractImages(res.data);
+  return extractImages(res.data, signal);
 }
 
 type GenerationPreviewCallback = (
@@ -2337,6 +2406,7 @@ export async function consumeGenerateImageStream(
   totalSteps: number,
   onPreview: GenerationPreviewCallback,
   contentType = "",
+  signal?: AbortSignal,
 ): Promise<Buffer[]> {
   const msgpackDecoder = new NaiStreamFrameDecoder();
   const sseDecoder = new NaiSseFrameDecoder();
@@ -2348,21 +2418,47 @@ export async function consumeGenerateImageStream(
   const zipChunks: Buffer[] = [];
   let previewStarted = false;
   let lastPreviewAt = 0;
+  let finalBytes = 0;
 
-  const consumeFrames = (frames: NaiStreamFrame[]) => {
+  const invalidFinal = () => Object.assign(
+    new Error("流式服务未返回有效图片；为避免重复扣费，未自动重发请求。"),
+    {naiStreamFrameError: true},
+  );
+  const complete = () => {
+    signal?.throwIfAborted();
+    const images = orderedFinalImages(finals);
+    for (const [sampleIndex, image] of [...finals.entries()].sort(([a], [b]) => a - b)) {
+      onPreview({progress: 1, currentStep: totalSteps, totalSteps,
+        sampleIndex, imageDataUrl: imageDataUrl(image)});
+    }
+    return images;
+  };
+  const consumeFrames = async (frames: NaiStreamFrame[]) => {
     for (const frame of frames) {
+      signal?.throwIfAborted();
       if (frame.error) {
         const frameError: Error & { naiStreamFrameError?: boolean } = new Error(frame.error);
         frameError.naiStreamFrameError = true;
         throw frameError;
       }
-      if (!frame.image?.length) continue;
+      if (!frame.image?.length) {
+        if (frame.eventType === "final") throw invalidFinal();
+        continue;
+      }
       previewStarted = true;
       const currentStep = (frame.stepIndex ?? 0) + 1;
       if (frame.eventType === "final") {
+        if (!Number.isSafeInteger(frame.sampleIndex) || frame.sampleIndex < 0) throw invalidFinal();
+        try { await validateNativeNaiImage(frame.image, signal); }
+        catch { signal?.throwIfAborted(); throw invalidFinal(); }
+        const bytes = finalBytes - (finals.get(frame.sampleIndex)?.length ?? 0) + frame.image.length;
+        if (bytes > MAX_NAI_GENERATION_RESPONSE_BYTES || (!finals.has(frame.sampleIndex) && finals.size >= 1024)) throw invalidFinal();
+        finalBytes = bytes;
         finals.set(frame.sampleIndex, frame.image);
+        // A valid sample may be previewed immediately, but 100% is only sent
+        // after the response has finished without an invalid sample/error.
         onPreview({
-          progress: 1,
+          progress: 0.99,
           currentStep: totalSteps,
           totalSteps,
           sampleIndex: frame.sampleIndex,
@@ -2371,6 +2467,8 @@ export async function consumeGenerateImageStream(
       } else {
         const now = Date.now();
         if (now - lastPreviewAt >= 110 || currentStep >= totalSteps) {
+          try { await validateNativeNaiImage(frame.image, signal); }
+          catch { signal?.throwIfAborted(); continue; }
           lastPreviewAt = now;
           onPreview({
             progress: Math.min(0.99, Math.max(0, currentStep / Math.max(1, totalSteps))),
@@ -2386,6 +2484,7 @@ export async function consumeGenerateImageStream(
 
   try {
     for await (const rawChunk of responseStream) {
+      signal?.throwIfAborted();
       const chunk = Buffer.from(rawChunk);
       if (mode === "unknown") {
         prefix = prefix.length ? Buffer.concat([prefix, chunk]) : chunk;
@@ -2400,8 +2499,8 @@ export async function consumeGenerateImageStream(
               ? "msgpack"
               : "sse";
         if (mode === "zip") zipChunks.push(prefix);
-        else if (mode === "sse") consumeFrames(sseDecoder.push(prefix));
-        else consumeFrames(msgpackDecoder.push(prefix));
+        else if (mode === "sse") await consumeFrames(sseDecoder.push(prefix));
+        else await consumeFrames(msgpackDecoder.push(prefix));
         prefix = Buffer.alloc(0);
         continue;
       }
@@ -2410,17 +2509,18 @@ export async function consumeGenerateImageStream(
         zipChunks.push(chunk);
         continue;
       }
-      if (mode === "sse") consumeFrames(sseDecoder.push(chunk));
-      else consumeFrames(msgpackDecoder.push(chunk));
+      if (mode === "sse") await consumeFrames(sseDecoder.push(chunk));
+      else await consumeFrames(msgpackDecoder.push(chunk));
     }
 
-    if (mode === "zip") return extractImages(Buffer.concat(zipChunks));
-    if (mode === "sse") consumeFrames(sseDecoder.finish());
+    if (mode === "zip") return extractImages(Buffer.concat(zipChunks), signal);
+    if (mode === "sse") await consumeFrames(sseDecoder.finish());
     if (finals.size === 0) {
       throw new Error("流式生成结束，但没有收到最终图片。为避免重复扣费，未自动重发请求。");
     }
-    return orderedFinalImages(finals);
+    return complete();
   } catch (error: any) {
+    signal?.throwIfAborted();
     if (isRecoverableCompletedStreamClose(error)) {
       // Some Node/Axios transports emit `aborted`/ECONNRESET after the server's
       // complete final frame has already been decoded. The generation is paid
@@ -2428,7 +2528,7 @@ export async function consumeGenerateImageStream(
       // failure and discarding the image.
       if (mode === "sse") {
         try {
-          consumeFrames(sseDecoder.finish());
+          await consumeFrames(sseDecoder.finish());
         } catch (frameError: any) {
           if (previewStarted) frameError.streamPreviewStarted = true;
           throw frameError;
@@ -2436,7 +2536,7 @@ export async function consumeGenerateImageStream(
       }
       if (mode === "zip" && zipChunks.length > 0) {
         try {
-          const images = await extractImages(Buffer.concat(zipChunks));
+          const images = await extractImages(Buffer.concat(zipChunks), signal);
           if (images.length > 0) {
             logInfo(`stream transport closed after complete ZIP; recovered ${images.length} image(s)`);
             return images;
@@ -2447,7 +2547,7 @@ export async function consumeGenerateImageStream(
       }
       if (finals.size > 0) {
         logInfo(`stream transport closed after final frame; recovered ${finals.size} image(s)`);
-        return orderedFinalImages(finals);
+        return complete();
       }
     }
     if (previewStarted) error.streamPreviewStarted = true;
@@ -2525,6 +2625,7 @@ async function postGenerateImageStream(
       Math.max(1, Number(payload.parameters?.steps) || 1),
       onPreview,
       String(response.headers?.["content-type"] ?? ""),
+      signal,
     ).catch((error: any) => {
       if (!error?.streamPreviewStarted && isStreamingNotAllowedMessage(error?.message)) return null;
       throw error;
@@ -2660,12 +2761,18 @@ function shouldDisableDeepSeekThinking(apiUrl: string, model: string): boolean {
   }
 }
 
+// Enable the documented transport guarantee only for the confirmed provider;
+// unknown compatible gateways retain their existing request format.
+export function supportsPromptJsonOutput(apiUrl:string){
+  try{return new URL(apiUrl).hostname.toLowerCase()==='api.deepseek.com';}catch{return false;}
+}
 async function callVisionApi(
   systemPrompt: string,
   userContent: Array<{ type: string; [k: string]: any }>,
   maxTokens = 800,
   label = "AI 反推",
   record = true,
+  jsonRequired = false,
 ): Promise<{ ok: boolean; content?: string; message: string }> {
   const settings = getSettings();
   const { visionApiUrl, visionApiKey, visionApiModel } = settings;
@@ -2683,6 +2790,7 @@ async function callVisionApi(
   const body = {
     model,
     max_tokens: maxTokens,
+    ...(jsonRequired && supportsPromptJsonOutput(base) ? {response_format:{type:'json_object'}} : {}),
     ...(shouldDisableDeepSeekThinking(base, model)
       ? { thinking: { type: "disabled" as const } }
       : {}),
@@ -2800,6 +2908,7 @@ async function callConvertApi(
   label = "提示词转换",
   record = true,
   retryEmpty = true,
+  jsonRequired = false,
 ): Promise<{ ok: boolean; content?: string; message: string }> {
   const settings = getSettings();
   const apiUrl = settings.convertApiUrl.trim();
@@ -2815,6 +2924,7 @@ async function callConvertApi(
   const body = {
     model,
     max_tokens: maxTokens,
+    ...(jsonRequired && supportsPromptJsonOutput(base) ? {response_format:{type:'json_object'}} : {}),
     ...(shouldDisableDeepSeekThinking(base, model)
       ? { thinking: { type: "disabled" as const } }
       : {}),
@@ -3053,19 +3163,12 @@ async function queryTagServer(
   if (type === "http" || type === "sse" || type === "stdio") {
     if (type !== "stdio" && !settings.tagServerUrl.trim()) return [];
     try {
-      const text = await mcpSearch(
-        {
-          type,
-          url: settings.tagServerUrl,
-          apiKey: settings.tagServerApiKey,
-          tool: settings.tagServerTool,
-          command: settings.tagServerCommand,
-          args: settings.tagServerArgs,
-        },
-        query,
-        limit,
-      );
-      return parseTagServerPayload(text).slice(0, limit);
+      const tags: TagSuggestion[] = [];
+      for (const tool of configuredMcpTagTools(settings)) {
+        try { const text = await mcpSearch({type, url:settings.tagServerUrl, apiKey:settings.tagServerApiKey, tool, command:settings.tagServerCommand, args:settings.tagServerArgs}, query, limit);
+        tags.push(...parseTagServerPayload(text)); } catch { /* Each independent slot may fail without discarding other results. */ }
+      }
+      return [...new Map(tags.map(t=>[t.tag,t])).values()].slice(0,limit);
     } catch {
       return [];
     }
@@ -3145,19 +3248,12 @@ export async function testTagServer(
   // For MCP transports, call directly so we can surface the real error message.
   if (type === "http" || type === "sse" || type === "stdio") {
     try {
-      const text = await mcpSearch(
-        {
-          type,
-          url: settings.tagServerUrl,
-          apiKey: settings.tagServerApiKey,
-          tool: settings.tagServerTool,
-          command: settings.tagServerCommand,
-          args: settings.tagServerArgs,
-        },
-        q,
-        12,
-      );
-      const tags = parseTagServerPayload(text).slice(0, 12);
+      const all: TagSuggestion[] = [];
+      for (const tool of configuredMcpTagTools(settings)) {
+        const text = await mcpSearch({type,url:settings.tagServerUrl,apiKey:settings.tagServerApiKey,tool,command:settings.tagServerCommand,args:settings.tagServerArgs},q,12);
+        all.push(...parseTagServerPayload(text));
+      }
+      const tags=[...new Map(all.map(t=>[t.tag,t])).values()].slice(0,36);
       const label =
         type === "stdio"
           ? "stdio MCP"
@@ -3172,7 +3268,7 @@ export async function testTagServer(
           }
         : {
             ok: false,
-            message: `${label} 已连接，但工具未返回可解析的标签（原始返回：${text.slice(0, 120) || "空"}）。`,
+            message: `${label} 已连接，但所选工具未返回可解析的标签。`,
             tags: [],
           };
     } catch (error: any) {
@@ -3251,7 +3347,7 @@ export async function reversePromptImage(
     task: "reverse",
     // A custom software template is authoritative; unrelated conversation presets
     // must not prepend their own prose/output rules. Keep the saved switch intact.
-    enabled: (safeTemplateVersion === "v5" ? settings.reversePromptTemplates : settings.reversePromptTemplatesV45)?.[mode]?.trim() ? false : settings.reverseConvertDshEnabled,
+    enabled: Object.values((safeTemplateVersion === "v5" ? settings.reversePromptTemplates : settings.reversePromptTemplatesV45)??{}).some(value=>value?.trim()) ? false : settings.reverseConvertDshEnabled,
     mode: settings.reverseConvertDshMode,
     sharedPreset: selectedImageTaskPromptPreset(
       settings.reverseConvertPromptPresets,
@@ -3316,7 +3412,7 @@ export async function reversePromptImage(
       `上次结果未通过模板校验：${feedback}。请重新对照同一图片输出完整结果。仅修正格式、数量和比例；不要新增图中不可见内容。`}] : firstUserContent;
     const result = await callVisionApi(effectiveSystem, contentForAttempt,
       knownCharacter ? 7000 : 4000,
-      `AI 反推 · ${safeTemplateVersion} · ${mode} · ${scopeLabel}`, true);
+      `AI 反推 · ${safeTemplateVersion} · ${mode} · ${scopeLabel}`, true, !!protocol);
     if (!result.ok) return {ok:false,message:`反推失败：${result.message}`};
     try {
       if (protocol) return {ok:true,...protocol.parse(result.content ?? ""),message:"反推成功"};
@@ -4150,7 +4246,7 @@ export async function convertPromptText(
     task: "convert",
     // A custom software template is authoritative; unrelated conversation presets
     // must not prepend their own prose/output rules. Keep the saved switch intact.
-    enabled: (safeTemplateVersion === "v5" ? settings.convertPromptTemplates : settings.convertPromptTemplatesV45)?.[mode]?.trim() ? false : settings.reverseConvertDshEnabled,
+    enabled: Object.values((safeTemplateVersion === "v5" ? settings.convertPromptTemplates : settings.convertPromptTemplatesV45)??{}).some(value=>value?.trim()) ? false : settings.reverseConvertDshEnabled,
     mode: settings.reverseConvertDshMode,
     sharedPreset: selectedImageTaskPromptPreset(
       settings.reverseConvertPromptPresets,
@@ -4176,7 +4272,18 @@ export async function convertPromptText(
     knownCharacter,
     safeTemplateVersion,
   );
-  const contract=!knownCharacter?mixedTemplateContract(baseSystemPrompt,mode):null;
+  const tagProtocol=mode==='tags'?reverseTemplateProtocol(baseSystemPrompt,mode,knownCharacter,'convert'):null;
+  if(tagProtocol){
+    let feedback='';
+    for(let attempt=0;attempt<3;attempt++){
+      const reply=await callConvertApi(systemPrompt+'\n\n'+tagProtocol.instruction,userText+(feedback?'\n上次模板校验问题：'+feedback+'。返回完整合格的JSON；保留明确事实，按所选模板允许的边界补足未限定细节，不堆重复词、不违背原输入。':''),5000,`提示词转换 · tags · 模板验收${attempt}`,true,false,true);
+      if(!reply.ok)return {ok:false,message:'转换失败：'+reply.message};
+      try{const parsed=tagProtocol.parse(reply.content??'',auditText);return {ok:true,result:parsed.prompt,variants:parsed.variants,message:'转换成功：纯Tag模板验收通过'};}
+      catch(error){feedback=error instanceof Error?error.message:String(error);}
+    }
+    return {ok:false,message:'提示词未满足纯Tag模板，已保留原提示词，未提交生图：'+feedback};
+  }
+  const contract=!knownCharacter?mixedTemplateContract(baseSystemPrompt,mode,!assistance||isSparsePromptEditSource(chineseText)):null;
   if(contract){
     const internalSystem=systemPrompt+'\n\n'+mixedEnvelopeInstruction;
     let previous='',problems:string[]=[],stats:{total:number;tags:number;natural:number;tagPercent:number}|undefined;
@@ -4184,7 +4291,7 @@ export async function convertPromptText(
       const delta=attempt&&stats;
       const additions=stats?Math.max(0,contract.min-stats.total,Math.ceil(stats.tags/.7)-stats.total):0;
       const correction=delta?`\n本轮只返回 JSON 增量 {"replace":[{"segment":0,"index":0,"unit":{"kind":"tag","text":"..."}}],"append":[{"segment":0,"units":[{"kind":"natural","text":"..."}]}],"remove":[]}，索引从0开始。没有改动的项不要返回；不要返回 segments 或完整改写。程序合并后复验，因此不得通过把 Tag 假标为 natural 改比例。现有 ${stats!.total} 单元，${stats!.tags} Tag，${stats!.natural} 自然短语；建议额外补充 ${additions} 个不重复的可见关系自然短语（按原要求，无额外人物或情节）。含逗号的短语用 replace 修成一个无逗号短语，保持原意。` : '';
-      const reply=await callConvertApi(internalSystem+correction,userText+(attempt?`\n上次验收问题：${problems.join('；')}。只修正这些问题并保留用户明确要求及已合格单元。不得删除事实换取凑数。\n上一版：${previous}`:''),7000,`提示词转换 · mixed · ${attempt?'校正'+attempt:'模板验收'}`,true,false);
+      const reply=await callConvertApi(internalSystem+correction,userText+(attempt?`\n上次验收问题：${problems.join('；')}。只修正这些问题并保留用户明确要求及已合格单元。不得删除事实换取凑数。\n上一版：${previous}`:''),7000,`提示词转换 · mixed · ${attempt?'校正'+attempt:'模板验收'}`,true,false,true);
       if(!reply.ok)return {ok:false,message:'转换失败：'+reply.message};
       try{
         previous=normalizeMixedEnvelope(delta?patchMixedEnvelope(previous,reply.content??''):reply.content??'');
@@ -4207,14 +4314,14 @@ export async function convertPromptText(
   // measurable contract and known mutually-exclusive camera tags before use.
   const range = baseSystemPrompt.match(/有效语义单元[\s\S]{0,80}?(\d{1,3})\s*[–—-]\s*(\d{1,3})/);
   const countUnits = (value:string) => value.split(/[,，]/).map(s=>s.trim()).filter(Boolean).length;
-  if (range && !knownCharacter && Number(range[1]) <= Number(range[2])) {
+  if (range && mode!=="natural" && !(baseSystemPrompt.includes("当前模式：纯 Tag")&&isSparsePromptEditSource(auditText)) && !knownCharacter && Number(range[1]) <= Number(range[2])) {
     const min = Number(range[1]), max = Number(range[2]);
     const issues = () => {
       const value=result.content ?? '', count=countUnits(value), base=value.split('|')[0].toLowerCase().replaceAll('_',' ');
       const problems:string[]=[];
       if(count<min||count>max)problems.push(`有 ${count} 个逗号分隔单元，模板要求 ${min}–${max} 个`);
       if(/[\u4e00-\u9fff]/.test(value))problems.push('只输出英文提示词，删除中文前言、说明和标题');
-      if(/俯视(?:机位|视角|镜头)|从上(?:方|往下)|from above/i.test(auditText)&&(!/\bfrom above\b/.test(base)||/\b(?:from below|low angle)\b/.test(base)))problems.push('用户指定俯视机位：必须是 from above，删除 from below 和 low angle；人物仰视镜头只用 looking up，不改变机位');
+      if(/俯视(?:机位|视角|镜头)|从上(?:方|往下)|from above/i.test(cameraIntentSource(auditText))&&(!/\bfrom above\b/.test(base)||/\b(?:from below|low angle)\b/.test(base)))problems.push('用户指定俯视机位：必须是 from above，删除 from below 和 low angle；人物仰视镜头只用 looking up，不改变机位');
       if(/holding (?:the )?umbrella with one hand/i.test(value)&&/both hands (?:gripping|holding)/i.test(value))problems.push('一只手持伞与双手握伞互斥，请只保留一种不违背用户要求的握持方式');
 
       if(/\b(?:from above|high angle|overhead view)\b/.test(base)&&/\b(?:from below|low angle|worm.s eye)\b/.test(base))problems.push('俯视机位与仰视机位互斥；角色抬头 looking up 不等于镜头 from below，请保留用户要求的机位');
@@ -4295,7 +4402,7 @@ export async function generateImage(
   if (!token)
     return {
       ok: false,
-      message: "请先在 设置 > 网络/API 中配置 NovelAI API Token。",
+      message: "请先在账户管理中配置 NovelAI API Token。",
       items: [],
     };
   if (!params.positivePrompt.trim())
@@ -4738,8 +4845,8 @@ export async function upscaleImg(
     const imageBaseUrl = resolveUpscaleBaseUrl(settings.imageBaseUrl);
     const upscaleModel = resolveUpscaleModel(model);
     const passes = plan.passes;
-    let passInput = Buffer.from(preparedImage.base64, "base64");
-    let outBuffer = passInput;
+    let passInput: Buffer = Buffer.from(preparedImage.base64, "base64");
+    let outBuffer: Buffer = passInput;
     let sizeNote = "";
     for (let pass = 0; pass < passes; pass += 1) {
       const payload = buildUpscalePayload(passInput, upscaleModel);
@@ -4767,13 +4874,9 @@ export async function upscaleImg(
         { signal: abort.signal, retryStatuses: [429] },
       );
 
-      // Response is usually a ZIP containing the upscaled PNG; fall back to raw bytes.
-      try {
-        const images = await extractImages(res.data);
-        outBuffer = images.length > 0 ? images[0] : Buffer.from(res.data);
-      } catch {
-        outBuffer = Buffer.from(res.data); // not a zip — treat as raw image bytes
-      }
+      // The native decoder accepts either ZIP or raw PNG/JPEG/WebP. Invalid
+      // ZIP/HTML must not bypass validation via an unconditional raw fallback.
+      outBuffer = (await extractImages(res.data, abort.signal))[0];
       const actual = readImageDimensions(outBuffer);
       const inputSize = readImageDimensions(passInput);
       if (![actual.width, actual.height].every(v => Number.isSafeInteger(v) && v > 0)) {
@@ -4921,7 +5024,7 @@ export async function augmentImg(
       maxRedirects: currentNaiAccount() ? 0 : undefined,
     });
 
-    const buffers = await extractImages(res.data);
+    const buffers = await extractImages(res.data, job.controller.signal);
     if (buffers.length === 0)
       return { ok: false, message: "后期处理成功但无图片返回。", items: [] };
     const outputBuffers = preparedImage.resized
@@ -4973,6 +5076,12 @@ function looksLikeReferenceError(detail: string): boolean {
   );
 }
 
+/** Recovery stays on the selected account; relay Keys must never be redirected to official hosts. */
+export function authenticationFailureMessage(status?: number, method?: 'token' | 'official-login' | 'relay'): string {
+  const service = method === 'relay' ? '中转接口' : 'NovelAI';
+  return `${service} 鉴权失败${status ? `（HTTP ${status}）` : ""}：请在账户管理中检查当前账号的 API Token 和接口地址，并重新验证。`;
+}
+
 function handleGenerateError(error: any, prefix: string): GenerateResult {
   if (error instanceof ImageSaveError) {
     logError(prefix, error.message);
@@ -5002,7 +5111,7 @@ function handleGenerateError(error: any, prefix: string): GenerateResult {
           : "validation";
   const authHint =
     failureKind === "auth"
-      ? `NovelAI 鉴权失败${status ? `（HTTP ${status}）` : ""}：请在设置页重新粘贴并验证 Persistent API Token，并确认 Image Endpoint 为 https://image.novelai.net。`
+      ? authenticationFailureMessage(status, currentNaiAccount()?.method)
       : "";
   return {
     ok: false,
@@ -5252,4 +5361,10 @@ async function baiduTranslate(
         : "百度翻译失败，请检查网络。",
     };
   }
+}
+
+export async function listConfiguredMcpTools() {
+  const settings=getSettings(),type=settings.tagServerType;
+  if(type==='rest') throw Error('REST does not expose MCP tools/list');
+  return mcpListTools({type,url:settings.tagServerUrl,apiKey:settings.tagServerApiKey,tool:settings.tagServerTool,command:settings.tagServerCommand,args:settings.tagServerArgs});
 }

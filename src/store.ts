@@ -322,7 +322,7 @@ interface AppState {
   setDirectorTool: (tool: DirectorTool) => void;
   setAugmentOption: <K extends keyof AugmentOptions>(key: K, value: AugmentOptions[K]) => void;
   // Vibe Transfer / Precise Reference
-  addVibeImage: (image: VibeTransferImage) => void;
+  addVibeImage: (image: VibeTransferImage) => boolean;
   removeVibeImage: (id: string) => void;
   updateVibeImage: (id: string, patch: Partial<Pick<VibeTransferImage, "infoExtracted" | "strength">>) => void;
   clearVibeImages: () => void;
@@ -1330,7 +1330,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const result = await window.naiDesktop.loadImage();
     if (loadRevision !== workbenchLoadRevision) return;
     if (result.ok && result.image) {
-      const restoreMetadata = get().activeTab === "generate" && result.metadata;
+      // Loading a source image is preview-only on every platform. Metadata is
+      // restored only by an explicit parameter action, never by the picker.
       set({
         workbenchImage: result.image,
         i2iOriginalImage: result.image,
@@ -1340,19 +1341,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         maskRevision: get().maskRevision + 1,
         statusText: storeFormat(get().settings, "status.imageLoaded", { width: result.image.width, height: result.image.height }),
       });
-      if (restoreMetadata) {
-        get().restoreImportedMetadata(
-          restoreMetadata.imported,
-          restoreMetadata.characterCaptions,
-          { preserveMissing: true },
-        );
-        const seed = restoreMetadata.imported.seed ?? 0;
-        set({
-          toast: seed > 0
-            ? storeFormat(get().settings, "toast.paramsLoadedSeed", { seed })
-            : storeText(get().settings, "toast.paramsLoaded"),
-        });
-      }
     } else if (result.message) {
       set({ toast: compactStoreError(get().settings, result.message), statusText: storeText(get().settings, "status.imageLoadFailed") });
     }
@@ -1387,7 +1375,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         return;
       }
       const restoreMetadata =
-        options?.restoreMetadata !== false &&
+        options?.restoreMetadata === true &&
         get().activeTab === "generate" &&
         result.metadata;
       set({
@@ -1560,7 +1548,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // ── Vibe Transfer / Precise Reference ──────────────────────────────────────
   addVibeImage(image) {
-    set((state) => ({ vibeImages: [...state.vibeImages, image] }));
+    // Check the live state at the shared commit point, including delayed reads.
+    const state = get();
+    if (state.vibeImages.length >= 16) {
+      set({ toast: storeText(state.settings, "reference.vibeLimit") });
+      return false;
+    }
+    set({ vibeImages: [...state.vibeImages, image] });
+    return true;
   },
 
   removeVibeImage(id) {
@@ -2096,6 +2091,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async generate() {
     const state = get();
+    if (state.settings?.imageProvider === 'openai-images') {
+      if(state.isGenerating || !state.params.positivePrompt.trim()) return;
+      const runId=`compatible-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      ++generationSettlementRevision; ++workbenchLoadRevision;
+      set({isGenerating:true,activeGenerationRunId:runId,generationPreview:null,generationPhase:'preparing',lastAnlasSpent:null,currentAnlasSpent:null});
+      try {
+        const result=await window.naiDesktop.generateCompatible({prompt:state.params.positivePrompt,n:state.batchCount,historyGroupId:state.generationGroupId,fileNamePrefix:state.params.fileNamePrefix,expectedImageServiceRevision:state.settings.imageServiceRevision});
+        if(get().activeGenerationRunId!==runId) return;
+        for(const item of [...result.items].reverse()) showCompletedImage(set,get,item);
+        set({statusText:result.message,toast:result.message,lastError:result.ok?'':result.message});
+      } catch { if(get().activeGenerationRunId===runId) set({statusText:'图片接口请求未完成；请核对服务端记录。没有自动重试。',lastError:'图片接口请求未完成。'}); }
+      finally { if(get().activeGenerationRunId===runId) set({isGenerating:false,activeGenerationRunId:null,generationPhase:'idle'}); }
+      return;
+    }
     if (!requireToken(set, state.account.hasToken, state.settings)) return;
     if (!state.params.positivePrompt.trim()) {
       set({ toast: storeText(state.settings, "toast.needPrompt"), statusText: storeText(state.settings, "status.missingPrompt") });

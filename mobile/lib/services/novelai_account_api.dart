@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
-import 'package:archive/archive.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../billing/anlas.dart';
@@ -62,63 +61,51 @@ class NovelAiAccountApi extends NaiApi {
       }, expectedToken: token);
 
   Future<http.Response> _send(NovelAiCredentialSnapshot snapshot,
-      AppSettings settings, http.BaseRequest request) async {
+      AppSettings settings, http.BaseRequest request,
+      {bool allowReadStatus = false}) async {
     _checkCancelled();
     snapshot.profile.validate(snapshot.token);
     GenerationScope.current?.credentials(snapshot.token, settings);
     request.followRedirects = false;
     request.maxRedirects = 0;
     request.headers['Authorization'] = 'Bearer ${snapshot.token}';
-    if (request.method == 'GET') {
-      void Function()? detach;
-      try {
-        return await novelAiBoundedRequest(
-          openClient: () => clientFactory(settings, request.url),
-          request: request,
-          maxResponseBytes: 256 * 1024,
-          bodyStatuses: const {200},
-          onOpened: (client) {
-            _checkCancelled();
-            _clients.add(client);
-            detach = GenerationScope.current?.attach(client.close);
-          },
-          onClosed: _clients.remove,
-        ).then((response) {
-          if (response.statusCode != 200) {
-            throw NaiHttpException(response.statusCode,
-                'NovelAI HTTP ${response.statusCode}；未自动重试或回退');
-          }
-          return response;
-        });
-      } on http.ClientException {
-        throw const NaiNetworkException('No retry');
-      } finally {
-        detach?.call();
-      }
-    }
-    final client = await clientFactory(settings, request.url);
-    _clients.add(client);
+    final readOnly = request.method == 'GET';
     void Function()? detach;
     try {
+      // Bound client/proxy opening, headers and body together. Never collect an
+      // unbounded paid/error response before checking its HTTP status.
+      final response = await novelAiBoundedRequest(
+        openClient: () => clientFactory(settings, request.url),
+        request: request,
+        timeout: Duration(seconds: readOnly ? 8 : 180),
+        maxResponseBytes: readOnly ? 256 * 1024 : 128 * 1024 * 1024,
+        bodyStatuses: readOnly
+            ? const {200}
+            : {for (var status = 200; status < 300; status++) status},
+        onOpened: (client) {
+          _checkCancelled();
+          _clients.add(client);
+          detach = GenerationScope.current?.attach(client.close);
+        },
+        onClosed: _clients.remove,
+      );
       _checkCancelled();
-      detach = GenerationScope.current?.attach(client.close);
-      final response = await (() async {
-        final response = await client.send(request);
-        return http.Response.fromStream(response);
-      })()
-          .timeout(const Duration(seconds: 180));
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        // Do not echo remote error bodies (they can contain credentials).
+      if (readOnly
+          ? response.statusCode != 200 && !allowReadStatus
+          : response.statusCode < 200 || response.statusCode >= 300) {
+        // Redirect/error bodies are cancelled without reading or disclosure.
         throw NaiHttpException(response.statusCode,
             'NovelAI HTTP ${response.statusCode}；未自动重试或回退');
       }
       return response;
     } on http.ClientException {
+      _checkCancelled();
       throw const NaiNetworkException('No retry');
+    } catch (_) {
+      _checkCancelled();
+      rethrow;
     } finally {
       detach?.call();
-      _clients.remove(client);
-      client.close();
     }
   }
 
@@ -139,32 +126,99 @@ class NovelAiAccountApi extends NaiApi {
     super.cancelActiveGeneration();
   }
 
-  @override
-  Future<AccountSummary> verifyToken(String token, AppSettings settings) async {
-    final snapshot = NovelAiCredentialSnapshot(
-        const NovelAiAccount(id: 'verify', label: 'Official', method: 'token'),
-        token.trim());
+  /// Same declared read-only routes as desktop. Never sends a paid request.
+  Future<AccountSummary> verifyCandidate(
+      NovelAiCredentialSnapshot snapshot, AppSettings settings) async {
+    snapshot.profile.validate(snapshot.token);
     _operations++;
     try {
-      final response = await _send(snapshot, snapshot.settings(settings),
-          http.Request('GET', snapshot.imageRoute('/user/data')));
-      return _parseAccountData(response.body);
+      final frozen = snapshot.settings(settings);
+      final urls = [
+        snapshot.imageRoute('/user/data'),
+        if (snapshot.profile.relay)
+          Uri.parse('${snapshot.profile.apiBaseUrl}/user/subscription'),
+        if (snapshot.profile.relay) _relayModelsUri(snapshot.profile.apiBaseUrl),
+      ];
+      var nativeHtml = false;
+      for (var i = 0; i < urls.length; i++) {
+        final response = await _send(
+            snapshot, frozen, http.Request('GET', urls[i]),
+            allowReadStatus: true);
+        final status = response.statusCode;
+        if ([404, 405, 501].contains(status) && i + 1 < urls.length) continue;
+        if (nativeHtml && [404, 405, 501].contains(status)) {
+          throw const FormatException('NAI_ACCOUNT_VALIDATION:invalid-response:200');
+        }
+        if (status != 200) {
+          final code = [401, 403].contains(status)
+              ? 'auth'
+              : [301, 302, 303, 307, 308, 404, 405, 501].contains(status)
+                  ? 'unsupported'
+                  : 'http';
+          throw FormatException('NAI_ACCOUNT_VALIDATION:$code:$status');
+        }
+        if (snapshot.profile.relay && i < 2 &&
+            RegExp(r'^\s*(?:<!doctype\s+html|<html(?:\s|>))', caseSensitive: false).hasMatch(response.body)) {
+          nativeHtml = true;
+          continue;
+        }
+        try {
+          if (snapshot.profile.relay && i == 2) {
+            final models = _novelAiRelayModelIds(jsonDecode(response.body));
+            if (models.isEmpty) {
+              throw const FormatException('NAI_ACCOUNT_VALIDATION:unsupported:200');
+            }
+            // New API token quota is not Anlas and is deliberately not converted.
+            return const AccountSummary(hasToken: true, hasActiveSubscription: false);
+          }
+          return _parseAccountData(response.body,
+              relay: snapshot.profile.relay);
+        } on FormatException catch (error) {
+          if (error.message == 'NAI_ACCOUNT_VALIDATION:unsupported:200') rethrow;
+          throw const FormatException(
+              'NAI_ACCOUNT_VALIDATION:invalid-response:200');
+        } catch (_) {
+          throw const FormatException('NAI_ACCOUNT_VALIDATION:invalid-response:200');
+        }
+      }
+      throw const FormatException('NAI_ACCOUNT_VALIDATION:unsupported:0');
     } finally {
       _operations--;
     }
   }
 
+  static Uri _relayModelsUri(String base) {
+    final prefix = base.replaceAll(RegExp(r'/+$'), '');
+    return Uri.parse('$prefix${prefix.endsWith('/v1') ? '/models' : '/v1/models'}');
+  }
+
+  static List<String> _novelAiRelayModelIds(Object? body) {
+    if (body is! Map || body['object'] != 'list' || body['data'] is! List ||
+        (body['data'] as List).length > 10000 || body['success'] == false || body['error'] != null) {
+      throw const FormatException('Invalid model list');
+    }
+    final rows = body['data'] as List;
+    if (!rows.every((r) => r is Map && r['id'] is String && (r['id'] as String).length <= 256)) {
+      throw const FormatException('Invalid model identity');
+    }
+    final allowed = {...naiModels.map((m) => m.value), ...naiInpaintModels.map((m) => m.value)};
+    return rows.map((r) => (r as Map)['id'] as String).where(allowed.contains).toSet().toList();
+  }
+
+  @override
+  Future<AccountSummary> verifyToken(String token, AppSettings settings) =>
+      verifyCandidate(
+          NovelAiCredentialSnapshot(
+              const NovelAiAccount(
+                  id: 'verify', label: 'Official', method: 'token'),
+              token.trim()),
+          settings);
+
   @override
   Future<AccountSummary> fetchAccount(String token, AppSettings settings) =>
       _run(token, settings, (snapshot, frozen) async {
-        if (snapshot.profile.relay) {
-          return const AccountSummary(
-              hasToken: true, tierName: '第三方 · 余额未知', stale: true);
-        }
         try {
-          final response = await _send(snapshot, frozen,
-              http.Request('GET', snapshot.imageRoute('/user/data')));
-          return _parseAccountData(response.body);
+          return await verifyCandidate(snapshot, frozen);
         } catch (_) {
           return const AccountSummary(hasToken: true, stale: true);
         }
@@ -370,7 +424,7 @@ class NovelAiAccountApi extends NaiApi {
         for (var pass = 0; pass < plan.passes; pass++) {
           final response = await _post(snapshot, frozen, '/ai/upscale',
               buildUpscalePayload(input, model));
-          input = _images(response.bodyBytes).first;
+          input = (await _images(response.bodyBytes)).first;
           final actual = decodeImageDimensions(input);
           if (actual.$1 != plan.inputWidth * (1 << (pass + 1)) ||
               actual.$2 != plan.inputHeight * (1 << (pass + 1))) {
@@ -405,60 +459,76 @@ class NovelAiAccountApi extends NaiApi {
             (await _post(snapshot, frozen, '/ai/augment-image', payload))
                 .bodyBytes);
       });
-  List<Uint8List> _images(Uint8List bytes) {
-    if (bytes.length > 8 && bytes[0] == 0x89 && bytes[1] == 0x50) {
-      return [bytes];
-    }
-    final images = ZipDecoder()
-        .decodeBytes(bytes)
-        .where((f) =>
-            f.isFile &&
-            RegExp(r'\.(png|webp|jpg|jpeg)$', caseSensitive: false)
-                .hasMatch(f.name))
-        .map((f) => Uint8List.fromList(f.content as List<int>))
-        .toList();
-    if (images.isEmpty) throw const FormatException('服务未返回图片；未重新提交');
-    return images;
-  }
+  Future<List<Uint8List>> _images(Uint8List bytes) =>
+      decodeNovelAiNativeResponse(bytes, checkCancelled: _checkCancelled);
 
-  AccountSummary _parseAccountData(String body) {
-    final data = jsonDecode(body) as Map<String, dynamic>;
+  AccountSummary _parseAccountData(String body, {bool relay = false}) {
+    final data = jsonDecode(body);
     Map<String, dynamic>? map(Object? v) =>
         v is Map ? Map<String, dynamic>.from(v) : null;
-    final direct = map(data['data']), info = map(data['information']);
-    final sub = map(data['subscription']) ??
+    final top = map(data);
+    if (top == null) throw const FormatException('Invalid account response');
+    final direct = map(top['data']), info = map(top['information']);
+    final sub = map(top['subscription']) ??
         map(info?['subscription']) ??
         map(direct?['subscription']) ??
         map(map(direct?['information'])?['subscription']) ??
-        {};
-    final steps = sub['trainingStepsLeft'];
+        top;
+    num? finite(Object? value) {
+      final n = value is num
+          ? value
+          : value is String
+              ? num.tryParse(value)
+              : null;
+      return n != null && n.isFinite ? n : null;
+    }
+
+    int? credits(Object? value) {
+      final n = finite(value);
+      return n != null && n >= 0 && n.round() <= 9007199254740991
+          ? n.round()
+          : null;
+    }
+
+    final tierValue = finite(sub['tier']);
+    if (tierValue == null ||
+        tierValue < 0 ||
+        tierValue != tierValue.round() ||
+        tierValue > 9007199254740991 ||
+        (sub.containsKey('active') && sub['active'] is! bool)) {
+      throw const FormatException('Invalid subscription');
+    }
+    final tier = tierValue.toInt(), steps = sub['trainingStepsLeft'];
+    final fixed =
+        steps is Map ? credits(steps['fixedTrainingStepsLeft']) : null;
+    final purchased =
+        steps is Map ? credits(steps['purchasedTrainingSteps']) : null;
     final balance = steps is Map
-        ? ((steps['fixedTrainingStepsLeft'] ?? 0) as num).toInt() +
-            ((steps['purchasedTrainingSteps'] ?? 0) as num).toInt()
-        : steps is num
-            ? steps.toInt()
-            : null;
-    final tier = sub['tier'] as int?;
+        ? (fixed != null || purchased != null
+            ? credits((fixed ?? 0) + (purchased ?? 0))
+            : null)
+        : credits(steps);
     final usage = map(sub['usage']);
-    final opus =
-        usage?['percent'] is num && usage?['timeUntilNextPercent'] is num
-            ? OpusGenerationUsage(
-                percent: (usage!['percent'] as num).toDouble(),
-                isNegative: usage['isNegative'] == true,
-                timeUntilNextPercent:
-                    max(0, (usage['timeUntilNextPercent'] as num).toDouble()))
-            : null;
+    final percent = finite(usage?['percent']),
+        seconds = finite(usage?['timeUntilNextPercent']);
+    final opus = !relay && percent != null && seconds != null
+        ? OpusGenerationUsage(
+            percent: percent.toDouble(),
+            isNegative: usage?['isNegative'] == true,
+            timeUntilNextPercent: max(0, seconds.toDouble()))
+        : null;
     return AccountSummary(
         hasToken: true,
         anlasBalance: balance,
         tierLevel: tier,
         tierName: switch (tier) {
+          0 => 'Paper',
           1 => 'Tablet',
           2 => 'Scroll',
           3 => 'Opus',
-          _ => 'NovelAI'
+          _ => '未知'
         },
-        hasActiveSubscription: sub['active'] as bool?,
+        hasActiveSubscription: !relay && sub['active'] != false && tier > 0,
         opusUsage: opus,
         opusUsageUpdatedAt:
             opus == null ? null : DateTime.now().millisecondsSinceEpoch);

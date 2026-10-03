@@ -1,0 +1,49 @@
+{
+  "scope": "Owned local native streaming consumer combinations; no HTTP",
+  "allowedPreviewImages": [
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAGUlEQVQokWNQSJhAEmIY1ZAwGkoKwzVpAAArcBAQD1yUaQAAAABJRU5ErkJggg==",
+    "/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAQABADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABv/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AIIAoFn/2Q==",
+    "UklGRjgAAABXRUJQVlA4ICwAAADwAQCdASoQABAAAUAmJaACdLoB+AAF9AAA/vFNr/xu3GG/Bd/5BerfNsaAAA=="
+  ],
+  "cases": [
+    {
+      "id": "msgpack-valid-final",
+      "body": "AAAAioOqZXZlbnRfdHlwZaVmaW5hbKdzYW1wX2l4AKVpbWFnZcRniVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAGUlEQVQokWNQSJhAEmIY1ZAwGkoKwzVpAAArcBAQD1yUaQAAAABJRU5ErkJggg==",
+      "expectedCount": 1,
+      "expectedImages": [
+        "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAGUlEQVQokWNQSJhAEmIY1ZAwGkoKwzVpAAArcBAQD1yUaQAAAABJRU5ErkJggg=="
+      ],
+      "contentType": "application/x-msgpack"
+    },
+    {
+      "id": "msgpack-invalid-final",
+      "body": "AAAAL4OqZXZlbnRfdHlwZaVmaW5hbKdzYW1wX2l4AKVpbWFnZcQMbm90IGFuIGltYWdl",
+      "expectedCount": 0,
+      "expectedImages": [],
+      "contentType": "application/x-msgpack"
+    },
+    {
+      "id": "msgpack-mixed-final",
+      "body": "AAAAioOqZXZlbnRfdHlwZaVmaW5hbKdzYW1wX2l4AKVpbWFnZcRniVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAGUlEQVQokWNQSJhAEmIY1ZAwGkoKwzVpAAArcBAQD1yUaQAAAABJRU5ErkJgggAAAC+DqmV2ZW50X3R5cGWlZmluYWync2FtcF9peAGlaW1hZ2XEDG5vdCBhbiBpbWFnZQ==",
+      "expectedCount": 0,
+      "expectedImages": [],
+      "contentType": "application/x-msgpack"
+    },
+    {
+      "id": "msgpack-server-error-after-valid",
+      "body": "AAAAioOqZXZlbnRfdHlwZaVmaW5hbKdzYW1wX2l4AKVpbWFnZcRniVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAGUlEQVQokWNQSJhAEmIY1ZAwGkoKwzVpAAArcBAQD1yUaQAAAABJRU5ErkJgggAAADiDqmV2ZW50X3R5cGWlZXJyb3Knc2FtcF9peACnbWVzc2FnZbRvd25lZCBzZXJ2ZXIgZmFpbHVyZQ==",
+      "expectedCount": 0,
+      "expectedImages": [],
+      "contentType": "application/x-msgpack"
+    },
+    {
+      "id": "sse-invalid-preview-then-valid",
+      "body": "ZXZlbnQ6IGludGVybWVkaWF0ZQpkYXRhOiB7ImltYWdlIjoiYm05MElHRnVJR2x0WVdkbCJ9CgpldmVudDogZmluYWwKZGF0YTogeyJpbWFnZSI6ImlWQk9SdzBLR2dvQUFBQU5TVWhFVWdBQUFCQUFBQUFRQ0FJQUFBQ1FrV2cyQUFBQUNYQklXWE1BQUFQb0FBQUQ2QUcxZTFKckFBQUFHVWxFUVZRb2tXTlFTSmhBRW1JWTFaQXdHa29Ld3pWcEFBQXJjQkFRRDF5VWFRQUFBQUJKUlU1RXJrSmdnZz09In0KCg==",
+      "expectedCount": 1,
+      "expectedImages": [
+        "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAGUlEQVQokWNQSJhAEmIY1ZAwGkoKwzVpAAArcBAQD1yUaQAAAABJRU5ErkJggg=="
+      ],
+      "contentType": "text/event-stream"
+    }
+  ]
+}

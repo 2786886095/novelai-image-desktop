@@ -20,8 +20,8 @@ export const STUDIO_BUILTIN_PRESETS=[
 
 export type StudioConversationOptions=Pick<AgentConversation,'studioApprovalMode'|'studioWebSearchEnabled'|'studioTemplateEnabled'|'studioPresetId'|'characterIds'|'activeCharacterId'|'lorebookIds'>;
 export function studioSessionOptions(chat?: Partial<AgentConversation>){return{
- approvalMode:chat?.studioApprovalMode==='auto'?'auto' as const:'confirm' as const,
- webSearchEnabled:chat?.studioWebSearchEnabled===true,
+ approvalMode:chat?.studioApprovalMode==='confirm'?'confirm' as const:'auto' as const,
+ webSearchEnabled:chat?.studioWebSearchEnabled!==false,
  templateEnabled:chat?.studioTemplateEnabled!==false,
  presetId:studioPresetId(chat?.studioPresetId),
 };}

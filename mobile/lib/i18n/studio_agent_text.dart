@@ -1,6 +1,342 @@
+import 'studio_agent_shared.dart';
 import 'app_locales.dart';
 
 const _rows = <String, List<String>>{
+  "accountLoginRejected": ["官方登录未成功；已有凭据保留。", "官方登入未成功；已有憑據保留。", "Official login unsuccessful; existing credentials preserved.", "公式ログイン失敗。既存認証情報は保持。", "공식 로그인 실패. 기존 인증 정보는 유지됩니다."],
+  "accountLoginNetwork": ["官方登录请求失败；未重试或转发至中转。", "官方登入請求失敗；未重試或轉發至中轉。", "Official login request failed; no retry or relay forwarding.", "公式ログイン通信失敗。再試行・中継転送はしません。", "공식 로그인 요청 실패. 재시도 또는 중계 전송은 없습니다."],
+  "accountLoginOtp": ["OTP 协议未确认；未发送验证码，也未覆盖原凭据。请使用官方 API Token。", "OTP 協議未確認；未傳送驗證碼，也未覆寫原憑據。請使用官方 API Token。", "OTP protocol unverified; no code sent or credentials overwritten. Use an official API Token.", "OTP 仕様未確認。コード送信・認証情報上書きなし。公式API Tokenを使用してください。", "OTP 프로토콜 미확인. 코드 전송이나 인증 정보 덮어쓰기는 없습니다. 공식 API Token을 사용하세요."],
+  "accountLoginChallenge": ["官方要求网页安全验证；请在官网完成验证或使用 API Token。未保存账号。", "官方要求網頁安全驗證；請在官網完成驗證或使用 API Token。未儲存帳戶。", "Official web security verification required. Complete it on the official website or use an API Token. Account not saved.", "公式サイトのセキュリティ検証が必要です。公式サイトで完了するか API Token を使用してください。未保存。", "공식 웹 보안 확인이 필요합니다. 공식 웹사이트에서 완료하거나 API Token을 사용하세요. 저장하지 않았습니다."],
+  "accountLoginRateLimited": ["官方暂时限制登录频率；稍后重试，未保存账号。", "官方暫時限制登入頻率；稍後重試，未儲存帳戶。", "Official login rate limit. Try later; account not saved.", "公式ログインの頻度制限です。後で再試行してください。未保存。", "공식 로그인 요청 제한. 나중에 다시 시도하세요. 저장하지 않았습니다."],
+  "accountLoginInvalidResponse": ["官方未返回有效登录凭据；未保存账号。", "官方未回傳有效登入憑證；未儲存帳戶。", "Official response contained no valid login token. Account not saved.", "公式応答に有効な認証情報がありません。未保存。", "공식 응답에 유효한 로그인 토큰이 없습니다. 저장하지 않았습니다."],
+  "accountLoggedOut": ["未登录", "未登入", "Not signed in", "未ログイン", "로그아웃"],
+  "accountSwitchBusy": [
+    "任务或账号操作进行中，未切换账号",
+    "任務或帳號操作進行中，未切換帳號",
+    "Task or account operation in progress; account not switched",
+    "処理中のためアカウントを切り替えませんでした",
+    "작업 중이므로 계정을 전환하지 않았습니다"
+  ],
+  "accountLocked": [
+    "任务进行中，账号已锁定",
+    "任務進行中，帳號已鎖定",
+    "Account locked during a task",
+    "処理中はアカウントを固定",
+    "작업 중 계정 잠김"
+  ],
+  "accountManage": ["管理", "管理", "Manage", "管理", "관리"],
+  "accountManager": [
+    "API 账号管理",
+    "API 帳號管理",
+    "API accounts",
+    "API アカウント管理",
+    "API 계정 관리"
+  ],
+  "accountMethodRelay": [
+    "第三方中转独立 API Token",
+    "第三方中轉獨立 API Token",
+    "Third-party relay API Token",
+    "中継サービスの独立 API Token",
+    "중계 서비스 API Token"
+  ],
+  "accountMethodEmail": [
+    "官方邮箱密码登录",
+    "官方信箱密碼登入",
+    "Official email/password login",
+    "公式メール・パスワードログイン",
+    "공식 이메일/비밀번호 로그인"
+  ],
+  "accountMethodKey": [
+    "官方 API Token",
+    "官方 API Token",
+    "Official API Token",
+    "公式 API Token",
+    "공식 API Token"
+  ],
+  "accountSaveFailed": [
+    "网络、账号输入或系统凭据库操作失败；未保存新账号。",
+    "網路、帳號輸入或系統憑證庫操作失敗；未儲存新帳號。",
+    "Network, account input or secure storage failed; no new account saved.",
+    "ネットワーク・入力・安全な保存に失敗。新規アカウントは保存していません。",
+    "네트워크, 입력 또는 보안 저장 실패. 새 계정을 저장하지 않았습니다."
+  ],
+  "accountUnsupported": [
+    "不支持只读验证，未保存账号",
+    "不支援唯讀驗證，未儲存帳號",
+    "Read-only verification unsupported; account not saved",
+    "読み取り専用検証非対応。未保存",
+    "읽기 전용 검증 미지원. 저장하지 않음"
+  ],
+  "accountAuthFailed": [
+    "API Token 无效或无权限，未保存账号",
+    "API Token 無效或無權限，未儲存帳號",
+    "Invalid or unauthorized API Token; account not saved",
+    "API Token が無効または権限不足。未保存",
+    "API Token 오류 또는 권한 없음. 저장하지 않음"
+  ],
+  "accountInvalidResponse": [
+    "接口返回的账号数据不兼容，未保存账号",
+    "介面回傳的帳號資料不相容，未儲存帳號",
+    "Incompatible account response; account not saved",
+    "アカウント応答が非対応。未保存",
+    "호환되지 않는 계정 응답. 저장하지 않음"
+  ],
+  "accountValidationFailed": [
+    "接口验证未通过，未保存账号",
+    "介面驗證未通過，未儲存帳號",
+    "API verification failed; account not saved",
+    "API 検証失敗。未保存",
+    "API 검증 실패. 저장하지 않음"
+  ],
+  "accountFailed": ["验证未通过", "驗證未通過", "Verification failed", "検証失敗", "검증 실패"],
+  "accountSaved": [
+    "验证通过，账号已保存",
+    "驗證通過，帳號已儲存",
+    "Verified; account saved",
+    "検証成功・保存済み",
+    "검증 성공. 계정 저장됨"
+  ],
+  "accountSavedDetail": [
+    "只读连接与鉴权验证；未调用生图接口。相同接口地址和 API Token 不重复添加。",
+    "唯讀連線與鑑權驗證；未呼叫生圖介面。相同介面位址和 API Token 不重複新增。",
+    "Read-only connection/authentication check; no image generation. Matching endpoint and API Token are not added twice.",
+    "読み取り専用の接続・認証検証。画像生成はしません。同じ接続先と API Token は重複登録しません。",
+    "읽기 전용 연결/인증 검증. 이미지 생성 없음. 동일 주소와 API Token는 중복 추가하지 않습니다."
+  ],
+  "accountCached": ["（缓存）", "（快取）", " (cached)", "（キャッシュ）", " (캐시)"],
+  "accountHideKey": [
+    "隐藏 API Token",
+    "隱藏 API Token",
+    "Hide API Token",
+    "API Token を隠す",
+    "API Token 숨기기"
+  ],
+  "accountViewKey": [
+    "查看 API Token",
+    "查看 API Token",
+    "View API Token",
+    "API Token を表示",
+    "API Token 보기"
+  ],
+  "accountCopyKey": [
+    "复制 API Token",
+    "複製 API Token",
+    "Copy API Token",
+    "API Token をコピー",
+    "API Token 복사"
+  ],
+  "accountKeyCopied": [
+    "API Token 已复制",
+    "API Token 已複製",
+    "API Token copied",
+    "API Token をコピーしました",
+    "API Token 복사됨"
+  ],
+  "accountNotSwitched": [
+    "未切换账号",
+    "未切換帳號",
+    "Account not switched",
+    "未切り替え",
+    "전환하지 않음"
+  ],
+  "accountBusy": [
+    "任务或账号操作进行中。",
+    "任務或帳號操作進行中。",
+    "Task or account operation in progress.",
+    "タスクまたはアカウントの処理中です。",
+    "작업 또는 계정 처리 중입니다."
+  ],
+  "accountCurrent": ["当前使用", "目前使用", "Current account", "使用中", "현재 계정"],
+  "accountUse": ["使用此账号", "使用此帳號", "Use account", "このアカウントを使用", "이 계정 사용"],
+  "accountVerified": ["验证通过", "驗證通過", "Verified", "検証成功", "검증 성공"],
+  "accountNoBalance": [
+    "连接与鉴权通过，接口未提供余额；未调用生图接口。",
+    "連線與鑑權通過，介面未提供餘額；未呼叫生圖介面。",
+    "Connected and authenticated; API did not provide a balance. No image generation.",
+    "接続・認証成功。残高の応答なし。画像生成はしていません。",
+    "연결/인증 성공. API 잔액 정보 없음. 이미지 생성 없음."
+  ],
+  "accountBalanceVerified": [
+    "Anlas: {name}；只读验证，未调用生图接口。",
+    "Anlas: {name}；唯讀驗證，未呼叫生圖介面。",
+    "Anlas: {name}; read-only verification, no image generation.",
+    "Anlas: {name}。読み取り専用検証。画像生成なし。",
+    "Anlas: {name}. 읽기 전용 검증. 이미지 생성 없음."
+  ],
+  "accountVerify": ["验证", "驗證", "Verify", "検証", "검증"],
+  "accountDeleteTitle": [
+    "删除 {name}？",
+    "刪除 {name}？",
+    "Delete {name}?",
+    "{name} を削除しますか？",
+    "{name}을(를) 삭제할까요?"
+  ],
+  "accountDeleteDetail": [
+    "删除当前账号后切换到剩余账号；删除最后一个后退出登录，不恢复旧 Token。",
+    "刪除目前帳號後切換到剩餘帳號；刪除最後一個後登出，不恢復舊 Token。",
+    "Deleting the active account switches to another. Deleting the last signs out; no old Token is restored.",
+    "使用中のアカウントを削除すると別のものに切り替えます。最後を削除するとログアウトし、古い Token は復元しません。",
+    "현재 계정 삭제 시 다른 계정으로 전환합니다. 마지막 계정 삭제 시 로그아웃하며 이전 Key는 복원하지 않습니다."
+  ],
+  "accountCancel": ["取消", "取消", "Cancel", "キャンセル", "취소"],
+  "accountDelete": ["删除", "刪除", "Delete", "削除", "삭제"],
+  "accountNotDeleted": [
+    "未删除账号",
+    "未刪除帳號",
+    "Account not deleted",
+    "削除していません",
+    "삭제하지 않음"
+  ],
+  "accountDeleteFailed": [
+    "任务进行中或系统凭据库写入失败。",
+    "任務進行中或系統憑證庫寫入失敗。",
+    "Task in progress or secure storage write failed.",
+    "処理中または安全な保存への書き込み失敗。",
+    "작업 중 또는 보안 저장 쓰기 실패."
+  ],
+  "accountSecurityHint": [
+    "API Token 由 Android / iOS 系统安全存储加密保存，可查看／复制。任务执行期间账号与接口地址固定。",
+    "API Token 由 Android / iOS 系統安全儲存加密保存，可查看／複製。任務執行期間帳號與介面位址固定。",
+    "API Tokens are encrypted in Android / iOS secure storage and can be viewed/copied. Account and endpoint stay fixed during tasks.",
+    "API Token は Android / iOS の安全な領域に暗号化保存し、表示・コピーできます。処理中はアカウントと接続先を固定します。",
+    "API Token는 Android / iOS 보안 저장소에 암호화되며 보기/복사가 가능합니다. 작업 중 계정과 주소는 고정됩니다."
+  ],
+  "accountAdd": ["添加账号", "新增帳號", "Add account", "アカウント追加", "계정 추가"],
+  "accountOfficialShort": [
+    "官方 Token",
+    "官方 Token",
+    "Official Token",
+    "公式 Token",
+    "공식 Token"
+  ],
+  "accountEmailShort": ["邮箱密码", "信箱密碼", "Email login", "メール", "이메일"],
+  "accountRelayShort": ["中转 Token", "中轉 Token", "Relay Token", "中継 Token", "중계 Token"],
+  "accountRelayHint": [
+    "使用中转站提供的独立 API Token，不回退官方。",
+    "使用中轉站提供的獨立 API Token，不回退官方。",
+    "Use the relay service’s own API Token; no fallback to official servers.",
+    "中継サービスの独立 API Token を使用し、公式へフォールバックしません。",
+    "중계 서비스의 독립 API Token를 사용하며 공식 서버로 대체하지 않습니다."
+  ],
+  "accountEmailHint": [
+    "仅向官方登录，不保存密码。",
+    "僅向官方登入，不儲存密碼。",
+    "Official login only; password is not saved.",
+    "公式のみでログインし、パスワードは保存しません。",
+    "공식 로그인만 사용하며 비밀번호는 저장하지 않습니다."
+  ],
+  "accountOfficialHint": [
+    "使用 NovelAI 官方 API Token。",
+    "使用 NovelAI 官方 API Token。",
+    "Use the official NovelAI API Token.",
+    "NovelAI 公式 API Token を使用します。",
+    "NovelAI 공식 API Token를 사용합니다."
+  ],
+  "accountLabel": ["账号名称", "帳號名稱", "Account name", "アカウント名", "계정 이름"],
+  "accountEmail": ["官方邮箱", "官方信箱", "Official email", "公式メール", "공식 이메일"],
+  "accountPassword": [
+    "密码（不保存）",
+    "密碼（不儲存）",
+    "Password (not saved)",
+    "パスワード（保存しません）",
+    "비밀번호 (저장 안 함)"
+  ],
+  "accountRelayKey": [
+    "中转平台 API Token",
+    "中轉平台 API Token",
+    "Relay API Token",
+    "中継 API Token",
+    "중계 API Token"
+  ],
+  "accountApiAddress": [
+    "API 接口地址",
+    "API 介面位址",
+    "API endpoint",
+    "API 接続先",
+    "API 주소"
+  ],
+  "accountAddressHint": [
+    "填写服务商提供的 HTTPS API 接口地址，不是后台网页地址；路径前缀请完整保留。",
+    "填寫服務商提供的 HTTPS API 介面位址，不是後台網頁位址；路徑前綴請完整保留。",
+    "Enter the provider’s HTTPS API endpoint, not its dashboard. Preserve the full path prefix.",
+    "管理画面ではなく提供元の HTTPS API 接続先を入力し、パスのプレフィックスを保持してください。",
+    "관리 페이지가 아닌 제공업체의 HTTPS API 주소를 입력하고 전체 경로 접두사를 유지하세요."
+  ],
+  "accountImageAddress": [
+    "图片接口地址（可选，留空使用上方地址）",
+    "圖片介面位址（可選，留空使用上方位址）",
+    "Image endpoint (optional; blank uses API endpoint)",
+    "画像接続先（任意・空欄は上記を使用）",
+    "이미지 주소 (선택, 비우면 위 주소 사용)"
+  ],
+  "accountVerifying": ["正在验证…", "正在驗證…", "Verifying…", "検証中…", "검증 중…"],
+  "accountVerifySave": [
+    "验证并保存账号",
+    "驗證並儲存帳號",
+    "Verify and save account",
+    "検証して保存",
+    "검증 후 저장"
+  ],
+  "webQuery": ["网页查询", "網頁查詢", "Web query", "ウェブ検索", "웹 검색"],
+  "confirmMode": ["每次确认", "每次確認", "Confirm", "毎回確認", "매번 확인"],
+  "autoMode": ["全自动", "全自動", "Full auto", "全自動", "완전 자동"],
+  "presetToggle": ["使用酒馆", "使用酒館", "Use Tavern", "酒館を使用", "타번 사용"],
+  "presetInfinite": [
+    "无限四代（生图适配）",
+    "無限四代（生圖適配）",
+    "Infinite Gen 4 (image workflow)",
+    "無限四代（画像生成向け）",
+    "Infinite Gen 4 (이미지용)"
+  ],
+  "presetComplete": [
+    "综合生图预设",
+    "綜合生圖預設",
+    "Unified image preset",
+    "統合画像プリセット",
+    "통합 이미지 프리셋"
+  ],
+  "questionProgress": [
+    "问题 {name}",
+    "問題 {name}",
+    "Question {name}",
+    "質問 {name}",
+    "질문 {name}"
+  ],
+  "questionManual": [
+    "点击选项即可确认；可用上／下一题查看",
+    "點擊選項即可確認；可用上／下一題查看",
+    "Click an option to confirm; use Previous/Next to review",
+    "選択肢をクリックして確定。前／次の質問で確認できます",
+    "옵션을 클릭하여 확인하고 이전/다음으로 검토하세요"
+  ],
+  "questionChoose": [
+    "选择一个选项，或自定义回答",
+    "選擇一個選項，或自訂回答",
+    "Choose an option or write your own answer",
+    "選択肢または自由回答",
+    "선택지 또는 직접 답변"
+  ],
+  "questionRecommended": ["推荐", "推薦", "Recommended", "おすすめ", "추천"],
+  "questionCustom": ["自定义", "自訂", "Custom answer", "自由回答", "직접 입력"],
+  "questionCustomHint": [
+    "输入你的方向或要求…",
+    "輸入你的方向或要求…",
+    "Your preference or requirements…",
+    "希望や条件を入力…",
+    "원하는 방향이나 요구사항…"
+  ],
+  "questionPrevious": ["上一题", "上一題", "Previous", "前の質問", "이전"],
+  "questionNext": ["下一题", "下一題", "Next", "次の質問", "다음"],
+  "questionSubmit": ["提交回答", "提交回答", "Submit answers", "回答を送信", "답변 제출"],
+  "questionSubmitting": ["提交中…", "提交中…", "Submitting…", "送信中…", "제출 중…"],
+  "questionCancel": ["取消提问", "取消提問", "Cancel question", "質問をキャンセル", "질문 취소"],
+  "questionFailed": [
+    "回答未提交，请重试",
+    "回答未提交，請重試",
+    "Answer not submitted. Try again.",
+    "未送信です。再試行してください。",
+    "제출되지 않았습니다. 다시 시도하세요."
+  ],
+  "questionConfirmCustom": ["确定", "確定", "Confirm", "確定", "확인"],
   "menuReadTemplate": ["查看模板", "查看模板", "View templates", "テンプレートを見る", "템플릿 보기"],
   "menuApplyTemplate": [
     "应用模板",
@@ -202,11 +538,11 @@ const _rows = <String, List<String>>{
     "아이디어를 이미지로"
   ],
   "heroBody": [
-    "描述想画的内容，或添加参考图。助手会结合当前参数帮你整理，执行前由你确认。",
-    "描述想畫的內容，或加入參考圖。助手會結合目前參數幫你整理，執行前由你確認。",
-    "Describe your idea or add a reference. The assistant uses your current settings and asks before taking action.",
-    "アイデアを説明するか参照画像を追加してください。現在の設定を使い、実行前に確認します。",
-    "아이디어를 설명하거나 참조 이미지를 추가하세요. 현재 설정을 활용하며 실행 전에 확인합니다."
+    "描述想画的内容，或添加参考图。助手会结合当前参数帮你整理；可选择执行模式，并随时停止。",
+    "描述想畫的內容，或加入參考圖。助手會結合目前參數幫你整理；可選擇執行模式，並隨時停止。",
+    "Describe your idea or add a reference. The assistant uses your current settings to help; choose an execution mode and stop at any time.",
+    "描きたい内容を説明するか、参照画像を追加してください。現在の設定を使って整理します。実行モードを選び、いつでも停止できます。",
+    "원하는 그림을 설명하거나 참조 이미지를 추가하세요. 현재 설정을 바탕으로 정리하며, 실행 모드를 선택하고 언제든 중지할 수 있습니다."
   ],
   "quickSettings": [
     "查看当前生图设置",
@@ -417,5 +753,6 @@ String studioAgentText(Object? language, String key, {String? name}) {
     'ko-KR' => 4,
     _ => 0
   };
-  return (_rows[key]?[index] ?? key).replaceAll('{name}', name ?? '');
+  return ((studioAgentSharedRows[key] ?? _rows[key])?[index] ?? key)
+      .replaceAll('{name}', name ?? '');
 }

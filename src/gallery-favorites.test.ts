@@ -13,3 +13,13 @@ it('uses exact qualified names, keeps unknown locales/names and never rewrites p
 it('keeps the full versioned name and UI dictionary identical on Flutter',()=>{const dart=readFileSync(new URL('../mobile/lib/services/gallery_labels.dart',import.meta.url),'utf8');const json=dart.match(/r\'\'\'([\s\S]*?)\'\'\'/)?.[1];expect(JSON.parse(json!)).toEqual(labels);});
 it('sends website sort to every page across boundaries and rejects invalid sorts',async()=>{const calls:string[]=[];const fetch=async(url:string)=>{calls.push(url);const start=new URL(url).searchParams.get('p')==='2'?100:0;return '<main>hits=200'+Array.from({length:100},(_,i)=>`<a aria-label="Open detail: ${i}" href="/hair/${start+i}"></a>`).join('')+'</main>';};await loadTagsGalleryPage(fetch,'hair',9,12,'blue','name');expect(calls).toHaveLength(2);expect(calls.every(u=>new URL(u).searchParams.get('s')==='name')).toBe(true);expect(tagsGalleryUrl('character',1,'','count')).toContain('s=count');expect(()=>tagsGalleryUrl('hair',1,'','bad')).toThrow();});
 it('compact drag slots accept gaps, both boundaries and invalid pointers',()=>{expect(characterDropIndex([30,110,190],100)).toBe(1);expect(characterDropIndex([30,110,190],-100)).toBe(0);expect(characterDropIndex([30,110,190],300)).toBe(2);expect(characterDropIndex([],1)).toBe(-1);expect(characterDropIndex([30],NaN)).toBe(-1);});
+it('the actual favorites component resets only a vanished source, retaining a still-valid filter',()=>{
+ const component=readFileSync(new URL('./components/GalleryFavorites.tsx',import.meta.url),'utf8');
+ const expression=component.match(/const availableSource=([^;]+);/)?.[1];expect(expression).toBeDefined();
+ const available=new Function('items','source',`return (${expression});`) as (items:{source:string}[],source:string)=>string;
+ expect(available([],'all')).toBe('all');expect(available([],'aitag')).toBe('all');
+ expect(available([{source:'danbooru'}],'aitag')).toBe('all');
+ expect(available([{source:'aitag'},{source:'danbooru'}],'aitag')).toBe('aitag');
+ expect(available([{source:'danbooru'}],'danbooru')).toBe('danbooru');
+ expect(component).toContain('value={availableSource}');expect(component).toContain("availableSource==='all'||i.source===availableSource");expect(component).toContain('setSource(availableSource);setPage(1)');
+});

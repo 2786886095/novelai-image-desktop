@@ -10,8 +10,8 @@ void main() {
     final settings = File('lib/screens/settings_screen.dart').readAsStringSync();
     final generate = File('lib/screens/generate_screen.dart').readAsStringSync();
     final state = File('lib/state/app_state.dart').readAsStringSync();
-    expect(settings, isNot(contains('const CompatibleImageSettingsCard()')));
-    expect(generate, isNot(contains('return CompatibleGenerateScreen(')));
+    expect(settings, contains('const CompatibleImageSettingsCard()'));
+    expect(generate, contains('CompatibleGenerateScreen(preview:preview)'));
     expect(state, contains("settings.imageProvider = 'novelai';"));
     expect(apiProfiles.containsKey('compatible-image'), isFalse);
   });

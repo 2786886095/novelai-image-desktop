@@ -30,6 +30,7 @@ Future<Object?> callMcpTagSearch({
   required String preferredTool,
   required String query,
   required int limit,
+  bool discoverOnly = false,
 }) {
   if (transport == 'sse') {
     return _callSse(
@@ -39,6 +40,7 @@ Future<Object?> callMcpTagSearch({
       preferredTool: preferredTool,
       query: query,
       limit: limit,
+      discoverOnly: discoverOnly,
     );
   }
   return _callStreamableHttp(
@@ -48,6 +50,7 @@ Future<Object?> callMcpTagSearch({
     preferredTool: preferredTool,
     query: query,
     limit: limit,
+    discoverOnly: discoverOnly,
   );
 }
 
@@ -58,6 +61,7 @@ Future<Object?> _callStreamableHttp({
   required String preferredTool,
   required String query,
   required int limit,
+  bool discoverOnly = false,
 }) async {
   final url = endpoint.replaceAll(RegExp(r'/+$'), '');
   final cacheKey = '$url|$preferredTool|$apiKey';
@@ -88,11 +92,10 @@ Future<Object?> _callStreamableHttp({
   }
 
   final cached = _sessions[cacheKey];
-  if (cached != null &&
+  if (!discoverOnly && cached != null &&
       DateTime.now().difference(cached.touchedAt) <
           const Duration(minutes: 5)) {
     sessionId = cached.sessionId;
-    try {
       final response = await post(_rpc(
           'tools/call',
           {
@@ -105,10 +108,6 @@ Future<Object?> _callStreamableHttp({
         ..sessionId = sessionId
         ..touchedAt = DateTime.now();
       return response?['result'];
-    } catch (_) {
-      _sessions.remove(cacheKey);
-      sessionId = '';
-    }
   }
 
   await post(_rpc(
@@ -124,24 +123,12 @@ Future<Object?> _callStreamableHttp({
   } catch (_) {
     // Some servers answer notifications with an empty 202 or close the body.
   }
-  Map<String, dynamic>? schema;
-  var toolName = preferredTool.trim().isEmpty ? 'search_tags' : preferredTool;
-  try {
-    final listed = await post(_rpc('tools/list', <String, dynamic>{}, 2));
-    final tools = ((listed?['result'] as Map?)?['tools'] as List?) ?? const [];
-    final selected =
-        tools.cast<Object?>().whereType<Map>().cast<Map>().firstWhere(
-              (tool) => tool['name'] == toolName,
-              orElse: () =>
-                  tools.isEmpty ? <String, dynamic>{} : tools.first as Map,
-            );
-    if (selected['name'] is String) toolName = selected['name'] as String;
-    if (selected['inputSchema'] is Map) {
-      schema = Map<String, dynamic>.from(selected['inputSchema'] as Map);
-    }
-  } catch (_) {
-    // tools/list is optional for narrowly scoped MCP servers.
-  }
+  final tools = await _collectTools((body, id) => post(body));
+  if (discoverOnly) return {'tools': tools};
+  final toolName = preferredTool.trim().isEmpty ? 'search_tags' : preferredTool.trim();
+  final selected = tools.where((tool) => tool['name'] == toolName).firstOrNull;
+  if (selected == null) throw StateError('Selected MCP tool was not discovered');
+  final schema = Map<String, dynamic>.from(selected['inputSchema'] as Map);
   final response = await post(_rpc(
       'tools/call',
       {
@@ -166,6 +153,7 @@ Future<Object?> _callSse({
   required String preferredTool,
   required String query,
   required int limit,
+  bool discoverOnly = false,
 }) async {
   final headers = <String, String>{
     'Accept': 'text/event-stream',
@@ -227,6 +215,8 @@ Future<Object?> _callSse({
           throw TimeoutException('SSE did not return an endpoint event'),
     );
 
+    if (postUri.origin != Uri.parse(endpoint).origin) throw StateError('MCP SSE endpoint must stay on the configured origin');
+
     Future<Map<String, dynamic>?> send(
       Map<String, dynamic> body, {
       int? responseId,
@@ -266,25 +256,12 @@ Future<Object?> _callSse({
       responseId: 1,
     );
     await send(_rpc('notifications/initialized'));
-    Map<String, dynamic>? schema;
-    var toolName =
-        preferredTool.trim().isEmpty ? 'search_tags' : preferredTool.trim();
-    try {
-      final listed = await send(
-        _rpc('tools/list', <String, dynamic>{}, 2),
-        responseId: 2,
-      );
-      final tools =
-          ((listed?['result'] as Map?)?['tools'] as List?) ?? const [];
-      final selected = tools.cast<Object?>().whereType<Map>().firstWhere(
-            (tool) => tool['name'] == toolName,
-            orElse: () => tools.isEmpty ? <String, dynamic>{} : tools.first,
-          );
-      if (selected['name'] is String) toolName = selected['name'] as String;
-      if (selected['inputSchema'] is Map) {
-        schema = Map<String, dynamic>.from(selected['inputSchema'] as Map);
-      }
-    } catch (_) {}
+    final tools = await _collectTools((body, id) => send(body, responseId: id));
+    if (discoverOnly) return {'tools': tools};
+    final toolName = preferredTool.trim().isEmpty ? 'search_tags' : preferredTool.trim();
+    final selected = tools.where((tool) => tool['name'] == toolName).firstOrNull;
+    if (selected == null) throw StateError('Selected MCP tool was not discovered');
+    final schema = Map<String, dynamic>.from(selected['inputSchema'] as Map);
     final called = await send(
       _rpc(
           'tools/call',
@@ -333,37 +310,46 @@ Map<String, dynamic>? _parseRpcBody(String raw) {
 }
 
 void _throwRpcError(Map<String, dynamic>? response) {
+  if ((response?['result'] as Map?)?['isError'] == true) throw StateError('MCP tool returned an error');
   final error = response?['error'];
   if (error is Map) {
-    throw StateError(error['message']?.toString() ?? 'MCP call failed');
+    throw StateError('MCP call failed');
   }
 }
 
-Map<String, dynamic> _buildArgs(
-  Map<String, dynamic>? schema,
-  String query,
-  int limit,
-) {
-  final properties = schema?['properties'];
-  if (properties is! Map) return {'query': query, 'limit': limit};
-  final args = <String, dynamic>{};
-  var hasString = false;
-  for (final entry in properties.entries) {
-    final definition = entry.value;
-    if (definition is! Map) continue;
-    final type = definition['type'];
-    final isString =
-        type == 'string' || type is List && type.contains('string');
-    final isNumber = type == 'number' || type == 'integer';
-    if (!hasString && isString) {
-      args[entry.key.toString()] = query;
-      hasString = true;
-    } else if (isNumber &&
-        RegExp(r'limit|top|count|num|size|^k$', caseSensitive: false)
-            .hasMatch(entry.key.toString())) {
-      args[entry.key.toString()] = limit;
+Future<List<Map<String, dynamic>>> _collectTools(Future<Map<String, dynamic>?> Function(Map<String, dynamic>, int) send) async {
+  final tools = <String, Map<String, dynamic>>{}, cursors = <String>{};
+  String? cursor;
+  for(var page=0;page<50;page++) {
+    final reply=await send(_rpc('tools/list',cursor==null?<String,dynamic>{}:{'cursor':cursor},2+page),2+page);
+    _throwRpcError(reply);
+    final result=reply?['result'];
+    if(result is! Map || result['tools'] is! List) throw StateError('MCP tools/list failed');
+    for(final tool in result['tools'] as List) {
+      if(tool is! Map || tool['name'] is! String || (tool['name'] as String).trim().isEmpty || tool['inputSchema'] is! Map) throw StateError('Invalid MCP tool schema');
+      tools[tool['name'] as String]={'name':tool['name'],if(tool['description'] is String)'description':tool['description'],'inputSchema':tool['inputSchema']};
     }
+    final next=result['nextCursor'];
+    if(next==null || next=='') return tools.values.toList();
+    if(next is! String || !cursors.add(next)) throw StateError('Invalid MCP pagination cursor');
+    cursor=next;
   }
-  if (!hasString) args['query'] = query;
-  return args;
+  throw StateError('MCP tool list exceeds page limit');
+}
+Future<List<Map<String,dynamic>>> listMcpTagTools({required http.Client client,required String endpoint,required String transport,required String apiKey}) async {
+  final result=await callMcpTagSearch(client:client,endpoint:endpoint,transport:transport,apiKey:apiKey,preferredTool:'search_tags',query:'',limit:1,discoverOnly:true);
+  return ((result as Map)['tools'] as List).cast<Map<String,dynamic>>();
+}
+Map<String, dynamic> _buildArgs(Map<String, dynamic>? schema,String query,int limit) {
+ final props=schema?['properties'];if(props is! Map) return {'query':query};
+ final keys=props.keys.cast<String>().toList();
+ final queryKey=keys.where((k)=>RegExp(r'^(query|q|text|prompt|description|tags?|keywords?|search)$',caseSensitive:false).hasMatch(k)).firstOrNull
+   ??keys.where((k)=>props[k] is Map && (props[k]['type']=='string'||(props[k]['type']=='array'&&props[k]['items'] is Map&&props[k]['items']['type']=='string'))).firstOrNull;
+ final args=<String,dynamic>{};
+ for(final key in keys){final def=props[key];if(def is! Map)continue;
+  if(key==queryKey){args[key]=def['type']=='array'?query.split(RegExp(r'[,，\n]')).map((s)=>s.trim()).where((s)=>s.isNotEmpty).toList():query;}
+  else if(['integer','number'].contains(def['type'])&&RegExp(r'limit|top|count|num|size|^k$',caseSensitive:false).hasMatch(key)){args[key]=limit;}
+  else if(schema?['required'] is List&&(schema!['required'] as List).contains(key)){if(def.containsKey('default')){args[key]=def['default'];}else{throw StateError('MCP required argument needs explicit configuration: $key');}}
+ }
+ return args;
 }

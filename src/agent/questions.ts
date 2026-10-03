@@ -1,5 +1,5 @@
 import type {AgentQuestion,AgentQuestionAnswer,AgentQuestionRequest} from './types';
-export const agentQuestionToolSchema={type:'object',additionalProperties:false,required:['questions'],properties:{questions:{type:'array',minItems:1,maxItems:3,items:{type:'object',additionalProperties:false,required:['prompt','options'],properties:{prompt:{type:'string',minLength:1,maxLength:600},options:{type:'array',minItems:2,maxItems:6,items:{type:'object',additionalProperties:false,required:['label'],properties:{label:{type:'string',minLength:1,maxLength:120},description:{type:'string',maxLength:400},recommended:{type:'boolean'}}}}}}}}};
+export const agentQuestionToolSchema={type:'object',additionalProperties:false,required:['questions'],properties:{questions:{type:'array',minItems:1,maxItems:3,items:{type:'object',additionalProperties:false,required:['prompt','options'],properties:{prompt_note:{type:'string',maxLength:600},prompt:{type:'string',minLength:1,maxLength:600},options:{type:'array',minItems:2,maxItems:6,items:{type:'object',additionalProperties:false,required:['label'],properties:{label:{type:'string',minLength:1,maxLength:120},description:{type:'string',maxLength:400},recommended:{type:'boolean'}}}}}}}}};
 function text(value:unknown,max:number){if(typeof value!=='string'||!value.trim()||value.length>max)throw Error('Invalid question text');return value.trim();}
 function optionalText(value:unknown,max:number){if(value===undefined)return undefined;if(typeof value!=='string'||value.length>max)throw Error('Invalid option description');return value.trim()||undefined;}
 /** Treat the model's wording as plain data, not executable UI or authorization. */
@@ -14,19 +14,25 @@ export function normalizeAgentQuestions(input:unknown):AgentQuestion[]{
  });
 }
 export function initialAgentQuestionAnswers(request:AgentQuestionRequest):AgentQuestionAnswer[]{
- return request.questions.map(q=>({questionId:q.id,optionId:(q.options.find(o=>o.recommended)??q.options[0]).id}));
+ return request.questions.map(q=>({questionId:q.id,text:''}));
 }
 export function restoreAgentQuestionDraft(request:AgentQuestionRequest,value:unknown){
- const defaults=initialAgentQuestionAnswers(request),saved=value as {index?:unknown;answers?:unknown};
+ const raw=value as {version?:unknown;requestId?:unknown;index?:unknown;answers?:unknown;confirmed?:unknown};
+ const saved=raw&&(raw.version===2||raw.version===3&&raw.requestId===request.id)?raw:undefined;
+ const defaults=initialAgentQuestionAnswers(request);
  const index=typeof saved?.index==='number'&&Number.isInteger(saved.index)?Math.max(0,Math.min(request.questions.length-1,saved.index)):0;
- const answers=defaults.map((fallback,i)=>{
+ const confirmed:string[]=[];
+ const answers=defaults.map<AgentQuestionAnswer>((fallback,i)=>{
   const a=Array.isArray(saved?.answers)?saved.answers[i]:undefined,q=request.questions[i];
   if(a?.questionId!==q.id)return fallback;
-  if(typeof a.optionId==='string'&&q.options.some(o=>o.id===a.optionId))return {questionId:q.id,optionId:a.optionId};
-  if(a.optionId===undefined&&typeof a.text==='string'&&a.text.length<=4000)return {questionId:q.id,text:a.text};
-  return fallback;
+  let restored:AgentQuestionAnswer;
+  try {restored=validateAgentQuestionAnswers({...request,questions:[q]},[a])[0];}
+  catch {if(a.optionId===undefined&&typeof a.text==='string'&&a.text.length<=4000)return {questionId:q.id,text:a.text};return fallback;}
+  const explicit=saved?.version===2?typeof restored.optionId==='string':Array.isArray(saved?.confirmed)&&saved.confirmed.includes(q.id);
+  if(explicit)confirmed.push(q.id);
+  return restored;
  });
- return {index,answers};
+ return {index,answers,confirmed};
 }
 export function validateAgentQuestionAnswers(request:AgentQuestionRequest,value:unknown):AgentQuestionAnswer[]{
  if(!Array.isArray(value)||value.length!==request.questions.length)throw Error('Answer every question');

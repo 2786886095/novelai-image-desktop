@@ -10,7 +10,7 @@ it('native conversion derives an assistant policy without overwriting templates'
 it('uses the current text as material and scopes custom changes',()=>{
  const r=preparePromptAssistance('white hair, from above',{kind:'custom',instruction:'改成俯视雨夜街道'});
  expect(JSON.parse(r.userText)).toMatchObject({currentPrompt:'white hair, from above',instruction:'改成俯视雨夜街道'});
- expect(r.auditText).toBe('改成俯视雨夜街道');expect(r.systemSuffix).toBe(PROMPT_CUSTOM_TEMPLATE);
+ expect(r.auditText).toBe('white hair, from above\n改成俯视雨夜街道');expect(r.systemSuffix).toBe(PROMPT_CUSTOM_TEMPLATE);
  expect(r.systemSuffix).toContain('不生成新的画师串');
 });
 it('optimization keeps the original facts as its audit input',()=>expect(preparePromptAssistance('white hair',{kind:'optimize',instruction:''}).auditText).toBe('white hair'));

@@ -1,3 +1,4 @@
+import {NAI_RELAY_MODEL_IDS} from '../../src/nai-accounts';
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -66,6 +67,7 @@ export async function generateConfiguredImages(request: CompatibleGenerationRequ
     if (settings.imageProvider !== "openai-images" || !settings.compatibleImage) {
       return { ok: false, items, message: "请先在设置中选择并保存兼容图片服务。" };
     }
+    if(!NAI_RELAY_MODEL_IDS.includes(settings.compatibleImage.model as any)) return {ok:false,items,message:'仅兼容 NovelAI 模型；未提交生成。'};
     const config = { ...settings.compatibleImage, apiKey: settings.imageApiKey ?? "" };
     const input = { prompt: request.prompt, n: request.n, size: options.size ?? config.size, extensions: config.extensions };
     const body = buildCompatibleImageRequest(config, input);
@@ -85,6 +87,7 @@ export async function generateConfiguredImages(request: CompatibleGenerationRequ
     const batch = await generateCompatibleImages(config, input, {
       signal: job.controller.signal,
       beforeSubmit: async () => {
+        if(getSettings().imageServiceRevision!==settings.imageServiceRevision) throw Error('Image settings changed before submit');
         assertAgentImageProvider(getSettings(), options.expectedProvider);
         await options.beforeSubmit?.();
       },

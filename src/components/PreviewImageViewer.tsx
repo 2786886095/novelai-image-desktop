@@ -43,8 +43,9 @@ export function PreviewImageViewer({images,index,onIndex,renderImage,favoriteAct
   surface?.addEventListener('keydown',key,true);root.current?.focus({preventScroll:true});
   return()=>{surface?.removeEventListener('keydown',key,true);if(previous?.isConnected&&!previous.closest('[inert]'))previous.focus({preventScroll:true});};
  },[]);
- function move(delta:number){if(navigation){(delta<0?navigation.onPrevious:navigation.onNext)?.();return;}const next=index+delta;if(next>=0&&next<images.length)onIndex(next);}
- function zoom(next:number){setScale(Math.min(8,Math.max(1,next)));setPan({x:0,y:0});}
+ // Keep keys on the viewer before the clicked control becomes disabled at a boundary.
+ function move(delta:number){if(navigation){const change=delta<0?navigation.onPrevious:navigation.onNext;if(change){root.current?.focus({preventScroll:true});change();}return;}const next=index+delta;if(next>=0&&next<images.length){root.current?.focus({preventScroll:true});onIndex(next);}}
+ function zoom(next:number){root.current?.focus({preventScroll:true});setScale(Math.min(8,Math.max(1,next)));setPan({x:0,y:0});}
  return <div ref={root} className="image-preview-viewer" tabIndex={0} onPointerDownCapture={e=>{moved.current=false;pointerStart.current={x:e.clientX,y:e.clientY};backgroundPress.current=e.button===0&&isBlank(e.target,e.clientX,e.clientY);}} onPointerMoveCapture={e=>{const start=pointerStart.current;if(start&&Math.hypot(e.clientX-start.x,e.clientY-start.y)>4)moved.current=true;}} onPointerCancel={()=>{pointerStart.current=null;backgroundPress.current=false;}} onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();if(e.detail>1)return;if(moved.current){moved.current=false;backgroundPress.current=false;return;}if(backgroundPress.current&&isBlank(e.target,e.clientX,e.clientY))onBackgroundClick();backgroundPress.current=false;}} onKeyDown={e=>{
   if((e.target as HTMLElement).closest('input,textarea,[contenteditable="true"]'))return;
   if(e.key==='Escape'){e.preventDefault();e.stopPropagation();onBackgroundClick();return;}

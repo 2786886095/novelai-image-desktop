@@ -78,7 +78,8 @@ describe("convertComicPanels fallback path", () => {
       convertApiKey: "",
       convertApiModel: "gpt-4o-mini",
       convertSystemPrompt: "",
-      convertPromptTemplates: { tags: "", natural: "", mixed: "" },
+      // These fixtures exercise transport/logging, not the bounded default.
+      convertPromptTemplates: { tags: "FIXTURE CUSTOM TAGS NO UNIT BOUND", natural: "", mixed: "" },
       mcpForConvert: false,
       proxyUrl: "",
       proxyForAi: true,
@@ -179,7 +180,7 @@ describe("convertComicPanels fallback path", () => {
       visionApiUrl: "https://api.deepseek.com",
       visionApiKey: "sk-test",
       visionApiModel: "deepseek-v4-flash-vision-exp",
-      reversePromptTemplates: { tags: "", natural: "", mixed: "" },
+      reversePromptTemplates: { tags: "FIXTURE CUSTOM TAGS NO UNIT BOUND", natural: "", mixed: "" },
       mcpForReverse: false,
     };
     axiosMock.post
@@ -230,12 +231,12 @@ describe("prompt codex enhancement", () => {
       visionApiKey: "sk-vision",
       visionApiModel: "vision-test",
       visionSystemPrompt: "",
-      reversePromptTemplates: { tags: "", natural: "", mixed: "" },
+      reversePromptTemplates: { tags: "FIXTURE CUSTOM TAGS NO UNIT BOUND", natural: "", mixed: "" },
       convertApiUrl: "https://example.test/v1",
       convertApiKey: "sk-convert",
       convertApiModel: "text-test",
       convertSystemPrompt: "",
-      convertPromptTemplates: { tags: "", natural: "", mixed: "" },
+      convertPromptTemplates: { tags: "FIXTURE CUSTOM TAGS NO UNIT BOUND", natural: "", mixed: "" },
       mcpForReverse: false,
       mcpForConvert: false,
       proxyUrl: "",
@@ -592,4 +593,43 @@ describe('prompt assistant derives selected conversion template',()=>{
   axiosMock.post.mockClear();axiosMock.post.mockResolvedValue({data:{choices:[{message:{content:'short'},finish_reason:'stop'}]}});
   expect((await convertPromptText('white hair','mixed',false,'v5',{kind:'optimize',instruction:''})).ok).toBe(false);expect(axiosMock.post).toHaveBeenCalledTimes(3);
  });
+});
+
+describe('saved-mixed derived mode transport and source facts',()=>{
+ beforeEach(()=>{axiosMock.post.mockReset();settingsRef.current={convertApiUrl:'https://example.test/v1',convertApiKey:'fixture',convertApiModel:'fixture',convertPromptTemplates:{tags:'',natural:'',mixed:'有效语义单元 50–150；Tag 65–75%'},reverseConvertDshEnabled:false};});
+ it('pure natural keeps the source facts without a mixed comma count',async()=>{
+  const {convertPromptText}=await import('./nai');
+  axiosMock.post.mockResolvedValue({data:{choices:[{message:{content:'A woman with white hair and red eyes stands on the stage.'},finish_reason:'stop'}]}});
+  const r=await convertPromptText('white hair, red eyes, stage','natural',false,'v5');
+  expect(r.ok).toBe(true);expect(axiosMock.post).toHaveBeenCalledTimes(1);expect(axiosMock.post.mock.calls[0][1].messages[0].content).toContain('纯自然语言');
+ });
+ it('custom mixed edits preserve unchanged eyes while accepting changed hair and overhead lighting',async()=>{
+  const {convertPromptText}=await import('./nai');
+  const envelope={segments:[{units:[...Array.from({length:42},(_,i)=>({kind:'tag',text:['1girl','black hair','red eyes','upper body'][i]??'fixture tag '+i})),...Array.from({length:18},(_,i)=>({kind:'natural',text:'her visible sleeve catches light '+i}))]}]};
+  const response=()=>({data:{choices:[{message:{content:JSON.stringify(envelope)},finish_reason:'stop'}]}});
+  axiosMock.post.mockResolvedValue(response());
+  const input='1girl, white hair, red eyes, upper body, she is lit from above by a spotlight';
+  expect((await convertPromptText(input,'mixed',false,'v5',{kind:'custom',instruction:'把发色改为黑发'})).ok).toBe(true);expect(axiosMock.post).toHaveBeenCalledTimes(1);
+  envelope.segments[0].units[2].text='blue eyes';axiosMock.post.mockReset();axiosMock.post.mockImplementation(async()=>response());
+  const invalid=await convertPromptText(input,'mixed',false,'v5',{kind:'custom',instruction:'把发色改为黑发'});
+  expect(invalid.ok).toBe(false);expect(invalid.result).toBeUndefined();expect(axiosMock.post).toHaveBeenCalledTimes(3);
+ });
+});
+
+it('requests documented JSON output on official DeepSeek only for typed prompts',async()=>{
+ const {convertPromptText}=await import('./nai');axiosMock.post.mockReset();
+ settingsRef.current={convertApiUrl:'https://api.deepseek.com',convertApiKey:'fixture',convertApiModel:'deepseek-v4-flash-vision-exp',convertPromptTemplates:{tags:'',natural:'',mixed:'有效语义单元 50–150；Tag 65–75%'}};
+ const units=[...Array.from({length:42},(_,i)=>({kind:'tag',text:'fixture tag '+i})),...Array.from({length:18},(_,i)=>({kind:'natural',text:'a visible sleeve detail '+i}))];
+ axiosMock.post.mockResolvedValue({data:{choices:[{message:{content:JSON.stringify({segments:[{units}]})},finish_reason:'stop'}]}});
+ expect((await convertPromptText('一个舞台场景','mixed')).ok).toBe(true);expect(axiosMock.post.mock.calls[0][1].response_format).toEqual({type:'json_object'});
+ axiosMock.post.mockClear();settingsRef.current.convertApiUrl='https://relay.example/v1';
+ expect((await convertPromptText('一个舞台场景','mixed')).ok).toBe(true);expect(axiosMock.post.mock.calls[0][1]).not.toHaveProperty('response_format');
+});
+
+it('pure Tag conversion audits the derived range and JSON transport before success',async()=>{
+ const {convertPromptText}=await import('./nai');axiosMock.post.mockReset();
+ settingsRef.current={convertApiUrl:'https://api.deepseek.com',convertApiKey:'fixture',convertApiModel:'fixture',convertPromptTemplates:{tags:'',natural:'',mixed:'有效语义单元 50–150；Tag 65–75%'}};
+ const response=(count:number)=>({data:{choices:[{message:{content:JSON.stringify({segments:[{units:Array.from({length:count},(_,i)=>({kind:'tag',text:'visible tag '+i}))}]})},finish_reason:'stop'}]}});
+ axiosMock.post.mockResolvedValueOnce(response(46)).mockResolvedValueOnce(response(60));
+ const result=await convertPromptText('场景布局与细节','tags');expect(result.ok).toBe(true);expect(result.result?.split(',')).toHaveLength(60);expect(axiosMock.post).toHaveBeenCalledTimes(2);expect(axiosMock.post.mock.calls[0][1].response_format).toEqual({type:'json_object'});
 });

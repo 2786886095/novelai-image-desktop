@@ -65,6 +65,7 @@ import {
   refreshStoredAccount,
   reversePromptImage,
   searchTagServer,
+  listConfiguredMcpTools,
   suggestTags,
   testTagServer,
   translateText,
@@ -1116,6 +1117,7 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   accountBoundHandle("nai:listModels", (_event, kind: "reverse" | "convert" | "translate") =>
     listAiModels(kind),
   );
+  ipcMain.handle("nai:listMcpTools", () => listConfiguredMcpTools());
   accountBoundHandle("nai:testTagServer", (_event, query: string) =>
     testTagServer(query),
   );

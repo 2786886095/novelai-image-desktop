@@ -23,6 +23,21 @@ abstract final class AppMotion {
   static const Curve easeInOut = Curves.easeInOutCubic;
 }
 
+/// Reduced motion bypasses the size ticker entirely, rather than laying out
+/// a zero-duration AnimatedSize that can dirty itself during keyboard layout.
+Widget studioSizeTransition(BuildContext context,
+        {required Widget child,
+        Duration duration = AppMotion.standard,
+        Duration? reverseDuration}) =>
+    MediaQuery.disableAnimationsOf(context)
+        ? child
+        : AnimatedSize(
+            duration: duration,
+            reverseDuration: reverseDuration,
+            curve: AppMotion.easeOut,
+            alignment: Alignment.topCenter,
+            child: child);
+
 abstract final class StudioRadii {
   static const double control = 8;
   static const double panel = 12;

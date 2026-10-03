@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:archive/archive.dart';
+import 'package:image/image.dart' as image_lib;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/services/generation_scope.dart';
@@ -54,8 +55,9 @@ void main() {
     await arrived.future.timeout(const Duration(seconds: 5));
     one.cancel();
     await aError;
+    final png = image_lib.encodePng(image_lib.Image(width: 16, height: 16));
     final zip = ZipEncoder()
-        .encode(Archive()..addFile(ArchiveFile('image.png', 3, [1, 2, 3])))!;
+        .encode(Archive()..addFile(ArchiveFile('image.png', png.length, png)))!;
     requests[1].response.add(zip);
     await requests[1].response.close();
     final result = await b.timeout(const Duration(seconds: 5));

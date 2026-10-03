@@ -1,6 +1,6 @@
 # Langbai NovelAI Studio
 
-> 2.4.6 候補版：公式トークン、公式メール/パスワード、NovelAI互換中継の複数アカウントと新アシスタント。未公開です。iOS共有コードは実装済みですがmacOSでのビルド・署名は未検証。Androidローカル版はテスト署名です。
+> v2.4.7：Windows x64 のインストーラーとポータブル版を公開します。Android/iOS 共通機能のソースは同期済みですが、今回のリリースにモバイルバイナリや実機・署名検証は含まれません。
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 

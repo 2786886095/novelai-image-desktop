@@ -8,6 +8,8 @@ import 'package:novelai_mobile/services/nai_api.dart';
 import 'package:novelai_mobile/services/update_service.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  HttpOverrides.global = null; // This test talks only to its own loopback fixture.
   test('DeepSeek V4 thinking is disabled only for the official endpoint', () {
     expect(
       shouldDisableDeepSeekThinking(

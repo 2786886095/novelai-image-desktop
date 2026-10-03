@@ -16,7 +16,7 @@ import { spawn } from "child_process";
 import { EventEmitter } from "events";
 import { proxyConfig } from "./proxy";
 
-const CLIENT_INFO = { name: "langbai-novelai-studio", version: "2.4.6" };
+const CLIENT_INFO = { name: "langbai-novelai-studio", version: "2.4.7" };
 const PROTOCOL_VERSION = "2024-11-05";
 
 interface JsonRpcMessage {
@@ -59,29 +59,45 @@ function parseBody(raw: string): JsonRpcMessage | null {
   return last;
 }
 
-/** Build a tools/call arguments object from the tool's inputSchema. */
-function buildArgs(inputSchema: any, query: string, limit: number): Record<string, unknown> {
-  const props = inputSchema?.properties;
-  if (!props || typeof props !== "object") return { query };
-  const args: Record<string, unknown> = {};
-  let stringSet = false;
-  for (const [key, def] of Object.entries<any>(props)) {
-    const type = def?.type;
-    const isString = type === "string" || (Array.isArray(type) && type.includes("string"));
-    const isNumber = type === "integer" || type === "number";
-    if (!stringSet && isString) {
-      args[key] = query;
-      stringSet = true;
-    } else if (isNumber && /limit|top|count|num|size|\bk\b/i.test(key)) {
-      args[key] = limit;
+export interface McpToolInfo { name: string; description?: string; inputSchema: Record<string, any> }
+/** Discover all pages; a repeated cursor is an error, not an infinite loop. */
+async function collectTools(send: (body: JsonRpcMessage, id: number) => Promise<JsonRpcMessage | null>): Promise<McpToolInfo[]> {
+  const tools = new Map<string, McpToolInfo>(), cursors = new Set<string>();
+  let cursor: string | undefined;
+  for (let page=0; page<50; page++) {
+    const result = await send(rpc("tools/list", cursor ? {cursor} : {}, 2+page), 2+page);
+    if (result?.error || !Array.isArray(result?.result?.tools)) throw Error("MCP tools/list failed");
+    for (const tool of result!.result.tools) {
+      if (typeof tool?.name !== 'string' || !tool.name.trim() || !tool.inputSchema || typeof tool.inputSchema !== 'object') throw Error('Invalid MCP tool schema');
+      tools.set(tool.name, {name:tool.name, ...(typeof tool.description==='string'?{description:tool.description}:{}), inputSchema:tool.inputSchema});
+    }
+    const next = result!.result.nextCursor;
+    if (next === undefined || next === null || next === '') return [...tools.values()];
+    if (typeof next !== 'string' || cursors.has(next)) throw Error('Invalid MCP pagination cursor');
+    cursors.add(next); cursor=next;
+  }
+  throw Error('MCP tool list exceeds page limit');
+}
+function buildArgs(schema: any, query: string, limit: number): Record<string, unknown> {
+  const props=schema?.properties;
+  if (!props || typeof props!=='object') return {query};
+  const args:Record<string,unknown>={};
+  const queryKey=Object.keys(props).find(k=>/^(query|q|text|prompt|description|tags?|keywords?|search)$/i.test(k))
+    ?? Object.keys(props).find(k=>props[k]?.type==='string'||(props[k]?.type==='array'&&props[k]?.items?.type==='string'));
+  for (const [key,def] of Object.entries<any>(props)) {
+    if (key===queryKey) args[key]=def.type==='array'?query.split(/[,，\n]/).map(s=>s.trim()).filter(Boolean):query;
+    else if (['integer','number'].includes(def?.type)&&/limit|top|count|num|size|^k$/i.test(key)) args[key]=limit;
+    else if (Array.isArray(schema?.required)&&schema.required.includes(key)) {
+      if (def.default!==undefined) args[key]=def.default;
+      else throw Error('MCP required argument needs explicit configuration: '+key);
     }
   }
-  if (!stringSet) args.query = query;
   return args;
 }
 
 /** Join an MCP tool result's content blocks into a single text string. */
 function resultToText(result: any): string {
+  if (result?.isError) throw Error("MCP tool returned an error");
   if (!result) return "";
   const content = result.content;
   if (Array.isArray(content)) {
@@ -120,6 +136,7 @@ function makePost(url: string, headers: Record<string, string>, getSid: () => st
       validateStatus: () => true,
       ...proxyConfig("mcp"),
     });
+    if (resp.status < 200 || resp.status >= 300) throw Error(`MCP HTTP ${resp.status}`);
     const newSid = resp.headers["mcp-session-id"];
     if (newSid) setSid(String(newSid));
     const data = typeof resp.data === "string" ? resp.data : JSON.stringify(resp.data);
@@ -133,6 +150,7 @@ async function callHttp(
   tool: string,
   query: string,
   limit: number,
+  listOnly = false,
 ): Promise<string> {
   const url = endpoint.replace(/\/+$/, "");
   const headers: Record<string, string> = {
@@ -147,18 +165,12 @@ async function callHttp(
 
   // Fast path: reuse a warm session and skip initialize + tools/list.
   const cached = httpSessions.get(cacheKey);
-  if (cached && Date.now() - cached.ts < SESSION_TTL_MS) {
+  if (!listOnly && cached && Date.now() - cached.ts < SESSION_TTL_MS) {
     sessionId = cached.sessionId;
-    try {
-      const call = await post(rpc("tools/call", { name: tool, arguments: buildArgs(cached.argSchema, query, limit) }, 3));
-      if (call?.error) throw new Error(call.error.message || "MCP tools/call 失败");
-      cached.ts = Date.now();
-      cached.sessionId = sessionId;
-      return resultToText(call?.result);
-    } catch {
-      httpSessions.delete(cacheKey); // stale session — fall through to full handshake
-      sessionId = "";
-    }
+    const call = await post(rpc("tools/call", { name: tool, arguments: buildArgs(cached.argSchema, query, limit) }, 1002));
+    if (call?.error) throw new Error("MCP tools/call failed");
+    cached.ts = Date.now(); cached.sessionId = sessionId;
+    return resultToText(call?.result);
   }
 
   await post(rpc("initialize", { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: CLIENT_INFO }, 1));
@@ -168,15 +180,11 @@ async function callHttp(
     /* notification failures are non-fatal */
   }
 
-  let argSchema: any = null;
-  try {
-    const list = await post(rpc("tools/list", {}, 2));
-    const tools = list?.result?.tools ?? [];
-    const found = tools.find((t: any) => t?.name === tool) ?? tools[0];
-    argSchema = found?.inputSchema ?? null;
-  } catch {
-    /* tools/list optional; fall back to a default arg name */
-  }
+  const tools = await collectTools(body => post(body));
+  if (listOnly) return JSON.stringify(tools);
+  const found = tools.find(t => t.name === tool);
+  if (!found) throw Error('Selected MCP tool was not discovered');
+  const argSchema = found.inputSchema;
 
   const call = await post(rpc("tools/call", { name: tool, arguments: buildArgs(argSchema, query, limit) }, 3));
   if (call?.error) throw new Error(call.error.message || "MCP tools/call 失败");
@@ -205,6 +213,7 @@ async function callSse(
   tool: string,
   query: string,
   limit: number,
+  listOnly = false,
 ): Promise<string> {
   const url = endpoint.replace(/\/+$/, "");
   const headers: Record<string, string> = {};
@@ -298,15 +307,11 @@ async function callSse(
     await waitEndpoint;
     await send(rpc("initialize", { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: CLIENT_INFO }, 1), 1);
     await send(rpc("notifications/initialized"));
-    let argSchema: any = null;
-    try {
-      const list = await send(rpc("tools/list", {}, 2), 2);
-      const tools = list?.result?.tools ?? [];
-      const found = tools.find((t: any) => t?.name === tool) ?? tools[0];
-      argSchema = found?.inputSchema ?? null;
-    } catch {
-      /* optional */
-    }
+    const tools = await collectTools((body,id) => send(body,id));
+    if (listOnly) return JSON.stringify(tools);
+    const found = tools.find(t => t.name === tool);
+    if (!found) throw Error('Selected MCP tool was not discovered');
+    const argSchema = found.inputSchema;
     const call = await send(rpc("tools/call", { name: tool, arguments: buildArgs(argSchema, query, limit) }, 3), 3);
     if (call?.error) throw new Error(call.error.message || "MCP tools/call 失败");
     return resultToText(call?.result);
@@ -326,10 +331,12 @@ async function callStdio(
   tool: string,
   query: string,
   limit: number,
+  listOnly = false,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, argv, {
-      shell: process.platform === "win32",
+      shell: process.platform === "win32" && !/\.exe$/i.test(command),
+      windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],
     });
     let stdout = "";
@@ -399,15 +406,11 @@ async function callStdio(
       try {
         await request(rpc("initialize", { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: CLIENT_INFO }, 1), 1);
         write(rpc("notifications/initialized"));
-        let argSchema: any = null;
-        try {
-          const list = await request(rpc("tools/list", {}, 2), 2);
-          const tools = list?.result?.tools ?? [];
-          const found = tools.find((tt: any) => tt?.name === tool) ?? tools[0];
-          argSchema = found?.inputSchema ?? null;
-        } catch {
-          /* optional */
-        }
+        const tools = await collectTools(request);
+        if (listOnly) { clearTimeout(overall); done(JSON.stringify(tools)); return; }
+        const found = tools.find(t => t.name === tool);
+        if (!found) throw Error('Selected MCP tool was not discovered');
+        const argSchema = found.inputSchema;
         const call = await request(rpc("tools/call", { name: tool, arguments: buildArgs(argSchema, query, limit) }, 3), 3);
         clearTimeout(overall);
         if (call?.error) return fail(new Error(call.error.message || "MCP tools/call 失败"));
@@ -443,4 +446,15 @@ export async function mcpSearch(config: McpConfig, query: string, limit: number)
   if (!config.url.trim()) throw new Error("请填写 MCP 服务地址。");
   if (config.type === "sse") return callSse(config.url.trim(), config.apiKey.trim(), tool, query, limit);
   return callHttp(config.url.trim(), config.apiKey.trim(), tool, query, limit);
+}
+
+/** Read-only discovery; never invokes an advertised tool. */
+export async function mcpListTools(config: McpConfig): Promise<McpToolInfo[]> {
+  const tool=config.tool.trim()||'search_tags';
+  if(config.type==='stdio') {
+    if(!config.command.trim()) throw Error('MCP command is required');
+    return JSON.parse(await callStdio(config.command.trim(), config.args.trim()?config.args.trim().split(/\s+/):[], tool, '', 1, true));
+  }
+  if(!config.url.trim()) throw Error('MCP URL is required');
+  return JSON.parse(await (config.type==='sse'?callSse:callHttp)(config.url.trim(),config.apiKey.trim(),tool,'',1,true));
 }

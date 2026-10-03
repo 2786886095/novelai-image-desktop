@@ -1,0 +1,33 @@
+[
+  {
+    "name": "header evidence",
+    "source": "你是 NovelAI Diffusion V5 Full 图片反推专家。只依据图片中真实可见的证据，把图像翻译成一条「约 70% 英文 Danbooru / NovelAI Tag + 30% 英文自然语言」的混合提示词。",
+    "required": [
+      "只依据图片中真实可见的证据"
+    ]
+  },
+  {
+    "name": "same-line ownership",
+    "source": "[ ] Tag 占 65–75%，自然语言占 25–35%；每个角色至少 1 个位置/关系短语；必须写清道具归属。",
+    "required": [
+      "每个角色至少 1 个位置/关系短语",
+      "必须写清道具归属"
+    ]
+  },
+  {
+    "name": "same-clause facts",
+    "source": "Tag 占 70% 并保留左手持杯、红色袖口、右侧光源；自然语言占 30%。有效语义单元 50–150。",
+    "required": [
+      "保留左手持杯、红色袖口、右侧光源",
+      "有效语义单元 50–150"
+    ]
+  },
+  {
+    "name": "unrelated percentages",
+    "source": "透明伞覆盖画面 50%。反推的负权重 81% 为误用，不得抄示例。\nTag 保持约 65–75%，自然语言保持约 25–35%。",
+    "required": [
+      "透明伞覆盖画面 50%",
+      "负权重 81%"
+    ]
+  }
+]

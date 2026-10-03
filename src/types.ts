@@ -1475,6 +1475,8 @@ export interface AppSettings {
   comicAnalyzePromptTemplate: string;
   promptOptimizeTemplate: string;
   promptAssistantTemplate: string;
+  /** Independent editor mode; absent legacy settings default to mixed. */
+  promptAssistantMode?: ReversePromptMode;
   // Text-only prompt conversion API, intentionally separated from vision reverse-prompt.
   convertApiUrl: string;
   convertApiKey: string;
@@ -1513,6 +1515,8 @@ export interface AppSettings {
   tagServerArgs: string;
   // MCP tool name to call for tag search (DanbooruSearchOnline: search_tags).
   tagServerTool: string;
+  tagServerRelatedTool?: string;
+  tagServerArtistTool?: string;
   // Which features consume the tag/MCP service. The capsule defaults on once the
   // service is configured; reverse / convert are opt-in.
   mcpForCapsule: boolean;
@@ -2053,6 +2057,7 @@ export interface NaiDesktopApi {
   clearAiCallLog: () => Promise<{ ok: boolean }>;
   getReverseTemplateDefaults: () => Promise<ModePromptTemplates>;
   listAiModels: (kind: "reverse" | "convert" | "translate") => Promise<AiModelListResult>;
+  listMcpTools: () => Promise<import("./mcp-tools").McpDiscoveredTool[]>;
   testTagServer: (
     query: string,
   ) => Promise<{ ok: boolean; message: string; tags: TagSuggestion[] }>;

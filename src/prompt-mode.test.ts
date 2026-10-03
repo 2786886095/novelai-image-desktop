@@ -262,7 +262,7 @@ describe("concise NovelAI V5 production templates", () => {
     ]) {
       expect(template).toContain("text, <language> text");
       expect(template).toContain("不复述文字内容");
-      expect(template).not.toContain("reads OPEN");
+      expect(template).toContain("渲染文字保持原文和载体");
     }
     for (const template of six) {
       expect(template).not.toContain("base 最末、第一个 | 之前");
@@ -271,16 +271,16 @@ describe("concise NovelAI V5 production templates", () => {
       expect(template).toMatch(/不视为互斥|景别/);
     }
     expect(SCOPED_REVERSE_SYSTEM_PROMPTS.tags).toContain(
-      "本模式允许省略且不得混入自然语言",
+      "没有可靠 Tag 时保留最短准确词组",
     );
     expect(CONVERT_SYSTEM_PROMPTS.tags).toContain(
-      "空间关系优先由角色段顺序表达",
+      "动作、空间、哪只手、注视目标及光源关系",
     );
-    expect(SCOPED_REVERSE_SYSTEM_PROMPTS.natural).not.toContain(
-      "人数 Tag/人数描述",
+    expect(SCOPED_REVERSE_SYSTEM_PROMPTS.natural).toContain(
+      "不输出逗号堆叠的 Tag 列表",
     );
-    expect(CONVERT_SYSTEM_PROMPTS.natural).not.toContain(
-      "人数 Tag/人数描述",
+    expect(CONVERT_SYSTEM_PROMPTS.natural).toContain(
+      "不输出逗号堆叠的 Tag 列表",
     );
     expect(CONVERT_SYSTEM_PROMPTS.tags).toContain("mutual#holding hands");
     expect(CONVERT_SYSTEM_PROMPTS.mixed).toContain("锚点必须成对");

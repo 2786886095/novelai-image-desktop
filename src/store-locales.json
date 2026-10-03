@@ -2,7 +2,7 @@
   "zh-CN": {
     "status.ready": "就绪",
     "status.apiConfigured": "API 已配置",
-    "status.needApiToken": "请先设置 API Key",
+    "status.needApiToken": "请先设置 API Token",
     "status.quoteFailed": "无法读取生成前扣费",
     "status.insufficient": "Anlas 余额不足",
     "status.imageLoaded": "已加载图片：{width}×{height}",
@@ -26,7 +26,7 @@
     "status.needImage": "缺少图片",
     "status.needOriginal": "缺少原图",
     "status.needMask": "缺少蒙版",
-    "toast.needApiToken": "请先在设置中配置 API Key。",
+    "toast.needApiToken": "请先在设置中配置 API Token。",
     "toast.imageLoaded": "已加载：{width}×{height}",
     "toast.needImage": "请先选择图片。",
     "toast.inspectDone": "反推完成！",
@@ -91,12 +91,13 @@
     "i2i.singleDone": "图生图完成，已保存 1 张图片{spent}。",
     "inpaint.status": "正在局部重绘，生成前报价 {amount} Anlas...",
     "upscale.status": "正在超分 {scale}x，生成前报价 {amount} Anlas...",
-    "post.status": "正在运行 {tool}，生成前报价 {amount} Anlas..."
+    "post.status": "正在运行 {tool}，生成前报价 {amount} Anlas...",
+    "reference.vibeLimit": "氛围迁移最多支持 16 张参考图。"
   },
   "zh-TW": {
     "status.ready": "就緒",
     "status.apiConfigured": "API 已設定",
-    "status.needApiToken": "請先設定 API Key",
+    "status.needApiToken": "請先設定 API Token",
     "status.quoteFailed": "無法讀取生成前費用",
     "status.insufficient": "Anlas 餘額不足",
     "status.imageLoaded": "已載入圖片：{width}×{height}",
@@ -120,7 +121,7 @@
     "status.needImage": "缺少圖片",
     "status.needOriginal": "缺少原圖",
     "status.needMask": "缺少遮罩",
-    "toast.needApiToken": "請先在設定中設定 API Key。",
+    "toast.needApiToken": "請先在設定中設定 API Token。",
     "toast.imageLoaded": "已載入：{width}×{height}",
     "toast.needImage": "請先選擇圖片。",
     "toast.inspectDone": "反推完成！",
@@ -185,12 +186,13 @@
     "i2i.singleDone": "圖生圖完成，已儲存 1 張圖片{spent}。",
     "inpaint.status": "正在局部重繪，生成前報價 {amount} Anlas...",
     "upscale.status": "正在超解析 {scale}x，生成前報價 {amount} Anlas...",
-    "post.status": "正在執行 {tool}，生成前報價 {amount} Anlas..."
+    "post.status": "正在執行 {tool}，生成前報價 {amount} Anlas...",
+    "reference.vibeLimit": "氛圍遷移最多支援 16 張參考圖。"
   },
   "en-US": {
     "status.ready": "Ready",
     "status.apiConfigured": "API configured",
-    "status.needApiToken": "Set API Key first",
+    "status.needApiToken": "Set API Token first",
     "status.quoteFailed": "Unable to read pre-generation cost",
     "status.insufficient": "Insufficient Anlas balance",
     "status.imageLoaded": "Loaded image: {width}×{height}",
@@ -214,7 +216,7 @@
     "status.needImage": "Missing image",
     "status.needOriginal": "Missing source image",
     "status.needMask": "Missing mask",
-    "toast.needApiToken": "Configure API Key in Settings first.",
+    "toast.needApiToken": "Configure API Token in Settings first.",
     "toast.imageLoaded": "Loaded: {width}×{height}",
     "toast.needImage": "Select an image first.",
     "toast.inspectDone": "Reverse prompt complete!",
@@ -279,12 +281,13 @@
     "i2i.singleDone": "Img2img complete; saved 1 image{spent}.",
     "inpaint.status": "Running inpaint, quoted {amount} Anlas...",
     "upscale.status": "Upscaling {scale}x, quoted {amount} Anlas...",
-    "post.status": "Running {tool}, quoted {amount} Anlas..."
+    "post.status": "Running {tool}, quoted {amount} Anlas...",
+    "reference.vibeLimit": "Vibe Transfer supports at most 16 references."
   },
   "ja-JP": {
     "status.ready": "準備完了",
     "status.apiConfigured": "API 設定済み",
-    "status.needApiToken": "先に API Key を設定してください",
+    "status.needApiToken": "先に API Token を設定してください",
     "status.quoteFailed": "生成前の料金を取得できません",
     "status.insufficient": "Anlas 残高が不足しています",
     "status.imageLoaded": "画像を読み込みました：{width}×{height}",
@@ -308,7 +311,7 @@
     "status.needImage": "画像がありません",
     "status.needOriginal": "元画像がありません",
     "status.needMask": "マスクがありません",
-    "toast.needApiToken": "先に設定画面で API Key を設定してください。",
+    "toast.needApiToken": "先に設定画面で API Token を設定してください。",
     "toast.imageLoaded": "読み込み完了：{width}×{height}",
     "toast.needImage": "先に画像を選択してください。",
     "toast.inspectDone": "画像解析が完了しました！",
@@ -373,12 +376,13 @@
     "i2i.singleDone": "画像からの生成が完了し、1 枚保存しました{spent}。",
     "inpaint.status": "インペイント中、生成前見積もり {amount} Anlas…",
     "upscale.status": "{scale}x アップスケール中、生成前見積もり {amount} Anlas…",
-    "post.status": "{tool} を実行中、生成前見積もり {amount} Anlas…"
+    "post.status": "{tool} を実行中、生成前見積もり {amount} Anlas…",
+    "reference.vibeLimit": "Vibe Transfer の参照画像は最大 16 枚です。"
   },
   "ko-KR": {
     "status.ready": "준비됨",
     "status.apiConfigured": "API 설정됨",
-    "status.needApiToken": "먼저 API Key를 설정하세요",
+    "status.needApiToken": "먼저 API Token를 설정하세요",
     "status.quoteFailed": "생성 전 비용을 조회하지 못했습니다",
     "status.insufficient": "Anlas 잔액 부족",
     "status.imageLoaded": "이미지 로드됨: {width}×{height}",
@@ -402,7 +406,7 @@
     "status.needImage": "이미지 없음",
     "status.needOriginal": "원본 이미지 없음",
     "status.needMask": "마스크 없음",
-    "toast.needApiToken": "먼저 설정에서 API Key를 입력하세요.",
+    "toast.needApiToken": "먼저 설정에서 API Token를 입력하세요.",
     "toast.imageLoaded": "로드됨: {width}×{height}",
     "toast.needImage": "먼저 이미지를 선택하세요.",
     "toast.inspectDone": "이미지 분석 완료!",
@@ -467,6 +471,7 @@
     "i2i.singleDone": "이미지 기반 생성 완료. 이미지 1장을 저장했습니다{spent}.",
     "inpaint.status": "인페인트 중, 생성 전 견적 {amount} Anlas…",
     "upscale.status": "{scale}x 업스케일 중, 생성 전 견적 {amount} Anlas…",
-    "post.status": "{tool} 실행 중, 생성 전 견적 {amount} Anlas…"
+    "post.status": "{tool} 실행 중, 생성 전 견적 {amount} Anlas…",
+    "reference.vibeLimit": "Vibe Transfer는 참고 이미지를 최대 16개까지 지원합니다."
   }
 }

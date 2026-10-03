@@ -16,7 +16,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.4.6';
+const appVersion = '2.4.7';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -752,6 +752,7 @@ class AccountSummary {
   final String? tierName;
   final int? tierLevel;
   final int? anlasBalance;
+  final String? expiresAt;
   final bool? hasActiveSubscription;
   final OpusGenerationUsage? opusUsage;
   final int? opusUsageUpdatedAt;
@@ -761,6 +762,7 @@ class AccountSummary {
     this.tierName,
     this.tierLevel,
     this.anlasBalance,
+    this.expiresAt,
     this.hasActiveSubscription,
     this.opusUsage,
     this.opusUsageUpdatedAt,
@@ -772,6 +774,7 @@ class AccountSummary {
         tierName: tierName,
         tierLevel: tierLevel,
         anlasBalance: anlasBalance,
+        expiresAt: expiresAt,
         hasActiveSubscription: hasActiveSubscription,
         opusUsage: opusUsage,
         opusUsageUpdatedAt: opusUsageUpdatedAt,
@@ -901,6 +904,8 @@ class AppSettings {
   String tagServerUrl;
   String tagServerType;
   String tagServerTool;
+  String tagServerRelatedTool;
+  String tagServerArtistTool;
   bool tagServerEnabled;
   bool mcpForCapsule;
   bool mcpForReverse;
@@ -950,6 +955,9 @@ class AppSettings {
   String convertPromptTemplateVersion;
   String agentPromptTemplateMode;
   Map<String, String> convertPromptTemplates;
+  String promptAssistantMode;
+  String promptOptimizeTemplate;
+  String promptAssistantTemplate;
   bool promptCodexEnhanceEnabled;
   bool promptCodexAdultEnabled;
   bool promptRuleAutoRepairEnabled;
@@ -1019,6 +1027,8 @@ class AppSettings {
     this.tagServerUrl = '',
     this.tagServerType = 'rest',
     this.tagServerTool = 'search_tags',
+    this.tagServerRelatedTool = '',
+    this.tagServerArtistTool = '',
     this.tagServerEnabled = false,
     this.mcpForCapsule = false,
     this.mcpForReverse = false,
@@ -1064,6 +1074,9 @@ class AppSettings {
     this.convertPromptTemplateVersion = 'v5',
     this.agentPromptTemplateMode = 'mixed',
     Map<String, String>? convertPromptTemplates,
+    this.promptAssistantMode = 'mixed',
+    this.promptOptimizeTemplate = '',
+    this.promptAssistantTemplate = '',
     this.promptCodexEnhanceEnabled = true,
     this.promptCodexAdultEnabled = true,
     this.promptRuleAutoRepairEnabled = false,
@@ -1140,6 +1153,8 @@ class AppSettings {
         'tagServerUrl': tagServerUrl,
         'tagServerType': tagServerType,
         'tagServerTool': tagServerTool,
+        'tagServerRelatedTool': tagServerRelatedTool,
+        'tagServerArtistTool': tagServerArtistTool,
         'tagServerEnabled': tagServerEnabled,
         'mcpForCapsule': mcpForCapsule,
         'mcpForReverse': mcpForReverse,
@@ -1188,6 +1203,9 @@ class AppSettings {
         'convertPromptTemplateVersion': convertPromptTemplateVersion,
         'agentPromptTemplateMode': agentPromptTemplateMode,
         'convertPromptTemplates': convertPromptTemplates,
+        'promptAssistantMode': promptAssistantMode,
+        'promptOptimizeTemplate': promptOptimizeTemplate,
+        'promptAssistantTemplate': promptAssistantTemplate,
         'promptCodexEnhanceEnabled': promptCodexEnhanceEnabled,
         'promptCodexAdultEnabled': promptCodexAdultEnabled,
         'promptRuleAutoRepairEnabled': promptRuleAutoRepairEnabled,
@@ -1227,8 +1245,11 @@ class AppSettings {
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> j) => AppSettings(
-        imageProvider: j['imageProvider'] == 'openai-images' ? 'openai-images' : 'novelai',
-        compatibleImage: j['compatibleImage'] is Map ? Map<String, dynamic>.from(j['compatibleImage']) : {},
+        imageProvider:
+            j['imageProvider'] == 'openai-images' ? 'openai-images' : 'novelai',
+        compatibleImage: j['compatibleImage'] is Map
+            ? Map<String, dynamic>.from(j['compatibleImage'])
+            : {},
         apiBaseUrl: j['apiBaseUrl'] ?? 'https://api.novelai.net',
         imageBaseUrl: j['imageBaseUrl'] ?? 'https://image.novelai.net',
         allowCustomEndpoint: j['allowCustomEndpoint'] ?? true,
@@ -1260,6 +1281,8 @@ class AppSettings {
         tagServerUrl: j['tagServerUrl'] ?? '',
         tagServerType: j['tagServerType'] ?? 'rest',
         tagServerTool: j['tagServerTool'] ?? 'search_tags',
+        tagServerRelatedTool: j['tagServerRelatedTool'] ?? '',
+        tagServerArtistTool: j['tagServerArtistTool'] ?? '',
         tagServerEnabled: j['tagServerEnabled'] ??
             (j['tagServerUrl']?.toString().trim().isNotEmpty ?? false),
         mcpForCapsule: j['mcpForCapsule'] ?? false,
@@ -1301,7 +1324,8 @@ class AppSettings {
             [],
         characterPromptPresets:
             normalizeCharacterPromptPresets(j['characterPromptPresets']),
-        stylePromptPresetSort: j['stylePromptPresetSort']?.toString() ?? 'default',
+        stylePromptPresetSort:
+            j['stylePromptPresetSort']?.toString() ?? 'default',
         stylePromptPresets: (j['stylePromptPresets'] as List?)
                 ?.whereType<Map>()
                 .map((item) =>
@@ -1326,10 +1350,25 @@ class AppSettings {
         reversePromptTemplates: _stringMap(j['reversePromptTemplates']),
         reversePromptTemplatesV45: _stringMap(j['reversePromptTemplatesV45']),
         convertPromptTemplatesV45: _stringMap(j['convertPromptTemplatesV45']),
-        comicAnalyzePromptTemplates: _stringMap(j['comicAnalyzePromptTemplates']),
-        convertPromptTemplateVersion: j['convertPromptTemplateVersion']=='v4.5'?'v4.5':'v5',
-        agentPromptTemplateMode: ['mixed','tags','natural'].contains(j['agentPromptTemplateMode'])?j['agentPromptTemplateMode']:'mixed',
+        comicAnalyzePromptTemplates:
+            _stringMap(j['comicAnalyzePromptTemplates']),
+        convertPromptTemplateVersion:
+            j['convertPromptTemplateVersion'] == 'v4.5' ? 'v4.5' : 'v5',
+        agentPromptTemplateMode:
+            ['mixed', 'tags', 'natural'].contains(j['agentPromptTemplateMode'])
+                ? j['agentPromptTemplateMode']
+                : 'mixed',
         convertPromptTemplates: _stringMap(j['convertPromptTemplates']),
+        promptAssistantMode: j['promptAssistantMode'] is String &&
+                ['mixed', 'tags', 'natural'].contains(j['promptAssistantMode'])
+            ? j['promptAssistantMode']
+            : 'mixed',
+        promptOptimizeTemplate: j['promptOptimizeTemplate'] is String
+            ? j['promptOptimizeTemplate']
+            : '',
+        promptAssistantTemplate: j['promptAssistantTemplate'] is String
+            ? j['promptAssistantTemplate']
+            : '',
         promptCodexEnhanceEnabled: j['promptCodexEnhanceEnabled'] ?? true,
         promptCodexAdultEnabled: j['promptCodexAdultEnabled'] ?? true,
         promptRuleAutoRepairEnabled: j['promptRuleAutoRepairEnabled'] ?? false,
@@ -1374,7 +1413,9 @@ class AppSettings {
         augmentColorizePrompt: _stringValue(j['augmentColorizePrompt'], ''),
         completionSound: CompletionSound.fromJson(j['completionSound']),
         persistI2IParams: j['persistI2IParams'] != false,
-        lastGenerationState: j['lastGenerationState'] is Map ? Map<String,dynamic>.from(j['lastGenerationState']) : {},
+        lastGenerationState: j['lastGenerationState'] is Map
+            ? Map<String, dynamic>.from(j['lastGenerationState'])
+            : {},
         reduceMotion: j['reduceMotion'] == true,
         augmentEmotion:
             _supportedOptionValue(j['augmentEmotion'], emotionOptions, 'happy'),
@@ -1492,10 +1533,20 @@ class StylePromptPreset {
 
   factory StylePromptPreset.fromJson(Map<String, dynamic> json) =>
       StylePromptPreset(
-        coverImageId: json['coverImageId'] is String ? json['coverImageId'] as String : null,
-        rating: (json['rating'] is num && (json['rating'] as num).isFinite ? (json['rating'] as num).clamp(0,5).toDouble() : 0.0),
-        usageCount: json['usageCount'] is num && (json['usageCount'] as num).isFinite ? (json['usageCount'] as num).clamp(0,9007199254740991).toInt() : 0,
-        sortOrder: json['sortOrder'] is num && (json['sortOrder'] as num).isFinite ? (json['sortOrder'] as num).clamp(0,9007199254740991).toInt() : 9007199254740991,
+        coverImageId: json['coverImageId'] is String
+            ? json['coverImageId'] as String
+            : null,
+        rating: (json['rating'] is num && (json['rating'] as num).isFinite
+            ? (json['rating'] as num).clamp(0, 5).toDouble()
+            : 0.0),
+        usageCount:
+            json['usageCount'] is num && (json['usageCount'] as num).isFinite
+                ? (json['usageCount'] as num).clamp(0, 9007199254740991).toInt()
+                : 0,
+        sortOrder:
+            json['sortOrder'] is num && (json['sortOrder'] as num).isFinite
+                ? (json['sortOrder'] as num).clamp(0, 9007199254740991).toInt()
+                : 9007199254740991,
         id: json['id']?.toString() ?? '',
         name: json['name']?.toString() ?? '',
         prompt: json['prompt']?.toString() ?? '',

@@ -7,18 +7,12 @@ import 'template_tools.dart';
 class AgentTemplateWorkflow {
   final AgentTemplateTools templates;
   final Future<String> Function() backup;
-  final Future<String> Function() agentBackup;
   AgentTemplateWorkflow(AppState app, {Future<String> Function()? backup,
-      Future<String> Function()? agentBackup, AgentTemplateTools? templates})
+      AgentTemplateTools? templates})
       : templates = templates ?? AgentTemplateTools(app),
         backup = backup ??
             (() async => (await DataBackupService(app.storage).createBackup(
                     {DataBackupCategory.configuration},
-                    internal: true))
-                .path),
-        agentBackup = agentBackup ??
-            (() async => (await DataBackupService(app.storage).createBackup(
-                    {DataBackupCategory.agentWorkspace},
                     internal: true))
                 .path);
 
@@ -93,8 +87,7 @@ class AgentTemplateWorkflow {
     }
     String? backupPath;
     if (['save', 'restore'].contains(args['action'])) {
-      backupPath = ['optimize', 'assistant'].contains(before['kind'])
-          ? await agentBackup() : await backup();
+      backupPath = await backup();
       if (backupPath.isEmpty) throw StateError('修改前备份未完成');
     }
     final after = await templates.execute('studio_save_prompt_template', {
@@ -108,9 +101,7 @@ class AgentTemplateWorkflow {
       'saved': true,
       if (backupPath != null) ...{
         'backupPath': backupPath,
-        'restoreInstructions': ['optimize', 'assistant'].contains(before['kind'])
-            ? '在 Agent 备份列表检查此文件，选择智能体工作区分类后确认恢复。'
-            : '在 Agent 备份列表检查此文件，仅选择配置分类，再确认恢复。也可重新读取模板后保存旧内容。'
+        'restoreInstructions': '在 Agent 备份列表检查此文件，仅选择配置分类，再确认恢复。也可重新读取模板后保存旧内容。'
       }
     };
   }

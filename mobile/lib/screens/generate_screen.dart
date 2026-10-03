@@ -1,4 +1,6 @@
+import 'mcp_tools.dart';
 import 'style_library_screen.dart';
+import 'compatible_images.dart';
 import '../models/style_library.dart';
 import '../i18n/style_library_text.dart';
 import 'dart:convert';
@@ -10,6 +12,7 @@ import 'character_preset_bar.dart';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -278,6 +281,7 @@ class GenerateScreen extends StatelessWidget {
         state.account.tierLevel == 3 && p.model.startsWith('nai-diffusion-5-');
 
     final preview = _PreviewCard(onPick: () => _pickImage(context));
+    if(state.settings.imageProvider=='openai-images' && state.workbenchImage==null) return Scaffold(body:CompatibleGenerateScreen(preview:preview));
     final controls = <Widget>[
       _TagSearchBox(
         onInsert: (tag, negative) => state.setParam((params) {
@@ -2295,6 +2299,7 @@ class _CapsulePickerSheetState extends State<_CapsulePickerSheet> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                 children: [
+                  McpCapsuleSuggestions(onPick:(tag)=>Navigator.of(context).pop(_CapsulePick(tag,category.isNegative))),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -3750,8 +3755,12 @@ Future<void> _saveReferencePreset(
   String t(String key) => mobileUiTextFor(language, key);
   final nameController = TextEditingController();
   final groupController = TextEditingController();
-  final result = await showDialog<(String, String)>(
+  final navigator = Navigator.of(context, rootNavigator: true);
+  final route = DialogRoute<(String, String)>(
     context: context,
+    themes: InheritedTheme.capture(from: context, to: navigator.context),
+    barrierColor: Theme.of(context).dialogTheme.barrierColor ?? Colors.black54,
+    traversalEdgeBehavior: TraversalEdgeBehavior.closedLoop,
     builder: (dialogContext) => AlertDialog(
       title: Text(t('referencePresets.saveTitle')),
       content: SingleChildScrollView(
@@ -3807,6 +3816,9 @@ Future<void> _saveReferencePreset(
       ],
     ),
   );
+  final result = await navigator.push(route);
+  // The dialog fields still listen to both controllers while popping.
+  await route.completed;
   nameController.dispose();
   groupController.dispose();
   if (result == null || !context.mounted) return;
@@ -3929,8 +3941,12 @@ class _ReferencePresetLibraryPanelState
     var strength = 1.0;
     var fidelity = 1.0;
     var preciseType = 'character';
-    final result = await showDialog<ReferencePresetKind>(
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final route = DialogRoute<ReferencePresetKind>(
       context: context,
+      themes: InheritedTheme.capture(from: context, to: navigator.context),
+      barrierColor: Theme.of(context).dialogTheme.barrierColor ?? Colors.black54,
+      traversalEdgeBehavior: TraversalEdgeBehavior.closedLoop,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
           title: Text(t('referencePresets.add')),
@@ -4087,6 +4103,9 @@ class _ReferencePresetLibraryPanelState
         ),
       ),
     );
+    final result = await navigator.push(route);
+    // Both text fields remain mounted during the reverse route animation.
+    await route.completed;
     if (result == null || !context.mounted) {
       nameController.dispose();
       groupController.dispose();
@@ -4116,8 +4135,12 @@ class _ReferencePresetLibraryPanelState
     final language = state.settings.language;
     String t(String key) => mobileUiTextFor(language, key);
     final controller = TextEditingController();
-    final value = await showDialog<String>(
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final route = DialogRoute<String>(
       context: context,
+      themes: InheritedTheme.capture(from: context, to: navigator.context),
+      barrierColor: Theme.of(context).dialogTheme.barrierColor ?? Colors.black54,
+      traversalEdgeBehavior: TraversalEdgeBehavior.closedLoop,
       builder: (dialogContext) => AlertDialog(
         title: Text(t('referencePresets.createGroup')),
         content: TextField(
@@ -4140,6 +4163,10 @@ class _ReferencePresetLibraryPanelState
         ],
       ),
     );
+    final value = await navigator.push(route);
+    // Popping resolves before the animated dialog subtree is unmounted.
+    // Keep its controller alive through teardown, not an arbitrary timer.
+    await route.completed;
     controller.dispose();
     if (value == null || !context.mounted) return;
     final error = await state.addReferencePresetGroup(value);
@@ -4175,8 +4202,15 @@ class _ReferencePresetLibraryPanelState
     );
     if (confirmed != true || !context.mounted) return;
     final target = _group;
-    await state.deleteReferencePresetGroup(target);
-    if (mounted) setState(() => _group = _allGroups);
+    try {
+      await state.deleteReferencePresetGroup(target);
+      if (mounted) setState(() => _group = _allGroups);
+    } catch (_) {
+      if (context.mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t('referencePresets.saveFailed'))),
+        );
+    }
   }
 
   Future<void> _movePresetToGroup(
@@ -4224,9 +4258,14 @@ class _ReferencePresetLibraryPanelState
 
   Future<void> _import(BuildContext context) async {
     final state = context.read<AppState>();
+    // Document providers may not recognize the app's own .nairp extension.
+    // On mobile select the document, then validate the ZIP/manifest in Storage;
+    // desktop retains its extension filter. This also covers iPhone and iPad.
+    final mobile = defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['nairp', 'zip'],
+      type: mobile ? FileType.any : FileType.custom,
+      allowedExtensions: mobile ? null : const ['nairp', 'zip'],
     );
     final path = result?.files.single.path;
     if (path == null || !context.mounted) return;
@@ -4297,8 +4336,15 @@ class _ReferencePresetLibraryPanelState
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    await state.deleteReferencePreset(preset.id);
-    if (mounted) setState(() => _selectedIds.remove(preset.id));
+    try {
+      await state.deleteReferencePreset(preset.id);
+      if (mounted) setState(() => _selectedIds.remove(preset.id));
+    } catch (_) {
+      if (context.mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t('referencePresets.saveFailed'))),
+        );
+    }
   }
 
   Future<void> _applySelected(BuildContext context) async {
@@ -4307,23 +4353,34 @@ class _ReferencePresetLibraryPanelState
     setState(() => _busy = true);
     String? lastError;
     var applied = 0;
-    for (final preset in state.referencePresets
-        .where((item) => _selectedIds.contains(item.id))) {
-      final error = widget.onApplyPreset == null
-          ? await state.applyReferencePreset(preset.id)
-          : await widget.onApplyPreset!(preset);
-      if (error == null) {
-        applied += 1;
-      } else {
-        lastError = error;
+    try {
+      for (final preset in state.referencePresets
+          .where((item) => _selectedIds.contains(item.id))) {
+        String? error;
+        try {
+          error = widget.onApplyPreset == null
+              ? await state.applyReferencePreset(preset.id)
+              : await widget.onApplyPreset!(preset);
+        } catch (_) {
+          error = mobileUiTextFor(
+              state.settings.language, 'referencePresets.applyFailed');
+        }
+        if (error == null) {
+          applied += 1;
+        } else {
+          lastError = error;
+        }
       }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
     if (!mounted || !context.mounted) return;
-    setState(() => _busy = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(lastError ?? '${state.displayStatus} · $applied')),
     );
-    if (applied > 0 && context.mounted) Navigator.maybePop(context);
+    if (applied > 0 && lastError == null && context.mounted) {
+      Navigator.maybePop(context);
+    }
   }
 
   Widget _selectionFooter(BuildContext context) {

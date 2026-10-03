@@ -1,3 +1,4 @@
+import '../services/novelai_image_envelope.dart';
 import '../services/novelai_accounts.dart';
 import '../services/novelai_account_api.dart';
 import '../services/novelai_official_auth.dart';
@@ -115,7 +116,7 @@ class AppState extends ChangeNotifier {
       if (storage is NovelAiAccountStorage) await (storage as NovelAiAccountStorage).ready();
       await action();
       _applyNaiAccount();
-      account = AccountSummary(hasToken: naiAccounts.active != null);
+      account = naiAccounts.cachedSummary(naiAccounts.active?.profile.id);
       _opusUsageTimer?.cancel();
       _quoteTimer?.cancel();
       _quoteVersion++;
@@ -123,17 +124,38 @@ class AppState extends ChangeNotifier {
       lastAnlasSpent = null;
     } finally { _naiChanging = false; notifyListeners(); }
   }
-  Future<void> activateNaiAccount(String? id) => _changeNaiAccount(() => naiAccounts.activate(id));
+  Future<void> activateNaiAccount(String? id) async {
+    await _changeNaiAccount(() => naiAccounts.activate(id));
+    if(id!=null) unawaited(refreshAnlas());
+  }
+  Future<AccountSummary> verifyNaiAccount(String id) async {
+    if(naiAccountLocked) throw StateError('任务进行中，未提交验证');
+    _naiChanging=true; notifyListeners();
+    try {
+      final summary=await naiAccounts.operation((snapshot) {
+        if(snapshot.profile.id!=id) throw StateError('账号已变化');
+        final transport=api is NovelAiAccountApi ? api as NovelAiAccountApi : NovelAiAccountApi(naiAccounts);
+        return transport.verifyCandidate(snapshot,settings);
+      },profileId:id);
+      await naiAccounts.rememberSummary(id,summary);
+      if(naiAccounts.active?.profile.id==id) account=summary; return summary;
+    } finally { _naiChanging=false; notifyListeners(); }
+  }
   Future<void> removeNaiAccount(String id) => _changeNaiAccount(() => naiAccounts.remove(id));
   Future<void> addNaiAccount({required String label, required String method, String token = '',
       String email = '', String password = '', String apiBaseUrl = 'https://api.novelai.net',
-      String imageBaseUrl = 'https://image.novelai.net'}) => _changeNaiAccount(() async {
+      String imageBaseUrl = 'https://image.novelai.net'}) async {
+    await _changeNaiAccount(() async {
     final secret = method == 'official-login' ? await NovelAiOfficialAuth(settingsProvider: () => settings).login(email, password) : token;
-    final profile = await naiAccounts.add(label: label, method: method, token: secret,
+    final transport=api is NovelAiAccountApi ? api as NovelAiAccountApi : NovelAiAccountApi(naiAccounts);
+    await naiAccounts.addVerified(label: label, method: method, token: secret,
+      verify:(snapshot)=>transport.verifyCandidate(snapshot,settings),
       apiBaseUrl: method == 'relay' ? apiBaseUrl : 'https://api.novelai.net',
       imageBaseUrl: method == 'relay' ? imageBaseUrl : 'https://image.novelai.net');
-    await naiAccounts.activate(profile.id);
-  });
+    });
+    account=naiAccounts.cachedSummary(naiAccounts.active?.profile.id,stale:false);
+    notifyListeners();
+  }
 
 
   BatchRedrawController? _batchRedraw;
@@ -156,11 +178,15 @@ class AppState extends ChangeNotifier {
 
   Future<void> saveCompatibleSettings(Map<String, dynamic> config, String key,
       {String? expectedCredentialId}) async {
+    final expected=expectedCredentialId ?? settings.compatibleImage['credentialId'] as String? ?? '';
+    final snapshot=Map<String,dynamic>.from(config);
+    await api.verifyCompatibleNovelAi(AppSettings.fromJson(settings.toJson()),snapshot,key);
+    if((settings.compatibleImage['credentialId'] as String? ?? '')!=expected) throw StateError('图片服务配置已变化，未保存。');
     final next = AppSettings.fromJson(settings.toJson())
-      ..compatibleImage = Map<String, dynamic>.from(config)
+      ..compatibleImage = snapshot
       ..imageProvider = 'openai-images';
     await storage.saveCompatibleConfiguration(next, key,
-      expectedCredentialId: expectedCredentialId ?? settings.compatibleImage['credentialId'] as String? ?? '');
+      expectedCredentialId: expected);
     // Unrelated in-memory edits made while secure storage was writing are retained.
     settings.compatibleImage = next.compatibleImage;
     settings.imageProvider = next.imageProvider;
@@ -190,6 +216,7 @@ class AppState extends ChangeNotifier {
   Future<CompatibleGenerationOutcome> _generateCompatible({String? promptOverride, int? countOverride, VoidCallback? ensureCurrent}) async {
     final snapshot = AppSettings.fromJson(jsonDecode(jsonEncode(settings.toJson())) as Map<String, dynamic>);
     final c = snapshot.compatibleImage;
+    if(!novelAiEnvelopeModels.contains(c['model'])) throw StateError('仅兼容 NovelAI 模型，未提交生成。');
     final prompt = promptOverride ?? params.positivePrompt, count = countOverride ?? batchCount, group = generationGroupId;
     final text = compatibleImageText(snapshot.language);
     final cancel = CompatibleImageCancellation();
@@ -251,7 +278,7 @@ class AppState extends ChangeNotifier {
       naiAccounts.onCommitted = () {
         if (_compatibleDisposed) return;
         _applyNaiAccount();
-        account = AccountSummary(hasToken: naiAccounts.active != null);
+        account = naiAccounts.cachedSummary(naiAccounts.active?.profile.id);
         _quoteVersion++;
         generationQuote = null;
         lastAnlasSpent = null;
@@ -379,10 +406,9 @@ class AppState extends ChangeNotifier {
         await (storage as NovelAiAccountStorage).ready();
         _applyNaiAccount();
       }
-      if (settings.imageProvider != 'novelai') {
-        // The separate OpenAI Images generator is retired. Keep its credential
-        // and configuration for backup/rollback, but never silently submit a
-        // generation to that service after this upgrade.
+      if (settings.imageProvider != 'novelai' && (settings.imageProvider != 'openai-images' || !novelAiEnvelopeModels.contains(settings.compatibleImage['model']))) {
+        // Preserve only an explicitly configured supported NovelAI envelope.
+        // Unsupported archived models keep their metadata, but stay inactive.
         settings.imageProvider = 'novelai';
         await storage.setSettings(settings);
       }
@@ -431,11 +457,8 @@ class AppState extends ChangeNotifier {
       // Follow the phone's current system proxy when one is published; an
       // empty result stays direct so Android/iOS VPN and TUN adapters can route
       // the socket without any app-side localhost port.
-      if (settings.proxyMode != 'auto') {
-        settings.proxyMode = 'auto';
-        settings.proxyUrl = '';
-        await storage.setSettings(settings);
-      }
+      // AppSettings supplies auto only when no mode is saved. Never overwrite
+      // an explicit direct/manual selection or its address during startup.
       await refreshSystemProxyRoute(settings.apiBaseUrl);
       _proxyRefreshTimer?.cancel();
       _proxyRefreshTimer = Timer.periodic(
@@ -515,7 +538,9 @@ class AppState extends ChangeNotifier {
         // is a NovelAI network call — awaiting it here would stall startup (and
         // hang indefinitely when there's no proxy), so it runs off the boot
         // path in the finally block and refreshes the UI when it lands.
-        account = const AccountSummary(hasToken: true);
+        account = storage is NovelAiAccountStorage
+            ? naiAccounts.cachedSummary(naiAccounts.active?.profile.id)
+            : const AccountSummary(hasToken: true);
       }
     } catch (error) {
       status = _rf('status.bootReadFailed', {'error': _cleanError(error)});
@@ -554,8 +579,14 @@ class AppState extends ChangeNotifier {
   // first frame. Mirrors the old inline fetch: placeholder + status note on
   // failure, no success toast.
   Future<AccountSummary> _fetchAccountPreservingLast(String token) async {
+    final id=naiAccounts.active?.profile.id;
     final fresh = await api.fetchAccount(token, settings);
-    if (!fresh.stale) return fresh;
+    if (!fresh.stale) {
+      if(storage is NovelAiAccountStorage && id!=null && naiAccounts.active?.profile.id==id) {
+        await naiAccounts.rememberSummary(id,fresh);
+      }
+      return fresh;
+    }
     // A failed official /user/data refresh must never replace the last real
     // allowance with a fabricated zero/placeholder. Keep the last successful
     // values, but mark them stale so the UI cannot claim a live sync.
@@ -576,7 +607,7 @@ class AppState extends ChangeNotifier {
         status = _rt('status.accountSyncStale');
       }
     } catch (error) {
-      account = const AccountSummary(hasToken: true);
+      account = account.hasToken ? account.copyWith(stale:true) : const AccountSummary(hasToken:true,stale:true);
       status = _rf('status.accountReadFailed', {'error': _cleanError(error)});
     }
     notifyListeners();
@@ -685,7 +716,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<String?> setToken(String token) async {
-    try { await addNaiAccount(label: 'NovelAI Token', method: 'token', token: token); return null; }
+    try { await addNaiAccount(label: naiAccounts.nextLabel, method: 'token', token: token); return null; }
     catch (_) { return '保存账号失败；请检查输入、系统凭据库和运行中任务'; }
   }
   Future<void> clearToken() => activateNaiAccount(null);
@@ -1279,6 +1310,8 @@ class AppState extends ChangeNotifier {
     try {
       final bytes = await File(filePath).readAsBytes();
       readImageDimensions(bytes);
+      // Another read or bundle import may have filled the last slot while waiting.
+      if (extras.vibeImages.length >= 16) return _rt('status.vibeLimit');
       extras.vibeImages.add(VibeTransferItem(
         base64: base64Encode(bytes),
         sourcePath: filePath,
@@ -1357,40 +1390,86 @@ class AppState extends ChangeNotifier {
     _scheduleGenerationQuote();
   }
 
-  Future<void> _persistReferencePresetLibrary() =>
-      storage.setReferencePresetLibrary(ReferencePresetLibrary(
-        groups: referencePresetGroups,
-        presets: referencePresets,
+  Future<void> _referencePresetMutationTail = Future<void>.value();
+
+  // Serialize the whole copy/metadata/publish transaction. Pending changes are
+  // invisible, and a failed write never poisons later mutations or drops a save.
+  Future<T> _referencePresetMutation<T>(Future<T> Function() work) {
+    final pending = _referencePresetMutationTail.then((_) => work());
+    _referencePresetMutationTail =
+        pending.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return pending;
+  }
+
+  Future<void> _commitReferencePresetLibrary(
+      List<String> groups, List<ReferencePreset> presets) async {
+    final next = ReferencePresetLibrary(
+      groups: List<String>.of(groups),
+      presets: List<ReferencePreset>.of(presets),
+    );
+    await storage.setReferencePresetLibrary(next);
+    referencePresetGroups = next.groups;
+    referencePresets = next.presets;
+  }
+
+  Future<void> _appendReferencePresets(List<ReferencePreset> additions,
+      {List<String> groups = const []}) {
+    final nextGroups = <String>{
+      ...referencePresetGroups,
+      ...groups,
+      for (final preset in additions) preset.group,
+    }.where((value) => value.isNotEmpty).toList()
+      ..sort();
+    return _commitReferencePresetLibrary(
+        nextGroups, [...referencePresets, ...additions]);
+  }
+
+  Future<void> _discardReferencePresetImage(String? path) async {
+    if (path == null) return;
+    try {
+      await storage.deleteReferencePresetImage(ReferencePreset(
+        id: '',
+        name: '',
+        group: '',
+        kind: ReferencePresetKind.precise,
+        filePath: path,
+        createdAt: '',
       ));
+    } catch (_) {
+      // Cleanup must not hide the metadata failure or remove an existing asset.
+    }
+  }
 
   Future<String?> addReferencePresetGroup(String value) async {
-    final group = value.trim();
-    if (group.isEmpty) return _rt('referencePresets.groupRequired');
-    if (!referencePresetGroups.contains(group)) {
-      referencePresetGroups.add(group);
-      referencePresetGroups.sort();
-      await _persistReferencePresetLibrary();
-      notifyListeners();
-    }
-    return null;
+    return _referencePresetMutation(() async {
+      final group = value.trim();
+      if (group.isEmpty) return _rt('referencePresets.groupRequired');
+      try {
+        if (!referencePresetGroups.contains(group)) {
+          final nextGroups = [...referencePresetGroups, group]..sort();
+          await _commitReferencePresetLibrary(nextGroups, referencePresets);
+          notifyListeners();
+        }
+        return null;
+      } catch (_) {
+        return _rt('referencePresets.saveFailed');
+      }
+    });
   }
 
   Future<void> deleteReferencePresetGroup(String value) async {
-    final group = value.trim();
-    if (group.isEmpty || !referencePresetGroups.contains(group)) return;
-    final nextGroups =
-        referencePresetGroups.where((item) => item != group).toList();
-    final nextPresets = referencePresets
-        .map((preset) =>
-            preset.group == group ? preset.copyWith(group: '') : preset)
-        .toList();
-    await storage.setReferencePresetLibrary(ReferencePresetLibrary(
-      groups: nextGroups,
-      presets: nextPresets,
-    ));
-    referencePresetGroups = nextGroups;
-    referencePresets = nextPresets;
-    notifyListeners();
+    return _referencePresetMutation(() async {
+      final group = value.trim();
+      if (group.isEmpty || !referencePresetGroups.contains(group)) return;
+      final nextGroups =
+          referencePresetGroups.where((item) => item != group).toList();
+      final nextPresets = referencePresets
+          .map((preset) =>
+              preset.group == group ? preset.copyWith(group: '') : preset)
+          .toList();
+      await _commitReferencePresetLibrary(nextGroups, nextPresets);
+      notifyListeners();
+    });
   }
 
   String _newReferencePresetId() =>
@@ -1406,37 +1485,37 @@ class AppState extends ChangeNotifier {
     }
     final title = name.trim();
     if (title.isEmpty) return _rt('referencePresets.nameRequired');
-    try {
-      final item = extras.vibeImages[index];
-      final id = _newReferencePresetId();
-      final path = await storage.persistReferencePresetImage(
-        presetId: id,
-        bytes: base64Decode(item.base64),
-        sourcePath: item.sourcePath,
-      );
-      final cleanGroup = group.trim();
-      if (cleanGroup.isNotEmpty &&
-          !referencePresetGroups.contains(cleanGroup)) {
-        referencePresetGroups.add(cleanGroup);
-        referencePresetGroups.sort();
+    final item = extras.vibeImages[index];
+    return _referencePresetMutation(() async {
+      String? persistedPath;
+      try {
+        final id = _newReferencePresetId();
+        final path = await storage.persistReferencePresetImage(
+          presetId: id,
+          bytes: base64Decode(item.base64),
+          sourcePath: item.sourcePath,
+        );
+        persistedPath = path;
+        final cleanGroup = group.trim();
+        final preset = ReferencePreset(
+          id: id,
+          name: title,
+          group: cleanGroup,
+          kind: ReferencePresetKind.vibe,
+          filePath: path,
+          createdAt: DateTime.now().toIso8601String(),
+          infoExtracted: item.infoExtracted,
+          strength: item.strength,
+        );
+        await _appendReferencePresets([preset]);
+        status = _rt('referencePresets.saved');
+        notifyListeners();
+        return null;
+      } catch (_) {
+        await _discardReferencePresetImage(persistedPath);
+        return _rt('referencePresets.saveFailed');
       }
-      referencePresets.add(ReferencePreset(
-        id: id,
-        name: title,
-        group: cleanGroup,
-        kind: ReferencePresetKind.vibe,
-        filePath: path,
-        createdAt: DateTime.now().toIso8601String(),
-        infoExtracted: item.infoExtracted,
-        strength: item.strength,
-      ));
-      await _persistReferencePresetLibrary();
-      status = _rt('referencePresets.saved');
-      notifyListeners();
-      return null;
-    } catch (_) {
-      return _rt('referencePresets.saveFailed');
-    }
+    });
   }
 
   Future<String?> savePreciseReferencePreset(
@@ -1449,41 +1528,41 @@ class AppState extends ChangeNotifier {
     }
     final title = name.trim();
     if (title.isEmpty) return _rt('referencePresets.nameRequired');
-    try {
-      final item = extras.preciseReferences[index];
-      final id = _newReferencePresetId();
-      final path = await storage.persistReferencePresetImage(
-        presetId: id,
-        bytes: base64Decode(item.base64),
-        sourcePath: item.sourcePath,
-      );
-      final cleanGroup = group.trim();
-      if (cleanGroup.isNotEmpty &&
-          !referencePresetGroups.contains(cleanGroup)) {
-        referencePresetGroups.add(cleanGroup);
-        referencePresetGroups.sort();
+    final item = extras.preciseReferences[index];
+    return _referencePresetMutation(() async {
+      String? persistedPath;
+      try {
+        final id = _newReferencePresetId();
+        final path = await storage.persistReferencePresetImage(
+          presetId: id,
+          bytes: base64Decode(item.base64),
+          sourcePath: item.sourcePath,
+        );
+        persistedPath = path;
+        final cleanGroup = group.trim();
+        final preset = ReferencePreset(
+          id: id,
+          name: title,
+          group: cleanGroup,
+          kind: ReferencePresetKind.precise,
+          filePath: path,
+          createdAt: DateTime.now().toIso8601String(),
+          preciseType: item.type,
+          strength: item.strength,
+          fidelity: item.fidelity,
+          informationExtracted: item.informationExtracted,
+          width: item.width,
+          height: item.height,
+        );
+        await _appendReferencePresets([preset]);
+        status = _rt('referencePresets.saved');
+        notifyListeners();
+        return null;
+      } catch (_) {
+        await _discardReferencePresetImage(persistedPath);
+        return _rt('referencePresets.saveFailed');
       }
-      referencePresets.add(ReferencePreset(
-        id: id,
-        name: title,
-        group: cleanGroup,
-        kind: ReferencePresetKind.precise,
-        filePath: path,
-        createdAt: DateTime.now().toIso8601String(),
-        preciseType: item.type,
-        strength: item.strength,
-        fidelity: item.fidelity,
-        informationExtracted: item.informationExtracted,
-        width: item.width,
-        height: item.height,
-      ));
-      await _persistReferencePresetLibrary();
-      status = _rt('referencePresets.saved');
-      notifyListeners();
-      return null;
-    } catch (_) {
-      return _rt('referencePresets.saveFailed');
-    }
+    });
   }
 
   Future<String?> saveReferencePresetFromPath(
@@ -1497,47 +1576,47 @@ class AppState extends ChangeNotifier {
     double fidelity = 1,
     double informationExtracted = 1,
   }) async {
-    final title = name.trim();
-    if (title.isEmpty) return _rt('referencePresets.nameRequired');
-    try {
-      final source = File(sourcePath);
-      if (!source.existsSync()) return _rt('referencePresets.sourceMissing');
-      final bytes = await source.readAsBytes();
-      final dimensions = decodeImageDimensions(bytes);
-      final id = _newReferencePresetId();
-      final path = await storage.persistReferencePresetImage(
-        presetId: id,
-        bytes: bytes,
-        sourcePath: sourcePath,
-      );
-      final cleanGroup = group.trim();
-      if (cleanGroup.isNotEmpty &&
-          !referencePresetGroups.contains(cleanGroup)) {
-        referencePresetGroups.add(cleanGroup);
-        referencePresetGroups.sort();
+    return _referencePresetMutation(() async {
+      final title = name.trim();
+      if (title.isEmpty) return _rt('referencePresets.nameRequired');
+      String? persistedPath;
+      try {
+        final source = File(sourcePath);
+        if (!source.existsSync()) return _rt('referencePresets.sourceMissing');
+        final bytes = await source.readAsBytes();
+        final dimensions = decodeImageDimensions(bytes);
+        final id = _newReferencePresetId();
+        final path = await storage.persistReferencePresetImage(
+          presetId: id,
+          bytes: bytes,
+          sourcePath: sourcePath,
+        );
+        persistedPath = path;
+        final cleanGroup = group.trim();
+        final preset = ReferencePreset(
+          id: id,
+          name: title,
+          group: cleanGroup,
+          kind: kind,
+          filePath: path,
+          createdAt: DateTime.now().toIso8601String(),
+          infoExtracted: infoExtracted.clamp(0, 1).toDouble(),
+          strength: strength.clamp(0, 1).toDouble(),
+          preciseType: preciseType,
+          fidelity: fidelity.clamp(0, 1).toDouble(),
+          informationExtracted: informationExtracted.clamp(0, 1).toDouble(),
+          width: dimensions.$1,
+          height: dimensions.$2,
+        );
+        await _appendReferencePresets([preset]);
+        status = _rt('referencePresets.saved');
+        notifyListeners();
+        return null;
+      } catch (_) {
+        await _discardReferencePresetImage(persistedPath);
+        return _rt('referencePresets.saveFailed');
       }
-      referencePresets.add(ReferencePreset(
-        id: id,
-        name: title,
-        group: cleanGroup,
-        kind: kind,
-        filePath: path,
-        createdAt: DateTime.now().toIso8601String(),
-        infoExtracted: infoExtracted.clamp(0, 1).toDouble(),
-        strength: strength.clamp(0, 1).toDouble(),
-        preciseType: preciseType,
-        fidelity: fidelity.clamp(0, 1).toDouble(),
-        informationExtracted: informationExtracted.clamp(0, 1).toDouble(),
-        width: dimensions.$1,
-        height: dimensions.$2,
-      ));
-      await _persistReferencePresetLibrary();
-      status = _rt('referencePresets.saved');
-      notifyListeners();
-      return null;
-    } catch (_) {
-      return _rt('referencePresets.saveFailed');
-    }
+    });
   }
 
   Future<String?> saveDownloadedPreciseReferencePreset({
@@ -1552,68 +1631,56 @@ class AppState extends ChangeNotifier {
     String sourceGameId = '',
     String sourceCategory = '',
   }) async {
-    if (referencePresets.any((preset) => preset.sourceId == sourceId)) {
-      return null;
-    }
-    final title = name.trim();
-    if (title.isEmpty || bytes.isEmpty) {
-      return _rt('referencePresets.saveFailed');
-    }
-    String? persistedPath;
-    try {
-      final dimensions = decodeImageDimensions(bytes);
-      if (dimensions.$1 <= 0 || dimensions.$2 <= 0) {
+    return _referencePresetMutation(() async {
+      if (referencePresets.any((preset) => preset.sourceId == sourceId)) {
+        return null;
+      }
+      final title = name.trim();
+      if (title.isEmpty || bytes.isEmpty) {
         return _rt('referencePresets.saveFailed');
       }
-      final id = _newReferencePresetId();
-      final path = await storage.persistReferencePresetImage(
-        presetId: id,
-        bytes: bytes,
-        sourcePath: '$sourceId.png',
-      );
-      persistedPath = path;
-      final cleanGroup = group.trim();
-      final nextGroups = <String>{...referencePresetGroups, cleanGroup}
-          .where((value) => value.isNotEmpty)
-          .toList()
-        ..sort();
-      final preset = ReferencePreset(
-        id: id,
-        name: title,
-        group: cleanGroup,
-        kind: ReferencePresetKind.precise,
-        filePath: path,
-        createdAt: DateTime.now().toIso8601String(),
-        sourceId: sourceId,
-        preciseType: 'character',
-        strength: 1,
-        fidelity: 1,
-        informationExtracted: 1,
-        width: width > 0 ? width : dimensions.$1,
-        height: height > 0 ? height : dimensions.$2,
-        sourceNames: sourceNames,
-        sourceGameNames: sourceGameNames,
-        sourceGameId: sourceGameId,
-        sourceCategory: sourceCategory,
-      );
-      final nextPresets = [...referencePresets, preset];
-      await storage.setReferencePresetLibrary(ReferencePresetLibrary(
-        groups: nextGroups,
-        presets: nextPresets,
-      ));
-      referencePresetGroups = nextGroups;
-      referencePresets = nextPresets;
-      status = _rt('referencePresets.saved');
-      notifyListeners();
-      return null;
-    } catch (_) {
-      if (persistedPath != null) {
-        try {
-          await File(persistedPath).delete();
-        } catch (_) {}
+      String? persistedPath;
+      try {
+        final dimensions = decodeImageDimensions(bytes);
+        if (dimensions.$1 <= 0 || dimensions.$2 <= 0) {
+          return _rt('referencePresets.saveFailed');
+        }
+        final id = _newReferencePresetId();
+        final path = await storage.persistReferencePresetImage(
+          presetId: id,
+          bytes: bytes,
+          sourcePath: '$sourceId.png',
+        );
+        persistedPath = path;
+        final cleanGroup = group.trim();
+        final preset = ReferencePreset(
+          id: id,
+          name: title,
+          group: cleanGroup,
+          kind: ReferencePresetKind.precise,
+          filePath: path,
+          createdAt: DateTime.now().toIso8601String(),
+          sourceId: sourceId,
+          preciseType: 'character',
+          strength: 1,
+          fidelity: 1,
+          informationExtracted: 1,
+          width: width > 0 ? width : dimensions.$1,
+          height: height > 0 ? height : dimensions.$2,
+          sourceNames: sourceNames,
+          sourceGameNames: sourceGameNames,
+          sourceGameId: sourceGameId,
+          sourceCategory: sourceCategory,
+        );
+        await _appendReferencePresets([preset]);
+        status = _rt('referencePresets.saved');
+        notifyListeners();
+        return null;
+      } catch (_) {
+        await _discardReferencePresetImage(persistedPath);
+        return _rt('referencePresets.saveFailed');
       }
-      return _rt('referencePresets.saveFailed');
-    }
+    });
   }
 
   Future<String?> applyReferencePreset(String id) async {
@@ -1629,6 +1696,7 @@ class AppState extends ChangeNotifier {
       if (!file.existsSync()) throw const FileSystemException();
       final encoded = base64Encode(await file.readAsBytes());
       if (preset.kind == ReferencePresetKind.vibe) {
+        if (extras.vibeImages.length >= 16) return _rt('status.vibeLimit');
         extras.vibeImages.add(VibeTransferItem(
           base64: encoded,
           infoExtracted: preset.infoExtracted,
@@ -1657,27 +1725,41 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> deleteReferencePreset(String id) async {
-    final index = referencePresets.indexWhere((preset) => preset.id == id);
-    if (index < 0) return;
-    final preset = referencePresets.removeAt(index);
-    await storage.deleteReferencePresetImage(preset);
-    await _persistReferencePresetLibrary();
-    notifyListeners();
+    return _referencePresetMutation(() async {
+      final matches = referencePresets.where((preset) => preset.id == id);
+      if (matches.isEmpty) return;
+      final preset = matches.first;
+      await _commitReferencePresetLibrary(referencePresetGroups,
+          referencePresets.where((preset) => preset.id != id).toList());
+      // Removing the durable record commits before removing its owned image.
+      // A failed metadata write therefore leaves both old metadata and pixels.
+      if (!referencePresets.any((item) => item.filePath == preset.filePath)) {
+        await _discardReferencePresetImage(preset.filePath);
+      }
+      notifyListeners();
+    });
   }
 
   Future<String?> moveReferencePresetToGroup(String id, String value) async {
-    final index = referencePresets.indexWhere((preset) => preset.id == id);
-    if (index < 0) return _rt('referencePresets.sourceMissing');
-    final group = value.trim();
-    if (group.isNotEmpty && !referencePresetGroups.contains(group)) {
-      referencePresetGroups.add(group);
-      referencePresetGroups.sort();
-    }
-    referencePresets[index] = referencePresets[index].copyWith(group: group);
-    await _persistReferencePresetLibrary();
-    status = _rt('referencePresets.moved');
-    notifyListeners();
-    return null;
+    return _referencePresetMutation(() async {
+      final index = referencePresets.indexWhere((preset) => preset.id == id);
+      if (index < 0) return _rt('referencePresets.sourceMissing');
+      final group = value.trim();
+      final nextGroups = <String>{...referencePresetGroups, group}
+          .where((value) => value.isNotEmpty)
+          .toList()
+        ..sort();
+      final nextPresets = List<ReferencePreset>.of(referencePresets);
+      nextPresets[index] = nextPresets[index].copyWith(group: group);
+      try {
+        await _commitReferencePresetLibrary(nextGroups, nextPresets);
+        status = _rt('referencePresets.moved');
+        notifyListeners();
+        return null;
+      } catch (_) {
+        return _rt('referencePresets.saveFailed');
+      }
+    });
   }
 
   Future<File> exportReferencePresets({String? presetId, String? group}) {
@@ -1706,24 +1788,24 @@ class AppState extends ChangeNotifier {
   }
 
   Future<String?> importReferencePresets(String filePath) async {
-    try {
-      final imported = await storage.importReferencePresetArchive(filePath);
-      for (final group in imported.groups) {
-        if (!referencePresetGroups.contains(group)) {
-          referencePresetGroups.add(group);
+    return _referencePresetMutation(() async {
+      ReferencePresetImport? imported;
+      try {
+        imported = await storage.importReferencePresetArchive(filePath);
+        await _appendReferencePresets(imported.presets,
+            groups: imported.groups);
+        status = _rf('referencePresets.imported', {
+          'count': imported.presets.length,
+        });
+        notifyListeners();
+        return null;
+      } catch (_) {
+        for (final preset in imported?.presets ?? <ReferencePreset>[]) {
+          await _discardReferencePresetImage(preset.filePath);
         }
+        return _rt('referencePresets.importFailed');
       }
-      referencePresetGroups.sort();
-      referencePresets.addAll(imported.presets);
-      await _persistReferencePresetLibrary();
-      status = _rf('referencePresets.imported', {
-        'count': imported.presets.length,
-      });
-      notifyListeners();
-      return null;
-    } catch (_) {
-      return _rt('referencePresets.importFailed');
-    }
+    });
   }
 
   Future<void> runTextOrImage() async {
@@ -2930,7 +3012,7 @@ class AppState extends ChangeNotifier {
   }) async {
     final snapshot = AppSettings.fromJson(settings.toJson());
     final version = snapshot.convertPromptTemplateVersion;
-    final mode = convertMode;
+    final mode = ReversePromptMode.values.firstWhere((m)=>m.value==snapshot.promptAssistantMode,orElse:()=>ReversePromptMode.mixed);
     final template = resolvedPromptTemplate('convert', mode, templateVersion: version);
     final key = await storage.getConvertKey() ?? '';
     return api.assistPrompt(settings: snapshot, apiKey: key,
@@ -3104,15 +3186,9 @@ class AppState extends ChangeNotifier {
   }) {
     if(templateVersion != null && !['v5','v4.5'].contains(templateVersion)) throw ArgumentError('Invalid template version');
     final key = mode.value;
-    if (kind == 'reverse') {
-      final override = promptOverrides(kind, templateVersion: templateVersion)[key]?.trim() ?? '';
-      if(override.isNotEmpty)return override;
-      return promptTemplates.getReverse(mode,scoped:scoped,templateVersion:templateVersion ?? settings.reversePromptTemplateVersion);
-    }
-    if (kind == 'convert') {
-      final override = promptOverrides(kind, templateVersion: templateVersion)[key]?.trim() ?? '';
-      if(override.isNotEmpty)return override;
-      return promptTemplates.get((templateVersion ?? settings.convertPromptTemplateVersion)=='v4.5'?'convertV45':'convert',mode);
+    if (kind == 'reverse' || kind == 'convert') {
+      final version=templateVersion??(kind=='reverse'?settings.reversePromptTemplateVersion:settings.convertPromptTemplateVersion);
+      return promptTemplates.resolve(kind,mode,promptOverrides(kind,templateVersion:version),templateVersion:version,scoped:scoped);
     }
     if (kind == 'comic') {
       final override = settings.comicAnalyzePromptTemplates[key]?.trim() ?? settings.comicPromptTemplate.trim();
@@ -3557,7 +3633,7 @@ class AppState extends ChangeNotifier {
       }
     }
 
-    if (settings.imageProvider != 'novelai') {
+    if (settings.imageProvider != 'novelai' && (settings.imageProvider != 'openai-images' || !novelAiEnvelopeModels.contains(settings.compatibleImage['model']))) {
       throw StateError('当前兼容图片服务未接入图生图；请切回 NovelAI，未自动回退或提交');
     }
     final snapshot = AppSettings.fromJson(jsonDecode(jsonEncode(settings.toJson())));

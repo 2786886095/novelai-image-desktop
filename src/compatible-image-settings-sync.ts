@@ -5,7 +5,7 @@ import {normalizeNovelAiSettings} from './novelai-only-settings';
 export function mergeImageSettings(current: AppSettings | null, incoming: AppSettings): AppSettings {
   if (!current) return normalizeNovelAiSettings(incoming);
   if ((current.imageServiceVersion ?? -1) > (incoming.imageServiceVersion ?? -1)) return normalizeNovelAiSettings(current);
-  return { ...current, imageProvider: 'novelai', compatibleImage: incoming.compatibleImage,
+  return { ...current, imageProvider: normalizeNovelAiSettings(incoming).imageProvider, compatibleImage: incoming.compatibleImage,
     imageApiKey: incoming.imageApiKey, imageServiceRevision: incoming.imageServiceRevision,
     imageServiceVersion: incoming.imageServiceVersion };
 }

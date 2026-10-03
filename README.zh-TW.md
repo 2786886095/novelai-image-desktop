@@ -1,6 +1,6 @@
 # Langbai NovelAI Studio
 
-> 2.4.6 候選：工作台支援官方 Token、官方郵箱密碼及 NovelAI 相容中轉多帳戶，並更新生圖助手。尚未發布；iOS 共用原始碼已接入，但未於 macOS 建置簽名。Android 本機包使用測試簽名，不保證覆蓋正式版。
+> v2.4.7：本次發行 Windows x64 安裝版與可攜版；Android/iOS 共用功能原始碼同步，不提供新行動端安裝包，也不代表完成行動實機或簽名驗收。
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 

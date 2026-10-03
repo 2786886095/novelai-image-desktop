@@ -24,7 +24,7 @@
  * IPC names use naiAccounts:<method>; window.naiAccounts exposes corresponding methods.
  * Native mobile must provide equivalent encrypted storage; this contract is not evidence
  * of mobile implementation or runtime DPAPI verification.
- * Passwords stay transient; main only sends {key} to exact HTTPS api.novelai.net/user/login.
+ * Passwords stay transient; main only sends {key} to exact HTTPS image.novelai.net/user/login.
  * UI has no editable OTP field. Typed backend OTP or explicit server OTP requirement returns otp-unsupported without inventing
  * a second request; original credentials remain. Raw password is never persisted/sent.
  * Source: github.com/Aedial/novelai-api/blob/main/novelai_api/{utils,_high_level,_low_level}.py

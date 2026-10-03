@@ -3185,7 +3185,8 @@ button { user-select: none; }
   position: fixed;
   right: 20px;
   bottom: 34px;
-  z-index: var(--z-floating);
+  /* Feedback must remain readable above the dialog that triggered it. */
+  z-index: var(--z-notification);
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -6214,6 +6215,14 @@ html, body, #root {
   line-height: 1.25;
   min-width: 0;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+/* MCP tool output may contain long unbroken artist names; keep the full tag
+   readable inside its chip without changing the value inserted on click. */
+.mcp-tag-suggestions .capsule-tax-chip > span {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 .capsule-tax-chip:hover {
   filter: brightness(1.1);
@@ -13190,6 +13199,7 @@ button:has(> .ui-icon):not(.select-menu-trigger) {
 
 /* ── 1. Light semantic tokens（对齐报告 §6.4 语义色，覆盖 STUDIO V2 的半透明玻璃 token）── */
 :root {
+  --z-confirm: calc(var(--z-overlay-top) + 200);
   --disclosure-open: 160ms;
   --disclosure-close: 120ms;
   --disclosure-exit-ease: cubic-bezier(0.2, 0, 0, 1);
@@ -14131,66 +14141,26 @@ button:has(> .ui-icon):not(.select-menu-trigger) {
   background: #fff;
 }
 
-/* Account disclosure is a quiet right-aligned affordance rather than an
-   isolated circle occupying the left edge of the fixed footer. */
-.account-details-shell {
-  position: relative;
-  display: block;
-  min-width: 0;
+/* Keep the disclosure header stable in both states. Even without V5 Opus
+   allowance, expansion reveals a separate balance/detail section. */
+.account-details-shell { position: relative; display: block; min-width: 0; width: 100%; }
+.account-details-content { padding: 10px 0 2px; }
+.account-details-shell > button.account-details-toggle,
+.account-details-shell.collapsed > button.account-details-toggle {
+  position: static; display: flex; align-items: center; justify-content: space-between;
+  width: 100%; min-width: 0; min-height: 34px; height: auto; gap: 8px;
+  padding: 2px 2px 2px 4px !important; border: 0; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-muted); box-shadow: none; text-align: left;
 }
-.account-details-content { padding-right: 28px; }
-.account-details-toggle {
-  position: absolute;
-  z-index: var(--z-base);
-  top: 0;
-  right: 0;
-  left: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  min-width: 24px;
-  padding: 0 !important;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  box-shadow: none;
-}
-.account-details-toggle:hover {
-  border-color: transparent;
-  background: var(--bg-hover);
-  color: var(--accent);
-}
-.account-details-toggle-copy { display: none; }
-.account-details-shell.collapsed {
-  display: block;
-  width: 100%;
-}
-.account-details-shell.collapsed .account-details-toggle {
-  position: static;
-  width: 100%;
-  min-height: 34px;
-  height: auto;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 2px 2px 2px 4px !important;
-  text-align: left;
-}
-.account-details-shell.collapsed .account-details-toggle-copy {
-  display: grid;
-  min-width: 0;
-  gap: 1px;
-}
+.account-details-toggle:hover { border-color: transparent; background: var(--bg-hover); color: var(--accent); }
+.account-details-toggle-copy,
+.account-details-shell.collapsed .account-details-toggle-copy { display: grid; min-width: 0; gap: 1px; }
 .account-details-toggle-copy strong,
-.account-details-toggle-copy small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.account-details-toggle-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-details-toggle-copy strong { color: var(--text-primary); font-size: 12px; }
 .account-details-toggle-copy small { color: var(--text-muted); font-size: 10px; font-weight: 500; }
+.account-allowance-empty { margin: 8px 0 0; padding: 8px 10px; border-radius: var(--radius-sm);
+  background: var(--bg-input); color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
 
 /* Keep the inpaint controls as one coherent toolbar. On genuinely narrow
    canvases it scrolls inside the pill instead of wrapping one orphan button. */
@@ -20429,7 +20399,7 @@ input[type="range"].studio-range:disabled { opacity:.5; cursor:not-allowed; }
 @media(forced-colors:active) { input[type="range"].studio-range { appearance:auto; -webkit-appearance:auto; } input[type="range"].studio-range::-webkit-slider-thumb { appearance:auto; -webkit-appearance:auto; } }
 
 /* Confirmation is above settings/account dialogs; closing surfaces never intercept input. */
-.app-confirm-backdrop{z-index:calc(var(--z-overlay,1000) + 20)}
+.app-confirm-backdrop{z-index:var(--z-confirm)}
 .app-confirm-backdrop.is-leaving,.app-confirm-backdrop.is-leaving *{pointer-events:none!important}
 .app-confirm-dialog :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 html.motion-reduced .app-confirm-backdrop,html.motion-reduced .app-confirm-dialog{transition:none}

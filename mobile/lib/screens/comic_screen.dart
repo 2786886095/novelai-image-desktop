@@ -261,6 +261,7 @@ class _ImportStepState extends State<_ImportStep> {
               children: [
                 TextField(
                   controller: input,
+                  onChanged: (_) => setState(() {}),
                   minLines: 8,
                   maxLines: 16,
                   decoration: InputDecoration(
@@ -719,6 +720,7 @@ class _PanelSizeSectionState extends State<_PanelSizeSection> {
               controller: input,
               minLines: 4,
               maxLines: 12,
+              onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 labelText: t('comic.sizesInput'),
                 hintText: '832×1216\n1216×832\n1024×1024',
@@ -1600,17 +1602,87 @@ class _Field extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => TextFormField(
-        key: ValueKey('$label-$value'),
-        initialValue: value,
+  Widget build(BuildContext context) => _ComicEditableField(
+        key: ValueKey(label),
+        value: value,
+        label: label,
         minLines: minLines,
-        maxLines: minLines == 1 ? 1 : minLines + 4,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          alignLabelWithHint: minLines > 1,
-        ),
         onChanged: onChanged,
+      );
+}
+
+// Keep the native editor alive when its onChanged callback notifies the parent.
+// A value-keyed editor is replaced on every keystroke, losing focus and IME state.
+class _ComicEditableField extends StatefulWidget {
+  final String value;
+  final String label;
+  final int minLines;
+  final TextInputType keyboardType;
+  final ValueChanged<String> onChanged;
+  final String? Function(String)? canonicalize;
+  const _ComicEditableField({
+    super.key,
+    required this.value,
+    required this.label,
+    required this.onChanged,
+    this.minLines = 1,
+    this.keyboardType = TextInputType.text,
+    this.canonicalize,
+  });
+
+  @override
+  State<_ComicEditableField> createState() => _ComicEditableFieldState();
+}
+
+class _ComicEditableFieldState extends State<_ComicEditableField> {
+  late final TextEditingController controller;
+  late final FocusNode focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = TextEditingController(text: widget.value);
+    focusNode = FocusNode();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ComicEditableField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final canonical = widget.canonicalize == null
+        ? controller.text
+        : widget.canonicalize!(controller.text);
+    // Self-echoes (including "5." -> 5.0) must not rewrite the user's draft,
+    // selection or composing range. Explicit external edits still synchronize.
+    if (widget.value != oldWidget.value &&
+        controller.text != widget.value &&
+        canonical != widget.value) {
+      controller.value = TextEditingValue(
+        text: widget.value,
+        selection: TextSelection.collapsed(offset: widget.value.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextFormField(
+        controller: controller,
+        focusNode: focusNode,
+        minLines: widget.minLines,
+        maxLines: widget.minLines == 1 ? 1 : widget.minLines + 4,
+        keyboardType: widget.keyboardType,
+        decoration: InputDecoration(
+          labelText: widget.label,
+          border: const OutlineInputBorder(),
+          alignLabelWithHint: widget.minLines > 1,
+        ),
+        onChanged: widget.onChanged,
       );
 }
 
@@ -1707,12 +1779,12 @@ class _NumberField extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
         width: width,
-        child: TextFormField(
-          key: ValueKey('$label-$value'),
-          initialValue: '$value',
+        child: _ComicEditableField(
+          key: ValueKey(label),
+          value: '$value',
+          label: label,
           keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-              labelText: label, border: const OutlineInputBorder()),
+          canonicalize: (input) => int.tryParse(input)?.toString(),
           onChanged: (input) {
             final parsed = int.tryParse(input);
             if (parsed != null) {
@@ -1741,12 +1813,12 @@ class _DecimalField extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
         width: width,
-        child: TextFormField(
-          key: ValueKey('$label-$value'),
-          initialValue: '$value',
+        child: _ComicEditableField(
+          key: ValueKey(label),
+          value: '$value',
+          label: label,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-              labelText: label, border: const OutlineInputBorder()),
+          canonicalize: (input) => double.tryParse(input)?.toString(),
           onChanged: (input) {
             final parsed = double.tryParse(input);
             if (parsed != null) {

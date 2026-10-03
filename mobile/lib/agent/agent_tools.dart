@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import '../artist/artist_recipe.dart';
 import '../images/png_metadata.dart';
 import '../models/nai_models.dart';
+import '../prompts/prompt_templates.dart';
 import '../references/reference_presets.dart';
 import '../services/artist_tag_service.dart';
 import '../services/online_gallery_service.dart';
@@ -58,6 +59,7 @@ const agentMutatingTools = <String>{
   'langbai_director',
   'langbai_reverse_prompt',
   'langbai_convert_prompt',
+  'langbai_edit_prompt',
   'langbai_save_prompt_preset',
   'langbai_apply_prompt',
   'langbai_memory_upsert',
@@ -94,6 +96,7 @@ String agentToolTitle(String name) => switch (name) {
       'langbai_director' => 'Director 后期',
       'langbai_reverse_prompt' => 'AI 反推提示词',
       'langbai_convert_prompt' => '转换提示词',
+      'langbai_edit_prompt' => '优化或编辑提示词',
       'langbai_save_prompt_preset' => '保存正面提示词预设',
       'langbai_apply_prompt' => '替换生成页提示词',
       'langbai_memory_list' => '读取记忆',
@@ -525,6 +528,18 @@ List<Map<String, dynamic>> agentToolSchemas() => [
         required: ['text'],
       ),
       _function(
+        'langbai_edit_prompt',
+        '使用软件当前保存的转换模板及优化/自定义编辑模板调用文本服务；可能产生服务费用。只返回预览文本，不应用到生图参数，也不生成图片。',
+        {
+          'kind': _string('用途', ['optimize', 'custom']),
+          'currentPrompt': _string('当前正面提示词'),
+          'instruction': _string('自定义修改要求；custom 必填'),
+          'mode': _string('模板模式', ['mixed', 'tags', 'natural']),
+          'templateVersion': _string('模板版本', ['v5', 'v4.5']),
+        },
+        required: ['kind', 'currentPrompt'],
+      ),
+      _function(
         'langbai_save_prompt_preset',
         '把正面提示词保存为可跨场景调用的预设。',
         {'name': _string('可选名称'), 'prompt': _string('正面提示词')},
@@ -709,9 +724,7 @@ class AgentToolExecutor {
   late final AgentFileActions fileActions = AgentFileActions(
       historyPaths: () => app.history.map((item) => item.filePath));
   late final AgentSessionControls sessions = AgentSessionControls(app);
-  late final AgentTemplateTools templates = AgentTemplateTools(app,
-      readAgentTemplate: readAgentTemplate,
-      writeAgentTemplate: writeAgentTemplate);
+  late final AgentTemplateTools templates = AgentTemplateTools(app);
   late final AgentTemplateWorkflow templateWorkflow =
       AgentTemplateWorkflow(app, templates: templates);
   late final AgentApiTools apiTools = AgentApiTools(app);
@@ -720,7 +733,9 @@ class AgentToolExecutor {
   late final AgentBackupTools backups = AgentBackupTools(app);
   Future<Map<String, dynamic>> approvalSummary(
           String tool, Map<String, dynamic> args, String session) async =>
-      tool == 'langbai_software_action' &&
+      tool == 'langbai_edit_prompt'
+          ? _editPreview(args)
+          : tool == 'langbai_software_action' &&
               softwareActions.resources
                   .handles(args['action']?.toString() ?? '')
           ? softwareActions.resources.approvalSummary(args)
@@ -739,17 +754,59 @@ class AgentToolExecutor {
   final AgentMemoryList listMemories;
   final AgentMemoryUpsert upsertMemory;
   final AgentMemoryDelete deleteMemory;
-  final String Function(String kind)? readAgentTemplate;
-  final Future<void> Function(String kind, String body)? writeAgentTemplate;
 
   AgentToolExecutor({
     required this.app,
     required this.listMemories,
     required this.upsertMemory,
     required this.deleteMemory,
-    this.readAgentTemplate,
-    this.writeAgentTemplate,
   });
+
+  ({String kind, String prompt, String instruction, ReversePromptMode mode,
+    String version}) _editInput(Map<String, dynamic> args) {
+    final kind = args['kind'];
+    final prompt = args['currentPrompt'];
+    final instruction = args['instruction'] ?? '';
+    final modeValue = args['mode'] ?? app.settings.promptAssistantMode;
+    final version = args['templateVersion'] ?? app.settings.convertPromptTemplateVersion;
+    if (!['optimize', 'custom'].contains(kind) ||
+        prompt is! String || prompt.trim().isEmpty || prompt.length > 24000 ||
+        instruction is! String || instruction.length > 8000 ||
+        (kind == 'custom' && instruction.trim().isEmpty) ||
+        !['mixed', 'tags', 'natural'].contains(modeValue) ||
+        !['v5', 'v4.5'].contains(version) ||
+        args.keys.any((key) => !{'kind', 'currentPrompt', 'instruction',
+          'mode', 'templateVersion'}.contains(key))) {
+      throw StateError('提示词编辑参数无效；custom 需要修改要求。');
+    }
+    return (kind: kind as String, prompt: prompt.trim(),
+      instruction: instruction.trim(),
+      mode: ReversePromptMode.values.byName(modeValue as String),
+      version: version as String);
+  }
+
+  Future<String> editPromptRevision(Map<String, dynamic> args) async {
+    final input = _editInput(args);
+    final settings = app.settings;
+    final key = await app.storage.getConvertKey() ?? '';
+    return sha256.convert(utf8.encode(jsonEncode([
+      input.kind, input.prompt, input.instruction, input.mode.value,
+      input.version, settings.convertApiUrl, settings.convertApiModel,
+      settings.proxyMode, settings.proxyUrl, settings.proxyForAi,
+      settings.convertPromptTemplates, settings.convertPromptTemplatesV45,
+      settings.promptOptimizeTemplate, settings.promptAssistantTemplate,
+      sha256.convert(utf8.encode(key)).toString(),
+    ]))).toString();
+  }
+
+  Map<String, dynamic> _editPreview(Map<String, dynamic> args) {
+    final input = _editInput(args);
+    return {'kind': input.kind, 'currentPrompt': input.prompt,
+      if (input.kind == 'custom') 'instruction': input.instruction,
+      'mode': input.mode.value, 'templateVersion': input.version,
+      'estimatedCost': null, 'estimateSource': 'provider-unknown',
+      'warning': '文本服务可能收费；确认后只返回编辑结果，不生成图片。'};
+  }
 
   Future<PreparedAgentImageOperation> prepareImageOperation(
       String tool, Map<String, dynamic> args, List<AgentAttachment> available,
@@ -1691,6 +1748,27 @@ class AgentToolExecutor {
           }
           return AgentToolResult(
               ok: true, title: title, output: app.convertResult);
+        case 'langbai_edit_prompt':
+          final input = _editInput(args);
+          final settings = AppSettings.fromJson(app.settings.toJson())
+            ..convertPromptTemplateVersion = input.version;
+          final library = await PromptTemplateLibrary.load();
+          final template = library.resolve('convert', input.mode,
+              input.version == 'v4.5'
+                  ? settings.convertPromptTemplatesV45
+                  : settings.convertPromptTemplates,
+              templateVersion: input.version);
+          final result = await app.api.assistPrompt(
+              settings: settings,
+              apiKey: await app.storage.getConvertKey() ?? '',
+              currentPrompt: input.prompt,
+              instruction: input.instruction,
+              kind: input.kind,
+              mode: input.mode,
+              templateVersion: input.version,
+              conversionTemplate: template);
+          return AgentToolResult(ok: result.ok, title: title,
+              output: result.ok ? result.text : result.message);
         case 'langbai_save_prompt_preset':
           final preset = await app.savePositivePromptPreset(
             prompt: _text(args['prompt']),

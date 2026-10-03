@@ -103,6 +103,10 @@ class _GalleryFavoritesScreenState extends State<GalleryFavoritesScreen> {
     return AnimatedBuilder(
         animation: store,
         builder: (context, _) {
+          if (source != 'all' && !store.items.any((item) => item.source == source)) {
+            source = 'all';
+            page = 1;
+          }
           final items = orderFavorites(
                   store.items
                       .where((i) =>
@@ -260,8 +264,18 @@ class _GalleryFavoritesScreenState extends State<GalleryFavoritesScreen> {
                               onPressed: () async {
                                 final controller =
                                     TextEditingController(text: '$shown');
-                                final n = await showDialog<int>(
+                                final navigator = Navigator.of(context,
+                                    rootNavigator: true);
+                                final route = DialogRoute<int>(
                                     context: context,
+                                    themes: InheritedTheme.capture(
+                                        from: context, to: navigator.context),
+                                    barrierColor: Theme.of(context)
+                                            .dialogTheme
+                                            .barrierColor ??
+                                        Colors.black54,
+                                    traversalEdgeBehavior:
+                                        TraversalEdgeBehavior.closedLoop,
                                     builder: (c) => AlertDialog(
                                             title: Text(
                                                 '${text['page']} / $pages'),
@@ -288,6 +302,9 @@ class _GalleryFavoritesScreenState extends State<GalleryFavoritesScreen> {
                                                               c)
                                                           .okButtonLabel))
                                             ]));
+                                final n = await navigator.push(route);
+                                // Retain the field through its reverse overlay transition.
+                                await route.completed;
                                 controller.dispose();
                                 if (n != null && mounted) {
                                   setState(() => page = n.clamp(1, pages));

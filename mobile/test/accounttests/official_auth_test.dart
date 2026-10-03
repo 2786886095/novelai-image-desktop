@@ -26,7 +26,7 @@ void main() {
     final auth = NovelAiOfficialAuth(
         clientFactory: () => MockClient((r) async {
               requests++;
-              expect(r.url.toString(), 'https://api.novelai.net/user/login');
+              expect(r.url.toString(), 'https://image.novelai.net/user/login');
               expect(r.method, 'POST');
               expect(r.followRedirects, false);
               expect(jsonDecode(r.body), {'key': v['accessKey']});
@@ -56,5 +56,35 @@ void main() {
               isNot(contains('sensitive remote text')))));
       expect(calls, 1);
     }
+  });
+  test('safe official failure category retains HTTP status without remote body', () async {
+    final v = vectors.first;
+    for (final fixture in [
+      (400, '{"error":"Incorrect Login Key; sensitive remote text"}', 'auth'),
+      (429, '{"error":"sensitive remote text"}', 'rate-limited'),
+      (403, '<html>Cloudflare captcha; sensitive remote text</html>', 'challenge'),
+      (200, '{"otpRequired":true}', 'otp-unsupported'),
+      (200, '{"requiresTwoFactor":true,"accessToken":"synthetic-token"}', 'otp-unsupported'),
+      (200, '{"challenge":"sensitive remote text"}', 'challenge'),
+      (201, '{}', 'invalid-response')
+    ]) {
+      var requests = 0;
+      final auth = NovelAiOfficialAuth(clientFactory: () => MockClient((r) async {
+        requests++;
+        return http.Response(fixture.$2, fixture.$1);
+      }));
+      await expectLater(auth.login(v['email'], v['password']), throwsA(
+          isA<NovelAiOfficialAuthFailure>()
+              .having((e) => e.code, 'safe category', fixture.$3)
+              .having((e) => e.status, 'actual status', fixture.$1)
+              .having((e) => e.toString(), 'remote body excluded', isNot(contains('sensitive remote text')))));
+      expect(requests, 1);
+    }
+  });
+  test('false challenge/OTP flags do not block a valid response', () async {
+    final v=vectors.first;
+    final auth=NovelAiOfficialAuth(clientFactory: () => MockClient((r) async =>
+        http.Response('{"accessToken":"synthetic-token","challenge":false,"captcha":false,"otpRequired":false,"mfa":false}',201)));
+    expect(await auth.login(v['email'],v['password']),'synthetic-token');
   });
 }

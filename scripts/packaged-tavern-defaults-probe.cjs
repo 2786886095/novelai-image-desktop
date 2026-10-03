@@ -1,0 +1,16 @@
+const fs=require('node:fs');
+const path=require('node:path');
+const assert=require('node:assert/strict');
+const asar=process.argv[2];
+const rows=require(path.join(asar,'dist-electron/shared/agent-ux-locales.json'));
+const {studioSessionOptions}=require(path.join(asar,'dist-electron/src/agent/workspace-controls.js'));
+const fresh=studioSessionOptions(undefined);
+const saved=studioSessionOptions({studioApprovalMode:'confirm',studioWebSearchEnabled:false,studioTemplateEnabled:false});
+assert.equal(rows.presetToggle[0],process.argv[3]);
+assert.equal(fresh.approvalMode,'auto');
+assert.equal(fresh.webSearchEnabled,true);
+assert.equal(fresh.templateEnabled,true);
+assert.equal(saved.approvalMode,'confirm');
+assert.equal(saved.webSearchEnabled,false);
+assert.equal(saved.templateEnabled,false);
+console.log(JSON.stringify({event:'actual_packaged_tavern_defaults_checked',field:'presetToggle',label:rows.presetToggle[0],fresh,saved}));

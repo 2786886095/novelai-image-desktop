@@ -25,6 +25,12 @@ function collectStrings(value: unknown): string[] {
 }
 
 describe("desktop i18n resources", () => {
+  it("uses the complete NovelAI API Token label for missing generation credentials", () => {
+    for (const language of SUPPORTED_APP_LANGUAGES) {
+      expect(desktopUiText(language.code, "cost.configureToken")).toContain("NovelAI API Token");
+    }
+  });
+
   it("supports the requested Simplified, Traditional, English, Japanese, and Korean locales", () => {
     expect(SUPPORTED_APP_LANGUAGES.map((item) => item.code)).toEqual(["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR"]);
   });

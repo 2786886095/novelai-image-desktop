@@ -2,7 +2,7 @@ import { app, ipcMain, safeStorage } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { NaiAccountsVault, accountCipherAvailable, type AccountVaultDocument } from './nai-accounts-vault';
+import { NaiAccountsVault, accountCipherAvailable, type AccountVaultDocument, parsePortableNaiAccounts } from './nai-accounts-vault';
 import type { NaiAccountInput } from '../../src/nai-accounts';
 import { officialNovelAiLogin, type OfficialLoginInput } from './nai-accounts-login';
 import { activateNaiAccount, restoreNaiAccount, naiAccountsBusy, configureNaiAccountSummaries, rememberNaiAccountSummary, forgetNaiAccountSummary } from './nai-accounts-runtime';
@@ -32,6 +32,34 @@ function getVault() {
   vault=candidate;
   return vault;
 }
+
+/** No startup migration is forced by a legacy-only export. */
+export function exportNaiAccountsBackup(){
+  if(!vault&&!fs.existsSync(path.join(app.getPath('userData'),'nai-accounts-v1.json')))return undefined;
+  return getVault().exportBackup();
+}
+export async function prepareNaiAccountsBackupRestore(value:unknown){
+  const portable=parsePortableNaiAccounts(value),v=getVault(),expected=v.revision();
+  if(naiAccountsBusy())throw Error('账户操作正在执行');
+  const summaries=new Map();
+  // Reject the whole credential transaction if even the final account fails.
+  for(const input of portable.accounts){
+    const validation=await validateNaiAccountReadOnly(input);requireNaiAccountValidation(validation);
+    summaries.set(input.id,validation.account??{});
+  }
+  const prepared=v.prepareBackupRestore(portable,expected,summaries);
+  return (write:()=>void,undo:()=>void)=>{
+    if(naiAccountsBusy()||v.revision()!==expected)throw Error('Account vault changed during backup import');
+    if(!portable.accounts.length){write();return;}
+    // The two desktop files cannot share one filesystem rename. Compensate the
+    // legacy settings write if the atomic vault persistence fails.
+    write();
+    try{activateNaiAccount(prepared.snapshot,prepared.commit);}
+    catch(error){undo();throw error;}
+    configureNaiAccountSummaries({read:id=>v.accountSummary(id),write:(id,s)=>v.rememberAccountSummary(id,s)});
+  };
+}
+
 export function ensureNaiAccountsLoaded() { getVault(); }
 export function registerNaiAccountsIpc() {
   // Lazy initialization: no real credentials are accessed by unit tests.
@@ -55,7 +83,8 @@ export function registerNaiAccountsIpc() {
     const validation=await validateNaiAccountReadOnly(candidate);
     if(!validation.ok)return {ok:false,code:'validation',message:'账户验证未通过，未保存。',validation};
     if(naiAccountsBusy())throw Error('账户操作正在执行');
-    const account=getVault().add(crypto.randomUUID(),candidate);
+    const account=getVault().addVerified(crypto.randomUUID(),candidate,validation.account);
+    // Stable summary is already durable; this refreshes cache without another vault write.
     if(validation.account)rememberNaiAccountSummary({...account,token:candidate.token},validation.account);
     return {ok:true,account};
   });
@@ -67,7 +96,8 @@ export function registerNaiAccountsIpc() {
     getVault().assertUnique(candidate);
     const validation=await validateNaiAccountReadOnly(candidate);requireNaiAccountValidation(validation);
     if(naiAccountsBusy())throw Error('账户操作正在执行');
-    const account=getVault().add(crypto.randomUUID(),candidate);
+    const account=getVault().addVerified(crypto.randomUUID(),candidate,validation.account);
+    // Stable summary is already durable; this refreshes cache without another vault write.
     if(validation.account)rememberNaiAccountSummary({...account,token:candidate.token},validation.account);
     return account;
   });
@@ -85,7 +115,7 @@ export function registerNaiAccountsIpc() {
   ipcMain.handle('naiAccounts:reveal',(_event,id:string)=>{const lease=getVault().bind(id);try{return lease.snapshot.token;}finally{lease.release();}});
   ipcMain.handle('naiAccounts:probe', async (_event, id: string) => {
     const lease=getVault().bind(id);
-    try{const result=await validateNaiAccountReadOnly(lease.snapshot,true);rememberNaiAccountSummary(lease.snapshot,result.account??{});return {...result,subscription:result.ok?'available':'skipped',protocol:'unverified',message:'Read-only API authentication only. Image generation protocol and billing are not tested.'};}
+    try{const result=await validateNaiAccountReadOnly(lease.snapshot,true);rememberNaiAccountSummary(lease.snapshot,result.account??{});return {...result,subscription:result.account?'available':'skipped',protocol:'unverified',message:'Read-only API authentication only. Image generation protocol and billing are not tested.'};}
     finally{lease.release();}
   });
 }

@@ -95,6 +95,14 @@ class Storage {
   ({File file, String name})? _metadataInspectorSession;
   Future<UnifiedPreferences> get _prefs => UnifiedStorage.preferences();
 
+  /// Sensitive backup hooks. Plain legacy Storage does not silently import a vault.
+  Future<Map<String, dynamic>?> exportNovelAiAccountsBackup() async => null;
+  Future<Future<void> Function()> prepareNovelAiAccountsRestore(
+      Object? value) async {
+    throw const FormatException(
+        'NovelAI account storage is required to restore this backup');
+  }
+
   Future<String?> getToken() => _secure.read(key: _kToken);
   Future<void> setToken(String token) =>
       _secure.write(key: _kToken, value: token);
@@ -553,10 +561,9 @@ class Storage {
     }
   }
 
-  Future<void> setReferencePresetLibrary(
-          ReferencePresetLibrary library) async =>
-      (await _prefs)
-          .setString(_kReferencePresetLibrary, jsonEncode(library.toJson()));
+  Future<void> setReferencePresetLibrary(ReferencePresetLibrary library) =>
+      _saveVerifiedString(
+          _kReferencePresetLibrary, jsonEncode(library.toJson()), '参考图预设保存失败');
 
   Future<String> persistReferencePresetImage({
     required String presetId,
@@ -567,8 +574,15 @@ class Storage {
     final extension = _referenceImageExtension(sourcePath);
     final file = File(
         '${root.path}${Platform.pathSeparator}${_safeReferencePresetId(presetId)}$extension');
-    await file.writeAsBytes(bytes, flush: true);
-    return file.path;
+    try {
+      await file.writeAsBytes(bytes, flush: true);
+      return file.path;
+    } catch (_) {
+      try {
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+      rethrow;
+    }
   }
 
   Future<void> deleteReferencePresetImage(ReferencePreset preset) async {
@@ -638,23 +652,32 @@ class Storage {
         .toSet()
         .toList();
     final imported = <ReferencePreset>[];
-    for (final raw in manifest['presets'] as List<dynamic>? ?? const []) {
-      if (raw is! Map) continue;
-      final json = Map<String, dynamic>.from(raw);
-      final asset = json['asset']?.toString() ?? '';
-      if (!asset.startsWith('images/') || asset.contains('..')) continue;
-      final imageFile = archive.findFile(asset);
-      if (imageFile == null || !imageFile.isFile) continue;
-      final original = ReferencePreset.fromJson(json);
-      if (original.name.isEmpty) continue;
-      final id =
-          '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 30)}';
-      final storedPath = await persistReferencePresetImage(
-        presetId: id,
-        bytes: List<int>.from(imageFile.content as List),
-        sourcePath: asset,
-      );
-      imported.add(original.copyWith(id: id, filePath: storedPath));
+    try {
+      for (final raw in manifest['presets'] as List<dynamic>? ?? const []) {
+        if (raw is! Map) continue;
+        final json = Map<String, dynamic>.from(raw);
+        final asset = json['asset']?.toString() ?? '';
+        if (!asset.startsWith('images/') || asset.contains('..')) continue;
+        final imageFile = archive.findFile(asset);
+        if (imageFile == null || !imageFile.isFile) continue;
+        final original = ReferencePreset.fromJson(json);
+        if (original.name.isEmpty) continue;
+        final id =
+            '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 30)}';
+        final storedPath = await persistReferencePresetImage(
+          presetId: id,
+          bytes: List<int>.from(imageFile.content as List),
+          sourcePath: asset,
+        );
+        imported.add(original.copyWith(id: id, filePath: storedPath));
+      }
+    } catch (_) {
+      for (final preset in imported) {
+        try {
+          await deleteReferencePresetImage(preset);
+        } catch (_) {}
+      }
+      rethrow;
     }
     return ReferencePresetImport(groups: groups, presets: imported);
   }
@@ -766,7 +789,8 @@ class Storage {
         trustOutputs: true);
   }
 
-  Future<void> _saveComicString(String key, String value, String error) async {
+  Future<void> _saveVerifiedString(
+      String key, String value, String error) async {
     final prefs = await _prefs;
     try {
       if (!await prefs.setString(key, value)) throw StateError(error);
@@ -780,12 +804,13 @@ class Storage {
 
   Future<void> setComicProject(ComicProject project) {
     final value = jsonEncode(project.toJson());
-    return _saveComicString(_kComicProject, value, '漫画工程保存失败');
+    return _saveVerifiedString(_kComicProject, value, '漫画工程保存失败');
   }
 
   Future<void> setComicBackup(ComicProject project) {
     final value = jsonEncode(project.toJson());
-    return _saveComicString('comic_project_agent_backup_v1', value, '漫画工程备份失败');
+    return _saveVerifiedString(
+        'comic_project_agent_backup_v1', value, '漫画工程备份失败');
   }
 
   Future<Map<String, dynamic>?> getComicRun() async {
@@ -816,7 +841,7 @@ class Storage {
   }
 
   Future<void> setBatchRedrawProject(BatchRedrawProject project) =>
-      _saveComicString(
+      _saveVerifiedString(
           _kBatchRedrawProject, jsonEncode(project.toJson()), '批量工程保存失败');
 
   Future<Map<String, dynamic>?> getBatchRun() async {
@@ -827,7 +852,7 @@ class Storage {
   }
 
   Future<void> setBatchRun(Map<String, dynamic> run) =>
-      _saveComicString('batch_run_v1', jsonEncode(run), '批量任务记录保存失败');
+      _saveVerifiedString('batch_run_v1', jsonEncode(run), '批量任务记录保存失败');
 
   Future<List<HistoryItem>> getHistory() async {
     if (_historyCache != null) return List.of(_historyCache!);

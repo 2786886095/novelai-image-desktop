@@ -1,4 +1,6 @@
 import 'novelai_accounts_screen.dart';
+import 'compatible_images.dart';
+import 'mcp_tools.dart';
 import '../ui/settings_section.dart';
 import 'completion_sound_settings.dart';
 import '../i18n/parity_text.dart';
@@ -171,7 +173,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final tokenCtrl = TextEditingController();
   final visionKeyCtrl = TextEditingController();
   final convertKeyCtrl = TextEditingController();
   final tagKeyCtrl = TextEditingController();
@@ -182,7 +183,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // changed on a rebuild it didn't trigger itself.
   final visionModelCtrl = TextEditingController();
   final convertModelCtrl = TextEditingController();
-  bool verifying = false;
   bool testingProxy = false;
   List<String> _detectedModels = [];
   String _detectedModelKind = '';
@@ -237,7 +237,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
-    tokenCtrl.dispose();
     visionKeyCtrl.dispose();
     convertKeyCtrl.dispose();
     tagKeyCtrl.dispose();
@@ -245,17 +244,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     visionModelCtrl.dispose();
     convertModelCtrl.dispose();
     super.dispose();
-  }
-
-  Future<void> _saveToken() async {
-    setState(() => verifying = true);
-    final appState = context.read<AppState>();
-    final err = await appState.setToken(tokenCtrl.text);
-    if (!mounted) return;
-    setState(() => verifying = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(err ?? '账号已保存（未进行付费测试）')));
-    if (err == null) tokenCtrl.clear();
   }
 
   Future<void> _importSharedPromptPreset(AppState state) async {
@@ -446,6 +434,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             16, 16, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
         children: [
           const NovelAiAccountSelector(),
+          const CompatibleImageSettingsCard(),
           Card(
             child: ListTile(
               leading: Icon(
@@ -541,56 +530,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   : settingsDetailText.networkTest),
             ),
           ]),
-          ExpansionTile(title: const Text('旧单账号配置（兼容保留）'), children: [
-            if(state.naiAccounts.active != null) const Padding(padding:EdgeInsets.all(12),child:Text('当前使用已保存账户；切回原有账户后可编辑旧配置。')),
-            AbsorbPointer(absorbing:state.naiAccounts.active != null,child:Opacity(opacity:state.naiAccounts.active != null ? .55 : 1,child:
-_Section(title: settingsText.novelAiSection, children: [
-            _TextSetting(
-                label: 'API Base URL',
-                value: s.apiBaseUrl,
-                onChanged: (v) => state.setSettings((x) => x.apiBaseUrl = v)),
-            _TextSetting(
-                label: 'Image Base URL',
-                value: s.imageBaseUrl,
-                onChanged: (v) => state.setSettings((x) => x.imageBaseUrl = v)),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(settingsDetailText.allowCustomEndpointTitle),
-              subtitle: Text(settingsDetailText.allowCustomEndpointSubtitle),
-              value: s.allowCustomEndpoint,
-              onChanged: (value) =>
-                  state.setSettings((x) => x.allowCustomEndpoint = value),
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(settingsDetailText.allowCustomEndpointFallbackTitle),
-              subtitle: Text(settingsDetailText.allowCustomEndpointFallbackSubtitle),
-              value: s.allowCustomEndpointFallback,
-              onChanged: (value) => state.setSettings(
-                  (x) => x.allowCustomEndpointFallback = value),
-            ),
-            _SecretField(
-                controller: tokenCtrl, labelText: 'Persistent API Token'),
-            const SizedBox(height: 8),
-            FilledButton(
-                onPressed: verifying ? null : _saveToken,
-                child: Text(verifying
-                    ? settingsDetailText.verifying
-                    : '保存为官方账号并激活（不发测试请求）')),
-            OutlinedButton.icon(
-              onPressed: () => _showTokenGuide(context),
-              icon: const Icon(Icons.help_outline),
-              label: Text(settingsDetailText.howToGetToken),
-            ),
-            if (account.hasToken)
-              OutlinedButton(
-                  onPressed: state.naiAccountLocked ? null : () async {
-                    try { await state.clearToken(); } catch (_) { /* Busy race is denied by AppState. */ }
-                  },
-                  child: Text(settingsDetailText.clearToken)),
-          ])
-            )),
-          ]),
+          OutlinedButton.icon(onPressed:()=>_showTokenGuide(context),
+            icon:const Icon(Icons.help_outline),label:const Text('如何获取 API Token')),
           _Section(title: settingsText.reverseSection, children: [
             _sharedPromptPresetCard(state),
             _TextSetting(
@@ -687,15 +628,7 @@ _Section(title: settingsText.novelAiSection, children: [
                   : state.setSettings((x) => x.tagServerType = v),
             ),
             const SizedBox(height: 8),
-            if (s.tagServerType != 'rest') ...[
-              _TextSetting(
-                label: settingsDetailText.mcpToolName,
-                value: s.tagServerTool,
-                onChanged: (value) =>
-                    state.setSettings((x) => x.tagServerTool = value),
-              ),
-              const SizedBox(height: 8),
-            ],
+            if (s.tagServerType != 'rest') const McpToolSettings(),
             _SecretField(
                 controller: tagKeyCtrl,
                 labelText: settingsDetailText.tagServiceKey,
@@ -777,7 +710,7 @@ _Section(title: settingsText.novelAiSection, children: [
                 )),
             const Divider(),
             Text(settingsDetailText.convertTemplateTitle),
-            StudioDropdownButtonFormField<String>(value:s.convertPromptTemplateVersion,decoration:InputDecoration(labelText:mobileUiTextFor(s.language,'inspect.templateVersionTitle')),items:const [DropdownMenuItem(value:'v4.5',child:Text('NAI 4.5')),DropdownMenuItem(value:'v5',child:Text('NAI V5'))],onChanged:(v){if(v!=null)state.setSettings((x)=>x.convertPromptTemplateVersion=v);}),
+            StudioDropdownButtonFormField<String>(value:s.convertPromptTemplateVersion,decoration:InputDecoration(labelText:mobileUiTextFor(s.language,'convert.templateVersionTitle')),items:const [DropdownMenuItem(value:'v4.5',child:Text('NAI 4.5')),DropdownMenuItem(value:'v5',child:Text('NAI V5'))],onChanged:(v){if(v!=null)state.setSettings((x)=>x.convertPromptTemplateVersion=v);}),
             ...ReversePromptMode.values.map((mode) => _TemplateTile(
                   title: mode.label,
                   customizedLabel: settingsDetailText.customized,
@@ -1102,9 +1035,6 @@ _Section(title: settingsText.novelAiSection, children: [
   ) async {
     final state = context.read<AppState>();
     final detailText = settingsDetailTextFor(state.settings.language);
-    final controller = TextEditingController(
-      text: state.resolvedPromptTemplate(kind, mode),
-    );
     final label = kind == 'reverse'
         ? '${detailText.reverseTemplateTitle} · ${mode.label}'
         : kind == 'convert'
@@ -1112,7 +1042,9 @@ _Section(title: settingsText.novelAiSection, children: [
             : detailText.comicTemplateTitle;
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => _TemplateEditorScope(
+        initialText: state.resolvedPromptTemplate(kind, mode),
+        builder: (controller) => AlertDialog(
         title: Text(label),
         content: SizedBox(
           // Wide on tablets, but never wider than the dialog on a phone (the old
@@ -1150,9 +1082,9 @@ _Section(title: settingsText.novelAiSection, children: [
             child: Text(detailText.save),
           ),
         ],
+        ),
       ),
     );
-    controller.dispose();
   }
 
   Future<void> _showTokenGuide(BuildContext context) {
@@ -1249,6 +1181,35 @@ _Section(title: settingsText.novelAiSection, children: [
     suffix.dispose();
     negative.dispose();
   }
+}
+
+// A dialog's result completes before its dismissal animation is unmounted.
+// Keep the controller owned by the route subtree, not by the awaiting caller.
+class _TemplateEditorScope extends StatefulWidget {
+  final String initialText;
+  final Widget Function(TextEditingController) builder;
+  const _TemplateEditorScope({required this.initialText, required this.builder});
+
+  @override
+  State<_TemplateEditorScope> createState() => _TemplateEditorScopeState();
+}
+
+class _TemplateEditorScopeState extends State<_TemplateEditorScope> {
+  late final TextEditingController _controller;
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialText);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(_controller);
 }
 
 class _TemplateTile extends StatelessWidget {

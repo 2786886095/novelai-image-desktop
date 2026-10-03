@@ -196,11 +196,11 @@
     "아이디어를 이미지로"
   ],
   "heroBody": [
-    "描述想画的内容，或添加参考图。助手会结合当前参数帮你整理，执行前由你确认。",
-    "描述想畫的內容，或加入參考圖。助手會結合目前參數幫你整理，執行前由你確認。",
-    "Describe your idea or add a reference. The assistant uses your current settings and asks before taking action.",
-    "アイデアを説明するか参照画像を追加してください。現在の設定を使い、実行前に確認します。",
-    "아이디어를 설명하거나 참조 이미지를 추가하세요. 현재 설정을 활용하며 실행 전에 확인합니다."
+    "描述想画的内容，或添加参考图。助手会结合当前参数帮你整理；可选择执行模式，并随时停止。",
+    "描述想畫的內容，或加入參考圖。助手會結合目前參數幫你整理；可選擇執行模式，並隨時停止。",
+    "Describe your idea or add a reference. The assistant uses your current settings to help; choose an execution mode and stop at any time.",
+    "描きたい内容を説明するか、参照画像を追加してください。現在の設定を使って整理します。実行モードを選び、いつでも停止できます。",
+    "원하는 그림을 설명하거나 참조 이미지를 추가하세요. 현재 설정을 바탕으로 정리하며, 실행 모드를 선택하고 언제든 중지할 수 있습니다."
   ],
   "quickSettings": [
     "查看当前生图设置",
@@ -1204,11 +1204,11 @@
     "Anlas 사용 가능"
   ],
   "presetToggle": [
-    "使用预设",
-    "使用預設",
-    "Use preset",
-    "プリセット使用",
-    "프리셋 사용"
+    "使用酒馆",
+    "使用酒館",
+    "Use Tavern",
+    "酒館を使用",
+    "타번 사용"
   ],
   "webToggleHint": [
     "开启后允许助手按需查询公开网页摘要；不会自动复制长指令。",
@@ -1323,11 +1323,11 @@
     "질문 {name}"
   ],
   "questionManual": [
-    "选好后手动提交，不会自动回答",
-    "選好後手動提交，不會自動回答",
-    "Submit manually; no automatic answers",
-    "選択後に手動送信。自動回答なし",
-    "선택 후 직접 제출 · 자동 답변 없음"
+    "点击选项即可确认；可用上／下一题查看",
+    "點擊選項即可確認；可用上／下一題查看",
+    "Click an option to confirm; use Previous/Next to review",
+    "選択肢をクリックして確定。前／次の質問で確認できます",
+    "옵션을 클릭하여 확인하고 이전/다음으로 검토하세요"
   ],
   "questionChoose": [
     "选择一个选项，或自定义回答",
@@ -1405,5 +1405,26 @@
     "Permanently delete “{name}”, its messages and attachments? This cannot be undone.",
     "「{name}」とメッセージ・添付を削除しますか？元に戻せません。",
     "“{name}” 대화 및 첨부 파일을 영구 삭제할까요? 되돌릴 수 없습니다."
+  ],
+  "questionConfirmCustom": [
+    "确定",
+    "確定",
+    "Confirm",
+    "確定",
+    "확인"
+  ],
+  "resourceDetails": [
+    "详情",
+    "詳情",
+    "Details",
+    "詳細",
+    "상세"
+  ],
+  "resourceActionFailed": [
+    "操作未完成，请重试。",
+    "操作未完成，請重試。",
+    "Could not complete the action. Please retry.",
+    "操作を完了できませんでした。再試行してください。",
+    "작업을 완료하지 못했습니다. 다시 시도하세요."
   ]
 }

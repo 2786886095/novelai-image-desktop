@@ -445,6 +445,9 @@ class AgentConversation {
   String? personaId;
   List<String> lorebookIds;
   String? samplerPresetId;
+  String studioApprovalMode;
+  bool studioWebSearchEnabled, studioTemplateEnabled;
+  String studioPresetId;
   String generationMode;
   String reasoningEffort;
   bool autoPlayGroup;
@@ -475,6 +478,10 @@ class AgentConversation {
     this.personaId,
     List<String>? lorebookIds,
     this.samplerPresetId,
+    this.studioApprovalMode = 'auto',
+    this.studioWebSearchEnabled = true,
+    this.studioTemplateEnabled = true,
+    this.studioPresetId = 'dsh-infinite-gen-4',
     this.generationMode = 'confirm',
     this.reasoningEffort = 'auto',
     this.autoPlayGroup = false,
@@ -533,6 +540,13 @@ class AgentConversation {
             .map((item) => '$item')
             .toList(),
         samplerPresetId: json['samplerPresetId']?.toString(),
+        studioApprovalMode:
+            json['studioApprovalMode'] == 'confirm' ? 'confirm' : 'auto',
+        studioWebSearchEnabled: json['studioWebSearchEnabled'] != false,
+        studioTemplateEnabled: json['studioTemplateEnabled'] != false,
+        studioPresetId: json['studioPresetId'] is String
+            ? json['studioPresetId']
+            : 'dsh-infinite-gen-4',
         generationMode: json['generationMode'] == 'auto' ? 'auto' : 'confirm',
         reasoningEffort:
             const {'low', 'medium', 'high'}.contains(json['reasoningEffort'])
@@ -571,6 +585,10 @@ class AgentConversation {
         if (personaId != null) 'personaId': personaId,
         'lorebookIds': lorebookIds,
         if (samplerPresetId != null) 'samplerPresetId': samplerPresetId,
+        'studioApprovalMode': studioApprovalMode,
+        'studioWebSearchEnabled': studioWebSearchEnabled,
+        'studioTemplateEnabled': studioTemplateEnabled,
+        'studioPresetId': studioPresetId,
         'generationMode': generationMode,
         'reasoningEffort': reasoningEffort,
         'autoPlayGroup': autoPlayGroup,
@@ -684,6 +702,8 @@ class AgentWorkspace {
   int presetLibraryVersion;
   String? selectedCharacterId;
   String? selectedPersonaId;
+  Map<String, dynamic> studioDefaults;
+  String studioResourceTab;
   String defaultGenerationMode;
   String updatedAt;
 
@@ -701,6 +721,8 @@ class AgentWorkspace {
     this.presetLibraryVersion = tavernPresetLibraryVersion,
     this.selectedCharacterId,
     this.selectedPersonaId,
+    Map<String, dynamic>? studioDefaults,
+    this.studioResourceTab = 'presets',
     this.defaultGenerationMode = 'confirm',
     String? updatedAt,
   })  : conversations = conversations ?? [],
@@ -711,6 +733,10 @@ class AgentWorkspace {
         personas = personas ?? [createSoftwareImagePersona()],
         lorebooks = lorebooks ?? [createSoftwareImageLorebook()],
         samplerPresets = samplerPresets ?? createTavernBuiltinSamplerPresets(),
+        studioDefaults = studioDefaults ?? {
+          'studioApprovalMode': 'auto',
+          'studioWebSearchEnabled': true
+        },
         updatedAt = updatedAt ?? agentNow();
 
   factory AgentWorkspace.fromJson(Map<String, dynamic> json) {
@@ -826,6 +852,50 @@ class AgentWorkspace {
       }
     }
     final selected = json['selectedConversationId']?.toString();
+    final selectedChat = conversations
+            .where((c) => c.id == selected && c.archivedAt == null)
+            .firstOrNull ??
+        conversations.where((c) => c.archivedAt == null).firstOrNull;
+    final incomingDefaults = _map(json['studioDefaults']);
+    final inherited = selectedChat?.toJson() ?? <String, dynamic>{};
+    final defaults = <String, dynamic>{};
+    for (final field in [
+      'studioApprovalMode',
+      'studioWebSearchEnabled',
+      'studioTemplateEnabled',
+      'studioPresetId',
+      'characterIds',
+      'activeCharacterId',
+      'lorebookIds'
+    ]) {
+      final value = incomingDefaults.containsKey(field)
+          ? incomingDefaults[field]
+          : inherited[field];
+      if (field == 'studioApprovalMode' &&
+          const ['auto', 'confirm'].contains(value)) defaults[field] = value;
+      if (const ['studioWebSearchEnabled', 'studioTemplateEnabled']
+              .contains(field) &&
+          value is bool) defaults[field] = value;
+      if (field == 'studioPresetId' &&
+          value is String &&
+          (const ['dsh-infinite-gen-4', 'studio-complete'].contains(value) ||
+              samplerPresets.any((p) => 'tavern:${p.id}' == value)))
+        defaults[field] = value;
+      if (const ['characterIds', 'lorebookIds'].contains(field) &&
+          value is List) {
+        defaults[field] = value
+            .whereType<String>()
+            .where((id) => field == 'characterIds'
+                ? characters.any((c) => c.id == id)
+                : lorebooks.any((b) => b.id == id))
+            .toSet()
+            .take(256)
+            .toList();
+      }
+      if (field == 'activeCharacterId' &&
+          value is String &&
+          characters.any((c) => c.id == value)) defaults[field] = value;
+    }
     return AgentWorkspace(
       selectedConversationId: conversations.any((item) => item.id == selected)
           ? selected
@@ -851,6 +921,11 @@ class AgentWorkspace {
       selectedPersonaId: personas.any((item) => item.id == selectedPersona)
           ? selectedPersona
           : personas.first.id,
+      studioDefaults: defaults,
+      studioResourceTab: const ['presets', 'worldbooks', 'characters']
+              .contains(json['studioResourceTab'])
+          ? json['studioResourceTab'] as String
+          : 'presets',
       defaultGenerationMode:
           json['defaultGenerationMode'] == 'auto' ? 'auto' : 'confirm',
       updatedAt: _text(json['updatedAt'], agentNow()),
@@ -873,6 +948,8 @@ class AgentWorkspace {
         if (selectedCharacterId != null)
           'selectedCharacterId': selectedCharacterId,
         if (selectedPersonaId != null) 'selectedPersonaId': selectedPersonaId,
+        'studioDefaults': studioDefaults,
+        'studioResourceTab': studioResourceTab,
         'defaultGenerationMode': defaultGenerationMode,
         'updatedAt': updatedAt,
       };

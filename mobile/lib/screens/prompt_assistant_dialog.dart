@@ -1,3 +1,5 @@
+import 'dart:convert';
+import '../ui/studio_dropdown.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,6 +13,7 @@ Map<String, String> promptAssistantLabels(Object? language) =>
           'custom': '提示詞助手',
           'instruction': '修改要求',
           'source': '目前提示詞',
+          'template': '使用範本模式',
           'preview': '預覽結果',
           'run': '執行',
           'retry': '重試',
@@ -24,6 +27,7 @@ Map<String, String> promptAssistantLabels(Object? language) =>
           'custom': 'Prompt assistant',
           'instruction': 'Requested changes',
           'source': 'Current prompt',
+          'template': 'Template mode',
           'preview': 'Preview',
           'run': 'Run',
           'retry': 'Retry',
@@ -37,6 +41,7 @@ Map<String, String> promptAssistantLabels(Object? language) =>
           'custom': 'プロンプト助手',
           'instruction': '変更内容',
           'source': '現在のプロンプト',
+          'template': 'テンプレートモード',
           'preview': 'プレビュー',
           'run': '実行',
           'retry': '再試行',
@@ -50,6 +55,7 @@ Map<String, String> promptAssistantLabels(Object? language) =>
           'custom': '프롬프트 도우미',
           'instruction': '변경 요청',
           'source': '현재 프롬프트',
+          'template': '템플릿 모드',
           'preview': '미리보기',
           'run': '실행',
           'retry': '재시도',
@@ -63,6 +69,7 @@ Map<String, String> promptAssistantLabels(Object? language) =>
           'custom': '提示词助手',
           'instruction': '修改要求',
           'source': '当前提示词',
+          'template': '使用模板模式',
           'preview': '预览结果',
           'run': '执行',
           'retry': '重试',
@@ -93,6 +100,9 @@ class _PromptAssistantDialogState extends State<PromptAssistantDialog> {
   final instruction = TextEditingController();
   String result = '', error = '';
   bool busy = false;
+  String? resultContext;
+  String signature(){final s=context.read<AppState>().settings;return jsonEncode([s.promptAssistantMode,s.convertPromptTemplateVersion,s.convertPromptTemplates,s.convertPromptTemplatesV45,s.promptOptimizeTemplate,s.promptAssistantTemplate]);}
+  List<String> modeLabels()=>switch(normalizeAppLocaleCode(context.read<AppState>().settings.language)){'zh-CN'=>['标签','自然语言','混合'],'zh-TW'=>['標籤','自然語言','混合'],'ja-JP'=>['タグ','自然言語','混合'],'ko-KR'=>['태그','자연어','혼합'],_=>['Tags','Natural','Mixed']};
 
   @override
   void dispose() {
@@ -102,6 +112,7 @@ class _PromptAssistantDialogState extends State<PromptAssistantDialog> {
 
   Future<void> _run() async {
     if (busy) return;
+    final requestContext=signature();
     setState(() {
       busy = true;
       result = '';
@@ -117,6 +128,7 @@ class _PromptAssistantDialogState extends State<PromptAssistantDialog> {
       setState(() {
         if (response.ok && response.text.trim().isNotEmpty) {
           result = response.text.trim();
+          resultContext=requestContext;
         } else {
           error = response.message;
         }
@@ -132,7 +144,7 @@ class _PromptAssistantDialogState extends State<PromptAssistantDialog> {
   Widget build(BuildContext context) {
     final labels =
         promptAssistantLabels(context.watch<AppState>().settings.language);
-    final stale = !widget.isCurrent(widget.source);
+    final stale = !widget.isCurrent(widget.source)||(result.isNotEmpty&&resultContext!=signature());
     return AlertDialog(
       title: Text(labels[widget.kind]!),
       content: SizedBox(
@@ -142,6 +154,12 @@ class _PromptAssistantDialogState extends State<PromptAssistantDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                StudioDropdownButtonFormField<String>(
+                    value:context.watch<AppState>().settings.promptAssistantMode,
+                    decoration:InputDecoration(labelText:labels['template']),
+                    items:[for(final (index,value) in ['tags','natural','mixed'].indexed)DropdownMenuItem(value:value,child:Text(modeLabels()[index]))],
+                    onChanged:busy?null:(next) async{if(next==null)return;setState((){result='';error='';resultContext=null;});await context.read<AppState>().setSettings((s)=>s.promptAssistantMode=next);}),
+                const SizedBox(height:12),
                 Text(labels['source']!),
                 SelectableText(widget.source),
                 if (widget.kind == 'custom') ...[

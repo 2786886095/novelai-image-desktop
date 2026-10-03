@@ -1,0 +1,682 @@
+{
+  "evidence": {
+    "path": "C:\\Users\\langbai\\.codex\\worktrees\\pi-agent-novelai\\artifacts\\pi-agent-transaction\\ux\\cross-platform-audit-v20\\WINDOWS_RICH_TAG_GROUNDING_LIVE_PROOF.json",
+    "sha256": "a3545d20c0c855a27414e161189e2e77f3ff44ea862e9e748ad8dece0e75a934",
+    "originalImage": {
+      "path": "C:\\Users\\langbai\\.codex\\worktrees\\pi-agent-novelai\\artifacts\\pi-agent-transaction\\ux\\cross-platform-audit-v20\\live-generation-1790871707490\\images\\2026-10-02\\QA-v20-landscape-redraw_2026-10-02_01_nai-diffusion-5-full.png",
+      "sha256": "841aa2dc9ee5e3d1e30ec30613bc921ff4c5b8b6922319f5c1589a49d01fbe99",
+      "source": "existing approved software QA output, not new image generation",
+      "pixelOnly": true,
+      "embeddedPromptOrCredentialsForwarded": false
+    },
+    "baseline": "C:\\Users\\langbai\\.codex\\worktrees\\pi-agent-novelai\\artifacts\\pi-agent-transaction\\ux\\cross-platform-audit-v20\\RICH_OUTPUT_REDUNDANCY_BASELINE.json",
+    "expectedKnownRecount": 64,
+    "notUniversalSemanticProof": true
+  },
+  "cases": [
+    {
+      "name": "actual rich68 becomes64 with only two alternatives and two empty labels",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "no humans"
+            },
+            {
+              "kind": "tag",
+              "text": "scenery"
+            },
+            {
+              "kind": "tag",
+              "text": "landscape"
+            },
+            {
+              "kind": "tag",
+              "text": "nature"
+            },
+            {
+              "kind": "tag",
+              "text": "outdoors"
+            },
+            {
+              "kind": "tag",
+              "text": "day"
+            },
+            {
+              "kind": "tag",
+              "text": "sky"
+            },
+            {
+              "kind": "tag",
+              "text": "blue sky"
+            },
+            {
+              "kind": "tag",
+              "text": "gradient sky"
+            },
+            {
+              "kind": "tag",
+              "text": "clear sky"
+            },
+            {
+              "kind": "tag",
+              "text": "sunlight"
+            },
+            {
+              "kind": "tag",
+              "text": "warm light"
+            },
+            {
+              "kind": "tag",
+              "text": "golden light"
+            },
+            {
+              "kind": "tag",
+              "text": "pink light"
+            },
+            {
+              "kind": "tag",
+              "text": "backlighting"
+            },
+            {
+              "kind": "tag",
+              "text": "mountain"
+            },
+            {
+              "kind": "tag",
+              "text": "mountain range"
+            },
+            {
+              "kind": "tag",
+              "text": "snow"
+            },
+            {
+              "kind": "tag",
+              "text": "snow-capped mountain"
+            },
+            {
+              "kind": "tag",
+              "text": "snowy peak"
+            },
+            {
+              "kind": "tag",
+              "text": "rocky mountain"
+            },
+            {
+              "kind": "tag",
+              "text": "mountain peak"
+            },
+            {
+              "kind": "tag",
+              "text": "rock"
+            },
+            {
+              "kind": "tag",
+              "text": "cliff"
+            },
+            {
+              "kind": "tag",
+              "text": "boulder"
+            },
+            {
+              "kind": "tag",
+              "text": "rock formation"
+            },
+            {
+              "kind": "tag",
+              "text": "ridge"
+            },
+            {
+              "kind": "tag",
+              "text": "summit"
+            },
+            {
+              "kind": "tag",
+              "text": "valley"
+            },
+            {
+              "kind": "tag",
+              "text": "slope"
+            },
+            {
+              "kind": "tag",
+              "text": "mountainside"
+            },
+            {
+              "kind": "tag",
+              "text": "alpine"
+            },
+            {
+              "kind": "tag",
+              "text": "highland"
+            },
+            {
+              "kind": "tag",
+              "text": "lake"
+            },
+            {
+              "kind": "tag",
+              "text": "alpine lake"
+            },
+            {
+              "kind": "tag",
+              "text": "shore"
+            },
+            {
+              "kind": "tag",
+              "text": "lakeshore"
+            },
+            {
+              "kind": "tag",
+              "text": "calm water"
+            },
+            {
+              "kind": "tag",
+              "text": "water"
+            },
+            {
+              "kind": "tag",
+              "text": "blue water"
+            },
+            {
+              "kind": "tag",
+              "text": "turquoise water"
+            },
+            {
+              "kind": "tag",
+              "text": "reflection"
+            },
+            {
+              "kind": "tag",
+              "text": "mist"
+            },
+            {
+              "kind": "tag",
+              "text": "fog"
+            },
+            {
+              "kind": "tag",
+              "text": "misty"
+            },
+            {
+              "kind": "tag",
+              "text": "haze"
+            },
+            {
+              "kind": "tag",
+              "text": "forest"
+            },
+            {
+              "kind": "tag",
+              "text": "pine tree"
+            },
+            {
+              "kind": "tag",
+              "text": "conifer"
+            },
+            {
+              "kind": "tag",
+              "text": "evergreen forest"
+            },
+            {
+              "kind": "tag",
+              "text": "tree"
+            },
+            {
+              "kind": "tag",
+              "text": "treetop"
+            },
+            {
+              "kind": "tag",
+              "text": "dark trees"
+            },
+            {
+              "kind": "tag",
+              "text": "silhouette"
+            },
+            {
+              "kind": "tag",
+              "text": "backlit trees"
+            },
+            {
+              "kind": "tag",
+              "text": "meadow"
+            },
+            {
+              "kind": "tag",
+              "text": "grass"
+            },
+            {
+              "kind": "tag",
+              "text": "moss"
+            },
+            {
+              "kind": "tag",
+              "text": "shrub"
+            },
+            {
+              "kind": "tag",
+              "text": "bush"
+            },
+            {
+              "kind": "tag",
+              "text": "patchy snow"
+            },
+            {
+              "kind": "tag",
+              "text": "rocky ground"
+            },
+            {
+              "kind": "tag",
+              "text": "shadow"
+            },
+            {
+              "kind": "tag",
+              "text": "distant mountains"
+            },
+            {
+              "kind": "tag",
+              "text": "atmospheric perspective"
+            },
+            {
+              "kind": "tag",
+              "text": "depth of field"
+            },
+            {
+              "kind": "tag",
+              "text": "foreground"
+            },
+            {
+              "kind": "tag",
+              "text": "background"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "no humans",
+          "scenery",
+          "landscape",
+          "nature",
+          "outdoors",
+          "day",
+          "sky",
+          "blue sky",
+          "gradient sky",
+          "clear sky",
+          "sunlight",
+          "warm light",
+          "golden light",
+          "pink light",
+          "backlighting",
+          "mountain",
+          "mountain range",
+          "snow",
+          "snow-capped mountain",
+          "snowy peak",
+          "rocky mountain",
+          "mountain peak",
+          "rock",
+          "cliff",
+          "boulder",
+          "rock formation",
+          "ridge",
+          "summit",
+          "valley",
+          "slope",
+          "mountainside",
+          "alpine",
+          "highland",
+          "lake",
+          "alpine lake",
+          "shore",
+          "lakeshore",
+          "calm water",
+          "water",
+          "blue water",
+          "turquoise water",
+          "reflection",
+          "mist",
+          "fog",
+          "haze",
+          "forest",
+          "pine tree",
+          "conifer",
+          "evergreen forest",
+          "tree",
+          "treetop",
+          "dark trees",
+          "silhouette",
+          "backlit trees",
+          "meadow",
+          "grass",
+          "moss",
+          "shrub",
+          "patchy snow",
+          "rocky ground",
+          "shadow",
+          "distant mountains",
+          "atmospheric perspective",
+          "depth of field"
+        ]
+      ]
+    },
+    {
+      "name": "complete mist/misty condition alternative",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "mist"
+            },
+            {
+              "kind": "tag",
+              "text": "misty"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "mist"
+        ]
+      ]
+    },
+    {
+      "name": "complete shrub/bush object alternative",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "shrub"
+            },
+            {
+              "kind": "tag",
+              "text": "bush"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "shrub"
+        ]
+      ]
+    },
+    {
+      "name": "no guess that mist fog haze or qualifiers mean the same",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "mist"
+            },
+            {
+              "kind": "tag",
+              "text": "fog"
+            },
+            {
+              "kind": "tag",
+              "text": "haze"
+            },
+            {
+              "kind": "tag",
+              "text": "light mist"
+            },
+            {
+              "kind": "tag",
+              "text": "dense fog"
+            },
+            {
+              "kind": "tag",
+              "text": "misty background"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "mist",
+          "fog",
+          "haze",
+          "light mist",
+          "dense fog",
+          "misty background"
+        ]
+      ]
+    },
+    {
+      "name": "remove unqualified layer names but retain positions and backdrop",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "foreground"
+            },
+            {
+              "kind": "tag",
+              "text": "background"
+            },
+            {
+              "kind": "tag",
+              "text": "rocks in foreground"
+            },
+            {
+              "kind": "tag",
+              "text": "white background"
+            },
+            {
+              "kind": "tag",
+              "text": "background forest"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "rocks in foreground",
+          "white background",
+          "background forest"
+        ]
+      ]
+    },
+    {
+      "name": "character segments retain their own plants",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "2girls"
+            }
+          ]
+        },
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "girl"
+            },
+            {
+              "kind": "tag",
+              "text": "foreground"
+            },
+            {
+              "kind": "tag",
+              "text": "shrub"
+            }
+          ]
+        },
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "girl"
+            },
+            {
+              "kind": "tag",
+              "text": "background"
+            },
+            {
+              "kind": "tag",
+              "text": "bush"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "2girls"
+        ],
+        [
+          "girl",
+          "shrub"
+        ],
+        [
+          "girl",
+          "bush"
+        ]
+      ]
+    },
+    {
+      "name": "visible text and Text payload are not structural labels",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "\"foreground\""
+            },
+            {
+              "kind": "tag",
+              "text": "\"background\""
+            },
+            {
+              "kind": "tag",
+              "text": "\"misty\""
+            },
+            {
+              "kind": "tag",
+              "text": "Text: background"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "\"foreground\"",
+          "\"background\"",
+          "\"misty\"",
+          "Text: background"
+        ]
+      ]
+    },
+    {
+      "name": "differing explicit weights are retained",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "1.3::mist ::"
+            },
+            {
+              "kind": "tag",
+              "text": "1.5::misty ::"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "1.3::mist ::",
+          "1.5::misty ::"
+        ]
+      ]
+    },
+    {
+      "name": "same weighted plant alternative preserves first spelling",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "1.3::shrub ::"
+            },
+            {
+              "kind": "tag",
+              "text": "1.3::bush ::"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "1.3::shrub ::"
+        ]
+      ]
+    },
+    {
+      "name": "weighted and unweighted alternatives are not silently merged",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "mist"
+            },
+            {
+              "kind": "tag",
+              "text": "1.3::misty ::"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "mist",
+          "1.3::misty ::"
+        ]
+      ]
+    },
+    {
+      "name": "actor/target prefixes are not erased",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "source#mist"
+            },
+            {
+              "kind": "tag",
+              "text": "target#misty"
+            },
+            {
+              "kind": "tag",
+              "text": "source#shrub"
+            },
+            {
+              "kind": "tag",
+              "text": "target#bush"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "source#mist",
+          "target#misty",
+          "source#shrub",
+          "target#bush"
+        ]
+      ]
+    }
+  ]
+}

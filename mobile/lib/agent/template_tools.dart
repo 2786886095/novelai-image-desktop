@@ -11,23 +11,7 @@ class AgentTemplateTools {
     'studio_save_prompt_template'
   };
   final AppState app;
-  final String Function(String kind)? readAgentTemplate;
-  final Future<void> Function(String kind, String body)? writeAgentTemplate;
-  AgentTemplateTools(this.app, {this.readAgentTemplate, this.writeAgentTemplate});
-  Future<String> _readExtra(String kind) async =>
-      readAgentTemplate?.call(kind) ??
-      (await app.storage.getAgentWorkspace()).agentTemplates[kind] ?? '';
-
-  Future<void> _writeExtra(String kind, String body) async {
-    if (writeAgentTemplate != null) return writeAgentTemplate!(kind, body);
-    final workspace = await app.storage.getAgentWorkspace();
-    if (body.isEmpty) {
-      workspace.agentTemplates.remove(kind);
-    } else {
-      workspace.agentTemplates[kind] = body;
-    }
-    await app.storage.setAgentWorkspace(workspace);
-  }
+  AgentTemplateTools(this.app);
   Future<Map<String, dynamic>> _selection(
       AppSettings s, Map<String, dynamic> args) async {
     final extraKind = args['kind'];
@@ -35,15 +19,18 @@ class AgentTemplateTools {
       if (args.containsKey('mode') || args.containsKey('templateVersion')) {
         throw StateError('优化/助手模板不使用模式或版本。');
       }
-      final custom = (await _readExtra(extraKind as String)).trim();
-      final builtin = extraKind == 'optimize'
-          ? 'Optimize the NovelAI prompt while preserving the user’s explicit subject, composition, style and constraints. Do not invent unsupported facts.'
-          : 'Help revise the NovelAI prompt according to the user’s request. Preserve explicit constraints and explain uncertain changes.';
+      final key = extraKind == 'optimize'
+          ? 'promptOptimizeTemplate' : 'promptAssistantTemplate';
+      final custom = (extraKind == 'optimize'
+          ? s.promptOptimizeTemplate : s.promptAssistantTemplate).trim();
+      final defaults = await PromptTemplateLibrary.load();
+      final builtin = defaults.promptEditDefaults[
+          extraKind == 'optimize' ? 'optimize' : 'custom'] ?? '';
       return {
         'kind': extraKind,
         'body': custom.isNotEmpty ? custom : builtin,
         'source': custom.isNotEmpty ? 'custom' : 'builtin',
-        'revision': sha256.convert(utf8.encode(jsonEncode([extraKind, custom]))).toString(),
+        'revision': sha256.convert(utf8.encode(jsonEncode([key, custom]))).toString(),
       };
     }
     final kind = args['kind'] ?? 'convert',
@@ -63,18 +50,19 @@ class AgentTemplateTools {
         saved = Map<String, dynamic>.from(raw[key] ?? {});
     final defaults = await PromptTemplateLibrary.load();
     final modeValue = ReversePromptMode.values.byName(mode);
-    final builtin = kind == 'convert'
-        ? defaults.get(version == 'v4.5' ? 'convertV45' : 'convert', modeValue)
-        : defaults.getReverse(modeValue,
-            scoped: false, templateVersion: version);
+    final body = defaults.resolve(kind as String, modeValue,
+        saved.map((key, value) => MapEntry(key, value.toString())),
+        templateVersion: version as String);
     final custom = (saved[mode] ?? '').toString().trim();
     return {
       'kind': kind,
       'mode': mode,
       'templateVersion': version,
       'key': key,
-      'body': custom.isNotEmpty ? custom : builtin,
-      'source': custom.isNotEmpty ? 'custom' : 'builtin',
+      'body': body,
+      'source': custom.isNotEmpty && body == custom
+          ? 'custom' : (saved['mixed'] ?? '').toString().trim().isNotEmpty
+              ? 'derived' : 'builtin',
       'revision': sha256
           .convert(utf8.encode(jsonEncode([
             key,
@@ -125,10 +113,24 @@ class AgentTemplateTools {
       }
       if (selected['kind'] == 'optimize' || selected['kind'] == 'assistant') {
         if (body != null || args['restoreDefault'] == true) {
-          await _writeExtra(selected['kind'] as String,
-              args['restoreDefault'] == true ? '' : (body as String).trim());
+          final current = await app.storage.getSettings();
+          if ((await _selection(current, args))['revision'] !=
+              selected['revision']) {
+            throw StateError('保存前模板已变化');
+          }
+          final key = selected['kind'] == 'optimize'
+              ? 'promptOptimizeTemplate' : 'promptAssistantTemplate';
+          final value = args['restoreDefault'] == true
+              ? '' : (body as String).trim();
+          final raw = current.toJson()..[key] = value;
+          final next = AppSettings.fromJson(raw);
+          // Persist first. A failed save must not change the live editor.
+          await app.storage.setSettings(next);
+          final live = app.settings.toJson()..[key] = value;
+          app.settings = AppSettings.fromJson(live);
+          app.markChanged();
         }
-        final after = await _selection(settings, args);
+        final after = await _selection(await app.storage.getSettings(), args);
         if (body is String && body.trim().isNotEmpty && after['body'] != body.trim()) {
           throw StateError('模板保存后回读不符');
         }

@@ -3,6 +3,7 @@ import {exportImageSettings, readImageSettingsBackup} from "../../src/compatible
 import {SENSITIVE_SETTING_KEYS} from "./credential-vault";
 import {imageSettingsStamp} from "./image-settings-events";
 import crypto, { randomUUID } from "node:crypto";
+import {exportNaiAccountsBackup,prepareNaiAccountsBackupRestore} from './nai-accounts';
 import fs from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
@@ -89,6 +90,8 @@ const API_SETTING_KEYS: Array<keyof AppSettings> = [
   "tagServerCommand",
   "tagServerArgs",
   "tagServerTool",
+  "tagServerRelatedTool",
+  "tagServerArtistTool",
   "mcpForCapsule",
   "mcpForReverse",
   "mcpForConvert",
@@ -494,6 +497,7 @@ async function buildArchive(
 
   if (selected.has("apiCredentials")) {
     const payload = {
+      novelAiAccounts: exportNaiAccountsBackup(),
       token: data.token ?? "",
       account: data.account ?? null,
       settings: { ...pickSettings(data.settings, API_SETTING_KEYS), ...exportImageSettings({...data.settings, credentialIssues: credentialIssues()}) },
@@ -944,10 +948,10 @@ async function restoreAgentWorkspace(
 }
 
 async function historyHashIndex(items: HistoryItem[]) {
-  const index = new Map<string, HistoryItem>();
+  const index = new Map<string, HistoryItem[]>();
   for (const item of items) {
     const digest = await sha256File(item.filePath);
-    if (digest && !index.has(digest)) index.set(digest, item);
+    if (digest) index.set(digest, [...(index.get(digest) ?? []), item]);
   }
   return index;
 }
@@ -1002,6 +1006,34 @@ function safeHistoryShape(raw: PortableHistoryItem): Omit<HistoryItem, "id" | "f
   };
 }
 
+function canonicalHistoryValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalHistoryValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => [key, canonicalHistoryValue(item)]));
+  }
+  return value;
+}
+
+function sameHistoryRecord(item: HistoryItem, raw: PortableHistoryItem, groupId?: string) {
+  // Asset de-duplication must not discard distinct generation metadata. Local
+  // IDs and paths may change during import and are not a record's identity.
+  const existing = { ...safeHistoryShape(item), groupId };
+  const incoming = { ...safeHistoryShape(raw), groupId };
+  if (item.groupId !== groupId) return false;
+  // Old archives omitted these fields. Ignore only absent values, not supplied
+  // timestamps, so a second import does not acquire a new "now" identity.
+  if (typeof raw.createdAt !== "string") {
+    delete (existing as Partial<typeof existing>).createdAt;
+    delete (incoming as Partial<typeof incoming>).createdAt;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(raw.date ?? ""))) {
+    delete (existing as Partial<typeof existing>).date;
+    delete (incoming as Partial<typeof incoming>).date;
+  }
+  return JSON.stringify(canonicalHistoryValue(existing)) === JSON.stringify(canonicalHistoryValue(incoming));
+}
+
 async function restoreHistoryItem(
   zip: JSZip,
   raw: PortableHistoryItem,
@@ -1009,7 +1041,7 @@ async function restoreHistoryItem(
     store: PersistedData;
     outputDir: string;
     groupIdMap: Map<string, string>;
-    historyByHash: Map<string, HistoryItem>;
+    historyByHash: Map<string, HistoryItem[]>;
     historyBySourceId: Map<string, HistoryItem>;
     importedIds: Set<string>;
     imported: { count: number; skipped: number; renamed: number };
@@ -1020,13 +1052,14 @@ async function restoreHistoryItem(
     state.imported.skipped += 1;
     return null;
   }
-  const duplicate = state.historyByHash.get(asset.reference.sha256);
+  const groupId = raw.groupId ? state.groupIdMap.get(raw.groupId) : undefined;
+  const matchingAssets = state.historyByHash.get(asset.reference.sha256) ?? [];
+  const duplicate = matchingAssets.find((item) => sameHistoryRecord(item, raw, groupId));
   if (duplicate) {
     state.imported.skipped += 1;
     if (typeof raw.id === "string") state.historyBySourceId.set(raw.id, duplicate);
     return duplicate;
   }
-  const groupId = raw.groupId ? state.groupIdMap.get(raw.groupId) : undefined;
   const group = groupId ? state.store.historyGroups.find((item) => item.id === groupId) : undefined;
   const folder = group
     ? path.join(state.outputDir, dateFolder(raw.date), safeFolderName(group.name, "group"))
@@ -1048,7 +1081,7 @@ async function restoreHistoryItem(
     ...safeHistoryShape(raw),
   };
   state.store.history.push(item);
-  state.historyByHash.set(asset.reference.sha256, item);
+  state.historyByHash.set(asset.reference.sha256, [...matchingAssets, item]);
   if (typeof raw.id === "string") state.historyBySourceId.set(raw.id, item);
   state.imported.count += 1;
   return item;
@@ -1386,15 +1419,17 @@ export async function importDataBackup(
 
   const imageRevision = imageSettingsStamp(readStore().settings).revision;
   let imageBackup: ReturnType<typeof readImageSettingsBackup> = null;
+  let accountRestore: Awaited<ReturnType<typeof prepareNaiAccountsBackupRestore>> | undefined;
   let archive: Awaited<ReturnType<typeof loadArchive>>;
   let portable: Awaited<ReturnType<typeof inspectPortableProjects>>;
   try {
     archive = await loadArchive(request.path);
     portable = await inspectPortableProjects(archive.zip, new Set(categories));
     if (categories.includes("apiCredentials")) {
-      const payload = await readJsonEntry<{ settings?: Record<string, unknown> } | null>(archive.zip, "data/api-credentials.json", null);
+      const payload = await readJsonEntry<{ settings?: Record<string, unknown>;novelAiAccounts?:unknown } | null>(archive.zip, "data/api-credentials.json", null);
       if (!payload || !payload.settings || typeof payload.settings !== 'object' || Array.isArray(payload.settings)) throw new Error('备份缺少有效的 API 配置。');
       imageBackup = readImageSettingsBackup(payload.settings);
+      if(payload.novelAiAccounts!==undefined)accountRestore=await prepareNaiAccountsBackupRestore(payload.novelAiAccounts);
     }
   } catch (error: any) {
     return { ok: false, message: `无法读取备份：${error?.message ?? String(error)}`, imported: 0, skipped: 0, renamed: 0 };
@@ -1568,7 +1603,7 @@ export async function importDataBackup(
         }
       }
       if (imageBackup) replaceCredentials.push("imageApiKey");
-      if (typeof incoming.token === "string") { next.token = incoming.token; replaceCredentials.push("token"); }
+      if (!accountRestore && typeof incoming.token === "string" && incoming.token.trim()) { next.token = incoming.token; replaceCredentials.push("token"); }
       if (incoming.account && typeof incoming.account === "object") next.account = incoming.account;
     }
 
@@ -1609,7 +1644,8 @@ export async function importDataBackup(
     }
     delete next.settings.imageServiceRevision;
     delete next.settings.imageServiceVersion;
-    writeStore(next, replaceCredentials);
+    if(accountRestore){const beforeWrite=readStore();accountRestore(()=>writeStore(next,replaceCredentials),()=>writeStore(beforeWrite,replaceCredentials));}
+    else writeStore(next, replaceCredentials);
 
     const workspaceData = selected.has("workspaceData")
       ? await readJsonEntry<Record<string, string>>(archive.zip, "data/workspace.json", {})

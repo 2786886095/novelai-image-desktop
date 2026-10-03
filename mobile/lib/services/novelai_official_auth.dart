@@ -29,8 +29,17 @@ Future<String> deriveNovelAiAccessKey(String email, String password) async {
 Future<String> _derive(List<String> values) =>
     deriveNovelAiAccessKey(values[0], values[1]);
 
+/// Safe, local category and actual status only; no remote response/credential.
+class NovelAiOfficialAuthFailure extends StateError {
+  final String code;
+  final int? status;
+  NovelAiOfficialAuthFailure(this.code, String message, {this.status})
+      : super(message);
+}
+
 class NovelAiOfficialAuth {
-  static final loginUri = Uri.parse('https://api.novelai.net/user/login');
+  // Official user routes use the image host; never the selected relay address.
+  static final loginUri = Uri.parse('https://image.novelai.net/user/login');
   static const maxResponseBytes = 64 * 1024;
   static const maxTokenBytes = 16 * 1024;
   final FutureOr<http.Client> Function()? clientFactory;
@@ -62,6 +71,7 @@ class NovelAiOfficialAuth {
           request: request,
           timeout: remaining,
           maxResponseBytes: maxResponseBytes,
+          bodyStatuses: const {200, 201, 400, 401, 403, 429},
           openClient: () async {
             if (clientFactory != null) return await clientFactory!();
             // Read the LIVE settings after derivation, not a constructor/UI copy.
@@ -73,40 +83,62 @@ class NovelAiOfficialAuth {
             return createProxyHttpClientForUri(snapshot, loginUri,
                 scope: ProxyScope.nai);
           });
-      if (response.statusCode != 201 && response.statusCode != 200) {
-        throw StateError(
-            '官方登录失败（HTTP ${response.statusCode}）；若需二次验证，请使用官方 Persistent API Token');
-      }
       Object? body;
       try {
         body = jsonDecode(utf8.decode(response.bodyBytes));
       } catch (_) {
-        throw StateError('官方登录响应格式无效；未保存凭据');
+        if (response.statusCode == 403 &&
+            RegExp(r'<html|cloudflare|captcha', caseSensitive: false)
+                .hasMatch(utf8.decode(response.bodyBytes, allowMalformed: true))) {
+          throw NovelAiOfficialAuthFailure('challenge',
+              '官方要求网页安全验证；请在官网完成验证或使用 API Token。未保存账号',
+              status: 403);
+        }
       }
       final json = body is Map ? body : null;
-      if (json != null &&
+      if (response.statusCode == 429) {
+        throw NovelAiOfficialAuthFailure('rate-limited', '官方暂时限制登录频率；未重试、未保存账号',
+            status: 429);
+      }
+      if ((json != null &&
           [
-            'challenge',
             'mfa',
             'otp',
+            'otpRequired',
             'mfaRequired',
             'twoFactorRequired',
             'requiresTwoFactor'
-          ].any((key) => json[key] != null && json[key] != false)) {
-        throw StateError('官方要求二次验证；协议尚未验证，请使用 Persistent API Token');
+          ].any((key) => json[key] != null && json[key] != false)) ||
+          RegExp(r'otp|two.factor|2fa', caseSensitive: false)
+              .hasMatch((json?['message'] ?? json?['error'] ?? '').toString())) {
+        throw NovelAiOfficialAuthFailure('otp-unsupported',
+            '官方要求二次验证；协议尚未验证，请使用 Persistent API Token',
+            status: response.statusCode);
+      }
+      if (['challenge', 'captcha']
+          .any((key) => json?[key] != null && json?[key] != false)) {
+        throw NovelAiOfficialAuthFailure('challenge',
+            '官方要求网页安全验证；请在官网完成验证或使用 API Token。未保存账号',
+            status: response.statusCode);
+      }
+      if (response.statusCode != 201 && response.statusCode != 200) {
+        throw NovelAiOfficialAuthFailure('auth',
+            '官方拒绝本次登录（HTTP ${response.statusCode}）；请核对官网登录与账号信息，未保存账号',
+            status: response.statusCode);
       }
       final token = body is Map ? body['accessToken'] : null;
       if (token is! String ||
           token.isEmpty ||
           token.length > maxTokenBytes ||
           !RegExp(r'^[\x21-\x7e]+$').hasMatch(token)) {
-        throw StateError('官方未返回访问凭据；二次验证流程尚未验证，请使用 Token');
+        throw NovelAiOfficialAuthFailure('invalid-response',
+            '官方未返回有效登录凭据；未保存账号', status: response.statusCode);
       }
       return token;
     } on TimeoutException {
-      throw StateError('官方登录超时；未保存凭据、未重试');
+      throw NovelAiOfficialAuthFailure('network', '官方登录超时；未保存凭据、未重试');
     } on http.ClientException {
-      throw StateError('官方登录网络失败；未重试');
+      throw NovelAiOfficialAuthFailure('network', '官方登录网络失败；未重试');
     }
   }
 }

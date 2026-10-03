@@ -223,6 +223,7 @@ export function defaultSettings(): AppSettings {
     comicAnalyzePromptTemplate: "",
     promptOptimizeTemplate: "",
     promptAssistantTemplate: "",
+    promptAssistantMode: "mixed" as const,
     convertApiUrl: "https://api.openai.com/v1",
     convertApiKey: "",
     convertApiModel: "gpt-4o-mini",
@@ -479,16 +480,8 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
       settings.proxyMode = "custom";
     }
   }
-  // v1.8.8 and earlier defaulted every installation to a fixed Clash port.
-  // Migrate that untouched preset to automatic system/PAC/TUN routing. Custom
-  // ports and explicit direct/SOCKS choices remain unchanged.
-  if (
-    rawSettings.proxyMode === "http" &&
-    (rawSettings.proxyUrl ?? "").trim().toLowerCase().replace(/\/$/, "") === "http://127.0.0.1:7890"
-  ) {
-    settings.proxyMode = "auto";
-    settings.proxyUrl = "";
-  }
+  // Missing-mode legacy defaults are handled above. A persisted proxyMode is
+  // an explicit choice, even if its port matches an old shipped preset.
   if (
     isEmptyModeTemplates(rawSettings.reversePromptTemplates) ||
     isLegacyScopedReverseTemplates(rawSettings.reversePromptTemplates) ||
@@ -653,7 +646,6 @@ export function getSettings(): AppSettings {
   const legacy=boundLegacyNaiAccount();
   if(legacy) { const {token:_token,...endpoints}=legacy; Object.assign(settings,endpoints); }
   if(selected) Object.assign(settings,{apiBaseUrl:selected.apiBaseUrl,imageBaseUrl:selected.imageBaseUrl,allowCustomEndpoint:selected.legacyConfiguration?.allowCustomEndpoint??(selected.method==='relay'),allowCustomEndpointFallback:selected.legacyConfiguration?.allowCustomEndpointFallback??false});
-  if(selected?.method==='relay') settings.streamPreviewEnabled=false; // No paid stream-capability probe on an unverified relay.
   const stamp = imageSettingsStamp(settings);
   return { ...settings, naiAccountId:selected?.id, naiAccountRevision:naiAccountRevision(), credentialIssues: credentialVault.issues(), imageServiceRevision: stamp.revision, imageServiceVersion: stamp.version };
 }
@@ -664,7 +656,7 @@ export function getSetting<K extends SettingKey>(key: K): AppSettings[K] {
 
 export function setSetting<K extends SettingKey>(key: K, value: AppSettings[K]): AppSettings[K] {
   if(['apiBaseUrl','imageBaseUrl','allowCustomEndpoint','allowCustomEndpointFallback'].includes(key) && (currentNaiAccount() || naiAccountsBusy())) throw Error('账户接口由所选账户绑定；操作期间不能修改。');
-  if(key==='imageProvider'&&value!=='novelai')throw Error(NOVELAI_ONLY_MESSAGE);
+  if(key==='imageProvider'&&value!=='novelai'&&value!=='openai-images')throw Error(NOVELAI_ONLY_MESSAGE);
   if (key === "outputDir" && (typeof value !== "string" || !value.trim())) throw new Error("请选择图片保存目录，保存位置不可留空。");
   if ((PROTECTED_DIRECTORY_KEYS as readonly string[]).includes(key) && typeof value === "string") {
     assertSafeDataDirectory(value, installedAppDir());
@@ -681,7 +673,7 @@ export function setSetting<K extends SettingKey>(key: K, value: AppSettings[K]):
 
 /** Commit endpoint, model and its independent credential together, never field-by-field. */
 export function setCompatibleImageSettings(config: NonNullable<AppSettings["compatibleImage"]>, apiKey: string, provider: NonNullable<AppSettings["imageProvider"]>) {
-  if(provider!=='novelai')throw Error(NOVELAI_ONLY_MESSAGE);
+  if(provider!=='novelai'&&provider!=='openai-images')throw Error(NOVELAI_ONLY_MESSAGE);
   const data = { ...readStore() };
   data.settings = { ...data.settings, compatibleImage: config, imageApiKey: apiKey, imageProvider: provider };
   writeStore(data, ["imageApiKey"]);

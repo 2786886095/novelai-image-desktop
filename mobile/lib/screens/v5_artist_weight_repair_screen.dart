@@ -559,6 +559,7 @@ class _V5ArtistWeightRepairScreenState
   String _message = '';
   bool _fixedSeed = true;
   bool _running = false;
+  bool _batchReady = false;
   bool _cancelled = false;
   bool _showFavorites = false;
   WeightControlMode _weightControlMode = WeightControlMode.novice;
@@ -753,6 +754,7 @@ class _V5ArtistWeightRepairScreenState
   }
 
   Future<void> _run(Map<String, String> text) async {
+    setState(() => _batchReady = false);
     if (_input.text.trim().isEmpty) {
       setState(() {
         _output.clear();
@@ -835,10 +837,12 @@ class _V5ArtistWeightRepairScreenState
         ),
       ));
       _showFavorites = false;
+      _batchReady = true;
     });
   }
 
   Future<void> _draw(Map<String, String> text) async {
+    setState(() => _batchReady = false);
     if (_drawInput.text.trim().isEmpty) {
       setState(() => _message = text['inputEmpty']!);
       return;
@@ -1014,7 +1018,7 @@ class _V5ArtistWeightRepairScreenState
 
   Future<void> _generate(Map<String, String> text) async {
     if (_running) return;
-    if (_results.isEmpty) {
+    if (!_batchReady || _results.isEmpty) {
       setState(() => _message = text['needDraw']!);
       return;
     }
@@ -1863,7 +1867,7 @@ class _V5ArtistWeightRepairScreenState
                   else
                     FilledButton.icon(
                       onPressed:
-                          _results.isEmpty ? null : () => _generate(text),
+                          !_batchReady || _results.isEmpty ? null : () => _generate(text),
                       icon: const Icon(Icons.play_arrow),
                       label: Text(text['generate']!),
                     ),
@@ -2187,7 +2191,7 @@ class _V5ArtistWeightRepairScreenState
                         )
                       else
                         FilledButton.icon(
-                          onPressed: _results.isEmpty
+                          onPressed: !_batchReady || _results.isEmpty
                               ? null
                               : () => _generate(drawText),
                           icon: const Icon(Icons.play_arrow),

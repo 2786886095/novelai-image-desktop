@@ -6,8 +6,10 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../i18n/local_favorites_text.dart';
+import '../i18n/app_locales.dart';
 import '../services/local_favorites.dart';
 import '../state/app_state.dart';
+import '../ui/zoomable_image.dart';
 import 'gallery_favorites_screen.dart';
 
 class LocalFavoritesScreen extends StatefulWidget {
@@ -43,6 +45,14 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
       if (mounted) {
         setState(() {
           library = result;
+          if (date.isNotEmpty &&
+              !result.items.any((item) => item.prefix.startsWith(date))) {
+            date = '';
+          }
+          final count = result.items
+              .where((item) => date.isEmpty || item.prefix.startsWith(date))
+              .length;
+          page = page.clamp(1, (count / pageSize).ceil().clamp(1, 999999));
           error = null;
         });
       }
@@ -83,22 +93,30 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
 
   Future<void> _rename(LocalFavorite item, String language) async {
     final controller = TextEditingController(text: item.name);
-    final suffix = await showDialog<String>(
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final route = DialogRoute<String>(
         context: context,
+        themes: InheritedTheme.capture(from: context, to: navigator.context),
+        barrierColor:
+            Theme.of(context).dialogTheme.barrierColor ?? Colors.black54,
+        traversalEdgeBehavior: TraversalEdgeBehavior.closedLoop,
         builder: (context) => AlertDialog(
               title: Text(localFavoritesText(language, 'rename')),
-              content: Row(children: [
-                Text('${item.prefix}_'),
-                Expanded(
-                    child: TextField(
-                  controller: controller,
-                  autofocus: true,
-                  maxLength: 100,
-                  decoration:
-                      const InputDecoration(border: OutlineInputBorder()),
-                  onSubmitted: (value) => Navigator.pop(context, value),
-                ))
-              ]),
+              content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('${item.prefix}_'),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: controller,
+                      autofocus: true,
+                      maxLength: 100,
+                      decoration:
+                          const InputDecoration(border: OutlineInputBorder()),
+                      onSubmitted: (value) => Navigator.pop(context, value),
+                    )
+                  ]),
               actions: [
                 TextButton(
                     onPressed: () => Navigator.pop(context),
@@ -108,8 +126,11 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
                     child: Text(localFavoritesText(language, 'save')))
               ],
             ));
+    final suffix = await navigator.push(route);
+    // Keep the field alive until the reverse animation removes its overlay.
+    await route.completed;
     controller.dispose();
-    if (suffix != null) {
+    if (suffix != null && mounted) {
       await _run(() async {
         await store.rename(item.id, suffix);
       });
@@ -117,12 +138,28 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
   }
 
   void _preview(List<LocalFavorite> items, int index, String language) {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => _FavoritePreview(
-            items: items,
-            initialIndex: index,
-            directory: library!.directory,
-            language: language)));
+    final files = [
+      for (final item in items)
+        File('${library!.directory}${Platform.pathSeparator}${item.fileName}')
+    ];
+    showGalleryImagePreview(context,
+        images: [
+          for (final file in files)
+            file.existsSync()
+                ? Image.file(file, fit: BoxFit.contain)
+                : Center(
+                    child: Text(localFavoritesText(language, 'missing'),
+                        style: const TextStyle(color: Colors.white)))
+        ],
+        initialIndex: index,
+        captions: [for (final item in items) item.fileName],
+        actionsBuilder: (context, current) => IconButton(
+            tooltip: mobileUiTextFor(language, 'gallery.share'),
+            color: Colors.white,
+            icon: const Icon(Icons.share_outlined),
+            onPressed: files[current].existsSync()
+                ? () => Share.shareXFiles([XFile(files[current].path)])
+                : null));
   }
 
   @override
@@ -274,22 +311,21 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
     final file =
         File('${library!.directory}${Platform.pathSeparator}${item.fileName}');
     final exists = file.existsSync();
+    final image = InkWell(
+        onTap: exists ? () => _preview(items, index, language) : null,
+        child: exists
+            ? Image.file(file,
+                width: double.infinity,
+                fit: masonry ? BoxFit.fitWidth : BoxFit.cover,
+                cacheWidth: 440)
+            : Center(child: Text(localFavoritesText(language, 'missing'))));
     return Card(
         clipBehavior: Clip.antiAlias,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          InkWell(
-              onTap: exists ? () => _preview(items, index, language) : null,
-              child: exists
-                  ? Image.file(file,
-                      width: double.infinity,
-                      height: masonry ? null : 160,
-                      fit: masonry ? BoxFit.fitWidth : BoxFit.cover,
-                      cacheWidth: 440)
-                  : SizedBox(
-                      height: 160,
-                      child: Center(
-                          child:
-                              Text(localFavoritesText(language, 'missing'))))),
+          if (masonry)
+            (exists ? image : SizedBox(height: 160, child: image))
+          else
+            Expanded(child: image),
           Text(item.fileName, maxLines: 1, overflow: TextOverflow.ellipsis),
           Row(mainAxisAlignment: MainAxisAlignment.end, children: [
             IconButton(
@@ -304,62 +340,5 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
                 icon: const Icon(Icons.bookmark_remove_outlined)),
           ]),
         ]));
-  }
-}
-
-class _FavoritePreview extends StatefulWidget {
-  final List<LocalFavorite> items;
-  final int initialIndex;
-  final String directory, language;
-  const _FavoritePreview(
-      {required this.items,
-      required this.initialIndex,
-      required this.directory,
-      required this.language});
-  @override
-  State<_FavoritePreview> createState() => _FavoritePreviewState();
-}
-
-class _FavoritePreviewState extends State<_FavoritePreview> {
-  late int index = widget.initialIndex;
-  @override
-  Widget build(BuildContext context) {
-    final item = widget.items[index];
-    final file =
-        File('${widget.directory}${Platform.pathSeparator}${item.fileName}');
-    return Scaffold(
-        appBar: AppBar(
-            title: Text('${index + 1} / ${widget.items.length}'),
-            actions: [
-              IconButton(
-                  icon: const Icon(Icons.share_outlined),
-                  onPressed: file.existsSync()
-                      ? () => Share.shareXFiles([XFile(file.path)])
-                      : null),
-            ]),
-        body: SafeArea(
-            child: Row(children: [
-          IconButton(
-              tooltip: localFavoritesText(widget.language, 'previous'),
-              onPressed: index <= 0 ? null : () => setState(() => index--),
-              icon: const Icon(Icons.chevron_left)),
-          Expanded(
-              child: file.existsSync()
-                  ? InteractiveViewer(
-                      key: ValueKey(item.id),
-                      minScale: 0.5,
-                      maxScale: 5,
-                      child:
-                          Center(child: Image.file(file, fit: BoxFit.contain)))
-                  : Center(
-                      child: Text(
-                          localFavoritesText(widget.language, 'missing')))),
-          IconButton(
-              tooltip: localFavoritesText(widget.language, 'next'),
-              onPressed: index >= widget.items.length - 1
-                  ? null
-                  : () => setState(() => index++),
-              icon: const Icon(Icons.chevron_right)),
-        ])));
   }
 }

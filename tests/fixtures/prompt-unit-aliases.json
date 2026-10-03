@@ -1,0 +1,724 @@
+{
+  "evidence": "WINDOWS_TAG_CONTEXT_LIVE_PROOF.json",
+  "aliases": [
+    [
+      "head back",
+      "head tilted back"
+    ],
+    [
+      "leaning forward",
+      "body leaning forward"
+    ],
+    [
+      "from side",
+      "from the side",
+      "side view"
+    ]
+  ],
+  "cases": [
+    {
+      "name": "observed actual 60 units becomes57 without the three redundant alternatives",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "1girl"
+            },
+            {
+              "kind": "tag",
+              "text": "solo"
+            },
+            {
+              "kind": "tag",
+              "text": "young adult"
+            },
+            {
+              "kind": "tag",
+              "text": "female singer"
+            },
+            {
+              "kind": "tag",
+              "text": "singing"
+            },
+            {
+              "kind": "tag",
+              "text": "indoors"
+            },
+            {
+              "kind": "tag",
+              "text": "stage"
+            },
+            {
+              "kind": "tag",
+              "text": "stage lights"
+            },
+            {
+              "kind": "tag",
+              "text": "spotlight"
+            },
+            {
+              "kind": "tag",
+              "text": "warm lighting"
+            },
+            {
+              "kind": "tag",
+              "text": "single spotlight"
+            },
+            {
+              "kind": "tag",
+              "text": "upper body"
+            },
+            {
+              "kind": "tag",
+              "text": "from the side"
+            },
+            {
+              "kind": "tag",
+              "text": "profile"
+            },
+            {
+              "kind": "tag",
+              "text": "long hair"
+            },
+            {
+              "kind": "tag",
+              "text": "black hair"
+            },
+            {
+              "kind": "tag",
+              "text": "straight hair"
+            },
+            {
+              "kind": "tag",
+              "text": "blue eyes"
+            },
+            {
+              "kind": "tag",
+              "text": "closed eyes"
+            },
+            {
+              "kind": "tag",
+              "text": "open mouth"
+            },
+            {
+              "kind": "tag",
+              "text": "white dress"
+            },
+            {
+              "kind": "tag",
+              "text": "sleeveless dress"
+            },
+            {
+              "kind": "tag",
+              "text": "neck ribbon"
+            },
+            {
+              "kind": "tag",
+              "text": "hair falling over shoulders"
+            },
+            {
+              "kind": "tag",
+              "text": "fair skin"
+            },
+            {
+              "kind": "tag",
+              "text": "slender"
+            },
+            {
+              "kind": "tag",
+              "text": "collarbone"
+            },
+            {
+              "kind": "tag",
+              "text": "holding microphone"
+            },
+            {
+              "kind": "tag",
+              "text": "microphone"
+            },
+            {
+              "kind": "tag",
+              "text": "microphone stand"
+            },
+            {
+              "kind": "tag",
+              "text": "cable"
+            },
+            {
+              "kind": "tag",
+              "text": "hand on chest"
+            },
+            {
+              "kind": "tag",
+              "text": "leaning forward"
+            },
+            {
+              "kind": "tag",
+              "text": "head back"
+            },
+            {
+              "kind": "tag",
+              "text": "dark background"
+            },
+            {
+              "kind": "tag",
+              "text": "bokeh"
+            },
+            {
+              "kind": "tag",
+              "text": "blurry lights"
+            },
+            {
+              "kind": "tag",
+              "text": "depth of field"
+            },
+            {
+              "kind": "tag",
+              "text": "singing into microphone"
+            },
+            {
+              "kind": "tag",
+              "text": "right hand holding microphone"
+            },
+            {
+              "kind": "tag",
+              "text": "microphone near mouth"
+            },
+            {
+              "kind": "tag",
+              "text": "left hand on own chest"
+            },
+            {
+              "kind": "tag",
+              "text": "head tilted back"
+            },
+            {
+              "kind": "tag",
+              "text": "body leaning forward"
+            },
+            {
+              "kind": "tag",
+              "text": "ponytail"
+            },
+            {
+              "kind": "tag",
+              "text": "earrings"
+            },
+            {
+              "kind": "tag",
+              "text": "bare arms"
+            },
+            {
+              "kind": "tag",
+              "text": "white dress with ribbon"
+            },
+            {
+              "kind": "tag",
+              "text": "stage floor"
+            },
+            {
+              "kind": "tag",
+              "text": "wire hanging down"
+            },
+            {
+              "kind": "tag",
+              "text": "dark stage background"
+            },
+            {
+              "kind": "tag",
+              "text": "spotlight from above"
+            },
+            {
+              "kind": "tag",
+              "text": "warm colored light"
+            },
+            {
+              "kind": "tag",
+              "text": "shallow depth of field"
+            },
+            {
+              "kind": "tag",
+              "text": "side view"
+            },
+            {
+              "kind": "tag",
+              "text": "upper body portrait"
+            },
+            {
+              "kind": "tag",
+              "text": "live performance"
+            },
+            {
+              "kind": "tag",
+              "text": "emotional singing"
+            },
+            {
+              "kind": "tag",
+              "text": "taut neck"
+            },
+            {
+              "kind": "tag",
+              "text": "no text"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "1girl",
+          "solo",
+          "young adult",
+          "female singer",
+          "singing",
+          "indoors",
+          "stage",
+          "stage lights",
+          "spotlight",
+          "warm lighting",
+          "single spotlight",
+          "upper body",
+          "from the side",
+          "profile",
+          "long hair",
+          "black hair",
+          "straight hair",
+          "blue eyes",
+          "closed eyes",
+          "open mouth",
+          "white dress",
+          "sleeveless dress",
+          "neck ribbon",
+          "hair falling over shoulders",
+          "fair skin",
+          "slender",
+          "collarbone",
+          "holding microphone",
+          "microphone",
+          "microphone stand",
+          "cable",
+          "hand on chest",
+          "leaning forward",
+          "head back",
+          "dark background",
+          "bokeh",
+          "blurry lights",
+          "depth of field",
+          "singing into microphone",
+          "right hand holding microphone",
+          "microphone near mouth",
+          "left hand on own chest",
+          "ponytail",
+          "earrings",
+          "bare arms",
+          "white dress with ribbon",
+          "stage floor",
+          "wire hanging down",
+          "dark stage background",
+          "spotlight from above",
+          "warm colored light",
+          "shallow depth of field",
+          "upper body portrait",
+          "live performance",
+          "emotional singing",
+          "taut neck",
+          "no text"
+        ]
+      ]
+    },
+    {
+      "name": "head tilt alias preserves first literal text",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "head back"
+            },
+            {
+              "kind": "tag",
+              "text": "head tilted back"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "head back"
+        ]
+      ]
+    },
+    {
+      "name": "body lean alias is bounded to whole exact phrase",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "leaning forward"
+            },
+            {
+              "kind": "tag",
+              "text": "body leaning forward"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "leaning forward"
+        ]
+      ]
+    },
+    {
+      "name": "side camera spelling aliases",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "from_side"
+            },
+            {
+              "kind": "tag",
+              "text": "from the side"
+            },
+            {
+              "kind": "tag",
+              "text": "side view"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "from_side"
+        ]
+      ]
+    },
+    {
+      "name": "same explicit weight allows redundant alias removal",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "1.3::head back ::"
+            },
+            {
+              "kind": "tag",
+              "text": "1.3::head tilted back ::"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "1.3::head back ::"
+        ]
+      ]
+    },
+    {
+      "name": "different weights are not silently merged",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "1.3::head back ::"
+            },
+            {
+              "kind": "tag",
+              "text": "1.5::head tilted back ::"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "1.3::head back ::",
+          "1.5::head tilted back ::"
+        ]
+      ]
+    },
+    {
+      "name": "positive and negative weights are not silently merged",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "-1::head back ::"
+            },
+            {
+              "kind": "tag",
+              "text": "1.3::head tilted back ::"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "-1::head back ::",
+          "1.3::head tilted back ::"
+        ]
+      ]
+    },
+    {
+      "name": "explicit weight vs plain phrase remain distinct",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "1.3::head back ::"
+            },
+            {
+              "kind": "tag",
+              "text": "head tilted back"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "1.3::head back ::",
+          "head tilted back"
+        ]
+      ]
+    },
+    {
+      "name": "character segments keep their own repeated pose",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "2girls"
+            },
+            {
+              "kind": "tag",
+              "text": "outdoors"
+            }
+          ]
+        },
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "girl"
+            },
+            {
+              "kind": "tag",
+              "text": "head back"
+            }
+          ]
+        },
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "girl"
+            },
+            {
+              "kind": "tag",
+              "text": "head tilted back"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "2girls",
+          "outdoors"
+        ],
+        [
+          "girl",
+          "head back"
+        ],
+        [
+          "girl",
+          "head tilted back"
+        ]
+      ]
+    },
+    {
+      "name": "face profile and camera angle are not collapsed",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "profile"
+            },
+            {
+              "kind": "tag",
+              "text": "from the side"
+            },
+            {
+              "kind": "tag",
+              "text": "looking left"
+            },
+            {
+              "kind": "tag",
+              "text": "facing left"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "profile",
+          "from the side",
+          "looking left",
+          "facing left"
+        ]
+      ]
+    },
+    {
+      "name": "body side ownership and attributes are untouched",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "right hand holding microphone"
+            },
+            {
+              "kind": "tag",
+              "text": "left hand on own chest"
+            },
+            {
+              "kind": "tag",
+              "text": "black hair"
+            },
+            {
+              "kind": "tag",
+              "text": "blue eyes"
+            },
+            {
+              "kind": "tag",
+              "text": "long hair"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "right hand holding microphone",
+          "left hand on own chest",
+          "black hair",
+          "blue eyes",
+          "long hair"
+        ]
+      ]
+    },
+    {
+      "name": "quoted visible text retains case and underscores",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "\"OPEN\""
+            },
+            {
+              "kind": "tag",
+              "text": "\"open\""
+            },
+            {
+              "kind": "tag",
+              "text": "\"a_b\""
+            },
+            {
+              "kind": "tag",
+              "text": "\"a b\""
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "\"OPEN\"",
+          "\"open\"",
+          "\"a_b\"",
+          "\"a b\""
+        ]
+      ]
+    },
+    {
+      "name": "explicit Text payload retains case",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "Text: OPEN"
+            },
+            {
+              "kind": "tag",
+              "text": "Text: open"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "Text: OPEN",
+          "Text: open"
+        ]
+      ]
+    },
+    {
+      "name": "scope prefixes are not removed",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "source#head back"
+            },
+            {
+              "kind": "tag",
+              "text": "target#head tilted back"
+            },
+            {
+              "kind": "tag",
+              "text": "head tilted back"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "source#head back",
+          "target#head tilted back",
+          "head tilted back"
+        ]
+      ]
+    },
+    {
+      "name": "extra qualifier is not guessed equivalent",
+      "segments": [
+        {
+          "units": [
+            {
+              "kind": "tag",
+              "text": "head back"
+            },
+            {
+              "kind": "tag",
+              "text": "head tilted back slightly"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "head back",
+          "head tilted back slightly"
+        ]
+      ]
+    }
+  ]
+}

@@ -1,3 +1,7 @@
+import 'package:http/testing.dart';
+import 'package:novelai_mobile/services/novelai_image_envelope.dart';
+import 'package:http/http.dart' as http;
+import 'package:novelai_mobile/services/nai_api.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -43,6 +47,12 @@ class FailingStorage extends Storage {
   }
 }
 
+Future<void> fixtureVerifyEnvelope(AppSettings settings,Map<String,dynamic> config,String key) async {
+ final client=MockClient((request)async {if(request.method!='GET'||!request.url.path.endsWith('/models'))throw StateError('Not readonly');return http.Response(jsonEncode({'data':[{'id':config['model']}]}),200);});
+ try {await verifyNovelAiImageEnvelope(client,config,key);}finally{client.close();}
+}
+class _VerifiedFixtureApi extends NaiApi {@override Future<void> verifyCompatibleNovelAi(AppSettings s,Map<String,dynamic> c,String key)=>fixtureVerifyEnvelope(s,c,key);}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory root;
@@ -54,7 +64,7 @@ void main() {
       image.Image(width: 8, height: 6)..textData = {'upstream-key': key});
   Map<String, dynamic> config(String url) => {
         'baseUrl': url,
-        'model': 'custom-image',
+        'model': 'nai-diffusion-5-full',
         'size': 'auto',
         'responseFormat': 'auto',
         'extensions': <String, dynamic>{}
@@ -74,7 +84,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     storage = Storage();
-    state = AppState(storage: storage, preloadCompletedImage: (_) async {})
+    state = AppState(api:_VerifiedFixtureApi(),storage: storage, preloadCompletedImage: (_) async {})
       ..settings = AppSettings(proxyMode: 'direct', saveToGallery: false)
       ..params.positivePrompt = 'quiet forest';
     await storage.setSettings(state.settings);
@@ -126,7 +136,7 @@ void main() {
         posts++;
         expect(req.headers.value('authorization'), 'Bearer $key');
         expect(jsonDecode(await utf8.decoder.bind(req).join()), {
-          'model': 'custom-image',
+          'model': 'nai-diffusion-5-full',
           'prompt': 'quiet forest',
           'size': 'auto',
           'n': 1
@@ -159,7 +169,7 @@ void main() {
     expect(image.decodePng(await File(item.filePath).readAsBytes())!.textData,
         isNull);
     final history = await Storage().getHistory();
-    expect(history.single.params['compatibleRequest']['model'], 'custom-image');
+    expect(history.single.params['compatibleRequest']['model'], 'nai-diffusion-5-full');
     expect(jsonEncode(history.map((i) => i.toJson()).toList()),
         isNot(contains(key)));
     expect(jsonEncode(history.map((i) => i.toJson()).toList()),
@@ -239,7 +249,7 @@ void main() {
     final before = await storage.getSettings();
     state.dispose();
     final broken = FailingStorage()..rejectSettings = true;
-    state = AppState(storage: broken)..settings = before;
+    state = AppState(api:_VerifiedFixtureApi(),storage: broken)..settings = before;
     await expectLater(
         state.saveCompatibleSettings(
             config('https://new.test/v1'), 'replacement'),
@@ -258,7 +268,7 @@ void main() {
     state.dispose();
     final broken = FailingStorage();
     storage = broken;
-    state = AppState(storage: storage, preloadCompletedImage: (_) async {})
+    state = AppState(api:_VerifiedFixtureApi(),storage: storage, preloadCompletedImage: (_) async {})
       ..settings = AppSettings(proxyMode: 'direct', saveToGallery: false)
       ..params.positivePrompt = 'test';
     var posts = 0;
@@ -332,8 +342,8 @@ void main() {
   test('retired separate image card is not mounted in normal settings', () {
     final settingsSource = File('lib/screens/settings_screen.dart').readAsStringSync();
     final generateSource = File('lib/screens/generate_screen.dart').readAsStringSync();
-    expect(settingsSource, isNot(contains('const CompatibleImageSettingsCard()')));
-    expect(generateSource, isNot(contains('return CompatibleGenerateScreen(')));
+    expect(settingsSource, contains('const CompatibleImageSettingsCard()'));
+    expect(generateSource, contains('CompatibleGenerateScreen(preview:preview)'));
   });
   test('system proxy routing uses the configured endpoint and image URL',
       () async {
@@ -373,8 +383,8 @@ void main() {
         value: state,
         child: const MaterialApp(home: Scaffold(body: GenerateScreen()))));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('compatible-prompt')), findsNothing);
-    expect(find.byKey(const ValueKey('compatible-generation-status')), findsNothing);
+    expect(find.byKey(const ValueKey('compatible-prompt')), findsOneWidget);
+    expect(find.byKey(const ValueKey('compatible-generation-status')), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });

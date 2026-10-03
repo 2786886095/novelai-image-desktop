@@ -208,7 +208,9 @@ html.motion-reduced .pi-agent,html.motion-reduced .pi-pane-slot,html.motion-redu
 .pi-question-option{display:flex!important;align-items:center;gap:10px;min-height:52px;padding:12px;border:1px solid var(--pi-line);border-radius:10px;background:transparent;cursor:pointer}.pi-question-option:hover{background:var(--bg-hover,#f2edfc)}.pi-question-option.is-selected{border-color:var(--pi-accent);background:var(--bg-hover,#f2edfc)}.pi-question-option:focus-within{outline:2px solid var(--pi-accent);outline-offset:2px}.pi-question-option input{accent-color:var(--pi-accent);flex:none;width:16px;height:16px;margin:0}.pi-question-option>span{flex:1;min-width:0}.pi-question-option strong{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;overflow-wrap:anywhere}.pi-question-option>svg{color:var(--pi-accent);flex:none}.pi-question-badge{padding:2px 6px;border-radius:5px;color:var(--pi-accent);background:var(--bg-hover,#f2edfc);font-size:11px;font-weight:500}.pi-question-description{display:block;margin-top:4px;color:var(--pi-muted);line-height:1.5;overflow-wrap:anywhere}.pi-question-card textarea{width:100%;resize:vertical;min-height:80px;max-height:240px;border-color:var(--pi-line);background:var(--pi-card)}
 .pi-question-card footer{display:flex;justify-content:space-between;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--pi-line)}.pi-question-card footer>div{display:flex;gap:8px}.pi-question-card footer button{min-height:44px;display:flex;align-items:center;justify-content:center;gap:6px}
 @media(max-width:760px){.pi-question-card{padding:12px}.pi-question-card>header{align-items:flex-start;flex-direction:column;gap:4px}.pi-question-card footer{flex-wrap:wrap}.pi-question-card footer>div{margin-left:auto}}
-@media(prefers-reduced-motion:reduce){.pi-question-card{animation:none}}html.motion-reduced .pi-question-card{animation:none}
+html.motion-reduced .pi-question-card{animation:none}
+.pi-agent .pi-question-option{justify-content:flex-start;text-align:left;padding:12px;min-height:52px}
+.pi-question-option>.pi-question-radio{flex:0 0 18px;width:18px;text-align:center}
 
 /* Closing phases are visual-only: no hidden modal or menu retains focus. */
 .pi-dialog-mask{position:fixed;inset:0;z-index:1100;display:grid;place-items:center;background:#14102088;padding:16px}
@@ -220,3 +222,7 @@ html.motion-reduced .pi-agent,html.motion-reduced .pi-pane-slot,html.motion-redu
 .pi-resource-details-toggle svg{transition:transform 160ms ease-out}
 .pi-resource-details-toggle[aria-expanded=true] svg{transform:rotate(180deg)}
 html.motion-reduced .pi-motion-disclosure,html.motion-reduced .pi-resource-details-toggle svg{transition:none}
+
+.pi-transcript-content{min-height:100%;display:flow-root;flex-shrink:0}
+.pi-agent.pi-context-popover{position:fixed;z-index:20020;display:block;height:auto;overflow:auto;padding:12px;border:1px solid var(--pi-line);border-radius:12px;box-shadow:0 8px 24px #20143822;animation:studio-view-in 160ms ease-out}.pi-context-popover .pi-context-panel-content>p{margin:0 0 8px}.pi-context-popover progress{width:100%;height:5px}.pi-context-popover pre{white-space:pre-wrap;overflow-wrap:anywhere}.pi-context-trigger{margin-left:auto}.pi-context-popover .pi-context-controls{display:flex;flex-wrap:wrap;gap:8px}.pi-context-popover .pi-context-controls label{display:flex;gap:6px;align-items:center}.pi-question-custom-confirm{margin:8px 0}
+html.motion-reduced .pi-agent.pi-context-popover{animation:none}

@@ -412,6 +412,7 @@ export default function V5ArtistWeightRepair({
   const [seedMode, setSeedMode] = useState<"fixed" | "random">("fixed");
   const [seed, setSeed] = useState(params.seed > 0 ? params.seed : 246813579);
   const [results, setResults] = useState<SharedArtistFavorite[]>([]);
+  const [batchReady, setBatchReady] = useState(false);
   const [favorites, setFavorites] = useState(() =>
     loadArtistFavorites(favoriteCollection),
   );
@@ -637,11 +638,13 @@ export default function V5ArtistWeightRepair({
       generationSeed: seedMode === "fixed" ? fixed : freshSeed(),
     }));
     setResults(pending);
+    setBatchReady(true);
     setShowFavorites(false);
     return pending;
   };
 
   const repair = () => {
+    setBatchReady(false);
     if (!input.trim()) {
       setOutput("");
       setMessage(text.empty);
@@ -680,6 +683,7 @@ export default function V5ArtistWeightRepair({
   };
 
   const draw = () => {
+    setBatchReady(false);
     if (!drawSource.trim()) return setMessage(text.drawEmpty);
     const normalized = normalizeV45ArtistSyntax(drawSource);
     const recipes = drawAllV5ArtistWeights(
@@ -732,7 +736,7 @@ export default function V5ArtistWeightRepair({
   };
 
   const generateBatch = async () => {
-    if (results.length === 0) return setMessage(text.needDraw);
+    if (!batchReady || results.length === 0) return setMessage(text.needDraw);
     if (!basePrompt.trim()) return setMessage(text.needPrompt);
     setRunning(true);
     cancelRef.current = false;
@@ -1011,7 +1015,7 @@ export default function V5ArtistWeightRepair({
       <section className="artist-result-toolbar artist-string-result-toolbar">
         <div className="artist-result-actions">
           {drawMode ? <Button onClick={draw} disabled={running}><Icon name="dice" />{text.draw}</Button> : <Button onClick={repair} disabled={running}><Icon name="dice" />{text.run}</Button>}
-          {running ? <Button variant="danger" onClick={() => { cancelRef.current = true; void window.naiDesktop.cancel(); }}>{text.stop}</Button> : <Button variant="primary" onClick={() => void generateBatch()} disabled={results.length === 0}>{text.generate}</Button>}
+          {running ? <Button variant="danger" onClick={() => { cancelRef.current = true; void window.naiDesktop.cancel(); }}>{text.stop}</Button> : <Button variant="primary" onClick={() => void generateBatch()} disabled={!batchReady || results.length === 0}>{text.generate}</Button>}
           {!drawMode && <Button disabled={!output} onClick={() => void copyCandidate(output, "first-output")}>{copiedAction === "first-output" ? text.copied : text.copy}</Button>}
           <span className={message === text.drawNone || message === text.none ? "warning" : ""}>{running ? interpolate(text.generating, { done: completed, total: results.length }) : message}</span>
         </div>

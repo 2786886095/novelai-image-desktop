@@ -1,0 +1,813 @@
+{
+  "scope": "NovelAI-only boundary cases. Synthetic credentials and owned transports; no live generation.",
+  "cases": [
+    {
+      "id": "native-pass",
+      "responses": {
+        "/user/data": {
+          "status": 200,
+          "data": {
+            "subscription": {
+              "tier": 0,
+              "active": true,
+              "trainingStepsLeft": 7
+            }
+          }
+        }
+      },
+      "expectedOk": true,
+      "expectedCode": "passed"
+    },
+    {
+      "id": "native-second-read-route",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 200,
+          "data": {
+            "subscription": {
+              "tier": 1,
+              "active": true,
+              "trainingStepsLeft": 20
+            }
+          }
+        }
+      },
+      "expectedOk": true,
+      "expectedCode": "passed"
+    },
+    {
+      "id": "newapi-novelai-models",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": {
+            "object": "list",
+            "data": [
+              {
+                "id": "nai-diffusion-5-full",
+                "object": "model"
+              }
+            ]
+          }
+        }
+      },
+      "expectedOk": true,
+      "expectedCode": "passed"
+    },
+    {
+      "id": "no-novelai-models",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": {
+            "object": "list",
+            "data": [
+              {
+                "id": "unrelated-text-model",
+                "object": "model"
+              }
+            ]
+          }
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "unsupported"
+    },
+    {
+      "id": "native-auth-fail",
+      "responses": {
+        "/user/data": {
+          "status": 401
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "auth"
+    },
+    {
+      "id": "native-redirect",
+      "responses": {
+        "/user/data": {
+          "status": 302
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "unsupported"
+    },
+    {
+      "id": "native-invalid-html",
+      "responses": {
+        "/user/data": {
+          "status": 200,
+          "data": "<html>Dashboard is not an account response</html>"
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "invalid-response"
+    },
+    {
+      "id": "native-html-newapi-novelai",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 200,
+          "data": "<!doctype html><html>Public application fallback</html>"
+        },
+        "/user/subscription": {
+          "status": 200,
+          "data": "<!doctype html><html>Public application fallback</html>"
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": {
+            "object": "list",
+            "data": [
+              {
+                "object": "model",
+                "id": "nai-diffusion-5-full"
+              }
+            ]
+          }
+        }
+      },
+      "expectedOk": true,
+      "expectedCode": "passed"
+    },
+    {
+      "id": "prefix-_v1",
+      "apiSuffix": "/v1",
+      "responses": {
+        "/v1/user/data": {
+          "status": 404
+        },
+        "/v1/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": {
+            "object": "list",
+            "data": [
+              {
+                "object": "model",
+                "id": "nai-diffusion-5-full"
+              }
+            ]
+          }
+        }
+      },
+      "expectedOk": true,
+      "expectedCode": "passed"
+    },
+    {
+      "id": "prefix-_tenant_api",
+      "apiSuffix": "/tenant/api",
+      "responses": {
+        "/tenant/api/user/data": {
+          "status": 404
+        },
+        "/tenant/api/user/subscription": {
+          "status": 404
+        },
+        "/tenant/api/v1/models": {
+          "status": 200,
+          "data": {
+            "object": "list",
+            "data": [
+              {
+                "object": "model",
+                "id": "nai-diffusion-5-full"
+              }
+            ]
+          }
+        }
+      },
+      "expectedOk": true,
+      "expectedCode": "passed"
+    },
+    {
+      "id": "prefix-_tenant_api_v1",
+      "apiSuffix": "/tenant/api/v1",
+      "responses": {
+        "/tenant/api/v1/user/data": {
+          "status": 404
+        },
+        "/tenant/api/v1/user/subscription": {
+          "status": 404
+        },
+        "/tenant/api/v1/models": {
+          "status": 200,
+          "data": {
+            "object": "list",
+            "data": [
+              {
+                "object": "model",
+                "id": "nai-diffusion-5-full"
+              }
+            ]
+          }
+        }
+      },
+      "expectedOk": true,
+      "expectedCode": "passed"
+    },
+    {
+      "id": "prefix-_tenant_api_v1_",
+      "apiSuffix": "/tenant/api/v1/",
+      "responses": {
+        "/tenant/api/v1/user/data": {
+          "status": 404
+        },
+        "/tenant/api/v1/user/subscription": {
+          "status": 404
+        },
+        "/tenant/api/v1/models": {
+          "status": 200,
+          "data": {
+            "object": "list",
+            "data": [
+              {
+                "object": "model",
+                "id": "nai-diffusion-5-full"
+              }
+            ]
+          }
+        }
+      },
+      "expectedOk": true,
+      "expectedCode": "passed"
+    },
+    {
+      "id": "models-auth-401",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 401,
+          "data": null
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "auth"
+    },
+    {
+      "id": "models-auth-403",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 403,
+          "data": null
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "auth"
+    },
+    {
+      "id": "models-unsupported-301",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 301,
+          "data": null
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "unsupported"
+    },
+    {
+      "id": "models-unsupported-302",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 302,
+          "data": null
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "unsupported"
+    },
+    {
+      "id": "models-unsupported-307",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 307,
+          "data": null
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "unsupported"
+    },
+    {
+      "id": "models-unsupported-308",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 308,
+          "data": null
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "unsupported"
+    },
+    {
+      "id": "models-unsupported-404",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 404,
+          "data": null
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "unsupported"
+    },
+    {
+      "id": "models-unsupported-405",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 405,
+          "data": null
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "unsupported"
+    },
+    {
+      "id": "models-unsupported-501",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 501,
+          "data": null
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "unsupported"
+    },
+    {
+      "id": "models-http-400",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 400,
+          "data": null
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "http"
+    },
+    {
+      "id": "models-http-429",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 429,
+          "data": null
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "http"
+    },
+    {
+      "id": "models-http-500",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 500,
+          "data": null
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "http"
+    },
+    {
+      "id": "models-html",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": "<html>Not authentication</html>"
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "invalid-response"
+    },
+    {
+      "id": "models-null",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": null
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "invalid-response"
+    },
+    {
+      "id": "models-empty-object",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": {}
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "invalid-response"
+    },
+    {
+      "id": "models-error",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": {
+            "object": "list",
+            "data": [
+              {
+                "object": "model",
+                "id": "nai-diffusion-5-full"
+              }
+            ],
+            "error": {
+              "message": "untrusted"
+            }
+          }
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "invalid-response"
+    },
+    {
+      "id": "models-rejected",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": {
+            "object": "list",
+            "data": [
+              {
+                "object": "model",
+                "id": "nai-diffusion-5-full"
+              }
+            ],
+            "success": false
+          }
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "invalid-response"
+    },
+    {
+      "id": "models-malformed",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": {
+            "object": "list",
+            "data": [
+              {
+                "id": 7
+              }
+            ]
+          }
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "invalid-response"
+    },
+    {
+      "id": "models-array",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": [
+            {
+              "object": "model",
+              "id": "nai-diffusion-5-full"
+            }
+          ]
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "invalid-response"
+    },
+    {
+      "id": "models-no-list-marker",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": {
+            "data": [
+              {
+                "object": "model",
+                "id": "nai-diffusion-5-full"
+              }
+            ]
+          }
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "invalid-response"
+    },
+    {
+      "id": "models-empty",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": {
+            "object": "list",
+            "data": []
+          }
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "unsupported"
+    },
+    {
+      "id": "models-unrelated-image",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": {
+            "object": "list",
+            "data": [
+              {
+                "id": "gpt-image-1"
+              }
+            ]
+          }
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "unsupported"
+    },
+    {
+      "id": "models-prefix-spoof",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": {
+            "object": "list",
+            "data": [
+              {
+                "id": "nai-diffusion-unrelated-image-model"
+              }
+            ]
+          }
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "unsupported"
+    },
+    {
+      "id": "models-alias",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": {
+            "object": "list",
+            "data": [
+              {
+                "id": "vendor/nai-diffusion-5-full"
+              }
+            ]
+          }
+        }
+      },
+      "expectedOk": false,
+      "expectedCode": "unsupported"
+    },
+    {
+      "id": "models-mixed-and-duplicate",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": {
+            "object": "list",
+            "data": [
+              {
+                "id": "gpt-image-1"
+              },
+              {
+                "id": "nai-diffusion-5-full"
+              },
+              {
+                "id": "nai-diffusion-5-full"
+              }
+            ]
+          }
+        }
+      },
+      "expectedOk": true,
+      "expectedCode": "passed"
+    },
+    {
+      "id": "models-quota-not-anlas",
+      "apiSuffix": "",
+      "responses": {
+        "/user/data": {
+          "status": 404
+        },
+        "/user/subscription": {
+          "status": 404
+        },
+        "/v1/models": {
+          "status": 200,
+          "data": {
+            "object": "list",
+            "data": [
+              {
+                "object": "model",
+                "id": "nai-diffusion-5-full"
+              }
+            ],
+            "total_available": 500000,
+            "currency": "USD",
+            "subscription": {
+              "tier": 3,
+              "trainingStepsLeft": 500000
+            }
+          }
+        }
+      },
+      "expectedOk": true,
+      "expectedCode": "passed"
+    }
+  ]
+}

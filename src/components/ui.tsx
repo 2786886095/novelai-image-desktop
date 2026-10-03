@@ -1,5 +1,6 @@
 import {cancelPortalExits,retainPortalExit,manageModalPortal,animatePortalEntry} from '../motion-system';
 import {RangeInput} from './RangeInput';
+import { resolveSelectPortalLayer } from './portal-layer';
 // Shared presentational primitives used across the app's panels.
 import {
   Children,
@@ -143,7 +144,7 @@ export function SelectMenu({
   const [portalContainer, setPortalContainer] = useState<Element>();
   const renderMenu = useDisclosurePresence(open, menuRef);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [position, setPosition] = useState({ left: 0, top: 0, width: 220, maxHeight: 320, opensUp: false, bottom: 0 });
+  const [position, setPosition] = useState({ left: 0, top: 0, width: 220, maxHeight: 320, opensUp: false, bottom: 0, zIndex: 20000 });
   const selectedIndex = options.findIndex((option) => option.value === value);
   const selected = selectedIndex >= 0 ? options[selectedIndex] : undefined;
   const firstEnabledIndex = options.findIndex((option) => !option.disabled);
@@ -167,7 +168,7 @@ export function SelectMenu({
     const maxHeight = Math.max(132, Math.min(320, opensUp ? above - gap : below - gap));
     const left = Math.min(Math.max(viewportGap, rect.left), window.innerWidth - width - viewportGap);
     const top = opensUp ? Math.max(viewportGap, rect.top - Math.min(estimatedHeight, maxHeight) - gap) : rect.bottom + gap;
-    setPosition({ left, top, width, maxHeight, opensUp, bottom: window.innerHeight - rect.top + gap });
+    setPosition({ left, top, width, maxHeight, opensUp, bottom: window.innerHeight - rect.top + gap, zIndex: resolveSelectPortalLayer(trigger) });
   }, [options.length, minMenuWidth]);
 
 
@@ -316,7 +317,7 @@ export function SelectMenu({
         {...disclosureAttributes(open)}
         role={open ? "listbox" : undefined}
         aria-label={ariaLabel}
-        style={{ left: position.left, top: position.opensUp ? undefined : position.top, bottom: position.opensUp ? position.bottom : undefined, width: position.width, maxHeight: position.maxHeight }}
+        style={{ left: position.left, top: position.opensUp ? undefined : position.top, bottom: position.opensUp ? position.bottom : undefined, width: position.width, maxHeight: position.maxHeight, zIndex: position.zIndex }}
         onKeyDown={(event) => {
           if (event.key === "Tab") {
             triggerRef.current?.focus({preventScroll: true});

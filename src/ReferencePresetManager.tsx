@@ -94,6 +94,7 @@ const TEXT = {
     chooseRequired: "请选择图片并填写预设名称。",
     saved: "预设已保存到本机。",
     applied: "预设已加入生成页。",
+    applyFailed: "预设读取或应用失败；未应用的预设可重试。",
     imported: "预设导入完成。",
     exported: "预设已导出。",
     quickSave: "存入预设",
@@ -122,15 +123,19 @@ const TEXT = {
     createPreset: "创建参考预设",
   },
   "zh-TW": {
+    applyFailed: "預設讀取或套用失敗；未套用的預設可重試。",
     title: "參考圖快捷預設", subtitle: "在本機儲存氛圍轉移與精準參考圖片及參數，可隨時重用或跨裝置匯入匯出。", back: "返回工具", add: "新增預設", name: "預設名稱", group: "分組", noGroup: "未分組", kind: "預設類型", vibe: "氛圍轉移", precise: "精準參考", image: "選擇圖片", save: "儲存到本機", use: "套用到生成", remove: "刪除", import: "匯入 .nairp", exportAll: "匯出全部", exportGroup: "匯出分組", exportOne: "匯出", all: "全部", empty: "尚未儲存參考圖預設", info: "資訊提取量", strength: "參考強度", fidelity: "保真度", type: "參考類型", character: "角色", style: "風格", both: "角色與風格", chooseRequired: "請選擇圖片並填寫預設名稱。", saved: "預設已儲存到本機。", applied: "預設已加入生成頁。", imported: "預設匯入完成。", exported: "預設已匯出。", quickSave: "存入預設", open: "開啟預設庫", cancel: "取消", createTitle: "建立參考預設", createHint: "選擇圖片、參數與分組，儲存後即可在生成頁直接使用。", library: "本機預設庫", groupName: "新分組名稱", createGroup: "建立分組", currentGroup: "目前分組", saveCurrent: "儲存並加入目前分組", moveGroup: "移動到分組", moved: "預設分組已更新。", groupCreated: "分組已建立，可直接加入預設。", imageHint: "點擊選擇氛圍圖或精準參考圖", replaceImage: "更換圖片", presetCount: "個預設", groupCount: "個分組", search: "搜尋預設名稱或分組", selected: "已選擇", applySelected: "套用所選預設", clearSelection: "清空選擇", preview: "雙擊預覽大圖", confirmDelete: "確認刪除這個預設？刪除後無法復原。", createPreset: "建立參考預設",
   },
   "en-US": {
+    applyFailed: "Could not read or apply the preset. Unapplied presets can be retried.",
     title: "Reference presets", subtitle: "Keep Vibe Transfer and Precise Reference images and settings locally, then reuse or move them between devices.", back: "Back to Tools", add: "New preset", name: "Preset name", group: "Group", noGroup: "Ungrouped", kind: "Preset type", vibe: "Vibe Transfer", precise: "Precise Reference", image: "Choose image", save: "Save locally", use: "Apply to Generate", remove: "Delete", import: "Import .nairp", exportAll: "Export all", exportGroup: "Export group", exportOne: "Export", all: "All", empty: "No reference presets saved yet", info: "Information extracted", strength: "Reference strength", fidelity: "Fidelity", type: "Reference type", character: "Character", style: "Style", both: "Character & style", chooseRequired: "Choose an image and enter a preset name.", saved: "Preset saved locally.", applied: "Preset added to Generate.", imported: "Preset import complete.", exported: "Preset exported.", quickSave: "Save preset", open: "Open preset library", cancel: "Cancel", createTitle: "Create reference preset", createHint: "Choose an image, settings, and group. Saved presets are ready in Generate.", library: "Local preset library", groupName: "New group name", createGroup: "Create group", currentGroup: "Current group", saveCurrent: "Save to current group", moveGroup: "Move to group", moved: "Preset group updated.", groupCreated: "Group created and ready for presets.", imageHint: "Choose a Vibe or Precise Reference image", replaceImage: "Replace image", presetCount: "presets", groupCount: "groups", search: "Search presets by name or group", selected: "selected", applySelected: "Apply selected presets", clearSelection: "Clear selection", preview: "Double-click to preview", confirmDelete: "Delete this preset? This cannot be undone.", createPreset: "Create reference preset",
   },
   "ja-JP": {
+    applyFailed: "プリセットの読込または適用に失敗しました。未適用のものは再試行できます。",
     title: "参照画像プリセット", subtitle: "Vibe Transfer と Precise Reference の画像・設定を端末内に保存し、再利用や端末間移行ができます。", back: "ツールへ戻る", add: "新規プリセット", name: "プリセット名", group: "グループ", noGroup: "未分類", kind: "種類", vibe: "Vibe Transfer", precise: "Precise Reference", image: "画像を選択", save: "端末に保存", use: "生成に適用", remove: "削除", import: ".nairp を読込", exportAll: "すべて書出し", exportGroup: "グループを書出し", exportOne: "書出し", all: "すべて", empty: "保存済みプリセットはありません", info: "情報抽出量", strength: "参照強度", fidelity: "忠実度", type: "参照タイプ", character: "キャラクター", style: "スタイル", both: "キャラクターとスタイル", chooseRequired: "画像とプリセット名を指定してください。", saved: "端末に保存しました。", applied: "生成画面に追加しました。", imported: "読込が完了しました。", exported: "書出しが完了しました。", quickSave: "プリセット保存", open: "プリセットを開く", cancel: "キャンセル", createTitle: "参照プリセットを作成", createHint: "画像・設定・グループを選ぶと、生成画面ですぐ再利用できます。", library: "ローカルプリセット", groupName: "新しいグループ名", createGroup: "グループ作成", currentGroup: "現在のグループ", saveCurrent: "現在のグループに保存", moveGroup: "グループを移動", moved: "グループを更新しました。", groupCreated: "グループを作成しました。", imageHint: "Vibe または Precise Reference 画像を選択", replaceImage: "画像を変更", presetCount: "件", groupCount: "グループ", search: "名前またはグループを検索", selected: "件選択", applySelected: "選択したプリセットを適用", clearSelection: "選択解除", preview: "ダブルクリックでプレビュー", confirmDelete: "このプリセットを削除しますか？元に戻せません。", createPreset: "参照プリセットを作成",
   },
   "ko-KR": {
+    applyFailed: "프리셋을 읽거나 적용하지 못했습니다. 적용되지 않은 프리셋은 다시 시도할 수 있습니다.",
     title: "참조 이미지 프리셋", subtitle: "Vibe Transfer와 Precise Reference 이미지 및 설정을 기기에 저장하고 재사용하거나 다른 기기로 옮길 수 있습니다.", back: "도구로 돌아가기", add: "새 프리셋", name: "프리셋 이름", group: "그룹", noGroup: "미분류", kind: "프리셋 종류", vibe: "Vibe Transfer", precise: "Precise Reference", image: "이미지 선택", save: "기기에 저장", use: "생성에 적용", remove: "삭제", import: ".nairp 가져오기", exportAll: "전체 내보내기", exportGroup: "그룹 내보내기", exportOne: "내보내기", all: "전체", empty: "저장된 참조 프리셋이 없습니다", info: "정보 추출량", strength: "참조 강도", fidelity: "충실도", type: "참조 유형", character: "캐릭터", style: "스타일", both: "캐릭터와 스타일", chooseRequired: "이미지를 선택하고 프리셋 이름을 입력하세요.", saved: "기기에 저장했습니다.", applied: "생성 화면에 추가했습니다.", imported: "가져오기가 완료되었습니다.", exported: "내보내기가 완료되었습니다.", quickSave: "프리셋 저장", open: "프리셋 열기", cancel: "취소", createTitle: "참조 프리셋 만들기", createHint: "이미지, 설정, 그룹을 선택하면 생성 화면에서 바로 사용할 수 있습니다.", library: "로컬 프리셋", groupName: "새 그룹 이름", createGroup: "그룹 만들기", currentGroup: "현재 그룹", saveCurrent: "현재 그룹에 저장", moveGroup: "그룹 이동", moved: "프리셋 그룹을 변경했습니다.", groupCreated: "그룹을 만들었습니다.", imageHint: "Vibe 또는 Precise Reference 이미지 선택", replaceImage: "이미지 변경", presetCount: "개 프리셋", groupCount: "개 그룹", search: "이름 또는 그룹 검색", selected: "개 선택", applySelected: "선택한 프리셋 적용", clearSelection: "선택 해제", preview: "더블 클릭하여 미리보기", confirmDelete: "이 프리셋을 삭제할까요? 삭제 후 복구할 수 없습니다.", createPreset: "참조 프리셋 만들기",
   },
 } as const;
@@ -344,18 +349,24 @@ export default function ReferencePresetManager({
   };
 
   const applyOne = async (preset: ReferencePreset) => {
-    const result = await window.naiDesktop.readReferencePreset(preset.id);
-    if (!result.ok || !result.base64 || !result.preset) return setToast(result.message || text.chooseRequired);
-    const saved = result.preset;
-    const previewUrl = saved.fileUrl;
-    if (onApplyPreset) {
-      await onApplyPreset(saved, { base64: result.base64, previewUrl });
-    } else if (saved.kind === "vibe") {
-      addVibeImage({ id: crypto.randomUUID(), previewUrl, base64: result.base64, infoExtracted: saved.infoExtracted, strength: saved.strength });
-    } else {
-      addPreciseReference({ id: crypto.randomUUID(), previewUrl, base64: result.base64, type: saved.preciseType, strength: saved.strength, fidelity: saved.fidelity, informationExtracted: 1, srcWidth: saved.width, srcHeight: saved.height });
+    try {
+      const result = await window.naiDesktop.readReferencePreset(preset.id);
+      if (!result.ok || !result.base64 || !result.preset) return setToast(result.message || text.chooseRequired);
+      const saved = result.preset;
+      const previewUrl = saved.fileUrl;
+      if (onApplyPreset) {
+        await onApplyPreset(saved, { base64: result.base64, previewUrl });
+      } else if (saved.kind === "vibe") {
+        if (!addVibeImage({ id: crypto.randomUUID(), previewUrl, base64: result.base64, infoExtracted: saved.infoExtracted, strength: saved.strength })) return false;
+      } else {
+        addPreciseReference({ id: crypto.randomUUID(), previewUrl, base64: result.base64, type: saved.preciseType, strength: saved.strength, fidelity: saved.fidelity, informationExtracted: 1, srcWidth: saved.width, srcHeight: saved.height });
+      }
+      return true;
+    } catch {
+      // IPC/consumer failures must not leave the picker busy or expose raw errors.
+      setToast(text.applyFailed);
+      return false;
     }
-    return true;
   };
 
   const apply = async (preset: ReferencePreset) => {
@@ -369,11 +380,17 @@ export default function ReferencePresetManager({
     if (selectedIds.size === 0 || busy) return;
     setBusy(true);
     let appliedCount = 0;
-    for (const preset of library.presets.filter((item) => selectedIds.has(item.id))) {
-      if (await applyOne(preset)) appliedCount += 1;
+    let rejected = false;
+    try {
+      for (const preset of library.presets.filter((item) => selectedIds.has(item.id))) {
+        if (await applyOne(preset)) appliedCount += 1;
+        else rejected = true;
+      }
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
-    if (appliedCount > 0) {
+    // Keep the rejection visible and the picker open after a partial application.
+    if (appliedCount > 0 && !rejected) {
       setToast(`${text.applied} ${appliedCount}`);
       onApplied?.();
     }

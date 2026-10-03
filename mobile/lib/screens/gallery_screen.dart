@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -461,6 +462,12 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     ),
                   ),
                   FilledButton.tonalIcon(
+                    key: const ValueKey('gallery-view-file-path'),
+                    icon: const Icon(Icons.folder_outlined),
+                    label: Text(t('gallery.viewFilePath')),
+                    onPressed: () => _showFilePath(sheetContext, item, language),
+                  ),
+                  FilledButton.tonalIcon(
                     icon: const Icon(Icons.star_border),
                     label: Text(localFavoritesText(language, 'add')),
                     onPressed: !file.existsSync()
@@ -617,8 +624,12 @@ class _GalleryScreenState extends State<GalleryScreen> {
     final language = context.read<AppState>().settings.language;
     String t(String key) => mobileUiTextFor(language, key);
     final controller = TextEditingController(text: initialValue);
-    final result = await showDialog<String>(
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final route = DialogRoute<String>(
       context: context,
+      themes: InheritedTheme.capture(from: context, to: navigator.context),
+      barrierColor: Theme.of(context).dialogTheme.barrierColor ?? Colors.black54,
+      traversalEdgeBehavior: TraversalEdgeBehavior.closedLoop,
       builder: (dialogContext) => AlertDialog(
         title: Text(title),
         content: TextField(
@@ -638,9 +649,59 @@ class _GalleryScreenState extends State<GalleryScreen> {
         ],
       ),
     );
+    final result = await navigator.push(route);
+    // The TextField is still mounted during the dialog's reverse animation.
+    await route.completed;
     controller.dispose();
     final trimmed = result?.trim();
     return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
+
+  Future<void> _showFilePath(
+    BuildContext context,
+    HistoryItem item,
+    String language,
+  ) async {
+    String t(String key) => mobileUiTextFor(language, key);
+    final path = File(item.filePath).absolute.path;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('gallery.viewFilePath')),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              path,
+              key: const ValueKey('gallery-full-file-path'),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.copy_outlined),
+            label: Text(t('gallery.copyFilePath')),
+            onPressed: () async {
+              var message = t('gallery.filePathCopied');
+              try {
+                await Clipboard.setData(ClipboardData(text: path));
+              } on PlatformException {
+                message = t('gallery.copyFilePathFailed');
+              }
+              if (dialogContext.mounted) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  SnackBar(content: Text(message)),
+                );
+              }
+            },
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(t('common.close')),
+          ),
+        ],
+      ),
+    );
   }
 }
 

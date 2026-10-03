@@ -1,7 +1,9 @@
 import 'dart:math';
+import 'dart:isolate';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:archive/archive.dart';
 import 'package:image/image.dart' as image_lib;
 
 const int maxNaiUpscaleOutputDimension = 4096;
@@ -84,6 +86,141 @@ bool isWebpImage(Uint8List bytes) =>
     bytes.length >= 12 &&
     String.fromCharCodes(bytes.sublist(0, 4)) == 'RIFF' &&
     String.fromCharCodes(bytes.sublist(8, 12)) == 'WEBP';
+
+bool isNovelAiNativeImage(Uint8List bytes) {
+  const png = [137, 80, 78, 71, 13, 10, 26, 10];
+  return (bytes.length >= 8 &&
+          List.generate(8, (i) => bytes[i] == png[i]).every((v) => v)) ||
+      (bytes.length >= 3 &&
+          bytes[0] == 255 && bytes[1] == 216 && bytes[2] == 255) ||
+      isWebpImage(bytes);
+}
+
+const _nativeResponseBytes = 128 * 1024 * 1024;
+const _nativeImageLimit = 32 * 1024 * 1024;
+FormatException _invalidNativeImage() =>
+    const FormatException('服务未返回有效图片；为避免重复扣费，未自动重发请求。');
+
+class _NativeInflateOutput extends OutputStream {
+  final int limit;
+  _NativeInflateOutput(this.limit);
+  void _check(int count) {
+    if (count < 0 || length + count > limit) throw _invalidNativeImage();
+  }
+  @override
+  void writeByte(int value) {
+    _check(1);
+    super.writeByte(value);
+  }
+  @override
+  void writeBytes(List<int> bytes, [int? len]) {
+    _check(len ?? bytes.length);
+    super.writeBytes(bytes, len);
+  }
+  @override
+  void writeInputStream(InputStreamBase stream) {
+    _check(stream.length);
+    super.writeInputStream(stream);
+  }
+}
+
+List<Uint8List> _nativeZipImages(Uint8List bytes) {
+  if (bytes.length < 4 || bytes[0] != 80 || bytes[1] != 75 ||
+      bytes[2] != 3 || bytes[3] != 4) throw _invalidNativeImage();
+  final directory = ZipDirectory.read(InputStream(bytes));
+  if (directory.fileHeaders.length > 1024) throw _invalidNativeImage();
+  final images = <Uint8List>[];
+  var total = 0;
+  for (final header in directory.fileHeaders) {
+    if (header.filename.endsWith('/')) continue;
+    final file = header.file;
+    final raw = file?.rawContent;
+    if (file == null || raw == null ||
+        (file.flags & 1) != 0 || (header.generalPurposeBitFlag & 1) != 0 ||
+        (((header.externalFileAttributes ?? 0) >> 16) & 0xf000) == 0xa000 ||
+        (file.compressionMethod != ZipFile.zipCompressionStore &&
+            file.compressionMethod != ZipFile.zipCompressionDeflate) ||
+        (header.uncompressedSize ?? -1) < 0 ||
+        header.uncompressedSize! > _nativeImageLimit) {
+      throw _invalidNativeImage();
+    }
+    final remaining = min(_nativeImageLimit, _nativeResponseBytes - total);
+    final output = _NativeInflateOutput(remaining);
+    if (file.compressionMethod == ZipFile.zipCompressionDeflate) {
+      Inflate.stream(raw, output);
+    } else {
+      output.writeInputStream(raw);
+    }
+    total += output.length;
+    if (output.length != header.uncompressedSize) throw _invalidNativeImage();
+    final content = Uint8List.fromList(output.getBytes());
+    if (isNovelAiNativeImage(content)) {
+      images.add(content);
+    } else if (RegExp(r'\.(png|jpe?g|webp)$', caseSensitive: false)
+        .hasMatch(header.filename)) {
+      throw _invalidNativeImage();
+    }
+  }
+  if (images.isEmpty) throw _invalidNativeImage();
+  return images;
+}
+
+Future<List<Uint8List>> _nativeZipImagesInWorker(Uint8List bytes) =>
+    Isolate.run(() => _nativeZipImages(bytes));
+
+/// Strict final-response decoding shared by both current and legacy image paths.
+/// The ZIP worker only closes over bytes, never a cancellation/account callback.
+Future<List<Uint8List>> decodeNovelAiNativeResponse(Uint8List bytes, {
+  void Function()? checkCancelled,
+}) async {
+  try {
+    checkCancelled?.call();
+    if (bytes.isEmpty || bytes.length > _nativeResponseBytes) {
+      throw _invalidNativeImage();
+    }
+    final images = isNovelAiNativeImage(bytes)
+        ? [bytes]
+        // ZIP inflation must not block the UI isolate. No credentials enter
+        // this worker, and its actual output is bounded, not just ZIP headers.
+        : await _nativeZipImagesInWorker(bytes);
+    for (final image in images) {
+      checkCancelled?.call();
+      await validateNovelAiNativeImage(image);
+      checkCancelled?.call();
+    }
+    return images; // Preserve original bytes and embedded metadata.
+  } catch (_) {
+    checkCancelled?.call();
+    throw _invalidNativeImage(); // Do not echo decoder or remote content.
+  }
+}
+
+Future<void> validateNovelAiNativeImage(Uint8List bytes) async {
+  if (!isNovelAiNativeImage(bytes) || bytes.length > 32 * 1024 * 1024) {
+    throw const FormatException('服务未返回有效图片；未自动重发请求。');
+  }
+  ui.ImmutableBuffer? buffer;
+  ui.ImageDescriptor? descriptor;
+  ui.Codec? codec;
+  ui.Image? image;
+  try {
+    // Use the same engine as Image.memory (including valid VP8L WebP), not a
+    // filename or a pure-Dart decoder which rejects some valid WebP images.
+    buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+    descriptor = await ui.ImageDescriptor.encoded(buffer);
+    if (descriptor.width <= 0 || descriptor.height <= 0 ||
+        descriptor.width * descriptor.height > 64 * 1024 * 1024) {
+      throw const FormatException('服务未返回有效图片；未自动重发请求。');
+    }
+    codec = await descriptor.instantiateCodec(targetWidth: 1, targetHeight: 1);
+    image = (await codec.getNextFrame()).image;
+  } finally {
+    image?.dispose();
+    codec?.dispose();
+    descriptor?.dispose();
+    buffer?.dispose();
+  }
+}
 
 /// Static generation endpoints receive PNG while the imported WebP stays intact.
 Future<Uint8List> processingImageBytes(Uint8List bytes) async {

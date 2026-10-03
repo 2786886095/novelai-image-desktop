@@ -1,3 +1,6 @@
+import 'package:http/testing.dart';
+import 'package:novelai_mobile/services/novelai_image_envelope.dart';
+import 'package:http/http.dart' as http;
 import 'package:novelai_mobile/agent/agent_provider.dart';
 import 'package:novelai_mobile/agent/agent_controller.dart';
 import 'package:novelai_mobile/agent/agent_models.dart';
@@ -56,6 +59,7 @@ class _Vault extends Storage {
 }
 
 class _Conversion extends NaiApi {
+ @override Future<void> verifyCompatibleNovelAi(AppSettings s,Map<String,dynamic> c,String key)=>fixtureVerifyEnvelope(s,c,key);
   int calls = 0;
   FutureOr<void> Function()? duringConversion;
   @override
@@ -87,6 +91,12 @@ class _LegacyProvider extends AgentProviderClient {
   }
 }
 
+Future<void> fixtureVerifyEnvelope(AppSettings settings,Map<String,dynamic> config,String key) async {
+ final client=MockClient((request)async {if(request.method!='GET'||!request.url.path.endsWith('/models'))throw StateError('Not readonly');return http.Response(jsonEncode({'data':[{'id':config['model']}]}),200);});
+ try {await verifyNovelAiImageEnvelope(client,config,key);}finally{client.close();}
+}
+class _VerifiedFixtureApi extends NaiApi {@override Future<void> verifyCompatibleNovelAi(AppSettings s,Map<String,dynamic> c,String key)=>fixtureVerifyEnvelope(s,c,key);}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory root;
@@ -109,7 +119,7 @@ void main() {
 
   Future<void> configure(String url) => app.saveCompatibleSettings({
         'baseUrl': url,
-        'model': 'independent-image',
+        'model': 'nai-diffusion-5-full',
         'size': 'auto',
         'responseFormat': 'auto'
       }, key);
@@ -202,7 +212,7 @@ void main() {
     final result = await tools.execute('langbai_get_generation_state', {}, []);
     final state = jsonDecode(result.output);
     expect(state['imageProvider'], 'openai-images');
-    expect(state['params']['model'], 'independent-image');
+    expect(state['params']['model'], 'nai-diffusion-5-full');
     expect(state['referenceCapabilities']['maxCharacterPrompts'], 0);
     expect(result.output, isNot(contains(key)));
   });
@@ -238,7 +248,7 @@ void main() {
       expect(request.headers.value('authorization'), 'Bearer $key');
       final body = jsonDecode(await utf8.decoder.bind(request).join());
       expect(body, {
-        'model': 'independent-image',
+        'model': 'nai-diffusion-5-full',
         'prompt': 'A forest with a winding path.',
         'size': 'auto',
         'n': 2
@@ -293,7 +303,7 @@ void main() {
       'generate': {'count': 1}
     });
     final card = await approval();
-    expect(card['parameters']['imageService']['model'], 'independent-image');
+    expect(card['parameters']['imageService']['model'], 'nai-diffusion-5-full');
     expect(jsonEncode(card), isNot(contains(key)));
     await call(
         'studio_resolve_image_approval', {'id': card['id'], 'approved': false});
@@ -590,7 +600,7 @@ void main() {
     expect(message.imageProposal!.status,'complete',reason:message.imageProposal!.error);
     expect(requests,hasLength(1));final body=requests.single;
     expect(body.keys.toSet(),{'model','prompt','size','n'});
-    expect(body['model'],'independent-image');expect(body['size'],'auto');
+    expect(body['model'],'nai-diffusion-5-full');expect(body['size'],'auto');
     expect(body['prompt'],endsWith('Visual style: watercolor\nAvoid: text'));
     if(scene){expect(body['prompt'],contains('Wearing coat, red, leather.'));expect(body['prompt'],contains('Wearing jacket, blue.'));}
     expect(message.imageProposal!.positivePrompt,'A forest');expect(jsonEncode(message.imageProposal!.scene),canonical);

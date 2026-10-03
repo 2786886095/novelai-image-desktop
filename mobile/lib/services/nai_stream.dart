@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:msgpack_dart/msgpack_dart.dart' as msgpack;
+import '../images/image_processing.dart';
 
 const _maxFrameBytes = 128 * 1024 * 1024;
 
@@ -268,6 +269,7 @@ Future<NaiStreamResult> consumeNaiGenerationStream(
   required int totalSteps,
   required void Function(NaiGenerationPreview preview) onPreview,
   String contentType = '',
+  void Function()? checkCancelled,
 }) async {
   final messagePack = _MessagePackFrameDecoder();
   final sse = _SseFrameDecoder();
@@ -279,32 +281,68 @@ Future<NaiStreamResult> consumeNaiGenerationStream(
   final zip = BytesBuilder(copy: false);
   var previewStarted = false;
   var lastPreviewAt = DateTime.fromMillisecondsSinceEpoch(0);
+  var finalBytes = 0;
+  NaiStreamException invalidFinal() => NaiStreamException(
+      '流式服务未返回有效图片；为避免重复扣费，未自动重发请求。',
+      previewStarted: previewStarted);
+  NaiStreamResult complete() {
+    checkCancelled?.call();
+    final entries = finals.entries.toList()
+      ..sort((left, right) => left.key.compareTo(right.key));
+    for (final entry in entries) {
+      onPreview(NaiGenerationPreview(image: entry.value, progress: 1,
+          currentStep: totalSteps, totalSteps: totalSteps,
+          sampleIndex: entry.key, finalImage: true));
+    }
+    return NaiStreamResult(images: entries.map((entry) => entry.value).toList());
+  }
 
-  void consumeFrames(List<_Frame> frames) {
+  Future<void> consumeFrames(List<_Frame> frames) async {
     for (final frame in frames) {
+      checkCancelled?.call();
       if (frame.error != null) {
         throw NaiStreamException(frame.error!, previewStarted: previewStarted);
       }
       final image = frame.image;
-      if (image == null || image.isEmpty) continue;
+      if (image == null || image.isEmpty) {
+        if (frame.eventType == 'final') throw invalidFinal();
+        continue;
+      }
       previewStarted = true;
       final currentStep = (frame.stepIndex ?? 0) + 1;
       final finalImage = frame.eventType == 'final';
-      if (finalImage) finals[frame.sampleIndex] = image;
+      if (finalImage) {
+        if (frame.sampleIndex < 0) throw invalidFinal();
+        try { await validateNovelAiNativeImage(image); }
+        catch (_) { checkCancelled?.call(); throw invalidFinal(); }
+        checkCancelled?.call();
+        final bytes = finalBytes - (finals[frame.sampleIndex]?.length ?? 0) + image.length;
+        if (bytes > _maxFrameBytes || (!finals.containsKey(frame.sampleIndex) && finals.length >= 1024)) {
+          throw invalidFinal();
+        }
+        finalBytes = bytes;
+        finals[frame.sampleIndex] = image;
+      }
       final now = DateTime.now();
       if (finalImage ||
           now.difference(lastPreviewAt).inMilliseconds >= 110 ||
           currentStep >= totalSteps) {
+        if (!finalImage) {
+          try { await validateNovelAiNativeImage(image); }
+          catch (_) { checkCancelled?.call(); continue; }
+          checkCancelled?.call();
+        }
         lastPreviewAt = now;
         onPreview(NaiGenerationPreview(
           image: image,
           progress: finalImage
-              ? 1
+              ? .99
               : (currentStep / maxOf(1, totalSteps)).clamp(0, .99).toDouble(),
           currentStep: finalImage ? totalSteps : currentStep,
           totalSteps: totalSteps,
           sampleIndex: frame.sampleIndex,
-          finalImage: finalImage,
+          // Completion is only announced after all returned samples succeed.
+          finalImage: false,
         ));
       }
     }
@@ -312,6 +350,7 @@ Future<NaiStreamResult> consumeNaiGenerationStream(
 
   try {
     await for (final chunk in stream) {
+      checkCancelled?.call();
       if (mode == _StreamMode.unknown) {
         prefix.addAll(chunk);
         if (prefix.length < 4) continue;
@@ -331,9 +370,9 @@ Future<NaiStreamResult> consumeNaiGenerationStream(
         if (mode == _StreamMode.zip) {
           zip.add(prefix);
         } else if (mode == _StreamMode.sse) {
-          consumeFrames(sse.push(prefix));
+          await consumeFrames(sse.push(prefix));
         } else {
-          consumeFrames(messagePack.push(prefix));
+          await consumeFrames(messagePack.push(prefix));
         }
         prefix.clear();
         continue;
@@ -341,28 +380,27 @@ Future<NaiStreamResult> consumeNaiGenerationStream(
       if (mode == _StreamMode.zip) {
         zip.add(chunk);
       } else if (mode == _StreamMode.sse) {
-        consumeFrames(sse.push(chunk));
+        await consumeFrames(sse.push(chunk));
       } else {
-        consumeFrames(messagePack.push(chunk));
+        await consumeFrames(messagePack.push(chunk));
       }
     }
     if (mode == _StreamMode.zip) {
       return NaiStreamResult(archive: zip.takeBytes());
     }
-    if (mode == _StreamMode.sse) consumeFrames(sse.finish());
+    if (mode == _StreamMode.sse) await consumeFrames(sse.finish());
     if (finals.isEmpty) {
       throw NaiStreamException(
         '流式生成结束，但没有收到最终图片。为避免重复扣费，未自动重发请求。',
         previewStarted: previewStarted,
       );
     }
-    final entries = finals.entries.toList()
-      ..sort((left, right) => left.key.compareTo(right.key));
-    return NaiStreamResult(
-        images: entries.map((entry) => entry.value).toList());
+    return complete();
   } on NaiStreamException {
+    checkCancelled?.call();
     rethrow;
   } catch (error) {
+    checkCancelled?.call();
     throw NaiStreamException(error.toString(), previewStarted: previewStarted);
   }
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../agent/agent_models.dart';
 import '../i18n/studio_agent_text.dart';
+import '../ui/studio_theme.dart';
 
 String studioToolStatus(String status) => switch (status) {
       'running' => 'statusRunning',
@@ -209,12 +210,16 @@ class _StudioAgentToolGroupState extends State<StudioAgentToolGroup> {
                               size: 18),
                         ])),
                   )),
-              if (open)
-                Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: widget.children)),
+              studioSizeTransition(context,
+                  duration: AppMotion.disclosureOpen,
+                  reverseDuration: AppMotion.disclosureClose,
+                  child: open
+                      ? Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: widget.children))
+                      : const SizedBox.shrink()),
             ]));
   }
 }

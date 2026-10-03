@@ -3,7 +3,7 @@
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
 
-**v2.4.6 候选说明（尚未发布）：** 新助手使用桌面 Pi Agent Core 和移动端原生工具循环，不要求下载旧独立酒馆组件。多账号支持官方 Token、官方邮箱密码和 NovelAI 协议中转。Windows 与 Android 本地构建验收中；iOS 共用源码已接入，尚未在 macOS 签名构建，不能据此宣称全平台发行完成。
+**v2.4.7 发布范围：** Windows x64 安装版与便携版；Android / iOS 共用功能源码同步，但本次不发布移动端安装包。新助手使用 Pi Agent Core / 原生工具循环，不要求下载旧独立酒馆组件。
 
 ### 从一句灵感，到一组作品。
 
@@ -72,7 +72,18 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 <a id="download"></a>
 ## 下载与安装
 
-### v2.4.6 候选交付状态
+### v2.4.7 Windows 正式版
+
+[发布说明与校验信息](https://github.com/2786886095/novelai-image-desktop/releases/tag/v2.4.7)
+
+| 用途 | 下载 |
+| --- | --- |
+| Windows x64 安装版 | [Langbai-NovelAI-Studio-Setup-2.4.7.exe](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.4.7/Langbai-NovelAI-Studio-Setup-2.4.7.exe) |
+| Windows x64 便携版 | [Langbai-NovelAI-Studio-2.4.7.exe](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.4.7/Langbai-NovelAI-Studio-2.4.7.exe) |
+
+本次仅发行 Windows 成品；Android/iOS 共用源码同步不代表已完成移动实机或签名验收。安装升级保留用户数据，更新前仍建议在设置里导出备份。其他系统请查看历史发行版，不要将历史包当作 2.4.7。
+
+## v2.4.6 候选交付状态
 
 本版本尚未上传正式发行版。文件名 `Langbai-NovelAI-Studio-2.4.6.exe` 为本地便携构建；`Langbai-NovelAI-Studio-Setup-2.4.6.exe` 为后续安装版目标（本轮未构建）。[v2.4.6 发布目标](https://github.com/2786886095/novelai-image-desktop/releases/tag/v2.4.6)仅是计划地址，不表示已有可下载文件。Android 本地包使用测试签名，不能保证覆盖已发布的不同签名 APK；不要为此卸载或删除旧数据。iOS 仍需 macOS / Xcode 构建签名。下方 v2.4.5 下载表是历史发行链接，不是本轮成果。
 

@@ -1,4 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:novelai_mobile/services/novelai_accounts.dart';
+import 'package:novelai_mobile/services/novelai_account_api.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:novelai_mobile/state/app_state.dart';
@@ -10,7 +14,9 @@ void main() {
   test('transaction behavior probe: activate B, deny C while busy', () async {
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({'nai_token': 'fixture-A'});
-    final dynamic app = AppState();
+    final vault=NovelAiAccounts();
+    final dynamic app=AppState(storage:NovelAiAccountStorage(vault),api:NovelAiAccountApi(vault,
+      clientFactory:(_,__)=>MockClient((_) async => http.Response('{"subscription":{"tier":0,"trainingStepsLeft":99}}',200))));
     addTearDown(() => (app as AppState).dispose());
     expect(await app.storage.getToken(), 'fixture-A');
     try {

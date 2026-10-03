@@ -161,7 +161,7 @@ Map<String, String> _backupText(Object? language) {
       'desc':
           'One .naisbackup format for desktop, Android, and iOS. Everything is selected by default.',
       'sensitive':
-          'Selected API tokens and third-party keys are written directly. Only share with trusted devices.',
+          'Selected API Tokens and third-party keys are written directly. Only share with trusted devices.',
       'selectAll': 'Select all',
       'clear': 'Clear',
       'export': 'Export selected data',

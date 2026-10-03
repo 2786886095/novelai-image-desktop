@@ -7,7 +7,7 @@ import { PassThrough } from "node:stream";
 const mock = vi.hoisted(() => ({ root: "", launch: vi.fn(), token: "FIXTURE_ONLY", open: vi.fn() }));
 vi.mock("electron", () => ({ app: { getPath: () => mock.root, getAppPath: () => mock.root }, dialog: { showOpenDialog: vi.fn() }, shell: { openPath: mock.open } }));
 vi.mock("node:child_process", () => ({ spawn: (...args: unknown[]) => mock.launch(...args) }));
-vi.mock("./store", () => ({ getToken: () => mock.token, atomicWriteFileSync: (file: string, text: string) => fs.writeFileSync(file, text) }));
+vi.mock("./store", () => ({ getToken: () => mock.token, getSetting: () => 'zh-CN', getSettings: () => ({imageBaseUrl:'https://image.novelai.net'}), atomicWriteFileSync: (file: string, text: string) => fs.writeFileSync(file, text) }));
 vi.mock("./local-media-protocol", () => ({ toLocalMediaUrl: (file: string) => "local:" + file }));
 vi.mock('./detective-runtime-check',()=>({detectiveRuntimeChecking:()=>false,detectiveRuntimeValidation:()=>({state:'passed'}),validateDetectiveRuntime:vi.fn()}));
 import { detectiveStart, detectiveStatus } from "./artist-detective";

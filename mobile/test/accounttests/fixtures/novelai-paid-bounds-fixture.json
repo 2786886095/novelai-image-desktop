@@ -1,0 +1,14 @@
+{
+  "byteLimit": 134217728,
+  "png": "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAGUlEQVQokWNQSJhAEmIY1ZAwGkoKwzVpAAArcBAQD1yUaQAAAABJRU5ErkJggg==",
+  "desktopPort": 58461,
+  "cases": [
+    "success200",
+    "success201",
+    "error401-body",
+    "redirect302-body",
+    "declared-overflow",
+    "stream-overflow",
+    "stream-error-redaction"
+  ]
+}

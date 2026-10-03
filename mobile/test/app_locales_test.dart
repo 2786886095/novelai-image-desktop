@@ -6,6 +6,16 @@ import 'package:novelai_mobile/i18n/app_locales.dart';
 import 'package:novelai_mobile/prompts/capsule_data.dart';
 
 void main() {
+  test('NovelAI billing uses API Token without renaming separate AI API Keys', () {
+    for (final locale in supportedAppLocales) {
+      expect(generateScreenTextFor(locale.code).configureToken,
+          contains('NovelAI API Token'));
+      final detail = settingsDetailTextFor(locale.code);
+      expect(detail.visionApiKey, contains('API Key'));
+      expect(detail.textApiKey, contains('API Key'));
+    }
+  });
+
   test(
       'supports Simplified, Traditional, English, Japanese, and Korean locales',
       () {

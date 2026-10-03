@@ -32,7 +32,32 @@ export function validateAccountProfile(input: NaiAccountInput): void {
   }
 }
 export interface NaiAccountValidationResult {
+  /** Read-only model access, not proof of a generation envelope or billing. */
+  modelIds?: string[];
   account?: Omit<AccountSummary,'hasToken'|'accountId'>;ok:boolean;code:'passed'|'auth'|'unsupported'|'network'|'invalid-input'|'invalid-response'|'http';status:number}
+
+/** Exact supported NovelAI identities only; arbitrary provider/model aliases are not inferred. */
+export const NAI_RELAY_MODEL_IDS = [
+  'nai-diffusion-5-full','nai-diffusion-5-curated',
+  'nai-diffusion-4-5-full','nai-diffusion-4-5-curated',
+  'nai-diffusion-4-full','nai-diffusion-4-curated','nai-diffusion-3','nai-diffusion-furry-3',
+  'nai-diffusion-5-full-inpainting','nai-diffusion-5-curated-inpainting',
+  'nai-diffusion-4-5-full-inpainting','nai-diffusion-4-5-curated-inpainting',
+  'nai-diffusion-4-full-inpainting','nai-diffusion-4-curated-inpainting','nai-diffusion-3-inpainting',
+] as const;
+export function novelAiRelayModelIds(data:unknown):string[]|undefined {
+  if(!data||typeof data!=='object'||Array.isArray(data))return undefined;
+  const body=data as Record<string,unknown>;
+  if(body.object!=='list'||!Array.isArray(body.data)||body.data.length>10000||body.success===false||(body.error!==undefined&&body.error!==null))return undefined;
+  if(!body.data.every(row=>row&&typeof row==='object'&&!Array.isArray(row)&&typeof row.id==='string'&&row.id.length<=256))return undefined;
+  const allowed=new Set<string>(NAI_RELAY_MODEL_IDS);
+  return [...new Set(body.data.map(row=>row.id as string).filter(id=>allowed.has(id)))];
+}
+/** Retains an explicitly entered prefix; does not append /v1 twice or replace the origin. */
+export function novelAiRelayModelsUrl(base:string):string {
+  const prefix=base.replace(/\/+$/,'');
+  return prefix+(prefix.endsWith('/v1')?'/models':'/v1/models');
+}
 export interface NaiAccountsBridge {
   list(): Promise<NaiAccountProfile[]>;
   add(input: NaiAccountInput): Promise<NaiAccountProfile>;
@@ -40,7 +65,7 @@ export interface NaiAccountsBridge {
   reveal(id:string):Promise<string>;
   state(): Promise<{ selectedId?: string; busy: boolean; migrationIssue?:string }>;
   select(id?: string): Promise<{ selectedId?: string }>;
-  login(input: {label:string;email:string;password:string;otp?:string}): Promise<{ok:true;account:NaiAccountProfile} | {ok:false;code:string;message:string;validation?:NaiAccountValidationResult}>;
+  login(input: {label:string;email:string;password:string;otp?:string}): Promise<{ok:true;account:NaiAccountProfile} | {ok:false;code:string;status?:number;message:string;validation?:NaiAccountValidationResult}>;
   migrate(): Promise<{ migrated: boolean; message: string }>;
   probe(id: string): Promise<{ ok?:boolean;code?:NaiAccountValidationResult['code'];status: number; subscription: 'skipped' | 'available'; protocol: 'unverified'; message: string }>;
 }

@@ -15,17 +15,24 @@ class _ControllerStorage extends Storage {
   Set<String> permissions = <String>{};
   int failures = 0;
   Completer<void>? pauseNext;
+  Directory? attachmentRoot;
+  @override
+  Future<Directory> agentAttachmentsDirectory([String? conversationId]) async =>
+      attachmentRoot ?? await super.agentAttachmentsDirectory(conversationId);
 
   @override
   Future<String?> getToken() async => null;
-
 
   @override
   Future<AgentWorkspace> getAgentWorkspace() async => workspace;
   @override
   Future<void> setAgentWorkspace(AgentWorkspace value) async {
-    if (failures > 0) { failures--; throw StateError('test disk failure'); }
-    final pause = pauseNext; pauseNext = null;
+    if (failures > 0) {
+      failures--;
+      throw StateError('test disk failure');
+    }
+    final pause = pauseNext;
+    pauseNext = null;
     if (pause != null) await pause.future;
     workspace = value;
   }
@@ -85,17 +92,28 @@ class _PreparedGenerationProvider extends AgentProviderClient {
   }) async {
     calls++;
     if (calls == 1) {
-      return AgentProviderTurn(toolCalls: const [AgentProviderToolCall(
-        id: 'prepare-1', name: 'langbai_prepare_generation',
-        arguments: {'positivePrompt': '1girl, rain', 'width': 832, 'height': 1216},
-      )], usage: AgentTokenUsage());
+      return AgentProviderTurn(toolCalls: const [
+        AgentProviderToolCall(
+          id: 'prepare-1',
+          name: 'langbai_prepare_generation',
+          arguments: {
+            'positivePrompt': '1girl, rain',
+            'width': 832,
+            'height': 1216
+          },
+        )
+      ], usage: AgentTokenUsage());
     }
     final toolOutput = messages.last['content'] as String;
-    final id = (jsonDecode(toolOutput) as Map<String, dynamic>)['preparationId'] as String;
-    return AgentProviderTurn(toolCalls: [AgentProviderToolCall(
-      id: 'generate-1', name: 'langbai_generate_image',
-      arguments: {'preparationId': id},
-    )], usage: AgentTokenUsage());
+    final id = (jsonDecode(toolOutput) as Map<String, dynamic>)['preparationId']
+        as String;
+    return AgentProviderTurn(toolCalls: [
+      AgentProviderToolCall(
+        id: 'generate-1',
+        name: 'langbai_generate_image',
+        arguments: {'preparationId': id},
+      )
+    ], usage: AgentTokenUsage());
   }
 }
 
@@ -123,18 +141,193 @@ class _CaptureSceneApp extends AppState {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  Future<(AgentController, _ControllerStorage, _CaptureSceneApp)> preparedScene() async {
-    final fixture = jsonDecode(File('../shared/tavern-scene-fixtures.json').readAsStringSync());
+  test(
+      'legacy Studio options migrate narrowly; invalid ids and imported authority never become new-chat defaults',
+      () async {
+    final source = AgentWorkspace(conversations: [
+      AgentConversation(
+          id: 'selected',
+          title: 'legacy fixture',
+          studioApprovalMode: 'auto',
+          studioWebSearchEnabled: true,
+          studioTemplateEnabled: false,
+          studioPresetId: 'studio-complete')
+    ], selectedConversationId: 'selected');
+    final data =
+        jsonDecode(jsonEncode(source.toJson())) as Map<String, dynamic>;
+    data.remove('studioDefaults');
+    final restored = AgentWorkspace.fromJson(data);
+    expect(restored.studioDefaults['studioApprovalMode'], 'auto');
+    expect(restored.studioDefaults['studioPresetId'], 'studio-complete');
+    final storage = _ControllerStorage()..workspace = restored;
+    final app = _app(storage),
+        controller =
+            AgentController(app: _app(storage), provider: _QueuedProvider([]));
+    addTearDown(app.dispose);
+    addTearDown(controller.dispose);
+    await controller.load();
+    final next = controller.createConversation('inherited');
+    expect(next.studioApprovalMode, 'auto');
+    expect(next.studioTemplateEnabled, false);
+    expect(next.studioPresetId, 'studio-complete');
+    expect(next.studioWebSearchEnabled, true);
+    data['studioDefaults'] = {
+      'studioApprovalMode': true,
+      'studioWebSearchEnabled': 'true',
+      'studioPresetId': 'removed',
+      'characterIds': [
+        'missing',
+        restored.characters.first.id,
+        restored.characters.first.id
+      ],
+      'lorebookIds': ['missing'],
+      'alwaysAllowed': ['everything'],
+      'apiKey': 'FIXTURE-NOT-A-REAL-KEY'
+    };
+    final narrow = AgentWorkspace.fromJson(data).studioDefaults;
+    expect(narrow.keys, isNot(contains('alwaysAllowed')));
+    expect(narrow.keys, isNot(contains('apiKey')));
+    expect(narrow.keys, isNot(contains('studioApprovalMode')));
+    expect(narrow.keys, isNot(contains('studioWebSearchEnabled')));
+    expect(narrow.keys, isNot(contains('studioPresetId')));
+    expect(narrow['characterIds'], [restored.characters.first.id]);
+    expect(narrow['lorebookIds'], isEmpty);
+  });
+  test(
+      'archive/delete storage failure restores chat and files; pending index commit locks chat identity',
+      () async {
+    final root =
+        await Directory.systemTemp.createTemp('studio-delete-transaction-');
+    addTearDown(() => root.delete(recursive: true));
+    final storage = _ControllerStorage()..attachmentRoot = root;
+    final app = _app(storage), provider = _QueuedProvider([]);
+    final controller = AgentController(app: app, provider: provider);
+    addTearDown(app.dispose);
+    addTearDown(controller.dispose);
+    await controller.load();
+    final selected = controller.selectedConversation!.id;
+    final attachment = File('${root.path}/$selected/owned.txt');
+    await attachment.parent.create(recursive: true);
+    await attachment.writeAsString('PRISTINE FIXTURE');
+    controller.workspace.memories.add(AgentMemory(
+        id: 'm',
+        title: 'fixture',
+        content: 'owned',
+        scope: 'conversation',
+        conversationId: selected));
+    await controller.saveWorkspace();
+    storage.failures = 1;
+    await expectLater(
+        controller.setConversationArchived(selected, true), throwsStateError);
+    expect(controller.selectedConversation!.id, selected);
+    expect(controller.selectedConversation!.archivedAt, isNull);
+    storage.failures = 1;
+    await expectLater(
+        controller.deleteConversation(selected), throwsStateError);
+    expect(
+        controller.workspace.conversations.any((c) => c.id == selected), true);
+    expect(controller.workspace.memories.any((m) => m.id == 'm'), true);
+    expect(await attachment.readAsString(), 'PRISTINE FIXTURE');
+    expect(controller.studioOptionsSaving, false);
+    final gate = Completer<void>();
+    storage.pauseNext = gate;
+    final deleting = controller.deleteConversation(selected);
+    expect(controller.studioOptionsSaving, true);
+    expect(() => controller.createConversation('blocked'), throwsStateError);
+    await controller.sendStudio('must not race');
+    expect(provider.calls, 0);
+    expect(await attachment.exists(), true);
+    gate.complete();
+    await deleting;
+    expect(
+        controller.workspace.conversations.any((c) => c.id == selected), false);
+    expect(controller.workspace.memories.any((m) => m.id == 'm'), false);
+    expect(await attachment.exists(), false);
+    expect(controller.selectedConversation!.archivedAt, isNull);
+    expect(controller.studioOptionsSaving, false);
+  });
+  test(
+      'Studio options survive new chats and serialized restart; write failure rolls back; in-flight save locks chat identity',
+      () async {
+    final storage = _ControllerStorage(), app = _app(_ControllerStorage());
+    final controller =
+        AgentController(app: _app(storage), provider: _QueuedProvider([]));
+    addTearDown(controller.dispose);
+    addTearDown(app.dispose);
+    await controller.load();
+    await controller.setStudioOptions(
+        approvalMode: 'auto',
+        webSearchEnabled: true,
+        templateEnabled: false,
+        presetId: 'studio-complete');
+    final chat = controller.createConversation('inherits');
+    await controller.saveWorkspace();
+    expect(chat.studioApprovalMode, 'auto');
+    expect(chat.studioWebSearchEnabled, true);
+    expect(chat.studioTemplateEnabled, false);
+    expect(chat.studioPresetId, 'studio-complete');
+    final restoredStorage = _ControllerStorage()
+      ..workspace = AgentWorkspace.fromJson(
+          jsonDecode(jsonEncode(storage.workspace.toJson())));
+    final restored = AgentController(
+        app: _app(restoredStorage), provider: _QueuedProvider([]));
+    addTearDown(restored.dispose);
+    await restored.load();
+    final next = restored.createConversation('after restart');
+    expect(next.studioApprovalMode, 'auto');
+    expect(next.studioPresetId, 'studio-complete');
+    storage.failures = 1;
+    final before = jsonEncode(controller.workspace.studioDefaults);
+    await expectLater(
+        controller.setStudioOptions(
+            approvalMode: 'confirm', presetId: 'dsh-infinite-gen-4'),
+        throwsStateError);
+    expect(chat.studioApprovalMode, 'auto');
+    expect(chat.studioPresetId, 'studio-complete');
+    expect(jsonEncode(controller.workspace.studioDefaults), before);
+    expect(controller.studioOptionsSaving, false);
+    final gate = Completer<void>();
+    storage.pauseNext = gate;
+    final change = controller.setStudioOptions(webSearchEnabled: false);
+    expect(controller.studioOptionsSaving, true);
+    expect(() => controller.createConversation('not while writing'),
+        throwsStateError);
+    gate.complete();
+    await change;
+    expect(controller.studioOptionsSaving, false);
+  });
+
+  Future<(AgentController, _ControllerStorage, _CaptureSceneApp)>
+      preparedScene() async {
+    final fixture = jsonDecode(
+        File('../shared/tavern-scene-fixtures.json').readAsStringSync());
     final storage = _ControllerStorage();
-    final app = _CaptureSceneApp(storage: storage)..settings = _app(storage).settings;
-    final controller = AgentController(app: app, provider: _QueuedProvider([
-      AgentProviderTurn(content: '<langbai-image>${jsonEncode({'scene': fixture['scene']})}</langbai-image>', usage: AgentTokenUsage())]));
-    addTearDown(controller.dispose); await controller.load();
-    await controller.updateActiveCharacterVisual(model:'nai-diffusion-5-full', stylePrompt:'', negativePrompt:'', count:1);
-    await controller.setGenerationMode('confirm'); await controller.send('Two adult hikers');
+    final app = _CaptureSceneApp(storage: storage)
+      ..settings = _app(storage).settings;
+    final controller = AgentController(
+        app: app,
+        provider: _QueuedProvider([
+          AgentProviderTurn(
+              content: '<langbai-image>${jsonEncode({
+                    'scene': fixture['scene']
+                  })}</langbai-image>',
+              usage: AgentTokenUsage())
+        ]));
+    addTearDown(controller.dispose);
+    await controller.load();
+    await controller.updateActiveCharacterVisual(
+        model: 'nai-diffusion-5-full',
+        stylePrompt: '',
+        negativePrompt: '',
+        count: 1);
+    await controller.setGenerationMode('confirm');
+    await controller.send('Two adult hikers');
     return (controller, storage, app);
   }
-  test('preflight and final persistence failures release generation state and allow retry', () async {
+
+  test(
+      'preflight and final persistence failures release generation state and allow retry',
+      () async {
     final (controller, storage, app) = await preparedScene();
     final conversation = controller.selectedConversation!;
     final message = conversation.messages.last;
@@ -151,40 +344,64 @@ void main() {
     expect(message.imageProposal!.error, isNot(contains('test disk failure')));
     expect(conversation.status, 'idle');
   });
-  test('scene save failure rolls back; saved scene rejects stale overwrite', () async {
+  test('scene save failure rolls back; saved scene rejects stale overwrite',
+      () async {
     final (controller, storage, _) = await preparedScene();
     final conversation = controller.selectedConversation!;
-    final message = conversation.messages.last, proposal = conversation.messages.last.imageProposal!;
-    final expected = Map<String, dynamic>.from(jsonDecode(jsonEncode(proposal.scene)));
-    final updated = Map<String, dynamic>.from(jsonDecode(jsonEncode(expected)))..['revision']=1;
+    final message = conversation.messages.last,
+        proposal = conversation.messages.last.imageProposal!;
+    final expected =
+        Map<String, dynamic>.from(jsonDecode(jsonEncode(proposal.scene)));
+    final updated = Map<String, dynamic>.from(jsonDecode(jsonEncode(expected)))
+      ..['revision'] = 1;
     updated['facts'][1]['prompt'] = 'black hair';
     final oldPrompt = proposal.positivePrompt;
     storage.failures = 1;
-    await expectLater(controller.saveTavernScene(conversation.id,message.id,expected,updated), throwsStateError);
-    expect(proposal.scene, expected); expect(proposal.positivePrompt, oldPrompt);
-    await controller.saveTavernScene(conversation.id,message.id,expected,updated);
+    await expectLater(
+        controller.saveTavernScene(
+            conversation.id, message.id, expected, updated),
+        throwsStateError);
+    expect(proposal.scene, expected);
+    expect(proposal.positivePrompt, oldPrompt);
+    await controller.saveTavernScene(
+        conversation.id, message.id, expected, updated);
     expect(proposal.scene, updated);
-    await expectLater(controller.saveTavernScene(conversation.id,message.id,expected,updated), throwsStateError);
+    await expectLater(
+        controller.saveTavernScene(
+            conversation.id, message.id, expected, updated),
+        throwsStateError);
     expect(proposal.scene, updated);
   });
-  test('deferred workspace persistence surfaces failures without an unhandled future', () async {
+  test(
+      'deferred workspace persistence surfaces failures without an unhandled future',
+      () async {
     final (controller, storage, _) = await preparedScene();
     storage.failures = 1;
     controller.createConversation('second');
     await Future<void>.delayed(const Duration(milliseconds: 250));
     expect(controller.error, contains('test disk failure'));
   });
-  test('scene saving blocks generation and duplicate commit until durable', () async {
+  test('scene saving blocks generation and duplicate commit until durable',
+      () async {
     final (controller, storage, app) = await preparedScene();
-    final conversation = controller.selectedConversation!; final message = conversation.messages.last;
-    final expected = Map<String, dynamic>.from(jsonDecode(jsonEncode(message.imageProposal!.scene)));
-    final updated = Map<String, dynamic>.from(jsonDecode(jsonEncode(expected)))..['revision']=1;
-    final pause = Completer<void>(); storage.pauseNext = pause;
-    final save = controller.saveTavernScene(conversation.id,message.id,expected,updated);
+    final conversation = controller.selectedConversation!;
+    final message = conversation.messages.last;
+    final expected = Map<String, dynamic>.from(
+        jsonDecode(jsonEncode(message.imageProposal!.scene)));
+    final updated = Map<String, dynamic>.from(jsonDecode(jsonEncode(expected)))
+      ..['revision'] = 1;
+    final pause = Completer<void>();
+    storage.pauseNext = pause;
+    final save = controller.saveTavernScene(
+        conversation.id, message.id, expected, updated);
     await controller.generateTavernImage(message.id);
     expect(app.requests, isEmpty);
-    await expectLater(controller.saveTavernScene(conversation.id,message.id,updated,updated), throwsStateError);
-    pause.complete(); await save;
+    await expectLater(
+        controller.saveTavernScene(
+            conversation.id, message.id, updated, updated),
+        throwsStateError);
+    pause.complete();
+    await save;
     await controller.generateTavernImage(message.id);
     expect(app.requests, hasLength(1));
   });
@@ -192,18 +409,26 @@ void main() {
   for (final issue in [null, 'limit', 'incomplete', 'failed']) {
     test('empty or incomplete reply stays recoverable: $issue', () async {
       final storage = _ControllerStorage();
-      final app = _CaptureSceneApp(storage: storage)..settings = _app(storage).settings;
+      final app = _CaptureSceneApp(storage: storage)
+        ..settings = _app(storage).settings;
       final provider = _QueuedProvider([
-        AgentProviderTurn(content: '', reasoning: 'thinking only', issue: issue, usage: AgentTokenUsage()),
+        AgentProviderTurn(
+            content: '',
+            reasoning: 'thinking only',
+            issue: issue,
+            usage: AgentTokenUsage()),
         AgentProviderTurn(content: '正常回复', usage: AgentTokenUsage()),
       ]);
       final controller = AgentController(app: app, provider: provider);
-      addTearDown(controller.dispose); await controller.load();
+      addTearDown(controller.dispose);
+      await controller.load();
       await controller.setGenerationMode('auto');
       await controller.send('画两名成年徒步者');
       expect(controller.selectedConversation!.messages.last.status, 'error');
-      expect(controller.selectedConversation!.messages.last.reasoning, 'thinking only');
-      expect(controller.error, isNotEmpty);expect(controller.sending, false);
+      expect(controller.selectedConversation!.messages.last.reasoning,
+          'thinking only');
+      expect(controller.error, isNotEmpty);
+      expect(controller.sending, false);
       expect(app.requests, isEmpty);
       await controller.send('你好');
       expect(controller.selectedConversation!.messages.last.status, 'complete');
@@ -342,14 +567,20 @@ void main() {
     expect(controller.pendingPermission, isNull);
   });
 
-  test('studio loop executes only an allowlisted read tool and continues', () async {
+  test('studio loop executes only an allowlisted read tool and continues',
+      () async {
     final storage = _ControllerStorage();
     final provider = _QueuedProvider([
-      AgentProviderTurn(toolCalls: const [AgentProviderToolCall(
-        id: 'state-1', name: 'langbai_get_generation_state', arguments: {},
-      )], usage: AgentTokenUsage(input: 10, output: 4, total: 14)),
-      AgentProviderTurn(content: '当前配置已读取。',
-        usage: AgentTokenUsage(input: 15, output: 7, total: 22)),
+      AgentProviderTurn(toolCalls: const [
+        AgentProviderToolCall(
+          id: 'state-1',
+          name: 'langbai_get_generation_state',
+          arguments: {},
+        )
+      ], usage: AgentTokenUsage(input: 10, output: 4, total: 14)),
+      AgentProviderTurn(
+          content: '当前配置已读取。',
+          usage: AgentTokenUsage(input: 15, output: 7, total: 22)),
     ]);
     final controller = AgentController(app: _app(storage), provider: provider);
     addTearDown(controller.dispose);
@@ -357,24 +588,29 @@ void main() {
     await controller.sendStudio('查看当前生图设置');
     expect(provider.calls, 2);
     expect(controller.selectedConversation!.messages.last.tools.single.name,
-      'langbai_get_generation_state');
+        'langbai_get_generation_state');
     expect(controller.selectedConversation!.messages.last.status, 'complete');
     expect(provider.requests[1].last['role'], 'tool');
   });
 
-  test('studio loop asks before mutation and reject leaves prompt intact', () async {
+  test('studio loop asks before mutation and reject leaves prompt intact',
+      () async {
     final storage = _ControllerStorage();
     final app = _app(storage);
     app.params.positivePrompt = 'original';
     final provider = _QueuedProvider([
-      AgentProviderTurn(toolCalls: const [AgentProviderToolCall(
-        id: 'apply-1', name: 'langbai_apply_prompt',
-        arguments: {'positivePrompt': 'changed'},
-      )], usage: AgentTokenUsage(input: 10, output: 4, total: 14)),
+      AgentProviderTurn(toolCalls: const [
+        AgentProviderToolCall(
+          id: 'apply-1',
+          name: 'langbai_apply_prompt',
+          arguments: {'positivePrompt': 'changed'},
+        )
+      ], usage: AgentTokenUsage(input: 10, output: 4, total: 14)),
     ]);
     final controller = AgentController(app: app, provider: provider);
     addTearDown(controller.dispose);
     await controller.load();
+    await controller.setStudioOptions(approvalMode: 'confirm');
     final running = controller.sendStudio('替换提示词');
     for (var i = 0; i < 100 && controller.pendingPermission == null; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 1));
@@ -385,17 +621,23 @@ void main() {
     await running;
     expect(app.params.positivePrompt, 'original');
     expect(controller.selectedConversation!.messages.last.tools.single.status,
-      'denied');
+        'denied');
   });
 
-  test('studio generation without a prepared ID never reaches approval or billing', () async {
+  test(
+      'studio generation without a prepared ID never reaches approval or billing',
+      () async {
     final storage = _ControllerStorage();
-    final app = _CaptureSceneApp(storage: storage)..settings = _app(storage).settings;
+    final app = _CaptureSceneApp(storage: storage)
+      ..settings = _app(storage).settings;
     final provider = _QueuedProvider([
-      AgentProviderTurn(toolCalls: const [AgentProviderToolCall(
-        id: 'unprepared-1', name: 'langbai_generate_image',
-        arguments: {'positivePrompt': '1girl'},
-      )], usage: AgentTokenUsage()),
+      AgentProviderTurn(toolCalls: const [
+        AgentProviderToolCall(
+          id: 'unprepared-1',
+          name: 'langbai_generate_image',
+          arguments: {'positivePrompt': '1girl'},
+        )
+      ], usage: AgentTokenUsage()),
       AgentProviderTurn(content: '需要先准备生图。', usage: AgentTokenUsage()),
     ]);
     final controller = AgentController(app: app, provider: provider);
@@ -404,17 +646,22 @@ void main() {
     await controller.sendStudio('画一张图');
     expect(app.requests, isEmpty);
     expect(controller.pendingPermission, isNull);
-    expect(controller.selectedConversation!.messages.last.tools.single.status, 'error');
+    expect(controller.selectedConversation!.messages.last.tools.single.status,
+        'error');
     expect(provider.calls, 2);
   });
 
-  test('studio prepared generation shows frozen preview and rejection spends nothing', () async {
+  test(
+      'studio prepared generation shows frozen preview and rejection spends nothing',
+      () async {
     final storage = _ControllerStorage();
-    final app = _CaptureSceneApp(storage: storage)..settings = _app(storage).settings;
+    final app = _CaptureSceneApp(storage: storage)
+      ..settings = _app(storage).settings;
     final provider = _PreparedGenerationProvider();
     final controller = AgentController(app: app, provider: provider);
     addTearDown(controller.dispose);
     await controller.load();
+    await controller.setStudioOptions(approvalMode: 'confirm');
     final running = controller.sendStudio('画一张竖图');
     for (var i = 0; i < 100 && controller.pendingPermission == null; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 1));
@@ -428,7 +675,8 @@ void main() {
     await controller.respondPermission('reject');
     await running;
     expect(app.requests, isEmpty);
-    expect(controller.selectedConversation!.messages.last.tools.last.status, 'denied');
+    expect(controller.selectedConversation!.messages.last.tools.last.status,
+        'denied');
   });
 
   test('image directive becomes a confirmation proposal without generating',
@@ -539,7 +787,7 @@ void main() {
 
     // This test explicitly covers legacy flat-image continuity; V4+ first
     // scenes have separate repair/structured integration tests above.
-    await controller.updateActiveCharacterVisual(model:'nai-diffusion-3');
+    await controller.updateActiveCharacterVisual(model: 'nai-diffusion-3');
     await controller.send('画一张雨中少女');
     await controller.send('改成 832×1216');
 
@@ -552,26 +800,68 @@ void main() {
     expect(assistantContext, contains('"positivePrompt":"1girl, rain"'));
     expect(secondRequest.last['content'], '改成 832×1216');
   });
-  test('first flat reply is repaired once before auto image generation', () async {
-    final fixture=jsonDecode(File('../shared/tavern-scene-fixtures.json').readAsStringSync());
-    final storage=_ControllerStorage();final app=_CaptureSceneApp(storage:storage)..settings=_app(storage).settings;
-    final provider=_QueuedProvider([
-      AgentProviderTurn(content:'<langbai-image>{"positivePrompt":"two adults","width":64}</langbai-image>',usage:AgentTokenUsage()),
-      AgentProviderTurn(content:'<langbai-image>${jsonEncode({'scene':fixture['scene'],'width':64,'stylePrompt':'injected'})}</langbai-image>',usage:AgentTokenUsage()),
+  test('first flat reply is repaired once before auto image generation',
+      () async {
+    final fixture = jsonDecode(
+        File('../shared/tavern-scene-fixtures.json').readAsStringSync());
+    final storage = _ControllerStorage();
+    final app = _CaptureSceneApp(storage: storage)
+      ..settings = _app(storage).settings;
+    final provider = _QueuedProvider([
+      AgentProviderTurn(
+          content:
+              '<langbai-image>{"positivePrompt":"two adults","width":64}</langbai-image>',
+          usage: AgentTokenUsage()),
+      AgentProviderTurn(
+          content: '<langbai-image>${jsonEncode({
+                'scene': fixture['scene'],
+                'width': 64,
+                'stylePrompt': 'injected'
+              })}</langbai-image>',
+          usage: AgentTokenUsage()),
     ]);
-    final controller=AgentController(app:app,provider:provider);addTearDown(controller.dispose);await controller.load();
-    await controller.updateActiveCharacterVisual(model:'nai-diffusion-5-full',width:832,height:1216,stylePrompt:'',negativePrompt:'',count:1);
-    await controller.setGenerationMode('auto');await controller.send('画两名成年徒步者，各自穿自己的外套');
-    final p=controller.selectedConversation!.messages.last.imageProposal!;
-    expect(provider.calls,2);expect(p.scene,fixture['scene']);expect(p.continuity?['repairStatus'],'repaired');
-    expect(app.requests,hasLength(1));expect(app.requests.first['characterPrompts'],hasLength(2));expect(app.requests.first['width'],832);
+    final controller = AgentController(app: app, provider: provider);
+    addTearDown(controller.dispose);
+    await controller.load();
+    await controller.updateActiveCharacterVisual(
+        model: 'nai-diffusion-5-full',
+        width: 832,
+        height: 1216,
+        stylePrompt: '',
+        negativePrompt: '',
+        count: 1);
+    await controller.setGenerationMode('auto');
+    await controller.send('画两名成年徒步者，各自穿自己的外套');
+    final p = controller.selectedConversation!.messages.last.imageProposal!;
+    expect(provider.calls, 2);
+    expect(p.scene, fixture['scene']);
+    expect(p.continuity?['repairStatus'], 'repaired');
+    expect(app.requests, hasLength(1));
+    expect(app.requests.first['characterPrompts'], hasLength(2));
+    expect(app.requests.first['width'], 832);
   });
-  test('second flat reply stays pending and never calls image generation', () async {
-    final storage=_ControllerStorage();final app=_CaptureSceneApp(storage:storage)..settings=_app(storage).settings;
-    final provider=_QueuedProvider(List.generate(2,(_)=>AgentProviderTurn(content:'<langbai-image>{"positivePrompt":"two adults"}</langbai-image>',usage:AgentTokenUsage())));
-    final controller=AgentController(app:app,provider:provider);addTearDown(controller.dispose);await controller.load();
-    await controller.updateActiveCharacterVisual(model:'nai-diffusion-5-full');await controller.setGenerationMode('auto');await controller.send('画两名成年人');
-    expect(provider.calls,2);expect(app.requests,isEmpty);expect(controller.selectedConversation!.messages.last.imageProposal!.continuity?['bindingError'],'SCENE_REQUIRED');
+  test('second flat reply stays pending and never calls image generation',
+      () async {
+    final storage = _ControllerStorage();
+    final app = _CaptureSceneApp(storage: storage)
+      ..settings = _app(storage).settings;
+    final provider = _QueuedProvider(List.generate(
+        2,
+        (_) => AgentProviderTurn(
+            content:
+                '<langbai-image>{"positivePrompt":"two adults"}</langbai-image>',
+            usage: AgentTokenUsage())));
+    final controller = AgentController(app: app, provider: provider);
+    addTearDown(controller.dispose);
+    await controller.load();
+    await controller.updateActiveCharacterVisual(model: 'nai-diffusion-5-full');
+    await controller.setGenerationMode('auto');
+    await controller.send('画两名成年人');
+    expect(provider.calls, 2);
+    expect(app.requests, isEmpty);
+    expect(
+        controller.selectedConversation!.messages.last.imageProposal!
+            .continuity?['bindingError'],
+        'SCENE_REQUIRED');
   });
-
 }

@@ -1,0 +1,37 @@
+{
+  "evidence": {
+    "path": "C:\\Users\\langbai\\.codex\\worktrees\\pi-agent-novelai\\artifacts\\pi-agent-transaction\\ux\\cross-platform-audit-v20\\WINDOWS_RICH_TAG_REVERSE_LIVE_PROOF.json",
+    "sha256": "727363353d2ca5940b96ac42bf326d4799ed0d2182e450c67429434d9b069df0",
+    "originalImage": {
+      "path": "C:\\Users\\langbai\\.codex\\worktrees\\pi-agent-novelai\\artifacts\\pi-agent-transaction\\ux\\cross-platform-audit-v20\\live-generation-1790871707490\\images\\2026-10-02\\QA-v20-landscape-redraw_2026-10-02_01_nai-diffusion-5-full.png",
+      "sha256": "841aa2dc9ee5e3d1e30ec30613bc921ff4c5b8b6922319f5c1589a49d01fbe99",
+      "source": "existing approved software QA output, not new image generation",
+      "pixelOnly": true,
+      "embeddedPromptOrCredentialsForwarded": false
+    },
+    "kind": "actual model output, not an instruction",
+    "reviewMethod": "Manual comparison with reopened 832x1216 source pixels",
+    "unsupportedVisibleObject": [
+      "sun"
+    ],
+    "ambiguousTime": [
+      "morning",
+      "sunrise"
+    ],
+    "qualifiedAlpineLight": true,
+    "generalVisionSemanticProof": false
+  },
+  "actualPrompt": "no humans, scenery, landscape, nature, outdoors, wide shot, from above, foreground, background, sky, blue sky, clear sky, gradient sky, sun, sunlight, sunrise, morning, day, backlighting, alpenglow, mountain, mountain range, mountain slope, peak, snow, rock, stone, boulder, cliff, hill, hillside, valley, forest, pine tree, tree, silhouette, moss, grass, bush, plant, lake, water, blue water, calm water, reflection, mist, shore, lakeside, gravel, shadow",
+  "expectedUnique": 47,
+  "aliases": [
+    [
+      "rock",
+      "stone"
+    ]
+  ],
+  "policy": {
+    "lighting": "光照不等于可见光源",
+    "ambiguousTime": "无法确认日出或日落时不指定 morning/sunrise/sunset"
+  },
+  "recountReason": "rock/stone overlap plus unqualified foreground/background layer labels"
+}

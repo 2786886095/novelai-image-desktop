@@ -1,3 +1,5 @@
+import {McpToolSettings,McpTagSuggestions} from './components/McpTools';
+import {CompatibleImageSettingsCard,CompatibleGenerationPanel} from './components/CompatibleImages';
 import { NaiAccountManager } from './components/NaiAccountManager';
 import {FilePathDialog} from './components/FilePathDialog';
 import {HistoryItemMenu} from './components/HistoryItemMenu';
@@ -13,6 +15,7 @@ import {takeRequestedSettingsSection} from './prompt-ui-settings';
 import {PromptToolsPopover} from './components/PromptToolsPopover';
 import {SlidingPromptToolbar,PromptResizeHandle} from './components/PromptEditorChrome';
 import {PromptAssistant} from './components/PromptAssistant';
+import {resolvePromptAssistantMode} from './prompt-assistant';
 import {usePromptHistory} from './use-prompt-history';
 import {promptEditorText} from './prompt-editor-text';
 import type {PromptEditRequest} from './prompt-assistant';
@@ -321,10 +324,11 @@ function CapsuleBrowser({ query, onPick, language }: { query: string; onPick: (t
 
   if (q) {
     if (downloaded === false) {
-      return <p className="chip-empty">{text.needsLibrary}</p>;
+      return <><p className="chip-empty">{text.needsLibrary}</p><McpTagSuggestions query={q} onPick={onPick}/></>;
     }
     return (
       <div className="capsule-browser">
+        <McpTagSuggestions query={q} onPick={onPick}/>
         <div className="capsule-browser-list">
           {items.map((t) => {
             const label = localizedTagLabel(t.tag, t.description, language);
@@ -1548,7 +1552,7 @@ export function PromptAndParams({
   const [showPromptMore,setShowPromptMore]=useState(false);
   const latestPromptValues=useRef({positivePrompt:effectivePositivePrompt,negativePrompt:params.negativePrompt});
   latestPromptValues.current={positivePrompt:effectivePositivePrompt,negativePrompt:params.negativePrompt};
-  const assistantMode=settings?.convertMode??'mixed';
+  const assistantMode=resolvePromptAssistantMode(settings);
   const assistantVersion=settings?.convertPromptTemplateVersion??'v5';
   const assistantContext=JSON.stringify([!!promptOverride,params.model,assistantMode,assistantVersion,settings?.convertPromptTemplates,settings?.convertPromptTemplatesV45,settings?.convertSystemPrompt,settings?.promptOptimizeTemplate,settings?.promptAssistantTemplate]);
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
@@ -3188,14 +3192,14 @@ function AccountAndRunButton({
         >
           <span className="account-details-toggle-copy">
             <strong>{account.hasToken ? account.tierName ?? t("account.configured") : t("account.notSet")}</strong>
-            <small>{f("account.anlas", { balance: account.anlasBalance ?? t("common.unknown") })}</small>
+            {accountDetailsCollapsed && <small>{f("account.anlas", { balance: account.anlasBalance ?? t("common.unknown") })}</small>}
           </span>
           <Icon name="chevronRight" className={clsx("disclosure-chevron", !accountDetailsCollapsed && "open")} />
         </button>
         <AnimatedCollapse open={!accountDetailsCollapsed}>{<div className="account-details-content">
             <div className="account-mini">
               <div>
-                <strong>{account.hasToken ? account.tierName ?? t("account.configured") : t("account.notSet")}</strong>
+                <strong>{t("account.balanceTitle")}</strong>
                 <small>
                   {f("account.anlas", { balance: account.anlasBalance ?? t("common.unknown") })}
                   {account.expiresAt ? f("account.expires", { date: account.expiresAt }) : ""}
@@ -3205,6 +3209,11 @@ function AccountAndRunButton({
                 {refreshingAccount ? t("account.refreshing") : t("account.refresh")}
               </button>
             </div>
+            {!showV5Allowance && !account.hasToken && (
+              <p className="account-allowance-empty" role="status">
+                {t("account.allowanceSignIn")}
+              </p>
+            )}
             {showV5Allowance && (
               <button
                 type="button"
@@ -3292,6 +3301,7 @@ function AccountAndRunButton({
 
 // ── Generate panel (T2I) ──────────────────────────────────────────────────────
 function GeneratePanel({openSettings}:{openSettings:()=>void}) {
+  const imageProvider = useAppStore(state=>state.settings?.imageProvider);
   const language = useAppStore((state) => state.settings?.language);
   const generate = useAppStore((state) => state.generate);
   const batchCount = useAppStore((state) => state.batchCount);
@@ -3308,6 +3318,8 @@ function GeneratePanel({openSettings}:{openSettings:()=>void}) {
   const [newGroupName, setNewGroupName] = useState("");
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
+
+  if(imageProvider==='openai-images') return <CompatibleGenerationPanel openSettings={openSettings} />;
 
   return (
     <>
@@ -4619,6 +4631,9 @@ function ZoomableImageStage({
   const pendingComparePositionRef = useRef(50);
   const compareAnimationFrameRef = useRef<number | null>(null);
   const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const panMovedRef = useRef(false);
+  const wheelTransformRef = useRef({ zoom: 1, pan: { x: 0, y: 0 } });
+  const wheelHandlerRef = useRef<(event: WheelEvent) => void>(() => {});
   const [zoom, setZoom] = useState(1);
   const [fullscreen, setFullscreen] = useState(false);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -4626,6 +4641,7 @@ function ZoomableImageStage({
   const [intrinsicSize, setIntrinsicSize] = useState({ width: 0, height: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [compareEnabled, setCompareEnabled] = useState(Boolean(compareBeforeImage));
+  wheelTransformRef.current = { zoom, pan };
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const canCompare = Boolean(compareBeforeImage?.fileUrl);
@@ -4649,6 +4665,9 @@ function ZoomableImageStage({
     setFullscreen(false);
     setZoom(1);
     setPan({ x: 0, y: 0 });
+    panStartRef.current = null;
+    panMovedRef.current = false;
+    setIsPanning(false);
     comparePositionRef.current = 50;
     pendingComparePositionRef.current = 50;
     if (compareAnimationFrameRef.current !== null) {
@@ -4671,7 +4690,14 @@ function ZoomableImageStage({
     update();
     const observer = new ResizeObserver(update);
     observer.observe(element);
-    return () => observer.disconnect();
+    // React's delegated wheel listeners are passive; the image must consume
+    // scrolling without moving the surrounding page.
+    const wheel = (event: WheelEvent) => wheelHandlerRef.current(event);
+    element.addEventListener('wheel', wheel, { passive: false });
+    return () => {
+      observer.disconnect();
+      element.removeEventListener('wheel', wheel);
+    };
   }, []);
 
   useEffect(() => () => {
@@ -4698,6 +4724,28 @@ function ZoomableImageStage({
       y: clampNumber(nextPan.y, minY, maxY),
     };
   }
+
+  wheelHandlerRef.current = (event: WheelEvent) => {
+    if (!event.deltaY || !Number.isFinite(event.deltaY) || !frameSize || !shellRef.current) return;
+    event.preventDefault();
+    if (panStartRef.current || compareDragRef.current) return;
+    const previous = wheelTransformRef.current;
+    const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? shellSize.height : 1);
+    const nextZoom = clampNumber(previous.zoom * Math.exp(-clampNumber(delta, -100, 100) * 0.002), 1, 8);
+    if (nextZoom === previous.zoom) return;
+    const bounds = shellRef.current.getBoundingClientRect();
+    const pointX = event.clientX - bounds.left - (shellSize.width - frameSize.width) / 2;
+    const pointY = event.clientY - bounds.top - (shellSize.height - frameSize.height) / 2;
+    const ratio = nextZoom / previous.zoom;
+    const nextPan = nextZoom === 1 ? { x: 0, y: 0 } : clampPanForZoom({
+      x: pointX - (pointX - previous.pan.x) * ratio,
+      y: pointY - (pointY - previous.pan.y) * ratio,
+    }, nextZoom);
+    // Keep consecutive wheel events in sync even before React commits a frame.
+    wheelTransformRef.current = { zoom: nextZoom, pan: nextPan };
+    setZoom(nextZoom);
+    setPan(nextPan);
+  };
 
   function updateComparePosition(clientX: number) {
     const rect = compareRectRef.current ?? frameRef.current?.getBoundingClientRect();
@@ -4741,6 +4789,7 @@ function ZoomableImageStage({
 
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     event.currentTarget.focus({preventScroll:true});
+    panMovedRef.current = false;
     if (zoom <= 1) return;
     if (event.button !== 0 && event.button !== 1) return;
     const target = event.target as HTMLElement;
@@ -4752,8 +4801,9 @@ function ZoomableImageStage({
   }
 
   function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
-    if (!isPanning || !panStartRef.current) return;
+    if (!panStartRef.current) return;
     const start = panStartRef.current;
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) panMovedRef.current = true;
     setPan(clampPanForZoom({
       x: start.panX + event.clientX - start.x,
       y: start.panY + event.clientY - start.y,
@@ -4787,7 +4837,10 @@ function ZoomableImageStage({
       <div
         ref={shellRef}
         data-image-copy-src={image.fileUrl}
-        onClick={event=>{if(!compareEnabled&&!(event.target as HTMLElement).closest("button"))setFullscreen(true);}}
+        onClick={event=>{
+          if(panMovedRef.current){panMovedRef.current=false;event.preventDefault();return;}
+          if(!compareEnabled&&!(event.target as HTMLElement).closest("button"))setFullscreen(true);
+        }}
         onDoubleClick={event=>{if(!(event.target as HTMLElement).closest("button"))setFullscreen(true);}}
         tabIndex={0}
         aria-label={alt}
@@ -4805,6 +4858,7 @@ function ZoomableImageStage({
         onPointerMove={handlePointerMove}
         onPointerUp={stopPanning}
         onPointerCancel={stopPanning}
+        onLostPointerCapture={stopPanning}
         onAuxClick={(event) => event.preventDefault()}
       >
         <div
@@ -4858,6 +4912,7 @@ function ZoomableImageStage({
               }}
               onDragStart={(event) => {
                 event.preventDefault();
+                panMovedRef.current = true;
                 window.naiDesktop.startImageDrag(image.fileUrl);
               }}
               onError={() => {
@@ -5820,6 +5875,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             {section === "api" && (
               <div className="settings-form">
                 <NaiAccountManager variant="settings" />
+                <CompatibleImageSettingsCard settings={settings} refresh={refreshSettings} />
                 <Button onClick={() => setShowTokenGuide(true)}><IconText icon="❔">{t("settings.tokenGuide")}</IconText></Button>
                 <div className="proxy-card">
                   <ProxyPresetControl mode={settings.proxyMode} value={settings.proxyUrl} onChange={(mode, value) => void updateProxy(mode, value)} />
@@ -6305,16 +6361,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                       />
                     </>
                   )}
-                  {settings.tagServerType !== "rest" && (
-                    <label className="field">
-                      <span>{t("settings.mcpTool")}</span>
-                      <input
-                        value={settings.tagServerTool}
-                        placeholder="search_tags"
-                        onChange={(e) => void update("tagServerTool", e.target.value)}
-                      />
-                    </label>
-                  )}
+                  {settings.tagServerType !== "rest" && <McpToolSettings settings={settings} onChange={(key,value)=>void update(key,value)}/>}
                   <div className="history-group-create">
                     <input value={tagTestQuery} onChange={(e) => setTagTestQuery(e.target.value)} placeholder={t("settings.testSearchPlaceholder")} />
                     <button type="button" onClick={() => void detectTagServer()} disabled={tagTesting}>
@@ -6988,7 +7035,7 @@ function PersistentTabView({
   resetKey?: unknown;
 }) {
   const [hasMounted, setHasMounted] = useState(active);
-  const viewMotion=useStudioRegionMotion(resetKey,active);
+  const viewMotion=useStudioRegionMotion(resetKey,active,scope === 'tab:works');
   useEffect(() => {
     if (active) setHasMounted(true);
   }, [active]);
@@ -6996,6 +7043,7 @@ function PersistentTabView({
   return (
     <div
       ref={viewMotion} className={clsx("persistent-tools-view", className, active ? "is-active" : "is-hidden")}
+      data-view-scope={scope}
       aria-hidden={!active}
     >
       <AppErrorBoundary scope={scope} resetKey={resetKey}>

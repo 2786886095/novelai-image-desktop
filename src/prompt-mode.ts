@@ -1,3 +1,7 @@
+import {derivePromptModeTemplate} from './data/prompt-mode-derived';
+import {PRE_DERIVED_REVERSE_SYSTEM_PROMPTS,PRE_DERIVED_CONVERT_SYSTEM_PROMPTS} from './data/prompt-templates';
+import {PREVIOUS_REVERSE_SYSTEM_PROMPTS,PREVIOUS_CONVERT_SYSTEM_PROMPTS} from './data/prompt-templates-previous-v5';
+import {V45_REVERSE_SYSTEM_PROMPTS,V45_CONVERT_SYSTEM_PROMPTS} from './data/prompt-templates-v45';
 import type {
   ModePromptTemplates,
   PromptVariants,
@@ -6,6 +10,10 @@ import type {
 } from "./types";
 
 type ModePromptDefaults = Record<ReversePromptMode, string>;
+export function isShippedModePrompt(value:string,mode:ReversePromptMode){
+ const normalized=(s:string)=>s.trim().replace(/\r\n/g,'\n');
+ return [PRE_DERIVED_REVERSE_SYSTEM_PROMPTS,PRE_DERIVED_CONVERT_SYSTEM_PROMPTS,PREVIOUS_REVERSE_SYSTEM_PROMPTS,PREVIOUS_CONVERT_SYSTEM_PROMPTS,V45_REVERSE_SYSTEM_PROMPTS,V45_CONVERT_SYSTEM_PROMPTS].some(p=>normalized(p[mode])===normalized(value));
+}
 
 export function resolveModePrompt(
   mode: ReversePromptMode,
@@ -14,7 +22,8 @@ export function resolveModePrompt(
   defaults: ModePromptDefaults,
 ) {
   const perMode = templates?.[mode]?.trim();
-  if (perMode) return perMode;
+  if (perMode && (mode==='mixed' || !isShippedModePrompt(perMode,mode))) return perMode;
+  if(mode!=='mixed')return derivePromptModeTemplate(templates?.mixed?.trim()||defaults.mixed,mode);
 
   // Legacy single-template fields are intentionally ignored. They are hidden
   // compatibility leftovers and can silently override the selected mode.

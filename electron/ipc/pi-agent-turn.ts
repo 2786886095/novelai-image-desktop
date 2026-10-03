@@ -151,7 +151,7 @@ export async function completeStudioPiTurn(options: {
     },
   });
   if(options.askQuestion)tools.push({
-    name:'langbai_ask_question',description:'询问必要的用户偏好，展示推荐选项和自定义回答。参数 args={questions:[{prompt,options:[{label,description?,recommended?}]}]}。手动提交前等待，不自动回答，不授予生图权限。',
+    name:'langbai_ask_question',description:'询问必要的用户偏好，展示推荐选项和自定义回答。参数 args={questions:[{prompt,options:[{label,description?,recommended?}]}]}。用户逐题点击确认前等待，不自动回答，不授予生图权限。',
     readonly:true,parameters:agentQuestionToolSchema,
     async execute(args,signal){const answer=await options.askQuestion!(args,signal);const output=JSON.stringify(answer);if(activeToolId)publish(activeToolId,{name:'langbai_ask_question',title:'回答问题',input:args,output});return {ok:true,output,data:answer};},
   });

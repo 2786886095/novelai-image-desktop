@@ -49,15 +49,14 @@ it('covers actionable context and template controls in every supported locale', 
 
 it('wires owned page controls to real preload APIs and keeps model setup out of the header', () => {
   const source = readFileSync(new URL('../PiAgentPage.tsx', import.meta.url), 'utf8');
-  const header = source.split('<header className="pi-header">')[1].split('</header>')[0];
-  expect(header).not.toContain('openSettings');
+  expect(source).not.toContain('className="pi-header"');expect(source).toContain('className="pi-sidebar-footer"');
   expect(source).toContain('window.naiDesktop.discoverAgentModels(');
   expect(source).not.toContain('getAgentModels(');
   expect(source).toContain('window.naiDesktop.compactAgentConversation(chat.id)');
   expect(source).toContain("setSetting('agentAutoCompact'");
   expect(source).toContain('importAttachments([item.filePath])');
-  expect(source).toContain("tool:'langbai_search_web',args:{query:'SEARCH_QUERY',limit:5}");
-  expect(source).toContain('prefill(studioTemplateDraft(template))');
+  expect(source).toContain('studioWebSearchEnabled:!sessionOptions.webSearchEnabled');
+  expect(source).toContain('studioTemplateEnabled:!sessionOptions.templateEnabled');
   expect(source).not.toMatch(/executeShell|readFileSync|mcpClient/);
 });
 
@@ -111,7 +110,7 @@ it('keeps the source renderer in the actual timeline and uses the existing exter
  expect(source).toContain('window.naiDesktop.openExternal(url)');
  expect(source).toContain("setDiscoveryState(result.models.length?'ready':'empty')");
  expect(source).toContain("t('modelSource_'+model.metadataSource)");
- expect(source).toContain("studioTemplateApplyRequest(templateKind,templateMode,templateVersion,text)");
+ expect(source).toContain('setChatActions(actions,id)');expect(source).toContain('sendAgentMessage({ conversationId: id, text: input, actions })');
 });
 
 it('flow progress follows actual preparation and generation, never reference attachments', () => {

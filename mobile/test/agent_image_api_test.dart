@@ -82,6 +82,18 @@ void main() {
     'responseFormat': 'auto',
     'extensions': <String, dynamic>{'steps': 28}
   };
+  // Deliberately exercise only the dormant legacy migration transaction below.
+  // Do NOT call the public AppState save here: it must authenticate an explicitly
+  // supported NovelAI model before persisting and correctly rejects this old model.
+  // The test-only catalog injection is not present in the shipping catalog.
+  Future<void> seedLegacyConfiguration(Map<String, dynamic> value, String secret) async {
+    final next = AppSettings.fromJson(app.settings.toJson())
+      ..compatibleImage = Map<String, dynamic>.from(value)
+      ..imageProvider = 'openai-images';
+    await storage.saveCompatibleConfiguration(next, secret);
+    app.settings.compatibleImage = next.compatibleImage;
+    app.settings.imageProvider = next.imageProvider;
+  }
   setUp(() async {
     HttpOverrides.global = null;
     SharedPreferences.setMockInitialValues({});
@@ -90,7 +102,7 @@ void main() {
     app = AppState(storage: storage)
       ..settings = AppSettings(proxyMode: 'direct');
     await storage.setSettings(app.settings);
-    await app.saveCompatibleSettings(config, key);
+    await seedLegacyConfiguration(config, key);
     tools = AgentApiTools(app);
   });
   tearDown(() => app.dispose());
@@ -216,7 +228,7 @@ void main() {
     await call(
         {'action': 'credential', 'expectedRevision': before['revision']});
     final pending = await tools.execute('studio_api_input', {}, 'image-api');
-    await app.saveCompatibleSettings(
+    await seedLegacyConfiguration(
         {...config, 'baseUrl': 'https://updated.example.test/v1'},
         'software-key');
     await expectLater(
@@ -546,4 +558,29 @@ void main() {
       expect(f.readAsStringSync(), isNot(contains('bridge-private-image-key')));
     }
   });
+  test('shipping catalog rejects all retired image profile actions without mutation', () async {
+    final injected = apiProfiles.remove('compatible-image');
+    try {
+      final before = await storage.readCompatibleApiState();
+      final credentials = await const FlutterSecureStorage().readAll();
+      for (final action in ['read', 'configure', 'credential', 'clearCredential', 'test']) {
+        await expectLater(call({'action': action, 'expectedRevision': 'legacy', 'patch': {'model': 'arbitrary'}}), throwsStateError);
+      }
+      expect(await tools.execute('studio_api_input', {}, 'image-api'), isNull);
+      expect(await storage.readCompatibleApiState(), before);
+      expect(await const FlutterSecureStorage().readAll(), credentials);
+    } finally {
+      apiProfiles['compatible-image'] = injected;
+    }
+  });
+  test('public save rejects an arbitrary legacy model before network or persistence', () async {
+    final before = await storage.readCompatibleApiState();
+    final credentials = await const FlutterSecureStorage().readAll();
+    await expectLater(app.saveCompatibleSettings(config, 'fixture-rejected-key'),
+      throwsA(isA<StateError>().having((e) => e.message, 'scope', contains('NovelAI'))));
+    expect(await storage.readCompatibleApiState(), before);
+    expect(await const FlutterSecureStorage().readAll(), credentials);
+    expect(await storage.getToken(), isNull);
+  });
+
 }

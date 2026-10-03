@@ -98,6 +98,8 @@ html .prompt-editor .prompt-toolbar-dock[data-open=true] .prompt-toolbar-reveal 
 html .disclosure-popover {transition-timing-function:var(--studio-enter);}
 /* 3. Page/tool changes fade, without transforming a containing block. */
 html .persistent-tools-view.is-active>* {animation:studio-view-in 150ms var(--studio-enter);}
+/* Keep a retained works surface visible; headings and new thumbnails still animate. */
+html .persistent-tools-view[data-view-scope="tab:works"].is-active>* {animation:none;}
 html :is(.redraw-wizard,.comic-generator)>section {animation:studio-view-in 150ms var(--studio-enter);}
 /* 4. Reorder panel feedback: wrap, instant drop, subtle accent target. */
 html .responsive-tab-navigation[data-editing=true] .tab-navigation-row {animation:studio-view-in 200ms var(--studio-enter);}
@@ -170,6 +172,8 @@ html .prompt-assistant-body {display:grid;gap:18px;padding:22px 24px;}
 html .prompt-assistant-body label {margin:0;min-width:0;}
 html .prompt-assistant-body textarea {min-height:220px;height:clamp(220px,32dvh,340px);font-size:14px;line-height:1.7;}
 html .prompt-assistant-dialog[data-kind=custom] .prompt-assistant-body {grid-template-columns:1fr 1fr;}
+html .prompt-assistant-mode {grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:8px;}
+html .prompt-assistant-mode small {color:var(--text-muted);}
 html .prompt-assistant-dialog[data-kind=custom] .prompt-assistant-body :is(p,.prompt-assistant-result,.prompt-api-required) {grid-column:1/-1;}
 html .prompt-assistant-dialog[data-ready=false] {width:min(540px,calc(100vw - 32px));}
 html .prompt-assistant-dialog header,html .prompt-assistant-dialog footer {padding:18px 24px;flex-shrink:0;}

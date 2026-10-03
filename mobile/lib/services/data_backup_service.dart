@@ -160,7 +160,8 @@ class DataBackupService {
     'agent_always_allowed_tools_v1',
   };
   static const _apiSettingKeys = <String>{
-    'imageProvider', 'compatibleImage',
+    'imageProvider',
+    'compatibleImage',
     'apiBaseUrl',
     'imageBaseUrl',
     'allowCustomEndpoint',
@@ -181,6 +182,8 @@ class DataBackupService {
     'tagServerUrl',
     'tagServerType',
     'tagServerTool',
+    'tagServerRelatedTool',
+    'tagServerArtistTool',
     'mcpForCapsule',
     'mcpForReverse',
     'mcpForConvert',
@@ -571,18 +574,26 @@ class DataBackupService {
 
     if (requested.contains(DataBackupCategory.apiCredentials)) {
       final image = await storage.readCompatibleApiState();
-      final imageConfig = Map<String,dynamic>.from(image['config'] as Map)..remove('enabled');
+      final imageConfig = Map<String, dynamic>.from(image['config'] as Map)
+        ..remove('enabled');
       final apiSettings = <String, dynamic>{
         for (final key in _apiSettingKeys)
           if (settingsJson.containsKey(key)) key: settingsJson[key],
         'visionApiKey': await storage.getVisionKey() ?? '',
         'convertApiKey': await storage.getConvertKey() ?? '',
         'agentApiKey': await storage.getAgentApiKey() ?? '',
-        ...exportImageSettings({'imageProvider': image['config']['enabled'] == true ? 'openai-images' : 'novelai', 'compatibleImage': imageConfig, 'imageApiKey': image['secret']}),
+        ...exportImageSettings({
+          'imageProvider':
+              image['config']['enabled'] == true ? 'openai-images' : 'novelai',
+          'compatibleImage': imageConfig,
+          'imageApiKey': image['secret']
+        }),
         'tagServerApiKey': await storage.getTagKey() ?? '',
         'baiduSecret': await storage.getBaiduSecret() ?? '',
       };
+      final vault = await storage.exportNovelAiAccountsBackup();
       final payload = {
+        if (vault != null) 'novelAiAccounts': vault,
         'token': await storage.getToken() ?? '',
         'account': null,
         'settings': apiSettings,
@@ -1033,15 +1044,15 @@ class DataBackupService {
     return bytes;
   }
 
-  Future<Map<String, HistoryItem>> _historyHashes(
+  Future<Map<String, List<HistoryItem>>> _historyHashes(
       Iterable<HistoryItem> items) async {
-    final result = <String, HistoryItem>{};
+    final result = <String, List<HistoryItem>>{};
     for (final item in items) {
       try {
         final file = File(item.filePath);
         if (!file.existsSync()) continue;
         final digest = sha256.convert(await file.readAsBytes()).toString();
-        result.putIfAbsent(digest, () => item);
+        result.putIfAbsent(digest, () => []).add(item);
       } catch (_) {}
     }
     return result;
@@ -1083,13 +1094,65 @@ class DataBackupService {
     return candidate;
   }
 
+  Object? _canonicalHistoryValue(Object? value) {
+    if (value is List) return value.map(_canonicalHistoryValue).toList();
+    if (value is Map) {
+      final keys = value.keys.map((key) => key.toString()).toList()..sort();
+      return {for (final key in keys) key: _canonicalHistoryValue(value[key])};
+    }
+    return value;
+  }
+
+  Map<String, dynamic> _historyRecordShape(
+      Map<String, dynamic> raw, String? groupId) {
+    final params = raw['params'] is Map
+        ? Map<String, dynamic>.from(raw['params'] as Map)
+        : <String, dynamic>{};
+    return {
+      'date': raw['date'],
+      'createdAt': raw['createdAt'],
+      'seed': (raw['seed'] as num?)?.toInt() ??
+          (raw['actualSeed'] as num?)?.toInt() ??
+          0,
+      'model': raw['model']?.toString() ?? params['model']?.toString() ?? '',
+      'width': (raw['width'] as num?)?.toInt() ?? 0,
+      'height': (raw['height'] as num?)?.toInt() ?? 0,
+      'prompt': raw['prompt']?.toString() ??
+          params['positivePrompt']?.toString() ??
+          '',
+      'feature': raw['feature']?.toString() ?? 't2i',
+      'groupId': groupId,
+      'params': params,
+    };
+  }
+
+  bool _sameHistoryRecord(
+      HistoryItem item, Map<String, dynamic> raw, String? groupId) {
+    if (item.groupId != groupId) return false;
+    final existing = _historyRecordShape(item.toJson(), groupId);
+    final incoming = _historyRecordShape(raw, groupId);
+    // Older archives can omit dates; generated fallback timestamps must not
+    // cause duplicate records on a repeated import. Supplied dates stay exact.
+    if (raw['createdAt'] is! String) {
+      existing.remove('createdAt');
+      incoming.remove('createdAt');
+    }
+    if (!RegExp(r'^\d{4}-\d{2}-\d{2}$')
+        .hasMatch(raw['date']?.toString() ?? '')) {
+      existing.remove('date');
+      incoming.remove('date');
+    }
+    return jsonEncode(_canonicalHistoryValue(existing)) ==
+        jsonEncode(_canonicalHistoryValue(incoming));
+  }
+
   Future<HistoryItem?> _restoreHistoryItem(
     _ArchiveBundle bundle,
     Map<String, dynamic> raw,
     List<HistoryItem> history,
     List<HistoryGroup> groups,
     Map<String, String> groupIds,
-    Map<String, HistoryItem> hashes,
+    Map<String, List<HistoryItem>> hashes,
     Set<String> ids,
     _Counters counters,
   ) async {
@@ -1100,12 +1163,15 @@ class DataBackupService {
       return null;
     }
     final digest = reference['sha256'].toString();
-    final duplicate = hashes[digest];
+    // Same pixels are not necessarily the same generation record.
+    final groupId = groupIds[raw['groupId']?.toString() ?? ''];
+    final duplicate = (hashes[digest] ?? const <HistoryItem>[])
+        .where((item) => _sameHistoryRecord(item, raw, groupId))
+        .firstOrNull;
     if (duplicate != null) {
       counters.skipped++;
       return duplicate;
     }
-    final groupId = groupIds[raw['groupId']?.toString() ?? ''];
     final group = groups.where((group) => group.id == groupId).firstOrNull;
     final root = await storage.imagesDir();
     final directory = Directory([
@@ -1148,7 +1214,7 @@ class DataBackupService {
       params: params,
     );
     history.add(item);
-    hashes[digest] = item;
+    hashes.putIfAbsent(digest, () => []).add(item);
     counters.imported++;
     return item;
   }
@@ -1540,7 +1606,7 @@ class DataBackupService {
     List<HistoryItem> history,
     List<HistoryGroup> groups,
     Map<String, String> groupIds,
-    Map<String, HistoryItem> hashes,
+    Map<String, List<HistoryItem>> hashes,
     Set<String> historyIds,
     _Counters counters,
   ) async {
@@ -1747,11 +1813,26 @@ class DataBackupService {
     }
     final imageBefore = await storage.readCompatibleApiState();
     final bundle = await _loadArchive(filePath);
-    Map<String,dynamic>? imageBackup;
+    Map<String, dynamic>? imageBackup;
+    Future<void> Function()? accountRestore;
     if (requested.contains(DataBackupCategory.apiCredentials)) {
       final payload = _readJson(bundle, 'data/api-credentials.json');
-      if (payload is! Map || payload['settings'] is! Map) throw const FormatException('Backup has no valid API settings.');
-      imageBackup = readImageSettingsBackup(Map<String,dynamic>.from(payload['settings'] as Map));
+      if (payload is! Map || payload['settings'] is! Map) {
+        throw const FormatException('Backup has no valid API settings.');
+      }
+      imageBackup = readImageSettingsBackup(
+          Map<String, dynamic>.from(payload['settings'] as Map));
+      if (payload.containsKey('novelAiAccounts')) {
+        accountRestore = await storage
+            .prepareNovelAiAccountsRestore(payload['novelAiAccounts']);
+        final vault = payload['novelAiAccounts'];
+        if (vault is Map &&
+            (vault['accounts'] as List).isEmpty &&
+            payload['token'] is String &&
+            (payload['token'] as String).trim().isNotEmpty) {
+          accountRestore = null;
+        }
+      }
     }
     final portable = PortableProjects.inspect(
         bundle.archive, requested.map((c) => c.id).toSet());
@@ -1914,8 +1995,13 @@ class DataBackupService {
       }
       settings = AppSettings.fromJson(merged);
 
-      if (json['token'] is String) {
-        await storage.setToken(json['token'] as String);
+      // Logged-out exports contain no credential, not a request to create or
+      // clear an account. Nonempty tokens still use verify-before-save.
+      final token = json['token'];
+      if (accountRestore == null &&
+          token is String &&
+          token.trim().isNotEmpty) {
+        await storage.setToken(token);
       }
       if (api['visionApiKey'] is String) {
         await storage.setVisionKey(api['visionApiKey'] as String);
@@ -1938,8 +2024,8 @@ class DataBackupService {
     if (imageBackup != null) {
       // Retain the legacy endpoint and private key for export/rollback, but
       // never reactivate the retired independent generator from an old backup.
-      await storage.restoreCompatibleImageBackup(settings,
-          {...imageBackup, 'imageProvider': 'novelai'}, imageBefore);
+      await storage.restoreCompatibleImageBackup(
+          settings, {...imageBackup, 'imageProvider': 'novelai'}, imageBefore);
     } else {
       await storage.setSettings(settings);
     }
@@ -1976,6 +2062,7 @@ class DataBackupService {
       }
     }
 
+    if (accountRestore != null) await accountRestore();
     return DataBackupImportReport(
       imported: counters.imported,
       skipped: counters.skipped,

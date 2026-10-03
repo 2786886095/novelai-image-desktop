@@ -1,0 +1,129 @@
+name: Release Windows (verified)
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish v2.4.7 only after every Windows and shared-source gate passes
+        type: boolean
+        default: true
+permissions:
+  contents: read
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+concurrency:
+  group: formal-release-v2.4.7
+  cancel-in-progress: false
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: Validate release metadata
+        run: node scripts/verify-release-windows-metadata.cjs
+      - name: Install dependencies
+        run: npm ci
+      - name: Warm Electron binary
+        run: npx electron --version
+      - name: Validate desktop source
+        run: npm run typecheck && npm test -- --maxWorkers=4
+      - name: Build Windows installer and portable
+        run: npm run build && npx electron-builder --win portable nsis --x64 --publish never
+      - name: Verify packaged native runtime and startup
+        run: node scripts/verify-packaged-runtime.mjs
+      - name: Verify packaged Tavern label and preserved defaults
+        shell: pwsh
+        run: |
+          $env:ELECTRON_RUN_AS_NODE='1'
+          & './release/win-unpacked/Langbai NovelAI Studio.exe' scripts/packaged-tavern-defaults-probe.cjs release/win-unpacked/resources/app.asar '使用酒馆'
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged label/defaults verification failed' }
+      - name: Decode final Windows installers with the actual NSIS decoder
+        shell: pwsh
+        run: |
+          Get-ChildItem release/*.exe | ForEach-Object {
+            node scripts/verify-windows-installer.mjs $_.FullName release/win-unpacked release/installer-smoke
+            if ($LASTEXITCODE -ne 0) { throw 'Final installer payload differs from build output' }
+          }
+      - name: Verify Windows clean installation and upgrade from 2.4.0
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/verify-windows-upgrade.ps1
+      - name: Verify real on-demand Agent download, startup and offline reuse
+        run: node scripts/verify-agent-on-demand.cjs release/agent-smoke
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-formal-evidence
+          path: |
+            release/packaged-smoke/
+            release/installer-smoke/*.json
+            release/upgrade-smoke/*.json
+            release/upgrade-smoke/*.jsonl
+            release/agent-smoke/verification.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-formal-assets
+          path: |
+            release/*.exe
+            release/latest.yml
+          if-no-files-found: error
+  shared-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+          cache: true
+      - name: Install Flutter dependencies
+        working-directory: mobile
+        run: flutter pub get
+      - name: Analyze shared mobile source
+        working-directory: mobile
+        run: flutter analyze --no-pub --no-fatal-infos
+      - name: Test shared mobile source
+        working-directory: mobile
+        run: flutter test --no-pub --concurrency=4
+  publish:
+    needs: [windows, shared-source]
+    if: inputs.publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-formal-assets
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-formal-evidence
+          path: release-evidence
+      - name: Publish only the verified Windows bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_RUN: ${{ github.run_id }}
+        run: node scripts/publish-verified-windows-release.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-publication-evidence
+          path: |
+            release-assets/verification.json
+            release-evidence/published-readback.json

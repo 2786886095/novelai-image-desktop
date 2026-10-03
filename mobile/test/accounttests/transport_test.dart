@@ -27,7 +27,7 @@ Future<(NovelAiAccounts, NovelAiAccount)> relayVault() async {
 
 void main() {
   test(
-      'selected relay performs real raw request; no GET/quote probe or official fallback',
+      'selected relay refreshes declared read-only route; generation remains one POST and no official fallback',
       () async {
     final (vault, _) = await relayVault();
     final calls = <http.Request>[];
@@ -43,7 +43,9 @@ void main() {
         await api.requestOfficialGenerationPrice(
             'relay-B', settings, GenerateParams()),
         isNull);
-    expect(calls, isEmpty);
+    expect(calls.single.method, 'GET');
+    expect(calls.single.url.toString(), 'https://relay.example/novelai/user/data');
+    calls.clear();
     final result = await api.generate('relay-B', settings,
         GenerateParams(positivePrompt: 'test'), GenerateExtras());
     expect(result.$1.single, png);

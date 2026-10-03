@@ -93,6 +93,8 @@ export function createEmptyAgentWorkspace(): AgentWorkspaceData {
     lorebookIds: [lorebook.id],
     samplerPresetId: sampler.id,
     generationMode: "confirm",
+    studioApprovalMode: "auto",
+    studioWebSearchEnabled: true,
     reasoningEffort: "auto",
     autoPlayGroup: false,
     pinned: false,
@@ -111,6 +113,7 @@ export function createEmptyAgentWorkspace(): AgentWorkspaceData {
     selectedCharacterId: character.id,
     selectedPersonaId: persona.id,
     defaultGenerationMode: "confirm",
+    studioDefaults: { studioApprovalMode: "auto", studioWebSearchEnabled: true },
     updatedAt: createdAt,
   };
 }
@@ -354,8 +357,8 @@ export function normalizeAgentWorkspace(raw: unknown): AgentWorkspaceData {
         lorebookIds,
         ...(samplerPresetId ? { samplerPresetId } : {}),
         generationMode: (conversation.generationMode === "auto" ? "auto" : "confirm") as AgentConversation["generationMode"],
-        studioApprovalMode: conversation.studioApprovalMode==='auto'?'auto' as const:'confirm' as const,
-        studioWebSearchEnabled: conversation.studioWebSearchEnabled===true,
+        studioApprovalMode: conversation.studioApprovalMode==='confirm'?'confirm' as const:'auto' as const,
+        studioWebSearchEnabled: conversation.studioWebSearchEnabled!==false,
         studioTemplateEnabled: conversation.studioTemplateEnabled!==false,
         studioPresetId: typeof conversation.studioPresetId==='string'&&(studioBuiltinPreset(conversation.studioPresetId)||conversation.studioPresetId.startsWith('tavern:')&&samplerPresets.some(p=>'tavern:'+p.id===conversation.studioPresetId))?studioPresetId(conversation.studioPresetId):STUDIO_DEFAULT_PRESET_ID,
         reasoningEffort: (["low", "medium", "high"].includes(String(conversation.reasoningEffort))
@@ -401,7 +404,7 @@ export function normalizeAgentWorkspace(raw: unknown): AgentWorkspaceData {
     : conversations.find(item => !item.archivedAt)?.id;
   return {
     version: AGENT_WORKSPACE_VERSION,
-    studioDefaults: normalizeStudioDefaults(input.studioDefaults),
+    studioDefaults: normalizeStudioDefaults(input.studioDefaults??conversations.find(c=>c.id===selectedConversationId)),
     ...(selectedConversationId ? { selectedConversationId } : {}),
     conversations,
     skills: [...skillById.values()],
@@ -507,6 +510,8 @@ export function createAgentConversation(title?: string): AgentWorkspaceMutationR
     lorebookIds: [...new Set(linkedLorebookIds)],
     ...(samplerPresetId ? { samplerPresetId } : {}),
     generationMode: workspace.defaultGenerationMode,
+    studioApprovalMode: "auto",
+    studioWebSearchEnabled: true,
     reasoningEffort: "auto",
     autoPlayGroup: false,
     pinned: false,
@@ -632,7 +637,7 @@ export function setStudioConversationOptions(conversationId:string,patch:Partial
  if(patch.characterIds!==undefined){if(!Array.isArray(patch.characterIds))return {ok:false,message:'无效的角色选择。',workspace};const ids=[...new Set(patch.characterIds.filter(id=>workspace.characters.some(c=>c.id===id)))];if(!ids.length)return {ok:false,message:'请选择一个角色卡。',workspace};chat.characterIds=ids;chat.activeCharacterId=ids.includes(patch.activeCharacterId??'')?patch.activeCharacterId:ids[0];}
  if(patch.lorebookIds!==undefined){if(!Array.isArray(patch.lorebookIds))return {ok:false,message:'无效的世界书选择。',workspace};chat.lorebookIds=[...new Set(patch.lorebookIds.filter(id=>workspace.lorebooks.some(b=>b.id===id)))];}
  workspace.studioDefaults=normalizeStudioDefaults({studioApprovalMode:chat.studioApprovalMode,studioWebSearchEnabled:chat.studioWebSearchEnabled,studioTemplateEnabled:chat.studioTemplateEnabled,studioPresetId:chat.studioPresetId,characterIds:chat.characterIds,activeCharacterId:chat.activeCharacterId,lorebookIds:chat.lorebookIds});
- chat.updatedAt=now();return mutation(workspace);
+ return mutation(workspace);
 }
 
 function safeFileName(name: string) {

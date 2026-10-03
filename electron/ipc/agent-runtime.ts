@@ -818,6 +818,7 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
   const controller = new AbortController();
   activeRequests.set(request.conversationId, controller);
   const deltas = smoothEmitter(request.conversationId, messageId);
+  let streamed = '';
   try {
     const settings = getSettings();
     const referenceWorkspace=readAgentWorkspace(),referenceChat=structuredClone(conversation);
@@ -862,7 +863,6 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
           + (item.imageProposal ? `\n[Recorded image state]\n${JSON.stringify(item.imageProposal)}` : ''),
           sourceMessageId: item.id })),
     ];
-    let streamed = '';
     const turn = await completeStudioPiTurn({
       settings: getSettings(), conversationId: request.conversationId, messageId,
       reasoningEffort: current.reasoningEffort,
@@ -929,6 +929,7 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
     updateAgentConversation(request.conversationId, (target) => {
       const assistant = target.messages.find((item) => item.id === messageId);
       if (assistant) {
+        assistant.content = streamed || assistant.content;
         for (const tool of assistant.tools) {
           if (tool.status !== 'pending' && tool.status !== 'running') continue;
           const wasRunning = tool.status === 'running';

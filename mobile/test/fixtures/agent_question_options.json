@@ -1,0 +1,61 @@
+{
+  "questions": [
+    {
+      "prompt": "Q1",
+      "options": [
+        {
+          "label": "First",
+          "recommended": true
+        },
+        {
+          "label": "Second"
+        }
+      ]
+    },
+    {
+      "prompt": "Q2",
+      "options": [
+        {
+          "label": "First",
+          "recommended": true
+        },
+        {
+          "label": "Second"
+        }
+      ]
+    },
+    {
+      "prompt": "Q3",
+      "options": [
+        {
+          "label": "First",
+          "recommended": true
+        },
+        {
+          "label": "Second"
+        }
+      ]
+    }
+  ],
+  "custom": "Explicit custom",
+  "edits": "Edited custom",
+  "older": "2026-10-01T00:00:00.000Z",
+  "recent": "2026-10-02T00:00:00.000Z",
+  "layouts": [
+    {
+      "name": "Android",
+      "width": 412,
+      "height": 915
+    },
+    {
+      "name": "iPhone",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "name": "iPad",
+      "width": 834,
+      "height": 1194
+    }
+  ]
+}

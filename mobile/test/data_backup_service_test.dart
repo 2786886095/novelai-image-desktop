@@ -300,7 +300,7 @@ void main() {
     expect(second.skipped, greaterThanOrEqualTo(2));
   });
 
-  test('skips identical image bytes and suffixes same-name different bytes',
+  test('skips identical image records and suffixes same-name different bytes',
       () async {
     final sourceA = Directory('${root.path}/source-a')..createSync();
     final sourceB = Directory('${root.path}/source-b')..createSync();
@@ -318,7 +318,7 @@ void main() {
       ..createSync(recursive: true);
     final existing = File('${destination.path}/same.png')
       ..writeAsBytesSync([1, 2, 3]);
-    await storage.writeHistory([_item('existing', existing.path, 9)]);
+    await storage.writeHistory([_item('existing', existing.path, 1)]);
 
     final report = await service.importBackup(
       archive.path,

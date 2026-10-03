@@ -5,6 +5,7 @@ import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 import {
   applyOfficialInpaintParameters,
+  authenticationFailureMessage,
   buildPayload,
   buildGenerateImageHttpBody,
   compositeInpaintBuffers,
@@ -34,6 +35,22 @@ import {
 function b64(text: string) {
   return Buffer.from(text, "utf8").toString("base64");
 }
+
+describe('account-aware authentication recovery', () => {
+  for (const method of ['relay', 'token', 'official-login', undefined] as const) {
+    for (const status of [401, 403]) {
+      it(`keeps ${method ?? 'legacy'} HTTP ${status} recovery in account management`, () => {
+        const message = authenticationFailureMessage(status, method);
+        expect(message).toContain('API Token');
+        expect(message).toContain('账户管理');
+        expect(message).toContain(`HTTP ${status}`);
+        expect(message).not.toContain('https://image.novelai.net');
+        expect(message).not.toContain('API Key');
+        expect(message.startsWith(method === 'relay' ? '中转接口' : 'NovelAI')).toBe(true);
+      });
+    }
+  }
+});
 
 function solidPng(width: number, height: number, rgba: [number, number, number, number]) {
   const png = new PNG({ width, height });
@@ -88,7 +105,7 @@ function pngWithGenerationMetadata() {
 
 describe("streaming final image recovery", () => {
   it("keeps a completed final frame when the transport reports aborted afterwards", async () => {
-    const finalImage = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    const finalImage = PNG.sync.write(solidPng(16, 16, [20, 40, 60, 255]));
     const finalFrame = frameNaiStreamMessage(encode({
       event_type: "final",
       samp_ix: 0,
@@ -117,7 +134,7 @@ describe("streaming final image recovery", () => {
     const finalFrame = frameNaiStreamMessage(encode({
       event_type: "final",
       samp_ix: 0,
-      image: Uint8Array.from([1, 2, 3]),
+      image: Uint8Array.from(PNG.sync.write(solidPng(16, 16, [20, 40, 60, 255]))),
     }));
     const errorFrame = frameNaiStreamMessage(encode({
       event_type: "error",
@@ -780,4 +797,34 @@ describe("resolveUpscaleOutputSize", () => {
       exceedsLimit: true,
     });
   });
+});
+
+
+describe("NovelAI stream final image validation", () => {
+  for (const fixtureName of ["novelai-stream-final-fixture.json", "novelai-stream-final-additional-fixture.json"]) {
+    const fixture = JSON.parse(fs.readFileSync(`mobile/test/accounttests/fixtures/${fixtureName}`, "utf8"));
+    const allowed = fixture.allowedPreviewImages ?? fixture.cases.flatMap((row: any) => row.expectedImages);
+    for (const row of fixture.cases) {
+      it(`preserves bytes and only completes valid images: ${row.id}`, async () => {
+        const body = Buffer.from(row.body, "base64");
+        async function* chunks() {
+          for (let i = 0; i < body.length; i += 17) yield body.subarray(i, i + 17);
+        }
+        const previews: {progress: number; imageDataUrl: string}[] = [];
+        let error: unknown;
+        let images: Buffer[] = [];
+        try {
+          images = await consumeGenerateImageStream(chunks(), 10,
+            (event) => previews.push(event), row.contentType ?? "text/event-stream");
+        } catch (caught) {
+          error = caught;
+        }
+        expect(images.map((image) => image.toString("base64"))).toEqual(row.expectedImages);
+        expect(images.length).toBe(row.expectedCount);
+        expect(error !== undefined).toBe(row.expectedCount === 0);
+        expect(previews.filter((event) => event.progress === 1)).toHaveLength(row.expectedCount);
+        expect(previews.every((event) => allowed.includes(event.imageDataUrl.split(",")[1]))).toBe(true);
+      });
+    }
+  }
 });

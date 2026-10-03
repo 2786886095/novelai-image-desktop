@@ -5,7 +5,7 @@ const _runtimeText = <String, Map<String, String>>{
     'common.ready': '就绪',
     'common.unknown': '未知',
     'error.tokenRequired': '请先在设置中配置 API Token',
-    'error.naiTokenRequired': '请先配置 NovelAI Token',
+    'error.naiTokenRequired': '请先配置 NovelAI API Token',
     'error.naiNetworkRetryFailed':
         'NovelAI 连接中断，软件已按当前系统代理自动重试。请确认 VPN 规则包含 api.novelai.net 和 image.novelai.net 后再试。',
     'error.positiveRequired': '请输入正面提示词',
@@ -184,7 +184,7 @@ const _runtimeText = <String, Map<String, String>>{
     'comic.panelDone': '分镜 #{index} 已生成',
     'comic.panelFailed': '分镜 #{index} 失败：{error}',
     'comic.insufficient': '选中分镜预计需要 {amount} Anlas，当前余额 {balance}；仍会尝试',
-    'comic.authStopped': '队列已停止：NovelAI Token 或 Image Endpoint 鉴权失败',
+    'comic.authStopped': '队列已停止：NovelAI API Token 或 Image Endpoint 鉴权失败',
     'comic.queueDone': '漫画队列完成：{done}/{total}',
     'comic.cancelling': '正在取消漫画队列...',
     'comic.zipShared': '导出成功：漫画 ZIP 已交给系统分享/保存',
@@ -233,7 +233,7 @@ const _runtimeText = <String, Map<String, String>>{
     'common.ready': '就緒',
     'common.unknown': '未知',
     'error.tokenRequired': '請先在設定中配置 API Token',
-    'error.naiTokenRequired': '請先配置 NovelAI Token',
+    'error.naiTokenRequired': '請先配置 NovelAI API Token',
     'error.naiNetworkRetryFailed':
         'NovelAI 連線中斷，軟體已依目前系統代理自動重試。請確認 VPN 規則包含 api.novelai.net 與 image.novelai.net 後再試。',
     'error.positiveRequired': '請輸入正面提示詞',
@@ -412,7 +412,7 @@ const _runtimeText = <String, Map<String, String>>{
     'comic.panelDone': '分鏡 #{index} 已生成',
     'comic.panelFailed': '分鏡 #{index} 失敗：{error}',
     'comic.insufficient': '選中分鏡預計需要 {amount} Anlas，目前餘額 {balance}；仍會嘗試',
-    'comic.authStopped': '佇列已停止：NovelAI Token 或 Image Endpoint 鑑權失敗',
+    'comic.authStopped': '佇列已停止：NovelAI API Token 或 Image Endpoint 鑑權失敗',
     'comic.queueDone': '漫畫佇列完成：{done}/{total}',
     'comic.cancelling': '正在取消漫畫佇列...',
     'comic.zipShared': '匯出成功：漫畫 ZIP 已交給系統分享/儲存',
@@ -461,7 +461,7 @@ const _runtimeText = <String, Map<String, String>>{
     'common.ready': 'Ready',
     'common.unknown': 'Unknown',
     'error.tokenRequired': 'Configure an API Token in Settings first',
-    'error.naiTokenRequired': 'Configure your NovelAI Token first',
+    'error.naiTokenRequired': 'Configure your NovelAI API Token first',
     'error.naiNetworkRetryFailed':
         'The NovelAI connection was interrupted after automatic retries. Make sure your VPN rules include api.novelai.net and image.novelai.net, then try again.',
     'error.positiveRequired': 'Enter a positive prompt first',
@@ -690,7 +690,7 @@ const _runtimeText = <String, Map<String, String>>{
     'comic.insufficient':
         'Selected panels are estimated at {amount} Anlas, current balance {balance}. They will still be tried',
     'comic.authStopped':
-        'Queue stopped: NovelAI Token or Image Endpoint authentication failed',
+        'Queue stopped: NovelAI API Token or Image Endpoint authentication failed',
     'comic.queueDone': 'Comic queue complete: {done}/{total}',
     'comic.cancelling': 'Cancelling comic queue...',
     'comic.zipShared': 'Export successful: comic ZIP sent to system share/save',
@@ -749,7 +749,7 @@ const _runtimeText = <String, Map<String, String>>{
     'common.ready': '準備完了',
     'common.unknown': '不明',
     'error.tokenRequired': '先に設定で API Token を設定してください',
-    'error.naiTokenRequired': '先に NovelAI Token を設定してください',
+    'error.naiTokenRequired': '先に NovelAI API Token を設定してください',
     'error.naiNetworkRetryFailed':
         'NovelAI への接続が中断され、自動再試行も失敗しました。VPN ルールに api.novelai.net と image.novelai.net を含めてから再試行してください。',
     'error.positiveRequired': '先にポジティブプロンプトを入力してください',
@@ -941,7 +941,7 @@ const _runtimeText = <String, Map<String, String>>{
     'comic.panelFailed': 'パネル #{index} 失敗: {error}',
     'comic.insufficient':
         '選択したパネルの見積もりは {amount} Anlas です。現在の残高 {balance}。実行を試みます',
-    'comic.authStopped': 'キュー停止: NovelAI Token または Image Endpoint の認証に失敗しました',
+    'comic.authStopped': 'キュー停止: NovelAI API Token または Image Endpoint の認証に失敗しました',
     'comic.queueDone': '漫画キュー完了: {done}/{total}',
     'comic.cancelling': '漫画キューをキャンセル中...',
     'comic.zipShared': 'エクスポート成功：漫画 ZIP をシステム共有/保存へ送りました',
@@ -991,7 +991,7 @@ const _runtimeText = <String, Map<String, String>>{
     'common.ready': '준비됨',
     'common.unknown': '알 수 없음',
     'error.tokenRequired': '먼저 설정에서 API Token을 설정하세요',
-    'error.naiTokenRequired': '먼저 NovelAI Token을 설정하세요',
+    'error.naiTokenRequired': '먼저 NovelAI API Token을 설정하세요',
     'error.naiNetworkRetryFailed':
         'NovelAI 연결이 중단되어 자동 재시도도 실패했습니다. VPN 규칙에 api.novelai.net 및 image.novelai.net이 포함되어 있는지 확인한 뒤 다시 시도하세요.',
     'error.positiveRequired': '먼저 포지티브 프롬프트를 입력하세요',
@@ -1185,7 +1185,7 @@ const _runtimeText = <String, Map<String, String>>{
     'comic.panelFailed': '패널 #{index} 실패: {error}',
     'comic.insufficient':
         '선택한 패널 예상 비용은 {amount} Anlas입니다. 현재 잔액 {balance}. 계속 시도합니다',
-    'comic.authStopped': '대기열 중지: NovelAI Token 또는 Image Endpoint 인증 실패',
+    'comic.authStopped': '대기열 중지: NovelAI API Token 또는 Image Endpoint 인증 실패',
     'comic.queueDone': '만화 대기열 완료: {done}/{total}',
     'comic.cancelling': '만화 대기열 취소 중...',
     'comic.zipShared': '내보내기 성공: 만화 ZIP을 시스템 공유/저장으로 보냈습니다',

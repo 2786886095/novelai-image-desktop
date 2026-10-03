@@ -25,8 +25,8 @@ import { compactAgentConversation, sendAgentMessage, getAgentPendingPermissions,
 
 beforeEach(() => {
   delete process.env.LANGBAI_PI_AGENT;
-  fixture.workspace = { conversations: [{
-    id: 'studio', title: '新对话', messages: [], draftAttachments: [], status: 'idle', compactCount: 0,
+  fixture.workspace = { characters: [], lorebooks: [], samplerPresets: [], conversations: [{
+    id: 'studio', title: '新对话', messages: [], characterIds: [], lorebookIds: [], draftAttachments: [], status: 'idle', compactCount: 0,
   }] };
   stopAgentRuntime();
   fixture.settings.agentAutoCompact = false;
@@ -63,6 +63,7 @@ it('persists a tool result and generated image without legacy proposal parsing',
 });
 
 it('pauses on an application-owned approval and consumes only a one-shot user answer', async () => {
+  fixture.workspace.conversations[0].studioApprovalMode = 'confirm';
   let authorized: boolean | undefined;
   fixture.turn.mockImplementation(async (options) => {
     authorized = await options.authorize('langbai_apply_prompt', { positivePrompt: 'cat' }, options.signal);
@@ -83,6 +84,7 @@ it('pauses on an application-owned approval and consumes only a one-shot user an
 });
 
 it('stopping during confirmation clears the gate without executing the pending tool', async () => {
+  fixture.workspace.conversations[0].studioApprovalMode = 'confirm';
   let authorized = false;
   fixture.turn.mockImplementation(async (options) => {
     authorized = await options.authorize('langbai_apply_prompt', { positivePrompt: 'cat' }, options.signal);
@@ -313,4 +315,17 @@ it('actual post-compaction Pi prompt retains every exact image proposal field, n
   expect(protectedMessage.content).toContain(JSON.stringify(proposal));
   expect(prompt.some((item: any) => item.role === 'system' && item.content === chat.lastSummary)).toBe(true);
   expect(JSON.stringify(prompt)).not.toContain('record-0 ');
+});
+
+it.each(['aborted','error'] as const)('retains partial Pi text when a turn is %s',async state=>{
+ let entered!:()=>void;const ready=new Promise<void>(r=>entered=r);
+ fixture.turn.mockImplementation(async options=>{
+  options.onText('保留半截回复。');entered();
+  if(state==='aborted')await new Promise<void>(resolve=>options.signal.addEventListener('abort',()=>resolve(),{once:true}));
+  throw Error('synthetic interrupted response');
+ });
+ const job=sendAgentMessage({conversationId:'studio',text:'synthetic partial response'});
+ await ready;if(state==='aborted')expect(abortAgentMessage('studio').ok).toBe(true);
+ expect((await job).ok).toBe(false);
+ expect(fixture.workspace.conversations[0].messages.at(-1)).toMatchObject({status:state,content:'保留半截回复。'});
 });
