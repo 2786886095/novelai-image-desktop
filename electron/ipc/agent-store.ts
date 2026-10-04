@@ -283,7 +283,7 @@ function normalizeMessage(raw: Partial<AgentMessage>): AgentMessage | null {
   };
 }
 
-export function normalizeAgentWorkspace(raw: unknown): AgentWorkspaceData {
+export function normalizeAgentWorkspace(raw: unknown, preserveRuntimeStatus = false): AgentWorkspaceData {
   const input = raw && typeof raw === "object" ? raw as Partial<AgentWorkspaceData> : {};
   if (Number(input.version) !== AGENT_WORKSPACE_VERSION) {
     return createEmptyAgentWorkspace();
@@ -342,7 +342,9 @@ export function normalizeAgentWorkspace(raw: unknown): AgentWorkspaceData {
         draftAttachments: (Array.isArray(conversation.draftAttachments) ? conversation.draftAttachments : [])
           .map((item) => rehydrateAttachment(item))
           .filter((item): item is AgentAttachment => Boolean(item)),
-        status: (conversation.status === "error" ? "error" : "idle") as AgentConversation["status"],
+        // Disk recovery resets transient work; writes during a live turn must not.
+        status: (preserveRuntimeStatus && ["running", "waiting-permission"].includes(String(conversation.status))
+          ? conversation.status : conversation.status === "error" ? "error" : "idle") as AgentConversation["status"],
         context: createContextSnapshot(contextMessages, settings.agentContextWindow, settings.agentAutoCompactThreshold, latestUsage),
         ...(latestUsage ? { lastTurnUsage: latestUsage } : {}),
         compactCount: Math.max(0, Math.trunc(Number(conversation.compactCount) || 0)),
@@ -461,7 +463,7 @@ export function invalidateAgentHistoryImage(id: string): void {
 export function writeAgentWorkspace(workspace: AgentWorkspaceData) {
   // A still-open renderer editor may save a snapshot from before deletion.
   // Resolve identities at the write boundary too, not only on the next read.
-  const normalized = resolvedWorkspace(normalizeAgentWorkspace({ ...workspace, updatedAt: now() }));
+  const normalized = resolvedWorkspace(normalizeAgentWorkspace({ ...workspace, updatedAt: now() }, true));
   const file = agentWorkspacePath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
   rotateBackupsSync(file);
@@ -679,9 +681,7 @@ function uniquePath(directory: string, fileName: string) {
 }
 
 export async function importAgentFiles(conversationId: string, sourcePaths?: string[]) {
-  const workspace = readAgentWorkspace();
-  const conversation = workspace.conversations.find((item) => item.id === conversationId);
-  if (!conversation) return { ok: false, message: "对话不存在。", attachments: [] };
+  if (!readAgentWorkspace().conversations.some(item=>item.id===conversationId&&!item.archivedAt)) return {ok:false,message:"对话不存在或已归档。",attachments:[]};
   let paths = Array.isArray(sourcePaths) ? sourcePaths.filter((item): item is string => typeof item === "string") : [];
   if (!paths.length) {
     const result = await dialog.showOpenDialog({
@@ -695,6 +695,10 @@ export async function importAgentFiles(conversationId: string, sourcePaths?: str
     if (result.canceled) return { ok: true, cancelled: true, attachments: [] };
     paths = result.filePaths;
   }
+  // The picker is asynchronous: never overwrite streaming changes with its old snapshot.
+  const workspace=readAgentWorkspace();
+  const conversation=workspace.conversations.find(item=>item.id===conversationId&&!item.archivedAt);
+  if(!conversation)return {ok:false,message:"对话不存在或已归档。",attachments:[]};
   const targetDirectory = path.join(agentAttachmentsDirectory(), conversationId);
   fs.mkdirSync(targetDirectory, { recursive: true });
   const imported: AgentAttachment[] = [];
@@ -729,6 +733,28 @@ export async function importAgentFiles(conversationId: string, sourcePaths?: str
   conversation.updatedAt = now();
   writeAgentWorkspace(workspace);
   return { ok: true, attachments: imported };
+}
+
+/** File bytes originate from an explicit composer paste/drop, never from model tools. */
+export function importAgentFileData(conversationId:string,raw:unknown) {
+  const workspace=readAgentWorkspace(),conversation=workspace.conversations.find(c=>c.id===conversationId&&!c.archivedAt);
+  if(!conversation||!Array.isArray(raw)||!raw.length||raw.length>64)return {ok:false,message:"附件输入无效或对话只读。",attachments:[]};
+  let total=0;
+  const files:Array<{name:string;bytes:Buffer}>=[];
+  for(const item of raw){
+    if(!item||typeof item.name!=='string'||!(item.bytes instanceof Uint8Array))return {ok:false,message:"附件输入无效。",attachments:[]};
+    const name=safeFileName(item.name),bytes=Buffer.from(item.bytes);
+    total+=bytes.length;
+    if(!ALLOWED_EXTENSIONS.has(path.extname(name).toLowerCase())||!bytes.length||bytes.length>MAX_FILE_BYTES||total>MAX_IMPORT_BYTES)return {ok:false,message:"不支持的附件或超过大小限制（单文件 48 MB，总计 192 MB）。",attachments:[]};
+    files.push({name,bytes});
+  }
+  const directory=path.join(agentAttachmentsDirectory(),conversationId),imported:AgentAttachment[]=[];
+  fs.mkdirSync(directory,{recursive:true});
+  try {
+    for(const file of files){const destination=uniquePath(directory,file.name),extension=path.extname(file.name).toLowerCase();fs.writeFileSync(destination,file.bytes,{flag:'wx'});imported.push({id:crypto.randomUUID(),name:path.basename(destination),mime:mimeFor(extension),size:file.bytes.length,kind:attachmentKind(extension),filePath:destination,fileUrl:toLocalMediaUrl(destination),createdAt:now()});}
+    conversation.draftAttachments.push(...imported);conversation.updatedAt=now();writeAgentWorkspace(workspace);
+    return {ok:true,attachments:imported};
+  }catch{for(const item of imported)try{fs.unlinkSync(item.filePath)}catch{}return {ok:false,message:"附件未保存，请检查本地存储。",attachments:[]};}
 }
 
 export function deleteAgentAttachment(conversationId: string, attachmentId: string): AgentWorkspaceMutationResult {

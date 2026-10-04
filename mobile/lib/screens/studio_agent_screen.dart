@@ -1,4 +1,7 @@
 import 'studio_question_cards.dart';
+import 'studio_model_collection.dart';
+import '../agent/model_selections.dart';
+import '../services/composer_transfers.dart';
 import 'studio_resources.dart';
 import '../agent/studio_options.dart';
 import '../agent/tavern_builtins.dart';
@@ -54,6 +57,8 @@ class StudioAgentScreen extends StatefulWidget {
 class _StudioAgentScreenState extends State<StudioAgentScreen> {
   AgentController? _agent;
   final _input = TextEditingController();
+  final _composerRegion = GlobalKey();
+  bool _attachmentBusy = false;
   final _focus = FocusNode();
   final _scroll = ScrollController();
   final _drafts = <String, String>{};
@@ -78,6 +83,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
     _input.addListener(_onInput);
     _scroll.addListener(_onScroll);
     _agent!.addListener(_changed);
+    ComposerTransfers.listen(_importTransferredFiles);
     if (_agent!.loaded) {
       _changed();
     } else {
@@ -120,9 +126,8 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
       _userScrollDirection = notification.direction;
     }
     // Idle near the bottom is not permission to undo an upward wheel/drag.
-    final atBottom = notification.metrics.maxScrollExtent -
-            notification.metrics.pixels <=
-        1;
+    final atBottom =
+        notification.metrics.maxScrollExtent - notification.metrics.pixels <= 1;
     final following = notification.direction == ScrollDirection.idle &&
         atBottom &&
         (_followLatest ||
@@ -216,8 +221,8 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                           ? 'presetTemplate'
                           : 'menuApplyTemplate');
               final body = ['convert', 'reverse'].contains(kind)
-                  ? app.resolvedPromptTemplate(kind,
-                      ReversePromptMode.values.byName(mode),
+                  ? app.resolvedPromptTemplate(
+                      kind, ReversePromptMode.values.byName(mode),
                       templateVersion: version)
                   : kind == 'optimize'
                       ? app.settings.promptOptimizeTemplate
@@ -419,6 +424,73 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                     ]))));
   }
 
+  Future<void> _importTransferredFiles(List<String> paths) async {
+    if (!mounted ||
+        _attachmentBusy ||
+        _agent?.selectedConversation?.archivedAt != null) return;
+    final id = _agent?.selectedConversation?.id;
+    if (id == null) return;
+    setState(() => _attachmentBusy = true);
+    try {
+      final imported =
+          await _agent!.importAttachmentPaths(paths, conversationId: id);
+      if (imported.isEmpty && mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(_t('attachmentLimit'))));
+    } catch (error) {
+      if (mounted) setState(() => _agent!.error = '$error');
+    } finally {
+      if (mounted) setState(() => _attachmentBusy = false);
+      for (final path in paths) {
+        if (path
+                .replaceAll('\\', '/')
+                .split('/')
+                .reversed
+                .skip(1)
+                .firstOrNull ==
+            'composer-inputs') {
+          try {
+            await File(path).delete();
+          } catch (_) {}
+        }
+      }
+    }
+  }
+
+  Future<void> _pasteFiles() async {
+    try {
+      await _importTransferredFiles(await ComposerTransfers.paste());
+    } catch (error) {
+      if (mounted) setState(() => _agent!.error = '$error');
+    }
+  }
+
+  Future<void> _pickFiles() async {
+    if (_attachmentBusy) return;
+    setState(() => _attachmentBusy = true);
+    try {
+      await _agent!.pickAttachments();
+    } catch (error) {
+      if (mounted) setState(() => _agent!.error = '$error');
+    } finally {
+      if (mounted) setState(() => _attachmentBusy = false);
+    }
+  }
+
+  void _publishComposerRegion() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final box =
+          _composerRegion.currentContext?.findRenderObject() as RenderBox?;
+      final enabled = box != null &&
+          box.hasSize &&
+          _agent?.selectedConversation?.archivedAt == null &&
+          ModalRoute.of(context)?.isCurrent == true;
+      ComposerTransfers.region(
+          enabled ? box.localToGlobal(Offset.zero) & box.size : null);
+    });
+  }
+
   Future<void> _showAttachmentSources() async {
     final agent = _agent!;
     final app = agent.app;
@@ -443,7 +515,14 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                       title: Text(_t('chooseFile')),
                       onTap: () {
                         Navigator.pop(sheetContext);
-                        agent.pickAttachments();
+                        _pickFiles();
+                      }),
+                  ListTile(
+                      leading: const Icon(Icons.content_paste),
+                      title: Text(_t('pasteFiles')),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        _pasteFiles();
                       }),
                   for (final source in sources)
                     ListTile(
@@ -467,6 +546,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
     final chat = agent?.selectedConversation;
     if (agent == null ||
         chat == null ||
+        _attachmentBusy ||
         agent.sending ||
         !agent.providerConfigured) return;
     final text = _input.text;
@@ -524,6 +604,12 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
     var providerName = settings.agentProviderName;
     var contextWindow = settings.agentContextWindow;
     var maxOutputTokens = settings.agentMaxOutputTokens;
+    var effort = settings.agentReasoningEffort;
+    var profiles = [
+      ...normalizeSavedAgentModels(settings.savedAgentModels)
+          .where((p) => p['providerKey'] != agentProviderKey(settings)),
+      ...selectedAgentModels(settings)
+    ];
     var saving = false;
     String? error;
     final settingsRoute = DialogRoute<void>(
@@ -593,6 +679,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                 const SizedBox(height: 12),
                                 TextField(
                                     controller: base,
+                                    onChanged: (_) => change(() {}),
                                     keyboardType: TextInputType.url,
                                     autocorrect: false,
                                     decoration: InputDecoration(
@@ -602,17 +689,42 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                 const SizedBox(height: 12),
                                 TextField(
                                     controller: model,
+                                    onChanged: (_) => change(() {}),
                                     autocorrect: false,
                                     decoration: InputDecoration(
                                         labelText: _t('modelId'))),
                                 const SizedBox(height: 12),
                                 TextField(
                                     controller: key,
+                                    onChanged: (_) => change(() {}),
                                     obscureText: true,
                                     autocorrect: false,
                                     enableSuggestions: false,
                                     decoration: InputDecoration(
                                         labelText: _t('apiKey'))),
+                                StudioModelCollection(
+                                    draft: AppSettings.fromJson({
+                                      ...settings.toJson(),
+                                      'agentApiProtocol': protocol,
+                                      'agentApiBaseUrl': base.text,
+                                      'agentApiModel': model.text,
+                                      'savedAgentModels': profiles,
+                                      'agentContextWindow': contextWindow,
+                                      'agentMaxOutputTokens': maxOutputTokens,
+                                      'agentReasoningEffort': effort
+                                    }),
+                                    apiKey: key.text,
+                                    disabled: saving,
+                                    onChanged: (draft) => change(() {
+                                          profiles = draft.savedAgentModels;
+                                          model.text = draft.agentApiModel;
+                                          contextWindow =
+                                              draft.agentContextWindow;
+                                          maxOutputTokens =
+                                              draft.agentMaxOutputTokens;
+                                          effort = draft.agentReasoningEffort;
+                                          vision = draft.agentVisionEnabled;
+                                        })),
                                 ExpansionTile(
                                     tilePadding: EdgeInsets.zero,
                                     title: Text(_t('details')),
@@ -699,7 +811,9 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                       autoCompact: settings.agentAutoCompact,
                                       compactThreshold:
                                           settings.agentAutoCompactThreshold,
-                                      visionEnabled: vision);
+                                      visionEnabled: vision,
+                                      savedModels: profiles,
+                                      reasoningEffort: effort);
                                   if (dialogContext.mounted) {
                                     Navigator.pop(dialogContext);
                                   }
@@ -1088,6 +1202,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _publishComposerRegion();
     final agent = _agent, chat = agent?.selectedConversation;
     if (_loadError != null) {
       return Scaffold(
@@ -1237,6 +1352,9 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                     onPressed: () => setState(() => agent.error = null),
                     icon: const Icon(Icons.close, size: 18))
               ])),
+        if (_attachmentBusy) Text(_t('uploadingAttachments')),
+        if (agent.sending && chat.draftAttachments.isNotEmpty)
+          Text(_t('nextMessageAttachments')),
         if (chat.draftAttachments.isNotEmpty)
           SizedBox(
               height: compact ? 52 : 64,
@@ -1261,7 +1379,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                       const BoxConstraints(maxWidth: 160),
                                   child: Text(file.name,
                                       overflow: TextOverflow.ellipsis)),
-                              onDeleted: agent.sending
+                              onDeleted: archived || _attachmentBusy
                                   ? null
                                   : () => agent.removeDraftAttachment(file.id)))
                   ])),
@@ -1352,6 +1470,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                       ])
             ])),
         SafeArea(
+            key: _composerRegion,
             top: false,
             child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
@@ -1377,13 +1496,25 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                   Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
                     IconButton(
                         tooltip: _t('addAttachment'),
-                        onPressed: agent.sending || archived
+                        onPressed: archived || _attachmentBusy
                             ? null
                             : _showAttachmentSources,
                         icon: const Icon(Icons.add)),
                     Expanded(
                         child: TextField(
                             controller: _input,
+                            contextMenuBuilder: (context, state) =>
+                                AdaptiveTextSelectionToolbar.buttonItems(
+                                    anchors: state.contextMenuAnchors,
+                                    buttonItems: [
+                                      ...state.contextMenuButtonItems,
+                                      ContextMenuButtonItem(
+                                          label: _t('pasteFiles'),
+                                          onPressed: () {
+                                            state.hideToolbar();
+                                            _pasteFiles();
+                                          })
+                                    ]),
                             readOnly: archived,
                             focusNode: _focus,
                             minLines: 1,
@@ -1408,6 +1539,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                         onPressed: agent.sending
                             ? agent.abort
                             : archived ||
+                                    _attachmentBusy ||
                                     !agent.providerConfigured ||
                                     (_input.text.trim().isEmpty &&
                                         _selectedActions.isEmpty &&
@@ -1422,8 +1554,19 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                             key: const ValueKey('agent-model-selector'),
                             tooltip: _t('modelSettings'),
                             enabled: !agent.sending,
-                            onSelected: (_) => _configure(),
+                            onSelected: (id) => id == 'configure'
+                                ? _configure()
+                                : agent.selectSavedModel(id),
                             itemBuilder: (_) => [
+                                  for (final m in selectedAgentModels(
+                                      agent.app.settings))
+                                    CheckedPopupMenuItem(
+                                        value: m['id'] as String,
+                                        checked: m['id'] ==
+                                            agent.app.settings.agentApiModel,
+                                        child: Text(m['displayName'] as String,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis)),
                                   PopupMenuItem(
                                       value: 'configure',
                                       child: _agentMenuLabel(
@@ -1554,6 +1697,8 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
 
   @override
   void dispose() {
+    ComposerTransfers.listen(null);
+    ComposerTransfers.region(null);
     if (_agent != null && _chatId != null) {
       _agent!.updateDraft(_chatId!, _input.text);
       unawaited(_agent!.saveWorkspace());

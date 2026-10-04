@@ -60,7 +60,7 @@ export function studioPiModel(settings: AppSettings): Model<Api> {
     api,
     provider: 'langbai-studio',
     baseUrl: settings.agentApiBaseUrl.trim().replace(/\/$/, ''),
-    reasoning: knownAgentModel(settings.agentApiModel)?.reasoning === true,
+    reasoning: knownAgentModel(settings.agentApiModel)?.reasoning === true || ["low","medium","high"].includes(settings.agentReasoningEffort??"auto"),
     // Auto means provider defaults, not an unsupported explicit `none` effort.
     thinkingLevelMap: { off: null },
     input: settings.agentVisionEnabled ? ['text', 'image'] : ['text'],

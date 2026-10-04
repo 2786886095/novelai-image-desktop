@@ -1426,5 +1426,110 @@
     "Could not complete the action. Please retry.",
     "操作を完了できませんでした。再試行してください。",
     "작업을 완료하지 못했습니다. 다시 시도하세요."
+  ],
+  "selectedModels": [
+    "已添加的模型",
+    "已新增的模型",
+    "Added models",
+    "追加したモデル",
+    "추가한 모델"
+  ],
+  "addModel": [
+    "添加模型",
+    "新增模型",
+    "Add model",
+    "モデルを追加",
+    "모델 추가"
+  ],
+  "removeModel": [
+    "移除模型",
+    "移除模型",
+    "Remove model",
+    "モデルを削除",
+    "모델 제거"
+  ],
+  "searchModels": [
+    "搜索模型",
+    "搜尋模型",
+    "Search models",
+    "モデルを検索",
+    "모델 검색"
+  ],
+  "filterModelsHint": [
+    "列表较长，请搜索以找到其他模型。",
+    "清單較長，請搜尋其他模型。",
+    "Filter to find additional models.",
+    "検索で他のモデルを表示。",
+    "검색하여 다른 모델 찾기"
+  ],
+  "contextWindow": [
+    "上下文长度",
+    "上下文長度",
+    "Context window",
+    "コンテキスト長",
+    "컨텍스트 길이"
+  ],
+  "reasoningLevel": [
+    "思考强度",
+    "思考強度",
+    "Reasoning effort",
+    "思考強度",
+    "추론 강도"
+  ],
+  "reasoning_auto": [
+    "跟随服务商默认",
+    "依服務商預設",
+    "Provider default",
+    "プロバイダー既定",
+    "제공자 기본값"
+  ],
+  "reasoning_low": [
+    "低",
+    "低",
+    "Low",
+    "低",
+    "낮음"
+  ],
+  "reasoning_medium": [
+    "中",
+    "中",
+    "Medium",
+    "中",
+    "중간"
+  ],
+  "reasoning_high": [
+    "高",
+    "高",
+    "High",
+    "高",
+    "높음"
+  ],
+  "uploadingAttachments": [
+    "正在添加附件…",
+    "正在新增附件…",
+    "Adding attachments…",
+    "添付を追加中…",
+    "첨부 추가 중…"
+  ],
+  "nextMessageAttachments": [
+    "附件将随下一条消息发送，不会修改正在执行的请求。",
+    "附件將隨下一則訊息傳送，不修改目前請求。",
+    "Attachments are staged for your next message; the current request is unchanged.",
+    "添付は次のメッセージで送信されます。現在のリクエストは変更しません。",
+    "첨부는 다음 메시지에 전송되며 현재 요청은 변경되지 않습니다."
+  ],
+  "attachmentLimit": [
+    "不支持的附件或超出限制：单文件 48 MB，总计 192 MB。",
+    "附件不支援或超過限制：單檔 48 MB，總計 192 MB。",
+    "Unsupported attachment or limit exceeded: 48 MB per file, 192 MB total.",
+    "未対応、または容量超過（48 MB/ファイル、合計192 MB）。",
+    "지원되지 않는 첨부 또는 용량 초과: 파일당 48 MB, 총 192 MB."
+  ],
+  "pasteFiles": [
+    "粘贴附件",
+    "貼上附件",
+    "Paste attachment",
+    "添付を貼り付け",
+    "첨부 붙여넣기"
   ]
 }

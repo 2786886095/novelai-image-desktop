@@ -50,7 +50,9 @@ it('covers actionable context and template controls in every supported locale', 
 it('wires owned page controls to real preload APIs and keeps model setup out of the header', () => {
   const source = readFileSync(new URL('../PiAgentPage.tsx', import.meta.url), 'utf8');
   expect(source).not.toContain('className="pi-header"');expect(source).toContain('className="pi-sidebar-footer"');
-  expect(source).toContain('window.naiDesktop.discoverAgentModels(');
+  expect(source).toContain('<AgentModelCollection draft={modelDraft}');
+  const collection = readFileSync(new URL('../components/AgentModelCollection.tsx', import.meta.url), 'utf8');
+  expect(collection).toContain('window.naiDesktop.discoverAgentModels(');
   expect(source).not.toContain('getAgentModels(');
   expect(source).toContain('window.naiDesktop.compactAgentConversation(chat.id)');
   expect(source).toContain("setSetting('agentAutoCompact'");
@@ -108,8 +110,9 @@ it('keeps the source renderer in the actual timeline and uses the existing exter
  expect(source.indexOf('<AgentWebSources preview={web}')).toBeLessThan(source.indexOf('{(tool.output || tool.error) && <details>'));
  expect(source).toContain('const url = studioSourceUrl(value)');
  expect(source).toContain('window.naiDesktop.openExternal(url)');
- expect(source).toContain("setDiscoveryState(result.models.length?'ready':'empty')");
- expect(source).toContain("t('modelSource_'+model.metadataSource)");
+ const collection=readFileSync(new URL('../components/AgentModelCollection.tsx',import.meta.url),'utf8');
+ expect(collection).toContain("result.models.length?t('foundModels'):t('emptyModels')");
+ expect(collection).toContain('t("modelSource_"+m.metadataSource)');
  expect(source).toContain('setChatActions(actions,id)');expect(source).toContain('sendAgentMessage({ conversationId: id, text: input, actions })');
 });
 

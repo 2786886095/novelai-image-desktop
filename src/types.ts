@@ -1488,6 +1488,8 @@ export interface AppSettings {
   agentApiBaseUrl: string;
   agentApiKey: string;
   agentApiModel: string;
+  savedAgentModels?: import("./agent/model-selections").SavedAgentModel[];
+  agentReasoningEffort?: import("./agent/types").AgentReasoningEffort;
   agentProviderName: string;
   agentContextWindow: number;
   agentMaxOutputTokens: number;
@@ -1678,6 +1680,7 @@ export interface NaiDesktopApi {
   renameAgentConversation: (conversationId: string, title: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
   setAgentConversationArchived: (conversationId: string, archived: boolean) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
   deleteAgentConversation: (conversationId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
+  importAgentFileData: (conversationId:string, files:Array<{name:string;bytes:Uint8Array}>) => Promise<import("./agent/types").AgentImportFilesResult>;
   importAgentFiles: (conversationId: string, sourcePaths?: string[]) => Promise<import("./agent/types").AgentImportFilesResult>;
   deleteAgentAttachment: (conversationId: string, attachmentId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
   onImageSaveFeedback: (callback: (notices: import("./image-save-feedback").ImageSaveNotice[]) => void) => () => void;
@@ -1936,6 +1939,7 @@ export interface NaiDesktopApi {
     options: AugmentOptions,
   ) => Promise<GenerateResult>;
   cancel: () => Promise<{ ok: boolean }>;
+  readAgentClipboardFiles: () => Promise<Array<{name:string;bytes:Uint8Array}>>;
   readClipboardImageFiles: () => Promise<Array<{name:string;bytes:Uint8Array}>>;
   savePastedImageFiles: (images: Array<{name:string;bytes:Uint8Array}>) => Promise<string[]>;
   loadImage: () => Promise<LoadImageResult>;

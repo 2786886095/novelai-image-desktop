@@ -23,6 +23,7 @@ class MainActivity : FlutterActivity() {
         private const val INCOMING_BACKUP_PENDING = "__incoming_backup_pending__"
     }
 
+    private var composerFiles: ComposerFiles? = null
     private val updateInstaller by lazy { VerifiedUpdateInstaller(this) }
     override fun onResume(){super.onResume();updateInstaller.resume()}
     @Deprecated("Used for the platform package installer result")
@@ -39,6 +40,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        composerFiles = ComposerFiles(this, flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,"langbai.novelai/app_update").setMethodCallHandler { call,result ->
             when(call.method) {
                 "status" -> result.success(updateInstaller.status())

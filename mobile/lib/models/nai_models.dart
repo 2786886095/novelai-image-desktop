@@ -1,5 +1,6 @@
 library;
 
+import '../agent/model_selections.dart';
 import 'dart:math' as math;
 import 'completion_sound.dart';
 
@@ -894,6 +895,8 @@ class AppSettings {
   String agentApiProtocol;
   String agentApiBaseUrl;
   String agentApiModel;
+  List<Map<String, dynamic>> savedAgentModels;
+  String agentReasoningEffort;
   String agentProviderName;
   int agentContextWindow;
   int agentMaxOutputTokens;
@@ -1017,6 +1020,8 @@ class AppSettings {
     this.agentApiProtocol = 'openai-responses',
     this.agentApiBaseUrl = 'https://api.deepseek.com',
     this.agentApiModel = 'deepseek-v4-flash',
+    this.savedAgentModels = const [],
+    this.agentReasoningEffort = 'auto',
     this.agentProviderName = 'DeepSeek',
     this.agentContextWindow = defaultAgentContextWindow,
     this.agentMaxOutputTokens = defaultAgentMaxOutputTokens,
@@ -1143,6 +1148,8 @@ class AppSettings {
         'agentApiProtocol': agentApiProtocol,
         'agentApiBaseUrl': agentApiBaseUrl,
         'agentApiModel': agentApiModel,
+        'savedAgentModels': savedAgentModels,
+        'agentReasoningEffort': agentReasoningEffort,
         'agentProviderName': agentProviderName,
         'agentContextWindow': agentContextWindow,
         'agentMaxOutputTokens': agentMaxOutputTokens,
@@ -1262,6 +1269,8 @@ class AppSettings {
         agentApiBaseUrl:
             _stringValue(j['agentApiBaseUrl'], 'https://api.deepseek.com'),
         agentApiModel: _stringValue(j['agentApiModel'], 'deepseek-v4-flash'),
+        savedAgentModels: normalizeSavedAgentModels(j['savedAgentModels']),
+        agentReasoningEffort: agentEffort(j['agentReasoningEffort']),
         agentProviderName: _stringValue(j['agentProviderName'], 'DeepSeek'),
         agentContextWindow: _intValue(
           j['agentContextWindow'],
