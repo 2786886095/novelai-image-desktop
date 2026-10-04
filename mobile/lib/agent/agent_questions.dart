@@ -36,8 +36,9 @@ class AgentQuestionRequest {
 }
 
 String _text(Object? value, int max) {
-  if (value is! String || value.trim().isEmpty || value.length > max)
+  if (value is! String || value.trim().isEmpty || value.length > max) {
     throw const FormatException('Invalid question text');
+  }
   return value.trim();
 }
 
@@ -46,14 +47,16 @@ List<AgentQuestion> normalizeAgentQuestions(Map<String, dynamic> input) {
     throw const FormatException('Unexpected question fields');
   }
   final raw = input['questions'];
-  if (raw is! List || raw.isEmpty || raw.length > 3)
+  if (raw is! List || raw.isEmpty || raw.length > 3) {
     throw const FormatException('Expected one to three questions');
+  }
   return [
     for (var i = 0; i < raw.length; i++)
       (() {
         final q = raw[i];
-        if (q is! Map || q['options'] is! List)
+        if (q is! Map || q['options'] is! List) {
           throw const FormatException('Invalid question');
+        }
         if (q.keys.any(
                 (k) => !['prompt', 'options', 'prompt_note'].contains(k)) ||
             (q.containsKey('prompt_note') &&
@@ -62,8 +65,9 @@ List<AgentQuestion> normalizeAgentQuestions(Map<String, dynamic> input) {
           throw const FormatException('Invalid question metadata');
         }
         final options = q['options'] as List;
-        if (options.length < 2 || options.length > 6)
+        if (options.length < 2 || options.length > 6) {
           throw const FormatException('Expected two to six options');
+        }
         final normalized = <AgentQuestionOption>[];
         for (var n = 0; n < options.length; n++) {
           final o = options[n];
@@ -74,16 +78,18 @@ List<AgentQuestion> normalizeAgentQuestions(Map<String, dynamic> input) {
             throw const FormatException('Invalid option metadata');
           }
           final desc = o['description'];
-          if (desc != null && (desc is! String || desc.length > 400))
+          if (desc != null && (desc is! String || desc.length > 400)) {
             throw const FormatException('Invalid option description');
+          }
           normalized.add(AgentQuestionOption(
               'o${n + 1}',
               _text(o['label'], 120),
               desc is String && desc.trim().isNotEmpty ? desc.trim() : null,
               o['recommended'] == true));
         }
-        if (normalized.where((o) => o.recommended).length > 1)
+        if (normalized.where((o) => o.recommended).length > 1) {
           throw const FormatException('Only one recommendation');
+        }
         return AgentQuestion('q${i + 1}', _text(q['prompt'], 600), normalized);
       })()
   ];
@@ -91,22 +97,26 @@ List<AgentQuestion> normalizeAgentQuestions(Map<String, dynamic> input) {
 
 List<Map<String, dynamic>> validateAgentQuestionAnswers(
     AgentQuestionRequest request, List<Map<String, dynamic>> answers) {
-  if (answers.length != request.questions.length)
+  if (answers.length != request.questions.length) {
     throw const FormatException('Answer every question');
+  }
   return request.questions.map((q) {
     final rows = answers.where((a) => a['questionId'] == q.id).toList();
-    if (rows.length != 1)
+    if (rows.length != 1) {
       throw const FormatException('Invalid question identity');
+    }
     final a = rows.single;
     if (a['optionId'] is String &&
         a['text'] == null &&
-        q.options.any((o) => o.id == a['optionId']))
+        q.options.any((o) => o.id == a['optionId'])) {
       return <String, dynamic>{'questionId': q.id, 'optionId': a['optionId']};
-    if (a['optionId'] == null)
+    }
+    if (a['optionId'] == null) {
       return <String, dynamic>{
         'questionId': q.id,
         'text': _text(a['text'], 4000)
       };
+    }
     throw const FormatException('Invalid option identity');
   }).toList();
 }

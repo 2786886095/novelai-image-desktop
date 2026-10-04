@@ -34,7 +34,7 @@ void main() {
   });
   for (final kind in InspectPageKind.values) {
     for (final entry in layouts.entries) {
-      testWidgets(kind.name+' history single-click reuse, semantics, delete isolation: '+entry.key, (tester) async {
+      testWidgets('${kind.name} history single-click reuse, semantics, delete isolation: ${entry.key}', (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = entry.value.$1;
         debugDefaultTargetPlatformOverride = entry.value.$2;

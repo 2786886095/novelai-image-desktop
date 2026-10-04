@@ -29,7 +29,7 @@ void main() {
       return http.Response(jsonEncode({'data':{'information':{'subscription':{
         'tier':'0','trainingStepsLeft':{'fixedTrainingStepsLeft':'100','purchasedTrainingSteps':'7'}}}}}),200);
     }));
-    final snapshot=NovelAiCredentialSnapshot(const NovelAiAccount(id:'fixture',label:'R',method:'relay',
+    const snapshot=NovelAiCredentialSnapshot(NovelAiAccount(id:'fixture',label:'R',method:'relay',
       apiBaseUrl:'https://relay.example/prefix',imageBaseUrl:'https://images.relay.example/prefix'),'FIXTURE-KEY');
     final result=await api.verifyCandidate(snapshot,AppSettings());
     expect(calls.map((r)=>r.url.toString()).toList(),[

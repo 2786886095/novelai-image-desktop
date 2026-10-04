@@ -87,14 +87,16 @@ class _StudioModelCollectionState extends State<StudioModelCollection> {
           apiKey: widget.apiKey,
           protocol: widget.draft.agentApiProtocol,
           baseUrl: widget.draft.agentApiBaseUrl);
-      if (mounted && id == sequence)
+      if (mounted && id == sequence) {
         setState(() {
           found = models;
           message = t(models.isEmpty ? 'emptyModels' : 'foundModels');
         });
+      }
     } catch (_) {
-      if (mounted && id == sequence)
+      if (mounted && id == sequence) {
         setState(() => message = t('failedModels'));
+      }
     } finally {
       if (mounted && id == sequence) setState(() => busy = false);
     }

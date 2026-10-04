@@ -22,17 +22,18 @@ String studioCreativeContext(AgentWorkspace workspace, AgentConversation chat) {
       chat.messages);
   String? body;
   if (chat.studioTemplateEnabled) {
-    if (chat.studioPresetId == studioDefaultPresetId)
+    if (chat.studioPresetId == studioDefaultPresetId) {
       body = studioInfinitePrompt;
-    else if (chat.studioPresetId == studioCompletePresetId)
+    } else if (chat.studioPresetId == studioCompletePresetId) {
       body = studioCompletePrompt;
-    else
+    } else {
       for (final p in workspace.samplerPresets) {
         if ('tavern:${p.id}' == chat.studioPresetId) {
           body = '${p.systemPrompt}\n${p.jailbreakPrompt}';
           break;
         }
       }
+    }
   }
   return jsonEncode({
     'preset': body,

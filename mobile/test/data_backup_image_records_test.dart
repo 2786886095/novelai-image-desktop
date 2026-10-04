@@ -125,9 +125,10 @@ void main() {
       ..sort((a, b) => (a['seed'] as int).compareTo(b['seed'] as int));
     expect(actual, expected);
     expect(rows.map((e) => e.filePath).toSet(), hasLength(2));
-    for (final row in rows)
+    for (final row in rows) {
       expect(sha256.convert(File(row.filePath).readAsBytesSync()).toString(),
           '6f800ec89b639e174fdcd89e75f3e5cd42e0ed108fdc9654b58f57cbdcf2ef05');
+    }
     await restore(v);
     expect(await storage.getHistory(), hasLength(2));
   });

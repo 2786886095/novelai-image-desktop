@@ -37,7 +37,7 @@ List<Map<String, dynamic>> selectedAgentModels(AppSettings settings) {
       .where((p) => p['providerKey'] == agentProviderKey(settings))
       .toList();
   if (settings.agentApiModel.trim().isNotEmpty &&
-      !models.any((p) => p['id'] == settings.agentApiModel.trim()))
+      !models.any((p) => p['id'] == settings.agentApiModel.trim())) {
     models.insert(0, {
       'providerKey': agentProviderKey(settings),
       'id': settings.agentApiModel.trim(),
@@ -47,6 +47,7 @@ List<Map<String, dynamic>> selectedAgentModels(AppSettings settings) {
       'reasoningEffort': agentEffort(settings.agentReasoningEffort),
       'vision': settings.agentVisionEnabled
     });
+  }
   return models;
 }
 
@@ -55,6 +56,7 @@ void applyAgentModel(AppSettings settings, Map<String, dynamic> model) {
   settings.agentContextWindow = model['contextWindow'] as int;
   settings.agentMaxOutputTokens = model['maxOutputTokens'] as int;
   settings.agentReasoningEffort = agentEffort(model['reasoningEffort']);
-  if (model['vision'] is bool)
+  if (model['vision'] is bool) {
     settings.agentVisionEnabled = model['vision'] as bool;
+  }
 }

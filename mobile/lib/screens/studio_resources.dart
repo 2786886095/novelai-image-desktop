@@ -23,9 +23,10 @@ class _StudioResourcesState extends State<StudioResources> {
     try {
       await action();
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(text('resourceActionFailed'))));
+      }
     }
   }
 
@@ -36,16 +37,18 @@ class _StudioResourcesState extends State<StudioResources> {
       final agent = widget.agent, id = widget.agent.selectedConversation?.id;
       if (tab == 'presets') {
         final result = await agent.importTavernPreset();
-        if (result != null && agent.selectedConversation?.id == id)
+        if (result != null && agent.selectedConversation?.id == id) {
           await agent.setStudioOptions(presetId: 'tavern:${result.preset.id}');
+        }
       } else {
         await agent.importTavernCard();
         if (agent.selectedConversation?.id == id) {
           final chat = agent.selectedConversation;
-          if (chat != null)
+          if (chat != null) {
             await agent.setStudioOptions(
                 characterIds: List.of(chat.characterIds),
                 lorebookIds: List.of(chat.lorebookIds));
+          }
         }
       }
     });

@@ -1,5 +1,4 @@
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 
 /// Native bytes are copied to application cache only on a paste/drop gesture.
 class ComposerTransfers {
@@ -24,15 +23,18 @@ class ComposerTransfers {
                   'width': rect.width,
                   'height': rect.height
                 });
-    } on MissingPluginException {}
+    } on MissingPluginException {
+      return; // This platform has no native composer bridge.
+    }
   }
 
   static void listen(Future<void> Function(List<String>)? onDrop) {
     channel.setMethodCallHandler(onDrop == null
         ? null
         : (call) async {
-            if (call.method == 'drop' && call.arguments is List)
+            if (call.method == 'drop' && call.arguments is List) {
               await onDrop(List<String>.from(call.arguments));
+            }
           });
   }
 }

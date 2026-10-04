@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/agent/agent_controller.dart';
@@ -19,7 +20,7 @@ void main() {
   test('Chinese Tavern label resolves through actual shared mobile localizations', () {
     expect(studioAgentText('zh-CN','presetToggle'),'使用酒馆');
     expect(studioAgentText('zh-TW','presetToggle'),'使用酒館');
-    print('MOBILE_LABEL=${studioAgentText('zh-CN','presetToggle')}');
+    debugPrint('MOBILE_LABEL=${studioAgentText('zh-CN','presetToggle')}');
   });
   test('fresh and unset legacy choices default all three on', () {
     for(final chat in [AgentConversation(id:'fresh',title:'fresh'),AgentConversation.fromJson({'id':'old','title':'old'})]) {
@@ -27,7 +28,7 @@ void main() {
       expect(chat.studioWebSearchEnabled,true);
       expect(chat.studioTemplateEnabled,true);
     }
-    print('MOBILE_UNSET=auto,true,true');
+    debugPrint('MOBILE_UNSET=auto,true,true');
   });
   test('explicit manual all-off choices persist in new chat and cold restart', () async {
     final storage=_MemoryStorage();final app=AppState(storage:storage);
@@ -45,6 +46,6 @@ void main() {
     expect(chat.studioApprovalMode,'confirm');
     expect(chat.studioWebSearchEnabled,false);
     expect(chat.studioTemplateEnabled,false);
-    print('MOBILE_SAVED=confirm,false,false');
+    debugPrint('MOBILE_SAVED=confirm,false,false');
   });
 }

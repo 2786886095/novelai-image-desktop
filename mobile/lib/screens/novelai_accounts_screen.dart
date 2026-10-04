@@ -61,17 +61,18 @@ class NovelAiAccountSelector extends StatelessWidget {
                                 await state
                                     .activateNaiAccount(id == '' ? null : id);
                               } catch (_) {
-                                if (context.mounted)
+                                if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                           content:
                                               Text(t('accountSwitchBusy'))));
+                                }
                               }
                             })),
               if (state.naiAccountLocked)
                 Tooltip(
                     message: t('accountLocked'),
-                    child: Icon(Icons.lock_outline, size: 18)),
+                    child: const Icon(Icons.lock_outline, size: 18)),
               if (showManage)
                 TextButton.icon(
                     icon: const Icon(Icons.manage_accounts_outlined, size: 18),
@@ -237,7 +238,7 @@ class _NovelAiAccountsScreenState extends State<NovelAiAccountsScreen> {
                             child: visibleKeys.contains(p.id)
                                 ? SelectableText(state.naiAccounts.reveal(p.id),
                                     maxLines: 2)
-                                : Text('••••••••••'))),
+                                : const Text('••••••••••'))),
                     IconButton(
                         tooltip: visibleKeys.contains(p.id)
                             ? t('accountHideKey')
@@ -255,9 +256,10 @@ class _NovelAiAccountsScreenState extends State<NovelAiAccountsScreen> {
                         onPressed: () async {
                           await Clipboard.setData(ClipboardData(
                               text: state.naiAccounts.reveal(p.id)));
-                          if (mounted)
+                          if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(content: Text(t('accountKeyCopied'))));
+                          }
                         })
                   ]),
                   Wrap(spacing: 8, children: [
@@ -268,12 +270,13 @@ class _NovelAiAccountsScreenState extends State<NovelAiAccountsScreen> {
                                 try {
                                   await state.activateNaiAccount(p.id);
                                 } catch (_) {
-                                  if (mounted)
+                                  if (mounted) {
                                     setState(() => message =
                                         _VerificationMessage(
                                             false,
                                             t('accountNotSwitched'),
                                             t('accountBusy')));
+                                  }
                                 }
                               },
                         child: Text(
@@ -286,7 +289,7 @@ class _NovelAiAccountsScreenState extends State<NovelAiAccountsScreen> {
                                 try {
                                   final summary =
                                       await state.verifyNaiAccount(p.id);
-                                  if (mounted)
+                                  if (mounted) {
                                     setState(() => results[
                                         p
                                             .id] = _VerificationMessage(
@@ -297,13 +300,16 @@ class _NovelAiAccountsScreenState extends State<NovelAiAccountsScreen> {
                                             : t('accountBalanceVerified',
                                                 name:
                                                     '${summary.anlasBalance}')));
+                                  }
                                 } catch (error) {
-                                  if (mounted)
+                                  if (mounted) {
                                     setState(
                                         () => results[p.id] = failure(error));
+                                  }
                                 } finally {
-                                  if (mounted)
+                                  if (mounted) {
                                     setState(() => submitting = false);
+                                  }
                                 }
                               },
                         child: Text(t('accountVerify'))),
@@ -336,12 +342,13 @@ class _NovelAiAccountsScreenState extends State<NovelAiAccountsScreen> {
                                   visibleKeys.remove(p.id);
                                   results.remove(p.id);
                                 } catch (_) {
-                                  if (mounted)
+                                  if (mounted) {
                                     setState(() => message =
                                         _VerificationMessage(
                                             false,
                                             t('accountNotDeleted'),
                                             t('accountDeleteFailed')));
+                                  }
                                 }
                               },
                         child: Text(t('accountDelete')))

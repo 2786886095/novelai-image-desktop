@@ -27,8 +27,9 @@ class _McpToolSettingsState extends State<McpToolSettings> {
       revision++;
       tools = [];
       timer?.cancel();
-      if (s.tagServerEnabled && s.tagServerUrl.trim().isNotEmpty)
+      if (s.tagServerEnabled && s.tagServerUrl.trim().isNotEmpty) {
         timer = Timer(const Duration(milliseconds: 400), discover);
+      }
     }
   }
 
@@ -50,9 +51,10 @@ class _McpToolSettingsState extends State<McpToolSettings> {
       final found = await state.api.listMcpTools(state.settings, apiKey: key);
       if (mounted && id == revision) setState(() => tools = found);
     } catch (_) {
-      if (mounted && id == revision)
+      if (mounted && id == revision) {
         setState(
             () => error = 'MCP tools/list failed; saved choices retained.');
+      }
     } finally {
       if (mounted && id == revision) setState(() => busy = false);
     }

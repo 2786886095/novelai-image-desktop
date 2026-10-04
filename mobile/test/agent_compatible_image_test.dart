@@ -95,7 +95,7 @@ Future<void> fixtureVerifyEnvelope(AppSettings settings,Map<String,dynamic> conf
  final client=MockClient((request)async {if(request.method!='GET'||!request.url.path.endsWith('/models'))throw StateError('Not readonly');return http.Response(jsonEncode({'data':[{'id':config['model']}]}),200);});
  try {await verifyNovelAiImageEnvelope(client,config,key);}finally{client.close();}
 }
-class _VerifiedFixtureApi extends NaiApi {@override Future<void> verifyCompatibleNovelAi(AppSettings s,Map<String,dynamic> c,String key)=>fixtureVerifyEnvelope(s,c,key);}
+
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

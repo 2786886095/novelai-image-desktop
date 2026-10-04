@@ -16,7 +16,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 List<String> takeErrors(WidgetTester tester) {
   final errors = <String>[];
   Object? error;
-  while ((error = tester.takeException()) != null) errors.add('$error');
+  while ((error = tester.takeException()) != null) {
+    errors.add('$error');
+  }
   return errors;
 }
 
@@ -75,8 +77,9 @@ void main() {
                   sha256: sha256.convert(bytes).toString(),
                   bytes: bytes.length)
           ];
-          for (final item in items)
+          for (final item in items) {
             File(p.join(saved.path, item.fileName)).writeAsBytesSync(bytes);
+          }
           final original = File(p.join(root.path, 'qa-original.png'))
             ..writeAsBytesSync(bytes);
           final index = File(p.join(root.path, 'data', 'local-favorites.json'));
@@ -149,9 +152,10 @@ void main() {
           expect(persisted.items.length, count - 1);
           // Bookmark removal must leave both the owned original and copied PNG unchanged.
           expect(original.readAsBytesSync(), bytes);
-          for (final item in items)
+          for (final item in items) {
             expect(File(p.join(saved.path, item.fileName)).readAsBytesSync(),
                 bytes);
+          }
           if (action == 'pageRegrowth') {
             expect(removeErrors, isEmpty);
             expect(find.text('2 / 2'), findsNothing);
@@ -169,7 +173,7 @@ void main() {
             await settleIo(tester);
             final errors = takeErrors(tester);
             final firstPage = find.text('1 / 2').evaluate().length == 1;
-            print(
+            debugPrint(
                 'FAVORITES_CONTROLS=${fixture.$1.name}/${fixture.$2}/$action/errors=${errors.length}/firstPage=$firstPage');
             expect(errors, isEmpty);
             expect(firstPage, isTrue,
@@ -185,16 +189,17 @@ void main() {
                 .map((e) => (e.widget as DropdownButton<String>).value)
                 .toList();
             final expectedDate = action == 'retainedDate' ? '20261002' : '';
-            print(
+            debugPrint(
                 'FAVORITES_CONTROLS=${fixture.$1.name}/${fixture.$2}/$action/errors=${removeErrors.length}/dateValues=${jsonEncode(dateValues)}/expectedDate=$expectedDate');
             expect(removeErrors, isEmpty,
                 reason:
                     'Removing the last item for a selected date must reconcile the dropdown before rebuild.');
             expect(dateValues, [expectedDate]);
-            if (action == 'empty')
+            if (action == 'empty') {
               expect(find.text('还没有收藏图片'), findsOneWidget);
-            else
+            } else {
               expect(find.text(items.first.fileName), findsOneWidget);
+            }
           }
         } finally {
           debugDefaultTargetPlatformOverride = null;

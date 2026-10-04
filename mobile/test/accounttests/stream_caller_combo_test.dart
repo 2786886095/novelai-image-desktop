@@ -161,8 +161,9 @@ void main() {
                 if (index != 0 || preview.progress >= 1) return;
                 if (kind == 'parallel-scoped-stop') firstScope.cancel();
                 if (kind == 'parallel-parent-guard') guardChanged = true;
-                if (kind == 'parallel-global-stop')
+                if (kind == 'parallel-global-stop') {
                   api.cancelActiveGeneration();
+                }
                 if (!releaseSecond.isCompleted) releaseSecond.complete();
               }));
           count = result.$1.length;

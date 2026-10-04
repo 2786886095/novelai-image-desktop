@@ -297,27 +297,6 @@ class AgentController extends ChangeNotifier {
     _notify();
   }
 
-  String? _selectedPromptTemplate(AgentConversation conversation) {
-    final kind = conversation.selectedTemplateKind;
-    if (kind == null) return null;
-    if (kind == 'optimize' || kind == 'assistant') {
-      return (kind == 'optimize'
-              ? app.settings.promptOptimizeTemplate
-              : app.settings.promptAssistantTemplate)
-          .trim();
-    }
-    if (kind == 'convert' || kind == 'reverse') {
-      final mode = conversation.selectedTemplateMode;
-      final version = conversation.selectedTemplateVersion;
-      if (mode == null || version == null) return null;
-      if (!const {'mixed', 'tags', 'natural'}.contains(mode)) return null;
-      return app.resolvedPromptTemplate(
-          kind, ReversePromptMode.values.byName(mode),
-          templateVersion: version);
-    }
-    return null;
-  }
-
   String _uniqueConversationTitle(String requested) {
     final base = requested.trim().isEmpty ? '新对话' : requested.trim();
     final occupied =
@@ -390,22 +369,25 @@ class AgentController extends ChangeNotifier {
         ? defaults['studioPresetId']
         : previous?.studioPresetId ?? studioDefaultPresetId;
     if (defaults['characterIds'] is List &&
-        (defaults['characterIds'] as List).isNotEmpty)
+        (defaults['characterIds'] as List).isNotEmpty) {
       conversation.characterIds = (defaults['characterIds'] as List)
           .whereType<String>()
           .where((id) => workspace.characters.any((c) => c.id == id))
           .toList();
-    if (defaults['lorebookIds'] is List)
+    }
+    if (defaults['lorebookIds'] is List) {
       conversation.lorebookIds = (defaults['lorebookIds'] as List)
           .whereType<String>()
           .where((id) => workspace.lorebooks.any((b) => b.id == id))
           .toList();
+    }
     if (defaults['activeCharacterId'] is String &&
-        conversation.characterIds.contains(defaults['activeCharacterId']))
+        conversation.characterIds.contains(defaults['activeCharacterId'])) {
       conversation.activeCharacterId = defaults['activeCharacterId'];
-    else if (!conversation.characterIds
-        .contains(conversation.activeCharacterId))
+    } else if (!conversation.characterIds
+        .contains(conversation.activeCharacterId)) {
       conversation.activeCharacterId = conversation.characterIds.firstOrNull;
+    }
     workspace.conversations.insert(0, conversation);
     workspace.selectedConversationId = conversation.id;
     _schedulePersist();
@@ -454,8 +436,9 @@ class AgentController extends ChangeNotifier {
           .firstOrNull
           ?.id;
     }
-    if (!workspace.conversations.any((c) => c.archivedAt == null))
+    if (!workspace.conversations.any((c) => c.archivedAt == null)) {
       createConversation('新对话');
+    }
     await _commitConversationChange(before);
   }
 
@@ -486,8 +469,9 @@ class AgentController extends ChangeNotifier {
         id == '.' ||
         id == '..' ||
         id.contains('\\') ||
-        id.contains('/'))
+        id.contains('/')) {
       throw const FormatException('Invalid conversation id');
+    }
     final before =
         AgentWorkspace.fromJson(jsonDecode(jsonEncode(workspace.toJson())));
     workspace.conversations.removeWhere((item) => item.id == id);
@@ -512,8 +496,9 @@ class AgentController extends ChangeNotifier {
       if (await FileSystemEntity.type(directory.path, followLinks: false) ==
           FileSystemEntityType.directory) {
         final resolved = p.normalize(await directory.resolveSymbolicLinks());
-        if (!p.isWithin(resolvedRoot, resolved))
+        if (!p.isWithin(resolvedRoot, resolved)) {
           throw const FormatException('Attachment path escaped workspace');
+        }
         await directory.delete(recursive: true);
       }
     } catch (_) {
@@ -686,8 +671,9 @@ class AgentController extends ChangeNotifier {
   /// IDs resolve only against the current canvas, reference library or history.
   Future<AgentAttachment> attachAppImage(String source, String id) async {
     final conversation = selectedConversation;
-    if (conversation == null || conversation.archivedAt != null)
+    if (conversation == null || conversation.archivedAt != null) {
       throw StateError('当前无法添加附件。');
+    }
     String? path;
     int? width, height;
     if (source == 'canvas' && id == 'current') {
@@ -1206,8 +1192,9 @@ class AgentController extends ChangeNotifier {
         var paidFailure = false;
         for (final call in turn.toolCalls) {
           _throwIfAborted();
-          if (++toolCalls > 12 && conversation.studioApprovalMode != 'auto')
+          if (++toolCalls > 12 && conversation.studioApprovalMode != 'auto') {
             throw const AgentProviderException('单轮工具调用超过上限。');
+          }
           if (!allowed.contains(call.name) ||
               call.name == 'langbai_search_web' &&
                   !conversation.studioWebSearchEnabled) {
@@ -1402,8 +1389,9 @@ class AgentController extends ChangeNotifier {
         }
         if (paidFailure ||
             assistant.tools.any((tool) => tool.status == 'denied')) break;
-        if (round == 7)
+        if (round == 7) {
           throw const AgentProviderException('智能体循环达到上限，已停止继续调用工具。');
+        }
       }
       assistant
         ..content = assistant.content.trim().isEmpty
@@ -1432,8 +1420,9 @@ class AgentController extends ChangeNotifier {
       pendingQuestion = null;
       _questionCompleter = null;
       final completer = _permissionCompleter;
-      if (completer != null && !completer.isCompleted)
+      if (completer != null && !completer.isCompleted) {
         completer.complete('reject');
+      }
       _permissionCompleter = null;
       pendingPermission = null;
       sending = false;
@@ -1628,8 +1617,9 @@ class AgentController extends ChangeNotifier {
         if (repair.usage != null) usage.add(repair.usage!);
         final resolved = resolveImagePrompt(repair.raw, base,
             model: compatible ? null : parsedProposal.model);
-        if (repair.state != 'unchanged')
+        if (repair.state != 'unchanged') {
           resolved.continuity['repairStatus'] = repair.state;
+        }
         parsedProposal
           ..positivePrompt = resolved.positivePrompt
           ..continuity = resolved.continuity
@@ -1713,8 +1703,9 @@ class AgentController extends ChangeNotifier {
 
   Map<String, dynamic> _imageArguments(TavernImageProposal proposal) {
     if (proposal.scene == null &&
-        proposal.continuity?['bindingError'] == 'SCENE_REQUIRED')
+        proposal.continuity?['bindingError'] == 'SCENE_REQUIRED') {
       throw StateError('SCENE_REQUIRED');
+    }
     final character = activeCharacter;
     final negative = character?.visual.negativePrompt ?? '';
     final style = character?.visual.stylePrompt ?? '';
@@ -1736,8 +1727,9 @@ class AgentController extends ChangeNotifier {
       });
       if (!params.isV4Plus ||
           (compiled['characterPrompts'] as List).length >
-              params.maxCharacterPrompts)
+              params.maxCharacterPrompts) {
         throw StateError('SCENE_MODEL_CAPACITY');
+      }
     }
     return {
       'positivePrompt': proposal.positivePrompt,
@@ -1774,8 +1766,9 @@ class AgentController extends ChangeNotifier {
     try {
       imageBinding.ensureCurrent(app.settings, app.generationGroupId);
       arguments = _imageArguments(proposal);
-      if (!compatible && proposal.scene != null)
+      if (!compatible && proposal.scene != null) {
         proposal.positivePrompt = arguments['positivePrompt'] as String;
+      }
       proposal
         ..stylePrompt = activeCharacter?.visual.stylePrompt ?? ''
         ..negativePrompt = activeCharacter?.visual.negativePrompt ?? '';
@@ -1918,11 +1911,13 @@ class AgentController extends ChangeNotifier {
     if (characterIds != null &&
         (characterIds.isEmpty ||
             characterIds
-                .any((id) => !workspace.characters.any((c) => c.id == id))))
+                .any((id) => !workspace.characters.any((c) => c.id == id)))) {
       throw const FormatException('Unknown character');
+    }
     if (lorebookIds != null &&
-        lorebookIds.any((id) => !workspace.lorebooks.any((b) => b.id == id)))
+        lorebookIds.any((id) => !workspace.lorebooks.any((b) => b.id == id))) {
       throw const FormatException('Unknown worldbook');
+    }
     studioOptionsSaving = true;
     final oldMode = chat.studioApprovalMode;
     final oldWeb = chat.studioWebSearchEnabled;
@@ -1935,16 +1930,19 @@ class AgentController extends ChangeNotifier {
     final oldActive = chat.activeCharacterId;
     _notify();
     try {
-      if (approvalMode != null)
+      if (approvalMode != null) {
         chat.studioApprovalMode = approvalMode == 'auto' ? 'auto' : 'confirm';
-      if (webSearchEnabled != null)
+      }
+      if (webSearchEnabled != null) {
         chat.studioWebSearchEnabled = webSearchEnabled;
+      }
       if (templateEnabled != null) chat.studioTemplateEnabled = templateEnabled;
       if (presetId != null) chat.studioPresetId = presetId;
       if (characterIds != null) {
         chat.characterIds = characterIds.toSet().toList();
-        if (!chat.characterIds.contains(chat.activeCharacterId))
+        if (!chat.characterIds.contains(chat.activeCharacterId)) {
           chat.activeCharacterId = chat.characterIds.first;
+        }
       }
       if (lorebookIds != null) chat.lorebookIds = lorebookIds.toSet().toList();
       workspace.studioDefaults = {
@@ -2128,14 +2126,15 @@ class AgentController extends ChangeNotifier {
     try {
       final result = await pick();
       if (result == null) return null;
-      if (_disposed || selectedConversation?.id != owner)
+      if (_disposed || selectedConversation?.id != owner) {
         throw StateError('Import owner changed');
+      }
       final before =
           AgentWorkspace.fromJson(jsonDecode(jsonEncode(workspace.toJson())));
       try {
         apply(result);
         final chat = selectedConversation;
-        if (chat != null)
+        if (chat != null) {
           workspace.studioDefaults = {
             'studioApprovalMode': chat.studioApprovalMode,
             'studioWebSearchEnabled': chat.studioWebSearchEnabled,
@@ -2145,6 +2144,7 @@ class AgentController extends ChangeNotifier {
             'activeCharacterId': chat.activeCharacterId,
             'lorebookIds': List<String>.from(chat.lorebookIds)
           };
+        }
         _persistTimer?.cancel();
         await _persist();
       } catch (_) {
@@ -2176,8 +2176,9 @@ class AgentController extends ChangeNotifier {
         if (result.lorebook != null) {
           final b = result.lorebook!;
           workspace.lorebooks.insert(0, b);
-          if (chat != null && !chat.lorebookIds.contains(b.id))
+          if (chat != null && !chat.lorebookIds.contains(b.id)) {
             chat.lorebookIds.add(b.id);
+          }
         }
       });
 
@@ -2189,12 +2190,14 @@ class AgentController extends ChangeNotifier {
             withData: false);
         final file = picked?.files.firstOrNull;
         if (file == null) return null;
-        if (file.size > 16 * 1024 * 1024)
+        if (file.size > 16 * 1024 * 1024) {
           throw const FormatException('Preset exceeds 16 MB');
+        }
         final bytes = file.bytes ??
             (file.path == null ? null : await File(file.path!).readAsBytes());
-        if (bytes == null || bytes.length > 16 * 1024 * 1024)
+        if (bytes == null || bytes.length > 16 * 1024 * 1024) {
           throw const FormatException('Invalid preset file');
+        }
         return importTavernSamplerPresetJson(utf8.decode(bytes),
             fileName: file.name);
       }, (result) {

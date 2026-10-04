@@ -41,8 +41,9 @@ class _StudioQuestionCardsState extends State<StudioQuestionCards> {
         (id, text) => !validIds.contains(id) || text.length > 4000);
     customIds.removeWhere((id) => !validIds.contains(id));
     answers.removeWhere((id, answer) {
-      if (!request.confirmedQuestionIds.contains(id) || !validIds.contains(id))
+      if (!request.confirmedQuestionIds.contains(id) || !validIds.contains(id)) {
         return true;
+      }
       try {
         final question = request.questions.firstWhere((q) => q.id == id);
         validateAgentQuestionAnswers(
@@ -61,8 +62,9 @@ class _StudioQuestionCardsState extends State<StudioQuestionCards> {
     setState(() => busy = true);
     try {
       if (!widget.onRespond(
-          widget.request.id, widget.request.conversationId, null))
+          widget.request.id, widget.request.conversationId, null)) {
         throw StateError('cancel failed');
+      }
       widget.request.clearDraft();
     } catch (_) {
       setState(() {
@@ -116,11 +118,12 @@ class _StudioQuestionCardsState extends State<StudioQuestionCards> {
         ok = false;
       }
       if (ok) widget.request.clearDraft();
-      if (!ok)
+      if (!ok) {
         setState(() {
           busy = false;
           error = t('questionFailed');
         });
+      }
       return;
     }
     move(

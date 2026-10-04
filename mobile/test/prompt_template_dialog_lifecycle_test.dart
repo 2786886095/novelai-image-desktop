@@ -59,7 +59,7 @@ void main() {
         final field = find.descendant(
             of: find.byType(AlertDialog), matching: find.byType(TextField));
         final original = tester.widget<TextField>(field).controller!.text;
-        final edited = original + '\nQA_NATIVE_DIALOG_LIFECYCLE_KEEP';
+        final edited = '$original\nQA_NATIVE_DIALOG_LIFECYCLE_KEEP';
         await tester.tap(field);
         await tester.enterText(field, edited);
         await tester.pump();

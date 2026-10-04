@@ -434,9 +434,10 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
     try {
       final imported =
           await _agent!.importAttachmentPaths(paths, conversationId: id);
-      if (imported.isEmpty && mounted)
+      if (imported.isEmpty && mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(_t('attachmentLimit'))));
+      }
     } catch (error) {
       if (mounted) setState(() => _agent!.error = '$error');
     } finally {
@@ -842,9 +843,10 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
       try {
         await _agent!.setConversationArchived(chat.id, action == 'archive');
       } catch (reason) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context)
               .showSnackBar(SnackBar(content: Text('$reason')));
+        }
       }
       return;
     }
@@ -866,9 +868,10 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
         try {
           await _agent!.deleteConversation(chat.id);
         } catch (_) {
-          if (mounted)
+          if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(_t('deleteChat') + '：未完成，请重试。')));
+                SnackBar(content: Text('${_t('deleteChat')}：未完成，请重试。')));
+          }
         }
       }
       return;
@@ -1277,9 +1280,10 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
               onNotification: _userScrolled,
               child: NotificationListener<ScrollMetricsNotification>(
                   onNotification: (n) {
-                    if (_followLatest)
+                    if (_followLatest) {
                       WidgetsBinding.instance
                           .addPostFrameCallback((_) => _pinLatest());
+                    }
                     return false;
                   },
                   child: ListView(
@@ -1608,11 +1612,12 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                             icon: const Icon(Icons.auto_awesome_outlined,
                                 size: 18),
                             onSelected: (value) {
-                              if (value == 'web')
+                              if (value == 'web') {
                                 _stageAction(
                                     const AgentComposerAction('web-search'));
-                              else
+                              } else {
                                 _showActionPanel(value);
+                              }
                             },
                             itemBuilder: (_) => [
                                   PopupMenuItem(
@@ -1823,8 +1828,9 @@ class _StudioChatListState extends State<_StudioChatList> {
                             !widget.agent.sending && !widget.agent.compacting,
                         onSelected: (action) async {
                           await widget.onAction(chat, action);
-                          if (mounted && action == 'restore')
+                          if (mounted && action == 'restore') {
                             setState(() => archivedView = false);
+                          }
                         },
                         itemBuilder: (_) => [
                               PopupMenuItem(
