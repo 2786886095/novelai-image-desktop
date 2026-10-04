@@ -16,7 +16,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 List<String> exceptions(WidgetTester tester) {
   final result = <String>[];
   Object? value;
-  while ((value = tester.takeException()) != null) result.add(value.toString());
+  while ((value = tester.takeException()) != null) {
+    result.add(value.toString());
+  }
   return result;
 }
 
@@ -53,8 +55,9 @@ void main() {
                 sha256: sha256.convert(bytes).toString(),
                 bytes: bytes.length)
         ];
-        for (final item in items)
+        for (final item in items) {
           File('${saved.path}/${item.fileName}').writeAsBytesSync(bytes);
+        }
         final index = File('${directory.path}/data/local-favorites.json');
         index.parent.createSync(recursive: true);
         index.writeAsStringSync(jsonEncode({
@@ -106,7 +109,7 @@ void main() {
         await tester.pumpAndSettle();
         final initial = exceptions(tester);
         if (action == 'grid' || action == 'largeText') {
-          print(
+          debugPrint(
               'LOCAL_FAVORITES=${fixture.$1.name}/${fixture.$2}/$action/errors=${initial.length}');
           expect(initial, isEmpty,
               reason:
@@ -114,7 +117,7 @@ void main() {
           expect(find.text(items.last.fileName), findsOneWidget);
         } else {
           // Isolate dialog/preview behavior from the separately asserted grid layout.
-          print(
+          debugPrint(
               'LOCAL_FAVORITES_INITIAL=${fixture.$1.name}/${fixture.$2}/$action/gridErrors=${initial.length}');
           if (action != 'preview') {
             await tester.tap(find.text('网格'));
@@ -133,8 +136,9 @@ void main() {
             final field = find.descendant(
                 of: find.byType(AlertDialog), matching: find.byType(TextField));
             final width = tester.getSize(field).width;
-            if (action == 'save')
+            if (action == 'save') {
               await tester.enterText(field, 'QA_FAVORITE_RENAMED');
+            }
             await tester.runAsync(() async {
               await tester.tap(find.text(action == 'save' ? '保存' : '取消'));
             });
@@ -148,7 +152,7 @@ void main() {
             final errors = exceptions(tester);
             final persisted = await tester
                 .runAsync(() => MobileLocalFavorites.instance.list());
-            print(
+            debugPrint(
                 'LOCAL_FAVORITES=${fixture.$1.name}/${fixture.$2}/$action/errors=${errors.length}/fieldUsable=${width >= 140}/names=${persisted!.items.map((e) => e.name).toList()}');
             expect(errors, isEmpty,
                 reason:
@@ -157,9 +161,10 @@ void main() {
                 reason: 'Prefix must not collapse the name input.');
             expect(persisted.items.last.name,
                 action == 'save' ? 'QA_FAVORITE_RENAMED' : '');
-            for (final item in persisted.items)
+            for (final item in persisted.items) {
               expect(File('${saved.path}/${item.fileName}').readAsBytesSync(),
                   bytes);
+            }
           } else {
             await tester.tap(find
                 .byWidgetPredicate(
@@ -169,7 +174,7 @@ void main() {
             final full = find.byWidgetPredicate(
                 (w) => w is Dialog && w.backgroundColor == Colors.black);
             final shared = full.evaluate().length == 1;
-            print(
+            debugPrint(
                 'LOCAL_FAVORITES=${fixture.$1.name}/${fixture.$2}/preview/shared=$shared');
             expect(shared, isTrue,
                 reason:
@@ -185,7 +190,7 @@ void main() {
             expect(find.text('1 / 2'), findsOneWidget);
             final pixel = find.descendant(of: full, matching: find.byType(RawImage)).last;
             final render = tester.renderObject<RenderImage>(pixel);
-            print('FAVORITE_IMAGE_HIT=image=${render.image?.width}x${render.image?.height}/box=${render.size}/origin=${render.localToGlobal(Offset.zero)}/tap=${tester.getCenter(pixel)}');
+            debugPrint('FAVORITE_IMAGE_HIT=image=${render.image?.width}x${render.image?.height}/box=${render.size}/origin=${render.localToGlobal(Offset.zero)}/tap=${tester.getCenter(pixel)}');
             await tester.tap(pixel);
             await tester.pumpAndSettle();
             expect(full, findsOneWidget);

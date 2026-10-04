@@ -293,8 +293,9 @@ List<AgentComposerAction> normalizeAgentComposerActions(dynamic raw) {
         templateVersion: item['templateVersion'] == 'v4.5' ? 'v4.5' : 'v5',
         templateId: kind == 'prompt-preset' ? id as String : null);
     if (!output
-        .any((a) => jsonEncode(a.toJson()) == jsonEncode(action.toJson())))
+        .any((a) => jsonEncode(a.toJson()) == jsonEncode(action.toJson()))) {
       output.add(action);
+    }
   }
   return output;
 }
@@ -879,8 +880,9 @@ class AgentWorkspace {
       if (field == 'studioPresetId' &&
           value is String &&
           (const ['dsh-infinite-gen-4', 'studio-complete'].contains(value) ||
-              samplerPresets.any((p) => 'tavern:${p.id}' == value)))
+              samplerPresets.any((p) => 'tavern:${p.id}' == value))) {
         defaults[field] = value;
+      }
       if (const ['characterIds', 'lorebookIds'].contains(field) &&
           value is List) {
         defaults[field] = value

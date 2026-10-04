@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
@@ -44,7 +45,7 @@ void main() {
         calls.every((c) => c['method'] == 'GET' && c['followRedirects'] == false &&
           c['maxRedirects'] == 0 && c['fixtureAuthorization'] == true);
       if (!allowsSave) { expect(document, original); expect(writes, originalWrites); expect(vault.profiles, isEmpty); }
-      print('NOVELAI_MOBILE_VALIDATION=${jsonEncode({'id':row['id'],'passed':passed,
+      debugPrint('NOVELAI_MOBILE_VALIDATION=${jsonEncode({'id':row['id'],'passed':passed,
         'allowsSave':allowsSave,'code':code,'calls':calls,'vaultWrites':writes-originalWrites,
         'anlasBalance':vault.active == null ? null : vault.cachedSummary(vault.active!.profile.id).anlasBalance})}');
       if (row['id'] == 'models-quota-not-anlas' && allowsSave) { expect(vault.cachedSummary(vault.active!.profile.id).anlasBalance, isNull); }

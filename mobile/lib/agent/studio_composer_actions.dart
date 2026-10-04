@@ -52,15 +52,18 @@ String studioComposerProviderText(
         'templateVersion': action.templateVersion
       }
     };
-    if (action.kind == 'template-read')
+    if (action.kind == 'template-read') {
       parts.add(
           'Read the selected template with studio_prompt_template and these fields, then briefly explain its purpose. Do not dump the body unless asked: ${jsonEncode(fields)}');
-    if (action.kind == 'template-save')
+    }
+    if (action.kind == 'template-save') {
       parts.add(
           'Read the current template and revision with langbai_templates, then propose saving the change in the user text. Ask for missing changes/body. Never fabricate expectedRevision and require the normal app confirmation before writing: ${jsonEncode(fields)}');
-    if (action.kind == 'template-apply')
+    }
+    if (action.kind == 'template-apply') {
       parts.add(
           'Process the user text using this template. Use langbai_convert_prompt for convert or langbai_edit_prompt for optimize/assistant; read the template first. Ask for missing text/instructions. Return the result briefly, without template instructions. Do not generate images: ${jsonEncode(fields)}');
+    }
   }
   final instruction = parts.isEmpty
       ? ''

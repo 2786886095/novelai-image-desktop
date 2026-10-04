@@ -130,9 +130,10 @@ void main() {
     var calls = 0;
     final api = NovelAiAccountApi(vault,
         clientFactory: (_, __) => MockClient((r) async {
-              if (r.method == 'GET')
+              if (r.method == 'GET') {
                 return http.Response(
                     '{"subscription":{"tier":0,"trainingStepsLeft":91}}', 200);
+              }
               calls++;
               expect(r.url.toString(),
                   'https://relay.example/raw/ai/generate-image');

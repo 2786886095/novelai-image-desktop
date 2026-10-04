@@ -120,11 +120,11 @@ void main() {
       await tester.pumpWidget(MaterialApp(
           home: MediaQuery(
               data: MediaQueryData(disableAnimations: reduced),
-              child: Scaffold(
+              child: const Scaffold(
                   body: StudioAgentToolGroup(
                       title: 'Tools',
                       attention: false,
-                      children: const [
+                      children: [
                     TextField(key: ValueKey('tool-input'))
                   ])))));
       await tester.pumpAndSettle();
@@ -739,8 +739,7 @@ void main() {
         (i) => AgentMessage(
             id: 'slow-$i',
             role: 'assistant',
-            content: 'Earlier message $i.\n\n' +
-                List.filled(8, 'Scrollable fixture history.').join(' '))));
+            content: 'Earlier message $i.\n\n${List.filled(8, 'Scrollable fixture history.').join(' ')}')));
     final app = AppState(storage: storage)
       ..settings = AppSettings(language: 'zh-CN');
     final controller = UxController(app: app)
@@ -772,7 +771,7 @@ void main() {
     final during = scroll.offset;
     await gesture.up();
     await tester.pumpAndSettle();
-    print(
+    debugPrint(
         'SCROLL_PROBE start=$start early=$early notified=$notified during=$during after=${scroll.offset} max=${scroll.position.maxScrollExtent}');
     expect(during, lessThan(start - 100),
         reason:

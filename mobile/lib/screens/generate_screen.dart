@@ -3942,6 +3942,11 @@ class _ReferencePresetLibraryPanelState
     var fidelity = 1.0;
     var preciseType = 'character';
     final navigator = Navigator.of(context, rootNavigator: true);
+    if (!navigator.mounted) {
+      nameController.dispose();
+      groupController.dispose();
+      return;
+    }
     final route = DialogRoute<ReferencePresetKind>(
       context: context,
       themes: InheritedTheme.capture(from: context, to: navigator.context),
@@ -4206,10 +4211,11 @@ class _ReferencePresetLibraryPanelState
       await state.deleteReferencePresetGroup(target);
       if (mounted) setState(() => _group = _allGroups);
     } catch (_) {
-      if (context.mounted)
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(t('referencePresets.saveFailed'))),
         );
+      }
     }
   }
 
@@ -4340,10 +4346,11 @@ class _ReferencePresetLibraryPanelState
       await state.deleteReferencePreset(preset.id);
       if (mounted) setState(() => _selectedIds.remove(preset.id));
     } catch (_) {
-      if (context.mounted)
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(t('referencePresets.saveFailed'))),
         );
+      }
     }
   }
 

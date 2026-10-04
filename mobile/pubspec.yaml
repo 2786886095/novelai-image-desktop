@@ -72,6 +72,8 @@ dev_dependencies:
   # project icon. Run: dart run flutter_launcher_icons
   flutter_launcher_icons: ^0.14.1
 
+  image_picker_platform_interface: 2.10.1
+  shared_preferences_platform_interface: 2.4.1
 flutter_launcher_icons:
   android: true
   ios: true

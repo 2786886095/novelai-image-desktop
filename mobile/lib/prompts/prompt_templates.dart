@@ -72,11 +72,11 @@ class PromptTemplateLibrary {
     // Match desktop format-only derivation; retain facts sharing a ratio line.
     final ratio=RegExp(r'(?:Danbooru\s*(?:\/\s*NovelAI\s*)?Tag|NovelAI\s*Tag|Tag|自然语言)\s*(?:保持|占|比例)?\s*(?:约)?\s*\d+(?:\s*[–—-]\s*\d+)?\s*[%％]|(?:约\s*)?\d+(?:\s*[–—-]\s*\d+)?\s*[%％]\s*(?:(?:英文|简短|简洁)\s*)*(?:Danbooru\s*(?:\/\s*NovelAI\s*)?Tag|NovelAI\s*Tag|Tag|自然语言)',caseSensitive:false);
     final filtered=mixed.split('\n').map((line){
-      final stripped=line.replaceAll(ratio,'').replaceAll(RegExp(r'「[\s+＋]*」的混合提示词'),(mode==ReversePromptMode.tags?'纯 Tag':'纯自然语言')+'提示词');
+      final stripped=line.replaceAll(ratio,'').replaceAll(RegExp(r'「[\s+＋]*」的混合提示词'),'${mode==ReversePromptMode.tags?'纯 Tag':'纯自然语言'}提示词');
       if(RegExp(r'^[\s+＋，,；;。.\[\]x]*$',caseSensitive:false).hasMatch(stripped)||RegExp(r'^\s*prompt\s+使用[\s+＋，,；;。.]*$',caseSensitive:false).hasMatch(stripped))return '';
       return stripped.replaceFirstMapped(RegExp(r'^(\s*(?:\[[ x]\]\s*)?)[，,；;]+\s*',caseSensitive:false),(m)=>m.group(1)!);
     }).join('\n').trimRight();
-    final safeguards='\n同一层级互斥项必须排除；base 全局取景与角色局部朝向、回头或注视不视为互斥。人数上限遵循所选模型和原模板，不因派生模式放宽。'+(RegExp(r'NovelAI (?:Diffusion )?V5').hasMatch(mixed)?'V5 Full 最多 22 个角色段，base 人数与角色段一致。':'');
+    final safeguards='\n同一层级互斥项必须排除；base 全局取景与角色局部朝向、回头或注视不视为互斥。人数上限遵循所选模型和原模板，不因派生模式放宽。${RegExp(r'NovelAI (?:Diffusion )?V5').hasMatch(mixed)?'V5 Full 最多 22 个角色段，base 人数与角色段一致。':''}';
     // modeSuffix is serialized by the desktop derivation and includes its empty-source common guards.
     final suffix=modeSuffix[mode.value]??'';
     const emptyGuards='\n同一层级互斥项必须排除；base 全局取景与角色局部朝向、回头或注视不视为互斥。人数上限遵循所选模型和原模板，不因派生模式放宽。';

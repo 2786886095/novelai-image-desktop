@@ -45,14 +45,13 @@ void main() {
           webSearchEnabled: kind == 'web' ? true : null,
           templateEnabled: kind == 'template' ? false : null,
           presetId: kind == 'preset' ? 'studio-complete' : null);
-      print('SHARED_PREFERENCE ' +
-          jsonEncode({
+      debugPrint('SHARED_PREFERENCE ${jsonEncode({
             'kind': kind,
             'before': before,
             'after': older.updatedAt,
             'order':
                 controller.workspace.conversations.map((c) => c.id).toList()
-          }));
+          })}');
       expect(older.updatedAt, before);
       expect(controller.workspace.conversations.map((c) => c.id),
           ['recent', 'older']);
@@ -130,12 +129,11 @@ void main() {
         await tester.pump();
         expect(sent.length, 1);
         expect(sent.single!.length, 3);
-        print('SHARED_REMOUNT ' +
-            jsonEncode({
+        debugPrint('SHARED_REMOUNT ${jsonEncode({
               'layout': layout['name'],
               'custom': custom,
               'sent': sent.length
-            }));
+            })}');
       });
     }
   }

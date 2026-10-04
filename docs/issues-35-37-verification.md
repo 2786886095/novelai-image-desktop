@@ -39,10 +39,19 @@ continues to take precedence, and providers may not support that parameter.
 - Flutter regression: 1728 tests passed, one existing test skipped. New widget
   tests exercised the plus button during output and mock native channel
   paste/drop callbacks. File-copy tests used real temporary files.
-- Flutter analyzer: no errors or warnings; informational style diagnostics
-  remain and were not treated as fatal.
+- Flutter analyzer: the first local run had 142 informational diagnostics and
+  used `--no-fatal-infos`; strict cloud validation correctly rejected them.
+  The follow-up fixed the diagnostics without disabling rules or tests. The
+  final strict `flutter analyze --no-pub` reports `No issues found!` (exit 0).
 - Android: `:app:compileDebugKotlin` passed after explicit local build-proxy
   configuration. No application proxy preference was changed.
+
+The strict-analysis follow-up retains all test assertions and diagnostic logs,
+uses `debugPrint` for test logging, adds missing control-flow braces, removes
+two unused private declarations, and checks the Navigator's own mount status
+before capturing its context. Platform-interface packages imported by tests
+are explicitly pinned as dev dependencies to their already-locked versions;
+no runtime package or application version was upgraded.
 
 ## Boundaries
 

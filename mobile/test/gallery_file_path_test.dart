@@ -26,7 +26,7 @@ void main() {
         'gallery.copyFilePath',
         'gallery.filePathCopied'
       ].map((key) => mobileUiTextFor(entry.key, key)).toList();
-      print('GALLERY_FILE_PATH=labels/${entry.key}/${observed.join('|')}');
+      debugPrint('GALLERY_FILE_PATH=labels/${entry.key}/${observed.join('|')}');
       expect(observed, entry.value);
     });
   }
@@ -87,8 +87,9 @@ void main() {
       String? clipboard;
       tester.binding.defaultBinaryMessenger
           .setMockMethodCallHandler(SystemChannels.platform, (call) async {
-        if (call.method == 'Clipboard.setData')
+        if (call.method == 'Clipboard.setData') {
           clipboard = (call.arguments as Map)['text'] as String;
+        }
         return null;
       });
       addTearDown(() => tester.binding.defaultBinaryMessenger
@@ -126,7 +127,7 @@ void main() {
       }
       final view = find.byKey(const ValueKey('gallery-view-file-path'));
       final available = view.evaluate().isNotEmpty;
-      print('GALLERY_FILE_PATH=${fixture.id}/available=$available');
+      debugPrint('GALLERY_FILE_PATH=${fixture.id}/available=$available');
       expect(view, findsOneWidget);
       await tester.ensureVisible(view);
       await tester.pumpAndSettle();
@@ -149,7 +150,7 @@ void main() {
       expect(state.history.single.filePath, image.path);
       if (!fixture.missing) expect(image.readAsBytesSync(), png);
       expect(tester.takeException(), isNull);
-      print(
+      debugPrint(
           'GALLERY_FILE_PATH=${fixture.id}/absolute=true/copied=true/detailRetained=true/bytesUnchanged=true');
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();

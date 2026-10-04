@@ -112,7 +112,7 @@ void main() {
               errors.any((e) => e.contains('used after being disposed'));
           final dependent =
               errors.any((e) => e.contains('_dependents.isEmpty'));
-          print(
+          debugPrint(
               'GALLERY_RENAME=${fixture.$1.name}/${fixture.$2}/$kind/$action/errors=${errors.length}/disposed=$disposed/dependent=$dependent/calls=${state.calls}');
           expect(errors, isEmpty,
               reason:

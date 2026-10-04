@@ -1,9 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 // ignore: depend_on_referenced_packages
 import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 import 'package:novelai_mobile/services/unified_storage.dart';
-import 'dart:typed_data';
 import 'dart:convert';
 import 'package:archive/archive.dart';
 import 'package:image/image.dart' as image_lib;
@@ -170,7 +170,7 @@ void main() {
               f.absolute.path.replaceAll('\\', '/') !=
                   source.absolute.path.replaceAll('\\', '/'))
           .length;
-      print(
+      debugPrint(
           'REFERENCE_FAILURE_OBSERVED: operation=$operation,error=$error,memoryPresets=${app.referencePresets.length},memoryGroups=${app.referencePresetGroups},durablePresets=${storage.durable.presets.length},originalImageRetained=$retained,newImageCopies=$copied,memoryUnchanged=${jsonEncode(memory.toJson()) == before}; no network/no native state changes/0credits');
       expect(error, isNotNull,
           reason: 'Failed metadata write must not be reported as success');
@@ -222,7 +222,7 @@ void main() {
       expect(await first, isNull);
       expect(await second, isNull);
       final ids = app.referencePresets.map((p) => p.sourceId).toList();
-      print(
+      debugPrint(
           'REFERENCE_OVERLAP_OBSERVED: sameSource=$sameSource,pendingVisible=$visibleWhilePending,memory=$ids,durable=${storage.durable.presets.map((p) => p.sourceId).toList()},copies=${root.listSync().whereType<File>().length};0network/0credits');
       expect(visibleWhilePending, 0,
           reason: 'Later commit must not overtake first pending commit');
@@ -276,7 +276,7 @@ void main() {
         .whereType<File>()
         .where((f) => f.path.endsWith('-copied.png'))
         .length;
-    print(
+    debugPrint(
         'REFERENCE_PARTIAL_IMPORT_OBSERVED: newCopies=$copied,originalRetained=${original.existsSync()},sourceArchiveRetained=${input.existsSync()};0network/0credits');
     expect(copied, 0);
     expect(original.readAsBytesSync(), bytes);
@@ -311,7 +311,7 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
       expect(prefs.getString('reference_preset_library_v1'), before);
-      print(
+      debugPrint(
           'REFERENCE_STORAGE_OBSERVED: silentSuccess=$silentSuccess,failedWriteRejected=true,originalMetadataRetained=true;0network/0credits');
     });
   }
@@ -354,7 +354,7 @@ void main() {
     expect(app.referencePresetGroups, ['RETRY']);
     expect(notifications, 1);
     expect(root.listSync().whereType<File>().length, 2);
-    print(
+    debugPrint(
         'REFERENCE_RETRY_OBSERVED: failedChangesDiscarded=true,retryPassed=true,notifications=$notifications;0network/0credits');
   });
 }
@@ -394,8 +394,9 @@ class PartialImportStorage extends Storage {
       {required String presetId,
       required List<int> bytes,
       String sourcePath = ''}) async {
-    if (++copies == 2)
+    if (++copies == 2) {
       throw StateError('QA forced second imported image failure');
+    }
     final f = File('${root.path}/$presetId-copied.png');
     await f.writeAsBytes(bytes, flush: true);
     return f.path;
