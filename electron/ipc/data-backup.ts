@@ -99,6 +99,8 @@ const API_SETTING_KEYS: Array<keyof AppSettings> = [
   "agentApiBaseUrl",
   "agentApiKey",
   "agentApiModel",
+  "savedAgentModels",
+  "agentReasoningEffort",
   "agentProviderName",
   "agentContextWindow",
   "agentMaxOutputTokens",

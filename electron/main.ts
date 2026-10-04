@@ -1,3 +1,4 @@
+import {readAgentClipboardFiles} from './ipc/agent-clipboard';
 import { registerNaiAccountsIpc, ensureNaiAccountsLoaded } from './ipc/nai-accounts';
 import { withNaiAccountOperation, rememberNaiProposal, assertNaiProposalAccount } from './ipc/nai-accounts-runtime';
 import {prepareBatchImageService} from './ipc/batch-image-service';
@@ -248,6 +249,7 @@ import {
   deleteAgentMemory,
   deleteAgentSkill,
   importAgentFiles,
+  importAgentFileData,
   importStudioPresetFiles,
   exportAgentAttachment,
   readAgentWorkspace,
@@ -769,6 +771,7 @@ function registerIpc() {
     return setAgentConversationArchived(conversationId, archived);
   });
   accountBoundHandle("agent:deleteConversation", (_event, conversationId: string) => deleteAgentConversation(conversationId));
+  accountBoundHandle("agent:importFileData", (_event, conversationId:string,files:unknown) => importAgentFileData(conversationId,files));
   accountBoundHandle("agent:importFiles", (_event, conversationId: string, sourcePaths?: string[]) => importAgentFiles(conversationId, sourcePaths));
   accountBoundHandle("agent:deleteAttachment", (_event, conversationId: string, attachmentId: string) => deleteAgentAttachment(conversationId, attachmentId));
   accountBoundHandle("agent:exportAttachment", (_event, conversationId: string, messageId: string, attachmentId: string) => exportAgentAttachment(conversationId, messageId, attachmentId));
@@ -1009,6 +1012,7 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
     (_event, tool: DirectorTool, options: AugmentOptions) =>
       augmentImg(tool, options),
   );
+  accountBoundHandle("agent:readClipboardFiles", () => readAgentClipboardFiles());
   ipcMain.handle("imageInput:readClipboard", () => readClipboardImageFiles());
   ipcMain.handle("imageInput:save", (_event, images: unknown) => savePastedImageFiles(images));
   accountBoundHandle("nai:loadImage", () => loadImageFile());

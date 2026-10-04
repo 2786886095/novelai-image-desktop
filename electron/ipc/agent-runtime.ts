@@ -865,7 +865,7 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
     ];
     const turn = await completeStudioPiTurn({
       settings: getSettings(), conversationId: request.conversationId, messageId,
-      reasoningEffort: current.reasoningEffort,
+      reasoningEffort: current.reasoningEffort && current.reasoningEffort!=="auto" ? current.reasoningEffort : getSettings().agentReasoningEffort??"auto",
       sessionOptions,resourceContext,
       prompt: promptMessagesWithImages(transcript, request.conversationId),
       signal: controller.signal, onText: (delta) => { streamed += delta; deltas.push(delta); }, emit,

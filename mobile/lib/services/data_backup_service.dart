@@ -172,6 +172,8 @@ class DataBackupService {
     'agentApiProtocol',
     'agentApiBaseUrl',
     'agentApiModel',
+    'savedAgentModels',
+    'agentReasoningEffort',
     'agentProviderName',
     'agentContextWindow',
     'agentMaxOutputTokens',

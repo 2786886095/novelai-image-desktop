@@ -1,3 +1,4 @@
+import 'model_selections.dart';
 import 'agent_questions.dart';
 import 'studio_options.dart';
 import 'studio_composer_actions.dart';
@@ -283,7 +284,8 @@ class AgentController extends ChangeNotifier {
       if (!const {'mixed', 'tags', 'natural'}.contains(mode) ||
           !const {'v5', 'v4.5'}.contains(version) ||
           (overrides[mode]?.trim().isNotEmpty != true &&
-              (mode == 'mixed' || overrides['mixed']?.trim().isNotEmpty != true))) {
+              (mode == 'mixed' ||
+                  overrides['mixed']?.trim().isNotEmpty != true))) {
         throw StateError('所选模板未保存。');
       }
     }
@@ -300,16 +302,18 @@ class AgentController extends ChangeNotifier {
     if (kind == null) return null;
     if (kind == 'optimize' || kind == 'assistant') {
       return (kind == 'optimize'
-          ? app.settings.promptOptimizeTemplate
-          : app.settings.promptAssistantTemplate).trim();
+              ? app.settings.promptOptimizeTemplate
+              : app.settings.promptAssistantTemplate)
+          .trim();
     }
     if (kind == 'convert' || kind == 'reverse') {
       final mode = conversation.selectedTemplateMode;
       final version = conversation.selectedTemplateVersion;
       if (mode == null || version == null) return null;
       if (!const {'mixed', 'tags', 'natural'}.contains(mode)) return null;
-      return app.resolvedPromptTemplate(kind,
-          ReversePromptMode.values.byName(mode), templateVersion: version);
+      return app.resolvedPromptTemplate(
+          kind, ReversePromptMode.values.byName(mode),
+          templateVersion: version);
     }
     return null;
   }
@@ -590,31 +594,50 @@ class AgentController extends ChangeNotifier {
       withData: false,
     );
     if (result == null) return const [];
-    final imported = <AgentAttachment>[];
-    var total = 0;
+    return importAttachmentPaths(
+        result.files.map((f) => f.path).whereType<String>().toList(),
+        conversationId: conversation.id);
+  }
+
+  Future<List<AgentAttachment>> importAttachmentPaths(List<String> paths,
+      {String? conversationId}) async {
+    final matches = workspace.conversations
+        .where((c) => c.id == (conversationId ?? selectedConversation?.id));
+    if (matches.isEmpty || matches.first.archivedAt != null) return [];
+    final conversation = matches.first, imported = <AgentAttachment>[];
     final directory =
         await app.storage.agentAttachmentsDirectory(conversation.id);
-    for (final selected in result.files) {
+    var total = 0;
+    for (final sourcePath in paths.take(64)) {
       try {
-        final sourcePath = selected.path;
-        if (sourcePath == null || sourcePath.isEmpty) continue;
-        final source = File(sourcePath);
+        final source = File(sourcePath),
+            extension = p.extension(sourcePath).toLowerCase();
+        if (!const {
+          '.png',
+          '.jpg',
+          '.jpeg',
+          '.webp',
+          '.gif',
+          '.bmp',
+          '.avif',
+          '.pdf',
+          '.txt',
+          '.md',
+          '.json',
+          '.jsonl',
+          '.csv',
+          '.tsv',
+          '.yaml',
+          '.yml'
+        }.contains(extension)) continue;
         final length = await source.length();
         if (length <= 0 || length > 48 * 1024 * 1024) continue;
         total += length;
         if (total > 192 * 1024 * 1024) break;
-        final extension = p.extension(selected.name).toLowerCase();
-        var target = File(
-            '${directory.path}${Platform.pathSeparator}${_safeName(selected.name)}');
-        var index = 1;
-        while (target.existsSync()) {
-          target = File(
-            '${directory.path}${Platform.pathSeparator}${p.basenameWithoutExtension(selected.name)} (${index++})$extension',
-          );
-        }
+        final target = File(p.join(directory.path,
+            '${agentId('attachment')}-${_safeName(p.basename(sourcePath))}'));
         await source.copy(target.path);
-        int? width;
-        int? height;
+        int? width, height;
         if (_kind(extension) == 'image') {
           try {
             final dims =
@@ -624,16 +647,24 @@ class AgentController extends ChangeNotifier {
           } catch (_) {}
         }
         imported.add(AgentAttachment(
-          id: agentId('attachment'),
-          name: p.basename(target.path),
-          mime: _mime(extension),
-          size: length,
-          kind: _kind(extension),
-          filePath: target.path,
-          width: width,
-          height: height,
-        ));
+            id: agentId('attachment'),
+            name: p.basename(sourcePath),
+            mime: _mime(extension),
+            size: length,
+            kind: _kind(extension),
+            filePath: target.path,
+            width: width,
+            height: height));
       } catch (_) {}
+    }
+    if (!workspace.conversations.contains(conversation) ||
+        conversation.archivedAt != null) {
+      for (final item in imported) {
+        try {
+          await File(item.filePath).delete();
+        } catch (_) {}
+      }
+      return [];
     }
     conversation.draftAttachments.addAll(imported);
     conversation.updatedAt = agentNow();
@@ -642,11 +673,21 @@ class AgentController extends ChangeNotifier {
     return imported;
   }
 
+  Future<void> selectSavedModel(String id) async {
+    if (sending || compacting) return;
+    final matches =
+        selectedAgentModels(app.settings).where((p) => p['id'] == id);
+    if (matches.isEmpty) return;
+    await app.setSettings((s) => applyAgentModel(s, matches.first));
+    _notify();
+  }
+
   /// Copies an image already registered in this app into the conversation.
   /// IDs resolve only against the current canvas, reference library or history.
   Future<AgentAttachment> attachAppImage(String source, String id) async {
     final conversation = selectedConversation;
-    if (conversation == null || sending) throw StateError('当前无法添加附件。');
+    if (conversation == null || conversation.archivedAt != null)
+      throw StateError('当前无法添加附件。');
     String? path;
     int? width, height;
     if (source == 'canvas' && id == 'current') {
@@ -1172,7 +1213,8 @@ class AgentController extends ChangeNotifier {
                   !conversation.studioWebSearchEnabled) {
             throw AgentProviderException('模型请求了未授权工具：${call.name}');
           }
-          if (paid.contains(call.name) && paidAttempted &&
+          if (paid.contains(call.name) &&
+              paidAttempted &&
               (call.name == 'langbai_edit_prompt' ||
                   conversation.studioApprovalMode != 'auto')) {
             throw const AgentProviderException('单轮已尝试过付费操作，请先检查结果再发送新消息。');
@@ -1503,7 +1545,9 @@ class AgentController extends ChangeNotifier {
           'maxOutputTokens':
               preset.maxOutputTokens ?? app.settings.agentMaxOutputTokens,
           'stop': preset.stop,
-          'reasoningEffort': conversation.reasoningEffort,
+          'reasoningEffort': conversation.reasoningEffort == 'auto'
+              ? app.settings.agentReasoningEffort
+              : conversation.reasoningEffort,
         },
         onDelta: (delta) {
           assistant.content += delta;
@@ -1576,7 +1620,9 @@ class AgentController extends ChangeNotifier {
                 'maxOutputTokens':
                     preset.maxOutputTokens ?? app.settings.agentMaxOutputTokens,
                 'stop': preset.stop,
-                'reasoningEffort': conversation.reasoningEffort
+                'reasoningEffort': conversation.reasoningEffort == 'auto'
+                    ? app.settings.agentReasoningEffort
+                    : conversation.reasoningEffort
               }),
         );
         if (repair.usage != null) usage.add(repair.usage!);
@@ -2463,11 +2509,17 @@ class AgentController extends ChangeNotifier {
     required bool autoCompact,
     required double compactThreshold,
     required bool visionEnabled,
+    List<Map<String, dynamic>>? savedModels,
+    String? reasoningEffort,
   }) async {
     await app.setSettings((settings) {
       settings
         ..agentApiProtocol = normalizeAgentProtocol(protocol)
         ..agentApiBaseUrl = baseUrl.trim().replaceAll(RegExp(r'/+$'), '')
+        ..savedAgentModels =
+            normalizeSavedAgentModels(savedModels ?? settings.savedAgentModels)
+        ..agentReasoningEffort =
+            agentEffort(reasoningEffort ?? settings.agentReasoningEffort)
         ..agentApiModel = model.trim()
         ..agentProviderName =
             providerName.trim().isEmpty ? '自定义模型' : providerName.trim()

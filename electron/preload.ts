@@ -142,6 +142,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   setAgentConversationArchived: (conversationId: string, archived: boolean) => ipcRenderer.invoke("agent:setConversationArchived", conversationId, archived),
   setStudioConversationOptions: (conversationId:string,patch:Partial<import('../src/agent/workspace-controls').StudioConversationOptions>)=>ipcRenderer.invoke('agent:setStudioOptions',conversationId,patch),
   deleteAgentConversation: (conversationId: string) => ipcRenderer.invoke("agent:deleteConversation", conversationId),
+  importAgentFileData: (conversationId:string, files:Array<{name:string;bytes:Uint8Array}>) => ipcRenderer.invoke("agent:importFileData",conversationId,files),
   importAgentFiles: (conversationId: string, sourcePaths?: string[]) => ipcRenderer.invoke("agent:importFiles", conversationId, sourcePaths),
   importStudioResources: (kind:'presets'|'worldbooks'|'characters') => ipcRenderer.invoke('agent:importStudioResources',kind),
   deleteAgentAttachment: (conversationId: string, attachmentId: string) => ipcRenderer.invoke("agent:deleteAttachment", conversationId, attachmentId),
@@ -441,6 +442,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   ) as Promise<ArtistStyleCatalogResult>,
   translate: (text: string, target?: string) =>
     ipcRenderer.invoke("nai:translate", text, target),
+  readAgentClipboardFiles: () => ipcRenderer.invoke("agent:readClipboardFiles"),
   readClipboardImageFiles: () => ipcRenderer.invoke("imageInput:readClipboard"),
   savePastedImageFiles: (images: Array<{name:string;bytes:Uint8Array}>) => ipcRenderer.invoke("imageInput:save", images),
   loadImage: () => ipcRenderer.invoke("nai:loadImage"),

@@ -1,10 +1,12 @@
 import Flutter
 import UIKit
 import CFNetwork
+import MobileCoreServices
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private static let incomingBackupPending = "__incoming_backup_pending__"
+  private var composerFiles: ComposerFiles?
   private var incomingBackupChannel: FlutterMethodChannel?
   private var pendingIncomingBackupPaths: [String] = []
   private var incomingBackupCopiesInProgress = 0
@@ -19,6 +21,7 @@ import CFNetwork
     // Dart's utf8 decoder can't read). Without this the offline tag library
     // would fail to parse on iOS.
     if let controller = window?.rootViewController as? FlutterViewController {
+      composerFiles = ComposerFiles(controller: controller)
       let channel = FlutterMethodChannel(
         name: "langbai.novelai/native_text",
         binaryMessenger: controller.binaryMessenger
@@ -206,5 +209,76 @@ import CFNetwork
       }
     }
     return true
+  }
+}
+
+final class ComposerFiles: NSObject, UIDropInteractionDelegate {
+  private let channel: FlutterMethodChannel
+  private var region: CGRect?
+  private let allowed=Set(["png","jpg","jpeg","webp","gif","bmp","avif","pdf","txt","md","json","jsonl","csv","tsv","yaml","yml"])
+  init(controller: FlutterViewController) {
+    channel=FlutterMethodChannel(name:"langbai.novelai/composer_files",binaryMessenger:controller.binaryMessenger)
+    super.init()
+    channel.setMethodCallHandler { [weak self] call,result in
+      guard let self=self else {result(nil);return}
+      if call.method=="region" {
+        if let m=call.arguments as? [String:Double],let x=m["x"],let y=m["y"],let w=m["width"],let h=m["height"] {self.region=CGRect(x:x,y:y,width:w,height:h)} else {self.region=nil}
+        result(nil)
+      } else if call.method=="paste" {
+        var paths=[String]();var total=0
+        for image in (UIPasteboard.general.images ?? []).prefix(64) {
+          if let data=image.pngData(),data.count<=48*1024*1024,total+data.count<=192*1024*1024,let path=self.save(data,extension:"png") {paths.append(path);total+=data.count}
+        }
+        for url in (UIPasteboard.general.urls ?? []).prefix(max(0,64-paths.count)) where url.isFileURL {
+          let scoped=url.startAccessingSecurityScopedResource();defer{if scoped{url.stopAccessingSecurityScopedResource()}}
+          let ext=url.pathExtension.lowercased()
+          if self.allowed.contains(ext),let values=try? url.resourceValues(forKeys:[.fileSizeKey]),let count=values.fileSize,count<=48*1024*1024,total+count<=192*1024*1024,let data=try? Data(contentsOf:url),let path=self.save(data,extension:ext){paths.append(path);total+=data.count}
+        }
+        result(paths)
+      } else {result(FlutterMethodNotImplemented)}
+    }
+    controller.view.addInteraction(UIDropInteraction(delegate:self))
+  }
+  private func preferredExtension(_ id:String)->String? {
+    return UTTypeCopyPreferredTagWithClass(id as CFString,kUTTagClassFilenameExtension)?.takeRetainedValue() as String?
+  }
+  private func save(_ data:Data,extension ext:String)->String? {
+    guard allowed.contains(ext),!data.isEmpty,data.count<=48*1024*1024 else{return nil}
+    let folder=FileManager.default.temporaryDirectory.appendingPathComponent("composer-inputs",isDirectory:true)
+    do {try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true);let file=folder.appendingPathComponent("\(UUID().uuidString).\(ext)");try data.write(to:file,options:.atomic);return file.path}catch{return nil}
+  }
+  private func representation(_ provider:NSItemProvider)->(id:String,ext:String)? {
+    let suggested=provider.suggestedName.map {URL(fileURLWithPath:$0).pathExtension.lowercased()} ?? ""
+    for id in provider.registeredTypeIdentifiers {
+      let ext=preferredExtension(id) ?? suggested
+      if allowed.contains(ext) && UTTypeConformsTo(id as CFString,kUTTypeData) {
+        // A file named *.txt can be dropped; an ordinary dragged text selection stays text.
+        if UTTypeConformsTo(id as CFString,kUTTypePlainText) && !allowed.contains(suggested) {continue}
+        return (id,ext)
+      }
+    }
+    return nil
+  }
+  func dropInteraction(_ interaction:UIDropInteraction,canHandle session:UIDropSession)->Bool {
+    return region != nil && session.items.contains {representation($0.itemProvider) != nil}
+  }
+  func dropInteraction(_ interaction:UIDropInteraction,sessionDidUpdate session:UIDropSession)->UIDropProposal {
+    guard let view=interaction.view else{return UIDropProposal(operation:.cancel)}
+    let point=session.location(in:view)
+    return UIDropProposal(operation:region?.contains(point)==true ? .copy:.cancel)
+  }
+  func dropInteraction(_ interaction:UIDropInteraction,performDrop session:UIDropSession) {
+    guard let view=interaction.view,region?.contains(session.location(in:view))==true else{return}
+    let group=DispatchGroup();var paths=[String]();var total=0
+    for item in session.items.prefix(64) {
+      let provider=item.itemProvider
+      guard let selected=representation(provider) else{continue}
+      let id=selected.id,ext=selected.ext
+      group.enter()
+      provider.loadDataRepresentation(forTypeIdentifier:id) { [weak self] data,_ in
+        DispatchQueue.main.async {defer{group.leave()};if let self=self,let data=data,data.count<=48*1024*1024,total+data.count<=192*1024*1024,let path=self.save(data,extension:ext){paths.append(path);total+=data.count}}
+      }
+    }
+    group.notify(queue:.main){ [weak self] in if !paths.isEmpty{self?.channel.invokeMethod("drop",arguments:paths)} }
   }
 }

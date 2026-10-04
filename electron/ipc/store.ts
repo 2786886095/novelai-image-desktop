@@ -1,3 +1,4 @@
+import {normalizeSavedAgentModels,agentEffort} from '../../src/agent/model-selections';
 import {normalizeAgentUiPreferences} from '../../src/agent/preferences';
 import {normalizeCompletionSound} from "../../src/completion-sound";
 import { currentNaiAccount, getNaiAccountSummary, rememberNaiAccountSummary, naiAccountsBusy, configureLegacyNaiBinding, boundLegacyNaiAccount, legacyNaiBindingAllowed, naiAccountRevision } from './nai-accounts-runtime';
@@ -294,6 +295,8 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   settings.agentProviderName = typeof settings.agentProviderName === "string" && settings.agentProviderName.trim()
     ? settings.agentProviderName.trim().slice(0, 80)
     : defaults.agentProviderName;
+  settings.savedAgentModels = normalizeSavedAgentModels(settings.savedAgentModels);
+  settings.agentReasoningEffort = agentEffort(settings.agentReasoningEffort);
   settings.agentContextWindow = clampContextWindow(settings.agentContextWindow);
   settings.agentMaxOutputTokens = Math.max(512, Math.min(
     settings.agentContextWindow,

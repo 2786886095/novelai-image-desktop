@@ -226,3 +226,12 @@ html.motion-reduced .pi-motion-disclosure,html.motion-reduced .pi-resource-detai
 .pi-transcript-content{min-height:100%;display:flow-root;flex-shrink:0}
 .pi-agent.pi-context-popover{position:fixed;z-index:20020;display:block;height:auto;overflow:auto;padding:12px;border:1px solid var(--pi-line);border-radius:12px;box-shadow:0 8px 24px #20143822;animation:studio-view-in 160ms ease-out}.pi-context-popover .pi-context-panel-content>p{margin:0 0 8px}.pi-context-popover progress{width:100%;height:5px}.pi-context-popover pre{white-space:pre-wrap;overflow-wrap:anywhere}.pi-context-trigger{margin-left:auto}.pi-context-popover .pi-context-controls{display:flex;flex-wrap:wrap;gap:8px}.pi-context-popover .pi-context-controls label{display:flex;gap:6px;align-items:center}.pi-question-custom-confirm{margin:8px 0}
 html.motion-reduced .pi-agent.pi-context-popover{animation:none}
+
+/* Issue35–37: bounded model lists and non-layout-shifting upload feedback. */
+.pi-model-list,.pi-model-discovery-list {max-height:min(48vh,380px);overflow:auto;overscroll-behavior:contain;min-width:0;}
+.pi-model-list button,.pi-model-toolbar button,.pi-model-discovery-list label {min-width:0;overflow-wrap:anywhere;white-space:normal;}
+.pi-model-list button span,.pi-model-discovery-list label span {min-width:0;overflow:hidden;text-overflow:ellipsis;}
+.pi-model-toolbar {display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.pi-model-collection {min-width:0;margin-block:12px;}.pi-model-discovery-list label{display:flex;gap:8px;padding:8px;align-items:center;}.pi-model-discovery-list small{display:block;}
+.pi-saved-model {padding-block:12px;border-bottom:1px solid var(--border);}.pi-saved-model label{display:grid;gap:6px;margin-top:8px;}
+.pi-compose-area.is-file-dragging {outline:2px solid var(--accent);outline-offset:2px;}
