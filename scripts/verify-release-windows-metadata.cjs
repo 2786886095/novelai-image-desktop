@@ -7,3 +7,4 @@ assert.ok(fs.readFileSync('electron/ipc/mcp-client.ts','utf8').includes('version
 const locales=JSON.parse(fs.readFileSync('shared/agent-ux-locales.json','utf8'));
 assert.ok(JSON.stringify(locales).includes('使用酒馆'));
 console.log(JSON.stringify({version:pkg.version,mobile:'2.4.8+167',scope:'Windows x64 binaries; shared Android/iOS source',label:'使用酒馆',pass:true}));
+const readme=fs.readFileSync('README.md','utf8');for(const expected of [`releases/tag/v${pkg.version}`,`Langbai-NovelAI-Studio-Setup-${pkg.version}.exe`,`Langbai-NovelAI-Studio-${pkg.version}.exe`])assert.ok(readme.includes(expected),'README release link out of sync: '+expected);
