@@ -787,7 +787,7 @@ class NaiApi {
     final effectiveNegative = _merge(
         params.negativePrompt, _ucPresetText(params.model, params.ucPreset));
     final charCaptions = extras.charCaptions
-        .where((c) => c.prompt.trim().isNotEmpty)
+        .where((c) => c.enabled && c.prompt.trim().isNotEmpty)
         .take(params.maxCharacterPrompts)
         .map((c) => {
               'char_caption': c.prompt.trim(),
@@ -803,7 +803,7 @@ class NaiApi {
             })
         .toList();
     final activeCharacters = extras.charCaptions
-        .where((c) => c.prompt.trim().isNotEmpty)
+        .where((c) => c.enabled && c.prompt.trim().isNotEmpty)
         .take(params.maxCharacterPrompts)
         .toList();
     final negativeCharCaptions =
@@ -822,7 +822,7 @@ class NaiApi {
             : <Map<String, Object>>[];
     final hasCoords = structuredCharacters &&
         extras.charCaptions
-            .where((caption) => caption.prompt.trim().isNotEmpty)
+            .where((caption) => caption.enabled && caption.prompt.trim().isNotEmpty)
             .take(params.maxCharacterPrompts)
             .any((caption) => caption.useCoords);
     final inputPrompt = structuredCharacters || charCaptions.isEmpty
@@ -978,7 +978,7 @@ class NaiApi {
   ) =>
       params.isV4Plus &&
       (error.statusCode == 400 || error.statusCode == 422) &&
-      extras.charCaptions.any((caption) => caption.prompt.trim().isNotEmpty);
+      extras.charCaptions.any((caption) => caption.enabled && caption.prompt.trim().isNotEmpty);
 
   Future<List<String>> listModels(
       AppSettings settings, String apiUrl, String apiKey) async {

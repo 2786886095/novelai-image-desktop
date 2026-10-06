@@ -1,6 +1,22 @@
 import {memo, useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode} from 'react';
 import type {CharCaption} from '../types';
 
+export function characterEnabledLabels(language: unknown) {
+ const labels: Record<string, string[]> = {
+  'zh-CN':['启用此角色','已启用','已暂停：内容保留，不参与生成'],
+  'zh-TW':['啟用此角色','已啟用','已暫停：內容保留，不參與生成'],
+  'en-US':['Enable this character','Enabled','Paused: content retained, excluded from generation'],
+  'ja-JP':['このキャラクターを有効にする','有効','一時停止：内容を保持し、生成から除外'],
+  'ko-KR':['이 캐릭터 활성화','활성화됨','일시 중지: 내용을 유지하고 생성에서 제외'],
+ };
+ const [label,on,off]=labels[String(language)]??labels['en-US'];
+ return {label,on,off};
+}
+
+export function CharacterEnabledToggle({enabled, label, onLabel, offLabel, onChange}:{enabled:boolean;label:string;onLabel:string;offLabel:string;onChange:(enabled:boolean)=>void}) {
+ return <button type="button" className="char-enabled-toggle" role="switch" aria-checked={enabled} aria-label={label} title={enabled?onLabel:offLabel} onClick={()=>onChange(!enabled)}><span className="char-enabled-track" aria-hidden="true"><span /></span><span>{enabled?onLabel:offLabel.split(':')[0].split('：')[0]}</span></button>;
+}
+
 export const characterEditLabels = (language: unknown) => {
  const strings: Record<string,string[]> = {
  'zh-CN':['拖动排序','同步位置','保留位置','角色顺序已更改','全部角色','选择要保存的角色'],

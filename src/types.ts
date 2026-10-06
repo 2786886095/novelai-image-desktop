@@ -386,6 +386,8 @@ export interface PreciseReferenceImage extends PreciseReferenceItem {
 
 /** Character prompt item — slim type sent over IPC */
 export interface CharCaptionItem {
+  /** Missing in older configurations means enabled. Never sent to NovelAI. */
+  enabled?: boolean;
   prompt: string;
   /** Per-character undesired content used by NovelAI V4/V4.5/V5. */
   negativePrompt?: string;

@@ -3210,7 +3210,7 @@ class _CharacterPositionEditorState extends State<_CharacterPositionEditor> {
                               for (var index = 0;
                                   index < captions.length;
                                   index++)
-                                Positioned(
+                                if (captions[index].enabled) Positioned(
                                   left: ((draft[captions[index]]?.dx ??
                                               (captions[index].useCoords
                                                   ? captions[index].x
@@ -5108,12 +5108,13 @@ class _CharCardState extends State<_CharCard> {
     String t(String key) => mobileUiTextFor(language, key);
     final collapsed = _collapsed || widget.forceCollapsed;
     final c = s.extras.charCaptions[widget.index];
+    final enabledText = characterEnabledLabels(language);
     final characterLabel = mobileUiFormatFor(
       language,
       'generate.characterLabel',
       {'index': widget.index + 1},
     );
-    final positionSummary = c.useCoords
+    final positionSummary = !c.enabled ? enabledText[2] : c.useCoords
         ? '${t('generate.positionCustom')} · '
             'X ${c.x.toStringAsFixed(2)} · Y ${c.y.toStringAsFixed(2)}'
         : t('generate.positionAiChoice');
@@ -5140,6 +5141,8 @@ class _CharCardState extends State<_CharCard> {
                       children: [
                         Text(
                           characterLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 2),
@@ -5155,6 +5158,18 @@ class _CharCardState extends State<_CharCard> {
                                   ),
                         ),
                       ],
+                    ),
+                  ),
+                  Tooltip(
+                    message: '${enabledText[0]} · ${widget.index + 1}',
+                    child: Switch(
+                      key: ValueKey('character-enabled-${widget.index}'),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      value: c.enabled,
+                      onChanged: (value) {
+                        c.enabled = value;
+                        s.markCharacterChanged();
+                      },
                     ),
                   ),
                   IconButton(

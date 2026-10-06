@@ -496,6 +496,9 @@ function finiteClamped(value: number, fallback: number) {
 
 function normalizedCharCaptions(extras: GenerateExtras | undefined, model: string, preserveText = false) {
   return (extras?.charCaptions ?? [])
+    // Filter before truncation so paused characters consume no API slots and
+    // never leak their positive/negative text or coordinates to any transport.
+    .filter((c) => c.enabled !== false)
     .map((c) => ({
       prompt: preserveText ? c.prompt : c.prompt.trim(),
       negativePrompt: preserveText ? c.negativePrompt ?? "" : c.negativePrompt?.trim() ?? "",

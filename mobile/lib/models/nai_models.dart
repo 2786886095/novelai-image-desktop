@@ -444,19 +444,22 @@ List<Map<String, dynamic>> normalizeCharacterPromptPresets(dynamic raw) {
 class CharCaptionItem {
   static double _coordinate(dynamic value) =>
       value is num && value.isFinite ? value.clamp(0, 1).toDouble() : 0.5;
+  bool enabled;
   String prompt;
   String negativePrompt;
   bool useCoords;
   double x;
   double y;
   CharCaptionItem(
-      {this.prompt = '',
+      {this.enabled = true,
+      this.prompt = '',
       this.negativePrompt = '',
       this.useCoords = false,
       this.x = 0.5,
       this.y = 0.5});
 
   Map<String, dynamic> toJson() => {
+        'enabled': enabled,
         'prompt': prompt,
         'negativePrompt': negativePrompt,
         'useCoords': useCoords,
@@ -464,6 +467,7 @@ class CharCaptionItem {
         'y': y
       };
   factory CharCaptionItem.fromJson(Map<String, dynamic> j) => CharCaptionItem(
+        enabled: j['enabled'] != false,
         prompt: j['prompt'] is String ? j['prompt'] : '',
         negativePrompt:
             j['negativePrompt'] is String ? j['negativePrompt'] : '',
@@ -649,6 +653,7 @@ class GenerateExtras {
             .toList(),
         charCaptions: charCaptions
             .map((item) => CharCaptionItem(
+                  enabled: item.enabled,
                   prompt: item.prompt,
                   negativePrompt: item.negativePrompt,
                   useCoords: item.useCoords,
