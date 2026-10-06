@@ -1,6 +1,6 @@
 # Langbai NovelAI Studio
 
-> v2.4.9：Windows x64 のインストーラーとポータブル版を公開します。Android/iOS 共通機能のソースは同期済みですが、今回のリリースにモバイルバイナリや実機・署名検証は含まれません。
+> v2.5.0：Windows x64 のインストーラーとポータブル版を公開します。Android/iOS 共通機能のソースは同期済みですが、今回のリリースにモバイルバイナリや実機・署名検証は含まれません。
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 

@@ -8,7 +8,7 @@ const repo='2786886095/novelai-image-desktop';
 const call=(args)=>execFileSync('gh',[...args,'--repo',repo],{encoding:'utf8',timeout:600000,maxBuffer:8*1024*1024}).trim();
 const git=(args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
 const version=JSON.parse(fs.readFileSync('package.json','utf8')).version;
-assert.equal(version,'2.4.9');const tag='v'+version,sha=git(['rev-parse','HEAD']);
+assert.equal(version,'2.5.0');const tag='v'+version,sha=git(['rev-parse','HEAD']);
 assert.equal(sha,process.env.GITHUB_SHA);assert.match(process.env.RELEASE_RUN??'',/^\d+$/);
 const run=JSON.parse(call(['run','view',process.env.RELEASE_RUN,'--json','headSha,jobs,event']));
 assert.equal(run.headSha,sha);assert.equal(run.event,'workflow_dispatch');
