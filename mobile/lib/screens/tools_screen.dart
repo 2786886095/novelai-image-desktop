@@ -17,7 +17,8 @@ import '../ui/quality_preset_control.dart';
 import '../ui/studio_shell.dart';
 import '../ui/zoomable_image.dart';
 import '../ui/before_after_compare.dart';
-import 'generate_screen.dart' show PromptEditor, GenerationSizeControls;
+import 'generate_screen.dart' show PromptEditor;
+import '../ui/inpaint_size_controls.dart';
 import 'inpaint_mask_editor.dart';
 
 enum ToolPageKind { inpaint, upscale, postprocess }
@@ -367,7 +368,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
             visualDensity: VisualDensity.compact,
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           ),
-          onPressed: state.busy || workbench == null || !hasMask
+          onPressed: state.busy || workbench == null || !hasMask || !state.inpaintAnlasQuote.ok
               ? null
               : () => _runInpaint(state),
           icon: const Icon(Icons.brush),
@@ -416,6 +417,12 @@ class _InpaintPanelState extends State<_InpaintPanel> {
               lockKind: 'negative',
               onChanged: (v) => state.setParam((p) => p.negativePrompt = v),
             ),
+            const SizedBox(height: 12),
+            InpaintSizeControls(mode: state.inpaintSizeMode, language: language, custom: state.inpaintCustomSize,
+              source: state.workbenchImage == null ? null :
+                (width: (state.inpaintSourceMode == 'original' ? state.i2iOriginalImage ?? state.workbenchImage! : state.workbenchImage!).width,
+                 height: (state.inpaintSourceMode == 'original' ? state.i2iOriginalImage ?? state.workbenchImage! : state.workbenchImage!).height),
+              onMode: state.setInpaintSizeMode, onSize: state.setInpaintCustomSize),
             const SizedBox(height: 16),
             Text(
               language.startsWith('zh') ? '生成后下次重绘使用' : 'Next redraw source',
@@ -534,7 +541,6 @@ class _InpaintPanelState extends State<_InpaintPanel> {
                   ),
             ),
             const SizedBox(height: 12),
-            const GenerationSizeControls(imageToImage: false),
             _ToolQuoteBar(quote: state.inpaintAnlasQuote),
             const SizedBox(height: 12),
             const _RedrawParams(),

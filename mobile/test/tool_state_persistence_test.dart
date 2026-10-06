@@ -66,6 +66,8 @@ void main() {
       state
         ..reverseMode = ReversePromptMode.natural
         ..convertMode = ReversePromptMode.tags
+        ..inpaintSizeMode = 'custom'
+        ..inpaintCustomSize = (width: 704, height: 1408)
         ..inpaintModel = 'nai-diffusion-4-curated-inpainting'
         ..upscaleScale = 4
         ..directorTool = 'declutter'
@@ -80,6 +82,8 @@ void main() {
       expect(saved.reversePromptTemplateVersion, 'v4.5');
       expect(saved.convertPromptMode, 'tags');
       expect(saved.inpaintModel, 'nai-diffusion-4-curated-inpainting');
+      expect(saved.lastGenerationState['inpaintSizeMode'], 'custom');
+      expect(saved.lastGenerationState['inpaintCustomSize'], {'width': 704, 'height': 1408});
       expect(saved.upscaleScale, 4);
       expect(saved.directorTool, 'declutter');
       expect(saved.augmentEmotion, 'sad');
@@ -93,6 +97,8 @@ void main() {
       );
       await reopened.load();
       expect(reopened.convertMode, ReversePromptMode.tags);
+      expect(reopened.inpaintSizeMode, 'custom');
+      expect(reopened.inpaintCustomSize, (width: 704, height: 1408));
       expect(reopened.settings.reversePromptTemplateVersion, 'v4.5');
       expect(reopened.directorTool, 'declutter');
       expect(reopened.upscaleScale, 4);

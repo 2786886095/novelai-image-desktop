@@ -4732,7 +4732,7 @@ export async function inpaintImage(
 
   try {
     const { buffer } = await readWorkbenchImage();
-    const focused = region ? prepareFocusedInpaintInput(bufferToPng(buffer),Buffer.from(stripBase64Prefix(maskBase64),'base64'),region) : null;
+    const focused = region ? prepareFocusedInpaintInput(bufferToPng(buffer),Buffer.from(stripBase64Prefix(maskBase64),'base64'),region,params,resizeImageBufferToPng) : null;
     const preparedAssets = focused
       ? prepareInpaintAssets(focused.crop,focused.cropMask.toString('base64'),focused.size)
       : prepareInpaintAssets(buffer, maskBase64, params);

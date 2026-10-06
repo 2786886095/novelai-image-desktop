@@ -14,6 +14,7 @@ import '../services/apk_update.dart';
 import '../services/completion_sound.dart';
 import '../images/style_prompt_restore.dart';
 import '../images/upscale_plan.dart';
+import '../inpaint/inpaint_size.dart';
 import '../services/vibe_file.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -332,6 +333,8 @@ class AppState extends ChangeNotifier {
   int batchIntervalSeconds = 0;
   String selectedGroupId = '';
   String generationGroupId = '';
+  String inpaintSizeMode = 'original';
+  InpaintSize inpaintCustomSize = (width: 1024, height: 1024);
   String inpaintModel = 'nai-diffusion-5-full-inpainting';
   double inpaintStrength = 1;
   double inpaintNoise = 0;
@@ -482,6 +485,8 @@ class AppState extends ChangeNotifier {
           settings.convertPromptMode, ReversePromptMode.natural);
       restoreI2IState();
       if (settings.persistInpaintParams) {
+        final size = restoreInpaintSizeState(settings.lastGenerationState);
+        inpaintSizeMode = size.mode; inpaintCustomSize = size.custom;
         inpaintModel = settings.inpaintModel;
         inpaintStrength = settings.inpaintStrength;
         inpaintNoise = settings.inpaintNoise;
@@ -1846,14 +1851,28 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  AnlasQuote get inpaintAnlasQuote => calculateInpaintAnlas(
-        params: params,
+  void setInpaintSizeMode(String mode) { inpaintSizeMode = mode == 'custom' ? 'custom' : 'original'; markChanged(); }
+  void setInpaintCustomSize(InpaintSize size) { inpaintCustomSize = size; markChanged(); }
+
+  GenerateParams get inpaintOutputParams {
+    final source = inpaintSourceMode == 'original' ? i2iOriginalImage ?? workbenchImage : workbenchImage;
+    if (source == null) throw FormatException(inpaintSizeText(settings.language)['missing']!);
+    final size = resolveInpaintSize(inpaintSizeMode, inpaintCustomSize, (width: source.width, height: source.height), settings.language);
+    return params.copy()..width = size.width..height = size.height;
+  }
+
+  AnlasQuote get inpaintAnlasQuote {
+    try { return calculateInpaintAnlas(
+        params: inpaintOutputParams,
         account: account,
         image: workbenchImage,
         inpaintModel: inpaintModel,
         strength: inpaintStrength,
         language: settings.language,
-      );
+      ); } on FormatException catch (e) {
+      return AnlasQuote(ok: false, source: AnlasQuoteSource.unavailable, message: e.message);
+    }
+  }
 
   AnlasQuote get upscaleAnlasQuote => calculateUpscaleAnlas(
         image: workbenchImage,
@@ -1902,7 +1921,9 @@ class AppState extends ChangeNotifier {
     settings.lastGenerationState = {...settings.lastGenerationState,
       'batchCount': batchCount,
       'i2iParams': {'strength':i2i.strength,'noise':i2i.noise,'extraNoiseSeed':i2i.extraNoiseSeed,'upscaledEnhance':false},
-      'i2iSizeMode':i2iSizeMode,'i2iSourceMode':i2iSourceMode};
+      'i2iSizeMode':i2iSizeMode,'i2iSourceMode':i2iSourceMode,
+      'inpaintSizeMode': inpaintSizeMode,
+      'inpaintCustomSize': {'width': inpaintCustomSize.width, 'height': inpaintCustomSize.height}};
     settings
       ..reversePromptMode = reverseMode.value
       ..convertPromptMode = convertMode.value
@@ -2781,7 +2802,7 @@ class AppState extends ChangeNotifier {
       if (source == null) throw Exception(_rt('error.originalImageRequired'));
       final image = await File(source.filePath).readAsBytes();
       final dims = source;
-      final outputParams = params.normalized();
+      final outputParams = inpaintOutputParams;
       final targetWidth = outputParams.width;
       final targetHeight = outputParams.height;
       // Inpaint keeps its own independent positive prompt

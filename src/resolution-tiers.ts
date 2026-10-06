@@ -30,6 +30,17 @@ export function nearestResolutionTier(width:number,height:number) {
   const pixels=width*height;
   return RESOLUTION_TIERS.find(t=>{const cap=t===0.4?409600:t*1024*1024;return pixels<=cap&&pixels>=cap*0.80;})??'custom';
 }
+/** Invalid/unfinished numeric input must remain editable, not crash a preset click. */
+export function resolutionPickerRatio(width:number,height:number) {
+  const ratio=nearestResolutionRatio(width,height);
+  if(ratio!=='custom')return ratio;
+  const aspect=width/height;
+  return Number.isFinite(width)&&Number.isFinite(height)&&width>0&&height>0&&aspect>=1/768&&aspect<=768?`${width}:${height}`:'1:1';
+}
+/** A tool can restrict the shared picker without restricting generation globally. */
+export function resolutionSizeAllowed(size:{width:number;height:number},maxDimension?:number) {
+  return [size.width,size.height].every(v=>Number.isInteger(v)&&v>=64&&v%64===0&&(maxDimension===undefined||v<=maxDimension));
+}
 export function resolutionLabels(language:unknown) {
   const labels:Record<string,{tier:string;ratio:string;custom:string;tiers:string[];normal:string;large:string;note:string;expand:string;collapse:string;resize:string}>={
     'zh-CN':{tier:'总分辨率',ratio:'画面比例',custom:'自定义',tiers:['小图','普通','大图','超大图','最大'],normal:'免费尺寸范围 · 是否免费仍取决于套餐与参数',large:'大图 · 请查看生成费用估算',note:'档位以 1024² 为基准；尺寸按 64 像素对齐，下面显示实际像素。',expand:'展开提示词工具栏',collapse:'收起提示词工具栏',resize:'拖动调整提示词高度；双击或 Home 恢复；方向键微调'},

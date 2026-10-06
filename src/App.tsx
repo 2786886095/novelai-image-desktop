@@ -9,7 +9,9 @@ import {FilePathDialog} from './components/FilePathDialog';
 import {HistoryItemMenu} from './components/HistoryItemMenu';
 import {PROMPT_OPTIMIZE_TEMPLATE, PROMPT_CUSTOM_TEMPLATE} from "./data/prompt-edit-templates";
 import {workflowText} from './workflow-text';
-import {focusedInpaintPlan} from './focused-inpaint';
+import {inpaintSizePlan} from './inpaint-size';
+import {resolvePromptSizeSlot} from './prompt-size-slot';
+import {InpaintSizeControls} from './components/InpaintSizeControls';
 import './interaction-refinement.css';
 import {ImageFavoriteButton} from './components/ImageFavoriteButton';
 import {useStudioRegionMotion} from './use-studio-motion';
@@ -48,7 +50,7 @@ import { normalizeAppLanguage } from "./i18n";
 import { MetadataApplyPanel } from "./MetadataApplyPanel";
 import { ImageSaveFeedback } from "./components/ImageSaveFeedback";
 import { imagePasteProps } from "./image-paste";
-import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import clsx from "clsx";
 import { format } from "date-fns";
@@ -1466,10 +1468,14 @@ export function StylePresetImagesModal({
 // ── Prompt + Params ───────────────────────────────────────────────────────────
 export function PromptAndParams({
   includeModel = true,
+  includeSize = true,
+  sizeControls,
   imageToImage = false,
   promptOverride,
 }: {
   includeModel?: boolean;
+  includeSize?: boolean;
+  sizeControls?: ReactNode;
   imageToImage?: boolean;
   // When set, the positive-prompt textarea (and every action that edits it —
   // templates, capsule insert, weight adjust, translate, normalize) reads and
@@ -2340,7 +2346,7 @@ export function PromptAndParams({
           </small>
         </div>
       )}
-      <ResolutionPicker width={params.width} height={params.height} language={settings?.language} onChange={({width,height})=>{if(imageToImage)setI2ISizeMode("custom");setParam("width",width);setParam("height",height);}}>
+      {resolvePromptSizeSlot(sizeControls, includeSize && <ResolutionPicker width={params.width} height={params.height} language={settings?.language} onChange={({width,height})=>{if(imageToImage)setI2ISizeMode("custom");setParam("width",width);setParam("height",height);}}>
       <div className="size-row">
         <CommittedNumberInput
           label={generateText.prompt.width}
@@ -2373,7 +2379,7 @@ export function PromptAndParams({
         />
       </div>
       <small className="dimension-input-hint">{t("size.commitHint")}</small>
-      </ResolutionPicker>
+      </ResolutionPicker>)}
       <div className="seed-mode-switch">
         <button
           type="button"
@@ -3425,7 +3431,12 @@ export function InpaintPanel({ openSettings }: { openSettings: () => void }) {
   const setBrushShape = useAppStore((state) => state.setBrushShape);
   const clearInpaintMask = useAppStore((state) => state.clearInpaintMask);
   const region = useAppStore(s=>s.inpaintRegion),source = useAppStore(s=>s.workbenchImage);
-  const focusedSize=region&&source?focusedInpaintPlan(region,source.width,source.height).size:undefined;
+  const original = useAppStore(s=>s.i2iOriginalImage);
+  const sizeMode = useAppStore(s=>s.inpaintSizeMode), customSize = useAppStore(s=>s.inpaintCustomSize);
+  const setSizeMode = useAppStore(s=>s.setInpaintSizeMode), setCustomSize = useAppStore(s=>s.setInpaintCustomSize);
+  const sizeSource = inpaintSourceMode === 'original' ? original ?? source : source;
+  let sizePlan: ReturnType<typeof inpaintSizePlan> | undefined, sizeError = '';
+  if (sizeSource) { try { sizePlan = inpaintSizePlan(sizeMode, customSize, sizeSource, region, language); } catch(e) { sizeError = (e as Error).message; } }
   const inpaint = useAppStore((state) => state.inpaint);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   return (
@@ -3515,11 +3526,13 @@ export function InpaintPanel({ openSettings }: { openSettings: () => void }) {
         <InpaintPromptSource/>
         <PromptAndParams
           includeModel={false}
+          includeSize={false}
+          sizeControls={<InpaintSizeControls mode={sizeMode} custom={customSize} source={sizeSource} language={language} onMode={setSizeMode} onSize={setCustomSize}/>}
           promptOverride={{ value: inpaintPositivePrompt, onChange: setInpaintPositivePrompt }}
         />
-        <FeatureCostCard label={t("cost.beforeRun")} feature="inpaint" sizeOverride={focusedSize} />
+        {!sizeError && <FeatureCostCard label={t("cost.beforeRun")} feature="inpaint" sizeOverride={sizePlan?.requestSize} />}
       </div>
-      <AccountAndRunButton label={t("inpaint.run")} onRun={() => void inpaint()} openSettings={openSettings} />
+      <AccountAndRunButton label={t("inpaint.run")} onRun={() => void inpaint()} openSettings={openSettings} disabled={Boolean(sizeError)} disabledReason={sizeError} />
     </>
   );
 }
