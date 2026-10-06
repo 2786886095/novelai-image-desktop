@@ -35,7 +35,7 @@ import {resolveCanvasImage} from "./canvas-preview";
 import {imageStageNavigation, imageStageContainsPoint} from "./image-stage-navigation";
 import {useDisclosurePresence, disclosureAttributes} from "./components/disclosure-motion";
 import {normalizeCharacterCaptions} from "./character-presets";
-import {AnimatedCollapse, CharacterPositionMarker, characterEditLabels, useCharacterReorder} from './components/CharacterEditing';
+import {AnimatedCollapse, CharacterPositionMarker, CharacterEnabledToggle, characterEnabledLabels, characterEditLabels, useCharacterReorder} from './components/CharacterEditing';
 import {PreviewImageViewer} from './components/PreviewImageViewer';
 import {HistoryImagePicker, historyPickerText} from './components/HistoryImagePicker';
 import { characterPresetText } from './character-presets';
@@ -1109,7 +1109,7 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
 }
 
 // ── Character Captions modal ──────────────────────────────────────────────────
-function CharCaptionsModal({ onClose }: { onClose: () => void }) {
+export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   const language = useAppStore((state) => state.settings?.language);
   const settings = useAppStore((state) => state.settings);
   const charCaptions = useAppStore((state) => state.charCaptions);
@@ -1128,6 +1128,7 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   const setCharCaptions = useAppStore(state=>state.setCharCaptions);
   const reorder = useCharacterReorder(charCaptions, setCharCaptions);
   const editText = characterEditLabels(language);
+  const enabledText = characterEnabledLabels(language);
   const customPositions = charCaptions.some((caption) => caption.useCoords);
   const [collapsedCharacters, setCollapsedCharacters] = useState<Set<string>>(() => new Set());
   const toggleCharacterAutoComplete = useCallback(async () => {
@@ -1202,7 +1203,7 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
                     aria-label={t("character.positionCanvas")}
                   >
                     <div className="char-position-grid" aria-hidden="true" />
-                    {charCaptions.map((caption,index)=><CharacterPositionMarker key={caption.id} caption={caption} index={index} label={f("character.markerLabel",{index:index+1})} onCommit={updateCharCaption}/>)}
+                    {charCaptions.map((caption,index)=>caption.enabled !== false && <CharacterPositionMarker key={caption.id} caption={caption} index={index} label={f("character.markerLabel",{index:index+1})} onCommit={updateCharCaption}/>)}
                   </div>
                 </div>
               </AnimatedCollapse>
@@ -1214,17 +1215,18 @@ function CharCaptionsModal({ onClose }: { onClose: () => void }) {
             const collapsed = Boolean(reorder.dragId) || collapsedCharacters.has(cc.id);
             const contentId = `character-content-${cc.id}`;
             return (
-            <div data-character-id={cc.id} className={clsx("char-row", collapsed && "collapsed", reorder.overId===cc.id && "drag-over")} key={cc.id}>
+            <div data-character-id={cc.id} className={clsx("char-row", cc.enabled === false && "is-paused", collapsed && "collapsed", reorder.overId===cc.id && "drag-over")} key={cc.id}>
               <div className="char-row-head"><button type="button" className="char-drag-handle" aria-label={`${editText.drag}: ${idx+1}`} disabled={charCaptions.length<2} {...reorder.handle(cc.id)}><span aria-hidden="true">☰</span></button>
                 <div className="char-row-title">
                   <strong>{f("character.label", { index: idx + 1 })}</strong>
                   <span className="char-row-position-summary">
-                    {cc.useCoords
+                    {cc.enabled === false ? enabledText.off : cc.useCoords
                       ? `${t("character.customPosition")} · X ${cc.x.toFixed(2)} · Y ${cc.y.toFixed(2)}`
                       : t("character.aiChoice")}
                   </span>
                 </div>
                 <div className="char-row-actions">
+                  <CharacterEnabledToggle enabled={cc.enabled !== false} label={`${enabledText.label} · ${idx+1}`} onLabel={enabledText.on} offLabel={enabledText.off} onChange={enabled => updateCharCaption(cc.id, {enabled})} />
                   <button
                     type="button"
                     className="char-row-toggle"

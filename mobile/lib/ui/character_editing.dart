@@ -3,6 +3,24 @@ import 'package:flutter/material.dart';
 import '../models/nai_models.dart';
 import 'studio_theme.dart';
 
+List<String> characterEnabledLabels(String language) =>
+    const {
+      'zh-CN': ['启用此角色', '已启用', '已暂停：内容保留，不参与生成'],
+      'zh-TW': ['啟用此角色', '已啟用', '已暫停：內容保留，不參與生成'],
+      'en-US': [
+        'Enable this character',
+        'Enabled',
+        'Paused: content retained, excluded from generation'
+      ],
+      'ja-JP': ['このキャラクターを有効にする', '有効', '一時停止：内容を保持し、生成から除外'],
+      'ko-KR': ['이 캐릭터 활성화', '활성화됨', '일시 중지: 내용을 유지하고 생성에서 제외'],
+    }[language] ??
+    const [
+      'Enable this character',
+      'Enabled',
+      'Paused: content retained, excluded from generation'
+    ];
+
 List<String> characterEditLabels(String language) =>
     const {
       'zh-CN': ['拖动排序', '同步位置', '保留位置', '角色顺序已更改', '全部角色', '选择要保存的角色'],
@@ -109,7 +127,11 @@ class _CharacterReorderListState extends State<CharacterReorderList> {
   final list = GlobalKey();
   Timer? settle;
   @override
-  void dispose() { settle?.cancel(); super.dispose(); }
+  void dispose() {
+    settle?.cancel();
+    super.dispose();
+  }
+
   void reset() {
     settle?.cancel();
     if (mounted) {

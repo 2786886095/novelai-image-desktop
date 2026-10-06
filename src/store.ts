@@ -551,7 +551,8 @@ function buildExtras(state: AppState): GenerateExtras {
       fidelity,
       informationExtracted,
     })),
-    charCaptions: state.charCaptions.map(({ prompt, negativePrompt, useCoords, x, y }) => ({
+    charCaptions: state.charCaptions.map(({ enabled, prompt, negativePrompt, useCoords, x, y }) => ({
+      enabled,
       prompt,
       negativePrompt,
       useCoords,
@@ -1602,6 +1603,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         ...state.charCaptions,
         {
           id,
+          enabled: true,
           prompt: "",
           negativePrompt: "",
           useCoords: state.charCaptions.some((caption) => caption.useCoords),

@@ -1264,6 +1264,7 @@ class AppState extends ChangeNotifier {
     if (exact) {
       final restoredCaptions = (characterCaptions ?? const [])
           .map((item) => CharCaptionItem(
+                enabled: item.enabled,
                 prompt: item.prompt,
                 negativePrompt: item.negativePrompt,
                 useCoords: item.useCoords,
