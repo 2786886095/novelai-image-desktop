@@ -16,6 +16,12 @@ export function favoriteContextMenuItem(src:string,win:BrowserWindow):MenuItemCo
   void add(src).then(r=>{if(!win.isDestroyed())win.webContents.send('favorites:changed',{message:r.duplicate?text.duplicate:text.added});}).catch(e=>{if(!win.isDestroyed())win.webContents.send('favorites:changed',{message:text.failed+': '+String(e)});});
  }};
 }
+export function imageParametersContextMenuItem(src:string,win:BrowserWindow):MenuItemConstructorOptions {
+ const file=localMediaUrlToPath(src);
+ return {label:favoritesText(getSettings().language).loadParams,enabled:Boolean(file),click:()=>{
+  if(file&&!win.isDestroyed())win.webContents.send('image:loadParameters',file);
+ }};
+}
 export function registerImageFavoritesIpc(){
  ipcMain.handle('favorites:list',async()=>{const data=await api().list();return {...data,items:data.items.map(expose)};});
  ipcMain.handle('favorites:status',async(_e,src:string)=>{const file=localMediaUrlToPath(src);if(!file)return null;const item=await api().status(file);return item?expose(item):null;});

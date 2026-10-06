@@ -1,3 +1,4 @@
+import {applyImageParameters} from '../apply-image-parameters';
 import {SelectMenuCompat} from './ui';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import type {ImageFavorite,ImageFavoriteLibrary} from '../favorites-types';
@@ -7,7 +8,9 @@ import {ImagePreviewDialog} from './ImagePreviewDialog';
 import {FAVORITES_PAGE_SIZES,loadFavoritesView,saveFavoritesView,favoritePreviewItems,type FavoritesView} from '../favorites-view';
 
 export function FavoritesNoticeSupport(){
- useEffect(()=>window.naiDesktop.onFavoritesChanged?.(({message})=>{useAppStore.getState().setToast(message);window.dispatchEvent(new Event('studio:favorites-changed'));}),[]);return null;
+ useEffect(()=>window.naiDesktop.onFavoritesChanged?.(({message})=>{useAppStore.getState().setToast(message);window.dispatchEvent(new Event('studio:favorites-changed'));}),[]);
+ useEffect(()=>window.naiDesktop.onImageCopyNotice?.(message=>useAppStore.getState().setToast(message)),[]);
+ useEffect(()=>window.naiDesktop.onImageParametersRequested?.(filePath=>{void applyImageParameters(filePath);}),[]);return null;
 }
 export function LocalFavorites(){
  const language=useAppStore(s=>s.settings?.language),text=favoritesText(language),toast=useAppStore(s=>s.setToast);
@@ -30,7 +33,7 @@ export function LocalFavorites(){
   {error&&<p role="alert">{text.failed}: {error}</p>}{loading?<p>{text.loading}</p>:!filtered.length&&<p className="favorites-empty">{text.empty}</p>}
   <div className={`local-favorites-grid${view.layout==='masonry'?' is-masonry':''}`}>{filtered.slice((current-1)*view.pageSize,current*view.pageSize).map(item=><article key={item.id}>
    <button className="favorite-image" aria-label={text.show+' '+(item.name||item.prefix)} disabled={item.missing} onClick={e=>{previewTrigger.current=e.currentTarget;setSelected(item);}}>{item.missing?<span>{text.missing}</span>:<img loading="lazy" src={item.fileUrl} alt={item.name||item.prefix} onError={e=>{e.currentTarget.hidden=true;}}/>}</button>
-   <div className="favorite-caption">{editing===item.id?<form onSubmit={e=>{e.preventDefault();void act(async()=>{await window.naiDesktop.favoritesRename(item.id,name);setEditing('');});}}><span className="favorite-prefix">{item.prefix}_</span><input autoFocus aria-label={text.name} maxLength={100} value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setEditing('');}}}/><div className="favorites-actions"><button className="btn" disabled={busy}>{text.save}</button><button type="button" className="btn" disabled={busy} onClick={()=>setEditing('')}>{text.cancel}</button></div></form>:<><strong title={item.filePath}>{item.prefix}{item.name?'_'+item.name:''}{item.extension}</strong><div className="favorites-actions"><button className="btn" disabled={busy||item.missing} onClick={()=>{setEditing(item.id);setName(item.name);}}>{text.rename}</button><button className="btn" disabled={busy} onClick={()=>void act(()=>window.naiDesktop.favoritesRemove(item.id))}>{text.remove}</button></div></>}</div>
+   <div className="favorite-caption">{editing===item.id?<form onSubmit={e=>{e.preventDefault();void act(async()=>{await window.naiDesktop.favoritesRename(item.id,name);setEditing('');});}}><span className="favorite-prefix">{item.prefix}_</span><input autoFocus aria-label={text.name} maxLength={100} value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setEditing('');}}}/><div className="favorites-actions"><button className="btn" disabled={busy}>{text.save}</button><button type="button" className="btn" disabled={busy} onClick={()=>setEditing('')}>{text.cancel}</button></div></form>:<><strong title={item.filePath}>{item.prefix}{item.name?'_'+item.name:''}{item.extension}</strong><div className="favorites-actions"><button className="btn" disabled={busy||item.missing} onClick={()=>{setEditing(item.id);setName(item.name);}}>{text.rename}</button><button className="btn" disabled={busy||item.missing} onClick={()=>void act(()=>applyImageParameters(item.filePath))}>{text.apply}</button><button className="btn" disabled={busy} onClick={()=>void act(()=>window.naiDesktop.favoritesRemove(item.id))}>{text.remove}</button></div></>}</div>
   </article>)}</div>
   {pages>1&&<div className="favorites-pagination"><button className="btn" aria-label="Previous" disabled={current<=1} onClick={()=>setPage(current-1)}>‹</button><span>{current} / {pages}</span><button className="btn" aria-label="Next" disabled={current>=pages} onClick={()=>setPage(current+1)}>›</button></div>}
   {selected&&previewIndex>=0&&<ImagePreviewDialog images={previewItems.map(x=>({src:x.fileUrl!,alt:x.name||x.prefix}))} index={previewIndex} onIndex={i=>setSelected(previewItems[i]??null)} onClose={()=>setSelected(null)}/>}

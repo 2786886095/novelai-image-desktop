@@ -4,6 +4,7 @@ const _labels = <String, Map<String, String>>{
   'zh-CN': {
     'title': '收藏夹',
     'local': '本地原图',
+    'apply': '应用到生成',
     'online': '在线收藏',
     'directory': '保存目录',
     'choose': '更换目录',
@@ -29,6 +30,7 @@ const _labels = <String, Map<String, String>>{
   'zh-TW': {
     'title': '收藏夾',
     'local': '本地原圖',
+    'apply': '套用至生成',
     'online': '線上收藏',
     'directory': '儲存目錄',
     'choose': '更換目錄',
@@ -54,6 +56,7 @@ const _labels = <String, Map<String, String>>{
   'en-US': {
     'title': 'Favorites',
     'local': 'Original images',
+    'apply': 'Apply to generation',
     'online': 'Online bookmarks',
     'directory': 'Save folder',
     'choose': 'Change folder',
@@ -80,6 +83,7 @@ const _labels = <String, Map<String, String>>{
   'ja-JP': {
     'title': 'お気に入り',
     'local': 'ローカル原画',
+    'apply': '生成に適用',
     'online': 'オンライン保存',
     'directory': '保存先',
     'choose': '保存先を変更',
@@ -105,6 +109,7 @@ const _labels = <String, Map<String, String>>{
   'ko-KR': {
     'title': '즐겨찾기',
     'local': '로컬 원본',
+    'apply': '생성에 적용',
     'online': '온라인 즐겨찾기',
     'directory': '저장 폴더',
     'choose': '폴더 변경',

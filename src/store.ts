@@ -1,3 +1,4 @@
+import {favoritesText} from './favorites-text';
 import {naiAccountSummaryMatches} from './nai-accounts';
 import {focusedInpaintPlan,type InpaintRegion} from './focused-inpaint';
 import {retainedPrompts} from "./retained-prompts";
@@ -1400,6 +1401,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             ? storeFormat(get().settings, "toast.paramsLoadedSeed", { seed })
             : storeText(get().settings, "toast.paramsLoaded"),
         });
+      } else if(options?.restoreMetadata===true && get().activeTab==='generate') {
+        set({toast:favoritesText(get().settings?.language).noMetadata});
       }
     } else if (result.message) {
       set({ toast: compactStoreError(get().settings, result.message), statusText: storeText(get().settings, "status.imageLoadFailed") });

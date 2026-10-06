@@ -47,6 +47,7 @@ import {
   NAI_MODELS,
   NAI_SAMPLERS,
   NAI_UC_PRESETS,
+  normalizeGenerateParams,
   isNAIV4PlusModel,
   supportsNAINoiseScheduleControl,
   supportsNAIVariety,
@@ -486,7 +487,7 @@ function NumericDraftInput({ value, onCommit, normalize, min, max, ...props }: N
   />;
 }
 
-function normalizeGenerationParams(
+export function normalizeGenerationParams(
   value: Partial<GenerateParams> | undefined,
   inherited: GenerateParams,
 ): GenerateParams {
@@ -496,10 +497,9 @@ function normalizeGenerationParams(
     inherited,
   );
   return {
-    ...DEFAULT_PARAMS,
-    ...inherited,
-    ...(value ?? {}),
-    model: "nai-diffusion-4-5-full",
+    // Random gacha is not the 4.5-only target-iteration workflow. Preserve
+    // saved/synced model choices and normalize model-specific quality flags.
+    ...normalizeGenerateParams({ ...inherited, ...(value ?? {}) }),
     positivePrompt: "",
     stylePrompt: "",
     width: dimensions.width,
@@ -1477,7 +1477,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
         </span>
       </summary>
       <div className="random-generation-grid">
-        <label className="wide"><span>{paramText.model}</span><SelectMenuCompat value={session.generationParams.model} onChange={(event) => patchGeneration("model", event.target.value as GenerateParams["model"])}>{NAI_MODELS.filter(model=>model.value === "nai-diffusion-4-5-full").map((model) => <option key={model.value} value={model.value}>{model.value}</option>)}</SelectMenuCompat></label>
+        <label className="wide"><span>{paramText.model}</span><SelectMenuCompat value={session.generationParams.model} onChange={(event) => patchGeneration("model", event.target.value as GenerateParams["model"])}>{NAI_MODELS.map((model) => <option key={model.value} value={model.value}>{model.label}</option>)}</SelectMenuCompat></label>
         <fieldset className="random-size-fields">
           <legend>{paramText.size}</legend>
           <div className="random-size-presets" role="group" aria-label={paramText.size}>

@@ -5,6 +5,7 @@ import '../ui/settings_section.dart';
 import 'completion_sound_settings.dart';
 import '../i18n/parity_text.dart';
 import '../ui/zoomable_image.dart';
+import '../i18n/image_actions_text.dart';
 import '../ui/studio_theme.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:convert';
@@ -765,6 +766,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: s.keepImageMetadata,
               onChanged: (value) =>
                   state.setSettings((x) => x.keepImageMetadata = value),
+            ),
+            SwitchListTile(
+              key: const ValueKey('copy-original-metadata-setting'),
+              contentPadding: EdgeInsets.zero,
+              title: Text(imageActionsText(s.language, 'originalTitle')),
+              subtitle: Text(imageActionsText(s.language, 'originalHint')),
+              value: s.copyImageMetadata,
+              onChanged: (value) => state.setSettings(
+                  (x) => x.copyImageMetadata = value),
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,

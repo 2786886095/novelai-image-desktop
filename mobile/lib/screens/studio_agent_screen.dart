@@ -483,7 +483,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
       if (!mounted) return;
       final box =
           _composerRegion.currentContext?.findRenderObject() as RenderBox?;
-      final enabled = box != null &&
+      final enabled = TickerMode.of(context) && box != null &&
           box.hasSize &&
           _agent?.selectedConversation?.archivedAt == null &&
           ModalRoute.of(context)?.isCurrent == true;

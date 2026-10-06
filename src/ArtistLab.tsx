@@ -179,7 +179,7 @@ export function TargetArtistLab({ onBack }: { onBack: () => void }) {
     let round = 0;
     let resetCount = 0;
     const previewSize = previewSizeForTarget(session.target);
-    const fixedParams = { ...params, positivePrompt: session.basePrompt.trim(), stylePrompt: session.sharedStylePrompt.trim(), ...previewSize, seedMode: "fixed" as const, seed: session.seed, qualityPreset: "none" as const, qualityToggle: false };
+    const fixedParams = { ...params, model: "nai-diffusion-4-5-full" as const, positivePrompt: session.basePrompt.trim(), stylePrompt: session.sharedStylePrompt.trim(), ...previewSize, seedMode: "fixed" as const, seed: session.seed, qualityPreset: "none" as const, qualityToggle: false, transparentBackground: false };
     const extras = { vibeImages: [], charCaptions: [], preciseReferences: [] };
     patch({ results: [], baseline: undefined, matches: [], discoveryOffset: 0, bestProgress: 0, round: 0, resetCount: 0, imagesUsed: 0 });
     let baselineSimilarity = 0;

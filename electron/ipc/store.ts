@@ -202,6 +202,7 @@ export function defaultSettings(): AppSettings {
     historyRetentionDays: 30,
     loggingEnabled: true,
     keepImageMetadata: true,
+    copyImageMetadata: false,
     autoBackupEnabled: true,
     autoBackupIntervalHours: 24,
     autoBackupRetentionCount: 7,
@@ -285,6 +286,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   const defaults = defaultSettings();
   const rawSettings = (raw?.settings ?? {}) as Partial<AppSettings>;
   const settings = normalizeNovelAiSettings({ ...defaults, ...rawSettings });
+  settings.copyImageMetadata = rawSettings.copyImageMetadata === true;
   settings.agentApiProtocol = normalizeAgentProviderProtocol(settings.agentApiProtocol);
   settings.agentApiBaseUrl = typeof settings.agentApiBaseUrl === "string"
     ? normalizeAgentApiBaseUrl(settings.agentApiBaseUrl)
@@ -658,6 +660,7 @@ export function getSetting<K extends SettingKey>(key: K): AppSettings[K] {
 }
 
 export function setSetting<K extends SettingKey>(key: K, value: AppSettings[K]): AppSettings[K] {
+  if (key === "copyImageMetadata" && typeof value !== "boolean") throw new Error("Invalid image metadata copy setting");
   if(['apiBaseUrl','imageBaseUrl','allowCustomEndpoint','allowCustomEndpointFallback'].includes(key) && (currentNaiAccount() || naiAccountsBusy())) throw Error('账户接口由所选账户绑定；操作期间不能修改。');
   if(key==='imageProvider'&&value!=='novelai'&&value!=='openai-images')throw Error(NOVELAI_ONLY_MESSAGE);
   if (key === "outputDir" && (typeof value !== "string" || !value.trim())) throw new Error("请选择图片保存目录，保存位置不可留空。");

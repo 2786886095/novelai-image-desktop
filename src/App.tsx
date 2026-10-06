@@ -1,3 +1,4 @@
+import {favoritesText} from './favorites-text';
 import {McpToolSettings,McpTagSuggestions} from './components/McpTools';
 import {CompatibleImageSettingsCard,CompatibleGenerationPanel} from './components/CompatibleImages';
 import { NaiAccountManager } from './components/NaiAccountManager';
@@ -31,6 +32,7 @@ import { planUpscale } from "./upscale-plan";
 import { maxNAIEnhanceSize } from "./nai-dimensions";
 import {parseVibeFile, exportVibeFile, vibeFileLabels, validateVibeModel} from "./vibe-file";
 import {resolveCanvasImage} from "./canvas-preview";
+import {imageStageNavigation, imageStageContainsPoint} from "./image-stage-navigation";
 import {useDisclosurePresence, disclosureAttributes} from "./components/disclosure-motion";
 import {normalizeCharacterCaptions} from "./character-presets";
 import {AnimatedCollapse, CharacterPositionMarker, characterEditLabels, useCharacterReorder} from './components/CharacterEditing';
@@ -2560,7 +2562,7 @@ function WorkbenchImageUpload() {
     event.preventDefault();
     setDragging(false);
     const filePath = await droppedImagePath(event.dataTransfer);
-    if (filePath) void loadWorkbenchFromPath(filePath);
+    if (filePath) void loadWorkbenchFromPath(filePath, {restoreMetadata: useAppStore.getState().activeTab === "generate"});
   }
 
   return (
@@ -4606,7 +4608,7 @@ function AiLogField({ title, text }: { title: string; text: string }) {
 }
 
 // ── Image canvas (center) ─────────────────────────────────────────────────────
-type ViewableImage = { id?: string; fileUrl: string; width: number; height: number };
+type ViewableImage = { id?: string; filePath?: string; fileUrl: string; width: number; height: number };
 
 function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -4623,6 +4625,9 @@ function ZoomableImageStage({
 }) {
   const shellRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const beforeImageRef = useRef<HTMLImageElement>(null);
+  const pointerPointRef = useRef<{ x: number; y: number } | null>(null);
   const compareClipRef = useRef<HTMLDivElement>(null);
   const compareDividerRef = useRef<HTMLButtonElement>(null);
   const compareDragRef = useRef(false);
@@ -4640,11 +4645,18 @@ function ZoomableImageStage({
   const [shellSize, setShellSize] = useState({ width: 0, height: 0 });
   const [intrinsicSize, setIntrinsicSize] = useState({ width: 0, height: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  const [isOverImage, setIsOverImage] = useState(false);
   const [compareEnabled, setCompareEnabled] = useState(Boolean(compareBeforeImage));
   wheelTransformRef.current = { zoom, pan };
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const canCompare = Boolean(compareBeforeImage?.fileUrl);
+  const history = useAppStore((state) => state.history);
+  const navigation = imageStageNavigation(history, image);
+  const navigationText = historyPickerText(language);
+  const previewImages = navigation.index < 0 ? [{ src: image.fileUrl, alt }] : history.map((item, index) => ({
+    src: index === navigation.index ? image.fileUrl : item.fileUrl, alt,
+  }));
   const frameSize = useMemo(() => {
     const shellWidth = shellSize.width;
     const shellHeight = shellSize.height;
@@ -4662,7 +4674,7 @@ function ZoomableImageStage({
   }, [image.height, image.width, intrinsicSize.height, intrinsicSize.width, shellSize.height, shellSize.width]);
 
   useEffect(() => {
-    setFullscreen(false);
+    // Reset transforms for the new picture, but keep the full-size viewer mounted.
     setZoom(1);
     setPan({ x: 0, y: 0 });
     panStartRef.current = null;
@@ -4679,6 +4691,11 @@ function ZoomableImageStage({
     setCompareEnabled(Boolean(compareBeforeImage));
     setIntrinsicSize({ width: 0, height: 0 });
   }, [image.fileUrl, compareBeforeImage?.fileUrl]);
+
+  useEffect(() => {
+    const point = pointerPointRef.current;
+    setIsOverImage(Boolean(point && containsDisplayedImagePoint(point.x, point.y)));
+  }, [zoom, pan, frameSize, intrinsicSize, compareEnabled, image.fileUrl]);
 
   useEffect(() => {
     const element = shellRef.current;
@@ -4787,7 +4804,46 @@ function ZoomableImageStage({
     }
   }
 
+  function containsDisplayedImagePoint(x: number, y: number) {
+    // Different before/after aspect ratios may letterbox inside the same frame.
+    const bounds = frameRef.current?.getBoundingClientRect();
+    const before = compareEnabled && canCompare && bounds && x < bounds.left + bounds.width * comparePositionRef.current / 100;
+    return imageStageContainsPoint(before ? beforeImageRef.current : imageRef.current, x, y);
+  }
+
+  function moveHistoryImage(delta: number) {
+    const state = useAppStore.getState();
+    // Read the current selection again for rapid/repeated keys, before React commits.
+    const current = state.activeTab === "inspect" ? image : resolveCanvasImage(state) ?? image;
+    const live = imageStageNavigation(state.history, current);
+    const next = delta < 0 ? live.previous : live.next;
+    if (!next) return;
+    if (!fullscreen) shellRef.current?.focus({ preventScroll: true });
+    state.selectImage(next);
+  }
+
+  function handleStageKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if ((event.target as HTMLElement).closest('input,textarea,select,button,a,[contenteditable]:not([contenteditable="false"]),[role="textbox"]')) return;
+    const delta = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
+    if (!delta || navigation.index < 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    moveHistoryImage(delta);
+  }
+
+  function handleImageClick(event: React.MouseEvent<HTMLDivElement>) {
+    if(panMovedRef.current){panMovedRef.current=false;event.preventDefault();return;}
+    if (!compareEnabled && !(event.target as HTMLElement).closest("button") && containsDisplayedImagePoint(event.clientX, event.clientY)) setFullscreen(true);
+  }
+
+  function handleImageDoubleClick(event: React.MouseEvent<HTMLDivElement>) {
+    if (panMovedRef.current || (event.target as HTMLElement).closest("button")) return;
+    if (containsDisplayedImagePoint(event.clientX, event.clientY)) setFullscreen(true);
+  }
+
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if ((event.target as HTMLElement).closest("button") || !containsDisplayedImagePoint(event.clientX, event.clientY)) return;
     event.currentTarget.focus({preventScroll:true});
     panMovedRef.current = false;
     if (zoom <= 1) return;
@@ -4801,6 +4857,8 @@ function ZoomableImageStage({
   }
 
   function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    pointerPointRef.current = { x: event.clientX, y: event.clientY };
+    setIsOverImage(containsDisplayedImagePoint(event.clientX, event.clientY));
     if (!panStartRef.current) return;
     const start = panStartRef.current;
     if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) panMovedRef.current = true;
@@ -4823,6 +4881,11 @@ function ZoomableImageStage({
   return (
     <div className="image-stage">
       <div className="image-viewer-toolbar"><ImageFavoriteButton src={image.fileUrl}/>
+        {navigation.index >= 0 && <>
+          <button type="button" className="btn btn-ghost btn-mini" aria-label={navigationText[1]} title={navigationText[1]} disabled={!navigation.previous} onClick={() => moveHistoryImage(-1)}>‹</button>
+          <span>{navigation.index + 1} / {history.length}</span>
+          <button type="button" className="btn btn-ghost btn-mini" aria-label={navigationText[2]} title={navigationText[2]} disabled={!navigation.next} onClick={() => moveHistoryImage(1)}>›</button>
+        </>}
         <button type="button" className="btn btn-ghost btn-mini" onClick={()=>setFullscreen(true)}>{workflowText(language).preview}</button>
         {canCompare ? (
           <button
@@ -4837,25 +4900,15 @@ function ZoomableImageStage({
       <div
         ref={shellRef}
         data-image-copy-src={image.fileUrl}
-        onClick={event=>{
-          if(panMovedRef.current){panMovedRef.current=false;event.preventDefault();return;}
-          if(!compareEnabled&&!(event.target as HTMLElement).closest("button"))setFullscreen(true);
-        }}
-        onDoubleClick={event=>{if(!(event.target as HTMLElement).closest("button"))setFullscreen(true);}}
+        onClick={handleImageClick}
+        onDoubleClick={handleImageDoubleClick}
         tabIndex={0}
         aria-label={alt}
-        onKeyDown={event=>{
-          if ((event.target as HTMLElement).closest('input,textarea,button,[contenteditable="true"]')) return;
-          const delta=event.key==='ArrowRight'||event.key==='ArrowDown'?1:event.key==='ArrowLeft'||event.key==='ArrowUp'?-1:0;
-          if(!delta||!image.id)return;
-          const state=useAppStore.getState(),index=state.history.findIndex(item=>item.id===image.id);
-          if(index<0)return;
-          event.preventDefault();event.stopPropagation();
-          const next=state.history[index+delta];if(next)state.selectImage(next);
-        }}
-        className={clsx("zoom-frame-shell", zoom > 1 && "is-zoomed", isPanning && "is-panning")}
+        onKeyDown={handleStageKeyDown}
+        className={clsx("zoom-frame-shell", zoom > 1 && "is-zoomed", isPanning && "is-panning", isOverImage && "is-over-image")}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
+        onPointerLeave={() => { pointerPointRef.current = null; setIsOverImage(false); }}
         onPointerUp={stopPanning}
         onPointerCancel={stopPanning}
         onLostPointerCapture={stopPanning}
@@ -4868,9 +4921,10 @@ function ZoomableImageStage({
         >
           {compareEnabled && canCompare ? (
             <>
-              <img className="zoom-image" src={compareBeforeImage!.fileUrl} alt={t("viewer.beforeAlt")} draggable={false} />
+              <img ref={beforeImageRef} className="zoom-image" src={compareBeforeImage!.fileUrl} alt={t("viewer.beforeAlt")} draggable={false} />
               <div ref={compareClipRef} className="compare-after-clip" style={{ clipPath: "inset(0 0 0 50%)" }}>
                 <img
+                  ref={imageRef}
                   className="zoom-image zoom-image-absolute"
                   src={image.fileUrl}
                   alt={t("viewer.afterAlt")}
@@ -4901,6 +4955,7 @@ function ZoomableImageStage({
             </>
           ) : (
             <img
+              ref={imageRef}
               className="zoom-image"
               src={image.fileUrl}
               alt={alt}
@@ -4922,7 +4977,17 @@ function ZoomableImageStage({
           )}
         </div>
       </div>
-      {fullscreen&&<AppPortal><div className="style-image-lightbox" role="dialog" aria-modal="true" aria-label={alt} onClick={event=>{if(event.target===event.currentTarget)setFullscreen(false);}}><button type="button" aria-label={t("common.close")} onClick={()=>setFullscreen(false)}>×</button><PreviewImageViewer images={[{src:image.fileUrl,alt}]} index={0} onIndex={()=>{}} onBackgroundClick={()=>setFullscreen(false)} /></div></AppPortal>}
+      {fullscreen&&<AppPortal><div className="style-image-lightbox" role="dialog" aria-modal="true" aria-label={alt} onClick={event=>{if(event.target===event.currentTarget)setFullscreen(false);}}><button type="button" aria-label={t("common.close")} onClick={()=>setFullscreen(false)}>×</button><PreviewImageViewer
+        images={previewImages}
+        index={Math.max(0, navigation.index)}
+        onIndex={index => { const next = useAppStore.getState().history[index]; if (navigation.index >= 0 && next) useAppStore.getState().selectImage(next); }}
+        navigation={navigation.index < 0 ? undefined : {
+          index: navigation.index, total: history.length,
+          onPrevious: navigation.previous ? () => moveHistoryImage(-1) : undefined,
+          onNext: navigation.next ? () => moveHistoryImage(1) : undefined,
+        }}
+        onBackgroundClick={()=>setFullscreen(false)}
+      /></div></AppPortal>}
     </div>
   );
 }
@@ -5014,7 +5079,7 @@ export function ImageCanvas() {
     if (!dropEnabled) return;
     const filePath = await droppedImagePath(e.dataTransfer);
     if (filePath) {
-      void loadWorkbenchFromPath(filePath);
+      void loadWorkbenchFromPath(filePath, {restoreMetadata: activeTab === "generate"});
     }
   }
 
@@ -5996,6 +6061,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   <span>{settingsSectionText.performance.strategyDesc}</span>
                 </div>
                 <div className="toggle-list">
+                  <Toggle
+                    checked={settings.copyImageMetadata ?? false}
+                    onChange={(v) => void update("copyImageMetadata", v)}
+                    label={favoritesText(settings.language).copyMetadata}
+                    description={favoritesText(settings.language).copyMetadataHint}
+                  />
                   <Toggle
                     checked={settings.superDrop}
                     onChange={(v) => void update("superDrop", v)}

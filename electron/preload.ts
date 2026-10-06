@@ -69,6 +69,15 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   favoritesRename: (id:string,name:string) => ipcRenderer.invoke('favorites:rename',id,name),
   favoritesRemove: (id:string) => ipcRenderer.invoke('favorites:remove',id),
   favoritesChooseDirectory: () => ipcRenderer.invoke('favorites:directory'),
+  copyImageWithMetadata: (srcURL:string) => ipcRenderer.invoke('image:copyMetadata',srcURL),
+  onImageCopyNotice: (callback:(message:string)=>void) => {
+    const listener=(_event:Electron.IpcRendererEvent,message:string)=>callback(message);
+    ipcRenderer.on('image-copy:notice',listener);return ()=>ipcRenderer.removeListener('image-copy:notice',listener);
+  },
+  onImageParametersRequested: (callback:(filePath:string)=>void) => {
+    const listener=(_event:Electron.IpcRendererEvent,filePath:string)=>callback(filePath);
+    ipcRenderer.on('image:loadParameters',listener);return ()=>ipcRenderer.removeListener('image:loadParameters',listener);
+  },
   onFavoritesChanged: (callback:(notice:{message:string})=>void) => {
     const listener=(_event:Electron.IpcRendererEvent,notice:{message:string})=>callback(notice);
     ipcRenderer.on('favorites:changed',listener);return ()=>ipcRenderer.removeListener('favorites:changed',listener);
