@@ -26,7 +26,9 @@ const nativeImage = (bytes: Buffer, empty = false, pixels = 2) => ({
 let png: Buffer;
 beforeEach(async () => {
   vi.resetAllMocks();
-  fixture.root = await fs.mkdtemp(path.join(os.tmpdir(), "nai-copy-test-"));
+  // CI temp roots can be macOS /var aliases or Windows 8.3 names. The source
+  // fixture must be canonical; redirected-path rejection is tested separately.
+  fixture.root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "nai-copy-test-")));
   fixture.raw.clear();
   png = pngWithComment();
   fixture.readImage.mockReturnValue(nativeImage(png));
