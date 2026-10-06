@@ -1,3 +1,4 @@
+import '../ui/image_actions_menu.dart';
 import '../ui/studio_theme.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:async';
@@ -723,6 +724,7 @@ class _HistoryTile extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => onTap(context, item),
+        onLongPress: () => showLocalImageActions(context, item.filePath),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
