@@ -300,6 +300,8 @@ export interface LastGenerationState {
   batchIntervalSeconds?: number;
   i2iParams: I2IParams;
   inpaintModel: NAIInpaintModel;
+  inpaintSizeMode?: "original" | "custom";
+  inpaintCustomSize?: { width: number; height: number };
   inpaintStrength: number;
   inpaintNoise: number;
   inpaintPositivePrompt: string;

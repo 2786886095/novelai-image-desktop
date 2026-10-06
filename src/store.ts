@@ -1,7 +1,8 @@
 import { normalizeHistoryWidth, readHistoryCollapsed, HISTORY_COLLAPSE_AT } from './workspace-history';
 import {favoritesText} from './favorites-text';
 import {naiAccountSummaryMatches} from './nai-accounts';
-import {focusedInpaintPlan,type InpaintRegion} from './focused-inpaint';
+import {type InpaintRegion} from './focused-inpaint';
+import {inpaintSizePlan,restoreInpaintSizeState,type InpaintSize,type InpaintSizeMode} from './inpaint-size';
 import {retainedPrompts} from "./retained-prompts";
 import { mergeImageSettings, mergeFullSettings } from "./compatible-image-settings-sync";
 import {localizedStoreText} from "./store-i18n";
@@ -181,6 +182,8 @@ interface AppState {
   i2iParams: I2IParams;
   i2iSizeMode: ImageToImageSizeMode;
   inpaintModel: NAIInpaintModel;
+  inpaintSizeMode: InpaintSizeMode;
+  inpaintCustomSize: InpaintSize;
   inpaintStrength: number;
   inpaintNoise: number;
   /** Independent from params.positivePrompt — inpaint must not inherit the
@@ -315,6 +318,8 @@ interface AppState {
   setI2ISourceMode: (mode: "original" | "latest") => void;
   setInpaintSourceMode: (mode: "original" | "latest") => Promise<void>;
   setInpaintModel: (model: NAIInpaintModel) => void;
+  setInpaintSizeMode: (mode: InpaintSizeMode) => void;
+  setInpaintCustomSize: (size: InpaintSize) => void;
   setInpaintStrength: (value: number) => void;
   setInpaintNoise: (value: number) => void;
   setInpaintPositivePrompt: (value: string) => void;
@@ -794,6 +799,7 @@ function normalizedLastToolState(last: LastGenerationState, state: AppState) {
     inpaintModel: (PERSISTED_INPAINT_MODELS.has(String(last.inpaintModel))
       ? last.inpaintModel
       : state.inpaintModel) as NAIInpaintModel,
+    ...restoreInpaintSizeState(last),
     inpaintStrength: persistedNumber(last.inpaintStrength, state.inpaintStrength, 0, 1),
     inpaintNoise: persistedNumber(last.inpaintNoise, state.inpaintNoise, 0, 0.99),
     inpaintPositivePrompt:
@@ -837,6 +843,8 @@ function buildLastGenerationState(state: AppState): LastGenerationState {
     inpaintModel: state.inpaintModel,
     inpaintStrength: state.inpaintStrength,
     inpaintNoise: state.inpaintNoise,
+    inpaintSizeMode: state.inpaintSizeMode,
+    inpaintCustomSize: { ...state.inpaintCustomSize },
     inpaintPositivePrompt: state.inpaintPositivePrompt,
     brushSize: state.brushSize,
     brushOpacity: state.brushOpacity,
@@ -887,6 +895,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   i2iParams: { ...DEFAULT_I2I_PARAMS },
   i2iSizeMode: "adaptive",
   inpaintModel: "nai-diffusion-5-full-inpainting",
+  inpaintSizeMode: 'original',
+  inpaintCustomSize: { width: 1024, height: 1024 },
   inpaintStrength: 1,
   inpaintNoise: 0,
   inpaintPositivePrompt: "",
@@ -1040,6 +1050,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           ? normalizeBatchIntervalSeconds(last.batchIntervalSeconds ?? state.batchIntervalSeconds)
           : state.batchIntervalSeconds,
         i2iParams: settings.persistI2IParams ? repairedTools.i2iParams : state.i2iParams,
+        inpaintSizeMode: settings.persistInpaintParams ? repairedTools.inpaintSizeMode : state.inpaintSizeMode,
+        inpaintCustomSize: settings.persistInpaintParams ? repairedTools.inpaintCustomSize : state.inpaintCustomSize,
         inpaintModel: settings.persistInpaintParams ? repairedTools.inpaintModel : state.inpaintModel,
         inpaintStrength: settings.persistInpaintParams
           ? repairedTools.inpaintStrength
@@ -1504,6 +1516,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setInpaintModel(model) {
     set({ inpaintModel: model });
+    persistGenerationState(get);
+  },
+
+  setInpaintSizeMode(mode) {
+    set({ inpaintSizeMode: mode === 'custom' ? 'custom' : 'original' });
+    persistGenerationState(get);
+  },
+  setInpaintCustomSize(size) {
+    set({ inpaintCustomSize: { ...size } });
     persistGenerationState(get);
   },
 
@@ -2636,6 +2657,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     const sourceImage = state.inpaintSourceMode === "original"
       ? state.i2iOriginalImage ?? state.workbenchImage
       : state.workbenchImage;
+    let sizePlan;
+    try { sizePlan = inpaintSizePlan(state.inpaintSizeMode, state.inpaintCustomSize, sourceImage, state.inpaintRegion, state.settings?.language); }
+    catch (error) { const message = (error as Error).message; set({ toast: message, statusText: message, lastError: message }); return; }
     let loadedSource;
     try {
       loadedSource = await window.naiDesktop.loadImageFromPath(sourceImage.filePath);
@@ -2662,7 +2686,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const inpaintParams: GenerateParams = {
       ...state.params,
       positivePrompt: state.inpaintPositivePrompt,
-      ...(state.inpaintRegion?focusedInpaintPlan(state.inpaintRegion,sourceImage.width,sourceImage.height).size:{}),
+      ...sizePlan.outputSize,
     };
     // Enter the generating state BEFORE the balance refresh and price quote so a
     // fast double-click can't sneak a second paid request in before the button
@@ -2681,7 +2705,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       get,
       (account) => ({
         feature: "inpaint",
-        params: inpaintParams,
+        params: { ...inpaintParams, ...sizePlan.requestSize },
         inpaintModel: state.inpaintModel,
         inpaintStrength: state.inpaintStrength,
         inpaintNoise: 0,

@@ -20424,6 +20424,11 @@ html.motion-reduced .app-confirm-backdrop,html.motion-reduced .app-confirm-dialo
 .history-rail > .history-panel { width: 100%; min-width: 220px; height: 100%; }
 .history-rail.is-collapsed { visibility: hidden; pointer-events: none; }
 .history-rail-toggle { position: absolute; top: 14px; width: 28px; height: 28px; padding: 0; display: grid; place-items: center; background: var(--bg-panel); color: var(--accent); border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; font-size: 24px; line-height: 1; }
+.history-rail-toggle > svg { display: block; width: 16px; height: 16px; }
+.inpaint-size-controls .dimension-inputs { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 8px; }
+.inpaint-size-controls .dimension-inputs label { display: grid; gap: 4px; min-width: 0; }
+.inpaint-size-controls .dimension-inputs input { min-width: 0; width: 100%; }
+.inpaint-size-controls .dimension-inputs > span { align-self: center; padding-top: 18px; }
 .history-rail-toggle:hover { background: var(--bg-hover); border-color: var(--accent); }
 .history-rail-control:focus-visible,.history-rail-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .workspace[data-history-collapsed="true"] .history-rail-control .ws-resizer-grip { opacity: .25; }

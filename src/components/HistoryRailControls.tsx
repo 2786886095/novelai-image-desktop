@@ -69,7 +69,11 @@ export function HistoryRailControls() {
       onPointerDown={event => event.stopPropagation()}
       onDoubleClick={event => event.stopPropagation()}
       onClick={() => useAppStore.getState().setWsHistoryCollapsed(!useAppStore.getState().wsHistoryCollapsed)}
-    ><span aria-hidden="true">{collapsed ? '‹' : '›'}</span></button>
+    >
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points={collapsed ? '12.5,5 7.5,10 12.5,15' : '7.5,5 12.5,10 7.5,15'} />
+      </svg>
+    </button>
     <span className="ws-resizer-grip" />
   </div>;
 }

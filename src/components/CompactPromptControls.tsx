@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState,type ButtonHTMLAttributes,type ReactNode} from 'react';
 import {AppPortal,SelectMenu} from './ui';
-import {RESOLUTION_TIERS,RESOLUTION_RATIOS,resolutionForTier,nearestResolutionTier,nearestResolutionRatio,resolutionLabels} from '../resolution-tiers';
+import {RESOLUTION_TIERS,RESOLUTION_RATIOS,resolutionForTier,nearestResolutionTier,nearestResolutionRatio,resolutionLabels,resolutionPickerRatio,resolutionSizeAllowed} from '../resolution-tiers';
 import {Icon,type IconName} from './icons';
 import {capsulePromptUnits,removeCapsuleUnit,compactText} from '../compact-prompt';
 import '../compact-prompt.css';
@@ -12,14 +12,15 @@ export function FurryModeSwitch({checked,onChange,label,disabled=false}:{checked
  const [busy,setBusy]=useState(false);
  return <button type="button" role="switch" aria-checked={checked} aria-label={label} title={label} data-tooltip={label} disabled={disabled||busy} className="compact-furry-switch" onClick={()=>{setBusy(true);void Promise.resolve().then(()=>onChange(!checked)).finally(()=>setBusy(false));}}><Icon name="paw"/><span className="compact-switch-track" aria-hidden="true"><span/></span></button>;
 }
-export function ResolutionPicker({width,height,onChange,language,children}:{width:number;height:number;onChange:(size:{width:number;height:number})=>void;language:unknown;children:ReactNode}) {
+export function ResolutionPicker({width,height,onChange,language,children,maxDimension}:{width:number;height:number;onChange:(size:{width:number;height:number})=>void;language:unknown;children:ReactNode;maxDimension?:number}) {
  const root=useRef<HTMLDivElement>(null);const focusDimensions=()=>requestAnimationFrame(()=>requestAnimationFrame(()=>root.current?.querySelector<HTMLInputElement>('input')?.focus()));
  const labels=resolutionLabels(language),tier=nearestResolutionTier(width,height),ratio=nearestResolutionRatio(width,height);
- const sizeRatio=ratio==='custom'?`${width}:${height}`:ratio;
+ const sizeRatio=resolutionPickerRatio(width,height);
+ const allowed=(t:number,r:string)=>resolutionSizeAllowed(resolutionForTier(t,r),maxDimension);
  return <div ref={root} className="compact-resolution resolution-tier-picker">
   <div className="resolution-selectors">
-   <div><span className="resolution-select-label">{labels.tier}</span><SelectMenu ariaLabel={labels.tier} value={String(tier)} options={[...RESOLUTION_TIERS.map((t,i)=>({value:String(t),label:`${t} MP · ${labels.tiers[i]}`})),{value:'custom',label:labels.custom}]} onChange={value=>{if(value!=='custom')onChange(resolutionForTier(Number(value),sizeRatio));else focusDimensions();}}/></div>
-   <div><span className="resolution-select-label">{labels.ratio}</span><SelectMenu ariaLabel={labels.ratio} value={ratio} options={[...RESOLUTION_RATIOS.map(value=>({value,label:value})),{value:'custom',label:labels.custom}]} onChange={value=>{if(value!=='custom')onChange(resolutionForTier(tier==='custom'?1:tier,value));else focusDimensions();}}/></div>
+   <div><span className="resolution-select-label">{labels.tier}</span><SelectMenu ariaLabel={labels.tier} value={String(tier)} options={[...RESOLUTION_TIERS.map((t,i)=>({value:String(t),label:`${t} MP · ${labels.tiers[i]}`,disabled:!allowed(t,sizeRatio)})),{value:'custom',label:labels.custom}]} onChange={value=>{if(value==='custom')focusDimensions();else if(allowed(Number(value),sizeRatio))onChange(resolutionForTier(Number(value),sizeRatio));}}/></div>
+   <div><span className="resolution-select-label">{labels.ratio}</span><SelectMenu ariaLabel={labels.ratio} value={ratio} options={[...RESOLUTION_RATIOS.map(value=>({value,label:value,disabled:!allowed(tier==='custom'?1:tier,value)})),{value:'custom',label:labels.custom}]} onChange={value=>{if(value==='custom')focusDimensions();else if(allowed(tier==='custom'?1:tier,value))onChange(resolutionForTier(tier==='custom'?1:tier,value));}}/></div>
   </div>
   <div className="resolution-actual" title={width*height<=1024*1024?labels.normal:labels.large} aria-live="polite">{width} × {height} · {(width*height/1_000_000).toFixed(3)} MP</div>
 

@@ -63,29 +63,29 @@ void main() {
     expect(quote(1024, 2048).amount, quote(704, 1408).amount);
   });
 
-  testWidgets('inpaint reuses editable dimensions and preset choices',
+  testWidgets('inpaint custom dimensions are independent of generation dimensions',
       (tester) async {
     final state = AppState();
+    state.setInpaintSizeMode('custom');
+    final mainSize = (state.params.width, state.params.height);
     addTearDown(state.dispose);
     await tester.pumpWidget(ChangeNotifierProvider.value(
         value: state,
         child:
             const MaterialApp(home: ToolsScreen(kind: ToolPageKind.inpaint))));
     await tester.pump();
-    final width = find.byKey(const ValueKey('output-width'));
-    final height = find.byKey(const ValueKey('output-height'));
+    final width = find.byKey(const ValueKey('inpaint-width'));
+    final height = find.byKey(const ValueKey('inpaint-height'));
     await tester.scrollUntilVisible(width, 350,
         scrollable: find.byType(Scrollable).first);
-    await tester.enterText(
-        find.descendant(of: width, matching: find.byType(TextField)), '704');
+    await tester.enterText(width, '704');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
-    await tester.enterText(
-        find.descendant(of: height, matching: find.byType(TextField)), '1408');
+    await tester.enterText(height, '1408');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
-    expect((state.params.width, state.params.height), (704, 1408));
-    expect(find.byType(ChoiceChip), findsWidgets);
+    expect(state.inpaintCustomSize, (width: 704, height: 1408));
+    expect((state.params.width, state.params.height), mainSize);
     expect(tester.takeException(), isNull);
   });
 }
