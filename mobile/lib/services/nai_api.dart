@@ -1,3 +1,4 @@
+import '../prompts/translation.dart';
 import 'openai_images.dart' as envelope;
 import 'novelai_image_envelope.dart';
 import 'generation_scope.dart';
@@ -231,7 +232,8 @@ class NaiApi {
   }
 
   Future<AiTextResult> translateText(String text, AppSettings settings,
-      {String target = 'en', String baiduSecret = ''}) async {
+      {String? target, String baiduSecret = ''}) async {
+    final resolvedTarget=resolveTranslationTarget(target??settings.translateTargetLanguage,settings.language);
     final input = text.trim();
     if (input.isEmpty) {
       return const AiTextResult(ok: false, message: 'Nothing to translate');
@@ -240,7 +242,7 @@ class NaiApi {
       return _translateWithBaidu(
         input,
         settings,
-        target,
+        resolvedTarget,
         baiduSecret,
       );
     }
@@ -248,7 +250,7 @@ class NaiApi {
       final uri = Uri.https(
         'translate.googleapis.com',
         '/translate_a/single',
-        {'client': 'gtx', 'sl': 'auto', 'tl': target, 'dt': 't', 'q': input},
+        {'client': 'gtx', 'sl': 'auto', 'tl': resolvedTarget, 'dt': 't', 'q': input},
       );
       final response = await _withClient(
         settings,
@@ -313,7 +315,7 @@ class NaiApi {
           body: {
             'q': input,
             'from': 'auto',
-            'to': target.toLowerCase().startsWith('zh') ? 'zh' : 'en',
+            'to': baiduTranslationTarget(target),
             'appid': appId,
             'salt': salt,
             'sign': '$sign',

@@ -1,3 +1,4 @@
+import {resolveTranslationTarget,baiduTranslationTarget,translationLanguageName} from '../../src/translation';
 import {prepareFocusedInpaintInput,compositeFocusedPatch} from './focused-inpaint';
 import {parseNaiAccountSummary} from './nai-account-summary';
 import {validateNaiAccountReadOnly,requireNaiAccountValidation} from './nai-accounts-validation';
@@ -5214,11 +5215,12 @@ export async function suggestTags(
  */
 export async function translateText(
   text: string,
-  target = "en",
+  target?: string,
 ): Promise<{ ok: boolean; text?: string; error?: string }> {
   const trimmed = (text ?? "").trim();
   if (!trimmed) return { ok: false, error: "没有可翻译的内容。" };
   const settings = getSettings();
+  target = resolveTranslationTarget(target ?? settings.translateTargetLanguage, settings.language);
   if (settings.translateProvider === "baidu") {
     return baiduTranslate(
       trimmed,
@@ -5249,11 +5251,11 @@ async function aiTranslate(
   if (!apiUrl || !apiKey || !model) {
     return { ok: false, error: "请先在设置中填写 AI 翻译的 API 地址、API Key 和模型。" };
   }
-  const targetLanguage = target === "en" ? "English" : target === "zh" || target === "zh-CN" ? "Simplified Chinese" : target;
+  const targetLanguage = translationLanguageName(target);
   const systemPrompt = [
     "You are a precise translation engine for NovelAI prompts.",
     `Translate the user's text into ${targetLanguage}.`,
-    "Preserve existing English Danbooru tags, weights, brackets, punctuation, and comma-separated structure.",
+    target === "en" ? "Preserve existing English Danbooru tags, weights, brackets, punctuation, and comma-separated structure." : "Translate the words, including English tags, but preserve weights, brackets, punctuation, and comma-separated structure. Do not shorten or omit content.",
     "Return only the translated text without explanations, quotes, or markdown fences.",
   ].join(" ");
   try {
@@ -5328,13 +5330,7 @@ async function baiduTranslate(
   if (!appid || !secret) {
     return { ok: false, error: "请先在设置中填写百度翻译 APP ID 与密钥。" };
   }
-  // Baidu expects "zh"/"en" language codes and a salt+sign signature.
-  const to =
-    target === "en"
-      ? "en"
-      : target === "zh" || target === "zh-CN"
-        ? "zh"
-        : target;
+  const to = baiduTranslationTarget(target);
   const salt = String(Date.now());
   const sign = crypto
     .createHash("md5")

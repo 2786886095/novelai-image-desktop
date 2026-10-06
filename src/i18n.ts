@@ -827,7 +827,7 @@ const GENERATE_PANEL_TEXT = {
       relatedTitle: "相关推荐（常一起使用）",
       weightAdjust: "权重微调",
       translating: "翻译中…",
-      translate: "自动检测→英文",
+      translate: "翻译预览",
       restore: "还原",
       restoreTitle: "还原翻译前的提示词",
       normalize: "标准化",
@@ -898,7 +898,7 @@ const GENERATE_PANEL_TEXT = {
       relatedTitle: "相關推薦（常一起使用）",
       weightAdjust: "權重微調",
       translating: "翻譯中…",
-      translate: "自動偵測→英文",
+      translate: "翻譯預覽",
       restore: "還原",
       restoreTitle: "還原翻譯前的提示詞",
       normalize: "標準化",
@@ -971,7 +971,7 @@ const GENERATE_PANEL_TEXT = {
       relatedTitle: "Related recommendations",
       weightAdjust: "Weight tuning",
       translating: "Translating…",
-      translate: "Auto-detect → EN",
+      translate: "Translation preview",
       restore: "Restore",
       restoreTitle: "Restore the prompt before translation",
       normalize: "Normalize",
@@ -1044,7 +1044,7 @@ const GENERATE_PANEL_TEXT = {
       relatedTitle: "関連おすすめ（よく併用）",
       weightAdjust: "重み調整",
       translating: "翻訳中…",
-      translate: "自動判別→英語",
+      translate: "翻訳プレビュー",
       restore: "元に戻す",
       restoreTitle: "翻訳前のプロンプトに戻す",
       normalize: "正規化",
@@ -1118,7 +1118,7 @@ const GENERATE_PANEL_TEXT = {
       relatedTitle: "관련 추천(자주 함께 사용)",
       weightAdjust: "가중치 조정",
       translating: "번역 중…",
-      translate: "자동 감지→영어",
+      translate: "번역 미리보기",
       restore: "복원",
       restoreTitle: "번역 전 프롬프트로 복원",
       normalize: "정규화",
@@ -5812,7 +5812,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.mcpForConvert": "用于提示词转换",
     "settings.mcpForConvertDesc":
       "转换中文描述时，用 MCP 标签补强结果（默认关闭）。",
-    "settings.translateHint": "提示词“自动检测→英文”按钮使用的翻译引擎。",
+    "settings.translateHint": "翻译预览使用的引擎。目标语言默认跟随软件，也可手动选择。",
     "settings.translateEngine": "翻译引擎",
     "settings.googleTranslate": "谷歌翻译（免费，可能需要代理）",
     "settings.baiduTranslate": "百度翻译（需 APP ID 与密钥）",
@@ -5993,7 +5993,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.mcpForConvert": "用於提示詞轉換",
     "settings.mcpForConvertDesc":
       "轉換中文描述時，用 MCP 標籤補強結果（預設關閉）。",
-    "settings.translateHint": "提示詞「自動偵測→英文」按鈕使用的翻譯引擎。",
+    "settings.translateHint": "翻譯預覽使用的引擎。目標語言預設跟隨軟體，也可手動選擇。",
     "settings.translateEngine": "翻譯引擎",
     "settings.googleTranslate": "Google 翻譯（免費，可能需要代理）",
     "settings.baiduTranslate": "百度翻譯（需 APP ID 與密鑰）",
@@ -6178,7 +6178,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.mcpForConvertDesc":
       "When converting Chinese descriptions, enrich the result with MCP tags (off by default).",
     "settings.translateHint":
-      "Translation engine used by the prompt auto-detect → English button.",
+      "Translation engine used by the preview. The target defaults to the app language and can be selected.",
     "settings.translateEngine": "Translation engine",
     "settings.googleTranslate": "Google Translate (free, may need proxy)",
     "settings.baiduTranslate": "Baidu Translate (requires APP ID and secret)",
@@ -6362,7 +6362,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.mcpForConvertDesc":
       "中国語説明の変換時、MCP タグで結果を強化します（既定オフ）。",
     "settings.translateHint":
-      "プロンプトの自動判別→英語ボタンで使う翻訳エンジンです。",
+      "プレビューの翻訳エンジン。翻訳先はアプリの言語が既定で、選択できます。",
     "settings.translateEngine": "翻訳エンジン",
     "settings.googleTranslate": "Google 翻訳（無料、プロキシが必要な場合あり）",
     "settings.baiduTranslate": "Baidu 翻訳（APP ID と Secret が必要）",
@@ -6549,7 +6549,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.mcpForConvertDesc":
       "중국어 설명 변환 시 MCP 태그로 결과를 보강합니다(기본 꺼짐).",
     "settings.translateHint":
-      "프롬프트 자동 감지→영어 버튼이 사용할 번역 엔진입니다.",
+      "미리보기 번역 엔진. 대상은 기본적으로 앱 언어이며 직접 선택할 수 있습니다.",
     "settings.translateEngine": "번역 엔진",
     "settings.googleTranslate": "Google 번역(무료, 프록시 필요 가능)",
     "settings.baiduTranslate": "Baidu 번역(APP ID와 비밀키 필요)",

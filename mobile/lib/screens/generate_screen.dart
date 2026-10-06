@@ -1,3 +1,5 @@
+import 'translation_preview_dialog.dart';
+import '../prompts/translation.dart';
 import 'mcp_tools.dart';
 import 'style_library_screen.dart';
 import 'compatible_images.dart';
@@ -596,23 +598,16 @@ class PromptEditorState extends State<PromptEditor> {
   }
 
   Future<void> _translate() async {
-    final input = controller.text.trim();
-    if (input.isEmpty) return;
-    setState(() => translating = true);
-    final translated = await context.read<AppState>().translateText(
-          input,
-          target: 'en',
-        );
-    if (!mounted) return;
-    setState(() => translating = false);
-    if (translated == null || translated.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.read<AppState>().status)),
-      );
-      return;
-    }
-    translationBackup = controller.text;
-    _apply(translated.trim());
+    final source=controller.text;
+    if(translating||source.trim().isEmpty)return;
+    setState(()=>translating=true);
+    try {
+      final result=await showDialog<String>(context:context,builder:(_)=>TranslationPreviewDialog(source:source,isCurrent:(expected)=>mounted&&controller.text==expected&&widget.value==expected));
+      if(!mounted||result==null)return;
+      if(controller.text!=source||widget.value!=source){ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(translationText(context.read<AppState>().settings.language)['stale']!)));return;}
+      translationBackup=source;
+      _apply(result);
+    }finally{if(mounted)setState(()=>translating=false);}
   }
 
   Future<void> _editWeights() async {
