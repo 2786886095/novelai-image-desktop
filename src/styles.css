@@ -1236,7 +1236,7 @@ button { user-select: none; }
   object-position: center;
   border-radius: var(--radius-md);
   user-select: none;
-  pointer-events: none;
+  pointer-events: auto;
 }
 .zoom-image-absolute,
 .compare-after-clip {
@@ -20415,3 +20415,19 @@ input[type="range"].studio-range:disabled { opacity:.5; cursor:not-allowed; }
 .app-confirm-dialog :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 html.motion-reduced .app-confirm-backdrop,html.motion-reduced .app-confirm-dialog{transition:none}
 @media(pointer:coarse){.app-confirm-actions button{min-height:44px}}
+
+/* History can collapse to zero, without unmounting filters or changing the
+   remembered expanded width. The reserved handle never overlaps the image. */
+.workspace { --ws-right-handle: 32px; grid-template-columns: var(--ws-left,380px) var(--ws-handle,14px) minmax(320px,1fr) var(--ws-right-handle,32px) var(--ws-right,340px); transition: grid-template-columns .20s var(--ease-out); }
+.workspace[data-history-resizing="true"] { transition: none; }
+.history-rail { min-width: 0; min-height: 0; overflow: hidden; }
+.history-rail > .history-panel { width: 100%; min-width: 220px; height: 100%; }
+.history-rail.is-collapsed { visibility: hidden; pointer-events: none; }
+.history-rail-toggle { position: absolute; top: 14px; width: 28px; height: 28px; padding: 0; display: grid; place-items: center; background: var(--bg-panel); color: var(--accent); border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; font-size: 24px; line-height: 1; }
+.history-rail-toggle:hover { background: var(--bg-hover); border-color: var(--accent); }
+.history-rail-control:focus-visible,.history-rail-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.workspace[data-history-collapsed="true"] .history-rail-control .ws-resizer-grip { opacity: .25; }
+.workspace[data-history-collapsed="true"] .history-rail-control:is(:hover,:focus-visible) .ws-resizer-grip { opacity: 1; }
+html.motion-reduced .workspace { transition: none; }
+@media (max-width: 1200px) { .workspace { grid-template-columns: var(--ws-left,360px) var(--ws-handle,14px) minmax(340px,1fr); } .history-rail { display: none; } }
+@media (max-width: 768px) { .workspace { grid-template-columns: 1fr; } }

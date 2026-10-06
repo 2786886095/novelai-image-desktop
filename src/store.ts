@@ -1,3 +1,4 @@
+import { normalizeHistoryWidth, readHistoryCollapsed, HISTORY_COLLAPSE_AT } from './workspace-history';
 import {favoritesText} from './favorites-text';
 import {naiAccountSummaryMatches} from './nai-accounts';
 import {focusedInpaintPlan,type InpaintRegion} from './focused-inpaint';
@@ -64,7 +65,6 @@ const WS_LEFT_DEFAULT = 380;
 const WS_RIGHT_DEFAULT = 340;
 const WS_LEFT_MIN = 260;
 const WS_LEFT_MAX = 560;
-const WS_RIGHT_MIN = 220;
 const WS_RIGHT_MAX = 480;
 // Every async workbench load gets a revision. Starting a newer load, clearing
 // the workbench, deleting its selected history item, or starting generation
@@ -152,6 +152,9 @@ interface AppState {
   /** Workspace rail widths (px); center fills the rest. Persisted to localStorage. */
   wsLeftWidth: number;
   wsRightWidth: number;
+  wsHistoryCollapsed: boolean;
+  /** Transient reveal width: never persists or replaces the remembered expanded width. */
+  wsHistoryDragWidth: number | null;
   params: GenerateParams;
   settings: AppSettings | null;
   account: AccountSummary;
@@ -273,6 +276,9 @@ interface AppState {
   setActiveCanvasSurface: (surface: CanvasSurface) => void;
   setPromptTab: (tab: PromptTab) => void;
   setWsWidth: (edge: "left" | "right", px: number) => void;
+  setWsHistoryCollapsed: (collapsed: boolean) => void;
+  setWsHistoryDragWidth: (width: number | null) => void;
+  commitWsHistoryDragWidth: () => void;
   saveWsWidths: () => void;
   resetWsWidths: () => void;
   setParam: <K extends keyof GenerateParams>(key: K, value: GenerateParams[K]) => void;
@@ -857,7 +863,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeTab: "generate",
   promptTab: "positive",
   wsLeftWidth: readWsWidth("langbai.ws.left", WS_LEFT_DEFAULT),
-  wsRightWidth: readWsWidth("langbai.ws.right", WS_RIGHT_DEFAULT),
+  wsRightWidth: normalizeHistoryWidth(readWsWidth("langbai.ws.right", WS_RIGHT_DEFAULT)),
+  wsHistoryCollapsed: readHistoryCollapsed(),
+  wsHistoryDragWidth: null,
   params: { ...DEFAULT_PARAMS },
   settings: null,
   account: { hasToken: false },
@@ -1104,23 +1112,40 @@ export const useAppStore = create<AppState>((set, get) => ({
     const clamped =
       edge === "left"
         ? Math.round(Math.max(WS_LEFT_MIN, Math.min(WS_LEFT_MAX, px)))
-        : Math.round(Math.max(WS_RIGHT_MIN, Math.min(WS_RIGHT_MAX, px)));
+        : normalizeHistoryWidth(px);
     set(edge === "left" ? { wsLeftWidth: clamped } : { wsRightWidth: clamped });
   },
+  setWsHistoryCollapsed(collapsed) {
+    set({ wsHistoryCollapsed: collapsed, wsHistoryDragWidth: null });
+    get().saveWsWidths();
+  },
+  setWsHistoryDragWidth(width) {
+    if (width !== null && !Number.isFinite(width)) return;
+    set({ wsHistoryDragWidth: width === null ? null : Math.max(0, Math.min(WS_RIGHT_MAX, width)) });
+  },
+  commitWsHistoryDragWidth() {
+    const width = get().wsHistoryDragWidth;
+    if (width === null) return;
+    if (width <= HISTORY_COLLAPSE_AT) set({ wsHistoryCollapsed: true, wsHistoryDragWidth: null });
+    else set({ wsRightWidth: normalizeHistoryWidth(width), wsHistoryCollapsed: false, wsHistoryDragWidth: null });
+    get().saveWsWidths();
+  },
   saveWsWidths() {
-    const { wsLeftWidth, wsRightWidth } = get();
+    const { wsLeftWidth, wsRightWidth, wsHistoryCollapsed } = get();
     try {
       localStorage.setItem("langbai.ws.left", String(wsLeftWidth));
       localStorage.setItem("langbai.ws.right", String(wsRightWidth));
+      localStorage.setItem("langbai.ws.history-collapsed", String(wsHistoryCollapsed));
     } catch {
       /* ignore persistence failure */
     }
   },
   resetWsWidths() {
-    set({ wsLeftWidth: WS_LEFT_DEFAULT, wsRightWidth: WS_RIGHT_DEFAULT });
+    set({ wsLeftWidth: WS_LEFT_DEFAULT, wsRightWidth: WS_RIGHT_DEFAULT, wsHistoryCollapsed: false, wsHistoryDragWidth: null });
     try {
       localStorage.setItem("langbai.ws.left", String(WS_LEFT_DEFAULT));
       localStorage.setItem("langbai.ws.right", String(WS_RIGHT_DEFAULT));
+      localStorage.setItem("langbai.ws.history-collapsed", "false");
     } catch {
       /* ignore persistence failure */
     }

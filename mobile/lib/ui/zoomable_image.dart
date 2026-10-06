@@ -1,3 +1,4 @@
+import 'image_actions_menu.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -32,7 +33,8 @@ Future<void> showGalleryImagePreview(BuildContext context,
           footerBuilder: footerBuilder));
 }
 
-bool paintedImageContains(GlobalKey imageKey, Offset global) {
+bool paintedImageContains(GlobalKey imageKey, Offset global,
+    {bool requirePaintedImage = false}) {
   final root = imageKey.currentContext?.findRenderObject();
   if (root == null) return false;
   bool foundImage = false, inside = false;
@@ -53,7 +55,7 @@ bool paintedImageContains(GlobalKey imageKey, Offset global) {
 
   visit(root);
   if (foundImage) return inside;
-  return root is RenderBox &&
+  return !requirePaintedImage && root is RenderBox &&
       (Offset.zero & root.size).contains(root.globalToLocal(global));
 }
 
@@ -219,6 +221,18 @@ class _ZoomableImageState extends State<ZoomableImage> {
               builder: (context, constraints) => GestureDetector(
                 // Double-tap opens the full-screen viewer; pinch still zooms
                 // here in place.
+                onLongPressStart: (details) {
+                  if (widget.imagePaths != null && index < widget.imagePaths!.length &&
+                      paintedImageContains(imageKey, details.globalPosition, requirePaintedImage: true)) {
+                    showLocalImageActions(context, widget.imagePaths![index]);
+                  }
+                },
+                onSecondaryTapUp: (details) {
+                  if (widget.imagePaths != null && index < widget.imagePaths!.length &&
+                      paintedImageContains(imageKey, details.globalPosition, requirePaintedImage: true)) {
+                    showLocalImageActions(context, widget.imagePaths![index]);
+                  }
+                },
                 onDoubleTapDown: (details) =>
                     doubleTapPosition = details.globalPosition,
                 onDoubleTap: () {

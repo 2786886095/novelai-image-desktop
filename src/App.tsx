@@ -1,3 +1,4 @@
+import { HistoryRailControls, HistoryRailPane } from './components/HistoryRailControls';
 import {TranslationPreview} from './components/TranslationPreview';
 import {TRANSLATION_LANGUAGES,normalizeTranslationPreference,translationText} from './translation';
 import {favoritesText} from './favorites-text';
@@ -7109,6 +7110,9 @@ function MainPage() {
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const wsLeftWidth = useAppStore((state) => state.wsLeftWidth);
   const wsRightWidth = useAppStore((state) => state.wsRightWidth);
+  const wsHistoryCollapsed = useAppStore((state) => state.wsHistoryCollapsed);
+  const wsHistoryDragWidth = useAppStore((state) => state.wsHistoryDragWidth);
+  const displayedHistoryWidth = wsHistoryDragWidth ?? (wsHistoryCollapsed ? 0 : wsRightWidth);
   const uiCaptureParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const uiCaptureTheme = uiCaptureParams.get("uiTheme");
   // Final render-boundary guard: even if a future IPC path forgets to sanitize
@@ -7202,7 +7206,9 @@ function MainPage() {
       <AppTabBar />
       <div
         className="workspace"
-        style={{ "--ws-left": `${wsLeftWidth}px`, "--ws-right": `${wsRightWidth}px` } as CSSProperties}
+        data-history-collapsed={wsHistoryCollapsed}
+        data-history-resizing={wsHistoryDragWidth !== null}
+        style={{ "--ws-left": `${wsLeftWidth}px`, "--ws-right": `${displayedHistoryWidth}px` } as CSSProperties}
       >
         <PersistentTabView
           active={workbenchActive}
@@ -7222,8 +7228,8 @@ function MainPage() {
               </Suspense>
             </PersistentCanvasSurface>
           </div>
-          <WorkspaceResizer edge="right" />
-          <MemoizedHistoryPanel />
+          <HistoryRailControls />
+          <HistoryRailPane><MemoizedHistoryPanel /></HistoryRailPane>
         </PersistentTabView>
         <PersistentTabView active={activeTab === "styles"} scope="tab:styles"><StyleLibrary/></PersistentTabView>
         <PersistentTabView active={activeTab === "records"} scope="tab:records">
