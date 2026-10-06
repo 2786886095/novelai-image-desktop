@@ -6,13 +6,15 @@ const fixture = vi.hoisted(() => ({ spawn: vi.fn() }));
 vi.mock("node:child_process", () => ({ spawn: fixture.spawn }));
 let child: EventEmitter & { stdin: EventEmitter & { end: ReturnType<typeof vi.fn> }; kill: ReturnType<typeof vi.fn> };
 beforeEach(() => {
+  // The writer is mocked; use the host's absolute syntax even on macOS/Linux CI.
+  vi.stubEnv("SystemRoot", path.resolve("fixture-windows-root"));
   fixture.spawn.mockReset();
   child = Object.assign(new EventEmitter(), {
     stdin: Object.assign(new EventEmitter(), { end: vi.fn() }), kill: vi.fn(),
   });
   fixture.spawn.mockReturnValue(child);
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 it("passes payload only over stdin, hides the helper and ignores output", async () => {
   const bytes = Buffer.from("private fixture payload");
   const pending = writeWindowsPngClipboard(bytes);
