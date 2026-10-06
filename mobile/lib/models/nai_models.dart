@@ -1,5 +1,7 @@
 library;
 
+import '../prompts/translation.dart';
+
 import '../agent/model_selections.dart';
 import 'dart:math' as math;
 import 'completion_sound.dart';
@@ -17,7 +19,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.4.9';
+const appVersion = '2.5.0';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -930,6 +932,7 @@ class AppSettings {
   bool proxyForTranslate;
   String updateSource;
   String translateProvider;
+  String translateTargetLanguage;
   String baiduAppId;
   int historyRetentionDays;
   int aitagCacheRetentionDays;
@@ -1056,6 +1059,7 @@ class AppSettings {
     this.proxyForTranslate = true,
     this.updateSource = 'github',
     this.translateProvider = 'google',
+    this.translateTargetLanguage = 'system',
     this.baiduAppId = '',
     this.historyRetentionDays = 365,
     this.aitagCacheRetentionDays = 30,
@@ -1185,6 +1189,7 @@ class AppSettings {
         'proxyForTranslate': proxyForTranslate,
         'updateSource': updateSource,
         'translateProvider': translateProvider,
+        'translateTargetLanguage': translateTargetLanguage,
         'baiduAppId': baiduAppId,
         'historyRetentionDays': historyRetentionDays,
         'aitagCacheRetentionDays': aitagCacheRetentionDays,
@@ -1317,6 +1322,7 @@ class AppSettings {
         proxyForTranslate: j['proxyForTranslate'] ?? true,
         updateSource: 'github',
         translateProvider: j['translateProvider'] ?? 'google',
+        translateTargetLanguage: normalizeTranslationPreference(j['translateTargetLanguage']),
         baiduAppId: j['baiduAppId'] ?? '',
         historyRetentionDays: j['historyRetentionDays'] ?? 365,
         aitagCacheRetentionDays: j['aitagCacheRetentionDays'] ?? 30,

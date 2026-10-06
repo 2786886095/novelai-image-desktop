@@ -1,3 +1,4 @@
+import '../prompts/translation.dart';
 import 'novelai_accounts_screen.dart';
 import 'compatible_images.dart';
 import 'mcp_tools.dart';
@@ -664,6 +665,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     state.setSettings((x) => x.mcpForReverse = v)),
           ]),
           _Section(title: settingsText.translateSection, children: [
+            StudioDropdownButtonFormField<String>(value:normalizeTranslationPreference(s.translateTargetLanguage),isExpanded:true,decoration:InputDecoration(labelText:translationText(s.language)['target'],border:const OutlineInputBorder()),items:[DropdownMenuItem(value:'system',child:Text(translationText(s.language)['system']!)),...translationLanguages.map((l)=>DropdownMenuItem(value:l.value,child:Text(l.label)))],onChanged:(value){if(value!=null)state.setSettings((x)=>x.translateTargetLanguage=value);}),
             StudioDropdownButtonFormField<String>(
               value: s.translateProvider,
               isExpanded: true,

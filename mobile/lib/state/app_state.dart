@@ -789,7 +789,7 @@ class AppState extends ChangeNotifier {
     } finally { _naiOperationCount--; notifyListeners(); }
   }
 
-  Future<String?> translateText(String text, {String target = 'en'}) async {
+  Future<String?> translateText(String text, {String? target}) async {
     busy = true;
     status = _rt('status.translating');
     notifyListeners();

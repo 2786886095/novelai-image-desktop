@@ -1,0 +1,9 @@
+import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import {TranslationPreview} from '../src/components/TranslationPreview';import {useAppStore} from '../src/store';import '../src/styles.css';import '../src/prompt-editor.css';
+let settings:any=JSON.parse(localStorage.getItem('translation-preview-fixture-settings')||'null')??{language:'zh-CN',translateTargetLanguage:'system'};
+const qa:any={calls:[],copied:'',source:'red coat, 1.2::blue hair::',applied:[],fail:false,defer:false};
+Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async(value:string)=>{qa.copied=value;}}});
+window.naiDesktop={getSettings:async()=>settings,setSetting:async(key:string,value:any)=>{settings={...settings,[key]:value};localStorage.setItem('translation-preview-fixture-settings',JSON.stringify(settings));return value;},translate:async(text:string,target:string)=>{qa.calls.push({text,target});if(qa.defer)await new Promise(resolve=>qa.release=resolve);return qa.fail?{ok:false,error:'fixture failure'}:{ok:true,text:'translated-'+target};}} as any;
+useAppStore.setState({settings});
+function Fixture(){const [source,setSource]=useState(qa.source),[open,setOpen]=useState(false);const language=useAppStore(s=>s.settings?.language);qa.setSource=(v:string)=>{qa.source=v;setSource(v);};qa.setLanguage=(v:string)=>{settings={...settings,language:v};useAppStore.setState({settings});};
+return <><button id="qa-open" onClick={()=>setOpen(true)}>Open</button><textarea id="qa-original" readOnly value={source}/>{open&&<TranslationPreview currentValue={source} context="positive" language={language} onClose={()=>setOpen(false)} onApply={(value,expected)=>{if(qa.source!==expected)return false;qa.applied.push(value);qa.setSource(value);return true;}}/>}</>;}
+(window as any).qa=qa;createRoot(document.getElementById('root')!).render(<Fixture/>);

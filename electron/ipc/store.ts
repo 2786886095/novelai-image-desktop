@@ -255,6 +255,7 @@ export function defaultSettings(): AppSettings {
     mcpForReverse: false,
     mcpForConvert: false,
     translateProvider: "google" as const,
+    translateTargetLanguage: "system",
     baiduAppId: "",
     baiduSecret: "",
     translateAiApiUrl: "https://api.openai.com/v1",

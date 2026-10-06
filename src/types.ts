@@ -1531,6 +1531,7 @@ export interface AppSettings {
   mcpForConvert: boolean;
   // Translation
   translateProvider: TranslateProvider;
+  translateTargetLanguage?: string; // system follows the current app language
   baiduAppId: string;
   baiduSecret: string;
   translateAiApiUrl: string;

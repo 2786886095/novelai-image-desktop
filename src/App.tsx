@@ -1,3 +1,5 @@
+import {TranslationPreview} from './components/TranslationPreview';
+import {TRANSLATION_LANGUAGES,normalizeTranslationPreference,translationText} from './translation';
 import {favoritesText} from './favorites-text';
 import {McpToolSettings,McpTagSuggestions} from './components/McpTools';
 import {CompatibleImageSettingsCard,CompatibleGenerationPanel} from './components/CompatibleImages';
@@ -186,10 +188,6 @@ const onboardingHeroUrl = "./onboarding-hero.png";
 const projectGithubUrl = "https://github.com/2786886095/novelai-image-desktop";
 const rewardWechatUrl = "./about/wechat-reward.jpg";
 const rewardAlipayUrl = "./about/alipay-reward.jpg";
-
-function hasTranslatableText(segment: string) {
-  return /[\p{Letter}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(segment);
-}
 
 function makeStylePresetId() {
   const cryptoId = globalThis.crypto?.randomUUID?.();
@@ -1501,7 +1499,7 @@ export function PromptAndParams({
   const [chipOpen, setChipOpen] = useState(false);
   const [showWeights, setShowWeights] = useState(false);
   const [showNormalize, setShowNormalize] = useState(false);
-  const [translating, setTranslating] = useState(false);
+  const [showTranslation,setShowTranslation] = useState(false);
   const [selectedStylePresetId, setSelectedStylePresetId] = useState("");
   const [selectedStylePresetGroup, setSelectedStylePresetGroup] = useState("all");
   const [styleGroupPromptOpen, setStyleGroupPromptOpen] = useState(false);
@@ -1997,63 +1995,9 @@ export function PromptAndParams({
     else setParam(key, value);
   }
 
-  async function translatePrompt() {
-    const text = promptValue.trim();
-    if (!text) {
-      setToast(t("prompt.emptyTranslate"));
-      return;
-    }
-    setTranslating(true);
-    const original = promptValue;
-    function applyTranslation(next:string) {
-      if(latestPromptValues.current[promptKey]!==original){setToast(editorText.stale);return false;}
-      setPromptValue(next);return true;
-    }
-    try {
-      if (settings?.translateProvider === "ai") {
-        const result = await window.naiDesktop.translate(text, "en");
-        if (!result.ok || !result.text?.trim()) {
-          setToast(t("prompt.translateFailed"));
-          return;
-        }
-        const translated = result.text.trim();
-        if(!applyTranslation(translated + (translated.endsWith(",") ? " " : ", ")))return;
-        setTranslateBackup((backup) => ({ ...backup, [promptKey]: original }));
-        setToast(t("prompt.translateDone"));
-        return;
-      }
-      // Translate comma-separated natural-language segments with provider-side
-      // auto language detection. English Danbooru tags normally round-trip to the
-      // same text, while Chinese/Japanese/Korean/other languages become English.
-      const segments = text.split(",");
-      let translatedAny = false;
-      let failed = false;
-      const translated = await Promise.all(
-        segments.map(async (seg) => {
-          const trimmed = seg.trim();
-          if (!trimmed || !hasTranslatableText(trimmed)) return trimmed;
-          const res = await window.naiDesktop.translate(trimmed, "en");
-          if (res.ok && res.text) {
-            translatedAny = true;
-            return res.text.trim();
-          }
-          failed = true;
-          return trimmed;
-        }),
-      );
-      if (!translatedAny && failed) {
-        setToast(t("prompt.translateFailed"));
-        return;
-      }
-      const joined = translated.filter(Boolean).join(", ");
-      if(!applyTranslation(joined + (joined.endsWith(",") ? " " : ", ")))return;
-      setTranslateBackup((b) => ({ ...b, [promptKey]: original }));
-      setToast(failed ? t("prompt.translatePartialFailed") : t("prompt.translateDone"));
-    } catch {
-      setToast(t("prompt.translateFailed"));
-    } finally {
-      setTranslating(false);
-    }
+  function translatePrompt() {
+    if (!promptValue.trim()) { setToast(t("prompt.emptyTranslate")); return; }
+    setShowTranslation(true);
   }
 
   function restoreTranslate() {
@@ -2290,7 +2234,7 @@ export function PromptAndParams({
       <div className="prompt-toolbar-row compact-prompt-toolbar" role="toolbar" aria-label={editorText.more}>
         <CompactIconButton label={editorText.undo} icon="undo" disabled={!promptHistory.canUndo} onClick={()=>promptHistory.undo()}/>
         <CompactIconButton label={editorText.redo} icon="redo" disabled={!promptHistory.canRedo} onClick={()=>promptHistory.redo()}/>
-        <CompactIconButton label={translating?generateText.prompt.translating:generateText.prompt.translate} icon="globe" onClick={()=>void translatePrompt()} disabled={translating}/>
+        <CompactIconButton label={translationText(settings?.language).title} icon="globe" aria-haspopup="dialog" onClick={translatePrompt} disabled={!promptValue.trim()}/>
         {promptTab==='positive'&&<><CompactIconButton label={editorText.optimize} icon="wand" aria-haspopup="dialog" onClick={()=>setAssistantKind('optimize')} disabled={!effectivePositivePrompt.trim()}/><CompactIconButton label={editorText.custom} icon="sparkles" aria-haspopup="dialog" onClick={()=>setAssistantKind('custom')}/></>}
         <CompactIconButton label={`${generateText.prompt.weightAdjust} (${weightTags.length})`} icon="sliders" aria-expanded={showWeights} aria-haspopup="dialog" onClick={()=>setShowWeights(v=>!v)} disabled={weightTags.length===0}/>
         <CompactIconButton label={generateText.prompt.capsuleTitle} icon="dice" aria-haspopup="dialog" aria-expanded={chipOpen} onClick={()=>setChipOpen(true)}/>
@@ -2299,12 +2243,16 @@ export function PromptAndParams({
           <CompactIconButton label={generateText.prompt.normalize} icon="sparkles" onClick={()=>setShowNormalize(true)} disabled={!promptValue.trim()}/>
           <CompactIconButton label={(settings?.autoComplete??true)?generateText.prompt.autocompleteOn:generateText.prompt.autocompleteOff} icon="bulb" role="switch" aria-checked={settings?.autoComplete??true} onClick={()=>void toggleAutoComplete()}/>
           {promptTab==="positive"&&<PromptChunkControl compact value={effectivePositivePrompt} onApply={value=>setPromptField("positivePrompt",value)} placement="top-right"/>}
-          {translateBackup[promptKey]!=null&&<CompactIconButton label={generateText.prompt.restore} icon="undo" onClick={restoreTranslate} disabled={translating}/>}
+          {translateBackup[promptKey]!=null&&<CompactIconButton label={generateText.prompt.restore} icon="undo" onClick={restoreTranslate}/>}
         </PromptToolsPopover>
       </div>
       </SlidingPromptToolbar>
       <PromptResizeHandle language={settings?.language}/>
       </div>
+      {showTranslation&&<TranslationPreview currentValue={promptValue} context={JSON.stringify([promptKey,!!promptOverride])} language={settings?.language} onClose={()=>setShowTranslation(false)} onApply={(next,expected,expectedContext)=>{
+        if(expectedContext!==JSON.stringify([promptKey,!!promptOverride])||latestPromptValues.current[promptKey]!==expected){setToast(editorText.stale);return false;}
+        setTranslateBackup(backup=>({...backup,[promptKey]:expected}));setPromptValue(next);return true;
+      }}/>}
       {assistantKind&&<PromptAssistant kind={assistantKind} currentValue={effectivePositivePrompt} context={assistantContext} mode={assistantMode} version={assistantVersion} language={settings?.language} onClose={()=>setAssistantKind(null)} onApply={(next,expected)=>{
         if(latestPromptValues.current.positivePrompt!==expected)return false;
         positiveHistory.commit(next);return true;
@@ -6455,6 +6403,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
                 <div className="tag-server-card">
                   <p className="settings-hint" style={{ margin: 0 }}>{t("settings.translateHint")}</p>
+                  <SelectMenu value={normalizeTranslationPreference(settings.translateTargetLanguage)} options={[{value:'system',label:translationText(settings.language).system},...TRANSLATION_LANGUAGES]} label={translationText(settings.language).target} ariaLabel={translationText(settings.language).target} onChange={value=>void update('translateTargetLanguage',value)}/>
+
                   <label className="field">
                     <span>{t("settings.translateEngine")}</span>
                     <SelectMenuCompat value={settings.translateProvider} onChange={(e) => void update("translateProvider", e.target.value as AppSettings["translateProvider"])}>

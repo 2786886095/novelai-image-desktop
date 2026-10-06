@@ -86,3 +86,9 @@
 @media(pointer:coarse){.prompt-editor .prompt-toolbar-dock :is(.compact-icon-button,.prompt-tool-btn){width:40px;min-width:40px;height:40px;min-height:40px;max-height:40px;flex-basis:40px;}.prompt-toolbar-reveal{max-width:calc(100% - 42px);}}
 
 .motion-reduced .prompt-weight-dialog {animation:none;}
+
+.translation-preview-target {display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+.translation-preview-target .select-menu {min-width:220px;max-width:100%;}
+.translation-preview-columns {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;}
+.translation-preview-columns textarea {min-height:220px;max-height:48dvh;}
+@media(max-width:620px){.translation-preview-columns {grid-template-columns:minmax(0,1fr);}.translation-preview-columns textarea {min-height:120px;height:22dvh;}}
