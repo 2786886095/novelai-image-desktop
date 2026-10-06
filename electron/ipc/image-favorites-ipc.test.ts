@@ -3,7 +3,7 @@ import {it,expect,vi} from 'vitest';
 const fixture=vi.hoisted(()=>({root:'',handlers:new Map<string,Function>(),pick:vi.fn()}));
 vi.mock('electron',()=>({app:{getPath:(key:string)=>path.join(fixture.root,key)},ipcMain:{handle:(key:string,fn:Function)=>fixture.handlers.set(key,fn)},dialog:{showOpenDialog:fixture.pick}}));
 vi.mock('./store',()=>({getSettings:()=>({language:'zh-CN'})}));
-import {registerImageFavoritesIpc,favoriteContextMenuItem} from './image-favorites-ipc';
+import {registerImageFavoritesIpc,favoriteContextMenuItem,imageParametersContextMenuItem} from './image-favorites-ipc';
 import {toLocalMediaUrl} from './local-media-protocol';
 it('right-click saves original once with toast, IPC reads it, raw/unregistered paths are rejected',async()=>{
  fixture.root=await fs.mkdtemp(path.join(os.tmpdir(),'favorites-ipc-'));
@@ -20,4 +20,15 @@ it('right-click saves original once with toast, IPC reads it, raw/unregistered p
   (menu.click as Function)();await vi.waitFor(()=>expect(send).toHaveBeenCalledWith('favorites:changed',{message:'图片已在收藏夹'}));
   fixture.pick.mockResolvedValueOnce({canceled:true,filePaths:[]});expect(await fixture.handlers.get('favorites:directory')!({})).toBeNull();expect((await fixture.handlers.get('favorites:list')!({})).directory).toBe(state.directory);
  }finally{await fs.rm(fixture.root,{recursive:true,force:true});}
+});
+
+it('native load parameters accepts only registered local images and ignores destroyed windows',()=>{
+ const send=vi.fn(),win={isDestroyed:()=>false,webContents:{send}} as any;
+ const src=toLocalMediaUrl(path.join(os.tmpdir(),'metadata.png'));
+ const menu=imageParametersContextMenuItem(src,win);
+ expect(menu.label).toBe('加载参数');expect(menu.enabled).toBe(true);
+ (menu.click as Function)();expect(send).toHaveBeenCalledWith('image:loadParameters',path.join(os.tmpdir(),'metadata.png'));
+ send.mockClear();const invalid=imageParametersContextMenuItem('https://private.example/image.png',win);
+ expect(invalid.enabled).toBe(false);(invalid.click as Function)();expect(send).not.toHaveBeenCalled();
+ const dead=imageParametersContextMenuItem(src,{isDestroyed:()=>true,webContents:{send}} as any);(dead.click as Function)();expect(send).not.toHaveBeenCalled();
 });

@@ -11,6 +11,7 @@ import {
   compositeInpaintBuffers,
   consumeGenerateImageStream,
   extractEmbeddedGenerationMetadata,
+  generateArtistLabImage,
   isOfficialNaiHost,
   isPreflightNetworkFailure,
   parseAccount,
@@ -35,6 +36,12 @@ import {
 function b64(text: string) {
   return Buffer.from(text, "utf8").toString("base64");
 }
+
+describe('artist iteration model boundary', () => {
+  it.each(['nai-diffusion-5-full', 'nai-diffusion-5-curated'] as const)('rejects %s before any iteration generation', async model => {
+    await expect(generateArtistLabImage({ ...DEFAULT_PARAMS, model }, {}, 'target')).rejects.toThrow('目标画风自动迭代仅支持 NAI 4.5 Full');
+  });
+});
 
 describe('account-aware authentication recovery', () => {
   for (const method of ['relay', 'token', 'official-login', undefined] as const) {

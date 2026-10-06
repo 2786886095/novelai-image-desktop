@@ -63,6 +63,73 @@ Future<void> _scrollUntilBuilt(
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  for (final model in [
+    'nai-diffusion-4-5-full',
+    'nai-diffusion-4-5-curated',
+    'nai-diffusion-5-full',
+    'nai-diffusion-5-curated',
+  ]) {
+    testWidgets('random gacha restores $model and sends the same retry model',
+        (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(420, 800);
+      addTearDown(tester.view.reset);
+      final saved = GenerateParams()..model = model;
+      SharedPreferences.setMockInitialValues({
+        'artist_lab_random_v1_generationParams': jsonEncode(saved.toJson()),
+        'artist_lab_random_v1_results': jsonEncode([
+          {
+            'recipe': {
+              'id': 'model-policy-retry',
+              'prompt': '1.0::artist:test_artist ::',
+              'artists': ['test_artist'],
+              'mutations': [],
+            },
+            'status': 'failed',
+            'error': 'fixture retry',
+            'generationModel': model,
+            'liked': false,
+          }
+        ]),
+      });
+      final state = _FakeGenerationAppState();
+      addTearDown(state.dispose);
+      Future<void> mount() async {
+        await tester.pumpWidget(
+          ChangeNotifierProvider<AppState>.value(
+            value: state,
+            child: MaterialApp(
+              theme: StudioTheme.light(),
+              home: RandomArtistLabScreen(
+                onBack: () {},
+                artistService: _FakeArtistService(),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await mount();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await mount();
+      final body =
+          find.byKey(const PageStorageKey<String>('random-artist-lab-scroll'));
+      await _scrollUntilBuilt(
+        tester,
+        find.descendant(of: body, matching: find.byType(Scrollable)).first,
+        find.byTooltip('重试'),
+      );
+      await tester.tap(find.byTooltip('重试').hitTestable());
+      await tester.pump();
+      expect(state.lastParams?.model, model);
+      expect(tester.takeException(), isNull);
+      state.generation.completeError(StateError('end fixture request'));
+      await tester.pumpAndSettle();
+    });
+  }
+
   for (final viewport in <(String, Size)>[
     ('phone portrait', const Size(360, 800)),
     ('phone landscape', const Size(800, 360)),

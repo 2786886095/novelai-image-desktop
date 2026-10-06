@@ -219,7 +219,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     ),
                     itemCount: history.length,
                     itemBuilder: (context, index) =>
-                        _HistoryTile(history[index], _openDetail),
+                        _HistoryTile(history[index],
+                            (context, item) => _openDetail(context, item, history)),
                   ),
           ),
         ],
@@ -322,7 +323,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
     }
   }
 
-  void _openDetail(BuildContext context, HistoryItem item) {
+  void _openDetail(BuildContext context, HistoryItem item, List<HistoryItem> navigation) {
     final language = context.read<AppState>().settings.language;
     String t(String key) => mobileUiTextFor(language, key);
     showModalBottomSheet<void>(
@@ -344,16 +345,10 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     height: 420,
                     child: ZoomableImage(
                       image: Image.file(file, fit: BoxFit.contain),
-                      gallery: context
-                          .read<AppState>()
-                          .history
-                          .map((i) =>
-                              Image.file(File(i.filePath), fit: BoxFit.contain))
-                          .toList(),
-                      initialIndex: context
-                          .read<AppState>()
-                          .history
-                          .indexWhere((i) => i.id == item.id),
+                      gallery: navigation.map((i) => Image.file(
+                          File(i.filePath), fit: BoxFit.contain)).toList(),
+                      imagePaths: navigation.map((i) => i.filePath).toList(),
+                      initialIndex: navigation.indexWhere((i) => i.id == item.id),
                     ),
                   ),
                 ),

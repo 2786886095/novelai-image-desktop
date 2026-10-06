@@ -226,8 +226,21 @@ final class ComposerFiles: NSObject, UIDropInteractionDelegate {
         result(nil)
       } else if call.method=="paste" {
         var paths=[String]();var total=0
-        for image in (UIPasteboard.general.images ?? []).prefix(64) {
-          if let data=image.pngData(),data.count<=48*1024*1024,total+data.count<=192*1024*1024,let path=self.save(data,extension:"png") {paths.append(path);total+=data.count}
+        // Prefer encoded data. UIImage.pngData() would erase embedded parameters.
+        let board = UIPasteboard.general
+        for (index, item) in board.items.prefix(64).enumerated() {
+          var copied = false
+          for id in item.keys.sorted() where UTTypeConformsTo(id as CFString, kUTTypeImage) {
+            guard let ext = self.preferredExtension(id), self.allowed.contains(ext),
+                  let data = board.data(forPasteboardType: id, inItemSet: IndexSet(integer: index))?.first,
+                  data.count <= 48*1024*1024, total+data.count <= 192*1024*1024,
+                  let path = self.save(data, extension: ext) else {continue}
+            paths.append(path); total += data.count; copied = true; break
+          }
+          // Some providers expose only a decoded UIImage; its original metadata is unavailable.
+          if !copied, let image = item.values.compactMap({$0 as? UIImage}).first,
+             let data = image.pngData(), total+data.count <= 192*1024*1024,
+             let path = self.save(data, extension: "png") {paths.append(path);total += data.count}
         }
         for url in (UIPasteboard.general.urls ?? []).prefix(max(0,64-paths.count)) where url.isFileURL {
           let scoped=url.startAccessingSecurityScopedResource();defer{if scoped{url.stopAccessingSecurityScopedResource()}}
@@ -235,6 +248,18 @@ final class ComposerFiles: NSObject, UIDropInteractionDelegate {
           if self.allowed.contains(ext),let values=try? url.resourceValues(forKeys:[.fileSizeKey]),let count=values.fileSize,count<=48*1024*1024,total+count<=192*1024*1024,let data=try? Data(contentsOf:url),let path=self.save(data,extension:ext){paths.append(path);total+=data.count}
         }
         result(paths)
+      } else if call.method == "copyImage" {
+        guard let args = call.arguments as? [String: Any],
+              let bytes = args["bytes"] as? FlutterStandardTypedData,
+              !bytes.data.isEmpty, bytes.data.count <= 48*1024*1024,
+              let mime = args["mime"] as? String,
+              let type = UTTypeCreatePreferredIdentifierForTag(kUTTagClassMIMEType, mime as CFString, nil)?.takeRetainedValue(),
+              UTTypeConformsTo(type, kUTTypeImage) else {
+          result(FlutterError(code: "image_clipboard", message: "Unsupported image bytes", details: nil));return
+        }
+        // Encoded data rather than UIImage preserves the original file bytes.
+        UIPasteboard.general.setItems([[type as String: bytes.data]], options: [:])
+        result(true)
       } else {result(FlutterMethodNotImplemented)}
     }
     controller.view.addInteraction(UIDropInteraction(delegate:self))

@@ -4112,6 +4112,11 @@ export async function generateArtistLabImage(
   rawMode: unknown,
 ): Promise<GenerateResult> {
   const mode = rawMode === "target" ? "target" : "random";
+  // The old target-search renderer and Artist Detective are 4.5-only;
+  // never apply this constraint to random gacha or weight-repair requests.
+  if (mode === "target" && params.model !== "nai-diffusion-4-5-full") {
+    throw new Error("目标画风自动迭代仅支持 NAI 4.5 Full。");
+  }
   const group = mode === "target" ? ensureHistoryGroup("画风实验室-目标迭代") : null;
   const result = await generateImage(
     {

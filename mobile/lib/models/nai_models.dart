@@ -929,6 +929,7 @@ class AppSettings {
   int historyRetentionDays;
   int aitagCacheRetentionDays;
   bool keepImageMetadata;
+  bool copyImageMetadata;
   bool saveToGallery;
   bool streamPreviewEnabled;
   // Custom base folder for saved originals. Empty = app documents/images.
@@ -1054,6 +1055,7 @@ class AppSettings {
     this.historyRetentionDays = 365,
     this.aitagCacheRetentionDays = 30,
     this.keepImageMetadata = true,
+    this.copyImageMetadata = false,
     this.saveToGallery = true,
     this.streamPreviewEnabled = true,
     this.imageOutputDir = '',
@@ -1182,6 +1184,7 @@ class AppSettings {
         'historyRetentionDays': historyRetentionDays,
         'aitagCacheRetentionDays': aitagCacheRetentionDays,
         'keepImageMetadata': keepImageMetadata,
+        'copyImageMetadata': copyImageMetadata,
         'saveToGallery': saveToGallery,
         'streamPreviewEnabled': streamPreviewEnabled,
         'imageOutputDir': imageOutputDir,
@@ -1313,6 +1316,7 @@ class AppSettings {
         historyRetentionDays: j['historyRetentionDays'] ?? 365,
         aitagCacheRetentionDays: j['aitagCacheRetentionDays'] ?? 30,
         keepImageMetadata: j['keepImageMetadata'] ?? true,
+        copyImageMetadata: j['copyImageMetadata'] == true,
         saveToGallery: j['saveToGallery'] ?? true,
         streamPreviewEnabled: j['streamPreviewEnabled'] ?? true,
         imageOutputDir: j['imageOutputDir'] ?? '',

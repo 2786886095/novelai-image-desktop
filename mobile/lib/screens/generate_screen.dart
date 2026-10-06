@@ -36,6 +36,7 @@ import '../ui/before_after_compare.dart';
 import '../ui/studio_shell.dart';
 import '../ui/studio_theme.dart';
 import '../ui/zoomable_image.dart';
+import '../widgets/generation_image_transfers.dart';
 import 'reference_catalog_panel.dart';
 import 'positive_prompt_preset_sheet.dart';
 import 'prompt_assistant_dialog.dart';
@@ -280,7 +281,8 @@ class GenerateScreen extends StatelessWidget {
     final showV5Allowance =
         state.account.tierLevel == 3 && p.model.startsWith('nai-diffusion-5-');
 
-    final preview = _PreviewCard(onPick: () => _pickImage(context));
+    final preview = GenerationImageTransfers(
+        child: _PreviewCard(onPick: () => _pickImage(context)));
     if(state.settings.imageProvider=='openai-images' && state.workbenchImage==null) return Scaffold(body:CompatibleGenerateScreen(preview:preview));
     final controls = <Widget>[
       _TagSearchBox(
@@ -1972,6 +1974,10 @@ class _PreviewCard extends StatelessWidget {
     final work = state.workbenchImage;
     final path = work?.filePath ?? current?.filePath;
     final livePreview = state.generationPreview;
+    final history = state.generationPreviewHistory;
+    final historyIndex = history.indexWhere((item) => item.filePath == path);
+    final paths = historyIndex < 0 ? <String>[if (path != null) path] :
+        history.map((item) => item.filePath).toList();
     return AspectRatio(
       aspectRatio: 1,
       child: Card(
@@ -1989,6 +1995,11 @@ class _PreviewCard extends StatelessWidget {
             else if (path != null && File(path).existsSync())
               ZoomableImage(
                 image: Image.file(File(path), fit: BoxFit.contain),
+                gallery: paths.map((p) => Image.file(File(p), fit: BoxFit.contain)).toList(),
+                imagePaths: paths,
+                initialIndex: historyIndex < 0 ? 0 : historyIndex,
+                onIndexChanged: historyIndex < 0 ? null :
+                    (index) => state.setWorkbenchFromHistory(history[index]),
               )
             else
               Center(child: Text(text.previewEmpty)),

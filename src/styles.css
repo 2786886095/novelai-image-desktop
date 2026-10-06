@@ -1203,10 +1203,11 @@ button { user-select: none; }
   justify-content: center;
   overflow: hidden;
   touch-action: none;
-  cursor: zoom-in;
+  cursor: default;
 }
-.zoom-frame-shell.is-zoomed { cursor: zoom-in; }
-.zoom-frame-shell.is-panning { cursor: grabbing; }
+.zoom-frame-shell.is-over-image { cursor: zoom-in; }
+.zoom-frame-shell.is-over-image.is-zoomed { cursor: grab; }
+.zoom-frame-shell.is-over-image.is-panning { cursor: grabbing; }
 .zoom-frame {
   position: relative;
   display: grid;

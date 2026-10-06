@@ -314,7 +314,15 @@ class AppState extends ChangeNotifier {
 
   bool booted = false;
   bool needsNetworkOnboarding = false;
-  bool busy = false;
+  int _workbenchLoadRevision = 0;
+  bool _busy = false;
+  bool get busy => _busy;
+  set busy(bool value) {
+    // Even a generation that starts and finishes during a read cancels that
+    // pending explicit restore. Preserve the existing busy notifications.
+    if (value && !_busy) _workbenchLoadRevision++;
+    _busy = value;
+  }
   Uint8List? generationPreview;
   double generationPreviewProgress = 0;
   int generationPreviewStep = 0;
@@ -1159,10 +1167,19 @@ class AppState extends ChangeNotifier {
     String filePath, {
     bool applyMetadata = false,
   }) async {
+    if (applyMetadata && busy) {
+      throw StateError('Cannot restore image parameters during generation.');
+    }
+    final revision = ++_workbenchLoadRevision;
     final bytes = await File(filePath).readAsBytes();
     final dims = readImageDimensions(bytes);
     final report =
         inspectImageMetadata(await compute(parseImageTextMetadata, bytes));
+    // Stage all decoded data before publishing any state. A later selection,
+    // clear, or paid-generation start invalidates only this explicit restore.
+    if (applyMetadata && (busy || revision != _workbenchLoadRevision)) {
+      throw StateError('Image parameter import cancelled: a newer image or generation started.');
+    }
     final imported = report.imported;
     workbenchImportedParams = imported.isEmpty ? null : imported;
     workbenchCharacterCaptions = report.characterCaptions;
@@ -1183,12 +1200,24 @@ class AppState extends ChangeNotifier {
     _scheduleGenerationQuote();
   }
 
+  /// Paste/drop and an explicit favorite apply restore parameters. Picker and
+  /// ordinary history selection deliberately retain the current form values.
+  Future<void> importGenerationImage(String path) =>
+      setWorkbenchPath(path, applyMetadata: true);
+
+  List<HistoryItem> get generationPreviewHistory => history
+      .where((item) =>
+          (selectedGroupId.isEmpty || item.groupId == selectedGroupId) &&
+          File(item.filePath).existsSync())
+      .toList();
+
   Future<void> setWorkbenchFromHistory(HistoryItem item) async {
     current = item;
     await setWorkbenchPath(item.filePath);
   }
 
   void clearWorkbench() {
+    _workbenchLoadRevision++;
     workbenchImage = null;
     i2iOriginalImage = null;
     workbenchImportedParams = null;
@@ -3782,6 +3811,7 @@ class AppState extends ChangeNotifier {
       );
 
   void selectImage(HistoryItem item) {
+    _workbenchLoadRevision++;
     current = item;
     notifyListeners();
   }

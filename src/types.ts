@@ -1439,6 +1439,9 @@ export interface AppSettings {
    * PNG) on disk. Default on. Turn off to save clean images with the embedded
    * info stripped — useful before sharing. */
   keepImageMetadata: boolean;
+  /** Preserve original PNG bytes on desktop image copy. Explicit opt-in;
+   * omitted in older settings/clients means OFF, independent of disk saving. */
+  copyImageMetadata?: boolean;
   /** Local portable archive schedule. Manual exports still select every
    * category by default. Automatic archives stay metadata-only unless the
    * user explicitly opts into copying the potentially very large image set. */
@@ -1628,6 +1631,8 @@ export interface ImportedParams {
   variety?: boolean;
 }
 
+export type CopyImageMetadataResult = { status: "copied" | "unsupported" | "failed" };
+
 export interface NaiDesktopApi {
   favoritesStatus: (src:string) => Promise<import('./favorites-types').ImageFavorite|null>;
   favoritesList: () => Promise<import('./favorites-types').ImageFavoriteLibrary>;
@@ -1635,6 +1640,8 @@ export interface NaiDesktopApi {
   favoritesRename: (id:string,name:string) => Promise<import('./favorites-types').ImageFavorite>;
   favoritesRemove: (id:string) => Promise<{removed:boolean;filesRetained:boolean}>;
   favoritesChooseDirectory: () => Promise<string|null>;
+  onImageCopyNotice?: (callback:(message:string)=>void) => ()=>void;
+  onImageParametersRequested?: (callback:(filePath:string)=>void) => ()=>void;
   onFavoritesChanged: (callback:(notice:{message:string})=>void) => ()=>void;
   onStudioAgentRequest?: (callback:(request:import('./studio-agent-contract').StudioAgentRequest)=>void) => ()=>void;
   replyStudioAgent: (id:string,reply:import('./studio-agent-contract').StudioAgentReply) => Promise<void>;
@@ -1941,6 +1948,8 @@ export interface NaiDesktopApi {
   cancel: () => Promise<{ ok: boolean }>;
   readAgentClipboardFiles: () => Promise<Array<{name:string;bytes:Uint8Array}>>;
   readClipboardImageFiles: () => Promise<Array<{name:string;bytes:Uint8Array}>>;
+  /** ON-only desktop copy. Non-copied results require ordinary copy + notice. */
+  copyImageWithMetadata?: (srcURL: string) => Promise<CopyImageMetadataResult>;
   savePastedImageFiles: (images: Array<{name:string;bytes:Uint8Array}>) => Promise<string[]>;
   loadImage: () => Promise<LoadImageResult>;
   loadImageFromPath: (filePath: string) => Promise<LoadImageResult>;

@@ -6,13 +6,13 @@ import {cancelBatchRedraw} from './ipc/nai';
 import {prepareComicImageService} from './ipc/comic-image-service';
 import {cancelTagComicGeneration} from './ipc/nai';
 import { registerCompatibleImageIpc } from "./ipc/compatible-settings-ipc";
-import {registerImageFavoritesIpc,favoriteContextMenuItem} from "./ipc/image-favorites-ipc";
+import {registerImageFavoritesIpc,favoriteContextMenuItem,imageParametersContextMenuItem} from "./ipc/image-favorites-ipc";
 import {portableRecoveryPath, activatePortableRecovery, listPortableRecoveries} from './ipc/portable-projects';
 import {registerHarnessLauncher, harnessNeedsExitConfirmation, confirmHarnessExit, stopHarnessForUpdate,resetHarnessExitAfterUpdateFailure} from "./ipc/harness-launcher";
 import { detectiveStatus, detectiveConfigure, detectiveStart, detectiveStop, detectiveOpenResults, detectiveClearResults, detectiveVerifyRuntime, detectiveSelectModel } from "./ipc/artist-detective";
 import { detectiveDownloadStatus, detectiveDownloadStart, detectiveDownloadCancel, detectiveDownloadDirectory, detectiveDownloadVariant } from "./ipc/detective-download";
 import { recoverLegacyCredentials } from "./ipc/credential-recovery";
-import { readClipboardImageFiles, savePastedImageFiles } from "./ipc/image-clipboard";
+import { copyImageWithMetadata, readClipboardImageFiles, savePastedImageFiles } from "./ipc/image-clipboard";
 import {
   app,
   dialog,
@@ -323,8 +323,23 @@ function attachEditContextMenu(win: BrowserWindow) {
       const language = getSettings().language;
       const labels: Record<string, string> = {"zh-CN":"复制图片", "zh-TW":"複製圖片", "ja-JP":"画像をコピー", "ko-KR":"이미지 복사"};
       Menu.buildFromTemplate([{label: labels[language] ?? "Copy image",
-        click: () => { if (!win.isDestroyed()) win.webContents.copyImageAt(params.x, params.y); },
-      }, favoriteContextMenuItem(params.srcURL, win)]).popup({window: win});
+        click: () => {
+          if(win.isDestroyed())return;
+          if(!getSettings().copyImageMetadata){win.webContents.copyImageAt(params.x,params.y);return;}
+          void copyImageWithMetadata(params.srcURL).then(result=>{
+            if(win.isDestroyed())return;
+            if(result.status!=='copied')win.webContents.copyImageAt(params.x,params.y);
+            const notices:Record<string,string[]>={
+              'zh-CN':['已复制原始 PNG（保留原数据）','已复制图片；此来源无法保留原数据'],
+              'zh-TW':['已複製原始 PNG（保留原資料）','已複製圖片；此來源無法保留原資料'],
+              'ja-JP':['元の PNG をコピーしました（元データを保持）','画像をコピーしました。元データは保持できません'],
+              'ko-KR':['원본 PNG 복사 완료 (원본 데이터 유지)','이미지 복사 완료; 원본 데이터는 유지되지 않습니다'],
+            };
+            const text=notices[language]??['Original PNG copied (metadata preserved)','Image copied; original metadata could not be retained'];
+            win.webContents.send('image-copy:notice',text[result.status==='copied'?0:1]);
+          });
+        },
+      }, favoriteContextMenuItem(params.srcURL, win), imageParametersContextMenuItem(params.srcURL, win)]).popup({window: win});
       return;
     }
     if (!isEditable && !hasSelection) return;
@@ -1014,6 +1029,7 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   );
   accountBoundHandle("agent:readClipboardFiles", () => readAgentClipboardFiles());
   ipcMain.handle("imageInput:readClipboard", () => readClipboardImageFiles());
+  ipcMain.handle('image:copyMetadata',(_event,srcURL:string)=>getSettings().copyImageMetadata===true?copyImageWithMetadata(srcURL):{status:'unsupported'});
   ipcMain.handle("imageInput:save", (_event, images: unknown) => savePastedImageFiles(images));
   accountBoundHandle("nai:loadImage", () => loadImageFile());
   accountBoundHandle("nai:loadImageFromPath", (_event, filePath: string) =>

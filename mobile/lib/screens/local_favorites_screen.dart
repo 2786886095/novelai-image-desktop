@@ -152,7 +152,16 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
                         style: const TextStyle(color: Colors.white)))
         ],
         initialIndex: index,
+        imagePaths: files.map((file) => file.path).toList(),
         captions: [for (final item in items) item.fileName],
+        footerBuilder: (context, current) => FilledButton.tonalIcon(
+            icon: const Icon(Icons.auto_awesome),
+            label: Text(localFavoritesText(language, 'apply')),
+            onPressed: files[current].existsSync() ? () async {
+              await _run(() => this.context.read<AppState>()
+                  .importGenerationImage(files[current].path));
+              if (context.mounted && error == null) Navigator.pop(context);
+            } : null),
         actionsBuilder: (context, current) => IconButton(
             tooltip: mobileUiTextFor(language, 'gallery.share'),
             color: Colors.white,
@@ -328,6 +337,11 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
             Expanded(child: image),
           Text(item.fileName, maxLines: 1, overflow: TextOverflow.ellipsis),
           Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+            IconButton(
+                tooltip: localFavoritesText(language, 'apply'),
+                onPressed: busy || !exists ? null : () => _run(() =>
+                    context.read<AppState>().importGenerationImage(file.path)),
+                icon: const Icon(Icons.auto_awesome)),
             IconButton(
                 tooltip: localFavoritesText(language, 'rename'),
                 onPressed:
