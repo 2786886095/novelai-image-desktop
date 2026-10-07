@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { getToken, atomicWriteFileSync, getSetting } from "./store";
+import { getToken, atomicWriteFileSync, getSetting, getSettings } from "./store";
 import {featureText} from '../../src/feature-text';
 import { toLocalMediaUrl } from "./local-media-protocol";
 import { detectiveDownloadStatus } from "./detective-download";
@@ -12,14 +12,16 @@ import {readDetectiveConfig,saveDetectiveConfig,detectiveProfile,updateDetective
 import {detectiveDownloadVariant} from './detective-download';
 import { detectiveBudget, detectiveParameters, detectiveRounds, type DetectiveRunRequest, type DetectiveSnapshot } from "../../src/artist-detective-contract";
 import {resolveNovelAiGenerationBaseUrl} from './nai';
+import {startDetectiveGenerationBridge} from './detective-generation-bridge';
 
 import {assertPortableIdle, registerPortableBusy} from './portable-projects';
 type Config = DetectiveConfig;
 let child: ChildProcess | null = null;
 let clearing = false;
+let starting = false;
 const config=readDetectiveConfig,save=saveDetectiveConfig;
 function alive(pid?: number) { if (!pid) return false; try { process.kill(pid, 0); return true; } catch { return false; } }
-registerPortableBusy(()=>!!child || clearing || detectiveRuntimeChecking() || alive(config().pid), 'detective');
+registerPortableBusy(()=>!!child || starting || clearing || detectiveRuntimeChecking() || alive(config().pid), 'detective');
 function read(file: string): any { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return null; } }
 function ready(c: Config) { return !!(c.python && c.assets && fs.existsSync(c.python) && fs.existsSync(path.join(c.assets, "manifest.json"))); }
 
@@ -81,7 +83,7 @@ export async function detectiveStart(value: DetectiveRunRequest) {
   assertPortableIdle();
   if (detectiveDownloadStatus().busy) throw new Error("请等待模型与运行环境安装完成。");
   const c = config();
-  if (alive(c.pid) || child || clearing || detectiveRuntimeChecking()) throw new Error("已有画风迭代或校验正在运行。");
+  if (alive(c.pid) || child || starting || clearing || detectiveRuntimeChecking()) throw new Error("已有画风迭代或校验正在运行。");
   const selected={...detectiveProfile(c,c.selectedVariant!),variant:c.selectedVariant};
   if (!ready(selected)) throw new Error("请先配置 Artist Detective 运行环境和模型目录。");
   if (detectiveRuntimeValidation(selected).state !== 'passed') throw new Error("请先完成模型与运行环境校验。");
@@ -100,10 +102,18 @@ export async function detectiveStart(value: DetectiveRunRequest) {
   const root = app.getAppPath();
   const runner = path.join(root.endsWith(".asar") ? root + ".unpacked" : root, "scripts", "artist-detective-live.py");
   if (!fs.existsSync(runner)) throw new Error("Artist Detective runner missing");
-  const log = fs.openSync(path.join(directory, "run.log"), "a");
+  starting = true;
+  let bridge: Awaited<ReturnType<typeof startDetectiveGenerationBridge>>;
   try {
-    child = spawn(c.python!, ["-X", "utf8", "-u", runner], { windowsHide: true, stdio: ["pipe", log, log], env: { ...process.env, PYTHONUTF8: "1" } });
-  } finally { fs.closeSync(log); }
+    bridge = await startDetectiveGenerationBridge({imageBaseUrl,token,settings:getSettings(),budget});
+    let log: number;
+    try { log = fs.openSync(path.join(directory, "run.log"), "a"); }
+    catch (error) { await bridge.close(); throw error; }
+    try {
+      child = spawn(c.python!, ["-X", "utf8", "-u", runner], { windowsHide: true, stdio: ["pipe", log, log], env: { ...process.env, PYTHONUTF8: "1" } });
+    } catch (error) { await bridge.close(); throw error; }
+    finally { fs.closeSync(log); }
+  } finally { starting = false; }
   const active = child;
   save({ ...c, directory, pid: active.pid, image: value.image });
   atomicWriteFileSync(path.join(directory, "status.json"), JSON.stringify({ stage: "loading", completed: 0, budget }));
@@ -114,6 +124,7 @@ export async function detectiveStart(value: DetectiveRunRequest) {
   active.on("error", () => { fail("Python 运行环境启动失败，请检查配置。"); });
   active.stdin!.on("error", () => { /* exit handler records early failure */ });
   active.once("close", code => {
+    void bridge.close();
     clearInterval(timer); child = null;
     if (code !== 0 && !fs.existsSync(path.join(directory, "failure.json"))) fail("迭代进程提前退出；已生成图片保留。");
     const current = config(); if (current.directory === directory) save({ ...current, pid: undefined });
@@ -121,7 +132,7 @@ export async function detectiveStart(value: DetectiveRunRequest) {
   // The renderer never receives the decrypted API token.
   active.stdin!.end(JSON.stringify({ output: directory, assets: c.assets, image: value.image,
     prompt: value.prompt.trim(), style: value.style.trim(), budget, parameters, token,
-    imageBaseUrl, language: getSetting('language') }));
+    imageBaseUrl, transportBridge: bridge.connection, language: getSetting('language') }));
   return detectiveStatus();
 }
 

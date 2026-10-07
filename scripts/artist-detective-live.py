@@ -95,9 +95,21 @@ def transport_failure_message(status, request_url, language="en-US"):
     return f"Generation endpoint {origin}: HTTP {status}; paid request not retried; completed images retained"
 
 
+def network_failure_message(kind, request_url, language="en-US"):
+    origin = urlsplit(request_url).hostname
+    texts = {
+        "zh-CN": "自动迭代连接 {origin} 失败，已使用软件的代理设置。请检查代理是否运行及端口是否正确，或切换合适的连接方式。未切换生图接口；结果不确定时不重发付费请求，已生成图片保留。",
+        "zh-TW": "自動迭代連線 {origin} 失敗，已使用軟體的代理設定。請檢查代理與連接埠，或切換合適的連線方式。未切換生圖介面；結果不確定時不重送付費請求，已生成圖片保留。",
+        "en-US": "Iteration could not connect to {origin} using the application's proxy settings. Check the proxy and port or select the appropriate connection mode. No endpoint switch or retry of uncertain paid requests; completed images retained.",
+        "ja-JP": "アプリのプロキシ設定で {origin} に接続できません。プロキシとポートを確認してください。接続先の自動切替・結果不明の有料リクエスト再送は行わず、生成済み画像は保持します。",
+        "ko-KR": "앱의 프록시 설정으로 {origin}에 연결하지 못했습니다. 프록시와 포트를 확인하세요. 서버 자동 변경이나 결과가 불확실한 유료 요청 재전송은 하지 않으며 생성된 이미지는 유지됩니다.",
+    }
+    return texts.get(language, texts["en-US"]).format(origin=origin) + " [" + kind + "]"
+
+
 class LiveGenerator(NovelAIGenerator):
     def __init__(self, root, catalog, budget, token, check, progress,
-                 image_base_url="https://image.novelai.net", language="en-US"):
+                 image_base_url="https://image.novelai.net", language="en-US", transport_bridge=None):
         # The upstream spool scans every requests/*.json as a render request.
         # Keep transport diagnostics outside that directory, including old runs.
         root = Path(root)
@@ -111,6 +123,21 @@ class LiveGenerator(NovelAIGenerator):
         self.token, self.check, self.progress = token, check, progress
         self.request_url = generation_request_url(image_base_url)
         self.language = language
+        self.transport_url = self.request_url
+        self.transport_headers = {"Authorization": "Bearer " + token}
+        if transport_bridge is not None:
+            if not isinstance(transport_bridge, dict):
+                raise ValueError("Invalid host generation bridge")
+            bridge = urlsplit(transport_bridge.get("url", ""))
+            key = transport_bridge.get("key", "")
+            if (bridge.scheme != "http" or bridge.hostname != "127.0.0.1" or not bridge.port
+                    or bridge.path != "/generate" or bridge.username or bridge.password
+                    or bridge.query or bridge.fragment or not isinstance(key, str)
+                    or len(key) != 64 or any(c not in "0123456789abcdef" for c in key)):
+                raise ValueError("Invalid host generation bridge")
+            self.transport_url = transport_bridge["url"]
+            # Never send the upstream Token to the loopback capability endpoint.
+            self.transport_headers = {"x-studio-bridge-key": key}
         self.client = httpx.Client(trust_env=False, timeout=httpx.Timeout(180, connect=30),
                                    limits=httpx.Limits(max_keepalive_connections=0), follow_redirects=False)
         self.next_request_at = 0.0
@@ -142,9 +169,15 @@ class LiveGenerator(NovelAIGenerator):
                 self.wait(max(0, self.next_request_at - time.monotonic()))
                 try:
                     response = self.client.post(
-                        self.request_url,
-                        headers={"Authorization": "Bearer " + self.token}, json=payload,
+                        self.transport_url,
+                        headers=self.transport_headers, json=payload,
                     )
+                    failure = response.headers.get("x-studio-network-failure")
+                    if self.transport_url != self.request_url and failure:
+                        message = network_failure_message(failure, self.request_url, self.language)
+                        if failure == "connect":
+                            raise httpx.ConnectError(message)
+                        raise httpx.ReadError(message)
                     self.next_request_at = time.monotonic() + 3.0
                     break
                 except (httpx.ConnectError, httpx.ConnectTimeout):
@@ -281,7 +314,8 @@ def main(command):
     score, reference = resources.scorer.bind(image)
     generator = LiveGenerator(out / "spool", asset / "retrieval/catalog.json", budget, command.pop("token"), check, progress,
                               image_base_url=command.get("imageBaseUrl", "https://image.novelai.net"),
-                              language=command.get("language", "en-US"))
+                              language=command.get("language", "en-US"),
+                              transport_bridge=command.get("transportBridge"))
     generator.prompt_budget = NovelAIPromptBudget(asset / "tokenizers/t5")
     initial = proposed["targets"][0]["initializers"]
     rank = resources.surrogate.for_target(hypothesis["content_tags"], hypothesis["style_tags"], reference)
@@ -302,7 +336,7 @@ def main(command):
 
 if __name__ == "__main__":
     command = json.load(sys.stdin)
-    secret = command.get("token", "")
+    secrets = [command.get("token", ""), command.get("transportBridge", {}).get("key", "")]
     output = Path(command["output"]).resolve()
     output.mkdir(parents=True, exist_ok=True)
     try:
@@ -310,7 +344,10 @@ if __name__ == "__main__":
             main(command)
     except Exception as error:
         # Never persist raw request objects, headers, credentials or exception tracebacks.
-        detail = str(error).replace(secret, "[redacted]") if secret else str(error)
+        detail = str(error)
+        for secret in secrets:
+            if secret:
+                detail = detail.replace(secret, "[redacted]")
         atomic_json(output / "failure.json", {"type": type(error).__name__, "message": detail[:600]})
         print("RUN_FAILED " + type(error).__name__ + ": " + detail[:600], flush=True)
         sys.exit(1)

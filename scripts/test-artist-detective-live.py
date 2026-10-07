@@ -174,5 +174,48 @@ class TransportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "budget exhausted"): self.gen.generate([self.body])
         self.assertEqual(len(self.calls), 0)
 
+    def bridge_generator(self, bridge=None):
+        self.gen.client.close()
+        self.gen = live.LiveGenerator(self.root / "spool", self.catalog, 2,
+            "FIXTURE_NOT_A_CREDENTIAL", lambda: None, lambda *a, **k: None,
+            transport_bridge=bridge or {"url": "http://127.0.0.1:12345/generate", "key": "a" * 64},
+            language="zh-CN")
+        self.gen.client.close()
+
+    def test_bridge_uses_only_loopback_capability_not_upstream_token(self):
+        self.bridge_generator()
+        self.transport(lambda _: self.image_response())
+        self.assertEqual(len(self.gen.generate([self.body])), 1)
+        self.assertEqual(str(self.calls[0].url), "http://127.0.0.1:12345/generate")
+        self.assertEqual(self.calls[0].headers["x-studio-bridge-key"], "a" * 64)
+        self.assertNotIn("authorization", self.calls[0].headers)
+        self.assertNotIn("FIXTURE_NOT_A_CREDENTIAL", str(self.calls[0].headers))
+
+    def test_bridge_rejects_remote_urls_credentials_paths_and_bad_capabilities(self):
+        for url, key in [("https://evil.invalid/generate", "a" * 64),
+                         ("http://127.0.0.1:12345/other", "a" * 64),
+                         ("http://user:password@127.0.0.1:12345/generate", "a" * 64),
+                         ("http://127.0.0.1:12345/generate?url=evil", "a" * 64),
+                         ("http://127.0.0.1:12345/generate", "bad")]:
+            with self.assertRaises(ValueError): self.bridge_generator({"url": url, "key": key})
+
+    def test_bridge_refusal_has_actionable_message_and_only_bounded_preconnect_retries(self):
+        self.bridge_generator()
+        self.transport(lambda _: httpx.Response(599, headers={"x-studio-network-failure": "connect"}))
+        with patch.object(live.time, "sleep"), self.assertRaisesRegex(httpx.ConnectError, "代理设置"):
+            self.gen.generate([self.body])
+        self.assertEqual(len(self.calls), 3)
+
+    def test_bridge_uncertain_failure_never_retries_or_replays_and_preserves_prior_images(self):
+        self.bridge_generator()
+        self.transport(lambda _: self.image_response())
+        prior = self.gen.generate([self.body])[0]
+        self.transport(lambda _: httpx.Response(598, headers={"x-studio-network-failure": "uncertain"}))
+        with self.assertRaises(httpx.ReadError): self.gen.generate([{**self.body, "seed": 43}])
+        with self.assertRaisesRegex(RuntimeError, "Unresolved previous submission"):
+            self.gen.generate([{**self.body, "seed": 43}])
+        self.assertEqual(len(self.calls), 2)
+        self.assertTrue(Path(prior["image"]).is_file())
+
 
 if __name__ == "__main__": unittest.main()
