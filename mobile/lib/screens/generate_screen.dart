@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import 'translation_preview_dialog.dart';
 import '../prompts/translation.dart';
 import 'mcp_tools.dart';
@@ -9,6 +10,7 @@ import 'dart:convert';
 import '../services/vibe_file.dart';
 import '../ui/studio_dropdown.dart';
 import '../ui/character_editing.dart';
+import '../ui/character_name_control.dart';
 import 'dart:async';
 import 'character_preset_bar.dart';
 import 'dart:io';
@@ -34,7 +36,7 @@ import '../references/reference_presets.dart';
 import '../services/nai_api.dart';
 import '../state/app_state.dart';
 import '../ui/quality_preset_control.dart';
-import '../ui/before_after_compare.dart';
+import '../ui/automatic_comparison_control.dart';
 import '../ui/studio_shell.dart';
 import '../ui/studio_theme.dart';
 import '../ui/zoomable_image.dart';
@@ -350,6 +352,7 @@ class GenerateScreen extends StatelessWidget {
         _I2IControls(),
       ],
       const SizedBox(height: 16),
+      const AutomaticComparisonControl(surface:'generate:t2i'),
       _OutputControls(),
     ];
     final runButton = _PrimaryRunButton(state: state);
@@ -364,13 +367,13 @@ class GenerateScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: landscapePhone ? 48 : null,
-        title: Text(
+        title: studioAppBarTitle(context, Text(
           state.workbenchImage == null
               ? text.titleTextToImage
               : text.titleImageLoaded,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-        ),
+        )),
         actions: [
           ConstrainedBox(
             constraints: BoxConstraints(
@@ -2772,22 +2775,7 @@ class _I2IControls extends StatelessWidget {
                   s.setI2ISourceMode(selection.first),
             ),
             const SizedBox(height: 4),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('每次完成后自动打开原图/结果对比。',
-                  style: Theme.of(context).textTheme.bodySmall),
-            ),
-            if (s.comparisonBefore case final before?)
-              if (s.comparisonAfter case final after?) ...[
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 320,
-                  child: BeforeAfterCompare(
-                    beforePath: before.filePath,
-                    afterPath: after.filePath,
-                  ),
-                ),
-              ],
+            const AutomaticComparisonControl(surface:'generate:i2i'),
             _Slider(
                 label: text.strength,
                 value: s.i2i.strength,
@@ -5130,31 +5118,10 @@ class _CharCardState extends State<_CharCard> {
               child: Row(
                 children: [
                   widget.dragHandle,
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          characterLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          positionSummary,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  Expanded(child: CharacterNameControl(editKey: ValueKey('character-name-edit-${widget.index}'), name: c.name, fallback: characterLabel, subtitle: positionSummary, language: language, onSave: (name) {
+                    final index = s.extras.charCaptions.indexOf(c);
+                    if (index >= 0) s.renameCharacter(index, name);
+                  })),
                   Tooltip(
                     message: '${enabledText[0]} · ${widget.index + 1}',
                     child: Switch(

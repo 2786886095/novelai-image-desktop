@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import '../agent/compatible_proposal.dart';
 import '../ui/studio_dropdown.dart';
 import '../ui/zoomable_image.dart';
@@ -673,7 +674,7 @@ class _AgentScreenState extends State<AgentScreen> {
             ? null
             : AppBar(
                 titleSpacing: 8,
-                title: _chatTitle(controller, text),
+                title: studioAppBarTitle(context, _chatTitle(controller, text)),
                 leading: IconButton(
                   tooltip: text['characters'],
                   onPressed: () => _showLibrarySheet(controller, text),
@@ -1328,7 +1329,7 @@ class _AgentScreenState extends State<AgentScreen> {
                                       .bodyLarge
                                       ?.copyWith(height: 1.55),
                                   code: TextStyle(
-                                    fontFamily: 'monospace',
+                                    fontFamily: UiTypographyScope.codeFamily(context),
                                     color: Theme.of(context)
                                         .colorScheme
                                         .onSurfaceVariant,

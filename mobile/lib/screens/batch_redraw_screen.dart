@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import '../ui/zoomable_image.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:convert';
@@ -96,7 +97,7 @@ class _BatchBody extends StatelessWidget {
                 onPressed: onBack,
                 icon: const Icon(Icons.arrow_back),
               ),
-        title: Text(t('batch.title')),
+        title: studioAppBarTitle(context, Text(t('batch.title'))),
       ),
       body: Column(
         children: [

@@ -513,6 +513,10 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   setSetting: <K extends SettingKey>(key: K, value: AppSettings[K]) =>
     ipcRenderer.invoke("settings:set", key, value),
   getSettings: () => ipcRenderer.invoke("settings:getAll"),
+  listUiFonts: () => ipcRenderer.invoke("uiFonts:list"),
+  importUiFont: () => ipcRenderer.invoke("uiFonts:import"),
+  readUiFont: (id: string) => ipcRenderer.invoke("uiFonts:read",id),
+  removeUiFont: (id: string) => ipcRenderer.invoke("uiFonts:remove",id),
   importStylePromptPresetImages: (
     presetId: string,
     availableSlots: number,

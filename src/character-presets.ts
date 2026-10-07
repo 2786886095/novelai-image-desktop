@@ -15,7 +15,7 @@ export function normalizeCharacterCaptions(value: unknown): CharCaption[] {
   return value.filter(v => v && typeof v === 'object').slice(0, 32).map(v => {
     const id = typeof v.id === 'string' && v.id && !seen.has(v.id) ? v.id : crypto.randomUUID();
     seen.add(id);
-    return {id, ...(typeof v.enabled === 'boolean' ? {enabled: v.enabled} : {}), prompt: typeof v.prompt === 'string' ? v.prompt : '',
+    return {id, ...(typeof v.name==='string' && v.name.trim() ? {name:v.name.trim().slice(0,64)} : {}), ...(typeof v.enabled === 'boolean' ? {enabled: v.enabled} : {}), prompt: typeof v.prompt === 'string' ? v.prompt : '',
       negativePrompt: typeof v.negativePrompt === 'string' ? v.negativePrompt : '',
       useCoords: v.useCoords === true, x: coordinate(v.x), y: coordinate(v.y)};
   });

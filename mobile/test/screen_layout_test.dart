@@ -252,7 +252,8 @@ void main() {
         isTrue);
     expect(
         find.byKey(const ValueKey('character-prompt-field-1')), findsOneWidget);
-    expect(find.text('角色 1'), findsOneWidget);
+    expect(find.text('角色 1'), findsWidgets);
+    expect(find.byKey(const ValueKey('character-name-input')), findsNothing);
 
     tester.widget<IconButton>(firstToggle).onPressed!.call();
     await tester.pumpAndSettle();

@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -64,7 +65,7 @@ class ToolsHubScreen extends StatelessWidget {
     final text = mobileToolsHubTextFor(language);
     final promptCodexText = _promptCodexTileText(language);
     return Scaffold(
-      appBar: AppBar(title: Text(text.title)),
+      appBar: AppBar(title: studioAppBarTitle(context, Text(text.title))),
       body: ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(StudioSpacing.lg),

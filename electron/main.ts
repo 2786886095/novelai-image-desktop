@@ -1,3 +1,4 @@
+import {UiFontRepository} from "./ipc/ui-fonts";
 import {readAgentClipboardFiles} from './ipc/agent-clipboard';
 import { registerNaiAccountsIpc, ensureNaiAccountsLoaded } from './ipc/nai-accounts';
 import { withNaiAccountOperation, rememberNaiProposal, assertNaiProposalAccount } from './ipc/nai-accounts-runtime';
@@ -1323,6 +1324,23 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
     return saved;
   });
   ipcMain.handle("settings:getAll", () => getSettings());
+  const uiFonts=new UiFontRepository(path.join(app.getPath('userData'),'ui-fonts'));
+  const assertFontSender=(event:Electron.IpcMainInvokeEvent)=>{
+    if(!mainWindow || event.sender!==mainWindow.webContents || event.senderFrame!==mainWindow.webContents.mainFrame)throw Error('FONT_SENDER');
+  };
+  ipcMain.handle('uiFonts:list',event=>{assertFontSender(event);return uiFonts.list();});
+  ipcMain.handle('uiFonts:read',(event,id:string)=>{assertFontSender(event);return uiFonts.read(id).toString('base64');});
+  ipcMain.handle('uiFonts:import',async event=>{
+    assertFontSender(event);
+    const picked=await dialog.showOpenDialog(mainWindow!,{properties:['openFile'],filters:[{name:'Fonts (TTF / OTF)',extensions:['ttf','otf']}]});
+    if(picked.canceled||!picked.filePaths[0])return null;
+    assertFontSender(event);return uiFonts.importFile(picked.filePaths[0]);
+  });
+  ipcMain.handle('uiFonts:remove',(event,id:string)=>{
+    assertFontSender(event);
+    if(getSettings().uiTypography?.font===id)setSetting('uiTypography',{...getSettings().uiTypography!,font:'default'});
+    uiFonts.remove(id);
+  });
   ipcMain.handle(
     "stylePreset:importImages",
     (_event, presetId: string, availableSlots: number, dialogTitle?: string) =>

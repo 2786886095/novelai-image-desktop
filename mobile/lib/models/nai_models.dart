@@ -1,5 +1,7 @@
 library;
 
+import 'automatic_comparison.dart';
+import 'ui_typography.dart';
 import '../prompts/translation.dart';
 
 import '../agent/model_selections.dart';
@@ -19,7 +21,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.5.1';
+const appVersion = '2.5.2';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -447,6 +449,7 @@ class CharCaptionItem {
   static double _coordinate(dynamic value) =>
       value is num && value.isFinite ? value.clamp(0, 1).toDouble() : 0.5;
   bool enabled;
+  String name;
   String prompt;
   String negativePrompt;
   bool useCoords;
@@ -454,6 +457,7 @@ class CharCaptionItem {
   double y;
   CharCaptionItem(
       {this.enabled = true,
+       this.name = '',
       this.prompt = '',
       this.negativePrompt = '',
       this.useCoords = false,
@@ -462,6 +466,7 @@ class CharCaptionItem {
 
   Map<String, dynamic> toJson() => {
         'enabled': enabled,
+        if(name.trim().isNotEmpty) 'name': name.trim().substring(0,name.trim().length.clamp(0,64)),
         'prompt': prompt,
         'negativePrompt': negativePrompt,
         'useCoords': useCoords,
@@ -470,6 +475,7 @@ class CharCaptionItem {
       };
   factory CharCaptionItem.fromJson(Map<String, dynamic> j) => CharCaptionItem(
         enabled: j['enabled'] != false,
+        name: j['name'] is String ? (j['name'] as String).trim().substring(0,(j['name'] as String).trim().length.clamp(0,64)) : '',
         prompt: j['prompt'] is String ? j['prompt'] : '',
         negativePrompt:
             j['negativePrompt'] is String ? j['negativePrompt'] : '',
@@ -656,6 +662,7 @@ class GenerateExtras {
         charCaptions: charCaptions
             .map((item) => CharCaptionItem(
                   enabled: item.enabled,
+                  name: item.name,
                   prompt: item.prompt,
                   negativePrompt: item.negativePrompt,
                   useCoords: item.useCoords,
@@ -921,6 +928,8 @@ class AppSettings {
   bool mcpForReverse;
   bool mcpForConvert;
   String language;
+  UiTypography uiTypography;
+  Map<String,bool> automaticComparison;
   String theme;
   String modelMode;
   String proxyMode;
@@ -1048,6 +1057,8 @@ class AppSettings {
     this.mcpForReverse = false,
     this.mcpForConvert = false,
     this.language = 'zh-CN',
+    this.uiTypography = const UiTypography(),
+    Map<String,bool>? automaticComparison,
     this.theme = 'system',
     this.modelMode = 'anime',
     this.proxyMode = 'auto',
@@ -1124,7 +1135,7 @@ class AppSettings {
     this.autoBackupRetentionCount = 7,
     this.autoBackupIncludeImages = false,
     this.autoBackupAssetPolicyVersion = 1,
-  })  : reverseConvertPromptPresets =
+  })  : automaticComparison=normalizeAutomaticComparison(automaticComparison), reverseConvertPromptPresets =
             reverseConvertPromptPresets ?? [createLyraImageSamplerPreset()],
         reverseConvertPromptPresetId = reverseConvertPromptPresetId ??
             (reverseConvertPromptPresets ?? [createLyraImageSamplerPreset()])
@@ -1178,6 +1189,8 @@ class AppSettings {
         'mcpForReverse': mcpForReverse,
         'mcpForConvert': mcpForConvert,
         'language': normalizeAppLocaleCode(language),
+        'uiTypography': uiTypography.toJson(),
+        'automaticComparison': normalizeAutomaticComparison(automaticComparison),
         'theme': theme,
         'modelMode': modelMode,
         'proxyMode': proxyMode,
@@ -1311,6 +1324,8 @@ class AppSettings {
         mcpForReverse: j['mcpForReverse'] ?? false,
         mcpForConvert: j['mcpForConvert'] ?? false,
         language: normalizeAppLocaleCode(j['language']),
+        uiTypography: UiTypography.fromJson(j['uiTypography']),
+        automaticComparison: normalizeAutomaticComparison(j['automaticComparison']),
         theme: j['theme'] ?? ((j['darkMode'] ?? false) ? 'dark' : 'system'),
         modelMode: j['modelMode'] ?? 'anime',
         proxyMode: j['proxyMode'] ?? 'auto',

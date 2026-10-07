@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:io';
 
@@ -78,7 +79,7 @@ class _ReversePanelState extends State<_ReversePanel> {
     final path = s.workbenchImage?.filePath;
     _syncController(_resultCtrl, s.reverseResult);
     return Scaffold(
-      appBar: AppBar(title: Text(t('inspect.reverseTitle')), actions: [
+      appBar: AppBar(title: studioAppBarTitle(context, Text(t('inspect.reverseTitle'))), actions: [
         IconButton(onPressed: widget.onPick, icon: const Icon(Icons.image))
       ]),
       body: ListView(
@@ -263,7 +264,7 @@ class _ConvertPanelState extends State<_ConvertPanel> {
     _syncController(_inputCtrl, s.convertInput);
     _syncController(_resultCtrl, s.convertResult);
     return Scaffold(
-      appBar: AppBar(title: Text(t('inspect.convertTitle'))),
+      appBar: AppBar(title: studioAppBarTitle(context, Text(t('inspect.convertTitle')))),
       body: ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(16),

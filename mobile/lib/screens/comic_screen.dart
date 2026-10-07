@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import '../i18n/comic_provider_text.dart';
 import '../ui/studio_dropdown.dart';
 import '../ui/zoomable_image.dart';
@@ -59,7 +60,7 @@ class _ComicBody extends StatelessWidget {
                 onPressed: onBack,
                 icon: const Icon(Icons.arrow_back),
               ),
-        title: Column(
+        title: studioAppBarTitle(context, Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(controller.displayTitle, overflow: TextOverflow.ellipsis),
@@ -69,7 +70,7 @@ class _ComicBody extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ],
-        ),
+        )),
         actions: [
           IconButton(
             tooltip: t('comic.newProject'),

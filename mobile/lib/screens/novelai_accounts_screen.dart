@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -387,7 +388,7 @@ class _NovelAiAccountsScreenState extends State<NovelAiAccountsScreen> {
                                 : Icons.visibility_outlined))
                         : null)));
     return Scaffold(
-        appBar: AppBar(title: Text(t('accountManager'))),
+        appBar: AppBar(title: studioAppBarTitle(context, Text(t('accountManager')))),
         body: ListView(padding: const EdgeInsets.all(16), children: [
           const NovelAiAccountSelector(showManage: false),
           const SizedBox(height: 12),

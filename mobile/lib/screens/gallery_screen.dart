@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import '../ui/image_actions_menu.dart';
 import '../ui/studio_theme.dart';
 import '../ui/studio_dropdown.dart';
@@ -75,7 +76,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
             (date.isEmpty || item.date == date))
         .toList();
     return Scaffold(
-      appBar: AppBar(title: Text(t('gallery.title'))),
+      appBar: AppBar(title: studioAppBarTitle(context, Text(t('gallery.title')))),
       body: Column(
         children: [
           Padding(

@@ -390,6 +390,8 @@ export interface PreciseReferenceImage extends PreciseReferenceItem {
 export interface CharCaptionItem {
   /** Missing in older configurations means enabled. Never sent to NovelAI. */
   enabled?: boolean;
+  /** Local display name, omitted from NovelAI requests. */
+  name?: string;
   prompt: string;
   /** Per-character undesired content used by NovelAI V4/V4.5/V5. */
   negativePrompt?: string;
@@ -1422,6 +1424,8 @@ export interface AppSettings {
   /** Preferred app update/download mirror. The other source remains fallback. */
   updateSource: "github";
   completionSound?: { enabled: boolean; volume: number; dataUrl: string; name: string };
+  uiTypography?: import("./typography").UiTypography;
+  automaticComparison?: import("./automatic-comparison").AutomaticComparison;
   theme: "light" | "dark" | "system";
   /** Explicit accessibility preference. It is intentionally independent from
    * Windows' generic animation-effects flag so performance tuning does not
@@ -1639,6 +1643,10 @@ export interface ImportedParams {
 export type CopyImageMetadataResult = { status: "copied" | "unsupported" | "failed" };
 
 export interface NaiDesktopApi {
+  listUiFonts: () => Promise<import("./typography").UiFont[]>;
+  importUiFont: () => Promise<import("./typography").UiFont | null>;
+  readUiFont: (id: string) => Promise<string>;
+  removeUiFont: (id: string) => Promise<void>;
   favoritesStatus: (src:string) => Promise<import('./favorites-types').ImageFavorite|null>;
   favoritesList: () => Promise<import('./favorites-types').ImageFavoriteLibrary>;
   favoritesAdd: (src:string) => Promise<{item:import('./favorites-types').ImageFavorite;duplicate:boolean}>;

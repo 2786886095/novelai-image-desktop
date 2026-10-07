@@ -1,3 +1,4 @@
+import {normalizeAutomaticComparison} from './automatic-comparison';
 import {workflowText} from './workflow-text';
 import {focusedInpaintPlan,type InpaintRegion} from './focused-inpaint';
 import {RangeInput} from './components/RangeInput';
@@ -47,6 +48,7 @@ function recolorMaskCanvas(
 export function InpaintCanvas() {
   const language = useAppStore((state) => state.settings?.language);
   const workflow=workflowText(language);
+  const automaticComparison=useAppStore(s=>normalizeAutomaticComparison(s.settings?.automaticComparison).inpaint);
   const workbenchImage = useAppStore((state) => state.workbenchImage);
   const currentImage = useAppStore((state) => state.currentImage);
   const comparisonBeforeImage = useAppStore((state) => state.comparisonBeforeImage);
@@ -93,7 +95,7 @@ export function InpaintCanvas() {
   const [stagePan, setStagePan] = useState({ x: 0, y: 0 });
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
-  const [compareEnabled, setCompareEnabled] = useState(Boolean(comparisonBeforeImage));
+  const [compareEnabled, setCompareEnabled] = useState(Boolean(comparisonBeforeImage) && automaticComparison);
   const [dropOver, setDropOver] = useState(false);
   const [brushSizeDraft, setBrushSizeDraft] = useState(String(brushSize));
   const brushFootprintCells = brushShape === "round"
@@ -141,8 +143,8 @@ export function InpaintCanvas() {
     }
     if (compareClipRef.current) compareClipRef.current.style.clipPath = "inset(0 0 0 50%)";
     if (compareDividerRef.current) compareDividerRef.current.style.left = "50%";
-    setCompareEnabled(canCompare);
-  }, [canCompare, comparisonBeforeImage?.fileUrl, currentImage?.fileUrl]);
+    setCompareEnabled(canCompare && automaticComparison);
+  }, [canCompare, comparisonBeforeImage?.fileUrl, currentImage?.fileUrl, automaticComparison]);
 
   useEffect(() => () => {
     if (compareAnimationFrameRef.current !== null) {

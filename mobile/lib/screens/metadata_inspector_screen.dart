@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import 'package:flutter/foundation.dart';
 import '../ui/studio_theme.dart';
 import '../ui/studio_dropdown.dart';
@@ -690,7 +691,7 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
           onPressed: widget.onBack,
           icon: const Icon(Icons.arrow_back),
         ),
-        title: Text(text.title),
+        title: studioAppBarTitle(context, Text(text.title)),
       ),
       body: Center(
         child: ConstrainedBox(
@@ -941,8 +942,8 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
                             report.rawText.isEmpty
                                 ? text.noParams
                                 : report.rawText,
-                            style: const TextStyle(
-                                fontFamily: 'monospace', fontSize: 12),
+                            style: TextStyle(
+                                fontFamily: UiTypographyScope.codeFamily(context), fontSize: 12),
                           ),
                         ),
                       ),

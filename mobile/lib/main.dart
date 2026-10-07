@@ -30,6 +30,9 @@ import 'services/background_queue_service.dart';
 import 'ui/onboarding.dart';
 import 'ui/studio_shell.dart';
 import 'ui/studio_theme.dart';
+import 'ui/global_typography.dart';
+import 'services/ui_fonts.dart';
+import 'models/ui_typography.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,6 +58,8 @@ class NovelAIApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography=context.select<AppState,UiTypography>((s)=>s.effectiveUiTypography);
+    final family=uiFontFamily(typography.font);
     final theme = context.select<AppState, String>((s) => s.settings.theme);
     final language =
         context.select<AppState, String>((s) => s.settings.language);
@@ -71,8 +76,8 @@ class NovelAIApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
       ],
-      theme: StudioTheme.light(),
-      darkTheme: StudioTheme.dark(),
+      theme: withUiFont(StudioTheme.light(),family),
+      darkTheme: withUiFont(StudioTheme.dark(),family),
       themeMode: switch (theme) {
         'light' => ThemeMode.light,
         'dark' => ThemeMode.dark,
@@ -80,10 +85,11 @@ class NovelAIApp extends StatelessWidget {
       },
       builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context).copyWith(
+              textScaler: StudioTextScaler(MediaQuery.textScalerOf(context),typography.scale/100),
               disableAnimations: reduceMotion ||
                   MediaQuery.disableAnimationsOf(context)),
-          child: Theme(
-              data: Theme.of(context).copyWith(
+          child: UiTypographyScope(family:family, child: Theme(
+              data: withUiTextLayout(Theme.of(context),StudioTextScaler(MediaQuery.textScalerOf(context),typography.scale/100)).copyWith(
                   expansionTileTheme: Theme.of(context)
                       .expansionTileTheme
                       .copyWith(
@@ -95,7 +101,7 @@ class NovelAIApp extends StatelessWidget {
                 behavior: HitTestBehavior.translucent,
                 onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
                 child: child ?? const SizedBox.shrink(),
-              ))),
+              )))),
       home: const HomeShell(),
     );
   }

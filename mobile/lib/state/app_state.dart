@@ -1,3 +1,5 @@
+import '../models/ui_typography.dart';
+import '../services/ui_fonts.dart';
 import '../services/novelai_image_envelope.dart';
 import '../services/novelai_accounts.dart';
 import '../services/novelai_account_api.dart';
@@ -312,6 +314,22 @@ class AppState extends ChangeNotifier {
   Set<String> aitagCompatibleParams = {...importedGenerateParamKeys};
   WorkingImage? comparisonBefore;
   WorkingImage? comparisonAfter;
+  String? comparisonSurface;
+  Future<void> _comparisonSave=Future.value();
+  Future<void> setAutomaticComparison(String surface,bool enabled) {
+    final operation=_comparisonSave.catchError((Object _){}).then((_)async{
+      if(!settings.automaticComparison.containsKey(surface))throw ArgumentError(surface);
+      final next={...settings.automaticComparison,surface:enabled};
+      final saved=AppSettings.fromJson({...settings.toJson(),'automaticComparison':next});
+      await storage.setSettings(saved);settings.automaticComparison=next;notifyListeners();
+    });
+    _comparisonSave=operation;return operation;
+  }
+  void renameCharacter(int index,String name){
+    extras.charCaptions[index].name=name;
+    unawaited(storage.setCharacterPrompts(extras.charCaptions).catchError((Object e){status='$e';notifyListeners();}));
+    notifyListeners();
+  }
 
   bool booted = false;
   bool needsNetworkOnboarding = false;
@@ -413,6 +431,7 @@ class AppState extends ChangeNotifier {
     try {
       promptTemplates = await PromptTemplateLibrary.load();
       settings = await storage.getSettings();
+    try { await ensureUiFont(settings.uiTypography.font); } catch (_) { /* Missing fonts use system fallback without destroying the saved choice. */ }
       if (storage is NovelAiAccountStorage) {
         await (storage as NovelAiAccountStorage).ready();
         _applyNaiAccount();
@@ -651,6 +670,19 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     storage.setParams(params);
     _scheduleGenerationQuote();
+  }
+
+  UiTypography? _uiTypographyPreview;
+  UiTypography get effectiveUiTypography=>_uiTypographyPreview??settings.uiTypography;
+  void previewUiTypography(UiTypography? value){_uiTypographyPreview=value;notifyListeners();}
+  // Typography is local UI state; never schedules a generation quote or a model call.
+  Future<void> setUiTypography(UiTypography value) async {
+    final next=UiTypography.fromJson(value.toJson());
+    try{
+      await ensureUiFont(next.font);
+      final saved=AppSettings.fromJson({...settings.toJson(),'uiTypography':next.toJson()});
+      await storage.setSettings(saved);settings.uiTypography=next;
+    }finally{_uiTypographyPreview=null;notifyListeners();}
   }
 
   Future<void> setSettings(void Function(AppSettings s) update) async {
@@ -1191,6 +1223,7 @@ class AppState extends ChangeNotifier {
     workbenchImage =
         WorkingImage(filePath: filePath, width: dims.$1, height: dims.$2);
     i2iOriginalImage = workbenchImage;
+    comparisonBefore=null;comparisonAfter=null;comparisonSurface=null;
     if (applyMetadata && !imported.isEmpty) {
       applyImportedMetadata(
         imported,
@@ -1304,6 +1337,7 @@ class AppState extends ChangeNotifier {
   void clearComparison() {
     comparisonBefore = null;
     comparisonAfter = null;
+    comparisonSurface = null;
     notifyListeners();
   }
 
@@ -2243,6 +2277,9 @@ class AppState extends ChangeNotifier {
               groupId: taskHistoryGroupId.ifEmptyNull,
             ));
           }
+          comparisonSurface='generate:t2i';
+          comparisonBefore=current==null?null:WorkingImage(filePath:current!.filePath,width:current!.width,height:current!.height);
+          comparisonAfter=WorkingImage(filePath:items.first.filePath,width:items.first.width,height:items.first.height);
           status = _rt('status.savingImage');
           notifyListeners();
           await _commitCompletedHistory(items);
@@ -2500,7 +2537,7 @@ class AppState extends ChangeNotifier {
     if (notify) notifyListeners();
   }
 
-  Future<void> generateI2I() async {
+  Future<void> generateI2I({String comparisonTool='generate:i2i'}) async {
     if (_naiChanging) throw StateError('账号正在切换，未提交请求');
     _naiOperationCount++;
     try {
@@ -2654,6 +2691,7 @@ class AppState extends ChangeNotifier {
                   height: actualSize.$2,
                   groupId: generationGroupId.ifEmptyNull));
             }
+            comparisonSurface = comparisonTool;
             comparisonBefore = source;
             comparisonAfter = WorkingImage(
               filePath: items.first.filePath,
@@ -2774,7 +2812,7 @@ class AppState extends ChangeNotifier {
       ..noise = min(0.5, enhanceMagnitude.clamp(1, 10) * 0.045);
     notifyListeners();
     try {
-      await generateI2I();
+      await generateI2I(comparisonTool:'generate:enhance');
     } finally {
       i2i.upscaledEnhance = previousMax;
       params
@@ -2849,6 +2887,7 @@ class AppState extends ChangeNotifier {
             height: targetHeight,
             groupId: generationGroupId.ifEmptyNull));
       }
+      comparisonSurface = 'inpaint';
       comparisonBefore = source;
       comparisonAfter = WorkingImage(
         filePath: items.first.filePath,
@@ -2898,6 +2937,7 @@ class AppState extends ChangeNotifier {
           width: plan.width,
           height: plan.height,
           groupId: generationGroupId.ifEmptyNull);
+      comparisonSurface='postprocess:upscale';comparisonBefore=dims;comparisonAfter=WorkingImage(filePath:item.filePath,width:item.width,height:item.height);
       await _commitCompletedHistory([item], useAsWorkbench: true);
       status = _rf('status.upscaleDone',
           {'spent': await _finishQuotedRun(token, before)});
@@ -2956,6 +2996,7 @@ class AppState extends ChangeNotifier {
             height: prepared.originalHeight,
             groupId: generationGroupId.ifEmptyNull));
       }
+      comparisonSurface='postprocess:director';comparisonBefore=dims;comparisonAfter=WorkingImage(filePath:items.first.filePath,width:items.first.width,height:items.first.height);
       await _commitCompletedHistory(items, useAsWorkbench: true);
       final resizeNote = prepared.resized
           ? _rf('status.directorRestoreNote', {
@@ -3835,6 +3876,7 @@ class AppState extends ChangeNotifier {
   void selectImage(HistoryItem item) {
     _workbenchLoadRevision++;
     current = item;
+    comparisonBefore=null;comparisonAfter=null;comparisonSurface=null;
     notifyListeners();
   }
 

@@ -25,7 +25,7 @@ export function CharacterPresetControls() {
   <Button disabled={!captions.length} onClick={()=>{setTarget('all');setName('');setError('');setOpen(true);}}>{title}</Button>
   {open&&<AppPortal><div className="modal-backdrop" onClick={()=>!busy&&setOpen(false)}><section className="modal character-save-dialog" role="dialog" aria-modal="true" aria-label={title} onClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==='Escape'&&!busy){e.stopPropagation();setOpen(false);}}}>
    <header><h2>{title}</h2></header><div className="character-save-body">
-   <SelectMenu label={labels.select} ariaLabel={labels.select} value={target} onChange={setTarget} disabled={busy} options={[{value:'all',label:labels.all},...captions.map((c,i)=>({value:c.id,label:`${i+1} · ${c.prompt.slice(0,60)||'—'}`}))]}/>
+   <SelectMenu label={labels.select} ariaLabel={labels.select} value={target} onChange={setTarget} disabled={busy} options={[{value:'all',label:labels.all},...captions.map((c,i)=>({value:c.id,label:`${c.name?.trim() || i+1} · ${c.prompt.slice(0,60)||'—'}`}))]}/>
    <label className="field"><span>{text.name}</span><input autoFocus value={name} disabled={busy} maxLength={120} onChange={e=>setName(e.target.value)}/></label>{error&&<p role="alert">{error}</p>}</div>
    <footer><Button disabled={busy} onClick={()=>setOpen(false)}>{text.cancel}</Button><Button variant="primary" disabled={busy||!name.trim()||!captions.some(c=>target==='all'||c.id===target)} onClick={()=>void save()}>{text.save}</Button></footer>
   </section></div></AppPortal>}
