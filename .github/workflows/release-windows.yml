@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish v2.5.2 only after every Windows and shared-source gate passes
+        description: Publish v2.5.3 only after every Windows and shared-source gate passes
         type: boolean
         default: true
 permissions:
@@ -12,7 +12,7 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 concurrency:
-  group: formal-release-v2.5.2
+  group: formal-release-v2.5.3
   cancel-in-progress: false
 jobs:
   windows:
@@ -38,6 +38,8 @@ jobs:
         run: node scripts/verify-packaged-runtime.mjs
       - name: Verify packaged Tavern label and preserved defaults
         run: node scripts/run-packaged-tavern-probe.cjs
+      - name: Verify packaged automatic iteration network transport
+        run: node scripts/verify-packaged-detective-network.cjs
       - name: Verify packaged font assets and actual Chinese glyphs
         run: node scripts/verify-packaged-fonts.cjs
       - name: Decode final Windows installers with the actual NSIS decoder

@@ -4,7 +4,7 @@ const {spawn,spawnSync}=require('node:child_process');
 const binary=path.resolve(process.argv[2]||'release/win-unpacked/Langbai NovelAI Studio.exe'),asar=path.join(path.dirname(binary),'resources/app.asar'),out=path.resolve('release/packaged-smoke/fonts-'+Date.now());
 fs.mkdirSync(out,{recursive:true});const catalog=JSON.parse(fs.readFileSync('public/ui-fonts/catalog.json'));
 const pause=ms=>new Promise(r=>setTimeout(r,ms));let child,ws;const pending=new Map();let id=0;
-const evidence={event:'actual_packaged_chromium_font_check',version:'2.5.2',binary,isolatedProfile:path.join(out,'profile'),fonts:[],externalFontRequests:[],paidCalls:0,pass:false};
+const evidence={event:'actual_packaged_chromium_font_check',version:'2.5.3',binary,isolatedProfile:path.join(out,'profile'),fonts:[],externalFontRequests:[],paidCalls:0,pass:false};
 const command=[binary,path.resolve('scripts/packaged-font-assets-probe.cjs'),asar,process.cwd()];
 const assets=spawnSync(command[0],command.slice(1),{encoding:'utf8',windowsHide:true,timeout:90000,env:{...process.env,ELECTRON_RUN_AS_NODE:'1'}});
 evidence.assetCommand={command,stdout:assets.stdout,stderr:assets.stderr,exitStatus:assets.status,error:assets.error?.message};
