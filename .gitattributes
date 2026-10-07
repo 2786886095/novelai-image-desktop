@@ -2,3 +2,7 @@
 /harness/community/infinite-gen4/infinite-gen-4.md -text
 # Generated responsive JS embeds CSS strings; keep input and bundle deterministic.
 /harness/plugins/studio-responsive/** text eol=lf
+
+# Preserve hash-pinned upstream fonts, OFL notices and catalog bytes on every OS.
+/public/ui-fonts/** -text
+/mobile/assets/ui-fonts/** -text
