@@ -1,10 +1,10 @@
 const fs=require('node:fs'),assert=require('node:assert/strict');
 const pkg=JSON.parse(fs.readFileSync('package.json','utf8')),lock=JSON.parse(fs.readFileSync('package-lock.json','utf8'));
-assert.equal(pkg.version,'2.5.2');assert.equal(lock.version,pkg.version);assert.equal(lock.packages[''].version,pkg.version);
-assert.match(fs.readFileSync('mobile/pubspec.yaml','utf8'),/^version: 2\.5\.2\+171$/m);
-assert.ok(fs.readFileSync('mobile/lib/models/nai_models.dart','utf8').includes("const appVersion = '2.5.2';"));
-assert.ok(fs.readFileSync('electron/ipc/mcp-client.ts','utf8').includes('version: "2.5.2"'));
+assert.equal(pkg.version,'2.5.3');assert.equal(lock.version,pkg.version);assert.equal(lock.packages[''].version,pkg.version);
+assert.match(fs.readFileSync('mobile/pubspec.yaml','utf8'),/^version: 2\.5\.3\+172$/m);
+assert.ok(fs.readFileSync('mobile/lib/models/nai_models.dart','utf8').includes("const appVersion = '2.5.3';"));
+assert.ok(fs.readFileSync('electron/ipc/mcp-client.ts','utf8').includes('version: "2.5.3"'));
 const locales=JSON.parse(fs.readFileSync('shared/agent-ux-locales.json','utf8'));
 assert.ok(JSON.stringify(locales).includes('使用酒馆'));
-console.log(JSON.stringify({version:pkg.version,mobile:'2.5.2+171',scope:'Windows x64 binaries; shared Android/iOS source',label:'使用酒馆',pass:true}));
+console.log(JSON.stringify({version:pkg.version,mobile:'2.5.3+172',scope:'Windows x64 binaries; shared Android/iOS source',label:'使用酒馆',pass:true}));
 const readme=fs.readFileSync('README.md','utf8');for(const expected of [`releases/tag/v${pkg.version}`,`Langbai-NovelAI-Studio-Setup-${pkg.version}.exe`,`Langbai-NovelAI-Studio-${pkg.version}.exe`])assert.ok(readme.includes(expected),'README release link out of sync: '+expected);
