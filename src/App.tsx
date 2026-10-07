@@ -1,3 +1,5 @@
+import {TypographySettings} from './components/TypographySettings';
+import {useGlobalTypography} from './global-typography';
 import { HistoryRailControls, HistoryRailPane } from './components/HistoryRailControls';
 import {TranslationPreview} from './components/TranslationPreview';
 import {TRANSLATION_LANGUAGES,normalizeTranslationPreference,translationText} from './translation';
@@ -13,6 +15,7 @@ import {inpaintSizePlan} from './inpaint-size';
 import {resolvePromptSizeSlot} from './prompt-size-slot';
 import {InpaintSizeControls} from './components/InpaintSizeControls';
 import './interaction-refinement.css';
+import './typography.css';
 import {ImageFavoriteButton} from './components/ImageFavoriteButton';
 import {useStudioRegionMotion} from './use-studio-motion';
 import {InpaintPromptSource} from './components/InpaintPromptSource';
@@ -39,6 +42,8 @@ import {parseVibeFile, exportVibeFile, vibeFileLabels, validateVibeModel} from "
 import {resolveCanvasImage} from "./canvas-preview";
 import {imageStageNavigation, imageStageContainsPoint} from "./image-stage-navigation";
 import {useDisclosurePresence, disclosureAttributes} from "./components/disclosure-motion";
+import {AutomaticComparisonControl} from './components/AutomaticComparisonControl';
+import {normalizeAutomaticComparison} from './automatic-comparison';
 import {normalizeCharacterCaptions} from "./character-presets";
 import {AnimatedCollapse, CharacterPositionMarker, CharacterEnabledToggle, characterEnabledLabels, characterEditLabels, useCharacterReorder} from './components/CharacterEditing';
 import {PreviewImageViewer} from './components/PreviewImageViewer';
@@ -99,6 +104,7 @@ import { Button, IconText, AppPortal, Toggle, NumberInput, CommittedNumberInput,
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { confirmAction } from "./components/confirm";
 import {CharacterPresetControls} from './components/CharacterPresetControls';
+import {CharacterNameControl} from './components/CharacterNameControl';
 import { Icon, type IconName } from "./components/icons";
 import { AppMenuBar, AppTitleBar } from "./app/AppChrome";
 import AppTabBar from "./app/AppTabBar";
@@ -1204,7 +1210,7 @@ export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
                     aria-label={t("character.positionCanvas")}
                   >
                     <div className="char-position-grid" aria-hidden="true" />
-                    {charCaptions.map((caption,index)=>caption.enabled !== false && <CharacterPositionMarker key={caption.id} caption={caption} index={index} label={f("character.markerLabel",{index:index+1})} onCommit={updateCharCaption}/>)}
+                    {charCaptions.map((caption,index)=>caption.enabled !== false && <CharacterPositionMarker key={caption.id} caption={caption} index={index} label={caption.name?.trim() || f("character.markerLabel",{index:index+1})} onCommit={updateCharCaption}/>)}
                   </div>
                 </div>
               </AnimatedCollapse>
@@ -1219,7 +1225,7 @@ export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
             <div data-character-id={cc.id} className={clsx("char-row", cc.enabled === false && "is-paused", collapsed && "collapsed", reorder.overId===cc.id && "drag-over")} key={cc.id}>
               <div className="char-row-head"><button type="button" className="char-drag-handle" aria-label={`${editText.drag}: ${idx+1}`} disabled={charCaptions.length<2} {...reorder.handle(cc.id)}><span aria-hidden="true">☰</span></button>
                 <div className="char-row-title">
-                  <strong>{f("character.label", { index: idx + 1 })}</strong>
+                  <CharacterNameControl name={cc.name} fallback={f("character.label",{index:idx+1})} language={language} onSave={name=>updateCharCaption(cc.id,{name})} />
                   <span className="char-row-position-summary">
                     {cc.enabled === false ? enabledText.off : cc.useCoords
                       ? `${t("character.customPosition")} · X ${cc.x.toFixed(2)} · Y ${cc.y.toFixed(2)}`
@@ -3283,6 +3289,7 @@ function GeneratePanel({openSettings}:{openSettings:()=>void}) {
   return (
     <>
       <div className="panel-scroll">
+        <AutomaticComparisonControl surface="generate:t2i" />
         <PromptAndParams />
         <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
         <CommittedNumberInput
@@ -3373,6 +3380,7 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
   return (
     <>
       <div className="panel-scroll">
+        <AutomaticComparisonControl surface="generate:i2i" />
         <WorkbenchImageUpload />
         <div className="field">
           <span>{t("inpaint.nextSource")}</span>
@@ -3442,6 +3450,7 @@ export function InpaintPanel({ openSettings }: { openSettings: () => void }) {
   return (
     <>
       <div className="panel-scroll">
+        <AutomaticComparisonControl surface="inpaint" />
         <WorkbenchImageUpload />
         <div className="field">
           <span>{t("inpaint.nextSource")}</span>
@@ -3556,6 +3565,7 @@ function UpscalePanel({ openSettings }: { openSettings: () => void }) {
   return (
     <>
       <div className="panel-scroll">
+        <AutomaticComparisonControl surface="postprocess:upscale" />
         <WorkbenchImageUpload />
         <small className="field-hint">{t("upscale.explain")}</small>
         <div className="scale-buttons">
@@ -3658,6 +3668,7 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
   return (
     <>
       <div className="panel-scroll">
+        <AutomaticComparisonControl surface="generate:enhance" />
         <WorkbenchImageUpload />
         <SliderInput label={f("enhance.magnitude", { value: magnitude })} value={magnitude} min={1} max={10} step={1} onChange={setMagnitude} />
         <small className="field-hint">{t("enhance.explain")}</small>
@@ -3694,6 +3705,7 @@ function DirectorPanel({ openSettings }: { openSettings: () => void }) {
   return (
     <>
       <div className="panel-scroll">
+        <AutomaticComparisonControl surface="postprocess:director" />
         <WorkbenchImageUpload />
         <div className="director-tools">
           {DIRECTOR_TOOLS.map((item) => (
@@ -4045,9 +4057,9 @@ function ReversePanel() {
           {hasImage ? (
             <img src={inspectImageUrl} className="wb-thumb" style={{ maxHeight: 110 }} alt={t("inspect.imageAlt")} />
           ) : (
-            <span style={{ fontSize: 12 }}>{t("inspect.dropHint")}</span>
+            <span style={{ fontSize: "calc(12px * var(--ui-text-scale, 1))" }}>{t("inspect.dropHint")}</span>
           )}
-          <label className="btn btn-secondary" style={{ cursor: "pointer", fontSize: 12 }}>
+          <label className="btn btn-secondary" style={{ cursor: "pointer", fontSize: "calc(12px * var(--ui-control-scale, 1))" }}>
             <IconText icon={<Icon name="folderOpen" />}>{t("inspect.openFile")}</IconText>
             <input
               type="file"
@@ -4153,7 +4165,7 @@ function ReversePanel() {
             <PromptVariantCards variants={reversePromptVariants} onUse={setReversePromptText} />
             {templates.length > 0 && (
               <div className="template-apply-row">
-                <span style={{ fontSize: 12 }}>{t("inspect.applyTemplate")}</span>
+                <span style={{ fontSize: "calc(12px * var(--ui-text-scale, 1))" }}>{t("inspect.applyTemplate")}</span>
                 <div className="template-chip-list">
                   {templates.map((tpl) => (
                     <button
@@ -4421,7 +4433,7 @@ function PromptConverterPanel() {
             <PromptVariantCards variants={convertResultVariants} onUse={setConvertResult} />
             {templates.length > 0 && (
               <div className="template-apply-row">
-                <span style={{ fontSize: 12 }}>{t("convert.applyTemplate")}</span>
+                <span style={{ fontSize: "calc(12px * var(--ui-text-scale, 1))" }}>{t("convert.applyTemplate")}</span>
                 <div className="template-chip-list">
                   {templates.map((tpl) => (
                     <button key={tpl.id} className="template-chip" onClick={() => applyTemplate(tpl)}>
@@ -4581,10 +4593,12 @@ function clampNumber(value: number, min: number, max: number) {
 function ZoomableImageStage({
   image,
   compareBeforeImage,
+  automaticComparison = true,
   alt,
 }: {
   image: ViewableImage;
   compareBeforeImage?: ViewableImage | null;
+  automaticComparison?: boolean;
   alt: string;
 }) {
   const shellRef = useRef<HTMLDivElement>(null);
@@ -4610,7 +4624,7 @@ function ZoomableImageStage({
   const [intrinsicSize, setIntrinsicSize] = useState({ width: 0, height: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [isOverImage, setIsOverImage] = useState(false);
-  const [compareEnabled, setCompareEnabled] = useState(Boolean(compareBeforeImage));
+  const [compareEnabled, setCompareEnabled] = useState(Boolean(compareBeforeImage) && automaticComparison);
   wheelTransformRef.current = { zoom, pan };
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
@@ -4652,9 +4666,9 @@ function ZoomableImageStage({
     }
     if (compareClipRef.current) compareClipRef.current.style.clipPath = "inset(0 0 0 50%)";
     if (compareDividerRef.current) compareDividerRef.current.style.left = "50%";
-    setCompareEnabled(Boolean(compareBeforeImage));
+    setCompareEnabled(Boolean(compareBeforeImage) && automaticComparison);
     setIntrinsicSize({ width: 0, height: 0 });
-  }, [image.fileUrl, compareBeforeImage?.fileUrl]);
+  }, [image.fileUrl, compareBeforeImage?.fileUrl, automaticComparison]);
 
   useEffect(() => {
     const point = pointerPointRef.current;
@@ -5171,6 +5185,7 @@ export function ImageCanvas() {
       {currentImage && <ZoomableImageStage
         image={currentImage}
         compareBeforeImage={comparisonBelongsToActiveTab && comparisonSurface === activeCanvasSurface ? comparisonBeforeImage : null}
+        automaticComparison={normalizeAutomaticComparison(settings?.automaticComparison)[activeCanvasSurface]}
         alt={t("canvas.resultAlt")}
       />}
     </main>
@@ -6148,6 +6163,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     <option value="system">{settingsSectionText.appearance.themeSystem}</option>
                   </SelectMenuCompat>
                 </label>
+                <TypographySettings />
                 <Toggle
                   checked={settings.reduceMotion}
                   onChange={(value) => void update("reduceMotion", value)}
@@ -6499,7 +6515,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
                 <p className="settings-hint">{t("settings.promptTemplateHint")}</p>
                 {(settings.promptTemplates ?? []).length === 0 && (
-                  <p style={{ fontSize: 12, color: "var(--text-muted)" }}>{t("settings.noTemplates")}</p>
+                  <p style={{ fontSize: "calc(12px * var(--ui-text-scale, 1))", color: "var(--text-muted)" }}>{t("settings.noTemplates")}</p>
                 )}
                 {(settings.promptTemplates ?? []).map((tpl) => (
                   <div className="tpl-item" key={tpl.id}>
@@ -6515,7 +6531,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   </div>
                 ))}
                 <div className="tpl-new">
-                  <strong style={{ fontSize: 12 }}>{t("settings.newTemplate")}</strong>
+                  <strong style={{ fontSize: "calc(12px * var(--ui-text-scale, 1))" }}>{t("settings.newTemplate")}</strong>
                   <label className="field">
                     <span>{t("settings.templateName")}</span>
                     <input value={newTplName} placeholder={t("settings.templateNamePlaceholder")} onChange={(e) => setNewTplName(e.target.value)} />
@@ -7169,6 +7185,8 @@ function MainPage() {
       useAppStore.getState().setShowSettings(true);
     }
   }, [uiCaptureParams]);
+
+  useGlobalTypography(settings?.uiTypography);
 
   // Apply theme class
   useEffect(() => {

@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import '../ui/studio_theme.dart';
 import '../ui/studio_dropdown.dart';
 import '../ui/zoomable_image.dart';
@@ -1919,7 +1920,7 @@ class _V5ArtistWeightRepairScreenState
             onPressed: widget.onBack,
             icon: const Icon(Icons.arrow_back),
           ),
-          title: Text(drawText['title']!),
+          title: studioAppBarTitle(context, Text(drawText['title']!)),
           actions: [
             TextButton.icon(
               onPressed: _reset,
@@ -1947,7 +1948,7 @@ class _V5ArtistWeightRepairScreenState
           onPressed: widget.onBack,
           icon: const Icon(Icons.arrow_back),
         ),
-        title: Text(text['title']!),
+        title: studioAppBarTitle(context, Text(text['title']!)),
       ),
       body: ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,

@@ -220,7 +220,20 @@ class _PhoneShell extends StatelessWidget {
       key: const ValueKey('studio-phone-shell'),
       resizeToAvoidBottomInset: false,
       body: _LazyIndexedStack(index: selectedIndex, children: pages),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: MediaQuery.textScalerOf(context).scale(14)>18.2
+          ? SafeArea(top:false,child:Material(color:Theme.of(context).colorScheme.surface,child:SingleChildScrollView(
+              scrollDirection:Axis.horizontal,child:Row(children:[
+                for(var index=0;index<=primary.length;index++)
+                  SizedBox(width:(size.width/5).clamp(104.0,160.0),child:InkWell(
+                    onTap:(){FocusManager.instance.primaryFocus?.unfocus();if(index<primary.length){onDestinationSelected(primary[index]);}else{_showMoreSheet(context);}},
+                    child:Padding(padding:const EdgeInsets.symmetric(horizontal:8,vertical:10),child:Column(mainAxisSize:MainAxisSize.min,children:[
+                      Icon(index<primary.length?destinations[primary[index]].icon:Icons.apps,
+                        color:(phoneIndex<0?primary.length:phoneIndex)==index?Theme.of(context).colorScheme.primary:null),
+                      const SizedBox(height:6),Text(index<primary.length?destinations[primary[index]].label:moreLabel,textAlign:TextAlign.center,
+                        style:Theme.of(context).textTheme.labelMedium),
+                    ])))),
+              ]))))
+          : NavigationBar(
         key: const ValueKey('studio-phone-navigation'),
         height: landscape ? 66 : null,
         labelBehavior: landscape
@@ -299,10 +312,10 @@ class _PhoneShell extends StatelessWidget {
                       shrinkWrap: true,
                       keyboardDismissBehavior:
                           ScrollViewKeyboardDismissBehavior.onDrag,
-                      crossAxisCount: landscape ? 4 : 3,
+                      crossAxisCount: MediaQuery.textScalerOf(context).scale(14)>18.2 ? (landscape?3:2) : (landscape ? 4 : 3),
                       mainAxisSpacing: 8,
                       crossAxisSpacing: 8,
-                      childAspectRatio: landscape ? 1.55 : 1.25,
+                      childAspectRatio: (landscape ? 1.55 : 1.25)/(MediaQuery.textScalerOf(context).scale(14)/14).clamp(1.0,3.0),
                       children: [
                         for (final index in order)
                           if (!primary.contains(index))

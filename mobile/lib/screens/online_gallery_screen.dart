@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import 'style_library_screen.dart';
 import 'gallery_favorites_screen.dart';
 import '../services/gallery_favorites.dart';
@@ -729,7 +730,7 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
     final text = _galleryText(language);
     return Scaffold(
       appBar: AppBar(
-        title: Text(text.title),
+        title: studioAppBarTitle(context, Text(text.title)),
         actions: [
           const GalleryFavoritesButton(),
           IconButton(
@@ -1664,12 +1665,12 @@ class _OnlineGalleryDetailScreenState
     final text = _galleryText(language);
     return Scaffold(
       appBar: AppBar(
-        title: Text(
+        title: studioAppBarTitle(context, Text(
             widget.item.title.isEmpty
                 ? '#${widget.item.id}'
                 : widget.item.title,
             maxLines: 1,
-            overflow: TextOverflow.ellipsis),
+            overflow: TextOverflow.ellipsis)),
         actions: [
           GalleryFavoriteButton(
               item: GalleryFavorite.fromItem(widget.item),

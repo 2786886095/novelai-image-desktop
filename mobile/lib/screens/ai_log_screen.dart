@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -18,8 +19,8 @@ class AiLogScreen extends StatelessWidget {
     String t(String key) => mobileUiTextFor(language, key);
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-            mobileUiFormatFor(language, 'aiLog.title', {'count': logs.length})),
+        title: studioAppBarTitle(context, Text(
+            mobileUiFormatFor(language, 'aiLog.title', {'count': logs.length}))),
         actions: [
           IconButton(
             tooltip: t('aiLog.refresh'),

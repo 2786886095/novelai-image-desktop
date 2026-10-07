@@ -2366,12 +2366,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       if (get().activeGenerationRunId !== runId) return;
 
-      showPartialImages(set, get, result);
+      const comparisonOptions={compareBefore:state.currentImage,comparisonSurface:"generate:t2i" as const};
+      showPartialImages(set, get, result, comparisonOptions);
       if (result.ok && result.items.length > 0) {
         completed++;
         const current = result.items[0];
         set({ params: { ...get().params, seed: result.actualSeed ?? current.actualSeed } });
-        await refreshAfterImageInBackground(set, get, current);
+        await refreshAfterImageInBackground(set, get, current, comparisonOptions);
       } else {
         // Keep transient failures isolated; deterministic auth/validation
         // failures below stop only the requests known to share that cause.

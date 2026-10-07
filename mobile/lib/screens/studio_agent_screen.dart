@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import 'studio_question_cards.dart';
 import 'studio_model_collection.dart';
 import '../agent/model_selections.dart';
@@ -1678,11 +1679,11 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                         tooltip: _t('chats'),
                         icon: const Icon(Icons.chat_bubble_outline, size: 20),
                         onPressed: () => Scaffold.of(barContext).openDrawer())),
-                title: Text(chat.title,
+                title: studioAppBarTitle(context, Text(chat.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w500)),
+                        fontSize: 14, fontWeight: FontWeight.w500))),
                 actions: [
                     Builder(
                         builder: (ctx) => IconButton(

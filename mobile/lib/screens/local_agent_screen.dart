@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import '../agent/batch_generation_actions.dart';
 import '../agent/comic_generation_actions.dart';
 import 'dart:async';
@@ -602,7 +603,7 @@ class _LocalAgentScreenState extends State<LocalAgentScreen> {
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(10)),
           child: SelectableText(logs,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 12))),
+              style: TextStyle(fontFamily: UiTypographyScope.codeFamily(context), fontSize: 12))),
       const SizedBox(height: 12),
       ExpansionTile(title: Text('${t('backup')} / ${t('restore')}'), children: [
         Text(t('backupsHint')),

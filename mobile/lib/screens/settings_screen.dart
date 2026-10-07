@@ -1,3 +1,5 @@
+import '../ui/global_typography.dart';
+import 'typography_settings.dart';
 import '../prompts/translation.dart';
 import 'novelai_accounts_screen.dart';
 import 'compatible_images.dart';
@@ -425,7 +427,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final streamPreviewText = _streamPreviewSettingText(s.language);
     final account = state.account;
     return Scaffold(
-      appBar: AppBar(title: Text(settingsText.title)),
+      appBar: AppBar(title: studioAppBarTitle(context, Text(settingsText.title))),
       body: StudioContent(
           child: ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -931,6 +933,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ? null
                   : state.setSettings((x) => x.theme = value),
             ),
+            const SizedBox(height:16),
+            const TypographySettings(),
             SwitchListTile(
                 title: Text(appearanceText.tagAutocomplete),
                 value: s.autoComplete,
@@ -1568,7 +1572,7 @@ class _TokenGuideScreen extends StatelessWidget {
     final text = tokenGuideTextFor(language);
     return Scaffold(
       appBar: AppBar(
-        title: Text(text.title),
+        title: studioAppBarTitle(context, Text(text.title)),
         leading: IconButton(
           tooltip: text.close,
           onPressed: () => Navigator.pop(context),

@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import 'gallery_favorites_screen.dart';
 import '../services/gallery_favorites.dart';
 import '../ui/studio_dropdown.dart';
@@ -544,7 +545,7 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
                       tooltip: text.back,
                       onPressed: widget.onBack,
                       icon: const Icon(Icons.arrow_back)),
-              title: Text(text.title),
+              title: studioAppBarTitle(context, Text(text.title)),
               actions: [
                 const GalleryFavoritesButton(),
                 IconButton(
@@ -1008,7 +1009,7 @@ class _AitagDetailScreenState extends State<_AitagDetailScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
-          title: Text(widget.text.metadata),
+          title: studioAppBarTitle(context, Text(widget.text.metadata)),
           actions: [
             IconButton(
                 tooltip: widget.text.source,
@@ -1359,7 +1360,7 @@ class _MetadataReportBlock extends StatelessWidget {
                             ]),
                             SelectableText(entry.value,
                                 style:
-                                    const TextStyle(fontFamily: 'monospace')),
+                                    TextStyle(fontFamily: UiTypographyScope.codeFamily(context))),
                           ],
                         ),
                       ),
@@ -1376,7 +1377,7 @@ class _MetadataReportBlock extends StatelessWidget {
                         icon: const Icon(Icons.copy_outlined)),
                     children: [
                       SelectableText(raw,
-                          style: const TextStyle(fontFamily: 'monospace'))
+                          style: TextStyle(fontFamily: UiTypographyScope.codeFamily(context)))
                     ],
                   ),
               ],
@@ -1412,6 +1413,6 @@ class _DataBlock extends StatelessWidget {
                   icon: const Icon(Icons.copy_outlined))
             ]),
             SelectableText(value,
-                style: const TextStyle(fontFamily: 'monospace')),
+                style: TextStyle(fontFamily: UiTypographyScope.codeFamily(context))),
           ])));
 }

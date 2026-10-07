@@ -6,7 +6,7 @@ import {useAppStore} from './store';
 
 beforeEach(()=>useAppStore.setState(useAppStore.getInitialState(),true));
 afterEach(()=>vi.unstubAllGlobals());
-const cast=[{id:'a',enabled:false,prompt:' exact, text, text ',negativePrompt:'negative',useCoords:true,x:0,y:1},{id:'b',prompt:'blue coat',negativePrompt:'',useCoords:false,x:.5,y:.5}];
+const cast=[{id:'a',name:'DISPLAY_ONLY_A',enabled:false,prompt:' exact, text, text ',negativePrompt:'negative',useCoords:true,x:0,y:1},{id:'b',name:'DISPLAY_ONLY_B',prompt:'blue coat',negativePrompt:'',useCoords:false,x:.5,y:.5}];
 it('keeps pause state, content, identity and coordinates in storage, reorder and presets',()=>{
  expect(normalizeCharacterCaptions(cast)).toEqual(cast);
  expect(normalizeCharacterCaptions([{...cast[0],enabled:'false'}])[0].enabled).toBeUndefined();

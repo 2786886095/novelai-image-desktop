@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:async';
 
@@ -287,7 +288,7 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
       return Scaffold(
         appBar: AppBar(
           leading: BackButton(onPressed: widget.onBack),
-          title: Text(text['title']!),
+          title: studioAppBarTitle(context, Text(text['title']!)),
         ),
         body: Center(
           child: _message.isEmpty
@@ -313,7 +314,7 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: BackButton(onPressed: widget.onBack),
-        title: Text(text['title']!),
+        title: studioAppBarTitle(context, Text(text['title']!)),
         actions: [
           IconButton(
             tooltip: text['source'],

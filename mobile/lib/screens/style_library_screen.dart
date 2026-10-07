@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -200,7 +201,7 @@ class _StyleLibraryScreenState extends State<StyleLibraryScreen> {
                 .contains(query.toLowerCase()))
         .toList();
     return Scaffold(
-        appBar: AppBar(title: Text(t['title']!), actions: [
+        appBar: AppBar(title: studioAppBarTitle(context, Text(t['title']!)), actions: [
           IconButton(
               tooltip: t['new'],
               onPressed: busy ? null : () => edit(state),
@@ -482,7 +483,7 @@ class _StyleEditorState extends State<_StyleEditor> {
     return PopScope(
         canPop: !busy,
         child: Scaffold(
-            appBar: AppBar(title: Text(t['edit']!)),
+            appBar: AppBar(title: studioAppBarTitle(context, Text(t['edit']!))),
             body: ListView(padding: const EdgeInsets.all(16), children: [
               TextField(
                   controller: name,
@@ -686,7 +687,7 @@ class _StyleBatchState extends State<_StyleBatch> {
     final state = context.watch<AppState>(),
         t = styleLibraryText(state.settings.language);
     return Scaffold(
-        appBar: AppBar(title: Text(t['batch']!)),
+        appBar: AppBar(title: studioAppBarTitle(context, Text(t['batch']!))),
         body: ListView(padding: const EdgeInsets.all(16), children: [
           Text(t['lines']!),
           TextField(controller: lines, minLines: 6, maxLines: 12),

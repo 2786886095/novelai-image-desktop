@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -345,7 +346,7 @@ class _SceneBindingsEditorState extends State<SceneBindingsEditor> {
         },
         child: Scaffold(
             appBar: AppBar(
-                title: Text(ui['title']!),
+                title: studioAppBarTitle(context, Text(ui['title']!)),
                 leading: IconButton(
                     tooltip: ui['cancel'],
                     onPressed: saving ? null : close,

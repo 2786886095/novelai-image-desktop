@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import '../images/upscale_plan.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:io';
@@ -16,7 +17,7 @@ import '../state/app_state.dart';
 import '../ui/quality_preset_control.dart';
 import '../ui/studio_shell.dart';
 import '../ui/zoomable_image.dart';
-import '../ui/before_after_compare.dart';
+import '../ui/automatic_comparison_control.dart';
 import 'generate_screen.dart' show PromptEditor;
 import '../ui/inpaint_size_controls.dart';
 import 'inpaint_mask_editor.dart';
@@ -47,7 +48,7 @@ class ToolsScreen extends StatelessWidget {
     final state = context.watch<AppState>();
     final language = state.settings.language;
     return Scaffold(
-      appBar: AppBar(title: Text(titleFor(language)), actions: [
+      appBar: AppBar(title: studioAppBarTitle(context, Text(titleFor(language))), actions: [
         IconButton(
             onPressed: () => _pick(context), icon: const Icon(Icons.image)),
       ]),
@@ -545,30 +546,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
             const SizedBox(height: 12),
             const _RedrawParams(),
             const SizedBox(height: 12),
-            if (state.comparisonBefore case final before?)
-              if (state.comparisonAfter case final after?) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(t('tools.beforeAfter'),
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                    IconButton(
-                      tooltip: t('tools.closeCompare'),
-                      onPressed: state.clearComparison,
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-                SizedBox(
-                  height: 420,
-                  child: BeforeAfterCompare(
-                    beforePath: before.filePath,
-                    afterPath: after.filePath,
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
+            const AutomaticComparisonControl(surface:'inpaint'),
             if (workbench == null)
               SizedBox(
                 height: 240,
@@ -787,6 +765,7 @@ class _UpscalePanel extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(children: [
+          const AutomaticComparisonControl(surface:'postprocess:upscale'),
           Text('超分只扩大输出并补足清晰度，不进行第二次创意扩散；画面变化通常小于“增强”。2×/4×会改变分辨率。',
               style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 12),
@@ -977,6 +956,8 @@ class _DirectorPanel extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(children: [
+          const AutomaticComparisonControl(surface:'postprocess:director'),
+          const AutomaticComparisonControl(surface:'generate:enhance'),
           StudioDropdownButtonFormField<String>(
             value: s.directorTool,
             decoration: InputDecoration(

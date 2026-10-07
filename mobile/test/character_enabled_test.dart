@@ -54,13 +54,14 @@ void main() {
         () async {
       final a = CharCaptionItem(
           enabled: false,
+          name:'DISPLAY_ONLY_PAUSED',
           prompt: 'paused role',
           negativePrompt: 'paused negative',
           useCoords: true,
           x: 0,
           y: 1);
       final b = CharCaptionItem(
-          prompt: 'active role', negativePrompt: 'active negative');
+          name:'DISPLAY_ONLY_ACTIVE',prompt: 'active role', negativePrompt: 'active negative');
       final extras = GenerateExtras(charCaptions: [a, b]);
       final params = GenerateParams(
           model: model,
@@ -90,6 +91,7 @@ void main() {
       expect(p['use_coords'], isFalse);
       expect(p.toString(), isNot(contains('paused')));
       expect(p.toString(), isNot(contains('enabled')));
+      expect(p.toString(), isNot(contains('DISPLAY_ONLY')));
       expect(
           (await api.buildPayload('unused', settings, params, 123, extras,
               structuredCharacters: false))['input'],

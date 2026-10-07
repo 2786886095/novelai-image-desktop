@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -190,7 +191,7 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
     final visible =
         filtered.skip((shownPage - 1) * pageSize).take(pageSize).toList();
     return Scaffold(
-      appBar: AppBar(title: Text(t('title')), actions: [
+      appBar: AppBar(title: studioAppBarTitle(context, Text(t('title'))), actions: [
         IconButton(
             tooltip: t('online'),
             icon: const Icon(Icons.public),

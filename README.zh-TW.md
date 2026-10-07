@@ -1,6 +1,6 @@
 # Langbai NovelAI Studio
 
-> v2.5.1：本次發行 Windows x64 安裝版與可攜版；Android/iOS 共用功能原始碼同步，不提供新行動端安裝包，也不代表完成行動實機或簽名驗收。
+> v2.5.2：本次發行 Windows x64 安裝版與可攜版；Android/iOS 共用功能原始碼同步，不提供新行動端安裝包，也不代表完成行動實機或簽名驗收。
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 

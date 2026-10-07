@@ -1,3 +1,5 @@
+import {normalizeAutomaticComparison} from "../../src/automatic-comparison";
+import {normalizeTypography,DEFAULT_TYPOGRAPHY} from "../../src/typography";
 import {normalizeSavedAgentModels,agentEffort} from '../../src/agent/model-selections';
 import {normalizeAgentUiPreferences} from '../../src/agent/preferences';
 import {normalizeCompletionSound} from "../../src/completion-sound";
@@ -189,6 +191,8 @@ export function defaultSettings(): AppSettings {
     proxyForUpdate: true,
     proxyForTranslate: true,
     updateSource: "github",
+    uiTypography: {...DEFAULT_TYPOGRAPHY},
+    automaticComparison: normalizeAutomaticComparison(null),
     theme: "light",
     reduceMotion: false,
     completionSound: normalizeCompletionSound(null),
@@ -287,6 +291,8 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   const defaults = defaultSettings();
   const rawSettings = (raw?.settings ?? {}) as Partial<AppSettings>;
   const settings = normalizeNovelAiSettings({ ...defaults, ...rawSettings });
+  settings.uiTypography=normalizeTypography(rawSettings.uiTypography);
+  settings.automaticComparison=normalizeAutomaticComparison(rawSettings.automaticComparison);
   settings.copyImageMetadata = rawSettings.copyImageMetadata === true;
   settings.agentApiProtocol = normalizeAgentProviderProtocol(settings.agentApiProtocol);
   settings.agentApiBaseUrl = typeof settings.agentApiBaseUrl === "string"
@@ -672,7 +678,7 @@ export function setSetting<K extends SettingKey>(key: K, value: AppSettings[K]):
   const replaceCredential = (SENSITIVE_SETTING_KEYS as readonly string[]).includes(key);
   data.settings = {
     ...data.settings,
-    [key]: key === "agentUiPreferences" ? normalizeAgentUiPreferences(value) : key === "language" ? normalizeLanguage(value) : key === "completionSound" ? normalizeCompletionSound(value) : value,
+    [key]: key === "automaticComparison" ? normalizeAutomaticComparison(value) : key === "uiTypography" ? normalizeTypography(value) : key === "agentUiPreferences" ? normalizeAgentUiPreferences(value) : key === "language" ? normalizeLanguage(value) : key === "completionSound" ? normalizeCompletionSound(value) : value,
   };
   writeStore(data, replaceCredential ? [key] : []);
   return data.settings[key];

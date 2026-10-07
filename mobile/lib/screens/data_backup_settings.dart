@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:io';
 
@@ -997,7 +998,7 @@ class IncomingBackupImportScreen extends StatelessWidget {
     );
     final text = _backupText(language);
     return Scaffold(
-      appBar: AppBar(title: Text(text['archive']!)),
+      appBar: AppBar(title: studioAppBarTitle(context, Text(text['archive']!))),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),

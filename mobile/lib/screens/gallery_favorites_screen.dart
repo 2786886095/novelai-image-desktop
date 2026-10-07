@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import '../ui/zoomable_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -120,7 +121,7 @@ class _GalleryFavoritesScreenState extends State<GalleryFavoritesScreen> {
               shown = page.clamp(1, pages);
           return Scaffold(
               appBar: AppBar(
-                  title: Text('${text['library']} · ${store.items.length}')),
+                  title: studioAppBarTitle(context, Text('${text['library']} · ${store.items.length}'))),
               body: Column(children: [
                 Padding(
                     padding: const EdgeInsets.all(12),
@@ -358,10 +359,10 @@ class _FavoriteDetailState extends State<_FavoriteDetail> {
         text = galleryLibraryText(context.watch<AppState>().settings.language);
     return Scaffold(
         appBar: AppBar(
-            title: Text(item.source == 'tags-gallery'
+            title: studioAppBarTitle(context, Text(item.source == 'tags-gallery'
                 ? localizedGalleryTag(
                     item.title, context.watch<AppState>().settings.language)
-                : item.title),
+                : item.title)),
             actions: [GalleryFavoriteButton(item: item)]),
         body: SafeArea(
             child: ListView(padding: const EdgeInsets.all(16), children: [

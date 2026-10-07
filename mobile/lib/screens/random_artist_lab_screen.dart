@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import '../ui/studio_theme.dart';
 import '../ui/studio_dropdown.dart';
 import '../ui/zoomable_image.dart';
@@ -2561,7 +2562,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: widget.onBack,
         ),
-        title: Text(text['title']!),
+        title: studioAppBarTitle(context, Text(text['title']!)),
       ),
       body: ListView(
         controller: _scrollController,

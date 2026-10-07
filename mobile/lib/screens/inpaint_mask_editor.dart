@@ -1,3 +1,4 @@
+import '../ui/global_typography.dart';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -774,7 +775,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
           child: Text(t('common.cancel')),
         ),
         leadingWidth: 80,
-        title: Text(t('tools.maskEditorTitle')),
+        title: studioAppBarTitle(context, Text(t('tools.maskEditorTitle'))),
         actions: [
           IconButton(
             key: const ValueKey('inpaint-mask-visibility-toggle'),

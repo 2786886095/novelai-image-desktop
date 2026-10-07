@@ -93,3 +93,14 @@ for build provenance, source requirements and validation gates.
 Ubuntu rootfs packages retain their copyright/license files under `/usr/share/doc`.
 The build emits the exact installed-package inventory. Node and locked npm packages
 retain their own LICENSE files. App MIT licensing does not relicense those components.
+
+## Bundled Chinese UI style fonts
+
+These original, unmodified fonts are distributed under SIL Open Font License 1.1, separately from the application MIT license. Copyright notices and full licenses are bundled alongside fonts in `dist/ui-fonts/` and `mobile/assets/ui-fonts/`. `catalog.json` records pinned source URLs, versions and SHA-256 hashes. They are not installed into the operating system.
+
+- **霞鹜文楷 轻便版 / LXGW WenKai Lite** v1.522: https://github.com/lxgw/LxgwWenKai-Lite; license `builtin-wenkai.OFL.txt`.
+- **小赖字体 / Xiaolai** v3.126: https://github.com/lxgw/kose-font; license `builtin-xiaolai.OFL.txt`.
+- **悠哉字体 / Yozai** v0.868: https://github.com/lxgw/yozai-font; license `builtin-yozai.OFL.txt`.
+- **霞鹜漫黑 / LXGW Marker Gothic** v1.003: https://github.com/lxgw/LxgwMarkerGothic; license `builtin-marker.OFL.txt`.
+- **得意黑 / Smiley Sans** v2.0.1: https://github.com/atelier-anchor/smiley-sans; license `builtin-smiley.OFL.txt`.
+- **思源宋体 CN / Source Han Serif CN** 2.003R: https://github.com/adobe-fonts/source-han-serif; license `builtin-source-serif.OFL.txt`.
