@@ -32,6 +32,9 @@ jobs:
         run: |
           set -euo pipefail
           repo="${GITHUB_REPOSITORY#*/}"
+          # Some HTTP gateways terminate chunked Git uploads. Keep full HTTP/1.1 posts.
+          git config http.postBuffer 524288000
+          git config http.version HTTP/1.1
           git fetch --prune origin \
             '+refs/heads/*:refs/remotes/origin/*' \
             '+refs/tags/*:refs/tags/*'
