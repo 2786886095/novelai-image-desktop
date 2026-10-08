@@ -1567,6 +1567,7 @@ export interface AppSettings {
   stylePromptPresetGroups: string[];
   // Positive-only reusable prompt presets shared by Generate and compatible
   // artist-string tools. Optional images are view-only notes (maximum three).
+  negativePromptPresets: import("./negative-prompt-library").NegativePromptPreset[];
   positivePromptPresets: PositivePromptPreset[];
   // Small reusable phrases inserted into any positive/character prompt. These
   // are intentionally stored separately from whole-prompt presets.

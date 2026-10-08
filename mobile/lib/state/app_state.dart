@@ -1,4 +1,6 @@
 import '../models/ui_typography.dart';
+import '../prompts/negative_prompt_library.dart';
+import '../models/automatic_comparison.dart';
 import '../services/ui_fonts.dart';
 import '../services/novelai_image_envelope.dart';
 import '../services/novelai_accounts.dart';
@@ -315,11 +317,20 @@ class AppState extends ChangeNotifier {
   WorkingImage? comparisonBefore;
   WorkingImage? comparisonAfter;
   String? comparisonSurface;
+  bool comparisonAutoOpenPending=false;
+  Future<void> _negativeSave=Future.value();
+  Future<void> mutateNegativePresets(List<Map<String,String>> Function(List<Map<String,String>>) update){
+    final operation=_negativeSave.catchError((Object _){}).then((_)async{
+      final next=normalizeNegativePromptPresets(update(settings.negativePromptPresets));
+      final saved=AppSettings.fromJson({...settings.toJson(),"negativePromptPresets":next});
+      await storage.setSettings(saved);settings.negativePromptPresets=next;notifyListeners();
+    });_negativeSave=operation;return operation;
+  }
   Future<void> _comparisonSave=Future.value();
   Future<void> setAutomaticComparison(String surface,bool enabled) {
     final operation=_comparisonSave.catchError((Object _){}).then((_)async{
       if(!settings.automaticComparison.containsKey(surface))throw ArgumentError(surface);
-      final next={...settings.automaticComparison,surface:enabled};
+      final next=normalizeAutomaticComparison({...settings.automaticComparison,surface:enabled});
       final saved=AppSettings.fromJson({...settings.toJson(),'automaticComparison':next});
       await storage.setSettings(saved);settings.automaticComparison=next;notifyListeners();
     });
@@ -1223,7 +1234,7 @@ class AppState extends ChangeNotifier {
     workbenchImage =
         WorkingImage(filePath: filePath, width: dims.$1, height: dims.$2);
     i2iOriginalImage = workbenchImage;
-    comparisonBefore=null;comparisonAfter=null;comparisonSurface=null;
+    comparisonBefore=null;comparisonAfter=null;comparisonSurface=null;comparisonAutoOpenPending=false;
     if (applyMetadata && !imported.isEmpty) {
       applyImportedMetadata(
         imported,
@@ -1337,7 +1348,7 @@ class AppState extends ChangeNotifier {
   void clearComparison() {
     comparisonBefore = null;
     comparisonAfter = null;
-    comparisonSurface = null;
+    comparisonSurface = null;comparisonAutoOpenPending=false;
     notifyListeners();
   }
 
@@ -2277,6 +2288,7 @@ class AppState extends ChangeNotifier {
               groupId: taskHistoryGroupId.ifEmptyNull,
             ));
           }
+          comparisonAutoOpenPending=false;
           comparisonSurface='generate:t2i';
           comparisonBefore=current==null?null:WorkingImage(filePath:current!.filePath,width:current!.width,height:current!.height);
           comparisonAfter=WorkingImage(filePath:items.first.filePath,width:items.first.width,height:items.first.height);
@@ -2691,6 +2703,7 @@ class AppState extends ChangeNotifier {
                   height: actualSize.$2,
                   groupId: generationGroupId.ifEmptyNull));
             }
+            comparisonAutoOpenPending=automaticComparisonAllowed(comparisonTool);
             comparisonSurface = comparisonTool;
             comparisonBefore = source;
             comparisonAfter = WorkingImage(
@@ -2887,6 +2900,7 @@ class AppState extends ChangeNotifier {
             height: targetHeight,
             groupId: generationGroupId.ifEmptyNull));
       }
+      comparisonAutoOpenPending=true;
       comparisonSurface = 'inpaint';
       comparisonBefore = source;
       comparisonAfter = WorkingImage(
@@ -2937,7 +2951,7 @@ class AppState extends ChangeNotifier {
           width: plan.width,
           height: plan.height,
           groupId: generationGroupId.ifEmptyNull);
-      comparisonSurface='postprocess:upscale';comparisonBefore=dims;comparisonAfter=WorkingImage(filePath:item.filePath,width:item.width,height:item.height);
+      comparisonAutoOpenPending=true;comparisonSurface='postprocess:upscale';comparisonBefore=dims;comparisonAfter=WorkingImage(filePath:item.filePath,width:item.width,height:item.height);
       await _commitCompletedHistory([item], useAsWorkbench: true);
       status = _rf('status.upscaleDone',
           {'spent': await _finishQuotedRun(token, before)});
@@ -2996,7 +3010,7 @@ class AppState extends ChangeNotifier {
             height: prepared.originalHeight,
             groupId: generationGroupId.ifEmptyNull));
       }
-      comparisonSurface='postprocess:director';comparisonBefore=dims;comparisonAfter=WorkingImage(filePath:items.first.filePath,width:items.first.width,height:items.first.height);
+      comparisonAutoOpenPending=true;comparisonSurface='postprocess:director';comparisonBefore=dims;comparisonAfter=WorkingImage(filePath:items.first.filePath,width:items.first.width,height:items.first.height);
       await _commitCompletedHistory(items, useAsWorkbench: true);
       final resizeNote = prepared.resized
           ? _rf('status.directorRestoreNote', {
@@ -3876,7 +3890,7 @@ class AppState extends ChangeNotifier {
   void selectImage(HistoryItem item) {
     _workbenchLoadRevision++;
     current = item;
-    comparisonBefore=null;comparisonAfter=null;comparisonSurface=null;
+    comparisonBefore=null;comparisonAfter=null;comparisonSurface=null;comparisonAutoOpenPending=false;
     notifyListeners();
   }
 

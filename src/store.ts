@@ -178,6 +178,7 @@ interface AppState {
   /** The exact tool surface that owns comparisonBeforeImage. Comparisons stay
    * cached while navigating, but render only when this surface is active. */
   comparisonSurface: CanvasSurface | null;
+  comparisonAutoOpenRequest: string | null;
   activeCanvasSurface: CanvasSurface;
   i2iParams: I2IParams;
   i2iSizeMode: ImageToImageSizeMode;
@@ -454,7 +455,7 @@ function showCompletedImage(
   set: (state: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
   get: () => AppState,
   item: HistoryItem,
-  options: { compareBefore?: WorkingImage | null; comparisonSurface?: CanvasSurface; loadWorkbench?: boolean } = {},
+  options: { compareBefore?: WorkingImage | null; comparisonSurface?: CanvasSurface; autoCompare?: boolean; loadWorkbench?: boolean } = {},
 ) {
   const preview = get().generationPreview;
   const canBridge = Boolean(
@@ -484,6 +485,7 @@ function showCompletedImage(
       currentImage: visibleItem,
       comparisonBeforeImage: options.compareBefore ?? null,
       comparisonSurface: options.compareBefore ? options.comparisonSurface ?? state.activeCanvasSurface : null,
+      comparisonAutoOpenRequest: options.autoCompare !== false && options.compareBefore && (options.comparisonSurface ?? state.activeCanvasSurface) !== "generate:t2i" && (options.comparisonSurface ?? state.activeCanvasSurface) === state.activeCanvasSurface ? `${options.comparisonSurface ?? state.activeCanvasSurface}|${item.id}` : null,
       selectedDate: item.date,
       historyDates: [item.date, ...state.historyDates.filter((date) => date !== item.date)].sort((a, b) => b.localeCompare(a)),
       history: matchesGroup
@@ -514,16 +516,16 @@ function showPartialImages(
   set: (state: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
   get: () => AppState,
   result: GenerateResult,
-  options: { compareBefore?: WorkingImage | null; comparisonSurface?: CanvasSurface } = {},
+  options: { compareBefore?: WorkingImage | null; comparisonSurface?: CanvasSurface; autoCompare?: boolean } = {},
 ) {
   if (result.ok) return;
-  for (const item of [...result.items].reverse()) showCompletedImage(set, get, item, options);
+  for (const item of [...result.items].reverse()) showCompletedImage(set, get, item, {...options,autoCompare:false});
 }
 
 async function runAfterImageRefresh(
   get: () => AppState,
   item: HistoryItem,
-  options: { compareBefore?: WorkingImage | null; comparisonSurface?: CanvasSurface; loadWorkbench?: boolean } = {},
+  options: { compareBefore?: WorkingImage | null; comparisonSurface?: CanvasSurface; autoCompare?: boolean; loadWorkbench?: boolean } = {},
 ) {
   // The generation itself already succeeded (the caller only reaches here on a
   // successful save) — a hiccup refreshing history/balance/workbench afterwards
@@ -670,7 +672,7 @@ async function refreshAfterImage(
   set: (state: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
   get: () => AppState,
   item: HistoryItem,
-  options: { compareBefore?: WorkingImage | null; comparisonSurface?: CanvasSurface; loadWorkbench?: boolean } = {},
+  options: { compareBefore?: WorkingImage | null; comparisonSurface?: CanvasSurface; autoCompare?: boolean; loadWorkbench?: boolean } = {},
 ) {
   if (!get().generationPreview?.imageDataUrl && item.fileUrl) {
     set({ generationPhase: "saving" });
@@ -684,7 +686,7 @@ async function refreshAfterImageInBackground(
   set: (state: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void,
   get: () => AppState,
   item: HistoryItem,
-  options: { compareBefore?: WorkingImage | null; comparisonSurface?: CanvasSurface; loadWorkbench?: boolean } = {},
+  options: { compareBefore?: WorkingImage | null; comparisonSurface?: CanvasSurface; autoCompare?: boolean; loadWorkbench?: boolean } = {},
 ) {
   if (!get().generationPreview?.imageDataUrl && item.fileUrl) {
     // With streaming disabled there is no decoded final frame to bridge the
@@ -889,7 +891,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   i2iOriginalImage: null,
   i2iSourceMode: "original",
   inpaintSourceMode: "original",
-  comparisonBeforeImage: null,
+  comparisonBeforeImage: null, comparisonAutoOpenRequest: null,
   comparisonSurface: null,
   activeCanvasSurface: "generate:t2i",
   i2iParams: { ...DEFAULT_I2I_PARAMS },
@@ -1375,7 +1377,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         workbenchImage: result.image,
         i2iOriginalImage: result.image,
         inputPreviewAnchor: {result: get().currentImage},
-        comparisonBeforeImage: null,
+        comparisonBeforeImage: null, comparisonAutoOpenRequest: null,
         inpaintMask: null, inpaintRegion: null,
         maskRevision: get().maskRevision + 1,
         statusText: storeFormat(get().settings, "status.imageLoaded", { width: result.image.width, height: result.image.height }),
@@ -1421,7 +1423,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         workbenchImage: result.image,
         i2iOriginalImage: result.image,
         inputPreviewAnchor: {result: get().currentImage},
-        comparisonBeforeImage: null,
+        comparisonBeforeImage: null, comparisonAutoOpenRequest: null,
         inpaintMask: null, inpaintRegion: null,
         maskRevision: get().maskRevision + 1,
         statusText: storeFormat(get().settings, "status.imageLoaded", { width: result.image.width, height: result.image.height }),
@@ -1455,7 +1457,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       workbenchImage: null,
   inputPreviewAnchor: null,
       i2iOriginalImage: null,
-      comparisonBeforeImage: null,
+      comparisonBeforeImage: null, comparisonAutoOpenRequest: null,
       inpaintMask: null, inpaintRegion: null,
       maskRevision: get().maskRevision + 1,
       statusText: storeText(get().settings, "status.workbenchCleared"),
@@ -1967,7 +1969,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   clearImageComparison() {
-    set({ comparisonBeforeImage: null, comparisonSurface: null });
+    set({ comparisonBeforeImage: null, comparisonAutoOpenRequest: null, comparisonSurface: null });
   },
 
   // ── Generation ─────────────────────────────────────────────────────────────
@@ -2243,7 +2245,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeVibeKeys: extrasVibeKeys(initialParams.model, initialExtras),
       queuePaused: false,
       queueProgress: { done: 0, failed: 0, total: initialTotal },
-      comparisonBeforeImage: null,
+      comparisonBeforeImage: null, comparisonAutoOpenRequest: null,
       currentAnlasSpent: null,
       lastAnlasSpent: null,
       lastError: "",
@@ -2935,7 +2937,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   selectImage(item) {
     const generating = get().isGenerating;
-    set({ currentImage: item, inputPreviewAnchor: null, comparisonBeforeImage: null, statusText: storeFormat(get().settings, "status.historySelected", { date: item.date }) });
+    set({ currentImage: item, inputPreviewAnchor: null, comparisonBeforeImage: null, comparisonAutoOpenRequest: null, statusText: storeFormat(get().settings, "status.historySelected", { date: item.date }) });
     // A history thumbnail is always a preview-only action. Embedded PNG
     // metadata must never replace the user's current prompt or generation
     // parameters implicitly; explicit parameter/variation actions own that job.
@@ -2953,7 +2955,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       params: normalizeGenerateParams({ ...state.params, ...item.params, seed }),
       activeTab: "generate",
       currentImage: item,
-      comparisonBeforeImage: null,
+      comparisonBeforeImage: null, comparisonAutoOpenRequest: null,
       toast: seed > 0
         ? storeFormat(state.settings, "toast.paramsLoadedSeed", { seed })
         : storeText(state.settings, "toast.paramsLoaded"),

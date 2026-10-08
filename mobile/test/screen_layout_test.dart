@@ -301,7 +301,14 @@ void main() {
       260,
       scrollable: scrollable,
     );
-    await tester.tap(find.text('参考图'));
+    final title=find.text('参考图');
+    await tester.pumpAndSettle();
+    for(var attempt=0;title.hitTestable().evaluate().isEmpty&&attempt<6;attempt++){
+      await tester.drag(scrollable,const Offset(0,-120));
+      await tester.pumpAndSettle();
+    }
+    expect(title.hitTestable(),findsOneWidget);
+    await tester.tap(title);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('reference-preset-library-open')),

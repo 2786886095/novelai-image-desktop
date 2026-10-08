@@ -968,7 +968,9 @@ export async function prepareExtras(
   const needsEncoding = extras.vibeImages.some(vibe => !matchingVibeEncoding(vibe, params.model));
   const token = needsEncoding ? getToken() : "";
   const settings = needsEncoding ? getSettings() : null;
-  const imageBaseUrl = tokenSafeBaseUrl(settings?.imageBaseUrl ?? "", "https://image.novelai.net");
+  // Imported matching encodings need no encode request, credential, or endpoint lookup.
+  // Keep the account-bound host guard intact for references that actually need encoding.
+  const imageBaseUrl = needsEncoding ? tokenSafeBaseUrl(settings!.imageBaseUrl, "https://image.novelai.net") : "";
 
   const encoded = await Promise.all(
     extras.vibeImages.map(async (vibe) => {

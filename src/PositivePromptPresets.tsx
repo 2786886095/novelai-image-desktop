@@ -1,3 +1,4 @@
+import "./prompt-preset-layout.css";
 import {normalizeCharacterCaptions, characterPresetText} from "./character-presets";
 import {desktopUiText} from "./i18n";
 import {maxNAICharacterPrompts, type CharCaptionItem} from "./types";

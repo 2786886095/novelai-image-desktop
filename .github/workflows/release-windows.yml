@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish v2.5.3 only after every Windows and shared-source gate passes
+        description: Publish v2.5.4 only after every Windows and shared-source gate passes
         type: boolean
         default: true
 permissions:
@@ -12,7 +12,7 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 concurrency:
-  group: formal-release-v2.5.3
+  group: formal-release-v2.5.4
   cancel-in-progress: false
 jobs:
   windows:

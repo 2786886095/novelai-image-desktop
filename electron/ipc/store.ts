@@ -1,3 +1,4 @@
+import {normalizeNegativePromptPresets} from "../../src/negative-prompt-library";
 import {normalizeAutomaticComparison} from "../../src/automatic-comparison";
 import {normalizeTypography,DEFAULT_TYPOGRAPHY} from "../../src/typography";
 import {normalizeSavedAgentModels,agentEffort} from '../../src/agent/model-selections';
@@ -276,6 +277,7 @@ export function defaultSettings(): AppSettings {
     promptTemplates: [],
     stylePromptPresets: [],
     stylePromptPresetGroups: ["Default"],
+    negativePromptPresets: normalizeNegativePromptPresets(undefined),
     positivePromptPresets: [],
     promptChunks: [],
     lastGenerationState: null,
@@ -399,6 +401,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
         })
         .filter((preset) => preset.id && preset.name)
     : [];
+  settings.negativePromptPresets = normalizeNegativePromptPresets(settings.negativePromptPresets);
   settings.positivePromptPresets = Array.isArray(settings.positivePromptPresets)
     ? settings.positivePromptPresets
         .filter((preset) => preset && typeof preset === "object")
@@ -678,7 +681,7 @@ export function setSetting<K extends SettingKey>(key: K, value: AppSettings[K]):
   const replaceCredential = (SENSITIVE_SETTING_KEYS as readonly string[]).includes(key);
   data.settings = {
     ...data.settings,
-    [key]: key === "automaticComparison" ? normalizeAutomaticComparison(value) : key === "uiTypography" ? normalizeTypography(value) : key === "agentUiPreferences" ? normalizeAgentUiPreferences(value) : key === "language" ? normalizeLanguage(value) : key === "completionSound" ? normalizeCompletionSound(value) : value,
+    [key]: key === "negativePromptPresets" ? normalizeNegativePromptPresets(value) : key === "automaticComparison" ? normalizeAutomaticComparison(value) : key === "uiTypography" ? normalizeTypography(value) : key === "agentUiPreferences" ? normalizeAgentUiPreferences(value) : key === "language" ? normalizeLanguage(value) : key === "completionSound" ? normalizeCompletionSound(value) : value,
   };
   writeStore(data, replaceCredential ? [key] : []);
   return data.settings[key];

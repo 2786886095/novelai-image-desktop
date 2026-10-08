@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   defaultPositivePromptPresetName,
   positivePromptPresetStorageId,
@@ -57,4 +58,43 @@ describe('unified character preset library', () => {
   expect(samePositivePromptPreset(a,{...a,captions:[{...a.captions[0],x:1}]})).toBe(false);
   expect(samePositivePromptPreset(a,JSON.parse(JSON.stringify(a)))).toBe(true);
  });
+});
+
+describe('positive/negative preset layout integration', () => {
+  const source = (file: string) => readFileSync(new URL(file, import.meta.url), 'utf8');
+
+  it('places both libraries first in More without consuming a main-toolbar slot', () => {
+    const app = source('./App.tsx');
+    const toolbar = app.slice(app.indexOf('<SlidingPromptToolbar language={settings?.language}'), app.indexOf('</SlidingPromptToolbar>'));
+    expect(toolbar).not.toContain('data-preset-toolbar');
+    const translation = toolbar.indexOf('label={translationText(settings?.language).title}');
+    const positive = toolbar.indexOf('<PositivePromptPresetControl compact');
+    const negative = toolbar.indexOf('<NegativePromptLibraryControl');
+    const optimize = toolbar.indexOf('label={editorText.optimize}');
+    const more = toolbar.indexOf('<PromptToolsPopover');
+    expect(translation).toBeGreaterThan(0);
+    expect(more).toBeGreaterThan(optimize);
+    expect(positive).toBeGreaterThan(more);
+    expect(negative).toBeGreaterThan(positive);
+    expect(toolbar.slice(0, more)).not.toContain('PositivePromptPresetControl');
+    expect(toolbar.slice(0, more)).not.toContain('NegativePromptLibraryControl');
+    expect(toolbar.indexOf('label={generateText.prompt.normalize}')).toBeGreaterThan(negative);
+    expect(toolbar).toContain('setPromptField("positivePrompt",value)');
+    expect(toolbar).toContain('setPromptField("negativePrompt",value)');
+  });
+
+  it('retains the shared 1120 × 760 viewport-bounded frame without widening main-toolbar buttons', () => {
+    for (const file of ['./PositivePromptPresets.tsx', './NegativePromptLibrary.tsx']) {
+      expect(source(file)).toContain('./prompt-preset-layout.css');
+    }
+    const css = source('./prompt-preset-layout.css');
+    expect(css).toContain(':is(.positive-preset-modal, .negative-library-dialog)');
+    expect(css).toContain('width: min(1120px,');
+    expect(css).toContain('height: min(760px,');
+    expect(css).toContain('100dvh');
+    expect(css).toContain('--prompt-preset-gutter: 16px');
+    expect(css).toContain('--prompt-preset-gutter: 8px');
+    expect(css).not.toContain('[data-preset-toolbar]');
+    expect(css).not.toContain('flex: 0 0 36px');
+  });
 });

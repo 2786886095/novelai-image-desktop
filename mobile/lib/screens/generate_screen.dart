@@ -1,4 +1,6 @@
 import '../ui/global_typography.dart';
+import '../ui/negative_prompt_library.dart';
+import '../prompts/negative_prompt_library.dart';
 import 'translation_preview_dialog.dart';
 import '../prompts/translation.dart';
 import 'mcp_tools.dart';
@@ -488,6 +490,7 @@ class PromptEditor extends StatefulWidget {
   final String? hintText;
   final bool showRelatedTags;
   final String? lockKind;
+  final bool negativeLibrary;
   // Translate / normalize / weight tools — only meaningful on the positive
   // prompt, so style and negative fields opt out.
   final bool showTextTools;
@@ -502,6 +505,7 @@ class PromptEditor extends StatefulWidget {
     this.hintText,
     this.showRelatedTags = false,
     this.lockKind,
+    this.negativeLibrary=false,
     this.showTextTools = false,
   });
 
@@ -947,6 +951,7 @@ class PromptEditorState extends State<PromptEditor> {
           spacing: 4,
           runSpacing: 4,
           children: [
+            if(widget.lockKind=='negative'||widget.negativeLibrary) NegativePromptLibraryButton(value:controller.text,onApply:(prompt,mode)=>_apply(applyNegativePreset(controller.text,prompt,mode))),
             if (widget.showTextTools) ...[
               TextButton.icon(onPressed: () => _openAssistant('optimize'),
                 icon: const Icon(Icons.auto_awesome, size: 18),
@@ -5190,14 +5195,11 @@ class _CharCardState extends State<_CharCard> {
                         },
                       ),
                       const SizedBox(height: 8),
-                      TextFormField(
-                        key: ValueKey(
-                            'character-negative-field-${widget.index}'),
-                        initialValue: c.negativePrompt,
-                        decoration: InputDecoration(
-                          labelText: t('generate.characterNegative'),
-                          border: const OutlineInputBorder(),
-                        ),
+                      PromptEditor(
+                        key: ValueKey('character-negative-field-${widget.index}'),
+                        label: t('generate.characterNegative'),
+                        value: c.negativePrompt,
+                        negativeLibrary: true,
                         onChanged: (v) {
                           c.negativePrompt = v;
                           s.markCharacterChanged();

@@ -1,6 +1,6 @@
 # Langbai NovelAI Studio
 
-> v2.5.3: Windows x64 설치 및 포터블 버전입니다. Android/iOS 공통 기능 소스는 동기화되며 이번 릴리스에는 모바일 설치 파일이나 실기기·서명 검증이 포함되지 않습니다.
+> v2.5.4: Windows x64 설치 및 포터블 버전입니다. Android/iOS 공통 기능 소스는 동기화되며 이번 릴리스에는 모바일 설치 파일이나 실기기·서명 검증이 포함되지 않습니다.
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 

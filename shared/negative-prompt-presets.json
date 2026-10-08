@@ -1,0 +1,14 @@
+[
+  {
+    "id": "negative-reinforced-v1",
+    "name": "强化版",
+    "prompt": "2.0::worst quality, normal quality, lowres, text, letters, title, watermark, signature, username, artist name, artist collaboration, \n1.8::bad hands, extra fingers, missing fingers, fused fingers, poorly drawn hands, bad feet, extra toes, missing toes, fused toes, poorly drawn feet, \n1.6::bad anatomy, bad proportions, malformed limbs, extra limbs, missing limbs, disconnected limbs, fused body parts, long neck, unnatural pose, \n1.5::blurry, jpeg artifacts, compression artifacts, glitch, scan lines, chromatic aberration, aliasing, jagged edges, grid noise, edge artifact, denoising failure, \n1.4::poorly drawn face, ugly face, asymmetrical eyes, cross-eyed, iris deformation, disproportional philtrum, facial asymmetry, \n1.3::plastic skin, wax figure, clay render, doll joint, flat color, flat lighting, specular overflow, vignetting, \n1.2::censored, cropped, out of frame, black bars, sketch, unfinished, messy, cartoon, Disney style, Pixar style, cel-shaded, vector art, western woman, western face, blood vessel, \n1.1::frame border, UV stretching, PBR error, subsurface scattering error, ray tracing artifact, digital artifact, unfinished, duplicate",
+    "createdAt": "2026-10-08T00:00:00Z"
+  },
+  {
+    "id": "negative-light-v1",
+    "name": "轻量版",
+    "prompt": "lowres, bad anatomy, bad hands, extra limbs, missing limbs, deformed, mutated, poorly drawn face, ugly, blurry, out of focus, watermark, text, error, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, username, artistic error, film grain, scan artifacts, bad quality, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page,mismatched pupils, glowing eyes",
+    "createdAt": "2026-10-08T00:00:00Z"
+  }
+]

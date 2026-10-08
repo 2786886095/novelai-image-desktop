@@ -112,6 +112,8 @@ import {WorksLibrary} from "./components/WorksLibrary";
 import {GalleryFavoritesLibrary} from "./components/GalleryFavorites";
 import { isActiveTab } from "./app/navigation";
 import { QualityPresetControl } from "./components/QualityPresetControl";
+import {NegativePromptLibraryControl} from "./NegativePromptLibrary";
+import {useResultComparison} from "./use-result-comparison";
 import { PositivePromptPresetControl } from "./PositivePromptPresets";
 import { PromptChunkControl } from "./PromptChunks";
 import ReferencePresetManager, {
@@ -1295,6 +1297,7 @@ export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
                     onChange={(negativePrompt) => updateCharCaption(cc.id, { negativePrompt })}
                   />
                 </label>
+                <NegativePromptLibraryControl value={cc.negativePrompt ?? ""} onApply={negativePrompt=>updateCharCaption(cc.id,{negativePrompt})}/>
                 {cc.useCoords && (
                   <div className="char-coords" aria-label={t("character.exactPosition")}>
                     <NumberInput
@@ -2252,7 +2255,9 @@ export function PromptAndParams({
         <CompactIconButton label={`${generateText.prompt.weightAdjust} (${weightTags.length})`} icon="sliders" aria-expanded={showWeights} aria-haspopup="dialog" onClick={()=>setShowWeights(v=>!v)} disabled={weightTags.length===0}/>
         <CompactIconButton label={generateText.prompt.capsuleTitle} icon="dice" aria-haspopup="dialog" aria-expanded={chipOpen} onClick={()=>setChipOpen(true)}/>
         <PromptToolsPopover label={editorText.more} open={showPromptMore} onOpenChange={setShowPromptMore}>
-          {promptTab === "positive" && <PositivePromptPresetControl compact value={effectivePositivePrompt} onApply={value=>setPromptField("positivePrompt",value)}/>}
+          {promptTab==='positive'
+            ? <PositivePromptPresetControl compact value={effectivePositivePrompt} onApply={value=>setPromptField("positivePrompt",value)}/>
+            : <NegativePromptLibraryControl value={params.negativePrompt} onApply={value=>setPromptField("negativePrompt",value)}/>}
           <CompactIconButton label={generateText.prompt.normalize} icon="sparkles" onClick={()=>setShowNormalize(true)} disabled={!promptValue.trim()}/>
           <CompactIconButton label={(settings?.autoComplete??true)?generateText.prompt.autocompleteOn:generateText.prompt.autocompleteOff} icon="bulb" role="switch" aria-checked={settings?.autoComplete??true} onClick={()=>void toggleAutoComplete()}/>
           {promptTab==="positive"&&<PromptChunkControl compact value={effectivePositivePrompt} onApply={value=>setPromptField("positivePrompt",value)} placement="top-right"/>}
@@ -4594,11 +4599,13 @@ function ZoomableImageStage({
   image,
   compareBeforeImage,
   automaticComparison = true,
+  comparisonSurface = "",
   alt,
 }: {
   image: ViewableImage;
   compareBeforeImage?: ViewableImage | null;
   automaticComparison?: boolean;
+  comparisonSurface?: string;
   alt: string;
 }) {
   const shellRef = useRef<HTMLDivElement>(null);
@@ -4624,7 +4631,7 @@ function ZoomableImageStage({
   const [intrinsicSize, setIntrinsicSize] = useState({ width: 0, height: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [isOverImage, setIsOverImage] = useState(false);
-  const [compareEnabled, setCompareEnabled] = useState(Boolean(compareBeforeImage) && automaticComparison);
+  const [compareEnabled,setCompareEnabled]=useResultComparison(comparisonSurface,image.id ?? image.fileUrl,compareBeforeImage?.filePath ?? compareBeforeImage?.fileUrl ?? "",Boolean(compareBeforeImage?.fileUrl),automaticComparison);
   wheelTransformRef.current = { zoom, pan };
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
@@ -4666,7 +4673,6 @@ function ZoomableImageStage({
     }
     if (compareClipRef.current) compareClipRef.current.style.clipPath = "inset(0 0 0 50%)";
     if (compareDividerRef.current) compareDividerRef.current.style.left = "50%";
-    setCompareEnabled(Boolean(compareBeforeImage) && automaticComparison);
     setIntrinsicSize({ width: 0, height: 0 });
   }, [image.fileUrl, compareBeforeImage?.fileUrl, automaticComparison]);
 
@@ -5185,6 +5191,7 @@ export function ImageCanvas() {
       {currentImage && <ZoomableImageStage
         image={currentImage}
         compareBeforeImage={comparisonBelongsToActiveTab && comparisonSurface === activeCanvasSurface ? comparisonBeforeImage : null}
+        comparisonSurface={activeCanvasSurface}
         automaticComparison={normalizeAutomaticComparison(settings?.automaticComparison)[activeCanvasSurface]}
         alt={t("canvas.resultAlt")}
       />}
