@@ -83,6 +83,13 @@ void main() {
             await tester.scrollUntilVisible(section, 400, scrollable: scrollable);
             expect(section, findsOneWidget);
             await tester.ensureVisible(section);
+            await tester.pumpAndSettle();
+            // The persistent generate footer can occlude an aligned-to-bottom title.
+            for (var attempt=0; section.hitTestable().evaluate().isEmpty && attempt<6; attempt++) {
+              await tester.drag(list,const Offset(0,-120));
+              await tester.pumpAndSettle();
+            }
+            expect(section.hitTestable(),findsOneWidget);
             await tester.tap(section);
             await tester.pumpAndSettle();
             final save = find.byTooltip('保存为预设');

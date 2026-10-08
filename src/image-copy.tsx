@@ -20,7 +20,9 @@ export async function copyImageForClipboard(src: string, metadataEnabled: boolea
   return result;
 }
 
-export function isImageCopyShortcut(event: Pick<KeyboardEvent,'key'|'ctrlKey'|'metaKey'|'altKey'|'shiftKey'|'repeat'>) {
+export function isImageCopyShortcut(event: Pick<KeyboardEvent,'key'|'ctrlKey'|'metaKey'|'altKey'|'shiftKey'|'repeat'> & Partial<Pick<KeyboardEvent,'code'|'isComposing'>>) {
+  // Function keys must never be interpreted as copy, including remapped key values.
+  if (event.isComposing || /^F\d{1,2}$/i.test(event.code ?? '') || /^F\d{1,2}$/i.test(event.key)) return false;
   return (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && !event.repeat && event.key.toLowerCase() === 'c';
 }
 

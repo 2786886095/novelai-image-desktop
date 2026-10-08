@@ -2,9 +2,9 @@ import {expect,it} from 'vitest';
 import {normalizeAutomaticComparison,COMPARISON_SURFACES,comparisonText} from './automatic-comparison';
 import {normalizeCharacterCaptions,normalizeCharacterPresets} from './character-presets';
 import {reorderCharacters} from './components/CharacterEditing';
-it('all six independent comparison surfaces default on and preserve explicit false',()=>{
- for(const value of [null,{},'false',false])expect(Object.values(normalizeAutomaticComparison(value))).toEqual(Array(6).fill(true));
- for(const key of COMPARISON_SURFACES){const v=normalizeAutomaticComparison({[key]:false,other:false});expect(v[key]).toBe(false);expect(Object.values(v).filter(Boolean)).toHaveLength(5);expect(normalizeAutomaticComparison(JSON.parse(JSON.stringify(v)))).toEqual(v);}
+it('text generation never auto-compares; five editing surfaces default on and preserve false',()=>{
+ for(const value of [null,{},'false',false])expect(Object.values(normalizeAutomaticComparison(value))).toEqual([false,true,true,true,true,true]);
+ for(const key of COMPARISON_SURFACES){const v=normalizeAutomaticComparison({[key]:false,other:false});expect(v[key]).toBe(false);expect(Object.values(v).filter(Boolean)).toHaveLength(key==='generate:t2i'?5:4);expect(normalizeAutomaticComparison(JSON.parse(JSON.stringify(v)))).toEqual(v);}
  expect(normalizeAutomaticComparison({inpaint:'false'}).inpaint).toBe(true);
 });
 it('named characters retain identities, prompts, pause and coordinates through presets and reorder',()=>{

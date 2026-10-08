@@ -1,0 +1,33 @@
+/* Positive presets and the negative library share one responsive dialog frame.
+   Keep their content and apply actions independent. Pixel bounds do not grow
+   with the global font scale; each dialog's existing content areas scroll. */
+.modal-backdrop:is(.positive-preset-backdrop, .negative-library-backdrop) {
+  --prompt-preset-gutter: 24px;
+  padding: var(--prompt-preset-gutter);
+  z-index: var(--z-overlay-top);
+}
+
+.modal-backdrop:is(.positive-preset-backdrop, .negative-library-backdrop)
+  > :is(.positive-preset-modal, .negative-library-dialog) {
+  width: min(1120px, calc(100vw - 2 * var(--prompt-preset-gutter)));
+  height: min(760px, calc(100dvh - 2 * var(--prompt-preset-gutter)));
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--radius-lg);
+  background: var(--bg-dialog);
+  box-shadow: var(--shadow-xl);
+}
+
+@media (max-width: 960px) {
+  .modal-backdrop:is(.positive-preset-backdrop, .negative-library-backdrop) {
+    --prompt-preset-gutter: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .modal-backdrop:is(.positive-preset-backdrop, .negative-library-backdrop) {
+    --prompt-preset-gutter: 8px;
+  }
+}

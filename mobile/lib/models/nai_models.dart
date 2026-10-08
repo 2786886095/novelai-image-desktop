@@ -1,6 +1,7 @@
 library;
 
 import 'automatic_comparison.dart';
+import '../prompts/negative_prompt_library.dart';
 import 'ui_typography.dart';
 import '../prompts/translation.dart';
 
@@ -21,7 +22,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.5.3';
+const appVersion = '2.5.4';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -968,6 +969,7 @@ class AppSettings {
   String stylePromptPresetSort;
   List<Map<String, dynamic>> characterPromptPresets;
   List<String> stylePromptPresetGroups;
+  List<Map<String,String>> negativePromptPresets;
   List<PositivePromptPreset> positivePromptPresets;
   Map<String, String> reversePromptTemplates;
   Map<String, String> reversePromptTemplatesV45;
@@ -1093,6 +1095,7 @@ class AppSettings {
     this.stylePromptPresetSort = "default",
     List<Map<String, dynamic>>? characterPromptPresets,
     List<String>? stylePromptPresetGroups,
+    List<Map<String,String>>? negativePromptPresets,
     List<PositivePromptPreset>? positivePromptPresets,
     Map<String, String>? reversePromptTemplates,
     Map<String, String>? reversePromptTemplatesV45,
@@ -1151,6 +1154,7 @@ class AppSettings {
         stylePromptPresets = stylePromptPresets ?? [],
         characterPromptPresets = [],
         stylePromptPresetGroups = stylePromptPresetGroups ?? ['Default'],
+        negativePromptPresets = normalizeNegativePromptPresets(negativePromptPresets),
         positivePromptPresets = mergeLegacyPositivePresets(
             positivePromptPresets ?? [], characterPromptPresets ?? []);
 
@@ -1227,6 +1231,7 @@ class AppSettings {
         'stylePromptPresets':
             stylePromptPresets.map((item) => item.toJson()).toList(),
         'stylePromptPresetGroups': stylePromptPresetGroups,
+        'negativePromptPresets': negativePromptPresets,
         'positivePromptPresets':
             positivePromptPresets.map((item) => item.toJson()).toList(),
         'reversePromptTemplates': reversePromptTemplates,
@@ -1377,6 +1382,7 @@ class AppSettings {
               .map((item) => item.toString().trim())
               .where((item) => item.isNotEmpty),
         }.toList(),
+        negativePromptPresets: normalizeNegativePromptPresets(j['negativePromptPresets']),
         positivePromptPresets: (j['positivePromptPresets'] as List?)
                 ?.whereType<Map>()
                 .map((item) => PositivePromptPreset.fromJson(

@@ -1,3 +1,4 @@
+import {useResultComparison} from "./use-result-comparison";
 import {normalizeAutomaticComparison} from './automatic-comparison';
 import {workflowText} from './workflow-text';
 import {focusedInpaintPlan,type InpaintRegion} from './focused-inpaint';
@@ -95,7 +96,7 @@ export function InpaintCanvas() {
   const [stagePan, setStagePan] = useState({ x: 0, y: 0 });
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
-  const [compareEnabled, setCompareEnabled] = useState(Boolean(comparisonBeforeImage) && automaticComparison);
+  const [compareEnabled,setCompareEnabled]=useResultComparison("inpaint",currentImage?.id ?? "",comparisonBeforeImage?.filePath ?? "",Boolean(comparisonSurface === "inpaint" && comparisonBeforeImage?.fileUrl && currentImage?.fileUrl),automaticComparison);
   const [dropOver, setDropOver] = useState(false);
   const [brushSizeDraft, setBrushSizeDraft] = useState(String(brushSize));
   const brushFootprintCells = brushShape === "round"
@@ -143,7 +144,6 @@ export function InpaintCanvas() {
     }
     if (compareClipRef.current) compareClipRef.current.style.clipPath = "inset(0 0 0 50%)";
     if (compareDividerRef.current) compareDividerRef.current.style.left = "50%";
-    setCompareEnabled(canCompare && automaticComparison);
   }, [canCompare, comparisonBeforeImage?.fileUrl, currentImage?.fileUrl, automaticComparison]);
 
   useEffect(() => () => {

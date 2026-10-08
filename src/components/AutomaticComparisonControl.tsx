@@ -1,6 +1,6 @@
 import {useState} from 'react';
 import {useAppStore} from '../store';
-import {comparisonText,normalizeAutomaticComparison,type ComparisonSurface} from '../automatic-comparison';
+import {comparisonText,normalizeAutomaticComparison,automaticComparisonAllowed,type ComparisonSurface} from '../automatic-comparison';
 // Serialize whole-map writes across mounted surfaces so rapid changes never overwrite each other.
 let pending:Promise<unknown>=Promise.resolve();
 export function AutomaticComparisonControl({surface}:{surface:ComparisonSurface}) {
@@ -15,6 +15,7 @@ export function AutomaticComparisonControl({surface}:{surface:ComparisonSurface}
   });pending=operation;
   void operation.catch(e=>useAppStore.getState().setToast(String(e))).finally(()=>setSaving(false));
  }
+ if(!automaticComparisonAllowed(surface))return null;
  return <label className="automatic-comparison-control" data-auto-compare={surface}>
   <span><input type="checkbox" checked={value} disabled={saving} onChange={e=>change(e.target.checked)}/>{t.label}</span><small>{t.hint}</small>
  </label>;

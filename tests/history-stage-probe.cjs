@@ -7,7 +7,7 @@ global.getComputedStyle = () => ({objectFit: 'contain'});
 function load(file) {
   const output = ts.transpileModule(fs.readFileSync(file, 'utf8'), {compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022}}).outputText;
   const exports = {};
-  new Function('exports', 'require', output)(exports, name => load(path.resolve(path.dirname(file), name + '.ts')));
+  new Function('exports', 'require', output)(exports, name => name==='react'?{useState:initial=>env.useNamedState('compareEnabled',initial),useRef:initial=>({current:initial}),useEffect:env.useEffect}:name==='./store'?{useAppStore}:load(path.resolve(path.dirname(file), name + '.ts')));
   return exports;
 }
 const source = fs.readFileSync(process.argv[2] || path.join(root, 'src/App.tsx'), 'utf8');
@@ -40,6 +40,7 @@ const env = {
   ...(fs.existsSync(path.join(root, 'src/image-stage-navigation.ts')) ? load(path.join(root, 'src/image-stage-navigation.ts')) : {}),
   getComputedStyle: () => ({objectFit: 'contain'}),
 };
+env.useResultComparison=load(path.join(root,'src/use-result-comparison.ts')).useResultComparison;
 const stage = new Function('env', `const {${Object.keys(env).join(',')}}=env;${output};return ZoomableImageStage;`)(env)({image, alt: 'Probe'});
 function find(node, predicate) {
   if (!node || typeof node !== 'object') return;
