@@ -1,7 +1,7 @@
 import {prepareArtistModel} from './artist-model-download';
 import { processableImage } from "./image-codec";
 import { app, dialog, nativeImage } from "electron";
-import axios from "axios";
+import { galleryGet } from "./gallery-network";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -17,7 +17,6 @@ import type {
 } from "../../src/artist-lab";
 import type { ArtistStylePreviewPage, ArtistStylePreviewResult } from "../../src/types";
 import { ARTIST_TAG_ALIASES } from "../../src/curated-artists";
-import { proxyConfig } from "./proxy";
 
 const DANBOORU_TAGS_URL = "https://danbooru.donmai.us/tags.json";
 const DANBOORU_POSTS_URL = "https://danbooru.donmai.us/posts.json";
@@ -118,7 +117,7 @@ export async function searchArtistTags(rawQuery: unknown, rawLimit: unknown): Pr
 }
 
 async function fetchArtistTagsPage(query: string, limit: number, page: number): Promise<ArtistTagRecord[]> {
-  const response = await axios.get(DANBOORU_TAGS_URL, {
+  const response = await galleryGet(DANBOORU_TAGS_URL, {
     timeout: 30_000,
     headers: {
       Accept: "application/json",
@@ -132,7 +131,6 @@ async function fetchArtistTagsPage(query: string, limit: number, page: number): 
       "search[is_deprecated]": "no",
       ...(query ? { "search[name_matches]": `*${query}*` } : {}),
     },
-    ...proxyConfig("update"),
   });
   if (!Array.isArray(response.data)) throw new ArtistPoolError("invalid-response");
   return response.data
@@ -513,11 +511,10 @@ async function representativeImages(artist: ArtistTagRecord, limit = 3): Promise
     }
     if (cachedFiles.length >= limit) return cachedFiles.slice(0, limit);
   } catch { /* live lookup */ }
-  const response = await axios.get(DANBOORU_POSTS_URL, {
+  const response = await galleryGet(DANBOORU_POSTS_URL, {
     timeout: 30_000,
     headers: { Accept: "application/json", "User-Agent": "Langbai-NovelAI-Studio/Artist-Lab" },
     params: { limit: 12, tags: `${artist.name} rating:g order:rank` },
-    ...proxyConfig("update"),
   });
   fs.mkdirSync(referenceCacheDir(), { recursive: true });
   const files = [...cachedFiles];
@@ -532,12 +529,11 @@ async function representativeImages(artist: ArtistTagRecord, limit = 3): Promise
     const file = referenceFile(artist, sourceUrl);
     try {
       if (!fs.existsSync(file)) {
-        const image = await axios.get<ArrayBuffer>(sourceUrl, {
+        const image = await galleryGet<ArrayBuffer>(sourceUrl, {
           responseType: "arraybuffer",
           timeout: 45_000,
           maxContentLength: 12 * 1024 * 1024,
           headers: danbooruImageHeaders,
-          ...proxyConfig("update"),
         });
         const bytes = Buffer.from(image.data);
         if (bytes.length < 128 || bytes.length > 12 * 1024 * 1024) continue;
@@ -612,11 +608,10 @@ async function loadArtistStylePreview(tag: string): Promise<ArtistStylePreviewRe
   if (baseTag && baseTag !== tag) queries.push(`${baseTag} rating:g order:score`, `${baseTag} order:score`, baseTag);
   for (const tags of queries) {
     try {
-      const response = await axios.get(DANBOORU_POSTS_URL, {
+      const response = await galleryGet(DANBOORU_POSTS_URL, {
         timeout: 30_000,
         headers: { Accept: "application/json", "User-Agent": "Langbai-NovelAI-Studio/Style-Preview" },
         params: { limit: 40, tags },
-        ...proxyConfig("update"),
       });
       for (const candidate of Array.isArray(response.data) ? response.data : []) {
         const id = Number(candidate?.id);
@@ -626,6 +621,7 @@ async function loadArtistStylePreview(tag: string): Promise<ArtistStylePreviewRe
       }
       if (posts.length > 0) break;
     } catch {
+      break; // A failed network route will not improve by sending more tag variants.
       // Try the next, less restrictive form. Some Danbooru deployments reject
       // ranking metatags for anonymous requests even though plain tag lookup works.
     }
@@ -643,12 +639,11 @@ async function loadArtistStylePreview(tag: string): Promise<ArtistStylePreviewRe
       try {
         const { imageFile } = stylePreviewFiles(tag, sourceUrl);
         if (!fs.existsSync(imageFile)) {
-          const image = await axios.get<ArrayBuffer>(sourceUrl, {
+          const image = await galleryGet<ArrayBuffer>(sourceUrl, {
             responseType: "arraybuffer",
             timeout: 45_000,
             maxContentLength: 12 * 1024 * 1024,
             headers: danbooruImageHeaders,
-            ...proxyConfig("update"),
           });
           const bytes = Buffer.from(image.data);
           if (bytes.length < 128 || bytes.length > 12 * 1024 * 1024) continue;
@@ -696,11 +691,10 @@ async function loadArtistPreviewPosts(tag: string): Promise<ArtistPreviewPost[]>
   const pending = pendingArtistPreviewPosts.get(tag);
   if (pending) return pending;
   const request = (async () => {
-    const response = await axios.get(DANBOORU_POSTS_URL, {
+    const response = await galleryGet(DANBOORU_POSTS_URL, {
       timeout: 30_000,
       headers: { Accept: "application/json", "User-Agent": "Langbai-NovelAI-Studio/Artist-Gallery" },
       params: { limit: 200, tags: `${tag} order:score` },
-      ...proxyConfig("update"),
     });
     const seen = new Set<number>();
     const posts = (Array.isArray(response.data) ? response.data : [])
@@ -746,38 +740,16 @@ export async function artistStylePreviewPage(
   const offset = (page - 1) * pageSize;
   const selected = posts.slice(offset, offset + pageSize);
   fs.mkdirSync(stylePreviewCacheDir(), { recursive: true });
-  const items = (await mapLimit(selected, 4, async (post): Promise<ArtistStylePreviewResult | null> => {
+  const items = selected.flatMap((post): ArtistStylePreviewResult[] => {
     const postId = Number(post.id);
     const sourceUrl = [post.preview_file_url, post.large_file_url, post.file_url]
-      .map(absoluteDanbooruMediaUrl)
-      .find(Boolean);
-    if (!sourceUrl || !Number.isFinite(postId)) return null;
-    try {
-      const imageFile = pagedStylePreviewFile(tag, postId, sourceUrl);
-      if (!fs.existsSync(imageFile)) {
-        const image = await axios.get<ArrayBuffer>(sourceUrl, {
-          responseType: "arraybuffer",
-          timeout: 45_000,
-          maxContentLength: 12 * 1024 * 1024,
-          headers: danbooruImageHeaders,
-          ...proxyConfig("update"),
-        });
-        const bytes = Buffer.from(image.data);
-        if (bytes.length < 128 || bytes.length > 12 * 1024 * 1024) return null;
-        fs.writeFileSync(imageFile, bytes);
-      }
-      return {
-        tag,
-        imageUrl: toLocalMediaUrl(imageFile),
-        sourceUrl,
-        postUrl: `https://danbooru.donmai.us/posts/${postId}`,
-        width: Math.max(0, Number(post.image_width) || 0),
-        height: Math.max(0, Number(post.image_height) || 0),
-      };
-    } catch {
-      return null;
-    }
-  })).filter((item): item is ArtistStylePreviewResult => Boolean(item));
+      .map(absoluteDanbooruMediaUrl).find(Boolean);
+    if (!sourceUrl || !Number.isFinite(postId)) return [];
+    const imageFile = pagedStylePreviewFile(tag, postId, sourceUrl);
+    return [{ tag, imageUrl: fs.existsSync(imageFile) ? toLocalMediaUrl(imageFile) : sourceUrl,
+      sourceUrl, postUrl: `https://danbooru.donmai.us/posts/${postId}`,
+      width: Math.max(0, Number(post.image_width) || 0), height: Math.max(0, Number(post.image_height) || 0) }];
+  });
   return {
     tag,
     page,

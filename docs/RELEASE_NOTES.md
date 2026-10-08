@@ -1,23 +1,22 @@
-### v2.5.4 更新内容
+### v2.5.5 更新内容
 
 ## 本次更新
-- 自动对比只在图生图、增强、重绘与后期有对应原图时触发；文生图不会把无关旧图自动拿来对比。保留各模式开关和手动对比。
-- 图片复制快捷键增加物理按键检查，F1 不触发复制；Ctrl+C 与右键复制保留。未将无法复现的 F1 原因宣称为已确认根因。
-- 导入与模型匹配的已编码 Vibe 文件时直接复用编码，不再先走无需进行的账户编码请求。原始图片编码仍严格使用当前账户绑定接口，不回退其他主机。
-- 新增负面提示词库：命名保存、搜索、编辑、删除、导入导出；先预览，再选择替换或追加，不改变正面提示词。
-- 内置用户提供的“强化版”和“轻量版”，保留原始权重、文本与换行。
-- 正面预设与负面提示词库入口统一放在提示词工具栏的“三个点／更多”中，避免挤占主工具栏；两个弹窗统一大小、居中位置和窄屏自适应。
-- 桌面与 Android/iOS 共享功能及源码同步，保留现有字体、角色开关和名称编辑、重绘尺寸等功能。
+- 修复在线画廊列表被统计、可选配置和整页缩略图下载拖住的问题；列表先显示，图片在可见区域逐张加载。
+- 覆盖 AITag、Danbooru、Safebooru、Gelbooru、QuickTagCloud、tags.gallery 与画师排名入口。
+- 画廊请求按实际目标网址使用现有代理设置；网络请求有总超时，缩略图使用独立并发队列，不阻塞列表查询。
+- 统计不可用时不伪造总数，部分集合失败时保留可用结果并显示失败信息；保留缓存校验及来源请求头。
+- Android/iOS 共享画廊源码同步，缩短无限等待并将可选配置移出列表展示路径。
+- 保留 v2.5.4 的自动对比范围、F1 复制防护、Vibe 文件导入与负面提示词库，以及现有字体、角色和重绘尺寸功能。
 
 ## 发行范围与验证
-本次公开提供 Windows x64 安装版与便携版；同时附 latest.yml 和 verification.json。移动端源码版本为 2.5.4+173，本次不发布 Android/iOS 二进制。
+公开提供 Windows x64 安装版与便携版，并附 latest.yml 和 verification.json。移动端源码版本为 2.5.5+174，本次不发布 Android/iOS 二进制。
 
-沿用桌面类型检查与测试、移动端分析与测试、三平台构建、真实打包运行与字体、实际 NSIS 解码、Windows 全新安装与 2.4.0 升级数据保留、智能体在线获取及离线复用等门槛。保留 v2.5.3 的自动迭代代理传输修复和实际本地 Python/PNG/缓存验收。
+保留桌面类型检查与测试、移动端分析与测试、三平台原生构建、真实打包运行与字体、实际 NSIS 解码、Windows 全新安装及 2.4.0 升级数据保留、智能体在线获取及离线复用等既有正式发布门槛。
 
-网络和 Vibe 回归使用隔离夹具，不消耗用户生图积分，不向第三方发送官方 Token。源码与本地夹具验证不等同于所有中转站的付费生图实测或移动实体设备验收。
+画廊修复已完成七个入口的真实联网和实际打包界面验证，以及同输入原版/修复版/回滚对照。网络测试不消耗用户生图积分；网站偶发超时仍可能发生，不承诺所有网络或服务端的固定速度。源码同步与 CI 验证不等同于移动实体设备或付费中转生图验收。
 
-Windows 包未代码签名，SmartScreen 可能提示未知发布者，请从本仓库正式 Release 下载并核对 SHA256。
+Windows 包未代码签名，SmartScreen 可能提示未知发布者；请从本仓库正式 Release 下载并核对 SHA256。
 
 ## 下载
-- [Windows 安装版](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.5.4/Langbai-NovelAI-Studio-Setup-2.5.4.exe)
-- [Windows 便携版](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.5.4/Langbai-NovelAI-Studio-2.5.4.exe)
+- [Windows 安装版](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.5.5/Langbai-NovelAI-Studio-Setup-2.5.5.exe)
+- [Windows 便携版](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.5.5/Langbai-NovelAI-Studio-2.5.5.exe)

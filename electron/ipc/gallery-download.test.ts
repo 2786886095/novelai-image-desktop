@@ -6,7 +6,12 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({ get: vi.fn(), choose: vi.fn(), settings: { onlineGalleryDownloadDir: "", outputDir: "" } }));
 vi.mock("axios", () => ({ default: { get: mock.get } }));
 vi.mock("electron", () => ({ dialog: { showOpenDialog: mock.choose } }));
-vi.mock("./proxy", () => ({ proxyConfig: () => ({}) }));
+vi.mock("./gallery-network", async () => {
+  const actual = await vi.importActual<typeof import("./gallery-network")>("./gallery-network");
+  return { ...actual };
+});
+vi.mock("./proxy", () => ({ proxyConfig: () => ({}), proxyConfigForUrl: async () => ({ proxy: false }) }));
+vi.mock("./store", () => ({ getSettings: () => ({ proxyMode: "direct" }), setSetting: vi.fn() }));
 vi.mock("./store", () => ({ getSettings: () => mock.settings, setSetting: (key: string, value: string) => Object.assign(mock.settings, { [key]: value }) }));
 import { downloadOnlineGalleryImages } from "./online-gallery";
 import { galleryDownloadFeedback, galleryImageExtension, galleryImageHeaders, validateGalleryImage } from "../../src/gallery-download";

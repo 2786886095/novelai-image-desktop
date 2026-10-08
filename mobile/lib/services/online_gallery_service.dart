@@ -336,13 +336,17 @@ String _safeCollectionId(Object? value) {
 
 class OnlineGalleryService {
   final http.Client _client;
+  final Duration requestTimeout;
+  final Duration globalSearchTimeout;
   late final TagsGalleryClient _tagsGallery = TagsGalleryClient(_client);
   _QuickCatalog? _quickCatalog;
   final Map<String, _QuickCodex> _quickCodexes = {};
   final Map<String, Future<OnlineGalleryDetail>> _detailCache = {};
 
-  OnlineGalleryService({http.Client? client})
-      : _client = client ?? http.Client();
+  OnlineGalleryService({http.Client? client,
+    this.requestTimeout = const Duration(seconds: 30),
+    this.globalSearchTimeout = const Duration(seconds: 20),
+  }) : _client = client ?? http.Client();
 
   Map<String, String> _headers(String referer) => {
         'Accept': 'application/json',
@@ -351,11 +355,14 @@ class OnlineGalleryService {
       };
 
   Future<http.Response> _quickGet(Uri uri, String referer,
-      {Duration timeout = const Duration(seconds: 30)}) async {
+      {Duration? timeout}) async {
+    final deadline = DateTime.now().add(timeout ?? requestTimeout);
     for (var attempt = 0;; attempt++) {
+      final remaining = deadline.difference(DateTime.now());
+      if (remaining <= Duration.zero) throw TimeoutException("Gallery request timed out");
       try {
         final response =
-            await _client.get(uri, headers: _headers(referer)).timeout(timeout);
+            await _client.get(uri, headers: _headers(referer)).timeout(remaining);
         if (attempt == 0 && [502, 503, 504].contains(response.statusCode)) {
           await Future<void>.delayed(const Duration(milliseconds: 250));
           continue;
@@ -366,7 +373,7 @@ class OnlineGalleryService {
             error is HandshakeException ||
             error is TimeoutException ||
             error is http.ClientException;
-        if (attempt >= 1 || !transient) rethrow;
+        if (attempt >= 1 || !transient || deadline.difference(DateTime.now()).inMilliseconds <= 250) rethrow;
         await Future<void>.delayed(const Duration(milliseconds: 250));
       }
     }
@@ -679,8 +686,7 @@ class OnlineGalleryService {
         ? Uri.parse(meta.dataUrl)
         : _trustedQuickUri(
             Uri.parse(catalog.releaseBaseUrl).resolve(canonicalName));
-    final response = await _quickGet(url, OnlineGallerySource.quicktag.siteUrl,
-        timeout: const Duration(minutes: 3));
+    final response = await _quickGet(url, OnlineGallerySource.quicktag.siteUrl);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw http.ClientException('HTTP ${response.statusCode}', url);
     }
@@ -869,11 +875,17 @@ class OnlineGalleryService {
       final groups =
           List.generate(available.length, (_) => <OnlineGalleryItem>[]);
       var next = 0;
+      final deadline = DateTime.now().add(globalSearchTimeout);
       await Future.wait(List.generate(available.length.clamp(0, 3), (_) async {
         while (next < available.length) {
           final index = next++, meta = available[next - 1];
+          final remaining = deadline.difference(DateTime.now());
+          if (remaining <= Duration.zero) {
+            (navigation['failedCollections'] as List<String>).add(meta.title);
+            continue;
+          }
           try {
-            final codex = await _loadQuickCodex(catalog, meta.id);
+            final codex = await _loadQuickCodex(catalog, meta.id).timeout(remaining);
             groups[index] = codex.entries.indexed
                 .where((e) =>
                     (!safeOnly || quickSafe(e.$2)) && quickMatch(e.$2, search))

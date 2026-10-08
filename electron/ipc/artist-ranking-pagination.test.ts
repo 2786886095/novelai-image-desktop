@@ -1,3 +1,4 @@
+vi.mock("./store", () => ({ getSettings: () => ({ proxyMode: "direct" }) }));
 vi.mock('./download-request',()=>({downloadRequest:vi.fn()}));
 import os from "node:os";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,7 +12,7 @@ vi.mock("electron", () => ({
   nativeImage: { createFromPath: vi.fn(() => ({ getSize: () => ({ width: 1, height: 1 }) })) },
 }));
 vi.mock("./local-media-protocol", () => ({ toLocalMediaUrl: (value: string) => value }));
-vi.mock("./proxy", () => ({ proxyConfig: () => ({}) }));
+vi.mock("./proxy", () => ({ proxyConfig: () => ({}), proxyConfigForUrl: async () => ({ proxy: false }) }));
 
 import { loadPopularArtistRanking } from "./artist-lab";
 

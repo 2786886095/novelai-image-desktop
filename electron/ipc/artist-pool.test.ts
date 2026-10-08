@@ -1,3 +1,4 @@
+vi.mock("./store", () => ({ getSettings: () => ({ proxyMode: "direct" }) }));
 vi.mock('./download-request',()=>({downloadRequest:vi.fn()}));
 import fs from "node:fs";
 import os from "node:os";
@@ -6,7 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ dir: "", get: vi.fn() }));
 vi.mock("axios", () => ({ default: { get: m.get } }));
 vi.mock("electron", () => ({ app: { getPath: () => m.dir }, dialog: {}, nativeImage: {} }));
-vi.mock("./proxy", () => ({ proxyConfig: () => ({}) }));
+vi.mock("./proxy", () => ({ proxyConfig: () => ({}), proxyConfigForUrl: async () => ({ proxy: false }) }));
 vi.mock("./image-codec", () => ({ processableImage: vi.fn() }));
 import { loadPopularArtistPool, loadPopularArtistTags } from "./artist-lab";
 const artists = (count: number, start = 1) => Array.from({ length: count }, (_, i) => ({ id: i + start, name: `fixture_${i + start}`, postCount: 100000 - i - start, deprecated: false }));

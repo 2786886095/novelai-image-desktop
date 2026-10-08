@@ -1,8 +1,7 @@
-import axios from "axios";
+import { galleryGet } from "./gallery-network";
 import { readAitagResponse, aitagTransportError, type AitagResponseKind } from "./aitag-response";
 import type { AitagSearchRequest } from "../../src/aitag";
 import { AITAG_PAGE_SIZE, aitagImageUrl, normalizeAitagConfig, normalizeAitagDetail, normalizeAitagSearch } from "../../src/aitag";
-import { proxyConfig } from "./proxy";
 import { cacheAitagImage } from "./aitag-cache";
 
 const API_BASE = "https://aitag.win";
@@ -66,13 +65,12 @@ function requestConfig() {
       Referer: `${API_BASE}/`,
       "User-Agent": "Langbai-NovelAI-Studio/AITag-Data-Client",
     },
-    ...proxyConfig("update"),
   };
 }
 
 async function requestJson(path: string, kind: AitagResponseKind, params?: Record<string, string | number>) {
   try {
-    const response = await axios.get(`${API_BASE}${path}`, {
+    const response = await galleryGet(`${API_BASE}${path}`, {
       ...requestConfig(), params, maxContentLength: 16 * 1024 * 1024,
       validateStatus: () => true,
     });
@@ -149,11 +147,14 @@ export async function searchAitagFresh(raw: unknown): Promise<unknown> {
     if (isDefault) defaultFreshInFlight = null;
   }
   const cacheKey = JSON.stringify(request);
-  searchCache.set(cacheKey, { expires: Date.now() + DATA_CACHE_TTL_MS, promise: Promise.resolve(value) });
+  const cachedValue = Promise.resolve(value);
+  searchCache.set(cacheKey, { expires: Date.now() + DATA_CACHE_TTL_MS, promise: cachedValue });
   if (isDefault) {
     // Optional CDN/filter configuration must not discard a successful page.
-    const config = await getAitagConfig().catch(() => null);
-    if (config) defaultSnapshot = { config, search: value };
+    void getAitagConfig().then(config => {
+      // A superseded/cleared page must not repopulate the current snapshot.
+      if (searchCache.get(cacheKey)?.promise === cachedValue) defaultSnapshot = { config, search: value };
+    }).catch(() => undefined);
   }
   return value;
 }

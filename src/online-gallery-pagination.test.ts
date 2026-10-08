@@ -38,14 +38,15 @@ describe("online gallery pagination, masonry cards and adaptive previews", () =>
     expect(catalog).not.toContain("gridRef.current?.scrollIntoView");
   });
 
-  it("keeps online gallery pages mounted until data and thumbnails are ready", () => {
+  it("keeps the current gallery page until metadata is ready, without waiting for every thumbnail", () => {
     const gallery = read("src/AitagGallery.tsx");
     const aitag = read("electron/ipc/aitag.ts");
     const external = read("electron/ipc/online-gallery.ts");
 
     expect(gallery).toContain("const [pendingPage, setPendingPage]");
-    expect(gallery).toContain("await Promise.allSettled(pageResult.items.map");
-    expect(gallery).toContain("await Promise.allSettled(normalized.items.map");
+    expect(gallery).not.toContain("await Promise.allSettled(pageResult.items.map");
+    expect(gallery).not.toContain("await Promise.allSettled(normalized.items.map");
+    expect(gallery).toContain("useGalleryImageVisible");
     expect(gallery).toContain("pendingRankingPage");
     expect(gallery).not.toContain("pageRef.current?.scrollIntoView");
     expect(aitag).toContain("page_size: AITAG_API_PAGE_SIZE");

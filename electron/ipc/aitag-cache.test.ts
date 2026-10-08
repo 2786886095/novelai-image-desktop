@@ -13,7 +13,12 @@ vi.mock("electron", () => ({
 vi.mock("axios", () => ({
   default: { get: axiosGet },
 }));
-vi.mock("./proxy", () => ({ proxyConfig: () => ({}) }));
+vi.mock("./gallery-network", async () => {
+  const actual = await vi.importActual<typeof import("./gallery-network")>("./gallery-network");
+  return { ...actual };
+});
+vi.mock("./proxy", () => ({ proxyConfig: () => ({}), proxyConfigForUrl: async () => ({ proxy: false }) }));
+vi.mock("./store", () => ({ getSettings: () => ({ proxyMode: "direct" }), setSetting: vi.fn() }));
 vi.mock("./local-media-protocol", () => ({
   toLocalMediaUrl: (file: string) => `local://${path.basename(file)}`,
 }));
