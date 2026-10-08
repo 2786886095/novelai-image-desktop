@@ -1,10 +1,10 @@
 import { galleryImageHeaders, galleryImageExtension } from "../../src/gallery-download";
 import { app } from "electron";
-import axios from "axios";
+import { galleryGet, galleryImageSlot } from "./gallery-network";
 import { createHash } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
-import { proxyConfig } from "./proxy";
+
 import { toLocalMediaUrl } from "./local-media-protocol";
 
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
@@ -97,7 +97,8 @@ function safeGallerySource(value: unknown): GalleryImageSource {
 }
 
 async function cacheGalleryImage(rawSource: unknown, rawUrl: unknown, rawDays?: unknown, rawForce?: unknown) {
-  await ensureAutomaticPrune(rawDays);
+  // Housekeeping can scan a large existing cache. Never put it on the paint path.
+  void ensureAutomaticPrune(rawDays).catch(() => undefined);
   const url = safeImageUrl(rawUrl);
   const source = safeGallerySource(rawSource);
   const dir = cacheDir();
@@ -118,7 +119,7 @@ async function cacheGalleryImage(rawSource: unknown, rawUrl: unknown, rawDays?: 
 
   const request = (async () => {
     await fs.mkdir(dir, { recursive: true });
-    const response = await axios.get<ArrayBuffer>(url.toString(), {
+    const response = await galleryImageSlot(() => galleryGet<ArrayBuffer>(url.toString(), {
       responseType: "arraybuffer",
       timeout: 30_000,
       maxContentLength: MAX_IMAGE_BYTES,
@@ -127,8 +128,7 @@ async function cacheGalleryImage(rawSource: unknown, rawUrl: unknown, rawDays?: 
       // main process with the matching source context and expose only a
       // validated cached file through the allow-listed local media protocol.
       headers: galleryImageHeaders(source),
-      ...proxyConfig("update"),
-    });
+    }));
     const bytes = Buffer.from(response.data);
     const contentType = String(response.headers?.["content-type"] ?? "").toLowerCase();
     if (

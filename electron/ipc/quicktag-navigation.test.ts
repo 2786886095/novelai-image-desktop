@@ -3,7 +3,8 @@ import {beforeEach,describe,it,expect,vi} from "vitest";
 import fixture from "../../shared/quicktag-fixtures.json";
 const get=vi.hoisted(()=>vi.fn());
 vi.mock("axios",()=>({default:{get}}));
-vi.mock("./proxy",()=>({proxyConfig:()=>({})}));
+vi.mock("./proxy",()=>({proxyConfig:()=>({}),proxyConfigForUrl:async()=>({proxy:false})}));
+vi.mock("./store",()=>({getSettings:()=>({proxyMode:"direct"}),setSetting:vi.fn()}));
 import {clearOnlineGalleryDataCache,searchOnlineGallery,getOnlineGalleryDetail} from "./online-gallery";
 beforeEach(()=>{
   clearOnlineGalleryDataCache(); get.mockReset();

@@ -1,7 +1,8 @@
 import {loadTagsGalleryPage, tagsGalleryCategory, tagsGalleryDetailUrl, parseTagsGalleryDetail} from "../../src/tags-gallery";
 import { galleryImageHeaders, validateGalleryImage, MAX_GALLERY_IMAGE_BYTES } from "../../src/gallery-download";
 import { quickCatalogNavigation, quickResolveCollection, quickCollectionType, quickCategories, quickLink, quickMatch, quickSafe, quickSourceUrl } from "../../src/quicktag";
-import axios, { type AxiosRequestConfig } from "axios";
+import { type AxiosRequestConfig } from "axios";
+import { galleryGet, optionalGalleryValue } from "./gallery-network";
 import { createHash } from "crypto";
 import { dialog } from "electron";
 import { mkdir, open, rm } from "fs/promises";
@@ -23,7 +24,6 @@ import {
   emptyOnlineGalleryTagGroups,
   splitOnlineGalleryTags,
 } from "../../src/online-gallery";
-import { proxyConfig } from "./proxy";
 import { getSettings, setSetting } from "./store";
 
 const PAGE_SIZE = 60;
@@ -261,23 +261,18 @@ async function fetchDonmai(request: OnlineGallerySearchRequest): Promise<OnlineG
   const tags = [rawQuery, safeOnly ? "rating:g" : ""].filter(Boolean).join(" ");
   const key = `${source}:search:${targetPage}:${targetPageSize}:${tags}`;
   return cached(key, async () => {
-    const [response, countResponse] = await Promise.all([
-      axios.get(`${base}/posts.json`, {
-        params: { tags, limit: targetPageSize, page: targetPage },
-        timeout: REQUEST_TIMEOUT,
-        headers: headers(base),
-        ...proxyConfig("update"),
-      }),
-      axios.get(`${base}/counts/posts.json`, {
-        params: { tags },
-        timeout: REQUEST_TIMEOUT,
-        headers: headers(base),
-        ...proxyConfig("update"),
-      }).catch(() => null),
-    ]);
+    const countPromise = cached(`${source}:count:${tags}`, () => galleryGet(`${base}/counts/posts.json`, {
+      params: { tags }, timeout: 3_000, headers: headers(base),
+    })).catch(() => null);
+    const response = await galleryGet(`${base}/posts.json`, {
+      params: { tags, limit: targetPageSize, page: targetPage },
+      timeout: REQUEST_TIMEOUT, headers: headers(base),
+    });
+    const countResponse = await optionalGalleryValue(countPromise);
     const raw = Array.isArray(response.data) ? response.data : [];
     const items = raw.map((post) => parseDonmaiPost(post, source)).filter((item) => item.id && item.cover.previewUrl);
-    const total = number(record(record(countResponse?.data).counts).posts) || undefined;
+    const count = record(record(countResponse?.data).counts).posts;
+    const total = count != null && Number.isFinite(Number(count)) && Number(count) >= 0 ? Number(count) : undefined;
     return {
       source,
       page: targetPage,
@@ -300,7 +295,7 @@ async function fetchGelbooru(request: OnlineGallerySearchRequest): Promise<Onlin
   const { apiKey, userId } = gelbooruCredentials(request);
   const key = `gelbooru:search:${targetPage}:${targetPageSize}:${tags}:${userId}:${createHash("sha256").update(apiKey).digest("hex")}`;
   return cached(key, async () => {
-    const response = await axios.get("https://gelbooru.com/index.php", {
+    const response = await galleryGet("https://gelbooru.com/index.php", {
       params: {
         page: "dapi",
         s: "post",
@@ -313,7 +308,6 @@ async function fetchGelbooru(request: OnlineGallerySearchRequest): Promise<Onlin
       },
       timeout: REQUEST_TIMEOUT,
       headers: headers("https://gelbooru.com/"),
-      ...proxyConfig("update"),
     });
     const raw = normalizeGelbooruPosts(response.data);
     const items = raw.map(parseGelbooruPost).filter((item) => item.id && item.cover.previewUrl);
@@ -358,19 +352,19 @@ async function fetchJson(value: string, referer: string): Promise<unknown> {
   const response = await quickGet(value, {
     timeout: REQUEST_TIMEOUT,
     headers: headers(referer),
-    ...proxyConfig("update"),
   });
   return response.data as unknown;
 }
 
 // Retry only idempotent public reads after transient transport/server errors.
 async function quickGet<T = unknown>(url: string, options: AxiosRequestConfig) {
+  const deadline = Date.now() + Number(options.timeout ?? REQUEST_TIMEOUT);
   for (let attempt = 0; ; attempt++) {
-    try { return await axios.get<T>(url, options); }
+    try { return await galleryGet<T>(url, { ...options, timeout: Math.max(1, deadline - Date.now()) }); }
     catch (error) {
       const failure = error as { code?: string; response?: { status?: number } };
       const transient = ["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "ECONNABORTED", "ERR_NETWORK"].includes(failure.code ?? "") || [502, 503, 504].includes(failure.response?.status ?? 0);
-      if (attempt >= 1 || !transient) throw error;
+      if (attempt >= 1 || !transient || deadline - Date.now() <= 250) throw error;
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
   }
@@ -466,11 +460,10 @@ async function loadQuickCodex(catalog: QuickTagCatalog, id: string): Promise<Qui
     const url = meta.dataUrl || `${catalog.releaseBaseUrl}${encodedPath(canonicalPath)}`;
     const response = await quickGet<ArrayBuffer>(url, {
       responseType: "arraybuffer",
-      timeout: 180_000,
+      timeout: REQUEST_TIMEOUT,
       maxContentLength: 32 * 1024 * 1024,
       maxBodyLength: 32 * 1024 * 1024,
       headers: headers(catalog.siteBaseUrl),
-      ...proxyConfig("update"),
     });
     const bytes = Buffer.from(response.data);
     const manifestEntry = meta.dataUrl ? undefined : catalog.manifestFiles[canonicalPath];
@@ -564,11 +557,15 @@ async function fetchQuickTag(request: OnlineGallerySearchRequest): Promise<Onlin
   if (!collectionId) {
     if (!search.trim()) return slice([]);
     const groups: OnlineGalleryItem[][] = Array.from({length:available.length},()=>[]);
+    const deadline = Date.now() + 20_000;
     let next = 0;
     await Promise.all(Array.from({length:Math.min(3,available.length)},async()=>{
       while(next < available.length) {
         const index = next++, meta = available[index];
-        try { const codex = await loadQuickCodex(catalog, meta.id); groups[index] = codex.entries.flatMap((entry,i) => (!safeOnly || quickSafe(entry)) && quickMatch(entry,search) ? [quickEntryItem(catalog,codex,entry,i)] : []); }
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) { navigation.failedCollections.push(meta.title); continue; }
+        try { const codex = await optionalGalleryValue(loadQuickCodex(catalog, meta.id), remaining);
+          if (!codex) throw new Error("QuickTagCloud search time budget exceeded"); groups[index] = codex.entries.flatMap((entry,i) => (!safeOnly || quickSafe(entry)) && quickMatch(entry,search) ? [quickEntryItem(catalog,codex,entry,i)] : []); }
         catch { navigation.failedCollections.push(meta.title); }
       }
     }));
@@ -600,6 +597,7 @@ export async function searchOnlineGallery(raw: unknown): Promise<OnlineGalleryPa
     page: page(input.page),
     pageSize: pageSize(input.pageSize),
     query: query(input.query),
+    sort: input.sort === "count" || input.sort === "name" ? input.sort : "score",
     collectionId: safeCollectionId(input.collectionId),
     categoryPath: list(input.categoryPath).filter((s): s is string => typeof s === "string").slice(0, 16),
     searchAll: input.searchAll === true,
@@ -618,10 +616,9 @@ async function fetchDonmaiDetail(request: OnlineGalleryDetailRequest): Promise<O
   const source = request.source as "danbooru" | "safebooru";
   const base = source === "safebooru" ? "https://safebooru.donmai.us" : "https://danbooru.donmai.us";
   if (!/^\d+$/.test(request.id)) throw new Error("Invalid post id");
-  const response = await axios.get(`${base}/posts/${request.id}.json`, {
+  const response = await galleryGet(`${base}/posts/${request.id}.json`, {
     timeout: REQUEST_TIMEOUT,
     headers: headers(base),
-    ...proxyConfig("update"),
   });
   const item = parseDonmaiPost(response.data, source);
   return { item, media: [item.cover], prompt: item.prompt, negativePrompt: "", note: "", categoryPath: [], metadata: record(response.data) };
@@ -630,7 +627,7 @@ async function fetchDonmaiDetail(request: OnlineGalleryDetailRequest): Promise<O
 async function fetchGelbooruDetail(request: OnlineGalleryDetailRequest): Promise<OnlineGalleryDetail> {
   if (!/^\d+$/.test(request.id)) throw new Error("Invalid post id");
   const { apiKey, userId } = gelbooruCredentials(request);
-  const response = await axios.get("https://gelbooru.com/index.php", {
+  const response = await galleryGet("https://gelbooru.com/index.php", {
     params: {
       page: "dapi",
       s: "post",
@@ -642,7 +639,6 @@ async function fetchGelbooruDetail(request: OnlineGalleryDetailRequest): Promise
     },
     timeout: REQUEST_TIMEOUT,
     headers: headers("https://gelbooru.com/"),
-    ...proxyConfig("update"),
   });
   const raw = normalizeGelbooruPosts(response.data)[0];
   if (!raw) throw new Error("Gelbooru post was not found");
@@ -772,12 +768,11 @@ export async function downloadOnlineGalleryImages(raw: unknown): Promise<OnlineG
     const image = images[index];
     try {
       if (!image.url) throw new Error("INVALID_IMAGE_URL");
-      const response = await axios.get<ArrayBuffer>(image.url, {
+      const response = await galleryGet<ArrayBuffer>(image.url, {
         responseType: "arraybuffer",
         timeout: 120_000,
         maxContentLength: MAX_GALLERY_IMAGE_BYTES,
         headers: galleryImageHeaders(source),
-        ...proxyConfig("update"),
       });
       const bytes = Buffer.from(response.data);
       const extension = validateGalleryImage(bytes, String(response.headers?.["content-type"] ?? ""));
@@ -798,5 +793,5 @@ export async function downloadOnlineGalleryImages(raw: unknown): Promise<OnlineG
 }
 
 function fetchTagsHtml(url:string):Promise<string>{
- return cached(`tags:${url}`,async()=>{const response=await axios.get<string>(url,{responseType:'text',timeout:REQUEST_TIMEOUT,maxContentLength:5_000_000,headers:{...headers('https://tags.gallery/'),Accept:'text/html'},...proxyConfig('update')});return response.data;});
+ return cached(`tags:${url}`,async()=>{const response=await galleryGet<string>(url,{responseType:'text',timeout:REQUEST_TIMEOUT,maxContentLength:5_000_000,headers:{...headers('https://tags.gallery/'),Accept:'text/html'},});return response.data;});
 }

@@ -697,7 +697,7 @@ function ArtistRankingGallery({
               <button type="button" className="artist-ranking-main" onClick={() => void togglePreview(artist)}>
                 <b>#{rank}</b>
                 <span className="artist-ranking-thumb" aria-hidden="true">
-                  {preview ? <img src={preview.imageUrl} alt="" loading="lazy" /> : <i>{previewResolved ? text.noPreviews : "…"}</i>}
+                  {preview ? <OnlineCachedImage source="danbooru" text={text} src={preview.imageUrl} alt="" loading="lazy" /> : <i>{previewResolved ? text.noPreviews : "…"}</i>}
                 </span>
                 <span className="artist-ranking-copy"><strong>{artist.name.replaceAll("_", " ")}</strong><code>artist:{artist.name}</code></span>
                 <em>{artist.postCount.toLocaleString()} {text.works}</em>
@@ -725,7 +725,7 @@ function ArtistRankingGallery({
                           }
                         }}
                       >
-                        <img src={item.imageUrl} alt={formatText(text.artistPreviewLabel, { artist: artist.name, index: index + 1 })} loading="lazy" />
+                        <OnlineCachedImage source="danbooru" text={text} src={item.imageUrl} alt={formatText(text.artistPreviewLabel, { artist: artist.name, index: index + 1 })} loading="lazy" />
                       </button><GalleryFavoriteButton item={{source:'danbooru',id:item.postUrl.split('/').pop()||item.postUrl,title:artist.name,author:artist.name,sourceUrl:item.postUrl,prompt:`artist:${artist.name}`,negativePrompt:'',createdAt:'',score:0,savedAt:Date.now(),images:[{url:item.imageUrl,thumb:item.imageUrl}]}}/></div>
                     ))}
                   </div>
@@ -765,6 +765,21 @@ function ArtistRankingGallery({
   );
 }
 
+function useGalleryImageVisible(ref: { current: HTMLElement | null }, eager: boolean) {
+  const [visible, setVisible] = useState(eager);
+  useEffect(() => {
+    if (eager || visible) return;
+    const node = ref.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) { observer.disconnect(); setVisible(true); }
+    }, { rootMargin: "320px" });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [eager, visible, ref]);
+  return eager || visible;
+}
+
 function OnlineCachedImage({
   source,
   text,
@@ -775,29 +790,34 @@ function OnlineCachedImage({
   const [resolved, setResolved] = useState("");
   const [failed, setFailed] = useState(false);
   const retryRef = useRef(false);
-  const activeRef = useRef(true);
+  const requestRef = useRef(0);
+  const placeholderRef = useRef<HTMLSpanElement>(null);
+  const visible = useGalleryImageVisible(placeholderRef, props.loading !== "lazy");
   const resolve = useCallback((force: boolean) => {
+    const request = ++requestRef.current;
     const days = Number(localStorage.getItem(AITAG_CACHE_RETENTION_KEY) ?? "30");
-    return window.naiDesktop.onlineGalleryCacheImage(source, src, Number.isFinite(days) ? days : 30, force)
+    return (src.startsWith("local-media:") || src.startsWith("nai-media:") || src.startsWith("nai-local:")
+      ? Promise.resolve(src)
+      : window.naiDesktop.onlineGalleryCacheImage(source, src, Number.isFinite(days) ? days : 30, force))
       .then((localUrl) => {
-        if (!activeRef.current) return;
+        if (request !== requestRef.current) return;
         setResolved(localUrl);
         setFailed(false);
       })
       .catch(() => {
-        if (!activeRef.current) return;
+        if (request !== requestRef.current) return;
         setResolved("");
         setFailed(true);
       });
   }, [source, src]);
   useEffect(() => {
-    activeRef.current = true;
+
     retryRef.current = false;
     setResolved("");
     setFailed(false);
-    void resolve(false);
-    return () => { activeRef.current = false; };
-  }, [resolve]);
+    if (visible) void resolve(false);
+    return () => { requestRef.current++; };
+  }, [resolve, visible]);
   const handleError: ImgHTMLAttributes<HTMLImageElement>["onError"] = (event) => {
     onError?.(event);
     if (retryRef.current) {
@@ -810,8 +830,8 @@ function OnlineCachedImage({
     void resolve(true);
   };
   return resolved && !failed
-    ? <img {...props} src={resolved} onError={handleError} />
-    : <span className="aitag-image-loading">{failed ? text.unavailableImage : text.imageLoading}</span>;
+    ? <img {...props} decoding="async" src={resolved} onError={handleError} />
+    : <span ref={placeholderRef} className="aitag-image-loading">{failed ? text.unavailableImage : text.imageLoading}</span>;
 }
 
 function useMasonryCard(ref: { current: HTMLElement | null }) {
@@ -853,7 +873,7 @@ export function ExternalWorkCard({ item, onOpen, text }: { item: OnlineGalleryIt
       <button type="button" className="aitag-card-hit" aria-label={item.title} onClick={() => onOpen(item)}>
         <div className="aitag-card-image" style={{ aspectRatio: ratio }}>
           {item.cover.previewUrl
-            ? <OnlineCachedImage key={item.cover.previewUrl} source={item.source} text={text} src={item.cover.previewUrl} alt="" onLoad={(event) => {
+            ? <OnlineCachedImage key={item.cover.previewUrl} source={item.source} text={text} src={item.cover.previewUrl} loading="lazy" alt="" onLoad={(event) => {
                 const { naturalWidth, naturalHeight } = event.currentTarget;
                 if (naturalWidth > 0 && naturalHeight > 0) setLoadedSize({url: item.cover.previewUrl, ratio: naturalWidth / naturalHeight});
               }} />
@@ -951,13 +971,7 @@ function ExternalGallery({
         gelbooruUserId,
       });
       if (sequence !== requestSequence.current) return;
-      if (keepCurrentPage) {
-        const days = Number(localStorage.getItem(AITAG_CACHE_RETENTION_KEY) ?? "30");
-        await Promise.allSettled(pageResult.items.map((item) => item.cover.previewUrl
-          ? window.naiDesktop.onlineGalleryCacheImage(source, item.cover.previewUrl, Number.isFinite(days) ? days : 30, false)
-          : Promise.resolve("")));
-      }
-      if (sequence !== requestSequence.current) return;
+      // Commit metadata immediately; one stalled thumbnail must not block pagination.
       setResult(pageResult);
       setCollectionId(pageResult.collectionId ?? "");
       if (pageResult.collectionId) setSearchAll(false);
@@ -1216,29 +1230,32 @@ function AitagCachedImage({ src, onError, ...props }: ImgHTMLAttributes<HTMLImag
   const [resolved, setResolved] = useState("");
   const [failed, setFailed] = useState(false);
   const retryRef = useRef(false);
-  const activeRef = useRef(true);
+  const requestRef = useRef(0);
+  const placeholderRef = useRef<HTMLSpanElement>(null);
+  const visible = useGalleryImageVisible(placeholderRef, props.loading !== "lazy");
   const resolve = useCallback((force: boolean) => {
+    const request = ++requestRef.current;
     const days = Number(localStorage.getItem(AITAG_CACHE_RETENTION_KEY) ?? "30");
     return window.naiDesktop.aitagCacheImage(src, Number.isFinite(days) ? days : 30, force)
       .then((localUrl) => {
-        if (!activeRef.current) return;
+        if (request !== requestRef.current) return;
         setResolved(localUrl);
         setFailed(false);
       })
       .catch(() => {
-        if (!activeRef.current) return;
+        if (request !== requestRef.current) return;
         setResolved("");
         setFailed(true);
       });
   }, [src]);
   useEffect(() => {
-    activeRef.current = true;
+
     retryRef.current = false;
     setResolved("");
     setFailed(false);
-    void resolve(false);
-    return () => { activeRef.current = false; };
-  }, [resolve]);
+    if (visible) void resolve(false);
+    return () => { requestRef.current++; };
+  }, [resolve, visible]);
   const handleError: ImgHTMLAttributes<HTMLImageElement>["onError"] = (event) => {
     onError?.(event);
     if (retryRef.current) {
@@ -1251,8 +1268,8 @@ function AitagCachedImage({ src, onError, ...props }: ImgHTMLAttributes<HTMLImag
     void resolve(true);
   };
   return resolved && !failed
-    ? <img {...props} src={resolved} onError={handleError} />
-    : <span className="aitag-image-loading">{failed ? "—" : "AITag"}</span>;
+    ? <img {...props} decoding="async" src={resolved} onError={handleError} />
+    : <span ref={placeholderRef} className="aitag-image-loading">{failed ? "—" : "AITag"}</span>;
 }
 
 function favoriteFromAitag(work:AitagWorkSummary,images:{url:string;thumb:string}[],prompt=''):GalleryFavorite{return {source:'aitag',id:String(work.id),title:work.title,author:work.userId,sourceUrl:`${AITAG_SITE_URL}/i/${work.id}`,prompt,negativePrompt:'',createdAt:work.createDate,score:work.totalBookmarks,images,savedAt:Date.now()};}
@@ -1293,7 +1310,7 @@ function WorkCard({
     <article ref={rootRef} className="aitag-card" onClick={() => onOpen(work)}>
       <button type="button" className="aitag-card-hit" aria-label={work.title || `#${work.id}`}>
         <div className="aitag-card-image" style={aspectRatio ? { aspectRatio } : undefined}>
-          {imageUrl ? <AitagCachedImage src={imageUrl} alt="" onLoad={(event) => {
+          {imageUrl ? <AitagCachedImage src={imageUrl} loading="lazy" alt="" onLoad={(event) => {
             const image = event.currentTarget;
             if (image.naturalWidth > 0 && image.naturalHeight > 0) setAspectRatio(image.naturalWidth / image.naturalHeight);
           }} /> : <span>AITag</span>}
@@ -1385,16 +1402,7 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
       });
       const normalized = normalizeAitagSearch(raw);
       if (sequence !== searchSequence.current) return;
-      if (keepCurrentPage) {
-        const days = Number(localStorage.getItem(AITAG_CACHE_RETENTION_KEY) ?? "30");
-        await Promise.allSettled(normalized.items.map(async (work) => {
-          const detail = await loadDetail(work.id);
-          const first = detail.images[0];
-          if (!first) return "";
-          return window.naiDesktop.aitagCacheImage(aitagImageUrl(config, first), Number.isFinite(days) ? days : 30, false);
-        }));
-      }
-      if (sequence !== searchSequence.current) return;
+      // Visible WorkCards fetch detail/images progressively after the page is committed.
       setResult(normalized);
       setPage(normalized.page);
       gallerySession.result = normalized;
@@ -1412,7 +1420,7 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
   }, [config, loadDetail, page, pageSize, prompt, query, result.items.length, sort, timeRange]);
 
   useEffect(() => {
-    if (gallerySession.loaded) return;
+    if (gallerySource !== "aitag" || gallerySession.loaded) return;
     let active = true;
     void (async () => {
       const snapshot = await window.naiDesktop.aitagSnapshot().catch(() => null);
@@ -1429,18 +1437,19 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
         gallerySession.loaded = true;
       }
       try {
-        const [rawConfig, rawResult] = await Promise.all([
-          window.naiDesktop.aitagConfig().catch(() => null),
-          window.naiDesktop.aitagSearchFresh({ page: 1, pageSize, query: "", prompt: "", sort: "new", timeRange: "all" }),
-        ]);
+        // CDN/filter config is optional. Preserve a ready list even when it is slow.
+        void window.naiDesktop.aitagConfig().then(rawConfig => {
+          if (!active) return;
+          const nextConfig = normalizeAitagConfig(rawConfig);
+          setConfig(nextConfig);
+          gallerySession.config = nextConfig;
+        }).catch(() => undefined);
+        const rawResult = await window.naiDesktop.aitagSearchFresh({ page: 1, pageSize, query: "", prompt: "", sort: "new", timeRange: "all" });
         if (!active) return;
-        const nextConfig = rawConfig ? normalizeAitagConfig(rawConfig) : gallerySession.config;
         const nextResult = normalizeAitagSearch(rawResult);
-        setConfig(nextConfig);
         setResult(nextResult);
         setPage(nextResult.page);
         setError(null);
-        gallerySession.config = nextConfig;
         gallerySession.result = nextResult;
         gallerySession.page = nextResult.page;
         gallerySession.loaded = true;
@@ -1450,8 +1459,8 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
         if (active) setLoading(false);
       }
     })();
-    return () => { active = false; };
-  }, []); // initial load only; later searches are explicit
+    return () => { active = false; searchSequence.current++; };
+  }, [gallerySource]); // fetch only the active source; later searches are explicit
 
   const refresh = useCallback(async () => {
     galleryDetailCache.clear();

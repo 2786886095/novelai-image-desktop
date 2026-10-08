@@ -18,7 +18,7 @@ describe("AITag user-facing errors", () => {
    const source=readFileSync('src/AitagGallery.tsx','utf8').split('export default function AitagGallery')[1];
    expect(source).toContain('formatAitagFailure(error, language)');
    expect(source).not.toContain('!error && result.items.length > 0');
-   expect(source).toContain('window.naiDesktop.aitagConfig().catch(() => null)');
+   expect(source).toContain('window.naiDesktop.aitagConfig().then(rawConfig =>');
    expect(source).toContain('onClick={() => void refresh()}');
  });
 });

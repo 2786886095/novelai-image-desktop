@@ -4,7 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const axiosGet = vi.hoisted(() => vi.fn());
 
 vi.mock("axios", () => ({ default: { get: axiosGet } }));
-vi.mock("./proxy", () => ({ proxyConfig: () => ({}) }));
+vi.mock("./gallery-network", async () => {
+  const actual = await vi.importActual<typeof import("./gallery-network")>("./gallery-network");
+  return { ...actual };
+});
+vi.mock("./proxy", () => ({ proxyConfig: () => ({}), proxyConfigForUrl: async () => ({ proxy: false }) }));
+vi.mock("./store", () => ({ getSettings: () => ({ proxyMode: "direct" }), setSetting: vi.fn() }));
 
 import { clearOnlineGalleryDataCache, getOnlineGalleryDetail, searchOnlineGallery } from "./online-gallery";
 

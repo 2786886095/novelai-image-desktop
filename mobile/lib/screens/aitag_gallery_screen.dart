@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../ui/global_typography.dart';
 import 'gallery_favorites_screen.dart';
 import '../services/gallery_favorites.dart';
@@ -484,12 +485,10 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
 
   Future<void> _refresh() async {
     service.clearDetailCache();
-    try {
-      await service.loadConfig();
-    } catch (_) {
-      // Keep the last known config and still refresh the result list.
-    }
-    if (mounted) setState(() {});
+    // Optional CDN/filter configuration must not block a fresh result list.
+    unawaited(service.loadConfig().then((_) {
+      if (mounted) setState(() {});
+    }).catchError((_) {}));
     await _search(result.page);
   }
 
