@@ -2680,12 +2680,12 @@
     "編集指示",
     "편집 지시"
   ],
-  "用自然语言描述蒙版区域要变成什么，例如：把标题换成写着 DREAM ENGINE 的霓虹 logo": [
-    "用自然语言描述蒙版区域要变成什么，例如：把标题换成写着 DREAM ENGINE 的霓虹 logo",
-    "用自然語言描述蒙版區域要變成什麼，例如：把標題換成寫著 DREAM ENGINE 的霓虹 logo",
-    "Describe in plain language what the masked area should become, e.g. replace the title with a neon logo reading DREAM ENGINE",
-    "マスク範囲をどう変えるか自然な文章で書いてください。例：タイトルを DREAM ENGINE と書かれたネオンロゴに置き換える",
-    "마스크 영역을 어떻게 바꿀지 자연어로 설명하세요. 예: 제목을 DREAM ENGINE이라고 적힌 네온 로고로 교체"
+  "用自然语言描述蒙版区域要变成什么，例如：把她手里的杯子换成一束白玫瑰": [
+    "用自然语言描述蒙版区域要变成什么，例如：把她手里的杯子换成一束白玫瑰",
+    "用自然語言描述蒙版區域要變成什麼，例如：把她手裡的杯子換成一束白玫瑰",
+    "Describe in plain language what the masked area should become, e.g. replace the cup in her hand with a bouquet of white roses",
+    "マスク範囲をどう変えるか自然な文章で書いてください。例：彼女が持っているカップを白いバラの花束に変える",
+    "마스크 영역을 어떻게 바꿀지 자연어로 설명하세요. 예: 그녀가 들고 있는 컵을 흰 장미 꽃다발로 바꾸기"
   ],
   "质量": [
     "质量",

@@ -65,7 +65,7 @@ export function OpenAIInpaintControls({ openSettings }: { openSettings: () => vo
           aria-label={ft("重绘指令")}
           rows={6}
           value={prompt}
-          placeholder={ft("用自然语言描述蒙版区域要变成什么，例如：把标题换成写着 DREAM ENGINE 的霓虹 logo")}
+          placeholder={ft("用自然语言描述蒙版区域要变成什么，例如：把她手里的杯子换成一束白玫瑰")}
           onChange={(event) => setPrompt(event.target.value)}
         />
       </label>
