@@ -7,6 +7,7 @@ import {cancelBatchRedraw} from './ipc/nai';
 import {prepareComicImageService} from './ipc/comic-image-service';
 import {cancelTagComicGeneration} from './ipc/nai';
 import { registerCompatibleImageIpc } from "./ipc/compatible-settings-ipc";
+import { openAIInpaintWorkbench } from "./ipc/openai-image-edit-workbench";
 import {registerImageFavoritesIpc,favoriteContextMenuItem,imageParametersContextMenuItem} from "./ipc/image-favorites-ipc";
 import {portableRecoveryPath, activatePortableRecovery, listPortableRecoveries} from './ipc/portable-projects';
 import {registerHarnessLauncher, harnessNeedsExitConfirmation, confirmHarnessExit, stopHarnessForUpdate,resetHarnessExitAfterUpdateFailure} from "./ipc/harness-launcher";
@@ -767,6 +768,8 @@ function registerIpc() {
   registerNaiAccountsIpc();
   registerImageFavoritesIpc();
   registerCompatibleImageIpc(() => mainWindow);
+  // OpenAI Images edits: billed by the provider, independent of the NovelAI account binding.
+  ipcMain.handle("openai:inpaint", (_event, request: import("../src/types").OpenAIInpaintRequest) => openAIInpaintWorkbench(request));
   accountBoundHandle("agent:getWorkspace", () => readAgentWorkspace());
   accountBoundHandle("agent:saveWorkspace", (_event, workspace: AgentWorkspaceData) => saveTavernWorkspace(workspace));
   accountBoundHandle('agent:setStudioOptions',(_event,id:string,patch:Partial<import('../src/agent/workspace-controls').StudioConversationOptions>)=>{
