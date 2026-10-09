@@ -47,6 +47,21 @@ void main() {
     expect(page.navigation!['failedCollections'], hasLength(10));
     expect(reads, 3);
   });
+  test('an individual request timeout does not exhaust the shared search budget', () async {
+    var reads = 0;
+    final service = OnlineGalleryService(
+      requestTimeout: const Duration(milliseconds: 100),
+      globalSearchTimeout: const Duration(seconds: 2),
+      client: client((_) async {
+        reads++;
+        throw TimeoutException('Individual fixture request timed out');
+      }),
+    );
+    final page = await service.search(source: OnlineGallerySource.quicktag, query: 'sample', searchAll: true);
+    expect(page.items, isEmpty);
+    expect(page.navigation!['failedCollections'], hasLength(10));
+    expect(reads, 10);
+  });
   test('normal lists use previews and remain independent of counts and image reads', () async {
     final urls = <Uri>[];
     final service = OnlineGalleryService(client: MockClient((request) async {

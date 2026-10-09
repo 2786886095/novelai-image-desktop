@@ -876,16 +876,21 @@ class OnlineGalleryService {
           List.generate(available.length, (_) => <OnlineGalleryItem>[]);
       var next = 0;
       final deadline = DateTime.now().add(globalSearchTimeout);
+      var deadlineReached = false;
       await Future.wait(List.generate(available.length.clamp(0, 3), (_) async {
         while (next < available.length) {
           final index = next++, meta = available[next - 1];
           final remaining = deadline.difference(DateTime.now());
-          if (remaining <= Duration.zero) {
+          if (deadlineReached || remaining <= Duration.zero) {
             (navigation['failedCollections'] as List<String>).add(meta.title);
             continue;
           }
           try {
-            final codex = await _loadQuickCodex(catalog, meta.id).timeout(remaining);
+            final codex = await _loadQuickCodex(catalog, meta.id).timeout(remaining, onTimeout: () {
+              // Latch the shared budget even if timer rounding fires before DateTime.now().
+              deadlineReached = true;
+              throw TimeoutException('Global gallery search timed out');
+            });
             groups[index] = codex.entries.indexed
                 .where((e) =>
                     (!safeOnly || quickSafe(e.$2)) && quickMatch(e.$2, search))
