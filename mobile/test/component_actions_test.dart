@@ -51,7 +51,12 @@ void main(){
   actions.afterResponse('langbai_software_action',input,'s','one',{'ok':true,'data':jsonDecode(result.output)},false);await actions.settled();
   expect(actions.operation!['state'],'interrupted');
   input=await args('component.update');result=await actions.execute('langbai_software_action',input,'s');
-  await Future<void>.delayed(const Duration(milliseconds:65));expect(actions.busy,false);expect(calls.contains('stop'),false);
+  await Future<void>.delayed(const Duration(milliseconds:65));
+  // The handoff timer starts a durable write; await that write, not a CI disk-speed guess.
+  await actions.settled();
+  expect(actions.busy,false);expect(actions.operation!['state'],'interrupted');
+  expect(jsonDecode(await File('${root.path}/component-operation.json').readAsString())['state'],'interrupted');
+  expect(calls.where((v)=>['stop','prepare','confirm','uninstall'].contains(v)),isEmpty);
  });
  test('restart never resumes a pending mutation',() async {
   await actions.execute('langbai_software_action',await args('component.update'),'s');
