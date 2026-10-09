@@ -393,6 +393,7 @@ export function parseImportedParams(meta: Record<string, string>): ImportedParam
     smea: typeof comment.sm === "boolean" ? comment.sm : undefined,
     smeaDyn: typeof comment.sm_dyn === "boolean" ? comment.sm_dyn : undefined,
     model: modelToNai(modelCandidate),
+    effort: modelCandidate && modelToNai(modelCandidate) ? String(modelCandidate).includes("-medium") ? "medium" : "high" : undefined,
     ucPreset: isNovelAi ? 3 : undefined,
     qualityToggle: isNovelAi ? false : undefined,
     qualityPreset: isNovelAi ? "none" : undefined,

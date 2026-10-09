@@ -848,6 +848,7 @@ class AgentController extends ChangeNotifier {
         if (proposal.scale != null) 'scale': proposal.scale,
         if (proposal.sampler?.trim().isNotEmpty == true)
           'sampler': proposal.sampler,
+          'effort': proposal.effort,
         'count': proposal.count,
       });
       text = '${text.trim().isEmpty ? 'Image proposal prepared.' : text}\n\n'
@@ -897,6 +898,7 @@ class AgentController extends ChangeNotifier {
       steps: visual.steps ?? saved.steps,
       scale: visual.scale ?? saved.cfgScale,
       sampler: visual.sampler ?? saved.sampler,
+      effort: visual.effort ?? saved.effort,
       count: visual.count,
     );
   }
@@ -1099,7 +1101,7 @@ class AgentController extends ChangeNotifier {
         'function': {
           'name': 'langbai_prepare_generation',
           'description':
-              '免费准备生图并返回一次性 preparationId、参数摘要与费用估算；不会生成图片。先读取当前生图状态。',
+              '免费准备生图并返回一次性 preparationId、参数摘要与费用估算；不会生成图片。先读取当前生图状态。effort: medium|high 默认跟随生图设置，Medium 固定14步/Euler Ancestral、不能自定义负面和 CFG Rescale，档位不改变 count。',
           'parameters': generationParameters,
         }
       });
@@ -1741,6 +1743,7 @@ class AgentController extends ChangeNotifier {
       if (proposal.height != null) 'height': proposal.height,
       if (proposal.steps != null) 'steps': proposal.steps,
       if (proposal.scale != null) 'cfgScale': proposal.scale,
+      if (proposal.effort != null) 'effort': proposal.effort,
       if (proposal.sampler != null) 'sampler': proposal.sampler,
       'count': proposal.count,
     };
@@ -2018,6 +2021,7 @@ class AgentController extends ChangeNotifier {
     int? steps,
     double? scale,
     String? sampler,
+    String? effort,
     int? count,
   }) async {
     final character = activeCharacter;
@@ -2040,6 +2044,7 @@ class AgentController extends ChangeNotifier {
     if (sampler != null && sampler.trim().isNotEmpty) {
       character.visual.sampler = sampler.trim();
     }
+    if (effort == 'medium' || effort == 'high') character.visual.effort = effort;
     if (count != null) character.visual.count = count.clamp(1, 8).toInt();
     character.updatedAt = agentNow();
     await _persist();

@@ -235,3 +235,5 @@ html.motion-reduced .pi-agent.pi-context-popover{animation:none}
 .pi-model-collection {min-width:0;margin-block:12px;}.pi-model-discovery-list label{display:flex;gap:8px;padding:8px;align-items:center;}.pi-model-discovery-list small{display:block;}
 .pi-saved-model {padding-block:12px;border-bottom:1px solid var(--border);}.pi-saved-model label{display:grid;gap:6px;margin-top:8px;}
 .pi-compose-area.is-file-dragging {outline:2px solid var(--accent);outline-offset:2px;}
+
+.pi-image-effort{border:0;margin:0;padding:12px;max-width:min(360px,calc(100vw - 32px));min-width:0}.pi-image-effort>small{overflow-wrap:anywhere}

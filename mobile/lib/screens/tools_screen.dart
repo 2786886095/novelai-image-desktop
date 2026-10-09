@@ -1,3 +1,4 @@
+import '../ui/effort_control.dart';
 import '../ui/global_typography.dart';
 import '../images/upscale_plan.dart';
 import '../ui/studio_dropdown.dart';
@@ -411,7 +412,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
               },
             ),
             const SizedBox(height: 12),
-            PromptEditor(
+            if (!(state.params.copy()..model = state.inpaintModel).isMediumEffort) PromptEditor(
               label: t('tools.negativePrompt'),
               value: state.params.negativePrompt,
               maxLines: 3,
@@ -485,6 +486,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
                 }
               },
             ),
+            EffortControl(model: state.inpaintModel, value: state.params.effort, language: language, onChanged: (value) => state.setParam((p) => p.effort = value)),
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,

@@ -111,6 +111,7 @@ export function buildAgentGenerationInput(
   const requestedNoiseSchedule = text(args.noiseSchedule, 100);
   const candidate: Partial<GenerateParams> = {
     ...saved,
+    ...(args.effort === "medium" || args.effort === "high" ? { effort: args.effort } : {}),
     // Imported image replay options belong to Generate, not the chat tool.
     metadataReplay: undefined,
     preservePromptText: undefined,

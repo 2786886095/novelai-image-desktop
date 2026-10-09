@@ -7,6 +7,7 @@ import '../models/nai_models.dart';
 
 class ImportedGenerateParams {
   final String? model;
+  final String? effort;
   final String? positivePrompt;
   final String? negativePrompt;
   final String? stylePrompt;
@@ -27,6 +28,7 @@ class ImportedGenerateParams {
 
   const ImportedGenerateParams({
     this.model,
+    this.effort,
     this.positivePrompt,
     this.negativePrompt,
     this.stylePrompt,
@@ -68,6 +70,7 @@ class ImportedGenerateParams {
 
   void applyTo(GenerateParams target) {
     if (model case final value?) target.model = value;
+    if (effort case final value?) target.effort = value;
     if (positivePrompt case final value?) target.positivePrompt = value;
     if (negativePrompt case final value?) target.negativePrompt = value;
     if (stylePrompt case final value?) target.stylePrompt = value;
@@ -101,6 +104,7 @@ class ImportedGenerateParams {
         if (positivePrompt != null) 'Positive prompt': positivePrompt!,
         if (negativePrompt != null) 'Negative prompt': negativePrompt!,
         if (stylePrompt != null) 'Style prompt': stylePrompt!,
+        if (effort != null) 'Effort': effort!,
         if (model != null) 'Model': model!,
         if (width != null) 'Width': width!,
         if (height != null) 'Height': height!,
@@ -123,6 +127,7 @@ class ImportedGenerateParams {
         if (positivePrompt != null) 'positivePrompt': positivePrompt!,
         if (negativePrompt != null) 'negativePrompt': negativePrompt!,
         if (stylePrompt != null) 'stylePrompt': stylePrompt!,
+        if (effort != null) 'effort': effort!,
         if (model != null) 'model': model!,
         if (width != null) 'width': width!,
         if (height != null) 'height': height!,
@@ -143,6 +148,7 @@ class ImportedGenerateParams {
 
   ImportedGenerateParams selecting(Set<String> keys) => ImportedGenerateParams(
         model: keys.contains('model') ? model : null,
+        effort: keys.contains('model') || keys.contains('effort') ? effort : null,
         positivePrompt: keys.contains('positivePrompt') ? positivePrompt : null,
         negativePrompt: keys.contains('negativePrompt') ? negativePrompt : null,
         stylePrompt: keys.contains('stylePrompt') ? stylePrompt : null,
@@ -629,6 +635,7 @@ ImportedGenerateParams parseImportedGenerateParams(
 
   return ImportedGenerateParams(
     model: _naiModel(modelCandidate),
+    effort: _naiModel(modelCandidate) != null ? modelCandidate.toString().contains('-medium') ? 'medium' : 'high' : null,
     positivePrompt: _nonEmpty(prompt),
     negativePrompt: negativePrompt,
     stylePrompt: isNovelAi ? '' : null,
@@ -934,6 +941,7 @@ ImportedGenerateParams _mergeImported(
 ) =>
     ImportedGenerateParams(
       model: primary.model ?? fallback.model,
+      effort: primary.effort ?? fallback.effort,
       positivePrompt: primary.positivePrompt ?? fallback.positivePrompt,
       negativePrompt: primary.negativePrompt ?? fallback.negativePrompt,
       width: primary.width ?? fallback.width,

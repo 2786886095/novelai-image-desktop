@@ -64,6 +64,7 @@ export interface TavernCharacterVisualPreset {
   steps?: number;
   scale?: number;
   sampler?: string;
+  effort?: "medium" | "high";
   count?: number;
   emotionPrompts: Record<string, string>;
   referencePresetIds: string[];
@@ -143,6 +144,7 @@ export interface TavernImageProposal {
   steps?: number;
   scale?: number;
   sampler?: string;
+  effort?: "medium" | "high";
   count: number;
   error?: string;
   createdAt: string;
@@ -393,6 +395,7 @@ export interface AgentSendRequest {
     steps?: number;
     scale?: number;
     sampler?: string;
+  effort?: "medium" | "high";
     count: number;
   };
 }

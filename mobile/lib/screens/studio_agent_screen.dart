@@ -1,3 +1,4 @@
+import '../ui/effort_control.dart';
 import '../ui/global_typography.dart';
 import 'studio_question_cards.dart';
 import 'studio_model_collection.dart';
@@ -1448,6 +1449,21 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                               backgroundColor: chat.studioTemplateEnabled
                                   ? color.primaryContainer
                                   : null)))),
+              if (agent.app.params.model == 'nai-diffusion-5-full')
+                TextButton.icon(
+                  key: const ValueKey('agent-image-effort'),
+                  onPressed: agent.sending || archived || agent.studioOptionsSaving ? null : () async {
+                    await showDialog<void>(context: context, builder: (dialogContext) => StatefulBuilder(builder: (context, change) => AlertDialog(
+                      title: Text(effortTitle(_language)),
+                      content: SizedBox(width: 360, child: SingleChildScrollView(child: EffortControl(model: agent.app.params.model, value: agent.app.params.effort, language: _language, onChanged: (value) {
+                        agent.app.setParam((p) => p.effort = value); change(() {}); setState(() {});
+                      }))),
+                      actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(_t('close')))],
+                    )));
+                  },
+                  icon: const Icon(Icons.tune, size: 16),
+                  label: Text('Effort · ${agent.app.params.effort == 'medium' ? 'Medium' : 'High'}'),
+                ),
               PopupMenuButton<String>(
                   key: const ValueKey('agent-preset-selector'),
                   tooltip: _t('presetToggle'),

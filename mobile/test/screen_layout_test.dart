@@ -168,13 +168,8 @@ void main() {
       scrollable: generateScroll,
       maxScrolls: 12,
     );
-    final scrollState = tester.state<ScrollableState>(generateScroll);
-    scrollState.position.jumpTo(
-      (scrollState.position.pixels + 120)
-          .clamp(0, scrollState.position.maxScrollExtent)
-          .toDouble(),
-    );
-    await tester.pump();
+    await tester.ensureVisible(find.text('自定义拖动'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('自定义拖动'));
     await tester.pumpAndSettle();
     expect(state.extras.charCaptions.every((item) => item.useCoords), isTrue);

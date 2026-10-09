@@ -126,7 +126,7 @@ export function maxNAICharacterPrompts(model: string): number {
   return isNAIV5Model(model) ? 32 : isNAIV4PlusModel(model) ? 6 : 0;
 }
 
-function normalizeNAIBaseModel(model: string): string {
+export function normalizeNAIBaseModel(model: string): string {
   return model.endsWith("-inpainting")
     ? model.slice(0, -"-inpainting".length)
     : model;
@@ -159,6 +159,21 @@ export const NAI_UC_PRESETS = [
 
 export type UcPreset = 0 | 1 | 2 | 3;
 
+export type NAIEffort = "medium" | "high";
+
+export function supportsNAIMediumEffort(model: string): boolean {
+  return normalizeNAIBaseModel(model).replace(/-medium$/, "") === "nai-diffusion-5-full";
+}
+export function isNAIMediumEffort(params: { model: string; effort?: NAIEffort }): boolean {
+  return supportsNAIMediumEffort(params.model) && (params.effort === "medium" || params.model.includes("-medium"));
+}
+/** Request-only projection: never overwrite the user's High settings or batch count. */
+export function effectiveNAIEffortParams<T extends { model: string; effort?: NAIEffort; steps: number; sampler: string; cfgRescale: number; negativePrompt: string; ucPreset: number }>(params: T): Omit<T, "model"> & { model: string } {
+  if (!isNAIMediumEffort(params)) return { ...params };
+  const inpaint = params.model.endsWith("-inpainting");
+  return { ...params, model: `nai-diffusion-5-full-medium${inpaint ? "-inpainting" : ""}`, steps: 14, sampler: "k_euler_ancestral", cfgRescale: 0, negativePrompt: "", ucPreset: 0 };
+}
+
 export type QualityPreset = "standard" | "light" | "none";
 export type ImageToImageSizeMode = "adaptive" | "custom";
 
@@ -167,6 +182,8 @@ export interface GenerateParams {
   preservePromptText?: boolean;
   metadataReplay?: MetadataReplay;
   model: NAIModel;
+  /** Effort is separate from quality tags; old saves default to High. */
+  effort?: NAIEffort;
   stylePrompt: string;
   positivePrompt: string;
   negativePrompt: string;
@@ -196,6 +213,7 @@ export interface GenerateParams {
 
 export const DEFAULT_PARAMS: GenerateParams = {
   model: "nai-diffusion-5-full",
+  effort: "high",
   stylePrompt: "",
   positivePrompt: "",
   negativePrompt: "",
@@ -240,7 +258,8 @@ function finiteNumber(value: unknown, fallback: number): number {
 /** Repair generation state restored from older releases or imported metadata. */
 export function normalizeGenerateParams(value?: Partial<GenerateParams> | null): GenerateParams {
   const source = value ?? {};
-  const model = String(source.model ?? DEFAULT_PARAMS.model);
+  const importedModel = String(source.model ?? DEFAULT_PARAMS.model);
+  const model = importedModel.replace(/-medium(?=-inpainting$|$)/, "");
   const normalizedModel = (SUPPORTED_MODEL_VALUES.has(model)
     ? model
     : DEFAULT_PARAMS.model) as NAIModel;
@@ -267,6 +286,7 @@ export function normalizeGenerateParams(value?: Partial<GenerateParams> | null):
   const dimensions = fitNAIImageSize(source.width, source.height, DEFAULT_PARAMS);
   return {
     model: normalizedModel,
+    effort: source.effort === "medium" || importedModel.includes("-medium") ? "medium" : "high",
     ...(source.preservePromptText === true ? { preservePromptText: true } : {}),
     ...(normalizeMetadataReplay(source.metadataReplay) ? { metadataReplay: normalizeMetadataReplay(source.metadataReplay) } : {}),
     stylePrompt: typeof source.stylePrompt === "string" ? source.stylePrompt : "",
@@ -1538,6 +1558,8 @@ export interface AppSettings {
   // Translation
   translateProvider: TranslateProvider;
   translateTargetLanguage?: string; // system follows the current app language
+  translateSourceLanguage?: string; // auto detects until explicitly selected
+  translateRealtime?: boolean; // opt-in, old/manual behavior remains default
   baiduAppId: string;
   baiduSecret: string;
   translateAiApiUrl: string;
@@ -1623,6 +1645,7 @@ export interface ImportedParams {
   negativePrompt?: string;
   stylePrompt?: string;
   model?: NAIModel;
+  effort?: NAIEffort;
   steps?: number;
   cfgScale?: number;
   cfgRescale?: number;
@@ -2118,7 +2141,8 @@ export interface NaiDesktopApi {
   translate: (
     text: string,
     target?: string,
-  ) => Promise<{ ok: boolean; text?: string; error?: string }>;
+    sourceLanguage?: string,
+  ) => Promise<{ ok: boolean; text?: string; error?: string; sourceLanguage?: string }>;
   checkUpdate: () => Promise<UpdateInfo>;
   isPortable: () => Promise<boolean>;
   downloadUpdate: () => Promise<{ ok: boolean; message: string }>;

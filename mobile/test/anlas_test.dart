@@ -43,7 +43,7 @@ void main() {
       imageToImage: true,
       strength: 0.7,
     );
-    expect(quote.amount, 14);
+    expect(quote.amount, 21); // V5 Full multiplier 1.5; img2img strength 0.7
   });
 
   test('Vibe encoding is one-time rather than multiplied by batch', () {

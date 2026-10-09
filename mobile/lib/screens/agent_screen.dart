@@ -1,3 +1,4 @@
+import '../ui/effort_control.dart';
 import '../ui/global_typography.dart';
 import '../agent/compatible_proposal.dart';
 import '../ui/studio_dropdown.dart';
@@ -2841,6 +2842,8 @@ class _AgentScreenState extends State<AgentScreen> {
     final defaults = controller.app.params;
     final visual = character?.visual;
     final model = visual?.model ?? defaults.model;
+    final effort = visual?.effort ?? defaults.effort;
+    final mediumEffort = model == 'nai-diffusion-5-full' && effort == 'medium';
     final width = visual?.width ?? defaults.width;
     final height = visual?.height ?? defaults.height;
     final steps = visual?.steps ?? defaults.steps;
@@ -2904,12 +2907,14 @@ class _AgentScreenState extends State<AgentScreen> {
                     steps: defaults.steps,
                     scale: defaults.cfgScale,
                     sampler: defaults.sampler,
+                    effort: defaults.effort,
                     count: 1,
                   ),
                   icon: const Icon(Icons.sync_rounded, size: 17),
                   label: Text(text['syncDefault']!),
                 ),
               ]),
+              EffortControl(model: model, value: effort, language: controller.app.settings.language, onChanged: (value) => controller.updateActiveCharacterVisual(effort: value)),
               const SizedBox(height: 10),
               StudioDropdownButtonFormField<String>(
                 value: model,
@@ -3029,7 +3034,7 @@ class _AgentScreenState extends State<AgentScreen> {
                           .updateActiveCharacterVisual(height: value.round()),
                     ),
                   ),
-                  SizedBox(
+                  if (!mediumEffort) SizedBox(
                     width: cellWidth,
                     child: _CommitNumberField(
                       label: text['generationSteps']!,
@@ -3067,7 +3072,7 @@ class _AgentScreenState extends State<AgentScreen> {
                 ]);
               }),
               const SizedBox(height: 10),
-              StudioDropdownButtonFormField<String>(
+              if (!mediumEffort) StudioDropdownButtonFormField<String>(
                 value: sampler,
                 isExpanded: true,
                 decoration: InputDecoration(
@@ -3284,6 +3289,7 @@ class _AgentScreenState extends State<AgentScreen> {
                                 }
                               },
                         icon: const Icon(Icons.add_photo_alternate_outlined))),
+                if (!GenerateParams(model: character.visual.model ?? controller.app.params.model, effort: character.visual.effort ?? controller.app.params.effort).isMediumEffort) ...[
                 _field(negative, text['negativePrompt']!, lines: 7),
                 Align(
                   alignment: Alignment.centerRight,
@@ -3294,6 +3300,7 @@ class _AgentScreenState extends State<AgentScreen> {
                     label: Text(text['restoreDefault']!),
                   ),
                 ),
+                ],
               ]),
             ),
           ),
@@ -3802,7 +3809,7 @@ class _AgentScreenState extends State<AgentScreen> {
                 Expanded(child: _field(height, text['height']!, number: true)),
               ]),
               Row(children: [
-                if (!compatible) Expanded(child: _field(steps, 'Steps', number: true)),
+                if (!compatible && current.effort != 'medium') Expanded(child: _field(steps, 'Steps', number: true)),
                 const SizedBox(width: 8),
                 if (!compatible) Expanded(child: _field(scale, 'CFG', number: true)),
                 const SizedBox(width: 8),
@@ -3837,6 +3844,7 @@ class _AgentScreenState extends State<AgentScreen> {
         steps: int.tryParse(steps.text),
         scale: double.tryParse(scale.text),
         sampler: current.sampler,
+        effort: current.effort,
         explicitParameters: current.explicitParameters,
         count: int.tryParse(count.text)?.clamp(1, 8) ?? 1,
       );

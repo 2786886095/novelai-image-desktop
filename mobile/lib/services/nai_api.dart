@@ -29,12 +29,14 @@ class AiTextResult {
   final bool ok;
   final String message;
   final String text;
+  final String? sourceLanguage;
   final PromptVariants? variants;
   final List<PromptCodexMatch> codexMatches;
   const AiTextResult({
     required this.ok,
     required this.message,
     this.text = '',
+    this.sourceLanguage,
     this.variants,
     this.codexMatches = const [],
   });
@@ -232,8 +234,10 @@ class NaiApi {
   }
 
   Future<AiTextResult> translateText(String text, AppSettings settings,
-      {String? target, String baiduSecret = ''}) async {
-    final resolvedTarget=resolveTranslationTarget(target??settings.translateTargetLanguage,settings.language);
+      {String? target, String? sourceLanguage, String baiduSecret = ''}) async {
+    final resolvedTarget = resolveTranslationTarget(
+        target ?? settings.translateTargetLanguage, settings.language);
+    final from = normalizeTranslationSource(sourceLanguage);
     final input = text.trim();
     if (input.isEmpty) {
       return const AiTextResult(ok: false, message: 'Nothing to translate');
@@ -244,13 +248,20 @@ class NaiApi {
         settings,
         resolvedTarget,
         baiduSecret,
+        from,
       );
     }
     try {
       final uri = Uri.https(
         'translate.googleapis.com',
         '/translate_a/single',
-        {'client': 'gtx', 'sl': 'auto', 'tl': resolvedTarget, 'dt': 't', 'q': input},
+        {
+          'client': 'gtx',
+          'sl': from,
+          'tl': resolvedTarget,
+          'dt': 't',
+          'q': input
+        },
       );
       final response = await _withClient(
         settings,
@@ -279,7 +290,13 @@ class NaiApi {
               message: 'Google Translate returned an empty result',
             )
           : AiTextResult(
-              ok: true, message: 'Translation complete', text: translated);
+              ok: true,
+              message: 'Translation complete',
+              text: translated,
+              sourceLanguage: _detectedSource(
+                  from == 'auto' && data is List && data.length > 2
+                      ? data[2]
+                      : from));
     } catch (error) {
       return AiTextResult(
         ok: false,
@@ -293,6 +310,7 @@ class NaiApi {
     AppSettings settings,
     String target,
     String secret,
+    String sourceLanguage,
   ) async {
     final appId = settings.baiduAppId.trim();
     final cleanSecret = secret.trim();
@@ -314,7 +332,9 @@ class NaiApi {
           },
           body: {
             'q': input,
-            'from': 'auto',
+            'from': sourceLanguage == 'auto'
+                ? 'auto'
+                : baiduTranslationTarget(sourceLanguage),
             'to': baiduTranslationTarget(target),
             'appid': appId,
             'salt': salt,
@@ -351,10 +371,19 @@ class NaiApi {
               message: 'Baidu Translate returned no result',
             )
           : AiTextResult(
-              ok: true, message: 'Translation complete', text: translated);
+              ok: true,
+              message: 'Translation complete',
+              text: translated,
+              sourceLanguage: _detectedSource(
+                  sourceLanguage == 'auto' ? data['from'] : sourceLanguage));
     } catch (error) {
       return AiTextResult(ok: false, message: 'Baidu Translate failed: $error');
     }
+  }
+
+  String? _detectedSource(Object? value) {
+    final code = normalizeTranslationSource(value);
+    return code == 'auto' ? null : code;
   }
 
   String _tierName(int? tier) {
@@ -765,6 +794,7 @@ class NaiApi {
         'Switch to V4.5 or remove vibe images.',
       );
     }
+    params = params.effectiveEffort();
     seed = seed.clamp(1, 0xffffffff).toInt();
     final basePrompt = _merge(params.stylePrompt, params.positivePrompt);
     // NovelAI V4+ shares the Anime checkpoint in Furry mode. The official
@@ -809,7 +839,7 @@ class NaiApi {
         .take(params.maxCharacterPrompts)
         .toList();
     final negativeCharCaptions =
-        activeCharacters.any((c) => c.negativePrompt.trim().isNotEmpty)
+        !params.isMediumEffort && activeCharacters.any((c) => c.negativePrompt.trim().isNotEmpty)
             ? activeCharacters
                 .map((c) => {
                       'char_caption': c.negativePrompt.trim(),

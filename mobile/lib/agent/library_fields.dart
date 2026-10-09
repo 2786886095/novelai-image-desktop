@@ -169,6 +169,14 @@ final Map<String,dynamic> libraryFields=Map<String,dynamic>.from(jsonDecode(r'''
             "label": "参考图预设 ID",
             "max": 2000
           }
+        },
+        "effort": {
+          "type": "string",
+          "label": "生成档位",
+          "values": [
+            "medium",
+            "high"
+          ]
         }
       }
     }

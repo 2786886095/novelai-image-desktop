@@ -61,7 +61,9 @@ Map<String, dynamic> studioGenerationPreview(AppState app, Map<String, dynamic> 
   params.width = number(args['width']) ?? params.width;
   params.height = number(args['height']) ?? params.height;
   params.steps = number(args['steps']) ?? params.steps;
+  if (args['effort'] == 'medium' || args['effort'] == 'high') params.effort = args['effort'] as String;
   final safe = params.normalized();
+  final effective = safe.effectiveEffort();
   final count = (number(args['count']) ?? 1).clamp(1, 8).toInt();
   final advancedReferences = args.containsKey('vibeReferences') ||
       args.containsKey('preciseReferences') || args.containsKey('characterPrompts');
@@ -74,8 +76,8 @@ Map<String, dynamic> studioGenerationPreview(AppState app, Map<String, dynamic> 
     batchCount: count, language: app.settings.language,
   );
   return {
-    'positivePrompt': safe.positivePrompt, 'model': safe.model,
-    'width': safe.width, 'height': safe.height, 'steps': safe.steps,
+    'positivePrompt': safe.positivePrompt, 'model': effective.model, 'effort': safe.effort,
+    'width': safe.width, 'height': safe.height, 'steps': effective.steps,
     'count': count, 'imageProvider': 'novelai',
     'estimatedAnlas': quote?.amount,
     'estimateSource': quote == null ? 'provider-unknown' : 'local-estimate',

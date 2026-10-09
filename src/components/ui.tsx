@@ -483,7 +483,9 @@ export function NumberInput({
   max,
   step = 1,
   onChange,
+  disabled = false,
 }: {
+  disabled?: boolean;
   label: string;
   value: number;
   min?: number;
@@ -493,6 +495,7 @@ export function NumberInput({
 }) {
   return (
     <CommittedNumberInput
+      disabled={disabled}
       label={label}
       value={value}
       min={min}

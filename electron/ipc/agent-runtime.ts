@@ -641,6 +641,7 @@ function proposalFromRaw(
     ...(parameters.height !== undefined ? { height: Math.round(numeric(parameters.height, 1024, 64, 2048)) } : {}),
     ...(parameters.steps !== undefined ? { steps: Math.round(numeric(parameters.steps, 28, 1, 50)) } : {}),
     ...(parameters.scale !== undefined ? { scale: numeric(parameters.scale, 5, 0, 10) } : {}),
+    ...(parameters.effort ? { effort: parameters.effort } : {}),
     ...(parameters.sampler ? { sampler: parameters.sampler } : {}),
     count: Math.round(numeric(parameters.count, 1, 1, 8)),
     createdAt: timestamp(),
@@ -656,6 +657,7 @@ function tavernImageDefaults(character: ReturnType<typeof readAgentWorkspace>["c
     steps: character.visual.steps ?? saved.steps,
     scale: character.visual.scale ?? saved.cfgScale,
     sampler: character.visual.sampler || saved.sampler,
+    effort: character.visual.effort ?? saved.effort ?? "high",
     count: character.visual.count ?? 1,
   };
 }
@@ -755,6 +757,7 @@ export async function generateTavernImage(request: TavernImageRequest, expectedP
         ...(proposal.height ? { height: proposal.height } : {}),
         ...(proposal.steps ? { steps: proposal.steps } : {}),
         ...(proposal.scale !== undefined ? { cfgScale: proposal.scale } : {}),
+        ...(proposal.effort ? { effort: proposal.effort } : {}),
         ...(proposal.sampler ? { sampler: proposal.sampler } : {}),
         count: proposal.count,
       },

@@ -1,6 +1,6 @@
 # Langbai NovelAI Studio
 
-> v2.5.5: Windows x64 installer and portable release. Shared Android/iOS features are synchronized in source; no new mobile binaries or physical-device/signing acceptance are included in this release.
+> v2.5.6: Windows x64 installer and portable release. Shared Android/iOS features are synchronized in source; no new mobile binaries or physical-device/signing acceptance are included in this release.
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 

@@ -4,6 +4,8 @@ import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import ts from 'typescript';
 import {desktopUiText,desktopUiFormat} from './i18n';
+import {DEFAULT_PARAMS} from './types';
+import {estimateOpusImages} from './anlas';
 import {naiAccountText} from './nai-accounts-locales';
 const app=readFileSync(new URL('./App.tsx',import.meta.url),'utf8');
 const parsed=ts.createSourceFile('App.tsx',app,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
@@ -12,9 +14,9 @@ const code=ts.transpileModule(component.getText(parsed),{compilerOptions:{jsx:ts
 afterEach(()=>vi.unstubAllGlobals());
 function render(account:Record<string,unknown>,model='nai-diffusion-5-full'){
  vi.stubGlobal('window',{location:{search:''}});vi.stubGlobal('localStorage',{getItem:()=>null,setItem:()=>{}});
- const state={account,settings:{language:'zh-CN'},generationQueue:[],isGenerating:false};
+ const state={account,params:{...DEFAULT_PARAMS,model},settings:{language:'zh-CN'},generationQueue:[],isGenerating:false};
  const plain=({children,...props}:any)=>React.createElement('span',props,children);
- const Component=new Function('React','useAppStore','useState','useCallback','AnimatedCollapse','clsx','desktopUiText','desktopUiFormat','isNAIV5Model','Icon','Button','IconText','QueuePanel','OpusUsageDialog',code+';return AccountAndRunButton;')(React,(select:any)=>select(state),React.useState,React.useCallback,({children}:any)=>React.createElement('div',null,children),(...values:any[])=>values.filter(Boolean).join(' '),desktopUiText,desktopUiFormat,(m:string)=>m.startsWith('nai-diffusion-5-'),()=>null,plain,plain,()=>null,()=>null);
+ const Component=new Function('React','useAppStore','useState','useCallback','AnimatedCollapse','clsx','desktopUiText','desktopUiFormat','isNAIV5Model','estimateOpusImages','Icon','Button','IconText','QueuePanel','OpusUsageDialog',code+';return AccountAndRunButton;')(React,(select:any)=>select(state),React.useState,React.useCallback,({children}:any)=>React.createElement('div',null,children),(...values:any[])=>values.filter(Boolean).join(' '),desktopUiText,desktopUiFormat,(m:string)=>m.startsWith('nai-diffusion-5-'),estimateOpusImages,()=>null,plain,plain,()=>null,()=>null);
  return renderToStaticMarkup(React.createElement(Component,{label:'TEST no generation',model,onRun:()=>{},openSettings:()=>{}}));
 }
 describe('NovelAI allowance actual React render (controlled state, not native UI)',()=>{

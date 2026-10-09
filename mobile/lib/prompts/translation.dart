@@ -158,3 +158,49 @@ Map<String, String> translationText(Object? language) {
   ];
   return {for (var i = 0; i < keys.length; i++) keys[i]: row[i]};
 }
+
+String normalizeTranslationSource(Object? value) {
+  final code = normalizeTranslationPreference(value);
+  return code == 'system' ? 'auto' : code;
+}
+
+Map<String, String> translationEditorText(Object? language) {
+  final rows = {
+    'zh-CN': ['源语言', '自动检测', '互换语言', '实时翻译', '输入停止后自动翻译', '请先选择源语言或完成自动检测'],
+    'zh-TW': ['來源語言', '自動偵測', '交換語言', '即時翻譯', '停止輸入後自動翻譯', '請先選擇來源語言或完成自動偵測'],
+    'en': [
+      'Source language',
+      'Detect language',
+      'Swap languages',
+      'Live translation',
+      'Translate after typing pauses',
+      'Choose a source language or translate to detect it first'
+    ],
+    'ja': [
+      '翻訳元の言語',
+      '自動検出',
+      '言語を入れ替え',
+      'リアルタイム翻訳',
+      '入力停止後に自動翻訳',
+      '翻訳元を選択するか自動検出してください'
+    ],
+    'ko': [
+      '원본 언어',
+      '자동 감지',
+      '언어 바꾸기',
+      '실시간 번역',
+      '입력이 멈추면 자동 번역',
+      '원본 언어를 선택하거나 자동 감지하세요'
+    ]
+  };
+  final row = rows[resolveTranslationTarget('system', language)] ?? rows['en']!;
+  const keys = [
+    'sourceLanguage',
+    'auto',
+    'swap',
+    'live',
+    'liveHint',
+    'selectSource'
+  ];
+  return {for (var i = 0; i < keys.length; i++) keys[i]: row[i]};
+}

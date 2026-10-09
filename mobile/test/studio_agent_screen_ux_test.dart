@@ -73,6 +73,21 @@ Future<void> captureUx(WidgetTester tester, GlobalKey key, String name) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets('active Studio Agent Effort switch preserves High preferences and batch on phone', (tester) async {
+    tester.view.devicePixelRatio=1; tester.view.physicalSize=const Size(390,844); addTearDown(tester.view.reset);
+    final storage=UxStorage();
+    final app=AppState(storage:storage)..params=GenerateParams(steps:23,sampler:'k_euler',negativePrompt:'keep High UC',cfgRescale:.4)..batchCount=3;
+    final controller=UxController(app:app)..workspace=storage.fixture..loaded=true;
+    await tester.pumpWidget(ChangeNotifierProvider.value(value:app,child:MaterialApp(theme:StudioTheme.light(),home:StudioAgentScreen(controller:controller))));
+    await tester.pumpAndSettle();
+    final chip=find.byKey(const ValueKey('agent-image-effort'));
+    await tester.ensureVisible(chip); await tester.tap(chip); await tester.pumpAndSettle();
+    await tester.tap(find.text('Medium').last);await tester.pumpAndSettle();
+    expect(app.params.effort,'medium'); expect(app.batchCount,3); expect(app.params.steps,23); expect(app.params.negativePrompt,'keep High UC'); expect(app.params.cfgRescale,.4);
+    await tester.tap(find.text('High').last);await tester.pumpAndSettle();
+    expect(app.params.effort,'high');expect(app.batchCount,3); expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox()); controller.dispose();app.dispose();
+  });
   testWidgets(
       'Studio option semantics expose selected mode and toggled web/preset state',
       (tester) async {

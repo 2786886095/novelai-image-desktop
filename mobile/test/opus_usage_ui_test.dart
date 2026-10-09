@@ -13,6 +13,7 @@ void main() {
     tester.view.physicalSize = const Size(900, 700);
     addTearDown(tester.view.reset);
     final state = AppState()
+      ..params = GenerateParams(width: 1024, height: 1024, steps: 23)
       ..account = const AccountSummary(
         hasToken: true,
         tierName: 'Opus',
@@ -56,6 +57,7 @@ void main() {
     tester.view.physicalSize = const Size(900, 700);
     addTearDown(tester.view.reset);
     final state = AppState()
+      ..params = GenerateParams(width: 1024, height: 1024, steps: 23)
       ..account = const AccountSummary(
         hasToken: true,
         tierName: 'Opus',

@@ -835,3 +835,16 @@ describe("NovelAI stream final image validation", () => {
     }
   }
 });
+
+describe('Effort protocol parity', () => {
+  it.each(['nai-diffusion-5-full', 'nai-diffusion-5-full-inpainting'])('sends Medium %s without any custom UC and without mutating input', model => {
+    const params = { ...DEFAULT_PARAMS, model, effort: 'medium' as const, steps: 37, sampler: 'k_euler' as const, cfgRescale: .4, negativePrompt: 'secret-custom-negative' };
+    const before = JSON.stringify(params);
+    const payload = buildPayload(params, 42, { charCaptions: [{prompt:'1girl',negativePrompt:'secret-character-negative',x:.5,y:.5,useCoords:false}] });
+    expect(payload.model).toBe(model.replace('-inpainting','')+'-medium'+(model.endsWith('-inpainting')?'-inpainting':''));
+    expect(payload.parameters).toMatchObject({steps:14,sampler:'k_euler_ancestral',cfg_rescale:0,ucPreset:0,n_samples:1});
+    expect(JSON.stringify(payload)).not.toContain('secret-custom-negative');
+    expect(JSON.stringify(payload)).not.toContain('secret-character-negative');
+    expect(JSON.stringify(params)).toBe(before);
+  });
+});

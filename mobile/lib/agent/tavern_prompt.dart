@@ -17,10 +17,11 @@ const String tavernBaseSystemPrompt =
 Langbai image integration:
 - If the user explicitly asks to draw, illustrate, generate, render, photograph, or show the current scene, append exactly one machine-readable block after the roleplay reply:
 <langbai-image>{"positivePrompt":"NovelAI-ready English positive prompt","explicitParameters":[],"width":1024,"height":1024,"steps":28,"scale":5,"count":1}</langbai-image>
-- The application's private <langbai-image-defaults> values are authoritative. Copy every unmentioned model, width, height, steps, scale, sampler, and count value exactly from those defaults.
+- The application's private <langbai-image-defaults> values are authoritative. Copy every unmentioned model, width, height, steps, scale, sampler, effort, and count value exactly from those defaults.
+- NovelAI image effort is high or medium, separate from chat reasoning effort. Medium is only valid for V5 Full/inpainting: 14 steps, Euler Ancestral, no custom UC or CFG Rescale. Changing effort must not change count.
 - Set explicitParameters to only the parameter field names the user explicitly requested in their latest message. Use ["width","height"] for an explicit size/aspect request. An empty list means every image parameter must remain at the application defaults.
 - AI only authors positivePrompt and explicitly requested image-parameter overrides. Never output or modify negativePrompt or stylePrompt; the application injects the user's negative prompt and artist string.
-- A follow-up that only changes image parameters (for example size, aspect ratio, steps, CFG, sampler, model, or count) is an explicit revision request when a recent <langbai-current-image> context exists. Reuse its positive prompt and every unchanged parameter, apply the user's exact values, then append a new <langbai-image> block.
+- A follow-up that only changes image parameters (for example size, aspect ratio, steps, CFG, sampler, model, effort, or count) is an explicit revision request when a recent <langbai-current-image> context exists. Reuse its positive prompt and every unchanged parameter, apply the user's exact values, then append a new <langbai-image> block.
 - Treat portrait / vertical as 832×1216, square as 1024×1024, and landscape / horizontal as 1216×832 unless the user gives exact dimensions. Exact dimensions always win.
 - <langbai-current-image> is private application context. Never quote, expose, or repeat that tag in the visible reply.
 - For ordinary conversation, respond normally and omit the machine-readable block; ordinary conversation remains part of the roleplay and image-planning context.
@@ -53,6 +54,7 @@ class TavernImageParameterDefaults {
   final int? steps;
   final double? scale;
   final String? sampler;
+  final String? effort;
   final int count;
 
   const TavernImageParameterDefaults({
@@ -62,6 +64,7 @@ class TavernImageParameterDefaults {
     this.steps,
     this.scale,
     this.sampler,
+    this.effort,
     this.count = 1,
   });
 
@@ -71,6 +74,7 @@ class TavernImageParameterDefaults {
         if (height != null) 'height': height,
         if (steps != null) 'steps': steps,
         if (scale != null) 'scale': scale,
+        if (effort != null) 'effort': effort,
         if (sampler != null) 'sampler': sampler,
         'count': count,
       };
@@ -104,6 +108,7 @@ void applyAuthoritativeTavernImageDefaults(
       proposal.scale == null) {
     proposal.scale = defaults.scale;
   }
+  if (!explicit.contains('effort') || proposal.effort == null) proposal.effort = defaults.effort;
   if (!explicit.contains('sampler') || proposal.sampler == null) {
     proposal.sampler = defaults.sampler;
   }

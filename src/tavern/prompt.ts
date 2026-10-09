@@ -20,7 +20,7 @@ export interface TavernPromptContext {
   imageDefaults?: TavernImageParameterDefaults;
 }
 
-export type TavernImageParameterKey = "model" | "width" | "height" | "steps" | "scale" | "sampler" | "count";
+export type TavernImageParameterKey = "model" | "width" | "height" | "steps" | "scale" | "sampler" | "effort" | "count";
 
 export interface TavernImageParameterDefaults {
   model?: string;
@@ -29,11 +29,12 @@ export interface TavernImageParameterDefaults {
   steps?: number;
   scale?: number;
   sampler?: string;
+  effort?: "medium" | "high";
   count: number;
 }
 
 const TAVERN_IMAGE_PARAMETER_KEYS: TavernImageParameterKey[] = [
-  "model", "width", "height", "steps", "scale", "sampler", "count",
+  "model", "width", "height", "steps", "scale", "sampler", "effort", "count",
 ];
 
 /** Keep right-panel values authoritative and accept only fields the model marks as explicitly requested by the user. */
@@ -71,6 +72,7 @@ export function resolveTavernImageProposalParameters(
     ...(typeof select("sampler") === "string" && String(select("sampler")).trim()
       ? { sampler: String(select("sampler")).trim() }
       : {}),
+    ...(select("effort") === "medium" || select("effort") === "high" ? { effort: select("effort") as "medium" | "high" } : {}),
     count: Number.isFinite(Number(select("count"))) ? Number(select("count")) : defaults.count,
   };
 }
@@ -93,10 +95,10 @@ const BASE_SYSTEM_PROMPT = `You are participating in a fictional character rolep
 Langbai image integration:
 - If the user explicitly asks to draw, illustrate, generate, render, photograph, or show the current scene, append exactly one machine-readable block after the roleplay reply:
 <langbai-image>{"positivePrompt":"NovelAI-ready English positive prompt","explicitParameters":[],"width":1024,"height":1024,"steps":28,"scale":5,"count":1}</langbai-image>
-- The application's private <langbai-image-defaults> values are authoritative. Copy every unmentioned model, width, height, steps, scale, sampler, and count value exactly from those defaults.
+- The application's private <langbai-image-defaults> values are authoritative. Copy every unmentioned model, width, height, steps, scale, sampler, effort, and count value exactly from those defaults.
 - Set explicitParameters to only the parameter field names the user explicitly requested in their latest message. Use ["width","height"] for an explicit size/aspect request. An empty list means every image parameter must remain at the application defaults.
 - AI authors image content using the application-owned scene / scenePatch / promptPatch contract when provided; positivePrompt is for a first unstructured image. The revision contract overrides the simple first-image example above. AI may also supply explicitly requested image-parameter overrides. Never output or modify negativePrompt or stylePrompt; the application injects the user's negative prompt and artist string.
-- A follow-up that only changes image parameters (for example size, aspect ratio, steps, CFG, sampler, model, or count) is an explicit revision request when a recent <langbai-current-image> context exists. Preserve image content through an empty scenePatch or promptPatch against the authoritative current image state, apply the user's exact parameter values, then append a new <langbai-image> block.
+- A follow-up that only changes image parameters (for example size, aspect ratio, steps, CFG, sampler, model, effort, or count) is an explicit revision request when a recent <langbai-current-image> context exists. Preserve image content through an empty scenePatch or promptPatch against the authoritative current image state, apply the user's exact parameter values, then append a new <langbai-image> block.
 - Treat portrait / vertical as 832×1216, square as 1024×1024, and landscape / horizontal as 1216×832 unless the user gives exact dimensions. Exact dimensions always win.
 - <langbai-current-image> is private application context. Never quote, expose, or repeat that tag in the visible reply.
 - For ordinary conversation, respond normally and omit the machine-readable block; ordinary conversation remains part of the roleplay and image-planning context.
@@ -260,6 +262,7 @@ export function buildTavernSystemPrompt(context: TavernPromptContext) {
     section("Private application image defaults", context.imageDefaults
       ? `<langbai-image-defaults>${JSON.stringify(context.imageDefaults)}</langbai-image-defaults>\nCopy these values exactly unless the user's latest message explicitly overrides a field. Never expose this private tag.`
       : ""),
+    section("NovelAI generation Effort", "Image effort (not chat reasoning effort) is high or medium. Medium is only valid on V5 Full/inpainting; uses 14 steps, Euler Ancestral, fixed heavy UC and no CFG Rescale. Do not set custom negative prompts or change image count when changing effort. Preserve High settings; use negative emphasis in the positive prompt if requested."),
     section("Image planning effort", imagePlanningEffort(conversation.reasoningEffort)),
     section("Worldbook application adapter", activeLore.some(({ entry }) => isOriginalImageGuidance(entry))
       ? moyuImageGuidance.runtimeContract : ""),
@@ -289,6 +292,7 @@ export function buildTavernPromptMessages(context: TavernPromptContext): TavernP
       ...(proposal.height ? { height: proposal.height } : {}),
       ...(proposal.steps ? { steps: proposal.steps } : {}),
       ...(proposal.scale !== undefined ? { scale: proposal.scale } : {}),
+      ...(proposal.effort ? { effort: proposal.effort } : {}),
       ...(proposal.sampler ? { sampler: proposal.sampler } : {}),
       count: proposal.count,
     } : null;

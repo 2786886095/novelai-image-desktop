@@ -1,3 +1,4 @@
+import '../ui/effort_control.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../agent/agent_models.dart';
@@ -47,6 +48,7 @@ class StudioAgentPlanCard extends StatelessWidget {
       if (preview['model'] != null) 'model': preview['model'],
       if (preview['width'] != null && preview['height'] != null)
         'size': '${preview['width']} × ${preview['height']}',
+      if (preview['effort'] != null) 'effort': preview['effort'],
       if (preview['steps'] != null) 'steps': preview['steps'],
       if (preview['count'] != null) 'count': preview['count']
     };
@@ -84,7 +86,7 @@ class StudioAgentPlanCard extends StatelessWidget {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(t(entry.key),
+                        Text(entry.key == 'effort' ? effortTitle(language) : t(entry.key),
                             style: TextStyle(
                                 fontSize: 12, color: color.onSurfaceVariant)),
                         Text('${entry.value}',
