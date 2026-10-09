@@ -1396,6 +1396,8 @@ export interface CompatibleGenerationRequest {
   fileNamePrefix?: string;
 }
 
+export interface McpServerStatus { running: boolean; port: number; url: string; error: string }
+
 export interface AppSettings {
   /** Runtime-only account identity and process-keyed credential/endpoint revision; no secret. */
   naiAccountId?: string;
@@ -1458,6 +1460,13 @@ export interface AppSettings {
   /** Show intermediate NovelAI generation frames. Defaults on; unsupported
    * endpoints safely keep using the normal ZIP response. */
   streamPreviewEnabled: boolean;
+  /** Fork: local MCP server (127.0.0.1 only) for external agents. Default off. */
+  mcpServerEnabled?: boolean;
+  mcpServerPort?: number;
+  /** Bearer token required by the MCP server. Encrypted at rest. */
+  mcpServerToken?: string;
+  /** Highest estimated Anlas cost a single MCP tool call may spend. 0 = only free operations. */
+  mcpMaxAnlasPerCall?: number;
   showFloatingToolbar: boolean;
   historyJumpAfterGenerate: boolean;
   historyRetentionDays: number;
@@ -1679,6 +1688,10 @@ export interface NaiDesktopApi {
   favoritesChooseDirectory: () => Promise<string|null>;
   onImageCopyNotice?: (callback:(message:string)=>void) => ()=>void;
   onImageParametersRequested?: (callback:(filePath:string)=>void) => ()=>void;
+  /** Fork: local MCP server. */
+  mcpStatus: () => Promise<McpServerStatus>;
+  mcpRegenerateToken: () => Promise<McpServerStatus>;
+  onMcpEvent: (callback:(event:{kind:'history';date?:string;count:number})=>void) => ()=>void;
   onFavoritesChanged: (callback:(notice:{message:string})=>void) => ()=>void;
   onStudioAgentRequest?: (callback:(request:import('./studio-agent-contract').StudioAgentRequest)=>void) => ()=>void;
   replyStudioAgent: (id:string,reply:import('./studio-agent-contract').StudioAgentReply) => Promise<void>;

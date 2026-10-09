@@ -1,3 +1,4 @@
+import { McpServerSettings } from "./components/McpServerSettings";
 import { estimateOpusImages, estimateOpusUsagePercent } from "./anlas";
 import { EffortControl, effortText } from "./components/EffortControl";
 import {TypographySettings} from './components/TypographySettings';
@@ -5863,6 +5864,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     ["sound", ft("提示音"), "volume"],
     ["appearance", settingsShellText.nav.appearance, "palette"],
     ["performance", settingsShellText.nav.performance, "speed"],
+    ["mcp", ft("MCP 服务"), "plug"],
     ["about", settingsShellText.nav.about, "info"],
   ];
   const selectedReverseConvertPreset = settings.reverseConvertPromptPresets.find(
@@ -6186,6 +6188,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               </div>
             )}
             {section === "sound" && <div className="settings-form"><CompletionSoundSettings /></div>}
+            {section === "mcp" && <McpServerSettings settings={settings} update={update} />}
             {section === "appearance" && (
               <div className="settings-form">
                 <label className="field">
