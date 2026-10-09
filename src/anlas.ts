@@ -1,3 +1,4 @@
+import { effectiveNAIEffortParams, isNAIMediumEffort, isNAIV5Model } from "./types";
 import { planUpscale } from "./upscale-plan";
 import { maxNAIEnhanceSize } from "./nai-dimensions";
 import {
@@ -81,11 +82,12 @@ export function calculateImageGenerationAnlas({
   /** How many of the vibe references are already encoded+cached (no re-charge). */
   alreadyEncodedVibes?: number;
 }): AnlasQuoteResult {
+  const effective = effectiveNAIEffortParams(params);
   const samples = positiveInt(batchCount, 1);
   const width = positiveInt(params.width, 512);
   const height = positiveInt(params.height, 512);
   const pixels = Math.max(width * height, 65_536);
-  const steps = positiveInt(params.steps, 28);
+  const steps = positiveInt(effective.steps, 28);
   const normalizedStrength = action === "generate" ? 1 : clamp01(strength, 1);
   const v4Plus = isNAIV4PlusModel(params.model);
   const vibeCount = supportsNAIVibeTransfer(params.model)
@@ -99,15 +101,16 @@ export function calculateImageGenerationAnlas({
     action === "generate" &&
     isActiveOpus(account) &&
     pixels <= OPUS_FREE_MAX_PIXELS &&
-    steps <= 28;
+    steps <= 28 &&
+    (!isNAIV5Model(params.model) || !account?.opusUsage?.isNegative && (account?.opusUsage?.percent ?? 100) > 0);
 
   if (opusFree) {
     details.push("Opus active: base text-to-image generation is free for this size/step request.");
   } else {
     const smeaMultiplier = !v4Plus && params.smeaDyn ? 1.4 : !v4Plus && params.smea ? 1.2 : 1;
-    const officialBase = Math.ceil(BASE_PIXEL_COEFFICIENT * pixels + STEP_PIXEL_COEFFICIENT * pixels * steps);
+    const officialBase = Math.ceil(BASE_PIXEL_COEFFICIENT * pixels + STEP_PIXEL_COEFFICIENT * pixels * steps * (isNAIMediumEffort(params) ? 1 / 1.06521739 : 1));
     // NovelAI caps a single image's base generation cost at 140 Anlas.
-    basePerSample = Math.min(140, Math.max(2, Math.ceil(officialBase * smeaMultiplier * normalizedStrength)));
+    basePerSample = Math.min(140, Math.max(2, Math.ceil(officialBase * smeaMultiplier * (isNAIV5Model(params.model) ? 1.5 : 1) * normalizedStrength)));
     details.push(`Base image price: ${basePerSample} Anlas each by the official frontend formula.`);
   }
 
@@ -261,4 +264,22 @@ export function calculateFeatureAnlasQuote({
     });
   }
   return calculateImageGenerationAnlas({ params, account, extras, batchCount, action: "generate", alreadyEncodedVibes });
+}
+
+/** Approximate allowance images, scaled from the official 1MP/23-step benchmark
+ * by the current public frontend paid price. Not a fixed 42% discount, not batch.
+ * Official account percentages/prices remain authoritative. */
+export function estimateOpusImages(params: GenerateParams, percent: number): number {
+  if (!isNAIV5Model(params.model) || !Number.isFinite(percent)) return 0;
+  const paid = { hasToken: true, tierLevel: 1, hasActiveSubscription: true } as AccountSummary;
+  const benchmark = calculateImageGenerationAnlas({ params: { ...params, model: "nai-diffusion-5-full", effort: "high", width: 1024, height: 1024, steps: 23 }, account: paid, forcePaid: true }).amount ?? 26;
+  const unit = calculateImageGenerationAnlas({ params, account: paid, forcePaid: true }).amount ?? benchmark;
+  const effective = effectiveNAIEffortParams(params);
+  if (params.width * params.height > OPUS_FREE_MAX_PIXELS || effective.steps > 28) return 0;
+  return Math.max(0, Math.floor(17.3 * Math.max(0, Math.min(100, percent)) * benchmark / Math.max(1, unit)));
+}
+
+export function estimateOpusUsagePercent(params: GenerateParams, batchCount = 1): number | null {
+  const capacity = estimateOpusImages(params, 100);
+  return capacity > 0 ? Math.max(1, Math.floor(batchCount)) * 100 / capacity : null;
 }

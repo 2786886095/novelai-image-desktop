@@ -92,3 +92,17 @@
 .translation-preview-columns {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;}
 .translation-preview-columns textarea {min-height:220px;max-height:48dvh;}
 @media(max-width:620px){.translation-preview-columns {grid-template-columns:minmax(0,1fr);}.translation-preview-columns textarea {min-height:120px;height:22dvh;}}
+
+/* Shared language bar: no fixed-width selects at large global text scales. */
+.translation-preview-languages { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:end; gap:12px; }
+.translation-preview-languages .select-menu { min-width:0; width:100%; }
+.translation-swap-button { display:flex; align-items:center; justify-content:center; align-self:end; min-width:38px; min-height:38px; padding:6px 10px; border:1px solid var(--border); border-radius:10px; color:var(--text-muted); background:var(--bg-input); font-size:1.25em; line-height:1; }
+.translation-swap-button:not(:disabled):hover { color:var(--accent); background:var(--accent-soft); }
+@media(max-width:620px) { .translation-preview-languages { grid-template-columns:minmax(0,1fr); gap:8px; } .translation-swap-button { justify-self:center; } }
+
+/* Compact preview-local control, using the same switch as global settings. */
+.translation-preview-options { display:flex; justify-content:flex-end; margin-top:12px; }
+.translation-preview-options .translation-live-toggle { display:inline-flex; flex-direction:row; align-items:center; gap:10px; margin:0; font-size:inherit; cursor:pointer; line-height:1.4; color:var(--text-muted); }
+.translation-live-toggle .toggle input { display:block; position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; z-index:1; cursor:pointer; }
+.translation-live-toggle .toggle:has(input:focus-visible) { outline:2px solid var(--accent); outline-offset:3px; border-radius:var(--radius-2xl); }
+.translation-live-toggle .toggle:has(input:disabled) { opacity:.55; }

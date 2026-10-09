@@ -46,7 +46,7 @@ describe("official Anlas pricing", () => {
       action: "img2img",
       strength: 0.7,
     });
-    expect(quote.amount).toBe(14);
+    expect(quote.amount).toBe(21);
   });
 
   it("charges V4 vibe encoding as a one-time fee, not per batch image", () => {

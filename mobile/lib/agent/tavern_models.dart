@@ -42,6 +42,7 @@ class TavernCharacterVisual {
   int? steps;
   double? scale;
   String? sampler;
+  String? effort;
   int count;
   Map<String, String> emotionPrompts;
   List<String> referencePresetIds;
@@ -56,6 +57,7 @@ class TavernCharacterVisual {
     this.steps,
     this.scale,
     this.sampler,
+    this.effort,
     this.count = 1,
     Map<String, String>? emotionPrompts,
     List<String>? referencePresetIds,
@@ -78,6 +80,7 @@ class TavernCharacterVisual {
             : null,
         steps: json['steps'] is num ? _integer(json['steps'], 28, 1, 50) : null,
         scale: json['scale'] is num ? _number(json['scale'], 5, 0, 10) : null,
+        effort: json['effort'] == 'medium' || json['effort'] == 'high' ? json['effort'].toString() : null,
         sampler: _string(json['sampler']).trim().isEmpty
             ? null
             : _string(json['sampler']),
@@ -96,6 +99,7 @@ class TavernCharacterVisual {
         if (height != null) 'height': height,
         if (steps != null) 'steps': steps,
         if (scale != null) 'scale': scale,
+        if (effort != null) 'effort': effort,
         if (sampler != null) 'sampler': sampler,
         'count': count,
         'emotionPrompts': emotionPrompts,
@@ -582,6 +586,7 @@ class TavernImageProposal {
   int? steps;
   double? scale;
   String? sampler;
+  String? effort;
   List<String> explicitParameters;
   int count;
   String? error;
@@ -605,6 +610,7 @@ class TavernImageProposal {
     this.steps,
     this.scale,
     this.sampler,
+    this.effort,
     List<String>? explicitParameters,
     this.count = 1,
     this.error,
@@ -641,6 +647,7 @@ class TavernImageProposal {
             : null,
         steps: json['steps'] is num ? _integer(json['steps'], 28, 1, 50) : null,
         scale: json['scale'] is num ? _number(json['scale'], 5, 0, 10) : null,
+        effort: json['effort'] == 'medium' || json['effort'] == 'high' ? json['effort'].toString() : null,
         sampler: _string(json['sampler']).trim().isEmpty
             ? null
             : _string(json['sampler']),
@@ -669,6 +676,7 @@ class TavernImageProposal {
         if (height != null) 'height': height,
         if (steps != null) 'steps': steps,
         if (scale != null) 'scale': scale,
+        if (effort != null) 'effort': effort,
         if (sampler != null) 'sampler': sampler,
         if (explicitParameters.isNotEmpty)
           'explicitParameters': explicitParameters,

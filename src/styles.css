@@ -20444,3 +20444,8 @@ html.motion-reduced .workspace { transition: none; }
 .character-name-input::placeholder {color:var(--text-primary);opacity:1;}
 .character-name-input:hover,.character-name-input:focus {border-color:var(--accent);background:var(--bg-canvas);}
 .char-row-title {min-width:0;flex:1;}
+
+/* Effort uses the existing segmented-control palette and scales with global typography. */
+.effort-control { min-width:0; margin:10px 0; }
+.effort-control .quality-preset-segments { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.effort-control .quality-preset-segments button { min-width:0; white-space:nowrap; }

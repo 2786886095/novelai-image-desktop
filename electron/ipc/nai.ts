@@ -1,4 +1,4 @@
-import {resolveTranslationTarget,baiduTranslationTarget,translationLanguageName} from '../../src/translation';
+import {resolveTranslationTarget,baiduTranslationTarget,translationLanguageName,normalizeTranslationSource,parseTranslationReply} from '../../src/translation';
 import {prepareFocusedInpaintInput,compositeFocusedPatch} from './focused-inpaint';
 import {parseNaiAccountSummary} from './nai-account-summary';
 import {validateNaiAccountReadOnly,requireNaiAccountValidation} from './nai-accounts-validation';
@@ -36,6 +36,9 @@ import {
   maxNAICharacterPrompts,
   MAX_NAI_SEED,
   normalizeGenerateParams,
+  effectiveNAIEffortParams,
+  isNAIMediumEffort,
+  normalizeNAIBaseModel,
   NAI_INPAINT_MODELS,
   supportsNAIPreciseReference,
   supportsNAIVibeTransfer,
@@ -554,14 +557,16 @@ export function buildPayload(
     ? params.model
     : null;
   params = {
-    ...normalizeGenerateParams(params as GenerateParams),
+    ...normalizeGenerateParams({ ...params, model: normalizeNAIBaseModel(params.model).replace(/-medium$/, "") as GenerateParams["model"] }),
     ...(inpaintModel ? { model: inpaintModel } : {}),
   } as PayloadParams;
+  params = effectiveNAIEffortParams(params);
+  const mediumEffort = isNAIMediumEffort(params);
   actualSeed = Math.min(MAX_NAI_SEED, Math.max(0, Math.round(Number.isFinite(Number(actualSeed)) && Number(actualSeed) >= 0 ? Number(actualSeed) : 1)));
   const merge = params.preservePromptText
     ? (...segments: string[]) => segments.filter(segment => segment !== "").join(", ")
     : mergePrompt;
-  const replay = params.metadataReplay?.model === params.model ? params.metadataReplay : undefined;
+  const replay = !mediumEffort && params.metadataReplay?.model === params.model ? params.metadataReplay : undefined;
   const basePrompt = merge(params.stylePrompt, params.positivePrompt);
   // In the official client, Furry is a mode for every V4+ checkpoint rather
   // than a separate V4/V5 model. It is represented by placing `fur dataset,`
@@ -585,7 +590,7 @@ export function buildPayload(
     ucPresetText(params.model, params.ucPreset),
   );
   const v4Plus = isV4Plus(params.model);
-  const cleanedCharCaptions = normalizedCharCaptions(extras, params.model, params.preservePromptText);
+  const cleanedCharCaptions = normalizedCharCaptions(extras, params.model, params.preservePromptText).map(c => mediumEffort ? { ...c, negativePrompt: "" } : c);
   const inputPrompt =
     charCaptionMode === "pipe"
       ? withPipeCharCaptions(effectivePrompt, cleanedCharCaptions)
@@ -5218,9 +5223,11 @@ export async function suggestTags(
 export async function translateText(
   text: string,
   target?: string,
-): Promise<{ ok: boolean; text?: string; error?: string }> {
+  sourceLanguage?: string,
+): Promise<{ ok: boolean; text?: string; error?: string; sourceLanguage?: string }> {
   const trimmed = (text ?? "").trim();
   if (!trimmed) return { ok: false, error: "没有可翻译的内容。" };
+  sourceLanguage = normalizeTranslationSource(sourceLanguage);
   const settings = getSettings();
   target = resolveTranslationTarget(target ?? settings.translateTargetLanguage, settings.language);
   if (settings.translateProvider === "baidu") {
@@ -5229,6 +5236,7 @@ export async function translateText(
       target,
       settings.baiduAppId.trim(),
       settings.baiduSecret.trim(),
+      sourceLanguage,
     );
   }
   if (settings.translateProvider === "ai") {
@@ -5238,9 +5246,10 @@ export async function translateText(
       settings.translateAiApiUrl.trim(),
       settings.translateAiApiKey.trim(),
       settings.translateAiModel.trim(),
+      sourceLanguage,
     );
   }
-  return googleTranslate(trimmed, target);
+  return googleTranslate(trimmed, target, sourceLanguage);
 }
 
 async function aiTranslate(
@@ -5249,7 +5258,8 @@ async function aiTranslate(
   apiUrl: string,
   apiKey: string,
   model: string,
-): Promise<{ ok: boolean; text?: string; error?: string }> {
+  sourceLanguage = "auto",
+): Promise<{ ok: boolean; text?: string; error?: string; sourceLanguage?: string }> {
   if (!apiUrl || !apiKey || !model) {
     return { ok: false, error: "请先在设置中填写 AI 翻译的 API 地址、API Key 和模型。" };
   }
@@ -5258,7 +5268,9 @@ async function aiTranslate(
     "You are a precise translation engine for NovelAI prompts.",
     `Translate the user's text into ${targetLanguage}.`,
     target === "en" ? "Preserve existing English Danbooru tags, weights, brackets, punctuation, and comma-separated structure." : "Translate the words, including English tags, but preserve weights, brackets, punctuation, and comma-separated structure. Do not shorten or omit content.",
-    "Return only the translated text without explanations, quotes, or markdown fences.",
+    sourceLanguage === "auto"
+      ? 'Detect the source language and return JSON only: {"text":"translated text","sourceLanguage":"BCP-47 language code"}. No explanations or markdown fences.'
+      : `The source language is ${translationLanguageName(sourceLanguage)}. Return only the translated text without explanations, quotes, or markdown fences.`,
   ].join(" ");
   try {
     const base = apiUrl.replace(/\/+$/, "");
@@ -5280,9 +5292,10 @@ async function aiTranslate(
       },
     );
     const output = cleanPromptOutput(String(response.data?.choices?.[0]?.message?.content ?? "")).trim();
-    if (!output) return { ok: false, error: "AI 翻译结果为空，请检查模型是否支持 Chat Completions。" };
+    const parsed = parseTranslationReply(output, sourceLanguage);
+    if (!parsed.text) return { ok: false, error: "AI 翻译结果为空，请检查模型是否支持 Chat Completions。" };
     recordAiCall({ label: "AI 翻译", api: "translate", model, systemPrompt, userText: text, ok: true, response: output });
-    return { ok: true, text: output };
+    return { ok: true, ...parsed };
   } catch (error: any) {
     const message = error?.response?.data?.error?.message ?? error?.response?.data?.message ?? error?.message ?? "未知错误";
     recordAiCall({ label: "AI 翻译", api: "translate", model, systemPrompt, userText: text, ok: false, response: String(message) });
@@ -5293,12 +5306,13 @@ async function aiTranslate(
 async function googleTranslate(
   text: string,
   target: string,
-): Promise<{ ok: boolean; text?: string; error?: string }> {
+  sourceLanguage = "auto",
+): Promise<{ ok: boolean; text?: string; error?: string; sourceLanguage?: string }> {
   try {
     const res = await axios.get(
       "https://translate.googleapis.com/translate_a/single",
       {
-        params: { client: "gtx", sl: "auto", tl: target, dt: "t", q: text },
+        params: { client: "gtx", sl: sourceLanguage, tl: target, dt: "t", q: text },
         timeout: 8_000,
         ...proxyConfig("translate"),
       },
@@ -5312,7 +5326,8 @@ async function googleTranslate(
       .join("")
       .trim();
     if (!out) return { ok: false, error: "谷歌翻译结果为空。" };
-    return { ok: true, text: out };
+    const detected = normalizeTranslationSource(sourceLanguage === "auto" ? res.data?.[2] : sourceLanguage);
+    return { ok: true, text: out, ...(detected !== "auto" ? { sourceLanguage: detected } : {}) };
   } catch (error: any) {
     return {
       ok: false,
@@ -5328,7 +5343,8 @@ async function baiduTranslate(
   target: string,
   appid: string,
   secret: string,
-): Promise<{ ok: boolean; text?: string; error?: string }> {
+  sourceLanguage = "auto",
+): Promise<{ ok: boolean; text?: string; error?: string; sourceLanguage?: string }> {
   if (!appid || !secret) {
     return { ok: false, error: "请先在设置中填写百度翻译 APP ID 与密钥。" };
   }
@@ -5342,7 +5358,7 @@ async function baiduTranslate(
     const res = await axios.get(
       "https://fanyi-api.baidu.com/api/trans/vip/translate",
       {
-        params: { q: text, from: "auto", to, appid, salt, sign },
+        params: { q: text, from: sourceLanguage === "auto" ? "auto" : baiduTranslationTarget(sourceLanguage), to, appid, salt, sign },
         timeout: 8_000,
         ...proxyConfig("translate"),
       },
@@ -5358,7 +5374,8 @@ async function baiduTranslate(
       .join("\n")
       .trim();
     if (!out) return { ok: false, error: "百度翻译结果为空。" };
-    return { ok: true, text: out };
+    const detected = normalizeTranslationSource(sourceLanguage === "auto" ? res.data?.from : sourceLanguage);
+    return { ok: true, text: out, ...(detected !== "auto" ? { sourceLanguage: detected } : {}) };
   } catch (error: any) {
     return {
       ok: false,

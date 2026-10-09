@@ -11,7 +11,7 @@ const template={kind:choice('convert','reverse','optimize','assistant'),mode:cho
 const generation={positivePrompt:requiredText(20_000),negativePrompt:text(20_000),stylePrompt:text(20_000),count:integer(1,8),model:text(120),
   width:integer(64,4096),height:integer(64,4096),steps:integer(1,50),cfgScale:number(0,20),scale:number(0,20),cfgRescale:number(0,1),
   seed:integer(0,4294967295),seedMode:choice('random','fixed'),sampler:text(100),noiseSchedule:text(100),smea:flag,smeaDyn:flag,variety:flag,
-  qualityToggle:flag,qualityPreset:choice('standard','light','none'),ucPreset:integer(0,3),transparentBackground:flag,
+  effort:{...choice('medium','high'),description:'V5 Full/inpainting only. Medium fixes 14 steps/Euler Ancestral, heavy UC, zero CFG Rescale; cannot use custom negative prompts. Never alter count when changing effort.'},qualityToggle:flag,qualityPreset:choice('standard','light','none'),ucPreset:integer(0,3),transparentBackground:flag,
   vibeReferences:refs,preciseReferences:refs,characterPrompts:refs};
 /** Schemas are for the fields inside Pi's {args:{...}} envelope. */
 export function studioPiToolSchema(name:string):Schema {

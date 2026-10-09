@@ -102,6 +102,7 @@ class StudioDataService {
         'seed': number(0, 4294967295, 1),
         'seedMode': choice(['fixed', 'random']),
         'ucPreset': choice([0, 1, 2, 3]),
+        'effort': choice(['medium', 'high']),
         'qualityPreset': choice(['standard', 'light', 'none']),
         for (final k in [
           'qualityToggle',

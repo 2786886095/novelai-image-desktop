@@ -1,8 +1,10 @@
+import { estimateOpusImages, estimateOpusUsagePercent } from "./anlas";
+import { EffortControl, effortText } from "./components/EffortControl";
 import {TypographySettings} from './components/TypographySettings';
 import {useGlobalTypography} from './global-typography';
 import { HistoryRailControls, HistoryRailPane } from './components/HistoryRailControls';
 import {TranslationPreview} from './components/TranslationPreview';
-import {TRANSLATION_LANGUAGES,normalizeTranslationPreference,translationText} from './translation';
+import {TRANSLATION_LANGUAGES,translationEditorText,normalizeTranslationPreference,translationText} from './translation';
 import {favoritesText} from './favorites-text';
 import {McpToolSettings,McpTagSuggestions} from './components/McpTools';
 import {CompatibleImageSettingsCard,CompatibleGenerationPanel} from './components/CompatibleImages';
@@ -154,6 +156,8 @@ import {
   supportsNAIModelMode,
   isNAIV4PlusModel,
   isNAIV5Model,
+  isNAIMediumEffort,
+  effectiveNAIEffortParams,
   maxNAICharacterPrompts,
   supportsNAICharacterPrompts,
   supportsNAINoiseScheduleControl,
@@ -465,8 +469,10 @@ function PromptTextarea({
   enabled,
   placeholder,
   className,
+  readOnly = false,
 }: {
   value: string;
+  readOnly?: boolean;
   onChange: (v: string) => void;
   model: string;
   enabled: boolean;
@@ -554,7 +560,7 @@ function PromptTextarea({
 
   return (
     <div className="prompt-ac-wrap">
-      <textarea
+      <textarea readOnly={readOnly}
         ref={taRef}
         className={clsx("prompt-box", className)}
         value={value}
@@ -664,11 +670,12 @@ function OpusUsageDialog({ onClose }: { onClose: () => void }) {
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const usage = account.opusUsage;
   const remainingPercent = usage ? Math.min(100, Math.max(0, usage.isNegative ? 0 : usage.percent)) : 0;
-  const remainingImages = Math.round(17.3 * remainingPercent);
+  const params = useAppStore(state => state.params);
+  const remainingImages = estimateOpusImages(params, remainingPercent);
   const refillPercent = usage && usage.timeUntilNextPercent > 0
     ? Math.round((86_400 / usage.timeUntilNextPercent) * 10) / 10
     : 0;
-  const refillImages = Math.round(17.3 * refillPercent);
+  const refillImages = estimateOpusImages(params, refillPercent);
 
   const refresh = async () => {
     setRefreshing(true);
@@ -735,7 +742,11 @@ function QualityAndTransparencyControls({ compact = false }: { compact?: boolean
 
 // ── Advanced params modal ─────────────────────────────────────────────────────
 function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
-  const params = useAppStore((state) => state.params);
+  const storedParams = useAppStore(state => state.params);
+  const inpaintModel = useAppStore(state => state.inpaintModel);
+  const isInpaintPanel = useAppStore(state => state.activeTab) === "inpaint";
+  const mediumEffort = isNAIMediumEffort({ ...storedParams, model: isInpaintPanel ? inpaintModel : storedParams.model });
+  const params = effectiveNAIEffortParams({ ...storedParams, model: isInpaintPanel ? inpaintModel : storedParams.model });
   const setParam = useAppStore((state) => state.setParam);
   const settings = useAppStore((state) => state.settings);
   const t = useCallback((key: string) => desktopUiText(settings?.language, key), [settings?.language]);
@@ -749,17 +760,17 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
           <button aria-label={t("common.close")} onClick={onClose}><Icon name="close" /></button>
         </header>
         <div className="advanced-grid">
-          <NumberInput label={t("advanced.steps")} value={params.steps} min={1} max={50} onChange={(v) => setParam("steps", v)} />
+          {!mediumEffort && <NumberInput label={t("advanced.steps")} value={params.steps} disabled={mediumEffort} min={1} max={50} onChange={(v) => setParam("steps", v)} />}
           <NumberInput label={t("advanced.cfgScale")} value={params.cfgScale} min={1} max={10} step={0.1} onChange={(v) => setParam("cfgScale", Math.min(10, Math.max(1, v)))} />
-          <NumberInput label={t("advanced.cfgRescale")} value={params.cfgRescale} min={0} max={1} step={0.01} onChange={(v) => setParam("cfgRescale", v)} />
-          <label className="field">
+          {!mediumEffort && <NumberInput label={t("advanced.cfgRescale")} value={params.cfgRescale} disabled={mediumEffort} min={0} max={1} step={0.01} onChange={(v) => setParam("cfgRescale", v)} />}
+          {!mediumEffort && <label className="field">
             <span>{t("advanced.sampler")}</span>
-            <SelectMenuCompat value={params.sampler} onChange={(e) => setParam("sampler", e.target.value as GenerateParams["sampler"])}>
+            <SelectMenuCompat disabled={mediumEffort} value={params.sampler} onChange={(e) => setParam("sampler", e.target.value as GenerateParams["sampler"])}>
               {NAI_SAMPLERS.map((s) => (
                 <option value={s.value} key={s.value}>{localizedDesktopOptionLabel(settings?.language, s.value, s.label)}</option>
               ))}
             </SelectMenuCompat>
-          </label>
+          </label>}
           {supportsNAINoiseScheduleControl(params.model) && (
             <label className="field">
               <span>{t("advanced.noiseSchedule")}</span>
@@ -770,14 +781,14 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
               </SelectMenuCompat>
             </label>
           )}
-          <label className="field">
+          {!mediumEffort && <label className="field">
             <span>{t("advanced.ucPreset")}</span>
-            <SelectMenuCompat value={params.ucPreset} onChange={(e) => setParam("ucPreset", Number(e.target.value) as GenerateParams["ucPreset"])}>
+            <SelectMenuCompat disabled={mediumEffort} value={params.ucPreset} onChange={(e) => setParam("ucPreset", Number(e.target.value) as GenerateParams["ucPreset"])}>
               {NAI_UC_PRESETS.map((p) => (
                 <option value={p.value} key={p.value}>{localizedDesktopOptionLabel(settings?.language, p.value, p.label)}</option>
               ))}
             </SelectMenuCompat>
-          </label>
+          </label>}
         </div>
         <div className="toggle-list compact">
           <QualityAndTransparencyControls compact />
@@ -1136,6 +1147,9 @@ export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   const generateText = useMemo(() => getGeneratePanelText(language), [language]);
   const setCharCaptions = useAppStore(state=>state.setCharCaptions);
   const reorder = useCharacterReorder(charCaptions, setCharCaptions);
+  const inpaintModel = useAppStore(state => state.inpaintModel);
+  const activeTab = useAppStore(state => state.activeTab);
+  const characterMediumEffort = isNAIMediumEffort({...params,model:activeTab==="inpaint"?inpaintModel:params.model});
   const editText = characterEditLabels(language);
   const enabledText = characterEnabledLabels(language);
   const customPositions = charCaptions.some((caption) => caption.useCoords);
@@ -1286,7 +1300,7 @@ export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
                   className="char-prompt"
                   onChange={(prompt) => updateCharCaption(cc.id, { prompt })}
                 />
-                <label className="field">
+                {!characterMediumEffort && <><label className="field">
                   <span>{t("character.negative")}</span>
                   <PromptTextarea
                     value={cc.negativePrompt ?? ""}
@@ -1297,7 +1311,7 @@ export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
                     onChange={(negativePrompt) => updateCharCaption(cc.id, { negativePrompt })}
                   />
                 </label>
-                <NegativePromptLibraryControl value={cc.negativePrompt ?? ""} onApply={negativePrompt=>updateCharCaption(cc.id,{negativePrompt})}/>
+                <NegativePromptLibraryControl value={cc.negativePrompt ?? ""} onApply={negativePrompt=>updateCharCaption(cc.id,{negativePrompt})}/></>}
                 {cc.useCoords && (
                   <div className="char-coords" aria-label={t("character.exactPosition")}>
                     <NumberInput
@@ -1499,6 +1513,9 @@ export function PromptAndParams({
   const setI2ISizeMode = useAppStore((state) => state.setI2ISizeMode);
   const promptTab = useAppStore((state) => state.promptTab);
   const setPromptTab = useAppStore((state) => state.setPromptTab);
+  const inpaintModel = useAppStore(state => state.inpaintModel);
+  const mediumEffort = isNAIMediumEffort({ ...params, model: includeModel ? params.model : inpaintModel });
+  useEffect(() => { if (mediumEffort && promptTab === "negative") setPromptTab("positive"); }, [mediumEffort, promptTab, setPromptTab]);
   const vibeImages = useAppStore((state) => state.vibeImages);
   const preciseRefCount = useAppStore((state) => state.preciseReferences.length);
   const charCaptions = useAppStore((state) => state.charCaptions);
@@ -2048,6 +2065,7 @@ export function PromptAndParams({
           </SelectMenuCompat>
         </div>
       )}
+      {includeModel && <EffortControl model={params.model} value={params.effort ?? "high"} language={settings?.language} onChange={value => setParam("effort", value)} />}
       <label className="field">
         <span className="field-label-row">
           {generateText.prompt.stylePrompt}
@@ -2227,9 +2245,9 @@ export function PromptAndParams({
         <button className={clsx(promptTab === "positive" && "active")} onClick={() => setPromptTab("positive")}>
           {generateText.prompt.positivePrompt}
         </button>
-        <button className={clsx(promptTab === "negative" && "active")} onClick={() => setPromptTab("negative")}>
+        {!mediumEffort && <button className={clsx(promptTab === "negative" && "active")} onClick={() => setPromptTab("negative")}>
           {generateText.prompt.negativePrompt}
-        </button>
+        </button>}
 
       </div>
       <div className="prompt-editor" onKeyDownCapture={e=>{
@@ -2241,7 +2259,8 @@ export function PromptAndParams({
       }}>
       <PromptTextarea
         value={promptValue}
-        onChange={(v) => promptHistory.commit(v,true)}
+        readOnly={promptTab === "negative" && mediumEffort}
+        onChange={(v) => { if (promptTab !== "negative" || !mediumEffort) promptHistory.commit(v,true); }}
         model={params.model}
         enabled={settings?.autoComplete ?? true}
         placeholder={promptTab === "positive" ? generateText.prompt.positivePlaceholder : generateText.prompt.negativePlaceholder}
@@ -2604,6 +2623,8 @@ function FeatureCostCard({
     sizeOverride, i2iOverride,
     feature,
     model: params.model,
+    effort: params.effort,
+    opusUsage: account.opusUsage,
     width: params.width,
     height: params.height,
     steps: params.steps,
@@ -2743,6 +2764,8 @@ function FeatureCostCard({
       <small className="cost-balance">
         {f("cost.balance", { balance: balance ?? t("common.unknown") })}{account.stale ? t("cost.cached") : ""} · {actualText}
         {quote?.insufficient ? t("cost.insufficient") : ""}
+        {feature === "generate" && quote?.amount === 0 && isNAIV5Model(params.model) && estimateOpusUsagePercent(params, batchCount) != null && <span className="effort-usage-estimate"> · V5 ≈{estimateOpusUsagePercent(params, batchCount)!.toFixed(3)}% · {effortText(language).remaining}: ≈{estimateOpusImages(params, account.opusUsage?.isNegative ? 0 : account.opusUsage?.percent ?? 0)}</span>}
+        {feature === "generate" && quote?.ok && quote.amount != null && quote.amount > 0 && balance != null && <span className="effort-paid-remaining"> · {effortText(language).remaining}: ≈{Math.floor(balance / (quote.amount / batchCount))}</span>}
       </small>
     </div>
   );
@@ -3129,11 +3152,12 @@ function AccountAndRunButton({
   const usagePercent = account.opusUsage
     ? Math.round(Math.min(100, Math.max(0, account.opusUsage.isNegative ? 0 : account.opusUsage.percent)) * 10) / 10
     : null;
-  const remainingImages = usagePercent === null ? null : Math.round(17.3 * usagePercent);
+  const params = useAppStore(state => state.params);
+  const remainingImages = usagePercent === null ? null : estimateOpusImages(params, usagePercent);
   const refillPercent = account.opusUsage && account.opusUsage.timeUntilNextPercent > 0
     ? Math.round((86_400 / account.opusUsage.timeUntilNextPercent) * 10) / 10
     : null;
-  const refillImages = refillPercent === null ? null : Math.round(17.3 * refillPercent);
+  const refillImages = refillPercent === null ? null : estimateOpusImages(params, refillPercent);
   async function refreshBalance() {
     setRefreshingAccount(true);
     try {
@@ -3423,6 +3447,7 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
 
 // ── Inpaint panel ─────────────────────────────────────────────────────────────
 export function InpaintPanel({ openSettings }: { openSettings: () => void }) {
+  const effort = useAppStore(state => state.params.effort);
   const language = useAppStore((state) => state.settings?.language);
   const inpaintSourceMode = useAppStore((state) => state.inpaintSourceMode);
   const setInpaintSourceMode = useAppStore((state) => state.setInpaintSourceMode);
@@ -3473,6 +3498,7 @@ export function InpaintPanel({ openSettings }: { openSettings: () => void }) {
             ))}
           </SelectMenuCompat>
         </label>
+        <EffortControl model={inpaintModel} value={effort ?? "high"} language={language} onChange={value => useAppStore.getState().setParam("effort", value)} />
         <Button
           className="full"
           variant="ghost"
@@ -6440,6 +6466,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
                 <div className="tag-server-card">
                   <p className="settings-hint" style={{ margin: 0 }}>{t("settings.translateHint")}</p>
+                  <Toggle checked={settings.translateRealtime===true} onChange={value=>void update("translateRealtime",value)} label={translationEditorText(settings.language).live} description={translationEditorText(settings.language).liveHint}/>
                   <SelectMenu value={normalizeTranslationPreference(settings.translateTargetLanguage)} options={[{value:'system',label:translationText(settings.language).system},...TRANSLATION_LANGUAGES]} label={translationText(settings.language).target} ariaLabel={translationText(settings.language).target} onChange={value=>void update('translateTargetLanguage',value)}/>
 
                   <label className="field">
@@ -7170,6 +7197,12 @@ function MainPage() {
   useEffect(() => {
     const captureSurface = uiCaptureParams.get("uiCapture");
     if (captureSurface) useAppStore.getState().setShowOnboarding(false);
+    if (captureSurface === "effort") {
+      const store=useAppStore.getState();
+      store.setParam("model", "nai-diffusion-5-full"); store.setParam("effort", "high"); store.setParam("steps", 23); store.setParam("sampler", "k_euler"); store.setParam("cfgRescale", .4); store.setParam("negativePrompt", "EFFORT_PRESERVED_HIGH_NEGATIVE");
+      store.setBatchCount(3);
+      useAppStore.setState({account:{hasToken:true,tierLevel:3,anlasBalance:1000,opusUsage:{percent:50,isNegative:false,timeUntilNextPercent:3600}}});
+    }
     if (captureSurface === "opusUsage" || captureSurface === "opusInline") {
       useAppStore.setState({
         account: {

@@ -1,7 +1,7 @@
 import type { AgentEvent, AgentToolBridgeResponse } from '../../src/agent/types';
 import { calculateImageGenerationAnlas } from '../../src/anlas';
 import { buildAgentGenerationInput } from '../../src/agent/generation-input';
-import { DEFAULT_PARAMS } from '../../src/types';
+import { DEFAULT_PARAMS, effectiveNAIEffortParams } from '../../src/types';
 import { retainedPrompts } from '../../src/retained-prompts';
 import { AGENT_READ_TOOLS, AGENT_MUTATING_TOOLS, executeAgentTool } from './agent-tools';
 import { compatibleAgentInput } from './agent-image-provider';
@@ -42,8 +42,9 @@ function generationPreview(args: Record<string, unknown>): StudioGenerationPrevi
   const advanced = vibeReferences !== undefined || preciseReferences !== undefined || characterPrompts !== undefined;
   const relay=currentNaiAccount()?.method==='relay';
   const quote = advanced || relay ? null : calculateImageGenerationAnlas({ params, account: getAccountSummary(), batchCount: count });
-  return { positivePrompt: params.positivePrompt, model: params.model,
-    width: params.width, height: params.height, steps: params.steps, count,
+  const effective = effectiveNAIEffortParams(params);
+  return { positivePrompt: params.positivePrompt, model: effective.model, effort: params.effort ?? 'high',
+    width: params.width, height: params.height, steps: effective.steps, count,
     imageProvider: 'novelai', estimatedAnlas: quote?.amount ?? null,
     estimateSource: advanced || relay ? 'provider-unknown' : 'local-estimate',
     warning: relay ? '中转站计费未经确认，官方 Anlas 估算不适用；请核对站点收费，确认后才提交。' : advanced ? '包含高级参考参数，无法可靠估价；可能消耗 Anlas。' : '本地估算并非实际扣费；最终以 NovelAI 为准。' };
@@ -59,7 +60,7 @@ const descriptions: Record<string, string> = {
   langbai_templates:'管理与设置页共用的提示词模板，读取 revision 后可选择/保存/恢复。参数 args={action:read|select|save|restore,kind?,mode?,templateVersion?,expectedRevision?,body?}。修改要确认并备份。',
   langbai_edit_prompt:'使用用户在软件设置保存的优化/助手模板编辑提示词，不生成图片。参数 args={kind:optimize|custom,currentPrompt:string,instruction?:string,mode?:mixed|tags|natural,templateVersion?:v5|v4.5}；模型服务可能收费，需用户确认。',
   langbai_get_generation_state: '读取当前 NovelAI 生图模型、参数、风格和服务配置；生图前先调用。参数 args={}。',
-  langbai_prepare_generation: '免费准备一次生图：冻结提示词、模型、尺寸、次数与费用估算，返回 preparationId；不会发起生图。参数 args={positivePrompt:string,count?:number,model?:string,width?:number,height?:number}。生图前必须调用。',
+  langbai_prepare_generation: '免费准备一次生图：冻结提示词、模型、尺寸、次数与费用估算，返回 preparationId；不会发起生图。参数 args={positivePrompt:string,count?:number,model?:string,effort?:medium|high,width?:number,height?:number}。默认跟随当前生成页 Effort；V5 Full Medium 固定14步/Euler Ancestral，不接受自定义负面和 CFG Rescale。改变档位不改变 count。生图前必须调用。',
   langbai_search_tags: '查询可用于 NovelAI 的标签。参数 args={query:string,limit?:number}。',
   langbai_search_artist_styles: '查询画师和风格。参数 args={query?:string,limit?:number}。',
   langbai_search_online_gallery: '搜索公开画廊。参数 args={source:string,query:string,page?:number}。',

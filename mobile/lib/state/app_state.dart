@@ -837,6 +837,14 @@ class AppState extends ChangeNotifier {
     } finally { _naiOperationCount--; notifyListeners(); }
   }
 
+  // Preview requests are local drafts; they must not lock the whole workspace.
+  Future<AiTextResult> translatePreviewText(String text,
+          {String? target, String? sourceLanguage}) async =>
+      api.translateText(text, settings,
+          target: target,
+          sourceLanguage: sourceLanguage,
+          baiduSecret: await storage.getBaiduSecret() ?? '');
+
   Future<String?> translateText(String text, {String? target}) async {
     busy = true;
     status = _rt('status.translating');

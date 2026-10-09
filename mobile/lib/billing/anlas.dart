@@ -81,7 +81,7 @@ AnlasQuote calculateImageGenerationAnlas({
   final width = max(1, size.width);
   final height = max(1, size.height);
   final pixels = max(width * height, 65536);
-  final steps = max(1, params.steps);
+  final steps = max(1, params.effectiveEffort().steps);
   final normalizedStrength = imageToImage ? strength.clamp(0, 1) : 1.0;
   final v4Plus = params.isV4Plus;
   final vibeCount =
@@ -94,7 +94,8 @@ AnlasQuote calculateImageGenerationAnlas({
       !imageToImage &&
       activeOpus &&
       pixels <= _opusFreeMaxPixels &&
-      steps <= 28;
+       steps <= 28 &&
+       (!params.isV5 || account?.opusUsage?.isNegative != true && (account?.opusUsage?.percent ?? 100) > 0);
 
   var basePerSample = 0;
   if (opusFree) {
@@ -106,11 +107,11 @@ AnlasQuote calculateImageGenerationAnlas({
             ? 1.2
             : 1.0;
     final officialBase = (_basePixelCoefficient * pixels +
-            _stepPixelCoefficient * pixels * steps)
+            _stepPixelCoefficient * pixels * steps * (params.isMediumEffort ? 1 / 1.06521739 : 1))
         .ceil();
     basePerSample = min(
       140,
-      max(2, (officialBase * smeaMultiplier * normalizedStrength).ceil()),
+      max(2, (officialBase * smeaMultiplier * (params.isV5 ? 1.5 : 1) * normalizedStrength).ceil()),
     );
     details.add(
       _af(language, 'anlas.baseCost', {'amount': basePerSample}),
@@ -286,4 +287,12 @@ AnlasQuote calculateDirectorAnlas({
           : _at(language, 'anlas.directorBgRemovalDetail'),
     ],
   );
+}
+
+int estimateOpusImages(GenerateParams params, double percent) {
+  if (!params.isV5 || !percent.isFinite || params.width * params.height > 1048576 || params.effectiveEffort().steps > 28) return 0;
+  final benchmarkParams = params.copy()..model = 'nai-diffusion-5-full'..effort = 'high'..width = 1024..height = 1024..steps = 23;
+  final benchmark = calculateImageGenerationAnlas(params: benchmarkParams, forcePaid: true).amount ?? 26;
+  final unit = calculateImageGenerationAnlas(params: params, forcePaid: true).amount ?? benchmark;
+  return max(0, (17.3 * percent.clamp(0, 100) * benchmark / max(1, unit)).floor());
 }

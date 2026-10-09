@@ -1179,8 +1179,8 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   ipcMain.handle("resource-database:related-tags", (_event, tags: string[], limit?: number) =>
     relatedResourceTags(Array.isArray(tags) ? tags : [], limit),
   );
-  accountBoundHandle("nai:translate", (_event, text: string, target?: string) =>
-    translateText(text, target),
+  accountBoundHandle("nai:translate", (_event, text: string, target?: string, sourceLanguage?: string) =>
+    translateText(text, target, sourceLanguage),
   );
   accountBoundHandle("nai:cancel", () => cancelGeneration());
 

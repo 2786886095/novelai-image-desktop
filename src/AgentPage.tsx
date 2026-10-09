@@ -1,3 +1,5 @@
+import { supportsNAIMediumEffort } from "./types";
+import { EffortControl } from "./components/EffortControl";
 import { compatibleProposalHint } from "./tavern/compatible-proposal";
 import {useDisclosurePresence, disclosureAttributes} from "./components/disclosure-motion";
 import {AnimatedCollapse} from './components/CharacterEditing';
@@ -499,6 +501,7 @@ export default function AgentPage() {
     ?? workspace?.personas[0], [conversation, workspace]);
   const imageRuntime = useMemo(() => ({
     model: activeCharacter?.visual.model || params.model,
+    effort: activeCharacter?.visual.effort ?? params.effort ?? "high",
     width: activeCharacter?.visual.width ?? params.width,
     height: activeCharacter?.visual.height ?? params.height,
     steps: activeCharacter?.visual.steps ?? params.steps,
@@ -875,6 +878,7 @@ export default function AgentPage() {
         steps: activeCharacter.visual.steps ?? params.steps,
         scale: activeCharacter.visual.scale ?? params.cfgScale,
         sampler: activeCharacter.visual.sampler || params.sampler,
+        effort: activeCharacter.visual.effort ?? params.effort ?? "high",
         count: activeCharacter.visual.count ?? 1,
       } : undefined;
       const result = await window.naiDesktop.sendAgentMessage({ conversationId: conversation.id, text, characterId: activeCharacter?.id, imageDefaults, ...(sceneRequest !== undefined ? {attachmentIds: []} : {}) });
@@ -908,6 +912,7 @@ export default function AgentPage() {
           steps: activeCharacter.visual.steps ?? params.steps,
           scale: activeCharacter.visual.scale ?? params.cfgScale,
           sampler: activeCharacter.visual.sampler || params.sampler,
+        effort: activeCharacter.visual.effort ?? params.effort ?? "high",
           count: activeCharacter.visual.count ?? 1,
         } : undefined,
       });
@@ -1871,7 +1876,7 @@ export function ImageProposalCard({ proposal, onOpenScene, autoMode, setProposal
             {!compatible && <>
             <Field label={tx("widthShort")}><NumericField readOnly={busy} label={tx("widthShort")} value={proposal.width ?? 1024} min={64} max={49152} onCommit={(value) => setProposal({ ...proposal, width: Math.round(value) })} /></Field>
             <Field label={tx("heightShort")}><NumericField readOnly={busy} label={tx("heightShort")} value={proposal.height ?? 1024} min={64} max={49152} onCommit={(value) => setProposal({ ...proposal, height: Math.round(value) })} /></Field>
-            <Field label={tx("steps")}><NumericField readOnly={busy} label={tx("steps")} value={proposal.steps ?? 28} min={1} max={50} onCommit={(value) => setProposal({ ...proposal, steps: Math.round(value) })} /></Field>
+{proposal.effort !== "medium" && <Field label={tx("steps")}><NumericField readOnly={busy} label={tx("steps")} value={proposal.steps ?? 28} min={1} max={50} onCommit={(value) => setProposal({ ...proposal, steps: Math.round(value) })} /></Field>}
             <Field label="CFG"><NumericField readOnly={busy} label="CFG" value={proposal.scale ?? 5} min={0} max={10} step={0.1} onCommit={(value) => setProposal({ ...proposal, scale: value })} /></Field>
             </>}
             <Field label={tx("imageCount")}><NumericField readOnly={busy} label={tx("imageCount")} value={proposal.count} min={1} max={8} onCommit={(value) => setProposal({ ...proposal, count: Math.round(value) })} /></Field>
@@ -2308,7 +2313,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
   workspace: AgentWorkspaceData;
   conversation?: AgentConversation;
   character?: TavernCharacter;
-  defaults: Pick<GenerateParams, "model" | "width" | "height" | "steps" | "cfgScale" | "sampler">;
+  defaults: Pick<GenerateParams, "model" | "width" | "height" | "steps" | "cfgScale" | "sampler" | "effort">;
   stylePresets: StylePromptPreset[];
   onSaveStylePreset: (prompt: string) => Promise<void>;
   onRefreshSettings: () => Promise<void>;
@@ -2331,6 +2336,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
   const lastAssistant = [...(conversation?.messages ?? [])].reverse().find((item) => item.role === "assistant" && item.status === "complete");
   const runtime = {
     model: character?.visual.model || defaults.model,
+    effort: character?.visual.effort ?? defaults.effort ?? "high",
     width: character?.visual.width ?? defaults.width,
     height: character?.visual.height ?? defaults.height,
     steps: character?.visual.steps ?? defaults.steps,
@@ -2340,6 +2346,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
     negativePrompt: character?.visual.negativePrompt ?? "",
     stylePrompt: character?.visual.stylePrompt ?? "",
   };
+  const mediumEffort = supportsNAIMediumEffort(runtime.model) && runtime.effort === "medium";
   const sizePresets = [
     { label: tx("square"), width: 1024, height: 1024 },
     { label: tx("landscape"), width: 1216, height: 832 },
@@ -2486,6 +2493,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
               steps: defaults.steps,
               scale: defaults.cfgScale,
               sampler: defaults.sampler,
+              effort: defaults.effort ?? "high",
               count: 1,
             })}><RefreshIcon />{tx("syncDefaults")}</button>
           </header>
@@ -2494,6 +2502,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
               {NAI_MODELS.map((model) => <option key={model.value} value={model.value}>{model.label}</option>)}
             </SelectMenuCompat>
           </Field>
+          <EffortControl model={runtime.model} value={runtime.effort} language={language} onChange={effort => updateVisual({effort})} />
           <section className="tavern-user-prompt-settings" onBlurCapture={flushUserPromptDraft}>
             <header><div><strong>{tx("userPromptSettings")}</strong><small>{tx("userPromptHint")}</small></div></header>
             <Field label={tx("stylePrompt")}>
@@ -2571,7 +2580,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
                 ) : null}
               </div>
             ), document.body) : null}
-            <Field label={tx("negativePrompt")}>
+            {!mediumEffort && <><Field label={tx("negativePrompt")}>
               <textarea
               rows={5}
               value={userPromptDraft.negative}
@@ -2581,7 +2590,7 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
             <button type="button" className="tavern-reset-negative" onClick={() => {
               editUserPromptDraft("negative", DEFAULT_TAVERN_NEGATIVE_PROMPT);
               updateVisual({ negativePrompt: DEFAULT_TAVERN_NEGATIVE_PROMPT });
-            }}><RefreshIcon />{tx("restoreNegative")}</button>
+            }}><RefreshIcon />{tx("restoreNegative")}</button></>}
           </section>
           <div className="tavern-size-groups" aria-label={tx("commonSizes")}>
             {sizeGroups.map((group) => <section key={group.label}>
@@ -2603,15 +2612,15 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
           <div className="tavern-image-parameter-grid">
             <Field label={tx("width")}><NumericField label={tx("imageWidth")} value={runtime.width} min={64} max={4096} step={64} onCommit={(width) => updateVisual({ width })} /></Field>
             <Field label={tx("height")}><NumericField label={tx("imageHeight")} value={runtime.height} min={64} max={4096} step={64} onCommit={(height) => updateVisual({ height })} /></Field>
-            <Field label={tx("steps")}><NumericField label={tx("steps")} value={runtime.steps} min={1} max={50} onCommit={(steps) => updateVisual({ steps })} /></Field>
+            {!mediumEffort && <Field label={tx("steps")}><NumericField label={tx("steps")} value={runtime.steps} min={1} max={50} onCommit={(steps) => updateVisual({ steps })} /></Field>}
             <Field label="CFG Scale"><NumericField label="CFG Scale" value={runtime.scale} min={0} max={10} step={0.1} onCommit={(scale) => updateVisual({ scale })} /></Field>
             <Field label={tx("imageCount")}><NumericField label={tx("imageCount")} value={runtime.count} min={1} max={8} onCommit={(count) => updateVisual({ count })} /></Field>
           </div>
-          <Field label={tx("sampler")}>
+          {!mediumEffort && <Field label={tx("sampler")}>
             <SelectMenuCompat value={runtime.sampler} onChange={(event) => updateVisual({ sampler: event.target.value })}>
               {NAI_SAMPLERS.map((sampler) => <option key={sampler.value} value={sampler.value}>{sampler.label}</option>)}
             </SelectMenuCompat>
-          </Field>
+          </Field>}
           <p className="tavern-parameter-chat-hint"><MessageIcon /><span>{tx("chatAdjustHint")}</span></p>
         </section>
       ) : null}

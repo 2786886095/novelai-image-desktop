@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../prompts/translation.dart';
+import '../prompts/translation_session.dart';
 import '../ui/studio_dropdown.dart';
 
 class TranslationPreviewDialog extends StatefulWidget {
@@ -18,9 +19,10 @@ class TranslationPreviewDialog extends StatefulWidget {
 class _TranslationPreviewDialogState extends State<TranslationPreviewDialog> {
   late final TextEditingController sourceController;
   final resultController = TextEditingController();
-  bool busy = false, saving = false;
-  String error = '', notice = '';
-  String? previewTarget, previewSource;
+  late AppState app;
+  late TranslationSession session;
+  bool initialized = false, saving = false, syncing = false;
+  String localError = '', notice = '';
   @override
   void initState() {
     super.initState();
@@ -28,67 +30,140 @@ class _TranslationPreviewDialogState extends State<TranslationPreviewDialog> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (initialized) return;
+    initialized = true;
+    app = context.read<AppState>();
+    session = TranslationSession(
+        widget.source,
+        resolveTranslationTarget(
+            app.settings.translateTargetLanguage, app.settings.language),
+        (source, to, from) async {
+      final reply = await app.translatePreviewText(source,
+          target: to, sourceLanguage: from);
+      return TranslationReply(
+          ok: reply.ok,
+          text: reply.text,
+          error: reply.message,
+          sourceLanguage: reply.sourceLanguage);
+    },
+        live: app.settings.translateRealtime,
+        sourceLanguage: app.settings.translateSourceLanguage);
+    session.addListener(_changed);
+    sourceController.addListener(_sourceChanged);
+    resultController.addListener(_resultChanged);
+    app.addListener(_settingsChanged);
+    session.start();
+  }
+
+  void _settingsChanged() {
+    if (!mounted || saving) return;
+    session.setLive(app.settings.translateRealtime);
+    session.setLanguages(
+        app.settings.translateSourceLanguage,
+        resolveTranslationTarget(
+            app.settings.translateTargetLanguage, app.settings.language));
+  }
+
+  void _sync(TextEditingController controller, String text) {
+    if (controller.text != text) {
+      controller.value = TextEditingValue(
+          text: text, selection: TextSelection.collapsed(offset: text.length));
+    }
+  }
+
+  void _changed() {
+    if (!mounted) return;
+    syncing = true;
+    _sync(sourceController, session.source);
+    _sync(resultController, session.result);
+    syncing = false;
+    setState(() {});
+  }
+
+  bool _composing(TextEditingController c) =>
+      c.value.composing.isValid && !c.value.composing.isCollapsed;
+  void _sourceChanged() {
+    if (syncing) return;
+    notice = '';
+    localError = '';
+    session.setComposing(_composing(sourceController));
+    if (sourceController.text != session.source) {
+      session.editSource(sourceController.text);
+    }
+  }
+
+  void _resultChanged() {
+    if (syncing) return;
+    notice = '';
+    localError = '';
+    session.setComposing(_composing(resultController), scheduleOnEnd: false);
+    if (resultController.text != session.result) {
+      session.editResult(resultController.text);
+    }
+  }
+
+  @override
   void dispose() {
+    if (initialized) {
+      app.removeListener(_settingsChanged);
+      session.dispose();
+    }
     sourceController.dispose();
     resultController.dispose();
     super.dispose();
   }
 
-  Future<void> _changeTarget(String value) async {
-    if (busy || saving) return;
-    final state = context.read<AppState>();
+  Future<void> _persist(String from, String to) async {
     setState(() {
       saving = true;
-      resultController.clear();
-      previewSource = null;
-      error = '';
+      localError = '';
       notice = '';
     });
     try {
-      await state.setSettings((s) =>
-          s.translateTargetLanguage = normalizeTranslationPreference(value));
+      await app.setSettings((s) {
+        s.translateSourceLanguage = from;
+        s.translateTargetLanguage = normalizeTranslationPreference(to);
+      });
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) {
+        session.setLanguages(
+            app.settings.translateSourceLanguage,
+            resolveTranslationTarget(
+                app.settings.translateTargetLanguage, app.settings.language));
+        setState(() => localError = '$e');
+      }
     } finally {
       if (mounted) setState(() => saving = false);
     }
   }
 
-  Future<void> _run(String target) async {
-    if (busy || saving || widget.source.trim().isEmpty) return;
-    final state = context.read<AppState>(), source = widget.source;
+  Future<void> _changeLive(bool value) async {
+    final previous = session.live;
     setState(() {
-      busy = true;
-      error = '';
+      saving = true;
+      localError = '';
       notice = '';
-      resultController.clear();
-      previewSource = null;
     });
     try {
-      final result = await state.translateText(source, target: target);
-      if (!mounted) return;
-      if (result == null || result.trim().isEmpty) {
-        setState(() => error = state.status);
-        return;
-      }
-      setState(() {
-        resultController.text = result.trim();
-        previewSource = source;
-        previewTarget = target;
-      });
+      await session.persistLive(value,
+          (enabled) => app.setSettings((s) => s.translateRealtime = enabled));
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      // setSettings mutates in memory before storage; restore that value too.
+      app.settings.translateRealtime = previous;
+      if (mounted) setState(() => localError = '$e');
     } finally {
-      if (mounted) setState(() => busy = false);
+      if (mounted) setState(() => saving = false);
     }
   }
 
   Future<void> _copy(Map<String, String> text) async {
     try {
-      await Clipboard.setData(ClipboardData(text: resultController.text));
+      await Clipboard.setData(ClipboardData(text: session.result));
       if (mounted) setState(() => notice = text['copied']!);
     } catch (_) {
-      if (mounted) setState(() => error = text['copyFailed']!);
+      if (mounted) setState(() => localError = text['copyFailed']!);
     }
   }
 
@@ -100,25 +175,80 @@ class _TranslationPreviewDialogState extends State<TranslationPreviewDialog> {
             height: 180,
             child: TextField(
                 controller: controller,
-                readOnly: true,
                 maxLines: null,
                 expands: true,
-                decoration:
-                    const InputDecoration(border: OutlineInputBorder())))
+                decoration: InputDecoration(
+                    labelText: label, border: const OutlineInputBorder())))
       ]);
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>(),
-        text = translationText(state.settings.language);
-    final preference = normalizeTranslationPreference(
-            state.settings.translateTargetLanguage),
-        target = resolveTranslationTarget(preference, state.settings.language);
-    final hasPreview = previewSource != null;
-    final stale = hasPreview &&
-        (previewSource != widget.source ||
-            !widget.isCurrent(previewSource!) ||
-            previewTarget != target);
-    final canApply = hasPreview && !busy && !saving && !stale;
+        text = translationText(state.settings.language),
+        editor = translationEditorText(state.settings.language);
+    final target = resolveTranslationTarget(
+        state.settings.translateTargetLanguage, state.settings.language);
+    final preference = session.target == target
+        ? normalizeTranslationPreference(state.settings.translateTargetLanguage)
+        : session.target;
+    final stale = !widget.isCurrent(widget.source);
+    final canApply = session.valid &&
+        session.result.trim().isNotEmpty &&
+        !session.busy &&
+        !session.composing &&
+        !saving &&
+        !stale;
+    final sourceMenu = StudioDropdownButtonFormField<String>(
+        value: session.sourceLanguage,
+        isExpanded: true,
+        decoration: InputDecoration(
+            labelText: editor['sourceLanguage'],
+            border: const OutlineInputBorder()),
+        items: [
+          DropdownMenuItem(value: 'auto', child: Text(editor['auto']!)),
+          ...translationLanguages.map(
+              (l) => DropdownMenuItem(value: l.value, child: Text(l.label)))
+        ],
+        onChanged: saving
+            ? null
+            : (v) {
+                if (v != null) {
+                  session.setLanguages(v, session.target);
+                  _persist(v, state.settings.translateTargetLanguage);
+                }
+              });
+    final targetMenu = StudioDropdownButtonFormField<String>(
+        value: preference,
+        isExpanded: true,
+        decoration: InputDecoration(
+            labelText: text['target'], border: const OutlineInputBorder()),
+        items: [
+          DropdownMenuItem(
+              value: 'system',
+              child: Text(
+                  '${text['system']} (${translationLanguages.firstWhere((l) => l.value == target).label})')),
+          ...translationLanguages.map(
+              (l) => DropdownMenuItem(value: l.value, child: Text(l.label)))
+        ],
+        onChanged: saving
+            ? null
+            : (v) {
+                if (v != null) {
+                  session.setLanguages(session.sourceLanguage,
+                      resolveTranslationTarget(v, state.settings.language));
+                  _persist(session.sourceLanguage, v);
+                }
+              });
+    final swap = IconButton(
+        tooltip: session.canSwap ? editor['swap'] : editor['selectSource'],
+        onPressed: !session.canSwap || saving
+            ? null
+            : () {
+                if (session.swap()) {
+                  _persist(session.sourceLanguage, session.target);
+                }
+              },
+        icon: Semantics(
+            label: editor['swap'], child: const Icon(Icons.swap_horiz)));
     return Dialog(
         child: ConstrainedBox(
             constraints: BoxConstraints(
@@ -142,35 +272,33 @@ class _TranslationPreviewDialogState extends State<TranslationPreviewDialog> {
                       child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            StudioDropdownButtonFormField<String>(
-                                value: preference,
-                                isExpanded: true,
-                                decoration: InputDecoration(
-                                    labelText: text['target'],
-                                    border: const OutlineInputBorder()),
-                                items: [
-                                  DropdownMenuItem(
-                                      value: 'system',
-                                      child: Text(
-                                          '${text['system']} (${translationLanguages.firstWhere((l) => l.value == target).label})')),
-                                  ...translationLanguages.map((l) =>
-                                      DropdownMenuItem(
-                                          value: l.value, child: Text(l.label)))
-                                ],
-                                onChanged: busy || saving
-                                    ? null
-                                    : (v) {
-                                        if (v != null) _changeTarget(v);
-                                      }),
+                            LayoutBuilder(
+                                builder: (context, c) => c.maxWidth >= 600
+                                    ? Row(children: [
+                                        Expanded(child: sourceMenu),
+                                        swap,
+                                        Expanded(child: targetMenu)
+                                      ])
+                                    : Column(children: [
+                                        sourceMenu,
+                                        swap,
+                                        targetMenu
+                                      ])),
                             const SizedBox(height: 12),
+                            SwitchListTile(
+                                key: const ValueKey('translation-live-toggle'),
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(editor['live']!),
+                                value: session.live,
+                                onChanged: saving ? null : _changeLive),
                             Text(text['hint']!),
                             const SizedBox(height: 16),
-                            LayoutBuilder(builder: (context, constraints) {
+                            LayoutBuilder(builder: (context, c) {
                               final source =
                                       _field(text['source']!, sourceController),
                                   result =
                                       _field(text['result']!, resultController);
-                              return constraints.maxWidth >= 600
+                              return c.maxWidth >= 600
                                   ? Row(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
@@ -185,7 +313,7 @@ class _TranslationPreviewDialogState extends State<TranslationPreviewDialog> {
                                       result
                                     ]);
                             }),
-                            if (busy)
+                            if (session.busy)
                               Padding(
                                   padding: const EdgeInsets.only(top: 12),
                                   child: Text(text['busy']!)),
@@ -193,10 +321,17 @@ class _TranslationPreviewDialogState extends State<TranslationPreviewDialog> {
                               Padding(
                                   padding: const EdgeInsets.only(top: 12),
                                   child: Text(notice)),
-                            if (error.isNotEmpty)
+                            if (localError.isNotEmpty ||
+                                session.error.isNotEmpty)
                               Padding(
                                   padding: const EdgeInsets.only(top: 12),
-                                  child: Text(error,
+                                  child: Text(
+                                      localError.isNotEmpty
+                                          ? localError
+                                          : session.error ==
+                                                  'TRANSLATION_FAILED'
+                                              ? text['failed']!
+                                              : session.error,
                                       style: TextStyle(
                                           color: Theme.of(context)
                                               .colorScheme
@@ -221,22 +356,31 @@ class _TranslationPreviewDialogState extends State<TranslationPreviewDialog> {
                             onPressed: () => Navigator.pop(context),
                             child: Text(text['cancel']!)),
                         OutlinedButton(
-                            onPressed:
-                                busy || saving || widget.source.trim().isEmpty
-                                    ? null
-                                    : () => _run(target),
-                            child: Text(text[hasPreview ? 'retry' : 'run']!)),
+                            onPressed: session.busy ||
+                                    session.composing ||
+                                    saving ||
+                                    session.source.trim().isEmpty
+                                ? null
+                                : () {
+                                    setState(() {
+                                      notice = '';
+                                      localError = '';
+                                    });
+                                    session.translate();
+                                  },
+                            child: Text(text[
+                                session.result.isEmpty ? 'run' : 'retry']!)),
                         OutlinedButton(
                             onPressed: canApply ? () => _copy(text) : null,
                             child: Text(text['copy']!)),
                         FilledButton(
                             onPressed: canApply
                                 ? () {
-                                    if (widget.isCurrent(previewSource!)) {
-                                      Navigator.pop(
-                                          context, resultController.text);
+                                    if (widget.isCurrent(widget.source)) {
+                                      Navigator.pop(context, session.result);
                                     } else {
-                                      setState(() => error = text['stale']!);
+                                      setState(
+                                          () => localError = text['stale']!);
                                     }
                                   }
                                 : null,

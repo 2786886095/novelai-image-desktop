@@ -29,6 +29,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../billing/anlas.dart';
+import '../ui/effort_control.dart';
 import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../prompts/capsule_data.dart';
@@ -180,11 +181,11 @@ Future<void> _showOpusUsageDialog(BuildContext context) async {
         final percent = usage == null
             ? 0.0
             : (usage.isNegative ? 0.0 : usage.percent.clamp(0, 100).toDouble());
-        final images = (17.3 * percent).round();
+        final images = estimateOpusImages(state.params, percent);
         final refill = usage != null && usage.timeUntilNextPercent > 0
             ? (86400 / usage.timeUntilNextPercent * 10).round() / 10
             : 0.0;
-        final refillImages = (17.3 * refill).round();
+        final refillImages = estimateOpusImages(state.params, refill);
         final officialSyncOk =
             !state.account.stale && state.account.opusUsageUpdatedAt != null;
         return AlertDialog(
@@ -335,7 +336,7 @@ class GenerateScreen extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 12),
-      PromptEditor(
+      if (!p.isMediumEffort) PromptEditor(
         label: text.negativePrompt,
         value: p.negativePrompt,
         maxLines: 3,
@@ -2513,10 +2514,11 @@ class _ParamControls extends StatelessWidget {
               v == null ? null : state.setParam((x) => x.model = v),
         ),
         const SizedBox(height: 12),
+        EffortControl(model: p.model, value: p.effort, language: language, onChanged: (value) => state.setParam((x) => x.effort = value)),
         const GenerationSizeControls(),
         const SizedBox(height: 12),
-        StudioDropdownButtonFormField<String>(
-          value: p.sampler,
+        if (!p.isMediumEffort) StudioDropdownButtonFormField<String>(
+          value: p.isMediumEffort ? 'k_euler_ancestral' : p.sampler,
           decoration: InputDecoration(
               labelText: text.sampler, border: const OutlineInputBorder()),
           isExpanded: true,
@@ -2527,16 +2529,16 @@ class _ParamControls extends StatelessWidget {
                       localizedNaiOptionLabel(language, s.value, s.label))))
               .toList(),
           onChanged: (v) =>
-              v == null ? null : state.setParam((x) => x.sampler = v),
+              v == null || p.isMediumEffort ? null : state.setParam((x) => x.sampler = v),
         ),
-        _Slider(
+        if (!p.isMediumEffort) _Slider(
             label: 'Steps',
-            value: p.steps.toDouble(),
+            value: p.isMediumEffort ? 14 : p.steps.toDouble(),
             min: 1,
             max: 50,
             divisions: 49,
-            onChanged: (v) => state.setParam((x) => x.steps = v.round()),
-            display: '${p.steps}'),
+            onChanged: (v) { if (!p.isMediumEffort) state.setParam((x) => x.steps = v.round()); },
+            display: '${p.isMediumEffort ? 14 : p.steps}'),
         _Slider(
             label: 'CFG Scale',
             value: p.cfgScale,
@@ -2546,14 +2548,14 @@ class _ParamControls extends StatelessWidget {
             onChanged: (v) => state.setParam(
                 (x) => x.cfgScale = double.parse(v.toStringAsFixed(1))),
             display: p.cfgScale.toStringAsFixed(1)),
-        _Slider(
+        if (!p.isMediumEffort) _Slider(
             label: 'CFG Rescale',
-            value: p.cfgRescale,
+            value: p.isMediumEffort ? 0 : p.cfgRescale,
             min: 0,
             max: 1,
             divisions: 100,
             onChanged: (v) => state.setParam(
-                (x) => x.cfgRescale = double.parse(v.toStringAsFixed(2))),
+                (x) { if (!p.isMediumEffort) x.cfgRescale = double.parse(v.toStringAsFixed(2)); }),
             display: p.cfgRescale.toStringAsFixed(2)),
         if (p.supportsNoiseScheduleControl) ...[
           const SizedBox(height: 6),
@@ -2576,8 +2578,8 @@ class _ParamControls extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 10),
-        StudioDropdownButtonFormField<int>(
-          value: p.ucPreset,
+        if (!p.isMediumEffort) StudioDropdownButtonFormField<int>(
+          value: p.isMediumEffort ? 0 : p.ucPreset,
           isExpanded: true,
           decoration: InputDecoration(
               labelText: text.ucPreset, border: const OutlineInputBorder()),
@@ -2589,7 +2591,7 @@ class _ParamControls extends StatelessWidget {
                   ))
               .toList(),
           onChanged: (value) =>
-              value == null ? null : state.setParam((x) => x.ucPreset = value),
+              value == null || p.isMediumEffort ? null : state.setParam((x) => x.ucPreset = value),
         ),
         const SizedBox(height: 10),
         SegmentedButton<String>(
@@ -5182,7 +5184,7 @@ class _CharCardState extends State<_CharCard> {
                             }
                             s.markCharacterChanged();
                           }),
-                      TextFormField(
+                      if (!s.params.isMediumEffort) TextFormField(
                         key: ValueKey('character-prompt-field-${widget.index}'),
                         initialValue: c.prompt,
                         decoration: InputDecoration(
@@ -5425,6 +5427,15 @@ class _AnlasQuoteBar extends StatelessWidget {
             : text.pendingQuote;
     final amount = quote?.amount;
     final warning = quote?.insufficient == true;
+    final capacity = amount == 0 && state.params.isV5
+        ? estimateOpusImages(state.params, state.account.opusUsage?.percent ?? 0)
+        : amount != null && amount > 0 && state.account.anlasBalance != null
+            ? (state.account.anlasBalance! * state.batchCount / amount).floor()
+            : null;
+    final totalCapacity = estimateOpusImages(state.params, 100);
+    final usageEstimate = amount == 0 && totalCapacity > 0
+        ? ' · ≈${(100 * state.batchCount / totalCapacity).toStringAsFixed(2)}%'
+        : '';
     return DecoratedBox(
       decoration: BoxDecoration(
         color: warning
@@ -5446,8 +5457,8 @@ class _AnlasQuoteBar extends StatelessWidget {
               child: Text(
                 amount == null
                     ? '${text.precharge}: ${state.account.hasToken ? text.reading : text.configureToken}'
-                    : '${text.precharge}: $amount Anlas · $source',
-                maxLines: 1,
+                    : '${text.precharge}: $amount Anlas · $source$usageEstimate${capacity == null ? '' : '\n${effortRemainingTitle(state.settings.language)} ≈$capacity'}',
+                maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),

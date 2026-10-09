@@ -449,8 +449,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     offset,
     limit,
   ) as Promise<ArtistStyleCatalogResult>,
-  translate: (text: string, target?: string) =>
-    ipcRenderer.invoke("nai:translate", text, target),
+  translate: (text: string, target?: string, sourceLanguage?: string) =>
+    ipcRenderer.invoke("nai:translate", text, target, sourceLanguage),
   readAgentClipboardFiles: () => ipcRenderer.invoke("agent:readClipboardFiles"),
   readClipboardImageFiles: () => ipcRenderer.invoke("imageInput:readClipboard"),
   savePastedImageFiles: (images: Array<{name:string;bytes:Uint8Array}>) => ipcRenderer.invoke("imageInput:save", images),

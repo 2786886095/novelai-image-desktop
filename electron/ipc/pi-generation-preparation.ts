@@ -7,6 +7,7 @@ export interface StudioGenerationPreview {
   height: number;
   steps: number;
   count: number;
+  effort?: 'medium' | 'high';
   imageProvider: string;
   estimatedAnlas: number | null;
   estimateSource: 'local-estimate' | 'provider-unknown';

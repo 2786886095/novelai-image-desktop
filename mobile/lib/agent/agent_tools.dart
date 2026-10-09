@@ -161,6 +161,7 @@ Map<String, dynamic> _generationProperties() => {
       'seed': _integer('无符号 32 位种子', 0, 4294967295),
       'seedMode': _string('种子模式', ['fixed', 'random']),
       'ucPreset': _integer('负面预设', 0, 3),
+      'effort': _string('V5 Full Effort: medium=14 steps/Euler Ancestral, no custom UC or CFG Rescale; keep count unchanged', ['medium', 'high']),
       'qualityPreset': _string('质量预设', ['standard', 'light', 'none']),
       'transparentBackground': {'type': 'boolean'},
       'smea': {'type': 'boolean'},
@@ -1027,6 +1028,7 @@ class AgentToolExecutor {
       if (args.containsKey('ucPreset')) {
         params.ucPreset = _int(args['ucPreset'], params.ucPreset, 0, 3);
       }
+      if (args['effort'] == 'medium' || args['effort'] == 'high') params.effort = args['effort'].toString();
       if (const {'standard', 'light', 'none'}.contains(args['qualityPreset'])) {
         params.qualityPreset = args['qualityPreset'].toString();
       }

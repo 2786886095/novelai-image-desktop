@@ -22,7 +22,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.5.5';
+const appVersion = '2.5.6';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -141,6 +141,7 @@ class GenerateParams {
   int seed;
   String seedMode;
   int ucPreset;
+  String effort;
   String qualityPreset;
   bool qualityToggle;
   bool transparentBackground;
@@ -164,6 +165,7 @@ class GenerateParams {
     this.seed = 0,
     this.seedMode = 'random',
     this.ucPreset = 2,
+    this.effort = 'high',
     this.qualityPreset = 'standard',
     this.qualityToggle = true,
     this.transparentBackground = false,
@@ -172,6 +174,18 @@ class GenerateParams {
     this.variety = false,
     this.fileNamePrefix = '',
   });
+
+  bool get supportsMediumEffort => model.replaceFirst(RegExp(r'-inpainting$'), '').replaceFirst(RegExp(r'-medium$'), '') == 'nai-diffusion-5-full';
+  bool get isMediumEffort => supportsMediumEffort && (effort == 'medium' || model.contains('-medium'));
+  GenerateParams effectiveEffort() {
+    final result = GenerateParams.fromJson(toJson());
+    if (isMediumEffort) {
+      result.model = 'nai-diffusion-5-full-medium${model.endsWith('-inpainting') ? '-inpainting' : ''}';
+      result.steps = 14; result.sampler = 'k_euler_ancestral';
+      result.cfgRescale = 0; result.ucPreset = 0; result.negativePrompt = '';
+    } else { result.model = model; }
+    return result;
+  }
 
   bool get isV5 => model.startsWith('nai-diffusion-5');
   bool get isV4Plus =>
@@ -206,6 +220,7 @@ class GenerateParams {
         'seed': seed,
         'seedMode': seedMode,
         'ucPreset': ucPreset,
+        'effort': effort,
         'qualityPreset': qualityPreset,
         'qualityToggle': qualityToggle,
         'transparentBackground': transparentBackground,
@@ -217,6 +232,7 @@ class GenerateParams {
 
   factory GenerateParams.fromJson(Map<String, dynamic> j) => GenerateParams(
         model: _stringValue(j['model'], 'nai-diffusion-5-full'),
+        effort: j['effort'] == 'medium' || _stringValue(j['model'], '').contains('-medium') ? 'medium' : 'high',
         stylePrompt: _stringValue(j['stylePrompt'], ''),
         positivePrompt: _stringValue(j['positivePrompt'], ''),
         negativePrompt: _stringValue(j['negativePrompt'], ''),
@@ -258,8 +274,9 @@ class GenerateParams {
     final supportedSamplers = naiSamplers.map((option) => option.value).toSet();
     final supportedSchedules =
         naiNoiseSchedules.map((option) => option.value).toSet();
+    final baseModel = model.replaceFirst(RegExp(r'-medium(?=-inpainting$|$)'), '');
     final normalizedModel =
-        supportedModels.contains(model) ? model : 'nai-diffusion-5-full';
+        supportedModels.contains(baseModel) ? baseModel : 'nai-diffusion-5-full';
     final normalizedQualityPreset = qualityPreset == 'none'
         ? 'none'
         : qualityPreset == 'light' &&
@@ -274,6 +291,7 @@ class GenerateParams {
     );
     return GenerateParams(
       model: normalizedModel,
+      effort: effort == 'medium' || model.contains('-medium') ? 'medium' : 'high',
       stylePrompt: stylePrompt,
       positivePrompt: positivePrompt,
       negativePrompt: negativePrompt,
@@ -943,6 +961,8 @@ class AppSettings {
   String updateSource;
   String translateProvider;
   String translateTargetLanguage;
+  String translateSourceLanguage;
+  bool translateRealtime;
   String baiduAppId;
   int historyRetentionDays;
   int aitagCacheRetentionDays;
@@ -1073,6 +1093,8 @@ class AppSettings {
     this.updateSource = 'github',
     this.translateProvider = 'google',
     this.translateTargetLanguage = 'system',
+    this.translateSourceLanguage = 'auto',
+    this.translateRealtime = false,
     this.baiduAppId = '',
     this.historyRetentionDays = 365,
     this.aitagCacheRetentionDays = 30,
@@ -1207,6 +1229,8 @@ class AppSettings {
         'updateSource': updateSource,
         'translateProvider': translateProvider,
         'translateTargetLanguage': translateTargetLanguage,
+        'translateSourceLanguage': translateSourceLanguage,
+        'translateRealtime': translateRealtime,
         'baiduAppId': baiduAppId,
         'historyRetentionDays': historyRetentionDays,
         'aitagCacheRetentionDays': aitagCacheRetentionDays,
@@ -1342,7 +1366,11 @@ class AppSettings {
         proxyForTranslate: j['proxyForTranslate'] ?? true,
         updateSource: 'github',
         translateProvider: j['translateProvider'] ?? 'google',
-        translateTargetLanguage: normalizeTranslationPreference(j['translateTargetLanguage']),
+        translateTargetLanguage:
+            normalizeTranslationPreference(j['translateTargetLanguage']),
+        translateSourceLanguage:
+            normalizeTranslationSource(j['translateSourceLanguage']),
+        translateRealtime: j['translateRealtime'] == true,
         baiduAppId: j['baiduAppId'] ?? '',
         historyRetentionDays: j['historyRetentionDays'] ?? 365,
         aitagCacheRetentionDays: j['aitagCacheRetentionDays'] ?? 30,

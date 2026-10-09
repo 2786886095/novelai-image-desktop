@@ -1,22 +1,22 @@
-### v2.5.5 更新内容
+### v2.5.6 更新内容
 
 ## 本次更新
-- 修复在线画廊列表被统计、可选配置和整页缩略图下载拖住的问题；列表先显示，图片在可见区域逐张加载。
-- 覆盖 AITag、Danbooru、Safebooru、Gelbooru、QuickTagCloud、tags.gallery 与画师排名入口。
-- 画廊请求按实际目标网址使用现有代理设置；网络请求有总超时，缩略图使用独立并发队列，不阻塞列表查询。
-- 统计不可用时不伪造总数，部分集合失败时保留可用结果并显示失败信息；保留缓存校验及来源请求头。
-- Android/iOS 共享画廊源码同步，缩短无限等待并将可选配置移出列表展示路径。
-- 保留 v2.5.4 的自动对比范围、F1 复制防护、Vibe 文件导入与负面提示词库，以及现有字体、角色和重绘尺寸功能。
+- 支持 NovelAI V5 的 Medium / High 档位，生图智能体同步支持；档位变化联动 Anlas 消耗预估和预计可生成张数，不自动修改批量张数。
+- Medium 模型按其能力固定生成参数，隐藏无法切换的控件，不增加额外小字说明；切回 High 保留原先可用的参数设置。
+- 解决 #59：翻译预览的原文与译文可编辑，源语言与目标语言可以互换，译文仅在点击“应用译文”后写回提示词。
+- 在翻译预览内直接提供“实时翻译”开关，默认关闭；与设置页同步保存，重新打开保留选择。启用后在输入停顿 600 ms 后翻译，关闭后停止排队的自动请求，仍可手动翻译。
+- 实时翻译限制单请求在途、忽略过期回复，并处理输入法组合输入；保存失败会恢复开关状态，关闭预览不写回草稿。
+- Windows/macOS/Linux 共用桌面源码与 Android/iOS Flutter 源码同步；保留在线画廊加载、代理网络、字体、角色、重绘尺寸与负面提示词库等既有修复。
 
 ## 发行范围与验证
-公开提供 Windows x64 安装版与便携版，并附 latest.yml 和 verification.json。移动端源码版本为 2.5.5+174，本次不发布 Android/iOS 二进制。
+公开提供 Windows x64 安装版与便携版，并附 latest.yml 和 verification.json。移动端源码版本为 2.5.6+175，本次不发布 Android/iOS 二进制。
 
 保留桌面类型检查与测试、移动端分析与测试、三平台原生构建、真实打包运行与字体、实际 NSIS 解码、Windows 全新安装及 2.4.0 升级数据保留、智能体在线获取及离线复用等既有正式发布门槛。
 
-画廊修复已完成七个入口的真实联网和实际打包界面验证，以及同输入原版/修复版/回滚对照。网络测试不消耗用户生图积分；网站偶发超时仍可能发生，不承诺所有网络或服务端的固定速度。源码同步与 CI 验证不等同于移动实体设备或付费中转生图验收。
+本轮本地功能验收为桌面 3185 项和移动端 1864 项通过（各 1 项既有跳过）；实际 Windows 打包界面验证翻译开关开启、关闭、保存、设置同步及 200% 字号宽窄布局，并完成同输入原版／修改版／回滚对照。翻译提供商与生图档位的协议验证使用隔离模拟接口，不使用用户凭据，不调用付费生图或翻译服务；不把源码同步或 CI 构建当作移动实体设备验收，也不保证所有第三方中转站支持同一接口能力。
 
 Windows 包未代码签名，SmartScreen 可能提示未知发布者；请从本仓库正式 Release 下载并核对 SHA256。
 
 ## 下载
-- [Windows 安装版](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.5.5/Langbai-NovelAI-Studio-Setup-2.5.5.exe)
-- [Windows 便携版](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.5.5/Langbai-NovelAI-Studio-2.5.5.exe)
+- [Windows 安装版](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.5.6/Langbai-NovelAI-Studio-Setup-2.5.6.exe)
+- [Windows 便携版](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.5.6/Langbai-NovelAI-Studio-2.5.6.exe)

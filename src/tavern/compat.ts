@@ -82,6 +82,7 @@ export function normalizeTavernVisual(value: unknown): TavernCharacterVisualPres
     ...(Number.isFinite(Number(raw.height)) ? { height: Math.round(finite(raw.height, 1024, 64, 4096)) } : {}),
     ...(Number.isFinite(Number(raw.steps)) ? { steps: Math.round(finite(raw.steps, 28, 1, 50)) } : {}),
     ...(Number.isFinite(Number(raw.scale)) ? { scale: finite(raw.scale, 5, 0, 10) } : {}),
+    ...(raw.effort === "medium" || raw.effort === "high" ? { effort: raw.effort } : {}),
     ...(string(raw.sampler).trim() ? { sampler: string(raw.sampler).trim() } : {}),
     count: Math.round(finite(raw.count, 1, 1, 8)),
     emotionPrompts: Object.fromEntries(

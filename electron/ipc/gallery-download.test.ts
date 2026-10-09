@@ -11,8 +11,7 @@ vi.mock("./gallery-network", async () => {
   return { ...actual };
 });
 vi.mock("./proxy", () => ({ proxyConfig: () => ({}), proxyConfigForUrl: async () => ({ proxy: false }) }));
-vi.mock("./store", () => ({ getSettings: () => ({ proxyMode: "direct" }), setSetting: vi.fn() }));
-vi.mock("./store", () => ({ getSettings: () => mock.settings, setSetting: (key: string, value: string) => Object.assign(mock.settings, { [key]: value }) }));
+vi.mock("./store", () => ({ getSettings: () => ({ proxyMode: "direct", ...mock.settings }), setSetting: (key: string, value: string) => Object.assign(mock.settings, { [key]: value }) }));
 import { downloadOnlineGalleryImages } from "./online-gallery";
 import { galleryDownloadFeedback, galleryImageExtension, galleryImageHeaders, validateGalleryImage } from "../../src/gallery-download";
 
