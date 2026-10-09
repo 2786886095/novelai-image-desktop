@@ -5,6 +5,7 @@ import {
   featherSelection,
   imageEditEndpoint,
   maskSelection,
+  matchSeamColors,
   normalizeOpenAIImageEditSettings,
   planEditCanvas,
   resizeSelection,
@@ -64,6 +65,30 @@ describe("openai image edit helpers", () => {
     // legacy opaque: white = repaint, black = keep
     expect([...maskSelection([255, 255, 255, 255, 0, 0, 0, 255], 2, 1)]).toEqual([1, 0]);
     expect([...resizeSelection(Uint8Array.from([1, 0]), 2, 1, 4, 2)]).toEqual([1, 1, 0, 0, 1, 1, 0, 0]);
+  });
+
+  it("removes tonal drift at the mask edge but keeps edited content and ignores mismatched structure", () => {
+    const width = 120, height = 60;
+    const source = new Uint8Array(width * height * 4).fill(120);
+    const selection = new Uint8Array(width * height);
+    for (let y = 10; y < 50; y += 1) for (let x = 40; x < 80; x += 1) selection[y * width + x] = 1;
+    // Provider drifted 30 darker everywhere and drew a white block inside the mask.
+    const generated = Uint8Array.from(source, (value) => value - 30);
+    for (let y = 25; y < 35; y += 1) for (let x = 55; x < 65; x += 1) generated.fill(255, (y * width + x) * 4, (y * width + x) * 4 + 3);
+    matchSeamColors(source, generated, selection, width, height);
+    const at = (x: number, y: number) => generated[(y * width + x) * 4];
+    expect(Math.abs(at(41, 30) - 120)).toBeLessThanOrEqual(4); // edge matched to the source tone
+    expect(Math.abs(at(60, 12) - 120)).toBeLessThanOrEqual(4);
+    expect(at(60, 30)).toBeGreaterThanOrEqual(240);            // edited content preserved
+
+    // Content that differs completely outside the mask must not tint the edit much.
+    const red = new Uint8Array(width * height * 4);
+    for (let pixel = 0; pixel < width * height; pixel += 1) red.set([255, 0, 0, 255], pixel * 4);
+    const blue = new Uint8Array(width * height * 4);
+    for (let pixel = 0; pixel < width * height; pixel += 1) blue.set([0, 0, 255, 255], pixel * 4);
+    matchSeamColors(blue, red, selection, width, height);
+    expect(red[(30 * width + 41) * 4]).toBeGreaterThanOrEqual(235);
+    expect(red[(30 * width + 41) * 4 + 2]).toBeLessThanOrEqual(20);
   });
 
   it("grows and feathers the paste-back alpha", () => {

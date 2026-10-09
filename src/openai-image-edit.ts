@@ -198,6 +198,71 @@ function boxBlur(src: Float32Array, width: number, height: number, radius: numbe
   return out;
 }
 
+/**
+ * Seam colour matching. Image-edit models re-render the whole picture, so the
+ * tone of the generated image can drift from the source; pasting back only the
+ * mask then leaves a visible seam wherever the mask edge crosses smooth
+ * background. This measures source − generated in a ring just outside the
+ * mask (robustly: structurally different pixels get little weight), spreads it
+ * as a smooth low-frequency offset and adds it to the generated pixels near the
+ * edge, fading out towards the inside. Mutates `generated` (RGBA).
+ */
+export function matchSeamColors(
+  source: ArrayLike<number>,
+  generated: { [index: number]: number; length: number },
+  selection: Uint8Array,
+  width: number,
+  height: number,
+  ringPx = 16,
+  radius = 24,
+) {
+  const count = width * height;
+  let outside = slidingMax(selection, width, height, ringPx, true);
+  outside = slidingMax(outside, width, height, ringPx, false);
+  const weight = new Float32Array(count);
+  const diff = [new Float32Array(count), new Float32Array(count), new Float32Array(count)];
+  let any = false;
+  for (let pixel = 0; pixel < count; pixel += 1) {
+    if (!outside[pixel] || selection[pixel]) continue;
+    const offset = pixel * 4;
+    const d0 = source[offset] - generated[offset];
+    const d1 = source[offset + 1] - generated[offset + 1];
+    const d2 = source[offset + 2] - generated[offset + 2];
+    // Cauchy weight on the RMS channel difference: small tonal drift counts, mismatched content barely does.
+    const rms = Math.sqrt((d0 * d0 + d1 * d1 + d2 * d2) / 3);
+    const w = 1 / (1 + (rms / 40) ** 2);
+    weight[pixel] = w;
+    diff[0][pixel] = w * d0;
+    diff[1][pixel] = w * d1;
+    diff[2][pixel] = w * d2;
+    any = true;
+  }
+  if (!any) return;
+  const smooth = (values: Float32Array) => {
+    let out = values;
+    for (let pass = 0; pass < 3; pass += 1) {
+      out = boxBlur(out, width, height, radius, true);
+      out = boxBlur(out, width, height, radius, false);
+    }
+    return out;
+  };
+  const density = smooth(weight);
+  const offsets = diff.map(smooth);
+  for (let pixel = 0; pixel < count; pixel += 1) {
+    const d = density[pixel];
+    if (d <= 1e-4) continue;
+    // Full correction at the edge, smoothly fading where few ring pixels are in reach.
+    const t = Math.min(1, d / 0.12);
+    const fade = t * t * (3 - 2 * t);
+    const offset = pixel * 4;
+    for (let channel = 0; channel < 3; channel += 1) {
+      const correction = Math.max(-64, Math.min(64, offsets[channel][pixel] / d));
+      const value = generated[offset + channel] + correction * fade;
+      generated[offset + channel] = Math.max(0, Math.min(255, Math.round(value)));
+    }
+  }
+}
+
 /** Grow the selection by `growPx`, then feather its edge over ~`featherPx` (alpha 0–255). */
 export function featherSelection(selection: Uint8Array, width: number, height: number, growPx = 4, featherPx = 6): Uint8Array {
   let grown = selection;

@@ -70,7 +70,9 @@ describe("openAIInpaintWorkbench", () => {
     expect(state.history).toHaveLength(1);
     const saved = await sharp(item.filePath).raw().toBuffer({ resolveWithObject: true });
     const px = (x: number, y: number) => [...saved.data.subarray((y * 200 + x) * saved.info.channels, (y * 200 + x) * saved.info.channels + 3)];
-    expect(px(130, 50)).toEqual([255, 0, 0]); // masked
+    const masked = px(130, 50); // masked: provider pixels (seam colour matching may shift them slightly)
+    expect(masked[0]).toBeGreaterThan(200);
+    expect(masked[2]).toBeLessThan(60);
     expect(px(10, 10)).toEqual([0, 0, 255]);  // outside the region
     expect(px(105, 25)).toEqual([0, 0, 255]); // inside the region but outside the mask
   });

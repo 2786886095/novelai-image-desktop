@@ -80,6 +80,7 @@ describe("runOpenAIImageEdit", () => {
       source: await source(), mask: await editorMask(), prompt: "paint it red",
       settings: { ...DEFAULT_OPENAI_IMAGE_EDIT, baseUrl: `${base}/v1`, model: "gpt-image-2.5-sunburst", quality: "high" },
       apiKey: key,
+      matchColors: false, // exact geometry check; colour matching is covered by the pure tests
     });
     expect(calls).toBe(1);
     expect(output.batch.complete).toBe(true);
@@ -102,6 +103,8 @@ describe("runOpenAIImageEdit", () => {
     expect(JSON.stringify(output.request)).not.toContain(key);
 
     expect(output.images).toHaveLength(1);
+    expect(output.raw).toHaveLength(1);
+    expect((await sharp(output.raw[0]).metadata()).width).toBe(120);
     const result = await sharp(output.images[0]).raw().toBuffer({ resolveWithObject: true });
     expect([result.info.width, result.info.height]).toEqual([120, 80]);
     const px = (x: number, y: number) => [...result.data.subarray((y * 120 + x) * result.info.channels, (y * 120 + x) * result.info.channels + 3)];

@@ -7,6 +7,7 @@ import {
   featherSelection,
   imageEditEndpoint,
   maskSelection,
+  matchSeamColors,
   normalizeOpenAIImageEditSettings,
   planEditCanvas,
   resizeSelection,
@@ -52,12 +53,16 @@ export interface OpenAIImageEditInput {
   pasteBack?: boolean;
   growPx?: number;
   featherPx?: number;
+  /** Match the generated tone to the source around the mask edge before pasting back (default true). */
+  matchColors?: boolean;
 }
 
 export interface OpenAIImageEditOutput {
   batch: CompatibleImageBatch;
   /** Final images at the source resolution. */
   images: Buffer[];
+  /** Provider output mapped to the source geometry, before colour matching / paste-back. */
+  raw: Buffer[];
   /** Non-secret request summary for history. */
   request: Record<string, unknown>;
 }
@@ -132,6 +137,7 @@ export async function runOpenAIImageEdit(input: OpenAIImageEditInput, options: C
   const pasteBack = input.pasteBack ?? Boolean(selection);
   const alpha = selection && pasteBack ? featherSelection(selection, source.width, source.height, input.growPx ?? 4, input.featherPx ?? 6) : null;
   const images: Buffer[] = [];
+  const raw: Buffer[] = [];
   for (const generated of batch.images) {
     const mapped = await sharp(generated)
       .resize(plan.canvas.width, plan.canvas.height, { fit: "fill" })
@@ -139,6 +145,8 @@ export async function runOpenAIImageEdit(input: OpenAIImageEditInput, options: C
       .ensureAlpha()
       .raw()
       .toBuffer();
+    raw.push(await sharp(Buffer.from(mapped), rawSource).png().toBuffer());
+    if (alpha && selection && input.matchColors !== false) matchSeamColors(source.data, mapped, selection, source.width, source.height);
     if (alpha) {
       for (let pixel = 0; pixel < alpha.length; pixel += 1) {
         const weight = alpha[pixel] / 255;
@@ -151,5 +159,5 @@ export async function runOpenAIImageEdit(input: OpenAIImageEditInput, options: C
     }
     images.push(await sharp(mapped, rawSource).png().toBuffer());
   }
-  return { batch, images, request };
+  return { batch, images, raw, request };
 }
