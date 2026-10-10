@@ -286,6 +286,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   saveCompatibleImageSettings: (config: CompatibleImageSettings, apiKey: string, provider: "novelai" | "openai-images", expectedRevision: string) =>
     ipcRenderer.invoke("images:saveCompatibleSettings", config, apiKey, provider, expectedRevision),
   setCompatibleImageProvider: (provider: "novelai", expectedRevision: string) => ipcRenderer.invoke("images:setCompatibleProvider", provider, expectedRevision),
+  openaiInpaint: (request: import("../src/types").OpenAIInpaintRequest) => ipcRenderer.invoke("openai:inpaint", request),
   onImageServiceChanged: (callback: (notice: { revision: string; version: number }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, notice: { revision: string; version: number }) => callback(notice);
     ipcRenderer.on("images:settingsChanged", listener);

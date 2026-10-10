@@ -1387,6 +1387,16 @@ export interface CompatibleImageSettings {
   extensions?: Record<string, unknown>;
 }
 
+export interface OpenAIInpaintRequest {
+  /** Natural-language edit instruction. */
+  prompt: string;
+  maskBase64: string;
+  region?: import("./focused-inpaint").InpaintRegion;
+  /** Composite only the masked area back onto the source (default true). */
+  pasteBack?: boolean;
+  settingsOverride?: Partial<import("./openai-image-edit").OpenAIImageEditSettings>;
+}
+
 export interface CompatibleGenerationRequest {
   /** Renderer snapshot binding; trusted Agent callers use their separate provider binding. */
   expectedImageServiceRevision?: string;
@@ -1404,6 +1414,11 @@ export interface AppSettings {
   imageProvider?: "novelai" | "openai-images";
   compatibleImage?: CompatibleImageSettings;
   imageApiKey?: string;
+  /** OpenAI Images edits (inpainting) — official API or a compatible relay. */
+  openaiImageEdit?: import("./openai-image-edit").OpenAIImageEditSettings;
+  openaiImageEditApiKey?: string;
+  /** Engine used by the inpaint panel. */
+  inpaintEngine?: "novelai" | "openai";
   /** Process-local revision: never persisted or included in provider requests. */
   imageServiceRevision?: string;
   imageServiceVersion?: number;
@@ -1977,6 +1992,7 @@ export interface NaiDesktopApi {
     noise: number,
     region?: import("./focused-inpaint").InpaintRegion,
   ) => Promise<GenerateResult>;
+  openaiInpaint: (request: OpenAIInpaintRequest) => Promise<GenerateResult>;
   upscaleImage: (scale: UpscaleScale, model: string) => Promise<SingleImageResult>;
   augmentImage: (
     tool: DirectorTool,

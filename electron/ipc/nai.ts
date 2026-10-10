@@ -1830,7 +1830,7 @@ function readImageDimensions(buf: Buffer): { width: number; height: number } {
   return { width: 0, height: 0 };
 }
 
-async function readWorkbenchImage(): Promise<{
+export async function readWorkbenchImage(): Promise<{
   base64: string;
   buffer: Buffer;
   image: WorkingImage;

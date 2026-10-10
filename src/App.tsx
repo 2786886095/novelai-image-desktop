@@ -8,6 +8,7 @@ import {TRANSLATION_LANGUAGES,translationEditorText,normalizeTranslationPreferen
 import {favoritesText} from './favorites-text';
 import {McpToolSettings,McpTagSuggestions} from './components/McpTools';
 import {CompatibleImageSettingsCard,CompatibleGenerationPanel} from './components/CompatibleImages';
+import {InpaintEngineSwitch,OpenAIImageEditSettingsCard,OpenAIInpaintControls,OpenAIInpaintRunButton} from './components/OpenAIImageEdit';
 import { NaiAccountManager } from './components/NaiAccountManager';
 import {FilePathDialog} from './components/FilePathDialog';
 import {HistoryItemMenu} from './components/HistoryItemMenu';
@@ -3476,6 +3477,7 @@ export function InpaintPanel({ openSettings }: { openSettings: () => void }) {
   let sizePlan: ReturnType<typeof inpaintSizePlan> | undefined, sizeError = '';
   if (sizeSource) { try { sizePlan = inpaintSizePlan(sizeMode, customSize, sizeSource, region, language); } catch(e) { sizeError = (e as Error).message; } }
   const inpaint = useAppStore((state) => state.inpaint);
+  const openaiEngine = useAppStore((state) => state.settings?.inpaintEngine) === "openai";
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   return (
     <>
@@ -3490,6 +3492,8 @@ export function InpaintPanel({ openSettings }: { openSettings: () => void }) {
           </div>
           
         </div>
+        <InpaintEngineSwitch />
+        {!openaiEngine && <>
         <label className="field">
           <span>{t("inpaint.model")}</span>
           <SelectMenuCompat value={inpaintModel} onChange={(e) => setInpaintModel(e.target.value as typeof inpaintModel)}>
@@ -3527,6 +3531,7 @@ export function InpaintPanel({ openSettings }: { openSettings: () => void }) {
                 : "inpaint.strengthHighHint",
           )}
         </small>
+        </>}
         <SliderInput
           label={t("inpaint.brushSize")}
           value={brushSize}
@@ -3563,6 +3568,7 @@ export function InpaintPanel({ openSettings }: { openSettings: () => void }) {
           <IconText icon={<Icon name="clear" />}>{t("inpaint.clearMask")}</IconText>
         </Button>
         <div className="panel-divider" />
+        {openaiEngine ? <OpenAIInpaintControls openSettings={openSettings} /> : <>
         <InpaintPromptSource/>
         <PromptAndParams
           includeModel={false}
@@ -3571,8 +3577,9 @@ export function InpaintPanel({ openSettings }: { openSettings: () => void }) {
           promptOverride={{ value: inpaintPositivePrompt, onChange: setInpaintPositivePrompt }}
         />
         {!sizeError && <FeatureCostCard label={t("cost.beforeRun")} feature="inpaint" sizeOverride={sizePlan?.requestSize} />}
+        </>}
       </div>
-      <AccountAndRunButton label={t("inpaint.run")} onRun={() => void inpaint()} openSettings={openSettings} disabled={Boolean(sizeError)} disabledReason={sizeError} />
+      {openaiEngine ? <OpenAIInpaintRunButton /> : <AccountAndRunButton label={t("inpaint.run")} onRun={() => void inpaint()} openSettings={openSettings} disabled={Boolean(sizeError)} disabledReason={sizeError} />}
     </>
   );
 }
@@ -5953,6 +5960,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               <div className="settings-form">
                 <NaiAccountManager variant="settings" />
                 <CompatibleImageSettingsCard settings={settings} refresh={refreshSettings} />
+                <OpenAIImageEditSettingsCard settings={settings} />
                 <Button onClick={() => setShowTokenGuide(true)}><IconText icon="❔">{t("settings.tokenGuide")}</IconText></Button>
                 <div className="proxy-card">
                   <ProxyPresetControl mode={settings.proxyMode} value={settings.proxyUrl} onChange={(mode, value) => void updateProxy(mode, value)} />

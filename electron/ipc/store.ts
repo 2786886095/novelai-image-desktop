@@ -4,6 +4,7 @@ import {normalizeTypography,DEFAULT_TYPOGRAPHY} from "../../src/typography";
 import {normalizeSavedAgentModels,agentEffort} from '../../src/agent/model-selections';
 import {normalizeAgentUiPreferences} from '../../src/agent/preferences';
 import {normalizeCompletionSound} from "../../src/completion-sound";
+import {DEFAULT_OPENAI_IMAGE_EDIT,normalizeOpenAIImageEditSettings} from "../../src/openai-image-edit";
 import { currentNaiAccount, getNaiAccountSummary, rememberNaiAccountSummary, naiAccountsBusy, configureLegacyNaiBinding, boundLegacyNaiAccount, legacyNaiBindingAllowed, naiAccountRevision } from './nai-accounts-runtime';
 import { ensureNaiAccountsLoaded } from './nai-accounts';
 import {normalizeNovelAiSettings,NOVELAI_ONLY_MESSAGE} from '../../src/novelai-only-settings';
@@ -180,6 +181,9 @@ export function defaultSettings(): AppSettings {
     imageBaseUrl: "https://image.novelai.net",
     imageProvider: "novelai",
     imageApiKey: "",
+    openaiImageEdit: { ...DEFAULT_OPENAI_IMAGE_EDIT },
+    openaiImageEditApiKey: "",
+    inpaintEngine: "novelai",
     compatibleImage: { baseUrl: "", model: "", size: "1024x1024", responseFormat: "auto" },
     harnessAutoUpdatePlugins: true,
     allowCustomEndpoint: true,
@@ -683,7 +687,7 @@ export function setSetting<K extends SettingKey>(key: K, value: AppSettings[K]):
   const replaceCredential = (SENSITIVE_SETTING_KEYS as readonly string[]).includes(key);
   data.settings = {
     ...data.settings,
-    [key]: key === "negativePromptPresets" ? normalizeNegativePromptPresets(value) : key === "automaticComparison" ? normalizeAutomaticComparison(value) : key === "uiTypography" ? normalizeTypography(value) : key === "agentUiPreferences" ? normalizeAgentUiPreferences(value) : key === "language" ? normalizeLanguage(value) : key === "completionSound" ? normalizeCompletionSound(value) : value,
+    [key]: key === "negativePromptPresets" ? normalizeNegativePromptPresets(value) : key === "automaticComparison" ? normalizeAutomaticComparison(value) : key === "uiTypography" ? normalizeTypography(value) : key === "agentUiPreferences" ? normalizeAgentUiPreferences(value) : key === "language" ? normalizeLanguage(value) : key === "completionSound" ? normalizeCompletionSound(value) : key === "openaiImageEdit" ? normalizeOpenAIImageEditSettings(value) : key === "inpaintEngine" ? (value === "openai" ? "openai" : "novelai") : value,
   };
   writeStore(data, replaceCredential ? [key] : []);
   return data.settings[key];

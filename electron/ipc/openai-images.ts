@@ -6,8 +6,20 @@ export interface CompatibleImageBatch {
  images:Buffer[]; complete:boolean; submitted:boolean; cancelled:boolean; timedOut:boolean;
  error?:ReturnType<typeof compatibleImageError>;
 }
+export type CompatibleImageRequestOptions={signal?:AbortSignal;beforeSubmit?:()=>void|Promise<void>;timeoutMs?:number;maxBytes?:number;route?:(url:string)=>Promise<{httpAgent?:unknown;httpsAgent?:unknown;proxy?:false}>};
+/** A prepared request. Built inside the guarded section so builder errors surface as configuration failures. */
+export interface CompatibleImagePost {endpoint:string;body:Buffer;contentType:string;expectedCount:number}
+
 /** One and only one billed POST. URL retrieval never receives the generation credential. */
-export async function generateCompatibleImages(config:CompatibleImageConfig,input:CompatibleImageInput,options:{signal?:AbortSignal;beforeSubmit?:()=>void|Promise<void>;timeoutMs?:number;maxBytes?:number;route?:(url:string)=>Promise<{httpAgent?:unknown;httpsAgent?:unknown;proxy?:false}>}={}):Promise<CompatibleImageBatch>{
+export async function generateCompatibleImages(config:CompatibleImageConfig,input:CompatibleImageInput,options:CompatibleImageRequestOptions={}):Promise<CompatibleImageBatch>{
+ return submitCompatibleImageRequest(config,()=>{
+  const endpoint=imageGenerationEndpoint(config.baseUrl,config.allowInsecureHttp),body=buildCompatibleImageRequest(config,input);
+  return {endpoint,body:Buffer.from(JSON.stringify(body),'utf8'),contentType:'application/json',expectedCount:input.n};
+ },options);
+}
+
+/** Shared by generations and edits: one POST, no retries; output is decoded and re-encoded without upstream metadata. */
+export async function submitCompatibleImageRequest(config:Pick<CompatibleImageConfig,'apiKey'|'allowInsecureHttp'>,prepare:()=>CompatibleImagePost|Promise<CompatibleImagePost>,options:CompatibleImageRequestOptions={}):Promise<CompatibleImageBatch>{
  const images:Buffer[]=[];let submitted=false,phase:CompatibleFailurePhase='configuration',status:number|undefined;
  const abort=new AbortController(),cancel=()=>abort.abort();options.signal?.addEventListener('abort',cancel,{once:true});
  if(options.signal?.aborted)abort.abort();
@@ -26,13 +38,13 @@ export async function generateCompatibleImages(config:CompatibleImageConfig,inpu
   });
  };
  try{
-  const endpoint=imageGenerationEndpoint(config.baseUrl,config.allowInsecureHttp),body=buildCompatibleImageRequest(config,input);
+  const {endpoint,body,contentType,expectedCount}=await prepare();
   if(typeof config.apiKey!=='string'||!config.apiKey.trim()||/[\r\n]/.test(config.apiKey))throw Error('invalid credential');
-  if(Buffer.byteLength(JSON.stringify(body),'utf8')>maxBytes)throw Error('request byte limit');
+  if(body.length>maxBytes)throw Error('request byte limit');
   const route = await routeFor(endpoint);
   abort.signal.throwIfAborted();await options.beforeSubmit?.();
   abort.signal.throwIfAborted();phase='generate';submitted=true;
-  const response=await client.post(endpoint,body,{...route,headers:{Authorization:`Bearer ${config.apiKey.trim()}`,'Content-Type':'application/json'}});
+  const response=await client.post(endpoint,body,{...route,headers:{Authorization:`Bearer ${config.apiKey.trim()}`,'Content-Type':contentType}});
   status=response.status;if(status<200||status>=300)throw Error('HTTP status');status=undefined;
   const parsed=JSON.parse(Buffer.from(response.data).toString('utf8'));
   if(!Array.isArray(parsed.data)||!parsed.data.length)throw Error('missing data');
@@ -63,7 +75,7 @@ export async function generateCompatibleImages(config:CompatibleImageConfig,inpu
    images.push(clean);
   }
   abort.signal.throwIfAborted();
-  if(images.length!==input.n)throw Error('image count mismatch');
+  if(images.length!==expectedCount)throw Error('image count mismatch');
   return {images,complete:true,submitted,cancelled:false,timedOut:false};
  }catch{
   return {images,complete:false,submitted,cancelled:options.signal?.aborted===true,timedOut,error:compatibleImageError(phase,status)};

@@ -6,6 +6,7 @@ import {inpaintSizePlan,restoreInpaintSizeState,type InpaintSize,type InpaintSiz
 import {retainedPrompts} from "./retained-prompts";
 import { mergeImageSettings, mergeFullSettings } from "./compatible-image-settings-sync";
 import {localizedStoreText} from "./store-i18n";
+import {featureText} from "./feature-text";
 import {playCompletionSound} from "./completion-sound";
 import { restoreSavedStyle } from "./style-prompt-restore";
 import type {InputPreviewAnchor} from "./canvas-preview";
@@ -190,6 +191,8 @@ interface AppState {
   /** Independent from params.positivePrompt — inpaint must not inherit the
    * main generate/i2i prompt automatically. */
   inpaintPositivePrompt: string;
+  /** Natural-language instruction for the OpenAI image-edit engine. */
+  openaiEditPrompt: string;
   brushSize: number;
   brushOpacity: number;
   brushColor: string;
@@ -324,6 +327,7 @@ interface AppState {
   setInpaintStrength: (value: number) => void;
   setInpaintNoise: (value: number) => void;
   setInpaintPositivePrompt: (value: string) => void;
+  setOpenaiEditPrompt: (value: string) => void;
   setBrushSize: (size: number) => void;
   setBrushOpacity: (opacity: number) => void;
   setBrushColor: (color: string) => void;
@@ -390,6 +394,8 @@ interface AppState {
   toggleQueueCollapsed: () => void;
   generateI2I: () => Promise<void>;
   inpaint: () => Promise<void>;
+  /** Inpaint with OpenAI Images edits (provider billing, no Anlas). */
+  openaiInpaint: () => Promise<void>;
   upscaleCurrentImage: () => Promise<void>;
   runDirectorTool: () => Promise<void>;
   cancel: () => Promise<void>;
@@ -902,6 +908,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   inpaintStrength: 1,
   inpaintNoise: 0,
   inpaintPositivePrompt: "",
+  openaiEditPrompt: "",
   brushSize: 4,
   brushOpacity: 0.55,
   brushColor: "#ffffff",
@@ -1538,6 +1545,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setInpaintNoise(value) {
     set({ inpaintNoise: Math.max(0, Math.min(0.99, value)) });
     persistGenerationState(get);
+  },
+
+  setOpenaiEditPrompt(value) {
+    set({ openaiEditPrompt: value });
   },
 
   setInpaintPositivePrompt(value) {
@@ -2764,6 +2775,71 @@ export const useAppStore = create<AppState>((set, get) => ({
       const spent = anlasSpent(anlasBefore, finalAccount.anlasBalance);
       const message = withAnlasSpent(get().settings, result.message, spent);
       set({ isGenerating: false, generationPhase: "idle", currentAnlasSpent: null, lastAnlasSpent: spent, lastError: message, statusText: storeText(get().settings, "status.inpaintFailed"), toast: message });
+    }
+  },
+
+  async openaiInpaint() {
+    const state = get();
+    if (state.isGenerating) return;
+    const language = state.settings?.language;
+    if (!state.workbenchImage) {
+      set({ toast: storeText(state.settings, "toast.needOriginal"), statusText: storeText(state.settings, "status.needOriginal") });
+      return;
+    }
+    if (!state.inpaintMask) {
+      set({ toast: storeText(state.settings, "toast.needMask"), statusText: storeText(state.settings, "status.needMask") });
+      return;
+    }
+    const prompt = state.openaiEditPrompt.trim();
+    if (!prompt) {
+      const message = featureText(language, "请输入重绘指令。");
+      set({ toast: message, statusText: message });
+      return;
+    }
+    const sourceImage = state.inpaintSourceMode === "original"
+      ? state.i2iOriginalImage ?? state.workbenchImage
+      : state.workbenchImage;
+    const loadedSource = await window.naiDesktop.loadImageFromPath(sourceImage.filePath).catch(() => null);
+    if (!loadedSource?.ok || !loadedSource.image) {
+      const message = storeText(state.settings, "status.imageLoadFailed");
+      set({ toast: message, statusText: message });
+      return;
+    }
+    const runId = `openai-edit-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    workbenchLoadRevision += 1;
+    set({
+      isGenerating: true,
+      activeGenerationRunId: runId,
+      generationPreview: null,
+      generationPhase: "requesting",
+      currentAnlasSpent: null,
+      lastAnlasSpent: null,
+      lastError: "",
+      statusText: featureText(language, "正在请求 OpenAI 图像编辑…"),
+    });
+    let result: GenerateResult;
+    try {
+      result = await window.naiDesktop.openaiInpaint({
+        prompt,
+        maskBase64: state.inpaintMask,
+        region: state.inpaintRegion ?? undefined,
+        pasteBack: true,
+      });
+    } catch {
+      result = { ok: false, items: [], message: "请求未完成，请核对服务商记录；没有自动重新提交。" };
+    }
+    if (get().activeGenerationRunId !== runId) return;
+    const message = featureText(language, result.message);
+    showPartialImages(set, get, result, { compareBefore: sourceImage, comparisonSurface: "inpaint" });
+    if (result.ok && result.items.length > 0) {
+      await refreshAfterImage(set, get, result.items[0], {
+        compareBefore: sourceImage,
+        comparisonSurface: "inpaint",
+        loadWorkbench: state.inpaintSourceMode === "latest",
+      });
+      set({ isGenerating: false, activeGenerationRunId: null, generationPhase: "idle", statusText: message, toast: message });
+    } else {
+      set({ isGenerating: false, activeGenerationRunId: null, generationPhase: "idle", lastError: message, statusText: message, toast: message });
     }
   },
 
