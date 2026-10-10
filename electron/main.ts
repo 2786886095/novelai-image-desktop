@@ -1,4 +1,6 @@
 import {UiFontRepository} from "./ipc/ui-fonts";
+import crypto from "node:crypto";
+import {startMcpServer, type McpServerHandle} from "./ipc/mcp-server";
 import {readAgentClipboardFiles} from './ipc/agent-clipboard';
 import { registerNaiAccountsIpc, ensureNaiAccountsLoaded } from './ipc/nai-accounts';
 import { withNaiAccountOperation, rememberNaiProposal, assertNaiProposalAccount } from './ipc/nai-accounts-runtime';
@@ -723,6 +725,7 @@ function createWindow() {
       "language",
       "appearance",
       "performance",
+      "mcp",
       "about",
     ].find((section) => normalizedUiCapturePath.includes(`settings-${section}`));
     const captureCatalogState = normalizedUiCapturePath.includes("series-confirm")
@@ -1324,7 +1327,14 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
       await refreshSystemProxy();
     }
     if (String(key).startsWith("agent")) await stopAgentRuntime();
+    if (String(key).startsWith("mcpServer")) await syncMcpServer();
     return saved;
+  });
+  ipcMain.handle("mcp:status", () => mcpStatus);
+  ipcMain.handle("mcp:regenerateToken", async () => {
+    setSetting("mcpServerToken", crypto.randomBytes(24).toString("hex"));
+    await syncMcpServer();
+    return mcpStatus;
   });
   ipcMain.handle("settings:getAll", () => getSettings());
   const uiFonts=new UiFontRepository(path.join(app.getPath('userData'),'ui-fonts'));
@@ -1498,6 +1508,34 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   ipcMain.handle("app:installUpdate", () => installUpdate());
 }
 
+// ── Local MCP server ─────────────────────────────────────────────────────────
+let mcpServer: McpServerHandle | null = null;
+let mcpStatus: { running: boolean; port: number; url: string; error: string } = { running: false, port: 0, url: "", error: "" };
+let mcpChain: Promise<unknown> = Promise.resolve();
+function syncMcpServer() {
+  const run = async () => {
+    const current = mcpServer;
+    mcpServer = null;
+    await current?.close().catch(() => undefined);
+    const settings = getSettings();
+    const port = Math.trunc(Number(settings.mcpServerPort) || 39280);
+    if (settings.mcpServerEnabled !== true) { mcpStatus = { running: false, port, url: "", error: "" }; return; }
+    try {
+      if (settings.credentialIssues?.includes("mcpServerToken")) throw new Error("MCP token is locked; recover local credential encryption or explicitly regenerate the token.");
+      let token = settings.mcpServerToken ?? "";
+      if (!token) { token = crypto.randomBytes(24).toString("hex"); setSetting("mcpServerToken", token); }
+      mcpServer = await startMcpServer({ port, token, window: () => mainWindow });
+      mcpStatus = { running: true, port: mcpServer.port, url: `http://127.0.0.1:${mcpServer.port}/mcp`, error: "" };
+    } catch (error) {
+      mcpStatus = { running: false, port, url: "", error: error instanceof Error ? error.message : String(error) };
+      console.warn("[mcp] failed to start", error);
+    }
+  };
+  const next = mcpChain.then(run, run);
+  mcpChain = next.catch(() => undefined);
+  return next;
+}
+
 app.whenReady().then(async () => {
   await installLocalMediaProtocol();
   if (!uiCaptureUserData) {
@@ -1526,6 +1564,7 @@ app.whenReady().then(async () => {
     await stopAgentRuntime();
   },resetHarnessExitAfterUpdateFailure);
   createWindow();
+  void syncMcpServer();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -1546,4 +1585,5 @@ app.on("before-quit", (event) => {
     return;
   }
   void stopAgentRuntime();
+  void mcpServer?.close();
 });

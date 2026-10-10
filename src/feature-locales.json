@@ -2931,5 +2931,313 @@
     "The request did not finish. Check your provider's records; nothing was resubmitted.",
     "リクエストが完了しませんでした。プロバイダーの記録を確認してください。自動で再送信はしていません。",
     "요청이 완료되지 않았습니다. 제공자 기록을 확인하세요. 자동으로 다시 제출하지 않았습니다."
+  ],
+  "MCP 服务": [
+    "MCP 服务",
+    "MCP 服務",
+    "MCP server",
+    "MCP サーバー",
+    "MCP 서버"
+  ],
+  "本地 MCP 服务": [
+    "本地 MCP 服务",
+    "本機 MCP 服務",
+    "Local MCP server",
+    "ローカル MCP サーバー",
+    "로컬 MCP 서버"
+  ],
+  "让外部智能体（pi、Claude Code、Codex 等）通过 MCP 控制本软件：文生图、图生图、局部重绘、超分、查看历史和图片。仅监听 127.0.0.1，需要 Bearer Token；生成结果照常保存到历史记录。": [
+    "让外部智能体（pi、Claude Code、Codex 等）通过 MCP 控制本软件：文生图、图生图、局部重绘、超分、查看历史和图片。仅监听 127.0.0.1，需要 Bearer Token；生成结果照常保存到历史记录。",
+    "讓外部智慧體（pi、Claude Code、Codex 等）透過 MCP 控制本軟體：文生圖、圖生圖、局部重繪、超解析、檢視歷史和圖片。僅監聽 127.0.0.1，需要 Bearer Token；生成結果照常儲存到歷史記錄。",
+    "Let external agents (pi, Claude Code, Codex, …) drive this app over MCP: text-to-image, img2img, inpainting, upscaling, browsing history and images. Listens on 127.0.0.1 only and requires a Bearer token; results are saved to history as usual.",
+    "外部エージェント（pi、Claude Code、Codex など）から MCP 経由で本アプリを操作できます：テキストから画像、画像から画像、部分再描画、アップスケール、履歴と画像の閲覧。127.0.0.1 のみで待ち受け、Bearer トークンが必要です。生成結果は通常どおり履歴に保存されます。",
+    "외부 에이전트(pi, Claude Code, Codex 등)가 MCP로 이 앱을 제어할 수 있습니다: 텍스트→이미지, 이미지→이미지, 부분 리드로우, 업스케일, 기록 및 이미지 보기. 127.0.0.1에서만 수신하며 Bearer 토큰이 필요합니다. 결과는 평소처럼 기록에 저장됩니다."
+  ],
+  "启用 MCP 服务": [
+    "启用 MCP 服务",
+    "啟用 MCP 服務",
+    "Enable MCP server",
+    "MCP サーバーを有効化",
+    "MCP 서버 사용"
+  ],
+  "运行中：{url}": [
+    "运行中：{url}",
+    "執行中：{url}",
+    "Running: {url}",
+    "実行中：{url}",
+    "실행 중: {url}"
+  ],
+  "启动失败：{error}": [
+    "启动失败：{error}",
+    "啟動失敗：{error}",
+    "Failed to start: {error}",
+    "起動に失敗しました：{error}",
+    "시작 실패: {error}"
+  ],
+  "未运行": [
+    "未运行",
+    "未執行",
+    "Not running",
+    "停止中",
+    "실행 중 아님"
+  ],
+  "端口": [
+    "端口",
+    "連接埠",
+    "Port",
+    "ポート",
+    "포트"
+  ],
+  "单次调用 Anlas 上限（0 = 只允许免费操作）": [
+    "单次调用 Anlas 上限（0 = 只允许免费操作）",
+    "單次呼叫 Anlas 上限（0 = 只允許免費操作）",
+    "Anlas limit per call (0 = free operations only)",
+    "1 回あたりの Anlas 上限（0 = 無料操作のみ）",
+    "호출당 Anlas 한도 (0 = 무료 작업만)"
+  ],
+  "每次付费操作执行前都会先估价，超过上限直接拒绝，不会扣点。Opus 免费范围：≤1MP、≤28 步、单张、无精准参考。精准参考按每张参考图 5 Anlas 计入上限（偏保守）。": [
+    "每次付费操作执行前都会先估价，超过上限直接拒绝，不会扣点。Opus 免费范围：≤1MP、≤28 步、单张、无精准参考。精准参考按每张参考图 5 Anlas 计入上限（偏保守）。",
+    "每次付費操作執行前都會先估價，超過上限直接拒絕，不會扣點。Opus 免費範圍：≤1MP、≤28 步、單張、無精準參考。精準參考按每張參考圖 5 Anlas 計入上限（偏保守）。",
+    "Every paid operation is quoted first and refused without charge if it exceeds the limit. Opus free range: ≤1MP, ≤28 steps, single image, no precise references. Precise references count as 5 Anlas per reference image (conservative).",
+    "有料操作は実行前に必ず見積もり、上限を超える場合は課金せずに拒否します。Opus の無料範囲：1MP 以下、28 ステップ以下、1 枚、精密参照なし。精密参照は参照画像 1 枚につき 5 Anlas として計上します（保守的）。",
+    "유료 작업은 실행 전에 항상 견적을 내고, 한도를 넘으면 차감 없이 거부합니다. Opus 무료 범위: 1MP 이하, 28스텝 이하, 1장, 정밀 참조 없음. 정밀 참조는 참조 이미지당 5 Anlas로 계산합니다(보수적)."
+  ],
+  "访问令牌（Bearer Token）": [
+    "访问令牌（Bearer Token）",
+    "存取權杖（Bearer Token）",
+    "Access token (Bearer)",
+    "アクセストークン（Bearer）",
+    "액세스 토큰 (Bearer)"
+  ],
+  "启用后自动生成": [
+    "启用后自动生成",
+    "啟用後自動產生",
+    "Generated when enabled",
+    "有効化すると自動生成",
+    "사용 시 자동 생성"
+  ],
+  "复制令牌": [
+    "复制令牌",
+    "複製權杖",
+    "Copy token",
+    "トークンをコピー",
+    "토큰 복사"
+  ],
+  "重新生成令牌": [
+    "重新生成令牌",
+    "重新產生權杖",
+    "Regenerate token",
+    "トークンを再生成",
+    "토큰 다시 생성"
+  ],
+  "接入客户端": [
+    "接入客户端",
+    "接入用戶端",
+    "Client",
+    "接続クライアント",
+    "연결 클라이언트"
+  ],
+  "复制": [
+    "复制",
+    "複製",
+    "Copy",
+    "コピー",
+    "복사"
+  ],
+  "配置里包含访问令牌，请勿分享。长时间生成会通过进度通知保持连接；如果客户端不支持，请把它的 MCP 工具超时调到 600 秒左右。": [
+    "配置里包含访问令牌，请勿分享。长时间生成会通过进度通知保持连接；如果客户端不支持，请把它的 MCP 工具超时调到 600 秒左右。",
+    "設定裡包含存取權杖，請勿分享。長時間生成會透過進度通知保持連線；如果用戶端不支援，請把它的 MCP 工具逾時調到 600 秒左右。",
+    "These configs contain your access token — do not share them. Long generations keep the connection alive with progress notifications; if your client ignores them, raise its MCP tool timeout to about 600 seconds.",
+    "設定にはアクセストークンが含まれます。共有しないでください。長時間の生成は進捗通知で接続を維持します。クライアントが対応していない場合は、MCP ツールのタイムアウトを 600 秒程度に設定してください。",
+    "설정에 액세스 토큰이 포함되어 있으니 공유하지 마세요. 긴 생성은 진행 알림으로 연결을 유지합니다. 클라이언트가 지원하지 않으면 MCP 도구 타임아웃을 약 600초로 늘리세요."
+  ],
+  "已复制到剪贴板": [
+    "已复制到剪贴板",
+    "已複製到剪貼簿",
+    "Copied to clipboard",
+    "クリップボードにコピーしました",
+    "클립보드에 복사했습니다"
+  ],
+  "MCP：已生成 {count} 张图片": [
+    "MCP：已生成 {count} 张图片",
+    "MCP：已生成 {count} 張圖片",
+    "MCP: generated {count} image(s)",
+    "MCP：{count} 枚の画像を生成しました",
+    "MCP: 이미지 {count}장 생성됨"
+  ],
+  "终端执行": [
+    "终端执行",
+    "終端機執行",
+    "Run in a terminal",
+    "ターミナルで実行",
+    "터미널에서 실행"
+  ],
+  "或写入 ~/.pi/agent/mcp.json": [
+    "或写入 ~/.pi/agent/mcp.json",
+    "或寫入 ~/.pi/agent/mcp.json",
+    "Or write to ~/.pi/agent/mcp.json",
+    "または ~/.pi/agent/mcp.json に書き込む",
+    "또는 ~/.pi/agent/mcp.json에 작성"
+  ],
+  "添加后在 pi 会话里执行 /reload；`pi mcp list` 可检查连接。": [
+    "添加后在 pi 会话里执行 /reload；`pi mcp list` 可检查连接。",
+    "新增後在 pi 對話裡執行 /reload；`pi mcp list` 可檢查連線。",
+    "Run /reload in your pi session after adding; `pi mcp list` checks the connection.",
+    "追加後、pi のセッションで /reload を実行してください。`pi mcp list` で接続を確認できます。",
+    "추가한 뒤 pi 세션에서 /reload를 실행하세요. `pi mcp list`로 연결을 확인할 수 있습니다."
+  ],
+  "终端执行（--scope user 对所有项目生效）": [
+    "终端执行（--scope user 对所有项目生效）",
+    "終端機執行（--scope user 對所有專案生效）",
+    "Run in a terminal (--scope user applies to all projects)",
+    "ターミナルで実行（--scope user で全プロジェクトに適用）",
+    "터미널에서 실행 (--scope user는 모든 프로젝트에 적용)"
+  ],
+  "或写入项目根目录 .mcp.json": [
+    "或写入项目根目录 .mcp.json",
+    "或寫入專案根目錄 .mcp.json",
+    "Or write to .mcp.json in the project root",
+    "またはプロジェクト直下の .mcp.json に書き込む",
+    "또는 프로젝트 루트의 .mcp.json에 작성"
+  ],
+  "在 Claude Code 里用 /mcp 查看状态。长任务可把环境变量 MCP_TOOL_TIMEOUT 设为 600000（毫秒）。": [
+    "在 Claude Code 里用 /mcp 查看状态。长任务可把环境变量 MCP_TOOL_TIMEOUT 设为 600000（毫秒）。",
+    "在 Claude Code 裡用 /mcp 檢視狀態。長任務可把環境變數 MCP_TOOL_TIMEOUT 設為 600000（毫秒）。",
+    "Use /mcp in Claude Code to check the status. For long jobs set the MCP_TOOL_TIMEOUT environment variable to 600000 (ms).",
+    "Claude Code では /mcp で状態を確認できます。長いジョブでは環境変数 MCP_TOOL_TIMEOUT を 600000（ミリ秒）に設定してください。",
+    "Claude Code에서 /mcp로 상태를 확인하세요. 긴 작업은 환경 변수 MCP_TOOL_TIMEOUT을 600000(밀리초)으로 설정하세요."
+  ],
+  "写入 ~/.codex/config.toml": [
+    "写入 ~/.codex/config.toml",
+    "寫入 ~/.codex/config.toml",
+    "Write to ~/.codex/config.toml",
+    "~/.codex/config.toml に書き込む",
+    "~/.codex/config.toml에 작성"
+  ],
+  "或用环境变量保存令牌": [
+    "或用环境变量保存令牌",
+    "或用環境變數儲存權杖",
+    "Or keep the token in an environment variable",
+    "またはトークンを環境変数に保存",
+    "또는 토큰을 환경 변수에 보관"
+  ],
+  "使用第二种方式时，需要先把令牌设为环境变量 LANGBAI_MCP_TOKEN。Codex 里用 /mcp 查看状态。": [
+    "使用第二种方式时，需要先把令牌设为环境变量 LANGBAI_MCP_TOKEN。Codex 里用 /mcp 查看状态。",
+    "使用第二種方式時，需要先把權杖設為環境變數 LANGBAI_MCP_TOKEN。Codex 裡用 /mcp 檢視狀態。",
+    "For the second option, set the token as the LANGBAI_MCP_TOKEN environment variable first. Use /mcp in Codex to check the status.",
+    "2 つ目の方法では、先にトークンを環境変数 LANGBAI_MCP_TOKEN に設定してください。Codex では /mcp で状態を確認できます。",
+    "두 번째 방법은 먼저 토큰을 환경 변수 LANGBAI_MCP_TOKEN으로 설정해야 합니다. Codex에서 /mcp로 상태를 확인하세요."
+  ],
+  "合并到 ~/.gemini/settings.json": [
+    "合并到 ~/.gemini/settings.json",
+    "合併到 ~/.gemini/settings.json",
+    "Merge into ~/.gemini/settings.json",
+    "~/.gemini/settings.json にマージ",
+    "~/.gemini/settings.json에 병합"
+  ],
+  "注意字段是 httpUrl（Streamable HTTP），timeout 单位为毫秒。": [
+    "注意字段是 httpUrl（Streamable HTTP），timeout 单位为毫秒。",
+    "注意欄位是 httpUrl（Streamable HTTP），timeout 單位為毫秒。",
+    "Note the field is httpUrl (Streamable HTTP); timeout is in milliseconds.",
+    "フィールド名は httpUrl（Streamable HTTP）、timeout の単位はミリ秒です。",
+    "필드 이름은 httpUrl(Streamable HTTP)이며 timeout 단위는 밀리초입니다."
+  ],
+  "合并到 ~/.cursor/mcp.json（或项目 .cursor/mcp.json）": [
+    "合并到 ~/.cursor/mcp.json（或项目 .cursor/mcp.json）",
+    "合併到 ~/.cursor/mcp.json（或專案 .cursor/mcp.json）",
+    "Merge into ~/.cursor/mcp.json (or the project's .cursor/mcp.json)",
+    "~/.cursor/mcp.json（またはプロジェクトの .cursor/mcp.json）にマージ",
+    "~/.cursor/mcp.json(또는 프로젝트의 .cursor/mcp.json)에 병합"
+  ],
+  "保存后在 Cursor 设置 → MCP 中确认服务已启用。": [
+    "保存后在 Cursor 设置 → MCP 中确认服务已启用。",
+    "儲存後在 Cursor 設定 → MCP 中確認服務已啟用。",
+    "After saving, make sure the server is enabled in Cursor Settings → MCP.",
+    "保存後、Cursor の設定 → MCP でサーバーが有効になっていることを確認してください。",
+    "저장한 뒤 Cursor 설정 → MCP에서 서버가 활성화되었는지 확인하세요."
+  ],
+  "命令面板 “MCP: Open User Configuration”，合并到 mcp.json（或项目 .vscode/mcp.json）": [
+    "命令面板 “MCP: Open User Configuration”，合并到 mcp.json（或项目 .vscode/mcp.json）",
+    "命令面板 “MCP: Open User Configuration”，合併到 mcp.json（或專案 .vscode/mcp.json）",
+    "Command Palette “MCP: Open User Configuration”, merge into mcp.json (or the project's .vscode/mcp.json)",
+    "コマンドパレット “MCP: Open User Configuration” から mcp.json（またはプロジェクトの .vscode/mcp.json）にマージ",
+    "명령 팔레트 “MCP: Open User Configuration”에서 mcp.json(또는 프로젝트의 .vscode/mcp.json)에 병합"
+  ],
+  "VS Code 使用 servers 而不是 mcpServers。": [
+    "VS Code 使用 servers 而不是 mcpServers。",
+    "VS Code 使用 servers 而不是 mcpServers。",
+    "VS Code uses servers, not mcpServers.",
+    "VS Code では mcpServers ではなく servers を使います。",
+    "VS Code는 mcpServers가 아니라 servers를 사용합니다."
+  ],
+  "合并到 ~/.codeium/windsurf/mcp_config.json": [
+    "合并到 ~/.codeium/windsurf/mcp_config.json",
+    "合併到 ~/.codeium/windsurf/mcp_config.json",
+    "Merge into ~/.codeium/windsurf/mcp_config.json",
+    "~/.codeium/windsurf/mcp_config.json にマージ",
+    "~/.codeium/windsurf/mcp_config.json에 병합"
+  ],
+  "Windsurf 的远程地址字段是 serverUrl。": [
+    "Windsurf 的远程地址字段是 serverUrl。",
+    "Windsurf 的遠端位址欄位是 serverUrl。",
+    "Windsurf uses the serverUrl field for remote servers.",
+    "Windsurf のリモート URL フィールドは serverUrl です。",
+    "Windsurf의 원격 주소 필드는 serverUrl입니다."
+  ],
+  "Cline 面板 → MCP Servers → Configure，合并到 cline_mcp_settings.json": [
+    "Cline 面板 → MCP Servers → Configure，合并到 cline_mcp_settings.json",
+    "Cline 面板 → MCP Servers → Configure，合併到 cline_mcp_settings.json",
+    "Cline panel → MCP Servers → Configure, merge into cline_mcp_settings.json",
+    "Cline パネル → MCP Servers → Configure から cline_mcp_settings.json にマージ",
+    "Cline 패널 → MCP Servers → Configure에서 cline_mcp_settings.json에 병합"
+  ],
+  "必须写 type: streamableHttp，否则 Cline 会按旧 SSE 方式连接。timeout 单位为秒。": [
+    "必须写 type: streamableHttp，否则 Cline 会按旧 SSE 方式连接。timeout 单位为秒。",
+    "必須寫 type: streamableHttp，否則 Cline 會按舊 SSE 方式連線。timeout 單位為秒。",
+    "type: streamableHttp is required, otherwise Cline connects with legacy SSE. timeout is in seconds.",
+    "type: streamableHttp が必須です。ないと Cline は旧 SSE 方式で接続します。timeout の単位は秒です。",
+    "type: streamableHttp가 필요합니다. 없으면 Cline이 구형 SSE 방식으로 연결합니다. timeout 단위는 초입니다."
+  ],
+  "合并到 opencode.json（项目根目录或 ~/.config/opencode/）": [
+    "合并到 opencode.json（项目根目录或 ~/.config/opencode/）",
+    "合併到 opencode.json（專案根目錄或 ~/.config/opencode/）",
+    "Merge into opencode.json (project root or ~/.config/opencode/)",
+    "opencode.json（プロジェクト直下または ~/.config/opencode/）にマージ",
+    "opencode.json(프로젝트 루트 또는 ~/.config/opencode/)에 병합"
+  ],
+  "合并到 claude_desktop_config.json（设置 → 开发者 → 编辑配置）": [
+    "合并到 claude_desktop_config.json（设置 → 开发者 → 编辑配置）",
+    "合併到 claude_desktop_config.json（設定 → 開發者 → 編輯設定）",
+    "Merge into claude_desktop_config.json (Settings → Developer → Edit Config)",
+    "claude_desktop_config.json にマージ（設定 → 開発者 → 構成を編集）",
+    "claude_desktop_config.json에 병합 (설정 → 개발자 → 구성 편집)"
+  ],
+  "Claude Desktop 的配置文件只支持本地命令，这里用 mcp-remote 桥接（需要 Node.js）。--header 的冒号两侧不要加空格。": [
+    "Claude Desktop 的配置文件只支持本地命令，这里用 mcp-remote 桥接（需要 Node.js）。--header 的冒号两侧不要加空格。",
+    "Claude Desktop 的設定檔只支援本機命令，這裡用 mcp-remote 橋接（需要 Node.js）。--header 的冒號兩側不要加空格。",
+    "Claude Desktop's config file only supports local commands, so this bridges through mcp-remote (requires Node.js). Do not put spaces around the colon in --header.",
+    "Claude Desktop の設定ファイルはローカルコマンドのみ対応のため、mcp-remote で中継します（Node.js が必要）。--header のコロンの前後に空白を入れないでください。",
+    "Claude Desktop 설정 파일은 로컬 명령만 지원하므로 mcp-remote로 중계합니다(Node.js 필요). --header의 콜론 앞뒤에 공백을 넣지 마세요."
+  ],
+  "其他客户端": [
+    "其他客户端",
+    "其他用戶端",
+    "Other clients",
+    "その他のクライアント",
+    "기타 클라이언트"
+  ],
+  "Cherry Studio、Trae 等：选择 Streamable HTTP（可流式 HTTP）类型后填写": [
+    "Cherry Studio、Trae 等：选择 Streamable HTTP（可流式 HTTP）类型后填写",
+    "Cherry Studio、Trae 等：選擇 Streamable HTTP（可串流 HTTP）類型後填寫",
+    "Cherry Studio, Trae, etc.: choose the Streamable HTTP type and fill in",
+    "Cherry Studio、Trae など：Streamable HTTP タイプを選んで入力",
+    "Cherry Studio, Trae 등: Streamable HTTP 유형을 선택한 뒤 입력"
+  ],
+  "传输方式为 Streamable HTTP（无状态，不支持旧 SSE 端点）；协议版本 2024-11-05 ～ 2025-11-25。": [
+    "传输方式为 Streamable HTTP（无状态，不支持旧 SSE 端点）；协议版本 2024-11-05 ～ 2025-11-25。",
+    "傳輸方式為 Streamable HTTP（無狀態，不支援舊 SSE 端點）；協定版本 2024-11-05 ～ 2025-11-25。",
+    "Transport is Streamable HTTP (stateless, no legacy SSE endpoint); protocol versions 2024-11-05 to 2025-11-25.",
+    "トランスポートは Streamable HTTP（ステートレス、旧 SSE エンドポイント非対応）、プロトコルバージョンは 2024-11-05 ～ 2025-11-25 です。",
+    "전송 방식은 Streamable HTTP(상태 비저장, 구형 SSE 엔드포인트 미지원)이며 프로토콜 버전은 2024-11-05 ~ 2025-11-25입니다."
   ]
 }

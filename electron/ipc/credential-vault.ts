@@ -1,6 +1,6 @@
 export const CREDENTIAL_PREFIX = "enc:v1:";
 export const SENSITIVE_SETTING_KEYS = [
-  "visionApiKey", "convertApiKey", "agentApiKey", "tagServerApiKey", "baiduSecret", "translateAiApiKey", "imageApiKey", "openaiImageEditApiKey",
+  "visionApiKey", "convertApiKey", "agentApiKey", "tagServerApiKey", "baiduSecret", "translateAiApiKey", "imageApiKey", "openaiImageEditApiKey", "mcpServerToken",
 ] as const;
 
 type Cryptography = {

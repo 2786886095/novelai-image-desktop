@@ -53,6 +53,7 @@ import { artistStyleCatalog, searchDanbooru, searchDanbooruConcepts } from "./da
 import { searchOnlineGallery } from "./online-gallery";
 import { listReferencePresets } from "./reference-presets";
 import { getHistory, getHistoryGroups, getSettings, setSetting } from "./store";
+import { MCP_ATTACHMENT_PREFIX, mcpAttachment } from "./mcp-attachments";
 import {
   conversationForRuntimeSession,
   deleteAgentMemory,
@@ -222,6 +223,11 @@ function defaultExtras(): GenerateExtras {
   };
 }
 
+/** Exported for the fork's MCP server so quotes use exactly the executed input. */
+export function agentGenerationInput(request: AgentToolBridgeRequest, args: Record<string, unknown>) {
+  return generationInput(request, args);
+}
+
 function generationInput(request: AgentToolBridgeRequest, args: Record<string, unknown>) {
   const settings = getSettings();
   const result = buildAgentGenerationInput(
@@ -269,7 +275,9 @@ function attachmentForRequest(request: AgentToolBridgeRequest, value: unknown): 
   // Tool-cache entries are not authority for a generated history image: its
   // record may have been deleted while its old pathname was reused.
   const validCached = history || attachmentId.startsWith("reference-preset:") ? cached : undefined;
-  const attachment = local ?? validCached ?? (history ? imageAttachment(history) : undefined);
+  // Fork: images imported through the local MCP server.
+  const mcp = attachmentId.startsWith(MCP_ATTACHMENT_PREFIX) ? mcpAttachment(attachmentId) : undefined;
+  const attachment = local ?? validCached ?? (history ? imageAttachment(history) : undefined) ?? mcp;
   if (!attachment || attachment.unavailable || !attachment.filePath || !fs.existsSync(attachment.filePath)) {
     throw new Error(`找不到 attachmentId=${attachmentId} 对应的本机文件。`);
   }

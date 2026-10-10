@@ -206,6 +206,10 @@ export function defaultSettings(): AppSettings {
     promptRandomizer: true,
     superDrop: true,
     streamPreviewEnabled: true,
+    mcpServerEnabled: false,
+    mcpServerPort: 39280,
+    mcpServerToken: "",
+    mcpMaxAnlasPerCall: 0,
     showFloatingToolbar: true,
     historyJumpAfterGenerate: true,
     historyRetentionDays: 30,
@@ -676,6 +680,9 @@ export function getSetting<K extends SettingKey>(key: K): AppSettings[K] {
 }
 
 export function setSetting<K extends SettingKey>(key: K, value: AppSettings[K]): AppSettings[K] {
+  if (key === "mcpServerEnabled" && typeof value !== "boolean") throw new Error("Invalid MCP enabled setting");
+  if (key === "mcpServerPort" && (typeof value !== "number" || !Number.isInteger(value) || value < 1024 || value > 65535)) throw new Error("Invalid MCP port");
+  if (key === "mcpMaxAnlasPerCall" && (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100000)) throw new Error("Invalid MCP Anlas limit");
   if (key === "copyImageMetadata" && typeof value !== "boolean") throw new Error("Invalid image metadata copy setting");
   if(['apiBaseUrl','imageBaseUrl','allowCustomEndpoint','allowCustomEndpointFallback'].includes(key) && (currentNaiAccount() || naiAccountsBusy())) throw Error('账户接口由所选账户绑定；操作期间不能修改。');
   if(key==='imageProvider'&&value!=='novelai'&&value!=='openai-images')throw Error(NOVELAI_ONLY_MESSAGE);

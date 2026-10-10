@@ -14,6 +14,7 @@ import "./studio-typography.css";
 import "./studio-controls.css";
 import "./typography.css";
 import {FavoritesNoticeSupport} from "./components/LocalFavorites";
+import {McpEventSupport} from "./components/McpServerSettings";
 import {installStudioAgent} from './studio-agent';
 
 installStudioAgent();
@@ -31,6 +32,7 @@ createRoot(document.getElementById("root")!).render(
       <ImagePasteSupport />
       <ImageCopySupport />
       <FavoritesNoticeSupport />
+      <McpEventSupport />
       <App />
     </AppErrorBoundary>
   </React.StrictMode>,
