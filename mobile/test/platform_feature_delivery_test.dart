@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -11,12 +12,18 @@ import 'package:novelai_mobile/agent/mobile_mcp_tools.dart';
 import 'package:novelai_mobile/agent/agent_tools.dart';
 import 'package:novelai_mobile/agent/agent_models.dart';
 import 'package:novelai_mobile/services/storage.dart';
+import 'package:novelai_mobile/services/novelai_accounts.dart';
 import 'package:novelai_mobile/services/unified_storage.dart';
 import 'package:novelai_mobile/screens/gallery_screen.dart';
 import 'package:novelai_mobile/screens/external_mcp_settings.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 
+class AccountApp extends AppState {
+  final NovelAiAccounts vault;
+  AccountApp(this.vault,Storage storage):super(storage:storage,preloadCompletedImage:(_) async {});
+  @override NovelAiAccounts get naiAccounts=>vault;
+}
 class Paths extends PathProviderPlatform {
   final String root;
   Paths(this.root);
@@ -128,6 +135,40 @@ void main(){
       await (await host.prepare('apply_to_workbench',{'image':id})).execute();expect(app.workbenchImage?.filePath,imported['filePath']);
       await expectLater(host.prepare('generate_image',{'positivePrompt':'blue coat'}),throwsStateError);
     } finally {host.dispose();}
+  });
+  test('MCP approval is invalidated by same-host account switch',() async {
+    String? saved;
+    final vault=NovelAiAccounts(read:() async=>saved,write:(value) async{saved=value;});
+    await vault.load(legacyToken:() async=>null,legacySettings:() async=>AppSettings());
+    final a=await vault.add(label:'Fixture A',method:'token',token:'fixture-account-a');
+    final b=await vault.add(label:'Fixture B',method:'token',token:'fixture-account-b');
+    await vault.activate(a.id);
+    final bound=AccountApp(vault,storage)..settings=AppSettings(proxyMode:'direct');
+    bound.account=const AccountSummary(hasToken:true,tierLevel:3,anlasBalance:10000,hasActiveSubscription:true);
+    final host=MobileMcpTools(app:bound,assets:Directory('${root.path}/account-mcp'),budget:()=>10000);
+    try {
+      final operation=await host.prepare('generate_image',{'positivePrompt':'blue coat'});
+      expect(jsonEncode(operation.summary),isNot(contains('fixture-account-a')));
+      await vault.activate(b.id);
+      await expectLater(operation.execute(),throwsStateError);
+      expect(bound.history,isEmpty);
+    } finally {host.dispose();bound.dispose();}
+  });
+  test('external execution leases the approved native account until completion',() async {
+    String? saved;
+    final vault=NovelAiAccounts(read:() async=>saved,write:(value) async{saved=value;});
+    await vault.load(legacyToken:() async=>null,legacySettings:() async=>AppSettings());
+    final a=await vault.add(label:'Fixture A',method:'token',token:'fixture-account-a');
+    final b=await vault.add(label:'Fixture B',method:'token',token:'fixture-account-b');
+    await vault.activate(a.id);
+    final bound=AccountApp(vault,storage),pending=Completer<void>();
+    try {
+      final running=bound.withExternalAnlasLimit(10,()=>pending.future);
+      try {await expectLater(vault.activate(b.id),throwsStateError);}
+      finally {pending.complete();await running;}
+      expect(vault.active!.profile.id,a.id);
+      await vault.activate(b.id);expect(vault.active!.profile.id,b.id);
+    } finally {bound.dispose();}
   });
   testWidgets('MCP listener remains alive after settings card is removed', (tester) async {
     await tester.runAsync(()=>app.externalMcp.toggle());final server=app.externalMcp.server!;

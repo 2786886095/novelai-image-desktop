@@ -4062,7 +4062,13 @@ class AppState extends ChangeNotifier {
   int? _externalAnlasLimit;
   Future<T> withExternalAnlasLimit<T>(int limit,Future<T> Function() action) async {
     if(_externalAnlasLimit!=null || busy)throw StateError('Another image task is running');
-    _externalAnlasLimit=limit;try{return await action();}finally{_externalAnlasLimit=null;}
+    _externalAnlasLimit=limit;
+    try {
+      final account=naiAccounts.active;
+      if(account==null)return await action();
+      // Hold the approved account lease before any executor await or token read.
+      return await naiAccounts.operation((_)=>action(),expectedToken:account.token,profileId:account.profile.id);
+    } finally {_externalAnlasLimit=null;}
   }
   void _checkExternalAnlas(AnlasQuote quote) {
     if(_externalAnlasLimit!=null && (!quote.ok || quote.amount==null || quote.amount!>_externalAnlasLimit!)) {

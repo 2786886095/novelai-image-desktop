@@ -79,6 +79,8 @@ class MobileMcpTools {
   }
   Map<String,dynamic> _ok(Object? data,[List<Map<String,dynamic>> extra=const []])=>{'content':[{'type':'text','text':jsonEncode(data)},...extra]};
   String _revision()=>sha256.convert(utf8.encode(jsonEncode([app.settings.toJson(),app.params.toJson(),app.extras.toJson(),
+    app.naiAccounts.active?.profile.toJson(),
+    if(app.naiAccounts.active case final active?) sha256.convert(utf8.encode(active.token)).toString(),
     app.generationGroupId,app.inpaintEngine,app.inpaintSourceMode,app.inpaintModel,app.inpaintSizeMode,
     app.inpaintCustomSize.width,app.inpaintCustomSize.height,app.i2iSizeMode,app.i2iSourceMode,
     app.workbenchImage?.filePath,app.i2iOriginalImage?.filePath]))).toString();
@@ -134,7 +136,8 @@ class MobileMcpTools {
           for(final entry in imageHashes.entries) {if(sha256.convert(await File(entry.key).readAsBytes()).toString()!=entry.value)throw StateError('Image changed');}
         }
         if(prepared!=null){final fresh=await _quote(name,args);if(!fresh.ok || fresh.amount==null || fresh.amount!>budget())throw StateError('Budget changed');
-          final output=await app.withExternalAnlasLimit(budget(),prepared.execute);return {'isError':!output.ok,'content':[{'type':'text','text':output.output}],
+          if(app.busy || revision!=_revision())throw StateError('Context changed before execution');
+           final output=await app.withExternalAnlasLimit(budget(),prepared.execute);return {'isError':!output.ok,'content':[{'type':'text','text':output.output}],
             'structuredContent':{'images':output.generatedImages.map((v)=>v.toJson()).toList()}};}
         if(name=='estimate_cost') {final q=await _quote(args['operation'],Map<String,dynamic>.from(args['arguments'] as Map? ?? {}));return _ok({'amount':q.amount,'ok':q.ok,'source':q.source.name});}
         if(name=='import_image'){
