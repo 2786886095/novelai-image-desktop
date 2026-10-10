@@ -1,12 +1,12 @@
-name: Release Windows (verified)
+name: Windows candidate (standalone publication disabled)
 
 on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish v2.5.7 only after every Windows and shared-source gate passes
+        description: Historical field; standalone Windows publication is disabled
         type: boolean
-        default: true
+        default: false
 permissions:
   contents: read
 env:
@@ -94,7 +94,7 @@ jobs:
         run: flutter test --no-pub --concurrency=4
   publish:
     needs: [windows, shared-source]
-    if: inputs.publish
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

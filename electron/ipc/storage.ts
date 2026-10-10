@@ -13,6 +13,7 @@ import {
   getHistoryGroups,
   getSetting,
   removeHistory,
+  removeHistoryItems,
   renameHistoryGroup,
   setHistoryGroup,
   setSetting,
@@ -167,8 +168,8 @@ export async function exportFiles(files: BatchExportFile[], defaultName = "image
   return { ok: true, count: added, failed: requested.length - added, message: `已导出 ${added} 张图片。`, path: result.filePath };
 }
 
-export function listHistory(date?: string, groupId?: string) {
-  return getHistory(date, groupId);
+export function listHistory(date?: string, groupId?: string, forceReconcile = false) {
+  return getHistory(date, groupId, forceReconcile);
 }
 
 export function listHistoryDates() {
@@ -183,7 +184,7 @@ export function createGroup(name: string) {
   return createHistoryGroup(name);
 }
 
-export function assignHistoryGroup(id: string, groupId?: string) {
+export function assignHistoryGroup(id: string | string[], groupId?: string) {
   return setHistoryGroup(id, groupId);
 }
 
@@ -258,6 +259,52 @@ export async function deleteHistoryItem(id: string) {
   renamingHistoryIds.add(id);
   try { return await deleteHistoryItemUnlocked(id); }
   finally { renamingHistoryIds.delete(id); }
+}
+
+/** Batch counterpart of the guarded single delete: disk first, one index commit.
+ * Partial disk failures retain those records; shared or unmanaged files stay put. */
+export async function deleteHistoryItems(rawIds: string[]) {
+  if (!Array.isArray(rawIds) || !rawIds.length || rawIds.length > 50_000 || rawIds.some(id => typeof id !== 'string' || !id)) {
+    return { ok: false, deletedIds: [] as string[], failed: [{ id: '', message: '无效的作品选择。' }] };
+  }
+  const ids = [...new Set(rawIds)], selected = new Set(ids), history = getHistory();
+  const rows = new Map(history.map(item => [item.id, item]));
+  const failed: Array<{ id: string; message: string }> = [], deletedIds: string[] = [], owned: string[] = [];
+  // Acquire every selected identity before awaiting any filesystem operation.
+  for (const id of ids) {
+    if (renamingHistoryIds.has(id)) { failed.push({ id, message: '该图片正在处理，请稍后重试。' }); selected.delete(id); }
+    else { renamingHistoryIds.add(id); owned.push(id); }
+  }
+  const key = (file: string) => process.platform === 'win32' ? path.resolve(file).toLowerCase() : path.resolve(file);
+  const outsideSelection = new Set(history.filter(row => !selected.has(row.id) && row.filePath).map(row => key(row.filePath)));
+  const outcomes = new Map<string, string | null>(), outputDir = getSetting('outputDir');
+  try {
+    for (const id of owned) {
+      const item = rows.get(id); let failure: string | null = null;
+      if (item?.filePath && outputDir && isInsideDir(item.filePath, outputDir) && !outsideSelection.has(key(item.filePath))) {
+        const fileKey = key(item.filePath);
+        if (outcomes.has(fileKey)) failure = outcomes.get(fileKey)!;
+        else {
+          try {
+            const stat = await fs.lstat(item.filePath);
+            if (!stat.isFile() || stat.isSymbolicLink()) throw Error('图片路径不是普通文件。');
+            const [file, root] = await Promise.all([fs.realpath(item.filePath), fs.realpath(outputDir)]);
+            if (!isInsideDir(file, root)) throw Error('图片路径通过链接指向保存目录之外。');
+            await fs.unlink(item.filePath);
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') failure = error instanceof Error ? error.message : String(error);
+          }
+          outcomes.set(fileKey, failure);
+        }
+      }
+      if (failure) failed.push({ id, message: failure }); else deletedIds.push(id);
+    }
+    if (deletedIds.length) {
+      removeHistoryItems(deletedIds);
+      invalidateAgentHistoryImage(deletedIds);
+    }
+    return { ok: failed.length === 0, deletedIds, failed };
+  } finally { for (const id of owned) renamingHistoryIds.delete(id); }
 }
 async function deleteHistoryItemUnlocked(id: string) {
   const history = getHistory(), item = history.find(row => row.id === id);

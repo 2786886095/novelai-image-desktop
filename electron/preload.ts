@@ -480,8 +480,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
   clearWorkbenchImage: () => ipcRenderer.invoke("nai:clearWorkbenchImage"),
 
-  getHistory: (date?: string, groupId?: string) =>
-    ipcRenderer.invoke("storage:getHistory", date, groupId),
+  getHistory: (date?: string, groupId?: string, forceReconcile?: boolean) =>
+    ipcRenderer.invoke("storage:getHistory", date, groupId, forceReconcile),
   getHistoryDates: () => ipcRenderer.invoke("storage:getHistoryDates"),
   getHistoryGroups: () => ipcRenderer.invoke("storage:getHistoryGroups"),
   createHistoryGroup: (name: string) =>
@@ -494,9 +494,9 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     imageSaves.run(`group:${groupId}`, "archive", () => ipcRenderer.invoke("storage:exportGroup", groupId)),
   exportFiles: (files: BatchExportFile[], defaultName?: string) =>
     imageSaves.run(`files:${JSON.stringify(files)}`, "archive", () => ipcRenderer.invoke("storage:exportFiles", files, defaultName), files.length),
-  setHistoryGroup: (id: string, groupId?: string) =>
+  setHistoryGroup: (id: string | string[], groupId?: string) =>
     ipcRenderer.invoke("storage:setHistoryGroup", id, groupId),
-  deleteHistory: (id: string) => ipcRenderer.invoke("storage:delete", id),
+  deleteHistory: (id: string | string[]) => ipcRenderer.invoke("storage:delete", id),
   pruneMissingHistoryItem: (id: string) =>
     ipcRenderer.invoke("storage:pruneMissing", id),
   renameHistoryItem: (id: string, name: string) =>

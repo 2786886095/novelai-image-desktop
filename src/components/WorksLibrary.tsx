@@ -7,26 +7,36 @@ import {directoryKey, filterWorks, readWorksPrompt, selectWorksRange, WORKS_PAGE
 import {worksText} from '../works-text';
 import {ImagePreviewDialog} from './ImagePreviewDialog';
 import {ImageFavoriteButton} from './ImageFavoriteButton';
+import {confirmAction} from './confirm';
+import {worksBatchText} from '../works-text';
 import '../works-library.css';
 
 export function WorksLibrary({active = true}: {active?: boolean}) {
-  const language = useAppStore(s=>s.settings?.language), t = worksText(language),workflow=workflowText(language);
+  const language = useAppStore(s=>s.settings?.language), t = worksText(language),workflow=workflowText(language),batch=worksBatchText(language);
   const [items,setItems] = useState<HistoryItem[]>([]), [groups,setGroups] = useState<HistoryGroup[]>([]);
   const [loading,setLoading] = useState(false), [error,setError] = useState(''), [notice,setNotice] = useState('');
   const [query,setQuery] = useState(''), [date,setDate] = useState(''), [group,setGroup] = useState(''), [directory,setDirectory] = useState('');
   const [order,setOrder] = useState<'newest'|'oldest'>('newest'), [page,setPage] = useState(0);
   const [focused,setFocused] = useState<string|null>(null), [selection,setSelection] = useState<Set<string>>(new Set());
   const anchor = useRef<string|null>(null), revision = useRef(0);
+  const [editMode,setEditMode] = useState(false), [destination,setDestination] = useState('__ungrouped'), [busy,setBusy] = useState(false);
+  const busyRef = useRef(false), pruning = useRef(new Set<string>());
+  const knownIds = useRef(new Set<string>());
   const [prompt,setPrompt] = useState<WorksPrompt|null>(null), [promptError,setPromptError] = useState(''), [promptLoading,setPromptLoading] = useState(false), [retry,setRetry] = useState(0);
   const [imageFailed,setImageFailed] = useState(false),[previewOpen,setPreviewOpen]=useState(false);
-  const refresh = useCallback(async()=>{
+  const refresh = useCallback(async(force = false)=>{
     const token = ++revision.current;
     setLoading(true); setError('');
     try {
       if (!window.naiDesktop?.getHistory) throw Error(t.unavailable);
       // Do not read the date-filtered workbench history: this page owns its complete snapshot.
-      const [all,collections] = await Promise.all([window.naiDesktop.getHistory(),window.naiDesktop.getHistoryGroups()]);
+      const all = await window.naiDesktop.getHistory(undefined,undefined,force);
+      const collections = await window.naiDesktop.getHistoryGroups();
       if (token !== revision.current) return;
+      const present = new Set(all.map(item=>item.id));
+      const removed = [...knownIds.current].filter(id=>!present.has(id));
+      knownIds.current = present;
+      if(removed.length)useAppStore.getState().forgetHistoryItems(removed);
       setItems(all); setGroups(collections);
       setSelection(old=>new Set([...old].filter(id=>all.some(item=>item.id===id))));
     } catch(e) { if (token===revision.current) setError(e instanceof Error ? e.message : t.error); }
@@ -40,7 +50,12 @@ export function WorksLibrary({active = true}: {active?: boolean}) {
       if (state.history===previous.history) return;
       clearTimeout(timer); timer=setTimeout(()=>void refresh(),200);
     });
-    return ()=>{++revision.current;clearTimeout(timer);unsubscribe();};
+    // A cached thumbnail will not emit a new image error after an Explorer
+    // deletion. Check on return to the app and periodically while this page is active.
+    const check = ()=>{if(!busyRef.current && !document.hidden)void refresh(true);};
+    const interval = setInterval(check,10_000);
+    window.addEventListener('focus',check);document.addEventListener('visibilitychange',check);
+    return ()=>{++revision.current;clearTimeout(timer);clearInterval(interval);unsubscribe();window.removeEventListener('focus',check);document.removeEventListener('visibilitychange',check);};
   },[active,refresh]);
   const filtered = useMemo(()=>filterWorks(items,{query,date,group,directory,order}),[items,query,date,group,directory,order]);
   const pages = Math.max(1,Math.ceil(filtered.length/WORKS_PAGE_SIZE)), currentPage = Math.min(page,pages-1);
@@ -72,6 +87,7 @@ export function WorksLibrary({active = true}: {active?: boolean}) {
   },[active,selected,retry,t]);
   function focus(item:HistoryItem) { setFocused(item.id); }
   function toggle(item:HistoryItem,range=false) {
+    setEditMode(true);
     setSelection(old=>selectWorksRange(filtered.map(i=>i.id),old,anchor.current,item.id,range));
     if (!range) anchor.current=item.id;
     focus(item);
@@ -87,8 +103,35 @@ export function WorksLibrary({active = true}: {active?: boolean}) {
     setNotice('');try{if(!(await window.naiDesktop.openInExplorer(item.filePath)).ok)throw Error();}catch{setNotice(t.error);}
   }
   function reset() {setQuery('');setDate('');setGroup('');setDirectory('');}
+  async function missing(item:HistoryItem) {
+    if (pruning.current.has(item.id)) return;
+    pruning.current.add(item.id);
+    try { await useAppStore.getState().dropMissingImage(item.id); await refresh(); }
+    catch { /* A decoding or offline-drive error is not proof of deletion. */ }
+    finally { pruning.current.delete(item.id); }
+  }
+  async function edit(kind:'move'|'delete') {
+    if(busyRef.current || !selection.size)return;
+    const ids=[...selection];busyRef.current=true;setBusy(true);setError('');
+    try {
+      if(kind==='delete' && !(await confirmAction(batch.confirm.replace('{count}',String(ids.length)),batch.remove)))return;
+      if(kind==='move') {
+        const result=await window.naiDesktop.setHistoryGroup(ids,destination);
+        if(!result.ok)throw Error(result.message||t.error);
+        setSelection(new Set());
+      } else {
+        const result=await window.naiDesktop.deleteHistory(ids);
+        const deleted=new Set(result.deletedIds??[]);
+        useAppStore.getState().forgetHistoryItems([...deleted]);
+        setSelection(old=>new Set([...old].filter(id=>!deleted.has(id))));
+        if(!result.ok)setError(`${batch.failed}: ${result.failed?.length??ids.length}. ${result.failed?.[0]?.message??result.message??t.error}`);
+      }
+      await useAppStore.getState().refreshHistory();await refresh(true);
+    } catch(e) {setError(e instanceof Error?e.message:t.error);await refresh();}
+    finally {busyRef.current=false;setBusy(false);}
+  }
   return <section className="works-library" aria-label={t.title}>
-    <header className="works-header"><div><h2>{t.title}</h2></div><div className="works-actions"><button onClick={()=>useAppStore.getState().setActiveTab('favorites')}>{t.favorites}</button><button onClick={()=>void refresh()} disabled={loading}>{loading?t.loading:t.refresh}</button></div></header>
+    <header className="works-header"><div><h2>{t.title}</h2></div><div className="works-actions"><button disabled={busy} aria-pressed={editMode} onClick={()=>{setEditMode(!editMode);if(editMode)setSelection(new Set());}}>{batch.edit}</button><button onClick={()=>useAppStore.getState().setActiveTab('favorites')}>{t.favorites}</button><button onClick={()=>void refresh(true)} disabled={loading||busy}>{loading?t.loading:t.refresh}</button></div></header>
     <div className="works-toolbar">
       <input type="search" aria-label={t.search} placeholder={t.search} value={query} onChange={e=>setQuery(e.target.value)}/>
       <SelectMenuCompat aria-label={t.dates} value={date} onChange={e=>setDate(e.target.value)}><option value="">{t.dates}</option>{dates.map(d=><option key={d}>{d}</option>)}</SelectMenuCompat>
@@ -106,13 +149,15 @@ export function WorksLibrary({active = true}: {active?: boolean}) {
         {folders.map(folder=><button key={directoryKey(folder.path)} aria-pressed={directoryKey(directory)===directoryKey(folder.path)} title={folder.path} onClick={()=>{setDirectory(folder.path);setGroup('');}}><span className="works-ellipsis">{worksName(folder.path)}</span><span>{folder.count}</span></button>)}
       </nav>
       <main className="works-results" aria-busy={loading}>
-        <div className="works-selection"><span>{t.selected} {selection.size}</span><button disabled={!visible.length} onClick={()=>setSelection(new Set(visible.map(i=>i.id)))}>{t.selectPage}</button><button disabled={!filtered.length} onClick={()=>setSelection(new Set(filtered.map(i=>i.id)))}>{t.selectAll}</button><button disabled={!selection.size} onClick={()=>setSelection(new Set())}>{t.clear}</button></div>
+        <div className="works-selection"><span>{t.selected} {selection.size}</span><button disabled={!visible.length||busy} onClick={()=>{setEditMode(true);setSelection(new Set(visible.map(i=>i.id)));}}>{t.selectPage}</button><button disabled={!filtered.length||busy} onClick={()=>{setEditMode(true);setSelection(new Set(filtered.map(i=>i.id)));}}>{t.selectAll}</button><button disabled={!selection.size||busy} onClick={()=>setSelection(new Set())}>{t.clear}</button>
+          {editMode&&<div className="works-batch-controls" aria-busy={busy}><SelectMenuCompat aria-label={batch.destination} value={destination} disabled={busy} onChange={e=>setDestination(e.target.value)}><option value="__ungrouped">{t.ungrouped}</option>{groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</SelectMenuCompat><button disabled={!selection.size||busy||loading} onClick={()=>void edit('move')}>{batch.move}</button><button className="works-batch-delete" disabled={!selection.size||busy||loading} onClick={()=>void edit('delete')}>{busy?t.loading:batch.remove}</button></div>}
+        </div>
         {!filtered.length?<div className="works-empty">{loading?t.loading:items.length?t.noMatch:t.empty}</div>:<div className="works-grid">
           {visible.map(item=><article key={item.id} className={`works-tile${focused===item.id?' is-focused':''}${selection.has(item.id)?' is-selected':''}`}>
             <ImageFavoriteButton src={item.fileUrl} compact/><button className="works-thumbnail" onDoubleClick={()=>{focus(item);setPreviewOpen(true);}} aria-label={worksName(item.filePath)} aria-pressed={focused===item.id} onClick={e=>{if(e.ctrlKey||e.metaKey||e.shiftKey)toggle(item,e.shiftKey);else{focus(item);anchor.current=item.id;}}} onKeyDown={e=>{const delta=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(delta){e.preventDefault();goTo((selectedIndex>=0?selectedIndex:filtered.indexOf(item))+delta);}}}>
-              <img src={item.fileUrl} alt="" loading="lazy" decoding="async" onError={e=>{e.currentTarget.style.visibility='hidden';e.currentTarget.parentElement?.classList.add('has-missing-image');}}/><span className="works-missing">{t.missing}</span>
+              <img src={item.fileUrl} alt="" loading="lazy" decoding="async" onError={e=>{e.currentTarget.style.visibility='hidden';e.currentTarget.parentElement?.classList.add('has-missing-image');void missing(item);}}/><span className="works-missing">{t.missing}</span>
             </button>
-            <label className="works-tile-caption"><input type="checkbox" checked={selection.has(item.id)} aria-label={`${t.selected}: ${worksName(item.filePath)}`} onChange={()=>toggle(item)}/><span title={item.filePath}>{worksName(item.filePath)}</span></label>
+            <label className="works-tile-caption"><input type="checkbox" disabled={busy} checked={selection.has(item.id)} aria-label={`${t.selected}: ${worksName(item.filePath)}`} onChange={()=>toggle(item)}/><span title={item.filePath}>{worksName(item.filePath)}</span></label>
             <small>{item.width} × {item.height} · {item.date}</small>
           </article>)}
         </div>}
@@ -121,7 +166,7 @@ export function WorksLibrary({active = true}: {active?: boolean}) {
       <aside className="works-preview" aria-label={t.preview}>
         {!selected?<div className="works-empty">{t.choose}</div>:<>
           <h3 className="works-ellipsis" title={selected.filePath}>{worksName(selected.filePath)}</h3>
-          <button className="works-preview-open" type="button" aria-label={workflow.preview} onClick={()=>setPreviewOpen(true)}>{imageFailed?<p role="status">{t.missing}</p>:<img key={selected.fileUrl} src={selected.fileUrl} alt={worksName(selected.filePath)} onError={()=>setImageFailed(true)}/>}</button>
+          <button className="works-preview-open" type="button" aria-label={workflow.preview} onClick={()=>setPreviewOpen(true)}>{imageFailed?<p role="status">{t.missing}</p>:<img key={selected.fileUrl} src={selected.fileUrl} alt={worksName(selected.filePath)} onError={()=>{setImageFailed(true);void missing(selected);}}/>}</button>
           <div className="works-preview-actions"><button type="button" onClick={()=>setPreviewOpen(true)}>{workflow.preview}</button><ImageFavoriteButton src={selected.fileUrl}/></div>
           {previewOpen&&<ImagePreviewDialog images={previewImages} index={selectedIndex} onIndex={goTo} onClose={()=>setPreviewOpen(false)}/>}
           <div className="works-preview-meta"><span>{selected.width} × {selected.height}</span><span>{selected.model}</span><span>Seed {selected.actualSeed}</span></div>

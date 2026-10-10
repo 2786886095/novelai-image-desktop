@@ -1649,6 +1649,7 @@ button { user-select: none; }
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: 100%;
   min-width: 0;
   min-height: 0;
   padding: 20px 24px;
@@ -1660,6 +1661,8 @@ button { user-select: none; }
 }
 .ai-log-head {
   display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
@@ -1688,6 +1691,8 @@ button { user-select: none; }
 }
 .ai-log-list {
   display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
   flex-direction: column;
   gap: 8px;
 }

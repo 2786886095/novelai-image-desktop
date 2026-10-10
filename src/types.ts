@@ -2025,7 +2025,7 @@ export interface NaiDesktopApi {
   loadMetadataSnapshot: () => Promise<MetadataSnapshotResult>;
   getPathForFile: (file: File) => string;
   clearWorkbenchImage: () => Promise<{ ok: boolean }>;
-  getHistory: (date?: string, groupId?: string) => Promise<HistoryItem[]>;
+  getHistory: (date?: string, groupId?: string, forceReconcile?: boolean) => Promise<HistoryItem[]>;
   getHistoryDates: () => Promise<string[]>;
   getHistoryGroups: () => Promise<HistoryGroup[]>;
   createHistoryGroup: (name: string) => Promise<HistoryGroup[]>;
@@ -2038,8 +2038,8 @@ export interface NaiDesktopApi {
     files: BatchExportFile[],
     defaultName?: string,
   ) => Promise<{ ok: boolean; message: string; path?: string }>;
-  setHistoryGroup: (id: string, groupId?: string) => Promise<{ ok: boolean }>;
-  deleteHistory: (id: string) => Promise<{ ok: boolean }>;
+  setHistoryGroup: (id: string | string[], groupId?: string) => Promise<{ ok: boolean; message?: string }>;
+  deleteHistory: (id: string | string[]) => Promise<{ ok: boolean; message?: string; deletedIds?: string[]; failed?: Array<{id:string; message:string}> }>;
   pruneMissingHistoryItem: (id: string) => Promise<boolean>;
   renameHistoryItem: (
     id: string,

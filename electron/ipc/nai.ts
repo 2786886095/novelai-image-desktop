@@ -103,7 +103,7 @@ import {configuredMcpTagTools} from "../../src/mcp-tools";
 import { searchDanbooru } from "./danbooru-tags";
 import { logError, logInfo, appendLog } from "./logger";
 import { zhForTag } from "../../src/prompt-data";
-import { proxyConfig } from "./proxy";
+import { proxyConfig, proxyConfigForUrl } from "./proxy";
 import { injectDshImageAiSystemPrompt } from "./dsh-reverse-convert";
 import { selectedImageTaskPromptPreset } from "../../src/tavern/image-task-preset";
 import {
@@ -2812,7 +2812,9 @@ async function callVisionApi(
     ],
   };
 
-  const post = (tokens: number) =>
+  // Resolve the actual endpoint before the first request, not the startup cache
+  // shared with other AI providers (which may still be empty or use another PAC rule).
+  const post = async (tokens: number) =>
     axios.post(
       `${base}/chat/completions`,
       { ...body, max_tokens: tokens },
@@ -2822,7 +2824,7 @@ async function callVisionApi(
           "Content-Type": "application/json",
         },
         timeout: 180_000,
-        ...proxyConfig("ai"),
+        ...await proxyConfigForUrl("ai", `${base}/chat/completions`, settings),
       },
     );
 
@@ -2946,7 +2948,7 @@ async function callConvertApi(
     ],
   };
 
-  const post = (tokens: number) =>
+  const post = async (tokens: number) =>
     axios.post(
       `${base}/chat/completions`,
       { ...body, max_tokens: tokens },
@@ -2956,7 +2958,7 @@ async function callConvertApi(
           "Content-Type": "application/json",
         },
         timeout: 180_000,
-        ...proxyConfig("ai"),
+        ...await proxyConfigForUrl("ai", `${base}/chat/completions`, settings),
       },
     );
 

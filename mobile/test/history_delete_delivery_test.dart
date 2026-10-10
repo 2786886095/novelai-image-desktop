@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/services/storage.dart';
+import 'package:novelai_mobile/services/works_batch.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 import 'package:novelai_mobile/agent/software_actions.dart';
@@ -12,6 +13,7 @@ import 'package:novelai_mobile/agent/agent_models.dart';
 class DiskHistory extends Storage {
  final Directory root;
  DiskHistory(this.root);
+ @override Future<WorksBatchFiles> worksFiles() async => WorksBatchFiles([root]);
  @override Future<List<HistoryItem>> getHistory() async => (jsonDecode(await File('${root.path}/history.json').readAsString()) as List).map((x)=>HistoryItem.fromJson(Map<String,dynamic>.from(x))).toList();
  @override Future<void> writeHistory(List<HistoryItem> items) => File('${root.path}/history.json').writeAsString(jsonEncode(items.map((x)=>x.toJson()).toList()),flush:true).then((_){ });
 }

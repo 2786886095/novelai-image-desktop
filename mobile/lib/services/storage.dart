@@ -1,3 +1,5 @@
+import 'works_batch.dart';
+import 'openai_image_edit.dart';
 import 'unified_storage.dart';
 import 'openai_images.dart';
 import 'compatible_image_backup.dart';
@@ -40,6 +42,35 @@ class SavedImageHistoryException implements Exception {
 class Storage {
   // All instances share one settings transaction queue. Secure-key writes and
   // preference commits cannot interleave with UI, Agent or backup writes.
+  static Future<void>? _historyTail;
+  static final Object _historyZone=Object();
+  Future<T> historyTransaction<T>(Future<T> Function() work) {
+    if(Zone.current[_historyZone]==true)return work();
+    final previous=_historyTail,done=Completer<void>();_historyTail=done.future;
+    return (() async {if(previous!=null)await previous;try{return await runZoned(work,zoneValues:{_historyZone:true});}
+      finally {if(identical(_historyTail,done.future))_historyTail=null;done.complete();}})();
+  }
+  Future<List<HistoryItem>> mutateHistory(List<HistoryItem> Function(List<HistoryItem>) change) => historyTransaction(() async {
+    final next=change(List.of(await getHistory()));await writeHistory(next);return next;
+  });
+  Future<WorksBatchFiles> worksFiles() async {
+    final settings=await getSettings();return WorksBatchFiles([await imagesDir(),
+      if(settings.imageOutputDir.trim().isNotEmpty)Directory(settings.imageOutputDir.trim())]);
+  }
+  Future<List<HistoryItem>> moveHistoryItems(Set<String> ids,String? group) => historyTransaction(() async {
+    if(group!=null && group.isNotEmpty && !(await getGroups()).any((g)=>g.id==group))throw StateError('Group no longer exists');
+    return mutateHistory((rows)=>rows.map((h)=>ids.contains(h.id)?HistoryItem.fromJson({...h.toJson(),'groupId':group}):h).toList());
+  });
+  Future<WorksBatchResult> deleteHistoryItems(Set<String> ids) => historyTransaction(() async {
+    final rows=await getHistory();final result=await (await worksFiles()).delete(rows,ids);
+    await writeHistory(rows.where((h)=>!result.removedIds.contains(h.id)).toList());return result;
+  });
+  Future<Set<String>> reconcileMissingHistory() => historyTransaction(() async {
+    final files=await worksFiles(),rows=await getHistory(),ids=<String>{};
+    for(final h in rows){if(await files.conclusivelyMissing(h.filePath))ids.add(h.id);}
+    if(ids.isNotEmpty)await writeHistory(rows.where((h)=>!ids.contains(h.id)).toList());return ids;
+  });
+
   static Future<void>? _settingsTail;
   static final Object _settingsZone = Object(), _imageCommitZone = Object();
   Future<T> _settingsTransaction<T>(Future<T> Function() work) {
@@ -89,6 +120,8 @@ class Storage {
   // which is O(N) per save → O(M·N) during a batch. The cache keeps reads free;
   // only writeHistory touches disk. All persists go through writeHistory, so the
   // cache never drifts.
+  static int _historyRevision = 0;
+  int _cacheRevision = -1;
   List<HistoryItem>? _historyCache;
   List<TextToolHistoryItem>? _convertHistoryCache;
   List<TextToolHistoryItem>? _reverseHistoryCache;
@@ -287,6 +320,27 @@ class Storage {
     });
   }
 
+  Future<String?> getOpenAIEditKey(String id) => id.isEmpty ? Future.value(null)
+      : _secure.read(key: 'openai_edit_key_$id');
+
+  Future<Map<String,dynamic>> saveOpenAIEditConfiguration(Map<String,dynamic> config,
+      String secret, {required String expectedId}) => _settingsTransaction(() async {
+    final current=await getSettings();
+    if((current.openAIEdit['credentialId'] ?? '')!=expectedId) throw StateError('Edit configuration changed');
+    imageEditEndpoint(OpenAIEditConfig.fromJson(config).baseUrl);
+    if(secret.trim().isEmpty || secret.length>8192 || RegExp(r'[\r\n\x00]').hasMatch(secret)) throw const FormatException('Invalid edit key');
+    final id='${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1<<32)}';
+    final next={...OpenAIEditConfig.fromJson(config).toJson(),'credentialId':id};
+    await _secure.write(key:'openai_edit_key_$id',value:secret.trim());
+    try {
+      current.openAIEdit=next;
+      if(!await (await _prefs).setString(_kSettings,jsonEncode(current.toJson()))) throw StateError('Edit settings not saved');
+    } catch (_) {await _secure.delete(key:'openai_edit_key_$id');rethrow;}
+    // A failed cleanup cannot turn a successfully committed configuration into a retry.
+    if(expectedId.isNotEmpty) {try {await _secure.delete(key:'openai_edit_key_$expectedId');} catch (_) {}}
+    return next;
+  });
+
   Future<String?> getVisionKey() => _secure.read(key: _kVisionKey);
   Future<void> setVisionKey(String value) =>
       _secure.write(key: _kVisionKey, value: value);
@@ -331,12 +385,16 @@ class Storage {
         snapshot.compatibleImage = current.compatibleImage;
         snapshot.imageProvider = current.imageProvider;
       }
+      if (current.openAIEdit['credentialId'] != snapshot.openAIEdit['credentialId']) {
+        snapshot.openAIEdit=current.openAIEdit;
+      }
       if (!await (await _prefs)
           .setString(_kSettings, jsonEncode(snapshot.toJson()))) {
         throw StateError('Settings could not be saved.');
       }
       settings.compatibleImage = snapshot.compatibleImage;
       settings.imageProvider = snapshot.imageProvider;
+      settings.openAIEdit = snapshot.openAIEdit;
     });
   }
 
@@ -855,6 +913,8 @@ class Storage {
       _saveVerifiedString('batch_run_v1', jsonEncode(run), '批量任务记录保存失败');
 
   Future<List<HistoryItem>> getHistory() async {
+    if (_cacheRevision != _historyRevision) _historyCache = null;
+    _cacheRevision = _historyRevision;
     if (_historyCache != null) return List.of(_historyCache!);
     final raw = (await _prefs).getString(_kHistory);
     if (raw == null) {
@@ -877,7 +937,8 @@ class Storage {
     }
   }
 
-  Future<void> writeHistory(List<HistoryItem> items) async {
+  Future<void> writeHistory(List<HistoryItem> items) => historyTransaction(()=>_writeHistory(items));
+  Future<void> _writeHistory(List<HistoryItem> items) async {
     final committed = List<HistoryItem>.of(items);
     final data = committed.map((e) => e.toJson()).toList();
     // Encode off the UI isolate when the list is large enough to matter.
@@ -887,6 +948,7 @@ class Storage {
     if (!await (await _prefs).setString(_kHistory, raw)) {
       throw StateError('History could not be saved');
     }
+    _cacheRevision = ++_historyRevision;
     _historyCache = committed;
   }
 
@@ -1071,8 +1133,7 @@ class Storage {
     );
 
     try {
-      final history = List<HistoryItem>.of(await getHistory())..insert(0, item);
-      await writeHistory(history);
+      await mutateHistory((rows)=>rows..insert(0,item));
     } catch (_) {
       // The image is already durable; callers must retain it even if indexing fails.
       throw SavedImageHistoryException(item);
@@ -1082,7 +1143,7 @@ class Storage {
 
   Future<HistoryItem> saveCompatibleImage(
       Uint8List bytes, Map<String, Object> request, AppSettings snapshot,
-      {String? groupId}) async {
+      {String? groupId, String feature = 'openai-images'}) async {
     final now = DateTime.now();
     final date = '${now.year}-${_pad(now.month)}-${_pad(now.day)}';
     final id =
@@ -1102,15 +1163,14 @@ class Storage {
         width: header.getUint32(16),
         height: header.getUint32(20),
         prompt: request['prompt'] as String,
-        feature: 'openai-images',
+        feature: feature,
         groupId: groupId,
         params: {
           'generationProvider': 'openai-images',
           'compatibleRequest': request
         });
     try {
-      final history = List<HistoryItem>.of(await getHistory())..insert(0, item);
-      await writeHistory(history);
+      await mutateHistory((rows)=>rows..insert(0,item));
     } catch (_) {
       throw SavedImageHistoryException(item);
     }
@@ -1168,24 +1228,10 @@ class Storage {
   }
 
   Future<void> deleteHistory(String id) async {
-    final history = await getHistory();
-    final item = history.where((e) => e.id == id).firstOrNull;
-    final shared = item != null &&
-        history.any((e) => e.id != id && e.filePath == item.filePath);
-    if (item != null && !shared) {
-      final type =
-          await FileSystemEntity.type(item.filePath, followLinks: false);
-      if (type != FileSystemEntityType.notFound) {
-        if (type != FileSystemEntityType.file) {
-          throw FileSystemException('图片路径不是普通文件，历史记录保留', item.filePath);
-        }
-        // Do not hide permission/IO errors: AppState restores its optimistic
-        // removal when this fails, and the on-disk record stays available.
-        await File(item.filePath).delete();
-      }
+    final result = await deleteHistoryItems({id});
+    if (result.failedIds.isNotEmpty) {
+      throw const FileSystemException('Image could not be removed; record retained');
     }
-    history.removeWhere((e) => e.id == id);
-    await writeHistory(history);
   }
 
   /// Deletes trusted generated outputs and their history entries in one write.

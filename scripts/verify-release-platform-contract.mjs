@@ -1,0 +1,11 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {execFileSync} from 'node:child_process';
+import {assertReleasePlatformContract,assertReleaseEvidenceFiles} from './release-platform-contract.mjs';
+const version=JSON.parse(fs.readFileSync('package.json','utf8')).version;
+const sourceSha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+const file=process.argv[2]??'release-evidence/feature-parity.json';
+const report=JSON.parse(fs.readFileSync(file,'utf8'));
+const result=assertReleasePlatformContract(report,{version,sourceSha});
+assertReleaseEvidenceFiles(report,path.dirname(file));
+console.log('FIVE_PLATFORM_FEATURE_CONTRACT_PASS',result);

@@ -1,3 +1,8 @@
+import '../agent/external_mcp_runtime.dart';
+import '../services/works_batch.dart';
+import 'package:flutter/painting.dart';
+import '../services/openai_image_edit.dart';
+import '../i18n/platform_feature_text.dart';
 import '../models/ui_typography.dart';
 import '../prompts/negative_prompt_library.dart';
 import '../models/automatic_comparison.dart';
@@ -311,6 +316,14 @@ class AppState extends ChangeNotifier {
   WorkingImage? i2iOriginalImage;
   String i2iSourceMode = 'original';
   String inpaintSourceMode = 'original';
+  String inpaintEngine = 'novelai';
+  bool get openAIEditReady => (settings.openAIEdit['credentialId'] as String? ?? '').isNotEmpty;
+  void setInpaintEngine(String value) {if(busy)return;inpaintEngine=value=='openai'?'openai':'novelai';markChanged();}
+  Future<void> saveOpenAIEditSettings(Map<String,dynamic> value,String key,String expectedId) async {
+    if(busy)throw StateError('Image operation is running');
+    final next=await storage.saveOpenAIEditConfiguration(value,key,expectedId:expectedId);
+    settings.openAIEdit=next;notifyListeners();
+  }
   ImportedGenerateParams? workbenchImportedParams;
   List<CharCaptionItem> workbenchCharacterCaptions = const [];
   Set<String> aitagCompatibleParams = {...importedGenerateParamKeys};
@@ -517,6 +530,7 @@ class AppState extends ChangeNotifier {
       if (settings.persistInpaintParams) {
         final size = restoreInpaintSizeState(settings.lastGenerationState);
         inpaintSizeMode = size.mode; inpaintCustomSize = size.custom;
+        inpaintEngine=settings.lastGenerationState['inpaintEngine']=='openai'?'openai':'novelai';
         inpaintModel = settings.inpaintModel;
         inpaintStrength = settings.inpaintStrength;
         inpaintNoise = settings.inpaintNoise;
@@ -1975,6 +1989,7 @@ class AppState extends ChangeNotifier {
       'batchCount': batchCount,
       'i2iParams': {'strength':i2i.strength,'noise':i2i.noise,'extraNoiseSeed':i2i.extraNoiseSeed,'upscaledEnhance':false},
       'i2iSizeMode':i2iSizeMode,'i2iSourceMode':i2iSourceMode,
+      'inpaintEngine':inpaintEngine,
       'inpaintSizeMode': inpaintSizeMode,
       'inpaintCustomSize': {'width': inpaintCustomSize.width, 'height': inpaintCustomSize.height}};
     settings
@@ -2140,6 +2155,7 @@ class AppState extends ChangeNotifier {
         account,
       );
       generationQuote = quote;
+      _checkExternalAnlas(quote);
       if (!quote.ok || quote.amount == null) {
         throw Exception(quote.message);
       }
@@ -2850,7 +2866,51 @@ class AppState extends ChangeNotifier {
     } finally { _naiOperationCount--; notifyListeners(); }
   }
 
+  Future<void> _openAIInpaint(Uint8List maskBytes) async {
+    if(busy)throw StateError('Another image operation is running');
+    final snapshot=AppSettings.fromJson(jsonDecode(jsonEncode(settings.toJson())) as Map<String,dynamic>);
+    final c=OpenAIEditConfig.fromJson(snapshot.openAIEdit);
+    final id=snapshot.openAIEdit['credentialId'] as String? ?? '';
+    final sourceMode=inpaintSourceMode,source=sourceMode=='original'?i2iOriginalImage??workbenchImage:workbenchImage;
+    if(source==null)throw StateError('Source image required');
+    final prompt=inpaintPositivePrompt,group=generationGroupId;
+    final cancel=CompatibleImageCancellation();_compatibleCancellation=cancel;
+    busy=true;lastAnlasSpent=null;
+    text(String key)=>platformFeatureText(snapshot.language,key);
+    status=text('editRunning');notifyListeners();
+    final saved=<HistoryItem>[];
+    try {
+      final bytes=await File(source.filePath).readAsBytes(),key=await storage.getOpenAIEditKey(id);
+      final output=await runOpenAIImageEdit(c,apiKey:key??'',source:bytes,mask:Uint8List.fromList(maskBytes),prompt:prompt,
+        cancellation:cancel,clientForUri:(uri)=>createProxyHttpClientForUri(snapshot,uri,scope:ProxyScope.ai),
+        beforeSubmit:() {
+          if(_compatibleDisposed || cancel.cancelled || inpaintEngine!='openai' ||
+            settings.openAIEdit['credentialId']!=id ||
+            (sourceMode=='original'?i2iOriginalImage??workbenchImage:workbenchImage)?.filePath!=source.filePath) {
+            throw StateError('Edit context changed before submission');
+          }
+        });
+      // A completed paid response is saved once, even if cancellation arrives after the response.
+      for(final png in output.images) {
+        try {saved.add(await storage.saveCompatibleImage(png,output.request,snapshot,groupId:group.ifEmptyNull,feature:'openai-inpaint'));}
+        on SavedImageHistoryException catch(e) {saved.add(e.item);rethrow;}
+      }
+      if(saved.isNotEmpty && !_compatibleDisposed) {
+        comparisonAutoOpenPending=true;comparisonSurface='inpaint';comparisonBefore=source;
+        comparisonAfter=WorkingImage(filePath:saved.first.filePath,width:output.width,height:output.height);
+        await _commitCompletedHistory(saved,useAsWorkbench:sourceMode=='latest' && workbenchImage?.filePath==source.filePath);
+      }
+      status=output.batch.complete?text('editDone'):output.batch.cancelled?text('editStopped'):output.batch.error?.message??text('editFailed');
+    } on SavedImageHistoryException {
+      if(saved.isNotEmpty && !_compatibleDisposed)await _commitCompletedHistory(saved);
+      status=text('historyFailed');
+    } catch (_) {status=text('editFailed');}
+    finally {if(_compatibleCancellation==cancel){_compatibleCancellation=null;busy=false;}notifyListeners();}
+  }
+
   Future<void> inpaint(Uint8List maskBytes) async {
+    if(inpaintEngine=='openai')return _openAIInpaint(maskBytes);
+    if(busy)throw StateError('Another image operation is running');
     if (_naiChanging) throw StateError('账号正在切换，未提交请求');
     _naiOperationCount++;
     try {
@@ -3843,18 +3903,37 @@ class AppState extends ChangeNotifier {
       itemParams: itemParams, itemExtras: itemExtras, strength: strength,
       groupName: groupName, historyGroupId: historyGroupId, cancelled: cancelled)).first;
 
-  Future<void> moveHistory(String id, String? groupId) async {
-    if(_historyFileOperations.contains(id))throw StateError('该图片正在处理，请稍后重试');
-    history = history
-        .map((item) => item.id == id
-            ? HistoryItem.fromJson({...item.toJson(), 'groupId': groupId})
-            : item)
-        .toList();
-    if (current?.id == id) {
-      current = history.where((item) => item.id == id).firstOrNull;
+  Future<void> moveHistory(String id,String? groupId) => moveHistoryItems({id},groupId);
+  Future<void> moveHistoryItems(Set<String> ids,String? groupId) async {
+    if(ids.any(_historyFileOperations.contains))throw StateError('Images are being processed');
+    _historyFileOperations.addAll(ids);
+    try {history=await storage.moveHistoryItems(Set.of(ids),groupId);
+      if(current!=null)current=history.where((h)=>h.id==current!.id).firstOrNull;notifyListeners();}
+    finally {_historyFileOperations.removeAll(ids);}
+  }
+  void _forgetHistoryImages(Set<String> ids,List<HistoryItem> previous) {
+    final paths=previous.where((h)=>ids.contains(h.id) && !history.any((live)=>live.filePath==h.filePath)).map((h)=>h.filePath).toSet();
+    for(final path in paths){unawaited(FileImage(File(path)).evict());}
+    if(current!=null && ids.contains(current!.id))current=history.firstOrNull;
+    if(paths.contains(workbenchImage?.filePath)){_workbenchLoadRevision++;workbenchImage=null;}
+    if(paths.contains(i2iOriginalImage?.filePath))i2iOriginalImage=null;
+    if(paths.contains(comparisonBefore?.filePath)||paths.contains(comparisonAfter?.filePath)) {
+      comparisonBefore=null;comparisonAfter=null;comparisonSurface=null;comparisonAutoOpenPending=false;
     }
-    await storage.writeHistory(history);
-    notifyListeners();
+  }
+  Future<WorksBatchResult> deleteHistoryItems(Set<String> ids) async {
+    if(ids.any(_historyFileOperations.contains))throw StateError('Images are being processed');
+    _historyFileOperations.addAll(ids);final previous=List<HistoryItem>.of(history);
+    try {final result=await storage.deleteHistoryItems(Set.of(ids));history=await storage.getHistory();
+      _forgetHistoryImages(result.removedIds,previous);notifyListeners();return result;}
+    finally {_historyFileOperations.removeAll(ids);}
+  }
+  bool _reconcilingHistory=false;
+  Future<void> reconcileMissingHistory() async {
+    if(!booted || _reconcilingHistory || busy || _historyFileOperations.isNotEmpty)return;
+    _reconcilingHistory=true;final previous=List<HistoryItem>.of(history);
+    try {final ids=await storage.reconcileMissingHistory();history=await storage.getHistory();
+      _forgetHistoryImages(ids,previous);notifyListeners();}finally {_reconcilingHistory=false;}
   }
 
   final Set<String> _historyFileOperations = {};
@@ -3863,15 +3942,22 @@ class AppState extends ChangeNotifier {
     try {
       final original=history.where((item)=>item.id==id).firstOrNull;
       if (original==null || name.trim().isEmpty) throw StateError('图片记录或名称无效');
+      final previousIds=history.map((item)=>item.id).toSet();
       final renamed=await storage.renameHistoryFile(original,name);
       if (renamed.filePath==original.filePath) return;
-      final live=history.where((item)=>item.id==id).firstOrNull;
-      if(live==null||live.filePath!=original.filePath){await File(renamed.filePath).delete();throw StateError('图片记录已变化，请重新读取');}
-      final committed=HistoryItem.fromJson({...live.toJson(),'filePath':renamed.filePath});
-      history=history.map((item)=>item.id==id?committed:item).toList();
-      try { await storage.writeHistory(history); }
-      catch (_) {
-        history=history.map((item)=>item.id==id&&item.filePath==renamed.filePath?HistoryItem.fromJson({...item.toJson(),'filePath':original.filePath}):item).toList();
+      late HistoryItem committed;
+      try {
+        history = await storage.mutateHistory((rows) {
+          final live=rows.where((item)=>item.id==id).firstOrNull;
+          if(live==null||live.filePath!=original.filePath)throw StateError('图片记录已变化，请重新读取');
+          committed=HistoryItem.fromJson({...live.toJson(),'filePath':renamed.filePath});
+          // Preserve images delivered to the UI while the file copy awaited;
+          // only new IDs may merge, so a concurrently deleted old row cannot
+          // be resurrected or overwrite a committed group change.
+          final additions=history.where((item)=>!previousIds.contains(item.id) && !rows.any((row)=>row.id==item.id));
+          return [...additions,...rows.map((item)=>item.id==id?committed:item)];
+        });
+      } catch (_) {
         try {await File(renamed.filePath).delete();}catch(_){}
         rethrow;
       }
@@ -3903,23 +3989,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> deleteHistory(String id) async {
-    if(_historyFileOperations.contains(id))throw StateError('该图片正在处理，请稍后重试');
-    final previousIndex = history.indexWhere((item) => item.id == id);
-    final removed = previousIndex >= 0 ? history[previousIndex] : null;
-    final previousCurrent = current;
-    history.removeWhere((e) => e.id == id);
-    if (current?.id == id) current = history.isNotEmpty ? history.first : null;
-    notifyListeners();
-    try {
-      await storage.deleteHistory(id);
-    } catch (_) {
-      if (removed != null && !history.any((item) => item.id == id)) {
-        history.insert(previousIndex.clamp(0, history.length), removed);
-      }
-      if (previousCurrent?.id == id) current = previousCurrent;
-      notifyListeners();
-      rethrow;
-    }
+    final result=await deleteHistoryItems({id});if(result.failedIds.isNotEmpty)throw const FileSystemException('Image could not be removed; record retained');
   }
 
   Future<void> deleteHistoryFiles(Iterable<String> filePaths) async {
@@ -3958,16 +4028,7 @@ class AppState extends ChangeNotifier {
   // gallery tile can't find its file mid-session). Re-checks existence so a
   // present file is never removed; only the record is dropped (file already
   // gone), keeping the in-app library in sync without showing broken tiles.
-  Future<void> dropMissingImage(String id) async {
-    final idx = history.indexWhere((e) => e.id == id);
-    if (idx < 0) return;
-    final item = history[idx];
-    if (item.filePath.isNotEmpty && File(item.filePath).existsSync()) return;
-    history.removeAt(idx);
-    if (current?.id == id) current = history.isNotEmpty ? history.first : null;
-    await storage.writeHistory(history);
-    notifyListeners();
-  }
+  Future<void> dropMissingImage(String id) => reconcileMissingHistory();
 
   Future<int?> _authorizeQuotedRun(
     String token,
@@ -3975,6 +4036,7 @@ class AppState extends ChangeNotifier {
   ) async {
     account = await _fetchAccountPreservingLast(token);
     final quote = buildQuote(account);
+    _checkExternalAnlas(quote);
     if (!quote.ok || quote.amount == null) throw Exception(quote.message);
     if (quote.insufficient) {
       status = _rf('status.insufficientThisRun', {
@@ -3995,6 +4057,17 @@ class AppState extends ChangeNotifier {
         before != null && after != null ? max(0, before - after) : null;
     _pendingAuthorizedBalance = null;
     return _spentText(lastAnlasSpent);
+  }
+
+  int? _externalAnlasLimit;
+  Future<T> withExternalAnlasLimit<T>(int limit,Future<T> Function() action) async {
+    if(_externalAnlasLimit!=null || busy)throw StateError('Another image task is running');
+    _externalAnlasLimit=limit;try{return await action();}finally{_externalAnlasLimit=null;}
+  }
+  void _checkExternalAnlas(AnlasQuote quote) {
+    if(_externalAnlasLimit!=null && (!quote.ok || quote.amount==null || quote.amount!>_externalAnlasLimit!)) {
+      throw StateError('MCP cost is above the human-approved budget; no image request submitted');
+    }
   }
 
   Future<void> _withTokenRun(Future<void> Function(String token) fn) async {
@@ -4075,8 +4148,11 @@ class AppState extends ChangeNotifier {
     return decodeImageDimensions(b);
   }
 
+  late final ExternalMcpRuntime externalMcp = ExternalMcpRuntime(this);
+
   @override
   void dispose() {
+    externalMcp.dispose();
     _comic?.dispose();
     _batchRedraw?.dispose();
     _compatibleDisposed = true;

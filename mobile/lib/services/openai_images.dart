@@ -133,12 +133,46 @@ Map<String, Object> compatibleImageBody(CompatibleImageConfig config,
 
 /// Creates a private, non-retrying client. The caller owns the result, including
 /// valid images preceding a later failure. Never rerun the billed POST to repair it.
+class CompatibleImageRequest {
+  final Uri endpoint;
+  final Uint8List body;
+  final String contentType;
+  const CompatibleImageRequest(this.endpoint, this.body, this.contentType);
+}
+
 Future<CompatibleImageBatch> generateCompatibleImages(
+        CompatibleImageConfig config,
+        {required String prompt,
+        required String size,
+        required int n,
+        Map<String, Object?> extensions = const {},
+        CompatibleImageCancellation? cancellation,
+        void Function()? beforeSubmit,
+        Future<http.Client> Function(Uri)? clientForUri,
+        Duration timeout = const Duration(minutes: 3),
+        int maxBytes = 64 * 1024 * 1024}) =>
+    submitCompatibleImageRequest(config,
+        n: n,
+        cancellation: cancellation,
+        beforeSubmit: beforeSubmit,
+        clientForUri: clientForUri,
+        timeout: timeout,
+        maxBytes: maxBytes,
+        prepare: () => CompatibleImageRequest(
+            compatibleImageEndpoint(config.baseUrl,
+                allowInsecureHttp: config.allowInsecureHttp),
+            Uint8List.fromList(utf8.encode(jsonEncode(compatibleImageBody(
+                config,
+                prompt: prompt,
+                size: size,
+                n: n,
+                extensions: extensions)))),
+            'application/json'));
+
+Future<CompatibleImageBatch> submitCompatibleImageRequest(
     CompatibleImageConfig config,
-    {required String prompt,
-    required String size,
+    {required FutureOr<CompatibleImageRequest> Function() prepare,
     required int n,
-    Map<String, Object?> extensions = const {},
     CompatibleImageCancellation? cancellation,
     void Function()? beforeSubmit,
     Future<http.Client> Function(Uri)? clientForUri,
@@ -170,17 +204,19 @@ Future<CompatibleImageBatch> generateCompatibleImages(
 
   Future<({int status, Uint8List bytes, Map<String, String> headers})> send(
       String method, Uri uri,
-      {String? body, bool credential = false}) async {
+      {Uint8List? body,
+      String contentType = 'application/json',
+      bool credential = false}) async {
     check();
     final req = http.AbortableRequest(method, uri, abortTrigger: stopFuture)
       ..followRedirects = false;
     if (credential) {
       req.headers.addAll({
         'Authorization': 'Bearer ${config.apiKey.trim()}',
-        'Content-Type': 'application/json'
+        'Content-Type': contentType
       });
     }
-    if (body != null) req.body = body;
+    if (body != null) req.bodyBytes = body;
     final pendingClient =
         (clientForUri?.call(uri) ?? Future.value(http.Client())).then((client) {
       if (timedOut || cancellation?.cancelled == true) {
@@ -218,21 +254,29 @@ Future<CompatibleImageBatch> generateCompatibleImages(
   }
 
   try {
-    final endpoint = compatibleImageEndpoint(config.baseUrl,
+    if (n < 1 || n > 9007199254740991) {
+      throw const FormatException('invalid count');
+    }
+    final prepared = await prepare();
+    check();
+    // Recheck the security policy on the actual endpoint, including edit requests.
+    compatibleImageEndpoint(prepared.endpoint.toString(),
         allowInsecureHttp: config.allowInsecureHttp);
-    final body = compatibleImageBody(config,
-        prompt: prompt, size: size, n: n, extensions: extensions);
+    final endpoint = prepared.endpoint;
     if (config.apiKey.trim().isEmpty ||
-        RegExp(r'[\r\n]').hasMatch(config.apiKey)) {
+        config.apiKey.length > 8192 ||
+        RegExp(r'[\r\n\x00]').hasMatch(config.apiKey)) {
       throw const FormatException('invalid credential');
     }
-    final json = jsonEncode(body);
-    if (utf8.encode(json).length > maxBytes) {
+    if (prepared.body.length > maxBytes) {
       throw const FormatException('request byte limit');
     }
     check();
     phase = 'generate';
-    final response = await send('POST', endpoint, body: json, credential: true);
+    final response = await send('POST', endpoint,
+        body: prepared.body,
+        contentType: prepared.contentType,
+        credential: true);
     status = response.status;
     if (status < 200 || status >= 300) {
       throw const FormatException('HTTP status');

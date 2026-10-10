@@ -1,0 +1,11 @@
+import {afterEach,beforeEach,expect,it,vi} from 'vitest';
+import {useAppStore} from './store';
+import {worksBatchText} from './works-text';
+import {metadataReplayFromComment,normalizeMetadataReplay} from './metadata-replay';
+import type {HistoryItem} from './types';
+const image=(id:string)=>({id,filePath:id+'.png',fileUrl:'fixture://'+id,params:{}} as HistoryItem);
+beforeEach(()=>useAppStore.setState(useAppStore.getInitialState(),true));afterEach(()=>vi.unstubAllGlobals());
+it('forgets only confirmed deleted works and clears a deleted canvas/comparison',()=>{const a=image('a'),b=image('b');useAppStore.setState({history:[a,b],currentImage:a,comparisonBeforeImage:b});useAppStore.getState().forgetHistoryItems(['a']);expect(useAppStore.getState().history).toEqual([b]);expect(useAppStore.getState().currentImage).toBe(b);expect(useAppStore.getState().comparisonBeforeImage).toBeNull();});
+it('does not replace a newer generation or insert an old preview underneath a running request',()=>{const a=image('a'),b=image('b');useAppStore.setState({history:[a,b],currentImage:b,isGenerating:true});useAppStore.getState().forgetHistoryItems(['a']);expect(useAppStore.getState().currentImage).toBe(b);useAppStore.getState().forgetHistoryItems(['b']);expect(useAppStore.getState().currentImage).toBeNull();});
+it('has localized batch actions and an explicit original-file deletion warning',()=>{for(const locale of ['zh-CN','zh-TW','en-US','ja-JP','ko-KR']){expect(Object.keys(worksBatchText(locale))).toEqual(Object.keys(worksBatchText('en-US')));expect(worksBatchText(locale).confirm).toContain('{count}');}});
+it.each([0,1,2])('does not forward inactive/unimplemented ControlNet strength %s from imported metadata',strength=>{const replay=metadataReplayFromComment({controlnet_strength:strength,controlnet_model:null,auto_upscale:true,uncond_scale:1},'nai-diffusion-4-5-full');expect(replay?.parameters).toEqual({uncond_scale:1});expect(normalizeMetadataReplay(replay)).toEqual(replay);});

@@ -403,6 +403,8 @@ interface AppState {
   selectImage: (item: HistoryItem) => void;
   variationFromImage: (item: HistoryItem) => void;
   deleteHistory: (id: string) => Promise<boolean>;
+  /** Apply only identities confirmed removed by native storage/reconciliation. */
+  forgetHistoryItems: (ids: readonly string[]) => void;
   dropMissingImage: (id: string) => Promise<void>;
   renameHistoryItem: (id: string, name: string) => Promise<void>;
   clearToast: () => void;
@@ -3095,9 +3097,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   // record (never deletes a present file), so this is safe to fire on any load
   // error — the image simply disappears from the library instead of showing
   // a broken placeholder.
+  forgetHistoryItems(ids) {
+    const removed = new Set(ids), state = get();
+    const history = state.history.filter(item => !removed.has(item.id));
+    const currentRemoved = !!state.currentImage && removed.has(state.currentImage.id);
+    const beforeRemoved = !!state.comparisonBeforeImage && state.history.some(item =>
+      removed.has(item.id) && item.filePath === state.comparisonBeforeImage?.filePath);
+    if (currentRemoved) workbenchLoadRevision += 1;
+    set({ history, currentImage: currentRemoved ? state.isGenerating ? null : history[0] ?? null : state.currentImage,
+      ...(currentRemoved || beforeRemoved ? {comparisonBeforeImage:null,comparisonAutoOpenRequest:null,comparisonSurface:null} : {}) });
+  },
+
   async dropMissingImage(id) {
     const removed = await window.naiDesktop.pruneMissingHistoryItem(id);
     if (!removed) return;
+    get().forgetHistoryItems([id]);
     await get().refreshHistory();
     const current = get().currentImage;
     if (current?.id === id) set({ currentImage: get().history[0] ?? null, comparisonBeforeImage: null });

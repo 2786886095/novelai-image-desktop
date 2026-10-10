@@ -911,6 +911,7 @@ class HistoryItem {
 class AppSettings {
   String imageProvider;
   Map<String, dynamic> compatibleImage;
+  Map<String, dynamic> openAIEdit;
   CompletionSound completionSound;
   bool persistI2IParams;
   Map<String, dynamic> lastGenerationState;
@@ -1045,6 +1046,7 @@ class AppSettings {
   AppSettings({
     this.imageProvider = 'novelai',
     this.compatibleImage = const {},
+    this.openAIEdit = const {},
     this.completionSound = const CompletionSound(),
     this.persistI2IParams = true,
     this.lastGenerationState = const {},
@@ -1186,6 +1188,7 @@ class AppSettings {
         'apiBaseUrl': apiBaseUrl,
         'imageProvider': imageProvider,
         'compatibleImage': compatibleImage,
+        'openAIEdit': openAIEdit,
         'imageBaseUrl': imageBaseUrl,
         'allowCustomEndpoint': allowCustomEndpoint,
         'allowCustomEndpointFallback': allowCustomEndpointFallback,
@@ -1312,6 +1315,7 @@ class AppSettings {
         compatibleImage: j['compatibleImage'] is Map
             ? Map<String, dynamic>.from(j['compatibleImage'])
             : {},
+        openAIEdit: j['openAIEdit'] is Map ? Map<String,dynamic>.from(j['openAIEdit']) : {},
         apiBaseUrl: j['apiBaseUrl'] ?? 'https://api.novelai.net',
         imageBaseUrl: j['imageBaseUrl'] ?? 'https://image.novelai.net',
         allowCustomEndpoint: j['allowCustomEndpoint'] ?? true,

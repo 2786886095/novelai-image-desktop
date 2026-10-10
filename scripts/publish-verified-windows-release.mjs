@@ -1,9 +1,10 @@
-// Explicit Windows-only scope. Existing Windows formal gates are not relaxed.
+// Historical Windows verifier retained for audit. Standalone publication disabled.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import {execFileSync,spawnSync} from 'node:child_process';
+throw new Error('Windows-only publication is disabled: release Windows, macOS, Linux, Android and iOS through the full feature-verified publisher.');
 const repo='2786886095/novelai-image-desktop';
 const call=(args)=>execFileSync('gh',[...args,'--repo',repo],{encoding:'utf8',timeout:600000,maxBuffer:8*1024*1024}).trim();
 const git=(args)=>execFileSync('git',args,{encoding:'utf8'}).trim();

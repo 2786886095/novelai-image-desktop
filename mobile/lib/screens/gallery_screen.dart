@@ -1,3 +1,4 @@
+import '../i18n/platform_feature_text.dart';
 import '../ui/global_typography.dart';
 import '../ui/image_actions_menu.dart';
 import '../ui/studio_theme.dart';
@@ -43,7 +44,38 @@ class GalleryScreen extends StatefulWidget {
   State<GalleryScreen> createState() => _GalleryScreenState();
 }
 
-class _GalleryScreenState extends State<GalleryScreen> {
+class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserver {
+  final Set<String> selected={};bool editing=false,operating=false;
+  Timer? _reconcileTimer;bool _visible=false;
+  @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);
+    _reconcileTimer=Timer.periodic(const Duration(seconds:10),(_){if(mounted && _visible && WidgetsBinding.instance.lifecycleState!=AppLifecycleState.paused) _refreshFiles();});}
+  @override void didChangeDependencies(){super.didChangeDependencies();final enabled=TickerMode.of(context);
+    if(enabled && !_visible)WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)_refreshFiles();});_visible=enabled;}
+  @override void didChangeAppLifecycleState(AppLifecycleState state){if(state==AppLifecycleState.resumed && _visible)_refreshFiles();}
+  Future<void> _refreshFiles() async {try {await context.read<AppState>().reconcileMissingHistory();} catch (_) {/* Inconclusive storage never prunes rows. */}}
+  Future<void> _batchMove() async {
+    final app=context.read<AppState>();String t(String k)=>platformFeatureText(app.settings.language,k);
+    final group=await showDialog<String>(context:context,builder:(ctx)=>SimpleDialog(title:Text(t('move')),children:[
+      SimpleDialogOption(onPressed:()=>Navigator.pop(ctx,''),child:Text(mobileUiTextFor(app.settings.language,'gallery.ungrouped'))),
+      ...app.groups.map((g)=>SimpleDialogOption(onPressed:()=>Navigator.pop(ctx,g.id),child:Text(g.name)))]));
+    if(group==null || !mounted)return;setState(()=>operating=true);
+    try {await app.moveHistoryItems(Set.of(selected),group.isEmpty?null:group);if(mounted)setState(selected.clear);}
+    catch (_) {if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(t('saveFailed'))));}
+    finally {if(mounted)setState(()=>operating=false);}
+  }
+  Future<void> _batchDelete() async {
+    final app=context.read<AppState>();String t(String k)=>platformFeatureText(app.settings.language,k);
+    final ids=Set<String>.of(selected);
+    final approved=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:Text(t('delete')),
+      content:Text('${ids.length} · ${t('deleteConfirm')}'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:Text(t('cancel'))),
+      FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:Text(t('delete')))]));
+    if(approved!=true || !mounted)return;setState(()=>operating=true);
+    try {final result=await app.deleteHistoryItems(ids);
+      if(mounted){setState(()=>selected.removeAll(result.removedIds));if(result.failedIds.isNotEmpty)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(t('partialDelete'))));}}
+    catch (_) {if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(t('partialDelete'))));}
+    finally {if(mounted)setState(()=>operating=false);}
+  }
+
   String group = '';
   String date = '';
   bool groupInitialized = false;
@@ -51,6 +83,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
   @override
   void dispose() {
+    _reconcileTimer?.cancel();WidgetsBinding.instance.removeObserver(this);
     groupCtrl.dispose();
     super.dispose();
   }
@@ -64,6 +97,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
       group = state.selectedGroupId;
       groupInitialized = true;
     }
+    selected.retainAll(state.history.map((h)=>h.id).toSet());
+    String feature(String k)=>platformFeatureText(language,k);
     final groups = state.groups;
     final dates = state.history.map((item) => item.date).toSet().toList()
       ..sort((a, b) => b.compareTo(a));
@@ -76,7 +111,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
             (date.isEmpty || item.date == date))
         .toList();
     return Scaffold(
-      appBar: AppBar(title: studioAppBarTitle(context, Text(t('gallery.title')))),
+      appBar: AppBar(title: studioAppBarTitle(context, Text(t('gallery.title'))),actions:[
+        IconButton(tooltip:feature('refresh'),onPressed:operating?null:_refreshFiles,icon:const Icon(Icons.refresh)),
+        IconButton(key:const ValueKey('works-batch-edit'),tooltip:feature('batchEdit'),onPressed:operating?null:()=>setState((){editing=!editing;selected.clear();}),icon:Icon(editing?Icons.done:Icons.checklist))]),
       body: Column(
         children: [
           Padding(
@@ -207,6 +244,11 @@ class _GalleryScreenState extends State<GalleryScreen> {
                   language, 'gallery.imageCount', {'count': history.length})),
             ),
           ),
+          if(editing)Padding(padding:const EdgeInsets.symmetric(horizontal:12),child:Wrap(spacing:8,runSpacing:4,children:[
+            Text('${selected.length}'),TextButton(onPressed:operating?null:()=>setState(()=>selected.addAll(history.map((h)=>h.id))),child:Text(feature('selectAll'))),
+            TextButton(onPressed:operating?null:()=>setState(selected.clear),child:Text(feature('clearSelection'))),
+            OutlinedButton(onPressed:operating||selected.isEmpty?null:_batchMove,child:Text(feature('move'))),
+            FilledButton(onPressed:operating||selected.isEmpty?null:_batchDelete,child:Text(feature('delete')))])),
           Expanded(
             child: history.isEmpty
                 ? Center(child: Text(t('gallery.empty')))
@@ -222,7 +264,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     itemCount: history.length,
                     itemBuilder: (context, index) =>
                         _HistoryTile(history[index],
-                            (context, item) => _openDetail(context, item, history)),
+                            (context, item) => _openDetail(context, item, history),
+                            selecting:editing,selected:selected.contains(history[index].id),
+                            onSelect:operating?null:()=>setState((){final id=history[index].id;if(!selected.remove(id))selected.add(id);})),
                   ),
           ),
         ],
@@ -706,7 +750,8 @@ class _HistoryTile extends StatelessWidget {
   final HistoryItem item;
   final void Function(BuildContext context, HistoryItem item) onTap;
 
-  const _HistoryTile(this.item, this.onTap);
+  final bool selecting,selected;final VoidCallback? onSelect;
+  const _HistoryTile(this.item, this.onTap,{this.selecting=false,this.selected=false,this.onSelect});
 
   @override
   Widget build(BuildContext context) {
@@ -724,11 +769,12 @@ class _HistoryTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => onTap(context, item),
-        onLongPress: () => showLocalImageActions(context, item.filePath),
+        onTap: selecting?onSelect:() => onTap(context, item),
+        onLongPress: selecting?null:() => showLocalImageActions(context, item.filePath),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if(selecting)SizedBox(height:28,child:Checkbox(value:selected,onChanged:onSelect==null?null:(_)=>onSelect!())),
             Expanded(
               child: Image.file(
                 file,

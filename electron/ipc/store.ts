@@ -913,6 +913,9 @@ function buildFileNameIndex(root: string): FileNameIndex {
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch {
+      // An unreadable subtree is not a completed search; do not prune records
+      // merely because their files were hidden by an access or disk error.
+      truncated = true;
       continue;
     }
     scanned += entries.length;
@@ -953,7 +956,9 @@ export function findMovedHistoryFile(
       // Could mean "genuinely doesn't exist" or "drive/share is offline right
       // now" — we can't tell the two apart, so don't let this root's absence
       // count as evidence the file is gone.
-      inconclusive = true;
+      // A deleted date subfolder is normal once its final image is removed.
+      // The subsequent complete output-root scan can still prove absence.
+      if (root === path.resolve(data.settings.outputDir || root)) inconclusive = true;
       continue;
     }
     let entry = indexCache.get(root);
@@ -1076,8 +1081,8 @@ export function pruneMissingHistoryItem(id: string): boolean {
   return true;
 }
 
-export function getHistory(date?: string, groupId?: string): HistoryItem[] {
-  reconcileHistoryFiles();
+export function getHistory(date?: string, groupId?: string, forceReconcile = false): HistoryItem[] {
+  reconcileHistoryFiles(forceReconcile);
   const history = readStore().history;
   return history
     .filter((item) => {
@@ -1110,6 +1115,12 @@ export function removeHistory(id: string): HistoryItem | null {
   data.history = data.history.filter((item) => item.id !== id);
   writeStore(data);
   return found;
+}
+
+/** One disk commit for a user-approved batch, preserving unselected rows. */
+export function removeHistoryItems(ids: readonly string[]): void {
+  const data = readStore(), selected = new Set(ids);
+  writeStore({ ...data, history: data.history.filter(item => !selected.has(item.id)) });
 }
 
 export function updateHistoryItem(id: string, patch: Partial<HistoryItem>): HistoryItem | null {
@@ -1192,10 +1203,17 @@ export function deleteHistoryGroup(id: string): HistoryGroup[] {
   return data.historyGroups;
 }
 
-export function setHistoryGroup(id: string, groupId?: string) {
+export function setHistoryGroup(id: string | string[], groupId?: string) {
   const data = readStore();
   const normalized = groupId && groupId !== "__ungrouped" ? groupId : undefined;
-  data.history = data.history.map((item) => (item.id === id ? { ...item, groupId: normalized } : item));
-  writeStore(data);
+  const ids = Array.isArray(id) ? id : [id];
+  const available = new Set(data.history.map(item => item.id));
+  if (Array.isArray(id) && (!ids.length || ids.length > 50_000 || ids.some(value => typeof value !== 'string')
+    || (normalized && !data.historyGroups.some(group => group.id === normalized))
+    || ids.some(value => !available.has(value)))) {
+    return { ok: false, message: '所选作品或目标分组已变化，请刷新后重试。' };
+  }
+  const selected = new Set(ids);
+  writeStore({ ...data, history: data.history.map((item) => selected.has(item.id) ? { ...item, groupId: normalized } : item) });
   return { ok: true };
 }

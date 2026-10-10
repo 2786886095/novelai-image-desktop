@@ -464,6 +464,7 @@ List<Map<String, dynamic>> agentToolSchemas() => [
         'langbai_inpaint_image',
         '使用源图片和黑白遮罩附件执行局部重绘；白色区域会被重绘。',
         {
+          'engine': _string('重绘引擎；独立 OpenAI 配置由软件保存', ['novelai','openai']),
           'attachmentId': _string('源图片 attachmentId'),
           'maskAttachmentId': _string('遮罩 attachmentId'),
           'positivePrompt': _string('局部重绘正面提示词'),
@@ -601,6 +602,7 @@ class _AgentAppSnapshot {
   final WorkingImage? workbenchImage;
   final ImportedGenerateParams? workbenchImportedParams;
   final List<CharCaptionItem> workbenchCharacterCaptions;
+  final String inpaintEngine,inpaintSourceMode;
   final String inpaintModel;
   final double inpaintStrength;
   final double inpaintNoise;
@@ -628,6 +630,7 @@ class _AgentAppSnapshot {
     required this.workbenchImage,
     required this.workbenchImportedParams,
     required this.workbenchCharacterCaptions,
+    required this.inpaintEngine,required this.inpaintSourceMode,
     required this.inpaintModel,
     required this.inpaintStrength,
     required this.inpaintNoise,
@@ -661,6 +664,7 @@ class _AgentAppSnapshot {
         workbenchImportedParams: app.workbenchImportedParams,
         workbenchCharacterCaptions:
             List<CharCaptionItem>.from(app.workbenchCharacterCaptions),
+        inpaintEngine:app.inpaintEngine,inpaintSourceMode:app.inpaintSourceMode,
         inpaintModel: app.inpaintModel,
         inpaintStrength: app.inpaintStrength,
         inpaintNoise: app.inpaintNoise,
@@ -694,6 +698,7 @@ class _AgentAppSnapshot {
       ..workbenchImage = workbenchImage
       ..workbenchImportedParams = workbenchImportedParams
       ..workbenchCharacterCaptions = workbenchCharacterCaptions
+      ..inpaintEngine=inpaintEngine..inpaintSourceMode=inpaintSourceMode
       ..inpaintModel = inpaintModel
       ..inpaintStrength = inpaintStrength
       ..inpaintNoise = inpaintNoise
@@ -817,8 +822,13 @@ class AgentToolExecutor {
     final template = tool == templateGenerationTool;
     final name = template ? 'langbai_generate_image' : tool;
     final generation = template ? templateGenerationArgs(input) : input;
-    assertAgentImageTool(name, app.settings);
-    if (app.settings.imageProvider == 'openai-images') {
+    final independentEdit=name=='langbai_inpaint_image' && input['engine']=='openai';
+    assertAgentImageTool(name, app.settings, independentEdit:independentEdit);
+    if(independentEdit){
+      final key=await app.storage.getOpenAIEditKey(app.settings.openAIEdit['credentialId'] as String? ?? '');
+      if(key==null || key.trim().isEmpty)throw StateError('请先在软件中配置独立 OpenAI 图像编辑密钥。');
+    }
+    if (app.settings.imageProvider == 'openai-images' && !independentEdit) {
       compatibleAgentInput(generation, app.settings, requirePrompt: !template);
       String? key;
       try {
@@ -1241,8 +1251,9 @@ class AgentToolExecutor {
       if (AgentSessionControls.paid.contains(tool)) {
         imageBinding ??= AgentImageBinding(app.settings, app.generationGroupId);
         imageBinding.ensureCurrent(app.settings, app.generationGroupId);
-        assertAgentImageTool(tool, app.settings);
-        if (app.settings.imageProvider == 'openai-images') {
+        final independentEdit=tool=='langbai_inpaint_image' && args['engine']=='openai';
+        assertAgentImageTool(tool, app.settings, independentEdit:independentEdit);
+        if (app.settings.imageProvider == 'openai-images' && !independentEdit) {
           compatibleAgentInput(args, app.settings);
         }
         if (inTemplateWorkflow) {
@@ -1671,13 +1682,15 @@ class AgentToolExecutor {
           if (sessionState?['style'] != null) {
             app.params.stylePrompt = sessionState!['style']['prompt'];
           }
+          app.inpaintEngine=args['engine']=='openai'?'openai':'novelai';
+          app.inpaintSourceMode='latest';
           app.inpaintPositivePrompt = _text(args['positivePrompt']);
           app.inpaintStrength = _double(args['strength'], 1, 0.1, 1);
           final maskBytes = await File(mask.filePath).readAsBytes();
           final images =
               await _collectNewImages(before, () => app.inpaint(maskBytes));
           return AgentToolResult(
-            ok: true,
+            ok: images.isNotEmpty,
             title: title,
             output:
                 _json({'saved': images.length, 'status': app.displayStatus}),

@@ -455,9 +455,13 @@ function resolvedWorkspace(workspace: AgentWorkspaceData): AgentWorkspaceData {
 }
 
 /** Persist before unlink, so restart and alternate swipes cannot resurrect a path. */
-export function invalidateAgentHistoryImage(id: string): void {
+export function invalidateAgentHistoryImage(id: string | readonly string[]): void {
   const workspace = readAgentWorkspace();
-  if (invalidateHistoryAttachments(workspace, id)) writeAgentWorkspace(workspace);
+  let changed = false;
+  for (const selected of typeof id === 'string' ? [id] : id) {
+    if (invalidateHistoryAttachments(workspace, selected)) changed = true;
+  }
+  if (changed) writeAgentWorkspace(workspace);
 }
 
 export function writeAgentWorkspace(workspace: AgentWorkspaceData) {

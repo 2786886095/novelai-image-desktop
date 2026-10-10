@@ -12,7 +12,8 @@ const BOOL_FIELDS = new Set(['straight_alpha', 'quality_boost', 'legacy_v3_exten
 const NUMBER_FIELDS: Record<string, [number, number]> = {
   uncond_scale: [0, 10], skip_cfg_below_sigma: [0, 1000],
   dynamic_thresholding_percentile: [0, 1], dynamic_thresholding_mimic_scale: [0, 100],
-  controlnet_strength: [0, 2],
+  // ControlNet is not implemented by this client. A saved inactive strength
+  // must not activate an unsupported extension on strict compatible endpoints.
 };
 const object = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;

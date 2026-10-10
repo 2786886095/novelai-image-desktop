@@ -26,6 +26,7 @@ class AgentImageBinding {
 // different key creates a new ID, so a pending authorization cannot change key.
 String _imageRevision(AppSettings s, String group) => jsonEncode([
       s.imageProvider,
+      s.openAIEdit,
       s.imageProvider == 'openai-images' ? s.compatibleImage : null,
       s.imageOutputDir,
       group,
@@ -42,7 +43,8 @@ const paidImageTools = {
   'langbai_upscale_image',
   'langbai_director'
 };
-void assertAgentImageTool(String tool, AppSettings settings) {
+void assertAgentImageTool(String tool, AppSettings settings, {bool independentEdit=false}) {
+  if(independentEdit && tool=='langbai_inpaint_image')return;
   if (settings.imageProvider == 'openai-images' &&
       paidImageTools.contains(tool) &&
       tool != 'langbai_generate_image') {

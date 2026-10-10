@@ -214,6 +214,7 @@ import {
   assignHistoryGroup,
   createGroup,
   deleteHistoryItem,
+  deleteHistoryItems,
   exportFiles,
   exportGroup,
   listHistory,
@@ -1195,7 +1196,7 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
 
   ipcMain.handle(
     "storage:getHistory",
-    (_event, date?: string, groupId?: string) => listHistory(date, groupId),
+    (_event, date?: string, groupId?: string, forceReconcile?: boolean) => listHistory(date, groupId, forceReconcile === true),
   );
   ipcMain.handle("storage:getHistoryDates", () => listHistoryDates());
   ipcMain.handle("storage:getHistoryGroups", () => listHistoryGroups());
@@ -1218,10 +1219,10 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   );
   ipcMain.handle(
     "storage:setHistoryGroup",
-    (_event, id: string, groupId?: string) => assignHistoryGroup(id, groupId),
+    (_event, id: string | string[], groupId?: string) => assignHistoryGroup(id, groupId),
   );
-  ipcMain.handle("storage:delete", async (_event, id: string) => {
-    const result = await deleteHistoryItem(id);
+  ipcMain.handle("storage:delete", async (_event, id: string | string[]) => {
+    const result = Array.isArray(id) ? await deleteHistoryItems(id) : await deleteHistoryItem(id);
     if (!mainWindow?.isDestroyed()) mainWindow?.webContents.send("agent:event", { kind: "workspace", workspace: readAgentWorkspace() });
     return result;
   });

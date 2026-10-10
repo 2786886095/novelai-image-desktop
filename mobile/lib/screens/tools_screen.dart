@@ -1,3 +1,4 @@
+import 'openai_edit_settings.dart';
 import '../ui/effort_control.dart';
 import '../ui/global_typography.dart';
 import '../images/upscale_plan.dart';
@@ -370,7 +371,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
             visualDensity: VisualDensity.compact,
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           ),
-          onPressed: state.busy || workbench == null || !hasMask || !state.inpaintAnlasQuote.ok
+          onPressed: state.busy || workbench == null || !hasMask || (state.inpaintEngine=='openai' ? !state.openAIEditReady : !state.inpaintAnlasQuote.ok)
               ? null
               : () => _runInpaint(state),
           icon: const Icon(Icons.brush),
@@ -392,6 +393,8 @@ class _InpaintPanelState extends State<_InpaintPanel> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const OpenAIInpaintControls(),
+            if(state.inpaintEngine=='novelai')
             PromptEditor(
               label: t('tools.stylePrompt'),
               value: state.params.stylePrompt,
@@ -412,7 +415,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
               },
             ),
             const SizedBox(height: 12),
-            if (!(state.params.copy()..model = state.inpaintModel).isMediumEffort) PromptEditor(
+            if (state.inpaintEngine=='novelai' && !(state.params.copy()..model = state.inpaintModel).isMediumEffort) PromptEditor(
               label: t('tools.negativePrompt'),
               value: state.params.negativePrompt,
               maxLines: 3,
@@ -420,7 +423,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
               onChanged: (v) => state.setParam((p) => p.negativePrompt = v),
             ),
             const SizedBox(height: 12),
-            InpaintSizeControls(mode: state.inpaintSizeMode, language: language, custom: state.inpaintCustomSize,
+            if(state.inpaintEngine=='novelai') InpaintSizeControls(mode: state.inpaintSizeMode, language: language, custom: state.inpaintCustomSize,
               source: state.workbenchImage == null ? null :
                 (width: (state.inpaintSourceMode == 'original' ? state.i2iOriginalImage ?? state.workbenchImage! : state.workbenchImage!).width,
                  height: (state.inpaintSourceMode == 'original' ? state.i2iOriginalImage ?? state.workbenchImage! : state.workbenchImage!).height),
@@ -461,6 +464,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 16),
+            if(state.inpaintEngine=='novelai') ...[
             StudioDropdownButtonFormField<String>(
               value: state.inpaintModel,
               isExpanded: true,
@@ -548,6 +552,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
             const SizedBox(height: 12),
             const _RedrawParams(),
             const SizedBox(height: 12),
+            ],
             const AutomaticComparisonControl(surface:'inpaint'),
             if (workbench == null)
               SizedBox(

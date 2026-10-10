@@ -1,3 +1,5 @@
+import 'external_mcp_settings.dart';
+import 'openai_edit_settings.dart';
 import '../ui/global_typography.dart';
 import 'typography_settings.dart';
 import '../prompts/translation.dart';
@@ -489,6 +491,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
             ),
           ),
+          const OpenAIEditSettingsCard(),
+          const ExternalMcpSettingsCard(),
           _Section(
               title: settingsText.updateSourceTitle,
               children: const [ListTile(title: Text('GitHub'))]),
