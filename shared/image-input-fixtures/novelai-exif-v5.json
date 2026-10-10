@@ -1,0 +1,43 @@
+{
+  "provenance": "Synthetic fixture matching official NovelAI EXIF mapping; NOT a user/official export; no signature verification claimed",
+  "officialSource": "https://github.com/NovelAI/novelai-image-metadata/blob/main/nai_sig.py",
+  "expected": {
+    "prompt": "1girl, blue sky",
+    "uc": "lowres, bad hands",
+    "model": "nai-diffusion-5-full",
+    "seed": 4000000000,
+    "steps": 28,
+    "scale": 6,
+    "width": 96,
+    "height": 64,
+    "sampler": "k_euler_ancestral",
+    "effort": "high",
+    "v4_prompt": {
+      "caption": {
+        "base_caption": "1girl, blue sky",
+        "char_captions": [
+          {
+            "char_caption": "girl, blue hair",
+            "centers": [
+              {
+                "x": 0.25,
+                "y": 0.75
+              }
+            ]
+          }
+        ]
+      },
+      "use_coords": true
+    },
+    "v4_negative_prompt": {
+      "caption": {
+        "base_caption": "lowres, bad hands",
+        "char_captions": [
+          {
+            "char_caption": "bad face"
+          }
+        ]
+      }
+    }
+  }
+}

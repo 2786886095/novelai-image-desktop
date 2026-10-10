@@ -26,7 +26,7 @@ export async function discardHarnessDownload(root:string, source:string) {
 /** Independent component releases, NOT upstream npm latest and NOT the application's updater. */
 export async function queryCompatibleHarness(signal: AbortSignal) {
   const headers={'Accept':'application/vnd.github+json','User-Agent':'Langbai-Tavern-Agent'};
-  type Release={tag_name:string;draft:boolean;prerelease:boolean;assets:Array<{name:string;url:string;digest?:string;size:number}>};
+  type Release={tag_name:string;draft:boolean;prerelease:boolean;assets:Array<{name:string;url:string;digest?:string;size:number;browser_download_url?:string}>};
   const releases:Release[]=[];
   for(let page=1;page<=5;page++){
   const response=await fetch('https://api.github.com/repos/2786886095/novelai-image-desktop/releases?per_page=100&page='+page,{headers,signal:AbortSignal.any([signal,AbortSignal.timeout(20000)])});
@@ -43,6 +43,18 @@ export async function queryCompatibleHarness(signal: AbortSignal) {
 }
 
 export type HarnessDownload = NonNullable<Awaited<ReturnType<typeof queryCompatibleHarness>>>;
+/** Use the exact approved public asset, not a cached authenticated API redirect.
+ * Each transfer resolves a fresh signed CDN URL; size and digest checks remain mandatory. */
+export function componentAssetDownloadUrl(selected:HarnessDownload, nonce=crypto.randomBytes(8).toString('hex')) {
+  const {asset,tag}=selected;
+  if(!/^agent-v\d+\.\d+\.\d+$/.test(tag)||!/^[-a-zA-Z0-9._]+$/.test(asset.name))throw Error('Unexpected component asset identity');
+  const canonical=`https://github.com/2786886095/novelai-image-desktop/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(asset.name)}`;
+  if(asset.browser_download_url!==undefined&&asset.browser_download_url!==canonical)throw Error('Unexpected public component download source');
+  if(!asset.url.startsWith('https://api.github.com/repos/2786886095/novelai-image-desktop/releases/assets/'))throw Error('Unexpected update source');
+  const target=new URL(asset.browser_download_url??asset.url);
+  target.searchParams.set('cacheBust',nonce);
+  return target.href;
+}
 /** Bound inactivity separately from total time so a progressing slow download
  * is not killed after five minutes. User stop always takes precedence. */
 export function componentDownloadDeadline(parent:AbortSignal,idleMs=120000,totalMs=3600000) {
@@ -71,7 +83,7 @@ export async function downloadCompatibleHarness(root:string, signal:AbortSignal,
     try{
       deadline.signal.throwIfAborted();
       const offset=total;
-      const download=await fetch(asset.url,{headers:{...headers,Accept:'application/octet-stream',...(offset?{Range:`bytes=${offset}-`}:{})},signal:deadline.signal});
+      const download=await fetch(componentAssetDownloadUrl(selected),{headers:{...headers,Accept:'application/octet-stream','Cache-Control':'no-cache',Pragma:'no-cache',...(offset?{Range:`bytes=${offset}-`}:{})},signal:deadline.signal});
       if(![200,206].includes(download.status)||!download.body)throw new Error(`下载失败 HTTP ${download.status}`);
       if(download.status===206){
         const range=/^bytes (\d+)-(\d+)\/(\d+)$/.exec(download.headers.get('content-range')??'');

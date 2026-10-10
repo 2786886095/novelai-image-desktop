@@ -5,6 +5,7 @@ import { metadataReplayFromComment } from "./metadata-replay";
 // - NovelAI PNG tEXt / uncompressed iTXt (Description + Comment JSON)
 // - AUTOMATIC1111 / Forge PNG parameters
 // - AUTOMATIC1111 / Forge JPEG/WebP EXIF UserComment
+// - NovelAI WebP EXIF (official field mapping, including EXIF sub-IFD)
 // - ComfyUI PNG prompt + workflow
 //
 // The parser intentionally keeps the original metadata alongside the compatible
@@ -198,7 +199,7 @@ function readTiffMetadata(bytes: Uint8Array, tiffStart: number): Record<string, 
 
   function visitIfd(relativeOffset: number) {
     const ifd = tiffStart + relativeOffset;
-    if (relativeOffset <= 0 || visited.has(ifd) || ifd + 2 > bytes.length) return;
+    if (relativeOffset <= 0 || visited.has(ifd) || visited.size >= 64 || ifd + 2 > bytes.length) return;
     visited.add(ifd);
     const count = u16(ifd);
     if (count > 4096 || ifd + 2 + count * 12 > bytes.length) return;
@@ -214,7 +215,10 @@ function readTiffMetadata(bytes: Uint8Array, tiffStart: number): Record<string, 
       const value = readValue(entry, type, valueCount);
       if (!value) continue;
       if (tag === 0x010e) result.ImageDescription = decodeAscii(value);
+      if (tag === 0x010d) result.Title = decodeAscii(value);
       if (tag === 0x0131) result.Software = decodeAscii(value);
+      if (tag === 0x013b) result.Artist = decodeAscii(value);
+      if (tag === 0x8298) result.Copyright = decodeAscii(value);
       if (tag === 0x9286) result.UserComment = decodeUserComment(value);
       if (tag === 0x9c9c) {
         result.XPComment = new TextDecoder("utf-16le").decode(value).replace(/\0+$/, "").trim();
@@ -226,7 +230,30 @@ function readTiffMetadata(bytes: Uint8Array, tiffStart: number): Record<string, 
   const parameters = [result.UserComment, result.XPComment, result.ImageDescription]
     .find((value) => value && /(?:^|\n)Steps:\s*\d+/m.test(value));
   if (parameters) result.parameters = parameters;
-  return result;
+  return normalizeExifMetadata(result);
+}
+
+/** Keep raw EXIF fields while exposing NovelAI JSON to the existing importer. */
+function normalizeExifMetadata(metadata: Record<string, string>): Record<string, string> {
+  for (const key of ["UserComment", "XPComment", "ImageDescription"]) {
+    try {
+      const decoded = objectValue(JSON.parse(metadata[key] ?? ""));
+      if (!decoded) continue;
+      const nested = decoded.Comment;
+      if (typeof nested === "string" || objectValue(nested)) {
+        return {
+          ...Object.fromEntries(Object.entries(decoded).map(([name, value]) =>
+            [name, typeof value === "string" ? value : JSON.stringify(value)])),
+          ...metadata,
+        };
+      }
+      if (typeof decoded.prompt === "string" || objectValue(decoded.v4_prompt)) {
+        return { ...metadata, Comment: JSON.stringify(decoded),
+          ...(metadata.ImageDescription ? { Description: metadata.ImageDescription } : {}) };
+      }
+    } catch { /* Optional metadata must not prevent loading the image. */ }
+  }
+  return metadata;
 }
 
 function parseJpegMeta(buffer: ArrayBuffer): Record<string, string> {
@@ -266,20 +293,29 @@ function parseWebpMeta(buffer: ArrayBuffer): Record<string, string> {
     decodeLatin1(bytes.subarray(8, 12)) !== "WEBP"
   ) return {};
   const view = new DataView(buffer);
+  const end = view.getUint32(4, true) + 8;
+  if (end < 12 || end > bytes.length) return {};
+  const result: Record<string, string> = {};
   let offset = 12;
-  while (offset + 8 <= bytes.length) {
+  while (offset + 8 <= end) {
     const type = decodeLatin1(bytes.subarray(offset, offset + 4));
     const length = view.getUint32(offset + 4, true);
     const start = offset + 8;
-    if (start + length > bytes.length) break;
-    if (type === "EXIF") {
+    if (start + length > end) break;
+    if (type === "EXIF" && length <= 8 * 1024 * 1024) {
       const hasPrefix =
         length >= 6 && decodeLatin1(bytes.subarray(start, start + 6)) === "Exif\u0000\u0000";
-      return readTiffMetadata(bytes, start + (hasPrefix ? 6 : 0));
+      const exif = readTiffMetadata(bytes.subarray(start + (hasPrefix ? 6 : 0), start + length), 0);
+      Object.assign(result, exif);
+      // NovelAI's WebP EXIF Software field stores Source, not Software.
+      if (exif.Comment) {
+        if (!result.Source && exif.Software) result.Source = exif.Software;
+        if (!result.Description && exif.ImageDescription) result.Description = exif.ImageDescription;
+      }
     }
     offset = start + length + (length % 2);
   }
-  return {};
+  return result;
 }
 
 /** Read supported embedded text metadata from PNG, JPEG, or WebP. */

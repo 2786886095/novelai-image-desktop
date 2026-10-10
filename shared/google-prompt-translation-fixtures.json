@@ -1,0 +1,233 @@
+[
+  {
+    "input": "black_hat, black_shirt, blonde_hair, white_dress",
+    "queries": [
+      "black hat\nblack shirt\nblonde hair\nwhite dress"
+    ],
+    "responses": [
+      "黑色帽子\n黑色衬衫\n金发\n白色连衣裙"
+    ],
+    "output": "黑色帽子, 黑色衬衫, 金发, 白色连衣裙"
+  },
+  {
+    "input": "1.2::{black_hat}, [blonde_hair] | artist:some_artist, character:misumi_uika, sumimi_(bang_dream!), -0.5::white_dress::",
+    "queries": [
+      "black hat\nblonde hair\nwhite dress"
+    ],
+    "responses": [
+      "黑色帽子\n金发\n白色连衣裙"
+    ],
+    "output": "1.2::{黑色帽子}, [金发] | artist:some_artist, character:misumi_uika, sumimi_(bang_dream!), -0.5::白色连衣裙::"
+  },
+  {
+    "input": "2girls, bang_dream!, bang_dream!_it's_mygo!!!!!, misumi_uika, sumita_mana, black_hat",
+    "queries": [
+      "2 girls\nblack hat"
+    ],
+    "responses": [
+      "两个女孩\n黑色帽子"
+    ],
+    "output": "两个女孩, bang_dream!, bang_dream!_it's_mygo!!!!!, misumi_uika, sumita_mana, 黑色帽子",
+    "categories": {
+      "bang_dream!": 3,
+      "bang_dream!_it's_mygo!!!!!": 3,
+      "misumi_uika": 4,
+      "sumita_mana": 4
+    }
+  },
+  {
+    "input": "(black_hat:1.3), white_dress, black_hat\r\n[blonde_hair]",
+    "queries": [
+      "black hat\nwhite dress\nblonde hair"
+    ],
+    "responses": [
+      "黑色帽子\n白色连衣裙\n金发"
+    ],
+    "output": "(黑色帽子:1.3), 白色连衣裙, 黑色帽子\r\n[金发]"
+  },
+  {
+    "input": "artist:known_artist, character:some_name, copyright:some_work, unknown_person, sumimi_(bang_dream!,live)",
+    "queries": [],
+    "responses": [],
+    "output": "artist:known_artist, character:some_name, copyright:some_work, unknown_person, sumimi_(bang_dream!,live)",
+    "categories": {
+      "unknown_person": 4
+    }
+  },
+  {
+    "input": "Please translate this sentence.",
+    "queries": [
+      "Please translate this sentence."
+    ],
+    "responses": [
+      "请翻译这个句子。"
+    ],
+    "output": "请翻译这个句子。"
+  },
+  {
+    "input": "black_hat, rare_garment, white_dress",
+    "categories": {
+      "black_hat": 4,
+      "rare_garment": 0,
+      "white_dress": 1
+    },
+    "queries": [
+      "rare garment"
+    ],
+    "responses": [
+      "稀有服饰"
+    ],
+    "output": "black_hat, 稀有服饰, white_dress"
+  },
+  {
+    "input": "https://example.invalid/a_b, file_name.png, 1.1::black_hat::",
+    "queries": [
+      "black hat"
+    ],
+    "responses": [
+      "黑色帽子"
+    ],
+    "output": "https://example.invalid/a_b, file_name.png, 1.1::黑色帽子::"
+  },
+  {
+    "input": "(( black_hat :1.3)), { white_dress }",
+    "queries": [
+      "black hat\nwhite dress"
+    ],
+    "responses": [
+      "黑色帽子\n白色连衣裙"
+    ],
+    "output": "(( 黑色帽子 :1.3)), { 白色连衣裙 }"
+  },
+  {
+    "input": "artist:pong, black hat, 123, file_name[1].png",
+    "queries": [
+      "black hat"
+    ],
+    "responses": [
+      "黑色帽子"
+    ],
+    "output": "artist:pong, 黑色帽子, 123, file_name[1].png"
+  },
+  {
+    "id": "unlisted-descriptors",
+    "input": "1girl, solo, smile, blush, rain",
+    "queries": [
+      "1 girl\nsolo\nsmile\nblush\nrain"
+    ],
+    "responses": [
+      "1个女孩\n单人\n微笑\n脸红\n雨"
+    ],
+    "output": "1个女孩, 单人, 微笑, 脸红, 雨",
+    "target": "zh-CN",
+    "source": "auto",
+    "detected": "en"
+  },
+  {
+    "id": "mixed-prose",
+    "input": "black_hat, she is reading a book under a cherry tree",
+    "queries": [
+      "black hat\nshe is reading a book under a cherry tree"
+    ],
+    "responses": [
+      "黑色帽子\n她在樱花树下看书"
+    ],
+    "output": "黑色帽子, 她在樱花树下看书",
+    "target": "zh-CN",
+    "source": "auto",
+    "detected": "en"
+  },
+  {
+    "id": "common-labels",
+    "input": "bare_shoulders, hair_between_eyes, cowboy_shot, thighhighs, twintails",
+    "queries": [
+      "bare shoulders\nhair between eyes\ncowboy shot\nthighhighs\ntwintails"
+    ],
+    "responses": [
+      "露肩\n双眼之间的头发\n牛仔镜头\n过膝袜\n双马尾"
+    ],
+    "output": "露肩, 双眼之间的头发, 牛仔镜头, 过膝袜, 双马尾",
+    "target": "zh-CN",
+    "source": "auto",
+    "detected": "en"
+  },
+  {
+    "id": "auto-chinese",
+    "input": "{黑色帽子}, 1.2::金发::",
+    "queries": [
+      "黑色帽子\n金发"
+    ],
+    "responses": [
+      "黒い帽子\n金髪"
+    ],
+    "output": "{黒い帽子}, 1.2::金髪::",
+    "target": "ja",
+    "source": "auto",
+    "detected": "zh-CN"
+  },
+  {
+    "id": "mixed-punctuation",
+    "input": "black_hat, She’s reading a book! It's raining.",
+    "queries": [
+      "black hat\nShe’s reading a book! It's raining."
+    ],
+    "responses": [
+      "黑色帽子\n她在看书！下雨了。"
+    ],
+    "output": "黑色帽子, 她在看书！下雨了。",
+    "target": "zh-CN",
+    "source": "auto",
+    "detected": "en"
+  },
+  {
+    "id": "auto-to-english",
+    "input": "{黑色帽子}, 1.2::金发::",
+    "queries": [
+      "黑色帽子\n金发"
+    ],
+    "responses": [
+      "black hat\nblonde hair"
+    ],
+    "output": "{black hat}, 1.2::blonde hair::",
+    "target": "en",
+    "source": "auto",
+    "detected": "zh-CN"
+  },
+  {
+    "id": "explicit-names-controls",
+    "input": "1.2::{black_hat}, [blonde_hair] | artist:some_artist, character:misumi_uika, sumimi_(bang_dream!), -0.5::white_dress::",
+    "queries": [
+      "black hat\nblonde hair\nwhite dress"
+    ],
+    "responses": [
+      "黑色帽子\n金发\n白色连衣裙"
+    ],
+    "output": "1.2::{黑色帽子}, [金发] | artist:some_artist, character:misumi_uika, sumimi_(bang_dream!), -0.5::白色连衣裙::",
+    "target": "zh-CN",
+    "source": "auto",
+    "detected": "en"
+  },
+  {
+    "input": "black_hat, blush, rain",
+    "categories": {
+      "black_hat": 5
+    },
+    "queries": [
+      "black hat\nblush\nrain"
+    ],
+    "responses": [
+      "黑色帽子\n脸红\n雨"
+    ],
+    "output": "黑色帽子, 脸红, 雨"
+  },
+  {
+    "input": "black_hat, unlisted_description",
+    "queries": [
+      "black hat\nunlisted description"
+    ],
+    "responses": [
+      "黑色帽子\n未列出的描述"
+    ],
+    "output": "黑色帽子, 未列出的描述"
+  }
+]

@@ -447,23 +447,36 @@ Map<String, String> _parseWebpMetadata(Uint8List bytes) {
     return {};
   }
   final data = ByteData.sublistView(bytes);
+  final end = data.getUint32(4, Endian.little) + 8;
+  if (end < 12 || end > bytes.length) return {};
+  final result = <String, String>{};
   var offset = 12;
-  while (offset + 8 <= bytes.length) {
+  while (offset + 8 <= end) {
     final type = latin1.decode(bytes.sublist(offset, offset + 4));
     final length = data.getUint32(offset + 4, Endian.little);
     final start = offset + 8;
-    if (start + length > bytes.length) break;
-    if (type == 'EXIF') {
+    if (start + length > end) break;
+    if (type == 'EXIF' && length <= _maxMetadataBytes) {
       final hasPrefix = length >= 6 &&
           latin1.decode(bytes.sublist(start, start + 6)) == 'Exif\u0000\u0000';
-      return _readTiffMetadata(
+      final exif = _normalizeImageMetadata(_readTiffMetadata(
           Uint8List.sublistView(
               bytes, start + (hasPrefix ? 6 : 0), start + length),
-          0);
+          0));
+      result.addAll(exif);
+      // Official NovelAI WebP maps EXIF Software to Source.
+      if (exif.containsKey('Comment')) {
+        if (!result.containsKey('Source') && exif.containsKey('Software')) {
+          result['Source'] = exif['Software']!;
+        }
+        if (!result.containsKey('Description') && exif.containsKey('ImageDescription')) {
+          result['Description'] = exif['ImageDescription']!;
+        }
+      }
     }
     offset = start + length + (length.isOdd ? 1 : 0);
   }
-  return {};
+  return result;
 }
 
 Map<String, String> _readTiffMetadata(Uint8List bytes, int tiffStart) {
@@ -559,7 +572,10 @@ Map<String, String> _readTiffMetadata(Uint8List bytes, int tiffStart) {
       final value = readValue(entry, type, valueCount);
       if (value == null) continue;
       if (tag == 0x010e) result['ImageDescription'] = decodeAscii(value);
+      if (tag == 0x010d) result['Title'] = decodeAscii(value);
       if (tag == 0x0131) result['Software'] = decodeAscii(value);
+      if (tag == 0x013b) result['Artist'] = decodeAscii(value);
+      if (tag == 0x8298) result['Copyright'] = decodeAscii(value);
       if (tag == 0x9286) result['UserComment'] = decodeUserComment(value);
       if (tag == 0x9c9c) {
         result['XPComment'] = decodeUtf16(value, littleEndian: true);

@@ -1,3 +1,4 @@
+import {prepareGooglePromptTranslation} from '../../src/google-prompt-translation';
 import {resolveTranslationTarget,baiduTranslationTarget,translationLanguageName,normalizeTranslationSource,parseTranslationReply} from '../../src/translation';
 import {prepareFocusedInpaintInput,compositeFocusedPatch} from './focused-inpaint';
 import {parseNaiAccountSummary} from './nai-account-summary';
@@ -5309,24 +5310,30 @@ async function googleTranslate(
   sourceLanguage = "auto",
 ): Promise<{ ok: boolean; text?: string; error?: string; sourceLanguage?: string }> {
   try {
-    const res = await axios.get(
-      "https://translate.googleapis.com/translate_a/single",
-      {
-        params: { client: "gtx", sl: sourceLanguage, tl: target, dt: "t", q: text },
-        timeout: 8_000,
-        ...proxyConfig("translate"),
-      },
-    );
-    // Response shape: [[[ "translated", "source", ... ], ...], ...]
-    const segments = (res.data?.[0] ?? []) as Array<
-      [string, string, ...unknown[]]
-    >;
-    const out = segments
-      .map((s) => s?.[0] ?? "")
-      .join("")
-      .trim();
-    if (!out) return { ok: false, error: "谷歌翻译结果为空。" };
-    const detected = normalizeTranslationSource(sourceLanguage === "auto" ? res.data?.[2] : sourceLanguage);
+    if (sourceLanguage === target) return { ok: true, text, sourceLanguage };
+    const plan = await prepareGooglePromptTranslation(text, async (tag) => {
+          const normalized = tag.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+          const hits = await searchDanbooru(tag, 20); // optional local index; never downloads
+          return hits.find(hit => hit.tag.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ').trim() === normalized)?.category;
+        });
+    const outputs: string[] = [];
+    let detected = normalizeTranslationSource(sourceLanguage);
+    for (const query of plan.queries) {
+      const res = await axios.get(
+        "https://translate.googleapis.com/translate_a/single",
+        {
+          params: { client: "gtx", sl: sourceLanguage, tl: target, dt: "t", q: query },
+          timeout: 8_000,
+          ...proxyConfig("translate"),
+        },
+      );
+      const segments = Array.isArray(res.data?.[0]) ? res.data[0] : [];
+      const out = segments.map((s: unknown) => Array.isArray(s) && typeof s[0] === 'string' ? s[0] : '').join('').trim();
+      if (!out) return { ok: false, error: "谷歌翻译结果为空。" };
+      outputs.push(out);
+      if (detected === 'auto') detected = normalizeTranslationSource(res.data?.[2]);
+    }
+    const out = plan.restore(outputs);
     return { ok: true, text: out, ...(detected !== "auto" ? { sourceLanguage: detected } : {}) };
   } catch (error: any) {
     return {

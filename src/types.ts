@@ -2177,6 +2177,7 @@ export interface NaiDesktopApi {
   downloadUpdate: () => Promise<{ ok: boolean; message: string }>;
   installUpdate: () => Promise<void>;
   onUpdateEvent: (callback: (event: UpdateProgressEvent) => void) => () => void;
+  onNavigateBack?: (callback: () => void) => () => void;
   minimize: () => Promise<void>;
   maximize: () => Promise<void>;
   close: () => Promise<void>;

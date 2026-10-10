@@ -381,6 +381,8 @@ function pinUserDataAndMigrate() {
   }
 }
 
+import { wireSystemBack } from "./system-navigation";
+
 function createWindow() {
   const iconPath = isDev
     ? path.join(__dirname, "../../public/icon.png")
@@ -412,6 +414,7 @@ function createWindow() {
   });
 
   attachEditContextMenu(mainWindow);
+  wireSystemBack(mainWindow);
   mainWindow.webContents.on("did-fail-load", (_event, code, description, _url, isMainFrame) => {
     if (!isMainFrame || code === -3) return;
       dialog.showErrorBox("启动失败 / Startup failed", `${description} (${code})`);
