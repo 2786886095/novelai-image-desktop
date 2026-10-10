@@ -63,6 +63,11 @@ import type {
 const imageSaves = createImageSaveTracker();
 
 contextBridge.exposeInMainWorld("naiDesktop", {
+  onNavigateBack: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("app:navigate-back", listener);
+    return () => ipcRenderer.removeListener("app:navigate-back", listener);
+  },
   favoritesStatus:(src:string)=>ipcRenderer.invoke('favorites:status',src),
   favoritesList: () => ipcRenderer.invoke('favorites:list'),
   favoritesAdd: (src:string) => ipcRenderer.invoke('favorites:add',src),

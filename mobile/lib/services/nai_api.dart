@@ -1,4 +1,5 @@
 import '../prompts/translation.dart';
+import '../prompts/google_prompt_translation.dart';
 import 'openai_images.dart' as envelope;
 import 'novelai_image_envelope.dart';
 import 'generation_scope.dart';
@@ -252,51 +253,37 @@ class NaiApi {
       );
     }
     try {
-      final uri = Uri.https(
-        'translate.googleapis.com',
-        '/translate_a/single',
-        {
-          'client': 'gtx',
-          'sl': from,
-          'tl': resolvedTarget,
-          'dt': 't',
-          'q': input
-        },
-      );
-      final response = await _withClient(
-        settings,
-        (client) => client.get(uri).timeout(const Duration(seconds: 8)),
-        scope: ProxyScope.translate,
-      );
-      if (response.statusCode >= 400) {
-        return AiTextResult(
-          ok: false,
-          message: 'Google Translate failed (HTTP ${response.statusCode})',
-        );
+      if (from == resolvedTarget) {
+        return AiTextResult(ok: true, message: 'Translation complete', text: input, sourceLanguage: from);
       }
-      final data = jsonDecode(response.body);
-      final segments = data is List && data.isNotEmpty && data.first is List
-          ? data.first as List
-          : const [];
-      final translated = segments
-          .whereType<List>()
-          .map((segment) =>
-              segment.isEmpty ? '' : segment.first?.toString() ?? '')
-          .join()
-          .trim();
-      return translated.isEmpty
-          ? const AiTextResult(
-              ok: false,
-              message: 'Google Translate returned an empty result',
-            )
-          : AiTextResult(
-              ok: true,
-              message: 'Translation complete',
-              text: translated,
-              sourceLanguage: _detectedSource(
-                  from == 'auto' && data is List && data.length > 2
-                      ? data[2]
-                      : from));
+      final plan = await prepareGooglePromptTranslation(input, lookupCategory: (tag) async {
+              String key(String v) => v.toLowerCase().replaceAll('_', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+              final hits = await _offlineTags.search(tag, limit: 20);
+              return hits.where((hit) => key(hit.tag) == key(tag)).firstOrNull?.category;
+            });
+      final outputs = <String>[];
+      String? detected = _detectedSource(from);
+      for (final query in plan.queries) {
+        final uri = Uri.https('translate.googleapis.com', '/translate_a/single', {
+          'client': 'gtx', 'sl': from, 'tl': resolvedTarget, 'dt': 't', 'q': query,
+        });
+        final response = await _withClient(settings,
+          (client) => client.get(uri).timeout(const Duration(seconds: 8)),
+          scope: ProxyScope.translate,
+        );
+        if (response.statusCode >= 400) {
+          return AiTextResult(ok: false, message: 'Google Translate failed (HTTP ${response.statusCode})');
+        }
+        final data = jsonDecode(response.body);
+        final segments = data is List && data.isNotEmpty && data.first is List ? data.first as List : const [];
+        final translated = segments.whereType<List>().map((s) => s.isNotEmpty && s.first is String ? s.first as String : '').join().trim();
+        if (translated.isEmpty) {
+          return const AiTextResult(ok: false, message: 'Google Translate returned an empty result');
+        }
+        outputs.add(translated);
+        detected ??= _detectedSource(data is List && data.length > 2 ? data[2] : null);
+      }
+      return AiTextResult(ok: true, message: 'Translation complete', text: plan.restore(outputs), sourceLanguage: detected);
     } catch (error) {
       return AiTextResult(
         ok: false,

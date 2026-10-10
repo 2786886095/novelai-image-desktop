@@ -19,6 +19,7 @@ vi.mock("./nai", () => ({ readWorkbenchImage: async () => ({ buffer: state.workb
 vi.mock("./proxy", () => ({ proxyConfigForUrl: async () => undefined }));
 vi.mock("./local-media-protocol", () => ({ toLocalMediaUrl: (file: string) => `local://${file}` }));
 
+import * as editRunner from "./openai-image-edit";
 import { openAIInpaintWorkbench } from "./openai-image-edit-workbench";
 
 const servers: http.Server[] = [];
@@ -28,6 +29,7 @@ beforeEach(() => {
   state.history = [];
 });
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(servers.splice(0).map((s) => new Promise<void>((r) => { s.closeAllConnections(); s.close(() => r()); })));
   fs.rmSync(outputDir, { recursive: true, force: true });
 });
@@ -86,4 +88,20 @@ describe("openAIInpaintWorkbench", () => {
     expect(result.message).toMatch(/OpenAI 图像编辑/);
     expect(server.calls()).toBe(0);
   });
+  it("does not falsely claim a request was never submitted when mapping throws", async () => {
+    const server = await redServer();
+    state.workbench = await sharp({create:{width:10,height:10,channels:3,background:"#000"}}).png().toBuffer();
+    state.settings={outputDir,openaiImageEdit:{baseUrl:server.url},openaiImageEditApiKey:"fixture-key"};
+    vi.spyOn(editRunner,"runOpenAIImageEdit").mockImplementation(async (_input, options) => {
+      await options?.beforeSubmit?.();
+      throw Error("fixture: mapping failed after submission boundary");
+    });
+    const result=await openAIInpaintWorkbench({prompt:"fixture",maskBase64:"AAAA"});
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("请求已开始提交");
+    expect(result.message).toContain("没有自动重新提交");
+    expect(result.message).not.toContain("请求未提交");
+    expect(server.calls()).toBe(0); // injected failure; no paid or real network call
+  });
+
 });

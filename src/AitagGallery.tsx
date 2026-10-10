@@ -1,4 +1,5 @@
 import {GallerySaveStyleButton} from "./StyleLibrary";
+import { useGalleryReturn } from "./use-gallery-return";
 import {GalleryFavoriteButton,GalleryFavoritesButton} from './components/GalleryFavorites';
 import {favoriteFromGallery,type GalleryFavorite} from './gallery-favorites';
 import {galleryLibraryText,localizedGalleryTag,galleryTagQuery} from './gallery-labels';
@@ -936,6 +937,10 @@ function ExternalGallery({
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState("");
   const gelbooruApiKey = DEFAULT_GELBOORU_API_KEY;
+  const { rememberList, returnToList, leaveForSearch, discardReturnPosition } = useGalleryReturn(
+    pageRef, Boolean(selected), () => setSelected(null), detailPreviewOpen,
+    () => setDetailPreviewOpen(false),
+  );
   const gelbooruUserId = DEFAULT_GELBOORU_USER_ID;
   const requestSequence = useRef(0);
   const info = { ...onlineGallerySourceInfo(source), label: localizedGallerySourceLabel(source, text) };
@@ -951,6 +956,7 @@ function ExternalGallery({
     targetType = collectionType,
     targetSort = tagsSort,
   ) => {
+    discardReturnPosition();
     const sequence = ++requestSequence.current;
     const keepCurrentPage = result.items.length > 0;
     const scrollAfterSwap = keepCurrentPage && targetPage !== result.page;
@@ -1023,6 +1029,7 @@ function ExternalGallery({
       await search(1, item.id, "", safeOnly, pageSize, [], false);
       return;
     }
+    rememberList();
     const sequence = ++requestSequence.current;
     setLoading(true);
     setError("");
@@ -1080,7 +1087,7 @@ function ExternalGallery({
       <main className="aitag-page aitag-detail-page">
         <header className="aitag-header">
           <div>
-            <button type="button" className="btn secondary compact" onClick={() => setSelected(null)}>{text.detailBack}</button>
+            <button type="button" className="btn secondary compact" onClick={returnToList}>{text.detailBack}</button>
             <h2>{source==="tags-gallery"?localizedGalleryTag(selected.item.title,language):selected.item.title || `#${selected.item.id}`}</h2>
             <p>{info.label} · {selected.item.createdAt || "—"}</p>
           </div>
@@ -1141,7 +1148,7 @@ function ExternalGallery({
             {tagGroups.map(([label, tags]) => tags.length ? (
               <section key={label} className="online-gallery-tag-section">
                 <h3>{label} ({tags.length})</h3>
-                <div>{tags.map((tag) => <button key={tag} type="button" onClick={() => { setSelected(null); setQueryValue(tag); void search(1, collectionId, tag); }}>{source==="tags-gallery"?localizedGalleryTag(tag,language):tag.replaceAll("_", " ")}</button>)}</div>
+                <div>{tags.map((tag) => <button key={tag} type="button" onClick={() => { leaveForSearch(); setQueryValue(tag); void search(1, collectionId, tag); }}>{source==="tags-gallery"?localizedGalleryTag(tag,language):tag.replaceAll("_", " ")}</button>)}</div>
               </section>
             ) : null)}
             {selected.note ? <article className="aitag-data-block"><header><h3>{text.note}</h3></header><p>{selected.note}</p></article> : null}
@@ -1356,6 +1363,10 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [compatibleSelection, setCompatibleSelection] = useState<Set<keyof ImportedParams>>(loadCompatibleSelection);
   const searchSequence = useRef(0);
+  const { rememberList, returnToList, discardReturnPosition } = useGalleryReturn(
+    pageRef, Boolean(selected), () => setSelected(null), detailPreviewOpen,
+    () => setDetailPreviewOpen(false), gallerySource === "aitag",
+  );
 
   const setGallerySource = useCallback((source: OnlineGallerySourceId) => {
     localStorage.setItem(ONLINE_GALLERY_SOURCE_KEY, source);
@@ -1384,6 +1395,7 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
     targetPage = 1,
     overrides?: { sort?: AitagSort; timeRange?: string; pageSize?: number },
   ) => {
+    discardReturnPosition();
     const sequence = ++searchSequence.current;
     const targetPageSize = overrides?.pageSize ?? pageSize;
     const keepCurrentPage = result.items.length > 0;
@@ -1478,6 +1490,7 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
   }, [page, search]);
 
   const openWork = async (work: AitagWorkSummary) => {
+    rememberList();
     setDetailLoading(true);
     setError(null);
     try {
@@ -1591,7 +1604,7 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
       <main className="aitag-page aitag-detail-page">
         <header className="aitag-header">
           <div>
-            <button type="button" className="btn secondary compact" onClick={() => setSelected(null)}>{text.detailBack}</button>
+            <button type="button" className="btn secondary compact" onClick={returnToList}>{text.detailBack}</button>
             <div className="online-gallery-title-line">
               <h2>{selected.work.title || `#${selected.work.id}`}</h2>
               <GallerySourcePicker value={gallerySource} onChange={setGallerySource} text={text} />

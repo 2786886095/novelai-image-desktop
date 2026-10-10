@@ -86,6 +86,8 @@ export async function openAIInpaintWorkbench(request: OpenAIInpaintRequest): Pro
       pasteBack: request.pasteBack ?? true,
     }, {
       signal: job.controller.signal,
+      // Preserve submission knowledge even if result mapping throws before returning.
+      beforeSubmit: () => { submitted = true; },
       route: (url) => proxyConfigForUrl("ai", url, settings),
     });
     submitted = output.batch.submitted;
@@ -101,7 +103,7 @@ export async function openAIInpaintWorkbench(request: OpenAIInpaintRequest): Pro
     return { ok: true, items, message: `OpenAI 图像编辑完成，已保存 ${items.length} 张。费用以服务商记录为准。` };
   } catch (error) {
     const message = error instanceof Error && /[\u4e00-\u9fff]/.test(error.message) ? error.message : "";
-    return { ok: false, items: [], message: submitted ? "结果保存未完成，请检查输出目录和历史存储；没有自动重新提交。" : message || "请求未提交，请检查 OpenAI 图像编辑配置、蒙版与图片。" };
+    return { ok: false, items: [], message: submitted ? "请求已开始提交，结果处理或保存未完成；请核查服务商记录，没有自动重新提交。" : message || "请求未提交，请检查 OpenAI 图像编辑配置、蒙版与图片。" };
   } finally {
     job.end();
   }
