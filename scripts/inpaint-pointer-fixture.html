@@ -1,0 +1,23 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><div id="root"></div><script>
+const fs=require('node:fs'),path=require('node:path'),Module=require('node:module');
+const source=process.env.POINTER_SOURCE,req=Module.createRequire(source+'/package.json'),ts=req('typescript'),React=req('react');
+const mock={settings:{language:'zh-CN',automaticComparison:{}},workbenchImage:{filePath:'fixture.svg',fileUrl:'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="400"><rect width="320" height="400" fill="#ddd"/></svg>'),width:320,height:400},currentImage:null,comparisonBeforeImage:null,comparisonSurface:null,brushSize:2,brushOpacity:1,brushColor:'#ff0000',brushMode:'paint',brushShape:'square',maskRevision:0,inpaintRegion:null,setBrushMode:()=>{},setBrushShape:()=>{},setBrushSize:()=>{},loadWorkbenchFromPath:()=>{},setInpaintRegion:r=>window.region=r,setInpaintMask:value=>{window.exportsCount=(window.exportsCount||0)+1;window.lastMask=value;}};
+const cache=new Map();
+function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(file).exports;const m=new Module(file);cache.set(file,m);m.filename=file;m.paths=Module._nodeModulePaths(path.dirname(file));m.require=(name)=>{
+ if(name==='./store')return {useAppStore:selector=>selector(mock)};
+ if(name==='./result-comparison')return {useResultComparison:()=>React.useState(false)};
+ if(name==='./workflow-text')return {workflowText:()=>({region:'region',regionHint:'regionHint',clearRegion:'clear'})};
+ if(name==='./i18n')return {desktopUiText:(_,key)=>key};
+ if(name==='./components/icons')return {Icon:()=>null};
+ if(name==='./components/RangeInput')return {RangeInput:props=>React.createElement('input',{...props,type:'range'})};
+ if(name==='./drag-drop')return {hasDraggedFiles:()=>false,droppedImagePath:()=>null};
+ if(name.startsWith('.')){let p=path.resolve(path.dirname(file),name);for(const ext of ['','.ts','.tsx'])if(fs.existsSync(p+ext)&&fs.statSync(p+ext).isFile())return load(p+ext);}
+ return req(name);
+ };m._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,file);return m.exports;}
+const style=document.createElement('style');style.textContent=fs.readFileSync(source+'/src/styles.css','utf8')+'\nbody{margin:0} .inpaint-canvas-area{position:absolute;width:700px;height:680px;top:10px;left:10px;box-sizing:border-box}.inpaint-mask-toolbar{height:70px}.inpaint-stage{min-height:0}.inpaint-mask-canvas{width:320px;height:400px}.inpaint-base-img{width:320px;height:400px}';document.head.append(style);
+window.pointerEvents=[];for(const name of ["pointermove","pointerup","pointerdown","lostpointercapture","pointerleave"])document.addEventListener(name,e=>window.pointerEvents.push({type:e.type,x:e.clientX,y:e.clientY,id:e.pointerId,buttons:e.buttons}),true);
+window.lastPointerId=1;window.exportsCount=0;document.addEventListener('pointerdown',e=>{window.lastPointerId=e.pointerId;},true);
+window.pointerSnapshot=()=>{const c=document.querySelector('canvas.inpaint-mask-canvas'),b=document.querySelector('.inpaint-cursor');return {visible:Number(b.style.opacity)>0,captured:c.hasPointerCapture(window.lastPointerId),exports:window.exportsCount,pixels:c.toDataURL(),panning:c.style.cursor==='grabbing',cursorStyle:c.style.cursor,left:b.style.left,events:window.pointerEvents.slice(-6)};};
+const {InpaintCanvas}=load(source+'/src/InpaintCanvas.tsx');req('react-dom/client').createRoot(document.getElementById('root')).render(React.createElement(InpaintCanvas));
+setTimeout(()=>window.fixtureReady=true,300);
+</script></body></html>

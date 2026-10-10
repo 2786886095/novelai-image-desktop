@@ -1,3 +1,4 @@
+import { isInsideInpaintSurface } from "./inpaint-pointer";
 import {useResultComparison} from "./use-result-comparison";
 import {normalizeAutomaticComparison} from './automatic-comparison';
 import {workflowText} from './workflow-text';
@@ -201,6 +202,12 @@ export function InpaintCanvas() {
     };
   }, []);
 
+  const pointerInsideCanvas = useCallback((clientX: number, clientY: number) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const stage = stageRef.current?.getBoundingClientRect();
+    return isInsideInpaintSurface(clientX, clientY, rect, stage);
+  }, []);
+
   const updateCursor = useCallback(
     (clientX: number, clientY: number) => {
       const canvas = canvasRef.current;
@@ -212,10 +219,10 @@ export function InpaintCanvas() {
         x: clientX - stageRect.left,
         y: clientY - stageRect.top,
         size: Math.max(2, brushPixelSize * displayScale),
-        visible: true,
+        visible: pointerInsideCanvas(clientX, clientY),
       });
     },
-    [brushPixelSize],
+    [brushPixelSize, pointerInsideCanvas],
   );
 
   const drawSamples = useCallback(
@@ -412,7 +419,8 @@ export function InpaintCanvas() {
       if (drawingPointerRef.current === event.pointerId) {
         if (!cancelled) {
           const native = event.nativeEvent;
-          const samples = native.getCoalescedEvents?.() ?? [native];
+          const coalesced = native.getCoalescedEvents?.();
+          const samples = coalesced?.length ? coalesced : [native];
           drawSamples(samples);
         }
         drawingRef.current = false;
@@ -426,6 +434,23 @@ export function InpaintCanvas() {
     },
     [drawSamples, exportMask],
   );
+
+  // Capture must not keep a hidden brush cursor alive outside the paint surface.
+  // End a stroke once on exit; a fresh press is required to start another one.
+  useEffect(() => {
+    const blur = () => {
+      const canvas = canvasRef.current;
+      const pointerId = drawingPointerRef.current ?? panPointerRef.current;
+      if (canvas && pointerId !== null) {
+        finishPointer({ pointerId, currentTarget: canvas } as React.PointerEvent<HTMLCanvasElement>, true);
+      }
+      regionStart.current = null;
+      setDraftRegion(null);
+      setCursor((current) => ({ ...current, visible: false }));
+    };
+    window.addEventListener("blur", blur);
+    return () => window.removeEventListener("blur", blur);
+  }, [finishPointer]);
 
   const imageZoomStyle = { transform: `translate(${stagePan.x}px, ${stagePan.y}px) scale(${stageZoom})` };
   const canvasZoomStyle = {
@@ -759,14 +784,26 @@ export function InpaintCanvas() {
             }
             updateCursor(event.clientX, event.clientY);
             if (drawingPointerRef.current !== event.pointerId) return;
+            if (!pointerInsideCanvas(event.clientX, event.clientY)) {
+              finishPointer(event, true);
+              return;
+            }
             const native = event.nativeEvent;
-            drawSamples(native.getCoalescedEvents?.() ?? [native]);
+            const coalesced = native.getCoalescedEvents?.();
+            drawSamples(coalesced?.length ? coalesced : [native]);
           }}
           onPointerEnter={(event) => updateCursor(event.clientX, event.clientY)}
           onPointerUp={(event) => {if(selectingRegion&&regionStart.current){try{if(draftRegion)setRegion(focusedInpaintPlan(draftRegion,workbenchImage.width,workbenchImage.height).region);}catch(e){useAppStore.getState().setToast(String(e));}regionStart.current=null;setDraftRegion(null);setSelectingRegion(false);if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);return;}finishPointer(event);}}
           onPointerCancel={(event) => {regionStart.current=null;setDraftRegion(null);finishPointer(event, true);}}
-          onPointerLeave={() => {
+          onLostPointerCapture={(event) => {
+            regionStart.current = null;
+            setDraftRegion(null);
+            finishPointer(event, true);
             setCursor((current) => ({ ...current, visible: false }));
+          }}
+          onPointerLeave={(event) => {
+            setCursor((current) => ({ ...current, visible: false }));
+            if (drawingPointerRef.current === event.pointerId) finishPointer(event, true);
           }}
         />
         {(draftRegion||region)&&!compareEnabled&&<svg className="inpaint-region-overlay" width={workbenchImage.width} height={workbenchImage.height} viewBox={`0 0 ${workbenchImage.width} ${workbenchImage.height}`} style={canvasZoomStyle} aria-label={workflow.regionLabel}><rect x={(draftRegion||region)!.x} y={(draftRegion||region)!.y} width={(draftRegion||region)!.width} height={(draftRegion||region)!.height} vectorEffect="non-scaling-stroke"/></svg>}
