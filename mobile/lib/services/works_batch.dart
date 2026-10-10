@@ -20,7 +20,10 @@ class WorksBatchFiles {
       if(await FileSystemEntity.type(base,followLinks:false)!=FileSystemEntityType.directory)continue;
       final realRoot=await root.resolveSymbolicLinks();
       final realFile=await File(path).resolveSymbolicLinks();
-      if(p.isWithin(realRoot,realFile) && p.equals(realFile,absolute))return true;
+      // An OS alias above the declared root (iOS /var -> /private/var) is allowed.
+      // A link inside the managed subtree must still change this exact expected path.
+      final expected=p.join(realRoot,p.relative(absolute,from:base));
+      if(p.isWithin(realRoot,realFile) && p.equals(realFile,expected))return true;
     }
     return false;
   }

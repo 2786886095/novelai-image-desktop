@@ -30,4 +30,24 @@ void main() {
       final result=await WorksBatchFiles([root]).delete(rows,{'a','b'});expect(result.removedIds,{'a','b'});expect(result.removedPaths.length,1);}
     finally {await root.delete(recursive:true);}
   });
+  test('OS ancestor alias is accepted but nested file and directory links never unlink originals',() async {
+    final temporary=await Directory.systemTemp.createTemp('works-alias-');
+    final root=Directory(await temporary.resolveSymbolicLinks());
+    try {
+      final physical=Directory('${root.path}/container')..createSync(),owned=Directory('${physical.path}/images')..createSync();
+      final alias=Link('${root.path}/os-alias');await alias.create(physical.path);
+      final viaAlias=Directory('${alias.path}/images'),file=File('${viaAlias.path}/owned.png')..writeAsBytesSync([1]);
+      final policy=WorksBatchFiles([viaAlias]);
+      final removed=await policy.delete([item('owned',file.path)],{'owned'});
+      expect(removed.removedPaths.length,1);expect(await file.exists(),isFalse);
+      final outside=Directory('${root.path}/outside')..createSync(),foreign=File('${outside.path}/foreign.png')..writeAsBytesSync([2]);
+      await Link('${owned.path}/escape').create(outside.path);
+      final retained=await policy.delete([item('foreign','${viaAlias.path}/escape/foreign.png')],{'foreign'});
+      expect(retained.removedPaths,isEmpty);expect(await foreign.readAsBytes(),[2]);
+      await Link('${owned.path}/file.png').create(foreign.path);
+      final fileLink=await policy.delete([item('linked','${viaAlias.path}/file.png')],{'linked'});
+      expect(fileLink.failedIds,{'linked'});expect(await foreign.readAsBytes(),[2]);
+    } finally {await root.delete(recursive:true);}
+  },skip:Platform.isWindows);
+
 }
