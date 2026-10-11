@@ -52,6 +52,7 @@ const _fixturePrivateKey="-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BA
 // https://api.dart.dev/dart-io/SecurityContext/setTrustedCertificates.html
 SecurityContext _trustFixtureCertificates(String pem) {
  final context=SecurityContext(withTrustedRoots:false);
+ if(!Platform.isIOS){context.setTrustedCertificatesBytes(utf8.encode(pem));return context;}
  final certificates=RegExp(r'-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----').allMatches(pem).toList();
  if(certificates.isEmpty)throw StateError('Missing fixture certificate');
  for(final match in certificates){context.setTrustedCertificatesBytes(base64Decode(match[1]!.replaceAll(RegExp(r'\s+'),'')));}
