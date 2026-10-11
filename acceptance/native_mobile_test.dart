@@ -1,6 +1,9 @@
 // ignore_for_file: avoid_print
 import 'dart:convert';
 import 'dart:io';
+import 'package:archive/archive.dart';
+import 'package:flutter/services.dart';
+import 'package:novelai_mobile/images/image_processing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -138,5 +141,122 @@ void main() {
       }
     }
     await tester.binding.setSurfaceSize(null);result('Native device core-screen responsive text 200 percent',['typography','works-batch-edit','generation','inpaint']);
+  });
+
+  // Backend -> native file/index readback with the production transport.
+  // All endpoints are localhost, never a provider and never a paid call.
+  for(final scenario in ['high','medium','503','401']) {
+    testWidgets('native NovelAI generation $scenario', (tester) async {
+      await tester.pumpWidget(const MaterialApp(home:Scaffold(body:Text('Neutral native generation'))));
+      var posts=0;final server=await HttpServer.bind(InternetAddress.loopbackIPv4,0);servers.add(server);
+      final status=int.tryParse(scenario)??200;Map<String,dynamic>? requestBody;
+      final generated=im.Image(width:64,height:64);im.fill(generated,color:im.ColorRgb8(0,0,255));
+      final png=im.encodePng(generated),zip=ZipEncoder().encode(Archive()..addFile(ArchiveFile('image.png',png.length,png)))!;
+      server.listen((request) async {
+        posts++;expect(request.uri.path,'/ai/generate-image');expect(request.method,'POST');
+        expect(request.headers.value('authorization'),'Bearer neutral-nai-secret');
+        requestBody=jsonDecode(await utf8.decoder.bind(request).join()) as Map<String,dynamic>;
+        request.response.statusCode=status;
+        if(status==200){request.response.headers.set('content-type','application/zip');request.response.add(zip);}
+        else{request.response.write('fixture HTTP $status');}
+        await request.response.close();
+      });
+      app.settings.imageBaseUrl='http://127.0.0.1:${server.port}';app.settings.streamPreviewEnabled=false;
+      final params=GenerateParams(positivePrompt:'blue square',width:64,height:64,seed:4000000000,seedMode:'fixed',effort:scenario=='medium'?'medium':'high');
+      var succeeded=false;
+      try {
+        final output=await app.api.generate('neutral-nai-secret',app.settings,params,GenerateExtras());
+        succeeded=true;expect(output.$1.length,1);expect(output.$2,4000000000);
+        final item=await storage.saveImage(output.$1.single,params,output.$2);
+        expect(await File(item.filePath).readAsBytes(),png);expect((await Storage().getHistory()).length,1);
+      } catch(error) {if(status==200)rethrow;}
+      expect(succeeded,status==200);expect(posts,1);expect(requestBody!['model'],scenario=='medium'?'nai-diffusion-5-full-medium':'nai-diffusion-5-full');
+      expect((requestBody!['parameters'] as Map)['seed'],4000000000);expect((requestBody!['parameters'] as Map)['n_samples'],1);
+      if(status!=200)expect(await storage.getHistory(),isEmpty);
+      result('Native NovelAI generation $scenario',['generation','effort','output-management','works']);
+    });
+  }
+  for(final action in ['img2img','inpaint','colorize','upscale']) {
+    testWidgets('native image action $action', (tester) async {
+      await tester.pumpWidget(const MaterialApp(home:Scaffold(body:Text('Neutral native image action'))));
+      var posts=0;final server=await HttpServer.bind(InternetAddress.loopbackIPv4,0);servers.add(server);
+      Map<String,dynamic>? requestBody;
+      final generated=im.Image(width:64,height:64);im.fill(generated,color:im.ColorRgb8(0,0,255));
+      final png=im.encodePng(generated),zip=ZipEncoder().encode(Archive()..addFile(ArchiveFile('image.png',png.length,png)))!;
+      server.listen((request) async {
+        posts++;expect(request.method,'POST');expect(request.headers.value('authorization'),'Bearer neutral-nai-secret');
+        expect(request.uri.path,action=='colorize'?'/ai/augment-image':action=='upscale'?'/ai/upscale':'/ai/generate-image');
+        requestBody=jsonDecode(await utf8.decoder.bind(request).join()) as Map<String,dynamic>;
+        request.response.headers.set('content-type','application/zip');request.response.add(zip);await request.response.close();
+      });
+      app.settings.imageBaseUrl='http://127.0.0.1:${server.port}';app.settings.streamPreviewEnabled=false;
+      final params=GenerateParams(positivePrompt:'blue square',width:64,height:64,seed:123,seedMode:'fixed'),input=await source.readAsBytes();
+      late Uint8List output;
+      if(action=='img2img'){
+        final r=await app.api.img2img('neutral-nai-secret',app.settings,params,GenerateExtras(),input,I2IParams());output=r.$1.single;
+        expect(requestBody!['action'],'img2img');expect((requestBody!['parameters'] as Map)['image'],isNotEmpty);
+      }else if(action=='inpaint'){
+        final r=await app.api.inpaint('neutral-nai-secret',app.settings,params,input,await mask.readAsBytes(),'nai-diffusion-5-full-inpainting',32,32,1,0);output=r.$1.single;
+        expect(requestBody!['action'],'infill');expect((requestBody!['parameters'] as Map)['mask'],isNotEmpty);
+        final decoded=im.decodePng(output)!;expect([decoded.getPixel(0,0).r,decoded.getPixel(0,0).g,decoded.getPixel(0,0).b],[220,30,30]);
+      }else if(action=='colorize'){
+        output=(await app.api.augment('neutral-nai-secret',app.settings,input,32,32,'colorize',AugmentOptions())).single;
+        expect(requestBody!['req_type'],'colorize');expect(requestBody!['image'],isNotEmpty);
+      }else{
+        output=await app.api.upscale('neutral-nai-secret',app.settings,input,2,'nai-diffusion-5-full');
+        final decoded=im.decodePng(output)!;expect([decoded.width,decoded.height],[64,64]);
+      }
+      expect(posts,1);final item=await storage.saveImage(output,params,123,feature:action);
+      expect(await File(item.filePath).readAsBytes(),output);expect((await Storage().getHistory()).single.feature,action);
+      result('Native image action $action',[action=='img2img'?'image-to-image':action=='inpaint'?'inpaint':'postprocess','works']);
+    });
+  }
+  for(final kind in ['convert','reverse']) {
+    for(final status in [200,401]) {
+      testWidgets('native cold $kind $status', (tester) async {
+        await tester.pumpWidget(const MaterialApp(home:Scaffold(body:Text('Neutral native text AI'))));
+        var posts=0;final server=await HttpServer.bind(InternetAddress.loopbackIPv4,0);servers.add(server);
+        const answer='A blue square lies in the middle of a red background.';
+        server.listen((request) async {
+          posts++;expect(request.method,'POST');expect(request.uri.path,'/v1/chat/completions');
+          expect(request.headers.value('authorization'),'Bearer neutral-text-secret');
+          final body=jsonDecode(await utf8.decoder.bind(request).join()) as Map;
+          expect(body['model'],'fixture');
+          if(kind=='reverse')expect(jsonEncode(body['messages']),contains('data:image/png;base64,'));
+          request.response.statusCode=status;request.response.headers.contentType=ContentType.json;
+          request.response.write(status==200?jsonEncode({'choices':[{'message':{'content':answer},'finish_reason':'stop'}]}):jsonEncode({'error':{'message':'fixture unauthorized'}}));await request.response.close();
+        });
+        final settings=AppSettings(proxyMode:'direct',saveToGallery:false,convertApiUrl:'http://127.0.0.1:${server.port}/v1',visionApiUrl:'http://127.0.0.1:${server.port}/v1',convertApiModel:'fixture',visionApiModel:'fixture',promptCodexEnhanceEnabled:false,promptRuleAutoRepairEnabled:false,reverseConvertDshEnabled:false,tagServerEnabled:false);
+        final response=kind=='convert'
+          ?await app.api.convertPrompt(settings:settings,apiKey:'neutral-text-secret',text:'A blue square',mode:ReversePromptMode.natural,knownCharacter:false,systemTemplate:'Describe the neutral shape.')
+          :await app.api.reversePrompt(settings:settings,apiKey:'neutral-text-secret',image:await source.readAsBytes(),mode:ReversePromptMode.natural,scope:ReversePromptScope.full,hint:'Describe the neutral shape.',knownCharacter:false,systemTemplate:'Describe the neutral shape.');
+        expect(response.ok,status==200);expect(posts,1);expect(app.aiCallLog.length,1);expect(app.aiCallLog.single.ok,status==200);
+        if(status==200){expect(response.text,answer);}else{expect(response.message,contains('401'));}
+        result('Native cold $kind $status',[kind,'ai-records']);
+      });
+    }
+  }
+  final webps=<String,String>{'lossy':'UklGRlQAAABXRUJQVlA4IEgAAABwBACdASpgAEAAPm02mUmkIyKhIWgAgA2JaQB2APwAABZkSKC7NmzZs2bNEAD+7c7f//nEsdTu7s///mCRuq/fb0odUoAAAAA=','lossless':'UklGRiQAAABXRUJQVlA4TBcAAAAvX8APAAfQtnI0uP8BICH8ny9F9D/1BwA=','alpha':'UklGRiQAAABXRUJQVlA4TBcAAAAvX8APEAfQtnI0uFkBICH8ny9F9D/1BwA=','animated':'UklGRpQAAABXRUJQVlA4WAoAAAACAAAAXwAAPwAAQU5JTQYAAAD/////AABBTk1GMAAAAAAAAAAAAF8AAD8AAGQAAAJWUDhMFwAAAC9fwA8AB1C8otSo/wEgIfyfL0X0P/UHAEFOTUYwAAAAAAAAAAAAXwAAPwAAZAAAAFZQOEwXAAAAL1/ADwAHULz61qj/ASAh/J8vRfQ/9QcA','novelai-exif-v5':'UklGRgoDAABXRUJQVlA4WAoAAAAIAAAAXwAAPwAAVlA4TBcAAAAvX8APAAfQuyZVtv8BICH8ny9F9D/1BwBKVU5LAwAAAG9kZABFWElGvwIAAElJKgAIAAAABgANAQIAGAAAAGgAAAAOAQIAEAAAAIAAAAAxAQIAGgAAAJAAAAA7AQIACAAAAKoAAACYggIALgAAALIAAABphwQAAQAAAFYAAAAAAAAAAQCGkgcA3wEAAOAAAAAAAAAATm92ZWxBSSBnZW5lcmF0ZWQgaW1hZ2UAMWdpcmwsIGJsdWUgc2t5AE5vdmVsQUkgRGlmZnVzaW9uIFY1IEZ1bGwATm92ZWxBSQBGaXh0dXJlIG9ubHk7IG5vdCBhbiBvZmZpY2lhbCBnZW5lcmF0ZWQgaW1hZ2UAQVNDSUkAAAB7InByb21wdCI6IjFnaXJsLCBibHVlIHNreSIsInVjIjoibG93cmVzLCBiYWQgaGFuZHMiLCJtb2RlbCI6Im5haS1kaWZmdXNpb24tNS1mdWxsIiwic2VlZCI6NDAwMDAwMDAwMCwic3RlcHMiOjI4LCJzY2FsZSI6Niwid2lkdGgiOjk2LCJoZWlnaHQiOjY0LCJzYW1wbGVyIjoia19ldWxlcl9hbmNlc3RyYWwiLCJlZmZvcnQiOiJoaWdoIiwidjRfcHJvbXB0Ijp7ImNhcHRpb24iOnsiYmFzZV9jYXB0aW9uIjoiMWdpcmwsIGJsdWUgc2t5IiwiY2hhcl9jYXB0aW9ucyI6W3siY2hhcl9jYXB0aW9uIjoiZ2lybCwgYmx1ZSBoYWlyIiwiY2VudGVycyI6W3sieCI6MC4yNSwieSI6MC43NX1dfV19LCJ1c2VfY29vcmRzIjp0cnVlfSwidjRfbmVnYXRpdmVfcHJvbXB0Ijp7ImNhcHRpb24iOnsiYmFzZV9jYXB0aW9uIjoibG93cmVzLCBiYWQgaGFuZHMiLCJjaGFyX2NhcHRpb25zIjpbeyJjaGFyX2NhcHRpb24iOiJiYWQgZmFjZSJ9XX19fQAA','novelai-exif-v5-be':'UklGRhADAABXRUJQVlA4WAoAAAAIAAAAXwAAPwAAVlA4TBcAAAAvX8APAAfQuyZVtv8BICH8ny9F9D/1BwBKVU5LAwAAAG9kZABFWElGxQIAAEV4aWYAAE1NACoAAAAIAAYBDQACAAAAGAAAAGgBDgACAAAAEAAAAIABMQACAAAAGgAAAJABOwACAAAACAAAAKqCmAACAAAALgAAALKHaQAEAAAAAQAAAFYAAAAAAAGShgAHAAAB3wAAAOAAAAAATm92ZWxBSSBnZW5lcmF0ZWQgaW1hZ2UAMWdpcmwsIGJsdWUgc2t5AE5vdmVsQUkgRGlmZnVzaW9uIFY1IEZ1bGwATm92ZWxBSQBGaXh0dXJlIG9ubHk7IG5vdCBhbiBvZmZpY2lhbCBnZW5lcmF0ZWQgaW1hZ2UAQVNDSUkAAAB7InByb21wdCI6IjFnaXJsLCBibHVlIHNreSIsInVjIjoibG93cmVzLCBiYWQgaGFuZHMiLCJtb2RlbCI6Im5haS1kaWZmdXNpb24tNS1mdWxsIiwic2VlZCI6NDAwMDAwMDAwMCwic3RlcHMiOjI4LCJzY2FsZSI6Niwid2lkdGgiOjk2LCJoZWlnaHQiOjY0LCJzYW1wbGVyIjoia19ldWxlcl9hbmNlc3RyYWwiLCJlZmZvcnQiOiJoaWdoIiwidjRfcHJvbXB0Ijp7ImNhcHRpb24iOnsiYmFzZV9jYXB0aW9uIjoiMWdpcmwsIGJsdWUgc2t5IiwiY2hhcl9jYXB0aW9ucyI6W3siY2hhcl9jYXB0aW9uIjoiZ2lybCwgYmx1ZSBoYWlyIiwiY2VudGVycyI6W3sieCI6MC4yNSwieSI6MC43NX1dfV19LCJ1c2VfY29vcmRzIjp0cnVlfSwidjRfbmVnYXRpdmVfcHJvbXB0Ijp7ImNhcHRpb24iOnsiYmFzZV9jYXB0aW9uIjoibG93cmVzLCBiYWQgaGFuZHMiLCJjaGFyX2NhcHRpb25zIjpbeyJjaGFyX2NhcHRpb24iOiJiYWQgZmFjZSJ9XX19fQAA'};
+  for(final name in webps.keys) {
+    testWidgets('native WebP $name decode and workbench import', (tester) async {
+      await tester.pumpWidget(const MaterialApp(home:Scaffold(body:Text('Neutral native WebP'))));
+      final bytes=base64Decode(webps[name]!),file=File('${root.path}/$name.webp');await file.writeAsBytes(bytes);
+      await app.setWorkbenchPath(file.path);expect(app.workbenchImage,isNotNull);
+      final png=await processingImageBytes(bytes),decoded=im.decodePng(png)!;
+      expect([decoded.width,decoded.height],[96,64]);expect(decoded.numFrames,1);expect(await file.readAsBytes(),bytes);
+      expect([app.workbenchImage!.width,app.workbenchImage!.height],[96,64]);
+      if(name=='alpha')expect(decoded.getPixel(20,20).a,lessThan(255));
+      if(name.startsWith('novelai-exif')) {
+        expect(app.workbenchImportedParams!.positivePrompt,'1girl, blue sky');expect(app.workbenchImportedParams!.seed,4000000000);
+        expect(app.workbenchCharacterCaptions.single.prompt,'girl, blue hair');
+      }
+      result('Native WebP $name',['metadata-import','tools']);
+    });
+  }
+  testWidgets('real native clipboard text roundtrip', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home:Scaffold(body:Text('Neutral native clipboard'))));
+    await Clipboard.setData(const ClipboardData(text:'neutral-native-clipboard-fixture'));
+    expect((await Clipboard.getData(Clipboard.kTextPlain))!.text,'neutral-native-clipboard-fixture');
+    result('Native clipboard text roundtrip',['clipboard']);
   });
 }
