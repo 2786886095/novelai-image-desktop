@@ -17,6 +17,11 @@ def call(name,cmd,cwd=None):
 call('android-build',['flutter','build','apk','--debug','--target=integration_test/native_acceptance_test.dart','--no-pub','--dart-define=ACCEPTANCE_SOURCE_SHA='+sha],root/'mobile')
 apk=root/'mobile/build/app/outputs/flutter-apk/app-debug.apk';assert apk.is_file()
 call('android-install',['adb','-s',device,'install','-r',str(apk)])
+# The native queue really asks for notification consent. Configure only this
+# fresh CI package, rather than hanging behind an unhandled system dialog.
+call('android-notification-consent',['adb','-s',device,'shell','pm','grant',package,'android.permission.POST_NOTIFICATIONS'])
+permissions=call('android-notification-consent-readback',['adb','-s',device,'shell','dumpsys','package',package])
+assert 'android.permission.POST_NOTIFICATIONS: granted=true' in permissions
 call('android-stop-prior-own-app',['adb','-s',device,'shell','am','force-stop',package])
 log_file=(out/'attached-android-device.log').open('w',encoding='utf-8');messages=[]
 reader=subprocess.Popen(['adb','-s',device,'logcat','-v','threadtime'],text=True,encoding='utf-8',errors='replace',stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
