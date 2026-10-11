@@ -1,7 +1,8 @@
 import subprocess,sys,pathlib,json,re,hashlib,threading
 root=pathlib.Path(sys.argv[1]).resolve();out=pathlib.Path(sys.argv[2]).resolve();out.mkdir(parents=True,exist_ok=True);sha=sys.argv[3];device=sys.argv[4];platform=sys.argv[5];suite=sys.argv[6] if len(sys.argv)>6 else 'core'
 command=['flutter','test','integration_test/native_acceptance_test.dart','-d',device,'--dart-define=ACCEPTANCE_SOURCE_SHA='+sha,'--reporter=expanded']
-if suite=='breadth':command += ['--plain-name','native breadth']
+if suite=='flows':command += ['--plain-name','native flows']
+elif suite=='breadth':command += ['--plain-name','native breadth']
 elif suite=='core':command += ['--name','^(?!native breadth)']
 else:assert suite=='all'
 device_logs=None
@@ -46,6 +47,10 @@ breadth=set(['Native negative library cold CRUD and exact export', 'Native negat
 breadth.add('Native backup distinct characters repeat-import identity')
 if suite=="breadth":expected=breadth
 elif suite=="all":expected |= breadth
+flows={'Native translation '+s for s in ['200','401','empty']} | {'Native gallery '+s for s in ['200','retry','timeout']} | {'Native update '+s for s in ['manifest','fallback','unavailable']} | {'Native durable generation '+s for s in ['batch','batch-cancel','comic-503','artist-promote']}
+flows.add('Native phone all15 navigation')
+if suite=='flows':expected=flows
+elif suite=='all':expected |= flows
 pass_=p.returncode==0 and len(cases)==len(expected) and {c['name'] for c in cases}==expected and all(c['pass'] and c['platform']==platform and c['sourceSha']==sha for c in cases)
 (out/'execution.json').write_text(json.dumps({'schema':1,'sourceSha':sha,'platform':platform,'device':device,'kind':'device','command':command,'stdout':stdout,'stderr':stderr,'exitStatus':p.returncode,'cases':cases,'pass':pass_,'paidCalls':0,'applicationLibUnmodified':True,'full39FeatureAcceptance':False,'suite':suite,'expectedCaseCount':len(expected)},indent=2))
 sys.exit(0 if pass_ else 1)

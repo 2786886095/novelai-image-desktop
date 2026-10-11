@@ -10,7 +10,7 @@ on:
         default: true
       mobile_suite:
         type: choice
-        options: [core, breadth, all]
+        options: [core, breadth, flows, all]
         default: all
       android_only:
         type: boolean
@@ -20,7 +20,7 @@ on:
         default: false
       suite:
         type: choice
-        options: [core, storage, network, breadth, all]
+        options: [core, storage, network, breadth, flows, all]
         default: all
 permissions:
   contents: read

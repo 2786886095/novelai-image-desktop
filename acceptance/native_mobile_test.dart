@@ -1,5 +1,12 @@
 // ignore_for_file: avoid_print
 import 'dart:convert';
+import 'package:http/io_client.dart';
+import 'package:novelai_mobile/services/update_service.dart';
+import 'package:novelai_mobile/services/online_gallery_service.dart';
+import 'package:novelai_mobile/artist/artist_recipe.dart';
+import 'package:novelai_mobile/main.dart';
+import 'package:novelai_mobile/ui/studio_shell.dart';
+
 import 'package:crypto/crypto.dart';
 import 'dart:io';
 import 'package:novelai_mobile/prompts/negative_prompt_library.dart';
@@ -71,6 +78,24 @@ Future<void> _activateNeutralAccount(AppState app,int port) async {
 // socket transport; neutral fixtures, no production endpoint and no paid call.
 void result(String name,List<String> features) => print('NATIVE_MOBILE_CASE:${jsonEncode({'name':name,'features':features,'pass':true,'platform':Platform.isAndroid?'android':'ios','sourceSha':const String.fromEnvironment('ACCEPTANCE_SOURCE_SHA'),'paidCalls':0})}');
 HistoryItem row(String id,String file)=>HistoryItem(id:id,filePath:file,date:'2026-10-11',createdAt:'2026-10-11',seed:123,model:'fixture',width:32,height:32,prompt:'blue square');
+// Public CI-only certificate and key; no production credential.
+const _flowCertificate="-----BEGIN CERTIFICATE-----\nMIIDyDCCArCgAwIBAgIUV6d3zASDfxQiKD+/xBo4BmStYCUwDQYJKoZIhvcNAQEL\nBQAwKTEnMCUGA1UEAwweTmV1dHJhbCBOYXRpdmUgRmxvdyBDSSBGaXh0dXJlMB4X\nDTI2MTAxMTExMTgxNVoXDTM2MTAwODExMTgxNVowKTEnMCUGA1UEAwweTmV1dHJh\nbCBOYXRpdmUgRmxvdyBDSSBGaXh0dXJlMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A\nMIIBCgKCAQEAjBWha2q2xtYstuaFKi4ucanGQ5yZHMOvrVrzJh5hHLxenGdFZSmD\n4rrsu65pFvNV40AQOb3IqDIYPx9nJnpBsxgq+Jfu3LUrBL5a+61afUvPZuhOQd9+\njs/TjoIPTKzgjtbLZH1JqX9+gtZcOHX2EXpzMU3Xsfit5+tXPGCQZ20Cpq7qkaFl\nLRWAtyZc5GLB5gdBjpDThC3JHsV9+rWz60fN6M46zBCcKzxQiSwulP+7Pb5iIiP+\nHKOP7XlntjYB6Q74kcwQAI33/V/XY6378kFUJZbVoZybA+fOKn4bgaWy2uCtLHaO\nYabxxOOYlYYp8MC3vsN+UtVHZKp0sV13lwIDAQABo4HnMIHkMB0GA1UdDgQWBBRP\nR4B+80Fx8ObcqIfcms2iqoVTUjAfBgNVHSMEGDAWgBRPR4B+80Fx8ObcqIfcms2i\nqoVTUjCBkAYDVR0RBIGIMIGFghh0cmFuc2xhdGUuZ29vZ2xlYXBpcy5jb22CE2Zh\nbnlpLWFwaS5iYWlkdS5jb22CEmRhbmJvb3J1LmRvbm1haS51c4ITc2FmZWJvb3J1\nLmRvbm1haS51c4IKZ2l0aHViLmNvbYIOYXBpLmdpdGh1Yi5jb22CCWxvY2FsaG9z\ndIcEfwAAATAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQCKHRye\naXmVnaw0G2CkE1x+L8ZOa+B2ti3U7WpxjkWp1tT+c8NPdAXyMIDtJKSF0Sq7A27V\n5VA2NF84083ZAPLl3qOEoJ2eEq6Q2vgcRXBOjplRaE9nshLAIt6T6W0DRgsN5TiA\nxeRi6C7X7GkF434mNQACnCZeeMDeKrSQXThMvVZ4pWU7u5OTZpz0K7a2lOy2o3cn\nOBK9v/lP3smU83//i99N0bg40XZRGE3n3JfDqNfof+vJ0XwG5jO0Zxm1+pCZyPOu\ntHl+demEZX29uWxZIuKO9uoxnTb76AqKQ6xwJC4Wc2pvumKWVEgo+2P9VsT0X8Gv\nS8I+H9fNlkWxI5Cm\n-----END CERTIFICATE-----\n";
+const _flowPrivateKey="-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCMFaFrarbG1iy2\n5oUqLi5xqcZDnJkcw6+tWvMmHmEcvF6cZ0VlKYPiuuy7rmkW81XjQBA5vcioMhg/\nH2cmekGzGCr4l+7ctSsEvlr7rVp9S89m6E5B336Oz9OOgg9MrOCO1stkfUmpf36C\n1lw4dfYRenMxTdex+K3n61c8YJBnbQKmruqRoWUtFYC3JlzkYsHmB0GOkNOELcke\nxX36tbPrR83ozjrMEJwrPFCJLC6U/7s9vmIiI/4co4/teWe2NgHpDviRzBAAjff9\nX9djrfvyQVQlltWhnJsD584qfhuBpbLa4K0sdo5hpvHE45iVhinwwLe+w35S1Udk\nqnSxXXeXAgMBAAECggEAE29i1FjbX+3SCVQlMIt0tR9VWwcMdSGvK3F9X5ICbi6y\nP6fSSG1Al4HQm19gxCbhiSRXu/MZNkCw/Xz5XizDFbpqJ9BIewWFoORaEiXkcpLE\nhSYAyYHc+Kpb0x83SS+I/jhNwrThNety3WspI0o2aAlhlvsSTGZQlmcf1Mge8MJJ\n819SKs3MRQtFJ1SCQWZcc8MgVpFBHj2y0vQObzV+GbflvbK5EqDVnBER+ZNTaKB8\nSGWxTlveiO1ng6QPj0N/w+e0tzCRP2OrFfJJu2vX8l32BFdrzjMJpjgtDHxImdsk\nl31VsppQr37kySxFqsk/iyd5toFVGO4xIxULNqOReQKBgQDDjyNBtUZyiUvJIXX9\nMofYEuZ6ZceHxHqsIX05oDfj9uBkBMxwvy80yiYPQaBTrjvpbbAuyPHA6B9tJznk\njn8sAjuBAIj1Pm7+Uq5pIoFgT6SqauR3BgBXhTXuqqERhK8tcY+w00IJ3Eu5Qtjy\njjeGdjAbSqx/bRQWHAbcF9BhyQKBgQC3YUaqHDKn5Hy4tUY9qGfj1ppc4e50kuVh\n3dKGkRYQ9XW3scseWc2BbOvLxSpwYMck+Na6t3C/D+Nbod6gBN7ipQATS8usJv0p\nZoTl/gIY9iosdXcVvTfITyju7ITBoCvKwOxFD4l7Rv2Y4YOJb3ghQA7gVf2joBrd\nUU5Dica+XwKBgQC0ezIKvoZZxqSO57bBCxWcMTVM2QohHxAoNHAh8uAiIAJPzK3x\nkEC886PUiLizAiaA9J6ZTxLu+kumrYEckvaDYzwPfrLnw8skJKKanSHSBS7vqN9Z\nicxe+a4gqpEkXdRemGQIybA08X9hZ3RZxy8vhXw4c95nbAARt6QNFF1ZIQKBgCXE\nIeJ8xi3vj4QWyS1/lk3E76t7WDmn2xfJsEbIcIvzkVfQhO1uPzWNcg5YP8I/HCRQ\nHyD7EHw40HEZqBi6iBCTPK28qWh96xtwoqQfKN1tLQhU9L6EZo2ZR+vUyA58Zyht\njPs4FO9PkoC+yPEwBMSMRcQL0Z22JnI4AW9FW6nvAoGBAJRATHfUWINrS2Zq8pge\nHt5lGKuQHav0ixB967yicsB1isTRJfgnkRiaHzWoqHlsymIpsY+sTGKYjzpZAjsn\nVUIcUgoB3F9wHSzhEvVMN67lKk1tClIp5Jpj/EDz97IFRBrrdewiEQpLeTXdBsVX\nlvl/SWmHrz0hpr5WnqFPbwPA\n-----END PRIVATE KEY-----\n";
+class _RoutedFlowTrust extends HttpOverrides {
+ final int port;_RoutedFlowTrust(this.port);
+ @override HttpClient createHttpClient(SecurityContext? _) {
+  final context=SecurityContext(withTrustedRoots:false)..setTrustedCertificatesBytes(utf8.encode(_flowCertificate));
+  return super.createHttpClient(context)..connectionFactory=(uri,proxyHost,proxyPort){
+   if(!{'translate.googleapis.com','fanyi-api.baidu.com','danbooru.donmai.us','safebooru.donmai.us','github.com','api.github.com','127.0.0.1','localhost'}.contains(uri.host))throw StateError('Unexpected paid or production host: ${uri.host}');
+   return Socket.startConnect(InternetAddress.loopbackIPv4,port).then((task)=>ConnectionTask.fromSocket(task.socket.then((socket)=>SecureSocket.secure(socket,host:uri.host,context:context)),task.cancel));
+  };
+ }
+}
+Future<HttpServer> _flowLoopback() async {
+ final context=SecurityContext()..useCertificateChainBytes(utf8.encode(_flowCertificate))..usePrivateKeyBytes(utf8.encode(_flowPrivateKey));
+ final server=await HttpServer.bindSecure(InternetAddress.loopbackIPv4,0,context);HttpOverrides.global=_RoutedFlowTrust(server.port);return server;
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   late Storage storage;late AppState app;late Directory root;late File source,mask;
@@ -197,7 +222,7 @@ void main() {
       var posts=0;final server=await _tlsLoopback();servers.add(server);
       final status=int.tryParse(scenario)??200;Map<String,dynamic>? requestBody;
       final generated=im.Image(width:64,height:64);im.fill(generated,color:im.ColorRgb8(0,0,255));
-      final png=im.encodePng(generated),zip=ZipEncoder().encode(Archive()..addFile(ArchiveFile('image.png',png.length,png)))!;
+      final png=im.encodePng(generated),zip=ZipEncoder().encode(Archive()..addFile(ArchiveFile('image.png',png.length,png)));
       server.listen((request) async {
         if(await _serveAccountVerification(request))return;
         posts++;expect(request.uri.path,'/ai/generate-image');expect(request.method,'POST');
@@ -229,7 +254,7 @@ void main() {
       var posts=0;final server=await _tlsLoopback();servers.add(server);
       Map<String,dynamic>? requestBody;
       final side=action=='inpaint'?256:64;final generated=im.Image(width:side,height:side);im.fill(generated,color:im.ColorRgb8(0,0,255));
-      final png=im.encodePng(generated),zip=ZipEncoder().encode(Archive()..addFile(ArchiveFile('image.png',png.length,png)))!;
+      final png=im.encodePng(generated),zip=ZipEncoder().encode(Archive()..addFile(ArchiveFile('image.png',png.length,png)));
       server.listen((request) async {
         if(await _serveAccountVerification(request))return;
         posts++;expect(request.method,'POST');expect(request.headers.value('authorization'),'Bearer neutral-nai-secret');
@@ -423,6 +448,75 @@ void main() {
     expect(cold.positivePromptPresets.map((p)=>p.captions.single.prompt),['blue coat','green coat']);
     for(final p in cold.positivePromptPresets){expect(p.captions.single.name,'Neutral character');expect(p.captions.single.enabled,false);expect(p.captions.single.x,0);expect(p.captions.single.y,1);}
     result('Native backup distinct characters repeat-import identity',['backup','characters','styles']);
+  });
+
+  for(final scenario in ['200','401','empty']) {
+    testWidgets('native flows translation $scenario',(tester) async {
+      await tester.pumpWidget(const MaterialApp(home:Scaffold(body:SafeArea(child:Text('Native translation')))));
+      var requests=0;final server=await _flowLoopback();servers.add(server);
+      server.listen((request) async {requests++;expect(request.uri.path,'/translate_a/single');expect(request.uri.queryParameters['q'],'蓝色方块');request.response.statusCode=scenario=='401'?401:200;request.response.headers.contentType=ContentType.json;request.response.write(scenario=='empty'?'[]':jsonEncode([[['blue square','蓝色方块',null,null]],null,'zh-CN']));await request.response.close();});
+      app.settings.translateProvider='google';
+      final output=await app.translatePreviewText('蓝色方块',target:'en',sourceLanguage:'auto');expect(output.ok,scenario=='200');expect(app.busy,false);expect(requests,1);
+      if(scenario=='200'){expect(output.text,'blue square');expect(output.sourceLanguage,'zh-CN');}
+      expect((await app.translatePreviewText('  ',target:'en')).ok,false);expect(requests,1);
+      result('Native translation $scenario',['translation']);
+    });
+  }
+  for(final scenario in ['200','retry','timeout']) {
+    testWidgets('native flows online gallery $scenario',(tester) async {
+      await tester.pumpWidget(const MaterialApp(home:Scaffold(body:SafeArea(child:Text('Native gallery')))));
+      var requests=0;final server=await _flowLoopback();servers.add(server);
+      server.listen((request) async {requests++;expect(request.uri.path,'/posts.json');expect(request.uri.queryParameters['tags'],'blue_square rating:g');if(scenario=='timeout')return;request.response.statusCode=scenario=='retry'&&requests==1?503:200;request.response.headers.contentType=ContentType.json;request.response.write(jsonEncode([{'id':123,'preview_file_url':'https://example.test/blue.png','large_file_url':'https://example.test/blue.png','file_url':'https://example.test/blue.png','image_width':32,'image_height':32,'rating':'g','tag_string_artist':'neutral_artist','tag_string':'blue_square neutral_artist'}]));await request.response.close();});
+      final client=IOClient(HttpClient());final gallery=OnlineGalleryService(client:client,requestTimeout:Duration(milliseconds:scenario=='timeout'?150:3000));
+      try {
+        if(scenario=='timeout'){final clock=Stopwatch()..start();await expectLater(gallery.search(source:OnlineGallerySource.danbooru,query:'blue_square'),throwsA(isA<Exception>()));expect(clock.elapsedMilliseconds,lessThan(2500));expect(requests,1);}
+        else{final page=await gallery.search(source:OnlineGallerySource.danbooru,query:'blue_square');expect(page.items.single.id,'123');expect(page.items.single.author,'neutral_artist');expect(page.items.single.cover.width,32);expect(requests,scenario=='retry'?2:1);}
+      }finally{client.close();}
+      result('Native gallery $scenario',['online-gallery']);
+    });
+  }
+  for(final scenario in ['manifest','fallback','unavailable']) {
+    testWidgets('native flows update $scenario',(tester) async {
+      await tester.pumpWidget(const MaterialApp(home:Scaffold(body:SafeArea(child:Text('Native update')))));
+      var requests=0;final server=await _flowLoopback();servers.add(server);
+      server.listen((request) async {requests++;await request.drain<void>();
+        if(request.uri.path.endsWith('latest.yml')){request.response.statusCode=scenario=='manifest'?200:503;request.response.write('version: 99.0.0\n');}
+        else {expect(request.uri.path,endsWith('/releases/latest'));request.response.statusCode=scenario=='unavailable'?503:200;request.response.headers.contentType=ContentType.json;request.response.write(jsonEncode({'tag_name':'v99.0.1','html_url':'https://github.com/2786886095/novelai-image-desktop/releases/tag/v99.0.1','assets':[]}));}
+        await request.response.close();});
+      final client=IOClient(HttpClient());
+      try{final update=await checkAppUpdateWithClient(client,isAndroid:false);expect(update.hasUpdate,scenario!='unavailable');
+        if(scenario=='unavailable'){expect(update.error,'network');expect(requests,4);}else{expect(update.latestVersion,scenario=='manifest'?'99.0.0':'99.0.1');expect(requests,scenario=='manifest'?1:3);}}
+      finally{client.close();}result('Native update $scenario',['updates']);
+    });
+  }
+  for(final scenario in ['batch','batch-cancel','comic-503','artist-promote']) {
+    testWidgets('native flows durable generation $scenario',(tester) async {
+      await tester.pumpWidget(const MaterialApp(home:Scaffold(body:SafeArea(child:Text('Native durable generation')))));
+      var posts=0;final server=await _tlsLoopback();servers.add(server);final image=im.Image(width:64,height:64);im.fill(image,color:im.ColorRgb8(0,0,255));final bytes=im.encodePng(image),zip=ZipEncoder().encode(Archive()..addFile(ArchiveFile('image.png',bytes.length,bytes)));
+      server.listen((request) async {if(await _serveAccountVerification(request))return;posts++;expect(request.uri.path,'/ai/generate-image');expect(request.headers.value('authorization'),'Bearer neutral-nai-secret');final body=jsonDecode(await utf8.decoder.bind(request).join()) as Map;expect(body['action'],scenario=='batch'?'img2img':'generate');request.response.statusCode=scenario=='comic-503'?503:200;request.response.headers.set('content-type','application/zip');request.response.add(zip);await request.response.close();});
+      await _activateNeutralAccount(app,server.port);app.settings.streamPreviewEnabled=false;final params=GenerateParams(positivePrompt:'blue square',width:64,height:64,seed:123,seedMode:'fixed');
+      if(scenario=='batch-cancel'){await expectLater(app.generateBatchRedrawItems(sourceBytes:await source.readAsBytes(),itemParams:params,itemExtras:GenerateExtras(),strength:.4,groupName:'Neutral batch',cancelled:()=>true),throwsA(isA<Exception>()));expect(posts,0);expect(app.history,isEmpty);}
+      else if(scenario=='batch'){final items=await app.generateBatchRedrawItems(sourceBytes:await source.readAsBytes(),itemParams:params,itemExtras:GenerateExtras(),strength:.4,groupName:'Neutral batch');expect(items.single.feature,'batch-redraw');expect(await File(items.single.filePath).readAsBytes(),bytes);expect((await Storage().getHistory()).length,1);expect(posts,1);}
+      else if(scenario=='comic-503'){await expectLater(app.generateComicPanel(panelParams:params,panelExtras:GenerateExtras(),projectTitle:'Neutral comic'),throwsA(isA<Exception>()));expect(posts,1);expect(await storage.getHistory(),isEmpty);}
+      else{final recipes=drawArtistRecipes(pool:const [ArtistTagRecord(1,'neutral_artist',123)],count:1,minArtists:1,maxArtists:1,drawSeed:123);expect(recipes.single.artists,['neutral_artist']);params.positivePrompt=recipes.single.prompt;
+        final temporary=await app.generateArtistLabTemporary(panelParams:params,panelExtras:GenerateExtras());expect(await File(temporary.filePath).exists(),true);expect(await storage.getHistory(),isEmpty);final saved=await app.saveArtistLabFavorite(temporary);expect(saved.feature,'artist-lab');expect(await File(temporary.filePath).exists(),false);expect(await File(saved.filePath).readAsBytes(),bytes);expect((await Storage().getHistory()).length,1);expect(posts,1);}
+      result('Native durable generation $scenario',[scenario.startsWith('batch')?'batch':scenario.startsWith('comic')?'comic':'random-artists','works']);
+    });
+  }
+
+  testWidgets('native flows full phone navigation',(tester) async {
+    final server=await _flowLoopback();servers.add(server);server.listen((request) async {await request.drain<void>();request.response.headers.contentType=ContentType.json;request.response.write('[]');await request.response.close();});
+    app.booted=true;app.needsNetworkOnboarding=false;
+    await tester.pumpWidget(ChangeNotifierProvider.value(value:app,child:const NovelAIApp()));await tester.pumpAndSettle(const Duration(milliseconds:100),EnginePhase.sendSemanticsUpdate,const Duration(seconds:10));
+    var shell=tester.widget<StudioAdaptiveShell>(find.byType(StudioAdaptiveShell));expect(shell.destinations.length,15);final labels=shell.destinations.map((d)=>d.label).toList();
+    for(var index=0;index<labels.length;index++){
+      final nav=find.byKey(const ValueKey('studio-phone-navigation'));expect(nav,findsOneWidget);
+      final direct=find.descendant(of:nav,matching:find.text(labels[index]));
+      if(direct.evaluate().isNotEmpty){await tester.tap(direct.hitTestable());}
+      else{await tester.tap(find.descendant(of:nav,matching:find.text(shell.moreLabel)).hitTestable());await tester.pumpAndSettle();final destination=find.descendant(of:find.byType(BottomSheet),matching:find.text(labels[index]));await tester.ensureVisible(destination);await tester.pumpAndSettle();await tester.tap(destination.hitTestable());}
+      await tester.pumpAndSettle(const Duration(milliseconds:100),EnginePhase.sendSemanticsUpdate,const Duration(seconds:10));shell=tester.widget<StudioAdaptiveShell>(find.byType(StudioAdaptiveShell));expect(shell.selectedIndex,index);expect(tester.takeException(),isNull,reason:labels[index]);
+    }
+    result('Native phone all15 navigation',['navigation']);
   });
 
 }

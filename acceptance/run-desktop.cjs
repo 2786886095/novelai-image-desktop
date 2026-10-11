@@ -5,6 +5,9 @@ const actual=cp.execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8
 const req=require('node:module').createRequire(path.join(root,'package.json')),electron=req('electron');
 const runs=[];
 const groups=[
+ ['flows','desktop-flows.cjs',[sha],['translation','batch','comic','artist-iteration','random-artists','updates']],
+ ['navigation','desktop-navigation.cjs',[],['navigation']],
+ ['clipboard','desktop-clipboard.cjs',[sha],['clipboard']],
  ['metadata','desktop-metadata.cjs',[sha],['metadata-import','tools']],
  ['generation','windows-generation-acceptance.cjs',['MODIFIED'],['generation','effort']],
  ['image-actions','current-image-actions-probe.cjs',[sha],['image-to-image','enhance','inpaint','postprocess','openai-inpaint']],
@@ -15,9 +18,10 @@ const groups=[
  ['breadth','desktop-breadth.cjs',[sha],['accounts','characters','image-agent','agent-components','backup','settings','typography']],
  ['storage','desktop-storage.cjs',[sha],['settings','typography','negative-prompts','styles','reference-presets','precise-reference','vibe-transfer','favorites','metadata-import','tools']],
 ];
-for(const [name,fixture,args,features] of groups.filter(x=>process.argv[5]==='all'||(process.argv[5]==='storage'?x[0]==='storage':process.argv[5]==='network'?x[0]==='network':process.argv[5]==='breadth'?x[0]==='breadth':!['storage','network','breadth'].includes(x[0])))) {
+const selected={flows:['flows','navigation','clipboard'],storage:['storage'],network:['network'],breadth:['breadth']};
+for(const [name,fixture,args,features] of groups.filter(x=>process.argv[5]==='all'||(selected[process.argv[5]]?selected[process.argv[5]].includes(x[0]):!['storage','network','breadth','flows','navigation','clipboard'].includes(x[0])))) {
  const report=path.join(out,name+'.json');const file=path.join(__dirname,fixture);
- const command=fixture==='ui-probe.cjs'?[process.execPath,file,root,report]:[electron,file,root,report,...args,'--no-error-dialogs'];
+ const command=['ui-probe.cjs','desktop-navigation.cjs'].includes(fixture)?[process.execPath,file,root,report]:[electron,file,root,report,...args,'--no-error-dialogs'];
  const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL;
  const p=cp.spawnSync(command[0],command.slice(1),{cwd:root,env,encoding:'utf8',windowsHide:true,timeout:300000,maxBuffer:8*1024*1024});
  fs.writeFileSync(path.join(out,name+'-stdout.log'),p.stdout??'');fs.writeFileSync(path.join(out,name+'-stderr.log'),p.stderr??'');
