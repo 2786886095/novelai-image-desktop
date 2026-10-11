@@ -215,7 +215,7 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home:Scaffold(body:Text('Neutral native image action'))));
       var posts=0;final server=await _tlsLoopback();servers.add(server);
       Map<String,dynamic>? requestBody;
-      final generated=im.Image(width:64,height:64);im.fill(generated,color:im.ColorRgb8(0,0,255));
+      final side=action=='inpaint'?256:64;final generated=im.Image(width:side,height:side);im.fill(generated,color:im.ColorRgb8(0,0,255));
       final png=im.encodePng(generated),zip=ZipEncoder().encode(Archive()..addFile(ArchiveFile('image.png',png.length,png)))!;
       server.listen((request) async {
         if(await _serveAccountVerification(request))return;
@@ -225,7 +225,7 @@ void main() {
         request.response.headers.set('content-type','application/zip');request.response.add(zip);await request.response.close();
       });
       await _activateNeutralAccount(app,server.port);app.settings.streamPreviewEnabled=false;
-      final params=GenerateParams(positivePrompt:'blue square',width:64,height:64,seed:123,seedMode:'fixed'),input=await source.readAsBytes();
+      final params=GenerateParams(positivePrompt:'blue square',width:side,height:side,seed:123,seedMode:'fixed'),input=await source.readAsBytes();
       late Uint8List output;
       if(action=='img2img'){
         final r=await app.api.img2img('neutral-nai-secret',app.settings,params,GenerateExtras(),input,I2IParams());output=r.$1.single;
@@ -233,7 +233,14 @@ void main() {
       }else if(action=='inpaint'){
         final r=await app.api.inpaint('neutral-nai-secret',app.settings,params,input,await mask.readAsBytes(),'nai-diffusion-5-full-inpainting',32,32,1,0);output=r.$1.single;
         expect(requestBody!['action'],'infill');expect((requestBody!['parameters'] as Map)['mask'],isNotEmpty);
-        final decoded=im.decodePng(output)!;expect([decoded.getPixel(0,0).r,decoded.getPixel(0,0).g,decoded.getPixel(0,0).b],[220,30,30]);
+        // The official default expands by 4 latent cells (32px) and
+        // blurs twice by 20px. A 64px fixture has no outside corner at all.
+        // Use 256px so these corners are genuinely outside the blended region.
+        final decoded=im.decodePng(output)!;expect([decoded.width,decoded.height],[256,256]);
+        for(final xy in [[0,0],[255,0],[0,255],[255,255]]) {
+          final corner=decoded.getPixel(xy[0],xy[1]);expect([corner.r,corner.g,corner.b],[220,30,30]);
+        }
+        expect(decoded.getPixel(128,128).b,greaterThan(200));
       }else if(action=='colorize'){
         output=(await app.api.augment('neutral-nai-secret',app.settings,input,32,32,'colorize',AugmentOptions())).single;
         expect(requestBody!['req_type'],'colorize');expect(requestBody!['image'],isNotEmpty);
