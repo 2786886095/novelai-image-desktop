@@ -10,11 +10,12 @@ const groups=[
  ['first-request','backend-fixture.cjs',[],['convert','reverse','metadata-import']],
  ['works','works-fixture.cjs',[],['works','works-batch-edit','missing-file-reconciliation']],
  ['records-ui','ui-probe.cjs',[],['ai-records','typography','works-batch-edit']],
+ ['network','desktop-network.cjs',[sha],['external-mcp-server','online-gallery','agent-components']],
  ['storage','desktop-storage.cjs',[sha],['settings','typography','negative-prompts','styles','reference-presets','precise-reference','vibe-transfer','favorites','metadata-import','tools']],
 ];
-for(const [name,fixture,args,features] of groups.filter(x=>process.argv[5]==='all'||(process.argv[5]==='storage'?x[0]==='storage':x[0]!=='storage'))) {
+for(const [name,fixture,args,features] of groups.filter(x=>process.argv[5]==='all'||(process.argv[5]==='storage'?x[0]==='storage':process.argv[5]==='network'?x[0]==='network':!['storage','network'].includes(x[0])))) {
  const report=path.join(out,name+'.json');const file=path.join(__dirname,fixture);
- const command=fixture==='ui-probe.cjs'?[process.execPath,file,root,report]:[electron,file,root,report,...args];
+ const command=fixture==='ui-probe.cjs'?[process.execPath,file,root,report]:[electron,file,root,report,...args,'--no-error-dialogs'];
  const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL;
  const p=cp.spawnSync(command[0],command.slice(1),{cwd:root,env,encoding:'utf8',windowsHide:true,timeout:300000,maxBuffer:8*1024*1024});
  fs.writeFileSync(path.join(out,name+'-stdout.log'),p.stdout??'');fs.writeFileSync(path.join(out,name+'-stderr.log'),p.stderr??'');

@@ -16,7 +16,7 @@ on:
         default: false
       suite:
         type: choice
-        options: [core, storage, all]
+        options: [core, storage, network, all]
         default: core
 permissions:
   contents: read
