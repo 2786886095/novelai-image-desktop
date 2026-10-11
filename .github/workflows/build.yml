@@ -8,6 +8,9 @@ on:
       mobile:
         type: boolean
         default: true
+      linux_only:
+        type: boolean
+        default: false
 permissions:
   contents: read
 env:
@@ -19,15 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux
-          - os: macos-latest
-            platform: macos-arm
-          - os: macos-15-intel
-            platform: macos-intel
-          - os: windows-latest
-            platform: windows
+        include: ${{ fromJSON(inputs.linux_only && '[{"os":"ubuntu-latest","platform":"linux"}]' || '[{"os":"ubuntu-latest","platform":"linux"},{"os":"macos-latest","platform":"macos-arm"},{"os":"macos-15-intel","platform":"macos-intel"},{"os":"windows-latest","platform":"windows"}]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
@@ -46,7 +41,12 @@ jobs:
         run: npm ci && npm run build
       - name: Native Linux display and fonts (CI only)
         if: runner.os == 'Linux'
-        run: sudo apt-get update -qq && sudo apt-get install -y xvfb fonts-noto-cjk
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y xvfb fonts-noto-cjk
+          # Preserve Chromium's sandbox. Configure the downloaded CI helper;
+          # never add --no-sandbox or alter a user's installed application.
+          sudo chown root:root app/node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 app/node_modules/electron/dist/chrome-sandbox
       - name: Execute actual desktop backends and isolated renderer on Linux
         if: runner.os == 'Linux'
         run: xvfb-run -a node controller/acceptance/run-desktop.cjs app evidence/${{ matrix.platform }} "$APP_SHA"
