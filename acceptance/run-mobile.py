@@ -30,7 +30,12 @@ def copy_stream(key,stream,destination):
  streams[key]=''.join(lines)
 threads=[threading.Thread(target=copy_stream,args=(key,getattr(p,key),out/(key+'.log'))) for key in ['stdout','stderr']]
 for thread in threads:thread.start()
-p.wait()
+try:p.wait(timeout=720)
+except subprocess.TimeoutExpired:
+ print('NATIVE_COMMAND_DEADLINE_EXCEEDED_12_MINUTES',file=sys.stderr,flush=True)
+ p.terminate()
+ try:p.wait(timeout=15)
+ except subprocess.TimeoutExpired:p.kill();p.wait()
 for thread in threads:thread.join()
 if device_logs is not None:
  device_logs.terminate()
