@@ -8,6 +8,9 @@ on:
       mobile:
         type: boolean
         default: true
+      android_only:
+        type: boolean
+        default: false
       linux_only:
         type: boolean
         default: false
@@ -79,6 +82,12 @@ jobs:
         with:
           ref: ${{ env.APP_SHA }}
           path: app
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Install shared agent presentation build dependencies
+        working-directory: app
+        run: npm ci
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -110,7 +119,7 @@ jobs:
           path: evidence/
           if-no-files-found: warn
   ios:
-    if: inputs.mobile
+    if: inputs.mobile && !inputs.android_only
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
