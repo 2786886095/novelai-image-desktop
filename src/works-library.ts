@@ -1,6 +1,6 @@
 import type {HistoryItem, MetadataSnapshotResult} from './types';
 import {metadataSnapshotToFile} from './metadata-snapshot';
-import {inspectImageMetadata, parseImageMeta} from './png-meta';
+import {inspectImageMetadata, parseImageMetaAsync} from './png-meta';
 
 export const WORKS_PAGE_SIZE = 60;
 export function worksName(path: string): string { return path.split(/[\\/]/).pop() || path; }
@@ -32,7 +32,7 @@ export async function readWorksPrompt(item: HistoryItem, read: (path: string)=>P
   const result = await read(item.filePath);
   if (!result.ok || !result.snapshot) throw new Error(result.message || 'Image file could not be read');
   const file = metadataSnapshotToFile(result.snapshot);
-  const report = inspectImageMetadata(parseImageMeta(await file.arrayBuffer()));
+  const report = inspectImageMetadata(await parseImageMetaAsync(await file.arrayBuffer()));
   if (typeof report.imported.positivePrompt === 'string' && report.imported.positivePrompt.trim()) {
     return {positive: report.imported.positivePrompt, negative: report.imported.negativePrompt ?? '', source:'original', warning:report.warnings.join('\n') || undefined};
   }

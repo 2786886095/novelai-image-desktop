@@ -1,0 +1,67 @@
+name: Image metadata regression
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'electron/**'
+      - 'mobile/**'
+      - 'shared/**'
+      - 'scripts/**'
+      - 'package*.json'
+      - '.github/workflows/**'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'electron/**'
+      - 'mobile/**'
+      - 'shared/**'
+      - 'scripts/**'
+      - 'package*.json'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop-metadata:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify official image metadata
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a npm run test:metadata
+          else
+            npm run test:metadata
+          fi
+
+  shared-mobile-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Verify official image metadata
+        run: flutter test --no-pub test/metadata_common_fixtures_test.dart test/official_image_metadata_test.dart

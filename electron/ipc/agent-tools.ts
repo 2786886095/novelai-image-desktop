@@ -23,7 +23,8 @@ import type {
   ReferencePreset,
   UpscaleScale,
 } from "../../src/types";
-import { inspectImageMetadata, parseImageMeta } from "../../src/png-meta";
+import { inspectImageMetadata } from "../../src/png-meta";
+import { readNativeImageMetadata } from "../image-metadata";
 import { imageOutcomeText } from "../../src/agent/image-outcome";
 import {
   applyAgentPromptLocks,
@@ -478,7 +479,7 @@ export async function executeAgentTool(
         const attachment = attachmentForRequest(request, args.attachmentId);
         const buffer = fs.readFileSync(attachment.filePath);
         if (buffer.length > 48 * 1024 * 1024) throw new Error("图片超过 48 MB，无法读取内嵌参数。");
-        const report = inspectImageMetadata(parseImageMeta(Uint8Array.from(buffer).buffer));
+        const report = inspectImageMetadata(await readNativeImageMetadata(buffer));
         return response(true, "图片内嵌参数", {
           attachmentId: attachment.id,
           found: report.kind !== "unknown" || Object.keys(report.imported).length > 0 || report.characterCaptions.length > 0,

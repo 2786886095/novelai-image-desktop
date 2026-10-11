@@ -1,0 +1,338 @@
+[
+  {
+    "name": "gray-alpha-16-adam7.png",
+    "bytes": 1147,
+    "sha256": "4e5060b87407ec2505f5cf3e9c010736fbaac8519e2d83dc61d74fe181ff7c53",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "gray-alpha-16-plain.png",
+    "bytes": 1004,
+    "sha256": "41bd90d2ed179897c1fb0037d48c19b82c36e4370f793467bc77c51669498dac",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "gray-alpha-8-adam7.png",
+    "bytes": 954,
+    "sha256": "571a67cabf1139bce0d81593ad124997bbecb483610d264b49f9b88de6c0265c",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "gray-alpha-8-plain.png",
+    "bytes": 849,
+    "sha256": "b7d023d794b8d39d437a869f7b77188ff21f828068e8882a5261b99ce4026ba3",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "palette-1-adam7.png",
+    "bytes": 680,
+    "sha256": "927674c905e9885e8fb2f2b2d1b1fda6b9727524df867402d2cd04e18eaa62ca",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "palette-1-plain.png",
+    "bytes": 577,
+    "sha256": "b122f0bdd860f9f2930df0db2aac9f0a3834c6359b80f95e4af7b1e3e39fd3cd",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "palette-2-adam7.png",
+    "bytes": 702,
+    "sha256": "4fd37ee92b17b71b9a765b144a15cbe3cce6da730f061cc89d1b6835a2e92d82",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "palette-2-plain.png",
+    "bytes": 577,
+    "sha256": "2f1f5e3db1b3380b25735a8a3693fe935a68569bddebeeaa7e40c14ab7d21156",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "palette-4-adam7.png",
+    "bytes": 791,
+    "sha256": "248f4c816bd993d3a1a7e6b57cb021743c77813102d0b76ebbbb23db9a509761",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "palette-4-plain.png",
+    "bytes": 702,
+    "sha256": "5fdf4dbf87488906ac5e576fe0177e6956fb93db484cb4707fa8b470b9708d9b",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "palette-8-adam7.png",
+    "bytes": 871,
+    "sha256": "958543d075cd955c7e06779a8676ae43cafb31141e95b9edcd711ccc6596f06e",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "palette-8-plain.png",
+    "bytes": 739,
+    "sha256": "cf44b104984f2ca471daceb7aa7f2fc98346743637b6dfcd50548aca52a0bd92",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "png-text-plus-stealth.png",
+    "bytes": 1052,
+    "sha256": "c3395ae291f13b88eeea4abc8b1ff7ac635efacf4af82a50d14f022e9dc201bd",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "rgb-trns-stealth.png",
+    "bytes": 951,
+    "sha256": "78f77c53c200f79f4be2622cde2cbef4d7d53f23fac851fcf7385ca67756c5d3",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "rgba-16-adam7.png",
+    "bytes": 1321,
+    "sha256": "9894840fd1338771e219c3c0089c1bbb5337127a79da944a8ef59bf55dd1aaa7",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "rgba-16-plain.png",
+    "bytes": 1213,
+    "sha256": "88151c577815f5093fa7cf2386e3b28483d518dd285ec1b27e15ec72653b3f4b",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "rgba-8-adam7.png",
+    "bytes": 1130,
+    "sha256": "8a709961465e66f5af83e565bb079c377399d806ecf7457f07e34b791633b930",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "rgba-8-plain.png",
+    "bytes": 991,
+    "sha256": "3173be41c21a0785b50c850b8f44d95dd186f7a86177ae946d0ee4a04ce614ee",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "webp-animated-alpha.webp",
+    "bytes": 964,
+    "sha256": "270899510d889eebb1cb3bb9025f9ab9fe89f3d16ce3609b8890d475f2a50f2b",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "webp-empty-exif-valid-alpha.webp",
+    "bytes": 566,
+    "sha256": "6bcaebbbd97dfc1c4434cfbd3b61be754d64453661a91cdb174e996f2385828b",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "webp-lossless-alpha.webp",
+    "bytes": 454,
+    "sha256": "9ab8e2462aceb7374ba998a5416b35f834fe7e44eff00047af9235ce21ec284e",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "webp-lossless-exif.webp",
+    "bytes": 916,
+    "sha256": "42dff65beaf42588c17586e9870a352972f3c6bce18c912c41e8eee937038bf8",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "webp-lossy-alpha.webp",
+    "bytes": 548,
+    "sha256": "5ceebb778633ebb13a63abf04cbdf29605f4760adf280f2f6a64aaba6796ba8c",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  },
+  {
+    "name": "webp-lossy-exif.webp",
+    "bytes": 992,
+    "sha256": "c578a1b40f1b18bdddbcd18a98d77503b5f0b1324f56daf72f524e0d9c1c9575",
+    "expected": {
+      "positivePrompt": "blue sky, 白色衣服",
+      "negativePrompt": "lowres",
+      "seed": 424242,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    },
+    "officialAlphaVerified": true
+  }
+]

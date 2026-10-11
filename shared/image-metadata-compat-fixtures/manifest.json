@@ -1,0 +1,187 @@
+[
+  {
+    "name": "plain-utf8.png",
+    "sha256": "5a298bccb9918373389069594efd42404acc7bd33c46f67d75062b8d46411d99",
+    "bytes": 193,
+    "expected": {
+      "positivePrompt": "blue sky, 蓝色衣服",
+      "negativePrompt": "lowres",
+      "seed": 123,
+      "steps": 28
+    }
+  },
+  {
+    "name": "plain-latin1.png",
+    "sha256": "07cdc6e04f575c81d1ffba8b8d7565a07dc9f990491937438caf3482fafcaa50",
+    "bytes": 130,
+    "expected": {
+      "positivePrompt": "café, été",
+      "seed": 123
+    }
+  },
+  {
+    "name": "compressed-ztxt.png",
+    "sha256": "b5b0685bf68fec88ae2ac356097f6ad5af2d4ec96542e44b83f93450f5aa6214",
+    "bytes": 175,
+    "expected": {
+      "positivePrompt": "blue sky, 蓝色衣服",
+      "negativePrompt": "lowres",
+      "seed": 123,
+      "steps": 28
+    }
+  },
+  {
+    "name": "compressed-itxt.png",
+    "sha256": "011defbbfce5264dc87b43dc99035f4c4bddb1012f32aa44dfd046baabd62f52",
+    "bytes": 178,
+    "expected": {
+      "positivePrompt": "blue sky, 蓝色衣服",
+      "negativePrompt": "lowres",
+      "seed": 123,
+      "steps": 28
+    }
+  },
+  {
+    "name": "uncompressed-itxt.png",
+    "sha256": "8d876fe7c9b75d35b648601374b83a2ea58ce6d071a2550523d26cabdb65d2b0",
+    "bytes": 169,
+    "expected": {
+      "positivePrompt": "blue sky, 蓝色衣服",
+      "negativePrompt": "lowres",
+      "seed": 123,
+      "steps": 28
+    }
+  },
+  {
+    "name": "bad-ztxt-then-valid.png",
+    "sha256": "d4ada97e40740b2834707fc7f6ece01760c716c81a7c60049443d1fa3e9132b3",
+    "bytes": 189,
+    "expected": {
+      "positivePrompt": "blue sky, 蓝色衣服",
+      "negativePrompt": "lowres",
+      "seed": 123,
+      "steps": 28
+    }
+  },
+  {
+    "name": "oversized-ztxt-then-valid.png",
+    "sha256": "9b3ce12f67a1daea08ecb72690d7a752a12ae8455f89eb2c3b9bdda6f6aa6da8",
+    "bytes": 9379,
+    "expected": {
+      "positivePrompt": "blue sky, 蓝色衣服",
+      "negativePrompt": "lowres",
+      "seed": 123,
+      "steps": 28
+    }
+  },
+  {
+    "name": "png-exif.png",
+    "sha256": "eb3fbbdbd5a5aa17b389ec90259e98c210883d92f9cf18d42abd7001204b7f8b",
+    "bytes": 192,
+    "expected": {
+      "positivePrompt": "blue sky, 蓝色衣服",
+      "negativePrompt": "lowres",
+      "seed": 123,
+      "steps": 28
+    }
+  },
+  {
+    "name": "stealth-gzip.png",
+    "sha256": "93d97b73080f27bbc57a061264f41a8c5bda6a2715a88b7a9ef3aac33290ffb2",
+    "bytes": 558,
+    "expected": {
+      "positivePrompt": "blue sky, 蓝色衣服",
+      "negativePrompt": "lowres",
+      "seed": 123,
+      "steps": 28
+    }
+  },
+  {
+    "name": "stealth-plain.png",
+    "sha256": "d9dcdc396d6c61c5e1d2dd9d1d320664ce61e1a31ecf6127cadc64032fd68bc5",
+    "bytes": 530,
+    "expected": {
+      "positivePrompt": "blue sky, 蓝色衣服",
+      "negativePrompt": "lowres",
+      "seed": 123,
+      "steps": 28
+    }
+  },
+  {
+    "name": "stealth-empty-comment.png",
+    "sha256": "41b8407510a634ac6ebffa7dd9d84610aa11acb5f0f0d34a043e3528e5ad5c8d",
+    "bytes": 578,
+    "expected": {
+      "positivePrompt": "blue sky, 蓝色衣服",
+      "negativePrompt": "lowres",
+      "seed": 123,
+      "steps": 28
+    }
+  },
+  {
+    "name": "stealth-invalid-comment.png",
+    "sha256": "ebb815f876ca6539db94f92081ec4322202fe881aecaafc5ecf0fd1b8f070717",
+    "bytes": 585,
+    "expected": {
+      "positivePrompt": "blue sky, 蓝色衣服",
+      "negativePrompt": "lowres",
+      "seed": 123,
+      "steps": 28
+    }
+  },
+  {
+    "name": "stealth-corrupt-length.png",
+    "sha256": "b68e7dea7a9b84cd3d06b1cfe1ef7c86e0b780578a66fcc0b1425c619a2d9a4e",
+    "bytes": 563,
+    "expected": {}
+  },
+  {
+    "name": "metadata-free.png",
+    "sha256": "46ac684bd0fad010ca30130a6a39a08cabbb6d34a1b59bfa7f42b6b300bbbc85",
+    "bytes": 74,
+    "expected": {}
+  },
+  {
+    "name": "truncated.png",
+    "sha256": "de9bdefca7b21e5662c338d4d2212df80ee897125ff29280af67eff3d59997ab",
+    "bytes": 30,
+    "expected": {}
+  },
+  {
+    "name": "novelai-exif-v5.webp",
+    "sha256": "1608afdd0cb816f828c36d2df7a7900245c87636782c6bf60080aaf05dfba6b8",
+    "bytes": 786,
+    "expected": {
+      "positivePrompt": "1girl, blue sky",
+      "negativePrompt": "lowres, bad hands",
+      "seed": 4000000000,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    }
+  },
+  {
+    "name": "novelai-exif-v5-be.webp",
+    "sha256": "ca4ddd33516942a95a322c1139f73967b1456a7a3ed9ccfed66c697ba9f5d686",
+    "bytes": 792,
+    "expected": {
+      "positivePrompt": "1girl, blue sky",
+      "negativePrompt": "lowres, bad hands",
+      "seed": 4000000000,
+      "steps": 28,
+      "model": "nai-diffusion-5-full",
+      "characters": 1
+    }
+  },
+  {
+    "name": "png-exif-followed-by-text.png",
+    "sha256": "f3576746bf758bbae3038f6d00e31ed28a46b2920a0a5f96fb0e8427711c0b1d",
+    "bytes": 184,
+    "expected": {
+      "positivePrompt": "blue sky, 蓝色衣服",
+      "negativePrompt": "lowres",
+      "seed": 123,
+      "steps": 28
+    }
+  }
+]

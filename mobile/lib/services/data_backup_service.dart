@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'compatible_image_backup.dart';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
@@ -321,7 +322,7 @@ class DataBackupService {
     final archiveFile = ArchiveFile(assetPath, bytes.length, bytes)
       // Generated images are already PNG/JPEG/WebP-compressed. Re-deflating
       // them is expensive and normally saves almost nothing.
-      ..compress = false;
+      ..compression = CompressionType.none;
     archive.addFile(archiveFile);
     assets[digest] = reference;
     return Map<String, dynamic>.from(reference);
@@ -1492,18 +1493,28 @@ class DataBackupService {
       final prompt = raw['prompt']?.toString() ?? '';
       final incomingPreviews = raw['previewImages'] as List? ?? const [];
       if (name.isEmpty || prompt.trim().isEmpty) continue;
+      final captions = _backupPositiveCaptions(raw['captions']);
+      final captionIdentity = _positiveCaptionIdentity(captions);
+      final sourceId = raw['id']?.toString() ?? '';
+      final collisionId = 'backup-positive-${sha256.convert(utf8.encode(
+        jsonEncode([sourceId, name, prompt, captionIdentity])))}';
       var index = positivePrompts.indexWhere((item) =>
           item.prompt == prompt &&
-          (item.name == name ||
-              ((raw['id']?.toString() ?? '').isNotEmpty &&
-                  item.id == raw['id']?.toString())));
+          jsonEncode(_positiveCaptionIdentity(item.captions)) == jsonEncode(captionIdentity) &&
+          (item.name == name || (sourceId.isNotEmpty && item.id == sourceId) ||
+              item.id == collisionId || item.id.startsWith('$collisionId-')));
       if (index < 0) {
         raw['name'] = _uniqueLabel(positiveNames, name, counters);
         if ((raw['id']?.toString() ?? '').isEmpty ||
             positiveIds.contains(raw['id'])) {
-          raw['id'] = _id();
+          var id = collisionId;
+          for (var suffix = 1; positiveIds.contains(id); suffix++) {
+            id = '$collisionId-$suffix';
+          }
+          raw['id'] = id;
         }
         positiveIds.add(raw['id'].toString());
+        raw['captions'] = captions.map((caption) => caption.toJson()).toList();
         raw['previewImages'] = const [];
         positivePrompts.add(PositivePromptPreset.fromJson(raw));
         index = positivePrompts.length - 1;
@@ -1519,6 +1530,25 @@ class DataBackupService {
     }
     settings.positivePromptPresets = positivePrompts;
     return settings;
+  }
+
+  List<CharCaptionItem> _backupPositiveCaptions(dynamic value) {
+    if (value is! List) return [];
+    return value.whereType<Map>().take(32).map((raw) =>
+        CharCaptionItem.fromJson(Map<String, dynamic>.from(raw))).toList();
+  }
+
+  List<Object> _positiveCaptionIdentity(List<CharCaptionItem> captions) {
+    String coordinate(double value) {
+      final bytes = ByteData(8)..setFloat64(0, value == 0 ? 0 : value, Endian.big);
+      return bytes.buffer.asUint8List().map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    }
+    return captions.take(32).map((caption) => <Object>[
+      caption.enabled, caption.name.trim().isEmpty ? '' :
+        caption.name.trim().substring(0, min(64, caption.name.trim().length)),
+      caption.prompt, caption.negativePrompt, caption.useCoords,
+      coordinate(caption.x), coordinate(caption.y),
+    ]).toList();
   }
 
   String _favoriteIdentity(Map<String, dynamic> value) {

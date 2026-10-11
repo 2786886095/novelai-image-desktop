@@ -6,7 +6,7 @@ import clsx from "clsx";
 import { Button, IconText, SelectMenu } from "./components/ui";
 import { Icon } from "./components/icons";
 import { normalizeAppLanguage } from "./i18n";
-import { inspectImageMetadata, parseImageMeta, type ImageMetadataReport } from "./png-meta";
+import { inspectImageMetadata, parseImageMetaAsync, type ImageMetadataReport } from "./png-meta";
 import {
   loadMetadataSnapshot,
   metadataSnapshotToFile,
@@ -546,7 +546,7 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
     const revision = requestedRevision ?? ++readRevisionRef.current;
     try {
       const buffer = await file.arrayBuffer();
-      const next = inspectImageMetadata(parseImageMeta(buffer));
+      const next = inspectImageMetadata(await parseImageMetaAsync(buffer));
       if (revision !== readRevisionRef.current) return false;
       setReport(next);
       setFileName(file.name);

@@ -507,4 +507,30 @@ void main() {
     expect(afterSecond.positivePromptPresets, hasLength(2));
     expect(second.skipped, greaterThanOrEqualTo(1));
   });
+  test('positive characters survive backup and different characters never collapse on repeated restore', () async {
+    PositivePromptPreset preset(String character) => PositivePromptPreset(id:'same-source',name:'Neutral preset',prompt:'blue square',createdAt:'2026-10-11T00:00:00Z',captions:[CharCaptionItem(enabled:false,name:'Neutral character',prompt:character,negativePrompt:'red coat',useCoords:true,x:0,y:1)]);
+    await storage.setSettings(AppSettings(positivePromptPresets:[preset('blue coat'),preset('green coat')]));
+    final archive=await service.createBackup({DataBackupCategory.promptPresets});
+    await storage.setSettings(AppSettings());
+    await service.importBackup(archive.path,{DataBackupCategory.promptPresets},confirmConfigurationOverwrite:false);
+    final first=await storage.getSettings();
+    expect(first.positivePromptPresets,hasLength(2));
+    expect(first.positivePromptPresets.map((p)=>p.id).toSet(),hasLength(2));
+    for(final p in first.positivePromptPresets){expect(p.captions.single.name,'Neutral character');expect(p.captions.single.enabled,false);expect(p.captions.single.x,0);expect(p.captions.single.y,1);expect(p.captions.single.negativePrompt,'red coat');}
+    await service.importBackup(archive.path,{DataBackupCategory.promptPresets},confirmConfigurationOverwrite:false);
+    final second=await storage.getSettings();
+    expect(second.positivePromptPresets,hasLength(2));
+    expect(second.positivePromptPresets.map((p)=>p.captions.single.prompt),['blue coat','green coat']);
+  });
+  test('positive presets without source IDs remain repeatable after name collision', () async {
+    Map<String,dynamic> preset(String character) => {'name':'Neutral preset','prompt':'blue square','createdAt':'2026-10-11T00:00:00Z','captions':[CharCaptionItem(prompt:character).toJson()]};
+    final archive=Archive();
+    void addJson(String path,Object data){final bytes=utf8.encode(jsonEncode(data));archive.addFile(ArchiveFile(path,bytes.length,bytes));}
+    addJson('manifest.json',{'format':DataBackupService.format,'version':DataBackupService.formatVersion,'categories':[{'category':'promptPresets','items':2,'bytes':0}]});
+    addJson('data/prompt-presets.json',{'positivePromptPresets':[preset('blue coat'),preset('green coat')]});
+    final input=File('${root.path}/legacy.naisbackup')..writeAsBytesSync(ZipEncoder().encode(archive));
+    for(var i=0;i<2;i++){await service.importBackup(input.path,{DataBackupCategory.promptPresets},confirmConfigurationOverwrite:false);}
+    expect((await storage.getSettings()).positivePromptPresets,hasLength(2));
+  });
+
 }

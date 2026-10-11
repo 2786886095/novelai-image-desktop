@@ -301,7 +301,12 @@ Map<String, String> parsePngTextMetadata(Uint8List bytes) {
               }
             }
             if (text != null) {
-              result[key] = utf8.decode(text, allowMalformed: true);
+              if (type == 'iTXt') {
+                result[key] = utf8.decode(text, allowMalformed: true);
+              } else {
+                try { result[key] = utf8.decode(text); }
+                catch (_) { result[key] = latin1.decode(text); }
+              }
             }
           }
         }
@@ -316,18 +321,26 @@ Map<String, String> parsePngTextMetadata(Uint8List bytes) {
 
 Map<String, String> _readStealthMetadata(Uint8List bytes) {
   if (bytes.length < 33 ||
-      bytes.length > 64 * 1024 * 1024 ||
-      bytes[0] != 137 ||
-      bytes[1] != 80 ||
-      bytes[2] != 78 ||
-      bytes[3] != 71) return {};
+      bytes.length > 64 * 1024 * 1024) return {};
+  final isPng = const [137, 80, 78, 71, 13, 10, 26, 10]
+      .asMap().entries.every((e) => bytes[e.key] == e.value);
+  final isWebp = latin1.decode(bytes.sublist(0, 4)) == 'RIFF' &&
+      latin1.decode(bytes.sublist(8, 12)) == 'WEBP';
+  if (!isPng && !isWebp) return {};
   try {
-    final info = image_lib.PngDecoder().startDecode(bytes);
+    final image_lib.Decoder decoder =
+        isPng ? image_lib.PngDecoder(maxPixels: 16 * 1024 * 1024)
+              : (image_lib.WebPDecoder()..maxPixels = 16 * 1024 * 1024);
+    // Optional PNG text/ICC metadata is already handled separately.
+    final input = isPng ? _metadataPixelPng(bytes) : bytes;
+    final info = decoder.startDecode(input);
     if (info == null ||
         info.width * info.height > 16 * 1024 * 1024 ||
         info.width * info.height < 152) return {};
-    final image = image_lib.decodePng(bytes);
-    if (image == null || image.numChannels < 4) return {};
+    // WebP inverse palette transforms mutate the decoder info object.
+    final expectedWidth = info.width, expectedHeight = info.height;
+    final image = decoder.decodeFrame(0);
+    if (image == null || image.width != expectedWidth || image.height != expectedHeight) return {};
     var cursor = 0;
     final capacity = image.width * image.height;
     int readByte() {
@@ -336,12 +349,11 @@ Map<String, String> _readStealthMetadata(Uint8List bytes) {
       }
       var value = 0;
       for (var i = 0; i < 8; i++, cursor++) {
-        value = (value << 1) |
-            (image
-                    .getPixel(cursor ~/ image.height, cursor % image.height)
-                    .a
-                    .toInt() &
-                1);
+        final pixel = image.getPixel(cursor ~/ image.height, cursor % image.height);
+        var alpha = (image.numChannels == 2 && !image.hasPalette ? pixel[1] : pixel.a).toInt();
+        // Official Pillow conversion to RGBA uses the high byte for 16-bit PNG.
+        if (image.format == image_lib.Format.uint16 && !image.hasPalette) alpha >>= 8;
+        value = (value << 1) | (alpha & 1);
       }
       return value;
     }
@@ -372,14 +384,39 @@ Map<String, String> _readStealthMetadata(Uint8List bytes) {
   }
 }
 
+Uint8List _metadataPixelPng(Uint8List bytes) {
+  final data = ByteData.sublistView(bytes);
+  final output = BytesBuilder(copy: false)..add(bytes.sublist(0, 8));
+  const keep = {'IHDR', 'IDAT', 'IEND', 'PLTE', 'tRNS'};
+  var offset = 8;
+  while (offset + 12 <= bytes.length) {
+    final length = data.getUint32(offset, Endian.big), end = offset + length + 12;
+    if (end > bytes.length) throw const FormatException('Truncated PNG pixels');
+    final type = latin1.decode(bytes.sublist(offset + 4, offset + 8));
+    if (keep.contains(type)) output.add(bytes.sublist(offset, end));
+    offset = end;
+    if (type == 'IEND') return output.takeBytes();
+  }
+  throw const FormatException('Incomplete PNG pixels');
+}
+
+bool _hasUsableGenerationMetadata(Map<String, String> metadata) {
+  if (metadata['parameters']?.trim().isNotEmpty == true) return true;
+  for (final key in ['Comment', 'comment', 'prompt', 'workflow']) {
+    try {
+      final value = jsonDecode(metadata[key] ?? '');
+      if ((value is Map || (key == 'workflow' && value is List)) && value.isNotEmpty) return true;
+    } catch (_) {}
+  }
+  return false;
+}
+
 Map<String, String> parseImageTextMetadata(Uint8List bytes) {
   final png = parsePngTextMetadata(bytes);
-  if (!png.containsKey('Comment') &&
-      !png.containsKey('parameters') &&
-      !png.containsKey('prompt')) {
+  if (!_hasUsableGenerationMetadata(png)) {
     final stealth = _readStealthMetadata(bytes);
     if (stealth.isNotEmpty) {
-      return _normalizeImageMetadata({...stealth, ...png});
+      return _normalizeImageMetadata({...png, ...stealth});
     }
   }
   if (png.isNotEmpty) return _normalizeImageMetadata(png);

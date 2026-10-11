@@ -81,7 +81,7 @@ const MetadataInspector = lazy(loadMetadataInspector);
 import { useAppStore } from "./store";
 import { relatedTags } from "./related-tags";
 import { fmtCount, wordAtCursor } from "./text-utils";
-import { inspectImageMetadata, parseImageMeta } from "./png-meta";
+import { inspectImageMetadata, parseImageMetaAsync } from "./png-meta";
 import { INPAINT_BRUSH_SLIDER_MAX, INPAINT_BRUSH_SLIDER_MIN } from "./inpaint-brush";
 import { droppedImagePath, droppedImagePaths, hasDraggedFiles } from "./drag-drop";
 import { compactRemoteErrorText } from "./error-message";
@@ -4030,7 +4030,7 @@ function ReversePanel() {
     // record can later be dropped once this source image is gone.
     const path = (file as File & { path?: string }).path || window.naiDesktop.getPathForFile(file);
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       if (revision !== fileReadRevision.current) {
         URL.revokeObjectURL(url);
         return;
@@ -4043,7 +4043,11 @@ function ReversePanel() {
         chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 0x8000)));
       }
       const b64 = btoa(chunks.join(""));
-      const meta = parseImageMeta(buf);
+      const meta = await parseImageMetaAsync(buf);
+      if (revision !== fileReadRevision.current) {
+        URL.revokeObjectURL(url);
+        return;
+      }
       setInspectImage(url, meta, b64, path);
     };
     reader.onerror = () => URL.revokeObjectURL(url);

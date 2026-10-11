@@ -101,7 +101,7 @@ const _nativeImageLimit = 32 * 1024 * 1024;
 FormatException _invalidNativeImage() =>
     const FormatException('服务未返回有效图片；为避免重复扣费，未自动重发请求。');
 
-class _NativeInflateOutput extends OutputStream {
+class _NativeInflateOutput extends OutputMemoryStream {
   final int limit;
   _NativeInflateOutput(this.limit);
   void _check(int count) {
@@ -113,43 +113,49 @@ class _NativeInflateOutput extends OutputStream {
     super.writeByte(value);
   }
   @override
-  void writeBytes(List<int> bytes, [int? len]) {
-    _check(len ?? bytes.length);
-    super.writeBytes(bytes, len);
+  void writeBytes(List<int> bytes, {int? length}) {
+    _check(length ?? bytes.length);
+    super.writeBytes(bytes, length: length);
   }
   @override
-  void writeInputStream(InputStreamBase stream) {
+  void writeStream(InputStream stream) {
     _check(stream.length);
-    super.writeInputStream(stream);
+    super.writeStream(stream);
+  }
+  @override
+  void writeBackReference(int distance, int count) {
+    _check(count);
+    if (distance <= 0 || distance > length) throw _invalidNativeImage();
+    super.writeBackReference(distance, count);
   }
 }
 
 List<Uint8List> _nativeZipImages(Uint8List bytes) {
   if (bytes.length < 4 || bytes[0] != 80 || bytes[1] != 75 ||
       bytes[2] != 3 || bytes[3] != 4) throw _invalidNativeImage();
-  final directory = ZipDirectory.read(InputStream(bytes));
+  final directory = ZipDirectory()..read(InputMemoryStream(bytes));
   if (directory.fileHeaders.length > 1024) throw _invalidNativeImage();
   final images = <Uint8List>[];
   var total = 0;
   for (final header in directory.fileHeaders) {
     if (header.filename.endsWith('/')) continue;
     final file = header.file;
-    final raw = file?.rawContent;
+    final raw = file == null ? null : InputMemoryStream(file.getRawContent());
     if (file == null || raw == null ||
         (file.flags & 1) != 0 || (header.generalPurposeBitFlag & 1) != 0 ||
         (((header.externalFileAttributes ?? 0) >> 16) & 0xf000) == 0xa000 ||
-        (file.compressionMethod != ZipFile.zipCompressionStore &&
-            file.compressionMethod != ZipFile.zipCompressionDeflate) ||
+        (header.compressionMethod != ZipFile.zipCompressionStore &&
+            header.compressionMethod != ZipFile.zipCompressionDeflate) ||
         (header.uncompressedSize ?? -1) < 0 ||
         header.uncompressedSize! > _nativeImageLimit) {
       throw _invalidNativeImage();
     }
     final remaining = min(_nativeImageLimit, _nativeResponseBytes - total);
     final output = _NativeInflateOutput(remaining);
-    if (file.compressionMethod == ZipFile.zipCompressionDeflate) {
-      Inflate.stream(raw, output);
+    if (header.compressionMethod == ZipFile.zipCompressionDeflate) {
+      Inflate.stream(raw, output: output);
     } else {
-      output.writeInputStream(raw);
+      output.writeStream(raw);
     }
     total += output.length;
     if (output.length != header.uncompressedSize) throw _invalidNativeImage();

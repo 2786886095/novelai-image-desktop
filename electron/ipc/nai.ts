@@ -1,3 +1,4 @@
+import {extractEmbeddedImageMetadata} from '../image-metadata';
 import {prepareGooglePromptTranslation} from '../../src/google-prompt-translation';
 import {resolveTranslationTarget,baiduTranslationTarget,translationLanguageName,normalizeTranslationSource,parseTranslationReply} from '../../src/translation';
 import {prepareFocusedInpaintInput,compositeFocusedPatch} from './focused-inpaint';
@@ -2715,7 +2716,7 @@ export async function loadImageFile(): Promise<LoadImageResult> {
         width: dims.width,
         height: dims.height,
       },
-      metadata: extractEmbeddedGenerationMetadata(buffer),
+      metadata: await extractEmbeddedImageMetadata(buffer),
     };
   } catch (error: any) {
     return {
@@ -4394,7 +4395,7 @@ export async function loadImageFromPath(
         width: dims.width,
         height: dims.height,
       },
-      metadata: extractEmbeddedGenerationMetadata(buffer),
+      metadata: await extractEmbeddedImageMetadata(buffer),
     };
   } catch (error: any) {
     return {

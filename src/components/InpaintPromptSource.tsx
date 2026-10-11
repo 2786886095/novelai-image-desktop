@@ -2,7 +2,7 @@ import {workflowText} from '../workflow-text';
 import {requestSettingsSection} from '../prompt-ui-settings';
 import {useEffect,useRef,useState} from 'react';
 import {useAppStore} from '../store';
-import {inspectImageMetadata,parseImageMeta} from '../png-meta';
+import {inspectImageMetadata,parseImageMetaAsync} from '../png-meta';
 import {metadataSnapshotToFile} from '../metadata-snapshot';
 export function InpaintPromptSource(){
  const image=useAppStore(s=>s.workbenchImage),value=useAppStore(s=>s.inpaintPositivePrompt),settings=useAppStore(s=>s.settings);
@@ -14,7 +14,7 @@ export function InpaintPromptSource(){
   if(kind==='reverse'&&(!settings?.visionApiKey.trim()||!settings.visionApiUrl.trim())){setError('请先在设置中配置 AI 反推 API。');return;}
   const id=++revision.current,path=image.filePath,original=value;pending.current=true;setBusy(true);setError('');setPreview(null);
   try{const result=await window.naiDesktop.readMetadataSnapshotFromPath(path);if(!result.ok||!result.snapshot)throw Error(result.message||'原图读取失败。');let text='';
-   if(kind==='metadata'){const file=metadataSnapshotToFile(result.snapshot),report=inspectImageMetadata(parseImageMeta(await file.arrayBuffer()));text=report.imported.positivePrompt??'';if(!text.trim())throw Error('原图没有可读取的提示词，可选择 AI 反推。');}
+   if(kind==='metadata'){const file=metadataSnapshotToFile(result.snapshot),report=inspectImageMetadata(await parseImageMetaAsync(await file.arrayBuffer()));text=report.imported.positivePrompt??'';if(!text.trim())throw Error('原图没有可读取的提示词，可选择 AI 反推。');}
    else{const response=await window.naiDesktop.reversePrompt(result.snapshot.base64,'tags','full','',false,settings?.reversePromptTemplateVersion??'v5');if(!response.ok||!response.prompt)throw Error(response.message||'反推失败。');text=response.prompt;}
    if(id===revision.current)setPreview({text,original,path});
   }catch(e){if(id===revision.current)setError(e instanceof Error?e.message:String(e));}finally{if(id===revision.current){pending.current=false;setBusy(false);}}

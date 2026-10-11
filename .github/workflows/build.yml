@@ -82,6 +82,16 @@ jobs:
         if: ${{ !inputs.candidate_build_only }}
         run: npm run typecheck && npm test
 
+      - name: Verify official image metadata
+        if: ${{ !inputs.candidate_build_only }}
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a npm run test:metadata
+          else
+            npm run test:metadata
+          fi
+
       - name: Install both macOS sharp architectures
         if: runner.os == 'macOS'
         run: node scripts/install-macos-sharp.mjs

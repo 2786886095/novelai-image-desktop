@@ -57,6 +57,7 @@ import {
   stylePromptPreviewDirectory,
 } from "./style-preset-images";
 import { toLocalMediaUrl } from "./local-media-protocol";
+import { normalizeCharacterCaptions } from "../../src/character-presets";
 import { positivePromptPresetStorageId } from "../../src/positive-prompt-presets";
 import {
   agentAttachmentsDirectory,
@@ -1261,6 +1262,24 @@ async function restoreStylePreviews(
   return reconcileStylePromptPreviewImages(presetId, previews, app.getPath("userData"));
 }
 
+// Preset identity includes ordered character captions, not just the base prompt.
+// A deterministic collision ID also makes repeated restores idempotent after renaming.
+function backupPositiveCaptions(value: unknown) {
+  return normalizeCharacterCaptions(value).map(({ id: _id, ...caption }) => caption);
+}
+function positiveCaptionIdentity(value: unknown): string {
+  const coordinate = (number: number) => {
+    const bytes = Buffer.alloc(8);
+    bytes.writeDoubleBE(number === 0 ? 0 : number);
+    return bytes.toString("hex");
+  };
+  return JSON.stringify(backupPositiveCaptions(value).map((caption) => [
+    caption.enabled !== false, caption.name ?? "", caption.prompt,
+    caption.negativePrompt ?? "", caption.useCoords,
+    coordinate(caption.x), coordinate(caption.y),
+  ]));
+}
+
 async function restorePromptPresets(
   zip: JSZip,
   payload: {
@@ -1348,18 +1367,28 @@ async function restorePromptPresets(
     if (!raw || typeof raw.name !== "string" || typeof raw.prompt !== "string" || !raw.prompt.trim()) {
       continue;
     }
+    const captions = backupPositiveCaptions(raw.captions);
+    const captionIdentity = positiveCaptionIdentity(captions);
+    const sourceId = typeof raw.id === "string" ? raw.id : "";
+    const collisionId = "backup-positive-" + crypto.createHash("sha256").update(
+      JSON.stringify([sourceId, raw.name, raw.prompt, JSON.parse(captionIdentity)]),
+    ).digest("hex");
     let target = positivePrompts.find((item) =>
       item.prompt === raw.prompt
-      && (item.name === raw.name || (Boolean(raw.id) && item.id === raw.id)));
+      && positiveCaptionIdentity(item.captions) === captionIdentity
+      && (item.name === raw.name || (sourceId && item.id === sourceId)
+        || item.id === collisionId || item.id.startsWith(collisionId + "-")));
     if (!target) {
       const name = uniqueLabel(positiveNames, raw.name);
       if (name.renamed) counters.renamed += 1;
-      const id = raw.id && !positiveIds.has(raw.id) ? raw.id : randomUUID();
+      let id = sourceId && !positiveIds.has(sourceId) ? sourceId : collisionId;
+      for (let suffix = 1; positiveIds.has(id); suffix += 1) id = `${collisionId}-${suffix}`;
       positiveIds.add(id);
       target = {
         id,
         name: name.value,
         prompt: raw.prompt,
+        captions,
         createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
         previewImages: [],
       };

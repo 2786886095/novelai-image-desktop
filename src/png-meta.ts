@@ -1,8 +1,10 @@
 import { metadataReplayFromComment } from "./metadata-replay";
+import { decodePngText, hasUsableGenerationMetadata, inflateMetadata, MAX_METADATA_BYTES, readPngStealthMetadata, readStealthMetadataPixels } from "./png-metadata-codecs";
+import { decodeBrowserMetadataPixels, metadataImageHeader, metadataPixelBytes, type MetadataPixelDecoder } from "./image-metadata-pixels";
 // Embedded image metadata parsing and mapping to GenerateParams.
 //
 // Supported inputs:
-// - NovelAI PNG tEXt / uncompressed iTXt (Description + Comment JSON)
+// - PNG tEXt / zTXt / iTXt / eXIf and NovelAI alpha-channel metadata
 // - AUTOMATIC1111 / Forge PNG parameters
 // - AUTOMATIC1111 / Forge JPEG/WebP EXIF UserComment
 // - NovelAI WebP EXIF (official field mapping, including EXIF sub-IFD)
@@ -103,7 +105,7 @@ function decodeLatin1(bytes: Uint8Array) {
   return new TextDecoder("latin1").decode(bytes);
 }
 
-/** Read tEXt and uncompressed iTXt chunks from a PNG ArrayBuffer. */
+/** Read bounded PNG text and EXIF chunks; malformed optional chunks are isolated. */
 export function parsePngMeta(buffer: ArrayBuffer): Record<string, string> {
   if (buffer.byteLength < 8) return {};
   const sig = new Uint8Array(buffer, 0, 8);
@@ -125,16 +127,22 @@ export function parsePngMeta(buffer: ArrayBuffer): Record<string, string> {
     );
     if (type === "IEND") break;
     const data = new Uint8Array(buffer, dataStart, length);
-    if (type === "tEXt" && length > 0) {
+    try {
+    if (length > MAX_METADATA_BYTES) { offset = dataEnd + 4; continue; }
+    if (type === "eXIf") {
+      Object.assign(result, readTiffMetadata(data, 0));
+    } else if ((type === "tEXt" || type === "zTXt") && length > 0) {
       const nullIdx = data.indexOf(0);
-      if (nullIdx >= 0) {
+      if (nullIdx > 0 && nullIdx <= 79) {
         const key = decodeLatin1(data.subarray(0, nullIdx));
-        // A1111 and ComfyUI commonly write UTF-8 despite tEXt being Latin-1.
-        result[key] = decodeUtf8(data.subarray(nullIdx + 1));
+        if (type === "tEXt") result[key] = decodePngText(data.subarray(nullIdx + 1));
+        else if (data[nullIdx + 1] === 0 && nullIdx + 2 < data.length) {
+          result[key] = decodePngText(inflateMetadata(data.subarray(nullIdx + 2)));
+        }
       }
     } else if (type === "iTXt" && length > 0) {
       const keywordEnd = data.indexOf(0);
-      if (keywordEnd >= 0 && keywordEnd + 2 < data.length) {
+      if (keywordEnd > 0 && keywordEnd <= 79 && keywordEnd + 2 < data.length && data[keywordEnd + 2] === 0) {
         const key = decodeLatin1(data.subarray(0, keywordEnd));
         const compressionFlag = data[keywordEnd + 1];
         let cursor = keywordEnd + 3;
@@ -142,12 +150,14 @@ export function parsePngMeta(buffer: ArrayBuffer): Record<string, string> {
         if (languageEnd >= 0) {
           cursor = languageEnd + 1;
           const translatedEnd = data.indexOf(0, cursor);
-          if (translatedEnd >= 0 && compressionFlag === 0) {
-            result[key] = decodeUtf8(data.subarray(translatedEnd + 1));
+          if (translatedEnd >= 0 && (compressionFlag === 0 || compressionFlag === 1)) {
+            const payload = data.subarray(translatedEnd + 1);
+            result[key] = decodeUtf8(compressionFlag === 1 ? inflateMetadata(payload) : payload);
           }
         }
       }
     }
+    } catch { /* Keep reading subsequent valid metadata chunks. */ }
     offset = dataEnd + 4;
   }
   return result;
@@ -321,10 +331,32 @@ function parseWebpMeta(buffer: ArrayBuffer): Record<string, string> {
 /** Read supported embedded text metadata from PNG, JPEG, or WebP. */
 export function parseImageMeta(buffer: ArrayBuffer): Record<string, string> {
   const png = parsePngMeta(buffer);
+  const bytes = new Uint8Array(buffer);
+  if (bytes.length >= 8 && PNG_SIG.every((byte, index) => bytes[index] === byte)) {
+    if (!hasUsableGenerationMetadata(png)) {
+      const stealth = readPngStealthMetadata(bytes);
+      if (Object.keys(stealth).length) return normalizeExifMetadata({ ...png, ...stealth });
+    }
+    return normalizeExifMetadata(png);
+  }
   if (Object.keys(png).length) return png;
   const jpeg = parseJpegMeta(buffer);
   if (Object.keys(jpeg).length) return jpeg;
   return parseWebpMeta(buffer);
+}
+
+/** Full official PNG/WebP support, including alpha-only WebP and uncommon PNG encodings. */
+export async function parseImageMetaAsync(buffer: ArrayBuffer, decodePixels: MetadataPixelDecoder = decodeBrowserMetadataPixels): Promise<Record<string,string>> {
+  const metadata=parseImageMeta(buffer);
+  if(hasUsableGenerationMetadata(metadata)) return metadata;
+  const bytes=new Uint8Array(buffer),header=metadataImageHeader(bytes);
+  if(!header) return metadata;
+  try {
+    const pixels=await decodePixels(metadataPixelBytes(bytes));
+    if(!pixels || pixels.width!==header.width || pixels.height!==header.height) return metadata;
+    const stealth=readStealthMetadataPixels(pixels.data,pixels.width,pixels.height,pixels.channels);
+    return Object.keys(stealth).length?normalizeExifMetadata({...metadata,...stealth}):metadata;
+  } catch {return metadata;}
 }
 
 function finiteNumber(value: unknown): number | undefined {

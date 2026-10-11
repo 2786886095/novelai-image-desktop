@@ -39,12 +39,12 @@ dependencies:
   provider: ^6.1.2          # state management (ChangeNotifier)
   shared_preferences: ^2.3.2 # token + settings persistence
   flutter_secure_storage: ^9.2.2 # token / AI keys
-  archive: ^3.6.1           # unzip the generate-image response
+  archive: 4.5.0           # unzip the generate-image response
   path_provider: ^2.1.4     # app document / cache dirs
   image_picker: ^1.1.2      # gallery image input
   share_plus: ^10.0.2       # export/share generated images
   socks5_proxy: ^2.1.1      # HTTPS over SOCKS5 proxy
-  image: ^4.3.0             # decode dimensions + safe upscale preparation
+  image: 4.12.0             # decode dimensions + safe upscale preparation
   file_picker: 8.1.7       # comic project JSON import; compatible with Flutter 3.24
   url_launcher: 6.3.1      # official NovelAI page from the Token guide
   flutter_foreground_task: ^9.2.2 # keep long serial queues alive on Android
