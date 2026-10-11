@@ -13,7 +13,7 @@ on:
         default: false
       suite:
         type: choice
-        options: [core, storage]
+        options: [core, storage, all]
         default: core
 permissions:
   contents: read
@@ -47,6 +47,9 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq && sudo apt-get install -y xvfb fonts-noto-cjk
+          # Electron 42 lazily installs its dist on first require. Materialize
+          # the exact locked binary before configuring its sandbox helper.
+          (cd app && node -e "console.log(require('electron'))")
           # Preserve Chromium's sandbox. Configure the downloaded CI helper;
           # never add --no-sandbox or alter a user's installed application.
           sudo chown root:root app/node_modules/electron/dist/chrome-sandbox
