@@ -110,7 +110,7 @@ Future<HttpServer> _flowLoopback() async {
 }
 
 
-// iOS fixture servers need a PKCS12 identity, not PEM private-key bytes.
+// Actual Flutter native engines validated the public PEM server identity.
 // Public neutral fixture only; production trust and keys are untouched.
 SecurityContext _serverFixtureContext(String pem,String key,String pkcs12) {
  return SecurityContext()..useCertificateChainBytes(utf8.encode(pem))..usePrivateKeyBytes(utf8.encode(key));
@@ -132,12 +132,16 @@ class _NativePreviewApi extends NaiApi {
 Future<void> _nativePreviewHost(WidgetTester tester,AppState state,{double scale=1}) async {
   var source='black jacket';
   await tester.pumpWidget(ChangeNotifierProvider.value(value:state,child:MaterialApp(
+    key:UniqueKey(),
     builder:(context,child)=>MediaQuery(data:MediaQuery.of(context).copyWith(textScaler:TextScaler.linear(scale)),child:child!),
-    home:Builder(builder:(context)=>Scaffold(body:TextButton(child:const Text('open-native-preview'),onPressed:() async {
+    home:Builder(builder:(context)=>Scaffold(body:SafeArea(child:Center(child:TextButton(child:const Text('open-native-preview'),onPressed:() async {
       final next=await showDialog<String>(context:context,builder:(_)=>TranslationPreviewDialog(source:source,isCurrent:(s)=>s==source));
       if(next!=null)source=next;
-    }))))));
-  await tester.tap(find.text('open-native-preview'));await tester.pumpAndSettle();
+    }))))))));
+  await tester.pumpAndSettle();
+  final open=find.text('open-native-preview').hitTestable();expect(open,findsOneWidget);
+  await tester.tap(open);await tester.pumpAndSettle();
+  expect(find.byType(TranslationPreviewDialog),findsOneWidget);expect(find.byType(TextField),findsNWidgets(2));
 }
 class _NativePreflightFixture {
   late HttpServer tls;late ServerSocket proxy;
@@ -524,7 +528,7 @@ void main() {
     server.listen((request) async {requests++;expect(request.uri.path,'/neutral-transport');request.response.write('validated neutral TLS');await request.response.close();});
     final client=HttpClient();
     try{final request=await client.getUrl(Uri.parse('https://translate.googleapis.com/neutral-transport'));final response=await request.close();expect(response.statusCode,200);expect(await utf8.decoder.bind(response).join(),'validated neutral TLS');expect(requests,1);
-      await expectLater(client.getUrl(Uri.parse('https://unexpected-paid-host.invalid/')),throwsA(isA<StateError>()));expect(requests,1);
+      await expectLater(Future.sync(()=>client.getUrl(Uri.parse('https://unexpected-paid-host.invalid/'))),throwsA(isA<StateError>()));expect(requests,1);
     }catch(error){print('NATIVE_FLOW_TRANSPORT_ERROR:$error');rethrow;}finally{client.close(force:true);}
     result('Native routed TLS validated and unknown host blocked',['native-fixture-transport']);
   });
@@ -594,7 +598,7 @@ void main() {
       app.i2i..strength=.37..noise=.11..upscaledEnhance=false;app.i2iSizeMode='adaptive';app.i2iSourceMode='original';app.enhanceScale=scenario=='medium-max'?0:1;
       await app.enhance();expect(posts,1);expect(app.busy,false);expect(app.params.width,832);expect(app.params.height,1216);expect(app.i2i.strength,.37);expect(app.i2i.noise,.11);expect(app.i2i.upscaledEnhance,false);expect(app.i2iSizeMode,'adaptive');expect(app.i2iSourceMode,'original');
       expect(body!['model'],scenario=='medium-max'?'nai-diffusion-5-full-medium':'nai-diffusion-5-full');final parameters=body!['parameters'] as Map;expect(parameters['width'],512);expect(parameters['height'],512);expect(parameters['upscaled_enhance']==true,scenario=='medium-max');expect(parameters['image'],isNotEmpty);
-      if(scenario=='503'){expect(app.history,isEmpty);expect(app.status,contains('neutral enhance failed'));expect(app.comparisonAfter,isNull);}
+      if(scenario=='503'){expect(app.history,isEmpty);expect(app.status,'完成：成功 0 张，失败 1 张；实扣 0 Anlas。NovelAI HTTP 503；未自动重试或回退');expect(app.status,isNot(contains('neutral enhance failed')));expect(app.comparisonAfter,isNull);}
       else{expect(app.history.length,1);expect(app.history.single.width,side);expect(app.history.single.height,side);expect(await File(app.history.single.filePath).readAsBytes(),bytes);expect((await Storage().getHistory()).length,1);expect(app.comparisonSurface,'generate:enhance');expect(app.comparisonBefore!.filePath,source.path);}
       result('Native AppState enhance $scenario',['enhance','effort','image-to-image','output-management']);
     });
