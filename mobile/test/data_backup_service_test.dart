@@ -103,7 +103,7 @@ void main() {
         'omitted': []
       }));
       inner.addFile(ArchiveFile('manifest.json', manifest.length, manifest));
-      final capsule = ZipEncoder().encode(inner)!;
+      final capsule = ZipEncoder().encode(inner);
       final outer = Archive();
       outer.addFile(ArchiveFile(
           'portable-projects/agent-${sha256.convert(capsule)}.zip',
@@ -118,7 +118,7 @@ void main() {
       }));
       outer.addFile(ArchiveFile('manifest.json', old.length, old));
       await File('$interop/desktop.naisbackup')
-          .writeAsBytes(ZipEncoder().encode(outer)!);
+          .writeAsBytes(ZipEncoder().encode(outer));
     }
     final inspected = await service.inspect('$interop/desktop.naisbackup');
     expect(
@@ -173,7 +173,7 @@ void main() {
       })
     });
     final file = File('${root.path}/bridge.naisbackup')
-      ..writeAsBytesSync(ZipEncoder().encode(archive)!);
+      ..writeAsBytesSync(ZipEncoder().encode(archive));
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('existing', 'current');
     await service.importBackup(file.path, {DataBackupCategory.workspaceData},
@@ -423,7 +423,7 @@ void main() {
         'artist-string-draw': [],
       },
     });
-    final encoded = ZipEncoder().encode(archive)!;
+    final encoded = ZipEncoder().encode(archive);
     final file = File('${root.path}/desktop.naisbackup')
       ..writeAsBytesSync(encoded);
 

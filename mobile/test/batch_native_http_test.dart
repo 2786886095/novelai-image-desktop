@@ -84,7 +84,7 @@ void main() {
           ..addFile(ArchiveFile('0.png', bytes.length, bytes))
           ..addFile(ArchiveFile('1.png', bytes.length, bytes));
         req.response.headers.contentType = ContentType('application', 'zip');
-        req.response.add(ZipEncoder().encode(archive)!);
+        req.response.add(ZipEncoder().encode(archive));
         await req.response.close();
       } catch (_) {
         await req.response.close().catchError((Object _) {});

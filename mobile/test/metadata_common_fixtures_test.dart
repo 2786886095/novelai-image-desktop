@@ -21,7 +21,9 @@ void main() {
         'characters': parseNovelAiCharacterCaptions(metadata).length,
       };
       final expected = fixture['expected'] as Map;
-      for (final field in expected.entries) expect(actual[field.key], field.value, reason: field.key);
+      for (final field in expected.entries) {
+        expect(actual[field.key], field.value, reason: field.key);
+      }
       if (expected.isEmpty) expect(actual.keys.where((key) => key != 'characters'), isEmpty);
       expect(bytes, original);
     });

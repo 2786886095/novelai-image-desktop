@@ -507,7 +507,7 @@ class TavernCardService {
           avatar,
         ));
       }
-      bytes = Uint8List.fromList(ZipEncoder().encode(archive) ?? const []);
+      bytes = Uint8List.fromList(ZipEncoder().encode(archive));
       extension = 'charx';
     } else {
       bytes = Uint8List.fromList(

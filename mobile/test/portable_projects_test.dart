@@ -30,7 +30,7 @@ MapEntry<String, List<int>> capsule(String kind,
     'omitted': []
   }));
   zip.addFile(ArchiveFile('manifest.json', manifest.length, manifest));
-  final bytes = ZipEncoder().encode(zip)!;
+  final bytes = ZipEncoder().encode(zip);
   return MapEntry('$kind-${sha256.convert(bytes)}.zip', bytes);
 }
 

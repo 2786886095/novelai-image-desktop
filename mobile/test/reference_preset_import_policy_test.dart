@@ -162,7 +162,7 @@ void main() {
         }));
         archive
             .addFile(ArchiveFile('manifest.json', manifest.length, manifest));
-        input.writeAsBytesSync(ZipEncoder().encode(archive)!);
+        input.writeAsBytesSync(ZipEncoder().encode(archive));
       }
       expect(await app.importReferencePresets(input.path), isNotNull);
       expect(

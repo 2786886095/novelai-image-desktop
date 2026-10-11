@@ -79,10 +79,10 @@ void main() {
       'schema': 'langbai-reference-catalog/v1',
       'assets': [_asset()],
     });
-    final compressed = GZipEncoder().encode(utf8.encode(chunk));
+    final compressed = const GZipEncoder().encode(utf8.encode(chunk));
     final unpacked = unpackReferenceCatalogPayload({
       'encoding': 'gzip-base64',
-      'payload': base64Encode(compressed!),
+      'payload': base64Encode(compressed),
     });
 
     expect(unpacked['schema'], 'langbai-reference-catalog/v1');

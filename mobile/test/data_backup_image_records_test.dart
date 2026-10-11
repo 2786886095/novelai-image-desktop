@@ -85,7 +85,7 @@ void main() {
       output.addFile(ArchiveFile(v.name, bytes.length, bytes));
     }
     final target = File('${root.path}/fixed-input.naisbackup')
-      ..writeAsBytesSync(ZipEncoder().encode(output)!);
+      ..writeAsBytesSync(ZipEncoder().encode(output));
     return {'file': target.path, 'data': data};
   }
 

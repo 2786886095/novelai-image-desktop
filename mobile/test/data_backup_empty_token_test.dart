@@ -120,7 +120,7 @@ void main() {
     return File('${root.path}/input.naisbackup')
       ..writeAsBytesSync(token == null && !omitToken
           ? await File(inputPath).readAsBytes()
-          : ZipEncoder().encode(archive)!);
+          : ZipEncoder().encode(archive));
   }
 
   Future<DataBackupImportReport> restore(File file) =>

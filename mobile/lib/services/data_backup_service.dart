@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'compatible_image_backup.dart';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';

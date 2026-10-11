@@ -48,7 +48,7 @@ void main(){
   void json(String name,Object data){final bytes=utf8.encode(jsonEncode(data));zip.addFile(ArchiveFile(name,bytes.length,bytes));}
   json('manifest.json',{'format':DataBackupService.format,'version':1,'categories':[{'category':'apiCredentials','items':3,'bytes':0}]});
   json('data/api-credentials.json',{'settings':api});
-  return File('${root.path}/input.naisbackup').writeAsBytes(ZipEncoder().encode(zip)!);
+  return File('${root.path}/input.naisbackup').writeAsBytes(ZipEncoder().encode(zip));
  }
  Future<Map<String,dynamic>> exported(File file) async {
   final zip=ZipDecoder().decodeBytes(await file.readAsBytes());

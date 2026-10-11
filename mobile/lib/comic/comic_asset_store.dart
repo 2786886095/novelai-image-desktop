@@ -127,7 +127,6 @@ class ComicAssetStore {
       archive.addFile(ArchiveFile(entry.key, bytes.length, bytes));
     }
     final bytes = ZipEncoder().encode(archive);
-    if (bytes == null) throw StateError('ZIP编码失败');
     ZipDecoder().decodeBytes(bytes, verify: true);
     return _saveAndShare(bytes, 'zip', count, check);
   }

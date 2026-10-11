@@ -268,7 +268,7 @@ void main() {
       archive.addFile(ArchiveFile('images/$i.png', bytes.length, bytes));
     }
     final input = File('${root.path}/owned.nairp')
-      ..writeAsBytesSync(ZipEncoder().encode(archive)!);
+      ..writeAsBytesSync(ZipEncoder().encode(archive));
     await expectLater(
         storage.importReferencePresetArchive(input.path), throwsStateError);
     final copied = root

@@ -143,11 +143,11 @@ List<Uint8List> _nativeZipImages(Uint8List bytes) {
     final raw = file == null ? null : InputMemoryStream(file.getRawContent());
     if (file == null || raw == null ||
         (file.flags & 1) != 0 || (header.generalPurposeBitFlag & 1) != 0 ||
-        (((header.externalFileAttributes ?? 0) >> 16) & 0xf000) == 0xa000 ||
+        (((header.externalFileAttributes) >> 16) & 0xf000) == 0xa000 ||
         (header.compressionMethod != ZipFile.zipCompressionStore &&
             header.compressionMethod != ZipFile.zipCompressionDeflate) ||
-        (header.uncompressedSize ?? -1) < 0 ||
-        header.uncompressedSize! > _nativeImageLimit) {
+        (header.uncompressedSize) < 0 ||
+        header.uncompressedSize > _nativeImageLimit) {
       throw _invalidNativeImage();
     }
     final remaining = min(_nativeImageLimit, _nativeResponseBytes - total);

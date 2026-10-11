@@ -1088,7 +1088,6 @@ class BatchRedrawController extends ChangeNotifier {
     final promptBytes = utf8.encode(prompts.toString());
     archive.addFile(ArchiveFile('prompts.md', promptBytes.length, promptBytes));
     final zip = ZipEncoder().encode(archive);
-    if (zip == null) throw StateError(_rt('error.zipEncode'));
     final temp = await getTemporaryDirectory();
     final file = File('${temp.path}/${_safe(_projectName())}.zip');
     await file.writeAsBytes(zip, flush: true);

@@ -80,8 +80,5 @@ Future<Uint8List> buildHistoryArchive(
     ..addFile(ArchiveFile('prompts.md', promptBytes.length, promptBytes));
 
   final encoded = ZipEncoder().encode(archive);
-  if (encoded == null) {
-    throw StateError(runtimeTextFor(language, 'history.zipFailed'));
-  }
   return Uint8List.fromList(encoded);
 }

@@ -57,7 +57,7 @@ void main() {
     await aError;
     final png = image_lib.encodePng(image_lib.Image(width: 16, height: 16));
     final zip = ZipEncoder()
-        .encode(Archive()..addFile(ArchiveFile('image.png', png.length, png)))!;
+        .encode(Archive()..addFile(ArchiveFile('image.png', png.length, png)));
     requests[1].response.add(zip);
     await requests[1].response.close();
     final result = await b.timeout(const Duration(seconds: 5));

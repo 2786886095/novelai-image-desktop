@@ -220,7 +220,7 @@ void main() {
       );
       final zip = ZipEncoder().encode(
         Archive()..addFile(ArchiveFile('image.png', png.length, png)),
-      )!;
+      );
       request.response
         ..statusCode = 200
         ..headers.contentType = ContentType.binary
@@ -282,7 +282,7 @@ void main() {
       );
       final zip = ZipEncoder().encode(
         Archive()..addFile(ArchiveFile('image.png', png.length, png)),
-      )!;
+      );
       request.response
         ..statusCode = 200
         ..headers.contentType = ContentType.binary
@@ -353,7 +353,7 @@ void main() {
         );
         final zip = ZipEncoder().encode(
           Archive()..addFile(ArchiveFile('image.png', png.length, png)),
-        )!;
+        );
         request.response
           ..statusCode = 200
           ..headers.contentType = ContentType.binary
@@ -415,7 +415,7 @@ void main() {
         );
         final zip = ZipEncoder().encode(
           Archive()..addFile(ArchiveFile('image.png', png.length, png)),
-        )!;
+        );
         request.response
           ..statusCode = 200
           ..headers.contentType = ContentType.binary

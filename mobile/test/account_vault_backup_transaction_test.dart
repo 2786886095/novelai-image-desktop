@@ -177,7 +177,7 @@ void main() {
     add('data/api-credentials.json',
         {'novelAiAccounts': value, 'token': '', 'settings': settings});
     return File('${root.path}/incoming.naisbackup')
-      ..writeAsBytesSync(ZipEncoder().encode(zip)!);
+      ..writeAsBytesSync(ZipEncoder().encode(zip));
   }
 
   Future<void> restore(String path) async {

@@ -678,7 +678,6 @@ class Storage {
     }));
     archive.addFile(ArchiveFile('manifest.json', manifest.length, manifest));
     final encoded = ZipEncoder().encode(archive);
-    if (encoded == null) throw StateError('Unable to encode preset archive.');
     final temp = await getTemporaryDirectory();
     final safeLabel = sanitizeFolderName(label)
         .replaceAll(RegExp(r'\s+'), '-')

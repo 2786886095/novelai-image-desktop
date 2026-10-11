@@ -167,7 +167,7 @@ class PortableProjects {
     if(files.isEmpty)return null;
     final manifest=utf8.encode(jsonEncode({'version':1,'kind':'agent','files':files,'omitted':omitted}));
     archive.addFile(ArchiveFile('manifest.json',manifest.length,manifest));
-    final bytes=ZipEncoder().encode(archive)!;
+    final bytes=ZipEncoder().encode(archive);
     validate('agent-${sha256.convert(bytes)}.zip',bytes);
     return bytes;
   }

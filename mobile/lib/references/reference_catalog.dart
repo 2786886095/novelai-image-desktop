@@ -262,7 +262,7 @@ Map<String, dynamic> unpackReferenceCatalogPayload(Object? raw) {
     return payload;
   }
   final compressed = base64Decode(payload['payload'] as String);
-  final decoded = GZipDecoder().decodeBytes(compressed);
+  final decoded = const GZipDecoder().decodeBytes(compressed);
   return _jsonMap(jsonDecode(utf8.decode(decoded)));
 }
 
