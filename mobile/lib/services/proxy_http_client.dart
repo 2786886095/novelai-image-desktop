@@ -142,6 +142,16 @@ Future<http.Client> createProxyHttpClientForUri(
   );
 }
 
+/// A handshake terminated before any HTTP body could be sent. Never classify
+/// generic socket resets, timeouts, server errors or certificate failures as safe.
+bool isPreSubmissionTlsDisconnect(Object error) {
+  if (error is! HandshakeException && error is! http.ClientException) return false;
+  final message = error.toString().toLowerCase();
+  if (message.contains('certificate') || message.contains('verify failed')) return false;
+  return message.contains('connection terminated during handshake') ||
+      message.contains('before secure tls connection was established');
+}
+
 bool isRetryableNetworkError(Object error) =>
     error is SocketException ||
     error is HandshakeException ||

@@ -8,6 +8,9 @@ import 'package:novelai_mobile/services/generation_scope.dart';
 import 'package:novelai_mobile/services/nai_api.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  // These are real loopback HTTP tests, not widget HTTP-400 stubs.
+  HttpOverrides.global = null;
   test(
       'scope cancellation closes only attached clients, detaches and never invokes another scope',
       () async {

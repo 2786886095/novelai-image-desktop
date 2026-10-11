@@ -115,6 +115,9 @@ export function compactRemoteErrorText(
   if (!raw) return fallback;
 
   const status = options.status ?? objectStatus(value) ?? detectedHttpStatus(raw);
+  if (status === undefined && /before secure TLS connection was established/i.test(raw)) {
+    return `${service}在建立安全连接前断开。请检查系统代理／VPN、代理端口和接口地址后重试；未关闭证书校验。`;
+  }
   const looksLikeHtml = /<!doctype\s+html|<html\b|<head\b|<body\b|<\/?(?:div|span|script|style|h[1-6]|p)\b/i.test(raw);
   const looksLikeGatewayPage = /cloudflare|cf-error|bad\s+gateway|gateway\s+time-?out|service\s+unavailable/i.test(raw);
   if (status === 502 || status === 503 || status === 504) {

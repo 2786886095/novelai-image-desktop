@@ -286,7 +286,7 @@ async function fetchAccount(
   const res = await axios.get(`${imageBaseUrl}/user/data`, {
     headers: { Authorization: `Bearer ${token}` },
     timeout: 15_000,
-    ...proxyConfig("nai"),
+    ...await proxyConfigForUrl("nai", `${imageBaseUrl}/user/data`, settings),
       maxRedirects: currentNaiAccount() ? 0 : undefined,
   });
   return parseAccount(res.data);
@@ -2117,9 +2117,8 @@ export function isPreflightNetworkFailure(error: any): boolean {
   if (error?.response) return false;
   const message = String(error?.message ?? "").toLowerCase();
   return (
-    message.includes("before secure tls connection was established") ||
-    message.includes("tls handshake") ||
-    error?.code === "ERR_SSL_HANDSHAKE_FAILURE"
+    error?.code === "ECONNRESET" &&
+    message.includes("before secure tls connection was established")
   );
 }
 
@@ -2140,7 +2139,7 @@ async function requestWithRetry<T>(
     retryPreflightNetworkFailures?: boolean;
   } = {},
 ): Promise<T> {
-  if(currentNaiAccount()) return fn(); // Selected accounts never automatically repeat paid requests.
+  const selectedAccount = !!currentNaiAccount(); // Only a proven pre-submission disconnect may retry a selected account.
   let attempt = 0;
   for (;;) {
     try {
@@ -2154,7 +2153,7 @@ async function requestWithRetry<T>(
         throw error;
       const status = error?.response?.status;
       const retryable =
-        (typeof status === "number" && retryStatuses.includes(status)) ||
+        (!selectedAccount && typeof status === "number" && retryStatuses.includes(status)) ||
         (retryPreflightNetworkFailures && isPreflightNetworkFailure(error));
       if (!retryable || attempt >= retries) throw error;
 
@@ -2261,7 +2260,7 @@ async function postGenerateImage(
           maxBodyLength: Infinity,
           maxContentLength: MAX_NAI_GENERATION_RESPONSE_BYTES,
           signal,
-          ...proxyConfig("nai"),
+          ...await proxyConfigForUrl("nai", `${baseUrl}/ai/generate-image`, settings),
       maxRedirects: currentNaiAccount() ? 0 : undefined,
         });
       },
@@ -2603,7 +2602,7 @@ async function postGenerateImageStream(
             maxBodyLength: Infinity,
             maxContentLength: Infinity,
             signal,
-            ...proxyConfig("nai"),
+            ...await proxyConfigForUrl("nai", `${baseUrl}/ai/generate-image-stream`, settings),
       maxRedirects: currentNaiAccount() ? 0 : undefined,
           });
         },

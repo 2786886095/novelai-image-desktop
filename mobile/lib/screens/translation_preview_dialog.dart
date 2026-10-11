@@ -167,6 +167,45 @@ class _TranslationPreviewDialogState extends State<TranslationPreviewDialog> {
     }
   }
 
+  Future<void> _apply(Map<String, String> text) async {
+    if (!widget.isCurrent(widget.source) || saving) return;
+    final result = session.result,
+        from = session.swapSource.isEmpty ? 'auto' : session.target,
+        to = session.swapSource.isEmpty ? session.target : session.swapSource;
+    final previousFrom = app.settings.translateSourceLanguage,
+        previousTo = app.settings.translateTargetLanguage;
+    setState(() {
+      saving = true;
+      localError = '';
+    });
+    session.setComposing(true);
+    try {
+      await app.setSettings((s) {
+        s.translateSourceLanguage = from;
+        s.translateTargetLanguage = to;
+      });
+      if (!mounted) return;
+      if (!widget.isCurrent(widget.source)) {
+        await app.setSettings((s) {
+          s.translateSourceLanguage = previousFrom;
+          s.translateTargetLanguage = previousTo;
+        });
+        if (mounted) setState(() => localError = text['stale']!);
+        return;
+      }
+      Navigator.pop(context, result);
+    } catch (e) {
+      app.settings.translateSourceLanguage = previousFrom;
+      app.settings.translateTargetLanguage = previousTo;
+      if (mounted) setState(() => localError = '$e');
+    } finally {
+      if (mounted) {
+        session.setComposing(false, scheduleOnEnd: false);
+        setState(() => saving = false);
+      }
+    }
+  }
+
   Widget _field(String label, TextEditingController controller) =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(label),
@@ -175,6 +214,7 @@ class _TranslationPreviewDialogState extends State<TranslationPreviewDialog> {
             height: 180,
             child: TextField(
                 controller: controller,
+                readOnly: saving,
                 maxLines: null,
                 expands: true,
                 decoration: InputDecoration(
@@ -249,143 +289,167 @@ class _TranslationPreviewDialogState extends State<TranslationPreviewDialog> {
               },
         icon: Semantics(
             label: editor['swap'], child: const Icon(Icons.swap_horiz)));
-    return Dialog(
-        child: ConstrainedBox(
-            constraints: BoxConstraints(
-                maxWidth: 900,
-                maxHeight: MediaQuery.sizeOf(context).height * .88),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
-                  child: Row(children: [
-                    Expanded(
-                        child: Text(text['title']!,
-                            style: Theme.of(context).textTheme.titleLarge)),
-                    IconButton(
-                        tooltip: text['cancel'],
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close))
-                  ])),
-              Flexible(
-                  child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            LayoutBuilder(
-                                builder: (context, c) => c.maxWidth >= 600
-                                    ? Row(children: [
-                                        Expanded(child: sourceMenu),
-                                        swap,
-                                        Expanded(child: targetMenu)
-                                      ])
-                                    : Column(children: [
-                                        sourceMenu,
-                                        swap,
-                                        targetMenu
-                                      ])),
-                            const SizedBox(height: 12),
-                            SwitchListTile(
-                                key: const ValueKey('translation-live-toggle'),
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(editor['live']!),
-                                value: session.live,
-                                onChanged: saving ? null : _changeLive),
-                            Text(text['hint']!),
-                            const SizedBox(height: 16),
-                            LayoutBuilder(builder: (context, c) {
-                              final source =
-                                      _field(text['source']!, sourceController),
-                                  result =
-                                      _field(text['result']!, resultController);
-                              return c.maxWidth >= 600
-                                  ? Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                          Expanded(child: source),
-                                          const SizedBox(width: 16),
-                                          Expanded(child: result)
-                                        ])
-                                  : Column(children: [
-                                      source,
-                                      const SizedBox(height: 16),
-                                      result
-                                    ]);
-                            }),
-                            if (session.busy)
-                              Padding(
-                                  padding: const EdgeInsets.only(top: 12),
-                                  child: Text(text['busy']!)),
-                            if (notice.isNotEmpty)
-                              Padding(
-                                  padding: const EdgeInsets.only(top: 12),
-                                  child: Text(notice)),
-                            if (localError.isNotEmpty ||
-                                session.error.isNotEmpty)
-                              Padding(
-                                  padding: const EdgeInsets.only(top: 12),
-                                  child: Text(
-                                      localError.isNotEmpty
-                                          ? localError
-                                          : session.error ==
-                                                  'TRANSLATION_FAILED'
-                                              ? text['failed']!
-                                              : session.error,
-                                      style: TextStyle(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .error))),
-                            if (stale)
-                              Padding(
-                                  padding: const EdgeInsets.only(top: 12),
-                                  child: Text(text['stale']!,
-                                      style: TextStyle(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .error))),
-                          ]))),
-              Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: Wrap(
-                      alignment: WrapAlignment.end,
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: Text(text['cancel']!)),
-                        OutlinedButton(
-                            onPressed: session.busy ||
-                                    session.composing ||
-                                    saving ||
-                                    session.source.trim().isEmpty
-                                ? null
-                                : () {
-                                    setState(() {
-                                      notice = '';
-                                      localError = '';
-                                    });
-                                    session.translate();
-                                  },
-                            child: Text(text[
-                                session.result.isEmpty ? 'run' : 'retry']!)),
-                        OutlinedButton(
-                            onPressed: canApply ? () => _copy(text) : null,
-                            child: Text(text['copy']!)),
-                        FilledButton(
-                            onPressed: canApply
-                                ? () {
-                                    if (widget.isCurrent(widget.source)) {
-                                      Navigator.pop(context, session.result);
-                                    } else {
-                                      setState(
-                                          () => localError = text['stale']!);
-                                    }
-                                  }
-                                : null,
-                            child: Text(text['apply']!)),
+    return PopScope(
+        canPop: !saving,
+        child: Dialog(
+            child: ConstrainedBox(
+                constraints: BoxConstraints(
+                    maxWidth: 900,
+                    maxHeight: MediaQuery.sizeOf(context).height * .88),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
+                      child: Row(children: [
+                        Expanded(
+                            child: Text(text['title']!,
+                                style: Theme.of(context).textTheme.titleLarge)),
+                        IconButton(
+                            tooltip: text['cancel'],
+                            onPressed:
+                                saving ? null : () => Navigator.pop(context),
+                            icon: const Icon(Icons.close))
                       ])),
-            ])));
+                  Flexible(
+                      child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                LayoutBuilder(
+                                    builder: (context, c) => c.maxWidth >= 600
+                                        ? Row(children: [
+                                            Expanded(child: sourceMenu),
+                                            swap,
+                                            Expanded(child: targetMenu)
+                                          ])
+                                        : Column(children: [
+                                            sourceMenu,
+                                            swap,
+                                            targetMenu
+                                          ])),
+                                const SizedBox(height: 12),
+                                SwitchListTile(
+                                    key: const ValueKey(
+                                        'translation-live-toggle'),
+                                    contentPadding: EdgeInsets.zero,
+                                    title: Text(editor['live']!),
+                                    value: session.live,
+                                    onChanged: saving ? null : _changeLive),
+                                Text(text['hint']!),
+                                const SizedBox(height: 16),
+                                LayoutBuilder(builder: (context, c) {
+                                  final source = _field(
+                                          text['source']!, sourceController),
+                                      result = _field(
+                                          text['result']!, resultController);
+                                  return c.maxWidth >= 600
+                                      ? Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                              Expanded(child: source),
+                                              const SizedBox(width: 16),
+                                              Expanded(child: result)
+                                            ])
+                                      : Column(children: [
+                                          source,
+                                          const SizedBox(height: 16),
+                                          result
+                                        ]);
+                                }),
+                                SizedBox(
+                                  height: MediaQuery.textScalerOf(context)
+                                      .scale(60),
+                                  child: SingleChildScrollView(
+                                      child: Semantics(
+                                          liveRegion: true,
+                                          child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                if (session.busy)
+                                                  Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              top: 12),
+                                                      child:
+                                                          Text(text['busy']!)),
+                                                if (notice.isNotEmpty)
+                                                  Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              top: 12),
+                                                      child: Text(notice)),
+                                                if (localError.isNotEmpty ||
+                                                    session.error.isNotEmpty)
+                                                  Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              top: 12),
+                                                      child: Text(
+                                                          localError.isNotEmpty
+                                                              ? localError
+                                                              : session.error ==
+                                                                      'TRANSLATION_FAILED'
+                                                                  ? text[
+                                                                      'failed']!
+                                                                  : session
+                                                                      .error,
+                                                          style: TextStyle(
+                                                              color: Theme.of(
+                                                                      context)
+                                                                  .colorScheme
+                                                                  .error))),
+                                                if (stale)
+                                                  Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              top: 12),
+                                                      child: Text(
+                                                          text['stale']!,
+                                                          style: TextStyle(
+                                                              color: Theme.of(
+                                                                      context)
+                                                                  .colorScheme
+                                                                  .error))),
+                                              ]))),
+                                ),
+                              ]))),
+                  Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            TextButton(
+                                onPressed: saving
+                                    ? null
+                                    : () => Navigator.pop(context),
+                                child: Text(text['cancel']!)),
+                            OutlinedButton(
+                                onPressed: session.busy ||
+                                        session.composing ||
+                                        saving ||
+                                        session.source.trim().isEmpty
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          notice = '';
+                                          localError = '';
+                                        });
+                                        session.translate();
+                                      },
+                                child: Text(text[session.result.isEmpty
+                                    ? 'run'
+                                    : 'retry']!)),
+                            OutlinedButton(
+                                onPressed: canApply ? () => _copy(text) : null,
+                                child: Text(text['copy']!)),
+                            FilledButton(
+                                onPressed: canApply ? () => _apply(text) : null,
+                                child: Text(text['apply']!)),
+                          ])),
+                ]))));
   }
 }

@@ -12,7 +12,7 @@ export function TranslationPreview({currentValue,context,language,onApply,onClos
  const [session]=useState(()=>new TranslationSession(currentValue,target,(source,to,from)=>window.naiDesktop.translate(source,to,from),settings?.translateRealtime===true,sourcePreference));
  const state=useSyncExternalStore(session.subscribe,()=>session.snapshot,()=>session.snapshot);
  const [saving,setSaving]=useState(false),[notice,setNotice]=useState(''),[localError,setLocalError]=useState('');
- const dialog=useRef<HTMLElement>(null),closed=useRef(false),close=useRef(onClose);close.current=onClose;
+ const dialog=useRef<HTMLElement>(null),closed=useRef(false),close=useRef(onClose),apply=useRef(onApply);close.current=saving?()=>{}:onClose;apply.current=onApply;
  const originalChanged=currentValue!==origin.current.source||context!==origin.current.context;
  const canApply=state.valid&&!!state.result.trim()&&!state.busy&&!state.composing&&!saving&&!originalChanged;
  useEffect(()=>{closed.current=false;session.start();return()=>{closed.current=true;session.dispose();};},[session]);
@@ -42,13 +42,31 @@ export function TranslationPreview({currentValue,context,language,onApply,onClos
   catch(e){if(!closed.current)setLocalError(e instanceof Error?e.message:text.failed);}
   finally{if(!closed.current)setSaving(false);}
  }
+ async function applyTranslation(){
+  if(!canApply)return;
+  const result=state.result,from=state.target,to=session.swapSource||state.target;
+  const previousFrom=sourcePreference,previousTo=preference;
+  // Freeze the draft while saving the next opening's direction. Never apply on a failed save.
+  setSaving(true);setLocalError('');session.setComposing(true);
+  try{
+   await window.naiDesktop.setSetting('translateSourceLanguage',session.swapSource?from:'auto');
+   await window.naiDesktop.setSetting('translateTargetLanguage',to);
+   await useAppStore.getState().refreshSettings();
+   if(closed.current)return;
+   if(!apply.current(result,origin.current.source,origin.current.context))throw Error(text.stale);
+   onClose();
+  }catch(e){
+   try{await window.naiDesktop.setSetting('translateSourceLanguage',previousFrom);await window.naiDesktop.setSetting('translateTargetLanguage',previousTo);await useAppStore.getState().refreshSettings();}catch{/* Surface the original failed save; never write the parent prompt. */}
+   if(!closed.current)setLocalError(e instanceof Error?e.message:text.failed);
+  }finally{if(!closed.current){session.setComposing(false,false);setSaving(false);}}
+ }
  async function copy(){
   try{await navigator.clipboard.writeText(state.result);if(!closed.current)setNotice(text.copied);}
   catch{if(!closed.current)setLocalError(text.copyFailed);}
  }
  const edit=()=>{setNotice('');setLocalError('');};
  return <AppPortal><div className="modal-backdrop prompt-assistant-backdrop"><section ref={dialog} className="prompt-assistant-dialog translation-preview-dialog" role="dialog" aria-modal="true" aria-label={text.title}>
-  <header><h2>{text.title}</h2><CompactIconButton label={text.cancel} icon="close" onClick={onClose}/></header>
+  <header><h2>{text.title}</h2><CompactIconButton label={text.cancel} icon="close" onClick={onClose} disabled={saving}/></header>
   <div className="prompt-assistant-body translation-preview-body">
    <div className="translation-preview-languages">
     <SelectMenu value={state.sourceLanguage} options={[{value:'auto',label:editor.auto},...TRANSLATION_LANGUAGES]} label={editor.sourceLanguage} ariaLabel={editor.sourceLanguage} disabled={saving} onChange={next=>{session.setLanguages(next,state.target);void persistLanguages(next,preference);}}/>
@@ -60,11 +78,11 @@ export function TranslationPreview({currentValue,context,language,onApply,onClos
    </div>
    <p className="prompt-assistant-note">{text.hint}</p>
    <div className="translation-preview-columns">
-    <label>{text.source}<textarea aria-label={text.source} value={state.source} onChange={e=>{edit();session.editSource(e.target.value);}} onCompositionStart={()=>session.setComposing(true)} onCompositionEnd={()=>session.setComposing(false)}/></label>
-    <label>{text.result}<textarea aria-label={text.result} value={state.result} onChange={e=>{edit();session.editResult(e.target.value);}} onCompositionStart={()=>session.setComposing(true)} onCompositionEnd={()=>session.setComposing(false,false)}/></label>
+    <label>{text.source}<textarea aria-label={text.source} readOnly={saving} value={state.source} onChange={e=>{edit();session.editSource(e.target.value);}} onCompositionStart={()=>session.setComposing(true)} onCompositionEnd={()=>session.setComposing(false)}/></label>
+    <label>{text.result}<textarea aria-label={text.result} readOnly={saving} value={state.result} onChange={e=>{edit();session.editResult(e.target.value);}} onCompositionStart={()=>session.setComposing(true)} onCompositionEnd={()=>session.setComposing(false,false)}/></label>
    </div>
-   {state.busy&&<p role="status">{text.busy}</p>}{notice&&<p role="status">{notice}</p>}{(localError||state.error)&&<p className="prompt-assistant-error" role="alert">{localError||(state.error==='TRANSLATION_FAILED'?text.failed:state.error)}</p>}{originalChanged&&<p className="prompt-assistant-error" role="alert">{text.stale}</p>}
+   <div className="translation-preview-status" aria-live="polite">{state.busy&&<p role="status">{text.busy}</p>}{notice&&<p role="status">{notice}</p>}{(localError||state.error)&&<p className="prompt-assistant-error" role="alert">{localError||(state.error==='TRANSLATION_FAILED'?text.failed:state.error)}</p>}{originalChanged&&<p className="prompt-assistant-error" role="alert">{text.stale}</p>}</div>
   </div>
-  <footer><button type="button" onClick={onClose}>{text.cancel}</button><button type="button" disabled={state.busy||state.composing||saving||!state.source.trim()} onClick={()=>{edit();session.translate();}}>{state.result?text.retry:text.run}</button><button type="button" disabled={!canApply} onClick={()=>void copy()}>{text.copy}</button><button className="prompt-assistant-apply" type="button" disabled={!canApply} onClick={()=>{if(canApply){if(onApply(state.result,origin.current.source,origin.current.context))onClose();else setLocalError(text.stale);}}}>{text.apply}</button></footer>
+  <footer><button type="button" disabled={saving} onClick={onClose}>{text.cancel}</button><button type="button" disabled={state.busy||state.composing||saving||!state.source.trim()} onClick={()=>{edit();session.translate();}}>{state.result?text.retry:text.run}</button><button type="button" disabled={!canApply} onClick={()=>void copy()}>{text.copy}</button><button className="prompt-assistant-apply" type="button" disabled={!canApply} onClick={()=>void applyTranslation()}>{text.apply}</button></footer>
  </section></div></AppPortal>;
 }

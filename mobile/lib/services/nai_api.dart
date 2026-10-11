@@ -73,7 +73,9 @@ class NaiNetworkException implements Exception {
   const NaiNetworkException(this.cause);
 
   @override
-  String toString() => 'NovelAI network connection failed';
+  String toString() => isPreSubmissionTlsDisconnect(cause)
+      ? 'NovelAI在建立安全连接前断开。请检查系统代理／VPN、代理端口和接口地址后重试；未关闭证书校验。'
+      : 'NovelAI network connection failed';
 }
 
 String resolveNovelAiBaseUrl(
@@ -1939,7 +1941,11 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
     }
     final scope=GenerationScope.current;
     scope?.credentials(token,settings);
-    final client = createProxyHttpClient(settings, scope: ProxyScope.nai);
+    final initialUri = Uri.parse(
+      '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/ai/generate-image-stream',
+    );
+    final client = await createProxyHttpClientForUri(settings, initialUri, scope: ProxyScope.nai);
+    try { scope?.credentials(token, settings); } catch (_) { client.close(); rethrow; }
     _activeGenerationClients.add(client);
     final detach=scope?.attach((){_activeGenerationClients.remove(client);client.close();});
     bool cancelled() => !_activeGenerationClients.contains(client);
@@ -1972,9 +1978,13 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
         try {
           response =
               await client.send(request).timeout(const Duration(seconds: 180));
-        } catch (_) {
+        } catch (error) {
           if (cancelled()) throw const GenerationCancelledException();
-        scope?.credentials(token,settings);
+          scope?.credentials(token, settings);
+          if (isPreSubmissionTlsDisconnect(error) && attempt < 2) {
+            await Future.delayed(Duration(milliseconds: 500 * (1 << attempt)));
+            continue;
+          }
           rethrow;
         }
         if (response.statusCode == 200 || response.statusCode == 201) {
@@ -2033,7 +2043,11 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
       String token, AppSettings settings, Map<String, dynamic> payload) async {
     final scope=GenerationScope.current;
     scope?.credentials(token,settings);
-    final client = createProxyHttpClient(settings, scope: ProxyScope.nai);
+    final initialUri = Uri.parse(
+      '${_naiBase(settings.imageBaseUrl, 'https://image.novelai.net', settings)}/ai/generate-image',
+    );
+    final client = await createProxyHttpClientForUri(settings, initialUri, scope: ProxyScope.nai);
+    try { scope?.credentials(token, settings); } catch (_) { client.close(); rethrow; }
     _activeGenerationClients.add(client);
     final detach=scope?.attach((){_activeGenerationClients.remove(client);client.close();});
     bool cancelled() => !_activeGenerationClients.contains(client);
@@ -2069,9 +2083,13 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
               ? retryAfter * 1000
               : 2000 * (1 << attempt);
           await Future.delayed(Duration(milliseconds: min(waitMs, 30000)));
-        } catch (_) {
+        } catch (error) {
           if (cancelled()) throw const GenerationCancelledException();
-        scope?.credentials(token,settings);
+          scope?.credentials(token, settings);
+          if (isPreSubmissionTlsDisconnect(error) && attempt < 2) {
+            await Future.delayed(Duration(milliseconds: 500 * (1 << attempt)));
+            continue;
+          }
           rethrow;
         }
       }

@@ -91,6 +91,12 @@
 .translation-preview-target .select-menu {min-width:220px;max-width:100%;}
 .translation-preview-columns {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;}
 .translation-preview-columns textarea {min-height:220px;max-height:48dvh;}
+/* Reserve status space in every state; long errors scroll instead of recentering the dialog. */
+.translation-preview-status {height:4.5em;min-height:4.5em;flex-shrink:0;overflow:auto;margin-top:12px;overflow-wrap:anywhere;}
+.translation-preview-status>p {margin:0;line-height:1.5;}
+.translation-preview-dialog footer {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}
+.translation-preview-dialog footer button {min-width:0;min-height:2.8em;white-space:normal;overflow-wrap:anywhere;}
+@media(max-width:620px){.translation-preview-dialog footer {grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:620px){.translation-preview-columns {grid-template-columns:minmax(0,1fr);}.translation-preview-columns textarea {min-height:120px;height:22dvh;}}
 
 /* Shared language bar: no fixed-width selects at large global text scales. */
