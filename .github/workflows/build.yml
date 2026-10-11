@@ -12,6 +12,9 @@ on:
         type: choice
         options: [core, breadth, flows, all]
         default: all
+      ios_only:
+        type: boolean
+        default: false
       android_only:
         type: boolean
         default: false
@@ -82,7 +85,7 @@ jobs:
           path: evidence/
           if-no-files-found: warn
   android:
-    if: inputs.mobile
+    if: inputs.mobile && !inputs.ios_only
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -155,10 +158,9 @@ jobs:
         run: |
           xcodebuild -version
           xcrun simctl list devices available -j > evidence/ios/simulator-inventory.json
-          DEVICE=$(cat evidence/ios/simulator-inventory.json | python3 -c 'import sys,json;d=json.load(sys.stdin);print(next(x["udid"] for v in d["devices"].values() for x in v if "iPhone" in x["name"]))')
-          echo "Simulator: $DEVICE"
-          xcrun simctl boot "$DEVICE"
-          xcrun simctl bootstatus "$DEVICE" -b
+          python3 controller/acceptance/prepare-ios.py app evidence/ios "$APP_SHA"
+          DEVICE=$(cat evidence/ios/device-id.txt)
+          echo "Prepared fresh simulator: $DEVICE"
           python3 controller/acceptance/run-mobile.py app evidence/ios "$APP_SHA" "$DEVICE" ios "${{ inputs.mobile_suite }}"
       - uses: actions/upload-artifact@v4
         if: always()
