@@ -86,7 +86,11 @@ Future<void> _activateNeutralAccount(AppState app,int port) async {
 
 // Native CI-only fresh simulator/emulator. Real plugin channels, storage and
 // socket transport; neutral fixtures, no production endpoint and no paid call.
-void result(String name,List<String> features) => print('NATIVE_MOBILE_CASE:${jsonEncode({'name':name,'features':features,'pass':true,'platform':Platform.isAndroid?'android':'ios','sourceSha':const String.fromEnvironment('ACCEPTANCE_SOURCE_SHA'),'paidCalls':0})}');
+final _nativeCases=<Map<String,dynamic>>[];
+void result(String name,List<String> features) {
+ final data={'name':name,'features':features,'pass':true,'platform':Platform.isAndroid?'android':'ios','sourceSha':const String.fromEnvironment('ACCEPTANCE_SOURCE_SHA'),'paidCalls':0};
+ _nativeCases.add(data);print('NATIVE_MOBILE_CASE:${jsonEncode(data)}');
+}
 HistoryItem row(String id,String file)=>HistoryItem(id:id,filePath:file,date:'2026-10-11',createdAt:'2026-10-11',seed:123,model:'fixture',width:32,height:32,prompt:'blue square');
 // Public CI-only certificate and key; no production credential.
 const _flowCertificate="-----BEGIN CERTIFICATE-----\nMIIDyDCCArCgAwIBAgIUV6d3zASDfxQiKD+/xBo4BmStYCUwDQYJKoZIhvcNAQEL\nBQAwKTEnMCUGA1UEAwweTmV1dHJhbCBOYXRpdmUgRmxvdyBDSSBGaXh0dXJlMB4X\nDTI2MTAxMTExMTgxNVoXDTM2MTAwODExMTgxNVowKTEnMCUGA1UEAwweTmV1dHJh\nbCBOYXRpdmUgRmxvdyBDSSBGaXh0dXJlMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A\nMIIBCgKCAQEAjBWha2q2xtYstuaFKi4ucanGQ5yZHMOvrVrzJh5hHLxenGdFZSmD\n4rrsu65pFvNV40AQOb3IqDIYPx9nJnpBsxgq+Jfu3LUrBL5a+61afUvPZuhOQd9+\njs/TjoIPTKzgjtbLZH1JqX9+gtZcOHX2EXpzMU3Xsfit5+tXPGCQZ20Cpq7qkaFl\nLRWAtyZc5GLB5gdBjpDThC3JHsV9+rWz60fN6M46zBCcKzxQiSwulP+7Pb5iIiP+\nHKOP7XlntjYB6Q74kcwQAI33/V/XY6378kFUJZbVoZybA+fOKn4bgaWy2uCtLHaO\nYabxxOOYlYYp8MC3vsN+UtVHZKp0sV13lwIDAQABo4HnMIHkMB0GA1UdDgQWBBRP\nR4B+80Fx8ObcqIfcms2iqoVTUjAfBgNVHSMEGDAWgBRPR4B+80Fx8ObcqIfcms2i\nqoVTUjCBkAYDVR0RBIGIMIGFghh0cmFuc2xhdGUuZ29vZ2xlYXBpcy5jb22CE2Zh\nbnlpLWFwaS5iYWlkdS5jb22CEmRhbmJvb3J1LmRvbm1haS51c4ITc2FmZWJvb3J1\nLmRvbm1haS51c4IKZ2l0aHViLmNvbYIOYXBpLmdpdGh1Yi5jb22CCWxvY2FsaG9z\ndIcEfwAAATAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQCKHRye\naXmVnaw0G2CkE1x+L8ZOa+B2ti3U7WpxjkWp1tT+c8NPdAXyMIDtJKSF0Sq7A27V\n5VA2NF84083ZAPLl3qOEoJ2eEq6Q2vgcRXBOjplRaE9nshLAIt6T6W0DRgsN5TiA\nxeRi6C7X7GkF434mNQACnCZeeMDeKrSQXThMvVZ4pWU7u5OTZpz0K7a2lOy2o3cn\nOBK9v/lP3smU83//i99N0bg40XZRGE3n3JfDqNfof+vJ0XwG5jO0Zxm1+pCZyPOu\ntHl+demEZX29uWxZIuKO9uoxnTb76AqKQ6xwJC4Wc2pvumKWVEgo+2P9VsT0X8Gv\nS8I+H9fNlkWxI5Cm\n-----END CERTIFICATE-----\n";
@@ -107,7 +111,8 @@ Future<HttpServer> _flowLoopback() async {
 }
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding=IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  binding.reportData={'cases':_nativeCases};
   late Storage storage;late AppState app;late Directory root;late File source,mask;
   final servers=<HttpServer>[];
   setUp(() async {

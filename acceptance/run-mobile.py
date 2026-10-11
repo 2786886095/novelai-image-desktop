@@ -7,7 +7,8 @@ elif suite=='core':command += ['--name','^(?!native breadth)']
 else:assert suite=='all'
 device_logs=None
 if platform=='ios':
- command += ['--verbose']
+ assert suite=='all', 'Attached iOS fixture executes every assertion, never filter cases'
+ command=[sys.executable,str(pathlib.Path(__file__).with_name('run-ios-attached.py')),str(root),str(out),sha,device]
  log=(out/'simulator-device.log').open('w')
  device_logs=subprocess.Popen(['xcrun','simctl','spawn',device,'log','stream','--style','compact','--level','debug','--predicate','process == "Runner" OR eventMessage CONTAINS[c] "Dart"'],stdout=log,stderr=subprocess.STDOUT)
 p=subprocess.Popen(command,cwd=root/'mobile',text=True,encoding='utf-8',errors='replace',stdout=subprocess.PIPE,stderr=subprocess.PIPE)
