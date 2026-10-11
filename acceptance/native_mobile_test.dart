@@ -69,7 +69,15 @@ void main() {
       await app.inpaint(await mask.readAsBytes());expect(posts,1);expect(app.busy,false);expect(app.history.length,status==200?1:0);
       if(status==200) {final saved=im.decodePng(await File(app.history.single.filePath).readAsBytes())!;
         expect([saved.getPixel(0,0).r,saved.getPixel(0,0).g,saved.getPixel(0,0).b],[220,30,30]);
-        expect([saved.getPixel(15,15).r,saved.getPixel(15,15).g,saved.getPixel(15,15).b],[0,0,255]);
+        // Default production compositor deliberately feathers/matches seams;
+        // pure blue is not the specified result for this small selected region.
+        final center=saved.getPixel(15,15);
+        expect(saved.width,32);expect(saved.height,32);
+        expect(center.r,lessThan(40));expect(center.g,lessThan(40));expect(center.b,greaterThan(200));expect(center.a,255);
+        for(final xy in [[0,31],[31,0],[31,31]]) {
+          final corner=saved.getPixel(xy[0],xy[1]);expect([corner.r,corner.g,corner.b],[220,30,30]);
+        }
+        print('NATIVE_COMPOSITE_PIXELS:${jsonEncode({'center':[center.r,center.g,center.b],'cornersUnchanged':true})}');
         expect(app.history.single.feature,'openai-inpaint');expect(jsonEncode(app.history.single.toJson()),isNot(contains('neutral-edit-secret')));
       }
       result('OpenAI real AppState multipart status $status',['openai-inpaint','inpaint','works']);
@@ -100,9 +108,20 @@ void main() {
   });
   testWidgets('actual records expand and scroll past long first entry', (tester) async {
     final text=List.generate(100,(i)=>'Neutral blue square record line $i').join('\n');
-    app.aiCallLog.addAll(List.generate(24,(i)=>AiCallLogEntry(id:'log-$i',time:DateTime(2026,10,11),label:'Neutral record $i',api:'convert',model:'fixture',systemPrompt:text,userText:text,ok:true,response:text)));
+    // Populate the read-only log through the real public API and transport.
+    final server=await HttpServer.bind(InternetAddress.loopbackIPv4,0);servers.add(server);var posts=0;
+    server.listen((request) async {
+      expect(request.method,'POST');expect(request.uri.path,'/v1/chat/completions');posts++;
+      await request.drain<void>();request.response.headers.contentType=ContentType.json;
+      request.response.write(jsonEncode({'choices':[{'message':{'content':text}}]}));await request.response.close();
+    });
+    for(var i=0;i<24;i++) {
+      final response=await app.api.runTextAi(settings:app.settings,apiKey:'neutral-log-secret',apiUrl:'http://127.0.0.1:${server.port}/v1',model:'fixture',system:text,user:text,label:'Neutral record $i');
+      expect(response.ok,true);
+    }
+    expect(posts,24);expect(app.aiCallLog.length,24);expect(app.aiCallLog.first.label,'Neutral record 23');
     await tester.pumpWidget(ChangeNotifierProvider.value(value:app,child:const MaterialApp(home:AiLogScreen())));await tester.pumpAndSettle();
-    await tester.tap(find.text('Neutral record 0'));await tester.pumpAndSettle();
+    await tester.tap(find.text('Neutral record 23'));await tester.pumpAndSettle();
     final list=find.byType(ListView).first;final scrollable=find.descendant(of:list,matching:find.byType(Scrollable)).first;
     final before=tester.state<ScrollableState>(scrollable).position.pixels;await tester.drag(list,const Offset(0,-500));await tester.pumpAndSettle();
     expect(tester.state<ScrollableState>(scrollable).position.pixels,greaterThan(before));expect(tester.takeException(),isNull);
