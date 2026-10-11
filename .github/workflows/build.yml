@@ -11,6 +11,10 @@ on:
       linux_only:
         type: boolean
         default: false
+      suite:
+        type: choice
+        options: [core, storage]
+        default: core
 permissions:
   contents: read
 env:
@@ -49,11 +53,11 @@ jobs:
           sudo chmod 4755 app/node_modules/electron/dist/chrome-sandbox
       - name: Execute actual desktop backends and isolated renderer on Linux
         if: runner.os == 'Linux'
-        run: xvfb-run -a node controller/acceptance/run-desktop.cjs app evidence/${{ matrix.platform }} "$APP_SHA"
+        run: xvfb-run -a node controller/acceptance/run-desktop.cjs app evidence/${{ matrix.platform }} "$APP_SHA" "${{ inputs.suite }}"
       - name: Execute actual desktop backends and isolated renderer
         if: runner.os != 'Linux'
         shell: bash
-        run: node controller/acceptance/run-desktop.cjs app evidence/${{ matrix.platform }} "$APP_SHA"
+        run: node controller/acceptance/run-desktop.cjs app evidence/${{ matrix.platform }} "$APP_SHA" "${{ inputs.suite }}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -4,13 +4,15 @@ fs.mkdirSync(out,{recursive:true});
 const actual=cp.execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();assert.equal(actual,sha);
 const req=require('node:module').createRequire(path.join(root,'package.json')),electron=req('electron');
 const runs=[];
-for(const [name,fixture,args,features] of [
+const groups=[
  ['generation','windows-generation-acceptance.cjs',['MODIFIED'],['generation','effort']],
  ['image-actions','current-image-actions-probe.cjs',[sha],['image-to-image','enhance','inpaint','postprocess','openai-inpaint']],
  ['first-request','backend-fixture.cjs',[],['convert','reverse','metadata-import']],
  ['works','works-fixture.cjs',[],['works','works-batch-edit','missing-file-reconciliation']],
  ['records-ui','ui-probe.cjs',[],['ai-records','typography','works-batch-edit']],
-]) {
+ ['storage','desktop-storage.cjs',[sha],['settings','typography','negative-prompts','styles','reference-presets','precise-reference','vibe-transfer','favorites','metadata-import','tools']],
+];
+for(const [name,fixture,args,features] of groups.filter(x=>process.argv[5]==='storage'?x[0]==='storage':x[0]!=='storage')) {
  const report=path.join(out,name+'.json');const file=path.join(__dirname,fixture);
  const command=fixture==='ui-probe.cjs'?[process.execPath,file,root,report]:[electron,file,root,report,...args];
  const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL;
