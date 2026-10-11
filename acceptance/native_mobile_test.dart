@@ -14,12 +14,45 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image/image.dart' as im;
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/services/storage.dart';
+import 'package:novelai_mobile/services/novelai_accounts.dart';
+import 'package:novelai_mobile/services/novelai_account_api.dart';
 import 'package:novelai_mobile/services/unified_storage.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 import 'package:novelai_mobile/screens/gallery_screen.dart';
 import 'package:novelai_mobile/screens/ai_log_screen.dart';
 import 'package:novelai_mobile/screens/generate_screen.dart';
 import 'package:novelai_mobile/screens/tools_screen.dart';
+
+
+// Public neutral CI-only key pair. Trust exactly this fixture certificate;
+// never disable certificate validation or trust arbitrary upstream certificates.
+const _fixtureCertificate="-----BEGIN CERTIFICATE-----\nMIIDJTCCAg2gAwIBAgIUZlYnwnKijIzC0lJL+Titdq3aQ68wDQYJKoZIhvcNAQEL\nBQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MTAxMTA3MDkxN1oXDTM2MTAw\nODA3MDkxN1owFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF\nAAOCAQ8AMIIBCgKCAQEA0pOWXmu3chxv0GJCDz8gkQvqyhvOc7jCmLZAStO9lR2a\nN1ASFcY7juqSaI4BEIU+AyJ0VJk3giF62yuQgVXtJgp2RJovGQTB4F2ujo6zlWr8\n+7PGRN3x1p0oonSgLl3cQJ2ojc0K+YHoBr91Kry8GG1eC9zGZ+HB217WN/BJYIam\nCRdZAdJS4j94hMptIJw3YkC3qbyceDDwHdWvcgxFklEnr1QOF4tbALzuy6dJrZwv\nOwKJ0egLz9Ku9CdgHWtI5vNNtZrurIlAqr3O46otO+SyQhsW1UZhPnl9oAJP3XtK\nP7LsL+mMPqDbBpNJEHMVqcz1szb52ZV6NLe2Si9rzQIDAQABo28wbTAdBgNVHQ4E\nFgQU71aTGl/O2vXMH0JHMWHc4CwBD0QwHwYDVR0jBBgwFoAU71aTGl/O2vXMH0JH\nMWHc4CwBD0QwGgYDVR0RBBMwEYcEfwAAAYIJbG9jYWxob3N0MA8GA1UdEwEB/wQF\nMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAI5mZxesfvnU7djfo/2odnCgWNzNhv3m\n2D2furxj24QIp0xwHHcKoRYNXN9xV152EFimWwEnFh9NebgGCAHHCw12x3JPwKa2\nBLuX051GIBFjeCuMlAeU0v4fQRykIwktXr0XxlUU50urOwq2E5lsBvsGW543Rbb9\nam0x4liFl2o0jD4MU6AVrs0wWPnlrzT2eyavqcUPorbnGy66gFDsSroO+DZX9TF8\nKg1+nZcfSUrdRoAxUVDYBuY6wi7MyZeGYRU/SrPy+FbCNDosfzqe7xwOSR89YzLe\nRsMGuQpHdFkdUJW5avpbCvb7hR3+7eW/n0qe1LPc+EIe/WArUyXmX84=\n-----END CERTIFICATE-----\n";
+const _fixturePrivateKey="-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSk5Zea7dyHG/Q\nYkIPPyCRC+rKG85zuMKYtkBK072VHZo3UBIVxjuO6pJojgEQhT4DInRUmTeCIXrb\nK5CBVe0mCnZEmi8ZBMHgXa6OjrOVavz7s8ZE3fHWnSiidKAuXdxAnaiNzQr5gegG\nv3UqvLwYbV4L3MZn4cHbXtY38ElghqYJF1kB0lLiP3iEym0gnDdiQLepvJx4MPAd\n1a9yDEWSUSevVA4Xi1sAvO7Lp0mtnC87AonR6AvP0q70J2Ada0jm8021mu6siUCq\nvc7jqi075LJCGxbVRmE+eX2gAk/de0o/suwv6Yw+oNsGk0kQcxWpzPWzNvnZlXo0\nt7ZKL2vNAgMBAAECggEAAcJ4d8HSk5CvxLZeSXM6vsnyWuDoTn8m5yPjJFm7hGIh\nMaDVnQ3eEQsEqq/nGKyx9wPXPeuJQA97qWNMwfvsrz9YO8LTFAeXzCihDQsEIdwP\nqm9j5hu5sEd50ubpFyh/7u1L8e8A9LlOB4Jn98tO260ysD3JzacgczuwmOD4TmcF\nwBsBBJXT8qe9SfvpnLIrHDzLoIqGEBFpN1cVeMDneuV17aj4TfxvxXNSL5g/NT3Q\nY90LEecTOJ8Vdth/S5i0+OyMlGevcZUT+c+Wt6Atvox2Ylvolv3q3R3kcHYurP4m\ncjAZ2w4+/pzJApY6HNLperg7/Hbf9EnKDWA2RU6MmQKBgQD9VXmG3LCma8iyfS28\nI8ZHqPQR3742DzkR8RgMhJqI6xD3ctpSDAs0sL55iLaireLGeexNhCG4RGeu6kwZ\nk4NMcS+rrvysqb6bLEYTweDCQhR6VQ01IvcsoD44C1HBb18ycgjM9CLa1bED7uwm\n0+tH103kKG1HsFQZHBdrcmEhFQKBgQDUyuq6qR5W21iUMDugdZByX7WnYnnmJSc6\nZwgwgE4335VAzDe/Moly0SeNrbDSDoJCLTdcvzRIg63mMq7fMCGLRoSkXHVtMfh/\n6oMrnhWIdZFsnwQ6svvbM7JIPlFdnc0TUkgxn+dMM93/EpZISV+37kGwefRXnBCI\n9njdSW8d2QKBgQDvE/BppvKLTGMOl3ZG/NgOHtOf3rDq4bjxRr90aNxSZM0RSfHh\nxn34zugjWDNMGaBPwRaSHSWZee0DtRf2dzFNPfBILQ9Gf7djSAgmcy0DB0u+G3Ao\neoQcOGofiAcy70E/IUFO8wPF1C+HT77L8ek0Vmuq68AeDLmBLPKpMzuY9QKBgDhJ\n1P27bsMbErtgZuVzM9qNZsf4TLaMbWwNhSUPS6GMCzcwzi5Nd/5fRU88+uEV5W8L\n9vEZwwLLklyqW4e+e6ET7lJsAsP3y/xKVJhdIOUP9H//MGc2oVjCvA5QLcXN0Emk\nImS+H7kQn1Cx4f8NKbzF0aqVGAV0ywrv59jha/tBAoGATZIQL/PE5m+gOQ1R6RPu\niVGvn1a2CtK75qFnr7QdaMddak2CBoxO8msM4IWGKMjnMtzwM/Jdr919efh3XKs2\nxF0I95HznT0N87cyiB7qbyGpE7X4PyTxShGClrRUoSTm8WaofUwAEk6275ojNq2D\nR7CjaiWeW9S0uJgH8gxLyqg=\n-----END PRIVATE KEY-----\n";
+class _LoopbackTrust extends HttpOverrides {
+  @override HttpClient createHttpClient(SecurityContext? context) {
+    final fixtureOnly=SecurityContext(withTrustedRoots:false)..setTrustedCertificatesBytes(utf8.encode(_fixtureCertificate));
+    return super.createHttpClient(fixtureOnly);
+  }
+}
+Future<HttpServer> _tlsLoopback() async {
+  final context=SecurityContext()..useCertificateChainBytes(utf8.encode(_fixtureCertificate))..usePrivateKeyBytes(utf8.encode(_fixturePrivateKey));
+  HttpOverrides.global=_LoopbackTrust();
+  return HttpServer.bindSecure(InternetAddress.loopbackIPv4,0,context);
+}
+Future<bool> _serveAccountVerification(HttpRequest request) async {
+  if(request.method!='GET')return false;
+  expect(request.uri.path,'/user/data');expect(request.headers.value('authorization'),'Bearer neutral-nai-secret');
+  request.response.headers.contentType=ContentType.json;
+  request.response.write(jsonEncode({'subscription':{'tier':3,'active':true,'trainingStepsLeft':{'fixedTrainingStepsLeft':1000000,'purchasedTrainingSteps':0}}}));
+  await request.response.close();return true;
+}
+Future<void> _activateNeutralAccount(AppState app,int port) async {
+  final url='https://127.0.0.1:$port';
+  await app.addNaiAccount(label:'Neutral CI account',method:'relay',token:'neutral-nai-secret',apiBaseUrl:url,imageBaseUrl:url);
+  expect(app.naiAccounts.active!.profile.imageBaseUrl,url);
+  expect(await app.storage.getToken(),'neutral-nai-secret');
+  expect(jsonEncode((await app.storage.getSettings()).toJson()),isNot(contains('neutral-nai-secret')));
+}
 
 // Native CI-only fresh simulator/emulator. Real plugin channels, storage and
 // socket transport; neutral fixtures, no production endpoint and no paid call.
@@ -34,7 +67,7 @@ void main() {
     final prefs=await SharedPreferences.getInstance();await prefs.clear();
     await const FlutterSecureStorage().deleteAll();
     root=await Directory((await getTemporaryDirectory()).path).createTemp('native-acceptance-');
-    storage=Storage();app=AppState(storage:storage,preloadCompletedImage:(_) async {})..settings=AppSettings(proxyMode:'direct',saveToGallery:false);
+    final accounts=NovelAiAccounts();storage=NovelAiAccountStorage(accounts);await (storage as NovelAiAccountStorage).ready();app=AppState(api:NovelAiAccountApi(accounts),storage:storage,preloadCompletedImage:(_) async {})..settings=AppSettings(proxyMode:'direct',saveToGallery:false);
     await storage.setSettings(app.settings);await storage.writeHistory([]);await storage.writeGroups([]);
     final image=im.Image(width:32,height:32,numChannels:4);im.fill(image,color:im.ColorRgba8(220,30,30,255));
     image.textData={'Comment':jsonEncode({'prompt':'blue square','seed':123})};
@@ -148,11 +181,12 @@ void main() {
   for(final scenario in ['high','medium','503','401']) {
     testWidgets('native NovelAI generation $scenario', (tester) async {
       await tester.pumpWidget(const MaterialApp(home:Scaffold(body:Text('Neutral native generation'))));
-      var posts=0;final server=await HttpServer.bind(InternetAddress.loopbackIPv4,0);servers.add(server);
+      var posts=0;final server=await _tlsLoopback();servers.add(server);
       final status=int.tryParse(scenario)??200;Map<String,dynamic>? requestBody;
       final generated=im.Image(width:64,height:64);im.fill(generated,color:im.ColorRgb8(0,0,255));
       final png=im.encodePng(generated),zip=ZipEncoder().encode(Archive()..addFile(ArchiveFile('image.png',png.length,png)))!;
       server.listen((request) async {
+        if(await _serveAccountVerification(request))return;
         posts++;expect(request.uri.path,'/ai/generate-image');expect(request.method,'POST');
         expect(request.headers.value('authorization'),'Bearer neutral-nai-secret');
         requestBody=jsonDecode(await utf8.decoder.bind(request).join()) as Map<String,dynamic>;
@@ -161,7 +195,7 @@ void main() {
         else{request.response.write('fixture HTTP $status');}
         await request.response.close();
       });
-      app.settings.imageBaseUrl='http://127.0.0.1:${server.port}';app.settings.streamPreviewEnabled=false;
+      await _activateNeutralAccount(app,server.port);app.settings.streamPreviewEnabled=false;
       final params=GenerateParams(positivePrompt:'blue square',width:64,height:64,seed:4000000000,seedMode:'fixed',effort:scenario=='medium'?'medium':'high');
       var succeeded=false;
       try {
@@ -173,23 +207,24 @@ void main() {
       expect(succeeded,status==200);expect(posts,1);expect(requestBody!['model'],scenario=='medium'?'nai-diffusion-5-full-medium':'nai-diffusion-5-full');
       expect((requestBody!['parameters'] as Map)['seed'],4000000000);expect((requestBody!['parameters'] as Map)['n_samples'],1);
       if(status!=200)expect(await storage.getHistory(),isEmpty);
-      result('Native NovelAI generation $scenario',['generation','effort','output-management','works']);
+      result('Native NovelAI generation $scenario',['generation','effort','output-management','works','accounts']);
     });
   }
   for(final action in ['img2img','inpaint','colorize','upscale']) {
     testWidgets('native image action $action', (tester) async {
       await tester.pumpWidget(const MaterialApp(home:Scaffold(body:Text('Neutral native image action'))));
-      var posts=0;final server=await HttpServer.bind(InternetAddress.loopbackIPv4,0);servers.add(server);
+      var posts=0;final server=await _tlsLoopback();servers.add(server);
       Map<String,dynamic>? requestBody;
       final generated=im.Image(width:64,height:64);im.fill(generated,color:im.ColorRgb8(0,0,255));
       final png=im.encodePng(generated),zip=ZipEncoder().encode(Archive()..addFile(ArchiveFile('image.png',png.length,png)))!;
       server.listen((request) async {
+        if(await _serveAccountVerification(request))return;
         posts++;expect(request.method,'POST');expect(request.headers.value('authorization'),'Bearer neutral-nai-secret');
         expect(request.uri.path,action=='colorize'?'/ai/augment-image':action=='upscale'?'/ai/upscale':'/ai/generate-image');
         requestBody=jsonDecode(await utf8.decoder.bind(request).join()) as Map<String,dynamic>;
         request.response.headers.set('content-type','application/zip');request.response.add(zip);await request.response.close();
       });
-      app.settings.imageBaseUrl='http://127.0.0.1:${server.port}';app.settings.streamPreviewEnabled=false;
+      await _activateNeutralAccount(app,server.port);app.settings.streamPreviewEnabled=false;
       final params=GenerateParams(positivePrompt:'blue square',width:64,height:64,seed:123,seedMode:'fixed'),input=await source.readAsBytes();
       late Uint8List output;
       if(action=='img2img'){
