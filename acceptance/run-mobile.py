@@ -1,6 +1,9 @@
 import subprocess,sys,pathlib,json,re,hashlib
-root=pathlib.Path(sys.argv[1]).resolve();out=pathlib.Path(sys.argv[2]).resolve();out.mkdir(parents=True,exist_ok=True);sha=sys.argv[3];device=sys.argv[4];platform=sys.argv[5]
+root=pathlib.Path(sys.argv[1]).resolve();out=pathlib.Path(sys.argv[2]).resolve();out.mkdir(parents=True,exist_ok=True);sha=sys.argv[3];device=sys.argv[4];platform=sys.argv[5];suite=sys.argv[6] if len(sys.argv)>6 else 'core'
 command=['flutter','test','integration_test/native_acceptance_test.dart','-d',device,'--dart-define=ACCEPTANCE_SOURCE_SHA='+sha,'--reporter=expanded']
+if suite=='breadth':command += ['--plain-name','native breadth']
+elif suite=='core':command += ['--name','^(?!native breadth)']
+else:assert suite=='all'
 p=subprocess.run(command,cwd=root/'mobile',text=True,encoding='utf-8',errors='replace',stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 (out/'stdout.log').write_text(p.stdout);(out/'stderr.log').write_text(p.stderr);print(p.stdout);print(p.stderr,file=sys.stderr)
 cases=[]
@@ -16,6 +19,9 @@ expected |= {'Native image action '+x for x in ['img2img','inpaint','colorize','
 expected |= {'Native cold '+k+' '+str(s) for k in ['convert','reverse'] for s in [200,401]}
 expected |= {'Native WebP '+n for n in ['lossy', 'lossless', 'alpha', 'animated', 'novelai-exif-v5', 'novelai-exif-v5-be']}
 expected.add('Native clipboard text roundtrip')
+breadth=set(['Native negative library cold CRUD and exact export', 'Native negative preview search and explicit append', 'Native named characters positive/style cold persistence', 'Native precise reference archive/apply/delete', 'Native vibe reference archive/apply/delete', 'Native favorites actual copy dedup rename and removal', 'Native font import engine readback and 200 percent persistence', 'Native backup archive restore rescue and idempotency', 'Native corrupt backup rejects without state mutation', 'Native comic batch agent state cold recovery'])
+if suite=="breadth":expected=breadth
+elif suite=="all":expected |= breadth
 pass_=p.returncode==0 and len(cases)==len(expected) and {c['name'] for c in cases}==expected and all(c['pass'] and c['platform']==platform and c['sourceSha']==sha for c in cases)
-(out/'execution.json').write_text(json.dumps({'schema':1,'sourceSha':sha,'platform':platform,'device':device,'kind':'device','command':command,'stdout':p.stdout,'stderr':p.stderr,'exitStatus':p.returncode,'cases':cases,'pass':pass_,'paidCalls':0,'applicationLibUnmodified':True,'full39FeatureAcceptance':False},indent=2))
+(out/'execution.json').write_text(json.dumps({'schema':1,'sourceSha':sha,'platform':platform,'device':device,'kind':'device','command':command,'stdout':p.stdout,'stderr':p.stderr,'exitStatus':p.returncode,'cases':cases,'pass':pass_,'paidCalls':0,'applicationLibUnmodified':True,'full39FeatureAcceptance':False,'suite':suite,'expectedCaseCount':len(expected)},indent=2))
 sys.exit(0 if pass_ else 1)

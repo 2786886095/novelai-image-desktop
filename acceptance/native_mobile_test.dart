@@ -1,6 +1,17 @@
 // ignore_for_file: avoid_print
 import 'dart:convert';
 import 'dart:io';
+import 'package:novelai_mobile/prompts/negative_prompt_library.dart';
+import 'package:novelai_mobile/ui/negative_prompt_library.dart';
+import 'package:novelai_mobile/references/reference_presets.dart';
+import 'package:novelai_mobile/services/local_favorites.dart';
+import 'package:novelai_mobile/services/ui_fonts.dart';
+import 'package:novelai_mobile/models/ui_typography.dart';
+import 'package:novelai_mobile/services/data_backup_service.dart';
+import 'package:novelai_mobile/agent/agent_models.dart';
+import 'package:novelai_mobile/comic/comic_models.dart';
+import 'package:novelai_mobile/batch/batch_redraw_models.dart';
+
 import 'package:archive/archive.dart';
 import 'package:flutter/services.dart';
 import 'package:novelai_mobile/images/image_processing.dart';
@@ -301,5 +312,89 @@ void main() {
     await Clipboard.setData(const ClipboardData(text:'neutral-native-clipboard-fixture'));
     expect((await Clipboard.getData(Clipboard.kTextPlain))!.text,'neutral-native-clipboard-fixture');
     result('Native clipboard text roundtrip',['clipboard']);
+  });
+
+  testWidgets('native breadth negative library cold writes and exact archive', (tester) async {
+    expect(app.settings.negativePromptPresets,negativeBuiltins);
+    await Future.wait([
+      app.mutateNegativePresets((old)=>old.map((p)=>p['id']==negativeBuiltins.first['id']?{...p,'name':'Neutral renamed'}:p).toList()),
+      app.mutateNegativePresets((old)=>[...old,{'id':'neutral','name':'Neutral custom','prompt':'bad geometry','createdAt':'2026-10-11'}])
+    ]);
+    final cold=await Storage().getSettings();expect(cold.negativePromptPresets.length,3);expect(cold.negativePromptPresets.first['name'],'Neutral renamed');
+    expect(parseNegativeLibrary(exportNegativeLibrary(cold.negativePromptPresets)),cold.negativePromptPresets);
+    expect(()=>parseNegativeLibrary('{}'),throwsFormatException);
+    await app.mutateNegativePresets((_)=>[]);expect((await Storage().getSettings()).negativePromptPresets,isEmpty);
+    result('Native negative library cold CRUD and exact export',['negative-prompts','settings']);
+  });
+  testWidgets('native breadth negative preview search and append', (tester) async {
+    app.settings.language='zh-CN';app.params.positivePrompt='keep-neutral-positive';String value='original';
+    await tester.pumpWidget(ChangeNotifierProvider.value(value:app,child:MaterialApp(home:Scaffold(body:NegativePromptLibraryButton(value:value,onApply:(prompt,mode)=>value=applyNegativePreset(value,prompt,mode))))));
+    await tester.tap(find.byTooltip('负面提示词库'));await tester.pumpAndSettle();expect(value,'original');expect(find.text('强化版'),findsWidgets);
+    await tester.enterText(find.byType(TextField).first,'轻量版');await tester.pumpAndSettle();final tile=find.widgetWithText(ListTile,'轻量版');await tester.ensureVisible(tile);await tester.tap(find.descendant(of:tile,matching:find.text('轻量版')));await tester.pumpAndSettle();
+    final append=find.text('追加');await tester.ensureVisible(append);await tester.tap(append);await tester.pumpAndSettle();expect(value,'original, ${negativeBuiltins[1]['prompt']}');expect(app.params.positivePrompt,'keep-neutral-positive');expect(tester.takeException(),isNull);
+    result('Native negative preview search and explicit append',['negative-prompts','navigation']);
+  });
+  testWidgets('native breadth named characters and positive style persistence', (tester) async {
+    final character=CharCaptionItem(name:'Neutral character',prompt:' blue coat ',negativePrompt:'red coat',x:0,y:1,useCoords:true);
+    await storage.setCharacterPrompts([character]);expect((await Storage().getCharacterPrompts()).single.toJson(),character.toJson());
+    app.settings.positivePromptPresets=[PositivePromptPreset(id:'positive',name:'Neutral positive',prompt:' blue square ',createdAt:'now',captions:[character])];
+    app.settings.stylePromptPresets=[StylePromptPreset(id:'style',name:'Neutral style',prompt:' graphic ',group:'Neutral',createdAt:'now')];
+    await storage.setSettings(app.settings);await app.renameStylePromptPreset('style',' Renamed style ');
+    final cold=await Storage().getSettings();expect(cold.positivePromptPresets.single.prompt,' blue square ');expect(cold.positivePromptPresets.single.captions.single.name,'Neutral character');expect(cold.stylePromptPresets.single.name,'Renamed style');expect(cold.stylePromptPresets.single.prompt,' graphic ');
+    await storage.setCharacterPrompts([]);expect(await Storage().getCharacterPrompts(),isEmpty);await app.removeStylePromptPreset('style');expect((await Storage().getSettings()).stylePromptPresets,isEmpty);
+    result('Native named characters positive/style cold persistence',['characters','styles','settings']);
+  });
+  for(final kind in [ReferencePresetKind.precise,ReferencePresetKind.vibe]) {
+    testWidgets('native breadth reference ${kind.name} file lifecycle', (tester) async {
+      final bytes=await source.readAsBytes();expect(await app.saveReferencePresetFromPath(source.path,kind:kind,name:'Neutral reference',group:'Neutral',strength:.7),isNull);
+      final cold=await Storage().getReferencePresetLibrary();expect(cold.presets.length,1);final preset=cold.presets.single;expect(preset.kind,kind);expect(await File(preset.filePath).readAsBytes(),bytes);expect(preset.filePath,isNot(source.path));
+      expect(await app.applyReferencePreset(preset.id),isNull);
+      if(kind==ReferencePresetKind.vibe){expect(base64Decode(app.extras.vibeImages.single.base64),bytes);}else{expect(base64Decode(app.extras.preciseReferences.single.base64),bytes);}
+      final archive=await storage.exportReferencePresetArchive(presets:[preset],groups:['Neutral']);final imported=await storage.importReferencePresetArchive(archive.path);expect(imported.presets.single.kind,kind);expect(await File(imported.presets.single.filePath).readAsBytes(),bytes);
+      await app.deleteReferencePreset(preset.id);expect(await File(preset.filePath).exists(),false);expect(await source.readAsBytes(),bytes);await storage.deleteReferencePresetImage(imported.presets.single);await archive.delete();
+      result('Native ${kind.name} reference archive/apply/delete',['reference-presets',kind==ReferencePresetKind.vibe?'vibe-transfer':'precise-reference']);
+    });
+  }
+  testWidgets('native breadth favorites copy dedup rename and bookmark removal', (tester) async {
+    final favorites=MobileLocalFavorites(rootOverride:root);addTearDown(favorites.dispose);final bytes=await source.readAsBytes(),item=await favorites.add(row('favorite-neutral',source.path));
+    expect(await (await favorites.file(item)).readAsBytes(),bytes);expect((await favorites.add(row('favorite-neutral',source.path))).id,item.id);
+    final cold=MobileLocalFavorites(rootOverride:root);addTearDown(cold.dispose);expect((await cold.list()).items.length,1);
+    final renamed=await favorites.rename(item.id,'Neutral');await expectLater(favorites.rename(item.id,'../outside'),throwsFormatException);await favorites.remove(item.id);
+    expect((await favorites.list()).items,isEmpty);expect(await (await favorites.file(renamed)).readAsBytes(),bytes);expect(await source.readAsBytes(),bytes);
+    result('Native favorites actual copy dedup rename and removal',['favorites','output-management']);
+  });
+  testWidgets('native breadth actual imported font engine and cold scale settings', (tester) async {
+    final bytes=(await rootBundle.load('assets/ui-fonts/SmileySans-Oblique.ttf')).buffer.asUint8List();final input=File('${root.path}/neutral.ttf');await input.writeAsBytes(bytes);
+    final repo=UiFontRepository(Directory('${root.path}/fonts'));final font=await repo.importFile(input.path);expect(uiFontLoaded(font.id),true);expect(await repo.read(font.id),bytes);expect((await repo.importFile(input.path)).id,font.id);
+    await app.setUiTypography(UiTypography(font:font.id,scale:200));final cold=await Storage().getSettings();expect(cold.uiTypography.font,font.id);expect(cold.uiTypography.scale,200);expect(uiFontFamily(font.id),'Studio-${font.id}');
+    final invalid=File('${root.path}/invalid.ttf');await invalid.writeAsBytes([0,1,2]);await expectLater(repo.importFile(invalid.path),throwsFormatException);expect((await repo.list()).length,1);
+    await app.setUiTypography(const UiTypography());await repo.remove(font.id);expect(await repo.list(),isEmpty);expect(await input.readAsBytes(),bytes);
+    result('Native font import engine readback and 200 percent persistence',['typography','settings']);
+  });
+  testWidgets('native breadth backup configuration prompt agent rescue and idempotency', (tester) async {
+    app.settings.backupDir='${root.path}/backups';app.settings.language='en-US';app.settings.positivePromptPresets=[PositivePromptPreset(id:'backup-neutral',name:'Neutral backup',prompt:'blue square',createdAt:'now')];
+    await storage.setSettings(app.settings);await storage.setParams(GenerateParams(seed:4000000000,seedMode:'fixed'));
+    await storage.setAgentWorkspace(AgentWorkspace(conversations:[AgentConversation(id:'neutral-conversation',title:'Neutral conversation',draftText:'blue square')]));
+    final selected={DataBackupCategory.configuration,DataBackupCategory.promptPresets,DataBackupCategory.agentWorkspace};final service=DataBackupService(storage);final archive=await service.createBackup(selected,includeAssets:true,internal:true);
+    final inspection=await service.inspect(archive.path);expect(inspection.categories.map((c)=>c.category),containsAll(selected));
+    await storage.setParams(GenerateParams(seed:42,seedMode:'fixed'));await storage.setAgentWorkspace(AgentWorkspace());app.settings.positivePromptPresets=[];await storage.setSettings(app.settings);
+    await expectLater(service.importBackup(archive.path,selected,confirmConfigurationOverwrite:false),throwsStateError);expect((await storage.getParams()).seed,42);
+    final first=await service.importBackup(archive.path,selected,confirmConfigurationOverwrite:true);expect(first.imported,greaterThan(0));expect(await File(first.rescueBackupPath).exists(),true);
+    expect((await Storage().getParams()).seed,4000000000);expect((await Storage().getSettings()).positivePromptPresets.single.prompt,'blue square');expect((await Storage().getAgentWorkspace()).conversations.single.draftText,'blue square');
+    await service.importBackup(archive.path,selected,confirmConfigurationOverwrite:true);expect((await Storage().getAgentWorkspace()).conversations.length,1);expect((await Storage().getSettings()).positivePromptPresets.length,1);
+    result('Native backup archive restore rescue and idempotency',['backup','settings','image-agent','agent-components']);
+  });
+  testWidgets('native breadth corrupted backup leaves native state unchanged', (tester) async {
+    final settings=(await storage.getSettings()).toJson(),params=(await storage.getParams()).toJson();final corrupt=File('${root.path}/corrupt.naisbackup');await corrupt.writeAsBytes([1,2,3]);
+    await expectLater(DataBackupService(storage).importBackup(corrupt.path,{DataBackupCategory.configuration},confirmConfigurationOverwrite:true),throwsA(isA<Exception>()));
+    expect((await Storage().getSettings()).toJson(),settings);expect((await Storage().getParams()).toJson(),params);
+    result('Native corrupt backup rejects without state mutation',['backup','settings']);
+  });
+  testWidgets('native breadth comic batch and agent workspace native cold recovery', (tester) async {
+    final params=GenerateParams(seed:4000000000,seedMode:'fixed'),comic=ComicProject.empty(GenerateParams(seed:4000000000,seedMode:'fixed')),batch=BatchRedrawProject.empty(GenerateParams(seed:4000000000,seedMode:'fixed'));
+    await storage.setComicProject(comic);await storage.setBatchRedrawProject(batch);await storage.setComicRun({'status':'paused','neutral':true});await storage.setBatchRun({'status':'paused','neutral':true});
+    final cold=Storage();expect((await cold.getComicProject(params)).toJson(),comic.toJson());expect((await cold.getBatchRedrawProject(params)).toJson(),batch.toJson());expect(await cold.getComicRun(),{'status':'paused','neutral':true});expect(await cold.getBatchRun(),{'status':'paused','neutral':true});
+    await storage.setAgentAlwaysAllowedTools({'read_image'});expect(await cold.getAgentAlwaysAllowedTools(),{'read_image'});
+    result('Native comic batch agent state cold recovery',['comic','batch','agent-components','image-agent']);
   });
 }
