@@ -48,7 +48,9 @@ breadth.add('Native backup distinct characters repeat-import identity')
 if suite=="breadth":expected=breadth
 elif suite=="all":expected |= breadth
 flows={'Native translation '+s for s in ['200','401','empty']} | {'Native gallery '+s for s in ['200','retry','timeout']} | {'Native update '+s for s in ['manifest','fallback','unavailable']} | {'Native durable generation '+s for s in ['batch','batch-cancel','comic-503','artist-promote']}
-flows.add('Native phone all15 navigation')
+flows |= {'Native phone all15 navigation reduced='+str(x).lower() for x in [False,True]}
+flows.add('Native routed TLS validated and unknown host blocked')
+flows |= {'Native AppState enhance '+x for x in ['normal','medium-max','503']}
 if suite=='flows':expected=flows
 elif suite=='all':expected |= flows
 pass_=p.returncode==0 and len(cases)==len(expected) and {c['name'] for c in cases}==expected and all(c['pass'] and c['platform']==platform and c['sourceSha']==sha for c in cases)

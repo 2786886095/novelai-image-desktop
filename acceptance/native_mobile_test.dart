@@ -48,9 +48,18 @@ import 'package:novelai_mobile/screens/tools_screen.dart';
 const _fixtureCertificate="-----BEGIN CERTIFICATE-----\nMIIDUjCCAjqgAwIBAgIUYdnJXFnZlJkLPm0djWBqlBzgg+YwDQYJKoZIhvcNAQEL\nBQAwHTEbMBkGA1UEAwwSTmV1dHJhbCBDSSBSb290IENBMB4XDTI2MTAxMTA3MjYz\nNFoXDTI3MTAxMTA3MjYzNFowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkq\nhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAp2jCGmt4OG1MoyoRZ1rpoE/waMnA7nze\notnpCC+EA7oaLbjmT8GdX5QgcaEMrquJN5y/vaAmflvzMiKKtqd0h+AZs4TvzQKG\nkiBu/NbBBf3n2p1qewpB/lvaeUUvnezT/TjWxahaic2LXHiOY+WhV59oO111+Cc2\n8FSzLHn/ZUOQ+nNZtI6E1s40t9tpq/6EVQmJfvtb7BIgnMlyDZfsLQ82Gs8HZAxU\nUwLdZwQZ9isySJnylTUrtuFElfRh6O/TmD8dpVmpzbiiLMTlilUe50TR2qgKFYSK\nedBRtks6d24JFBijya/STPLjSWvp4P6nvuNxOOgD/ohDdmsWJx1h9QIDAQABo4GS\nMIGPMAwGA1UdEwEB/wQCMAAwDgYDVR0PAQH/BAQDAgWgMBMGA1UdJQQMMAoGCCsG\nAQUFBwMBMBoGA1UdEQQTMBGHBH8AAAGCCWxvY2FsaG9zdDAdBgNVHQ4EFgQUQyS8\nIEYkBSeTAhO/XUGNGd8Np/MwHwYDVR0jBBgwFoAUr0lAYXmZ+xnFcYSKQd42keRG\nH/swDQYJKoZIhvcNAQELBQADggEBAC51zZvrINl4zsFPuX0AAKMi3Ze5VCX6fYVh\nUmRdMzleI/mtB39u5k89mBJWxKa45ZP2E69wm0tTI4X20dcCNMgvEEB+6d15HhlU\n/KeSrM4ciSzyBy5ZJ+sxibR15ubtMySmtlnEuomsrdxiM2KfhYHW4fp8ptSeRE0g\nl4zLoPzqXYXScJ5kgFhwdwYV2Ms8pIKysOmQ8VFRpr1TusaT6ByhD/pG4ylsC4Tu\ncPgbTjs2/TimirBnw1ZEaj+nD90OuLuH21CJhuRy88TdY3c7FQn1C5MMDDU4mj+Q\nNO4hhCJxpk+mom5mhu1in0mZEQctJHJ4u4P88UmL+edyQrUgpl8=\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nMIIDLjCCAhagAwIBAgIUWgLilRtsr+PY4AiW2JzYYefXjDswDQYJKoZIhvcNAQEL\nBQAwHTEbMBkGA1UEAwwSTmV1dHJhbCBDSSBSb290IENBMB4XDTI2MTAxMTA3MjYz\nNFoXDTM2MTAwODA3MjYzNFowHTEbMBkGA1UEAwwSTmV1dHJhbCBDSSBSb290IENB\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7ugFhDN4nfWOt1urNBt6\nE3cPSioTCiN9qNBGeO08bptlRCWgbSHEWNE2PZz3lJakSpFh8GV1/ADlXYQ4bOLE\nltVx6gtx/vgQ0OslJR6g25zNj64EOjDYfLXStfrAiUbKIvw/xgsJhp33phLZgrSI\nzrQd1OIBASkDAQgvM7CgXdKb5goupi44ctugpp0xcNW061nXlgWmkSY/+jr9KGHL\nDUAo4UYvV8as76q9/WGxoNDJcdJwT6Lfwt90cKh392bTCFqitnweinr59YxzpAIl\nL+h3s+qo/RNfZGwKfYno95HtI72Ff/yt1MDjs6OX+mMpeHD7VH9QyrSGBzcPZ639\n+QIDAQABo2YwZDAdBgNVHQ4EFgQUr0lAYXmZ+xnFcYSKQd42keRGH/swHwYDVR0j\nBBgwFoAUr0lAYXmZ+xnFcYSKQd42keRGH/swEgYDVR0TAQH/BAgwBgEB/wIBADAO\nBgNVHQ8BAf8EBAMCAQYwDQYJKoZIhvcNAQELBQADggEBADkxzBsh1os6SQ1Qp9+2\n7EJA5nfJliIlwtsckLeKdFHpyvhDn+z/PspgdJi6adzYLaWBQ9nukt9FAQLUvRpM\n9FdFT/GQu1OKMpEUy7rZX/ry03gyNLrLtAdCdrUUs/tADplzlAtGWGrZ6itnw9Se\nVepJZyUpOHCeyXE8NYy/D75i1qh8sA+YXipUMZ042G9ExgWZvhk98HWd/CP4FBbS\npHLAXjccb+jmri9sCBuSZiYTI0cTFIbnaO58mokI2LHemesN3nN+d1Cef62xzpok\nwYa6Fs1J7QUvdK7Dlsnd+GFx9zO0SoL4Qa1nrQsV82m9lH8QeFxT8H25ej/TYFoj\nq0U=\n-----END CERTIFICATE-----\n";
 const _fixtureCa="-----BEGIN CERTIFICATE-----\nMIIDLjCCAhagAwIBAgIUWgLilRtsr+PY4AiW2JzYYefXjDswDQYJKoZIhvcNAQEL\nBQAwHTEbMBkGA1UEAwwSTmV1dHJhbCBDSSBSb290IENBMB4XDTI2MTAxMTA3MjYz\nNFoXDTM2MTAwODA3MjYzNFowHTEbMBkGA1UEAwwSTmV1dHJhbCBDSSBSb290IENB\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7ugFhDN4nfWOt1urNBt6\nE3cPSioTCiN9qNBGeO08bptlRCWgbSHEWNE2PZz3lJakSpFh8GV1/ADlXYQ4bOLE\nltVx6gtx/vgQ0OslJR6g25zNj64EOjDYfLXStfrAiUbKIvw/xgsJhp33phLZgrSI\nzrQd1OIBASkDAQgvM7CgXdKb5goupi44ctugpp0xcNW061nXlgWmkSY/+jr9KGHL\nDUAo4UYvV8as76q9/WGxoNDJcdJwT6Lfwt90cKh392bTCFqitnweinr59YxzpAIl\nL+h3s+qo/RNfZGwKfYno95HtI72Ff/yt1MDjs6OX+mMpeHD7VH9QyrSGBzcPZ639\n+QIDAQABo2YwZDAdBgNVHQ4EFgQUr0lAYXmZ+xnFcYSKQd42keRGH/swHwYDVR0j\nBBgwFoAUr0lAYXmZ+xnFcYSKQd42keRGH/swEgYDVR0TAQH/BAgwBgEB/wIBADAO\nBgNVHQ8BAf8EBAMCAQYwDQYJKoZIhvcNAQELBQADggEBADkxzBsh1os6SQ1Qp9+2\n7EJA5nfJliIlwtsckLeKdFHpyvhDn+z/PspgdJi6adzYLaWBQ9nukt9FAQLUvRpM\n9FdFT/GQu1OKMpEUy7rZX/ry03gyNLrLtAdCdrUUs/tADplzlAtGWGrZ6itnw9Se\nVepJZyUpOHCeyXE8NYy/D75i1qh8sA+YXipUMZ042G9ExgWZvhk98HWd/CP4FBbS\npHLAXjccb+jmri9sCBuSZiYTI0cTFIbnaO58mokI2LHemesN3nN+d1Cef62xzpok\nwYa6Fs1J7QUvdK7Dlsnd+GFx9zO0SoL4Qa1nrQsV82m9lH8QeFxT8H25ej/TYFoj\nq0U=\n-----END CERTIFICATE-----\n";
 const _fixturePrivateKey="-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCnaMIaa3g4bUyj\nKhFnWumgT/BoycDufN6i2ekIL4QDuhotuOZPwZ1flCBxoQyuq4k3nL+9oCZ+W/My\nIoq2p3SH4BmzhO/NAoaSIG781sEF/efanWp7CkH+W9p5RS+d7NP9ONbFqFqJzYtc\neI5j5aFXn2g7XXX4JzbwVLMsef9lQ5D6c1m0joTWzjS322mr/oRVCYl++1vsEiCc\nyXINl+wtDzYazwdkDFRTAt1nBBn2KzJImfKVNSu24USV9GHo79OYPx2lWanNuKIs\nxOWKVR7nRNHaqAoVhIp50FG2Szp3bgkUGKPJr9JM8uNJa+ng/qe+43E46AP+iEN2\naxYnHWH1AgMBAAECggEABZ/Lm5seMhkb8MReStBfVnMxErgqeuiniyWSgmOkRgLH\n097pH+dTi+08TMz6Edkx9jQWLf72JBsfN8E400ubauAwxNrzunm5/ylHSUfGutaN\npkbRF7qfvnWkCJx2LdJRyelRr9jI1+XXp37mW71QdxLkK9BnQPPCUP8reNRNa/+z\n6wGb5mR2oXtRXcUZNx1lKoaDbZ3DDzOYM/dyHZBCKcy5tXYw7rj+xS9/huwqVH+K\nyRNn8AemJtIFg0zbKYdpAuGYM0THIYfnvSv3YE5NEbjdune3esm8d0qbgyWrJijp\n1760i7h5m3F5EnO71yoq1IOuHKAX0bbCX9sy9x5uCQKBgQDdzV4RpgEcFMpIHxAf\nPBzWRcar7Yb2oSDlCEhf9jBvuDjXvSQCGLQohhHw/rGlRxre+hhM+13xK2O1w+sn\n5DiIOVUeLZv/pqJF6iRayE3Au4pYsyqDxzcJyYCkz5LDwMQ+ZUU2hnrTleWKre4c\nE8wqQJCE0ah/3NAVJwqHm+Y/qQKBgQDBOHl9MU3ktZSN2s+nFJEZtPSttSC32XkM\nbM8yAbv9KWtefU4wwrv2LbSkJ3qCyrFqSRtMMiVXf/0RjxuwZVQymaXTEWzAaWpz\ngWsycolugRQ2Fctf0c8z427UbtLwaUcMVCD5lNOyMGacjCqMf3+FO8HrLQ9FIpyG\n9BETwOpvbQKBgDM0qFT2uCbdfd2snjI31Ih7T2R9z7y8cjWt9deBpKkGJMlZtyhs\nv5rjaNz0T9rSUZfMsTOEjKmS1NAvzOhGve5lHgt7iBo7RBdT+NSkjZ7DLStRIa2O\nnlw6EuL5sO5UYHnvM01lOpICdx3PDbuZrnbKtRKUvIvYVImtm7a2/S8RAoGAXbUt\n9nF6/Xiy2zlLjBSFappAMB6wB3oJIuWCdxYwPc9gqyrKSQuobPQtr48V82iqMonS\nG1oWkiEYcvOc0ifSddfefEbvH0IAxpP1kTnLPTSMwM5BG+99NgUPMyesVbw5INmM\nRH7RTJH8sd+oowsSpWMd4RixVy46C5lCzvm4uOECgYB6eWngaOApkWzLUmegQAs/\n49SSCyoJClXR7hLAOa3lIGRplU9l3UT2siIypmUbaqogHeckvy3Sx8ghKvnJcmMB\n9FtOzgftHCVUQ8vzs+xIRxZDrM9ezE8s86RxE6kPPSUhR2/tTaOiKbbHCa8LoCy+\ng1Us2E5J3tv1AwWR/Vix6w==\n-----END PRIVATE KEY-----\n";
+// iOS takes one DER X509 certificate per call, unlike PEM bundle callers.
+// https://api.dart.dev/dart-io/SecurityContext/setTrustedCertificates.html
+SecurityContext _trustFixtureCertificates(String pem) {
+ final context=SecurityContext(withTrustedRoots:false);
+ final certificates=RegExp(r'-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----').allMatches(pem).toList();
+ if(certificates.isEmpty)throw StateError('Missing fixture certificate');
+ for(final match in certificates){context.setTrustedCertificatesBytes(base64Decode(match[1]!.replaceAll(RegExp(r'\s+'),'')));}
+ return context;
+}
 class _LoopbackTrust extends HttpOverrides {
   @override HttpClient createHttpClient(SecurityContext? context) {
-    final fixtureOnly=SecurityContext(withTrustedRoots:false)..setTrustedCertificatesBytes(utf8.encode(_fixtureCa));
+    final fixtureOnly=_trustFixtureCertificates(_fixtureCa);
     return super.createHttpClient(fixtureOnly);
   }
 }
@@ -84,10 +93,10 @@ const _flowPrivateKey="-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEF
 class _RoutedFlowTrust extends HttpOverrides {
  final int port;_RoutedFlowTrust(this.port);
  @override HttpClient createHttpClient(SecurityContext? _) {
-  final context=SecurityContext(withTrustedRoots:false)..setTrustedCertificatesBytes(utf8.encode(_flowCertificate));
+  final context=_trustFixtureCertificates(_flowCertificate);
   return super.createHttpClient(context)..connectionFactory=(uri,proxyHost,proxyPort){
    if(!{'translate.googleapis.com','fanyi-api.baidu.com','danbooru.donmai.us','safebooru.donmai.us','github.com','api.github.com','127.0.0.1','localhost'}.contains(uri.host))throw StateError('Unexpected paid or production host: ${uri.host}');
-   return Socket.startConnect(InternetAddress.loopbackIPv4,port).then((task)=>ConnectionTask.fromSocket(task.socket.then((socket)=>SecureSocket.secure(socket,host:uri.host,context:context)),task.cancel));
+   return Socket.startConnect(InternetAddress.loopbackIPv4,port).then((task)=>ConnectionTask.fromSocket(task.socket.then<Socket>((socket) async {try{return await SecureSocket.secure(socket,host:uri.host,context:context);}catch(error){print('NATIVE_FLOW_TLS_ERROR:$error');rethrow;}}),task.cancel));
   };
  }
 }
@@ -450,13 +459,23 @@ void main() {
     result('Native backup distinct characters repeat-import identity',['backup','characters','styles']);
   });
 
+  testWidgets('native flows routed TLS hostname validation',(tester) async {
+    await tester.pumpWidget(const MaterialApp(home:Scaffold(body:Text('Native TLS fixture'))));
+    final server=await _flowLoopback();servers.add(server);var requests=0;
+    server.listen((request) async {requests++;expect(request.uri.path,'/neutral-transport');request.response.write('validated neutral TLS');await request.response.close();});
+    final client=HttpClient();
+    try{final request=await client.getUrl(Uri.parse('https://translate.googleapis.com/neutral-transport'));final response=await request.close();expect(response.statusCode,200);expect(await utf8.decoder.bind(response).join(),'validated neutral TLS');expect(requests,1);
+      await expectLater(client.getUrl(Uri.parse('https://unexpected-paid-host.invalid/')),throwsA(isA<StateError>()));expect(requests,1);
+    }catch(error){print('NATIVE_FLOW_TRANSPORT_ERROR:$error');rethrow;}finally{client.close(force:true);}
+    result('Native routed TLS validated and unknown host blocked',['native-fixture-transport']);
+  });
   for(final scenario in ['200','401','empty']) {
     testWidgets('native flows translation $scenario',(tester) async {
       await tester.pumpWidget(const MaterialApp(home:Scaffold(body:SafeArea(child:Text('Native translation')))));
       var requests=0;final server=await _flowLoopback();servers.add(server);
       server.listen((request) async {requests++;expect(request.uri.path,'/translate_a/single');expect(request.uri.queryParameters['q'],'蓝色方块');request.response.statusCode=scenario=='401'?401:200;request.response.headers.contentType=ContentType.json;request.response.write(scenario=='empty'?'[]':jsonEncode([[['blue square','蓝色方块',null,null]],null,'zh-CN']));await request.response.close();});
       app.settings.translateProvider='google';
-      final output=await app.translatePreviewText('蓝色方块',target:'en',sourceLanguage:'auto');expect(output.ok,scenario=='200');expect(app.busy,false);expect(requests,1);
+      final output=await app.translatePreviewText('蓝色方块',target:'en',sourceLanguage:'auto');print('NATIVE_TRANSLATION_DIAGNOSTIC:$output');expect(output.ok,scenario=='200');expect(app.busy,false);expect(requests,1);
       if(scenario=='200'){expect(output.text,'blue square');expect(output.sourceLanguage,'zh-CN');}
       expect((await app.translatePreviewText('  ',target:'en')).ok,false);expect(requests,1);
       result('Native translation $scenario',['translation']);
@@ -504,10 +523,28 @@ void main() {
     });
   }
 
-  testWidgets('native flows full phone navigation',(tester) async {
+  for(final scenario in ['normal','medium-max','503']) {
+    testWidgets('native flows enhance AppState $scenario',(tester) async {
+      await tester.pumpWidget(const MaterialApp(home:Scaffold(body:Text('Native enhance'))));
+      final input=im.Image(width:512,height:512);im.fill(input,color:im.ColorRgb8(220,30,30));await source.writeAsBytes(im.encodePng(input));
+      final side=scenario=='medium-max'?1024:512;final image=im.Image(width:side,height:side);im.fill(image,color:im.ColorRgb8(0,0,255));final bytes=im.encodePng(image),zip=ZipEncoder().encode(Archive()..addFile(ArchiveFile('image.png',bytes.length,bytes)));
+      final server=await _tlsLoopback();servers.add(server);var posts=0;Map? body;
+      server.listen((request) async {if(await _serveAccountVerification(request))return;posts++;expect(request.uri.path,'/ai/generate-image');body=jsonDecode(await utf8.decoder.bind(request).join()) as Map;expect(body!['action'],'img2img');request.response.statusCode=scenario=='503'?503:200;if(scenario=='503'){request.response.write('neutral enhance failed');}else{request.response.headers.set('content-type','application/zip');request.response.add(zip);}await request.response.close();});
+      await _activateNeutralAccount(app,server.port);app.settings.streamPreviewEnabled=false;await app.setWorkbenchPath(source.path);
+      app.params..positivePrompt='blue square'..width=832..height=1216..seed=123..seedMode='fixed'..effort=scenario=='medium-max'?'medium':'high';
+      app.i2i..strength=.37..noise=.11..upscaledEnhance=false;app.i2iSizeMode='adaptive';app.i2iSourceMode='original';app.enhanceScale=scenario=='medium-max'?0:1;
+      await app.enhance();expect(posts,1);expect(app.busy,false);expect(app.params.width,832);expect(app.params.height,1216);expect(app.i2i.strength,.37);expect(app.i2i.noise,.11);expect(app.i2i.upscaledEnhance,false);expect(app.i2iSizeMode,'adaptive');expect(app.i2iSourceMode,'original');
+      expect(body!['model'],scenario=='medium-max'?'nai-diffusion-5-full-medium':'nai-diffusion-5-full');final parameters=body!['parameters'] as Map;expect(parameters['width'],512);expect(parameters['height'],512);expect(parameters['upscaled_enhance']==true,scenario=='medium-max');expect(parameters['image'],isNotEmpty);
+      if(scenario=='503'){expect(app.history,isEmpty);expect(app.status,contains('neutral enhance failed'));expect(app.comparisonAfter,isNull);}
+      else{expect(app.history.length,1);expect(app.history.single.width,side);expect(app.history.single.height,side);expect(await File(app.history.single.filePath).readAsBytes(),bytes);expect((await Storage().getHistory()).length,1);expect(app.comparisonSurface,'generate:enhance');expect(app.comparisonBefore!.filePath,source.path);}
+      result('Native AppState enhance $scenario',['enhance','effort','image-to-image','output-management']);
+    });
+  }
+  for(final reduced in [false,true]) {
+  testWidgets('native flows full phone navigation reduced=$reduced',(tester) async {
     final previousErrorHandler=FlutterError.onError;FlutterError.onError=(details){print('NATIVE_LAYOUT_ORIGINAL_ERROR:${details.exceptionAsString()}');print('NATIVE_LAYOUT_ORIGINAL_STACK:${details.stack}');previousErrorHandler?.call(details);};addTearDown(()=>FlutterError.onError=previousErrorHandler);
     final server=await _flowLoopback();servers.add(server);server.listen((request) async {await request.drain<void>();request.response.headers.contentType=ContentType.json;request.response.write('[]');await request.response.close();});
-    app.booted=true;app.needsNetworkOnboarding=false;
+    app.booted=true;app.needsNetworkOnboarding=false;app.settings.reduceMotion=reduced;
     await tester.pumpWidget(ChangeNotifierProvider.value(value:app,child:const NovelAIApp()));await tester.pumpAndSettle(const Duration(milliseconds:100),EnginePhase.sendSemanticsUpdate,const Duration(seconds:10));
     var shell=tester.widget<StudioAdaptiveShell>(find.byType(StudioAdaptiveShell));expect(shell.destinations.length,15);final labels=shell.destinations.map((d)=>d.label).toList();
     for(var index=0;index<labels.length;index++){
@@ -517,7 +554,8 @@ void main() {
       else{await tester.tap(find.descendant(of:nav,matching:find.text(shell.moreLabel)).hitTestable());await tester.pumpAndSettle();final destination=find.descendant(of:find.byType(BottomSheet),matching:find.text(labels[index]));await tester.ensureVisible(destination);await tester.pumpAndSettle();await tester.tap(destination.hitTestable());}
       await tester.pumpAndSettle(const Duration(milliseconds:100),EnginePhase.sendSemanticsUpdate,const Duration(seconds:10));shell=tester.widget<StudioAdaptiveShell>(find.byType(StudioAdaptiveShell));expect(shell.selectedIndex,index);expect(tester.takeException(),isNull,reason:labels[index]);
     }
-    result('Native phone all15 navigation',['navigation']);
+    result('Native phone all15 navigation reduced=$reduced',['navigation']);
   });
+  }
 
 }
