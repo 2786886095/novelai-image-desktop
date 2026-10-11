@@ -505,6 +505,7 @@ void main() {
   }
 
   testWidgets('native flows full phone navigation',(tester) async {
+    final previousErrorHandler=FlutterError.onError;FlutterError.onError=(details){print('NATIVE_LAYOUT_ORIGINAL_ERROR:${details.exceptionAsString()}');print('NATIVE_LAYOUT_ORIGINAL_STACK:${details.stack}');previousErrorHandler?.call(details);};addTearDown(()=>FlutterError.onError=previousErrorHandler);
     final server=await _flowLoopback();servers.add(server);server.listen((request) async {await request.drain<void>();request.response.headers.contentType=ContentType.json;request.response.write('[]');await request.response.close();});
     app.booted=true;app.needsNetworkOnboarding=false;
     await tester.pumpWidget(ChangeNotifierProvider.value(value:app,child:const NovelAIApp()));await tester.pumpAndSettle(const Duration(milliseconds:100),EnginePhase.sendSemanticsUpdate,const Duration(seconds:10));
