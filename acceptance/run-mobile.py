@@ -12,7 +12,7 @@ if platform=='android':
  driver.write_text("import 'dart:convert';\nimport 'dart:io';\nimport 'package:integration_test/integration_test_driver.dart';\nFuture<void> main() async { await integrationDriver(timeout: const Duration(minutes:12),writeResponseOnFailure:true,responseDataCallback:(data) async {await File(Platform.environment['NATIVE_RESPONSE_PATH']!).writeAsString(jsonEncode(data));});}\n")
  import os
  os.environ['NATIVE_RESPONSE_PATH']=str(out/'android-driver-response.json')
- command=['flutter','drive','--target=integration_test/native_acceptance_test.dart','--driver=test_driver/native_acceptance_driver.dart','-d',device,'--no-pub','--dart-define=ACCEPTANCE_SOURCE_SHA='+sha]
+ command=['flutter','drive','--no-start-paused','--target=integration_test/native_acceptance_test.dart','--driver=test_driver/native_acceptance_driver.dart','-d',device,'--no-pub','--dart-define=ACCEPTANCE_SOURCE_SHA='+sha]
  log=(out/'android-native-logcat.log').open('w')
  device_logs=subprocess.Popen(['adb','-s',device,'logcat','-v','threadtime'],stdout=log,stderr=subprocess.STDOUT)
 if platform=='ios':
