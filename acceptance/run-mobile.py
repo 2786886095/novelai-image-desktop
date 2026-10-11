@@ -48,8 +48,9 @@ for line in stdout.splitlines():
  if 'NATIVE_MOBILE_CASE:' in line:
   try: cases.append(json.loads(line.split('NATIVE_MOBILE_CASE:',1)[1]))
   except json.JSONDecodeError: pass
-if platform=='android' and (out/'android-driver-response.json').exists():
- response=json.loads((out/'android-driver-response.json').read_text());assert isinstance(response,dict) and isinstance(response.get('cases'),list)
+response_path=out/({'android':'android-driver-response.json','ios':'attached-driver-response.json'}[platform])
+if response_path.exists():
+ response=json.loads(response_path.read_text());assert isinstance(response,dict) and isinstance(response.get('cases'),list)
  cases=response['cases']
 assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()==sha
 before=json.loads((out/'application-lib-hashes.json').read_text());after={str(q.relative_to(root)):hashlib.sha256(q.read_bytes()).hexdigest() for q in (root/'mobile/lib').rglob('*') if q.is_file()};assert after==before['files']
