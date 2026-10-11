@@ -1,209 +1,139 @@
-name: Build
-
+name: Native five-platform acceptance
 on:
-  push:
-    branches: [main]
-    tags: ['v*']
   workflow_dispatch:
     inputs:
-      candidate_build_only:
-        description: Build private delivery candidates only; skip additional tests and forbid release publication
+      desktop:
         type: boolean
-        default: false
-      publish_after_verification:
-        description: Publish the release only after all gates pass
+        default: true
+      mobile:
         type: boolean
-        default: false
-      verified_build_run:
-        description: Reuse installers only if all four native build gates passed and application source is identical
-        type: string
-        required: false
-      mobile_run:
-        description: Successful Build Mobile run with the identical mobile source tree
-        type: string
-        required: false
-
-# Needed for softprops/action-gh-release to create/attach to Releases on v* tags.
+        default: true
 permissions:
-  contents: write
-
-# Force bundled JS actions onto Node 24 (silences the Node 20 deprecation notice).
+  contents: read
 env:
+  APP_SHA: f4135d72f70e1c67bc71b985c6c157c3250a3431
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
-  build:
-    if: ${{ !inputs.verified_build_run }}
+  desktop:
+    if: inputs.desktop
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
-            name: macos
-            artifacts: |
-              release/*.dmg
-              release/*.zip
-          - os: windows-latest
-            name: windows
-            artifacts: |
-              release/*.exe
-              release/latest.yml
           - os: ubuntu-latest
-            name: linux
-            artifacts: |
-              release/*.AppImage
-
+            platform: linux
+          - os: macos-latest
+            platform: macos-arm
+          - os: macos-15-intel
+            platform: macos-intel
+          - os: windows-latest
+            platform: windows
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          # Electron 42 requires Node >=22.12. Keep CI on the same supported
-          # runtime family used by the packaged application tooling.
-          node-version: 24
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      # Electron 42 may download its binary lazily even after npm ci. Without a
-      # serial warm-up, parallel Vitest workers can race while creating
-      # electron/dist on fresh Windows and macOS runners (directory exists).
-      - name: Warm Electron binary
-        if: runner.os != 'Linux'
-        run: npx electron --version
-
-      - name: Validate desktop source
-        if: ${{ !inputs.candidate_build_only }}
-        run: npm run typecheck && npm test
-
-      - name: Install both macOS sharp architectures
-        if: runner.os == 'macOS'
-        run: node scripts/install-macos-sharp.mjs
-
-      - name: Build app (${{ matrix.name }})
-        run: npm run build && npx electron-builder --publish never
-        env:
-          # No signing certs in CI — skip macOS code signing / notarization.
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-
-      - name: Install CJK fonts for Linux UI verification
-        if: runner.os == 'Linux' && !inputs.candidate_build_only
-        run: sudo apt-get update -qq && sudo apt-get install -y fonts-noto-cjk
-
-      - name: Verify packaged native runtime and startup
-        if: ${{ !inputs.candidate_build_only }}
-        run: node scripts/verify-packaged-runtime.mjs
-
-      - name: Decode final Windows installers with the actual NSIS decoder
-        if: runner.os == 'Windows' && !inputs.candidate_build_only
-        shell: pwsh
-        run: |
-          Get-ChildItem release/*.exe | ForEach-Object {
-            node scripts/verify-windows-installer.mjs $_.FullName release/win-unpacked release/installer-smoke
-            if ($LASTEXITCODE -ne 0) { throw 'Final installer payload differs from build output' }
-          }
-
-      - name: Verify Windows clean installation and upgrade from 2.4.0
-        if: runner.os == 'Windows' && !inputs.candidate_build_only
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: ./scripts/verify-windows-upgrade.ps1
-
-      - name: Verify real on-demand Agent download, startup and offline reuse
-        if: runner.os == 'Windows' && !inputs.candidate_build_only
-        run: node scripts/verify-agent-on-demand.cjs release/agent-smoke
-
-      - name: Upload packaged smoke evidence
-        if: always() && !inputs.candidate_build_only
-        uses: actions/upload-artifact@v4
-        with:
-          name: packaged-smoke-${{ matrix.name }}
-          path: |
-            release/packaged-smoke/*.json
-            release/packaged-smoke/*.log
-            release/packaged-smoke/*.png
-            release/installer-smoke/*.json
-            release/upgrade-smoke/*.json
-            release/upgrade-smoke/*.jsonl
-            release/agent-smoke/verification.json
-          if-no-files-found: warn
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: novelai-image-desktop-${{ matrix.name }}
-          path: ${{ matrix.artifacts }}
-          if-no-files-found: error
-
-      - name: Attach to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') && !inputs.candidate_build_only
-        uses: softprops/action-gh-release@v2
-        with:
-          body_path: docs/RELEASE_NOTES.md
-          # Desktop hotfixes are published only after all release assets are verified.
-          draft: true
-          files: ${{ matrix.artifacts }}
-
-  mac-intel-smoke:
-    if: ${{ !inputs.candidate_build_only }}
-    needs: build
-    runs-on: macos-15-intel
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
+        with:
+          path: controller
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.APP_SHA }}
+          path: app
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - uses: actions/download-artifact@v4
-        with:
-          name: novelai-image-desktop-macos
-          path: release
-      - name: Extract the same universal app and verify it on native Intel
-        run: |
-          mkdir -p release/mac-universal
-          ditto -x -k release/*.zip release/mac-universal
-          node scripts/verify-packaged-runtime.mjs
+      - name: Install native application dependencies and compile exact app SHA
+        working-directory: app
+        run: npm ci && npm run build
+      - name: Native Linux display and fonts (CI only)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y xvfb fonts-noto-cjk
+      - name: Execute actual desktop backends and isolated renderer on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run -a node controller/acceptance/run-desktop.cjs app evidence/${{ matrix.platform }} "$APP_SHA"
+      - name: Execute actual desktop backends and isolated renderer
+        if: runner.os != 'Linux'
+        shell: bash
+        run: node controller/acceptance/run-desktop.cjs app evidence/${{ matrix.platform }} "$APP_SHA"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: packaged-smoke-macos-intel
-          path: |
-            release/packaged-smoke/*.json
-            release/packaged-smoke/*.log
-            release/packaged-smoke/*.png
-
-  publish-verified:
-    needs: [build, mac-intel-smoke]
-    if: always() && !inputs.candidate_build_only && github.event_name == 'workflow_dispatch' && inputs.publish_after_verification && (inputs.verified_build_run || (needs.build.result == 'success' && needs.mac-intel-smoke.result == 'success'))
+          name: native-acceptance-${{ matrix.platform }}
+          path: evidence/
+          if-no-files-found: warn
+  android:
+    if: inputs.mobile
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    permissions:
-      contents: write
-      actions: read
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v5
+          path: controller
+      - uses: actions/checkout@v5
         with:
-          node-version: 24
-      - uses: actions/download-artifact@v4
+          ref: ${{ env.APP_SHA }}
+          path: app
+      - uses: actions/setup-java@v4
         with:
-          pattern: novelai-image-desktop-*
-          path: release-assets
-          merge-multiple: true
-          run-id: ${{ inputs.verified_build_run || github.run_id }}
-          github-token: ${{ github.token }}
-      - name: Verify mobile source, versions, signatures and installer hashes; then publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-          MOBILE_RUN: ${{ inputs.mobile_run }}
-          BUILD_RUN: ${{ inputs.verified_build_run || github.run_id }}
-        run: node scripts/publish-verified-release.mjs
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+          cache: true
+      - name: Stage external native fixture; verify unchanged app library
+        run: python3 controller/acceptance/stage-mobile.py app controller/acceptance/native_mobile_test.dart evidence/android "$APP_SHA"
+      - name: Resolve test SDK dependency
+        working-directory: app/mobile
+        run: flutter pub get
+      - name: Enable KVM on CI runner only
+        run: sudo chmod 666 /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: python3 controller/acceptance/run-mobile.py app evidence/android "$APP_SHA" emulator-5554 android
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-acceptance-android
+          path: evidence/
+          if-no-files-found: warn
+  ios:
+    if: inputs.mobile
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: controller
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.APP_SHA }}
+          path: app
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+          cache: true
+      - name: Stage external native fixture; verify unchanged app library
+        run: python3 controller/acceptance/stage-mobile.py app controller/acceptance/native_mobile_test.dart evidence/ios "$APP_SHA"
+      - name: Resolve test SDK dependency
+        working-directory: app/mobile
+        run: flutter pub get
+      - name: Boot CI simulator and execute real plugin/transport/renderer checks
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import sys,json;d=json.load(sys.stdin);print(next(x["udid"] for v in d["devices"].values() for x in v if "iPhone" in x["name"]))')
+          echo "Simulator: $DEVICE"
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          python3 controller/acceptance/run-mobile.py app evidence/ios "$APP_SHA" "$DEVICE" ios
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-acceptance-ios
+          path: evidence/
+          if-no-files-found: warn
