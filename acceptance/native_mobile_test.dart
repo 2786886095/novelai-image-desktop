@@ -1,5 +1,8 @@
 // ignore_for_file: avoid_print
 import 'dart:convert';
+import 'dart:async';
+import 'package:novelai_mobile/services/nai_api.dart';
+import 'package:novelai_mobile/screens/translation_preview_dialog.dart';
 import 'package:http/io_client.dart';
 import 'package:novelai_mobile/services/update_service.dart';
 import 'package:novelai_mobile/services/online_gallery_service.dart';
@@ -65,7 +68,7 @@ class _LoopbackTrust extends HttpOverrides {
   }
 }
 Future<HttpServer> _tlsLoopback() async {
-  final context=SecurityContext()..useCertificateChainBytes(utf8.encode(_fixtureCertificate))..usePrivateKeyBytes(utf8.encode(_fixturePrivateKey));
+  final context=_serverFixtureContext(_fixtureCertificate,_fixturePrivateKey,_fixturePkcs12);
   HttpOverrides.global=_LoopbackTrust();
   return HttpServer.bindSecure(InternetAddress.loopbackIPv4,0,context);
 }
@@ -106,8 +109,65 @@ class _RoutedFlowTrust extends HttpOverrides {
  }
 }
 Future<HttpServer> _flowLoopback() async {
- final context=SecurityContext()..useCertificateChainBytes(utf8.encode(_flowCertificate))..usePrivateKeyBytes(utf8.encode(_flowPrivateKey));
+ final context=_serverFixtureContext(_flowCertificate,_flowPrivateKey,_flowPkcs12);
  final server=await HttpServer.bindSecure(InternetAddress.loopbackIPv4,0,context);HttpOverrides.global=_RoutedFlowTrust(server.port);return server;
+}
+
+
+// iOS fixture servers need a PKCS12 identity, not PEM private-key bytes.
+// Public neutral fixture only; production trust and keys are untouched.
+SecurityContext _serverFixtureContext(String pem,String key,String pkcs12) {
+ final context=SecurityContext();
+ if(Platform.isIOS){context.usePrivateKeyBytes(base64Decode(pkcs12),password:'neutral-public-fixture');}
+ else{context.useCertificateChainBytes(utf8.encode(pem));context.usePrivateKeyBytes(utf8.encode(key));}
+ return context;
+}
+const _fixturePkcs12="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";
+const _flowPkcs12="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";
+const _issue68Fixture={"id": "issue68-mixed-trailing-comma", "input": "1 名女孩, 黑色夹克, 黑色连裤袜, 棕色头发,鞋子，", "queries": ["1 名女孩\n黑色夹克\n黑色连裤袜\n棕色头发\n鞋子"], "responses": ["1 girl\nblack jacket\nblack pantyhose\nbrown hair\nshoes"], "output": "1 girl, black jacket, black pantyhose, brown hair,shoes,", "source": "zh-CN", "target": "en", "detected": "zh-CN"};
+class _NativePreviewApi extends NaiApi {
+  Completer<AiTextResult>? pending;
+  final calls=<List<String?>>[];
+  @override
+  Future<AiTextResult> translateText(String text, AppSettings settings,
+      {String? target,String? sourceLanguage,String baiduSecret=''}) async {
+    calls.add([text,target,sourceLanguage]);
+    if(pending!=null)return pending!.future;
+    return AiTextResult(ok:true,message:'neutral fixture',text:target=='en'?'black jacket':'黑色夹克',sourceLanguage:sourceLanguage=='auto'?'en':sourceLanguage);
+  }
+}
+Future<void> _nativePreviewHost(WidgetTester tester,AppState state,{double scale=1}) async {
+  var source='black jacket';
+  await tester.pumpWidget(ChangeNotifierProvider.value(value:state,child:MaterialApp(
+    builder:(context,child)=>MediaQuery(data:MediaQuery.of(context).copyWith(textScaler:TextScaler.linear(scale)),child:child!),
+    home:Builder(builder:(context)=>Scaffold(body:TextButton(child:const Text('open-native-preview'),onPressed:() async {
+      final next=await showDialog<String>(context:context,builder:(_)=>TranslationPreviewDialog(source:source,isCurrent:(s)=>s==source));
+      if(next!=null)source=next;
+    }))))));
+  await tester.tap(find.text('open-native-preview'));await tester.pumpAndSettle();
+}
+class _NativePreflightFixture {
+  late HttpServer tls;late ServerSocket proxy;
+  final sockets=<Socket>[];int connections=0,posts=0;
+  Future<void> start() async {
+    tls=await HttpServer.bindSecure(InternetAddress.loopbackIPv4,0,_serverFixtureContext(_fixtureCertificate,_fixturePrivateKey,_fixturePkcs12));
+    tls.listen((request) async {
+      await request.drain<void>();posts++;
+      final png=im.encodePng(im.Image(width:16,height:16));
+      final bytes=ZipEncoder().encode(Archive()..addFile(ArchiveFile('image.png',png.length,png)));
+      request.response.headers.contentType=ContentType('application','zip');request.response.add(bytes);await request.response.close();
+    },onError:(_){});
+    proxy=await ServerSocket.bind(InternetAddress.loopbackIPv4,0);
+    proxy.listen((socket) async {
+      sockets.add(socket);connections++;
+      if(connections==1){socket.listen((_) {unawaited(socket.close());});return;}
+      final remote=await Socket.connect(InternetAddress.loopbackIPv4,tls.port);sockets.add(remote);
+      socket.listen(remote.add,onError:(_)=>remote.destroy(),onDone:()=>remote.destroy());
+      remote.listen(socket.add,onError:(_)=>socket.destroy(),onDone:()=>socket.destroy());
+    });
+    HttpOverrides.global=_LoopbackTrust();
+  }
+  Future<void> close() async {for(final socket in sockets){socket.destroy();}await proxy.close();await tls.close(force:true);}
 }
 
 void main() {
@@ -563,5 +623,59 @@ void main() {
     result('Native phone all15 navigation reduced=$reduced',['navigation']);
   });
   }
+
+  // Real native rendering and preference channels; only the remote translator
+  // response is neutral fixture data, never a mock platform plugin.
+  for(final from in ['en','auto']) {
+    testWidgets('native issues translation reopen $from',(tester) async {
+      app.dispose();final api=_NativePreviewApi();app=AppState(api:api,storage:storage)..settings=AppSettings(language:'zh-CN',translateSourceLanguage:from,translateTargetLanguage:'zh-CN',translateRealtime:false);
+      await _nativePreviewHost(tester,app);
+      await tester.tap(find.text('翻译'));await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.swap_horiz));await tester.pumpAndSettle();
+      expect(app.settings.translateSourceLanguage,'zh-CN');expect(app.settings.translateTargetLanguage,'en');
+      await tester.tap(find.text('应用译文'));await tester.pumpAndSettle();
+      final saved=await storage.getSettings();expect(saved.translateSourceLanguage,'en');expect(saved.translateTargetLanguage,'zh-CN');
+      await tester.tap(find.text('open-native-preview'));await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(find.byType(TextField).first).controller!.text,'black jacket');
+      expect(api.calls.length,1);expect(app.settings.translateSourceLanguage,'en');expect(app.settings.translateTargetLanguage,'zh-CN');
+      await tester.pumpWidget(const SizedBox());
+      result('Native issue70 reopened pair $from',['translation','translation-preview']);
+    });
+  }
+  for(final scale in [1.0,1.5,2.0]) {
+    testWidgets('native issues status geometry $scale',(tester) async {
+      app.dispose();final api=_NativePreviewApi();app=AppState(api:api,storage:storage)..settings=AppSettings(language:'zh-CN',translateSourceLanguage:'en',translateTargetLanguage:'zh-CN');
+      await _nativePreviewHost(tester,app,scale:scale);
+      List<double> positions()=>[tester.getTopLeft(find.byType(TextField).first).dy,tester.getTopLeft(find.byType(TextField).last).dy,tester.getTopLeft(find.widgetWithText(FilledButton,'应用译文')).dy];
+      final idle=positions();api.pending=Completer<AiTextResult>();await tester.tap(find.text('翻译'));await tester.pump();expect(positions(),idle);
+      api.pending!.complete(const AiTextResult(ok:false,message:'neutral long translation failure; 原文保持不变。neutral long translation failure'));await tester.pumpAndSettle();expect(positions(),idle);
+      api.pending=Completer<AiTextResult>();await tester.tap(find.text('翻译'));await tester.pump();api.pending!.complete(const AiTextResult(ok:true,message:'ok',text:'黑色夹克',sourceLanguage:'en'));await tester.pumpAndSettle();expect(positions(),idle);expect(tester.takeException(),isNull);
+      await tester.pumpWidget(const SizedBox());result('Native issue71 geometry scale $scale',['translation','translation-preview','typography']);
+    });
+  }
+  for(final stream in [false,true]) {
+    testWidgets('native issues safe preflight recovery $stream',(tester) async {
+      await tester.pumpWidget(const MaterialApp(home:Scaffold(body:Text('Native issue69'))));
+      final fixture=_NativePreflightFixture();await fixture.start();
+      try {
+        final settings=AppSettings(proxyMode:'direct',allowCustomEndpoint:true,streamPreviewEnabled:stream,imageBaseUrl:'https://127.0.0.1:${fixture.proxy.port}');
+        final output=await NaiApi().generate('public-fixture-token',settings,GenerateParams(),GenerateExtras(),onPreview:stream?(_){}:null);
+        expect(fixture.connections,2);expect(fixture.posts,1);expect(output.$1,hasLength(1));
+        result('Native issue69 preflight single submit stream $stream',['generation','native-fixture-transport']);
+      } finally {await fixture.close();HttpOverrides.global=null;}
+    });
+  }
+  testWidgets('native issues fullwidth comma exact caller',(tester) async {
+    await tester.pumpWidget(const MaterialApp(home:Scaffold(body:Text('Native issue68'))));
+    var requests=0;final server=await _flowLoopback();servers.add(server);
+    final words=<String,String>{};for(var i=0;i<(_issue68Fixture['queries'] as List).length;i++) {
+      final terms=(_issue68Fixture['queries'] as List)[i].toString().split('\n'),values=(_issue68Fixture['responses'] as List)[i].toString().split('\n');
+      for(var j=0;j<terms.length;j++){words[terms[j]]=values[j];}
+    }
+    server.listen((request) async {requests++;expect(request.uri.path,'/translate_a/single');final query=request.uri.queryParameters['q']!;final text=query.split('\n').map((s)=>words[s]??s).join('\n');request.response.headers.contentType=ContentType.json;request.response.write(jsonEncode([[[text]],null,'zh-CN']));await request.response.close();});
+    app.settings.translateProvider='google';final reply=await app.translatePreviewText(_issue68Fixture['input'].toString(),target:'en',sourceLanguage:'zh-CN');
+    expect(reply.ok,true);expect(reply.text,_issue68Fixture['output']);expect(requests,(_issue68Fixture['queries'] as List).length);
+    result('Native issue68 exact fullwidth comma caller',['translation','translation-preview']);
+  });
 
 }

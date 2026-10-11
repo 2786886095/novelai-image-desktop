@@ -44,6 +44,9 @@ expected |= {'Native WebP '+n for n in ['lossy', 'lossless', 'alpha', 'animated'
 expected.add('Native clipboard text roundtrip')
 metadata={'Native official metadata '+f['name'] for f in json.loads((root/'shared/official-image-metadata-fixtures/manifest.json').read_text())}
 expected |= metadata
+issueCases={'Native issue70 reopened pair '+x for x in ['en','auto']} | {'Native issue71 geometry scale '+str(x) for x in [1.0,1.5,2.0]} | {'Native issue69 preflight single submit stream '+str(x).lower() for x in [False,True]} | {'Native issue68 exact fullwidth comma caller'}
+expected |= issueCases
+
 breadth=set(['Native negative library cold CRUD and exact export', 'Native negative preview search and explicit append', 'Native named characters positive/style cold persistence', 'Native precise reference archive/apply/delete', 'Native vibe reference archive/apply/delete', 'Native favorites actual copy dedup rename and removal', 'Native font import engine readback and 200 percent persistence', 'Native backup archive restore rescue and idempotency', 'Native corrupt backup rejects without state mutation', 'Native comic batch agent state cold recovery'])
 breadth.add('Native backup distinct characters repeat-import identity')
 if suite=="breadth":expected=breadth
