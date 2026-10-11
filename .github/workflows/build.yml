@@ -28,7 +28,7 @@ on:
 permissions:
   contents: read
 env:
-  APP_SHA: 69ecf72e10f2ffec8dc39cfef1856a146c9c05bb
+  APP_SHA: 48defea369317ea37bc6a12cc095b3c0c8f1703e
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 jobs:
   desktop:

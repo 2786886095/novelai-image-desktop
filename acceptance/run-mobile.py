@@ -6,6 +6,15 @@ elif suite=='breadth':command += ['--plain-name','native breadth']
 elif suite=='core':command += ['--name','^(?!native breadth)']
 else:assert suite=='all'
 device_logs=None
+if platform=='android':
+ assert suite=='all', 'Run all native assertions through official integrationDriver'
+ driver=root/'mobile/test_driver/native_acceptance_driver.dart';driver.parent.mkdir(exist_ok=True)
+ driver.write_text("import 'dart:convert';\nimport 'dart:io';\nimport 'package:integration_test/integration_test_driver.dart';\nFuture<void> main() async { await integrationDriver(timeout: const Duration(minutes:12),writeResponseOnFailure:true,responseDataCallback:(data) async {await File(Platform.environment['NATIVE_RESPONSE_PATH']!).writeAsString(jsonEncode(data));});}\n")
+ import os
+ os.environ['NATIVE_RESPONSE_PATH']=str(out/'android-driver-response.json')
+ command=['flutter','drive','--target=integration_test/native_acceptance_test.dart','--driver=test_driver/native_acceptance_driver.dart','-d',device,'--no-pub','--dart-define=ACCEPTANCE_SOURCE_SHA='+sha]
+ log=(out/'android-native-logcat.log').open('w')
+ device_logs=subprocess.Popen(['adb','-s',device,'logcat','-v','threadtime'],stdout=log,stderr=subprocess.STDOUT)
 if platform=='ios':
  assert suite=='all', 'Attached iOS fixture executes every assertion, never filter cases'
  command=[sys.executable,str(pathlib.Path(__file__).with_name('run-ios-attached.py')),str(root),str(out),sha,device]
@@ -34,6 +43,9 @@ for line in stdout.splitlines():
  if 'NATIVE_MOBILE_CASE:' in line:
   try: cases.append(json.loads(line.split('NATIVE_MOBILE_CASE:',1)[1]))
   except json.JSONDecodeError: pass
+if platform=='android' and (out/'android-driver-response.json').exists():
+ response=json.loads((out/'android-driver-response.json').read_text());assert isinstance(response,dict) and isinstance(response.get('cases'),list)
+ cases=response['cases']
 assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()==sha
 before=json.loads((out/'application-lib-hashes.json').read_text());after={str(q.relative_to(root)):hashlib.sha256(q.read_bytes()).hexdigest() for q in (root/'mobile/lib').rglob('*') if q.is_file()};assert after==before['files']
 expected={'Real native credential/preferences/path-provider readback','OpenAI real AppState multipart status 200','OpenAI real AppState multipart status 422','Actual native filesystem/group/index/cache transaction','Native loopback MCP authentication/lifecycle','Native renderer expanded records scroll','Native device core-screen responsive text 200 percent'}
