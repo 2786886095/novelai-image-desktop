@@ -18,7 +18,7 @@ class FixtureTrust extends HttpOverrides {
     final testContext = SecurityContext(withTrustedRoots: false);
     if (trusted) {
       testContext.setTrustedCertificatesBytes(File(
-              '../shared/issue-network-fixtures/public-test-cert.${Platform.isIOS ? 'der' : 'pem'}')
+              '../shared/issue-network-fixtures/public-test-ca.${Platform.isIOS ? 'der' : 'pem'}')
           .readAsBytesSync());
     }
     return super.createHttpClient(testContext);

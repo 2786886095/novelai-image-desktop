@@ -1,3 +1,4 @@
-Public, test-only localhost TLS fixture. The accompanying private key is intentionally
-public and must never be used for a real service. The certificate is explicitly trusted
-only by test clients; production certificate and hostname validation remain enabled.
+Public, neutral loopback TEST-ONLY certificates and keys. Not used by shipped application code.
+The server presents a one-year serverAuth leaf plus its root; client trust is restricted to this root.
+PEM bundles work on desktop/Android, while iOS accepts one DER certificate per call.
+Never disable certificate validation.
