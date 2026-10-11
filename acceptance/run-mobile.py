@@ -1,4 +1,4 @@
-import subprocess,sys,pathlib,json,re,hashlib,threading
+import subprocess,sys,pathlib,json,re,hashlib,threading,os,signal
 root=pathlib.Path(sys.argv[1]).resolve();out=pathlib.Path(sys.argv[2]).resolve();out.mkdir(parents=True,exist_ok=True);sha=sys.argv[3];device=sys.argv[4];platform=sys.argv[5];suite=sys.argv[6] if len(sys.argv)>6 else 'core'
 command=['flutter','test','integration_test/native_acceptance_test.dart','-d',device,'--dart-define=ACCEPTANCE_SOURCE_SHA='+sha,'--reporter=expanded']
 if suite=='flows':command += ['--plain-name','native flows']
@@ -20,7 +20,7 @@ if platform=='ios':
  command=[sys.executable,str(pathlib.Path(__file__).with_name('run-ios-attached.py')),str(root),str(out),sha,device]
  log=(out/'simulator-device.log').open('w')
  device_logs=subprocess.Popen(['xcrun','simctl','spawn',device,'log','stream','--style','compact','--level','debug','--predicate','process == "Runner" OR eventMessage CONTAINS[c] "Dart"'],stdout=log,stderr=subprocess.STDOUT)
-p=subprocess.Popen(command,cwd=root/'mobile',text=True,encoding='utf-8',errors='replace',stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+p=subprocess.Popen(command,cwd=root/'mobile',text=True,encoding='utf-8',errors='replace',stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True)
 streams={}
 def copy_stream(key,stream,destination):
  lines=[]
@@ -33,9 +33,9 @@ for thread in threads:thread.start()
 try:p.wait(timeout=720)
 except subprocess.TimeoutExpired:
  print('NATIVE_COMMAND_DEADLINE_EXCEEDED_12_MINUTES',file=sys.stderr,flush=True)
- p.terminate()
+ os.killpg(p.pid,signal.SIGTERM)
  try:p.wait(timeout=15)
- except subprocess.TimeoutExpired:p.kill();p.wait()
+ except subprocess.TimeoutExpired:os.killpg(p.pid,signal.SIGKILL);p.wait()
 for thread in threads:thread.join()
 if device_logs is not None:
  device_logs.terminate()
