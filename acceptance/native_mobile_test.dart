@@ -329,8 +329,8 @@ void main() {
   });
   testWidgets('native breadth negative preview search and append', (tester) async {
     app.settings.language='zh-CN';app.params.positivePrompt='keep-neutral-positive';String value='original';
-    await tester.pumpWidget(ChangeNotifierProvider.value(value:app,child:MaterialApp(home:Scaffold(body:NegativePromptLibraryButton(value:value,onApply:(prompt,mode)=>value=applyNegativePreset(value,prompt,mode))))));
-    await tester.tap(find.byTooltip('负面提示词库'));await tester.pumpAndSettle();expect(value,'original');expect(find.text('强化版'),findsWidgets);
+    await tester.pumpWidget(ChangeNotifierProvider.value(value:app,child:MaterialApp(home:Scaffold(body:SafeArea(child:NegativePromptLibraryButton(value:value,onApply:(prompt,mode)=>value=applyNegativePreset(value,prompt,mode)))))));
+    await tester.ensureVisible(find.byTooltip('负面提示词库'));await tester.tap(find.byTooltip('负面提示词库').hitTestable());await tester.pumpAndSettle();expect(value,'original');expect(find.text('强化版'),findsWidgets);
     await tester.enterText(find.byType(TextField).first,'轻量版');await tester.pumpAndSettle();final tile=find.widgetWithText(ListTile,'轻量版');await tester.ensureVisible(tile);await tester.tap(find.descendant(of:tile,matching:find.text('轻量版')));await tester.pumpAndSettle();
     final append=find.text('追加');await tester.ensureVisible(append);await tester.tap(append);await tester.pumpAndSettle();expect(value,'original, ${negativeBuiltins[1]['prompt']}');expect(app.params.positivePrompt,'keep-neutral-positive');expect(tester.takeException(),isNull);
     result('Native negative preview search and explicit append',['negative-prompts','navigation']);
