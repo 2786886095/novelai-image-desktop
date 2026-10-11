@@ -5,6 +5,7 @@ const actual=cp.execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8
 const req=require('node:module').createRequire(path.join(root,'package.json')),electron=req('electron');
 const runs=[];
 const groups=[
+ ['metadata','desktop-metadata.cjs',[sha],['metadata-import','tools']],
  ['generation','windows-generation-acceptance.cjs',['MODIFIED'],['generation','effort']],
  ['image-actions','current-image-actions-probe.cjs',[sha],['image-to-image','enhance','inpaint','postprocess','openai-inpaint']],
  ['first-request','backend-fixture.cjs',[],['convert','reverse','metadata-import']],

@@ -1,13 +1,34 @@
-import subprocess,sys,pathlib,json,re,hashlib
+import subprocess,sys,pathlib,json,re,hashlib,threading
 root=pathlib.Path(sys.argv[1]).resolve();out=pathlib.Path(sys.argv[2]).resolve();out.mkdir(parents=True,exist_ok=True);sha=sys.argv[3];device=sys.argv[4];platform=sys.argv[5];suite=sys.argv[6] if len(sys.argv)>6 else 'core'
 command=['flutter','test','integration_test/native_acceptance_test.dart','-d',device,'--dart-define=ACCEPTANCE_SOURCE_SHA='+sha,'--reporter=expanded']
 if suite=='breadth':command += ['--plain-name','native breadth']
 elif suite=='core':command += ['--name','^(?!native breadth)']
 else:assert suite=='all'
-p=subprocess.run(command,cwd=root/'mobile',text=True,encoding='utf-8',errors='replace',stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-(out/'stdout.log').write_text(p.stdout);(out/'stderr.log').write_text(p.stderr);print(p.stdout);print(p.stderr,file=sys.stderr)
+device_logs=None
+if platform=='ios':
+ command += ['--verbose']
+ log=(out/'simulator-device.log').open('w')
+ device_logs=subprocess.Popen(['xcrun','simctl','spawn',device,'log','stream','--style','compact','--level','debug','--predicate','process == "Runner" OR eventMessage CONTAINS[c] "Dart"'],stdout=log,stderr=subprocess.STDOUT)
+p=subprocess.Popen(command,cwd=root/'mobile',text=True,encoding='utf-8',errors='replace',stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+streams={}
+def copy_stream(key,stream,destination):
+ lines=[]
+ with destination.open('w',encoding='utf-8') as output:
+  for line in stream:
+   lines.append(line);output.write(line);output.flush();print(line,end='',file=sys.stderr if key=='stderr' else sys.stdout,flush=True)
+ streams[key]=''.join(lines)
+threads=[threading.Thread(target=copy_stream,args=(key,getattr(p,key),out/(key+'.log'))) for key in ['stdout','stderr']]
+for thread in threads:thread.start()
+p.wait()
+for thread in threads:thread.join()
+if device_logs is not None:
+ device_logs.terminate()
+ try:device_logs.wait(timeout=10)
+ except subprocess.TimeoutExpired:device_logs.kill();device_logs.wait()
+ log.close()
+stdout=streams['stdout'];stderr=streams['stderr']
 cases=[]
-for line in p.stdout.splitlines():
+for line in stdout.splitlines():
  if 'NATIVE_MOBILE_CASE:' in line:
   try: cases.append(json.loads(line.split('NATIVE_MOBILE_CASE:',1)[1]))
   except json.JSONDecodeError: pass
@@ -19,9 +40,12 @@ expected |= {'Native image action '+x for x in ['img2img','inpaint','colorize','
 expected |= {'Native cold '+k+' '+str(s) for k in ['convert','reverse'] for s in [200,401]}
 expected |= {'Native WebP '+n for n in ['lossy', 'lossless', 'alpha', 'animated', 'novelai-exif-v5', 'novelai-exif-v5-be']}
 expected.add('Native clipboard text roundtrip')
+metadata={'Native official metadata '+f['name'] for f in json.loads((root/'shared/official-image-metadata-fixtures/manifest.json').read_text())}
+expected |= metadata
 breadth=set(['Native negative library cold CRUD and exact export', 'Native negative preview search and explicit append', 'Native named characters positive/style cold persistence', 'Native precise reference archive/apply/delete', 'Native vibe reference archive/apply/delete', 'Native favorites actual copy dedup rename and removal', 'Native font import engine readback and 200 percent persistence', 'Native backup archive restore rescue and idempotency', 'Native corrupt backup rejects without state mutation', 'Native comic batch agent state cold recovery'])
+breadth.add('Native backup distinct characters repeat-import identity')
 if suite=="breadth":expected=breadth
 elif suite=="all":expected |= breadth
 pass_=p.returncode==0 and len(cases)==len(expected) and {c['name'] for c in cases}==expected and all(c['pass'] and c['platform']==platform and c['sourceSha']==sha for c in cases)
-(out/'execution.json').write_text(json.dumps({'schema':1,'sourceSha':sha,'platform':platform,'device':device,'kind':'device','command':command,'stdout':p.stdout,'stderr':p.stderr,'exitStatus':p.returncode,'cases':cases,'pass':pass_,'paidCalls':0,'applicationLibUnmodified':True,'full39FeatureAcceptance':False,'suite':suite,'expectedCaseCount':len(expected)},indent=2))
+(out/'execution.json').write_text(json.dumps({'schema':1,'sourceSha':sha,'platform':platform,'device':device,'kind':'device','command':command,'stdout':stdout,'stderr':stderr,'exitStatus':p.returncode,'cases':cases,'pass':pass_,'paidCalls':0,'applicationLibUnmodified':True,'full39FeatureAcceptance':False,'suite':suite,'expectedCaseCount':len(expected)},indent=2))
 sys.exit(0 if pass_ else 1)

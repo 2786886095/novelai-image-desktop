@@ -11,7 +11,7 @@ on:
       mobile_suite:
         type: choice
         options: [core, breadth, all]
-        default: core
+        default: all
       android_only:
         type: boolean
         default: false
@@ -21,11 +21,11 @@ on:
       suite:
         type: choice
         options: [core, storage, network, breadth, all]
-        default: core
+        default: all
 permissions:
   contents: read
 env:
-  APP_SHA: f4135d72f70e1c67bc71b985c6c157c3250a3431
+  APP_SHA: 3f48b7b62d5f720ffe39d1bec9d3b1acb5dab0aa
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 jobs:
   desktop:
@@ -61,6 +61,13 @@ jobs:
           # never add --no-sandbox or alter a user's installed application.
           sudo chown root:root app/node_modules/electron/dist/chrome-sandbox
           sudo chmod 4755 app/node_modules/electron/dist/chrome-sandbox
+      - name: Verify actual native browser and entry-point official metadata gates (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a sh -c 'cd app && npm run test:metadata'
+      - name: Verify actual native browser and entry-point official metadata gates
+        if: runner.os != 'Linux'
+        working-directory: app
+        run: npm run test:metadata
       - name: Execute actual desktop backends and isolated renderer on Linux
         if: runner.os == 'Linux'
         run: dbus-run-session -- xvfb-run -a sh controller/acceptance/run-linux.sh app evidence/${{ matrix.platform }} "$APP_SHA" "${{ inputs.suite }}"
@@ -124,7 +131,7 @@ jobs:
           if-no-files-found: warn
   ios:
     if: inputs.mobile && !inputs.android_only
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
@@ -146,7 +153,9 @@ jobs:
         run: flutter pub get
       - name: Boot CI simulator and execute real plugin/transport/renderer checks
         run: |
-          DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import sys,json;d=json.load(sys.stdin);print(next(x["udid"] for v in d["devices"].values() for x in v if "iPhone" in x["name"]))')
+          xcodebuild -version
+          xcrun simctl list devices available -j > evidence/ios/simulator-inventory.json
+          DEVICE=$(cat evidence/ios/simulator-inventory.json | python3 -c 'import sys,json;d=json.load(sys.stdin);print(next(x["udid"] for v in d["devices"].values() for x in v if "iPhone" in x["name"]))')
           echo "Simulator: $DEVICE"
           xcrun simctl boot "$DEVICE"
           xcrun simctl bootstatus "$DEVICE" -b
