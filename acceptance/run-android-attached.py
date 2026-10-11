@@ -27,8 +27,16 @@ thread=threading.Thread(target=capture,daemon=True);thread.start();forwarded=Non
 try:
  time.sleep(2)
  launch_at=len(messages)
- call('android-launch-unpaused',['adb','-s',device,'shell','am','start','-n',package+'/.MainActivity'])
- pid=call('android-own-pid',['adb','-s',device,'shell','pidof',package]).strip();assert re.fullmatch(r'\d+',pid)
+ call('android-launch-unpaused',['adb','-s',device,'shell','am','start','-W','-n',package+'/.MainActivity'])
+ pid=None;pid_attempts=[];pid_deadline=time.monotonic()+30
+ while time.monotonic()<pid_deadline:
+  command=['adb','-s',device,'shell','pidof',package]
+  probe=subprocess.run(command,text=True,encoding='utf-8',capture_output=True)
+  pid_attempts.append({'command':command,'exitStatus':probe.returncode,'stdout':probe.stdout,'stderr':probe.stderr})
+  if probe.returncode==0 and re.fullmatch(r'\d+',probe.stdout.strip()):pid=probe.stdout.strip();break
+  time.sleep(.2)
+ (out/'android-own-pid.json').write_text(json.dumps(pid_attempts,indent=2))
+ assert pid,'No owned CI app process after waited activity launch; preserve logs, never count pass'
  uri=None;deadline=time.monotonic()+90
  while time.monotonic()<deadline:
   for line in messages[launch_at:]:
