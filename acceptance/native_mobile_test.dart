@@ -359,8 +359,8 @@ void main() {
     final favorites=MobileLocalFavorites(rootOverride:root);addTearDown(favorites.dispose);final bytes=await source.readAsBytes(),item=await favorites.add(row('favorite-neutral',source.path));
     expect(await (await favorites.file(item)).readAsBytes(),bytes);expect((await favorites.add(row('favorite-neutral',source.path))).id,item.id);
     final cold=MobileLocalFavorites(rootOverride:root);addTearDown(cold.dispose);expect((await cold.list()).items.length,1);
-    final renamed=await favorites.rename(item.id,'Neutral');await expectLater(favorites.rename(item.id,'../outside'),throwsFormatException);await favorites.remove(item.id);
-    expect((await favorites.list()).items,isEmpty);expect(await (await favorites.file(renamed)).readAsBytes(),bytes);expect(await source.readAsBytes(),bytes);
+    final renamed=await favorites.rename(item.id,'Neutral');await expectLater(favorites.rename(item.id,'../outside'),throwsFormatException);final retainedPath=(await favorites.file(renamed)).path;await favorites.remove(item.id);
+    expect((await favorites.list()).items,isEmpty);expect(await File(retainedPath).readAsBytes(),bytes);expect(await source.readAsBytes(),bytes);
     result('Native favorites actual copy dedup rename and removal',['favorites','output-management']);
   });
   testWidgets('native breadth actual imported font engine and cold scale settings', (tester) async {
@@ -372,7 +372,7 @@ void main() {
     result('Native font import engine readback and 200 percent persistence',['typography','settings']);
   });
   testWidgets('native breadth backup configuration prompt agent rescue and idempotency', (tester) async {
-    app.settings.backupDir='${root.path}/backups';app.settings.language='en-US';app.settings.positivePromptPresets=[PositivePromptPreset(id:'backup-neutral',name:'Neutral backup',prompt:'blue square',createdAt:'now')];
+    app.settings.backupDir='${root.path}/backups';app.settings.language='en-US';app.settings.positivePromptPresets=[PositivePromptPreset(id:'backup-neutral',name:'Neutral backup',prompt:'blue square',createdAt:'now',captions:[CharCaptionItem(name:'Neutral backup character',prompt:'blue coat',negativePrompt:'red coat',x:0,y:1,useCoords:true)])];
     await storage.setSettings(app.settings);await storage.setParams(GenerateParams(seed:4000000000,seedMode:'fixed'));
     await storage.setAgentWorkspace(AgentWorkspace(conversations:[AgentConversation(id:'neutral-conversation',title:'Neutral conversation',draftText:'blue square')]));
     final selected={DataBackupCategory.configuration,DataBackupCategory.promptPresets,DataBackupCategory.agentWorkspace};final service=DataBackupService(storage);final archive=await service.createBackup(selected,includeAssets:true,internal:true);
@@ -380,7 +380,7 @@ void main() {
     await storage.setParams(GenerateParams(seed:42,seedMode:'fixed'));await storage.setAgentWorkspace(AgentWorkspace());app.settings.positivePromptPresets=[];await storage.setSettings(app.settings);
     await expectLater(service.importBackup(archive.path,selected,confirmConfigurationOverwrite:false),throwsStateError);expect((await storage.getParams()).seed,42);
     final first=await service.importBackup(archive.path,selected,confirmConfigurationOverwrite:true);expect(first.imported,greaterThan(0));expect(await File(first.rescueBackupPath).exists(),true);
-    expect((await Storage().getParams()).seed,4000000000);expect((await Storage().getSettings()).positivePromptPresets.single.prompt,'blue square');expect((await Storage().getAgentWorkspace()).conversations.single.draftText,'blue square');
+    expect((await Storage().getParams()).seed,4000000000);expect((await Storage().getSettings()).positivePromptPresets.single.prompt,'blue square');expect((await Storage().getSettings()).positivePromptPresets.single.captions.single.toJson(),CharCaptionItem(name:'Neutral backup character',prompt:'blue coat',negativePrompt:'red coat',x:0,y:1,useCoords:true).toJson());expect((await Storage().getAgentWorkspace()).conversations.single.draftText,'blue square');
     await service.importBackup(archive.path,selected,confirmConfigurationOverwrite:true);expect((await Storage().getAgentWorkspace()).conversations.length,1);expect((await Storage().getSettings()).positivePromptPresets.length,1);
     result('Native backup archive restore rescue and idempotency',['backup','settings','image-agent','agent-components']);
   });
