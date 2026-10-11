@@ -229,5 +229,99 @@
       "黑色帽子\n未列出的描述"
     ],
     "output": "黑色帽子, 未列出的描述"
+  },
+  {
+    "id": "issue68-mixed-trailing-comma",
+    "input": "1 名女孩, 黑色夹克, 黑色连裤袜, 棕色头发,鞋子，",
+    "queries": [
+      "1 名女孩\n黑色夹克\n黑色连裤袜\n棕色头发\n鞋子"
+    ],
+    "responses": [
+      "1 girl\nblack jacket\nblack pantyhose\nbrown hair\nshoes"
+    ],
+    "output": "1 girl, black jacket, black pantyhose, brown hair,shoes,",
+    "source": "zh-CN",
+    "target": "en",
+    "detected": "zh-CN"
+  },
+  {
+    "id": "issue68-chinese-only",
+    "input": "黑色夹克，鞋子，",
+    "queries": [
+      "黑色夹克\n鞋子"
+    ],
+    "responses": [
+      "black jacket\nshoes"
+    ],
+    "output": "black jacket,shoes,",
+    "source": "zh-CN",
+    "target": "en",
+    "detected": "zh-CN"
+  },
+  {
+    "id": "issue68-consecutive-empty",
+    "input": "黑色夹克， ，鞋子，，",
+    "queries": [
+      "黑色夹克\n鞋子"
+    ],
+    "responses": [
+      "black jacket\nshoes"
+    ],
+    "output": "black jacket, ,shoes,,",
+    "source": "zh-CN",
+    "target": "en",
+    "detected": "zh-CN"
+  },
+  {
+    "id": "issue68-weight-controls",
+    "input": "1.3::{黑色夹克}，鞋子，",
+    "queries": [
+      "黑色夹克\n鞋子"
+    ],
+    "responses": [
+      "black jacket\nshoes"
+    ],
+    "output": "1.3::{black jacket},shoes,",
+    "source": "zh-CN",
+    "target": "en",
+    "detected": "zh-CN"
+  },
+  {
+    "id": "issue68-protected-qualifier",
+    "input": "character:名_(作品,番外)，黑色夹克，",
+    "queries": [
+      "黑色夹克"
+    ],
+    "responses": [
+      "black jacket"
+    ],
+    "output": "character:名_(作品,番外),black jacket,",
+    "source": "zh-CN",
+    "target": "en",
+    "detected": "zh-CN"
+  },
+  {
+    "id": "issue68-protected-file",
+    "input": "https://example.test/base[1].png，鞋子，",
+    "queries": [
+      "鞋子"
+    ],
+    "responses": [
+      "shoes"
+    ],
+    "output": "https://example.test/base[1].png,shoes,",
+    "source": "zh-CN",
+    "target": "en",
+    "detected": "zh-CN"
+  },
+  {
+    "id": "issue68-only-separators",
+    "input": "， ，",
+    "queries": [],
+    "responses": [],
+    "output": ", ,",
+    "source": "zh-CN",
+    "target": "en",
+    "detected": "zh-CN"
   }
 ]

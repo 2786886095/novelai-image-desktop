@@ -21,6 +21,8 @@
 .negative-library-editor textarea {resize:none;flex:1;min-height:8rem;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;}
 .negative-library-error {color:var(--danger);padding:0 1.25rem;overflow-wrap:anywhere;}
 .negative-library-dialog button:focus-visible,.negative-library-dialog input:focus-visible,.negative-library-dialog textarea:focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+/* Field edges meet the scrolling article: paint the ring inside, not in its clipped overflow. */
+.negative-library-dialog input:focus-visible,.negative-library-dialog textarea:focus-visible {outline-offset:-2px;}
 @media(max-width:680px){.negative-library-body{grid-template-columns:minmax(0,1fr);grid-template-rows:7rem minmax(0,1fr);}.negative-library-dialog{height:calc(100dvh - 1rem);width:calc(100vw - 1rem);}.negative-library-dialog .btn{min-height:44px;}.negative-library-tools{padding:.75rem;}.negative-library-body{padding:0 .75rem .75rem;}}
 @media(max-width:680px){.modal-backdrop.negative-library-backdrop{padding:.5rem;}}.negative-library-dialog>header,.negative-library-tools {flex-shrink:0;} .negative-library-dialog header p {font-size:12px;} @media(max-width:680px){.negative-library-dialog{overflow:auto;}.negative-library-dialog>header{padding:16px;}.negative-library-tools{padding:12px;}.negative-library-body{padding:0 12px 12px;min-height:400px;grid-template-rows:clamp(96px,7rem,132px) minmax(0,1fr);}.negative-library-editor,.negative-library-editor textarea{min-height:128px;}}
 .negative-library-editor {min-height:calc(128px + 2em + .5rem);flex-shrink:0;} .negative-library-body footer,.negative-library-detail-title {flex-shrink:0;}

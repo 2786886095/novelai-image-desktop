@@ -5,10 +5,10 @@ String _key(String s) =>
     s.toLowerCase().replaceAll('_', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
 
 final _protectedAtom = RegExp(
-    r'^(?:(?:artist|character|copyright):[^,{}\[\]|\r\n]+|[^\s(),{}\[\]|]+\([^()]*\)|https?://[^\s,{}|]+|[^\s,{}|]+\.(?:png|webp|jpe?g|gif|avif|bmp|vibe|json)|[+-]?(?:\d+(?:\.\d+)?|\.\d+))$',
+    r'^(?:(?:artist|character|copyright):[^,，{}\[\]|\r\n]+|[^\s(),，{}\[\]|]+\([^()]*\)|https?://[^\s,，{}|]+|[^\s,，{}|]+\.(?:png|webp|jpe?g|gif|avif|bmp|vibe|json)|[+-]?(?:\d+(?:\.\d+)?|\.\d+))$',
     caseSensitive: false);
 final _resourceAtom = RegExp(
-    r'^(?:https?://[^\s,{}|]+|[^\s,{}|]+\.(?:png|webp|jpe?g|gif|avif|bmp|vibe|json))(?=$|[\s,{}|])',
+    r'^(?:https?://[^\s,，{}|]+|[^\s,，{}|]+\.(?:png|webp|jpe?g|gif|avif|bmp|vibe|json))(?=$|[\s,，{}|])',
     caseSensitive: false);
 
 class _Piece {
@@ -50,7 +50,7 @@ List<_Piece> _piecesOf(String text) {
   }
 
   final delimiter =
-      RegExp(r'^(?:[+-]?(?:\d+(?:\.\d+)?|\.\d+)::|::|[{},\[\]|\r\n])');
+      RegExp(r'^(?:[+-]?(?:\d+(?:\.\d+)?|\.\d+)::|::|[{},，\[\]|\r\n])');
   for (var i = 0; i < text.length; i++) {
     if (i == start || RegExp(r'\s').hasMatch(text[i - 1])) {
       final resource = _resourceAtom.firstMatch(text.substring(i));
@@ -68,7 +68,8 @@ List<_Piece> _piecesOf(String text) {
     final m = delimiter.firstMatch(text.substring(i));
     if (m == null) continue;
     push(i);
-    pieces.add(_Piece.literal(m[0]!));
+    // Normalize only a parsed separator, not protected names or resource bytes.
+    pieces.add(_Piece.literal(m[0] == '，' ? ',' : m[0]!));
     i += m[0]!.length - 1;
     start = i + 1;
   }
@@ -82,7 +83,7 @@ Future<GooglePromptTranslationPlan> prepareGooglePromptTranslation(String text,
     return GooglePromptTranslationPlan([], (_) => text);
   }
   if (!RegExp(
-          r'[_{}()\[\]|,]|::|\b(?:artist|character|copyright):|(?:^|[,\s])\d+(?:girls?|boys?)\b')
+          r'[_{}()\[\]|,，]|::|\b(?:artist|character|copyright):|(?:^|[,，\s])\d+(?:girls?|boys?)\b')
       .hasMatch(text)) {
     return GooglePromptTranslationPlan([text], (values) => values[0].trim());
   }

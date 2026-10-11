@@ -8,8 +8,8 @@ export interface GooglePromptTranslationPlan {
   restore: (translated: string[]) => string;
 }
 const key = (s: string) => s.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
-const protectedAtom = /^(?:(?:artist|character|copyright):[^,{}\[\]|\r\n]+|[^\s(),{}\[\]|]+\([^()]*\)|https?:\/\/[^\s,{}|]+|[^\s,{}|]+\.(?:png|webp|jpe?g|gif|avif|bmp|vibe|json)|[+-]?(?:\d+(?:\.\d+)?|\.\d+))$/i;
-const resourceAtom = /^(?:https?:\/\/[^\s,{}|]+|[^\s,{}|]+\.(?:png|webp|jpe?g|gif|avif|bmp|vibe|json))(?=$|[\s,{}|])/i;
+const protectedAtom = /^(?:(?:artist|character|copyright):[^,，{}\[\]|\r\n]+|[^\s(),，{}\[\]|]+\([^()]*\)|https?:\/\/[^\s,，{}|]+|[^\s,，{}|]+\.(?:png|webp|jpe?g|gif|avif|bmp|vibe|json)|[+-]?(?:\d+(?:\.\d+)?|\.\d+))$/i;
+const resourceAtom = /^(?:https?:\/\/[^\s,，{}|]+|[^\s,，{}|]+\.(?:png|webp|jpe?g|gif|avif|bmp|vibe|json))(?=$|[\s,，{}|])/i;
 
 
 function piecesOf(text: string): Piece[] {
@@ -36,9 +36,10 @@ function piecesOf(text: string): Piece[] {
     }
     if(text[i]==='(')depth++; else if(text[i]===')')depth=Math.max(0,depth-1);
     if(depth)continue;
-    const delimiter=/^(?:[+-]?(?:\d+(?:\.\d+)?|\.\d+)::|::|[{},\[\]|\r\n])/.exec(text.slice(i));
+    const delimiter=/^(?:[+-]?(?:\d+(?:\.\d+)?|\.\d+)::|::|[{},，\[\]|\r\n])/.exec(text.slice(i));
     if(!delimiter)continue;
-    push(i);pieces.push({literal:delimiter[0]});i+=delimiter[0].length-1;start=i+1;
+    // Chinese IME commas are local separators, never part of a translation term.
+    push(i);pieces.push({literal:delimiter[0]==='，'?',':delimiter[0]});i+=delimiter[0].length-1;start=i+1;
   }
   push(text.length);return pieces;
 }
@@ -46,7 +47,7 @@ function piecesOf(text: string): Piece[] {
 export async function prepareGooglePromptTranslation(text: string,
   lookupCategory?: (tag: string) => Promise<number | undefined>): Promise<GooglePromptTranslationPlan> {
   if (protectedAtom.test(text.trim())) return {queries:[],restore:()=>text};
-  if (!/[_{}()\[\]|,]|::|\b(?:artist|character|copyright):|(?:^|[,\s])\d+(?:girls?|boys?)\b/.test(text)) {
+  if (!/[_{}()\[\]|,，]|::|\b(?:artist|character|copyright):|(?:^|[,，\s])\d+(?:girls?|boys?)\b/.test(text)) {
     return {queries:[text],restore:values=>values[0].trim()};
   }
   if(text.length>20_000)throw Error('提示词过长，请分段翻译。');

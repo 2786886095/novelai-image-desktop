@@ -5,6 +5,12 @@ import {applyNegativePreset,NEGATIVE_BUILTINS,normalizeNegativePromptPresets,par
 import {NegativePromptLibraryControl,mutateNegativePresets} from './NegativePromptLibrary';
 import {useAppStore} from './store';
 afterEach(()=>{vi.unstubAllGlobals();useAppStore.setState(useAppStore.getInitialState(),true);});
+it('keeps field focus rings inside the scrolling detail pane without changing dialog geometry',()=>{
+ const css=fs.readFileSync('src/negative-prompt-library.css','utf8');
+ expect(css).toMatch(/\.negative-library-dialog input:focus-visible,\.negative-library-dialog textarea:focus-visible\s*\{outline-offset:-2px;\}/);
+ expect(css).toContain('outline:2px solid var(--accent)');
+ expect(css).toContain('article {display:flex;flex-direction:column;gap:.75rem;overflow:auto;');
+});
 it('seeds exactly the user-provided builtins, including weights, duplicates and literal line breaks',()=>{
  expect(normalizeNegativePromptPresets(undefined)).toEqual(JSON.parse(fs.readFileSync('shared/negative-prompt-presets.json','utf8')));
  expect(NEGATIVE_BUILTINS.map(p=>p.name)).toEqual(['强化版','轻量版']);
