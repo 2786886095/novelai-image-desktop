@@ -12,7 +12,7 @@ if platform=='android':
  driver.write_text("import 'dart:convert';\nimport 'dart:io';\nimport 'package:integration_test/integration_test_driver.dart';\nFuture<void> main() async { await integrationDriver(timeout: const Duration(minutes:12),writeResponseOnFailure:true,responseDataCallback:(data) async {await File(Platform.environment['NATIVE_RESPONSE_PATH']!).writeAsString(jsonEncode(data));});}\n")
  import os
  os.environ['NATIVE_RESPONSE_PATH']=str(out/'android-driver-response.json')
- command=['flutter','drive','--no-start-paused','--target=integration_test/native_acceptance_test.dart','--driver=test_driver/native_acceptance_driver.dart','-d',device,'--no-pub','--dart-define=ACCEPTANCE_SOURCE_SHA='+sha]
+ command=[sys.executable,str(pathlib.Path(__file__).with_name('run-android-attached.py')),str(root),str(out),sha,device]
  log=(out/'android-native-logcat.log').open('w')
  device_logs=subprocess.Popen(['adb','-s',device,'logcat','-v','threadtime'],stdout=log,stderr=subprocess.STDOUT)
 if platform=='ios':
@@ -30,9 +30,10 @@ def copy_stream(key,stream,destination):
  streams[key]=''.join(lines)
 threads=[threading.Thread(target=copy_stream,args=(key,getattr(p,key),out/(key+'.log'))) for key in ['stdout','stderr']]
 for thread in threads:thread.start()
+deadline_error=None
 try:p.wait(timeout=720)
 except subprocess.TimeoutExpired:
- print('NATIVE_COMMAND_DEADLINE_EXCEEDED_12_MINUTES',file=sys.stderr,flush=True)
+ deadline_error='NATIVE_COMMAND_DEADLINE_EXCEEDED_12_MINUTES\n';print(deadline_error,end='',file=sys.stderr,flush=True)
  os.killpg(p.pid,signal.SIGTERM)
  try:p.wait(timeout=15)
  except subprocess.TimeoutExpired:os.killpg(p.pid,signal.SIGKILL);p.wait()
@@ -42,7 +43,7 @@ if device_logs is not None:
  try:device_logs.wait(timeout=10)
  except subprocess.TimeoutExpired:device_logs.kill();device_logs.wait()
  log.close()
-stdout=streams['stdout'];stderr=streams['stderr']
+stdout=streams['stdout'];stderr=streams['stderr']+(deadline_error or '');exit_status=124 if deadline_error else p.returncode
 cases=[]
 for line in stdout.splitlines():
  if 'NATIVE_MOBILE_CASE:' in line:
@@ -75,6 +76,6 @@ flows.add('Native routed TLS validated and unknown host blocked')
 flows |= {'Native AppState enhance '+x for x in ['normal','medium-max','503']}
 if suite=='flows':expected=flows
 elif suite=='all':expected |= flows
-pass_=p.returncode==0 and len(cases)==len(expected) and {c['name'] for c in cases}==expected and all(c['pass'] and c['platform']==platform and c['sourceSha']==sha for c in cases)
-(out/'execution.json').write_text(json.dumps({'schema':1,'sourceSha':sha,'platform':platform,'device':device,'kind':'device','command':command,'stdout':stdout,'stderr':stderr,'exitStatus':p.returncode,'cases':cases,'pass':pass_,'paidCalls':0,'applicationLibUnmodified':True,'full39FeatureAcceptance':False,'suite':suite,'expectedCaseCount':len(expected)},indent=2))
+pass_=exit_status==0 and len(cases)==len(expected) and {c['name'] for c in cases}==expected and all(c['pass'] and c['platform']==platform and c['sourceSha']==sha for c in cases)
+(out/'execution.json').write_text(json.dumps({'schema':1,'sourceSha':sha,'platform':platform,'device':device,'kind':'device','command':command,'stdout':stdout,'stderr':stderr,'exitStatus':exit_status,'childExitStatus':p.returncode,'deadlineExceeded':bool(deadline_error),'cases':cases,'pass':pass_,'paidCalls':0,'applicationLibUnmodified':True,'full39FeatureAcceptance':False,'suite':suite,'expectedCaseCount':len(expected)},indent=2))
 sys.exit(0 if pass_ else 1)
