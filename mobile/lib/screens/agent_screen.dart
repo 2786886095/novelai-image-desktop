@@ -1868,14 +1868,9 @@ class _AgentScreenState extends State<AgentScreen> {
 
     return Align(
       alignment: Alignment.bottomLeft,
-      child: AnimatedSize(
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : AppMotion.disclosureOpen,
-        reverseDuration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : AppMotion.disclosureClose,
-        curve: Curves.easeOutCubic,
+      child: studioSizeTransition(context,
+        duration: AppMotion.disclosureOpen,
+        reverseDuration: AppMotion.disclosureClose,
         child: Container(
           key: ValueKey(menu),
           width: menu == _ComposerMenu.reasoning ? 278 : double.infinity,

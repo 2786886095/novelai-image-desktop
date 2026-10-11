@@ -38,6 +38,25 @@ Widget studioSizeTransition(BuildContext context,
             alignment: Alignment.topCenter,
             child: child);
 
+/// A cross-fade contains an AnimatedSize too. Reduced motion must bypass it,
+/// not resume a zero-duration size controller during a later layout.
+Widget studioCrossFadeTransition(BuildContext context,
+        {required Widget firstChild,
+        required Widget secondChild,
+        required bool showSecond,
+        Duration duration = AppMotion.disclosureOpen,
+        Duration? reverseDuration = AppMotion.disclosureClose}) =>
+    MediaQuery.disableAnimationsOf(context)
+        ? (showSecond ? secondChild : firstChild)
+        : AnimatedCrossFade(
+            firstChild: firstChild,
+            secondChild: secondChild,
+            crossFadeState: showSecond
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: duration,
+            reverseDuration: reverseDuration);
+
 abstract final class StudioRadii {
   static const double control = 8;
   static const double panel = 12;

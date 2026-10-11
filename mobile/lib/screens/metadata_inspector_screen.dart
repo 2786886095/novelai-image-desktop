@@ -1000,7 +1000,7 @@ class _HistoryMetadataPicker extends StatelessWidget {
             trailing: Icon(expanded ? Icons.expand_less : Icons.expand_more),
             onTap: () => onExpandedChanged(!expanded),
           ),
-          AnimatedCrossFade(
+          studioCrossFadeTransition(context,
             firstChild: const SizedBox(width: double.infinity),
             secondChild: Padding(
               // Keep room for the dropdown's floating label. With zero top
@@ -1156,14 +1156,9 @@ class _HistoryMetadataPicker extends StatelessWidget {
                 ],
               ),
             ),
-            crossFadeState:
-                expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-            duration: MediaQuery.disableAnimationsOf(context)
-                ? Duration.zero
-                : AppMotion.disclosureOpen,
-            reverseDuration: MediaQuery.disableAnimationsOf(context)
-                ? Duration.zero
-                : AppMotion.disclosureClose,
+            showSecond: expanded,
+            duration: AppMotion.disclosureOpen,
+            reverseDuration: AppMotion.disclosureClose,
           ),
         ],
       ),
