@@ -35,25 +35,40 @@ describe("release version consistency", () => {
     );
   });
 
-  it("keeps the README download section and release notes on the current version", () => {
-    const packageVersion = JSON.parse(read("package.json")).version as string;
-    const readme = read("README.md");
-    const releaseNotes = read("docs/RELEASE_NOTES.md");
+  it("uses moving Latest and main entries in all README languages", () => {
+    const repo = "https://github.com/2786886095/novelai-image-desktop";
+    for (const file of ["README.md", "README.en.md", "README.ja.md", "README.ko.md", "README.zh-TW.md"]) {
+      const readme = read(file);
+      const releaseLinks = readme.match(/https?:\/\/[^\s)\]<>"']+\/releases(?:\/[^\s)\]<>"']*)?/g) ?? [];
 
-    expect(readme).not.toContain("gitee.com");
-    expect(readme).toContain(`releases/tag/v${packageVersion}`);
-    expect(readme).toContain(
-      `Langbai-NovelAI-Studio-${packageVersion}.exe`,
-    );
-    expect(readme).toContain(
-      `Langbai-NovelAI-Studio-Setup-${packageVersion}.exe`,
-    );
-    expect(releaseNotes).toContain(`### v${packageVersion} 更新内容`);
-    expect(releaseNotes).toContain(
-      `Langbai-NovelAI-Studio-${packageVersion}.exe`,
-    );
-    expect(releaseNotes.match(/^### v\d+\.\d+\.\d+ 更新内容$/gm)).toEqual([
-      `### v${packageVersion} 更新内容`,
-    ]);
+      expect(readme, file).not.toContain("gitee.com");
+      expect(readme, file).toContain(`${repo}/releases/latest`);
+      expect(readme, file).toContain(`${repo}/tree/main`);
+      expect(releaseLinks.length, file).toBeGreaterThan(0);
+      for (const link of releaseLinks) {
+        expect(link, file).toBe(`${repo}/releases/latest`);
+      }
+      // Dated screenshots and historical facts may retain their real versions.
+      expect(readme.split(/\r?\n/).slice(0, 12).join("\n"), file)
+        .not.toMatch(/\bv?\d+\.\d+\.\d+\b/i);
+      const download = readme.split(/^## /m).find((section) =>
+        /^(下载与安装|Installation and updates|インストールと更新|설치 및 업데이트|下載與更新)\r?\n/.test(section));
+      expect(download, file).toBeDefined();
+      expect(download, file).not.toMatch(/\bv?\d+\.\d+\.\d+\b/i);
+    }
+  });
+
+  it("uses a version-independent first Latest note and preserves historical entries", () => {
+    const repo = "https://github.com/2786886095/novelai-image-desktop";
+    const releaseNotes = read("docs/RELEASE_NOTES.md");
+    const entries = [...releaseNotes.matchAll(/^##\s+.+$/gm)];
+    expect(entries.length).toBeGreaterThan(1);
+    const first = releaseNotes.slice(entries[0].index, entries[1].index);
+
+    expect(entries[0][0]).toMatch(/^## Latest\b/);
+    expect(first).toContain(`${repo}/releases/latest`);
+    expect(first).toContain(`${repo}/tree/main`);
+    expect(first).not.toMatch(/\bv?\d+\.\d+\.\d+\b|\/releases\/(?:tag|download)\/|\/(?:tree|blob|commit)\/[a-f0-9]{7,40}\b/i);
+    expect(releaseNotes.slice(entries[1].index)).toMatch(/\bv?\d+\.\d+\.\d+\b/);
   });
 });
