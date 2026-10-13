@@ -103,7 +103,9 @@ jobs:
 
       - name: Install both macOS sharp architectures
         if: runner.os == 'macOS'
-        run: node scripts/install-macos-sharp.mjs
+        run: |
+          node --test scripts/install-macos-sharp.test.mjs
+          node scripts/install-macos-sharp.mjs
 
       - name: Build app (${{ matrix.name }})
         run: npm run build && npx electron-builder --publish never
