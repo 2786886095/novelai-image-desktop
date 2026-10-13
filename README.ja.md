@@ -1,11 +1,11 @@
 # Langbai NovelAI Studio
 
-> v2.5.7：Windows x64 のインストーラーとポータブル版を公開します。Android/iOS 共通機能のソースは同期済みですが、今回のリリースにモバイルバイナリや実機・署名検証は含まれません。
+> **最新リリース（Latest）**：[Latest ページ](https://github.com/2786886095/novelai-image-desktop/releases/latest)で、Windows・macOS・Linux・Android・iOS の現在の配布ファイル、バージョン、導入条件、検証記録を確認してください。
+> 配布ファイルがあることや GitHub の「安定版」分類は、全39機能・実機・実サービスアカウントの検証完了を意味しません。現在確認済みの配布について、その全体検証は未完了です。
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
 
-**v2.4.3 対応環境：** 独立 Tavern Agent は Windows x64 と Android ARM64（Android 8 以降）に対応し、その他の環境は従来の酒場機能を維持します。ページを開くだけではダウンロードせず、インストール前にバージョンとサイズを表示して確認します。コンポーネントの削除後も会話とユーザーデータは保持され、再インストール時に利用できます。
 
 ### ひとつのアイデアから、一連の作品へ。
 
@@ -61,15 +61,19 @@ Windows のローカル Artist Detective は現在 **NAI 4.5 Full のみ**対応
 
 ## インストールと更新
 
-利用できるファイルと各版の注意事項は[最新リリース](https://github.com/2786886095/novelai-image-desktop/releases/latest)を確認してください。[変更履歴（中国語）](./docs/RELEASE_NOTES.md)。
+[Latest ページ](https://github.com/2786886095/novelai-image-desktop/releases/latest)の添付ファイルから、自分の環境に合うパッケージを選んでください。古いバージョンやタグのリンクではなく、そのページの版ごとの注意事項を確認してください。配布ファイルと導入条件はリリースにより変わる場合があります。
 
-| OS | パッケージ | 注意事項 |
+| OS | Latest ページで選ぶファイル | インストール上の制約 |
 | --- | --- | --- |
-| Windows x64 | インストーラー EXE／ポータブル EXE | インストーラーはショートカットとアプリ内更新に対応。ポータブル版は新しいファイルに手動で置き換えます。 |
-| macOS Intel／Apple silicon | Universal DMG／ZIP | 未署名です。システムの警告については導入ガイドを参照してください。 |
-| Linux x64 | AppImage | 実行権限を付けて起動します。 |
-| Android | APK | 手動インストール。 |
-| iOS | 未署名 IPA | 自分で署名またはサイドロードが必要です。App Store 用ではありません。 |
+| Windows x64 | [インストーラー EXE](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [ポータブル EXE](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 署名の状態は Latest の説明を確認してください。現在確認済みの Windows 配布は Authenticode 未署名で、セキュリティ警告が不要になるとは保証しません。バックアップ後に手動更新してください。 |
+| macOS Intel／Apple silicon | [Universal DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [Universal ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 署名・公証の状態は Latest の説明を確認してください。現在確認済みの配布では公証を確認できておらず、システムの信頼確認が出る場合があります。 |
+| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 実行権限を付けて起動し、新しいファイルへ手動で交換してください。 |
+| Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Latest のインストールと署名の説明に従ってください。手動インストールが必要で、現在確認済みの配布について実機や上書き更新の全体検証は完了していません。 |
+| iOS | [IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Latest の添付ファイルが**未署名 IPA**なら、**通常の iPhone にそのままインストールできません**。自分で署名する必要があります。自分の端末への導入には有効な Apple 署名とプロビジョニングが必要です。Latest の説明で明示されない限り、App Store や TestFlight で利用できるとは判断しないでください。 |
+
+**更新は手動で行ってください。** Latest の説明が対応する更新経路を明示していない限り、現在のパッケージを自分でダウンロードしてください。更新用メタデータが必ず添付されるとは限らず、内部バージョンやタグの形式によってはアプリ内更新が新しいバイナリを提示しません。交換前に設定と作品をバックアップし、更新を強制するために既存データを削除したり旧アプリをアンインストールしたりしないでください。
+
+ダウンロードする添付ファイルの検証記録とチェックサムは [Latest ページ](https://github.com/2786886095/novelai-image-desktop/releases/latest)で確認してください。検証ファイルの名前や有無はリリースにより変わる場合があります。[main のリポジトリソース](https://github.com/2786886095/novelai-image-desktop/tree/main)は現在のブランチであり、特定のバイナリの厳密なビルド元を証明するものではありません。その対応関係は配布の検証記録を参照してください。「安定版」での公開は全39機能・実機・有料の実サービスアカウントの検証完了を意味せず、現在確認済みの配布については未完了です。[変更履歴（中国語）](./docs/RELEASE_NOTES.md)。
 
 Windows のインストーラー版とポータブル版は `%APPDATA%\novelai-image-desktop\` を共有します。ポータブル版でも**すべてのデータが実行ファイルの横に保存されるわけではありません**。交換前に設定と作品をバックアップしてください。デスクトップとモバイルの機能は同一ではなく、ローカル画風反復は Windows 専用です。[OS ごとの差異](./docs/guide/FEATURES.md#platforms)。
 

@@ -1,11 +1,10 @@
 # Langbai NovelAI Studio
 
-> v2.5.7：本次發行 Windows x64 安裝版與可攜版；Android/iOS 共用功能原始碼同步，不提供新行動端安裝包，也不代表完成行動實機或簽名驗收。
+> 下載請以 [Latest 發行頁](https://github.com/2786886095/novelai-image-desktop/releases/latest)的最新說明與附件為準，選擇 Windows、macOS、Linux、Android、iOS 套件。穩定版分類不代表 39 項功能已全部驗收；iOS 簽署狀態與安裝方式也以該頁說明為準。
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
 
-**v2.4.3 平台說明：** 獨立酒館 Agent 元件支援 Windows x64 與 Android ARM64（Android 8+）；其他平台保留原有酒館。進入頁面不自動下載，安裝前顯示版本與大小並請求確認。解除安裝元件保留對話與使用者資料，重新安裝可繼續使用。
 
 ### 從一句靈感，到一組作品。
 
@@ -61,15 +60,21 @@ Windows 本機 Artist Detective 流程目前僅開放 **NAI 4.5 Full**。完整�
 
 ## 下載與更新
 
-以[最新發行頁](https://github.com/2786886095/novelai-image-desktop/releases/latest)的套件及版本說明為準。[更新紀錄（簡體中文）](./docs/RELEASE_NOTES.md)。
+發行版本、適用平臺、簽署狀態及更新限制以 [Latest 發行頁](https://github.com/2786886095/novelai-image-desktop/releases/latest)的最新說明為準。各下載連結皆開啟附件清單，請依下表選擇套件格式。[原始碼（main）](https://github.com/2786886095/novelai-image-desktop/tree/main) · [更新紀錄（簡體中文）](./docs/RELEASE_NOTES.md)。
 
-| 平臺 | 套件 | 說明 |
+| 平臺 | 在 Latest 選擇的附件 | 說明 |
 | --- | --- | --- |
-| Windows x64 | 安裝 EXE／可攜 EXE | 安裝版提供捷徑與軟體內更新；可攜版需下載新套件替換。 |
-| macOS Intel／Apple 晶片 | 通用 DMG／ZIP | 目前未簽署；請參閱安裝教學中的系統提示說明。 |
-| Linux x64 | AppImage | 加入執行權限後開啟。 |
-| Android | APK | 手動安裝。 |
-| iOS | 未簽署 IPA | 需自行簽署或側載，不是 App Store 套件。 |
+| Windows x64 | [安裝 EXE（Setup）](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 選擇安裝版；目前未確認發布者程式碼簽署已完成。 |
+| Windows x64 | [可攜 EXE](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 下載可攜套件後手動替換。 |
+| macOS Intel／Apple 晶片 | [通用 DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 目前未確認 Apple 簽署或公證已完成；依系統安全提示與安裝教學處理。 |
+| macOS Intel／Apple 晶片 | [通用 ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 選擇通用 ZIP 套件；簽署與公證狀態以 Latest 說明為準。 |
+| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 加入執行權限後開啟。 |
+| Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 從 Latest 附件下載 APK 並手動安裝。 |
+| iOS | [IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 目前附件為 unsigned IPA，需使用有效憑證及描述檔自行簽名（簽署）；不能直接安裝到一般 iPhone，也不是 App Store 套件。最新簽署狀態與安裝方式以 Latest 頁說明為準。 |
+
+**請手動從 Latest 下載與安裝。** 不能僅靠 GitHub 的 Latest 標記推斷軟體內自動更新可用；是否提供更新清單、版本能否辨識及各平臺更新方式，請確認該次發行的說明。
+
+校驗資料、檔案雜湊及執行紀錄以 [Latest 頁](https://github.com/2786886095/novelai-image-desktop/releases/latest)提供的附件或說明為準，下載後請核對對應套件雜湊。穩定版分類不等於五端 39 項功能矩陣已完整驗收；目前尚未齊備，不應視為全部功能通過。
 
 Windows 安裝版與可攜版共用 `%APPDATA%\novelai-image-desktop\`。可攜版**不表示所有資料都存在程式旁**。替換套件前請備份設定與作品。桌面與行動端功能不完全相同，本機畫風迭代僅 Windows 提供。[平臺差異](./docs/guide/FEATURES.md#platforms)。
 

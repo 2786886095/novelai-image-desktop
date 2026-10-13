@@ -1,4 +1,48 @@
-### v2.5.7 更新内容
+# 更新记录
+
+## Latest · 发行与项目同步（2026-10-13）
+
+- 当前发行与下载入口统一指向 [GitHub Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest)，由 Latest 附件选择 Windows 安装版 / 便携版、macOS DMG / ZIP、Linux AppImage、Android APK、iOS IPA；首页当前区不固定版本号、日期标签、源码 SHA 或带版本的安装包名。
+- 已发行源码和五种语言 README、项目首页说明及维护规则同步到 [默认分支 main](https://github.com/2786886095/novelai-image-desktop/tree/main)。历史记录下方保留真实版本与日期，不修改构建、移动版本或更新校验的必要版本字段。
+- 当前 iOS IPA 未签名，需自行取得适用的 Apple 签名与 provisioning profile 才能安装，不能直接安装到普通 iPhone；不是 App Store / TestFlight 发行。其他系统的签名、校验清单和安装限制以 Latest 的证据为准。
+- 当前应手动下载；Latest / 稳定分类本身不会产生新版本号、更新清单或自动升级能力。自动更新须按实际发行条件核对。
+- 当前完整 39 功能正式验收矩阵尚未齐，受控网络 / 模拟器检查不等于所有真机与真实付费服务验收；#69 真实环境 TLS 根因仍未确认。不能用稳定标签代替验收证明。
+- 以后按项目 AGENTS.md 的“GitHub 项目同步与 Latest 入口”规则执行，避免只更新 Release 而遗漏 main / 首页。
+
+---
+
+## 2026-10-12 · 2.5.7 五端公开发行
+
+- GitHub 的[同一发布页](https://github.com/2786886095/novelai-image-desktop/releases/tag/issues-68-71-preview-20261012)已从预发布改为稳定版 / Latest，并补发现有 iOS 未签名 IPA。桌面版本仍为 2.5.7，Android / iOS 为 2.5.7+176；没有伪装为新版本或重新命名旧二进制。
+- 七个安装包均对应[发行源码 48defea369317ea37bc6a12cc095b3c0c8f1703e](https://github.com/2786886095/novelai-image-desktop/tree/48defea369317ea37bc6a12cc095b3c0c8f1703e)：Windows 安装版与便携版、macOS universal DMG 与 ZIP、Linux x86_64 AppImage、Android APK、iOS unsigned IPA。
+- #68：中文全角逗号 U+FF0C 在本地按标签分隔并规范为英文逗号，避免翻译结果错位。
+- #70：应用译文前保存下次源 / 目标语言方向，保存失败不替换原提示词，重开方向正确。
+- #71：翻译状态区预留空间，避免状态出现 / 消失引起输入框和按钮上下跳动。上述三个具体 issue 已关闭；#69 真实环境 TLS 故障根因仍未确认，保留开放。
+- 同时包含已观察的首请求重试、AI 记录滚动、作品批量删除 / 移动作品组、本地删图后的记录清理及特定不支持参数的 422 请求修正，不推广为所有网络 / 422 问题的修复。
+
+### 下载与校验
+
+| 平台 | 下载 |
+| --- | --- |
+| Windows x64 安装版 | [Setup.exe](https://github.com/2786886095/novelai-image-desktop/releases/download/issues-68-71-preview-20261012/Langbai-NovelAI-Studio-Setup-2.5.7.exe) |
+| Windows x64 便携版 | [便携版.exe](https://github.com/2786886095/novelai-image-desktop/releases/download/issues-68-71-preview-20261012/Langbai-NovelAI-Studio-2.5.7.exe) |
+| macOS universal | [DMG](https://github.com/2786886095/novelai-image-desktop/releases/download/issues-68-71-preview-20261012/Langbai-NovelAI-Studio-2.5.7-universal.dmg) / [ZIP](https://github.com/2786886095/novelai-image-desktop/releases/download/issues-68-71-preview-20261012/Langbai-NovelAI-Studio-2.5.7.zip) |
+| Linux x86_64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/download/issues-68-71-preview-20261012/Langbai-NovelAI-Studio-2.5.7.AppImage) |
+| Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/download/issues-68-71-preview-20261012/app-release.apk) |
+| iOS | [未签名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/download/issues-68-71-preview-20261012/novelai-mobile-unsigned.ipa) |
+
+[五端校验清单](https://github.com/2786886095/novelai-image-desktop/releases/download/issues-68-71-preview-20261012/SHA256SUMS-five-platforms.txt) · [发行证据与限制](https://github.com/2786886095/novelai-image-desktop/releases/download/issues-68-71-preview-20261012/RELEASE_VERIFICATION.json)。四端预览校验文件作为历史快照保留，不用于替代本次五端清单。
+
+### 安装与验收边界
+
+- 本次须手动下载安装：未新增内部版本号，也没有 latest.yml；同 2.5.7 版本不会触发新版本升级，当前自动更新器不识别此非语义版本 tag。
+- iOS IPA 没有主 App 代码签名与 provisioning profile，需自行签名后按对应分发方式处理，不能直接安装到普通 iPhone，不是 App Store / TestFlight 发行。
+- Windows EXE 未 Authenticode 签名；macOS 签名 / 公证未确认。
+- 原生 CI 受控网络 fixture / 模拟器检查不等于所有真机与真实付费账号端到端验收；完整 39 功能正式验收矩阵尚未齐。稳定分类是维护者选择，不是正式门禁通过证据；私有原图对官网效果的比对也未确认。
+
+---
+
+## 2026-10-10 · v2.5.7 Windows 发行（历史记录）
 
 ## 本次更新
 - 接入本地 MCP 服务，默认关闭；提供本机外部智能体连接设置，并补充鉴权、来源、账户绑定与额度限制等边界保护。

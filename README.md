@@ -3,7 +3,7 @@
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
 
-**v2.5.7 发布范围：** Windows x64 安装版与便携版；Android / iOS 共用功能源码同步，但本次不发布移动端安装包。新助手使用 Pi Agent Core / 原生工具循环，不要求下载旧独立酒馆组件。
+**当前发行入口：** [GitHub Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 提供 Windows、macOS、Linux、Android、iOS 的当前发行文件；平台包、安装方式与限制以 Latest 说明为准。iOS 目前为未签名 IPA，需自行签名，不能直接安装到普通 iPhone。新助手使用 Pi Agent Core / 原生工具循环，不要求下载旧独立酒馆组件。
 
 ### 从一句灵感，到一组作品。
 
@@ -58,7 +58,7 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 <a id="screenshots"></a>
 ## 看看实际工作台
 
-下面是仓库已有的 **2026-08-30 / v2.0.1 实际界面截图**，用于展示布局；v2.4.5 已增加酒馆等入口，具体功能以当前版本为准。顶部芙宁娜配图是宣传插画，不作为功能截图。
+下面是 **2026-08-30 / v2.0.1 的历史实际界面截图**，仅展示旧版布局，不是 2026-10-12 五端包的当前截图；功能与入口以当前包为准。顶部芙宁娜配图是宣传插画，不作为功能截图。
 
 ![生成工作台：左侧提示词与参数、中间画布、右侧历史与素材](./docs/assets/readme/workbench-light.png)
 
@@ -72,39 +72,30 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 <a id="download"></a>
 ## 下载与安装
 
-### v2.5.7 Windows 正式版
+### Latest · 当前发行文件
 
-[发布说明与校验信息](https://github.com/2786886095/novelai-image-desktop/releases/tag/v2.5.7)
+[最新发行说明与附件](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [更新记录](./docs/RELEASE_NOTES.md) · [默认分支源码](https://github.com/2786886095/novelai-image-desktop/tree/main)
 
-| 用途 | 下载 |
-| --- | --- |
-| Windows x64 安装版 | [Langbai-NovelAI-Studio-Setup-2.5.7.exe](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.5.7/Langbai-NovelAI-Studio-Setup-2.5.7.exe) |
-| Windows x64 便携版 | [Langbai-NovelAI-Studio-2.5.7.exe](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.5.7/Langbai-NovelAI-Studio-2.5.7.exe) |
-
-本次仅发行 Windows 成品；Android/iOS 共用源码同步不代表已完成移动实机或签名验收。安装升级保留用户数据，更新前仍建议在设置里导出备份。其他系统请查看历史发行版，不要将历史包当作 2.5.7。
-
-## v2.4.6 候选交付状态
-
-本版本尚未上传正式发行版。文件名 `Langbai-NovelAI-Studio-2.4.6.exe` 为本地便携构建；`Langbai-NovelAI-Studio-Setup-2.4.6.exe` 为后续安装版目标（本轮未构建）。[v2.4.6 发布目标](https://github.com/2786886095/novelai-image-desktop/releases/tag/v2.4.6)仅是计划地址，不表示已有可下载文件。Android 本地包使用测试签名，不能保证覆盖已发布的不同签名 APK；不要为此卸载或删除旧数据。iOS 仍需 macOS / Xcode 构建签名。下方 v2.4.5 下载表是历史发行链接，不是本轮成果。
-
-**[GitHub 最新发行版](https://github.com/2786886095/novelai-image-desktop/releases/latest)** · [更新记录](./docs/RELEASE_NOTES.md)
-
-以下直链对应 **[v2.4.5](https://github.com/2786886095/novelai-image-desktop/releases/tag/v2.4.5)**；后续版本请使用上面的「最新发行版」。
-
-| 平台 | 选择安装包 | 使用说明 |
+| 平台 | 下载入口 | 在 Latest 附件中选择 |
 | --- | --- | --- |
-| Windows x64 · 安装版 | [Setup.exe](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.4.5/Langbai-NovelAI-Studio-Setup-2.4.5.exe) | 长期使用建议选这个；安装向导、快捷方式、软件内更新 |
-| Windows x64 · 便携版 | [便携版.exe](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.4.5/Langbai-NovelAI-Studio-2.4.5.exe) | 双击运行；启动时解压到临时目录，更新需下载新包替换 |
-| macOS · Intel / Apple 芯片 | [通用 DMG](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.4.5/Langbai-NovelAI-Studio-2.4.5-universal.dmg) / [ZIP](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.4.5/Langbai-NovelAI-Studio-2.4.5.zip) | 当前未签名；安装与系统提示处理见[安装说明](./docs/guide/GETTING_STARTED.md#install) |
-| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.4.5/Langbai-NovelAI-Studio-2.4.5.AppImage) | 添加执行权限后运行 |
-| Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.4.5/app-release.apk) | 手动安装 APK |
-| iOS | [未签名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/download/v2.4.5/novelai-mobile-unsigned.ipa) | 需要自行签名或侧载，不是 App Store 安装包 |
+| Windows x64 · 安装版 | [安装版](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 文件名含 Setup 的 EXE；安装前备份设置与作品 |
+| Windows x64 · 便携版 | [便携版](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 不含 Setup 的便携 EXE；下载新包替换，便携版不等于零痕迹 |
+| macOS · Intel / Apple Silicon | [Universal DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 通用 DMG 或 ZIP；签名 / 公证状态以 Latest 说明为准 |
+| Linux x86_64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | AppImage，添加执行权限后运行 |
+| Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | APK，手动安装；先核对签名与升级说明，勿为更新而删除旧数据 |
+| iOS | [IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 当前为未签名 IPA：需自行取得适用的 Apple 签名与 provisioning profile 后安装，不能直接安装到普通 iPhone，不是 App Store / TestFlight 发行 |
 
-**v2.4.5 同步更新电脑端与手机端；iOS 附件为未签名测试包。**
+校验清单、SHA256、签名和安装限制以 [Latest 的说明与附件](https://github.com/2786886095/novelai-image-desktop/releases/latest)为准；首页不写死发行版本、日期标签、校验文件名或带版本的安装包名。历史四端预览校验文件不用于替代当前发行清单。
+
+**本次请手动下载安装。** 将 GitHub 发布页设为 Latest 不会自动产生新版本、更新清单或有效的自动更新标签；是否支持软件内更新应按 Latest 的真实说明核对，不能仅凭 Latest 标记保证自动升级。
+
+**稳定版分类不代表完整 39 功能验收通过。** 当前完整验收矩阵尚未齐；受控网络 fixture、模拟器 / 仿真器检查不等于所有真机和真实付费账号端到端验收。Windows EXE 当前未 Authenticode 签名，macOS 签名 / 公证未确认，未来状态以 Latest 证据为准。已发行源码和项目维护规则同步到 [main](https://github.com/2786886095/novelai-image-desktop/tree/main)，不通过重新命名旧包冒充新构建。
+
+#68 全角逗号分隔、#70 翻译方向保存、#71 翻译状态布局位移的具体缺陷已关闭；#69 真实环境 TLS 根因仍未确认，保持开放。不声称解决所有网络故障或所有 422。
 
 Windows 便携版与安装版共享本机用户数据目录 `%APPDATA%\novelai-image-desktop\`。**便携版不等于零痕迹，也不是所有数据都写在程序旁边。** 更换包前建议备份设置和作品。
 
-桌面端和移动端统一使用 GitHub 下载与更新。不同平台的更新方式见[安装与更新](./docs/guide/GETTING_STARTED.md#updates)。
+当前五端文件统一从 GitHub 下载，本次按上表手动安装；一般更新机制见[安装与更新](./docs/guide/GETTING_STARTED.md#updates)，不要将一般机制当成本次已支持自动升级。
 
 <a id="faq"></a>
 ## 常见问题

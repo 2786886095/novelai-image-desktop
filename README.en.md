@@ -1,11 +1,11 @@
 # Langbai NovelAI Studio
 
-> v2.5.7: Windows x64 installer and portable release. Shared Android/iOS features are synchronized in source; no new mobile binaries or physical-device/signing acceptance are included in this release.
+> **Latest release**: See the [Latest release page](https://github.com/2786886095/novelai-image-desktop/releases/latest) for the packages currently provided for Windows, macOS, Linux, Android and iOS, their versions, installation limits and verification records.
+> Package availability or GitHub's stable label does **not** prove full 39-feature, physical-device or production-provider acceptance. Complete acceptance is not established for the currently delivered build.
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
 
-**v2.4.3 platform note:** The standalone Tavern Agent supports Windows x64 and Android ARM64 (Android 8+); other platforms retain the existing Tavern. Opening its page does not download anything. Installation shows the version and download size and asks for confirmation. Uninstalling the component preserves conversations and user data for reinstallation.
 
 ### From an idea to a collection of images.
 
@@ -61,15 +61,19 @@ The following existing screenshot is from **2026-08-30 / v2.0.1** and illustrate
 
 ## Installation and updates
 
-Use the [latest release](https://github.com/2786886095/novelai-image-desktop/releases/latest) for available packages and version-specific notes. [Release notes (Chinese)](./docs/RELEASE_NOTES.md).
+Open the [Latest release page](https://github.com/2786886095/novelai-image-desktop/releases/latest) and choose the package for your platform from its assets. Use that page's version-specific notes rather than an old version or tag link. Package availability and installation requirements may change between releases.
 
-| Platform | Package | Notes |
+| Platform | Choose on the Latest page | Installation limits |
 | --- | --- | --- |
-| Windows x64 | Setup EXE or portable EXE | The installer provides shortcuts and in-app updates. Replace portable packages manually. |
-| macOS Intel / Apple silicon | Universal DMG or ZIP | Unsigned; see the installation guide for system prompts. |
-| Linux x64 | AppImage | Grant execution permission before running. |
-| Android | APK | Install manually. |
-| iOS | Unsigned IPA | Requires your own signing or sideloading; not an App Store package. |
+| Windows x64 | [Setup EXE](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [portable EXE](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Check the Latest signing notes. The currently verified Windows delivery has no Authenticode signature; do not assume that security or trust warnings are suppressed. Back up data and update manually. |
+| macOS Intel / Apple silicon | [Universal DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [Universal ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Check the Latest signing and notarization notes. Notarization has not been confirmed for the currently verified delivery; system trust prompts may apply. |
+| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Grant execution permission, then run; replace the package manually. |
+| Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Follow the Latest installation and signature notes. Install manually; full physical-device and in-place-upgrade acceptance is not established for the currently verified delivery. |
+| iOS | [IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | If the Latest asset is an **unsigned IPA**, it is **not directly installable on a stock iPhone**. Your own valid Apple signing and provisioning are required. Do not assume App Store or TestFlight availability unless the Latest notes explicitly confirm it. |
+
+**Manual updates:** download the current package yourself unless the Latest notes explicitly confirm a supported updater path. An updater manifest is not guaranteed, and package versions or tag naming may not trigger an in-app update; do not assume the updater will offer new bytes. Back up settings and works before replacement. Do not uninstall or delete existing data merely to force an update.
+
+Use the verification and checksum files attached to the [Latest page](https://github.com/2786886095/novelai-image-desktop/releases/latest) for the assets you download; their names and availability can change between releases. [Repository source on main](https://github.com/2786886095/novelai-image-desktop/tree/main) is the current repository branch, not proof of a particular binary's exact build source; use the release verification records for that identity. Stable publication does not establish full 39-feature, physical-device or paid production-provider acceptance, which remains incomplete for the currently verified delivery. [Release notes (Chinese)](./docs/RELEASE_NOTES.md).
 
 Windows installer and portable builds share `%APPDATA%\novelai-image-desktop\`. Portable does **not** mean all user data is stored beside the executable. Back up settings and images before replacing packages. Desktop and mobile features may differ; local Artist Detective iteration is Windows-only. [Platform differences](./docs/guide/FEATURES.md#platforms).
 
