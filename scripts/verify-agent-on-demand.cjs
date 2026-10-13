@@ -12,6 +12,8 @@ const {app}=require('electron');
 const profileBase=path.resolve(process.argv[2]??'artifacts/repair-2.4.1/live-agent');
 require('node:fs').mkdirSync(profileBase,{recursive:true});
 app.setPath('userData',require('node:fs').mkdtempSync(path.join(profileBase,'electron-profile-')));
+// Authenticate only CI release-list queries, never the redirecting asset transport.
+require('./ci-github-api-auth.cjs').installCiGitHubApiAuth(require('../dist-electron/electron/ipc/download-request.js'));
 const {HarnessEngine}=require('../dist-electron/electron/ipc/harness-engine.js');
 const {downloadCompatibleHarness,queryCompatibleHarness}=require('../dist-electron/electron/ipc/harness-update.js');
 const {startHarnessBridge}=require('../dist-electron/electron/ipc/harness-bridge.js');

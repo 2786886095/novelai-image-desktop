@@ -139,7 +139,11 @@ jobs:
 
       - name: Verify real on-demand Agent download, startup and offline reuse
         if: runner.os == 'Windows' && !inputs.candidate_build_only
-        run: node scripts/verify-agent-on-demand.cjs release/agent-smoke
+        env:
+          CI_AGENT_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node --test scripts/ci-github-api-auth.test.cjs
+          node scripts/verify-agent-on-demand.cjs release/agent-smoke
 
       - name: Upload packaged smoke evidence
         if: always() && !inputs.candidate_build_only
