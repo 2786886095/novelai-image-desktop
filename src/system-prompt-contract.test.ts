@@ -14,7 +14,7 @@ const fallback:any={unicode:'IMPORT_TXT_龙白_🖼️\nPreserve supplied subjec
 const fixture:any=process.env.SYSTEM_PROMPT_CONTRACT_FIXTURE?JSON.parse(fs.readFileSync(process.env.SYSTEM_PROMPT_CONTRACT_FIXTURE,'utf8')):fallback;
 const sha=(s:string)=>crypto.createHash('sha256').update(s).digest('hex');
 const observations:any[]=[];const servers:ReturnType<typeof createServer>[]=[];let caseNumber=0;
-beforeEach(()=>{const base=process.env.SYSTEM_PROMPT_PROFILE_ROOT??os.tmpdir();fs.mkdirSync(base,{recursive:true});host.root=fs.mkdtempSync(path.join(base,'system-prompt-contract-'));host.picked=[];host.tools=[];host.outbound=[];vi.resetModules();caseNumber++;});
+beforeEach(()=>{const base=process.env.SYSTEM_PROMPT_PROFILE_ROOT??os.tmpdir();fs.mkdirSync(base,{recursive:true});host.root=fs.realpathSync.native(fs.mkdtempSync(path.join(base,'system-prompt-contract-')));host.picked=[];host.tools=[];host.outbound=[];vi.resetModules();caseNumber++;});
 afterEach(async()=>{observations.push({case:caseNumber,profile:host.root,loopbackRequests:host.outbound.length,externalRequests:host.outbound.filter(x=>!x.startsWith('http://127.0.0.1:')).length});if(process.env.SYSTEM_PROMPT_OBSERVATION_FILE)fs.writeFileSync(process.env.SYSTEM_PROMPT_OBSERVATION_FILE,JSON.stringify(observations,null,2));await Promise.all(servers.splice(0).map(s=>new Promise<void>(r=>s.close(()=>r()))));});
 const imported=(text:string,filename:string)=>importer.importImageSystemPrompt(text,{filename,sourceHash:sha(text),now:'2026-10-14T00:00:00.000Z'});
 function observe(name:string,data:any){observations.push({name,...data});}
