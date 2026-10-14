@@ -1,3 +1,4 @@
+import {preservedGenerationTime} from "./history-generation-time";
 import { app, dialog, shell } from "electron";
 import {exportImageSettings, readImageSettingsBackup} from "../../src/compatible-image-backup";
 import {SENSITIVE_SETTING_KEYS} from "./credential-vault";
@@ -996,6 +997,7 @@ function dateFolder(value: unknown) {
 
 function safeHistoryShape(raw: PortableHistoryItem): Omit<HistoryItem, "id" | "filePath" | "fileUrl" | "groupId"> {
   return {
+    ...preservedGenerationTime(raw),
     date: dateFolder(raw.date),
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
     params: raw.params && typeof raw.params === "object" ? raw.params : cloneJson(DEFAULT_PARAMS),

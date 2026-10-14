@@ -538,6 +538,16 @@ export interface PromptVariants {
   featurePrompt: string;
 }
 
+/** Successful prompt conversion may carry advisory template warnings. */
+export interface ConvertPromptResult {
+  ok: boolean;
+  result?: string;
+  variants?: PromptVariants;
+  validation?: {total:number;tags:number;natural:number;tagPercent:number};
+  warnings?: string[];
+  message: string;
+}
+
 /** In-flight/just-finished convert or reverse requests. Concurrent, not a
  * serial queue: each job fires its API call immediately on creation and is
  * updated in place when that call resolves. Not persisted across restarts. */
@@ -551,6 +561,7 @@ export interface TextToolJob {
   status: TextToolJobStatus;
   result?: string;
   variants?: PromptVariants;
+  warnings?: string[];
   message?: string;
   addedAt: number;
 }
@@ -566,6 +577,7 @@ export interface TextToolHistoryItem {
   sourceImagePath?: string;
   result: string;
   variants?: PromptVariants;
+  warnings?: string[];
   createdAt: string;
 }
 
@@ -976,6 +988,10 @@ export interface AnlasQuoteResult {
 }
 
 export interface HistoryItem {
+  /** Local generation completion, never the official server epoch or filesystem mtime. */
+  generatedAt?: string;
+  generatedAtSource?: "local-completion";
+  generatedImageSha256?: string;
   /** Compatible-provider request receipt. No URL or credential is persisted here. */
   generationProvider?: "openai-images";
   compatibleRequest?: Record<string, unknown>;
@@ -1523,6 +1539,9 @@ export interface AppSettings {
   /** User-manageable SillyTavern JSON presets shared by AI reverse and prompt conversion. */
   reverseConvertPromptPresets: import("./tavern/image-task-preset").ImageTaskPromptPreset[];
   reverseConvertPromptPresetId: string;
+  /** Independent selections; old shared selection is retained for compatibility. */
+  convertSystemPromptPresetId?: string;
+  reverseSystemPromptPresetId?: string;
   // Legacy per-mode comic storyboard templates. Kept for migration only.
   comicAnalyzePromptTemplates: ModePromptTemplates;
   // Current single storyboard analysis template used by the comic generator.
@@ -1691,12 +1710,15 @@ export interface ImportedParams {
 export type CopyImageMetadataResult = { status: "copied" | "unsupported" | "failed" };
 
 export interface NaiDesktopApi {
+  /** Fixed public official parser assets only; never image bytes or account credentials. */
+  fetchOfficialMetadataAsset?: (assetId: string) => Promise<Uint8Array>;
+  cancelOfficialMetadataAssetDownloads?: () => Promise<void>;
   listUiFonts: () => Promise<import("./typography").UiFont[]>;
   importUiFont: () => Promise<import("./typography").UiFont | null>;
   readUiFont: (id: string) => Promise<string>;
   removeUiFont: (id: string) => Promise<void>;
   favoritesStatus: (src:string) => Promise<import('./favorites-types').ImageFavorite|null>;
-  favoritesList: () => Promise<import('./favorites-types').ImageFavoriteLibrary>;
+  favoritesList: (options?: {resolveGeneratedAt?: boolean}) => Promise<import('./favorites-types').ImageFavoriteLibrary>;
   favoritesAdd: (src:string) => Promise<{item:import('./favorites-types').ImageFavorite;duplicate:boolean}>;
   favoritesRename: (id:string,name:string) => Promise<import('./favorites-types').ImageFavorite>;
   favoritesRemove: (id:string) => Promise<{removed:boolean;filesRetained:boolean}>;
@@ -2076,13 +2098,7 @@ export interface NaiDesktopApi {
     knownCharacter?: boolean,
     templateVersion?: ReversePromptTemplateVersion,
     assistant?: import("./prompt-assistant").PromptEditRequest,
-  ) => Promise<{
-    ok: boolean;
-    result?: string;
-    variants?: PromptVariants;
-    validation?: {total:number;tags:number;natural:number;tagPercent:number};
-      message: string;
-  }>;
+  ) => Promise<ConvertPromptResult>;
   getConvertHistory: () => Promise<TextToolHistoryItem[]>;
   addConvertHistoryItem: (
     item: TextToolHistoryItem,

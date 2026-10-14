@@ -104,3 +104,22 @@ These original, unmodified fonts are distributed under SIL Open Font License 1.1
 - **霞鹜漫黑 / LXGW Marker Gothic** v1.003: https://github.com/lxgw/LxgwMarkerGothic; license `builtin-marker.OFL.txt`.
 - **得意黑 / Smiley Sans** v2.0.1: https://github.com/atelier-anchor/smiley-sans; license `builtin-smiley.OFL.txt`.
 - **思源宋体 CN / Source Han Serif CN** 2.003R: https://github.com/adobe-fonts/source-han-serif; license `builtin-source-serif.OFL.txt`.
+
+## IG5 image-task rule adaptations
+
+- Source: https://github.com/Minglink/dsh-infinite-gen-5
+- Pinned revision: `eeff0bbeb905bdc57952dc7497d5fdfc33653c0f`.
+- Attribution: Minglink and the upstream contributors.
+- License: CC BY-NC-SA 4.0; full text and attribution notice are bundled as
+  `shared/ig5-LICENSE.txt` and `shared/ig5-NOTICE.txt`.
+- Modified: three task-scoped rewrites of general workflow, evidence, output-format
+  and authorization rules for desktop prompt conversion, image reconstruction
+  and Studio image planning/generation. These are not upstream native NovelAI
+  prompts, do not imply upstream endorsement, and bundle no IG5 executable tools.
+- Scope: these adaptation texts retain CC BY-NC-SA 4.0 terms; that notice does not
+  relicense unrelated application code, existing presets or other dependencies.
+  Commercial-use authorization has not been established. The fixed source URLs,
+  byte sizes, hashes and adaptation statement are in `shared/ig5-image-prompts.json`.
+- Platform boundary: packaging the desktop adaptations does not assert Android
+  or iOS default-prompt parity. Their separate Flutter implementation and declared
+  assets determine what is actually enabled on those platforms.

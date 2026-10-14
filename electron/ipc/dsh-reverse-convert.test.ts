@@ -10,11 +10,11 @@ import { LYRA_PRESET_SYSTEM_PROMPT } from "../../src/tavern/lyra-preset-data";
 describe("built-in DSH image AI adapter", () => {
   it("injects the real built-in provenance and preserves the existing schema", () => {
     const value = injectDshImageAiSystemPrompt({ task: "reverse", systemPrompt: "RETURN_JSON" });
-    expect(value).toContain("DSH Infinite Gen 3");
+    expect(value).toContain("IG5 task-scoped rule adapter");
     expect(value).toContain("Inspect the supplied image directly");
     expect(value).toContain("RETURN_JSON");
-    expect(DSH_IMAGE_AI_PROVENANCE.sourceCommit).toBe("d0c43196079849d4501afb3d1a8e195cf808024a");
-    expect(DSH_IMAGE_AI_PROVENANCE.sourcePromptSha256).toBe("86385E839813D79C1AB6495B723BEA70BF36B0C55B359FDB18B78C4230C49244");
+    expect(DSH_IMAGE_AI_PROVENANCE.sourceCommit).toBe("eeff0bbeb905bdc57952dc7497d5fdfc33653c0f");
+    expect(DSH_IMAGE_AI_PROVENANCE.sourceRulesSha256).toBe("cc3f06240a3ad92ccc1d5c35f1c1e6be81238e2b5c11eb94d3e72d1786e895a4");
   });
 
   it("supports strict conversion mode", () => {
@@ -37,11 +37,12 @@ describe("built-in DSH image AI adapter", () => {
     expect(buildDshImageAiSystemAddon("reverse")).not.toContain("ordinary chat");
   });
 
-  it("shares the supplied Lyra preset across all three image-task prompts", () => {
+  it("uses scoped IG5 defaults while retaining Lyra attribution for saved choices", () => {
     for (const task of ["tavern-image", "reverse", "convert"] as const) {
       const value = buildDshImageAiSystemAddon(task);
-      expect(value).toContain("Shared SillyTavern preset · 夏瑾 天琴座 Beta 3.8");
-      expect(value.length).toBeGreaterThan(5000);
+      expect(value).toContain("IG5 task-scoped rule adapter");
+      expect(value).not.toContain(LYRA_PRESET_SYSTEM_PROMPT);
+      expect(value.length).toBeGreaterThan(2000);
     }
     expect(LYRA_IMAGE_TASK_PROVENANCE.sourceSha256)
       .toBe("09D89AE4F64E05C06962786BB19A8C7364898E863DCC3FCDE99F661E841EF6A9");
@@ -65,7 +66,7 @@ describe("built-in DSH image AI adapter", () => {
     };
     for (const task of ["reverse", "convert"] as const) {
       const value = injectDshImageAiSystemPrompt({ task, systemPrompt: "BASE", sharedPreset });
-      expect(value).toContain("Shared SillyTavern preset · Custom preset");
+      expect(value).toContain("Selected system preset · Custom preset");
       expect(value).toContain("CUSTOM_SYSTEM_PROMPT");
       expect(value).toContain("CUSTOM_JAILBREAK_PROMPT");
       expect(value).not.toContain(LYRA_PRESET_SYSTEM_PROMPT);
@@ -79,7 +80,7 @@ describe("built-in DSH image AI adapter", () => {
       sharedPreset: null,
     });
     expect(value).toContain("BASE");
-    expect(value).not.toContain("Shared SillyTavern preset");
+    expect(value).not.toContain("Selected system preset");
     expect(value).not.toContain(LYRA_PRESET_SYSTEM_PROMPT);
   });
 });

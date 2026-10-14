@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createDefaultImageTaskPromptPreset,
+  createLegacyImageTaskPromptPreset,
   imageTaskPromptPresetFromSampler,
   normalizeImageTaskPromptPresets,
   selectedImageTaskPromptPreset,
@@ -8,8 +9,8 @@ import {
 import { createTavernSamplerPreset } from "./compat";
 
 describe("reverse/convert shared prompt presets", () => {
-  it("ships Lyra as the initial shared preset", () => {
-    const preset = createDefaultImageTaskPromptPreset();
+  it("retains Lyra as a selectable legacy preset", () => {
+    const preset = createLegacyImageTaskPromptPreset();
     expect(preset.name).toBe("夏瑾 天琴座 Beta 3.8");
     expect(preset.sourceHash).toBe("09D89AE4F64E05C06962786BB19A8C7364898E863DCC3FCDE99F661E841EF6A9");
     expect(preset.systemPrompt.length).toBeGreaterThan(3000);

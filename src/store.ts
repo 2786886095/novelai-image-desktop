@@ -243,6 +243,7 @@ interface AppState {
   reverseHistory: TextToolHistoryItem[];
   convertInput: string;
   convertResult: string;
+  convertResultWarnings: string[];
   convertMode: ReversePromptMode;
   convertKnownCharacter: boolean;
   convertJobs: TextToolJob[];
@@ -375,7 +376,7 @@ interface AppState {
   deleteReverseHistoryItem: (id: string) => Promise<void>;
   clearReverseHistory: () => Promise<void>;
   setConvertInput: (text: string) => void;
-  setConvertResult: (text: string) => void;
+  setConvertResult: (text: string, warnings?: string[]) => void;
   setConvertMode: (mode: ReversePromptMode) => void;
   setConvertKnownCharacter: (known: boolean) => void;
   runConvertPrompt: () => Promise<void>;
@@ -945,6 +946,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   reverseHistory: [],
   convertInput: "",
   convertResult: "",
+  convertResultWarnings: [],
   convertMode: "tags" as ReversePromptMode,
   convertKnownCharacter: false,
   convertResultVariants: null,
@@ -1877,8 +1879,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ convertInput: text });
   },
 
-  setConvertResult(text) {
-    set({ convertResult: text });
+  setConvertResult(text, warnings) {
+    set({ convertResult: text, convertResultWarnings: warnings ? [...warnings] : [] });
   },
 
   setConvertMode(mode) {
@@ -1928,9 +1930,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (result.ok && result.result) {
       set({
         convertJobs: get().convertJobs.map((j) =>
-          j.id === job.id ? { ...j, status: "done", result: result.result, variants: result.variants } : j,
+          j.id === job.id ? { ...j, status: "done", result: result.result, variants: result.variants, warnings: result.warnings ? [...result.warnings] : [] } : j,
         ),
         convertResult: result.result,
+        convertResultWarnings: result.warnings ? [...result.warnings] : [],
         convertResultVariants: result.variants ?? null,
         toast: storeText(get().settings, "toast.convertDone"),
       });
@@ -1941,6 +1944,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         input: convertInput,
         result: result.result,
         variants: result.variants,
+        warnings: result.warnings ? [...result.warnings] : [],
         createdAt: new Date().toISOString(),
       };
       set({ convertHistory: [historyItem, ...get().convertHistory] });

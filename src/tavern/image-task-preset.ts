@@ -1,3 +1,4 @@
+import ig5 from "../../shared/ig5-image-prompts.json";
 import type { TavernSamplerPreset } from "../agent/types";
 import {
   LYRA_PRESET_JAILBREAK_PROMPT,
@@ -19,12 +20,24 @@ export interface ImageTaskPromptPreset {
   updatedAt: string;
 }
 
-export const DEFAULT_IMAGE_TASK_PROMPT_PRESET_ID = "builtin-lyra-beta-3-8-image-task";
-
-export function createDefaultImageTaskPromptPreset(): ImageTaskPromptPreset {
+export type ImageSystemPromptTask = 'convert' | 'reverse';
+export const DEFAULT_IMAGE_TASK_PROMPT_PRESET_ID = "builtin-ig5-convert";
+export const DEFAULT_REVERSE_IMAGE_TASK_PROMPT_PRESET_ID = "builtin-ig5-reverse";
+export const LEGACY_IMAGE_TASK_PROMPT_PRESET_ID = "builtin-lyra-beta-3-8-image-task";
+export function createDefaultImageTaskPromptPreset(task: ImageSystemPromptTask = 'convert'): ImageTaskPromptPreset {
+  return {id: task === 'reverse' ? DEFAULT_REVERSE_IMAGE_TASK_PROMPT_PRESET_ID : DEFAULT_IMAGE_TASK_PROMPT_PRESET_ID,
+    name: task === 'reverse' ? '无限五代 · 图片反推适配' : '无限五代 · 提示词转换适配',
+    systemPrompt: ig5.prompts[task], jailbreakPrompt: '', source: 'builtin',
+    sourceName: ig5.source + '@' + ig5.commit, sourceHash: ig5.promptSha256[task],
+    createdAt: '2026-10-14T00:00:00.000Z', updatedAt: '2026-10-14T00:00:00.000Z'};
+}
+export function createDefaultImageTaskPromptPresets(): ImageTaskPromptPreset[] {
+  return [createDefaultImageTaskPromptPreset('convert'),createDefaultImageTaskPromptPreset('reverse'),createLegacyImageTaskPromptPreset()];
+}
+export function createLegacyImageTaskPromptPreset(): ImageTaskPromptPreset {
   const timestamp = "2026-09-06T00:00:00.000Z";
   return {
-    id: DEFAULT_IMAGE_TASK_PROMPT_PRESET_ID,
+    id: LEGACY_IMAGE_TASK_PROMPT_PRESET_ID,
     name: LYRA_PRESET_NAME,
     systemPrompt: LYRA_PRESET_SYSTEM_PROMPT,
     jailbreakPrompt: LYRA_PRESET_JAILBREAK_PROMPT,
@@ -51,9 +64,9 @@ export function imageTaskPromptPresetFromSampler(preset: TavernSamplerPreset): I
 }
 
 export function normalizeImageTaskPromptPresets(value: unknown): ImageTaskPromptPreset[] {
-  if (!Array.isArray(value)) return [createDefaultImageTaskPromptPreset()];
+  if (!Array.isArray(value)) return createDefaultImageTaskPromptPresets();
   const ids = new Set<string>();
-  return value.flatMap((raw) => {
+  const preserved: ImageTaskPromptPreset[] = value.flatMap((raw) => {
     if (!raw || typeof raw !== "object") return [];
     const item = raw as Partial<ImageTaskPromptPreset>;
     const id = typeof item.id === "string" ? item.id.trim().slice(0, 160) : "";
@@ -81,12 +94,26 @@ export function normalizeImageTaskPromptPresets(value: unknown): ImageTaskPrompt
       updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : timestamp,
     }];
   });
+  // Keep an intentionally empty library empty, and never replace a saved custom body.
+  if (value.length) for (const task of ['convert','reverse'] as const) {
+    const preset = createDefaultImageTaskPromptPreset(task);
+    if (!ids.has(preset.id)) preserved.push(preset);
+  }
+  return preserved;
+}
+
+/** Valid explicitly saved choices (including legacy ones) survive migration. */
+export function imageTaskPresetIds(settings: {reverseConvertPromptPresetId?:unknown;convertSystemPromptPresetId?:unknown;reverseSystemPromptPresetId?:unknown}, presets: ImageTaskPromptPreset[]) {
+  const valid = (id:unknown) => typeof id === 'string' && presets.some(p=>p.id===id) ? id : undefined;
+  const choose = (task:ImageSystemPromptTask, id:unknown) => valid(id) ?? valid(settings.reverseConvertPromptPresetId) ?? valid(createDefaultImageTaskPromptPreset(task).id) ?? '';
+  return {convertSystemPromptPresetId:choose('convert',settings.convertSystemPromptPresetId),reverseSystemPromptPresetId:choose('reverse',settings.reverseSystemPromptPresetId)};
 }
 
 export function selectedImageTaskPromptPreset(
   presets: ImageTaskPromptPreset[] | undefined,
   selectedId: string | undefined,
+  task: ImageSystemPromptTask = 'convert',
 ): ImageTaskPromptPreset | null {
-  const available = presets ?? [createDefaultImageTaskPromptPreset()];
-  return available.find((item) => item.id === selectedId) ?? available[0] ?? null;
+  const available = presets ?? createDefaultImageTaskPromptPresets();
+  return available.find((item) => item.id === selectedId) ?? available.find(item=>item.id===createDefaultImageTaskPromptPreset(task).id) ?? available[0] ?? null;
 }

@@ -1,7 +1,8 @@
 import {normalizeStudioDefaults} from '../../src/agent/preferences';
 import { normalizeStudioComposerActions } from '../../src/agent/composer-actions';
 import {studioBuiltinPreset,studioPresetId,STUDIO_DEFAULT_PRESET_ID,type StudioConversationOptions} from '../../src/agent/workspace-controls';
-import {importTavernSamplerPresetJson} from '../../src/tavern/preset-import';
+import {decodeSystemPromptFile,importImageSystemPrompt,MAX_SYSTEM_PROMPT_IMPORT_BYTES,SystemPromptImportError} from '../../src/tavern/system-prompt-import';
+import {systemPromptImportErrorText,systemPromptImportText} from '../../src/tavern/system-prompt-import-text';
 import { recoverInterruptedImageRepairs } from "../../src/tavern/image-repair";
 import { readSceneBindings } from "../../src/tavern/scene-bindings";
 import { dialog } from "electron";
@@ -653,27 +654,34 @@ function safeFileName(name: string) {
 
 /** Explicit UI file picker; imported instructions remain declarative preset data. */
 export async function importStudioPresetFiles():Promise<AgentWorkspaceMutationResult & {cancelled?:boolean}>{
- const picked=await dialog.showOpenDialog({title:'导入生图预设',properties:['openFile','multiSelections'],filters:[{name:'JSON / Markdown / Text 预设',extensions:['json','md','txt']}]});
+ const language=getSettings().language;
+ const picked=await dialog.showOpenDialog({title:systemPromptImportText(language).import,properties:['openFile','multiSelections'],filters:[{name:'UTF-8 JSON / Markdown / Text',extensions:['json','md','txt']}]});
+ // Read after the asynchronous picker: do not overwrite intervening chat output.
  const workspace=readAgentWorkspace();
  if(picked.canceled)return {ok:true,cancelled:true,workspace};
- const errors:string[]=[],imported:TavernSamplerPreset[]=[];
+ const errors:string[]=[],warnings:string[]=[],imported:TavernSamplerPreset[]=[];
  for(const file of picked.filePaths){try{
-  const stat=fs.statSync(file);if(!stat.isFile()||stat.size<=0||stat.size>2*1024*1024)throw Error('文件为空或超过 2 MB。');
-  const text=fs.readFileSync(file,'utf8').replace(/^\uFEFF/,'');
-  let preset:TavernSamplerPreset;
-  if(path.extname(file).toLowerCase()==='.json'){
-   const raw=JSON.parse(text);
-   if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('无效的预设 JSON。');
-   if(!Array.isArray(raw.prompts)&&typeof raw.systemPrompt!=='string'&&typeof raw.system_prompt!=='string')throw Error('此 JSON 不是预设；角色卡和世界书请从对应页签导入。');
-   if(typeof raw.systemPrompt==='string'||typeof raw.system_prompt==='string')preset=normalizeTavernSamplerPreset({...raw,systemPrompt:raw.systemPrompt??raw.system_prompt,jailbreakPrompt:raw.jailbreakPrompt??raw.jailbreak_prompt??''});
-   else {const result=importTavernSamplerPresetJson(text,path.basename(file));if(!result.importedPromptCount)throw Error('没有可用的提示词块。');if(result.warnings.length)errors.push(...result.warnings);preset=result.preset;}
-  }else preset=normalizeTavernSamplerPreset({name:path.basename(file,path.extname(file)),systemPrompt:text,jailbreakPrompt:''});
-  preset.id=crypto.randomUUID();preset.source='sillytavern-json';preset.sourceName=path.basename(file);preset.sourceHash=crypto.createHash('sha256').update(text).digest('hex');
+  const stat=fs.lstatSync(file);
+  if(!stat.isFile()||stat.size<=0)throw new SystemPromptImportError('empty');
+  if(stat.size>MAX_SYSTEM_PROMPT_IMPORT_BYTES)throw new SystemPromptImportError('bytes');
+  const bytes=fs.readFileSync(file);
+  const result=importImageSystemPrompt(decodeSystemPromptFile(bytes),{filename:path.basename(file),sourceHash:crypto.createHash('sha256').update(bytes).digest('hex')});
+  const preset=result.preset;preset.id=crypto.randomUUID();
+  warnings.push(...result.warnings);
   imported.push(preset);
- }catch(error){errors.push(path.basename(file)+'：'+String(error));}}
- if(!imported.length)return {ok:false,message:errors.join('\n')||'没有导入内容。',workspace};
- workspace.samplerPresets.push(...imported);
- return {ok:true,workspace:writeAgentWorkspace(workspace),message:`已导入 ${imported.length} 个预设。${errors.length?'\n'+errors.join('\n'):''}`};
+ }catch(error){errors.push(path.basename(file)+'：'+systemPromptImportErrorText(error,language));}}
+ // Reject the batch before writing any profile when any file is invalid.
+ if(errors.length||!imported.length)return {ok:false,message:errors.join('\n')||systemPromptImportText(language).empty,workspace};
+ const selectedIds:string[]=[];
+ for(const preset of imported){
+  const duplicate=workspace.samplerPresets.findIndex(item=>item.source!=='builtin'&&item.sourceHash?.toLowerCase()===preset.sourceHash?.toLowerCase());
+  // A matching raw-file hash does not authorize undoing the user's edits.
+  if(duplicate>=0){selectedIds.push(workspace.samplerPresets[duplicate].id);}
+  else {workspace.samplerPresets.push(preset);selectedIds.push(preset.id);}
+ }
+ const chat=workspace.conversations.find(item=>item.id===workspace.selectedConversationId&&!item.archivedAt);
+ if(chat){chat.studioPresetId='tavern:'+selectedIds[0];workspace.studioDefaults=normalizeStudioDefaults({...workspace.studioDefaults,studioPresetId:chat.studioPresetId});}
+ return {ok:true,workspace:writeAgentWorkspace(workspace),message:`${systemPromptImportText(language).import}: ${imported.length}${warnings.length?'\n'+warnings.join('\n'):''}`};
 }
 
 function uniquePath(directory: string, fileName: string) {

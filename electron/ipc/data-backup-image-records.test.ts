@@ -44,3 +44,14 @@ it('parameter key ordering and remapped group IDs do not defeat de-duplication',
 it('legacy omitted timestamps remain repeat-importable without duplicates',async()=>{
  const {target}=await input(d=>{d.items=d.items.slice(0,1);delete d.items[0].createdAt;delete d.items[0].date;});await restore(target);await restore(target);expect(fixture.store.history).toHaveLength(1);
 });
+
+it('completion/hash provenance survives import and repeated import without being synthesized for legacy rows',async()=>{
+ const stamp='2026-10-14T01:02:03.004Z',sha='a'.repeat(64);
+ const {target}=await input(d=>{d.items=d.items.slice(0,1);Object.assign(d.items[0],{generatedAt:stamp,generatedAtSource:'local-completion',generatedImageSha256:sha});});
+ await restore(target);expect(fixture.store.history[0]).toMatchObject({generatedAt:stamp,generatedAtSource:'local-completion',generatedImageSha256:sha});
+ await restore(target);expect(fixture.store.history).toHaveLength(1);
+});
+it('legacy backup imports cannot invent a generation completion marker from createdAt',async()=>{
+ const {target}=await input(d=>{d.items=d.items.slice(0,1);delete d.items[0].generatedAt;delete d.items[0].generatedAtSource;delete d.items[0].generatedImageSha256;});
+ await restore(target);expect(fixture.store.history[0].generatedAt).toBeUndefined();expect(fixture.store.history[0].generatedAtSource).toBeUndefined();
+});

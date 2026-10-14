@@ -21,6 +21,15 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 [![Build Mobile](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml)
 [![License: MIT](https://img.shields.io/badge/Code-MIT-586069)](./LICENSE)
 
+## 本轮桌面更新范围（发行准备）
+
+- **原数据恢复**：联网／离线可选，默认联网仅下载官方解析器；图片在本机读取，不上传。联网当前支持 PNG/WebP，JPEG 请选离线。下拉菜单统一为软件样式，历史未加载或读取失败不再显示为零张。
+- **收藏夹**：支持收藏时间／可核验的本机生成完成时间及升降序；默认收藏时间从新到旧，生成时间未知的旧图排在末尾。
+- **系统提示词**：转换、反推、生图智能体支持导入；默认提取并适配 IG5 通用工作规则，不是原样运行仓库的逆向工作台指令。现有自定义配置与应用权限规则保留。
+- **画师侦探下载**：补充可见错误、代理路径与断点续传处理；该本地工作流仅 Windows x64 + NVIDIA，完整模型至少 8 GB 显存，资源下载约 5.12 GiB，完整版建议预留至少 35 GB 磁盘空间。资源体积不等于应用安装包或安装后占用；轻量模型没有统一低显存保证。
+
+**范围与状态**：上述桌面新增能力尚未移植到 Android／iOS；移动端仍使用原有本机元数据解析和提示词预设流程。五端新包的正式构建／发布正在准备，不表示已经上线或通过完整 39 × 5 功能验收。iOS 仍为未签名 IPA，须自行签名，不能直接安装普通 iPhone。最终包与证据以 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 为准，发行源码见 [main](https://github.com/2786886095/novelai-image-desktop/tree/main)。
+
 <a id="quick-start"></a>
 ## 先完成你的第一张图
 

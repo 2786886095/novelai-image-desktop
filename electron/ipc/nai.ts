@@ -1,3 +1,4 @@
+import {localGenerationTime} from "./history-generation-time";
 import {extractEmbeddedImageMetadata} from '../image-metadata';
 import {prepareGooglePromptTranslation} from '../../src/google-prompt-translation';
 import {resolveTranslationTarget,baiduTranslationTarget,translationLanguageName,normalizeTranslationSource,parseTranslationReply} from '../../src/translation';
@@ -128,7 +129,7 @@ import {
   parsePromptVariantResponse,
   resolveModePrompt,
 } from "../../src/prompt-mode";
-import {cameraIntentSource,auditMixedEnvelope,mixedTemplateContract,mixedEnvelopeInstruction,patchMixedEnvelope,normalizeMixedEnvelope} from '../../src/prompt-template-audit';
+import {cameraIntentSource,auditMixedEnvelope,mixedTemplateContract,mixedEnvelopeInstruction,patchMixedEnvelope,normalizeMixedEnvelope,promptUnitIdentity} from '../../src/prompt-template-audit';
 import { beginJob, cancelAllJobs } from "./job-registry";
 import { NaiSseFrameDecoder, NaiStreamFrameDecoder, type NaiStreamFrame } from "./nai-stream";
 
@@ -2076,6 +2077,7 @@ async function saveBuffers(
         fileUrl: toLocalMediaUrl(filePath, id),
         date,
         createdAt: now.toISOString(),
+        ...localGenerationTime(outBuffer, now),
         params: { ...params, seed: actualSeed },
         actualSeed,
         model: modelOverride ?? params.model,
@@ -3359,13 +3361,14 @@ export async function reversePromptImage(
   const reconstructionInstruction = `\n反推必须以“可复现画面”为目标，而不是只做粗略识别。输出前逐项核对：主体数量与身份、背景颜色/复杂度、全身或半身取景、视角、人物在画面中的大小与位置、双腿姿势、左右手臂各自的方向/弯曲/指向、手势、头部朝向、注视和表情。\nTag 模式按“人数与构图 → 身份 → 外貌服装 → 姿势动作 → 背景”排序。优先输出图中能直接观察到、能稳定复现构图的成熟 Danbooru Tag，不要用“电影感”“精美光影”等主观修饰替代白色背景、全身、站立、分腿、伸臂、指向等事实。单人全身图不得只写 pointing：若可见，必须同时保留 1girl、solo、white background/simple background、full body、standing、spread legs/legs apart、outstretched arm、pointing、looking at viewer、smile 等互不冲突的成熟 Tag；已知角色必须保留准确的 Danbooru 身份 Tag。左右关系没有可靠 Tag 时可用最短英文短语补足。不要把 standing wide stance 误写成坐姿语义，也不要臆造图中不存在的背景、动作或光照。`;
   const systemPrompt = injectDshImageAiSystemPrompt({
     task: "reverse",
-    // A custom software template is authoritative; unrelated conversation presets
-    // must not prepend their own prose/output rules. Keep the saved switch intact.
-    enabled: Object.values((safeTemplateVersion === "v5" ? settings.reversePromptTemplates : settings.reversePromptTemplatesV45)??{}).some(value=>value?.trim()) ? false : settings.reverseConvertDshEnabled,
+    // Task output templates and imported system presets are separate layers.
+    // A custom template must not silently disable the selected system preset.
+    enabled: settings.reverseConvertDshEnabled,
     mode: settings.reverseConvertDshMode,
     sharedPreset: selectedImageTaskPromptPreset(
       settings.reverseConvertPromptPresets,
-      settings.reverseConvertPromptPresetId,
+      settings.reverseSystemPromptPresetId ?? settings.reverseConvertPromptPresetId,
+      "reverse",
     ),
     systemPrompt: [
     resolveModePrompt(
@@ -4238,6 +4241,7 @@ export async function convertPromptText(
   ok: boolean;
   result?: string;
   validation?: {total:number;tags:number;natural:number;tagPercent:number};
+  warnings?: string[];
   variants?: { namePrompt: string; featurePrompt: string };
   message: string;
 }> {
@@ -4263,13 +4267,13 @@ export async function convertPromptText(
   ).replace(/\{\{input\}\}/g, "<provided in the user message>");
   const systemPrompt = injectDshImageAiSystemPrompt({
     task: "convert",
-    // A custom software template is authoritative; unrelated conversation presets
-    // must not prepend their own prose/output rules. Keep the saved switch intact.
-    enabled: Object.values((safeTemplateVersion === "v5" ? settings.convertPromptTemplates : settings.convertPromptTemplatesV45)??{}).some(value=>value?.trim()) ? false : settings.reverseConvertDshEnabled,
+    // Preserve the explicit on/off switch, not a hidden cross-mode template gate.
+    enabled: settings.reverseConvertDshEnabled,
     mode: settings.reverseConvertDshMode,
     sharedPreset: selectedImageTaskPromptPreset(
       settings.reverseConvertPromptPresets,
-      settings.reverseConvertPromptPresetId,
+      settings.convertSystemPromptPresetId ?? settings.reverseConvertPromptPresetId,
+      "convert",
     ),
     systemPrompt: [
       baseSystemPrompt,
@@ -4304,22 +4308,65 @@ export async function convertPromptText(
   }
   const contract=!knownCharacter?mixedTemplateContract(baseSystemPrompt,mode,!assistance||isSparsePromptEditSource(chineseText)):null;
   if(contract){
-    const internalSystem=systemPrompt+'\n\n'+mixedEnvelopeInstruction;
-    let previous='',problems:string[]=[],stats:{total:number;tags:number;natural:number;tagPercent:number}|undefined;
-    for(let attempt=0;attempt<3;attempt++){
-      const delta=attempt&&stats;
-      const additions=stats?Math.max(0,contract.min-stats.total,Math.ceil(stats.tags/.7)-stats.total):0;
-      const correction=delta?`\n本轮只返回 JSON 增量 {"replace":[{"segment":0,"index":0,"unit":{"kind":"tag","text":"..."}}],"append":[{"segment":0,"units":[{"kind":"natural","text":"..."}]}],"remove":[]}，索引从0开始。没有改动的项不要返回；不要返回 segments 或完整改写。程序合并后复验，因此不得通过把 Tag 假标为 natural 改比例。现有 ${stats!.total} 单元，${stats!.tags} Tag，${stats!.natural} 自然短语；建议额外补充 ${additions} 个不重复的可见关系自然短语（按原要求，无额外人物或情节）。含逗号的短语用 replace 修成一个无逗号短语，保持原意。` : '';
-      const reply=await callConvertApi(internalSystem+correction,userText+(attempt?`\n上次验收问题：${problems.join('；')}。只修正这些问题并保留用户明确要求及已合格单元。不得删除事实换取凑数。\n上一版：${previous}`:''),7000,`提示词转换 · mixed · ${attempt?'校正'+attempt:'模板验收'}`,true,false,true);
+    // V5 mixed template diagnostics are advisory. Return the usable prompt on
+    // the first response; do not spend extra model calls to satisfy soft rules.
+    // Transport/API errors still fail rather than becoming applicable results.
+    if(safeTemplateVersion==='v5'){
+      const reply=await callConvertApi(systemPrompt+'\n\n'+mixedEnvelopeInstruction,userText,7000,'提示词转换 · mixed · 模板提示',true,false,true);
       if(!reply.ok)return {ok:false,message:'转换失败：'+reply.message};
       try{
-        previous=normalizeMixedEnvelope(delta?patchMixedEnvelope(previous,reply.content??''):reply.content??'');
-        const audit=auditMixedEnvelope(previous,auditText,contract);problems=audit.issues;stats=audit.stats;
+        const candidate=normalizeMixedEnvelope(reply.content??'',{repairMetadata:true});
+        const audit=auditMixedEnvelope(candidate,auditText,contract);
+        if(!audit.prompt.trim())return {ok:false,message:'转换失败：模型未返回可用提示词'};
+        return {ok:true,result:audit.prompt,validation:audit.stats,warnings:audit.issues,
+          message:audit.issues.length?'转换完成：模板问题仅供参考，不阻止应用或复用':`转换成功：${audit.stats.total}单元，Tag ${audit.stats.tags} / 自然语言 ${audit.stats.natural}`};
+      }catch(error){return {ok:false,message:'转换失败：内部提示词数据无法解析：'+(error instanceof Error?error.message:String(error))};}
+    }
+    let previous='',problems:string[]=[],stats:{total:number;tags:number;natural:number;tagPercent:number}|undefined;
+    let structureRepairUsed=false;
+    const structural=(issue:string)=>/角色段必须以|角色首词|base 人数|角色段数量|缺少有效段落|段落没有有效单元|保留用户指定的(?:单人|人物|多人)数量/.test(issue);
+    const deltaInstruction=`软件内部本轮输出协议：只返回一个 JSON 增量对象 {"replace":[{"segment":0,"index":0,"unit":{"kind":"tag","text":"..."}}],"append":[{"segment":0,"units":[{"kind":"natural","text":"..."}]}],"remove":[{"segment":0,"index":1}]}。根字段仅 replace/append/remove；索引从0开始，对应下方上一版的 segments[i].units[j]。没有改动的项不要返回，不返回完整提示词或 segments 根对象。unit 只能包含 kind 与 text，kind 只能 tag 或 natural。每个单元通常无逗号；引号内画面文字允许逗号和中文，不能拆开。成熟 Tag 用 tag；明确位置、身体侧、关系和层次短语用 natural，不假改 kind 凑比例。每个索引最多修改或删除一次，不改已合格事实，不新增人物或情节；含逗号的短语可 replace 成保持原意的无逗号短语。`;
+    // A full structure repair may reorder facts within a role, not swap owners.
+    // Role/count markers are structural; a misplaced first hair/clothing fact is not.
+    const preserveFacts=(before:string,after:string,issues:string[])=>{
+      const badUnits=new Set<string>();
+      for(const issue of issues.filter(issue=>!structural(issue)&&!issue.includes('校正丢失已合格单元')))for(const match of issue.matchAll(/segments\[(\d+)\]\.units\[(\d+)\]/g))badUnits.add(match[1]+':'+match[2]);
+      const original=JSON.parse(before),repaired=JSON.parse(after);
+      if(original.segments.length!==repaired.segments.length)throw Error('结构校正改变段落数量，无法可靠映射已有角色事实，未提交生图');
+      const available=new Map<string,number>();
+      for(const [segmentIndex,segment] of repaired.segments.entries())for(const unit of segment.units??[]){
+        if(!['tag','natural'].includes(unit?.kind)||typeof unit.text!=='string')continue;
+        const key=segmentIndex+'\n'+promptUnitIdentity(unit.kind,unit.text);available.set(key,(available.get(key)??0)+1);
+      }
+      for(const [segmentIndex,segment] of original.segments.entries())for(const [unitIndex,unit] of segment.units.entries()){
+        if(badUnits.has(segmentIndex+':'+unitIndex))continue;
+        const literal=unit.text.trim(),weighted=literal.match(/^(-?\d+(?:\.\d+)?)::\s*(.*?)\s*::$/),body=(weighted?weighted[2]:literal).trim();
+        if(issues.some(structural)&&unit.kind==='tag'&&((segmentIndex===0&&(!weighted||Number(weighted[1])>0)&&/^\d+\s*(?:girls?|boys?|others?)$/i.test(body))||(segmentIndex>0&&unitIndex===0&&/^(?:girl|boy|other|1girl|1boy|1other)$/i.test(literal))))continue;
+        const key=segmentIndex+'\n'+promptUnitIdentity(unit.kind,unit.text),count=available.get(key)??0;
+        if(!count)throw Error(`校正丢失已合格单元 segments[${segmentIndex}].units[${unitIndex}]：${unit.text}`);
+        available.set(key,count-1);
+      }
+    };
+    for(let attempt=0;attempt<3;attempt++){
+      const structureRepair=!!(attempt&&stats&&!structureRepairUsed&&problems.some(structural));
+      if(structureRepair)structureRepairUsed=true;
+      const delta=!!(attempt&&stats&&!structureRepair);
+      const additions=stats?Math.max(0,contract.min-stats.total,Math.ceil(stats.tags/.7)-stats.total):0;
+      const correction=delta?`\n现有 ${stats!.total} 单元，${stats!.tags} Tag，${stats!.natural} 自然短语；模板上限还可容纳 ${Math.max(0,contract.max-stats!.total)} 个单元。比例补足参考值为 ${Math.max(0,Math.min(additions,contract.max-stats!.total))} 个自然单元，这不是硬配额；优先修正具体 kind/索引问题，角色缺关系时可按明确输入补足关系。仍须满足上下限与比例，不为凑数增添事实。` : structureRepair?'\n本轮允许一次完整 segments 对象的结构修复：修正 base 人数或角色首词，只在同一角色段内重排已有单元，保留所有未指出错误的外貌、服装、道具、动作、关系和文字。不对调人物归属，不凭空增减源要求的人数；不能可靠映射原角色事实时保留原稿并失败，之后仍完整复验。不要返回增量根对象。':'';
+      const reply=await callConvertApi(systemPrompt+'\n\n'+(delta?deltaInstruction:mixedEnvelopeInstruction)+correction,userText+(attempt?`\n上次验收问题：${problems.join('；')}。只修正这些问题并保留用户明确要求及已合格单元。不得删除事实换取凑数。\n上一版：${previous}`:''),7000,`提示词转换 · mixed · ${attempt?'校正'+attempt:'模板验收'}`,true,false,true);
+      if(!reply.ok)return {ok:false,message:'转换失败：'+reply.message};
+      try{
+        const candidate=normalizeMixedEnvelope(delta?patchMixedEnvelope(previous,reply.content??''):reply.content??'',{repairMetadata:true});
+        const audit=auditMixedEnvelope(candidate,auditText,contract);
+        if(attempt&&stats)preserveFacts(previous,candidate,problems);
+        previous=candidate;
+        problems=audit.issues;stats=audit.stats;
         if(!problems.length)return {ok:true,result:audit.prompt,validation:audit.stats,message:`转换成功：${audit.stats.total}单元，Tag ${audit.stats.tags} / 自然语言 ${audit.stats.natural}`};
-      }catch(e){problems=[e instanceof Error?e.message:String(e)];}
+      }catch(e){problems=[...new Set([...problems,e instanceof Error?e.message:String(e)])];}
     }
     return {ok:false,message:'提示词未满足所选模板：'+problems.join('；')+'。本次校正已结束，未提交生图；不要自动重复同一任务。'};
   }
+  let conversionWarnings:string[]=[];
   let result = await callConvertApi(
     systemPrompt,
     userText,
@@ -4348,7 +4395,8 @@ export async function convertPromptText(
       return problems;
     };
     let problems=issues();
-    if(problems.length){
+    if(safeTemplateVersion==='v5'&&mode==='mixed')conversionWarnings=problems;
+    else if(problems.length){
       result=await callConvertApi(systemPrompt,
         `${userText}\n\n模板格式校正：${problems.join('；')}。请按同一模板重新输出完整提示词；保留明确主体、人数、外貌、场景和排除项，只允许模板和用户许可的合理细节。不要凑重复词，不要解释或计数。\n上一版：${result.content ?? ''}`,
         3000, `提示词转换 · ${mode} · 模板格式校正`, true);
@@ -4376,7 +4424,9 @@ export async function convertPromptText(
     variants = { namePrompt, featurePrompt };
     content = namePrompt;
   }
-  return { ok: true, result: content, variants, message: "转换成功" };
+  if(safeTemplateVersion==='v5'&&mode==='mixed'&&!content.trim())return {ok:false,message:'转换失败：模型未返回可用提示词'};
+  return { ok: true, result: content, variants, warnings:conversionWarnings,
+    message:conversionWarnings.length?'转换完成：模板问题仅供参考，不阻止应用或复用':"转换成功" };
 }
 
 export async function loadImageFromPath(
@@ -4930,13 +4980,8 @@ export async function upscaleImg(
     );
     // Upscale has its own save path, so apply the same metadata preference used
     // by generation, img2img, inpaint, batch redraw, and Director tools.
-    await fs.writeFile(
-      filePath,
-      prepareImageBufferForSave(
-        outBuffer,
-        settings.keepImageMetadata !== false,
-      ),
-    );
+    const savedBuffer = prepareImageBufferForSave(outBuffer, settings.keepImageMetadata !== false);
+    await fs.writeFile(filePath, savedBuffer);
     const outDims = readImageDimensions(outBuffer);
     const outWidth = outDims.width || plan.width;
     const outHeight = outDims.height || plan.height;
@@ -4946,6 +4991,7 @@ export async function upscaleImg(
       fileUrl: toLocalMediaUrl(filePath),
       date,
       createdAt: now.toISOString(),
+      ...localGenerationTime(savedBuffer, now),
       params: {
         ...DEFAULT_PARAMS,
         width: outWidth,

@@ -37,6 +37,8 @@ import {
 } from "../../src/agent/provider-catalog";
 import {
   createDefaultImageTaskPromptPreset,
+  createDefaultImageTaskPromptPresets,
+  imageTaskPresetIds,
   normalizeImageTaskPromptPresets,
 } from "../../src/tavern/image-task-preset";
 
@@ -232,7 +234,9 @@ export function defaultSettings(): AppSettings {
     reversePromptTemplatesV45: emptyModeTemplates(),
     reverseConvertDshEnabled: true,
     reverseConvertDshMode: "focused" as const,
-    reverseConvertPromptPresets: [createDefaultImageTaskPromptPreset()],
+    reverseConvertPromptPresets: createDefaultImageTaskPromptPresets(),
+    convertSystemPromptPresetId: createDefaultImageTaskPromptPreset("convert").id,
+    reverseSystemPromptPresetId: createDefaultImageTaskPromptPreset("reverse").id,
     reverseConvertPromptPresetId: createDefaultImageTaskPromptPreset().id,
     comicAnalyzePromptTemplates: { tags: "", natural: "", mixed: "" },
     comicAnalyzePromptTemplate: "",
@@ -350,6 +354,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   )
     ? String(rawSettings.reverseConvertPromptPresetId)
     : settings.reverseConvertPromptPresets[0]?.id ?? "";
+  Object.assign(settings, imageTaskPresetIds(rawSettings, settings.reverseConvertPromptPresets));
   settings.updateSource = "github";
   settings.stylePromptPresetGroups = Array.from(
     new Set(
@@ -1105,6 +1110,12 @@ export function getHistoryDates(): string[] {
 }
 
 /** Identity-only snapshot: no filesystem reconciliation or per-image stat calls. */
+/** Generation-time snapshot: no reconciliation/stat or credential fields exposed. */
+export function getFavoriteHistoryReferences(): Array<Pick<HistoryItem, "id"|"filePath"|"generatedAt"|"generatedAtSource"|"generatedImageSha256">> {
+  return readStore().history.map(({id,filePath,generatedAt,generatedAtSource,generatedImageSha256}) =>
+    ({id,filePath,generatedAt,generatedAtSource,generatedImageSha256}));
+}
+
 export function getHistoryReferenceItems(): Array<Pick<HistoryItem, "id" | "filePath">> {
   return readStore().history.map(({ id, filePath }) => ({ id, filePath }));
 }

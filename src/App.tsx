@@ -126,9 +126,12 @@ import ReferencePresetManager, {
   type QuickPresetSource,
 } from "./ReferencePresetManager";
 import { isScrollInsideFloatingMenu } from "./floating-menu";
-import { importTavernSamplerPresetJson } from "./tavern/preset-import";
+import { decodeSystemPromptFile, importImageSystemPrompt, MAX_SYSTEM_PROMPT_IMPORT_BYTES, SystemPromptImportError } from "./tavern/system-prompt-import";
+import { systemPromptImportErrorText, systemPromptImportText } from "./tavern/system-prompt-import-text";
 import {
+  createDefaultImageTaskPromptPreset,
   imageTaskPromptPresetFromSampler,
+  selectedImageTaskPromptPreset,
   type ImageTaskPromptPreset,
 } from "./tavern/image-task-preset";
 import { desktopUiFormat, desktopUiText, getGeneratePanelText, getLocalizedTabItems, getSettingsSectionText, getSettingsShellText, getTokenGuideText, localizedDesktopOptionLabel, SUPPORTED_APP_LANGUAGES } from "./i18n";
@@ -2934,7 +2937,7 @@ function TextToolHistoryPanel({
   items: TextToolHistoryItem[];
   onDelete: (id: string) => void;
   onClear: () => void;
-  onUse: (result: string) => void;
+  onUse: (result: string, warnings?: string[]) => void;
 }) {
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
@@ -2985,7 +2988,7 @@ function TextToolHistoryItemRow({
 }: {
   item: TextToolHistoryItem;
   onDelete: (id: string) => void;
-  onUse: (result: string) => void;
+  onUse: (result: string, warnings?: string[]) => void;
 }) {
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
@@ -3017,9 +3020,9 @@ function TextToolHistoryItemRow({
         <Icon name="chevronRight" className={clsx("disclosure-chevron", expanded && "open")} />
       </button>
       <AnimatedCollapse open={expanded}>{hasVariants ? (
-          <PromptVariantCards variants={item.variants ?? null} onUse={onUse} />
+          <PromptVariantCards variants={item.variants ?? null} onUse={(result) => onUse(result, item.warnings)} />
         ) : (
-          <button type="button" className="queue-mini-btn" onClick={() => onUse(item.result)}>
+          <button type="button" className="queue-mini-btn" onClick={() => onUse(item.result, item.warnings)}>
             {t("variant.use")}
           </button>
         )}</AnimatedCollapse>
@@ -4337,6 +4340,7 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
 function PromptConverterPanel() {
   const convertInput = useAppStore((state) => state.convertInput);
   const convertResult = useAppStore((state) => state.convertResult);
+  const convertResultWarnings = useAppStore((state) => state.convertResultWarnings);
   const setConvertInput = useAppStore((state) => state.setConvertInput);
   const setConvertResult = useAppStore((state) => state.setConvertResult);
   const convertMode = useAppStore((state) => state.convertMode);
@@ -4473,6 +4477,12 @@ function PromptConverterPanel() {
               value={convertResult}
               onChange={(e) => setConvertResult(e.target.value)}
             />
+            {convertResultWarnings.length > 0 && (
+              <div className="metadata-warnings prompt-result-warnings" role="status" aria-live="polite">
+                <Icon name="warning" />
+                <div>{convertResultWarnings.map((warning, index) => <p key={index}>{warning}</p>)}</div>
+              </div>
+            )}
             <PromptVariantCards variants={convertResultVariants} onUse={setConvertResult} />
             {templates.length > 0 && (
               <div className="template-apply-row">
@@ -5715,6 +5725,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
   if (!settings) return null;
 
+  const promptPresetTask = section === "ai-reverse" ? "reverse" : "convert";
+  const promptPresetSelectionKey = promptPresetTask === "reverse" ? "reverseSystemPromptPresetId" : "convertSystemPromptPresetId";
+  const promptPresetSelectedId = settings[promptPresetSelectionKey] ?? settings.reverseConvertPromptPresetId;
+  const promptImportText = systemPromptImportText(settings.language);
   const update = async <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     await window.naiDesktop.setSetting(key, value);
     await refreshSettings();
@@ -5724,39 +5738,41 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     selectedId: string,
   ) => {
     await window.naiDesktop.setSetting("reverseConvertPromptPresets", presets);
-    await window.naiDesktop.setSetting("reverseConvertPromptPresetId", selectedId);
+    await window.naiDesktop.setSetting(promptPresetSelectionKey, selectedId);
     await refreshSettings();
   };
   const importReverseConvertPreset = async (file?: File) => {
     if (!file) return;
     setReverseConvertPresetStatus("");
     try {
-      const source = await file.text();
-      const result = importTavernSamplerPresetJson(source, file.name);
-      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source));
-      result.preset.sourceHash = [...new Uint8Array(digest)]
+      if (file.size > MAX_SYSTEM_PROMPT_IMPORT_BYTES) throw new SystemPromptImportError("bytes");
+      const bytes = await file.arrayBuffer();
+      const source = decodeSystemPromptFile(new Uint8Array(bytes));
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      const sourceHash = [...new Uint8Array(digest)]
         .map((value) => value.toString(16).padStart(2, "0"))
         .join("")
         .toUpperCase();
+      const result = importImageSystemPrompt(source, { filename: file.name, sourceHash });
       const preset = imageTaskPromptPresetFromSampler(result.preset);
       const current = settings.reverseConvertPromptPresets ?? [];
       const duplicateIndex = current.findIndex((item) => (
-        preset.sourceHash && item.sourceHash === preset.sourceHash
+        item.source !== "builtin" && preset.sourceHash && item.sourceHash?.toLowerCase() === preset.sourceHash.toLowerCase()
       ));
       const presets = duplicateIndex >= 0
-        ? current.map((item, index) => index === duplicateIndex
-          ? { ...preset, id: item.id, name: item.name, createdAt: item.createdAt }
-          : item)
+        // The source hash identifies the imported file, not later user edits.
+        // Reimport selects the existing profile without overwriting its body.
+        ? current
         : [preset, ...current];
       const selectedId = duplicateIndex >= 0 ? current[duplicateIndex].id : preset.id;
       await persistReverseConvertPresets(presets, selectedId);
       setReverseConvertPresetStatus([
-        `${t("settings.promptPresetImported")}: ${preset.name}`,
+        `${t("settings.promptPresetImported")}: ${presets.find(item => item.id === selectedId)?.name ?? preset.name}`,
         ...result.warnings,
       ].join(" "));
     } catch (reason) {
       setReverseConvertPresetStatus(
-        `${t("settings.promptPresetImportFailed")}: ${reason instanceof Error ? reason.message : String(reason)}`,
+        `${t("settings.promptPresetImportFailed")}: ${systemPromptImportErrorText(reason, settings.language)}`,
       );
     } finally {
       if (reverseConvertPresetFileRef.current) reverseConvertPresetFileRef.current.value = "";
@@ -5764,8 +5780,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   };
   const beginRenameReverseConvertPreset = () => {
     const selected = settings.reverseConvertPromptPresets.find(
-      (item) => item.id === settings.reverseConvertPromptPresetId,
-    ) ?? settings.reverseConvertPromptPresets[0];
+      (item) => item.id === promptPresetSelectedId,
+    );
     if (!selected) return;
     setRenamingReverseConvertPresetId(selected.id);
     setRenamingReverseConvertPresetName(selected.name);
@@ -5778,18 +5794,27 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       settings.reverseConvertPromptPresets.map((item) => item.id === renamingReverseConvertPresetId
         ? { ...item, name, updatedAt }
         : item),
-      settings.reverseConvertPromptPresetId,
+      promptPresetSelectedId,
     );
     setRenamingReverseConvertPresetId("");
     setReverseConvertPresetStatus(t("settings.promptPresetRenamed"));
   };
   const deleteReverseConvertPreset = async () => {
     const selected = settings.reverseConvertPromptPresets.find(
-      (item) => item.id === settings.reverseConvertPromptPresetId,
-    ) ?? settings.reverseConvertPromptPresets[0];
-    if (!selected || !(await confirmAction(`${t("settings.deletePromptPreset")}: ${selected.name}?`))) return;
+      (item) => item.id === promptPresetSelectedId,
+    );
+    if (!selected || selected.source === "builtin" || !(await confirmAction(`${t("settings.deletePromptPreset")}: ${selected.name}?`))) return;
     const presets = settings.reverseConvertPromptPresets.filter((item) => item.id !== selected.id);
-    await persistReverseConvertPresets(presets, presets[0]?.id ?? "");
+    const replacements = (["convert", "reverse"] as const).flatMap((task) => {
+      const key = task === "convert" ? "convertSystemPromptPresetId" : "reverseSystemPromptPresetId";
+      if ((settings[key] ?? settings.reverseConvertPromptPresetId) !== selected.id) return [];
+      const fallback = createDefaultImageTaskPromptPreset(task);
+      if (!presets.some(item => item.id === fallback.id)) presets.push(fallback);
+      return [{ key, id: fallback.id } as const];
+    });
+    await window.naiDesktop.setSetting("reverseConvertPromptPresets", presets);
+    for (const replacement of replacements) await window.naiDesktop.setSetting(replacement.key, replacement.id);
+    await refreshSettings();
     setRenamingReverseConvertPresetId("");
     setReverseConvertPresetStatus(t("settings.promptPresetDeleted"));
   };
@@ -5878,24 +5903,23 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     ["mcp", ft("MCP 服务"), "plug"],
     ["about", settingsShellText.nav.about, "info"],
   ];
-  const selectedReverseConvertPreset = settings.reverseConvertPromptPresets.find(
-    (item) => item.id === settings.reverseConvertPromptPresetId,
-  ) ?? settings.reverseConvertPromptPresets[0];
+  const selectedReverseConvertPreset = selectedImageTaskPromptPreset(settings.reverseConvertPromptPresets, promptPresetSelectedId, promptPresetTask);
   const reverseConvertPresetManager = (
     <section className="reverse-convert-preset-manager">
       <header>
         <div>
-          <strong>{t("settings.sharedPromptPreset")}</strong>
-          <small>{t("settings.sharedPromptPresetHint")}</small>
+          <strong>{promptImportText.title}</strong>
+          <small>{promptImportText.hint}</small>
         </div>
         <span>{settings.reverseConvertPromptPresets.length}</span>
       </header>
+      <Toggle checked={settings.reverseConvertDshEnabled} onChange={(enabled) => void update("reverseConvertDshEnabled", enabled)} label={promptImportText.enabled} description={promptImportText.disabledHint} />
       {settings.reverseConvertPromptPresets.length ? (
         <label className="field">
           <span>{t("settings.activePromptPreset")}</span>
           <SelectMenuCompat
             value={selectedReverseConvertPreset?.id ?? ""}
-            onChange={(event) => void update("reverseConvertPromptPresetId", event.target.value)}
+            onChange={(event) => void update(promptPresetSelectionKey, event.target.value)}
           >
             {settings.reverseConvertPromptPresets.map((preset) => (
               <option value={preset.id} key={preset.id}>{preset.name}</option>
@@ -5925,16 +5949,16 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           ref={reverseConvertPresetFileRef}
           className="tavern-file-input"
           type="file"
-          accept=".json,application/json"
+          accept=".json,.md,.txt,application/json,text/markdown,text/plain"
           onChange={(event) => void importReverseConvertPreset(event.target.files?.[0])}
         />
         <Button onClick={() => reverseConvertPresetFileRef.current?.click()}>
-          <IconText icon="⇩">{t("settings.importJsonPreset")}</IconText>
+          <IconText icon="⇩">{promptImportText.import}</IconText>
         </Button>
         <Button disabled={!selectedReverseConvertPreset} onClick={beginRenameReverseConvertPreset}>
           <IconText icon="✎">{t("settings.renamePromptPreset")}</IconText>
         </Button>
-        <Button variant="danger" disabled={!selectedReverseConvertPreset} onClick={() => void deleteReverseConvertPreset()}>
+        <Button variant="danger" disabled={!selectedReverseConvertPreset || selectedReverseConvertPreset.source === "builtin"} onClick={() => void deleteReverseConvertPreset()}>
           <IconText icon="⌫">{t("settings.deletePromptPreset")}</IconText>
         </Button>
       </div>

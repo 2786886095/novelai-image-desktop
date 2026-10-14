@@ -10,6 +10,7 @@ vi.mock("electron", () => ({ app: { getPath: () => mock.root }, dialog: { showOp
 vi.mock("./store", () => ({ getSetting:()=>mock.language, atomicWriteFileSync: (p: string, s: string) => fs.writeFileSync(p, s) }));
 vi.mock("./proxy", () => ({ proxyConfig: () => ({}) }));
 vi.mock("axios", () => ({ default: { get: (...args: unknown[]) => mock.get(...args) } }));
+vi.mock("./download-request", () => ({ downloadRequest: (_category: string, url: string, options: unknown) => mock.get(url, options) }));
 vi.mock("node:child_process", () => ({ execFile: (...args: unknown[]) => mock.exec(...args) }));
 vi.mock("./detective-release.json", () => ({ default: { version: "fixture", packages: [{file:"assets.zip",bytes:6,sha256:"bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1fc6c5c6dcd93c4721",kind:"assets",variant:"full",directory:"novelai-desktop-assets"},{file:"light.zip",bytes:3,sha256:"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",kind:"assets",variant:"light",directory:"novelai-light-desktop-assets"}] } }));
 import { detectiveDownloadVariant, detectiveDownloadStart, detectiveDownloadStatus, detectiveDownloadCancel, detectiveDownloadDirectory, validateRange, verifyDownload, packageUrl } from "./detective-download";
@@ -25,7 +26,7 @@ beforeEach(async () => {
   detectiveDownloadVariant("full");
   await detectiveDownloadDirectory();
 });
-afterEach(() => { Object.defineProperty(process,"platform",originalPlatform); Object.defineProperty(process,"arch",originalArch); fs.rmSync(mock.root, { recursive: true, force: true }); });
+afterEach(() => { vi.restoreAllMocks(); Object.defineProperty(process,"platform",originalPlatform); Object.defineProperty(process,"arch",originalArch); fs.rmSync(mock.root, { recursive: true, force: true }); });
 const done = async () => { await vi.waitFor(() => expect(detectiveDownloadStatus().busy).toBe(false)); return detectiveDownloadStatus(); };
 it('uses the current language for the native directory picker',async()=>{
  for(const [language,title] of [['zh-CN','选择模型与运行环境存放位置'],['zh-TW','選擇模型與執行環境儲存位置'],['en-US','Choose model and runtime location'],['ja-JP','モデルと実行環境の保存先を選択'],['ko-KR','모델 및 실행 환경 저장 위치 선택']]){mock.language=language;await detectiveDownloadDirectory();expect(mock.titles.at(-1)).toBe(title);}mock.language='zh-CN';
@@ -45,6 +46,8 @@ it("validates resumed HTTP ranges", () => {
   expect(validateRange("bytes 3-5/6", 3, 6)).toBe(true);
   expect(validateRange("bytes 0-5/6", 3, 6)).toBe(false);
   expect(validateRange("bytes 3-5/9", 3, 6)).toBe(false);
+  expect(validateRange("bytes 3-999/6", 3, 6)).toBe(false);
+  expect(validateRange("bytes 3--1/6", 3, 6)).toBe(false);
 });
 it("resumes partial bytes without starting duplicate downloads", async () => {
   fs.writeFileSync(path.join(mock.root,"assets.zip.part"),"abc");
@@ -141,4 +144,51 @@ it("rejects unsupported host platforms before starting a download",()=>{
  Object.defineProperty(process,"platform",{configurable:true,value:"linux"});
  expect(()=>detectiveDownloadStart()).toThrow("Windows x64");
  expect(mock.get).not.toHaveBeenCalled();
+});
+
+it("reports HTTP status and releases the failed response before extracting", async () => {
+  const body = Readable.from([Buffer.from("denied")]);
+  mock.get.mockResolvedValue({ status: 403, headers: {}, data: body });
+  detectiveDownloadStart(); const status = await done();
+  expect(status.error).toMatchObject({ stage: "downloading", file: "assets.zip", code: "DOWNLOAD_HTTP_ERROR", httpStatus: 403 });
+  expect(status.error?.message).toContain("HTTP 403");
+  expect(body.destroyed).toBe(true); expect(mock.exec).not.toHaveBeenCalled();
+});
+it("retains a sanitized TLS diagnostic instead of only a generic installation failure", async () => {
+  mock.get.mockRejectedValue(Object.assign(new Error("TLS_SENTINEL https://user:fixture-password@cdn.invalid/file?token=fixture-token Authorization: Bearer fixture-bearer"), { code: "ERR_TLS_CERT_ALTNAME_INVALID" }));
+  detectiveDownloadStart(); const status = await done();
+  expect(status.error).toMatchObject({ stage: "downloading", code: "ERR_TLS_CERT_ALTNAME_INVALID" });
+  expect(status.error?.message).toContain("TLS_SENTINEL");
+  expect(JSON.stringify(status)).not.toMatch(/fixture-password|fixture-token|fixture-bearer/);
+  expect(mock.exec).not.toHaveBeenCalled();
+});
+it("destroys a live response even when opening the partial file fails", async () => {
+  const body = Readable.from([Buffer.from("abcdef")]);
+  mock.get.mockResolvedValue({ status: 200, headers: {}, data: body });
+  vi.spyOn(fs.promises, "open").mockRejectedValueOnce(Object.assign(new Error("DISK_SENTINEL"), { code: "ENOSPC" }));
+  detectiveDownloadStart(); const status = await done();
+  expect(status.error).toMatchObject({ stage: "downloading", code: "ENOSPC", message: "DISK_SENTINEL" });
+  expect(body.destroyed).toBe(true); expect(mock.exec).not.toHaveBeenCalled();
+});
+it("keeps a valid partial file on a malformed Content-Range response", async () => {
+  fs.writeFileSync(path.join(mock.root, "assets.zip.part"), "abc");
+  const body = Readable.from([Buffer.from("def")]);
+  mock.get.mockResolvedValue({ status: 206, headers: { "content-range": "bytes 3-999/6" }, data: body });
+  detectiveDownloadStart(); const status = await done();
+  expect(status.error).toMatchObject({ stage: "downloading", code: "DOWNLOAD_RANGE_MISMATCH", httpStatus: 206 });
+  expect(fs.readFileSync(path.join(mock.root, "assets.zip.part"), "utf8")).toBe("abc");
+  expect(body.destroyed).toBe(true); expect(mock.exec).not.toHaveBeenCalled();
+});
+it("preserves separate extraction and CUDA-check reasons without replacing prior paths", async () => {
+  const cfg = path.join(mock.root, "artist-detective-runtime.json");
+  fs.writeFileSync(cfg, JSON.stringify({ python: "old-python", assets: "old-assets", directory: "history" }));
+  mock.get.mockResolvedValue({ status: 200, headers: {}, data: Readable.from([Buffer.from("abcdef")]) });
+  mock.exec.mockImplementation((...args: unknown[]) => (args.at(-1) as Function)(Object.assign(new Error("TAR_SENTINEL"), { code: "ENOENT" })));
+  detectiveDownloadStart(); let status = await done();
+  expect(status.error).toMatchObject({ stage: "extracting", code: "ENOENT", message: "TAR_SENTINEL" });
+  mock.exec.mockImplementation((...args: unknown[]) => (args.at(-1) as Function)(null, "", ""));
+  mock.validate.mockResolvedValue({ state: "failed", message: "CUDA_SENTINEL unavailable" });
+  detectiveDownloadStart(); status = await done();
+  expect(status.error).toMatchObject({ stage: "checking", code: "RUNTIME_CHECK_FAILED", message: "CUDA_SENTINEL unavailable" });
+  expect(JSON.parse(fs.readFileSync(cfg, "utf8"))).toMatchObject({ python: "old-python", assets: "old-assets", directory: "history" });
 });

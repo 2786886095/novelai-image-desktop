@@ -1,3 +1,4 @@
+import {localGenerationTime} from "./history-generation-time";
 import {NAI_RELAY_MODEL_IDS} from '../../src/nai-accounts';
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
@@ -101,6 +102,7 @@ export async function generateConfiguredImages(request: CompatibleGenerationRequ
       const prefix = (request.fileNamePrefix ?? "compatible").replace(/[^\p{L}\p{N}._-]/gu, "_").slice(0, 80) || "compatible";
       const filePath = await writeUniqueImageFile(dir, `${prefix}-${date}-${id}`, "png", bytes);
       const item: HistoryItem = {
+        ...localGenerationTime(bytes),
         id, filePath, fileUrl: toLocalMediaUrl(filePath, id), date, createdAt: now.toISOString(), groupId: group?.id,
         params: { ...DEFAULT_PARAMS, positivePrompt: input.prompt, negativePrompt: "", seed: -1 },
         actualSeed: -1, model: config.model, width: metadata.width!, height: metadata.height!,

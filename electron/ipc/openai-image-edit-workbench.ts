@@ -1,3 +1,4 @@
+import {localGenerationTime} from "./history-generation-time";
 // Inpaint-panel / history integration for OpenAI Images edits.
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
@@ -40,6 +41,7 @@ export async function saveOpenAIEditResults(images: Buffer[], meta: { prompt: st
     const prefix = (meta.prefix ?? "openai-edit").replace(/[^\p{L}\p{N}._-]/gu, "_").slice(0, 80) || "openai-edit";
     const filePath = await writeUniqueImageFile(dir, `${prefix}-${date}-${id}`, "png", bytes);
     const item: HistoryItem = {
+      ...localGenerationTime(bytes, now),
       id, filePath, fileUrl: toLocalMediaUrl(filePath, id), date, createdAt: now.toISOString(), groupId: group?.id,
       params: { ...DEFAULT_PARAMS, positivePrompt: meta.prompt, negativePrompt: "", seed: -1, width: metadata.width!, height: metadata.height! },
       actualSeed: -1, model: meta.model, width: metadata.width!, height: metadata.height!,

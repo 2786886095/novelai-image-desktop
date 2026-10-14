@@ -1,4 +1,5 @@
 import {UiFontRepository} from "./ipc/ui-fonts";
+import { fetchOfficialMetadataAsset, cancelOfficialMetadataAssetDownloads } from "./ipc/official-metadata-assets";
 import crypto from "node:crypto";
 import {startMcpServer, type McpServerHandle} from "./ipc/mcp-server";
 import {readAgentClipboardFiles} from './ipc/agent-clipboard';
@@ -772,6 +773,8 @@ function accountBoundHandle(channel: string, listener: Parameters<typeof ipcMain
   });
 }
 function registerIpc() {
+  ipcMain.handle("metadata:officialAsset", (_event, assetId: unknown) => fetchOfficialMetadataAsset(assetId));
+  ipcMain.handle("metadata:cancelOfficialAssets", () => cancelOfficialMetadataAssetDownloads());
   registerNaiAccountsIpc();
   registerImageFavoritesIpc();
   registerCompatibleImageIpc(() => mainWindow);

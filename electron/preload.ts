@@ -63,13 +63,15 @@ import type {
 const imageSaves = createImageSaveTracker();
 
 contextBridge.exposeInMainWorld("naiDesktop", {
+  fetchOfficialMetadataAsset: (assetId: string) => ipcRenderer.invoke("metadata:officialAsset", assetId),
+  cancelOfficialMetadataAssetDownloads: () => ipcRenderer.invoke("metadata:cancelOfficialAssets"),
   onNavigateBack: (callback: () => void) => {
     const listener = () => callback();
     ipcRenderer.on("app:navigate-back", listener);
     return () => ipcRenderer.removeListener("app:navigate-back", listener);
   },
   favoritesStatus:(src:string)=>ipcRenderer.invoke('favorites:status',src),
-  favoritesList: () => ipcRenderer.invoke('favorites:list'),
+  favoritesList: (options?: {resolveGeneratedAt?: boolean}) => ipcRenderer.invoke('favorites:list', options),
   favoritesAdd: (src:string) => ipcRenderer.invoke('favorites:add',src),
   favoritesRename: (id:string,name:string) => ipcRenderer.invoke('favorites:rename',id,name),
   favoritesRemove: (id:string) => ipcRenderer.invoke('favorites:remove',id),

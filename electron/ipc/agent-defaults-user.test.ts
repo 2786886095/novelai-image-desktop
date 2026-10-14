@@ -2,7 +2,7 @@ import {describe,expect,it,vi} from 'vitest';
 vi.mock('./store',()=>({getSettings:()=>({agentContextWindow:8192,agentAutoCompactThreshold:.8,outputDir:''}),getHistoryReferenceItems:()=>[],fileExistsWithDirectoryCache:()=>false,readWithBackupRecoverySync:()=>null,atomicWriteFileSync:vi.fn(),rotateBackupsSync:vi.fn()}));
 vi.mock('./agent-workspace-location',()=>({agentWorkspaceDirectory:()=>process.cwd()+'/defaults-qa',rebaseAgentWorkspaceFile:(value:string)=>value}));
 import {createEmptyAgentWorkspace,createAgentConversation,normalizeAgentWorkspace,setStudioConversationOptions} from './agent-store';
-import {studioSessionOptions,studioCreativeReferenceData,STUDIO_DEFAULT_PRESET_ID} from '../../src/agent/workspace-controls';
+import {studioSessionOptions,studioCreativeReferenceData,studioSelectedSystemPrompt,STUDIO_DEFAULT_PRESET_ID} from '../../src/agent/workspace-controls';
 
 describe('fresh Studio defaults without private profiles',()=>{
  it('defaults fresh and missing legacy choices to full-auto plus web, preserving explicit saved off',()=>{
@@ -33,8 +33,10 @@ describe('fresh Studio defaults without private profiles',()=>{
   const workspace=createEmptyAgentWorkspace();const chat=workspace.conversations[0];
   expect(studioSessionOptions(chat).presetId).toBe(STUDIO_DEFAULT_PRESET_ID);
   const enabled=JSON.parse(studioCreativeReferenceData(workspace,chat,[]));
-  expect(enabled.preset?.body).toContain('image');
-  expect(enabled.preset?.name).toBe('presetInfinite');
+  expect(enabled.preset?.id).toBe(STUDIO_DEFAULT_PRESET_ID);
+  expect(enabled.preset?.body).toBeUndefined();
+  expect(studioSelectedSystemPrompt(workspace,chat)).toContain('image');
+  expect(enabled.preset?.name).toBe('presetInfiniteFive');
   const disabled=JSON.parse(studioCreativeReferenceData(workspace,{...chat,studioTemplateEnabled:false},[]));
   expect(disabled.preset).toBeNull();
   expect(disabled.characters).toEqual(enabled.characters);

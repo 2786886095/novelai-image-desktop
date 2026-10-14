@@ -1,0 +1,32 @@
+.metadata-recovery-settings {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+  gap: 12px 18px;
+  align-items: center;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--bg-dialog);
+  box-shadow: var(--shadow-sm);
+}
+
+.metadata-recovery-select { display: grid; gap: 7px; min-width: 0; }
+.metadata-recovery-select .select-menu-trigger { width: 100%; }
+.metadata-history-retry { display: grid; justify-items: start; gap: 8px; }
+.metadata-recovery-settings p { margin: 0; line-height: 1.6; overflow-wrap: anywhere; color: var(--text-secondary); }
+.metadata-recovery-storage-warning { grid-column: 1 / -1; font-size: 12px; }
+.metadata-recovery-status { color: var(--text-secondary); margin: 0; padding: 0 4px; }
+.metadata-recovery-error {
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--bg-dialog);
+  color: var(--text-primary);
+}
+.metadata-recovery-error p { margin: 0 0 10px; line-height: 1.6; overflow-wrap: anywhere; }
+.metadata-recovery-error-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.metadata-recovery-original-note { margin: 12px 0 0; color: var(--text-secondary); line-height: 1.6; font-size: 12px; }
+
+@media (max-width: 768px) {
+  .metadata-recovery-settings { grid-template-columns: minmax(0, 1fr); padding: 14px; }
+}

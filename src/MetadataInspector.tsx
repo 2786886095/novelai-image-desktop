@@ -6,7 +6,16 @@ import clsx from "clsx";
 import { Button, IconText, SelectMenu } from "./components/ui";
 import { Icon } from "./components/icons";
 import { normalizeAppLanguage } from "./i18n";
-import { inspectImageMetadata, parseImageMetaAsync, type ImageMetadataReport } from "./png-meta";
+import { inspectImageMetadata, type ImageMetadataReport } from "./png-meta";
+import {
+  loadMetadataRecoveryMode,
+  readImageMetadataForRecovery,
+  saveMetadataRecoveryMode,
+  type MetadataRecoveryMode,
+} from "./metadata-recovery";
+import { metadataRecoveryText } from "./metadata-recovery-i18n";
+import { originalOfficialMetadata } from "../shared/official-metadata-result";
+import "./metadata-recovery.css";
 import {
   loadMetadataSnapshot,
   metadataSnapshotToFile,
@@ -496,6 +505,12 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
   const activeTab = useAppStore((state) => state.activeTab);
   const setToast = useAppStore((state) => state.setToast);
   const text = TEXT[language];
+  const recoveryText = metadataRecoveryText(language);
+  const [recoveryMode, setRecoveryMode] = useState<MetadataRecoveryMode>(loadMetadataRecoveryMode);
+  const [reading, setReading] = useState(false);
+  const [readError, setReadError] = useState("");
+  const [preferenceNotSaved, setPreferenceNotSaved] = useState(false);
+  const [hasOfficialOriginal, setHasOfficialOriginal] = useState(false);
   const [report, setReport] = useState<ImageMetadataReport | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [fileName, setFileName] = useState("");
@@ -506,6 +521,9 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [historyGroupsFailed, setHistoryGroupsFailed] = useState(false);
+  const [historyRetryRevision, setHistoryRetryRevision] = useState(0);
   const [historyReadingId, setHistoryReadingId] = useState("");
   const [selectedHistoryId, setSelectedHistoryId] = useState("");
   const [historyDisplayLimit, setHistoryDisplayLimit] = useState(60);
@@ -514,6 +532,16 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
   const historyLoadRevisionRef = useRef(0);
   const historyReadRevisionRef = useRef(0);
   const historyReadInFlightRef = useRef(0);
+  const recoveryModeRef = useRef(recoveryMode);
+  const currentFileRef = useRef<File | null>(null);
+  const activeReadAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => {
+    readRevisionRef.current += 1;
+    historyReadRevisionRef.current += 1;
+    activeReadAbortRef.current?.abort();
+    activeReadAbortRef.current = null;
+  }, []);
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -544,28 +572,85 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
     requestedRevision?: number,
   ): Promise<boolean> => {
     const revision = requestedRevision ?? ++readRevisionRef.current;
+    const mode = recoveryModeRef.current;
+    if (revision !== readRevisionRef.current) return false;
+    activeReadAbortRef.current?.abort();
+    const controller = new AbortController();
+    activeReadAbortRef.current = controller;
+    currentFileRef.current = file;
+    // Never offer an old mode/file's report for application while a new read
+    // is pending or has failed. Keep the original File for an explicit retry.
+    setReport(null);
+    setHasOfficialOriginal(false);
+    setReading(true);
+    setReadError("");
+    setFileName(file.name);
     try {
-      const buffer = await file.arrayBuffer();
-      const next = inspectImageMetadata(await parseImageMetaAsync(buffer));
-      if (revision !== readRevisionRef.current) return false;
-      setReport(next);
-      setFileName(file.name);
       setPreviewUrl((old) => {
         if (old) URL.revokeObjectURL(old);
         return URL.createObjectURL(file);
       });
+      const buffer = await file.arrayBuffer();
+      if (revision !== readRevisionRef.current || mode !== recoveryModeRef.current) return false;
+      const metadata = await readImageMetadataForRecovery(buffer, mode, controller.signal);
+      const next = inspectImageMetadata(metadata);
+      if (revision !== readRevisionRef.current || mode !== recoveryModeRef.current) return false;
+      const original = originalOfficialMetadata(metadata);
+      if (original) {
+        // A Comment envelope may be needed for existing app mapping. It is
+        // not an original official field and must not replace provenance.
+        next.rawText = JSON.stringify(original, null, 2);
+        next.rawMetadata = Object.fromEntries(Object.entries(original).map(([key, value]) => [
+          key, typeof value === "string" ? value : JSON.stringify(value),
+        ]));
+        setHasOfficialOriginal(true);
+      }
+      setReport(next);
       if (persist) void saveMetadataSnapshot(file).catch(() => undefined);
       return true;
     } catch {
-      if (revision === readRevisionRef.current) setToast(text.readFailed);
+      if (revision === readRevisionRef.current && mode === recoveryModeRef.current) {
+        const message = mode === "online" ? recoveryText.onlineFailed : recoveryText.offlineFailed;
+        setReadError(message);
+        setToast(message);
+      }
       return false;
+    } finally {
+      if (revision === readRevisionRef.current) {
+        setReading(false);
+        if (activeReadAbortRef.current === controller) activeReadAbortRef.current = null;
+      }
     }
-  }, [setToast, text.readFailed]);
+  }, [setToast, recoveryText.onlineFailed, recoveryText.offlineFailed]);
+
+  function changeRecoveryMode(mode: MetadataRecoveryMode) {
+    if (mode === recoveryModeRef.current) return;
+    // Update refs synchronously: an old request may settle before React has
+    // rendered the new choice. The mode itself is not a readFile dependency,
+    // so changing it cannot accidentally reload an older persisted snapshot.
+    readRevisionRef.current += 1;
+    activeReadAbortRef.current?.abort();
+    activeReadAbortRef.current = null;
+    historyReadRevisionRef.current += 1;
+    historyReadInFlightRef.current = 0;
+    setHistoryReadingId("");
+    recoveryModeRef.current = mode;
+    setRecoveryMode(mode);
+    setPreferenceNotSaved(!saveMetadataRecoveryMode(mode));
+    setReport(null);
+    setReadError("");
+    setReading(false);
+    const file = currentFileRef.current;
+    if (file) void readFile(file, false);
+  }
 
   // MetadataInspector stays mounted while hidden. Reload the latest hand-off
   // every time this tab becomes active instead of relying on a mount-only
   // effect, otherwise the history eye button can navigate to a blank page.
   useEffect(() => {
+    activeReadAbortRef.current?.abort();
+    activeReadAbortRef.current = null;
+    setReading(false);
     if (activeTab !== "metadata") {
       readRevisionRef.current += 1;
       return;
@@ -600,26 +685,46 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
   }, [activeTab]);
 
   useEffect(() => {
-    if (activeTab !== "metadata" || !historyOpen || historyLoaded) return;
+    if (activeTab !== "metadata" || !historyOpen) {
+      setHistoryLoading(false);
+      return;
+    }
+    if (historyLoaded) return;
     const revision = ++historyLoadRevisionRef.current;
     setHistoryLoading(true);
-    void Promise.all([
-      window.naiDesktop.getHistory(),
-      window.naiDesktop.getHistoryGroups(),
+    setHistoryError("");
+    setHistoryGroupsFailed(false);
+    void Promise.allSettled([
+      Promise.resolve().then(() => window.naiDesktop.getHistory()),
+      Promise.resolve().then(() => window.naiDesktop.getHistoryGroups()),
     ]).then(([items, groups]) => {
       if (revision !== historyLoadRevisionRef.current) return;
-      setHistoryItems(items);
-      setHistoryGroups(groups);
-      setHistoryLoaded(true);
-    }).catch(() => {
-      if (revision === historyLoadRevisionRef.current) setToast(text.historyFailed);
-    }).finally(() => {
-      if (revision === historyLoadRevisionRef.current) setHistoryLoading(false);
+      // Set loading in the same update batch: historyLoaded's effect cleanup
+      // must not invalidate a later finally and strand the spinner.
+      setHistoryLoading(false);
+      if (items.status === "fulfilled") {
+        setHistoryItems(items.value);
+        setHistoryLoaded(true);
+      } else {
+        setHistoryError(text.historyFailed);
+        setToast(text.historyFailed);
+      }
+      if (groups.status === "fulfilled") setHistoryGroups(groups.value);
+      else {
+        setHistoryGroups([]);
+        setHistoryGroupId("");
+        setHistoryGroupsFailed(true);
+      }
     });
     return () => {
       if (revision === historyLoadRevisionRef.current) historyLoadRevisionRef.current += 1;
     };
-  }, [activeTab, historyLoaded, historyOpen, setToast, text.historyFailed]);
+  }, [activeTab, historyLoaded, historyOpen, historyRetryRevision, setToast, text.historyFailed]);
+
+  function retryHistory() {
+    setHistoryLoaded(false);
+    setHistoryRetryRevision((revision) => revision + 1);
+  }
 
   async function readHistoryItem(item: HistoryItem) {
     if (historyReadInFlightRef.current) return;
@@ -666,6 +771,47 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
         <Button onClick={onBack} variant="secondary">{text.back}</Button>
       </header>
 
+      <section className="metadata-recovery-settings" aria-label={recoveryText.mode}>
+        <div className="metadata-recovery-select">
+          <SelectMenu
+            id="metadata-recovery-mode"
+            value={recoveryMode}
+            label={recoveryText.mode}
+            ariaLabel={recoveryText.mode}
+            ariaDescribedBy="metadata-recovery-privacy"
+            options={[
+              { value: "online", label: recoveryText.online },
+              { value: "offline", label: recoveryText.offline },
+            ]}
+            onChange={(mode) => {
+              if (mode === "online" || mode === "offline") changeRecoveryMode(mode);
+            }}
+          />
+        </div>
+        <p id="metadata-recovery-privacy">
+          {recoveryMode === "online" ? recoveryText.onlinePrivacy : recoveryText.offlinePrivacy}
+        </p>
+        {preferenceNotSaved && (
+          <p className="metadata-recovery-storage-warning" role="status">{recoveryText.preferenceNotSaved}</p>
+        )}
+      </section>
+
+      {reading && <p className="metadata-recovery-status" role="status">{recoveryText.reading}</p>}
+      {readError && (
+        <section className="metadata-recovery-error" role="alert">
+          <p>{readError}</p>
+          <div className="metadata-recovery-error-actions">
+            <Button variant="secondary" onClick={() => {
+              const file = currentFileRef.current;
+              if (file) void readFile(file, false);
+            }}>{recoveryText.retry}</Button>
+            {recoveryMode === "online" && (
+              <Button variant="secondary" onClick={() => changeRecoveryMode("offline")}>{recoveryText.chooseOffline}</Button>
+            )}
+          </div>
+        </section>
+      )}
+
       <section className={clsx("metadata-history-picker", historyOpen && "open")}>
         <button
           type="button"
@@ -679,7 +825,7 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
             <strong>{text.historyTitle}</strong>
             <small>{text.historyHint}</small>
           </span>
-          <em>{visibleHistoryItems.length}</em>
+          <em aria-live="polite">{historyLoading ? "…" : historyError ? recoveryText.historyUnavailable : historyLoaded ? visibleHistoryItems.length : recoveryText.historyNotLoaded}</em>
           <Icon name="chevronRight" className={clsx("disclosure-chevron", historyOpen && "open")} />
         </button>
         <AnimatedCollapse open={historyOpen}>{<div className="metadata-history-content">
@@ -696,11 +842,20 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
                 onChange={setHistoryGroupId}
               />
             </div>
+            {historyGroupsFailed && historyLoaded && (
+              <p className="metadata-history-empty" role="status">{recoveryText.historyGroupsFailed}</p>
+            )}
+            {(historyError || historyGroupsFailed) && !historyLoading && (
+              <div className="metadata-history-retry">
+                {historyError && <p className="metadata-history-empty" role="alert">{historyError}</p>}
+                <Button variant="secondary" onClick={retryHistory}>{recoveryText.historyRetry}</Button>
+              </div>
+            )}
             {historyLoading ? (
               <p className="metadata-history-empty">{text.historyLoading}</p>
-            ) : visibleHistoryItems.length === 0 ? (
+            ) : historyError ? null : historyLoaded && visibleHistoryItems.length === 0 ? (
               <p className="metadata-history-empty">{text.historyEmpty}</p>
-            ) : (
+            ) : historyLoaded ? (
               <div className="metadata-history-grid">
                 {renderedHistoryItems.map((item) => {
                   const name = item.filePath.split(/[\\/]/).pop() || item.filePath;
@@ -724,8 +879,8 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
                   );
                 })}
               </div>
-            )}
-            {visibleHistoryItems.length > renderedHistoryItems.length && (
+            ) : null}
+            {historyLoaded && !historyLoading && !historyError && visibleHistoryItems.length > renderedHistoryItems.length && (
               <Button
                 className="metadata-history-more"
                 variant="secondary"
@@ -759,7 +914,7 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
         <div className="metadata-drop-copy">
           <strong>{fileName || text.dropTitle}</strong>
           <span>{text.dropHint}</span>
-          <small>{text.localOnly}</small>
+          <small>{recoveryMode === "online" ? recoveryText.onlineSummary : text.localOnly}</small>
         </div>
         <Button onClick={() => inputRef.current?.click()} variant={report ? "secondary" : "primary"}>
           <IconText icon={<Icon name="folderOpen" />}>{report ? text.replace : text.choose}</IconText>
@@ -830,6 +985,7 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
 
           <details className="metadata-raw">
             <summary>{text.raw}</summary>
+            {hasOfficialOriginal && <p className="metadata-recovery-original-note">{recoveryText.mappingWrapper}</p>}
             <div className="metadata-raw-actions">
               <Button onClick={() => void copyRaw()} variant="secondary">{text.copyRaw}</Button>
             </div>

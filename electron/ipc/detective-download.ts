@@ -4,8 +4,8 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { execFile, type ExecFileOptions } from "node:child_process";
 import { promisify } from "node:util";
-import axios from "axios";
-import { proxyConfig } from "./proxy";
+import { downloadRequest } from "./download-request";
+import { downloadFailureDiagnostic, type DetectiveDownloadDiagnostic } from "../../src/detective-download-diagnostics";
 import { getSetting } from "./store";
 import {featureText} from '../../src/feature-text';
 import release from "./detective-release.json";
@@ -26,12 +26,13 @@ export interface DetectiveDownloadStatus {
   variant: DetectiveVariant;
   stage: DownloadStage; busy: boolean; directory: string; file: string;
   downloaded: number; total: number; bytesPerSecond: number; message: string;
+  error?: DetectiveDownloadDiagnostic;
   packages: { file: string; bytes: number; sha256: string; url: string }[];
   repository: string;
 }
 let job: Promise<void> | null = null;
 let controller: AbortController | null = null;
-type DownloadState={stage:DownloadStage;file:string;downloaded:number;bytesPerSecond:number;message:string};
+type DownloadState={stage:DownloadStage;file:string;downloaded:number;bytesPerSecond:number;message:string;error?:DetectiveDownloadDiagnostic};
 const states=new Map<string,DownloadState>();
 function currentState():DownloadState {
   const key=app.getPath('userData')+'|'+chosenVariant();
@@ -72,7 +73,11 @@ export async function detectiveDownloadDirectory() {
 }
 export function detectiveDownloadCancel() { controller?.abort(); if(job&&state.stage==='checking')cancelDetectiveRuntimeCheck(); return detectiveDownloadStatus(); }
 export function validateRange(header: unknown, offset: number, total: number) {
-  return typeof header === "string" && header.startsWith(`bytes ${offset}-`) && header.endsWith(`/${total}`);
+  const match = typeof header === "string" ? /^bytes (\d+)-(\d+)\/(\d+)$/.exec(header) : null;
+  return Boolean(match && Number(match[1]) === offset && Number(match[2]) === total - 1 && Number(match[3]) === total);
+}
+function downloadError(message: string, code: string, httpStatus?: number) {
+  return Object.assign(new Error(message), { code, ...(httpStatus ? { httpStatus } : {}) });
 }
 async function download(p: Package, root: string, before: number, signal: AbortSignal) {
   const final = path.join(root, p.file), pending = final + ".part";
@@ -86,18 +91,21 @@ async function download(p: Package, root: string, before: number, signal: AbortS
   state.downloaded = before + offset;
   if (offset < p.bytes) {
     state.stage = "downloading";
-    const response = await axios.get(packageUrl(p.file), { ...proxyConfig("ai"), responseType: "stream", timeout: 60000,
-      signal, maxRedirects: 8, headers: offset ? { Range: `bytes=${offset}-` } : {} });
-    if (offset && response.status === 206 && !validateRange(response.headers["content-range"], offset, p.bytes)) {
-      response.data.destroy(); throw new Error("断点响应范围不符，请重试");
-    }
-    if (response.status === 200) offset = 0;
-    else if (response.status !== 206 || !validateRange(response.headers["content-range"], offset, p.bytes)) {
-      response.data.destroy(); throw new Error("下载响应异常");
-    }
-    const handle = await fs.promises.open(pending, offset ? "a" : "w");
-    let current = offset, lastBytes = offset, lastAt = Date.now();
+    // Resolve the actual Hugging Face URL and each CDN redirect under the app's
+    // AI proxy policy; a cached OpenAI/PAC decision is not a model-host decision.
+    const response = await downloadRequest("ai", packageUrl(p.file), { signal, headers: offset ? { Range: `bytes=${offset}-` } : {} });
+    let handle: Awaited<ReturnType<typeof fs.promises.open>> | undefined;
     try {
+      if (response.status !== 200 && response.status !== 206) {
+        throw downloadError(`模型下载 HTTP ${response.status}`, "DOWNLOAD_HTTP_ERROR", response.status);
+      }
+      if (response.status === 200) offset = 0;
+      else if (!validateRange(response.headers["content-range"], offset, p.bytes)) {
+        throw downloadError("断点响应范围不符，请重试", "DOWNLOAD_RANGE_MISMATCH", response.status);
+      }
+      handle = await fs.promises.open(pending, offset ? "a" : "w");
+      let current = offset, lastBytes = offset, lastAt = Date.now();
+      state.downloaded = before + offset;
       for await (const chunk of response.data) {
         signal.throwIfAborted();
         current += chunk.length;
@@ -107,7 +115,7 @@ async function download(p: Package, root: string, before: number, signal: AbortS
         const now = Date.now();
         if (now - lastAt >= 250) { state.bytesPerSecond = (current - lastBytes) * 1000 / (now - lastAt); lastAt = now; lastBytes = current; }
       }
-    } finally { await handle.close(); response.data.destroy(); }
+    } finally { try { await handle?.close(); } finally { response.data.destroy(); } }
   }
   signal.throwIfAborted(); state.stage = "verifying"; state.bytesPerSecond = 0;
   try { await verifyDownload(pending, p.bytes, p.sha256, signal); }
@@ -125,7 +133,7 @@ export function detectiveDownloadStart() {
   }
   controller = new AbortController(); const signal = controller.signal, root = directory();
   const chosen = packages(), variant = chosenVariant();
-  state=currentState();Object.assign(state,{ stage: "downloading", file: "", downloaded: 0, bytesPerSecond: 0, message: "" });
+  state=currentState();Object.assign(state,{ stage: "downloading", file: "", downloaded: 0, bytesPerSecond: 0, message: "", error: undefined });
   job = (async () => {
     await fs.promises.mkdir(root, { recursive: true });
     let before = 0; const archives: string[] = [];
@@ -141,17 +149,18 @@ export function detectiveDownloadStart() {
     state.stage = "checking"; state.file = "Python / CUDA / 模型清单";
     const python = path.join(install, "python", "python.exe"), assets = path.join(install, chosen.find(p => p.kind === "assets")?.directory ?? "novelai-desktop-assets");
     const verified=await validateDetectiveRuntime({python,assets,variant},true);
-    if(verified.state!=='passed')throw Error(verified.message??'Model verification failed');
+    if(verified.state!=='passed')throw downloadError(verified.message??'Model verification failed', "RUNTIME_CHECK_FAILED");
     signal.throwIfAborted();
     // Re-read to preserve any new user settings made while downloading.
     current=readDetectiveConfig();
     const next=updateDetectiveProfile(current,variant,{python,assets});
     saveDetectiveConfig({...next,...(next.selectedVariant===variant?{python,assets,variant}:{})});
     state.stage = "complete"; state.message = "运行环境与模型校验通过，已切换到新版资源。原图片与历史记录保留。";
-  })().catch(() => {
+  })().catch((error: unknown) => {
     const at = state.stage;
     state.stage = signal.aborted ? "cancelled" : "failed";
     state.message = signal.aborted ? "下载已取消，已下载内容保留，可继续下载。" : `安装在 ${at} 阶段失败：请检查网络、磁盘空间、NVIDIA 驱动${variant === "full" ? "与至少 8GB 显存" : "及可用显存"}；原运行环境和模型配置未替换，可重试。`;
+    state.error = signal.aborted ? undefined : downloadFailureDiagnostic(error, at, state.file);
   }).finally(() => { state.bytesPerSecond = 0; job = null; controller = null; });
   return detectiveDownloadStatus();
 }

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import http from "node:http";
 import os from "node:os";
@@ -66,6 +67,9 @@ describe("openAIInpaintWorkbench", () => {
     expect(server.calls()).toBe(1);
     expect(result.items).toHaveLength(1);
     const item = result.items[0];
+    expect(item.generatedAtSource).toBe('local-completion');
+    expect(item.generatedAt).toBe(item.createdAt);
+    expect(item.generatedImageSha256).toBe(crypto.createHash('sha256').update(fs.readFileSync(item.filePath)).digest('hex'));
     expect(item).toMatchObject({ generationProvider: "openai-images", model: "gpt-image-2.5-sunburst", width: 200, height: 100 });
     expect(item.compatibleRequest).toMatchObject({ endpoint: "images/edits", size: "1024x1024", mask: true });
     expect(JSON.stringify(item)).not.toContain("\"k\"");

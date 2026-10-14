@@ -47,7 +47,7 @@ import { executeAgentTool } from "./agent-tools";
 import { completeStudioPiTurn, completeStudioPiSummary } from "./pi-agent-turn";
 import { studioGenerationFingerprint, studioGenerationPreparations } from './pi-studio-tools';
 import { StudioPiApprovals } from './pi-agent-approval';
-import {studioSessionOptions,studioCreativeReferenceData} from '../../src/agent/workspace-controls';
+import {studioSessionOptions,studioCreativeReferenceData,studioSelectedSystemPrompt} from '../../src/agent/workspace-controls';
 import {activeLorebookEntries} from '../../src/tavern/prompt';
 
 type EventSink = (event: AgentEvent) => void;
@@ -829,9 +829,10 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
     const sessionOptions=studioSessionOptions(conversation);
     const lore=activeLorebookEntries(referenceWorkspace.lorebooks.filter(b=>conversation.lorebookIds.includes(b.id)),referenceChat.messages,settings.lastGenerationState?.params.model);
     const resourceContext=studioCreativeReferenceData(referenceWorkspace,referenceChat,lore);
+    const configuredSystemPrompt=studioSelectedSystemPrompt(referenceWorkspace,referenceChat);
     const snapshot = createContextSnapshot(effectiveContextMessages(conversation.messages, conversation.lastSummary, conversation.lastCompactedAt),
       settings.agentContextWindow, settings.agentAutoCompactThreshold, conversation.lastTurnUsage);
-    snapshot.used += estimateTextTokens(turnInput.providerText)+estimateTextTokens(resourceContext) + conversation.draftAttachments.filter(item => selected.has(item.id)).length * 1_200;
+    snapshot.used += estimateTextTokens(turnInput.providerText)+estimateTextTokens(resourceContext)+estimateTextTokens(configuredSystemPrompt) + conversation.draftAttachments.filter(item => selected.has(item.id)).length * 1_200;
     if (shouldAutoCompact(snapshot, settings.agentAutoCompact, settings.agentAutoCompactThreshold)) {
       const compacted = await compactConversationWithController(request.conversationId, controller);
       controller.signal.throwIfAborted();
@@ -869,7 +870,7 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
     const turn = await completeStudioPiTurn({
       settings: getSettings(), conversationId: request.conversationId, messageId,
       reasoningEffort: current.reasoningEffort && current.reasoningEffort!=="auto" ? current.reasoningEffort : getSettings().agentReasoningEffort??"auto",
-      sessionOptions,resourceContext,
+      sessionOptions,resourceContext,configuredSystemPrompt,
       prompt: promptMessagesWithImages(transcript, request.conversationId),
       signal: controller.signal, onText: (delta) => { streamed += delta; deltas.push(delta); }, emit,
       onTool: (tool) => {

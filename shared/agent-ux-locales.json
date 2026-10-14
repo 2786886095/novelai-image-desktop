@@ -1239,11 +1239,11 @@
     "Infinite Gen 4 (이미지용)"
   ],
   "presetInfiniteBody": [
-    "默认预设：直接、简洁地整理提示词和执行生图；基于 Minglink 无限四代，非商业许可。",
-    "預設：直接精簡地整理提示詞與生圖；基於 Minglink 無限四代，非商業授權。",
-    "Default: direct, compact prompting and image execution. Adapted from Minglink; non-commercial license.",
-    "直接・簡潔なプロンプトと画像生成。Minglink 原作、非商用ライセンス。",
-    "간결한 프롬프트와 이미지 실행. Minglink 기반, 비상업 라이선스."
+    "四代兼容预设，保留旧选择；新默认为五代生图适配。此预设不改变工具或付款权限。",
+    "四代相容預設，保留舊選擇；新預設為五代生圖適配。不改變工具或付款權限。",
+    "Legacy IG4 adaptation retained for saved choices; IG5 is the new default. This preset does not change tool or payment permissions.",
+    "保存済み選択のためのIG4互換プリセットです。新しい既定はIG5。ツール・支払い権限は変更しません。",
+    "저장된 선택을 유지하는 IG4 호환 프리셋입니다. 새 기본값은 IG5이며 도구·결제 권한을 바꾸지 않습니다."
   ],
   "presetComplete": [
     "综合生图预设",
@@ -1531,5 +1531,19 @@
     "Paste attachment",
     "添付を貼り付け",
     "첨부 붙여넣기"
+  ],
+  "presetInfiniteFive": [
+    "无限五代 · 生图适配",
+    "無限五代 · 生圖適配",
+    "IG5 · Image-task adaptation",
+    "IG5 · 画像タスク向け",
+    "IG5 · 이미지 작업 적용"
+  ],
+  "presetInfiniteFiveBody": [
+    "参考五代通用规则改写；任务系统预设参与实际调用，但不改变工具、网络或付款权限。不是上游原生生图提示词。",
+    "參考五代通用規則改寫；任務系統預設參與實際呼叫，但不改變工具、網路或付款權限。不是上游原生生圖提示詞。",
+    "A task-scoped rewrite of IG5 workflow rules, not an upstream image preset. Applied in the actual system layer without granting tools, network access or payment approval.",
+    "IG5の一般ルールを画像タスク向けに改写。実際のシステム層に適用しますが、ツール・ネットワーク・支払い権限は付与しません。",
+    "IG5 일반 작업 규칙의 이미지 작업용 적용입니다. 실제 시스템 계층에 적용되지만 도구·네트워크·결제 권한을 부여하지 않습니다."
   ]
 }

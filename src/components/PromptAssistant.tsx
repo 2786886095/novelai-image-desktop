@@ -3,6 +3,7 @@ import {isPromptApiConfigured,requestPromptApiSettings,promptSetupText} from '..
 import {useEffect,useRef,useState} from 'react';
 import {AppPortal,SelectMenu} from './ui';
 import {CompactIconButton} from './CompactPromptControls';
+import {Icon} from './icons';
 import {promptEditorText} from '../prompt-editor-text';
 import type {PromptEditRequest} from '../prompt-assistant';
 import type {ReversePromptMode,ReversePromptTemplateVersion} from '../types';
@@ -15,7 +16,7 @@ export function PromptAssistant({kind,currentValue,context,mode,version,language
  const settings=useAppStore(state=>state.settings),ready=isPromptApiConfigured(settings),setup=promptSetupText(language);
  function configure(){requestPromptApiSettings();useAppStore.getState().setShowSettings(true);onClose();}
  const [instruction,setInstruction]=useState(''),[busy,setBusy]=useState(false),[modeBusy,setModeBusy]=useState(false),[error,setError]=useState('');
- const [preview,setPreview]=useState<{value:string;source:string;context:string;stats?:string}|null>(null);
+ const [preview,setPreview]=useState<{value:string;source:string;context:string;stats?:string;warnings?:string[]}|null>(null);
  const dialog=useRef<HTMLElement>(null),sequence=useRef(0),close=useRef(onClose);close.current=onClose;
  const stale=!!preview&&(preview.source!==currentValue||preview.context!==context);
  async function changeMode(next:string){
@@ -47,7 +48,7 @@ export function PromptAssistant({kind,currentValue,context,mode,version,language
    const reply=await window.naiDesktop.convertPrompt(source,mode,false,version,{kind,instruction});
    if(id!==sequence.current)return;
    if(!reply.ok||!reply.result?.trim()){setError(reply.message||text.failed);return;}
-   setPreview({value:reply.result,source,context:requestContext,stats:reply.validation?`${reply.validation.total} ${text.units} · Tag ${reply.validation.tags} (${reply.validation.tagPercent}%) · ${text.natural} ${reply.validation.natural}`:undefined});
+   setPreview({value:reply.result,source,context:requestContext,warnings:reply.warnings ? [...reply.warnings] : [],stats:reply.validation?`${reply.validation.total} ${text.units} · Tag ${reply.validation.tags} (${reply.validation.tagPercent}%) · ${text.natural} ${reply.validation.natural}`:undefined});
   }catch(e){if(id===sequence.current)setError(e instanceof Error?e.message:text.failed);}
   finally{if(id===sequence.current)setBusy(false);}
  }
@@ -61,6 +62,7 @@ export function PromptAssistant({kind,currentValue,context,mode,version,language
    {busy&&<p role="status">{text.busy}</p>}
    {error&&<p className="prompt-assistant-error" role="alert">{error}</p>}
    {preview&&<label className="prompt-assistant-result">{text.preview}<textarea readOnly value={preview.value}/>{preview.stats&&<small>{preview.stats}</small>}</label>}
+   {!!preview?.warnings?.length&&<div className="metadata-warnings prompt-assistant-warning" role="status" aria-live="polite"><Icon name="warning"/><div>{preview.warnings.map((warning,index)=><p key={index}>{warning}</p>)}</div></div>}
    {stale&&<p className="prompt-assistant-error" role="alert">{text.stale}</p>}
    </>}
   </div>

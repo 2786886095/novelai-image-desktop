@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -31,7 +32,12 @@ afterEach(async()=>{cancelAllJobs();await fs.rm(root,{recursive:true,force:true}
 
 async function assertSaved(result:Awaited<ReturnType<typeof generateImage>>,count:number){
  expect(result.items).toHaveLength(count);
- for(let i=0;i<count;i++)expect(await fs.readFile(result.items[i].filePath)).toEqual(images[i]);
+ for(let i=0;i<count;i++){
+  const bytes=await fs.readFile(result.items[i].filePath);expect(bytes).toEqual(images[i]);
+  expect(result.items[i].generatedAtSource).toBe('local-completion');
+  expect(result.items[i].generatedAt).toBe(result.items[i].createdAt);
+  expect(result.items[i].generatedImageSha256).toBe(crypto.createHash('sha256').update(bytes).digest('hex'));
+ }
  expect(new Set(result.items.map(item=>item.id)).size).toBe(count);
  expect(result.actualSeed).toBe(42);
 }

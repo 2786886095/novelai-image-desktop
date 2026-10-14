@@ -3,11 +3,12 @@ import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import sharp from 'sharp';
 import type {ImageFavorite,ImageFavoriteLibrary} from '../../src/favorites-types';
+import {hashFavoriteFile,normalizeFavoriteGenerationTime,type FavoriteGenerationTimeResolver} from './favorite-history-time';
 
 interface Index extends ImageFavoriteLibrary {version:1}
 const extensions=new Set(['.png','.jpg','.jpeg','.webp','.gif','.avif','.bmp']);
 // One service instance per application. All read/modify/write operations share a queue.
-export function createImageFavorites(options:{indexPath:string;defaultDirectory:string;now?:()=>Date}) {
+export function createImageFavorites(options:{indexPath:string;defaultDirectory:string;now?:()=>Date;resolveGeneratedAt?:FavoriteGenerationTimeResolver}) {
  let tail:Promise<unknown>=Promise.resolve();
  const serial=<T>(fn:()=>Promise<T>):Promise<T>=>{const next=tail.then(fn);tail=next.catch(()=>{});return next;};
  const revision=(data:Index)=>createHash('sha256').update(JSON.stringify(data)).digest('hex');
@@ -16,6 +17,11 @@ export function createImageFavorites(options:{indexPath:string;defaultDirectory:
   let raw:string;try{raw=await fs.readFile(options.indexPath,'utf8');}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return {version:1,directory:options.defaultDirectory,items:[]};throw e;}
   const data=JSON.parse(raw) as Index;
   if(data.version!==1||typeof data.directory!=='string'||!path.isAbsolute(data.directory)||!Array.isArray(data.items)||data.items.some(x=>!x||typeof x.id!=='string'||typeof x.filePath!=='string'||!path.isAbsolute(x.filePath)||!/^\d{8}_\d+x\d+_\d+$/.test(x.prefix)||!extensions.has(x.extension)))throw Error('收藏索引损坏，请保留文件后检查索引。');
+  data.items=data.items.map(item=>{
+   const generatedAt=normalizeFavoriteGenerationTime(item.generatedAt);
+   if(generatedAt&&item.generatedAtSource==='local-completion')return {...item,generatedAt};
+   const clean={...item};delete clean.generatedAt;delete clean.generatedAtSource;delete clean.generatedAtHistoryId;return clean;
+  });
   return data;
  }
  async function save(data:Index){
@@ -43,7 +49,26 @@ export function createImageFavorites(options:{indexPath:string;defaultDirectory:
    const item=data.items.find(item=>item.sha256===hash);
    return item&&!await missing(item.filePath)?item:null;
   }),
-  list:()=>serial(async()=>{const data=await read();return {revision:revision(data),directory:data.directory,items:await Promise.all(data.items.map(async x=>({...x,missing:await missing(x.filePath)})))};}),
+  list:(listOptions?:{resolveGeneratedAt?:boolean})=>serial(async()=>{
+   const data=await read();let changed=false;
+   // Legacy backfill is opt-in (generation-time sort), never the default list path.
+   if(listOptions?.resolveGeneratedAt===true&&options.resolveGeneratedAt){
+    let remaining=64*1024*1024;
+    for(const item of data.items){
+     if(item.generatedAt)continue;
+     try{
+      const stat=await regular(item.filePath);if(stat.size>remaining)continue;
+      remaining-=stat.size;
+      const content=await hashFavoriteFile(item.filePath,stat.size);
+      if(!content||content.sha256!==item.sha256)continue;
+      const time=await options.resolveGeneratedAt(item.filePath,item.sha256,content.bytes);
+      if(time){Object.assign(item,time);changed=true;}
+     }catch{/* Missing/changed/unreadable files stay unknown. No mtime fallback. */}
+    }
+    if(changed)await save(data);
+   }
+   return {revision:revision(data),directory:data.directory,items:await Promise.all(data.items.map(async x=>({...x,missing:await missing(x.filePath)})))};
+  }),
   setDirectory:(directory:string,expectedRevision?:string)=>serial(async()=>{
    const data=await read();check(data,expectedRevision);const targetRoot=await ensureDirectory(directory),created:string[]=[];
    try{
@@ -71,7 +96,11 @@ export function createImageFavorites(options:{indexPath:string;defaultDirectory:
    // Hash and archive the same bytes. Never re-encode: embedded PNG/EXIF metadata is preserved.
    const bytes=await fs.readFile(source),hash=createHash('sha256').update(bytes).digest('hex');
    const old=data.items.find(x=>x.sha256===hash);
-   if(old&&!await missing(old.filePath))return {item:old,duplicate:true};
+   const time=old?.generatedAt?{generatedAt:old.generatedAt,generatedAtSource:old.generatedAtSource,generatedAtHistoryId:old.generatedAtHistoryId}:await Promise.resolve().then(()=>options.resolveGeneratedAt?.(source,hash,bytes.length)).catch(()=>undefined);
+   if(old&&!await missing(old.filePath)){
+    if(time&&!old.generatedAt){Object.assign(old,time);await save(data);}
+    return {item:old,duplicate:true};
+   }
    const meta=await sharp(bytes,{limitInputPixels:268402689}).metadata();
    if(!meta.width||!meta.height)throw Error('图片分辨率读取失败。');
    const directory=await ensureDirectory(data.directory),now=options.now?.()??new Date();
@@ -88,7 +117,7 @@ export function createImageFavorites(options:{indexPath:string;defaultDirectory:
    while(true){while(reserved.has(seq))seq++;prefix=base+String(seq++).padStart(2,'0');target=path.join(directory,prefix+extension);
     try{await fs.writeFile(target,bytes,{flag:'wx'});break;}catch(e){if((e as NodeJS.ErrnoException).code!=='EEXIST')throw e;}
    }
-   const item:ImageFavorite={id:old?.id??randomUUID(),sha256:hash,filePath:target,prefix,name:'',extension,width:meta.width,height:meta.height,savedAt:now.toISOString()};
+   const item:ImageFavorite={id:old?.id??randomUUID(),sha256:hash,filePath:target,prefix,name:'',extension,width:meta.width,height:meta.height,savedAt:old?.savedAt??now.toISOString(),...time};
    data.items=[item,...data.items.filter(x=>x.id!==item.id)];
    try{await save(data);}catch(e){await fs.unlink(target).catch(()=>{});throw e;}
    return {item,duplicate:false};

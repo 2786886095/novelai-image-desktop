@@ -116,6 +116,7 @@ export function SelectMenu({
   onChange,
   label,
   ariaLabel,
+  ariaDescribedBy,
   className,
   disabled = false,
   defaultOpen = false,
@@ -130,6 +131,7 @@ export function SelectMenu({
   onChange: (value: string) => void;
   label?: ReactNode;
   ariaLabel: string;
+  ariaDescribedBy?: string;
   className?: string;
   disabled?: boolean;
   id?: string;
@@ -271,6 +273,7 @@ export function SelectMenu({
         type="button"
         className={clsx("select-menu-trigger", className)}
         aria-label={accessibleLabel}
+        aria-describedby={ariaDescribedBy}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={menuId}
@@ -378,6 +381,7 @@ export function SelectMenuCompat({
   name,
   title,
   "aria-label": ariaLabel,
+  "aria-describedby": ariaDescribedBy,
 }: Omit<SelectHTMLAttributes<HTMLSelectElement>, "value" | "defaultValue" | "multiple" | "size"> & {
   value?: string | number;
   defaultValue?: string | number;
@@ -413,6 +417,7 @@ export function SelectMenuCompat({
       options={options}
       onChange={commit}
       ariaLabel={resolvedLabel}
+      ariaDescribedBy={ariaDescribedBy}
       id={triggerId}
       className={clsx("select-menu-compat", className)}
       disabled={disabled}

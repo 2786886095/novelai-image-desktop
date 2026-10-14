@@ -1,9 +1,9 @@
 const fs=require('node:fs'),assert=require('node:assert/strict');
 const pkg=JSON.parse(fs.readFileSync('package.json','utf8')),lock=JSON.parse(fs.readFileSync('package-lock.json','utf8'));
-assert.equal(pkg.version,'2.5.7');assert.equal(lock.version,pkg.version);assert.equal(lock.packages[''].version,pkg.version);
-assert.match(fs.readFileSync('mobile/pubspec.yaml','utf8'),/^version: 2\.5\.7\+176$/m);
-assert.ok(fs.readFileSync('mobile/lib/models/nai_models.dart','utf8').includes("const appVersion = '2.5.7';"));
-assert.ok(fs.readFileSync('electron/ipc/mcp-client.ts','utf8').includes('version: "2.5.7"'));
+assert.equal(pkg.version,'2.5.8');assert.equal(lock.version,pkg.version);assert.equal(lock.packages[''].version,pkg.version);
+assert.match(fs.readFileSync('mobile/pubspec.yaml','utf8'),/^version: 2\.5\.8\+177$/m);
+assert.ok(fs.readFileSync('mobile/lib/models/nai_models.dart','utf8').includes("const appVersion = '2.5.8';"));
+assert.ok(fs.readFileSync('electron/ipc/mcp-client.ts','utf8').includes('version: "2.5.8"'));
 const locales=JSON.parse(fs.readFileSync('shared/agent-ux-locales.json','utf8'));
 assert.ok(JSON.stringify(locales).includes('使用酒馆'));
 // Current page entries move with Latest/main; real package/build versions above remain required.
@@ -30,4 +30,4 @@ assert.ok(first.includes(repo+'/releases/latest'));
 assert.ok(first.includes(repo+'/tree/main'));
 assert.doesNotMatch(first,/\bv?\d+\.\d+\.\d+\b|\/releases\/(?:tag|download)\/|\/(?:tree|blob|commit)\/[a-f0-9]{7,40}\b/i);
 assert.match(notes.slice(entries[1].index),/\bv?\d+\.\d+\.\d+\b/);
-console.log(JSON.stringify({version:pkg.version,mobile:'2.5.7+176',scope:'Windows x64 binaries; shared Android/iOS source',label:'使用酒馆',pass:true}));
+console.log(JSON.stringify({version:pkg.version,mobile:'2.5.8+177',scope:'Windows x64 binaries; shared Android/iOS source',label:'使用酒馆',pass:true}));

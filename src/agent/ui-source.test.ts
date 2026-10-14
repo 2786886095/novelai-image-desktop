@@ -115,12 +115,14 @@ describe("Character Tavern desktop UI", () => {
     expect(styles).toContain(".tavern-library-delete.is-busy");
   });
 
-  it("manages a shared reverse/convert JSON preset library in settings", () => {
+  it("manages a shared library with independent reverse/convert system selections and TXT/MD/JSON import", () => {
     const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
     expect(source).toContain("importReverseConvertPreset");
     expect(source).toContain("reverseConvertPromptPresets");
     expect(source).toContain("reverseConvertPromptPresetId");
-    expect(source).toContain('accept=".json,application/json"');
+    expect(source).toContain('accept=".json,.md,.txt,application/json,text/markdown,text/plain"');
+    expect(source).toContain("convertSystemPromptPresetId");
+    expect(source).toContain("reverseSystemPromptPresetId");
     expect(source).toContain("deleteReverseConvertPreset");
   });
 });

@@ -188,3 +188,102 @@ describe("convert/反推 job tracker (concurrent, not a serial queue)", () => {
     }
   });
 });
+
+
+describe("advisory prompt conversion warnings", () => {
+  beforeEach(() => useAppStore.setState(useAppStore.getInitialState(), true));
+
+  it("keeps mixed/V5 success usable and clones warnings into result, job and persisted history", async () => {
+    const warnings = ["Mixed template ratio differs; the result remains usable."];
+    const nai = stubNaiDesktop({ convertPrompt: vi.fn().mockResolvedValue({ ok: true, result: "1girl, A girl stands outside.", warnings }) });
+    useAppStore.setState({ convertInput: "描述", convertMode: "mixed" });
+    await useAppStore.getState().runConvertPrompt();
+    const state = useAppStore.getState();
+    expect(nai.convertPrompt).toHaveBeenCalledWith("描述", "mixed", false, "v5");
+    expect(state.convertResult).toBe("1girl, A girl stands outside.");
+    expect(state.convertJobs[0].status).toBe("done");
+    expect(state.convertResultWarnings).toEqual(warnings);
+    expect(state.convertJobs[0].warnings).toEqual(warnings);
+    expect(state.convertHistory[0].warnings).toEqual(warnings);
+    expect(nai.addConvertHistoryItem).toHaveBeenCalledWith(expect.objectContaining({ result: state.convertResult, warnings }));
+    warnings.push("Later bridge mutation");
+    expect(state.convertResultWarnings).toHaveLength(1);
+    expect(state.convertJobs[0].warnings).toHaveLength(1);
+    expect(state.convertHistory[0].warnings).toHaveLength(1);
+    expect(state.convertJobs[0].warnings).not.toBe(state.convertResultWarnings);
+    expect(state.convertHistory[0].warnings).not.toBe(state.convertResultWarnings);
+  });
+
+  it("clears previous result warnings on the next success without warnings", async () => {
+    stubNaiDesktop({ convertPrompt: vi.fn().mockResolvedValue({ ok: true, result: "1boy, solo" }) });
+    useAppStore.setState({ convertInput: "new request", convertResult: "older result", convertResultWarnings: ["Older template warning"] });
+    await useAppStore.getState().runConvertPrompt();
+    expect(useAppStore.getState().convertResult).toBe("1boy, solo");
+    expect(useAppStore.getState().convertResultWarnings).toEqual([]);
+    expect(useAppStore.getState().convertJobs[0].warnings).toEqual([]);
+    expect(useAppStore.getState().convertHistory[0].warnings).toEqual([]);
+  });
+
+  it("clears old warnings on manual replacement and restores cloned history warnings explicitly", () => {
+    const warnings = ["History template warning"];
+    useAppStore.getState().setConvertResult("historic result", warnings);
+    warnings.push("External array changed");
+    expect(useAppStore.getState().convertResultWarnings).toEqual(["History template warning"]);
+    useAppStore.getState().setConvertResult("manual replacement");
+    expect(useAppStore.getState().convertResultWarnings).toEqual([]);
+    useAppStore.getState().setConvertResult("historic result", ["History template warning"]);
+    expect(useAppStore.getState().convertResultWarnings).toEqual(["History template warning"]);
+  });
+
+  it("does not let a cancelled late warning reply overwrite a newer result, warnings or toast", async () => {
+    const late = deferred<{ ok: boolean; result: string; warnings: string[] }>();
+    const nai = stubNaiDesktop({ convertPrompt: vi.fn().mockReturnValue(late.promise) });
+    useAppStore.setState({ convertInput: "cancelled request" });
+    const pending = useAppStore.getState().runConvertPrompt();
+    const id = useAppStore.getState().convertJobs[0].id;
+    useAppStore.getState().removeConvertJob(id);
+    useAppStore.getState().setConvertResult("newer result", ["newer warning"]);
+    useAppStore.getState().setToast("newer toast");
+    late.resolve({ ok: true, result: "late result", warnings: ["late warning"] });
+    await pending;
+    expect(useAppStore.getState().convertResult).toBe("newer result");
+    expect(useAppStore.getState().convertResultWarnings).toEqual(["newer warning"]);
+    expect(useAppStore.getState().toast).toBe("newer toast");
+    expect(useAppStore.getState().convertHistory).toEqual([]);
+    expect(nai.addConvertHistoryItem).not.toHaveBeenCalled();
+  });
+
+  it("retains current and history warnings after the done job auto-dismisses", async () => {
+    vi.useFakeTimers();
+    try {
+      stubNaiDesktop({ convertPrompt: vi.fn().mockResolvedValue({ ok: true, result: "usable result", warnings: ["Template warning"] }) });
+      useAppStore.setState({ convertInput: "description" });
+      await useAppStore.getState().runConvertPrompt();
+      expect(useAppStore.getState().convertJobs).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(useAppStore.getState().convertJobs).toHaveLength(0);
+      expect(useAppStore.getState().convertResult).toBe("usable result");
+      expect(useAppStore.getState().convertResultWarnings).toEqual(["Template warning"]);
+      expect(useAppStore.getState().convertHistory[0].warnings).toEqual(["Template warning"]);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("keeps each concurrent warning paired with its result under existing last-completion-wins semantics", async () => {
+    const first = deferred<{ ok: boolean; result: string; warnings: string[] }>();
+    const second = deferred<{ ok: boolean; result: string; warnings: string[] }>();
+    stubNaiDesktop({ convertPrompt: vi.fn().mockImplementationOnce(() => first.promise).mockImplementationOnce(() => second.promise) });
+    useAppStore.setState({ convertInput: "first" });
+    const a = useAppStore.getState().runConvertPrompt();
+    useAppStore.setState({ convertInput: "second" });
+    const b = useAppStore.getState().runConvertPrompt();
+    second.resolve({ ok: true, result: "second result", warnings: ["second warning"] });
+    await b;
+    expect(useAppStore.getState().convertResultWarnings).toEqual(["second warning"]);
+    first.resolve({ ok: true, result: "first result", warnings: ["first warning"] });
+    await a;
+    const state = useAppStore.getState();
+    expect(state.convertResult).toBe("first result");
+    expect(state.convertResultWarnings).toEqual(["first warning"]);
+    for (const item of [...state.convertJobs, ...state.convertHistory]) expect(item.warnings).toEqual([item.result === "first result" ? "first warning" : "second warning"]);
+  });
+});

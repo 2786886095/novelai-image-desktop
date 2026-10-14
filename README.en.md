@@ -17,6 +17,15 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 > Bring your own **NovelAI Persistent API Token**. Model access and generation charges depend on your NovelAI account. Optional image analysis, prompt conversion and Tavern AI services require separate configuration.
 
+## Desktop changes in this release preparation
+
+- **Metadata recovery**: choose online or offline. Online is the default and downloads only the official parser; images are processed locally and are not uploaded. Online currently supports PNG/WebP; use offline for JPEG. Menus use the shared app style, and an unloaded or failed history lookup no longer appears as zero images.
+- **Favorites**: sort by favorite time or verified local generation-completion time, ascending or descending. Favorite time, newest first, is the default; images with unknown generation times remain last.
+- **System prompts**: import presets for conversion, reverse prompting and the image agent. Defaults adapt IG5's general workflow rules, not its repository's reverse-engineering workbench instructions verbatim. Existing custom settings and application permission rules are preserved.
+- **Artist Detective downloads**: visible errors, proxy routing and resumable-download handling. This local workflow is Windows x64 + NVIDIA only; the full model needs at least 8 GB VRAM. Resources download at approximately 5.12 GiB; reserve at least 35 GB disk space for the full setup. Download size is not the app-package size or installed footprint; no universal low-VRAM guarantee is established for the light model.
+
+**Scope and status**: these desktop additions have not been ported to Android/iOS; mobile retains its existing local metadata parser and prompt-preset workflow. Formal five-platform builds/publication are being prepared, not already live or accepted across the complete 39 × 5 feature matrix. The iOS IPA remains unsigned: users must sign it themselves, and it cannot be installed directly on an ordinary iPhone. Check [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) for final packages and evidence, and [main](https://github.com/2786886095/novelai-image-desktop/tree/main) for released source.
+
 ## Quick start
 
 1. Download the package for your operating system from the release page. End users do not need Node.js or source-build commands.

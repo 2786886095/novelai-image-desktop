@@ -48,7 +48,7 @@ it('keeps all 24 official format fixture bytes and metadata expectations intact'
 
 // Structural protection complements runtime tests; it is not an end-to-end UI claim.
 it.each([
-  ['src/App.tsx', 'parseImageMetaAsync'], ['src/MetadataInspector.tsx', 'parseImageMetaAsync'],
+  ['src/App.tsx', 'parseImageMetaAsync'], ['src/MetadataInspector.tsx', 'readImageMetadataForRecovery'],
   ['src/works-library.ts', 'parseImageMetaAsync'], ['src/components/InpaintPromptSource.tsx', 'parseImageMetaAsync'],
   ['electron/ipc/agent-tools.ts', 'readNativeImageMetadata']
 ])('keeps %s on the awaited shared decoder', (file, symbol) => {

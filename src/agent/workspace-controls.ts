@@ -1,15 +1,18 @@
+import ig5 from "../../shared/ig5-image-prompts.json";
 import type {AgentConversation,AgentWorkspaceData} from './types';
 import infinitePreset from '../../shared/agent-infinite-preset.json';
 import {LYRA_PRESET_SYSTEM_PROMPT,LYRA_PRESET_JAILBREAK_PROMPT} from '../tavern/lyra-preset-data';
 
-export const STUDIO_DEFAULT_PRESET_ID='dsh-infinite-gen-4';
+export const STUDIO_DEFAULT_PRESET_ID='dsh-infinite-gen-5';
+export const STUDIO_LEGACY_PRESET_ID='dsh-infinite-gen-4';
 export const STUDIO_MERGED_PRESET_ID='studio-complete';
 export const STUDIO_LYRA_PRESET_ID='builtin-lyra-beta-3-8-sampler';
 const oldPresetIds=new Set(['studio-director','studio-prompts','studio-reference','tavern:'+STUDIO_LYRA_PRESET_ID]);
 export function studioPresetId(id?:string){return !id||oldPresetIds.has(id)?STUDIO_DEFAULT_PRESET_ID:id;}
 
 export const STUDIO_BUILTIN_PRESETS=[
- {id:STUDIO_DEFAULT_PRESET_ID,name:'presetInfinite',body:infinitePreset.adaptedPrompt},
+ {id:STUDIO_DEFAULT_PRESET_ID,name:'presetInfiniteFive',body:ig5.prompts.studio},
+ {id:STUDIO_LEGACY_PRESET_ID,name:'presetInfinite',body:infinitePreset.adaptedPrompt},
  {id:STUDIO_MERGED_PRESET_ID,name:'presetComplete',body:[
   'Help the user plan and create images. Keep replies brief, preserve explicit image constraints, use actual Studio generation tools and receipts. Do not generate when asked only to discuss or inspect.',
   'Focus on NovelAI prompt composition, subject, action, lighting and framing. Preserve explicit tags and exclusions. Explain edits briefly; never invent an executed image.',
@@ -33,8 +36,16 @@ export function studioCreativeReferenceData(workspace:AgentWorkspaceData,chat:Ag
  const preset=studioBuiltinPreset(options.presetId);
  const tavern=options.presetId.startsWith('tavern:')?workspace.samplerPresets.find(p=>p.id===options.presetId.slice(7)):undefined;
  return JSON.stringify({
-  preset:options.templateEnabled?(preset?{name:preset.name,body:preset.body}:tavern?{name:tavern.name,body:tavern.systemPrompt,postscript:tavern.jailbreakPrompt}:null):null,
+  preset:options.templateEnabled?(preset?{id:preset.id,name:preset.name,source:'builtin'}:tavern?{id:'tavern:'+tavern.id,name:tavern.name,source:tavern.source,sourceName:tavern.sourceName}:null):null,
   characters:workspace.characters.filter(c=>chat.characterIds.includes(c.id)).map(c=>({name:c.nickname||c.name,description:c.description,personality:c.personality,scenario:c.scenario,creativeInstructions:c.systemPrompt,postscript:c.postHistoryInstructions})),
   worldbooks:lore.map(item=>({book:item.book.name,title:item.entry.comment,content:item.entry.content})),
  });
+}
+
+/** Explicit user-selected task system layer, never a tool or payment permission. */
+export function studioSelectedSystemPrompt(workspace:AgentWorkspaceData,chat:AgentConversation):string {
+ const options=studioSessionOptions(chat);if(!options.templateEnabled)return '';
+ const builtin=studioBuiltinPreset(options.presetId);if(builtin)return builtin.body;
+ const preset=options.presetId.startsWith('tavern:')?workspace.samplerPresets.find(p=>p.id===options.presetId.slice(7)):undefined;
+ return preset?[preset.systemPrompt,preset.jailbreakPrompt].filter(Boolean).join('\n\n'):'';
 }

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
+import {verifyIg5Package} from './verify-ig5-package.mjs';
 
 const root=process.cwd();
 const output=path.resolve('release/packaged-smoke');
@@ -29,6 +30,11 @@ function run(command,args,env,name){
 }
 const probe=path.resolve('scripts/packaged-runtime-probe.cjs');
 const appRoot=path.join(resources,'app.asar');
+const ig5=verifyIg5Package(appRoot,root);
+fs.writeFileSync(path.join(output,'ig5-package.json'),JSON.stringify(ig5,null,2)+'\n');
+checks.push({name:'ig5-license-provenance',status:0,archive:appRoot,files:ig5.files});
+fs.writeFileSync(path.join(output,'results.json'),JSON.stringify(checks,null,2));
+console.log('IG5_PACKAGED_BYTES_VERIFIED',ig5.version,ig5.files.length);
 if(process.platform==='darwin'){
  for(const arch of [process.arch === 'arm64' ? 'arm64' : 'x86_64'])run('/usr/bin/arch',['-'+arch,binary,probe,appRoot],{ELECTRON_RUN_AS_NODE:'1'},'runtime-'+arch);
 }else run(binary,[probe,appRoot],{ELECTRON_RUN_AS_NODE:'1'},'runtime');

@@ -9,7 +9,7 @@ const item={source:'danbooru',id:'123',title:'fixture',author:'',sourceUrl:'http
 it('Agent browsing preferences use actual persisted fields and reject invalid or stale settings',()=>{
  const f=fixture(),api=f.create(),state=api.read('favorites.view');
  const after=api.apply({action:'favorites.view.update',layout:'masonry',pageSize:48,expectedRevision:state.revision});
- expect(after.view).toEqual({layout:'masonry',pageSize:48});expect(f.create().read('favorites.view').view).toEqual(after.view);expect(f.events).toContain('favorites.view');
+ expect(after.view).toEqual({layout:'masonry',pageSize:48,sortBy:'savedAt',sortDirection:'desc'});expect(f.create().read('favorites.view').view).toEqual(after.view);expect(f.events).toContain('favorites.view');
  expect(()=>api.apply({action:'favorites.view.update',layout:'masonry',pageSize:0,expectedRevision:after.revision})).toThrow();
  f.values.set(FAVORITES_VIEW_KEY,JSON.stringify({pageSize:12,layout:'grid'}));expect(()=>api.apply({action:'favorites.view.update',layout:'masonry',pageSize:24,expectedRevision:after.revision})).toThrow('已变化');
 });
@@ -33,4 +33,12 @@ it('online bookmarks are idempotent, persistent, separate from local originals a
 it('corrupt storage and persistence failures leave original bookmarks intact',()=>{
  const f=fixture(),api=f.create();f.values.set(GALLERY_FAVORITES_KEY,'{bad');expect(()=>api.read('favorites.online')).toThrow();expect(f.values.get(GALLERY_FAVORITES_KEY)).toBe('{bad');
  f.values.delete(GALLERY_FAVORITES_KEY);const state=api.read('favorites.online');f.storage.setItem=()=>{throw Error('quota');};expect(()=>api.apply({action:'favorites.online.add',item,expectedRevision:state.revision})).toThrow('quota');expect(f.events).toEqual([]);
+});
+
+it('legacy Agent layout updates preserve the user-selected sorting fields',()=>{
+ const f=fixture();f.values.set(FAVORITES_VIEW_KEY,JSON.stringify({pageSize:24,layout:'grid',sortBy:'generatedAt',sortDirection:'asc'}));
+ const api=f.create(),state=api.read('favorites.view');
+ const after=api.apply({action:'favorites.view.update',layout:'masonry',pageSize:48,expectedRevision:state.revision});
+ expect(after.view).toEqual({pageSize:48,layout:'masonry',sortBy:'generatedAt',sortDirection:'asc'});
+ expect(f.create().read('favorites.view').view).toEqual(after.view);
 });

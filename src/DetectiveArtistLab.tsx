@@ -2,6 +2,7 @@ import {PreviewImageViewer, type PreviewImage} from "./components/PreviewImageVi
 import {useFeatureText} from "./feature-i18n";
 import { useEffect, useState } from "react";
 import "./detective-download.css";
+import { downloadDiagnosticLabel } from "./detective-download-diagnostics";
 import { AppPortal, Button, CommittedNumberInput, SelectMenu } from "./components/ui";
 import { confirmAction } from "./components/confirm";
 import { useAppStore } from "./store";
@@ -31,6 +32,7 @@ const STAGE: Record<string, string> = { idle: "未开始", loading: "校验与�
 
 export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
   const ft=useFeatureText();
+  const language=useAppStore(s=>s.settings?.language);
   const [draft, setDraft] = useState(restore);
   const [preview,setPreview] = useState<{images:PreviewImage[];index:number}|null>(null);
   const [snapshot, setSnapshot] = useState<DetectiveSnapshot | null>(null);
@@ -142,6 +144,7 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
             <p>{ft("存放位置：")}<code style={{ overflowWrap: "anywhere" }}>{download.directory}</code></p>
 
             {download.message && <p role="status">{download.message.startsWith('安装在 ') ? ft('安装在 {stage} 阶段失败。原运行环境和模型配置未替换；请检查网络、磁盘空间及显卡驱动后重试。',{stage:ft(DOWNLOAD_STAGE[download.message.match(/^安装在 (\w+) 阶段/)?.[1] ?? 'failed'] ?? download.stage)}) : ft(download.message)}</p>}
+            {download.error && <p className="artist-error detective-download-diagnostic" role="alert"><strong>{downloadDiagnosticLabel(language)}</strong><br/>{download.error.file && <><code>{download.error.file}</code><br/></>}{[download.error.code, download.error.httpStatus ? `HTTP ${download.error.httpStatus}` : ""].filter(Boolean).join(" · ")}{download.error.code || download.error.httpStatus ? " · " : ""}{download.error.message}</p>}
           </>}
           <div className="artist-candidate-actions">
             <Button disabled={active} onClick={() => void action(async () => setDownload(await window.naiDesktop.artistDetectiveDownloadDirectory()))}>{ft("选择存放位置")}</Button>

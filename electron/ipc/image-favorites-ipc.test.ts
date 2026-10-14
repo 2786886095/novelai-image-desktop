@@ -1,20 +1,29 @@
 import fs from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import sharp from 'sharp';
 import {it,expect,vi} from 'vitest';
-const fixture=vi.hoisted(()=>({root:'',handlers:new Map<string,Function>(),pick:vi.fn()}));
+import {createHash} from 'node:crypto';
+import type {FavoriteHistoryReference} from './favorite-history-time';
+const fixture=vi.hoisted(()=>({root:'',handlers:new Map<string,Function>(),pick:vi.fn(),history:[] as FavoriteHistoryReference[],historyReads:vi.fn()}));
 vi.mock('electron',()=>({app:{getPath:(key:string)=>path.join(fixture.root,key)},ipcMain:{handle:(key:string,fn:Function)=>fixture.handlers.set(key,fn)},dialog:{showOpenDialog:fixture.pick}}));
-vi.mock('./store',()=>({getSettings:()=>({language:'zh-CN'})}));
+vi.mock('./store',()=>({getSettings:()=>({language:'zh-CN'}),getFavoriteHistoryReferences:()=>{fixture.historyReads();return fixture.history;}}));
 import {registerImageFavoritesIpc,favoriteContextMenuItem,imageParametersContextMenuItem} from './image-favorites-ipc';
 import {toLocalMediaUrl} from './local-media-protocol';
 it('right-click saves original once with toast, IPC reads it, raw/unregistered paths are rejected',async()=>{
  fixture.root=await fs.mkdtemp(path.join(os.tmpdir(),'favorites-ipc-'));
  try{
   registerImageFavoritesIpc();const source=path.join(fixture.root,'original.png'),bytes=await sharp({create:{width:4,height:6,channels:3,background:'#675a98'}}).png().toBuffer();await fs.writeFile(source,bytes);
+  fixture.history=[{id:'generation-fixture',filePath:source,generatedAt:'2026-09-20T10:20:30Z',generatedAtSource:'local-completion',generatedImageSha256:createHash('sha256').update(bytes).digest('hex')}];
   const send=vi.fn(),win={isDestroyed:()=>false,webContents:{send}} as any;
   expect(favoriteContextMenuItem('file:///private.png',win).enabled).toBe(false);
   await expect(fixture.handlers.get('favorites:add')!({},source)).rejects.toThrow();
   const menu=favoriteContextMenuItem(toLocalMediaUrl(source),win);expect(menu.label).toBe('收藏图片');expect(menu.enabled).toBe(true);(menu.click as Function)();
   await vi.waitFor(()=>expect(send).toHaveBeenCalledWith('favorites:changed',{message:'已收藏图片'}));expect(fixture.pick).not.toHaveBeenCalled();
   const state=await fixture.handlers.get('favorites:list')!({});expect(state.items).toHaveLength(1);expect(state.items[0].fileUrl).toMatch(/^nai-local:/);expect(await fs.readFile(state.items[0].filePath)).toEqual(bytes);
+  expect(state.items[0].generatedAt).toBe('2026-09-20T10:20:30.000Z');expect(state.items[0].generatedAtSource).toBe('local-completion');
+  const historyReads=fixture.historyReads.mock.calls.length;await fixture.handlers.get('favorites:list')!({});expect(fixture.historyReads).toHaveBeenCalledTimes(historyReads);
+  const indexFile=path.join(fixture.root,'userData','image-favorites.v1.json'),legacy=JSON.parse(await fs.readFile(indexFile,'utf8'));
+  delete legacy.items[0].generatedAt;delete legacy.items[0].generatedAtSource;delete legacy.items[0].generatedAtHistoryId;await fs.writeFile(indexFile,JSON.stringify(legacy));
+  expect((await fixture.handlers.get('favorites:list')!({})).items[0].generatedAt).toBeUndefined();expect(fixture.historyReads).toHaveBeenCalledTimes(historyReads);
+  expect((await fixture.handlers.get('favorites:list')!({},{resolveGeneratedAt:true})).items[0].generatedAt).toBe('2026-09-20T10:20:30.000Z');expect(fixture.historyReads).toHaveBeenCalledTimes(historyReads+1);
   expect((await fixture.handlers.get('favorites:status')!({},toLocalMediaUrl(source))).id).toBe(state.items[0].id);
   expect(await fixture.handlers.get('favorites:status')!({},source)).toBeNull();
   (menu.click as Function)();await vi.waitFor(()=>expect(send).toHaveBeenCalledWith('favorites:changed',{message:'图片已在收藏夹'}));
