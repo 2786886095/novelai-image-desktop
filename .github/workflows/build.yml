@@ -186,6 +186,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+      - name: Install locked verification tooling (no build/install scripts)
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - uses: actions/download-artifact@v4
         with:
           name: novelai-image-desktop-macos
