@@ -1,6 +1,8 @@
 name: Native Feature Acceptance Components
 
 on:
+  push:
+    branches: ['codex/release-2.5.8-mobile-parity']
   workflow_dispatch:
 
 # This workflow collects bounded native journeys. It never publishes or replaces
@@ -17,11 +19,55 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     steps:
+      - name: Preserve exact committed bytes before checkout
+        shell: bash
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
         with:
           node-version: '24.14.0'
           cache: npm
+      - name: Verify exact checkout bytes against index and commit
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const cp = require('node:child_process');
+          const crypto = require('node:crypto');
+          function git(args, encoding) {
+            const result = cp.spawnSync('git', args, { encoding, maxBuffer: 64 * 1024 * 1024 });
+            if (result.error || result.status !== 0) {
+              throw new Error('Git command failed: ' + JSON.stringify(args) + '; exit=' + result.status + '; ' + (result.stderr || ''));
+            }
+            return result.stdout;
+          }
+          const head = git(['rev-parse', 'HEAD'], 'utf8').trim();
+          if (!/^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA || '') || head !== process.env.GITHUB_SHA) {
+            throw new Error('Checkout HEAD must equal GITHUB_SHA.');
+          }
+          // Index must still be exactly the committed tree; this alone is NOT a raw-byte proof.
+          git(['diff', '--cached', '--exit-code'], 'utf8');
+          const records = git(['ls-files', '--stage', '-z']).toString('utf8').split('\0').filter(Boolean);
+          if (!records.length) throw new Error('No tracked checkout files found.');
+          const mismatches = [];
+          for (const record of records) {
+            const match = /^([0-7]{6}) ([a-f0-9]{40}) ([0-3])\t([\s\S]+)$/.exec(record);
+            if (!match || match[3] !== '0') throw new Error('Unmerged or invalid Git index entry.');
+            const mode = match[1], oid = match[2], file = match[4];
+            let bytes;
+            if (mode === '120000') {
+              bytes = fs.readlinkSync(file, { encoding: 'buffer' });
+            } else if (mode === '100644' || mode === '100755') {
+              bytes = fs.readFileSync(file);
+            } else {
+              throw new Error('Unsupported tracked entry mode: ' + mode + ' ' + file);
+            }
+            const actual = crypto.createHash('sha1').update(Buffer.from('blob ' + bytes.length + '\0')).update(bytes).digest('hex');
+            if (actual !== oid) mismatches.push(file);
+          }
+          if (mismatches.length) throw new Error('Raw checkout byte mismatch: ' + JSON.stringify(mismatches));
+          console.log(JSON.stringify({ observed: 'COMMITTED_INDEX_RAW_BYTES_VERIFIED', sourceSha: head, verifiedFiles: records.length, full195Certified: false }));
+          NODE
       - run: npm ci --no-audit --no-fund
       - name: Configure Linux test display and Chromium sandbox (CI only)
         if: runner.os == 'Linux'
@@ -50,12 +96,58 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
+      - name: Preserve exact committed bytes before checkout
+        shell: bash
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
         with:
           node-version: '24.14.0'
           cache: npm
+      - name: Verify exact checkout bytes against index and commit
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const cp = require('node:child_process');
+          const crypto = require('node:crypto');
+          function git(args, encoding) {
+            const result = cp.spawnSync('git', args, { encoding, maxBuffer: 64 * 1024 * 1024 });
+            if (result.error || result.status !== 0) {
+              throw new Error('Git command failed: ' + JSON.stringify(args) + '; exit=' + result.status + '; ' + (result.stderr || ''));
+            }
+            return result.stdout;
+          }
+          const head = git(['rev-parse', 'HEAD'], 'utf8').trim();
+          if (!/^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA || '') || head !== process.env.GITHUB_SHA) {
+            throw new Error('Checkout HEAD must equal GITHUB_SHA.');
+          }
+          // Index must still be exactly the committed tree; this alone is NOT a raw-byte proof.
+          git(['diff', '--cached', '--exit-code'], 'utf8');
+          const records = git(['ls-files', '--stage', '-z']).toString('utf8').split('\0').filter(Boolean);
+          if (!records.length) throw new Error('No tracked checkout files found.');
+          const mismatches = [];
+          for (const record of records) {
+            const match = /^([0-7]{6}) ([a-f0-9]{40}) ([0-3])\t([\s\S]+)$/.exec(record);
+            if (!match || match[3] !== '0') throw new Error('Unmerged or invalid Git index entry.');
+            const mode = match[1], oid = match[2], file = match[4];
+            let bytes;
+            if (mode === '120000') {
+              bytes = fs.readlinkSync(file, { encoding: 'buffer' });
+            } else if (mode === '100644' || mode === '100755') {
+              bytes = fs.readFileSync(file);
+            } else {
+              throw new Error('Unsupported tracked entry mode: ' + mode + ' ' + file);
+            }
+            const actual = crypto.createHash('sha1').update(Buffer.from('blob ' + bytes.length + '\0')).update(bytes).digest('hex');
+            if (actual !== oid) mismatches.push(file);
+          }
+          if (mismatches.length) throw new Error('Raw checkout byte mismatch: ' + JSON.stringify(mismatches));
+          console.log(JSON.stringify({ observed: 'COMMITTED_INDEX_RAW_BYTES_VERIFIED', sourceSha: head, verifiedFiles: records.length, full195Certified: false }));
+          NODE
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify pinned mobile metadata runtime without regeneration
+        run: node scripts/build-mobile-metadata-runtime.mjs --check
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -89,12 +181,58 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 75
     steps:
+      - name: Preserve exact committed bytes before checkout
+        shell: bash
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
         with:
           node-version: '24.14.0'
           cache: npm
+      - name: Verify exact checkout bytes against index and commit
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const cp = require('node:child_process');
+          const crypto = require('node:crypto');
+          function git(args, encoding) {
+            const result = cp.spawnSync('git', args, { encoding, maxBuffer: 64 * 1024 * 1024 });
+            if (result.error || result.status !== 0) {
+              throw new Error('Git command failed: ' + JSON.stringify(args) + '; exit=' + result.status + '; ' + (result.stderr || ''));
+            }
+            return result.stdout;
+          }
+          const head = git(['rev-parse', 'HEAD'], 'utf8').trim();
+          if (!/^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA || '') || head !== process.env.GITHUB_SHA) {
+            throw new Error('Checkout HEAD must equal GITHUB_SHA.');
+          }
+          // Index must still be exactly the committed tree; this alone is NOT a raw-byte proof.
+          git(['diff', '--cached', '--exit-code'], 'utf8');
+          const records = git(['ls-files', '--stage', '-z']).toString('utf8').split('\0').filter(Boolean);
+          if (!records.length) throw new Error('No tracked checkout files found.');
+          const mismatches = [];
+          for (const record of records) {
+            const match = /^([0-7]{6}) ([a-f0-9]{40}) ([0-3])\t([\s\S]+)$/.exec(record);
+            if (!match || match[3] !== '0') throw new Error('Unmerged or invalid Git index entry.');
+            const mode = match[1], oid = match[2], file = match[4];
+            let bytes;
+            if (mode === '120000') {
+              bytes = fs.readlinkSync(file, { encoding: 'buffer' });
+            } else if (mode === '100644' || mode === '100755') {
+              bytes = fs.readFileSync(file);
+            } else {
+              throw new Error('Unsupported tracked entry mode: ' + mode + ' ' + file);
+            }
+            const actual = crypto.createHash('sha1').update(Buffer.from('blob ' + bytes.length + '\0')).update(bytes).digest('hex');
+            if (actual !== oid) mismatches.push(file);
+          }
+          if (mismatches.length) throw new Error('Raw checkout byte mismatch: ' + JSON.stringify(mismatches));
+          console.log(JSON.stringify({ observed: 'COMMITTED_INDEX_RAW_BYTES_VERIFIED', sourceSha: head, verifiedFiles: records.length, full195Certified: false }));
+          NODE
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify pinned mobile metadata runtime without regeneration
+        run: node scripts/build-mobile-metadata-runtime.mjs --check
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.24.0'

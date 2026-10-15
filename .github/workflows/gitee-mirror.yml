@@ -13,11 +13,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: gitee-mirror-${{ github.repository }}
+  group: gitee-mirror-${{ github.repository }}${{ (github.event_name == 'push' && github.ref == 'refs/heads/codex/release-2.5.8-mobile-parity') && '-candidate-native' || '' }}
   cancel-in-progress: true
 
 jobs:
   mirror:
+    if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/codex/release-2.5.8-mobile-parity' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out full history
