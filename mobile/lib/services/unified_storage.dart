@@ -41,7 +41,10 @@ class UnifiedStorage {
     'convertPromptTemplatesV45',
     'comicAnalyzePromptTemplates',
     'convertPromptTemplates',
-    'reverseConvertPromptPresets'
+    'reverseConvertPromptPresets',
+    'reverseConvertPromptPresetId',
+    'convertSystemPromptPresetId',
+    'reverseSystemPromptPresetId'
   ];
   static const folders = [
     'images',

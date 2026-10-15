@@ -24,6 +24,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private var composerFiles: ComposerFiles? = null
+    private var officialMetadata: OfficialMetadataBridge? = null
     private val updateInstaller by lazy { VerifiedUpdateInstaller(this) }
     override fun onResume(){super.onResume();updateInstaller.resume()}
     @Deprecated("Used for the platform package installer result")
@@ -32,7 +33,7 @@ class MainActivity : FlutterActivity() {
         super.onActivityResult(requestCode,resultCode,data)
     }
     private val completionAudio by lazy { CompletionAudio(this) }
-    override fun onDestroy(){completionAudio.stop();super.onDestroy()}
+    override fun onDestroy(){officialMetadata?.dispose();completionAudio.stop();super.onDestroy()}
 
     private var incomingBackupChannel: MethodChannel? = null
     private val pendingIncomingBackups = ArrayDeque<String>()
@@ -40,6 +41,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        officialMetadata = OfficialMetadataBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         composerFiles = ComposerFiles(this, flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,"langbai.novelai/app_update").setMethodCallHandler { call,result ->
             when(call.method) {

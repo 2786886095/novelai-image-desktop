@@ -1,5 +1,5 @@
 import '../ui/global_typography.dart';
-import 'package:flutter/foundation.dart';
+import 'dart:async';
 import '../ui/studio_theme.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:io';
@@ -10,7 +10,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../i18n/app_locales.dart';
+import '../i18n/metadata_recovery_text.dart';
 import '../images/png_metadata.dart';
+import '../images/metadata_recovery.dart';
 import '../models/nai_models.dart';
 import '../state/app_state.dart';
 
@@ -55,12 +57,13 @@ const _metadataUngrouped = '__metadata_ungrouped__';
 /// manual imports. Kept outside the widget so the grouped-history action can be
 /// verified without an image picker or navigation shell.
 Future<({ImageMetadataReport report, File file, String name})>
-    inspectHistoryImageMetadata(AppState appState, HistoryItem item) async {
+    inspectHistoryImageMetadata(AppState appState, HistoryItem item,
+        {MetadataRecoveryMode mode = MetadataRecoveryMode.online,
+        MetadataRecoveryReader? reader}) async {
   final source = File(item.filePath);
   if (!source.existsSync()) throw StateError('missing history image');
   final bytes = await source.readAsBytes();
-  final report =
-      inspectImageMetadata(await compute(parseImageTextMetadata, bytes));
+  final report = await (reader ?? MetadataRecoveryReader()).read(bytes, mode: mode);
   final fileName = source.uri.pathSegments.isEmpty
       ? item.filePath
       : source.uri.pathSegments.last;
@@ -556,11 +559,13 @@ String metadataGroupLabel(Object? language, String group) {
 class MetadataInspectorScreen extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback onOpenGenerate;
+  final MetadataRecoveryReader? recoveryReader;
 
   const MetadataInspectorScreen({
     super.key,
     required this.onBack,
     required this.onOpenGenerate,
+    this.recoveryReader,
   });
 
   @override
@@ -570,6 +575,12 @@ class MetadataInspectorScreen extends StatefulWidget {
 
 class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
   final _picker = ImagePicker();
+  late final MetadataRecoveryReader _reader;
+  MetadataRecoveryMode _recoveryMode = MetadataRecoveryMode.online;
+  Uint8List? _lastBytes;
+  String? _recoveryError;
+  int _readRevision = 0;
+  Future<void> _snapshotWrite = Future<void>.value();
   ImageMetadataReport? _report;
   String? _filePath;
   String _fileName = '';
@@ -582,23 +593,78 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
   @override
   void initState() {
     super.initState();
+    _reader = widget.recoveryReader ?? MetadataRecoveryReader();
     WidgetsBinding.instance.addPostFrameCallback((_) => _restoreSnapshot());
   }
 
+  @override
+  void dispose() {
+    _readRevision++;
+    unawaited(_reader.cancel());
+    super.dispose();
+  }
+
+  Future<void> _loadBytes(Uint8List bytes, String name, {File? existing}) async {
+    final revision = ++_readRevision;
+    final mode = _recoveryMode;
+    setState(() {
+      _lastBytes = Uint8List.fromList(bytes); _fileName = name;
+      _filePath = existing?.path;
+      _report = null; _recoveryError = null; _reading = true;
+    });
+    try {
+      final app = context.read<AppState>();
+      File? file = existing;
+      if (file == null) {
+        final write = _snapshotWrite.then((_) async {
+          if (!mounted || revision != _readRevision) return;
+          file = (await app.storage.saveMetadataInspectorImage(bytes, name)).file;
+        });
+        _snapshotWrite = write.catchError((Object _) {});
+        await write;
+      }
+      if (!mounted || revision != _readRevision) return;
+      if (file == null) return;
+      setState(() => _filePath = file!.path);
+      final report = await _reader.read(bytes, mode: mode);
+      if (!mounted || revision != _readRevision) return;
+      setState(() => _report = report);
+    } catch (error) {
+      if (mounted && revision == _readRevision) {
+        final language = context.read<AppState>().settings.language;
+        setState(() => _recoveryError = mode == MetadataRecoveryMode.online
+            ? '${metadataRecoveryText(language).onlineFailure} (${error is MetadataRecoveryFailure ? error.code : 'read_failed'})'
+            : _metadataTextFor(language).readFailed);
+      }
+    } finally {
+      if (mounted && revision == _readRevision) setState(() => _reading = false);
+    }
+  }
+
+  void _changeMode(MetadataRecoveryMode? mode) {
+    if (mode == null || mode == _recoveryMode) return;
+    _readRevision++;
+    unawaited(_reader.cancel());
+    setState(() {
+      _recoveryMode = mode; _report = null; _recoveryError = null;
+      _reading = false; _historyReadingId = null;
+    });
+    final bytes = _lastBytes;
+    if (bytes != null) {
+      unawaited(_loadBytes(bytes, _fileName,
+          existing: _filePath == null ? null : File(_filePath!)));
+    }
+  }
+
   Future<void> _restoreSnapshot() async {
+    final revision = _readRevision;
     try {
       final snapshot =
           await context.read<AppState>().storage.getMetadataInspectorImage();
-      if (snapshot == null || !mounted) return;
+      if (snapshot == null || !mounted || revision != _readRevision) return;
       final bytes = await snapshot.file.readAsBytes();
-      final report =
-          inspectImageMetadata(await compute(parseImageTextMetadata, bytes));
-      if (!mounted) return;
-      setState(() {
-        _report = report;
-        _filePath = snapshot.file.path;
-        _fileName = snapshot.name;
-      });
+      if (!mounted || revision != _readRevision) return;
+      await _loadBytes(bytes, snapshot.name, existing: snapshot.file);
     } catch (_) {
       // Persistence is best-effort; image import remains available.
     }
@@ -606,29 +672,21 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
 
   Future<void> _pick() async {
     final appState = context.read<AppState>();
-    final text = _metadataTextFor(appState.settings.language);
     setState(() => _reading = true);
+    var accepted = false;
     try {
       final picked = await _picker.pickImage(source: ImageSource.gallery);
       if (picked == null || !mounted) return;
       final bytes = await picked.readAsBytes();
-      final report =
-          inspectImageMetadata(await compute(parseImageTextMetadata, bytes));
-      final snapshot =
-          await appState.storage.saveMetadataInspectorImage(bytes, picked.name);
-      if (!mounted) return;
-      setState(() {
-        _report = report;
-        _filePath = snapshot.file.path;
-        _fileName = picked.name;
-      });
+      accepted = true;
+      await _loadBytes(bytes, picked.name);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(text.readFailed)));
+            .showSnackBar(SnackBar(content: Text(_metadataTextFor(appState.settings.language).readFailed)));
       }
     } finally {
-      if (mounted) setState(() => _reading = false);
+      if (mounted && !accepted) setState(() => _reading = false);
     }
   }
 
@@ -639,21 +697,19 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
   ) async {
     setState(() => _historyReadingId = item.id);
     try {
-      final result = await inspectHistoryImageMetadata(appState, item);
+      final file = File(item.filePath);
+      if (!file.existsSync()) throw StateError('missing history image');
+      final bytes = await file.readAsBytes();
       if (!mounted) return;
-      setState(() {
-        _report = result.report;
-        _filePath = result.file.path;
-        _fileName = result.name;
-        _historyOpen = false;
-      });
+      await _loadBytes(bytes, file.uri.pathSegments.last);
+      if (mounted) setState(() => _historyOpen = false);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(text.readFailed)));
       }
     } finally {
-      if (mounted) setState(() => _historyReadingId = null);
+      if (mounted && _historyReadingId == item.id) setState(() => _historyReadingId = null);
     }
   }
 
@@ -675,6 +731,7 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final text = _metadataTextFor(state.settings.language);
+    final recoveryText = metadataRecoveryText(state.settings.language);
     final report = _report;
     final compatible = report?.imported.compatibleValues ?? const {};
     final history = state.history.where((item) {
@@ -701,6 +758,29 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
             padding: const EdgeInsets.all(16),
             children: [
               Text(text.subtitle, style: Theme.of(context).textTheme.bodyLarge),
+              const SizedBox(height: 12),
+              StudioDropdownButtonFormField<MetadataRecoveryMode>(
+                key: const ValueKey('metadata-recovery-mode'),
+                value: _recoveryMode,
+                isExpanded: true,
+                decoration: InputDecoration(labelText: recoveryText.label),
+                items: [
+                  DropdownMenuItem(value: MetadataRecoveryMode.online, child: Text(recoveryText.online)),
+                  DropdownMenuItem(value: MetadataRecoveryMode.offline, child: Text(recoveryText.offline)),
+                ],
+                onChanged: _changeMode,
+              ),
+              const SizedBox(height: 8),
+              Text(_recoveryMode == MetadataRecoveryMode.online ? recoveryText.onlineInfo : recoveryText.offlineInfo,
+                  key: const ValueKey('metadata-recovery-privacy')),
+              if (_recoveryError != null) ...[
+                const SizedBox(height: 8),
+                Text(_recoveryError!, key: const ValueKey('metadata-recovery-error'),
+                    style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                TextButton(onPressed: _lastBytes == null || _reading ? null : () =>
+                    _loadBytes(_lastBytes!, _fileName, existing: _filePath == null ? null : File(_filePath!)),
+                    child: Text(recoveryText.retry)),
+              ],
               const SizedBox(height: 12),
               _HistoryMetadataPicker(
                 text: text,
@@ -761,7 +841,7 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
                         Text(text.dropHint),
                         const SizedBox(height: 6),
                         Text(
-                          text.localOnly,
+                          _recoveryMode == MetadataRecoveryMode.online ? recoveryText.onlineInfo : recoveryText.offlineInfo,
                           style: TextStyle(
                               color: Theme.of(context).colorScheme.primary),
                         ),

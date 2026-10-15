@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/screens/metadata_inspector_screen.dart';
+import 'package:novelai_mobile/images/metadata_recovery.dart';
 import 'package:novelai_mobile/services/storage.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 import 'package:provider/provider.dart';
@@ -100,7 +101,7 @@ void main() {
     expect(tester.takeException(), isNull);
 
     final inspected = await tester.runAsync(
-      () => inspectHistoryImageMetadata(state, state.history.single),
+      () => inspectHistoryImageMetadata(state, state.history.single, mode: MetadataRecoveryMode.offline),
     );
 
     expect(storage.snapshot?.name, 'grouped.png');

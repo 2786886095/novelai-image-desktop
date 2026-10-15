@@ -7,12 +7,15 @@ import 'package:path/path.dart' as p;
 
 import '../models/nai_models.dart';
 import 'unified_storage.dart';
+import 'favorite_view.dart';
+export 'favorite_view.dart' show FavoriteView;
 
 const localFavoritesKey = 'local_favorites_v1';
 
 class LocalFavorite {
   final String id, sourceId, prefix, name, extension, fileName, sha256;
   final int bytes;
+  final String? savedAt, generatedAt, generatedAtSource;
   const LocalFavorite(
       {required this.id,
       required this.sourceId,
@@ -21,7 +24,8 @@ class LocalFavorite {
       required this.extension,
       required this.fileName,
       required this.sha256,
-      required this.bytes});
+      required this.bytes,
+      this.savedAt, this.generatedAt, this.generatedAtSource});
 
   factory LocalFavorite.fromJson(Map<String, dynamic> raw) {
     String field(String key) => raw[key] is String ? raw[key] as String : '';
@@ -33,7 +37,10 @@ class LocalFavorite {
         extension: field('extension'),
         fileName: field('fileName'),
         sha256: field('sha256'),
-        bytes: raw['bytes'] is int ? raw['bytes'] as int : -1);
+        bytes: raw['bytes'] is int ? raw['bytes'] as int : -1,
+        savedAt: favoriteSortTimestamp(raw['savedAt'])==null?null:raw['savedAt'] as String,
+        generatedAt: raw['generatedAtSource']=='local-completion'&&favoriteSortTimestamp(raw['generatedAt'])!=null?raw['generatedAt'] as String:null,
+        generatedAtSource: raw['generatedAtSource']=='local-completion'&&favoriteSortTimestamp(raw['generatedAt'])!=null?'local-completion':null);
     if (item.id.isEmpty ||
         item.sourceId.isEmpty ||
         !RegExp(r'^\d{8}_\d+x\d+_\d{2,}$').hasMatch(item.prefix) ||
@@ -58,7 +65,10 @@ class LocalFavorite {
         'extension': extension,
         'fileName': fileName,
         'sha256': sha256,
-        'bytes': bytes
+        'bytes': bytes,
+        if(savedAt!=null)'savedAt': savedAt,
+        if(generatedAt!=null&&generatedAtSource=='local-completion')...{
+          'generatedAt':generatedAt,'generatedAtSource':generatedAtSource},
       };
   LocalFavorite renamed(String suffix) => LocalFavorite(
       id: id,
@@ -68,13 +78,14 @@ class LocalFavorite {
       extension: extension,
       fileName: '$prefix${suffix.isEmpty ? '' : '_$suffix'}$extension',
       sha256: sha256,
-      bytes: bytes);
+      bytes: bytes, savedAt: savedAt, generatedAt: generatedAt, generatedAtSource: generatedAtSource);
 }
 
 class LocalFavoriteLibrary {
   final String directory;
   final List<LocalFavorite> items;
-  const LocalFavoriteLibrary(this.directory, this.items);
+  final FavoriteView view;
+  const LocalFavoriteLibrary(this.directory, this.items,{this.view=const FavoriteView()});
 }
 
 /// Copies the original encoded image, never a thumbnail or re-encoded bitmap.
@@ -125,7 +136,7 @@ class MobileLocalFavorites extends ChangeNotifier {
       throw const FormatException('Duplicate local favorite');
     }
     return LocalFavoriteLibrary(
-        custom.isEmpty ? defaultDirectory.path : custom, items);
+        custom.isEmpty ? defaultDirectory.path : custom, items,view:FavoriteView.fromJson(value['view']));
   }
 
   Future<void> _write(LocalFavoriteLibrary data) async {
@@ -141,6 +152,7 @@ class MobileLocalFavorites extends ChangeNotifier {
           'version': 1,
           'directory': custom,
           'items': data.items.map((e) => e.toJson()).toList(),
+          'view':data.view.toJson(),
         }))) throw const FileSystemException('Failed to save local favorites');
     notifyListeners();
   }
@@ -159,6 +171,15 @@ class MobileLocalFavorites extends ChangeNotifier {
   }
 
   Future<LocalFavoriteLibrary> list() => _serial(_read);
+  Future<LocalFavoriteLibrary> listSorted({String? sortBy,String? sortDirection})=>_serial(() async {
+    final data=await _read();final view=data.view.copyWith(sortBy:sortBy,sortDirection:sortDirection);
+    return LocalFavoriteLibrary(data.directory,sortLocalFavoriteItems(data.items,view),view:view);
+  });
+  Future<void> saveView({String? sortBy,String? sortDirection,String? layout,int? pageSize})=>_serial(() async {
+    final data=await _read();
+    await _write(LocalFavoriteLibrary(data.directory,data.items,
+      view:data.view.copyWith(sortBy:sortBy,sortDirection:sortDirection,layout:layout,pageSize:pageSize)));
+  });
 
   Future<LocalFavorite> add(HistoryItem history) => _serial(() async {
         final source = File(history.filePath);
@@ -217,9 +238,16 @@ class MobileLocalFavorites extends ChangeNotifier {
               extension: extension,
               fileName: '$prefix$extension',
               sha256: hash,
-              bytes: bytes.length);
+              bytes: bytes.length,
+              savedAt: DateTime.fromMillisecondsSinceEpoch(DateTime.now().millisecondsSinceEpoch,isUtc:true).toIso8601String(),
+              generatedAt: history.params['_langbaiLocalGenerationCompletedSource']=='local-completion' &&
+                  favoriteSortTimestamp(history.params['_langbaiLocalGenerationCompletedAt'])!=null
+                ? history.params['_langbaiLocalGenerationCompletedAt'] as String:null,
+              generatedAtSource: history.params['_langbaiLocalGenerationCompletedSource']=='local-completion' &&
+                  favoriteSortTimestamp(history.params['_langbaiLocalGenerationCompletedAt'])!=null
+                ? 'local-completion':null);
           await _write(
-              LocalFavoriteLibrary(directory, [...data.items, favorite]));
+              LocalFavoriteLibrary(directory, [...data.items, favorite],view:data.view));
           return favorite;
         } catch (_) {
           await destination.delete().catchError((Object _) => destination);
@@ -255,7 +283,7 @@ class MobileLocalFavorites extends ChangeNotifier {
         try {
           await target.writeAsBytes(bytes, flush: true);
           final items = [...data.items]..[index] = next;
-          await _write(LocalFavoriteLibrary(directory, items));
+          await _write(LocalFavoriteLibrary(directory, items,view:data.view));
         } catch (_) {
           await target.delete().catchError((Object _) => target);
           rethrow;
@@ -272,7 +300,7 @@ class MobileLocalFavorites extends ChangeNotifier {
           throw StateError('Favorite not found');
         }
         await _write(LocalFavoriteLibrary(
-            data.directory, data.items.where((e) => e.id != id).toList()));
+            data.directory, data.items.where((e) => e.id != id).toList(),view:data.view));
         // Removing a bookmark never deletes the original or the copied image.
       });
 
@@ -301,7 +329,7 @@ class MobileLocalFavorites extends ChangeNotifier {
             copied.add(target);
             await target.writeAsBytes(bytes, flush: true);
           }
-          await _write(LocalFavoriteLibrary(destination, data.items));
+          await _write(LocalFavoriteLibrary(destination, data.items,view:data.view));
         } catch (_) {
           for (final file in copied) {
             await file.delete().catchError((Object _) => file);
@@ -318,3 +346,8 @@ class MobileLocalFavorites extends ChangeNotifier {
     return File(p.join(data.directory, item.fileName));
   }
 }
+
+List<LocalFavorite> sortLocalFavoriteItems(Iterable<LocalFavorite> items,FavoriteView view)=>
+  sortFavoriteRecords(items,view,savedAt:(e)=>e.savedAt,
+    generatedAt:(e)=>e.generatedAtSource=='local-completion'?e.generatedAt:null,
+    id:(e)=>e.id,fileName:(e)=>e.fileName);

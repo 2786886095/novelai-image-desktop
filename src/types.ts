@@ -977,6 +977,12 @@ export interface AnlasQuoteRequest {
 }
 
 export interface AnlasQuoteResult {
+  /** Independent relay tariffs are unknown; amount is only a conservative local budget estimate. */
+  billingContext?: "independent-relay";
+  /** Official frontend formula without subscription discounts, NOT a relay invoice. */
+  referenceAmount?: number;
+  /** Account snapshot that actually produced the quote; never a credential. */
+  accountId?: string;
   ok: boolean;
   amount?: number;
   source?: AnlasQuoteSource;

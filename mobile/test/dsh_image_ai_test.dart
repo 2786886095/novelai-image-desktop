@@ -5,6 +5,7 @@ import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/agent/lyra_preset_data.dart';
 import 'package:novelai_mobile/agent/tavern_models.dart';
 import 'package:novelai_mobile/prompts/dsh_image_ai.dart';
+import 'package:novelai_mobile/prompts/ig5_image_prompts.dart';
 
 void main() {
   group('built-in DSH image AI adapter', () {
@@ -55,11 +56,18 @@ void main() {
       expect(source, contains("text['conversationName']"));
     });
 
-    test('shares the supplied Lyra preset across all image tasks', () {
+    test(
+        'fresh scoped defaults are the three shared IG5 adaptations; Lyra remains explicit legacy',
+        () {
       for (final task in DshImageAiTask.values) {
+        final key = task == DshImageAiTask.convert
+            ? 'convert'
+            : task == DshImageAiTask.reverse
+                ? 'reverse'
+                : 'studio';
         final value = buildDshImageAiSystemAddon(task);
-        expect(value, contains('Shared SillyTavern preset · 夏瑾 天琴座 Beta 3.8'));
-        expect(value.length, greaterThan(5000));
+        expect(value, contains(ig5PromptBodies[key]!));
+        expect(value, isNot(contains(lyraPresetSystemPrompt)));
       }
       expect(lyraImageTaskSourceSha256,
           '09D89AE4F64E05C06962786BB19A8C7364898E863DCC3FCDE99F661E841EF6A9');
@@ -107,7 +115,11 @@ void main() {
         reverseConvertPromptPresets: [custom],
         reverseConvertPromptPresetId: custom.id,
       ).toJson());
-      expect(restored.reverseConvertPromptPresets.single.name, 'Custom');
+      expect(
+          restored.reverseConvertPromptPresets
+              .firstWhere((p) => p.id == 'custom')
+              .name,
+          'Custom');
       expect(restored.reverseConvertPromptPresetId, 'custom');
 
       final empty = AppSettings.fromJson({

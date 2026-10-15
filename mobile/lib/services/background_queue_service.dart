@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
@@ -18,6 +19,16 @@ class _QueueKeepAliveHandler extends TaskHandler {
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {}
 
   @override
+  void onReceiveData(Object data) {
+    if (data is Map && data['action'] == 'queue-ready-ping' &&
+        data['nonce'] is String) {
+      FlutterForegroundTask.sendDataToMain({
+        'action': 'queue-ready', 'nonce': data['nonce'],
+      });
+    }
+  }
+
+  @override
   void onNotificationButtonPressed(String id) {
     if (id == 'cancel') {
       FlutterForegroundTask.sendDataToMain({'action': 'cancel'});
@@ -30,6 +41,42 @@ abstract final class BackgroundQueueService {
   static final Set<void Function()> _cancelHandlers = {};
   static bool _initialized = false;
   static bool _warnedNoBackgroundSupport = false;
+  static Future<void> _lifecycleTail = Future.value();
+  static Completer<void>? _ready;
+  static String? _readyNonce;
+  static int _readySequence = 0;
+
+  // Returning startService only proves the Android Service is running. Its
+  // Dart callback can start later; destroying it first loses the background
+  // channel and raises MissingPluginException from setTaskHandler. Serialize
+  // lifecycle changes and require a real, nonce-bound TaskHandler response.
+  static Future<void> _serialize(Future<void> Function() action) {
+    final next = _lifecycleTail.then((_) => action());
+    // Keep the queue usable after a failure; callers still receive `next` and
+    // its original error, rather than a swallowed successful result.
+    _lifecycleTail = next.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return next;
+  }
+
+  static Future<void> _waitForTaskReady() async {
+    final ready = Completer<void>();
+    final nonce = '${DateTime.now().microsecondsSinceEpoch}-${++_readySequence}';
+    _ready = ready;
+    _readyNonce = nonce;
+    void ping() => FlutterForegroundTask.sendDataToTask({
+      'action': 'queue-ready-ping', 'nonce': nonce,
+    });
+    ping();
+    final retry = Timer.periodic(const Duration(milliseconds: 100), (_) => ping());
+    try {
+      await ready.future.timeout(const Duration(seconds: 10), onTimeout: () {
+        throw StateError('Background queue task did not become ready.');
+      });
+    } finally {
+      retry.cancel();
+      if (identical(_ready, ready)) { _ready = null; _readyNonce = null; }
+    }
+  }
 
   // flutter_foreground_task is Android-only (there is no iOS equivalent
   // service API it wraps) — every method below no-ops on other platforms.
@@ -82,6 +129,11 @@ abstract final class BackgroundQueueService {
       _cancelHandlers.remove(handler);
 
   static void _onTaskData(Object data) {
+    if (data is Map && data['action'] == 'queue-ready' &&
+        data['nonce'] == _readyNonce && _ready != null && !_ready!.isCompleted) {
+      _ready!.complete();
+      return;
+    }
     if (data is Map && data['action'] == 'cancel') {
       for (final handler in List<void Function()>.from(_cancelHandlers)) {
         handler();
@@ -93,25 +145,28 @@ abstract final class BackgroundQueueService {
     String owner, {
     required String title,
     required String text,
-  }) async {
-    if (!Platform.isAndroid) return;
+  }) {
+    if (!Platform.isAndroid) return Future.value();
     initialize();
     _owners.add(owner);
+    return _serialize(() async {
+    if (!_owners.contains(owner)) return;
     final permission =
         await FlutterForegroundTask.checkNotificationPermission();
     if (permission != NotificationPermission.granted) {
       await FlutterForegroundTask.requestNotificationPermission();
     }
     if (await FlutterForegroundTask.isRunningService) {
-      await FlutterForegroundTask.updateService(
+      final result = await FlutterForegroundTask.updateService(
         notificationTitle: title,
         notificationText: text,
         notificationButtons: const [
           NotificationButton(id: 'cancel', text: 'Cancel'),
         ],
       );
+      if (result is ServiceRequestFailure) throw result.error;
     } else {
-      await FlutterForegroundTask.startService(
+      final result = await FlutterForegroundTask.startService(
         serviceId: 9099,
         serviceTypes: const [ForegroundServiceTypes.dataSync],
         notificationTitle: title,
@@ -121,14 +176,17 @@ abstract final class BackgroundQueueService {
         ],
         callback: queueServiceCallback,
       );
+      if (result is ServiceRequestFailure) throw result.error;
     }
+    await _waitForTaskReady();
+    });
   }
 
   static Future<void> update(
-      {required String title, required String text}) async {
-    if (!Platform.isAndroid || !await FlutterForegroundTask.isRunningService) {
-      return;
-    }
+      {required String title, required String text}) {
+    if (!Platform.isAndroid) return Future.value();
+    return _serialize(() async {
+    if (_owners.isEmpty || !await FlutterForegroundTask.isRunningService) return;
     await FlutterForegroundTask.updateService(
       notificationTitle: title,
       notificationText: text,
@@ -136,13 +194,16 @@ abstract final class BackgroundQueueService {
         NotificationButton(id: 'cancel', text: 'Cancel'),
       ],
     );
+    });
   }
 
-  static Future<void> stop(String owner) async {
-    if (!Platform.isAndroid) return;
+  static Future<void> stop(String owner) {
+    if (!Platform.isAndroid) return Future.value();
     _owners.remove(owner);
+    return _serialize(() async {
     if (_owners.isEmpty && await FlutterForegroundTask.isRunningService) {
       await FlutterForegroundTask.stopService();
     }
+    });
   }
 }

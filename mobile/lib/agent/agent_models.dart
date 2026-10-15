@@ -482,7 +482,7 @@ class AgentConversation {
     this.studioApprovalMode = 'auto',
     this.studioWebSearchEnabled = true,
     this.studioTemplateEnabled = true,
-    this.studioPresetId = 'dsh-infinite-gen-4',
+    this.studioPresetId = 'dsh-infinite-gen-5',
     this.generationMode = 'confirm',
     this.reasoningEffort = 'auto',
     this.autoPlayGroup = false,
@@ -547,7 +547,7 @@ class AgentConversation {
         studioTemplateEnabled: json['studioTemplateEnabled'] != false,
         studioPresetId: json['studioPresetId'] is String
             ? json['studioPresetId']
-            : 'dsh-infinite-gen-4',
+            : 'dsh-infinite-gen-5',
         generationMode: json['generationMode'] == 'auto' ? 'auto' : 'confirm',
         reasoningEffort:
             const {'low', 'medium', 'high'}.contains(json['reasoningEffort'])
@@ -879,7 +879,7 @@ class AgentWorkspace {
           value is bool) defaults[field] = value;
       if (field == 'studioPresetId' &&
           value is String &&
-          (const ['dsh-infinite-gen-4', 'studio-complete'].contains(value) ||
+          (const ['dsh-infinite-gen-5', 'dsh-infinite-gen-4', 'studio-complete'].contains(value) ||
               samplerPresets.any((p) => 'tavern:${p.id}' == value))) {
         defaults[field] = value;
       }

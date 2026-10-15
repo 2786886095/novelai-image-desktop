@@ -1928,31 +1928,35 @@ class AppState extends ChangeNotifier {
     return params.copy()..width = size.width..height = size.height;
   }
 
+  bool get usesRelayBillingReference => naiAccounts.active?.profile.relay == true;
+  AnlasQuote _billingPreview(AnlasQuote quote) => usesRelayBillingReference
+      ? quote.asRelayReference(settings.language) : quote;
+
   AnlasQuote get inpaintAnlasQuote {
-    try { return calculateInpaintAnlas(
+    try { return _billingPreview(calculateInpaintAnlas(
         params: inpaintOutputParams,
         account: account,
         image: workbenchImage,
         inpaintModel: inpaintModel,
         strength: inpaintStrength,
         language: settings.language,
-      ); } on FormatException catch (e) {
+      )); } on FormatException catch (e) {
       return AnlasQuote(ok: false, source: AnlasQuoteSource.unavailable, message: e.message);
     }
   }
 
-  AnlasQuote get upscaleAnlasQuote => calculateUpscaleAnlas(
+  AnlasQuote get upscaleAnlasQuote => _billingPreview(calculateUpscaleAnlas(
         image: workbenchImage,
         account: account,
         scale: upscaleScale,
         language: settings.language,
-      );
+      ));
 
-  AnlasQuote get directorAnlasQuote => calculateDirectorAnlas(
+  AnlasQuote get directorAnlasQuote => _billingPreview(calculateDirectorAnlas(
         tool: directorTool,
         account: account,
         language: settings.language,
-      );
+      ));
 
   void _scheduleGenerationQuote() {
     if (!booted) return;
@@ -2016,9 +2020,10 @@ class AppState extends ChangeNotifier {
     AccountSummary quoteAccount, {
     bool imageToImage = false,
   }) async {
-    final local = calculateImageGenerationAnlas(
+    final local = _billingPreview(calculateImageGenerationAnlas(
       params: quoteParams,
       account: quoteAccount,
+      forcePaid: usesRelayBillingReference,
       extras: quoteExtras,
       batchCount: count,
       imageToImage: imageToImage,
@@ -2027,8 +2032,8 @@ class AppState extends ChangeNotifier {
       alreadyEncodedVibes: api.countCachedVibes(quoteParams.model, quoteExtras),
       preciseReferenceCount: quoteExtras.preciseReferences.length,
       language: settings.language,
-    );
-    if (imageToImage ||
+    ));
+    if (usesRelayBillingReference || imageToImage ||
         quoteExtras.vibeImages.isNotEmpty ||
         quoteExtras.preciseReferences.isNotEmpty) {
       return local;
@@ -2072,9 +2077,10 @@ class AppState extends ChangeNotifier {
         ..height = size.$2;
     }
     final count = batchCount.clamp(1, 999);
-    generationQuote = calculateImageGenerationAnlas(
+    generationQuote = _billingPreview(calculateImageGenerationAnlas(
       params: quoteParams,
       account: account,
+      forcePaid: usesRelayBillingReference,
       extras: quoteExtras,
       batchCount: count,
       imageToImage: imageToImage,
@@ -2083,8 +2089,8 @@ class AppState extends ChangeNotifier {
       alreadyEncodedVibes: api.countCachedVibes(quoteParams.model, quoteExtras),
       preciseReferenceCount: quoteExtras.preciseReferences.length,
       language: settings.language,
-    );
-    quoteLoading = !imageToImage &&
+    ));
+    quoteLoading = !usesRelayBillingReference && !imageToImage &&
         quoteExtras.vibeImages.isEmpty &&
         quoteExtras.preciseReferences.isEmpty;
     notifyListeners();

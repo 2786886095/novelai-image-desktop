@@ -4,8 +4,10 @@ import 'dart:convert';
 import 'agent_models.dart';
 import 'lyra_preset_data.dart';
 import 'tavern_prompt.dart';
+import '../prompts/ig5_image_prompts.dart';
 
-const studioDefaultPresetId = 'dsh-infinite-gen-4';
+const studioDefaultPresetId = 'dsh-infinite-gen-5';
+const studioLegacyPresetId = 'dsh-infinite-gen-4';
 const studioCompletePresetId = 'studio-complete';
 const studioInfinitePrompt =
     r'''Be a direct, concise image-creation assistant. Deliver the requested prompt, visual analysis or actual image workflow rather than a generic lecture. Use the user's language, preserve explicit subjects, composition and exclusions, and ask only when missing information prevents a useful result. For analysis, distinguish visible facts from inference. For prompt work, organize subject, action, framing, lighting, style and negative constraints. Use real Studio tools for current parameters, registered references, generation plans and image execution; cite actual receipts and image results, never invent placeholders or claim an image was generated without a successful tool result. Discuss or inspect without generating when asked. Follow the application's selected confirm/full-auto mode, optional web and preset switches, and its actual available tools. This is an image-workflow adaptation of Infinite Generation Four's compact, direct delivery style, not the upstream offline security-documentation mode.''';
@@ -20,23 +22,9 @@ String studioCreativeContext(AgentWorkspace workspace, AgentConversation chat) {
   final entries = activeTavernLorebookEntries(
       workspace.lorebooks.where((b) => chat.lorebookIds.contains(b.id)).toList(),
       chat.messages);
-  String? body;
-  if (chat.studioTemplateEnabled) {
-    if (chat.studioPresetId == studioDefaultPresetId) {
-      body = studioInfinitePrompt;
-    } else if (chat.studioPresetId == studioCompletePresetId) {
-      body = studioCompletePrompt;
-    } else {
-      for (final p in workspace.samplerPresets) {
-        if ('tavern:${p.id}' == chat.studioPresetId) {
-          body = '${p.systemPrompt}\n${p.jailbreakPrompt}';
-          break;
-        }
-      }
-    }
-  }
+  final selected=workspace.samplerPresets.where((p)=>'tavern:${p.id}'==chat.studioPresetId).firstOrNull;
   return jsonEncode({
-    'preset': body,
+    'preset': chat.studioTemplateEnabled ? {'id':chat.studioPresetId, if(selected!=null) 'name':selected.name, if(selected!=null) 'source':selected.source, if(selected!=null) 'sourceHash':selected.sourceHash} : null,
     'characters': [
       for (final c in workspace.characters)
         if (chat.characterIds.contains(c.id))
@@ -62,4 +50,14 @@ String studioCreativeContext(AgentWorkspace workspace, AgentConversation chat) {
           }
     ]
   });
+}
+
+/// Selected task content is a system layer; fixed app permissions still override it.
+String studioSelectedSystemPrompt(AgentWorkspace workspace, AgentConversation chat) {
+  if(!chat.studioTemplateEnabled)return '';
+  if(chat.studioPresetId==studioDefaultPresetId)return ig5PromptBodies['studio']!;
+  if(chat.studioPresetId==studioLegacyPresetId)return studioInfinitePrompt;
+  if(chat.studioPresetId==studioCompletePresetId)return studioCompletePrompt;
+  final preset=workspace.samplerPresets.where((p)=>'tavern:${p.id}'==chat.studioPresetId).firstOrNull;
+  return preset==null?'':[preset.systemPrompt,preset.jailbreakPrompt].where((s)=>s.isNotEmpty).join('\n\n');
 }

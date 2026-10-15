@@ -29,6 +29,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../billing/anlas.dart';
+import '../i18n/anlas_billing_text.dart';
 import '../ui/effort_control.dart';
 import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
@@ -5420,6 +5421,21 @@ class _AnlasQuoteBar extends StatelessWidget {
     final quote = state.generationQuote;
     final text = generateScreenTextFor(state.settings.language);
     final scheme = Theme.of(context).colorScheme;
+    if (quote?.referenceOnly == true) {
+      final billing = relayAnlasBillingText(state.settings.language, quote!.referenceAmount);
+      return DecoratedBox(
+        decoration: BoxDecoration(color: scheme.secondaryContainer.withOpacity(0.55), borderRadius: BorderRadius.circular(8)),
+        child: Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Icon(Icons.help_outline, size: 18), const SizedBox(width: 7),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(billing.actualUnknown, style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text(billing.reference),
+              Text(billing.noSharedOpus, style: Theme.of(context).textTheme.bodySmall),
+            ])),
+          ])),
+      );
+    }
     final source = quote?.source == AnlasQuoteSource.officialApi
         ? text.officialQuote
         : quote?.source == AnlasQuoteSource.estimateFormula
@@ -5457,7 +5473,7 @@ class _AnlasQuoteBar extends StatelessWidget {
               child: Text(
                 amount == null
                     ? '${text.precharge}: ${state.account.hasToken ? text.reading : text.configureToken}'
-                    : '${text.precharge}: $amount Anlas · $source$usageEstimate${capacity == null ? '' : '\n${effortRemainingTitle(state.settings.language)} ≈$capacity'}',
+                    : '${anlasPreviewHeading(state.settings.language, official: quote?.source == AnlasQuoteSource.officialApi)}: $amount Anlas · $source$usageEstimate${capacity == null ? '' : '\n${effortRemainingTitle(state.settings.language)} ≈$capacity'}',
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w600),

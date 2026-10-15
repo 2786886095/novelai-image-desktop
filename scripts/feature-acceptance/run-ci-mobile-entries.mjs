@@ -1,0 +1,25 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {spawnSync} from 'node:child_process';
+const platform=process.argv[2],device=process.argv[3];
+if(process.env.GITHUB_ACTIONS!=='true'||!['android','ios'].includes(platform)||!device||!process.env.RUNNER_TEMP)throw Error('Fresh CI mobile target required.');
+const root=path.join(process.env.RUNNER_TEMP,`feature-native-${platform}`);fs.mkdirSync(root,{recursive:true});
+const commands=[],entries=[];let failed=false;
+function run(args,timeout=2100000){
+ const argv=[process.execPath,...args];const r=spawnSync(argv[0],argv.slice(1),{encoding:'utf8',timeout,maxBuffer:100*1024*1024,env:{...process.env,STUDIO_NODE_BINARY:process.execPath}});
+ const row={command:argv,cwd:process.cwd(),stdout:r.stdout??'',stderr:r.stderr??'',exitStatus:r.status,error:r.error?.message??null};commands.push(row);process.stdout.write(row.stdout);process.stderr.write(row.stderr);return r.status===0&&!r.error;
+}
+const sha=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8'});commands.push({command:['git','rev-parse','HEAD'],stdout:sha.stdout??'',stderr:sha.stderr??'',exitStatus:sha.status});
+if(sha.status!==0||sha.stdout.trim()!==process.env.GITHUB_SHA)throw Error('CI checkout identity mismatch.');
+const assets=path.join(root,'official-assets');
+for(const entry of ['core19','metadata_favorites16','queue_lifecycle4']){
+ const component={entry,status:'failed',full195Certified:false,scope:'bounded actual target-platform components only; not entire feature rows'};entries.push(component);
+ if(entry==='metadata_favorites16'&&!run(['scripts/feature-acceptance/fetch-official-assets.mjs',assets],1100000)){failed=true;component.failure='Public asset GET/size/SHA verification failed; no metadata native pass is claimed.';continue;}
+ const ready=run(['scripts/feature-acceptance/write-ci-input.mjs',platform,device,entry,assets],120000);
+ const input=path.join(root,entry,'native-input.json');
+ const passed=ready&&run([entry==='metadata_favorites16'?'scripts/feature-acceptance/run-metadata-favorites-native.mjs':'scripts/feature-acceptance/run-mobile-native.mjs',input]);
+ component.input=input;component.exitStatus=passed?0:1;component.status=passed?'passed':'failed';if(!passed)failed=true;
+ // Keep running independent entries after a failure; the job remains failed.
+ fs.writeFileSync(path.join(root,'CI_COMPONENT_COMMANDS.json'),JSON.stringify({sourceSha:sha.stdout.trim(),platform,device,entries,commands,exitStatus:failed?1:0,full195Certified:false,completeFeatureRowsCertified:0},null,2)+'\n');
+}
+fs.writeFileSync(path.join(root,'CI_COMPONENT_COMMANDS.json'),JSON.stringify({sourceSha:sha.stdout.trim(),platform,device,entries,commands,exitStatus:failed?1:0,full195Certified:false,completeFeatureRowsCertified:0},null,2)+'\n');process.exitCode=failed?1:0;

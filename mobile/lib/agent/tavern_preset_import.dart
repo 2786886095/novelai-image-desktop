@@ -16,6 +16,153 @@ class TavernPresetImportResult {
   });
 }
 
+const maxSystemPromptFileBytes = 2 * 1024 * 1024;
+const maxImportedSystemPromptChars = 200000;
+const maxImportedPostscriptChars = 100000;
+
+class SystemPromptImportError extends FormatException {
+  final String code;
+  const SystemPromptImportError(this.code) : super(code);
+}
+
+String decodeSystemPromptFile(List<int> bytes) {
+  if (bytes.length > maxSystemPromptFileBytes) { {
+    throw const SystemPromptImportError('bytes');
+  }
+  }
+  try {
+    return utf8.decode(bytes, allowMalformed: false);
+  } on FormatException {
+    throw const SystemPromptImportError('utf8');
+  }
+}
+
+void _strictBodies(String system, String postscript) {
+  if (system.trim().isEmpty) throw const SystemPromptImportError('empty');
+  if (system.length > maxImportedSystemPromptChars) {
+    throw const SystemPromptImportError('system-limit');
+  }
+  if (postscript.length > maxImportedPostscriptChars) {
+    throw const SystemPromptImportError('postscript-limit');
+  }
+}
+
+/// Bounded declarative import shared by conversion, reverse and Studio.
+/// IDs and source types from input are never local identity or permissions.
+TavernPresetImportResult importImageSystemPrompt(
+  String source, {
+  required String fileName,
+  String? sourceHash,
+}) {
+  final rawBytes = utf8.encode(source);
+  if (rawBytes.length > maxSystemPromptFileBytes) {
+    throw const SystemPromptImportError('bytes');
+  }
+  final text = source.startsWith('\uFEFF') ? source.substring(1) : source;
+  if (text.trim().isEmpty) throw const SystemPromptImportError('empty');
+  final extension = fileName.split('.').last.toLowerCase();
+  if (!['txt', 'md', 'json'].contains(extension) || !fileName.contains('.')) {
+    throw const SystemPromptImportError('extension');
+  }
+  TavernSamplerPreset preset;
+  final warnings = <String>[];
+  var count = 1;
+  if (extension != 'json') {
+    _strictBodies(text, '');
+    preset = TavernSamplerPreset(
+        name: _fileName(fileName),
+        systemPrompt: text,
+        jailbreakPrompt: '',
+        source: 'langbai');
+  } else {
+    Object? decoded;
+    try {
+      decoded = jsonDecode(text);
+    } on FormatException {
+      throw const SystemPromptImportError('json');
+    }
+    if (decoded is! Map) throw const SystemPromptImportError('shape');
+    final root = _map(decoded);
+    if (root.containsKey('systemPrompt') || root.containsKey('system_prompt')) {
+      final system = root['systemPrompt'] ?? root['system_prompt'];
+      final postscript =
+          root['jailbreakPrompt'] ?? root['jailbreak_prompt'] ?? '';
+      if (system is! String || postscript is! String) {
+        throw const SystemPromptImportError('shape');
+      }
+      _strictBodies(system, postscript);
+      preset = TavernSamplerPreset.fromJson({
+        ...root,
+        'name': root['name'] ?? root['preset_name'] ?? _fileName(fileName),
+        'systemPrompt': system,
+        'jailbreakPrompt': postscript,
+        'source': 'langbai'
+      });
+    } else {
+      if (root['prompts'] is! List) {
+        throw const SystemPromptImportError('shape');
+      }
+      final blocks = <String>[];
+      var postscript = '';
+      for (final item in _orderedRows(root)) {
+        final role = '${item['role'] ?? 'system'}'.toLowerCase();
+        if (item['marker'] == true || (role != 'system' && role != 'user')) {
+          continue;
+        }
+        if (item['content'] != null && item['content'] is! String) {
+          throw const SystemPromptImportError('shape');
+        }
+        final content = (item['content'] as String? ?? '').trim();
+        if (content.isEmpty || _hasExecutablePayload(content)) continue;
+        if ('${item['identifier'] ?? ''}'.toLowerCase() == 'jailbreak') {
+          postscript = content;
+        } else {
+          blocks.add(content);
+        }
+      }
+      final system = blocks.join('\n\n');
+      _strictBodies(
+          system, postscript); // Reject before the legacy importer's slices.
+      final legacy = importTavernSamplerPresetJson(text, fileName: fileName);
+      preset = legacy.preset
+        ..systemPrompt = system
+        ..jailbreakPrompt = postscript;
+      warnings.addAll(legacy.warnings);
+      count = blocks.length + (postscript.isEmpty ? 0 : 1);
+    }
+  }
+  final localName=fileName.split(RegExp(r'[/\\]')).last;
+  final fallbackName=_fileName(localName).isEmpty?'Imported system prompt':_fileName(localName);
+  final name=preset.name.trim().isEmpty?fallbackName:preset.name.trim();
+  preset.name=name.length>160?name.substring(0,160):name;
+  preset
+    ..id = tavernId('sampler')
+    ..sourceName = localName.length>260?localName.substring(0,260):localName
+    ..sourceHash = sourceHash ?? sha256.convert(rawBytes).toString();
+  return TavernPresetImportResult(
+      preset: preset, warnings: warnings, importedPromptCount: count);
+}
+
+TavernPresetImportResult importImageSystemPromptBytes(List<int> bytes,
+        {required String fileName}) =>
+    importImageSystemPrompt(decodeSystemPromptFile(bytes),
+        fileName: fileName, sourceHash: sha256.convert(bytes).toString());
+
+/// Same raw hash only selects the original object; user edits remain complete.
+TavernSamplerPreset selectImportedSystemPreset(
+    List<TavernSamplerPreset> library, TavernSamplerPreset imported) {
+  final hash = imported.sourceHash?.toLowerCase();
+  final old = hash == null || hash.isEmpty
+      ? null
+      : library
+          .where((p) =>
+              p.source != 'builtin' && p.sourceHash?.toLowerCase() == hash)
+          .firstOrNull;
+  if (old != null) return old;
+  library.insert(0, imported);
+  return imported;
+}
+
 Map<String, dynamic> _map(Object? value) =>
     value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
 

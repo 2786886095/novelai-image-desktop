@@ -53,7 +53,7 @@ void main() {
                 extension: '.png',
                 fileName: '20261002_832x1216_0$i.png',
                 sha256: sha256.convert(bytes).toString(),
-                bytes: bytes.length)
+                bytes: bytes.length, savedAt:DateTime.utc(2026,10,2,0,0,i).toIso8601String())
         ];
         for (final item in items) {
           File('${saved.path}/${item.fileName}').writeAsBytesSync(bytes);
@@ -120,9 +120,11 @@ void main() {
           debugPrint(
               'LOCAL_FAVORITES_INITIAL=${fixture.$1.name}/${fixture.$2}/$action/gridErrors=${initial.length}');
           if (action != 'preview') {
-            await tester.tap(find.text('网格'));
+            await tester.runAsync(() => tester.tap(find.text('网格')));
             await tester.pumpAndSettle();
-            await tester.tap(find.text('瀑布流').last);
+            await tester.runAsync(() => tester.tap(find.text('瀑布流').last));
+            await tester.pumpAndSettle();
+            await tester.runAsync(() async { await MobileLocalFavorites.instance.list(); await Future<void>.delayed(const Duration(milliseconds:100)); });
             await tester.pumpAndSettle();
           }
           final setupErrors = exceptions(tester);

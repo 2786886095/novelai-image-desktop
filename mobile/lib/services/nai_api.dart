@@ -1,3 +1,4 @@
+import '../prompts/ig5_image_prompts.dart';
 import '../prompts/translation.dart';
 import '../prompts/google_prompt_translation.dart';
 import 'openai_images.dart' as envelope;
@@ -130,12 +131,7 @@ bool shouldDisableDeepSeekThinking(String apiUrl, String model) {
 }
 
 class NaiApi {
-  TavernSamplerPreset? _reverseConvertPromptPreset(AppSettings settings) {
-    for (final preset in settings.reverseConvertPromptPresets) {
-      if (preset.id == settings.reverseConvertPromptPresetId) return preset;
-    }
-    return settings.reverseConvertPromptPresets.firstOrNull;
-  }
+  TavernSamplerPreset? _reverseConvertPromptPreset(AppSettings settings, {required bool reverse}) => selectedImageSystemPreset(settings.reverseConvertPromptPresets, reverse ? settings.reverseSystemPromptPresetId : settings.convertSystemPromptPresetId, reverse ? 'reverse' : 'convert');
 
   final _rng = Random.secure();
   final Map<String, String> _vibeEncodeCache = {};
@@ -1089,9 +1085,9 @@ class NaiApi {
     final system = injectDshImageAiSystemPrompt(
       task: DshImageAiTask.reverse,
       systemPrompt: baseSystem,
-      enabled: (selectedVersion=='v4.5'?settings.reversePromptTemplatesV45:settings.reversePromptTemplates).values.any((value)=>value.trim().isNotEmpty)?false:settings.reverseConvertDshEnabled,
+      enabled: settings.reverseConvertDshEnabled,
       mode: settings.reverseConvertDshMode,
-      sharedPreset: _reverseConvertPromptPreset(settings),
+      sharedPreset: _reverseConvertPromptPreset(settings, reverse: true),
       useDefaultSharedPreset: false,
     );
     final scopeText = switch (scope) {
@@ -1490,9 +1486,9 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
     final system = injectDshImageAiSystemPrompt(
       task: DshImageAiTask.convert,
       systemPrompt: baseSystem,
-      enabled: (settings.convertPromptTemplateVersion=='v4.5'?settings.convertPromptTemplatesV45:settings.convertPromptTemplates).values.any((value)=>value.trim().isNotEmpty)?false:settings.reverseConvertDshEnabled,
+      enabled: settings.reverseConvertDshEnabled,
       mode: settings.reverseConvertDshMode,
-      sharedPreset: _reverseConvertPromptPreset(settings),
+      sharedPreset: _reverseConvertPromptPreset(settings, reverse: false),
       useDefaultSharedPreset: false,
     );
     final ruleRepairEnabled = settings.promptRuleAutoRepairEnabled &&

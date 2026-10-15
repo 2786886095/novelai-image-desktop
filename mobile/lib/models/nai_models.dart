@@ -12,7 +12,7 @@ import 'completion_sound.dart';
 import '../agent/agent_models.dart';
 import '../agent/agent_context.dart';
 import '../agent/agent_provider_catalog.dart';
-import '../agent/tavern_builtins.dart';
+import '../prompts/ig5_image_prompts.dart';
 import '../i18n/app_locales.dart';
 
 class NaiOption {
@@ -1009,6 +1009,8 @@ class AppSettings {
   String reverseConvertDshMode;
   List<TavernSamplerPreset> reverseConvertPromptPresets;
   String reverseConvertPromptPresetId;
+  String convertSystemPromptPresetId;
+  String reverseSystemPromptPresetId;
   String comicPromptTemplate;
   // Last-used tool selections, persisted so they survive an app restart
   // (mirrors the desktop "last generation state").
@@ -1138,6 +1140,8 @@ class AppSettings {
     this.reverseConvertDshMode = 'focused',
     List<TavernSamplerPreset>? reverseConvertPromptPresets,
     String? reverseConvertPromptPresetId,
+    String? convertSystemPromptPresetId,
+    String? reverseSystemPromptPresetId,
     this.comicPromptTemplate = '',
     this.reversePromptMode = 'tags',
     this.reversePromptTemplateVersion = 'v5',
@@ -1163,12 +1167,10 @@ class AppSettings {
     this.autoBackupIncludeImages = false,
     this.autoBackupAssetPolicyVersion = 1,
   })  : automaticComparison=normalizeAutomaticComparison(automaticComparison), reverseConvertPromptPresets =
-            reverseConvertPromptPresets ?? [createLyraImageSamplerPreset()],
-        reverseConvertPromptPresetId = reverseConvertPromptPresetId ??
-            (reverseConvertPromptPresets ?? [createLyraImageSamplerPreset()])
-                .firstOrNull
-                ?.id ??
-            '',
+            normalizeImageSystemPresets(reverseConvertPromptPresets),
+        reverseConvertPromptPresetId = reverseConvertPromptPresetId ?? 'builtin-ig5-convert',
+        convertSystemPromptPresetId = convertSystemPromptPresetId ?? '',
+        reverseSystemPromptPresetId = reverseSystemPromptPresetId ?? '',
         reversePromptTemplates = reversePromptTemplates ?? {},
         reversePromptTemplatesV45 = reversePromptTemplatesV45 ?? {},
         convertPromptTemplatesV45 = convertPromptTemplatesV45 ?? {},
@@ -1180,7 +1182,10 @@ class AppSettings {
         stylePromptPresetGroups = stylePromptPresetGroups ?? ['Default'],
         negativePromptPresets = normalizeNegativePromptPresets(negativePromptPresets),
         positivePromptPresets = mergeLegacyPositivePresets(
-            positivePromptPresets ?? [], characterPromptPresets ?? []);
+            positivePromptPresets ?? [], characterPromptPresets ?? []) {
+    this.convertSystemPromptPresetId = resolveImageSystemPresetId(this.reverseConvertPromptPresets, convertSystemPromptPresetId, reverseConvertPromptPresetId, 'convert');
+    this.reverseSystemPromptPresetId = resolveImageSystemPresetId(this.reverseConvertPromptPresets, reverseSystemPromptPresetId, reverseConvertPromptPresetId, 'reverse');
+  }
 
   bool get darkMode => theme == 'dark';
 
@@ -1279,6 +1284,8 @@ class AppSettings {
         'reverseConvertPromptPresets':
             reverseConvertPromptPresets.map((item) => item.toJson()).toList(),
         'reverseConvertPromptPresetId': reverseConvertPromptPresetId,
+        'convertSystemPromptPresetId': convertSystemPromptPresetId,
+        'reverseSystemPromptPresetId': reverseSystemPromptPresetId,
         'comicPromptTemplate': comicPromptTemplate,
         'reversePromptMode': reversePromptMode,
         'reversePromptTemplateVersion': reversePromptTemplateVersion,
@@ -1464,11 +1471,13 @@ class AppSettings {
                         (item.systemPrompt.trim().isNotEmpty ||
                             item.jailbreakPrompt.trim().isNotEmpty))
                     .toList()
-                : [createLyraImageSamplerPreset()],
+                : null,
         reverseConvertPromptPresetId:
             j['reverseConvertPromptPresetId'] is String
                 ? _stringValue(j['reverseConvertPromptPresetId'], '')
                 : null,
+        convertSystemPromptPresetId: j['convertSystemPromptPresetId'] is String ? j['convertSystemPromptPresetId'] : null,
+        reverseSystemPromptPresetId: j['reverseSystemPromptPresetId'] is String ? j['reverseSystemPromptPresetId'] : null,
         comicPromptTemplate: j['comicPromptTemplate'] ?? '',
         reversePromptMode: j['reversePromptMode'] ?? 'tags',
         reversePromptTemplateVersion:

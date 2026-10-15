@@ -2,6 +2,7 @@ import '../images/upscale_plan.dart';
 import 'dart:math';
 
 import '../i18n/runtime_text.dart';
+import '../i18n/anlas_billing_text.dart';
 import '../models/nai_models.dart';
 
 const _basePixelCoefficient = 2951823174884865e-21;
@@ -18,6 +19,10 @@ class AnlasQuote {
   final bool insufficient;
   final String message;
   final List<String> details;
+  // An estimate remains usable for budgets, but is not a relay quote or bill.
+  final String billingContext;
+  bool get referenceOnly => billingContext == 'independent-relay';
+  int? get referenceAmount => referenceOnly ? amount : null;
 
   const AnlasQuote({
     required this.ok,
@@ -27,7 +32,18 @@ class AnlasQuote {
     this.balance,
     this.insufficient = false,
     this.details = const [],
+    this.billingContext = 'official',
   });
+
+  AnlasQuote asRelayReference(Object? language) {
+    final text = relayAnlasBillingText(language, amount);
+    return AnlasQuote(
+      ok: ok, amount: amount, source: source, balance: balance,
+      insufficient: insufficient, billingContext: 'independent-relay',
+      message: text.actualUnknown,
+      details: [text.reference, text.noSharedOpus, ...details],
+    );
+  }
 
   AnlasQuote asOfficial(
     int officialAmount, {

@@ -4,6 +4,9 @@ import '../agent/studio_options.dart';
 import '../agent/tavern_builtins.dart';
 import '../i18n/studio_agent_text.dart';
 import '../ui/studio_theme.dart';
+import '../i18n/system_prompt_import_text.dart';
+import '../prompts/ig5_image_prompts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Compact resource lists; imported text is creative data, not app authority.
 class StudioResources extends StatefulWidget {
@@ -22,10 +25,10 @@ class _StudioResourcesState extends State<StudioResources> {
   Future<void> perform(Future<void> Function() action) async {
     try {
       await action();
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(text('resourceActionFailed'))));
+            SnackBar(content: Text('${text('resourceActionFailed')}: ${systemPromptImportErrorText(error,widget.language)}')));
       }
     }
   }
@@ -147,6 +150,7 @@ class _StudioResourcesState extends State<StudioResources> {
               child: SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
+                      key: ValueKey('studio-resource-import-$tab'),
                       onPressed: locked ? null : () => import(tab),
                       icon: const Icon(Icons.file_upload_outlined, size: 18),
                       label: Text(text('import_$tab'))))),
@@ -155,18 +159,21 @@ class _StudioResourcesState extends State<StudioResources> {
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   children: [
                 if (tab == 'presets') ...[
+                  TextButton(onPressed:()=>launchUrl(Uri.parse(ig5SourceUrl),mode:LaunchMode.externalApplication),child:const Text('Minglink / Infinite Gen 5 · CC BY-NC-SA 4.0')),
+                  const Text('Task adaptations, not the upstream reverse-engineering workbench. Full license and attribution: assets/ig5/.'),
                   for (final id in [
                     studioDefaultPresetId,
+                    studioLegacyPresetId,
                     studioCompletePresetId
                   ])
                     item(
                         id,
                         text(id == studioDefaultPresetId
-                            ? 'presetInfinite'
-                            : 'presetComplete'),
+                            ? 'presetInfiniteFive'
+                            : id==studioLegacyPresetId ? 'presetInfinite' : 'presetComplete'),
                         text(id == studioDefaultPresetId
-                            ? 'presetInfiniteBody'
-                            : 'presetCompleteBody'),
+                            ? 'presetInfiniteFiveBody'
+                            : id==studioLegacyPresetId ? 'presetInfiniteBody' : 'presetCompleteBody'),
                         Icons.description_outlined,
                         chat?.studioPresetId == id,
                         locked,

@@ -1128,7 +1128,9 @@ class Storage {
       prompt: p.positivePrompt,
       feature: feature,
       groupId: groupId,
-      params: p.toJson(),
+      params: {...p.toJson(),
+        '_langbaiLocalGenerationCompletedAt':DateTime.fromMillisecondsSinceEpoch(DateTime.now().millisecondsSinceEpoch,isUtc:true).toIso8601String(),
+        '_langbaiLocalGenerationCompletedSource':'local-completion'},
     );
 
     try {
@@ -1165,6 +1167,8 @@ class Storage {
         feature: feature,
         groupId: groupId,
         params: {
+          '_langbaiLocalGenerationCompletedAt':DateTime.fromMillisecondsSinceEpoch(DateTime.now().millisecondsSinceEpoch,isUtc:true).toIso8601String(),
+          '_langbaiLocalGenerationCompletedSource':'local-completion',
           'generationProvider': 'openai-images',
           'compatibleRequest': request
         });
@@ -1208,7 +1212,9 @@ class Storage {
       height: params.height,
       prompt: params.positivePrompt,
       feature: 'artist-lab-temp',
-      params: params.toJson(),
+      params: {...params.toJson(),
+        '_langbaiLocalGenerationCompletedAt':DateTime.fromMillisecondsSinceEpoch(DateTime.now().millisecondsSinceEpoch,isUtc:true).toIso8601String(),
+        '_langbaiLocalGenerationCompletedSource':'local-completion'},
     );
   }
 

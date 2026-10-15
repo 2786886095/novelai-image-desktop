@@ -2,6 +2,11 @@ import 'app_locales.dart';
 
 const _labels = <String, Map<String, String>>{
   'zh-CN': {
+    'savedAt': '收藏时间',
+    'generatedAt': '本机生成完成时间',
+    'desc': '新到旧',
+    'asc': '旧到新',
+    'sortTimeNote': '未知时间排在最后；生成时间仅使用可核实的本机完成记录，不是官方服务器时间。',
     'title': '收藏夹',
     'local': '本地原图',
     'apply': '应用到生成',
@@ -28,6 +33,11 @@ const _labels = <String, Map<String, String>>{
     'noFolder': '此设备不支持选择该目录；原目录不变。'
   },
   'zh-TW': {
+    'savedAt': '收藏時間',
+    'generatedAt': '本機生成完成時間',
+    'desc': '新到舊',
+    'asc': '舊到新',
+    'sortTimeNote': '未知時間排在最後；生成時間僅使用可核實的本機完成紀錄，不是官方伺服器時間。',
     'title': '收藏夾',
     'local': '本地原圖',
     'apply': '套用至生成',
@@ -54,6 +64,11 @@ const _labels = <String, Map<String, String>>{
     'noFolder': '此裝置不支援選擇該目錄；原目錄不變。'
   },
   'en-US': {
+    'savedAt': 'Collection time',
+    'generatedAt': 'Local generation completion',
+    'desc': 'Newest first',
+    'asc': 'Oldest first',
+    'sortTimeNote': 'Unknown times are last. Generation time uses recorded local completion, not the official server timestamp.',
     'title': 'Favorites',
     'local': 'Original images',
     'apply': 'Apply to generation',
@@ -81,6 +96,11 @@ const _labels = <String, Map<String, String>>{
         'This device cannot select that folder; the old folder is unchanged.'
   },
   'ja-JP': {
+    'savedAt': '保存日時',
+    'generatedAt': 'ローカル生成完了日時',
+    'desc': '新しい順',
+    'asc': '古い順',
+    'sortTimeNote': '不明な日時は最後。生成日時は確認可能なローカル完了記録で、公式サーバーの日時ではありません。',
     'title': 'お気に入り',
     'local': 'ローカル原画',
     'apply': '生成に適用',
@@ -107,6 +127,11 @@ const _labels = <String, Map<String, String>>{
     'noFolder': 'この端末では選択できません。元の保存先を保持します。'
   },
   'ko-KR': {
+    'savedAt': '즐겨찾기 시간',
+    'generatedAt': '로컬 생성 완료 시간',
+    'desc': '최신순',
+    'asc': '오래된순',
+    'sortTimeNote': '알 수 없는 시간은 마지막입니다. 생성 시간은 로컬 완료 기록이며 공식 서버 시간이 아닙니다.',
     'title': '즐겨찾기',
     'local': '로컬 원본',
     'apply': '생성에 적용',

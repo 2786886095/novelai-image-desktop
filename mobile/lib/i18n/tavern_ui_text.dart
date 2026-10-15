@@ -10,11 +10,11 @@ const _tavernExtraRows = <String, List<String>>{
     'Tavern 시스템 프롬프트와 샘플링을 제어합니다'
   ],
   'importPreset': [
-    '导入 JSON 预设',
-    '匯入 JSON 預設',
-    'Import JSON preset',
-    'JSON プリセットを読み込む',
-    'JSON 프리셋 가져오기'
+    '导入系统提示词（TXT / MD / JSON）',
+    '匯入系統提示詞（TXT / MD / JSON）',
+    'Import system prompt (TXT / MD / JSON)',
+    'システムプロンプトを読込 (TXT / MD / JSON)',
+    '시스템 프롬프트 가져오기 (TXT / MD / JSON)'
   ],
   'renamePreset': [
     '重命名预设',

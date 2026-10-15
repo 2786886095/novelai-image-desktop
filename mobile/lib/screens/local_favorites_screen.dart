@@ -11,6 +11,7 @@ import '../i18n/app_locales.dart';
 import '../services/local_favorites.dart';
 import '../state/app_state.dart';
 import '../ui/zoomable_image.dart';
+import '../ui/studio_dropdown.dart';
 import 'gallery_favorites_screen.dart';
 
 class LocalFavoritesScreen extends StatefulWidget {
@@ -46,6 +47,7 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
       if (mounted) {
         setState(() {
           library = result;
+          layout=result.view.layout;pageSize=result.view.pageSize;
           if (date.isNotEmpty &&
               !result.items.any((item) => item.prefix.startsWith(date))) {
             date = '';
@@ -181,11 +183,9 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
         current?.items.map((e) => e.prefix.substring(0, 8)).toSet().toList() ??
             [];
     dates.sort((a, b) => b.compareTo(a));
-    final filtered = (current?.items ?? const <LocalFavorite>[])
-        .where((item) => date.isEmpty || item.prefix.startsWith(date))
-        .toList()
-        .reversed
-        .toList();
+    final view=current?.view??const FavoriteView();
+    final filtered = sortLocalFavoriteItems(
+      (current?.items ?? const <LocalFavorite>[]).where((item)=>date.isEmpty||item.prefix.startsWith(date)),view);
     final pages = (filtered.length / pageSize).ceil().clamp(1, 999999);
     final shownPage = page.clamp(1, pages);
     final visible =
@@ -220,7 +220,8 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
                           child: Text(t('choose')))
                     ]),
                     Wrap(spacing: 8, children: [
-                      DropdownButton<String>(
+                      StudioDropdownButton<String>(
+                          key:const ValueKey('favorites-date'),
                           value: date,
                           items: [
                             DropdownMenuItem(value: '', child: Text(t('all'))),
@@ -231,25 +232,28 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
                                 date = v ?? '';
                                 page = 1;
                               })),
-                      DropdownButton<String>(
+                      StudioDropdownButton<String>(
                           value: layout,
                           items: ['grid', 'masonry']
                               .map((v) =>
                                   DropdownMenuItem(value: v, child: Text(t(v))))
                               .toList(),
-                          onChanged: (v) =>
-                              setState(() => layout = v ?? 'grid')),
-                      DropdownButton<int>(
+                          onChanged: busy?null:(v)=>_run(()=>store.saveView(layout:v))),
+                      StudioDropdownButton<int>(
                           value: pageSize,
                           items: [12, 24, 48, 96]
                               .map((n) => DropdownMenuItem(
                                   value: n, child: Text('${t('size')} $n')))
                               .toList(),
-                          onChanged: (v) => setState(() {
-                                pageSize = v ?? 24;
-                                page = 1;
-                              })),
+                          onChanged: busy?null:(v){page=1;_run(()=>store.saveView(pageSize:v));}),
+                      StudioDropdownButton<String>(key:const ValueKey('favorites-sort-by'),value:view.sortBy,
+                        items:['savedAt','generatedAt'].map((v)=>DropdownMenuItem(value:v,child:Text(t(v)))).toList(),
+                        onChanged:busy?null:(v){page=1;_run(()=>store.saveView(sortBy:v));}),
+                      StudioDropdownButton<String>(key:const ValueKey('favorites-sort-direction'),value:view.sortDirection,
+                        items:['desc','asc'].map((v)=>DropdownMenuItem(value:v,child:Text(t(v)))).toList(),
+                        onChanged:busy?null:(v){page=1;_run(()=>store.saveView(sortDirection:v));}),
                     ]),
+                    Text(t('sortTimeNote'),style:Theme.of(context).textTheme.bodySmall),
                   ])),
         if (error != null)
           Padding(

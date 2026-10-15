@@ -2,11 +2,13 @@ import Flutter
 import UIKit
 import CFNetwork
 import MobileCoreServices
+import WebKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private static let incomingBackupPending = "__incoming_backup_pending__"
   private var composerFiles: ComposerFiles?
+  private var officialMetadata: OfficialMetadataBridge?
   private var incomingBackupChannel: FlutterMethodChannel?
   private var pendingIncomingBackupPaths: [String] = []
   private var incomingBackupCopiesInProgress = 0
@@ -21,6 +23,7 @@ import MobileCoreServices
     // Dart's utf8 decoder can't read). Without this the offline tag library
     // would fail to parse on iOS.
     if let controller = window?.rootViewController as? FlutterViewController {
+      officialMetadata = OfficialMetadataBridge(messenger: controller.binaryMessenger)
       composerFiles = ComposerFiles(controller: controller)
       let channel = FlutterMethodChannel(
         name: "langbai.novelai/native_text",
@@ -305,5 +308,124 @@ final class ComposerFiles: NSObject, UIDropInteractionDelegate {
       }
     }
     group.notify(queue:.main){ [weak self] in if !paths.isEmpty{self?.channel.invokeMethod("drop",arguments:paths)} }
+  }
+}
+
+
+// Isolated memory-only official image parser. Downloaded factories execute in
+// the dedicated Worker, never in this document. No JS/native bridge exists.
+private final class OfficialMetadataBridge: NSObject, WKNavigationDelegate {
+  private final class Session {
+    let id: String
+    let view: WKWebView
+    let result: FlutterResult
+    let payload: String
+    let worker: String
+    var timeout: DispatchWorkItem?
+    var settled = false
+    var initialNavigation = true
+    init(_ id: String, _ view: WKWebView, _ result: @escaping FlutterResult, _ payload: String, _ worker: String) {
+      self.id = id; self.view = view; self.result = result; self.payload = payload; self.worker = worker
+    }
+  }
+  private let channel: FlutterMethodChannel
+  private var active: Session?
+  init(messenger: FlutterBinaryMessenger) {
+    channel = FlutterMethodChannel(name: "langbai.novelai/official_metadata", binaryMessenger: messenger)
+    super.init()
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self = self else { result(FlutterError(code: "disposed", message: "Metadata sandbox disposed", details: nil)); return }
+      let args = call.arguments as? [String: Any] ?? [:]
+      if call.method == "cancel" {
+        if let session = self.active, session.id == args["id"] as? String { self.finish(session, nil, "cancelled") }
+        result(nil); return
+      }
+      guard call.method == "read" else { result(FlutterMethodNotImplemented); return }
+      guard let id = args["id"] as? String, id.count <= 160,
+            let host = args["host"] as? String, host.utf8.count <= 1024 * 1024,
+            let worker = args["worker"] as? String, worker.utf8.count <= 1024 * 1024,
+            let payload = args["payload"] as? String, payload.utf8.count <= 92 * 1024 * 1024 else {
+        result(FlutterError(code: "invalid_input", message: "Metadata sandbox input exceeds safety limits", details: nil)); return
+      }
+      self.start(id, host, worker, payload, result)
+    }
+  }
+  private func finish(_ session: Session, _ value: String?, _ error: String?) {
+    if session.settled { return }
+    session.settled = true
+    session.timeout?.cancel()
+    if active === session { active = nil }
+    session.view.evaluateJavaScript("globalThis.naiMetadataCancel && naiMetadataCancel()", completionHandler: nil)
+    session.view.navigationDelegate = nil
+    session.view.stopLoading()
+    session.view.loadHTMLString("", baseURL: nil) // destroy the document and its Worker
+    if let error = error {
+      session.result(FlutterError(code: error, message: "Isolated metadata reader failed; no offline fallback", details: nil))
+    } else { session.result(value) }
+  }
+  private func start(_ id: String, _ host: String, _ worker: String, _ payload: String, _ result: @escaping FlutterResult) {
+    if let old = active { finish(old, nil, "cancelled") }
+    let configuration = WKWebViewConfiguration()
+    configuration.websiteDataStore = .nonPersistent()
+    configuration.processPool = WKProcessPool()
+    configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
+    if #available(iOS 14.0, *) { configuration.defaultWebpagePreferences.allowsContentJavaScript = true }
+    else { configuration.preferences.javaScriptEnabled = true }
+    let view = WKWebView(frame: .zero, configuration: configuration)
+    view.navigationDelegate = self
+    let session = Session(id, view, result, payload, worker)
+    active = session
+    let timeout = DispatchWorkItem { [weak self, weak session] in
+      if let self = self, let session = session { self.finish(session, nil, "sandbox_timeout") }
+    }
+    session.timeout = timeout
+    DispatchQueue.main.asyncAfter(deadline: .now() + 40, execute: timeout)
+    let csp = "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' blob:; worker-src blob:; child-src blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    let safeHost = host.replacingOccurrences(of: "</script", with: "<\\/script")
+    view.loadHTMLString("<!doctype html><meta charset=\"utf-8\"><meta http-equiv=\"Content-Security-Policy\" content=\"\(csp)\"><script>\(safeHost)</script>", baseURL: URL(string: "https://metadata.invalid/"))
+  }
+  func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+    guard let session = active, session.view === webView else { decisionHandler(.cancel); return }
+    let url = navigationAction.request.url
+    if session.initialNavigation && (url?.absoluteString == "about:blank" || url?.host == "metadata.invalid") {
+      session.initialNavigation = false; decisionHandler(.allow)
+    } else { decisionHandler(.cancel) }
+  }
+  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    guard let session = active, session.view === webView, !session.settled else { return }
+    push(session, 0)
+  }
+  private func quote(_ string: String) -> String {
+    let data = try! JSONSerialization.data(withJSONObject: [string])
+    let array = String(data: data, encoding: .utf8)!
+    return String(array.dropFirst().dropLast())
+  }
+  private func push(_ session: Session, _ offset: Int) {
+    guard active === session, !session.settled else { return }
+    // Payload is ASCII JSON/base64; bounded chunks avoid interprocess message limits.
+    let payload = session.payload as NSString
+    let expression: String
+    let end = min(offset + 60000, payload.length)
+    if offset < payload.length { expression = "naiMetadataChunk(\(quote(payload.substring(with: NSRange(location: offset, length: end - offset)))))" }
+    else { expression = "naiMetadataStart(\(quote(session.worker)))" }
+    session.view.evaluateJavaScript(expression) { [weak self] _, error in
+      guard let self = self, self.active === session, !session.settled else { return }
+      if error != nil { self.finish(session, nil, "sandbox_failed"); return }
+      if offset < payload.length { self.push(session, end) } else { self.poll(session) }
+    }
+  }
+  private func poll(_ session: Session) {
+    guard active === session, !session.settled else { return }
+    session.view.evaluateJavaScript("JSON.stringify(globalThis.naiMetadataResult)") { [weak self] value, error in
+      guard let self = self, self.active === session, !session.settled else { return }
+      if error != nil { self.finish(session, nil, "sandbox_failed"); return }
+      if let text = value as? String, text != "null" {
+        guard text.utf8.count <= 18 * 1024 * 1024, let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data), object is [String: Any] else {
+          self.finish(session, nil, "invalid_response"); return
+        }
+        self.finish(session, text, nil)
+      } else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in self?.poll(session) } }
+    }
   }
 }

@@ -1,3 +1,4 @@
+import { anlasBillingDisplay, visibleAnlasQuote, type ScopedAnlasQuote } from "./anlas-billing";
 import { McpServerSettings } from "./components/McpServerSettings";
 import { estimateOpusImages, estimateOpusUsagePercent } from "./anlas";
 import { EffortControl, effortText } from "./components/EffortControl";
@@ -170,7 +171,6 @@ import {
   supportsNAIVibeTransfer,
   supportsNAIVariety,
   type AnlasQuoteFeature,
-  type AnlasQuoteResult,
   type ModelMode,
   type AiCallLogEntry,
   type AppSettings,
@@ -2619,7 +2619,7 @@ function FeatureCostCard({
   const isGenerating = useAppStore((state) => state.isGenerating);
   const currentAnlasSpent = useAppStore((state) => state.currentAnlasSpent);
   const lastAnlasSpent = useAppStore((state) => state.lastAnlasSpent);
-  const [quote, setQuote] = useState<AnlasQuoteResult | null>(null);
+  const [quoteState, setQuoteState] = useState<ScopedAnlasQuote | null>(null);
   const [loading, setLoading] = useState(false);
   const balance = account.anlasBalance;
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
@@ -2629,6 +2629,7 @@ function FeatureCostCard({
     feature,
     model: params.model,
     effort: params.effort,
+    accountId: account.accountId,
     opusUsage: account.opusUsage,
     width: params.width,
     height: params.height,
@@ -2654,10 +2655,12 @@ function FeatureCostCard({
     balance,
   });
 
+  const quote = visibleAnlasQuote(quoteState, quoteKey, account.accountId);
+
   useEffect(() => {
     let cancelled = false;
+    setQuoteState(null);
     if (!account.hasToken) {
-      setQuote(null);
       setLoading(false);
       return;
     }
@@ -2702,7 +2705,15 @@ function FeatureCostCard({
           account,
         })
         .then((result) => {
-          if (!cancelled) setQuote(result);
+          if (!cancelled && (account.accountId === undefined || result.accountId === account.accountId)) {
+            setQuoteState({ key: quoteKey, quote: result });
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setQuoteState({ key: quoteKey, quote: {
+            ok: false, source: "unavailable", accountId: account.accountId,
+            message: "Generation preview quote unavailable; this preview submits no generation request.",
+          } });
         })
         .finally(() => {
           if (!cancelled) setLoading(false);
@@ -2714,35 +2725,8 @@ function FeatureCostCard({
     };
   }, [quoteKey]);
 
-  const sourceLabel =
-    quote?.source === "official-api"
-      ? t("cost.official")
-      : quote?.source === "estimate-formula"
-        ? t("cost.estimateFormula")
-        : quote?.source === "estimate-fixed"
-          ? t("cost.estimateFixed")
-          : "";
-  const isEstimate = quote?.source === "estimate-formula" || quote?.source === "estimate-fixed";
-  const unavailableText =
-    quote?.reason === "missing-token"
-      ? t("cost.configureToken")
-      : quote?.reason === "missing-image"
-        ? t("cost.loadImageFirst")
-        : quote?.reason === "missing-params"
-          ? t("cost.invalidParams")
-          : quote?.reason === "image-too-large"
-            ? t("cost.imageTooLarge")
-            : t("cost.unavailable");
-  const primary =
-    quote?.ok && typeof quote.amount === "number"
-      ? quote.amount === 0
-        ? t("cost.zero")
-        : isEstimate
-          ? f("cost.estimated", { amount: quote.amount })
-          : f("cost.willSpend", { amount: quote.amount })
-      : loading
-        ? t("cost.loading")
-        : unavailableText;
+  const display = anlasBillingDisplay({ quote, language, loading });
+  const { sourceLabel, primary, secondary, isReferenceOnly } = display;
   const actualText = isGenerating
     ? currentAnlasSpent != null
       ? f("cost.currentSpent", { amount: currentAnlasSpent })
@@ -2756,21 +2740,22 @@ function FeatureCostCard({
       className={clsx(
         "cost-row cost-card",
         isGenerating && "cost-live",
-        quote?.amount === 0 && "cost-free",
-        quote?.insufficient && "cost-warn",
+        !isReferenceOnly && quote?.amount === 0 && "cost-free",
+        !isReferenceOnly && quote?.insufficient && "cost-warn",
         !loading && (!quote || !quote.ok) && "cost-card-unavailable",
       )}
     >
       <div>
-        <span>{label}</span>
+        <span>{display.title}</span>
         <small>{sourceLabel || t("cost.readingHint")}</small>
       </div>
       <strong className="cost-primary">{primary}</strong>
+      {secondary && <small className="cost-balance cost-reference">{secondary}</small>}
       <small className="cost-balance">
-        {f("cost.balance", { balance: balance ?? t("common.unknown") })}{account.stale ? t("cost.cached") : ""} · {actualText}
-        {quote?.insufficient ? t("cost.insufficient") : ""}
-        {feature === "generate" && quote?.amount === 0 && isNAIV5Model(params.model) && estimateOpusUsagePercent(params, batchCount) != null && <span className="effort-usage-estimate"> · V5 ≈{estimateOpusUsagePercent(params, batchCount)!.toFixed(3)}% · {effortText(language).remaining}: ≈{estimateOpusImages(params, account.opusUsage?.isNegative ? 0 : account.opusUsage?.percent ?? 0)}</span>}
-        {feature === "generate" && quote?.ok && quote.amount != null && quote.amount > 0 && balance != null && <span className="effort-paid-remaining"> · {effortText(language).remaining}: ≈{Math.floor(balance / (quote.amount / batchCount))}</span>}
+        {isReferenceOnly ? t("cost.relayActualHint") : <>{f("cost.balance", { balance: balance ?? t("common.unknown") })}{account.stale ? t("cost.cached") : ""} · {actualText}</>}
+        {!isReferenceOnly && quote?.insufficient ? t("cost.insufficient") : ""}
+        {!isReferenceOnly && feature === "generate" && quote?.amount === 0 && isNAIV5Model(params.model) && estimateOpusUsagePercent(params, batchCount) != null && <span className="effort-usage-estimate"> · V5 ≈{estimateOpusUsagePercent(params, batchCount)!.toFixed(3)}% · {effortText(language).remaining}: ≈{estimateOpusImages(params, account.opusUsage?.isNegative ? 0 : account.opusUsage?.percent ?? 0)}</span>}
+        {!isReferenceOnly && feature === "generate" && quote?.ok && quote.amount != null && quote.amount > 0 && balance != null && <span className="effort-paid-remaining"> · {effortText(language).remaining}: ≈{Math.floor(balance / (quote.amount / batchCount))}</span>}
       </small>
     </div>
   );

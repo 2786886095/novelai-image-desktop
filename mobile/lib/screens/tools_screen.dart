@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../billing/anlas.dart';
+import '../i18n/anlas_billing_text.dart';
 import '../i18n/app_locales.dart';
 import '../i18n/runtime_text.dart';
 import '../inpaint/inpaint_mask.dart';
@@ -1093,6 +1094,21 @@ class _ToolQuoteBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final language = context.watch<AppState>().settings.language;
+    if (quote.referenceOnly) {
+      final billing = relayAnlasBillingText(language, quote.referenceAmount);
+      return DecoratedBox(
+        decoration: BoxDecoration(color: colors.secondaryContainer, borderRadius: BorderRadius.circular(8)),
+        child: Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Icon(Icons.help_outline, size: 18), const SizedBox(width: 8),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(billing.actualUnknown, style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text(billing.reference),
+              Text(billing.noSharedOpus, style: Theme.of(context).textTheme.bodySmall),
+            ])),
+          ])),
+      );
+    }
     final warning = quote.insufficient || !quote.ok;
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -1112,8 +1128,7 @@ class _ToolQuoteBar extends StatelessWidget {
               child: Text(
                 quote.amount == null
                     ? quote.message
-                    : mobileUiFormatFor(language, 'tools.prechargeFormula',
-                        {'amount': quote.amount}),
+                    : '${anlasPreviewHeading(language, official: quote.source == AnlasQuoteSource.officialApi)}: ${quote.amount} Anlas',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),

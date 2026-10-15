@@ -1,4 +1,5 @@
 import '../agent/lyra_preset_data.dart';
+import 'ig5_image_prompts.dart';
 import '../agent/tavern_models.dart';
 
 enum DshImageAiTask { tavernImage, reverse, convert }
@@ -18,11 +19,7 @@ String buildDshImageAiSystemAddon(
 }) {
   final effectivePreset = sharedPreset ??
       (useDefaultSharedPreset
-          ? TavernSamplerPreset(
-              name: lyraPresetName,
-              systemPrompt: lyraPresetSystemPrompt,
-              jailbreakPrompt: lyraPresetJailbreakPrompt,
-            )
+          ? createIg5ImageSamplerPreset(task == DshImageAiTask.convert ? 'convert' : task == DshImageAiTask.reverse ? 'reverse' : 'studio')
           : null);
   final taskRule = switch (task) {
     DshImageAiTask.tavernImage =>
@@ -59,7 +56,7 @@ String injectDshImageAiSystemPrompt({
 }) {
   if (!enabled) return systemPrompt;
   final effectiveSystemPrompt = sharedPreset?.systemPrompt ??
-      (useDefaultSharedPreset ? lyraPresetSystemPrompt : '');
+      (useDefaultSharedPreset ? ig5PromptBodies[task == DshImageAiTask.convert ? 'convert' : task == DshImageAiTask.reverse ? 'reverse' : 'studio']! : '');
   final sharedPresetAlreadyPresent = effectiveSystemPrompt.isNotEmpty &&
       systemPrompt.contains(effectiveSystemPrompt);
   return [

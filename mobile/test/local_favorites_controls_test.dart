@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/screens/local_favorites_screen.dart';
+import 'package:novelai_mobile/ui/studio_dropdown.dart';
 import 'package:novelai_mobile/services/local_favorites.dart';
 import 'package:novelai_mobile/services/unified_storage.dart';
 import 'package:novelai_mobile/state/app_state.dart';
@@ -75,7 +76,7 @@ void main() {
                   fileName:
                       '${action == 'otherDate' && i == 1 ? '20261001' : '20261002'}_832x1216_${i.toString().padLeft(2, '0')}.png',
                   sha256: sha256.convert(bytes).toString(),
-                  bytes: bytes.length)
+                  bytes: bytes.length, savedAt:DateTime.utc(2026,10,2,0,0,i).toIso8601String())
           ];
           for (final item in items) {
             File(p.join(saved.path, item.fileName)).writeAsBytesSync(bytes);
@@ -127,9 +128,11 @@ void main() {
           await tester.pumpAndSettle();
           expect(takeErrors(tester), isEmpty);
           if (action == 'pageRegrowth') {
-            await tester.tap(find.text('每页张数 24'));
+            await tester.runAsync(() => tester.tap(find.text('每页张数 24')));
             await tester.pumpAndSettle();
-            await tester.tap(find.text('每页张数 12').last);
+            await tester.runAsync(() => tester.tap(find.text('每页张数 12').last));
+            await tester.pumpAndSettle();
+            await tester.runAsync(() async { await MobileLocalFavorites.instance.list(); await Future<void>.delayed(const Duration(milliseconds:100)); });
             await tester.pumpAndSettle();
             expect(find.text('1 / 2'), findsOneWidget);
             await tester.tap(find.byTooltip('下一张'));
@@ -182,11 +185,10 @@ void main() {
           } else {
             final dateValues = find
                 .byWidgetPredicate((w) =>
-                    w is DropdownButton<String> &&
-                    w.value != 'grid' &&
-                    w.value != 'masonry')
+                    w is StudioDropdownButton<String> &&
+                    w.key==const ValueKey('favorites-date'))
                 .evaluate()
-                .map((e) => (e.widget as DropdownButton<String>).value)
+                .map((e) => (e.widget as StudioDropdownButton<String>).value)
                 .toList();
             final expectedDate = action == 'retainedDate' ? '20261002' : '';
             debugPrint(

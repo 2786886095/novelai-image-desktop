@@ -5,7 +5,7 @@ import {resolveTranslationTarget,baiduTranslationTarget,translationLanguageName,
 import {prepareFocusedInpaintInput,compositeFocusedPatch} from './focused-inpaint';
 import {parseNaiAccountSummary} from './nai-account-summary';
 import {validateNaiAccountReadOnly,requireNaiAccountValidation} from './nai-accounts-validation';
-import { currentNaiAccount } from './nai-accounts-runtime';
+import { currentNaiAccount, getNaiAccountSummary } from './nai-accounts-runtime';
 import {preparePromptAssistance,isSparsePromptEditSource,type PromptEditRequest} from "../../src/prompt-assistant.js";
 import {authorizeAgentBatchRequest} from './batch-run-authorization';
 import {currentBatchImageBinding,assertBatchImageBinding,prepareBatchImageService} from './batch-image-service';
@@ -1557,9 +1557,13 @@ async function requestOfficialGenerationPrice(
 export async function quoteAnlasCost(
   request: AnlasQuoteRequest,
 ): Promise<AnlasQuoteResult> {
+  const boundAccount = currentNaiAccount();
+  const isIndependentRelay = boundAccount?.method === "relay";
   const token = getToken();
   if (!token) {
     return {
+      accountId: boundAccount?.id,
+      ...(isIndependentRelay ? { billingContext: "independent-relay" as const } : {}),
       ok: false,
       source: "unavailable",
       reason: "missing-token",
@@ -1567,9 +1571,11 @@ export async function quoteAnlasCost(
     };
   }
 
-  const account = request.account?.hasToken
-    ? request.account
-    : await refreshStoredAccount();
+  // Managed account metadata comes only from its bound snapshot. A renderer
+  // summary (even with hasToken) must not inherit another account's Opus/balance.
+  const account = boundAccount
+    ? getNaiAccountSummary(boundAccount)
+    : request.account?.hasToken ? request.account : await refreshStoredAccount();
   let image: Pick<WorkingImage, "width" | "height"> | null =
     request.image ?? null;
   if (request.feature === "upscale" || request.feature === "inpaint") {
@@ -1582,7 +1588,7 @@ export async function quoteAnlasCost(
     }
   }
 
-  const calculated = calculateFeatureAnlasQuote({
+  const quoteInput = {
     feature: request.feature,
     params: request.params,
     extras: request.extras,
@@ -1590,7 +1596,6 @@ export async function quoteAnlasCost(
     i2iParams: request.i2iParams,
     inpaintModel: request.inpaintModel,
     inpaintStrength: request.inpaintStrength,
-    account,
     image,
     upscaleScale: request.upscaleScale,
     directorTool: request.directorTool,
@@ -1604,23 +1609,39 @@ export async function quoteAnlasCost(
         request.alreadyQueuedVibes ?? 0,
       ),
     ),
+  };
+  const paidReferenceAccount: AccountSummary = {
+    hasToken: account.hasToken, accountId: account.accountId,
+    anlasBalance: account.anlasBalance, hasActiveSubscription: false,
+  };
+  const reference = calculateFeatureAnlasQuote({ ...quoteInput, account: paidReferenceAccount });
+  const calculated = isIndependentRelay ? reference : calculateFeatureAnlasQuote({ ...quoteInput, account });
+  const contextResult = (value: AnlasQuoteResult): AnlasQuoteResult => ({
+    ...value, accountId: boundAccount?.id ?? account.accountId,
+    referenceAmount: reference.ok ? reference.amount : undefined,
+    ...(isIndependentRelay ? {
+      billingContext: "independent-relay" as const,
+      message: reference.ok && typeof reference.amount === "number"
+        ? `Actual fee is unknown. Official no-subscription formula reference: approximately ${reference.amount} Anlas; not a relay quote or actual debit. This relay account does not inherit official Opus benefits.`
+        : "Actual fee is unknown. Official no-subscription formula reference is unavailable; not a relay quote or actual debit. This relay account does not inherit official Opus benefits.",
+    } : {}),
   });
-  if (!calculated.ok) return calculated;
+  if (!calculated.ok) return contextResult(calculated);
 
   const hasVibes = (request.extras?.vibeImages?.length ?? 0) > 0;
-  if (request.feature !== "generate" || !request.params || hasVibes)
-    return calculated;
+  if (isIndependentRelay || request.feature !== "generate" || !request.params || hasVibes)
+    return contextResult(calculated);
 
   const officialPerRequest = await requestOfficialGenerationPrice(
     request.params,
     request.extras,
   );
-  if (officialPerRequest == null) return calculated;
+  if (officialPerRequest == null) return contextResult(calculated);
 
   const amount =
     officialPerRequest * Math.max(1, Math.floor(request.batchCount ?? 1));
   const balance = account.anlasBalance;
-  return {
+  return contextResult({
     ok: true,
     amount,
     source: "official-api",
@@ -1633,7 +1654,7 @@ export async function quoteAnlasCost(
         ? `The desktop app sends ${Math.floor(request.batchCount)} single-image requests: ${officialPerRequest} x ${Math.floor(request.batchCount)}.`
         : "The desktop app sends one single-image request.",
     ],
-  };
+  });
 }
 
 export function prepareInpaintAssets(
