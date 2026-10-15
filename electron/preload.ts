@@ -348,6 +348,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     strength: number,
     noise: number,
     region?: import("../src/focused-inpaint").InpaintRegion,
+    extras?: GenerateExtras,
   ) =>
     ipcRenderer.invoke(
       "nai:inpaint",
@@ -357,6 +358,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
       strength,
       noise,
       region,
+      extras,
     ),
   upscaleImage: (scale: UpscaleScale, model: string) =>
     ipcRenderer.invoke("nai:upscale", scale, model),

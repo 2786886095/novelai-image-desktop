@@ -865,7 +865,9 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
   const clearPreciseReferences = useAppStore((state) => state.clearPreciseReferences);
   const setToast = useAppStore((state) => state.setToast);
   const setParam = useAppStore((state) => state.setParam);
-  const model = useAppStore((state) => state.params.model);
+  const activeTab = useAppStore((state) => state.activeTab);
+  const setInpaintModel = useAppStore((state) => state.setInpaintModel);
+  const model = useAppStore((state) => state.activeTab === "inpaint" ? state.inpaintModel : state.params.model);
   const vf = vibeFileLabels(language);
   const preciseSupported = supportsNAIPreciseReference(model);
   const vibeSupported = supportsNAIVibeTransfer(model);
@@ -881,6 +883,10 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
   }, []);
 
   const switchToV45 = () => {
+    if (activeTab === "inpaint") {
+      setInpaintModel(model.includes("curated") ? "nai-diffusion-4-5-curated-inpainting" : "nai-diffusion-4-5-full-inpainting");
+      return;
+    }
     setParam(
       "model",
       model.includes("curated")
@@ -1145,8 +1151,9 @@ export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   const removeCharCaption = useAppStore((state) => state.removeCharCaption);
   const updateCharCaption = useAppStore((state) => state.updateCharCaption);
   const clearCharCaptions = useAppStore((state) => state.clearCharCaptions);
-  const supportsCharacters = supportsNAICharacterPrompts(params.model);
-  const maxCharacters = maxNAICharacterPrompts(params.model);
+  const characterModel = useAppStore((state) => state.activeTab === "inpaint" ? state.inpaintModel : state.params.model);
+  const supportsCharacters = supportsNAICharacterPrompts(characterModel);
+  const maxCharacters = maxNAICharacterPrompts(characterModel);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const generateText = useMemo(() => getGeneratePanelText(language), [language]);

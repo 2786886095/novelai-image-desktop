@@ -1,9 +1,11 @@
 import {
   DEFAULT_PARAMS,
+  NAI_INPAINT_MODELS,
   NAI_MODELS,
   NAI_SAMPLERS,
   maxNAICharacterPrompts,
   normalizeGenerateParams,
+  normalizeNAIBaseModel,
   supportsNAICharacterPrompts,
   supportsNAIPreciseReference,
   supportsNAIVibeTransfer,
@@ -25,6 +27,10 @@ export interface AgentGenerationDefaults {
 export interface AgentGenerationInput {
   params: GenerateParams;
   extras: GenerateExtras;
+}
+
+export interface AgentInpaintInput extends AgentGenerationInput {
+  inpaintModel: NAIInpaintModel;
 }
 
 export interface AgentPromptLocks {
@@ -94,6 +100,34 @@ function copyExtras(extras?: GenerateExtras): GenerateExtras {
   };
 }
 
+/** Resolve the operation's independent model before validating references or
+ * limiting character prompts. Never overwrite the saved text-to-image model. */
+export function buildAgentInpaintInput(
+  rawArgs: unknown,
+  defaults: AgentGenerationDefaults = {},
+  resolveAttachmentBase64?: (attachmentId: string) => string,
+): AgentInpaintInput {
+  const args = record(rawArgs);
+  const requested = text(args.inpaintModel, 100);
+  if (requested && !NAI_INPAINT_MODELS.some((item) => item.value === requested)) {
+    throw new Error(`不支持的局部重绘模型：${requested}。`);
+  }
+  const saved = defaults.params ?? DEFAULT_PARAMS;
+  const requestedBase = text(args.model, 100);
+  const base = normalizeGenerateParams({
+    ...saved,
+    ...(requestedBase && NAI_MODELS.some((item) => item.value === requestedBase)
+      ? { model: requestedBase as GenerateParams["model"] }
+      : {}),
+  }).model;
+  const inpaintModel = (requested || defaultAgentInpaintModel(base)) as NAIInpaintModel;
+  const input = buildAgentGenerationInput({
+    ...args,
+    model: normalizeNAIBaseModel(inpaintModel),
+  }, defaults, resolveAttachmentBase64);
+  return { ...input, inpaintModel };
+}
+
 /**
  * Normalize the parameters and optional attachment-backed reference inputs
  * accepted by the Agent generation tools. Keeping this parser outside Electron
@@ -150,7 +184,7 @@ export function buildAgentGenerationInput(
   const extras = copyExtras(defaults.extras);
 
   if (Array.isArray(args.vibeReferences)) {
-    if (!supportsNAIVibeTransfer(params.model)) {
+    if (args.vibeReferences.length > 0 && !supportsNAIVibeTransfer(params.model)) {
       throw new Error(`${params.model} 不支持 Vibe Transfer。`);
     }
     extras.vibeImages = list(args.vibeReferences, 16).map((item) => {
@@ -166,7 +200,7 @@ export function buildAgentGenerationInput(
   }
 
   if (Array.isArray(args.preciseReferences)) {
-    if (!supportsNAIPreciseReference(params.model)) {
+    if (args.preciseReferences.length > 0 && !supportsNAIPreciseReference(params.model)) {
       throw new Error(`${params.model} 不支持精准参考图。`);
     }
     extras.preciseReferences = list(args.preciseReferences, 16).map((item) => {

@@ -186,6 +186,7 @@ import type {
   DataBackupExportRequest,
   DataBackupImportRequest,
   GenerationPreviewEvent,
+  GenerateExtras,
   I2IParams,
   MetadataSnapshotPayload,
   NAIInpaintModel,
@@ -1031,7 +1032,8 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
       strength: number,
       noise: number,
       region?: import('../src/focused-inpaint').InpaintRegion,
-    ) => inpaintImage(params, inpaintModel, maskBase64, strength, noise, region),
+      extras?: GenerateExtras,
+    ) => inpaintImage(params, inpaintModel, maskBase64, strength, noise, region, extras),
   );
     accountBoundHandle("nai:upscale", (_event, scale: UpscaleScale, model: string) =>
       upscaleImg(scale, model),

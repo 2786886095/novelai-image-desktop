@@ -152,9 +152,10 @@ AnlasQuote calculateImageGenerationAnlas({
   }
 
   if (v4Plus && params.supportsPreciseReference && preciseReferenceCount > 0) {
-    final preciseCost = 5 * samples;
+    final preciseCost = 5 * samples * preciseReferenceCount;
     total += preciseCost;
     details.add(_af(language, 'anlas.preciseCost', {
+      'references': preciseReferenceCount,
       'samples': samples,
       'amount': preciseCost,
     }));
@@ -212,6 +213,8 @@ AnlasQuote calculateInpaintAnlas({
   required WorkingImage? image,
   required String inpaintModel,
   double strength = 1,
+  GenerateExtras? extras,
+  int alreadyEncodedVibes = 0,
   Object? language,
 }) {
   if (image == null || image.width <= 0 || image.height <= 0) {
@@ -228,7 +231,9 @@ AnlasQuote calculateInpaintAnlas({
   return calculateImageGenerationAnlas(
     params: quoteParams,
     account: account,
-    extras: GenerateExtras(),
+    extras: extras,
+    alreadyEncodedVibes: alreadyEncodedVibes,
+    preciseReferenceCount: extras?.preciseReferences.length ?? 0,
     imageToImage: true,
     strength: strength,
     language: language,

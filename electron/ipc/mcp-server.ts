@@ -22,14 +22,12 @@ import {
   type AnlasQuoteRequest,
   type DirectorTool,
   type HistoryItem,
-  type NAIInpaintModel,
   type UpscaleScale,
 } from "../../src/types";
 import type { AgentAttachment, AgentToolBridgeRequest, AgentToolBridgeResponse } from "../../src/agent/types";
-import { defaultAgentInpaintModel } from "../../src/agent/generation-input";
 import { withNaiAccountOperation } from "./nai-accounts-runtime";
 import { bindAgentImageProvider, assertAgentImageProvider, type ImageProviderBinding } from "./agent-image-provider";
-import { agentGenerationInput, executeAgentTool } from "./agent-tools";
+import { agentGenerationInput, agentInpaintInput, executeAgentTool } from "./agent-tools";
 import { quoteAnlasCost, refreshStoredAccount } from "./nai";
 import { getHistory, getSettings } from "./store";
 import { MAX_MCP_IMAGE_PIXELS, importMcpImage, looksLikeLocalPath, mcpAttachment, newMcpTempFile, registerMcpFile } from "./mcp-attachments";
@@ -190,25 +188,12 @@ async function quote(request: AnlasQuoteRequest): Promise<Budget & { ok: boolean
   const limit = budgetLimit();
   if (!result.ok || typeof result.amount !== "number") return { ok: false, amount: Number.NaN, limit, message: result.message };
   if (!Number.isFinite(result.amount) || result.amount < 0) return { ok: false, amount: Number.NaN, limit, message: "Invalid Anlas estimate" };
-  let amount = result.amount;
+  // quoteAnlasCost is the canonical complete total for both formula and
+  // official-price sources, including per-reference and per-image charges.
+  // Re-applying the old MCP surcharge here would count those charges twice.
+  const amount = result.amount;
   const details = [...(result.details ?? [])];
-  // Precise references. The shared estimator charges a flat 5 Anlas per image
-  // (the official request-price route ignores them entirely). On a live Opus
-  // account a single-image V4.5 img2img was billed 5 Anlas with one reference
-  // and 15 with three, so the MCP guard conservatively budgets 5 Anlas per
-  // reference per image. Over-estimating only makes the cap stricter.
-  const precise = request.extras?.preciseReferences?.length ?? 0;
-  if (precise > 0) {
-    const samples = Math.max(1, Math.floor(request.batchCount ?? 1));
-    const alreadyIncluded = result.source === "official-api" ? 0 : 5 * samples;
-    const extra = Math.max(0, 5 * precise * samples - alreadyIncluded);
-    if (extra > 0) {
-      amount += extra;
-      details.push(`MCP guard: precise references budgeted at 5 Anlas x ${precise} ref(s) x ${samples} image(s) (+${extra}, conservative).`);
-    }
-  }
-  const message = amount === result.amount ? result.message : `Budgeted at ${amount} Anlas for the MCP cap (estimator: ${result.message})`;
-  return { ok: true, amount, limit, source: result.source, balance: result.balance, details, message };
+  return { ok: true, amount, limit, source: result.source, balance: result.balance, details, message: result.message };
 }
 
 async function enforceBudget(request: AnlasQuoteRequest): Promise<Budget> {
@@ -406,7 +391,7 @@ function createTools(options: McpServerOptions): ToolDef[] {
     {
       name: "inpaint",
       title: "Inpaint (masked redraw)",
-      description: "Redraw only the masked area. Create the mask with make_mask. NOTE: the Studio inpaint endpoint ignores characterPrompts and references — describe the masked subject in positivePrompt.",
+      description: "Redraw only the masked area. Create the mask with make_mask. Supports characterPrompts and model-compatible references; V4.5 precise references cannot be combined with Vibe Transfer.",
       inputSchema: schema({
         ...GENERATION_PROPS,
         image: IMAGE_REF,
@@ -419,12 +404,11 @@ function createTools(options: McpServerOptions): ToolDef[] {
         const image = await resolveImage(raw.image);
         const mask = await resolveImage(raw.mask, "mask");
         const strength = num(raw.strength, 1, 0, 1);
-        const args = withSourceSize({ ...(await toAgentArgs(raw)), attachmentId: image.id, maskAttachmentId: mask.id, strength }, image, 1600);
-        const { params } = agentGenerationInput(agentRequest(args), args);
-        const inpaintModel = (str(raw.inpaintModel) || defaultAgentInpaintModel(params.model)) as NAIInpaintModel;
+        const args = withSourceSize({ ...(await toAgentArgs(raw)), inpaintModel: raw.inpaintModel, attachmentId: image.id, maskAttachmentId: mask.id, strength }, image, 1600);
+        const { params, extras, inpaintModel } = agentInpaintInput(agentRequest(args), args);
         args.inpaintModel = inpaintModel;
         return imageOperation("langbai_inpaint_image", args, {
-          feature: "inpaint", params, inpaintModel, inpaintStrength: strength,
+          feature: "inpaint", params, extras, inpaintModel, inpaintStrength: strength,
           image: { width: image.width ?? params.width, height: image.height ?? params.height },
         }, ctx, raw.syncWorkbench === true);
       },
@@ -466,7 +450,7 @@ function createTools(options: McpServerOptions): ToolDef[] {
       name: "estimate_cost",
       title: "Estimate Anlas cost",
       description: "Quote an operation without running it. Same arguments as the corresponding tool plus `operation`.",
-      inputSchema: { type: "object", properties: { operation: { type: "string", enum: ["generate", "img2img", "inpaint", "upscale"] }, ...GENERATION_PROPS, image: IMAGE_REF, count: { type: "integer" }, strength: { type: "number" }, scale: { type: "integer" } }, required: ["operation"], additionalProperties: true },
+      inputSchema: { type: "object", properties: { operation: { type: "string", enum: ["generate", "img2img", "inpaint", "upscale"] }, ...GENERATION_PROPS, image: IMAGE_REF, count: { type: "integer" }, strength: { type: "number" }, inpaintModel: { type: "string", enum: NAI_INPAINT_MODELS.map((item) => item.value) }, scale: { type: "integer" } }, required: ["operation"], additionalProperties: true },
       annotations: READ,
       run: async (raw) => {
         const operation = str(raw.operation);
@@ -476,12 +460,15 @@ function createTools(options: McpServerOptions): ToolDef[] {
           request = { feature: "upscale", upscaleScale: (Number(raw.scale) === 2 ? 2 : 4) as UpscaleScale, image: { width: image.width ?? 0, height: image.height ?? 0 } };
         } else if (operation === "img2img" || operation === "inpaint") {
           const image = await resolveImage(raw.image);
-          const args = withSourceSize({ ...(await toAgentArgs({ positivePrompt: "quote", ...raw })) }, image, operation === "inpaint" ? 1600 : 2048);
-          const { params, extras } = agentGenerationInput(agentRequest(args), args);
+          const args = withSourceSize({ ...(await toAgentArgs({ positivePrompt: "quote", ...raw })), ...(operation === "inpaint" ? { inpaintModel: raw.inpaintModel } : {}) }, image, operation === "inpaint" ? 1600 : 2048);
           const strength = num(raw.strength, operation === "inpaint" ? 1 : 0.5, 0, 1);
-          request = operation === "img2img"
-            ? { feature: "i2i", params, extras, i2iParams: { ...DEFAULT_I2I_PARAMS, strength } }
-            : { feature: "inpaint", params, inpaintModel: defaultAgentInpaintModel(params.model), inpaintStrength: strength, image: { width: image.width ?? 0, height: image.height ?? 0 } };
+          if (operation === "inpaint") {
+            const { params, extras, inpaintModel } = agentInpaintInput(agentRequest(args), args);
+            request = { feature: "inpaint", params, extras, inpaintModel, inpaintStrength: strength, image: { width: image.width ?? 0, height: image.height ?? 0 } };
+          } else {
+            const { params, extras } = agentGenerationInput(agentRequest(args), args);
+            request = { feature: "i2i", params, extras, i2iParams: { ...DEFAULT_I2I_PARAMS, strength } };
+          }
         } else {
           const args = await toAgentArgs({ positivePrompt: "quote", ...raw });
           request = await generationBudget(args, num(raw.count, 1, 1, 8));
@@ -662,7 +649,7 @@ const INSTRUCTIONS = [
   "Omitted generation fields inherit the current workbench (see get_state); characterPrompts and references are never inherited.",
   "Every image argument accepts an absolute local path, so reference sheets can be used directly.",
   "V5 has no precise reference / vibe transfer: for face fidelity, compose with V5 then img2img with model nai-diffusion-4-5-full + preciseReferences (strength ~0.5).",
-  "Inpaint ignores characterPrompts; describe the masked subject in positivePrompt. Use make_mask + view_image(previewPath) first.",
+  "Inpaint supports characterPrompts and model-compatible references. V4.5 precise references cannot be combined with Vibe Transfer. Use make_mask + view_image(previewPath) first.",
   "Paid calls are refused when the Anlas estimate exceeds the user's per-call limit; check with estimate_cost. Never retry a paid call blindly — inspect list_history first.",
 ].join("\n");
 

@@ -246,15 +246,16 @@ class NovelAiAccountApi extends NaiApi {
           GenerateParams params, int seed, GenerateExtras extras,
           {bool structuredCharacters = true}) =>
       _run(token, settings, (snapshot, frozen) async {
+        params = params.normalized(
+            allowInpaintModel: params.model.endsWith('-inpainting'));
         final copy = extras.copy();
-        if (copy.vibeImages.isNotEmpty && !params.supportsVibeTransfer) {
-          throw const FormatException('当前模型不支持 Vibe Transfer');
-        }
+        validateNaiReferenceExtras(params, copy);
+        final referenceModel = naiReferenceModel(params.model);
         final encoded = <VibeTransferItem>[];
         for (final vibe in copy.vibeImages) {
-          vibe.validateModel(params.model);
-          if (!params.model.contains('-4') ||
-              vibe.matchingEncoding(params.model) != null) {
+          vibe.validateModel(referenceModel);
+          if (!referenceModel.contains('-4') ||
+              vibe.matchingEncoding(referenceModel) != null) {
             encoded.add(vibe);
             continue;
           }
@@ -263,7 +264,7 @@ class NovelAiAccountApi extends NaiApi {
           final response = await _post(snapshot, frozen, '/ai/encode-vibe', {
             'image': base64Encode(bytes),
             'information_extracted': vibe.infoExtracted,
-            'model': params.model
+            'model': referenceModel
           });
           encoded.add(VibeTransferItem(
               base64: vibe.base64,
@@ -271,7 +272,7 @@ class NovelAiAccountApi extends NaiApi {
               strength: vibe.strength,
               encodings: [
                 VibeEncoding(
-                    model: params.model,
+                    model: referenceModel,
                     infoExtracted: vibe.infoExtracted,
                     encoding: base64Encode(response.bodyBytes))
               ]));
@@ -372,8 +373,9 @@ class NovelAiAccountApi extends NaiApi {
           int width,
           int height,
           double strength,
-          double noise) =>
-      _run(token, settings, (snapshot, frozen) async {
+          double noise, {GenerateExtras? extras}) {
+    final taskExtras = extras?.copy() ?? GenerateExtras();
+    return _run(token, settings, (snapshot, frozen) async {
         final p = params.normalized();
         final seed =
             p.seedMode != 'random' && p.seed > 0 ? p.seed : randomSeed();
@@ -387,7 +389,7 @@ class NovelAiAccountApi extends NaiApi {
           ..width = prepared.width
           ..height = prepared.height;
         final payload =
-            await buildPayload(token, frozen, p, seed, GenerateExtras());
+            await buildPayload(token, frozen, p, seed, taskExtras);
         payload['action'] = 'infill';
         final parameters = payload['parameters'] as Map<String, dynamic>;
         parameters.addAll({
@@ -412,6 +414,7 @@ class NovelAiAccountApi extends NaiApi {
           inpaintModel
         );
       });
+  }
   @override
   Future<Uint8List> upscale(String token, AppSettings settings,
           Uint8List imageBytes, int scale, String model) =>

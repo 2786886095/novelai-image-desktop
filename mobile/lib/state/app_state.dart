@@ -1939,6 +1939,8 @@ class AppState extends ChangeNotifier {
         image: workbenchImage,
         inpaintModel: inpaintModel,
         strength: inpaintStrength,
+        extras: extras.copy(),
+        alreadyEncodedVibes: api.countCachedVibes(inpaintModel, extras),
         language: settings.language,
       )); } on FormatException catch (e) {
       return AnlasQuote(ok: false, source: AnlasQuoteSource.unavailable, message: e.message);
@@ -2921,6 +2923,9 @@ class AppState extends ChangeNotifier {
     _naiOperationCount++;
     try {
     await _withTokenRun((token) async {
+      final taskExtras = extras.copy();
+      final taskModel = inpaintModel;
+      final taskStrength = inpaintStrength;
       final source = inpaintSourceMode == 'original'
           ? (i2iOriginalImage ?? workbenchImage)
           : workbenchImage;
@@ -2935,6 +2940,7 @@ class AppState extends ChangeNotifier {
       // the rest of params (size, sampler, negative prompt, etc.) is still
       // shared with the main generate/i2i params.
       final taskParams = params.copy()
+        ..model = taskModel.replaceFirst(RegExp(r'-inpainting$'), '')
         ..positivePrompt = expandPromptWildcards(inpaintPositivePrompt)
         ..negativePrompt = expandPromptWildcards(params.negativePrompt)
         ..width = targetWidth
@@ -2945,8 +2951,10 @@ class AppState extends ChangeNotifier {
           params: taskParams,
           account: fresh,
           image: dims,
-          inpaintModel: inpaintModel,
-          strength: inpaintStrength,
+          inpaintModel: taskModel,
+          strength: taskStrength,
+          extras: taskExtras,
+          alreadyEncodedVibes: api.countCachedVibes(taskModel, taskExtras),
           language: settings.language,
         ),
       );
@@ -2959,11 +2967,12 @@ class AppState extends ChangeNotifier {
           taskParams,
           image,
           maskBytes,
-          inpaintModel,
+          taskModel,
           dims.width,
           dims.height,
-          inpaintStrength,
-          0);
+          taskStrength,
+          0,
+          extras: taskExtras);
       if (images.isEmpty) throw Exception(_rt('error.inpaintNoImages'));
       final items = <HistoryItem>[];
       for (final bytes in images) {

@@ -17,14 +17,15 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 > Bring your own **NovelAI Persistent API Token**. Model access and generation charges depend on your NovelAI account. Optional image analysis, prompt conversion and Tavern AI services require separate configuration.
 
-## Changes and platform scope
+## Changes in this update
 
-- **Metadata recovery**: choose online or offline. Online is the default and downloads only the official parser; images are processed locally and are not uploaded. Online currently supports PNG/WebP; use offline for JPEG. Menus use the shared app style, and an unloaded or failed history lookup no longer appears as zero images.
-- **Favorites**: sort by favorite time or verified local generation-completion time, ascending or descending. Favorite time, newest first, is the default; images with unknown generation times remain last.
-- **System prompts**: import presets for conversion, reverse prompting and the image agent. Defaults adapt IG5's general workflow rules, not its repository's reverse-engineering workbench instructions verbatim. Existing custom settings and application permission rules are preserved.
-- **Artist Detective downloads**: visible errors, proxy routing and resumable-download handling. This local workflow is Windows x64 + NVIDIA only; the full model needs at least 8 GB VRAM. Resources download at approximately 5.12 GiB; reserve at least 35 GB disk space for the full setup. Download size is not the app-package size or installed footprint; no universal low-VRAM guarantee is established for the light model.
+- Desktop and mobile inpainting forward character positive/negative prompts, positions and Precise References.
+- Character/reference capabilities use the actual inpaint model, avoiding rejection or truncation based on the unrelated main model.
+- Agent/MCP inpaint estimates, budgets and submission use the same effective model and references.
+- Precise Reference estimates scale with reference and image counts; image-to-image batches cover every image while Vibe encoding is counted once.
+- Incompatible Precise Reference and Vibe combinations are explicitly rejected before encoding or generation.
 
-**Scope and acceptance**: Android/iOS source now includes online/offline metadata recovery, four favorites sort orders by favorite time or local generation-completion time, and separate IG5 default system prompts and import for conversion, reverse prompting and the image agent. Existing custom settings and selections are preserved. The local Artist Detective workflow remains Windows-only. At the maintainer's request, this release build skips iOS validation; no iOS acceptance is claimed. The complete 39 × 5 (195-item) feature matrix remains incomplete. The iOS package is an unsigned IPA: your own valid Apple signing and provisioning profile are required, it cannot be installed directly on a stock iPhone, and it is not an App Store/TestFlight distribution. See [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) for packages, actual build-source identity, hashes and the observed verification scope; [main](https://github.com/2786886095/novelai-image-desktop/tree/main) is the released-source entry point.
+**Verification limits:** Estimates are not measured charges. Controlled tests do not certify paid generation or the full 39 × 5 feature matrix. The maintainer's previous iOS verification waiver remains in effect. The unsigned IPA requires your own signing and cannot be installed directly on a stock iPhone. See [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) for files and hashes, and [main](https://github.com/2786886095/novelai-image-desktop/tree/main) for current source.
 
 ## Quick start
 

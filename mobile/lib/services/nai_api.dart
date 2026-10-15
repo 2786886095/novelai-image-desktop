@@ -130,6 +130,34 @@ bool shouldDisableDeepSeekThinking(String apiUrl, String model) {
           .hasMatch(model.trim());
 }
 
+// Reference encodings are tied to the base checkpoint, not the infill action.
+String naiReferenceModel(String model) =>
+    model.replaceFirst(RegExp(r'-inpainting$'), '');
+
+// Shared by legacy and account-bound builders: no encoding may precede this.
+void validateNaiReferenceExtras(GenerateParams params, GenerateExtras extras) {
+  if (extras.preciseReferences.isNotEmpty && extras.vibeImages.isNotEmpty) {
+    throw const NaiHttpException(
+      0, 'Precise Reference and Vibe Transfer cannot be used together.',
+    );
+  }
+  if (extras.preciseReferences.isNotEmpty &&
+      !params.supportsPreciseReference) {
+    throw const NaiHttpException(
+      0,
+      'Precise Reference is currently supported only by NovelAI V4.5. '
+      'V5 did not launch with this feature. Switch to V4.5 Full/Curated or remove precise references.',
+    );
+  }
+  if (extras.vibeImages.isNotEmpty && !params.supportsVibeTransfer) {
+    throw const NaiHttpException(
+      0,
+      'NovelAI V5 does not currently support Vibe Transfer. '
+      'Switch to V4.5 or remove vibe images.',
+    );
+  }
+}
+
 class NaiApi {
   TavernSamplerPreset? _reverseConvertPromptPreset(AppSettings settings, {required bool reverse}) => selectedImageSystemPreset(settings.reverseConvertPromptPresets, reverse ? settings.reverseSystemPromptPresetId : settings.convertSystemPromptPresetId, reverse ? 'reverse' : 'convert');
 
@@ -179,8 +207,8 @@ class NaiApi {
 
   int countCachedVibes(String model, GenerateExtras extras) => extras.vibeImages
       .where((vibe) =>
-          vibe.matchingEncoding(model) != null ||
-          _vibeEncodeCache.containsKey(_vibeCacheKey(model, vibe)))
+          vibe.matchingEncoding(naiReferenceModel(model)) != null ||
+          _vibeEncodeCache.containsKey(_vibeCacheKey(naiReferenceModel(model), vibe)))
       .length;
 
   void cancelActiveGeneration() {
@@ -596,8 +624,10 @@ class NaiApi {
     int width,
     int height,
     double strength,
-    double noise,
-  ) async {
+    double noise, {
+    GenerateExtras? extras,
+  }) async {
+    final taskExtras = extras?.copy() ?? GenerateExtras();
     params = params.normalized();
     final seed = params.seedMode != 'random' && params.seed > 0
         ? params.seed
@@ -625,7 +655,7 @@ class NaiApi {
         ..width = prepared.width
         ..height = prepared.height;
       final payload =
-          await buildPayload(token, settings, p, seed, GenerateExtras());
+          await buildPayload(token, settings, p, seed, taskExtras);
       payload['action'] = 'infill';
       final parameters = payload['parameters'] as Map<String, dynamic>;
       parameters['image'] = base64Encode(prepared.imageBytes);
@@ -764,21 +794,8 @@ class NaiApi {
     params = params.normalized(
       allowInpaintModel: params.model.endsWith('-inpainting'),
     );
-    if (extras.preciseReferences.isNotEmpty &&
-        !params.supportsPreciseReference) {
-      throw const NaiHttpException(
-        0,
-        'Precise Reference is currently supported only by NovelAI V4.5. '
-        'V5 did not launch with this feature. Switch to V4.5 Full/Curated or remove precise references.',
-      );
-    }
-    if (extras.vibeImages.isNotEmpty && !params.supportsVibeTransfer) {
-      throw const NaiHttpException(
-        0,
-        'NovelAI V5 does not currently support Vibe Transfer. '
-        'Switch to V4.5 or remove vibe images.',
-      );
-    }
+    extras = extras.copy();
+    validateNaiReferenceExtras(params, extras);
     params = params.effectiveEffort();
     seed = seed.clamp(1, 0xffffffff).toInt();
     final basePrompt = _merge(params.stylePrompt, params.positivePrompt);
@@ -925,12 +942,12 @@ class NaiApi {
     // silent reference-less generation when legacy/stored references remain.
     if (extras.vibeImages.isNotEmpty && params.supportsVibeTransfer) {
       for (final vibe in extras.vibeImages) {
-        vibe.validateModel(params.model);
+        vibe.validateModel(naiReferenceModel(params.model));
       }
       final encoded = <VibeTransferItem>[];
       for (final vibe in extras.vibeImages) {
         encoded
-            .add(await _encodeVibeOrRaw(token, settings, params.model, vibe));
+            .add(await _encodeVibeOrRaw(token, settings, naiReferenceModel(params.model), vibe));
       }
       parameters['reference_image_multiple'] =
           encoded.map((e) => e.base64).toList();

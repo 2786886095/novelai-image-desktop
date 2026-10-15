@@ -69,7 +69,7 @@ void main() {
     expect(decoded.height, 1536);
   });
 
-  test('precise reference adds one flat fee per generated image', () {
+  test('precise reference fee scales by references and generated images', () {
     final quote = calculateImageGenerationAnlas(
       params: GenerateParams()
         ..model = 'nai-diffusion-4-5-full'
@@ -85,7 +85,7 @@ void main() {
       preciseReferenceCount: 3,
       language: 'zh-CN',
     );
-    expect(quote.details.join('\n'), contains('精准参考：2 张 x 5 = 10'));
+    expect(quote.details.join('\n'), contains('精准参考：3 份参考 x 2 张 x 5 = 30'));
   });
 
   test('a non-official reference size is accepted and normalized, not rejected',

@@ -2032,6 +2032,7 @@ export interface NaiDesktopApi {
     strength: number,
     noise: number,
     region?: import("./focused-inpaint").InpaintRegion,
+    extras?: GenerateExtras,
   ) => Promise<GenerateResult>;
   openaiInpaint: (request: OpenAIInpaintRequest) => Promise<GenerateResult>;
   upscaleImage: (scale: UpscaleScale, model: string) => Promise<SingleImageResult>;

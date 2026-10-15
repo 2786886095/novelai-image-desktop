@@ -58,17 +58,20 @@ describe("release version consistency", () => {
     }
   });
 
-  it("uses a version-independent first Latest note and preserves historical entries", () => {
+  it("uses current-only Latest notes and preserves byte-authentic history separately", () => {
     const repo = "https://github.com/2786886095/novelai-image-desktop";
     const releaseNotes = read("docs/RELEASE_NOTES.md");
     const entries = [...releaseNotes.matchAll(/^##\s+.+$/gm)];
-    expect(entries.length).toBeGreaterThan(1);
-    const first = releaseNotes.slice(entries[0].index, entries[1].index);
+    expect(entries.length).toBe(1);
+    const first = releaseNotes.slice(entries[0].index);
 
     expect(entries[0][0]).toMatch(/^## Latest\b/);
     expect(first).toContain(`${repo}/releases/latest`);
     expect(first).toContain(`${repo}/tree/main`);
     expect(first).not.toMatch(/\bv?\d+\.\d+\.\d+\b|\/releases\/(?:tag|download)\/|\/(?:tree|blob|commit)\/[a-f0-9]{7,40}\b/i);
-    expect(releaseNotes.slice(entries[1].index)).toMatch(/\bv?\d+\.\d+\.\d+\b/);
+    const history = read("docs/history/RELEASE_NOTES-through-2.5.8.md");
+    expect(history).toMatch(/\bv?\d+\.\d+\.\d+\b/);
+    expect(history).toContain("2026-10-12");
+    expect(releaseNotes).not.toContain("## 2026-10-12");
   });
 });

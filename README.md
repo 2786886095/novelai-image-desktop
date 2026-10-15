@@ -21,14 +21,15 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 [![Build Mobile](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml)
 [![License: MIT](https://img.shields.io/badge/Code-MIT-586069)](./LICENSE)
 
-## 本轮更新范围与平台差异
+## 本轮更新
 
-- **原数据恢复**：联网／离线可选，默认联网仅下载官方解析器；图片在本机读取，不上传。联网当前支持 PNG/WebP，JPEG 请选离线。下拉菜单统一为软件样式，历史未加载或读取失败不再显示为零张。
-- **收藏夹**：支持收藏时间／可核验的本机生成完成时间及升降序；默认收藏时间从新到旧，生成时间未知的旧图排在末尾。
-- **系统提示词**：转换、反推、生图智能体支持导入；默认提取并适配 IG5 通用工作规则，不是原样运行仓库的逆向工作台指令。现有自定义配置与应用权限规则保留。
-- **画师侦探下载**：补充可见错误、代理路径与断点续传处理；该本地工作流仅 Windows x64 + NVIDIA，完整模型至少 8 GB 显存，资源下载约 5.12 GiB，完整版建议预留至少 35 GB 磁盘空间。资源体积不等于应用安装包或安装后占用；轻量模型没有统一低显存保证。
+- 局部重绘同步传递角色正／负面提示、位置与精准参考，桌面和移动端参数链保持一致。
+- 独立重绘按实际重绘模型判断角色和参考能力，不再被主生成模型错误拦截或截断。
+- 智能体／MCP 重绘估价、预算和提交共用实际模型及参考参数。
+- 多精准参考按参考数及张数计费估算；图生图批量总价覆盖全部图片，Vibe 编码仍只计一次。
+- 精准参考与 Vibe 混用在任何编码／生成请求前明确拒绝，不静默丢弃其中一种。
 
-**范围与验收**：Android／iOS 源码已加入联网／离线原数据恢复、收藏时间／本机生成完成时间的四种排序，以及转换／反推／生图智能体三项 IG5 默认系统提示词与导入，保留已有自定义配置和选择。画师侦探本地流程仍仅限 Windows。本次发行构建按维护者授权跳过 iOS 验证，不宣称 iOS 验收通过；完整 39 × 5（195 项）功能验收未完成。iOS 包为未签名 IPA，需自行取得适用的 Apple 签名与 provisioning profile，不能直接安装普通 iPhone，不是 App Store／TestFlight 发行。平台包、实际构建来源、哈希与实测范围以 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 说明和证据为准，发行源码入口为 [main](https://github.com/2786886095/novelai-image-desktop/tree/main)。
+**验证边界：** 估价是参考，不替代实际服务端扣费；受控测试不等于真实付费生成或完整 39 × 5 功能验收。沿用维护者要求跳过 iOS 验证，未签名 IPA 需自行签名，不能直接安装普通 iPhone。平台文件、源码身份和哈希见 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest)，当前源码见 [main](https://github.com/2786886095/novelai-image-desktop/tree/main)。
 
 <a id="quick-start"></a>
 ## 先完成你的第一张图

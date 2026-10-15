@@ -47,7 +47,7 @@ import type {
   PreciseReferenceImage,
   WorkingImage,
 } from "./types";
-import { createDefaultBatchRedraw, DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS, DIRECTOR_TOOLS, EMOTION_OPTIONS, isNAIV5Model, maxNAICharacterPrompts, NAI_INPAINT_MODELS, normalizeGenerateParams, seedForBatch } from "./types";
+import { createDefaultBatchRedraw, DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS, DIRECTOR_TOOLS, EMOTION_OPTIONS, isNAIV5Model, maxNAICharacterPrompts, NAI_INPAINT_MODELS, normalizeGenerateParams, normalizeNAIBaseModel, seedForBatch } from "./types";
 import { normalizeAppLanguage } from "./i18n";
 import { expandWildcards } from "./wildcards";
 import { adaptiveNAIImageSize } from "./nai-dimensions";
@@ -1659,7 +1659,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // ── Character Prompt ───────────────────────────────────────────────────────
   addCharCaption() {
-    if (get().charCaptions.length >= maxNAICharacterPrompts(get().params.model)) return;
+    const state = get();
+    const model = state.activeTab === "inpaint" ? state.inpaintModel : state.params.model;
+    if (state.charCaptions.length >= maxNAICharacterPrompts(model)) return;
     const id = crypto.randomUUID();
     set((state) => ({
       charCaptions: [
@@ -2705,9 +2707,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     // The main process scales source and mask together before local compositing.
     const inpaintParams: GenerateParams = {
       ...state.params,
+      model: normalizeNAIBaseModel(state.inpaintModel).replace(/-medium$/, "") as GenerateParams["model"],
       positivePrompt: state.inpaintPositivePrompt,
       ...sizePlan.outputSize,
     };
+    const inpaintExtras = buildExtras(state);
     // Enter the generating state BEFORE the balance refresh and price quote so a
     // fast double-click can't sneak a second paid request in before the button
     // disappears (isGenerating is what hides it — see AccountAndRunButton).
@@ -2726,6 +2730,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       (account) => ({
         feature: "inpaint",
         params: { ...inpaintParams, ...sizePlan.requestSize },
+        extras: inpaintExtras,
         inpaintModel: state.inpaintModel,
         inpaintStrength: state.inpaintStrength,
         inpaintNoise: 0,
@@ -2760,6 +2765,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         state.inpaintStrength,
         0,
         state.inpaintRegion ?? undefined,
+        inpaintExtras,
       ),
       anlasBefore,
       "status.inpaintFailed",

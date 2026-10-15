@@ -59,14 +59,14 @@ void main() {
     expect(quote.amount, 4);
   });
 
-  test('precise reference is a flat 5 Anlas per generated image', () {
+  test('precise reference is 5 Anlas per reference per generated image', () {
     final quote = calculateImageGenerationAnlas(
       params: GenerateParams(model: 'nai-diffusion-4-5-full'),
       account: opusAccount,
       batchCount: 2,
       preciseReferenceCount: 2,
     );
-    expect(quote.amount, 10);
+    expect(quote.amount, 20);
   });
 
   test('V5 never estimates a Precise Reference surcharge', () {

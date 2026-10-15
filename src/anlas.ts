@@ -136,16 +136,14 @@ export function calculateImageGenerationAnlas({
     }
   }
 
-  // Precise / Director references (V4.5/V5): the official docs charge "an additional
-  // cost of 5 Anlas to each image generation" — a FLAT 5 per generated image when
-  // the feature is used, NOT per reference. So it scales with the request/batch
-  // count only, regardless of how many references are attached.
+  // Precise / Director references add 5 Anlas per attached reference and
+  // generated image, so both the reference count and output count apply.
   // Only charge models whose current frontend capability map exposes the feature.
   const preciseCount = extras?.preciseReferences?.length ?? 0;
   if (v4Plus && supportsNAIPreciseReference(params.model) && preciseCount > 0) {
-    const preciseCost = 5 * samples;
+    const preciseCost = 5 * preciseCount * samples;
     total += preciseCost;
-    details.push(`Precise reference: 5 Anlas x ${samples} image(s) = ${preciseCost} (flat per image, ${preciseCount} ref attached).`);
+    details.push(`Precise reference: 5 Anlas x ${preciseCount} reference(s) x ${samples} image(s) = ${preciseCost}.`);
   }
 
   return finalizeQuote(action === "generate" ? "generate" : action === "img2img" ? "i2i" : "inpaint", total, account, details, "estimate-formula");
@@ -241,7 +239,7 @@ export function calculateFeatureAnlasQuote({
       account,
       extras,
       alreadyEncodedVibes,
-      batchCount: 1,
+      batchCount,
       action: "img2img",
       strength: i2iParams?.strength ?? 1,
     });
@@ -257,7 +255,8 @@ export function calculateFeatureAnlasQuote({
     return calculateImageGenerationAnlas({
       params: inpaintParams,
       account,
-      extras: { vibeImages: [], charCaptions: [] },
+      extras,
+      alreadyEncodedVibes,
       batchCount: 1,
       action: "infill",
       strength: inpaintStrength ?? 1,

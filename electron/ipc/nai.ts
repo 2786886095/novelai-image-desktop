@@ -937,6 +937,9 @@ export async function prepareExtras(
   beforeSubmit?: NativeSubmissionGuard,
 ): Promise<GenerateExtras | undefined> {
   if (!extras) return extras;
+  if (extras.preciseReferences?.length && extras.vibeImages?.length) {
+    throw new Error("精准参考不能与氛围迁移同时使用，请移除其中一种参考。");
+  }
   // Validate the entire bundle before image decoding or any paid encoding call.
   if (extras.vibeImages?.length) {
     if (!supportsNAIVibeTransfer(params.model)) throw new Error("Vibe Transfer requires V4/V4.5 or V3, not V5.");
@@ -1638,8 +1641,14 @@ export async function quoteAnlasCost(
   );
   if (officialPerRequest == null) return contextResult(calculated);
 
-  const amount =
-    officialPerRequest * Math.max(1, Math.floor(request.batchCount ?? 1));
+  const samples = Math.max(1, Math.floor(request.batchCount ?? 1));
+  // The request-price payload intentionally contains no reference images. Its
+  // response is the base price, not a reference-inclusive total. Keep this
+  // canonical quote complete so UI and MCP budget guards need no surcharge.
+  const preciseReferenceCount = supportsNAIPreciseReference(request.params.model)
+    ? request.extras?.preciseReferences?.length ?? 0 : 0;
+  const preciseReferenceCost = 5 * preciseReferenceCount * samples;
+  const amount = officialPerRequest * samples + preciseReferenceCost;
   const balance = account.anlasBalance;
   return contextResult({
     ok: true,
@@ -1650,6 +1659,9 @@ export async function quoteAnlasCost(
     message: `生成前官方报价：${amount} Anlas。`,
     details: [
       `NovelAI request-price returned ${officialPerRequest} Anlas per request.`,
+      ...(preciseReferenceCount > 0
+        ? [`Precise reference: 5 Anlas x ${preciseReferenceCount} reference(s) x ${samples} image(s) = ${preciseReferenceCost}.`]
+        : []),
       request.batchCount && request.batchCount > 1
         ? `The desktop app sends ${Math.floor(request.batchCount)} single-image requests: ${officialPerRequest} x ${Math.floor(request.batchCount)}.`
         : "The desktop app sends one single-image request.",
@@ -4798,8 +4810,13 @@ export async function inpaintImage(
   strength = 1,
   noise = 0,
   region?: import("../../src/focused-inpaint").InpaintRegion,
+  extras?: GenerateExtras,
 ): Promise<GenerateResult> {
-  params = normalizeGenerateParams(params);
+  // Inpaint has its own model selector, independent of text-to-image.
+  params = normalizeGenerateParams({
+    ...params,
+    model: normalizeModel(inpaintModel) as GenerateParams["model"],
+  });
   const token = getToken();
   if (!token) return { ok: false, message: "请先配置 API Token。", items: [] };
   if (!params.positivePrompt.trim())
@@ -4812,8 +4829,23 @@ export async function inpaintImage(
   const job = beginJob();
 
   try {
+    if (extras?.preciseReferences?.length && extras.vibeImages?.length) {
+      throw new Error("精准参考不能与氛围迁移同时使用，请移除其中一种参考。");
+    }
+    const preparedExtras = await prepareExtras(params, extras, job.controller.signal);
     const { buffer } = await readWorkbenchImage();
     const focused = region ? prepareFocusedInpaintInput(bufferToPng(buffer),Buffer.from(stripBase64Prefix(maskBase64),'base64'),region,params,resizeImageBufferToPng) : null;
+    // Custom centers are stored relative to the whole canvas. The infill model
+    // sees the crop, so remap both positive/negative caption centers together.
+    // AI-choice captions keep their sentinel position. Never mutate saved input.
+    const requestExtras = focused && preparedExtras ? {
+      ...preparedExtras,
+      charCaptions: (preparedExtras.charCaptions ?? []).map(c => c.useCoords ? {
+        ...c,
+        x: finiteClamped((finiteClamped(Number(c.x), 0.5) * focused.source.width - focused.region.x) / focused.region.width, 0.5),
+        y: finiteClamped((finiteClamped(Number(c.y), 0.5) * focused.source.height - focused.region.y) / focused.region.height, 0.5),
+      } : {...c}),
+    } : preparedExtras;
     const preparedAssets = focused
       ? prepareInpaintAssets(focused.crop,focused.cropMask.toString('base64'),focused.size)
       : prepareInpaintAssets(buffer, maskBase64, params);
@@ -4841,8 +4873,9 @@ export async function inpaintImage(
         width: preparedAssets.width,
         height: preparedAssets.height,
       };
-      const payload = buildPayload(inpaintParams, actualSeed);
+      const payload = buildPayload(inpaintParams, actualSeed, requestExtras);
       payload.action = "infill";
+      logInfo(`inpaint request: model=${model} characters=${normalizedCharCaptions(requestExtras, model, params.preservePromptText).length} precise=${requestExtras?.preciseReferences?.length ?? 0} vibe=${requestExtras?.vibeImages?.length ?? 0} focused=${Boolean(focused)}`);
       applyOfficialInpaintParameters(
         payload.parameters,
         preparedAssets,

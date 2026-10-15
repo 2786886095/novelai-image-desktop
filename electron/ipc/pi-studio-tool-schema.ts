@@ -1,3 +1,5 @@
+import {NAI_INPAINT_MODELS} from '../../src/types';
+
 type Schema=Record<string,unknown>;
 const text=(maxLength=30_000):Schema=>({type:'string',maxLength});
 const requiredText=(maxLength=30_000):Schema=>({...text(maxLength),minLength:1});
@@ -32,7 +34,7 @@ export function studioPiToolSchema(name:string):Schema {
     case 'langbai_memory_list':properties={query:text(1000)};break;
     case 'langbai_generate_image':properties={preparationId:id};required=['preparationId'];break;
     case 'langbai_redraw_image':properties={...generation,attachmentId:id,strength:number(0,1),noise:number(0,1)};required=['attachmentId','positivePrompt'];break;
-    case 'langbai_inpaint_image':properties={...generation,attachmentId:id,maskAttachmentId:id,strength:number(0,1),noise:number(0,1)};required=['attachmentId','maskAttachmentId','positivePrompt'];break;
+    case 'langbai_inpaint_image':properties={...generation,inpaintModel:choice(...NAI_INPAINT_MODELS.map(item=>item.value)),attachmentId:id,maskAttachmentId:id,strength:number(0,1),noise:number(0,1)};required=['attachmentId','maskAttachmentId','positivePrompt'];break;
     case 'langbai_upscale_image':properties={attachmentId:id,scale:choice(2,4)};required=['attachmentId','scale'];break;
     case 'langbai_director':properties={attachmentId:id,tool:text(100),prompt:text(20_000),emotion:text(50),emotionLevel:number(0,1),defry:integer(0,5)};required=['attachmentId','tool'];break;
     case 'langbai_reverse_prompt':properties={attachmentId:id,scope:choice('full','character','object','scene'),hint:text(1000),knownCharacter:flag,mode:template.mode,templateVersion:template.templateVersion};required=['attachmentId'];break;

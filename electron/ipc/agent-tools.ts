@@ -19,7 +19,6 @@ import type {
   GenerateExtras,
   GenerateParams,
   HistoryItem,
-  NAIInpaintModel,
   ReferencePreset,
   UpscaleScale,
 } from "../../src/types";
@@ -29,8 +28,9 @@ import { imageOutcomeText } from "../../src/agent/image-outcome";
 import {
   applyAgentPromptLocks,
   buildAgentGenerationInput,
-  defaultAgentInpaintModel,
+  buildAgentInpaintInput,
   resolveAgentPromptLocks,
+  type AgentGenerationInput,
 } from "../../src/agent/generation-input";
 import {
   DEFAULT_AUGMENT_OPTIONS,
@@ -229,9 +229,22 @@ export function agentGenerationInput(request: AgentToolBridgeRequest, args: Reco
   return generationInput(request, args);
 }
 
+/** The MCP quote and Agent executor share the operation-specific input. */
+export function agentInpaintInput(request: AgentToolBridgeRequest, args: Record<string, unknown>) {
+  return buildRequestInput(request, args, buildAgentInpaintInput);
+}
+
 function generationInput(request: AgentToolBridgeRequest, args: Record<string, unknown>) {
+  return buildRequestInput(request, args, buildAgentGenerationInput);
+}
+
+function buildRequestInput<T extends AgentGenerationInput>(
+  request: AgentToolBridgeRequest,
+  args: Record<string, unknown>,
+  build: (...args: Parameters<typeof buildAgentGenerationInput>) => T,
+): T {
   const settings = getSettings();
-  const result = buildAgentGenerationInput(
+  const result = build(
     args,
     {
       params: settings.lastGenerationState?.params ?? DEFAULT_PARAMS,
@@ -545,16 +558,18 @@ export async function executeAgentTool(
       case "langbai_inpaint_image": {
         const sourcePath = attachmentForRequest(request, args.attachmentId).filePath;
         const maskPath = attachmentForRequest(request, args.maskAttachmentId).filePath;
-        const params = generationInput(request, args).params;
+        const { params, extras, inpaintModel } = agentInpaintInput(request, args);
         const result = await serializedWorkbench(async () => {
           const loaded = await loadImageFromPath(sourcePath);
           if (!loaded.ok) throw new Error(loaded.message || "无法加载原图。");
           return inpaintImage(
             params,
-            (text(args.inpaintModel) || defaultAgentInpaintModel(params.model)) as NAIInpaintModel,
+            inpaintModel,
             readBase64(maskPath),
             finite(args.strength, 1, 0, 1),
             finite(args.noise, 0, 0, 1),
+            undefined,
+            extras,
           );
         });
         const images = result.items.map(imageAttachment);

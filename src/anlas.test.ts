@@ -86,7 +86,7 @@ describe("official Anlas pricing", () => {
     ).toBe(2);
   });
 
-  it("charges a flat 5 Anlas per image for precise reference, regardless of reference count", () => {
+  it("charges 5 Anlas per precise reference and generated image", () => {
     const oneRef = calculateImageGenerationAnlas({
       params: { ...DEFAULT_PARAMS, model: "nai-diffusion-4-5-full" },
       account: opusAccount, // base image is free for Opus, so only the reference fee remains
@@ -97,7 +97,7 @@ describe("official Anlas pricing", () => {
         preciseReferences: [{ base64: "", type: "character", strength: 1, fidelity: 1 }],
       },
     });
-    expect(oneRef.amount).toBe(10); // 5 Anlas x 2 images (flat per image)
+    expect(oneRef.amount).toBe(10); // 5 Anlas x 1 reference x 2 images
 
     const twoRefs = calculateImageGenerationAnlas({
       params: { ...DEFAULT_PARAMS, model: "nai-diffusion-4-5-full" },
@@ -112,8 +112,7 @@ describe("official Anlas pricing", () => {
         ],
       },
     });
-    // Official docs: "5 Anlas to each image generation" — flat, NOT per reference.
-    expect(twoRefs.amount).toBe(10);
+    expect(twoRefs.amount).toBe(20); // 5 Anlas x 2 references x 2 images
   });
 
   it("does not estimate a Precise Reference surcharge on V5", () => {
