@@ -74,6 +74,74 @@ export function captureSourceState({sourceRoot, sourceSha, evidenceDirectory, re
   fs.writeFileSync(path.join(evidenceDirectory, 'tracked-source-manifest.json'), JSON.stringify(manifest, null, 2)+'\n');
   fs.writeFileSync(path.join(evidenceDirectory, 'dirty-status.raw'), status);
   fs.writeFileSync(path.join(evidenceDirectory, 'tracked-diff.patch'), patch);
+  // Preserve only these otherwise-untracked generated project inputs for review.
+  // This is evidence, never a whitelist or approval of a dirty compilation tree.
+  const generatedProject = {allowlist:['mobile/ios/Podfile', 'mobile/ios/Podfile.lock'],
+    maxFileBytes:1024*1024, files:[]};
+  const generatedErrors = [];
+  const actualEvidenceRoot = fs.realpathSync(evidenceDirectory);
+  if (within(sourceRoot, actualEvidenceRoot)) throw Error('Generated project evidence escaped into its source checkout.');
+  for (const relative of generatedProject.allowlist) {
+    const row = {path:relative, exists:null, bytes:null, sha256:null,
+      evidencePath:null, reopenedMatch:null};
+    generatedProject.files.push(row);
+    let descriptor;
+    try {
+      let current = sourceRoot, missing = false;
+      const parts = relative.split('/');
+      for (let index=0; index<parts.length; index++) {
+        current = path.resolve(current, parts[index]);
+        if (!within(sourceRoot, current) || current === sourceRoot) throw Error('Generated project input escaped its checkout.');
+        const stat = fs.lstatSync(current, {throwIfNoEntry:false});
+        if (!stat) { missing=true; break; }
+        if (index === parts.length-1) row.exists = true;
+        if (stat.isSymbolicLink()) throw Error('Generated project input symlink is forbidden: '+relative);
+        if (index < parts.length-1 && !stat.isDirectory()) throw Error('Generated project parent is not a directory: '+relative);
+        if (index === parts.length-1 && !stat.isFile()) throw Error('Generated project input is not a regular file: '+relative);
+      }
+      if (missing) { row.exists=false; continue; }
+      const before = fs.lstatSync(current);
+      if (before.size > generatedProject.maxFileBytes) throw Error('Generated project input exceeds 1MiB: '+relative);
+      if (!within(sourceRoot, fs.realpathSync(current))) throw Error('Generated project input real path escaped its checkout.');
+      descriptor = fs.openSync(current, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+      const opened = fs.fstatSync(descriptor);
+      if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino) throw Error('Generated project input changed while opening: '+relative);
+      if (opened.size > generatedProject.maxFileBytes) throw Error('Generated project input exceeds 1MiB: '+relative);
+      const buffer = Buffer.alloc(generatedProject.maxFileBytes+1);
+      let length=0, read;
+      while (length < buffer.length && (read=fs.readSync(descriptor, buffer, length, buffer.length-length, null)) > 0) length += read;
+      if (length > generatedProject.maxFileBytes) throw Error('Generated project input exceeds 1MiB while reading: '+relative);
+      const after = fs.fstatSync(descriptor), leaf = fs.lstatSync(current);
+      if (leaf.isSymbolicLink() || !leaf.isFile() || leaf.dev !== opened.dev || leaf.ino !== opened.ino ||
+          after.size !== length || opened.size !== after.size || opened.mtimeMs !== after.mtimeMs || opened.ctimeMs !== after.ctimeMs) {
+        throw Error('Generated project input changed while reading: '+relative);
+      }
+      const bytes = buffer.subarray(0, length);
+      let destination = actualEvidenceRoot;
+      for (const segment of ['generated-project', ...parts.slice(0, -1)]) {
+        destination = path.resolve(destination, segment);
+        if (!within(actualEvidenceRoot, destination)) throw Error('Generated project archive escaped its evidence root.');
+        const stat = fs.lstatSync(destination, {throwIfNoEntry:false});
+        if (stat && (stat.isSymbolicLink() || !stat.isDirectory())) throw Error('Generated project archive parent is unsafe.');
+        if (!stat) fs.mkdirSync(destination);
+      }
+      destination = path.join(destination, parts.at(-1));
+      fs.writeFileSync(destination, bytes, {flag:'wx', mode:0o600});
+      const reopened = fs.readFileSync(destination);
+      row.bytes = bytes.length; row.sha256 = sha256(bytes); row.evidencePath = destination;
+      row.reopenedMatch = reopened.length === bytes.length && sha256(reopened) === row.sha256;
+      if (!row.reopenedMatch) throw Error('Generated project archive readback mismatch: '+relative);
+    } catch (error) { row.error=error.message; generatedErrors.push(error.message); }
+    finally { if (descriptor !== undefined) fs.closeSync(descriptor); }
+  }
+  const generatedManifestPath = path.join(actualEvidenceRoot, 'generated-project-manifest.json');
+  const generatedManifestBytes = Buffer.from(JSON.stringify(generatedProject, null, 2)+'\n');
+  fs.writeFileSync(generatedManifestPath, generatedManifestBytes, {flag:'wx'});
+  const generatedReopened = fs.readFileSync(generatedManifestPath);
+  const generatedProjectManifest = {path:generatedManifestPath, bytes:generatedManifestBytes.length,
+    sha256:sha256(generatedManifestBytes), reopenedMatch:generatedReopened.equals(generatedManifestBytes)};
+  if (!generatedProjectManifest.reopenedMatch) throw Error('Generated project manifest readback mismatch.');
+  if (generatedErrors.length) throw Error('Generated project evidence rejected: '+generatedErrors.join('; '));
   const locks = ['package-lock.json', 'mobile/pubspec.lock', 'mobile/ios/Podfile.lock',
     'mobile/android/gradle/wrapper/gradle-wrapper.properties'].map(relative => {
       const file = path.join(sourceRoot, relative);
@@ -86,7 +154,7 @@ export function captureSourceState({sourceRoot, sourceSha, evidenceDirectory, re
     dirtyPaths:status.toString('utf8').split('\0').filter(Boolean),
     patch:{path:path.join(evidenceDirectory, 'tracked-diff.patch'), bytes:patch.length, sha256:sha256(patch)},
     manifest:{path:path.join(evidenceDirectory, 'tracked-source-manifest.json'), sha256:sha256(fs.readFileSync(path.join(evidenceDirectory, 'tracked-source-manifest.json')))},
-    locks, full195Certified:false};
+    locks, generatedProject, generatedProjectManifest, full195Certified:false};
   fs.writeFileSync(path.join(evidenceDirectory, 'source-state.json'), JSON.stringify(result, null, 2)+'\n');
   if (requirePristine && (!result.clean || !result.rawMatchesHead)) throw Error('Entry checkout must be clean and every raw source byte must equal its immutable Git blob.');
   return result;

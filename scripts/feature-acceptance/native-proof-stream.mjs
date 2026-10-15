@@ -40,6 +40,7 @@ export async function collectResidentFlutter({ command, cwd, env, sourceSha, pla
   let stdout = '', stderr = '', nativeStdout = '', nativeStderr = '', appId = null;
   let actualCloseCode = null, actualCloseSignal = null, timedOut = false, terminationReason = 'unexpected-process-close', processError = null;
   let journeyStarted = false;
+  let appStarted = false, stopDeadline = null;
   let stopRequested = false, stopReply = null, stopEventObserved = false;
   const protocolErrors = [], protocolEvents = [], stdinCommands = [];
   const buffers = { stdout: '', stderr: '' };
@@ -58,25 +59,32 @@ export async function collectResidentFlutter({ command, cwd, env, sourceSha, pla
   function startJourneyDeadline() {
     if (!journeyStarted && !proof.completion && !stopRequested) { journeyStarted = true; armDeadline(journeyTimeoutMs, 'native-journey-timeout'); }
   }
+  function scheduleStopAfterReady() {
+    if (!proof.completion || !appStarted || tailTimer || stopRequested || timedOut) return;
+    // DONE can precede Flutter's devFS/service initialization. It is only a
+    // completion candidate; app.stop is safe only after this app.started.
+    tailTimer = setTimeout(() => {
+      tailTimer = null;
+      if (timedOut) return;
+      if (!appId || !appStarted) { protocolErrors.push('Missing ready current Flutter app identity.'); forceStop('missing-app-identity'); return; }
+      stopRequested = true; terminationReason = 'machine-app-stop-after-done';
+      const request = { id: 'native-proof-stop', method: 'app.stop', params: { appId } };
+      stdinCommands.push(request);
+      child.stdin.write(JSON.stringify([request]) + '\n', error => { if (error) { protocolErrors.push(error.message); forceStop('stdin-stop-error'); } });
+      // Only an actual stop request starts stopGrace. DONE-before-started keeps
+      // the original build/journey deadline; repeated ready events extend none.
+      clearTimeout(deadline);
+      stopDeadline = Date.now() + stopGraceMs;
+      deadline = setTimeout(() => { timedOut = true; forceStop('machine-stop-timeout'); }, stopGraceMs);
+    }, completionTailMs);
+  }
   function nativeLine(text, channel) {
     if (!appId && /FEATURE_ACCEPTANCE_(CHECK|DONE):/.test(text)) protocolErrors.push('Native proof before matching current app.start.');
     if (channel === 'stderr') nativeStderr += text + '\n'; else nativeStdout += text + '\n';
     const beforeChecks = proof.checksCount, beforeErrors = proof.errorsCount;
     proof.line(text);
     if (appId && proof.errorsCount === beforeErrors && proof.checksCount > beforeChecks) startJourneyDeadline();
-    if (proof.completion && !tailTimer && !stopRequested) {
-      // Continue collecting after DONE, including trailing native async errors.
-      tailTimer = setTimeout(() => {
-        tailTimer = null;
-        if (!appId) { protocolErrors.push('Missing current Flutter app identity.'); forceStop('missing-app-identity'); return; }
-        stopRequested = true; terminationReason = 'machine-app-stop-after-done';
-        const request = { id: 'native-proof-stop', method: 'app.stop', params: { appId } };
-        stdinCommands.push(request);
-        child.stdin.write(JSON.stringify([request]) + '\n', error => { if (error) { protocolErrors.push(error.message); forceStop('stdin-stop-error'); } });
-        clearTimeout(deadline);
-        deadline = setTimeout(() => { timedOut = true; forceStop('machine-stop-timeout'); }, stopGraceMs);
-      }, completionTailMs);
-    }
+    scheduleStopAfterReady(); // Keep draining trailing native async errors.
   }
   function transportLine(text, channel) {
     const trimmed = text.trim();
@@ -92,7 +100,7 @@ export async function collectResidentFlutter({ command, cwd, env, sourceSha, pla
       } else if (message.event === 'app.started') {
         protocolEvents.push(message);
         if (!appId || p.appId !== appId) protocolErrors.push('Flutter app.started identity mismatch.');
-        else startJourneyDeadline();
+        else { appStarted = true; startJourneyDeadline(); scheduleStopAfterReady(); }
       } else if (message.event === 'app.log') {
         if (!appId || p.appId !== appId || typeof p.log !== 'string') protocolErrors.push('Flutter app.log identity mismatch.');
         else for (const line of p.log.split(/\r?\n/)) nativeLine(line, p.error ? 'stderr' : 'stdout');
@@ -127,7 +135,7 @@ export async function collectResidentFlutter({ command, cwd, env, sourceSha, pla
   if (actualCloseCode !== 0 || actualCloseSignal !== null || timedOut || processError) errors.push('Resident Flutter process did not close successfully: ' + JSON.stringify({ actualCloseCode, actualCloseSignal, timedOut, processError }));
   if (!stopRequested || !stopEventObserved || stopReply?.result !== true || terminationReason !== 'machine-app-stop-after-done') errors.push('Current resident Flutter process lacks successful app.stop protocol/close evidence.');
   return { ...parsed, passed: errors.length === 0, errors, stdout, stderr, nativeStdout, nativeStderr, command, cwd, childPid,
-    currentAppId: appId, requestedDevice: device, actualCloseCode, actualCloseSignal, timedOut, terminationReason, processError,
+    currentAppId: appId, currentAppStarted: appStarted, stopDeadline, requestedDevice: device, actualCloseCode, actualCloseSignal, timedOut, terminationReason, processError,
     journeyStarted, stdinCommands, protocolEvents, stopReply, stopEventObserved, expectedChecks,
     exitStatus: actualCloseCode, exitStatusMeaning: 'actual resident Flutter child close code; null/signal/nonzero is never accepted' };
 }
