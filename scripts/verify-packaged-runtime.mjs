@@ -2,8 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {verifyIg5Package} from './verify-ig5-package.mjs';
+import {readReleaseVersion} from './release-version.cjs';
 
 const root=process.cwd();
+const expectedVersion=readReleaseVersion(root);
 const output=path.resolve('release/packaged-smoke');
 fs.mkdirSync(output,{recursive:true});
 let binary,resources;
@@ -38,7 +40,7 @@ console.log('IG5_PACKAGED_BYTES_VERIFIED',ig5.version,ig5.files.length);
 if(process.platform==='darwin'){
  for(const arch of [process.arch === 'arm64' ? 'arm64' : 'x86_64'])run('/usr/bin/arch',['-'+arch,binary,probe,appRoot],{ELECTRON_RUN_AS_NODE:'1'},'runtime-'+arch);
 }else run(binary,[probe,appRoot],{ELECTRON_RUN_AS_NODE:'1'},'runtime');
-run(binary,[path.resolve('scripts/packaged-agent-probe.cjs'),appRoot],{ELECTRON_RUN_AS_NODE:'1'},'pi-accounts-runtime');
+run(binary,[path.resolve('scripts/packaged-agent-probe.cjs'),appRoot,expectedVersion],{ELECTRON_RUN_AS_NODE:'1'},'pi-accounts-runtime');
 for(const tab of ['01-generate','08-tools','09-reference-presets','11-agent']){
  const image=path.join(output,tab+'.png');
  const userData=path.join(output,'profile');fs.mkdirSync(userData,{recursive:true});

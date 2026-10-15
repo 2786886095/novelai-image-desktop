@@ -1,8 +1,9 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {createRequire}=require('node:module');
+const {assertPackagedVersion}=require('./release-version.cjs');
 const root=path.resolve(process.argv[2]);const load=createRequire(path.join(root,'package.json'));
 (async()=>{
- const metadata=load('./package.json');if(metadata.version!=='2.5.8')throw Error('Wrong packaged version');
+ const metadata=load('./package.json');assertPackagedVersion(metadata.version,process.argv[3]);
  for(const name of ['agent-runtime.js','pi-agent-core.js','pi-studio-tools.js','nai-accounts-vault.js','nai-accounts-login.js','nai-accounts-runtime.js','nai-accounts.js']){
   const rel=path.join('dist-electron','electron','ipc',name);
   const packed=fs.readFileSync(path.join(root,rel));

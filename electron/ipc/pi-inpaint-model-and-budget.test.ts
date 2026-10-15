@@ -60,11 +60,18 @@ it("Pi omission still uses the unchanged V5 workbench default resolver", async (
   expect(input.inpaintModel).toBe(defaultAgentInpaintModel(defaults.params.model));
 });
 
-it("MCP uses complete canonical totals once for both formula and official quotes", () => {
+it.each(["LF", "CRLF"] as const)("MCP uses complete canonical totals once with a real %s fixture file", (lineEnding) => {
   // Reuse the isolated authority loader, without changing its frozen 15 cases.
-  // This supplemental runner executes eight separate production-flow cases.
-  const original = fs.readFileSync(path.resolve("scripts/check-agent-inpaint-parameters.cjs"), "utf8");
-  const boundary = original.indexOf("(async()=>{\n await check(");
+  // Execute all eight production-flow cases after reading each real newline variant.
+  const tempRoot = path.resolve(os.tmpdir());
+  const output = fs.mkdtempSync(path.join(tempRoot, "langbai-pi-inpaint-budget-"));
+  try {
+  const normalized = fs.readFileSync(path.resolve("scripts/check-agent-inpaint-parameters.cjs"), "utf8").replace(/\r\n/g, "\n");
+  const fixture = path.join(output, `source-fixture-${lineEnding}.cjs`);
+  fs.writeFileSync(fixture, lineEnding === "CRLF" ? normalized.replace(/\n/g, "\r\n") : normalized);
+  const original = fs.readFileSync(fixture, "utf8");
+  expect(original.includes("\r\n")).toBe(lineEnding === "CRLF");
+  const boundary = original.search(/\(async\(\)=>\{\r?\n await check\(/);
   expect(boundary).toBeGreaterThan(0);
   let prefix = original.slice(0, boundary);
   expect(prefix).toContain("let settings;");
@@ -107,18 +114,16 @@ it("MCP uses complete canonical totals once for both formula and official quotes
  fs.writeFileSync(path.join(out,'RESULTS.json'),JSON.stringify(report,null,2)+'\n');console.log('SUPPLEMENT '+checks.filter(x=>x.pass).length+'/'+checks.length);if(!report.allPass)process.exitCode=1;
 })().catch(e=>{console.error(e.stack);process.exitCode=2;});
 `;
-  const tempRoot = path.resolve(os.tmpdir());
-  const output = fs.mkdtempSync(path.join(tempRoot, "langbai-pi-inpaint-budget-"));
-  try {
     const runner = path.join(output, "supplement.cjs");
     fs.writeFileSync(runner, prefix + cases);
     const result = spawnSync(process.execPath, [runner, process.cwd(), output], { encoding: "utf8", timeout: 20_000 });
     if (process.env.AGENT_INPAINT_FOLLOWUP_EVIDENCE_DIR) {
-      const evidence = path.resolve(process.env.AGENT_INPAINT_FOLLOWUP_EVIDENCE_DIR);
+      const evidence = path.join(path.resolve(process.env.AGENT_INPAINT_FOLLOWUP_EVIDENCE_DIR), lineEnding);
       fs.mkdirSync(evidence, { recursive: true });
       fs.writeFileSync(path.join(evidence, "child.stdout.txt"), result.stdout);
       fs.writeFileSync(path.join(evidence, "child.stderr.txt"), result.stderr);
       fs.copyFileSync(runner, path.join(evidence, "supplement.cjs"));
+      fs.copyFileSync(fixture, path.join(evidence, `source-fixture-${lineEnding}.cjs`));
       if (fs.existsSync(path.join(output, "RESULTS.json"))) fs.copyFileSync(path.join(output, "RESULTS.json"), path.join(evidence, "RESULTS.json"));
     }
     expect(result.status, result.stdout + result.stderr).toBe(0);
