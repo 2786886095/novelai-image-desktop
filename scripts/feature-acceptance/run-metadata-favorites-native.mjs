@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import http from 'node:http';
 import { spawn, spawnSync } from 'node:child_process';
+import { finished } from 'node:stream/promises';
 
 // Separate disposable-device component entry, not a replacement release gate.
 // Keep the event loop alive while the recording runner invokes native Flutter.
@@ -38,6 +39,33 @@ try {
     const head = spawnSync('git', ['-C', source, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
     commands.push({ argv: ['git', '-C', source, 'rev-parse', 'HEAD'], stdout: head.stdout ?? '', stderr: head.stderr ?? '', exit: head.status });
     if (head.status !== 0 || head.stdout.trim().toLowerCase() !== input.sourceSha.toLowerCase()) throw new Error('CI sourceSha does not match the actual checkout HEAD.');
+    // Preserve literal dirty inputs/diffs before the unchanged fail-closed guard.
+    const evidenceCommands = [];
+    function gitEvidence(args, file) {
+      const argv = ['git', '-C', source, ...args];
+      const result = spawnSync(argv[0], argv.slice(1), { encoding: 'utf8', timeout: 30000, maxBuffer: 80 * 1024 * 1024 });
+      const row = { argv, stdout: result.stdout ?? '', stderr: result.stderr ?? '', exitStatus: result.status, error: result.error?.message ?? null };
+      evidenceCommands.push(row); fs.writeFileSync(path.join(output, file), row.stdout);
+      if (row.exitStatus !== 0 || row.error) throw new Error('Cannot record exact dirty source evidence.');
+      return row.stdout;
+    }
+    const names = gitEvidence(['diff', '--name-only', 'HEAD', '--'], 'dirty-source-names.txt');
+    gitEvidence(['diff', '--binary', 'HEAD', '--'], 'dirty-source.patch');
+    gitEvidence(['diff', '--cached', '--binary', 'HEAD', '--'], 'dirty-source-index.patch');
+    const tracked = gitEvidence(['ls-files', '--stage', '-z'], 'dirty-source-tracked.txt');
+    const files = tracked.split('\0').filter(Boolean).map(record => {
+      const match = /^([0-7]{6}) ([a-f0-9]{40}) ([0-3])\t([\s\S]+)$/.exec(record);
+      if (!match || match[3] !== '0') throw new Error('Invalid tracked source index.');
+      const file = path.join(source, match[4]);
+      const exists = fs.lstatSync(file, { throwIfNoEntry: false });
+      const bytes = exists ? (match[1] === '120000' ? fs.readlinkSync(file, { encoding: 'buffer' }) : fs.readFileSync(file)) : null;
+      return { path: match[4], mode: match[1], indexOid: match[2], exists: bytes !== null, bytes: bytes?.length ?? null, sha256: bytes ? hash(bytes) : null };
+    });
+    const dirtyEvidence = { sourceRoot: source, sourceSha: input.sourceSha, names, files, commands: evidenceCommands, boundary: 'Raw evidence, not a whitelist, restore, or acceptance of generated changes.' };
+    const evidencePath = path.join(output, 'dirty-source-evidence.json');
+    fs.writeFileSync(evidencePath, JSON.stringify(dirtyEvidence, null, 2) + '\n');
+    if (JSON.parse(fs.readFileSync(evidencePath, 'utf8')).files.length !== files.length) throw new Error('Dirty evidence readback failed.');
+    commands.push(...evidenceCommands);
     command(['git', '-C', source, 'diff', '--quiet', 'HEAD', '--']);
   }
   const inventory = fs.readFileSync(path.join(project, 'lib/images/official_metadata_assets.dart'), 'utf8');
@@ -86,10 +114,17 @@ try {
     const child = spawn(argv[0], argv.slice(1), { cwd: project, env: { ...process.env, STUDIO_NODE_BINARY: process.execPath } });
     child.stdout.on('data', data => { stdout.write(data); process.stdout.write(data); });
     child.stderr.on('data', data => { stderr.write(data); process.stderr.write(data); });
-    child.on('error', error => resolve({ exit: 1, error: error.message }));
-    child.on('exit', (exit, signal) => resolve({ exit, signal }));
+    let childError;
+    child.on('error', error => { childError = error.message; });
+    child.on('close', (exit, signal) => resolve({ exit, signal, error: childError ?? null }));
   });
-  stdout.end(); stderr.end(); commands.push({ argv, cwd: project, ...result });
+  stdout.end(); stderr.end();
+  await Promise.all([finished(stdout), finished(stderr)]);
+  const streamReadback = ['runner.stdout.txt', 'runner.stderr.txt'].map(name => {
+    const bytes = fs.readFileSync(path.join(output, name));
+    return { path: path.join(output, name), bytes: bytes.length, sha256: hash(bytes) };
+  });
+  commands.push({ argv, cwd: project, ...result, streamReadback });
   if (result.exit !== 0) throw new Error(`Native metadata/favorites component runner failed exit ${result.exit}`);
   const receipt = JSON.parse(fs.readFileSync(path.join(output, 'native-mobile-receipt.json'), 'utf8'));
   if (receipt.checks.length !== 16 || receipt.completeFeatureRowsCertified !== 0 || receipt.full195Certified !== false) throw new Error('Unexpected bounded check count or overclaimed certification');

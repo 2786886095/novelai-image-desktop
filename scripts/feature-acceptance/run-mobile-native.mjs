@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { spawnSync, spawn } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
+import { collectResidentFlutter, createNativeProof } from './native-proof-stream.mjs';
 
 // A recording runner, not a publisher or a replacement for the release gate.
 // Its one JSON input is also used for executable-harness B/M/R/P verification.
@@ -51,6 +52,7 @@ try {
     }
   }
   const sourceSha = input.sourceSha || 'uncommitted';
+  createNativeProof({ sourceSha, platform: input.platform, expectedChecks: input.expectedChecks });
   // A local uncommitted source snapshot is never silently labelled as a Git SHA.
   if (sourceSha !== 'uncommitted' && !/^[a-f0-9]{40}$/i.test(sourceSha)) throw new Error('Invalid source SHA.');
   if (input.platform === 'android') {
@@ -63,15 +65,20 @@ try {
       if (cleared.exitStatus !== 0 || cleared.stdout.trim() !== 'Success') throw new Error('Isolated test sandbox could not be reset.');
     }
   }
-  const result = command([input.flutter, 'run', '-t', input.testFile || 'integration_test/native_feature_journeys.dart',
-    '-d', input.device, '--no-pub', '--no-resident',
-    '--dart-define=FEATURE_ISOLATED_DEVICE=true', `--dart-define=FEATURE_SOURCE_SHA=${sourceSha}`],
-    input.projectRoot, input.timeoutMs || 1200000);
-  if (result.exitStatus !== 0) throw new Error(`Native build/install/launch failed (exit ${result.exitStatus}).`);
+  if (input.prepareDependencies === true) {
+    const prepared = command([input.flutter, 'pub', 'get'], input.projectRoot, input.dependencyTimeoutMs || 300000);
+    if (prepared.exitStatus !== 0 || prepared.error) throw new Error('Native entry dependency preparation failed.');
+  }
   let nativeStdout = '', nativeStderr = '';
   let nativeCommand;
   let completion;
+  let resident;
   if (input.platform === 'android') {
+    const result = command([input.flutter, 'run', '-t', input.testFile || 'integration_test/native_feature_journeys.dart',
+      '-d', input.device, '--no-pub', '--no-resident',
+      '--dart-define=FEATURE_ISOLATED_DEVICE=true', `--dart-define=FEATURE_SOURCE_SHA=${sourceSha}`],
+      input.projectRoot, input.timeoutMs || 1200000);
+    if (result.exitStatus !== 0) throw new Error(`Native build/install/launch failed (exit ${result.exitStatus}).`);
     const pidResult = command([input.adb, '-s', input.device, 'shell', 'pidof', input.appId]);
     const pid = pidResult.stdout.trim();
     if (pidResult.exitStatus !== 0 || !/^\d+$/.test(pid)) throw new Error('Isolated native app did not stay running.');
@@ -101,45 +108,31 @@ try {
     const screenshot = command([input.adb, '-s', input.device, 'shell', 'screencap', '-p', '/data/local/tmp/acceptance-native.png']);
     if (screenshot.exitStatus === 0) command([input.adb, '-s', input.device, 'pull', '/data/local/tmp/acceptance-native.png', path.join(outputRoot, 'native-screen.png')]);
   } else {
-    nativeCommand = ['xcrun', 'simctl', 'launch', '--terminate-running-process', '--console-pty', input.device, input.appId];
-    await new Promise(resolve => {
-      const child = spawn(nativeCommand[0], nativeCommand.slice(1), { cwd: input.projectRoot, env: process.env });
-      // Readable's UTF-8 decoder preserves split multibyte characters. Raw
-      // Buffer += string would corrupt literal Chinese stdout/stderr chunks.
-      child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
-      let stopping = false;
-      const timer = setTimeout(() => { stopping = true; child.kill(); }, input.journeyTimeoutMs || 240000);
-      const observeCompletion = () => {
-        const match = (nativeStdout + '\n' + nativeStderr).match(/FEATURE_ACCEPTANCE_DONE:(\{[^\r\n]*\})/);
-        if (match && !stopping) {
-          completion = JSON.parse(match[1]); stopping = true; clearTimeout(timer);
-          command(['xcrun', 'simctl', 'terminate', input.device, input.appId]); child.kill();
-        }
-      };
-      child.stdout.on('data', data => { nativeStdout += data; observeCompletion(); });
-      child.stderr.on('data', data => { nativeStderr += data; observeCompletion(); });
-      child.on('error', error => { nativeStderr += error.stack; clearTimeout(timer); });
-      // 'close' follows stdout/stderr drain; 'exit' can precede trailing bytes.
-      child.on('close', () => { clearTimeout(timer); resolve(); });
-    });
-    ledger.push({ command: nativeCommand, cwd: input.projectRoot, stdout: nativeStdout, stderr: nativeStderr, exitStatus: completion ? 0 : 1,
-      exitStatusMeaning: 'console collection/completion observation; app terminated after receipt' });
+    nativeCommand = [input.flutter, 'run', '--machine', '-t', input.testFile || 'integration_test/native_feature_journeys.dart',
+      '-d', input.device, '--no-pub', '--dart-define=FEATURE_ISOLATED_DEVICE=true', `--dart-define=FEATURE_SOURCE_SHA=${sourceSha}`];
+    resident = await collectResidentFlutter({ command: nativeCommand, cwd: input.projectRoot, env: process.env,
+      sourceSha, platform: input.platform, device: input.device, expectedChecks: input.expectedChecks,
+      timeoutMs: input.timeoutMs || 1500000, journeyTimeoutMs: input.journeyTimeoutMs || 300000,
+      completionTailMs: input.completionTailMs || 750, stopGraceMs: input.stopGraceMs || 15000 });
+    nativeStdout = resident.nativeStdout; nativeStderr = resident.nativeStderr; completion = resident.completion;
+    ledger.push(resident);
+    if (resident.timedOut) {
+      // Diagnostics are restricted to this disposable Simulator and output root.
+      command(['xcrun', 'simctl', 'diagnose', '-u', '-b', '--output=' + path.join(outputRoot, 'simulator-diagnostics'), input.device], input.projectRoot, 120000);
+    }
+    if (!resident.passed) command(['xcrun', 'simctl', 'terminate', input.device, input.appId]);
     command(['xcrun', 'simctl', 'io', input.device, 'screenshot', path.join(outputRoot, 'native-screen.png')]);
   }
   fs.writeFileSync(path.join(outputRoot, 'native-app.stdout.txt'), nativeStdout);
   fs.writeFileSync(path.join(outputRoot, 'native-app.stderr.txt'), nativeStderr);
   process.stdout.write(nativeStdout); process.stderr.write(nativeStderr);
-  const regex = /FEATURE_ACCEPTANCE_CHECK:(\{[^\r\n]*\})/g;
-  for (const match of (nativeStdout + '\n' + nativeStderr).matchAll(regex)) {
-    const check = JSON.parse(match[1]);
-    if (check.platform !== input.platform || check.sourceSha !== sourceSha || check.mockOnly !== false || check.paidCalls !== 0) {
-      throw new Error('Native check identity or safety contract mismatch.');
-    }
-    checks.push({ ...check, command: nativeCommand, stdout: nativeStdout, stderr: nativeStderr,
-      exitStatus: completion?.exitStatus ?? 1, skipped: false,
-      acceptanceLevel: 'component-only', sourceSnapshotSha256: input.sourceSnapshotSha256 || null });
-  }
-  if (completion?.exitStatus !== 0 || checks.length === 0 || completion.checks !== checks.length || /Unhandled Exception:|FEATURE_NATIVE_ASYNC_ERROR:/.test(nativeStdout + '\n' + nativeStderr)) throw new Error(`Native journey failed (logical exit ${completion?.exitStatus}, emitted checks ${checks.length}; native asynchronous errors are not ignored).`);
+  const proof = createNativeProof({ sourceSha, platform: input.platform, expectedChecks: input.expectedChecks });
+  for (const line of (nativeStdout + '\n' + nativeStderr).split(/\r?\n/)) proof.line(line);
+  const parsed = proof.finish();
+  checks = parsed.checks.map(check => ({ ...check, command: nativeCommand, stdout: nativeStdout, stderr: nativeStderr,
+    exitStatus: input.platform === 'ios' ? resident.actualCloseCode : completion?.exitStatus ?? 1, skipped: false,
+    acceptanceLevel: 'component-only', sourceSnapshotSha256: input.sourceSnapshotSha256 || null }));
+  if (!parsed.passed || (resident && !resident.passed)) throw new Error('Native journey failed: ' + [...parsed.errors, ...(resident?.errors || [])].join('; '));
   if (input.platform === 'android') command([input.adb, '-s', input.device, 'shell', 'am', 'force-stop', input.appId]);
   exitStatus = 0;
 } catch (error) {
@@ -151,7 +144,7 @@ try {
     sourceSnapshotSha256: input.sourceSnapshotSha256 || null,
     platform: input.platform, device: input.device, isolated: input.isolated,
     completeFeatureRowsCertified: 0, full195Certified: false,
-    checks, ledger, exitStatus, failure: failure || null,
+    expectedChecks: input.expectedChecks ?? null, checks, ledger, exitStatus, failure: failure || null,
     boundary: 'Real target native component journeys. No paid/public generation call, human profile, publishing, or whole-feature certification.' };
   const target = path.join(outputRoot, 'native-mobile-receipt.json');
   fs.writeFileSync(target, JSON.stringify(receipt, null, 2) + '\n');

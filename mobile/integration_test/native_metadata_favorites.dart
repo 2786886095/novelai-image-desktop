@@ -48,10 +48,10 @@ Future<void> main() async {
   runApp(const MaterialApp(home:Scaffold(body:Center(child:Text('Native metadata / favorites component checks')))));
   await WidgetsBinding.instance.endOfFrame;
   try { await _run();_assert(_errors.isEmpty,'Native async/UI error(s): $_errors');
-    print('FEATURE_ACCEPTANCE_DONE:${jsonEncode({'exitStatus':0,'checks':_checks.length,'platform':Platform.operatingSystem,'paidCalls':0})}');
+    print('FEATURE_ACCEPTANCE_DONE:${jsonEncode({'sourceSha': const String.fromEnvironment('FEATURE_SOURCE_SHA', defaultValue: 'uncommitted'), 'exitStatus':0,'checks':_checks.length,'platform':Platform.operatingSystem,'paidCalls':0})}');
   } catch(error,stack) {
     print('FEATURE_ACCEPTANCE_FAILURE:$error\n$stack');
-    print('FEATURE_ACCEPTANCE_DONE:${jsonEncode({'exitStatus':1,'checks':_checks.length,'platform':Platform.operatingSystem,'paidCalls':0})}');
+    print('FEATURE_ACCEPTANCE_DONE:${jsonEncode({'sourceSha': const String.fromEnvironment('FEATURE_SOURCE_SHA', defaultValue: 'uncommitted'), 'exitStatus':1,'checks':_checks.length,'platform':Platform.operatingSystem,'paidCalls':0})}');
   }
 }
 Future<void> _run() async {

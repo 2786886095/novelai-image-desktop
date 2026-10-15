@@ -183,6 +183,34 @@ jobs:
           cache: true
       - run: flutter pub get
         working-directory: mobile
+      - name: Require runner-only KVM access and usable acceleration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm || { printf '%s\n' 'KVM_DEVICE unavailable: /dev/kvm' >&2; exit 1; }
+          if ! command -v setfacl >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends acl
+          fi
+          sudo setfacl -m "u:$(id -u):rw" /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm || { printf '%s\n' 'KVM_DEVICE access denied: /dev/kvm' >&2; exit 1; }
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "$sdk_root" ]; then
+            printf '%s\n' 'SDK_ROOT unavailable: ANDROID_HOME / ANDROID_SDK_ROOT' >&2
+            exit 1
+          fi
+          sdkmanager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$sdkmanager" ]; then
+            printf 'SDKMANAGER unavailable: %s\n' "$sdkmanager" >&2
+            exit 1
+          fi
+          "$sdkmanager" --channel=0 --install "emulator"
+          emulator="$sdk_root/emulator/emulator"
+          if [ ! -x "$emulator" ]; then
+            printf 'EMULATOR unavailable: %s\n' "$emulator" >&2
+            exit 1
+          fi
+          "$emulator" -accel-check
       - name: Fresh disposable Android Emulator journeys
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -191,7 +219,8 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          emulator-options: -no-window -no-audio -no-snapshot -gpu swiftshader_indirect -no-boot-anim
+          disable-linux-hw-accel: false
+          emulator-options: -no-window -no-audio -no-snapshot -gpu swiftshader_indirect -no-boot-anim -accel on
           script: |
             node scripts/feature-acceptance/run-ci-mobile-entries.mjs android emulator-5554
       - uses: actions/upload-artifact@v4

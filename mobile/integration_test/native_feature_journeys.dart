@@ -78,8 +78,8 @@ Future<void> main() async {
     print('FEATURE_NATIVE_ASYNC_ERROR:$error\n$stack');
     return true;
   };
-  try { await _run(); print('FEATURE_ACCEPTANCE_DONE:'+jsonEncode({'exitStatus':0,'checks':_checks.length,'platform':Platform.operatingSystem,'paidCalls':0})); }
-  catch(error,stack){ print('FEATURE_ACCEPTANCE_FAILURE:$error\n$stack'); print('FEATURE_ACCEPTANCE_DONE:'+jsonEncode({'exitStatus':1,'checks':_checks.length,'platform':Platform.operatingSystem,'paidCalls':0})); }
+  try { await _run(); print('FEATURE_ACCEPTANCE_DONE:'+jsonEncode({'sourceSha': const String.fromEnvironment('FEATURE_SOURCE_SHA', defaultValue: 'uncommitted'), 'exitStatus':0,'checks':_checks.length,'platform':Platform.operatingSystem,'paidCalls':0})); }
+  catch(error,stack){ print('FEATURE_ACCEPTANCE_FAILURE:$error\n$stack'); print('FEATURE_ACCEPTANCE_DONE:'+jsonEncode({'sourceSha': const String.fromEnvironment('FEATURE_SOURCE_SHA', defaultValue: 'uncommitted'), 'exitStatus':1,'checks':_checks.length,'platform':Platform.operatingSystem,'paidCalls':0})); }
 }
 final _checks = <Map<String,Object?>>[];
 final _asyncErrors = <Object>[];

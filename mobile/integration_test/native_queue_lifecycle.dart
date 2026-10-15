@@ -47,7 +47,7 @@ Future<void> main() async {
       await Future<void>.delayed(const Duration(seconds: 2));
       require(errors.isEmpty, 'Native iOS asynchronous queue policy failure');
       check('native iOS concurrent queue guards complete without Android channel errors', {'completed': true, 'backgroundKeepaliveClaimed': false});
-      print('FEATURE_ACCEPTANCE_DONE:${jsonEncode({'exitStatus': 0, 'checks': checked, 'platform': Platform.operatingSystem, 'paidCalls': 0})}');
+      print('FEATURE_ACCEPTANCE_DONE:${jsonEncode({'sourceSha': const String.fromEnvironment('FEATURE_SOURCE_SHA', defaultValue: 'uncommitted'), 'exitStatus': 0, 'checks': checked, 'platform': Platform.operatingSystem, 'paidCalls': 0})}');
       return;
     }
     FlutterForegroundTask.initCommunicationPort();
@@ -83,9 +83,9 @@ Future<void> main() async {
     await Future<void>.delayed(const Duration(seconds: 2));
     require(errors.isEmpty, 'Native asynchronous lifecycle failure');
     check('concurrent stop/start owner handoff on actual native service', {'handoffPreservedService': true, 'teardownCompleted': true});
-    print('FEATURE_ACCEPTANCE_DONE:${jsonEncode({'exitStatus': 0, 'checks': checked, 'platform': Platform.operatingSystem, 'paidCalls': 0})}');
+    print('FEATURE_ACCEPTANCE_DONE:${jsonEncode({'sourceSha': const String.fromEnvironment('FEATURE_SOURCE_SHA', defaultValue: 'uncommitted'), 'exitStatus': 0, 'checks': checked, 'platform': Platform.operatingSystem, 'paidCalls': 0})}');
   } catch (error, stack) {
     print('FEATURE_ACCEPTANCE_FAILURE:$error\n$stack');
-    print('FEATURE_ACCEPTANCE_DONE:${jsonEncode({'exitStatus': 1, 'checks': checked, 'platform': Platform.operatingSystem, 'paidCalls': 0})}');
+    print('FEATURE_ACCEPTANCE_DONE:${jsonEncode({'sourceSha': const String.fromEnvironment('FEATURE_SOURCE_SHA', defaultValue: 'uncommitted'), 'exitStatus': 1, 'checks': checked, 'platform': Platform.operatingSystem, 'paidCalls': 0})}');
   }
 }
