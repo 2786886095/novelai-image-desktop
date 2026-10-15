@@ -22,6 +22,17 @@ for(const entry of ['core19','metadata_favorites16','queue_lifecycle4']){
  try {
   workspace=createEntryWorkspace({repositoryRoot:process.cwd(),sourceSha:sha.stdout.trim(),entry,platform,runnerTemp:process.env.RUNNER_TEMP,evidenceRoot:root});
   component.workspace=workspace.sourceRoot;component.initialSource=workspace.before;component.originalCheckout=workspace.original;
+  // Gradle's production buildAgentPresentation hook imports the locked Node
+  // toolchain too. Prepare it separately in each pristine entry, never copy a
+  // dirty root node_modules or run arbitrary package lifecycle hooks.
+  const nodeDirectory=path.dirname(process.execPath);
+  const npmCandidates=[path.join(nodeDirectory,'node_modules','npm','bin','npm-cli.js'),path.resolve(nodeDirectory,'..','lib','node_modules','npm','bin','npm-cli.js')];
+  const npmCli=npmCandidates.find(file=>fs.existsSync(file))??npmCandidates[0];
+  const dependencyCommand=commands.length;
+  const dependenciesReady=run(workspace.sourceRoot,[npmCli,'ci','--ignore-scripts','--no-audit','--no-fund'],600000);
+  component.nodeDependencies={commandIndex:dependencyCommand,exitStatus:commands[dependencyCommand].exitStatus,ready:dependenciesReady,scope:'locked per-entry npm ci; lifecycle hooks disabled; dependency tree is not uploaded'};
+  if(!dependenciesReady)throw Error('Locked Node dependency preparation failed; this entry was not launched.');
+  component.afterNodeDependencies=captureSourceState({sourceRoot:workspace.sourceRoot,sourceSha:sha.stdout.trim(),evidenceDirectory:path.join(workspace.evidenceDirectory,'after-node-dependencies'),requirePristine:true});
   if(entry==='metadata_favorites16'&&!run(workspace.sourceRoot,['scripts/feature-acceptance/fetch-official-assets.mjs',assets],1100000))throw Error('Public asset GET/size/SHA verification failed; no metadata native pass is claimed.');
   const ready=run(workspace.sourceRoot,['scripts/feature-acceptance/write-ci-input.mjs',platform,device,entry,assets,String(expectedChecks[entry])],120000);
   const input=path.join(root,entry,'native-input.json');component.input=input;
