@@ -1,17 +1,28 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
 const {createServer}=require('node:http');
-const {app}=require('electron');
+const {app,safeStorage}=require('electron');
 const phase=path.dirname(__filename),config=JSON.parse(fs.readFileSync(path.join(phase,'SETUP.json'),'utf8'));
 const profile=path.join(phase,'isolated-native-profile');fs.mkdirSync(profile,{recursive:true});
 for(const key of ['appData','userData','sessionData','pictures','documents','downloads','logs']){const dir=key==='userData'?profile:path.join(profile,key);fs.mkdirSync(dir,{recursive:true});app.setPath(key,fs.realpathSync.native(dir));}
 app.commandLine.appendSwitch('no-error-dialogs');
 const production=file=>require(path.join(config.compiled,file));
 const sha=data=>crypto.createHash('sha256').update(data).digest('hex');
-const cases=[],httpRequests=[];let server;
+const cases=[],httpRequests=[];let server,credentialSession;
 async function check(name,action){try{const observed=await action();cases.push({name,pass:true,observed});}catch(error){cases.push({name,pass:false,error:error.stack||String(error)});console.error(name,error.stack||error);}}
 app.whenReady().then(async()=>{
  assert.equal(app.isPackaged,false,'Use the native development Electron runner; never bootstrap a packaged human profile');
  assert.equal(app.getPath('userData'),fs.realpathSync.native(profile));
+ if(process.platform==='linux'){
+  credentialSession={backend:safeStorage.getSelectedStorageBackend(),encryptionAvailable:safeStorage.isEncryptionAvailable(),roundTrip:false};
+  console.log('CREDENTIAL_SESSION '+JSON.stringify(credentialSession));
+  assert.ok(credentialSession.backend&&!['basic_text','unknown'].includes(credentialSession.backend),'A secure Linux secret-store backend is required.');
+  assert.equal(credentialSession.encryptionAvailable,true,'Linux native credential encryption must be available.');
+  const credentialSample=crypto.randomBytes(32).toString('hex');
+  const credentialCipher=safeStorage.encryptString(credentialSample);
+  assert.ok(safeStorage.decryptString(credentialCipher)===credentialSample,'Native credential round-trip failed.');
+  credentialSession.roundTrip=true;
+  console.log('CREDENTIAL_SESSION '+JSON.stringify(credentialSession));
+ }
  const sharp=require(path.join(config.deps,'sharp'));
  const favorites=production('electron/ipc/image-favorites.js'),history=production('electron/ipc/favorite-history-time.js'),view=production('src/favorites-view.js');
  const root=path.join(phase,'favorite-real-files');fs.mkdirSync(root);const originals={};
@@ -43,5 +54,5 @@ app.whenReady().then(async()=>{
  await check('system_prompt.production_reverse_real_loopback',async()=>{const before=httpRequests.length;const image=fs.readFileSync(originals.A.file).toString('base64');const result=await nai.reversePromptImage(image,'natural','full','',false,'v5');assert.equal(result.ok,true);assert.equal(httpRequests.length,before+1);const systems=httpRequests.at(-1).body.messages.filter(item=>item.role==='system').map(item=>item.content).join('\n');assert.ok(systems.includes(reverse.systemPrompt));assert.ok(!systems.includes(convert.systemPrompt));assert.ok(systems.includes('CUSTOM_OUTPUT_REVERSE'));assert.ok(JSON.stringify(httpRequests.at(-1).body).includes('data:image/png;base64,'));return {ok:result.ok,httpRequests:1,systemHash:sha(systems),imageSentOnlyToLoopbackFixture:true,importedBodyPresent:true};});
  await check('system_prompt.native_studio_workspace_persist_select_reopen',()=>{const api=production('electron/ipc/agent-store.js'),studio=production('src/agent/workspace-controls.js');const initial=api.createAgentConversation('Native isolated import integration').workspace;const preset=imported['top.json'];initial.samplerPresets.push(preset);api.writeAgentWorkspace(initial);const selected=api.setStudioConversationOptions(initial.selectedConversationId,{studioPresetId:'tavern:'+preset.id});assert.equal(selected.ok,true);api.resetAgentStoreCacheForTests();const reopened=api.readAgentWorkspace(),chat=reopened.conversations.find(item=>item.id===reopened.selectedConversationId);assert.equal(chat.studioPresetId,'tavern:'+preset.id);assert.equal(studio.studioSelectedSystemPrompt(reopened,chat),'TOP_JSON_IMPORTED\n\nPOSTSCRIPT_IMPORTED');const file=api.agentWorkspacePath();assert.ok(file.startsWith(profile+path.sep));assert.ok(fs.existsSync(file));return {path:file,presetId:preset.id,persistedBodyPresent:true,selectedSystemLayerVerified:true,scope:'Direct shared importer + native workspace APIs; the file-picker UI itself was not automated.'};});
  await new Promise(resolve=>server.close(resolve));server=undefined;
- const report={sourceSha:config.sourceSha,platform:process.platform,arch:process.arch,nativeElectron:process.versions.electron,isolatedUserData:app.getPath('userData'),actualProductionModules:true,mockedModules:false,cases,passed:cases.filter(item=>item.pass).length,total:cases.length,httpRequests,paidCalls:0,scope:'Actual host native production function/files/Electron/loopback integration only; no fullapp/file-picker/provider journey, paid request, or other-platform inference.'};fs.writeFileSync(path.join(phase,'NATIVE_CORE_REPORT.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));app.exit(report.passed===report.total?0:1);
+ const report={sourceSha:config.sourceSha,platform:process.platform,arch:process.arch,nativeElectron:process.versions.electron,credentialSession,isolatedUserData:app.getPath('userData'),actualProductionModules:true,mockedModules:false,cases,passed:cases.filter(item=>item.pass).length,total:cases.length,httpRequests,paidCalls:0,scope:'Actual host native production function/files/Electron/loopback integration only; no fullapp/file-picker/provider journey, paid request, or other-platform inference.'};fs.writeFileSync(path.join(phase,'NATIVE_CORE_REPORT.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));app.exit(report.passed===report.total?0:1);
 }).catch(error=>{console.error(error.stack||error);server?.close();app.exit(1);});

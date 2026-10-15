@@ -40,7 +40,8 @@ try {
   fs.symlinkSync(deps,path.join(run,'compiled/node_modules'),process.platform==='win32'?'junction':'dir');
   fs.writeFileSync(path.join(run,'SETUP.json'),JSON.stringify({sourceSha,compiled:path.join(run,'compiled'),deps},null,2));
   const target=path.join(run,'desktop-journeys.cjs');fs.copyFileSync(path.join(sourceRoot,'scripts/feature-acceptance/desktop-journeys.cjs'),target);
-  const actual=command([req('electron'),target]);
+  const electronCommand=process.platform==='linux'?[req('electron'),'--password-store=gnome-libsecret',target]:[req('electron'),target];
+  const actual=process.platform==='linux'?command(electronCommand,120000):command(electronCommand);
   const report=JSON.parse(fs.readFileSync(path.join(run,'NATIVE_CORE_REPORT.json'),'utf8'));
   if(actual.exitStatus!==0||report.platform!==process.platform||report.passed!==17||report.total!==17||report.mockedModules!==false) throw new Error('Native desktop journey incomplete or wrong runtime.');
   for(const item of report.cases){
@@ -56,5 +57,17 @@ finally{
   const value={sourceSha,platform,run,checks,ledger,exitStatus,completeFeatureRowsCertified:0,full195Certified:false,boundary:'No paid call, human profile, release publication, or inference about another target platform.'};
   fs.writeFileSync(target,JSON.stringify(value,null,2)+'\n');const bytes=fs.readFileSync(target);
   console.log(`RECEIPT ${target} BYTES=${bytes.length} SHA256=${crypto.createHash('sha256').update(bytes).digest('hex')} CHECKS=${checks.length} EXIT=${exitStatus}`);
+  const evidenceNames=[path.basename(target),...['command-ledger.json','NATIVE_CORE_REPORT.json','SETUP.json','desktop-journeys.cjs','compile.json'].map(name=>path.posix.join(path.basename(run),name))];
+  const evidenceFiles=[],missingFiles=[];
+  for(const relativeFile of evidenceNames){
+    const file=path.join(outputRoot,...relativeFile.split('/'));
+    if(!fs.existsSync(file)){missingFiles.push(relativeFile);continue;}
+    const data=fs.readFileSync(file);
+    evidenceFiles.push({file:relativeFile,bytes:data.length,sha256:crypto.createHash('sha256').update(data).digest('hex')});
+  }
+  const evidenceManifest=path.join(outputRoot,'EVIDENCE_MANIFEST.json');
+  fs.writeFileSync(evidenceManifest,JSON.stringify({sourceSha,platform,exitStatus,files:evidenceFiles,missingFiles,completeFeatureRowsCertified:0,full195Certified:false},null,2)+'\n');
+  const evidenceManifestBytes=fs.readFileSync(evidenceManifest);
+  console.log('EVIDENCE_MANIFEST '+evidenceManifest+' BYTES='+evidenceManifestBytes.length+' SHA256='+crypto.createHash('sha256').update(evidenceManifestBytes).digest('hex'));
   process.exitCode=exitStatus;
 }

@@ -73,7 +73,7 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y xvfb fonts-noto-cjk
+          sudo apt-get update -qq && sudo apt-get install -y xvfb fonts-noto-cjk gnome-keyring dbus-x11 libsecret-1-0
           node -e "console.log(require('electron'))"
           sudo chown root:root node_modules/electron/dist/chrome-sandbox
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
@@ -81,7 +81,24 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = Linux ]; then
-            xvfb-run -a node scripts/feature-acceptance/run-desktop-native.mjs "$RUNNER_TEMP/desktop-acceptance" "$GITHUB_SHA"
+            keyring_home="$(mktemp -d "$RUNNER_TEMP/native-keyring-home.XXXXXX")"
+            chmod 700 "$keyring_home"
+            export NATIVE_KEYRING_HOME="$keyring_home"
+            timeout --signal=TERM --kill-after=10s 180s dbus-run-session -- xvfb-run -a bash --noprofile --norc -euo pipefail <<'KEYRING_SESSION'
+          set +x
+          export HOME="$NATIVE_KEYRING_HOME"
+          export XDG_DATA_HOME="$HOME/.local/share"
+          export XDG_CONFIG_HOME="$HOME/.config"
+          export XDG_RUNTIME_DIR="$HOME/run"
+          export XDG_CURRENT_DESKTOP=GNOME
+          mkdir -p "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_RUNTIME_DIR"
+          chmod 700 "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_RUNTIME_DIR"
+          keyring_password="$(openssl rand -hex 32)"
+          printf '::add-mask::%s\n' "$keyring_password"
+          printf '%s' "$keyring_password" | timeout --signal=TERM --kill-after=5s 15s gnome-keyring-daemon --unlock --components=secrets
+          unset keyring_password
+          node scripts/feature-acceptance/run-desktop-native.mjs "$RUNNER_TEMP/desktop-acceptance" "$GITHUB_SHA"
+          KEYRING_SESSION
           else
             node scripts/feature-acceptance/run-desktop-native.mjs "$RUNNER_TEMP/desktop-acceptance" "$GITHUB_SHA"
           fi
@@ -89,7 +106,14 @@ jobs:
         if: always()
         with:
           name: native-components-${{ runner.os }}-${{ github.sha }}
-          path: ${{ runner.temp }}/desktop-acceptance/
+          path: |
+            ${{ runner.temp }}/desktop-acceptance/desktop-*-receipt.json
+            ${{ runner.temp }}/desktop-acceptance/EVIDENCE_MANIFEST.json
+            ${{ runner.temp }}/desktop-acceptance/*/command-ledger.json
+            ${{ runner.temp }}/desktop-acceptance/*/NATIVE_CORE_REPORT.json
+            ${{ runner.temp }}/desktop-acceptance/*/SETUP.json
+            ${{ runner.temp }}/desktop-acceptance/*/desktop-journeys.cjs
+            ${{ runner.temp }}/desktop-acceptance/*/compile.json
           if-no-files-found: error
 
   android-components:
