@@ -46,11 +46,24 @@ export function validateAndroidPreflightTarget({device, appId}) {
 export async function inspectAndroidForeground({adb, device, appId, command, phase = () => {}}) {
   validateAndroidPreflightTarget({device, appId});
   const adbCommand = args => command([adb, '-s', device, ...args], undefined, 20000);
-  const dumped = ensureResult(adbCommand(['shell', 'uiautomator', 'dump', '/data/local/tmp/acceptance-window.xml']), 'Native window dump failed');
+  // A failed dump must never expose a prior observation from this fixed path.
+  const cleared = adbCommand(['shell', 'rm', '-f', '/data/local/tmp/acceptance-window.xml']);
+  ensureResult(cleared, 'Native stale hierarchy removal failed');
+  if (cleared.stderr.trim()) throw Error('Native stale hierarchy removal returned unexpected stderr.');
+  const dump = adbCommand(['shell', 'uiautomator', 'dump', '/data/local/tmp/acceptance-window.xml']);
+  const dumped = ensureResult(dump, 'Native window dump failed');
   if (!/dumped to:\s*\/data\/local\/tmp\/acceptance-window\.xml/.test(dumped)) {
-    throw Error('Native window dump did not confirm a fresh hierarchy; stale XML is not accepted.');
+    const error = Error('Native window dump did not confirm a fresh hierarchy; stale XML is not accepted.');
+    // This remains an error for all direct/runtime callers. Only preflight may
+    // recognize this exact transient after it actually closed a launcher ANR.
+    if (!dumped && dump.stderr.trim() === 'ERROR: null root node returned by UiTestAutomationBridge.' &&
+        !dump.signal && !dump.timedOut && !dump.outputOverflow) error.code = 'ANDROID_LAUNCHER_NULL_HIERARCHY';
+    throw error;
   }
-  const xml = ensureResult(adbCommand(['shell', 'cat', '/data/local/tmp/acceptance-window.xml']), 'Native window read failed');
+  if (dump.stderr.trim()) throw Error('Native window dump returned unexpected stderr.');
+  const read = adbCommand(['shell', 'cat', '/data/local/tmp/acceptance-window.xml']);
+  const xml = ensureResult(read, 'Native window read failed');
+  if (read.stderr.trim()) throw Error('Native window read returned unexpected stderr.');
   if (!/<hierarchy\b/.test(xml)) throw Error('Native window hierarchy is missing.');
   const modal = observedAndroidModal(xml);
   if (modal?.kind?.startsWith('unhandled-')) throw Error(`Unhealthy Android native foreground: ${modal.kind}: ${modal.text}`);
@@ -76,7 +89,18 @@ export async function prepareAndroidNative({adb, device, appId, command, phase =
   sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), now = Date.now, timeoutMs = 45000,
   grantNotifications = false} = {}) {
   validateAndroidPreflightTarget({device, appId});
-  const adbCommand = args => command([adb, '-s', device, ...args], undefined, 20000);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw Error('Invalid Android readiness timeout.');
+  // input.timeoutMs is also the APK-build budget. It cannot extend readiness.
+  const budgetMs = Math.min(timeoutMs, 45000), deadline = now() + budgetMs;
+  const expired = () => Error(`Disposable Android native foreground did not stabilize within ${budgetMs}ms.`);
+  const boundedCommand = (argv, cwd, requested = 20000) => {
+    const remaining = deadline - now();
+    if (remaining <= 0) throw expired();
+    const result = command(argv, cwd, Math.min(20000, requested, remaining));
+    if (now() >= deadline) throw expired();
+    return result;
+  };
+  const adbCommand = args => boundedCommand([adb, '-s', device, ...args], undefined, 20000);
   if (ensureResult(adbCommand(['shell', 'getprop', 'ro.kernel.qemu']), 'Emulator identity read failed') !== '1') {
     throw Error('Refusing preflight outside an actual disposable Android emulator.');
   }
@@ -94,17 +118,29 @@ export async function prepareAndroidNative({adb, device, appId, command, phase =
       phase({stage: 'notification-permission', sdk, appId, permission: 'granted=true observed'});
     } else phase({stage: 'notification-permission-not-required', sdk, appId});
   }
-  const deadline = now() + timeoutMs;
-  let stable = 0;
+  let stable = 0, closedLauncherAnr = false, nullHierarchyAttempts = 0;
   while (now() < deadline) {
     const boot = ensureResult(adbCommand(['shell', 'getprop', 'sys.boot_completed']), 'Boot state read failed');
-    const result = await inspectAndroidForeground({adb, device, appId, command, phase});
+    let result;
+    try {
+      result = await inspectAndroidForeground({adb, device, appId, command: boundedCommand, phase});
+    } catch (error) {
+      if (!closedLauncherAnr || error.code !== 'ANDROID_LAUNCHER_NULL_HIERARCHY') throw error;
+      if (++nullHierarchyAttempts > 3) throw Error('Launcher recovery null hierarchy retry budget exhausted.');
+      stable = 0;
+      phase({stage: 'not-ready', reason: 'launcher-recovery-null-root', attempt: nullHierarchyAttempts, maxAttempts: 3});
+      await sleep(Math.min(500, Math.max(0, deadline - now())));
+      continue;
+    }
+    if (result.modal?.kind === 'launcher-anr') closedLauncherAnr = true;
+    const immersive = result.focus.some(line => /mCurrentFocus=.*ImmersiveModeConfirmation/.test(line));
+    if (immersive) phase({stage: 'not-ready', reason: 'immersive-confirmation-visible'});
     // Two independently observed clean windows, not a guessed sleep, are needed
     // before launching the real entry. No CHECK result is fabricated here.
-    stable = boot === '1' && !result.modal && result.focus.length > 0 &&
+    stable = boot === '1' && !result.modal && !immersive && result.focus.some(line => /mCurrentFocus=Window\{/.test(line)) &&
       !result.focus.some(line => /mCurrentFocus=null/.test(line)) ? stable + 1 : 0;
     if (stable >= 2) {phase({stage: 'ready', appId, stableObservations: stable}); return;}
-    await sleep(500);
+    await sleep(Math.min(500, Math.max(0, deadline - now())));
   }
-  throw Error(`Disposable Android native foreground did not stabilize within ${timeoutMs}ms.`);
+  throw expired();
 }

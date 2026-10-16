@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
+import 'package:novelai_mobile/i18n/app_locales.dart';
 import 'package:novelai_mobile/screens/settings_screen.dart';
 import 'package:novelai_mobile/services/ios_output_folder.dart';
 import 'package:novelai_mobile/services/storage.dart';
@@ -15,6 +16,7 @@ import 'package:novelai_mobile/services/unified_storage.dart';
 import 'native_foreground.dart';
 import 'native_scenario_support.dart';
 import 'native_ui_actions.dart';
+import 'native_settings_disclosure.dart';
 
 final suite = NativeScenarios(1);
 Future<void> main() => suite.run(_run);
@@ -28,23 +30,12 @@ Future<void> _run() async {
   final originalRoot = c.app.settings.imageOutputDir;
   try {
     await nativeUiMount(c.app, const SettingsScreen());
-    // Settings uses lazy ListView children: scroll its actual position until
-    // the production choose button is mounted, then dispatch real hit tests.
-    Element? choose;
-    for (var i = 0; i < 100; i++) {
-      final matches = nativeUiElements(
-          (w) => w.key == const ValueKey('image-output-choose'));
-      if (matches.isNotEmpty) {
-        choose = matches.single;
-        break;
-      }
-      final scroll = nativeUiElements((w) => w is Scrollable);
-      require(scroll.isNotEmpty, 'Settings has no real scrollable');
-      final state = (scroll.first as StatefulElement).state as ScrollableState;
-      final p = state.position;
-      p.jumpTo((p.pixels + 400).clamp(p.minScrollExtent, p.maxScrollExtent));
-      await frame();
-    }
+    // The production storage section is collapsed. Expose it through its
+    // real disclosure before locating the original native chooser button.
+    final choose = await nativeSettingsControl(
+      sectionTitle: settingsScreenTextFor(c.app.settings.language).storageSection,
+      targetKey: const ValueKey('image-output-choose'),
+    );
     require(choose != null, 'Actual generated-output chooser was not exposed');
     print('NATIVE_FOLDER_PICKER_REQUEST:${jsonEncode({
           'sourceSha': sourceSha,
