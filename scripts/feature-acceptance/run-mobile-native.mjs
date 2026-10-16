@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { collectResidentFlutter, createNativeProof } from './native-proof-stream.mjs';
 import {fullFeatureProfiles,profileSha256} from './full-feature-profiles.mjs';
 import {prepareAndroidNative,inspectAndroidForeground} from './android-native-preflight.mjs';
+import {observeAndroidRuntimeHealth} from './android-runtime-health.mjs';
 import {verifyMobilePredecessor,verifyColdNativeRestart} from './mobile-native-predecessor.mjs';
 
 // A recording runner, not a publisher or a replacement for the release gate.
@@ -149,7 +150,12 @@ try {
       const match = nativeStdout.match(/FEATURE_ACCEPTANCE_DONE:(\{[^\r\n]*\})/);
       if (match) { completion = JSON.parse(match[1]); break; }
       if (poll++ % 5 === 0) {
-        await inspectAndroidForeground({...input,command,phase:androidPhase});
+        // Only a same-process rendered/resumed native witness permits the bounded
+        // exact-idle observation policy. Initial/legacy callers remain strict.
+        if(requireNativeBegin&&nativeStdout.includes('FEATURE_NATIVE_FOREGROUND:resumed; actual first/resumed frames rendered')){
+          await observeAndroidRuntimeHealth({...input,command,phase:androidPhase,journeyDeadline:end,
+            nativeStdout,sourceSha,profileSha:profileSha256,expectedNativePid:observedAndroidPid});
+        } else await inspectAndroidForeground({...input,command,phase:androidPhase});
       }
       await new Promise(resolve => setTimeout(resolve, 3000));
     }

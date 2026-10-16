@@ -59,7 +59,7 @@ app.whenReady().then(async()=>{
   await check('clipboard','native-unicode-text',()=>{const text='Native isolated clipboard 龙白 🧪';clipboard.writeText(text);assert.equal(clipboard.readText(),text);return {nativeUnicodeRoundtrip:true};});
   await check('clipboard','png-metadata-copy-paste',async()=>{
    const api=production('electron/ipc/image-clipboard.js'),media=production('electron/ipc/local-media-protocol.js'),file=await writer.writeUniqueImageFile(output,'clipboard','png',bytes);
-   const result=await api.copyImageWithMetadata(media.toLocalMediaUrl(file));assert.equal(result.status,'copied');
+   const result=await api.copyImageWithMetadata(media.toLocalMediaUrl(file),true,true);assert.equal(result.status,'copied',JSON.stringify({copyResult:result}));
    const pasted=await api.readClipboardImageFiles();assert.equal(hash(Buffer.from(pasted[0].bytes)),imageHash);
    // Remain inside the existing disposable-runner gate: no human-host clipboard probes.
    const {PNG}=require(path.join(config.deps,'pngjs')),meta=production('src/png-meta.js'),codecs=production('src/png-metadata-codecs.js');
@@ -82,7 +82,7 @@ app.whenReady().then(async()=>{
     if(fixture==='known-stego')assert.equal(codecs.readPngStealthMetadata(original).Comment,privateComment);
     if(fixture!=='partial-alpha')assert.equal(inspect(original).positivePrompt,'native clipboard private fixture');
     const source=await writer.writeUniqueImageFile(output,'clipboard-off-'+fixture,'png',original);
-    assert.equal((await api.copyImageWithMetadata(media.toLocalMediaUrl(source),false)).status,'copied');
+    const offCopy=await api.copyImageWithMetadata(media.toLocalMediaUrl(source),false,true);assert.equal(offCopy.status,'copied',JSON.stringify({copyResult:offCopy}));
     const actual=await api.readClipboardImageFiles();assert.equal(actual.length,1);const cleaned=Buffer.from(actual[0].bytes),pixels=PNG.sync.read(cleaned);
     assert.deepEqual([pixels.width,pixels.height],[sourcePixels.width,sourcePixels.height]);
     let maxRgbaDelta=0;for(let i=0;i<pixels.data.length;i++)maxRgbaDelta=Math.max(maxRgbaDelta,Math.abs(pixels.data[i]-sourcePixels.data[i]));

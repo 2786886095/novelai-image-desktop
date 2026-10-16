@@ -4,7 +4,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { MAX_IMAGE_BYTES, MAX_IMAGE_PIXELS, validateImage } from "./image-codec";
 import { localMediaUrlToPath } from "./local-media-protocol";
-import { writeWindowsPngClipboard } from "./windows-png-clipboard";
+import { writeWindowsPngClipboard, type CopyImageMetadataDiagnostic } from "./windows-png-clipboard";
 import { removePngGenerationMetadata } from './png-privacy';
 import sharp from 'sharp';
 import type { CopyImageMetadataResult } from "../../src/types";
@@ -27,7 +27,20 @@ export function preparePngForClipboard(raw: unknown): Uint8Array {
  * a normal native image is available. ON callers may use their preservation
  * fallback with a notice; OFF callers MUST fail closed without a raw fallback.
  * Never fetch renderer URLs or accept guessed file paths. */
-export async function copyImageWithMetadata(srcURL: string, keepImageMetadata = true): Promise<CopyImageMetadataResult> {
+export async function copyImageWithMetadata(srcURL: string, keepImageMetadata = true, diagnostics = false): Promise<CopyImageMetadataResult & {diagnostic?:CopyImageMetadataDiagnostic}> {
+  let phase: CopyImageMetadataDiagnostic['phase'] = 'source-read';
+  const fail = (errorCode: CopyImageMetadataDiagnostic['errorCode'], diagnostic?: CopyImageMetadataDiagnostic): CopyImageMetadataResult & {diagnostic?:CopyImageMetadataDiagnostic} => ({status:'failed',...(diagnostics?{diagnostic:diagnostic??{phase,errorCode}}:{})});
+  const safeNative = (error: unknown): CopyImageMetadataDiagnostic | undefined => {
+    try {
+      const value=(error as {diagnostic?:CopyImageMetadataDiagnostic})?.diagnostic;
+      // Snapshot once before validation; even accessor-backed errors cannot swap
+      // an allowlisted token for arbitrary data during serialization.
+      const phase=value?.phase,errorCode=value?.errorCode,rawHresult=value?.hresult;
+      if(!phase||!errorCode||!['native-process','native-load','native-decode','native-data','native-publish-cleanup'].includes(phase)||!['NATIVE_SPAWN_FAILED','NATIVE_TIMEOUT','NATIVE_EXIT_FAILED','NATIVE_SCRIPT_FAILED','NATIVE_DIAGNOSTIC_INVALID'].includes(errorCode))return;
+      const hresult=['0x800401D0','0x80070005','0x8007000E','0x80004005','0x80131500','0x80131604'].includes(rawHresult??'')?rawHresult:undefined;
+      return {phase,errorCode,...(hresult?{hresult}:{})};
+    }catch{return;}
+  };
   if (typeof srcURL !== "string") return {status:"unsupported"};
   const file = localMediaUrlToPath(srcURL);
   const extension = file ? path.extname(file).toLowerCase() : '';
@@ -51,22 +64,29 @@ export async function copyImageWithMetadata(srcURL: string, keepImageMetadata = 
         if (!read.bytesRead) break;
         length += read.bytesRead;
       }
-      if (length !== stat.size) return {status:"failed"};
+      if (length !== stat.size) return fail('SOURCE_LENGTH_CHANGED');
       bytes = buffer.subarray(0, length);
     } finally { await handle.close(); }
     if (keepImageMetadata && !isPng(bytes)) return {status:"unsupported"};
+    phase='image-validate';
     const metadata = await validateImage(bytes);
     if (keepImageMetadata && metadata.extension !== "png") return {status:"unsupported"};
+    phase='png-prepare';
     const png = keepImageMetadata || isPng(bytes) ? bytes : await sharp(bytes, {limitInputPixels: MAX_IMAGE_PIXELS, pages: 1}).ensureAlpha().png().toBuffer();
     const intended = keepImageMetadata ? bytes : Buffer.from(preparePngForClipboard(png));
-    if (process.platform === "win32") await writeWindowsPngClipboard(intended);
+    phase='native-process';
+    if (process.platform === "win32") {if(diagnostics)await writeWindowsPngClipboard(intended,true);else await writeWindowsPngClipboard(intended);}
     else clipboard.writeBuffer(pngFormat(), intended);
     // Never claim preservation merely because a write did not throw.
-    if (!clipboard.readBuffer(pngFormat()).equals(intended) || clipboard.readImage().isEmpty()) return {status:"failed"};
+    phase='png-readback';
+    if (!clipboard.readBuffer(pngFormat()).equals(intended)) return fail('PNG_READBACK_MISMATCH');
+    phase='bitmap-readback';
+    if (clipboard.readImage().isEmpty()) return fail('BITMAP_EMPTY');
     return {status:"copied"};
-  } catch {
-    // Paths, generation parameters and arbitrary error strings stay private.
-    return {status:"failed"};
+  } catch (error) {
+    // No arbitrary exception/URL/path/bytes enter the bounded diagnostic.
+    const code=phase==='source-read'?'SOURCE_IO_FAILED':phase==='image-validate'?'IMAGE_DECODE_FAILED':phase==='png-prepare'?'PNG_PREPARE_FAILED':phase==='native-process'?'NATIVE_EXIT_FAILED':'READBACK_FAILED';
+    return fail(code,phase==='native-process'?safeNative(error):undefined);
   }
 }
 
