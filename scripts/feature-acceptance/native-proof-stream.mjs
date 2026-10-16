@@ -1,16 +1,19 @@
 import { spawn } from 'node:child_process';
+import {mobileNativeEntries,isMobileScenarioEntry} from './mobile-entry-specs.mjs';
 
 // Flutter 3.24 run --machine: framed app.start/app.log/app.stop plus plain
 // native log lines (run.dart creates its daemon with logToStdout=true).
 // No TTY keystroke, second launch, repaired JSON, or self-declared count fallback.
-export function createNativeProof({ sourceSha, platform, expectedChecks, profileSha, testEntry }) {
+export function createNativeProof({ sourceSha, platform, expectedChecks, profileSha, testEntry, requireNativeBegin=false }) {
   if (!Number.isSafeInteger(expectedChecks) || expectedChecks < 1) throw Error('A fixed positive expectedChecks input is required.');
   const checks = [], pending = [], errors = [];
   const pendingFields = new Set(['sourceSha', 'profileSha', 'platform', 'paidCalls', 'mockOnly', 'kind', 'nativeOnly', 'testEntry', 'feature', 'status', 'reason']);
-  const beginFields = new Set(['sourceSha', 'profileSha', 'platform', 'paidCalls', 'mockOnly', 'kind', 'nativeOnly', 'testEntry', 'expectedChecks']);
+  const beginFields = new Set(['sourceSha', 'profileSha', 'platform', 'paidCalls', 'mockOnly', 'kind', 'nativeOnly', 'testEntry', 'expectedChecks', 'nativePid']);
+  const validPid=value=>Number.isSafeInteger(value)&&value>0&&value<=2147483647;
   const boundNativeIdentity = value => /^[a-f0-9]{64}$/.test(profileSha ?? '') &&
     value.profileSha === profileSha && value.kind === 'device' && value.nativeOnly === true &&
-    value.mockOnly === false && ['library33', 'generation24'].includes(testEntry) && value.testEntry === testEntry;
+    value.mockOnly === false && isMobileScenarioEntry(testEntry) && value.testEntry === testEntry &&
+    (!mobileNativeEntries[testEntry].platforms || mobileNativeEntries[testEntry].platforms.includes(platform));
   let completion = null, begin = null;
   function line(text) {
     if (/Unhandled Exception:|FEATURE_NATIVE_ASYNC_ERROR:|FEATURE_ACCEPTANCE_FAILURE:/.test(text)) errors.push('Native asynchronous/journey error: ' + text);
@@ -27,7 +30,8 @@ export function createNativeProof({ sourceSha, platform, expectedChecks, profile
     }
     if (marker[1] === 'BEGIN') {
       if (begin || completion || checks.length || !boundNativeIdentity(value) ||
-          value.expectedChecks !== expectedChecks || Object.keys(value).some(key => !beginFields.has(key))) {
+          value.expectedChecks !== expectedChecks || Object.keys(value).some(key => !beginFields.has(key)) ||
+          ('nativePid' in value && !validPid(value.nativePid)) || (requireNativeBegin && !validPid(value.nativePid))) {
         errors.push('Native BEGIN entry/profile/safety identity mismatch.'); return;
       }
       begin = value;
@@ -43,6 +47,7 @@ export function createNativeProof({ sourceSha, platform, expectedChecks, profile
       }
       pending.push(value);
     } else if (marker[1] === 'CHECK') {
+      if (requireNativeBegin && !begin) errors.push('Native CHECK before required same-entry native BEGIN.');
       if (completion) errors.push('Native CHECK emitted after DONE.');
       if (value.mockOnly !== false || value.status !== 'passed' || value.kind !== 'device') errors.push('Native CHECK must be a passed, non-mock device check.');
       checks.push(value);
@@ -53,14 +58,15 @@ export function createNativeProof({ sourceSha, platform, expectedChecks, profile
   }
   function finish() {
     const failure = [...errors];
+    if (requireNativeBegin && !begin) failure.push('Required same-entry native BEGIN/PID is missing.');
     if (!completion || completion.exitStatus !== 0 || completion.checks !== expectedChecks || checks.length !== expectedChecks) failure.push(`Native journey incomplete: expected ${expectedChecks}, checks ${checks.length}, DONE ${completion?.checks}, exit ${completion?.exitStatus}.`);
     return { checks, pending, begin, completion, errors: failure, passed: failure.length === 0 };
   }
   return { line, finish, get completion() { return completion; }, get checksCount() { return checks.length; }, get errorsCount() { return errors.length; } };
 }
 
-export async function collectResidentFlutter({ command, cwd, env, sourceSha, platform, device, expectedChecks, profileSha, testEntry, timeoutMs = 1500000, journeyTimeoutMs = 300000, completionTailMs = 750, stopGraceMs = 15000 }) {
-  const proof = createNativeProof({ sourceSha, platform, expectedChecks, profileSha, testEntry });
+export async function collectResidentFlutter({ command, cwd, env, sourceSha, platform, device, expectedChecks, profileSha, testEntry, requireNativeBegin=false, timeoutMs = 1500000, journeyTimeoutMs = 300000, completionTailMs = 750, stopGraceMs = 15000 }) {
+  const proof = createNativeProof({ sourceSha, platform, expectedChecks, profileSha, testEntry, requireNativeBegin });
   let stdout = '', stderr = '', nativeStdout = '', nativeStderr = '', appId = null;
   let actualCloseCode = null, actualCloseSignal = null, timedOut = false, terminationReason = 'unexpected-process-close', processError = null;
   let journeyStarted = false;

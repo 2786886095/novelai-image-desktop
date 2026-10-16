@@ -17,9 +17,9 @@ function run(sourceRoot,args,timeout=2100000){
 }
 const sha=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8'});commands.push({command:['git','rev-parse','HEAD'],stdout:sha.stdout??'',stderr:sha.stderr??'',exitStatus:sha.status});
 if(sha.status!==0||sha.stdout.trim()!==process.env.GITHUB_SHA)throw Error('CI checkout identity mismatch.');
-const assets=path.join(root,'official-assets');
 const save=()=>fs.writeFileSync(path.join(root,'CI_COMPONENT_COMMANDS.json'),JSON.stringify({sourceSha:sha.stdout.trim(),platform,device,entryGroup,selectedEntries,entries,commands,exitStatus:failed?1:0,full195Certified:false,completeFeatureRowsCertified:0},null,2)+'\n');
 for(const entry of selectedEntries){
+ const assets=path.join(root,entry,'official-assets'); // Fresh per entry: fetcher rejects existing/partial directories.
  const component={entry,expectedChecks:expectedChecks[entry],status:'failed',sourceQualified:false,full195Certified:false,scope:'bounded actual target-platform components only; not entire feature rows'};entries.push(component);
  let workspace;
  try {
@@ -41,10 +41,12 @@ for(const entry of selectedEntries){
   component.nodeDependencies={commandIndex:dependencyCommand,exitStatus:commands[dependencyCommand].exitStatus,ready:dependenciesReady,scope:'locked per-entry npm ci; lifecycle hooks disabled; dependency tree is not uploaded'};
   if(!dependenciesReady)throw Error('Locked Node dependency preparation failed; this entry was not launched.');
   component.afterNodeDependencies=captureSourceState({sourceRoot:workspace.sourceRoot,sourceSha:sha.stdout.trim(),evidenceDirectory:path.join(workspace.evidenceDirectory,'after-node-dependencies'),requirePristine:true});
-  if(entry==='metadata_favorites16'&&!run(workspace.sourceRoot,['scripts/feature-acceptance/fetch-official-assets.mjs',assets],1100000))throw Error('Public asset GET/size/SHA verification failed; no metadata native pass is claimed.');
+  const officialMetadata=entry==='metadata_favorites16'||entry==='metadata_import3';
+  if(officialMetadata&&!run(workspace.sourceRoot,['scripts/feature-acceptance/fetch-official-assets.mjs',assets],1100000))throw Error('Public asset GET/size/SHA verification failed; no metadata native pass is claimed.');
   const ready=run(workspace.sourceRoot,['scripts/feature-acceptance/write-ci-input.mjs',platform,device,entry,assets,String(expectedChecks[entry])],120000);
   const input=path.join(root,entry,'native-input.json');component.input=input;
-  const passed=ready&&run(workspace.sourceRoot,[entry==='metadata_favorites16'?'scripts/feature-acceptance/run-metadata-favorites-native.mjs':'scripts/feature-acceptance/run-mobile-native.mjs',input]);
+  const nativeRunner=entry==='metadata_favorites16'?'scripts/feature-acceptance/run-metadata-favorites-native.mjs':entry==='metadata_import3'?'scripts/feature-acceptance/run-metadata-import-native.mjs':'scripts/feature-acceptance/run-mobile-native.mjs';
+  const passed=ready&&run(workspace.sourceRoot,[nativeRunner,input]);
   component.nativeExitStatus=passed?0:1;component.status=passed?'passed':'failed';if(!passed)failed=true;
  } catch(error) {component.failure=error.message;component.nativeExitStatus??=null;failed=true;}
  finally {

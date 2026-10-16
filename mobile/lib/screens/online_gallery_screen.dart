@@ -12,7 +12,6 @@ import 'quicktag_navigation.dart';
 import 'gallery_image_aspect.dart';
 import '../services/quicktag_ui.dart';
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -27,6 +26,7 @@ import '../artist/artist_recipe.dart';
 import '../services/artist_tag_service.dart';
 import '../services/online_gallery_service.dart';
 import '../services/online_gallery_download_location.dart';
+import '../services/gallery_download.dart';
 import '../state/app_state.dart';
 import 'aitag_gallery_screen.dart';
 
@@ -450,7 +450,14 @@ String _replaceArtistText(String value, Map<String, Object> fields) =>
             output.replaceAll('{${entry.key}}', '${entry.value}'));
 
 class OnlineGalleryScreen extends StatefulWidget {
-  const OnlineGalleryScreen({super.key});
+  final OnlineGalleryService? service;
+  final http.Client Function()? downloadClientFactory;
+  final OnlineGallerySource? initialSource;
+  const OnlineGalleryScreen(
+      {super.key,
+      this.service,
+      this.downloadClientFactory,
+      this.initialSource});
 
   @override
   State<OnlineGalleryScreen> createState() => _OnlineGalleryScreenState();
@@ -460,11 +467,12 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
   static const _artistRankingPageSizeKey =
       'online_gallery_artist_ranking_page_size';
   static const _artistRankingPageSizes = [12, 24, 48, 60];
-  final service = OnlineGalleryService();
+  late final service = widget.service ?? OnlineGalleryService();
   final artistService = ArtistTagService();
   final query = TextEditingController();
   final scrollController = ScrollController();
-  OnlineGallerySource source = OnlineGallerySource.aitag;
+  late OnlineGallerySource source =
+      widget.initialSource ?? OnlineGallerySource.aitag;
   OnlineGalleryPage? result;
   bool loading = false;
   bool safeOnly = true;
@@ -678,6 +686,7 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
       builder: (_) => _OnlineGalleryDetailScreen(
         service: service,
         item: item,
+        downloadClientFactory: widget.downloadClientFactory,
       ),
     ));
   }
@@ -1567,7 +1576,9 @@ class _OnlineGalleryDetailScreen extends StatefulWidget {
   final OnlineGalleryService service;
   final OnlineGalleryItem item;
 
-  const _OnlineGalleryDetailScreen({required this.service, required this.item});
+  final http.Client Function()? downloadClientFactory;
+  const _OnlineGalleryDetailScreen(
+      {required this.service, required this.item, this.downloadClientFactory});
 
   @override
   State<_OnlineGalleryDetailScreen> createState() =>
@@ -1579,62 +1590,84 @@ class _OnlineGalleryDetailScreenState
   late final Future<OnlineGalleryDetail> detail =
       widget.service.detail(widget.item);
   bool downloading = false;
+  GalleryDownloadCancellation? _downloadCancellation;
+  ImageSaveFeedback? _downloadFeedback;
+
+  @override
+  void dispose() {
+    _downloadCancellation?.cancel();
+    _downloadFeedback?.close();
+    super.dispose();
+  }
 
   Future<void> _download(
       List<OnlineGalleryMedia> media, _GalleryText text) async {
     if (downloading || media.isEmpty) return;
+    final cancellation = GalleryDownloadCancellation();
+    _downloadCancellation = cancellation;
     setState(() => downloading = true);
     final state = context.read<AppState>();
+    _downloadFeedback?.close();
     final feedback = ImageSaveFeedback.show(context, state.settings.language);
-    var saved = 0;
-    var failed = 0;
-    String? outputPath;
+    _downloadFeedback = feedback;
+    final client = widget.downloadClientFactory?.call() ?? http.Client();
     try {
-      if (!await ensureOnlineGalleryDownloadDirectory(state)) {
+      if (!await ensureOnlineGalleryDownloadDirectory(state) || !mounted) {
+        cancellation.cancel();
         feedback.finish(saved: 0, cancelled: true);
         return;
       }
-      if (!mounted) {
-        feedback.finish(saved: 0, cancelled: true);
-        return;
-      }
+      cancellation.check();
       feedback.downloading(text.downloading, media.length);
-      for (var index = 0; index < media.length; index++) {
-        final item = media[index];
-        try {
-          final url =
-              item.downloadUrl.isNotEmpty ? item.downloadUrl : item.displayUrl;
-          if (url.isEmpty) throw const FormatException('EMPTY_IMAGE_URL');
-          final response = await http.get(Uri.parse(url), headers: {
-            'Referer': '${widget.item.source.siteUrl}/',
-            'User-Agent': 'Langbai-NovelAI-Studio-Mobile',
-          }).timeout(const Duration(minutes: 2));
-          if (response.statusCode < 200 || response.statusCode >= 300) {
-            throw HttpException('HTTP ${response.statusCode}');
-          }
-          final extension = RegExp(r'\.([a-zA-Z0-9]{2,5})$')
-                  .firstMatch(Uri.parse(url).path)
-                  ?.group(1) ??
-              'jpg';
-          final file = await state.storage.saveOnlineGalleryImage(
-            response.bodyBytes,
-            source: widget.item.source.id,
-            itemId: widget.item.id,
-            title: widget.item.title,
-            imageId: '${(index + 1).toString().padLeft(2, '0')}-${item.id}',
-            extension: extension,
-          );
-          outputPath = file.parent.path;
-          saved++;
-        } catch (_) {
-          failed++;
-        }
+      final result = await downloadGalleryBatch<OnlineGalleryMedia>(
+          images: media,
+          id: (image) => image.id,
+          cancellation: cancellation,
+          fetch: (image) => fetchGalleryImage(
+              client,
+              image.downloadUrl.isNotEmpty
+                  ? image.downloadUrl
+                  : image.displayUrl,
+              {
+                'Referer': '${widget.item.source.siteUrl}/',
+                'User-Agent': 'Langbai-NovelAI-Studio-Mobile'
+              },
+              cancellation: cancellation),
+          save: (image, index, bytes, extension) async {
+            cancellation.check();
+            return state.storage.saveOnlineGalleryImage(bytes,
+                source: widget.item.source.id,
+                itemId: widget.item.id,
+                title: widget.item.title,
+                imageId:
+                    '${(index + 1).toString().padLeft(2, '0')}-${image.id}',
+                extension: extension);
+          });
+      if (mounted) {
+        feedback.finish(
+            saved: result.savedFiles.length,
+            failed: result.failures.length,
+            cancelled: result.cancelled,
+            path: result.savedFiles.isEmpty
+                ? null
+                : result.savedFiles.last.parent.path);
+      } else {
+        feedback.close();
       }
-      feedback.finish(saved: saved, failed: failed, path: outputPath);
     } catch (_) {
-      feedback.finish(
-          saved: saved, failed: media.length - saved, path: outputPath);
+      if (mounted) {
+        feedback.finish(
+            saved: 0,
+            failed: cancellation.cancelled ? 0 : media.length,
+            cancelled: cancellation.cancelled);
+      } else {
+        feedback.close();
+      }
     } finally {
+      client.close();
+      if (identical(_downloadCancellation, cancellation)) {
+        _downloadCancellation = null;
+      }
       if (mounted) setState(() => downloading = false);
     }
   }
@@ -1665,13 +1698,21 @@ class _OnlineGalleryDetailScreenState
     final text = _galleryText(language);
     return Scaffold(
       appBar: AppBar(
-        title: studioAppBarTitle(context, Text(
-            widget.item.title.isEmpty
-                ? '#${widget.item.id}'
-                : widget.item.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis)),
+        title: studioAppBarTitle(
+            context,
+            Text(
+                widget.item.title.isEmpty
+                    ? '#${widget.item.id}'
+                    : widget.item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis)),
         actions: [
+          if (downloading)
+            IconButton(
+                key: const ValueKey('online-gallery-cancel-download'),
+                tooltip: MaterialLocalizations.of(context).cancelButtonLabel,
+                onPressed: () => _downloadCancellation?.cancel(),
+                icon: const Icon(Icons.stop_circle_outlined)),
           GalleryFavoriteButton(
               item: GalleryFavorite.fromItem(widget.item),
               prepare: () async =>
@@ -1940,8 +1981,16 @@ class _DetailInfo extends StatelessWidget {
             label: Text(text.usePrompt),
           ),
         ],
-        if (item.source == OnlineGallerySource.quicktag && detail.prompt.trim().isNotEmpty)
-          SaveGalleryStyleButton(name:item.title,prompt:detail.prompt,images:(detail.media.isEmpty?[item.cover]:detail.media).map((im)=>im.downloadUrl.isNotEmpty?im.downloadUrl:im.displayUrl).toList()),
+        if (item.source == OnlineGallerySource.quicktag &&
+            detail.prompt.trim().isNotEmpty)
+          SaveGalleryStyleButton(
+              name: item.title,
+              prompt: detail.prompt,
+              images: (detail.media.isEmpty ? [item.cover] : detail.media)
+                  .map((im) => im.downloadUrl.isNotEmpty
+                      ? im.downloadUrl
+                      : im.displayUrl)
+                  .toList()),
         if (item.source == OnlineGallerySource.quicktag)
           for (final block
               in quickCharacters(detail.metadata['entry']).indexed) ...[

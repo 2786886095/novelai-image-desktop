@@ -13,6 +13,9 @@ import {verifyMobilePredecessor,verifyColdNativeRestart} from './mobile-native-p
 const inputPath = path.resolve(process.argv[2] || 'native-input.json');
 const inputBytes = fs.readFileSync(inputPath);
 const input = JSON.parse(inputBytes.toString('utf8'));
+// Legacy release_parity7 emits CHECK/DONE directly. All NativeScenarios entries
+// must additionally bind their real native process before the first CHECK.
+const requireNativeBegin=isMobileScenarioEntry(input.entry)&&input.entry!=='release_parity7';
 const ledger = [];
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const outputRoot = path.resolve(process.env.FEATURE_ACCEPTANCE_OUTPUT || input.outputRoot);
@@ -62,7 +65,7 @@ try {
   }
   const sourceSha = input.sourceSha || 'uncommitted';
   createNativeProof({ sourceSha, platform: input.platform, expectedChecks: input.expectedChecks,
-    testEntry: input.entry, profileSha: isMobileScenarioEntry(input.entry) ? profileSha256 : undefined });
+    testEntry: input.entry, profileSha: isMobileScenarioEntry(input.entry) ? profileSha256 : undefined, requireNativeBegin });
   // A local uncommitted source snapshot is never silently labelled as a Git SHA.
   if (sourceSha !== 'uncommitted' && !/^[a-f0-9]{40}$/i.test(sourceSha)) throw new Error('Invalid source SHA.');
   predecessorProof=verifyMobilePredecessor({...input,outputRoot},profileSha256);
@@ -150,6 +153,7 @@ try {
     resident = await collectResidentFlutter({ command: nativeCommand, cwd: input.projectRoot, env: process.env,
       sourceSha, platform: input.platform, device: input.device, expectedChecks: input.expectedChecks,
       testEntry: input.entry, profileSha: isMobileScenarioEntry(input.entry) ? profileSha256 : undefined,
+      requireNativeBegin,
       timeoutMs: input.timeoutMs || 1500000, journeyTimeoutMs: input.journeyTimeoutMs || 300000,
       completionTailMs: input.completionTailMs || 750, stopGraceMs: input.stopGraceMs || 15000 });
     nativeStdout = resident.nativeStdout; nativeStderr = resident.nativeStderr; completion = resident.completion;
@@ -165,7 +169,7 @@ try {
   fs.writeFileSync(path.join(outputRoot, 'native-app.stderr.txt'), nativeStderr);
   process.stdout.write(nativeStdout); process.stderr.write(nativeStderr);
   const proof = createNativeProof({ sourceSha, platform: input.platform, expectedChecks: input.expectedChecks,
-    testEntry: input.entry, profileSha: isMobileScenarioEntry(input.entry) ? profileSha256 : undefined });
+    testEntry: input.entry, profileSha: isMobileScenarioEntry(input.entry) ? profileSha256 : undefined, requireNativeBegin });
   for (const line of (nativeStdout + '\n' + nativeStderr).split(/\r?\n/)) proof.line(line);
   const parsed = proof.finish();
   nativeCompletion=parsed.completion; nativePending=parsed.pending; nativeBegin=parsed.begin;

@@ -2,6 +2,8 @@
 export const mobileNativeEntries=Object.freeze({
  core19:Object.freeze({testFile:'integration_test/native_feature_journeys.dart',expectedChecks:19,scenarioChecks:0}),
  metadata_favorites16:Object.freeze({testFile:'integration_test/native_metadata_favorites.dart',expectedChecks:16,scenarioChecks:0}),
+ metadata_import3:Object.freeze({testFile:'integration_test/native_metadata_import_scenarios.dart',expectedChecks:3,scenarioChecks:3}),
+ gallery3:Object.freeze({testFile:'integration_test/native_online_gallery_scenarios.dart',expectedChecks:3,scenarioChecks:3}),
  queue_lifecycle4:Object.freeze({testFile:'integration_test/native_queue_lifecycle.dart',expectedChecks:4,scenarioChecks:0}),
  release_parity7:Object.freeze({testFile:'integration_test/native_release_parity.dart',expectedChecks:7,scenarioChecks:4}),
  library33:Object.freeze({testFile:'integration_test/native_library_scenarios.dart',expectedChecks:33,scenarioChecks:30}),
@@ -22,7 +24,8 @@ export const isMobileScenarioEntry=entry=>Object.hasOwn(mobileNativeEntries,entr
 // still required. The cold reopen pair must share a disposable device in order.
 export const mobileNativeEntryGroups=Object.freeze({
  core:Object.freeze(['core19','queue_lifecycle4']),
- metadata:Object.freeze(['metadata_favorites16']),
+ metadata:Object.freeze(['metadata_favorites16','metadata_import3']),
+ gallery:Object.freeze(['gallery3']),
  library:Object.freeze(['library33']),
  generation:Object.freeze(['generation24','release_parity7']),
  text:Object.freeze(['text15','skill_reopen1']),

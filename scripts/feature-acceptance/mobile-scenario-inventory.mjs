@@ -2,6 +2,8 @@
 // old components or silently change a legacy entry's asserted check total.
 const keys=(feature,scenarios)=>scenarios.map(scenario=>`${feature}/${scenario}`);
 export const mobileScenarioInventories=Object.freeze({
+ metadata_import3:Object.freeze(keys('metadata-import',['default-online-local-bytes','offline-and-selected-apply','formats-error-cancel-no-upload'])),
+ gallery3:Object.freeze(keys('online-gallery',['browse-search-pagination','inspect-download-presets','network-error-cancel'])),
  release_parity7:Object.freeze(keys('inpaint',[
   'mask-source-pixel-preservation','focused4k-work-pasteback',
   'restore-before-image-mask-roi','invalid-roi-no-submit'])),

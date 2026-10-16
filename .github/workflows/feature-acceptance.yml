@@ -79,7 +79,7 @@ jobs:
           sudo chown root:root node_modules/electron/dist/chrome-sandbox
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - name: Check bounded native command and fixture cleanup
-        run: node --test scripts/feature-acceptance/bounded-native-command.test.mjs scripts/feature-acceptance/generation-fixture-cleanup.test.mjs scripts/feature-acceptance/android-native-preflight.test.mjs scripts/feature-acceptance/desktop-native-diagnostics.test.mjs scripts/feature-acceptance/mobile-native-predecessor.test.mjs scripts/feature-acceptance/desktop-native-expansion.test.mjs
+        run: node --test scripts/feature-acceptance/bounded-native-command.test.mjs scripts/feature-acceptance/generation-fixture-cleanup.test.mjs scripts/feature-acceptance/android-native-preflight.test.mjs scripts/feature-acceptance/desktop-native-diagnostics.test.mjs scripts/feature-acceptance/mobile-native-predecessor.test.mjs scripts/feature-acceptance/desktop-native-expansion.test.mjs scripts/feature-acceptance/native-begin-entry-parity.test.mjs scripts/feature-acceptance/metadata-import-wrapper.test.mjs scripts/feature-acceptance/prepare-android-image.test.mjs
       - name: Fetch and verify the pinned Windows-only component seed
         if: runner.os == 'Windows'
         env:
@@ -201,7 +201,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        entry-group: [core, metadata, library, generation, text, workflows, ui, os]
+        entry-group: [core, metadata, gallery, library, generation, text, workflows, ui, os]
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -296,6 +296,8 @@ jobs:
             exit 1
           fi
           "$emulator" -accel-check
+      - name: Prepare fixed Android image with bounded archive recovery
+        run: node scripts/feature-acceptance/prepare-android-image.mjs
       - name: Fresh disposable Android Emulator journeys
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -312,14 +314,16 @@ jobs:
         if: always()
         with:
           name: native-components-android-${{ matrix.entry-group }}-${{ github.sha }}
-          path: ${{ runner.temp }}/feature-native-android/
+          path: |
+            ${{ runner.temp }}/feature-native-android/
+            ${{ runner.temp }}/android-image-preparation-*/
           if-no-files-found: error
 
   ios-components:
     strategy:
       fail-fast: false
       matrix:
-        entry-group: [core, metadata, library, generation, text, workflows, ui, os]
+        entry-group: [core, metadata, gallery, library, generation, text, workflows, ui, os]
     runs-on: macos-14
     timeout-minutes: 75
     steps:
@@ -414,7 +418,7 @@ jobs:
           path: ${{ runner.temp }}/all-native-evidence
           merge-multiple: false
       - name: Check matrix rejection rules
-        run: node --test scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/mobile-scenario-receipt.test.mjs scripts/feature-acceptance/mobile-entry-consistency.test.mjs scripts/feature-acceptance/native-proof-stream.test.mjs scripts/feature-acceptance/native-resident-pending.test.mjs
+        run: node --test scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/mobile-scenario-receipt.test.mjs scripts/feature-acceptance/mobile-entry-consistency.test.mjs scripts/feature-acceptance/native-proof-stream.test.mjs scripts/feature-acceptance/native-resident-pending.test.mjs scripts/feature-acceptance/native-begin-entry-parity.test.mjs scripts/feature-acceptance/metadata-import-wrapper.test.mjs scripts/feature-acceptance/prepare-android-image.test.mjs
       - name: Require all 39 client features on all five actual platforms
         shell: bash
         run: |

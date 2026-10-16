@@ -63,7 +63,8 @@ Future<({ImageMetadataReport report, File file, String name})>
   final source = File(item.filePath);
   if (!source.existsSync()) throw StateError('missing history image');
   final bytes = await source.readAsBytes();
-  final report = await (reader ?? MetadataRecoveryReader()).read(bytes, mode: mode);
+  final report =
+      await (reader ?? MetadataRecoveryReader()).read(bytes, mode: mode);
   final fileName = source.uri.pathSegments.isEmpty
       ? item.filePath
       : source.uri.pathSegments.last;
@@ -582,6 +583,7 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
   int _readRevision = 0;
   Future<void> _snapshotWrite = Future<void>.value();
   ImageMetadataReport? _report;
+  final Set<String> _selectedKeys = {};
   String? _filePath;
   String _fileName = '';
   bool _reading = false;
@@ -604,13 +606,18 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
     super.dispose();
   }
 
-  Future<void> _loadBytes(Uint8List bytes, String name, {File? existing}) async {
+  Future<void> _loadBytes(Uint8List bytes, String name,
+      {File? existing}) async {
     final revision = ++_readRevision;
     final mode = _recoveryMode;
     setState(() {
-      _lastBytes = Uint8List.fromList(bytes); _fileName = name;
+      _lastBytes = Uint8List.fromList(bytes);
+      _fileName = name;
       _filePath = existing?.path;
-      _report = null; _recoveryError = null; _reading = true;
+      _report = null;
+      _selectedKeys.clear();
+      _recoveryError = null;
+      _reading = true;
     });
     try {
       final app = context.read<AppState>();
@@ -618,7 +625,8 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
       if (file == null) {
         final write = _snapshotWrite.then((_) async {
           if (!mounted || revision != _readRevision) return;
-          file = (await app.storage.saveMetadataInspectorImage(bytes, name)).file;
+          file =
+              (await app.storage.saveMetadataInspectorImage(bytes, name)).file;
         });
         _snapshotWrite = write.catchError((Object _) {});
         await write;
@@ -628,7 +636,15 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
       setState(() => _filePath = file!.path);
       final report = await _reader.read(bytes, mode: mode);
       if (!mounted || revision != _readRevision) return;
-      setState(() => _report = report);
+      setState(() {
+        _report = report;
+        _selectedKeys
+          ..clear()
+          ..addAll(report.imported.compatibleValuesByKey.keys);
+        if (report.characterCaptions.isNotEmpty) {
+          _selectedKeys.add('characters');
+        }
+      });
     } catch (error) {
       if (mounted && revision == _readRevision) {
         final language = context.read<AppState>().settings.language;
@@ -637,7 +653,9 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
             : _metadataTextFor(language).readFailed);
       }
     } finally {
-      if (mounted && revision == _readRevision) setState(() => _reading = false);
+      if (mounted && revision == _readRevision) {
+        setState(() => _reading = false);
+      }
     }
   }
 
@@ -646,8 +664,11 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
     _readRevision++;
     unawaited(_reader.cancel());
     setState(() {
-      _recoveryMode = mode; _report = null; _recoveryError = null;
-      _reading = false; _historyReadingId = null;
+      _recoveryMode = mode;
+      _report = null;
+      _recoveryError = null;
+      _reading = false;
+      _historyReadingId = null;
     });
     final bytes = _lastBytes;
     if (bytes != null) {
@@ -682,8 +703,9 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
       await _loadBytes(bytes, picked.name);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(_metadataTextFor(appState.settings.language).readFailed)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content:
+                Text(_metadataTextFor(appState.settings.language).readFailed)));
       }
     } finally {
       if (mounted && !accepted) setState(() => _reading = false);
@@ -709,7 +731,9 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
             .showSnackBar(SnackBar(content: Text(text.readFailed)));
       }
     } finally {
-      if (mounted && _historyReadingId == item.id) setState(() => _historyReadingId = null);
+      if (mounted && _historyReadingId == item.id) {
+        setState(() => _historyReadingId = null);
+      }
     }
   }
 
@@ -733,7 +757,12 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
     final text = _metadataTextFor(state.settings.language);
     final recoveryText = metadataRecoveryText(state.settings.language);
     final report = _report;
-    final compatible = report?.imported.compatibleValues ?? const {};
+    final compatible =
+        report?.imported.compatibleValuesByKey ?? const <String, Object>{};
+    final selectionKeys = {
+      ...compatible.keys,
+      if (report?.characterCaptions.isNotEmpty == true) 'characters'
+    };
     final history = state.history.where((item) {
       if (_historyGroupId == _metadataUngrouped) {
         return item.groupId == null || item.groupId!.isEmpty;
@@ -765,20 +794,33 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
                 isExpanded: true,
                 decoration: InputDecoration(labelText: recoveryText.label),
                 items: [
-                  DropdownMenuItem(value: MetadataRecoveryMode.online, child: Text(recoveryText.online)),
-                  DropdownMenuItem(value: MetadataRecoveryMode.offline, child: Text(recoveryText.offline)),
+                  DropdownMenuItem(
+                      value: MetadataRecoveryMode.online,
+                      child: Text(recoveryText.online)),
+                  DropdownMenuItem(
+                      value: MetadataRecoveryMode.offline,
+                      child: Text(recoveryText.offline)),
                 ],
                 onChanged: _changeMode,
               ),
               const SizedBox(height: 8),
-              Text(_recoveryMode == MetadataRecoveryMode.online ? recoveryText.onlineInfo : recoveryText.offlineInfo,
+              Text(
+                  _recoveryMode == MetadataRecoveryMode.online
+                      ? recoveryText.onlineInfo
+                      : recoveryText.offlineInfo,
                   key: const ValueKey('metadata-recovery-privacy')),
               if (_recoveryError != null) ...[
                 const SizedBox(height: 8),
-                Text(_recoveryError!, key: const ValueKey('metadata-recovery-error'),
-                    style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                TextButton(onPressed: _lastBytes == null || _reading ? null : () =>
-                    _loadBytes(_lastBytes!, _fileName, existing: _filePath == null ? null : File(_filePath!)),
+                Text(_recoveryError!,
+                    key: const ValueKey('metadata-recovery-error'),
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error)),
+                TextButton(
+                    onPressed: _lastBytes == null || _reading
+                        ? null
+                        : () => _loadBytes(_lastBytes!, _fileName,
+                            existing:
+                                _filePath == null ? null : File(_filePath!)),
                     child: Text(recoveryText.retry)),
               ],
               const SizedBox(height: 12),
@@ -841,7 +883,9 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
                         Text(text.dropHint),
                         const SizedBox(height: 6),
                         Text(
-                          _recoveryMode == MetadataRecoveryMode.online ? recoveryText.onlineInfo : recoveryText.offlineInfo,
+                          _recoveryMode == MetadataRecoveryMode.online
+                              ? recoveryText.onlineInfo
+                              : recoveryText.offlineInfo,
                           style: TextStyle(
                               color: Theme.of(context).colorScheme.primary),
                         ),
@@ -898,29 +942,68 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
                         const SizedBox(height: 4),
                         Text(text.compatibleHint),
                         const SizedBox(height: 12),
-                        if (compatible.isEmpty)
+                        if (selectionKeys.isEmpty)
                           Text(text.noCompatible)
-                        else
+                        else ...[
+                          Wrap(spacing: 8, children: [
+                            TextButton(
+                                key: const ValueKey('metadata-selection-all'),
+                                onPressed: () => setState(
+                                    () => _selectedKeys.addAll(selectionKeys)),
+                                child: Text(MaterialLocalizations.of(context)
+                                    .selectAllButtonLabel)),
+                            TextButton(
+                                key: const ValueKey('metadata-selection-clear'),
+                                onPressed: () => setState(_selectedKeys.clear),
+                                child: Text(switch (state.settings.language) {
+                                  'zh-TW' => '全不選',
+                                  'en-US' => 'Clear selection',
+                                  'ja-JP' => '選択を解除',
+                                  'ko-KR' => '모두 선택 해제',
+                                  _ => '全不选'
+                                })),
+                            Text(
+                                '${_selectedKeys.length}/${selectionKeys.length}'),
+                          ]),
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children: compatible.entries.map((entry) {
+                            children: selectionKeys.map((key) {
+                              final entry = MapEntry(
+                                  key,
+                                  key == 'characters'
+                                      ? report.characterCaptions.length
+                                      : compatible[key]);
                               final english =
                                   _importedEnglish[entry.key] ?? entry.key;
-                              return Chip(
+                              return FilterChip(
+                                  key: ValueKey('metadata-select-${entry.key}'),
+                                  selected: _selectedKeys.contains(entry.key),
+                                  onSelected: (value) => setState(() {
+                                        if (value) {
+                                          _selectedKeys.add(entry.key);
+                                        } else {
+                                          _selectedKeys.remove(entry.key);
+                                        }
+                                      }),
                                   label: Text(
-                                '${metadataParameterLabel(state.settings.language, english)}: ${entry.value}',
-                              ));
+                                    '${metadataParameterLabel(state.settings.language, english)}: ${entry.value}',
+                                  ));
                             }).toList(),
                           ),
+                        ],
                         const SizedBox(height: 14),
                         FilledButton.icon(
-                          onPressed: compatible.isEmpty
+                          key: const ValueKey('metadata-apply-selected'),
+                          onPressed: _selectedKeys.isEmpty
                               ? null
                               : () {
                                   state.applyImportedMetadata(
-                                    report.imported,
-                                    characterCaptions: report.characterCaptions,
+                                    report.imported.selecting(_selectedKeys),
+                                    characterCaptions:
+                                        _selectedKeys.contains('characters')
+                                            ? report.characterCaptions
+                                            : null,
                                     exact: true,
                                     preserveMissing: true,
                                   );
@@ -1023,7 +1106,9 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> {
                                 ? text.noParams
                                 : report.rawText,
                             style: TextStyle(
-                                fontFamily: UiTypographyScope.codeFamily(context), fontSize: 12),
+                                fontFamily:
+                                    UiTypographyScope.codeFamily(context),
+                                fontSize: 12),
                           ),
                         ),
                       ),
@@ -1080,7 +1165,8 @@ class _HistoryMetadataPicker extends StatelessWidget {
             trailing: Icon(expanded ? Icons.expand_less : Icons.expand_more),
             onTap: () => onExpandedChanged(!expanded),
           ),
-          studioCrossFadeTransition(context,
+          studioCrossFadeTransition(
+            context,
             firstChild: const SizedBox(width: double.infinity),
             secondChild: Padding(
               // Keep room for the dropdown's floating label. With zero top

@@ -1363,7 +1363,7 @@ class AppState extends ChangeNotifier {
     bool exact = false,
     bool preserveMissing = false,
   }) {
-    if (imported.isEmpty) {
+    if (imported.isEmpty && !(exact && characterCaptions?.isNotEmpty == true)) {
       status = _rt('status.noMetadata');
       notifyListeners();
       return;
