@@ -17,6 +17,7 @@ export const mobileNativeEntries=Object.freeze({
  ui9:Object.freeze({testFile:'integration_test/native_ui_scenarios.dart',expectedChecks:9,scenarioChecks:9}),
  os6:Object.freeze({testFile:'integration_test/native_os_scenarios.dart',expectedChecks:6,scenarioChecks:6}),
  android_update2:Object.freeze({testFile:'integration_test/native_android_update_scenarios.dart',expectedChecks:2,scenarioChecks:2,platforms:Object.freeze(['android'])}),
+ ios_update2:Object.freeze({testFile:'integration_test/native_ios_update_scenarios.dart',expectedChecks:2,scenarioChecks:2,platforms:Object.freeze(['ios'])}),
 });
 export const isMobileScenarioEntry=entry=>Object.hasOwn(mobileNativeEntries,entry)&&mobileNativeEntries[entry].scenarioChecks>0;
 
@@ -31,7 +32,7 @@ export const mobileNativeEntryGroups=Object.freeze({
  text:Object.freeze(['text15','skill_reopen1']),
  workflows:Object.freeze(['batch_mcp7','comic_openai6','image_agent3','tools3']),
  ui:Object.freeze(['ui9']),
- os:Object.freeze(['os6','android_update2']),
+ os:Object.freeze(['os6','android_update2','ios_update2']),
 });
 export function selectMobileNativeEntries(group='all',platform){
  if(platform!==undefined&&!['android','ios'].includes(platform))throw Error('Unknown native mobile platform');

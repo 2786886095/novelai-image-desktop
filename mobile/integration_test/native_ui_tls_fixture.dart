@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'native_ui_tls_credentials.dart';
+import 'native_tls_context.dart';
 
 class NativeUiTlsFixture {
   final HttpServer tls, proxy;
@@ -31,15 +32,15 @@ class NativeUiTlsFixture {
     'danbooru.donmai.us:443'
   };
   static Future<NativeUiTlsFixture> open(Uint8List image) async {
-    final pem = base64Decode(nativeUiCertificate),
-        context = SecurityContext()
-          ..useCertificateChainBytes(pem)
-          ..usePrivateKeyBytes(base64Decode(nativeUiPrivateKey));
+    final context = nativeFixtureServerContext(
+        chainBase64: nativeUiChainBase64,
+        keyBase64: nativeUiPrivateKey,
+        pkcs12Base64: nativeUiPkcs12Base64);
     final tls = await HttpServer.bindSecure(
             InternetAddress.loopbackIPv4, 0, context),
         proxy = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final value = NativeUiTlsFixture._(tls, proxy, image);
-    SecurityContext.defaultContext.setTrustedCertificatesBytes(pem);
+    trustNativeFixtureRootInDisposableProcess();
     tls.listen(value._respond,
         onError: (Object error) => value.errors.add('$error'));
     proxy.listen(value._tunnel,

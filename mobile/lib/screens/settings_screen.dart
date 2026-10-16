@@ -1,3 +1,4 @@
+import 'ios_update_card.dart';
 import 'prompt_skill_selector.dart';
 import '../prompts/prompt_skill_selection.dart';
 import 'external_mcp_settings.dart';
@@ -29,6 +30,7 @@ import '../agent/tavern_models.dart';
 import '../prompts/ig5_image_prompts.dart';
 import '../models/nai_models.dart';
 import '../services/storage_permission.dart';
+import '../services/ios_output_folder.dart';
 import '../services/aitag_service.dart';
 import '../services/online_gallery_download_location.dart';
 import '../state/app_state.dart';
@@ -442,6 +444,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onPressed: state.refreshAnlas),
             ),
           ),
+          if (Platform.isIOS) const IosUpdateCard() else
           Card(
             child: ListTile(
               leading: Icon(state.updateInfo?.hasUpdate == true
@@ -843,10 +846,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (value) =>
                   state.setSettings((x) => x.saveToGallery = value),
             ),
-            if (Platform.isAndroid)
+            if (Platform.isAndroid || Platform.isIOS)
               _ImageOutputDirSetting(
                 value: s.imageOutputDir,
                 text: settingsDetailText,
+                language: s.language,
                 onChanged: (value) =>
                     state.setSettings((x) => x.imageOutputDir = value),
               ),
@@ -1418,46 +1422,56 @@ class _ModelNameField extends StatelessWidget {
       );
 }
 
-// Lets the user choose a custom base folder for saved originals (Android). Images
-// are stored as <base>/<date>/<group>/ — the same date/group layout as the
-// desktop client. On Android 11+ an arbitrary folder needs "All files access",
-// so we prompt for it; until granted, saves fall back to the app folder.
+// Real OS folder selection for generated originals. Android uses the production
+// all-files permission flow; iOS uses native persisted document-picker grants.
+// Both retain the desktop <base>/<date>/<group>/ layout.
 class _ImageOutputDirSetting extends StatelessWidget {
   const _ImageOutputDirSetting({
     required this.value,
     required this.text,
+    required this.language,
     required this.onChanged,
   });
   final String value;
   final SettingsDetailText text;
+  final String language;
   final ValueChanged<String> onChanged;
 
   Future<void> _pick(BuildContext context) async {
-    final picked = await FilePicker.platform
-        .getDirectoryPath(dialogTitle: text.chooseImageFolderDialog);
-    if (picked == null || picked.trim().isEmpty) return;
-    final granted = await StoragePermission.hasAllFilesAccess();
-    if (!granted && context.mounted) {
-      final go = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(text.fileAccessTitle),
-          content: Text(text.fileAccessContent),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(text.later)),
-            FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(text.authorize)),
-          ],
-        ),
-      );
-      if (go == true) await StoragePermission.requestAllFilesAccess();
+    try {
+      final picked = Platform.isIOS
+          ? await IosOutputFolder.choose()
+          : await FilePicker.platform
+              .getDirectoryPath(dialogTitle: text.chooseImageFolderDialog);
+      if (picked == null || picked.trim().isEmpty) return;
+      final granted = await StoragePermission.hasAllFilesAccess();
+      if (!granted && context.mounted) {
+        final go = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(text.fileAccessTitle),
+            content: Text(text.fileAccessContent),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(text.later)),
+              FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: Text(text.authorize)),
+            ],
+          ),
+        );
+        if (go == true) await StoragePermission.requestAllFilesAccess();
+      }
+      // Android retains its prior deferred-grant behavior. iOS only reaches
+      // this point after the native picker has saved an access bookmark.
+      onChanged(picked.trim());
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
+      }
     }
-    // Remember the choice regardless — saving falls back gracefully until the
-    // permission is granted.
-    onChanged(picked.trim());
   }
 
   @override
@@ -1475,7 +1489,13 @@ class _ImageOutputDirSetting extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          text.imagePathHint,
+          Platform.isIOS ? switch (language) {
+            'zh-CN' => '通过“文件”授权输出目录并记住访问权限。撤销权限或移动目录后，请重新选择；不会假装保存到所选位置。',
+            'zh-TW' => '透過「檔案」授權輸出資料夾並記住權限。撤銷權限或移動後請重新選擇；不會假稱已儲存到所選位置。',
+            'ja-JP' => 'ファイルで保存先へのアクセスを許可します。権限を取り消したり移動した場合は再選択してください。',
+            'ko-KR' => '파일 앱에서 출력 폴더 접근을 허용합니다. 권한 해제나 폴더 이동 후에는 다시 선택하세요.',
+            _ => 'Authorize a folder in Files. Choose it again after permission changes or moving it; a fallback is never reported as the selected output.',
+          } : text.imagePathHint,
           style: theme.textTheme.bodySmall
               ?.copyWith(color: theme.colorScheme.outline),
         ),
@@ -1484,6 +1504,7 @@ class _ImageOutputDirSetting extends StatelessWidget {
           spacing: 8,
           children: [
             OutlinedButton.icon(
+              key: const ValueKey('image-output-choose'),
               onPressed: () => _pick(context),
               icon: const Icon(Icons.folder_open),
               label: Text(text.chooseFolder),

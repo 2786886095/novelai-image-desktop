@@ -15,8 +15,8 @@ const env=()=>({GITHUB_ACTIONS:'true',RUNNER_OS:'Linux',ANDROID_HOME:ANDROID_SDK
 const result=(patch={})=>({stdout:'Installing system images.\n',stderr:'',exitStatus:0,error:null,timedOut:false,outputOverflow:false,signal:null,cleanupComplete:true,...patch});
 // Every virtual Linux path maps into this one new temporary host directory.
 // There is no real SDK access and the injected command never spawns sdkmanager.
-function fixture(){
-  const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-image-unit-')),reads=[],writes=[],commands=[];
+function fixture({temporaryParent=os.tmpdir()}={}){
+  const root=fs.realpathSync(fs.mkdtempSync(path.join(temporaryParent,'android-image-unit-'))),reads=[],writes=[],commands=[];
   const roots=[[ANDROID_SDK_ROOT,path.join(root,'sdk')],[ANDROID_RUNNER_TEMP,path.join(root,'runner-temp')]];
   const real=file=>{
     assert.equal(typeof file,'string');
@@ -29,6 +29,7 @@ function fixture(){
   const virtual=file=>{for(const [v,a] of roots)if(file===a||file.startsWith(a+path.sep))return path.posix.join(v,...path.relative(a,file).split(path.sep));return file;};
   for(const [,actual]of roots)fs.mkdirSync(actual,{recursive:true});
   fs.mkdirSync(path.dirname(real(ANDROID_SDKMANAGER)),{recursive:true});fs.writeFileSync(real(ANDROID_SDKMANAGER),'PURE UNIT COMMAND STUB - NOT SDKMANAGER');
+  fs.chmodSync(real(ANDROID_SDKMANAGER),0o755);
   const io={
     realpathSync:f=>{reads.push(f);return virtual(fs.realpathSync(real(f)));},
     lstatSync:f=>{reads.push(f);return fs.lstatSync(real(f));},
@@ -48,7 +49,7 @@ function fixture(){
   const run=async(answers,{environment=env(),hostPlatform='linux',onCall}={})=>createAndroidImagePreparer({io,hostPlatform,command:async(argv,options)=>{
     commands.push({argv,options});if(onCall)onCall(commands.length);const value=answers[commands.length-1];assert(value,'Unexpected extra attempt');return value;
   }})(environment);
-  return{root,io,real,install,run,reads,writes,commands,close(){assert.equal(path.dirname(root),os.tmpdir());fs.rmSync(root,{recursive:true,force:true});}};
+  return{root,io,real,install,run,reads,writes,commands,close(){assert.equal(path.dirname(root),fs.realpathSync(temporaryParent));fs.rmSync(root,{recursive:true,force:true});}};
 }
 
 test('only Linux GitHub Actions, fixed SDK roots and exact RUNNER_TEMP pass admission',()=>{
@@ -156,4 +157,40 @@ test('missing installed metadata verifier is strict and CLI cannot select anothe
   const file=fileURLToPath(new URL('./prepare-android-image.mjs',import.meta.url));
   const child=spawnSync(process.execPath,[file,'--sdk-root=/human/sdk'],{env:{...process.env,GITHUB_ACTIONS:'true'},encoding:'utf8',timeout:5000,windowsHide:true});
   assert.equal(child.status,1);assert.match(child.stderr,/no path\/package overrides/);assert.equal(child.stdout,'');
+});
+
+// A real temporary alias reproduces Darwin-style noncanonical temp parents on
+// every host (a junction on Windows); all SDK access stays inside this fixture.
+test('temporary alias roots round-trip through the unchanged canonical SDK guard',async()=>{
+  const base=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'android-image-alias-unit-')));
+  const actual=path.join(base,'actual'),alias=path.join(base,'alias');
+  let f;
+  try{
+    fs.mkdirSync(actual);fs.symlinkSync(actual,alias,process.platform==='win32'?'junction':'dir');
+    f=fixture({temporaryParent:alias});
+    assert.equal(path.dirname(f.root),fs.realpathSync(actual));
+    assert.notEqual(path.dirname(f.root),alias);
+    assert.equal(f.io.realpathSync(ANDROID_SDK_ROOT),ANDROID_SDK_ROOT);
+    assert.equal(f.io.realpathSync(ANDROID_RUNNER_TEMP),ANDROID_RUNNER_TEMP);
+    const r=await f.run([result()],{onCall:()=>f.install()});
+    assert.equal(r.exitStatus,0);assert.equal(f.commands.length,1);
+    assert.equal(r.productNativePass,false);assert.deepEqual(r.sdkPathsDeleted,[]);
+  }finally{
+    if(f)f.close();
+    assert.equal(path.dirname(base),fs.realpathSync(os.tmpdir()));
+    assert(path.basename(base).startsWith('android-image-alias-unit-'));
+    fs.rmSync(base,{recursive:true,force:true});
+  }
+});
+
+test('temporary sdkmanager stub is executable without ever running its bytes',()=>{
+  const f=fixture();try{
+    const stub=f.real(ANDROID_SDKMANAGER);
+    assert.equal(fs.readFileSync(stub,'utf8'),'PURE UNIT COMMAND STUB - NOT SDKMANAGER');
+    fs.accessSync(stub,fs.constants.X_OK);
+    // Windows does not expose POSIX execute bits; this assertion really runs
+    // on Linux/macOS in their normal controller CI, not a Windows simulation.
+    if(process.platform!=='win32')assert.equal(fs.statSync(stub).mode&0o777,0o755);
+    assert.deepEqual(f.commands,[]);
+  }finally{f.close();}
 });

@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:novelai_mobile/services/gallery_download.dart';
 import 'native_ui_tls_credentials.dart';
+import 'native_tls_context.dart';
 
 class NativeGalleryTlsFixture {
   final HttpServer tls, proxy;
@@ -20,22 +21,22 @@ class NativeGalleryTlsFixture {
   HttpRequest? held;
   NativeGalleryTlsFixture._(this.tls, this.proxy, this.image);
   static Future<NativeGalleryTlsFixture> open(Uint8List image) async {
-    final pem = base64Decode(nativeUiCertificate);
-    final context = SecurityContext()
-      ..useCertificateChainBytes(pem)
-      ..usePrivateKeyBytes(base64Decode(nativeUiPrivateKey));
+    final context = nativeFixtureServerContext(
+        chainBase64: nativeUiChainBase64,
+        keyBase64: nativeUiPrivateKey,
+        pkcs12Base64: nativeUiPkcs12Base64);
     final tls =
         await HttpServer.bindSecure(InternetAddress.loopbackIPv4, 0, context);
     final proxy = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final value = NativeGalleryTlsFixture._(tls, proxy, image);
-    SecurityContext.defaultContext.setTrustedCertificatesBytes(pem);
+    trustNativeFixtureRootInDisposableProcess();
     tls.listen(value._respond, onError: (Object e) => value.errors.add('$e'));
     proxy.listen(value._tunnel, onError: (Object e) => value.errors.add('$e'));
     return value;
   }
 
-  HttpClient ioClient() =>
-      HttpClient()..findProxy = (_) => 'PROXY 127.0.0.1:${proxy.port}';
+  HttpClient ioClient() => HttpClient(context: nativeFixtureClientContext())
+    ..findProxy = (_) => 'PROXY 127.0.0.1:${proxy.port}';
   http.Client client() => IOClient(ioClient());
   Future<void> _tunnel(HttpRequest r) async {
     try {

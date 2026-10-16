@@ -1,0 +1,80 @@
+import 'app_locales.dart';
+
+List<String> iosUpdateText(Object? language) =>
+    switch (normalizeAppLocaleCode(language)) {
+      'zh-TW' => const [
+          'iOS 更新下載',
+          '檢查更新',
+          '下載並驗證 IPA',
+          '取消下載',
+          '發行頁面',
+          'IPA 未簽名，必須自行簽名；不能直接安裝到普通 iPhone。下載與驗證不代表已安裝或更新完成。',
+          '正在下載',
+          '正在驗證 SHA-256',
+          '已驗證，尚未安裝',
+          '已取消，原資料未變更',
+          '下載／驗證失敗',
+          '目前版本',
+          '已儲存至應用程式 Documents。可從「檔案」App 的本機 Langbai Studio／ios-updates 取出，自行簽名。'
+        ],
+      'en-US' => const [
+          'iOS update download',
+          'Check updates',
+          'Download and verify IPA',
+          'Cancel download',
+          'Release page',
+          'The IPA is unsigned and requires your own signing; it cannot be installed directly on a standard iPhone. Downloading and verification do not mean installation or update completion.',
+          'Downloading',
+          'Verifying SHA-256',
+          'Verified, not installed',
+          'Cancelled; original data unchanged',
+          'Download / verification failed',
+          'Current version',
+          'Saved in app Documents. Retrieve it in Files → On My iPhone/iPad → Langbai Studio → ios-updates, then sign it yourself.'
+        ],
+      'ja-JP' => const [
+          'iOS 更新のダウンロード',
+          '更新を確認',
+          'IPA を取得・検証',
+          '取得を中止',
+          'リリースページ',
+          'IPA は未署名で、自分で署名する必要があります。通常の iPhone に直接インストールできません。取得・検証はインストールや更新完了を意味しません。',
+          '取得中',
+          'SHA-256 を検証中',
+          '検証済み・未インストール',
+          '中止しました。元データは変更されません',
+          '取得・検証に失敗',
+          '現在のバージョン',
+          'アプリの Documents に保存済み。「ファイル」→この iPhone/iPad 内→Langbai Studio→ios-updates から取り出して自分で署名してください。'
+        ],
+      'ko-KR' => const [
+          'iOS 업데이트 다운로드',
+          '업데이트 확인',
+          'IPA 다운로드 및 검증',
+          '다운로드 취소',
+          '릴리스 페이지',
+          'IPA는 서명되지 않았으며 직접 서명해야 합니다. 일반 iPhone에 바로 설치할 수 없습니다. 다운로드 및 검증은 설치나 업데이트 완료를 의미하지 않습니다.',
+          '다운로드 중',
+          'SHA-256 검증 중',
+          '검증됨 · 설치되지 않음',
+          '취소됨 · 원본 데이터 유지',
+          '다운로드 / 검증 실패',
+          '현재 버전',
+          '앱 Documents에 저장됩니다. 파일 → 나의 iPhone/iPad → Langbai Studio → ios-updates에서 꺼낸 뒤 직접 서명하세요.'
+        ],
+      _ => const [
+          'iOS 更新下载',
+          '检查更新',
+          '下载并验证 IPA',
+          '取消下载',
+          '发行页面',
+          'IPA 未签名，必须自行签名；不能直接安装到普通 iPhone。下载与验证不代表已安装或更新完成。',
+          '正在下载',
+          '正在验证 SHA-256',
+          '已验证，尚未安装',
+          '已取消，原数据未更改',
+          '下载／验证失败',
+          '当前版本',
+          '已保存至应用 Documents。可从“文件”App 的本机 Langbai Studio／ios-updates 取出，自行签名。'
+        ],
+    };

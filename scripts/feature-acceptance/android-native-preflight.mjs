@@ -58,8 +58,16 @@ export async function inspectAndroidForeground({adb, device, appId, command, pha
     phase({stage: 'observed-modal', kind: modal.kind, tap: modal.tap});
     ensureResult(adbCommand(['shell', 'input', 'tap', ...modal.tap.map(String)]), 'Observed native dialog tap failed');
   }
-  const focus = ensureResult(adbCommand(['shell', 'dumpsys', 'window', 'windows']), 'Native foreground inspection failed');
-  const lines = focus.split(/\r?\n/).filter(line => /mCurrentFocus=|mFocusedApp=/.test(line));
+  let focus = ensureResult(adbCommand(['shell', 'dumpsys', 'window', 'windows']), 'Native foreground inspection failed');
+  let lines = focus.split(/\r?\n/).filter(line => /mCurrentFocus=|mFocusedApp=/.test(line));
+  if (lines.length === 0) {
+    // AOSP Android 14's `windows` subcommand omits DisplayContent's focus
+    // summary. Query the complete read-only dump only when fields are absent;
+    // an explicitly null focus is not a missing-field success/retry signal.
+    phase({stage: 'focus-query-fallback', from: 'window windows', to: 'window', reason: 'focus fields absent'});
+    focus = ensureResult(adbCommand(['shell', 'dumpsys', 'window']), 'Native full foreground inspection failed');
+    lines = focus.split(/\r?\n/).filter(line => /mCurrentFocus=|mFocusedApp=/.test(line));
+  }
   phase({stage: 'foreground', focus: lines});
   return {modal, focus: lines};
 }

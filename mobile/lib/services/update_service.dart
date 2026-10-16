@@ -14,6 +14,9 @@ class UpdateInfo {
   final String? error;
   final String? apkSha256;
   final int? apkSize;
+  final String? ipaUrl;
+  final String? ipaSha256;
+  final int? ipaSize;
 
   const UpdateInfo({
     required this.hasUpdate,
@@ -23,6 +26,9 @@ class UpdateInfo {
     this.error,
     this.apkSha256,
     this.apkSize,
+    this.ipaUrl,
+    this.ipaSha256,
+    this.ipaSize,
   });
 }
 
@@ -110,6 +116,7 @@ String? _assetUrl(dynamic value, String wantedName) {
 Future<UpdateInfo> _checkGithubApi(
   http.Client client, {
   required bool isAndroid,
+  bool isIOS = false,
 }) async {
   const current = appVersion;
   final response = await _getWithRetry(
@@ -136,11 +143,32 @@ Future<UpdateInfo> _checkGithubApi(
   if (hasUpdate && isAndroid && installerUrl == null) {
     throw Exception('GitHub release is missing app-release.apk');
   }
-  final apk=(json['assets'] is List ? json['assets'] as List : const []).whereType<Map>().where((item)=>item['name']=='app-release.apk').firstOrNull;
-  final digest=apk?['digest']?.toString();
+  final apk = (json['assets'] is List ? json['assets'] as List : const [])
+      .whereType<Map>()
+      .where((item) => item['name'] == 'app-release.apk')
+      .firstOrNull;
+  final digest = apk?['digest']?.toString();
+  final ipa = (json['assets'] is List ? json['assets'] as List : const [])
+      .whereType<Map>()
+      .where((item) => item['name'] == 'novelai-mobile-unsigned.ipa')
+      .firstOrNull;
+  final ipaDigest = ipa?['digest']?.toString();
+  final ipaUrl =
+      isIOS ? _assetUrl(json['assets'], 'novelai-mobile-unsigned.ipa') : null;
+  if (hasUpdate && isIOS && ipaUrl == null) {
+    throw const FormatException(
+        'GitHub release is missing novelai-mobile-unsigned.ipa');
+  }
   return UpdateInfo(
-    apkSha256: digest?.startsWith('sha256:')==true ? digest!.substring(7).toLowerCase() : null,
-    apkSize: apk?['size'] is int ? apk!['size'] as int : null,
+    apkSha256: isAndroid && digest?.startsWith('sha256:') == true
+        ? digest!.substring(7).toLowerCase()
+        : null,
+    apkSize: isAndroid && apk?['size'] is int ? apk!['size'] as int : null,
+    ipaUrl: ipaUrl,
+    ipaSha256: isIOS && ipaDigest?.startsWith('sha256:') == true
+        ? ipaDigest!.substring(7).toLowerCase()
+        : null,
+    ipaSize: isIOS && ipa?['size'] is int ? ipa!['size'] as int : null,
     hasUpdate: hasUpdate,
     currentVersion: current,
     latestVersion: latest,
@@ -152,6 +180,7 @@ Future<UpdateInfo> _checkGithubApi(
 Future<UpdateInfo> _checkGithub(
   http.Client client, {
   required bool isAndroid,
+  bool isIOS = false,
 }) async {
   const current = appVersion;
   UpdateInfo manifestInfo;
@@ -172,20 +201,24 @@ Future<UpdateInfo> _checkGithub(
       releaseUrl: _githubReleaseUrl,
     );
   } catch (_) {
-    return _checkGithubApi(client, isAndroid: isAndroid);
+    return _checkGithubApi(client, isAndroid: isAndroid, isIOS: isIOS);
   }
-  if (isAndroid && manifestInfo.hasUpdate) {
-    return _checkGithubApi(client, isAndroid: true);
+  if ((isAndroid || isIOS) && manifestInfo.hasUpdate) {
+    return _checkGithubApi(client, isAndroid: isAndroid, isIOS: isIOS);
   }
   return manifestInfo;
 }
 
 /// Old source preferences are ignored after migrating to GitHub-only updates.
 Future<UpdateInfo> checkAppUpdateWithClient(http.Client client,
-    {String preferredSource = 'github', bool? isAndroid}) async {
+    {String preferredSource = 'github', bool? isAndroid, bool? isIOS}) async {
   try {
-    return await _checkGithub(client,
-        isAndroid: isAndroid ?? Platform.isAndroid);
+    final android = isAndroid ?? Platform.isAndroid;
+    final ios = isIOS ?? Platform.isIOS;
+    if (android && ios) {
+      throw const FormatException('Conflicting update platform');
+    }
+    return await _checkGithub(client, isAndroid: android, isIOS: ios);
   } catch (_) {
     return const UpdateInfo(
         hasUpdate: false, currentVersion: appVersion, error: 'network');

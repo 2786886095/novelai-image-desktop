@@ -3,6 +3,7 @@ import 'openai_image_edit.dart';
 import 'unified_storage.dart';
 import 'openai_images.dart';
 import 'compatible_image_backup.dart';
+import 'ios_output_folder.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
@@ -1120,6 +1121,23 @@ class Storage {
     return fallback;
   }
 
+  Future<File> _writeSavedImage(AppSettings settings, String date,
+      String? groupId, String name, Uint8List bytes) async {
+    final root = settings.imageOutputDir.trim();
+    if (Platform.isIOS && root.isNotEmpty) {
+      final folders = <String>[date];
+      if (groupId != null && groupId.isNotEmpty) {
+        final group = (await getGroups()).where((g) => g.id == groupId).firstOrNull;
+        if (group != null && group.name.trim().isNotEmpty) folders.add(sanitizeFolderName(group.name));
+      }
+      // A stale/revoked external grant fails explicitly. Do not call an app-
+      // managed fallback the selected output, or persist a misleading history path.
+      return IosOutputFolder.write(root: root, folders: folders, stem: name, bytes: bytes);
+    }
+    final directory = await _imageSaveDir(settings, date, groupId);
+    return writeUniqueImageFile(directory, name, 'png', bytes);
+  }
+
   Future<HistoryItem> saveImage(
     Uint8List bytes,
     GenerateParams p,
@@ -1149,8 +1167,7 @@ class Storage {
     // Keep mode intentionally preserves the caller's exact bytes.
     final output = settings.keepImageMetadata ? bytes : stripPngMetadata(bytes);
     // Save into <base>/<date>/<group>/ (custom path or app documents).
-    final images = await _imageSaveDir(settings, date, groupId);
-    final file = await writeUniqueImageFile(images, baseName, 'png', output);
+    final file = await _writeSavedImage(settings, date, groupId, baseName, output);
     final filePath = file.path;
     if (settings.saveToGallery) {
       try {
@@ -1194,8 +1211,7 @@ class Storage {
     final now = _imageClock();
     final date = '${now.year}-${_pad(now.month)}-${_pad(now.day)}';
     final id = _newImageId(now);
-    final dir = await _imageSaveDir(snapshot, date, groupId);
-    final file = await writeUniqueImageFile(dir, 'compatible-$date-$id', 'png', output);
+    final file = await _writeSavedImage(snapshot, date, groupId, 'compatible-$date-$id', output);
     final filePath = file.path;
     final header =
         bytes.buffer.asByteData(bytes.offsetInBytes, bytes.lengthInBytes);
