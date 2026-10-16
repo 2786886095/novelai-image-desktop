@@ -3,22 +3,46 @@ import { spawn } from 'node:child_process';
 // Flutter 3.24 run --machine: framed app.start/app.log/app.stop plus plain
 // native log lines (run.dart creates its daemon with logToStdout=true).
 // No TTY keystroke, second launch, repaired JSON, or self-declared count fallback.
-export function createNativeProof({ sourceSha, platform, expectedChecks }) {
+export function createNativeProof({ sourceSha, platform, expectedChecks, profileSha, testEntry }) {
   if (!Number.isSafeInteger(expectedChecks) || expectedChecks < 1) throw Error('A fixed positive expectedChecks input is required.');
-  const checks = [], errors = [];
-  let completion = null;
+  const checks = [], pending = [], errors = [];
+  const pendingFields = new Set(['sourceSha', 'profileSha', 'platform', 'paidCalls', 'mockOnly', 'kind', 'nativeOnly', 'testEntry', 'feature', 'status', 'reason']);
+  const beginFields = new Set(['sourceSha', 'profileSha', 'platform', 'paidCalls', 'mockOnly', 'kind', 'nativeOnly', 'testEntry', 'expectedChecks']);
+  const boundNativeIdentity = value => /^[a-f0-9]{64}$/.test(profileSha ?? '') &&
+    value.profileSha === profileSha && value.kind === 'device' && value.nativeOnly === true &&
+    value.mockOnly === false && ['library33', 'generation24'].includes(testEntry) && value.testEntry === testEntry;
+  let completion = null, begin = null;
   function line(text) {
     if (/Unhandled Exception:|FEATURE_NATIVE_ASYNC_ERROR:|FEATURE_ACCEPTANCE_FAILURE:/.test(text)) errors.push('Native asynchronous/journey error: ' + text);
-    const markers = [...text.matchAll(/FEATURE_ACCEPTANCE_(CHECK|DONE):/g)];
-    if (!markers.length) { if (text.includes('FEATURE_ACCEPTANCE_')) errors.push('Truncated or unknown native proof marker.'); return; }
-    if (markers.length !== 1) { errors.push('Merged native proof lines are forbidden.'); return; }
-    const marker = markers[0], literal = text.slice(marker.index + marker[0].length).trim();
+    const reserved = [...text.matchAll(/FEATURE_ACCEPTANCE_/g)];
+    if (!reserved.length) return;
+    if (reserved.length !== 1) { errors.push('Merged native proof lines are forbidden.'); return; }
+    const marker = /FEATURE_ACCEPTANCE_(CHECK|DONE|BEGIN|PENDING):/.exec(text);
+    if (!marker) { errors.push('Truncated or unknown native proof marker.'); return; }
+    const literal = text.slice(marker.index + marker[0].length).trim();
     let value;
     try { value = JSON.parse(literal); } catch { errors.push('Truncated or malformed native proof JSON.'); return; }
     if (!value || Array.isArray(value) || typeof value !== 'object' || value.sourceSha !== sourceSha || value.platform !== platform || value.paidCalls !== 0) {
       errors.push('Native proof source/platform/safety identity mismatch.'); return;
     }
-    if (marker[1] === 'CHECK') {
+    if (marker[1] === 'BEGIN') {
+      if (begin || completion || checks.length || !boundNativeIdentity(value) ||
+          value.expectedChecks !== expectedChecks || Object.keys(value).some(key => !beginFields.has(key))) {
+        errors.push('Native BEGIN entry/profile/safety identity mismatch.'); return;
+      }
+      begin = value;
+    } else if (marker[1] === 'PENDING') {
+      // A capability observation is neither a CHECK nor a scenario. Bind its
+      // profile externally; preserve the exact record without certifying it.
+      if (!begin || completion || !boundNativeIdentity(value) || value.status !== 'pending' ||
+          value.feature !== 'agent-components' || typeof value.reason !== 'string' ||
+          !value.reason.trim() || value.reason.length > 16384 ||
+          Object.keys(value).some(key => !pendingFields.has(key)) ||
+          pending.some(record => record.feature === value.feature)) {
+        errors.push('Native PENDING capability/profile/safety identity mismatch.'); return;
+      }
+      pending.push(value);
+    } else if (marker[1] === 'CHECK') {
       if (completion) errors.push('Native CHECK emitted after DONE.');
       if (value.mockOnly !== false || value.status !== 'passed' || value.kind !== 'device') errors.push('Native CHECK must be a passed, non-mock device check.');
       checks.push(value);
@@ -30,13 +54,13 @@ export function createNativeProof({ sourceSha, platform, expectedChecks }) {
   function finish() {
     const failure = [...errors];
     if (!completion || completion.exitStatus !== 0 || completion.checks !== expectedChecks || checks.length !== expectedChecks) failure.push(`Native journey incomplete: expected ${expectedChecks}, checks ${checks.length}, DONE ${completion?.checks}, exit ${completion?.exitStatus}.`);
-    return { checks, completion, errors: failure, passed: failure.length === 0 };
+    return { checks, pending, begin, completion, errors: failure, passed: failure.length === 0 };
   }
   return { line, finish, get completion() { return completion; }, get checksCount() { return checks.length; }, get errorsCount() { return errors.length; } };
 }
 
-export async function collectResidentFlutter({ command, cwd, env, sourceSha, platform, device, expectedChecks, timeoutMs = 1500000, journeyTimeoutMs = 300000, completionTailMs = 750, stopGraceMs = 15000 }) {
-  const proof = createNativeProof({ sourceSha, platform, expectedChecks });
+export async function collectResidentFlutter({ command, cwd, env, sourceSha, platform, device, expectedChecks, profileSha, testEntry, timeoutMs = 1500000, journeyTimeoutMs = 300000, completionTailMs = 750, stopGraceMs = 15000 }) {
+  const proof = createNativeProof({ sourceSha, platform, expectedChecks, profileSha, testEntry });
   let stdout = '', stderr = '', nativeStdout = '', nativeStderr = '', appId = null;
   let actualCloseCode = null, actualCloseSignal = null, timedOut = false, terminationReason = 'unexpected-process-close', processError = null;
   let journeyStarted = false;
@@ -79,7 +103,7 @@ export async function collectResidentFlutter({ command, cwd, env, sourceSha, pla
     }, completionTailMs);
   }
   function nativeLine(text, channel) {
-    if (!appId && /FEATURE_ACCEPTANCE_(CHECK|DONE):/.test(text)) protocolErrors.push('Native proof before matching current app.start.');
+    if (!appId && /FEATURE_ACCEPTANCE_(CHECK|DONE|BEGIN|PENDING):/.test(text)) protocolErrors.push('Native proof before matching current app.start.');
     if (channel === 'stderr') nativeStderr += text + '\n'; else nativeStdout += text + '\n';
     const beforeChecks = proof.checksCount, beforeErrors = proof.errorsCount;
     proof.line(text);

@@ -79,7 +79,9 @@ Future<void> _run()async{
   await storage.setToken('FIXTURE_ONLY_NOT_A_USER_TOKEN');await storage.setVisionKey('FIXTURE_ONLY_NOT_A_USER_KEY');
   final strokes=[InpaintStroke(brushCells:16,points:[const Offset(.37,.42),const Offset(.39,.44)])];
   final mask=await renderInpaintMask(strokes:strokes,width:3840,height:2160,inverted:false);final decodedMask=im.decodePng(mask)!;
-  _assert(decodedMask.width==3840&&decodedMask.height==2160&&decodedMask.getPixel(1420,907).a>155&&decodedMask.getPixel(0,0).a==0,'Mask source pixels changed');
+  final selectedMaskPixel=decodedMask.getPixel(1420,907),unselectedMaskPixel=decodedMask.getPixel(0,0);
+  print('FEATURE_FIXTURE_MASK_PIXELS:${jsonEncode({'sourceSize':[decodedMask.width,decodedMask.height],'selectedRgba':[selectedMaskPixel.r,selectedMaskPixel.g,selectedMaskPixel.b,selectedMaskPixel.a],'unselectedRgba':[unselectedMaskPixel.r,unselectedMaskPixel.g,unselectedMaskPixel.b,unselectedMaskPixel.a]})}');
+  _assert(decodedMask.width==3840&&decodedMask.height==2160&&selectedMaskPixel.r==255&&selectedMaskPixel.g==255&&selectedMaskPixel.b==255&&selectedMaskPixel.a==255&&unselectedMaskPixel.r==0&&unselectedMaskPixel.g==0&&unselectedMaskPixel.b==0&&unselectedMaskPixel.a==255,'Mask source pixels changed');
   // Actual rendered editor, real pointer events, not a helper-only cap assertion.
   runApp(MaterialApp(home:InpaintMaskEditor(image:source,language:'en-US')));await _frame();await _frame();
   final toggle=_element(const ValueKey('select-inpaint-region'))!;(toggle.widget as IconButton).onPressed!();await _frame();

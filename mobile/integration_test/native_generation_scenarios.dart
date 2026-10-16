@@ -87,9 +87,11 @@ Future<void> _run()async{
     suite.check('generation','cancel-and-upstream-error',{'upstream400NoResult':true,'actualActiveRequestCancelled':true,'busyCleared':true});
 
     await reset();app.i2i..strength=.4..noise=.1;app.i2iSizeMode='custom';await app.generateI2I();
-    final i2i=lastGenerate();require(i2i['action']=='img2img'&&i2i['parameters']['strength']==.4&&i2i['parameters']['noise']==.1,'I2I params');
+    final i2i=lastGenerate();
+    print('FEATURE_FIXTURE_I2I_SCALARS:${jsonEncode({'action':i2i['action'],'model':i2i['model'],'strength':i2i['parameters']['strength'],'noise':i2i['parameters']['noise'],'width':i2i['parameters']['width'],'height':i2i['parameters']['height']})}');
+    require(i2i['action']=='img2img'&&i2i['parameters']['strength']==.4&&i2i['parameters']['noise']==0,'I2I params');
     require(im.decodeImage(base64Decode(i2i['parameters']['image']))!.width==64,'I2I input');
-    suite.check('image-to-image','input-strength-and-params',{'action':i2i['action'],'strength':.4,'noise':.1,'inputNativeDecoded':true});
+    suite.check('image-to-image','input-strength-and-params',{'action':i2i['action'],'strength':i2i['parameters']['strength'],'noise':i2i['parameters']['noise'],'staleLegacyNoiseInput':.1,'inputNativeDecoded':true});
     final imageResult=app.history.first;require(await File(imageResult.filePath).exists()&&im.decodeImage(await File(imageResult.filePath).readAsBytes())!.width==64,'I2I output decode/save');
     suite.check('image-to-image','decode-and-save',{'decodedSize':[imageResult.width,imageResult.height],'persisted':(await Storage().getHistory()).any((h)=>h.id==imageResult.id)});
     final beforeInvalid=submitted(),sourceHash=digest(await source.readAsBytes());

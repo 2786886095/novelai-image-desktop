@@ -34,7 +34,7 @@ function command(argv, cwd = input.projectRoot, timeout = 120000) {
 let exitStatus = 1;
 let checks = [];
 let failure;
-let nativeCompletion=null, nativeRuntime=null;
+let nativeCompletion=null, nativeRuntime=null, nativePending=[], nativeBegin=null;
 try {
   if (!input.isolated || !['android', 'ios'].includes(input.platform)) {
     throw new Error('Only an explicitly disposable Android emulator/iOS simulator is allowed.');
@@ -55,7 +55,8 @@ try {
     }
   }
   const sourceSha = input.sourceSha || 'uncommitted';
-  createNativeProof({ sourceSha, platform: input.platform, expectedChecks: input.expectedChecks });
+  createNativeProof({ sourceSha, platform: input.platform, expectedChecks: input.expectedChecks,
+    testEntry: input.entry, profileSha: isMobileScenarioEntry(input.entry) ? profileSha256 : undefined });
   // A local uncommitted source snapshot is never silently labelled as a Git SHA.
   if (sourceSha !== 'uncommitted' && !/^[a-f0-9]{40}$/i.test(sourceSha)) throw new Error('Invalid source SHA.');
   if (input.platform === 'android') {
@@ -75,7 +76,7 @@ try {
   const extraDartDefines=[];
   if(isMobileScenarioEntry(input.entry)){
     if(input.expectedChecks!==mobileNativeEntries[input.entry].expectedChecks||input.profileSha256!==profileSha256)throw Error('Independent parity count/profile mismatch.');
-    extraDartDefines.push(`--dart-define=FEATURE_PROFILE_SHA=${profileSha256}`);
+    extraDartDefines.push(`--dart-define=FEATURE_PROFILE_SHA=${profileSha256}`, `--dart-define=FEATURE_TEST_ENTRY=${input.entry}`);
     const version=command([input.flutter,'--version','--machine'],input.projectRoot,120000);
     if(version.exitStatus!==0||version.error)throw Error('Cannot identify actual Flutter SDK.');
     const info=JSON.parse(version.stdout);
@@ -125,6 +126,7 @@ try {
       '-d', input.device, '--no-pub', '--dart-define=FEATURE_ISOLATED_DEVICE=true', `--dart-define=FEATURE_SOURCE_SHA=${sourceSha}`, ...extraDartDefines];
     resident = await collectResidentFlutter({ command: nativeCommand, cwd: input.projectRoot, env: process.env,
       sourceSha, platform: input.platform, device: input.device, expectedChecks: input.expectedChecks,
+      testEntry: input.entry, profileSha: isMobileScenarioEntry(input.entry) ? profileSha256 : undefined,
       timeoutMs: input.timeoutMs || 1500000, journeyTimeoutMs: input.journeyTimeoutMs || 300000,
       completionTailMs: input.completionTailMs || 750, stopGraceMs: input.stopGraceMs || 15000 });
     nativeStdout = resident.nativeStdout; nativeStderr = resident.nativeStderr; completion = resident.completion;
@@ -139,10 +141,11 @@ try {
   fs.writeFileSync(path.join(outputRoot, 'native-app.stdout.txt'), nativeStdout);
   fs.writeFileSync(path.join(outputRoot, 'native-app.stderr.txt'), nativeStderr);
   process.stdout.write(nativeStdout); process.stderr.write(nativeStderr);
-  const proof = createNativeProof({ sourceSha, platform: input.platform, expectedChecks: input.expectedChecks });
+  const proof = createNativeProof({ sourceSha, platform: input.platform, expectedChecks: input.expectedChecks,
+    testEntry: input.entry, profileSha: isMobileScenarioEntry(input.entry) ? profileSha256 : undefined });
   for (const line of (nativeStdout + '\n' + nativeStderr).split(/\r?\n/)) proof.line(line);
   const parsed = proof.finish();
-  nativeCompletion=parsed.completion;
+  nativeCompletion=parsed.completion; nativePending=parsed.pending; nativeBegin=parsed.begin;
   if(isMobileScenarioEntry(input.entry)){
     if(parsed.completion?.profileSha!==profileSha256)throw Error('Native DONE profile mismatch.');
     for(const check of parsed.checks){
@@ -165,7 +168,7 @@ try {
     sourceSnapshotSha256: input.sourceSnapshotSha256 || null,
     platform: input.platform, device: input.device, isolated: input.isolated,
     completeFeatureRowsCertified: 0, full195Certified: false,
-    entry:input.entry??null, nativeRuntime,nativeCompletion,
+    entry:input.entry??null, nativeRuntime,nativeCompletion,nativePending,nativeBegin,
     expectedChecks: input.expectedChecks ?? null, checks, ledger, exitStatus, failure: failure || null,
     boundary: 'Real target native component journeys. No paid/public generation call, human profile, publishing, or whole-feature certification.' };
   const target = path.join(outputRoot, 'native-mobile-receipt.json');

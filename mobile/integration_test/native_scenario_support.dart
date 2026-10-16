@@ -20,6 +20,7 @@ import 'package:novelai_mobile/state/app_state.dart';
 
 const sourceSha = String.fromEnvironment('FEATURE_SOURCE_SHA');
 const profileSha = String.fromEnvironment('FEATURE_PROFILE_SHA');
+const testEntry = String.fromEnvironment('FEATURE_TEST_ENTRY');
 const syntheticToken = 'NATIVE_ACCEPTANCE_SYNTHETIC_NOT_A_REAL_CREDENTIAL';
 void require(bool value, String reason) {
   if (!value) throw StateError(reason);
@@ -70,6 +71,8 @@ class NativeScenarios {
       require(const bool.fromEnvironment('FEATURE_ISOLATED_DEVICE'), 'Disposable device is mandatory');
       require(RegExp(r'^[a-f0-9]{40}$').hasMatch(sourceSha), 'Committed source identity required');
       require(RegExp(r'^[a-f0-9]{64}$').hasMatch(profileSha), 'Profile identity required');
+      require(const {'library33':33,'generation24':24}[testEntry] == expected, 'Registered native entry/count identity required');
+      print('FEATURE_ACCEPTANCE_BEGIN:${jsonEncode({'sourceSha':sourceSha,'profileSha':profileSha,'platform':Platform.operatingSystem,'kind':'device','nativeOnly':true,'mockOnly':false,'paidCalls':0,'testEntry':testEntry,'expectedChecks':expected})}');
       if (Platform.isAndroid) FlutterForegroundTask.initCommunicationPort();
       BackgroundQueueService.initialize();
       runApp(const MaterialApp(home:Scaffold(body:Text('Isolated native client scenarios'))));
@@ -108,7 +111,8 @@ class NativeScenarios {
   }
   void pending(String feature, String reason) => print('FEATURE_ACCEPTANCE_PENDING:${jsonEncode({
     'sourceSha':sourceSha,'profileSha':profileSha,'platform':Platform.operatingSystem,
-    'feature':feature,'status':'pending','reason':reason})}');
+    'feature':feature,'status':'pending','reason':reason,
+    'kind':'device','nativeOnly':true,'testEntry':testEntry,'mockOnly':false,'paidCalls':0})}');
 }
 
 class NativeContext {

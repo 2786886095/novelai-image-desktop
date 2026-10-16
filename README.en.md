@@ -19,6 +19,7 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## Candidate changes (not released)
 
+- Acceptance and builds: correct small-window inpainting hit targets, navigation-menu selectors, and mobile mask/request fixtures; incomplete observations remain incomplete rather than being promoted to feature passes.
 - Focused inpainting adapts only the region to a valid working size and composites it onto the original-size canvas; restore the original image, mask and region for further editing. Mobile receives the corresponding workflow.
 - Image analysis accepts fenced JSON and structured results. Refusal, truncation, invalid output or cancellation preserves existing prompts and results rather than applying refusal text.
 - Failed or cancelled conversion preserves both existing variants. Configured AI keys are redacted at the covered diagnostic/log boundaries without rewriting successful prompt content.

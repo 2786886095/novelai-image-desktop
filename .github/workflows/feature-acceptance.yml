@@ -2,7 +2,7 @@ name: Native Client Feature Acceptance
 
 on:
   push:
-    branches: ['codex/release-2.5.10']
+    branches: ['codex/release-2.6.0']
   workflow_dispatch:
 
 # This workflow executes client scenarios and preserves bounded observations. It never publishes or replaces
@@ -78,6 +78,8 @@ jobs:
           node -e "console.log(require('electron'))"
           sudo chown root:root node_modules/electron/dist/chrome-sandbox
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+      - name: Check bounded native command and fixture cleanup
+        run: node --test scripts/feature-acceptance/bounded-native-command.test.mjs scripts/feature-acceptance/generation-fixture-cleanup.test.mjs
       - name: Fetch and verify the pinned Windows-only component seed
         if: runner.os == 'Windows'
         env:
@@ -391,7 +393,7 @@ jobs:
           path: ${{ runner.temp }}/all-native-evidence
           merge-multiple: false
       - name: Check matrix rejection rules
-        run: node --test scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/mobile-scenario-receipt.test.mjs scripts/feature-acceptance/mobile-entry-consistency.test.mjs
+        run: node --test scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/mobile-scenario-receipt.test.mjs scripts/feature-acceptance/mobile-entry-consistency.test.mjs scripts/feature-acceptance/native-proof-stream.test.mjs scripts/feature-acceptance/native-resident-pending.test.mjs
       - name: Require all 39 client features on all five actual platforms
         shell: bash
         run: |
