@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -188,6 +189,7 @@ void main() {
             mode == 'history-failure' ? 'failed' : 'completed');
         final saved = await storage.getBatchRedrawProject(app.params);
         final candidates = saved.items.expand((x) => x.candidates).toList();
+        print('AGENT_BATCH_ALLOCATION_DIAGNOSTICS=${jsonEncode({'mode':mode,'operation':actions.operation,'runError':app.batchRedraw.runError,'candidates':candidates.map((v)=>{'id':v.id,'path':v.outputPath}).toList(),'history':app.history.map((h)=>{'id':h.id,'path':h.filePath}).toList()})}');
         expect(candidates.length, mode == 'history-failure' ? 2 : 8);
         for (final image in candidates) {
           expect(

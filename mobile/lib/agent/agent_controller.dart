@@ -1,3 +1,4 @@
+import 'template_tools.dart';
 import 'model_selections.dart';
 import 'agent_questions.dart';
 import 'studio_options.dart';
@@ -266,33 +267,21 @@ class AgentController extends ChangeNotifier {
   }
 
   Future<void> selectPromptTemplate(String kind,
-      {String? mode, String? version}) async {
+      {String? mode, String? version,String? skillVersion}) async {
     final conversation = selectedConversation;
     if (conversation == null) return;
     if (!const {'convert', 'reverse', 'optimize', 'assistant'}.contains(kind)) {
       throw ArgumentError.value(kind, 'kind');
     }
-    if (kind == 'optimize' || kind == 'assistant') {
-      final saved = kind == 'optimize'
-          ? app.settings.promptOptimizeTemplate
-          : app.settings.promptAssistantTemplate;
-      if (saved.trim().isEmpty) {
-        throw StateError('所选模板未保存。');
-      }
-    } else {
-      final overrides = app.promptOverrides(kind, templateVersion: version);
-      if (!const {'mixed', 'tags', 'natural'}.contains(mode) ||
-          !const {'v5', 'v4.5'}.contains(version) ||
-          (overrides[mode]?.trim().isNotEmpty != true &&
-              (mode == 'mixed' ||
-                  overrides['mixed']?.trim().isNotEmpty != true))) {
-        throw StateError('所选模板未保存。');
-      }
-    }
+    await AgentTemplateTools(app).execute('studio_prompt_template',{
+      'kind':kind,if(mode!=null)'mode':mode,if(version!=null)'templateVersion':version,
+      if(skillVersion!=null)'skillVersion':skillVersion,
+    });
     conversation
       ..selectedTemplateKind = kind
       ..selectedTemplateMode = mode
-      ..selectedTemplateVersion = version;
+      ..selectedTemplateVersion = version
+      ..selectedTemplateSkillVersion=skillVersion;
     await _persist();
     _notify();
   }

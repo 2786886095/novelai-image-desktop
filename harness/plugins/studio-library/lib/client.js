@@ -1581,21 +1581,67 @@ function ImageApproval({ call, sessionId }) {
 }
 const approvalCSS = `.studio-approval-shade{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:12px;background:rgb(0 0 0 / .2)}.studio-approval-card{width:min(480px,100%);max-height:80dvh;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;background:var(--dsw-alias-bg-base,#fff);color:var(--dsw-alias-label-primary,#171717);border:1px solid var(--dsw-alias-border-l2,#ddd);border-radius:14px;padding:20px;overflow-wrap:anywhere}.studio-approval-card h3{flex-shrink:0;margin:0 0 12px}.studio-approval-body{min-height:0;overflow:auto}.studio-approval-card .studio-library-toolbar{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;flex-shrink:0;border-top:1px solid var(--dsw-alias-border-l2,#ddd);padding-top:12px;margin-top:12px}.studio-approval-card button{min-height:44px;min-width:80px;font:inherit;border:1px solid var(--dsw-alias-border-l2,#ddd);border-radius:6px;padding:7px 12px;background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-bg-base,#fff));color:inherit;cursor:pointer}.studio-approval-card button:focus-visible,.studio-approval-card summary:focus-visible{outline:2px solid currentColor;outline-offset:2px}.studio-approval-card summary{min-height:44px;display:flex;align-items:center;cursor:pointer}`;
 //#endregion
+//#region harness/plugins/studio-library/template-selection.js
+function templatePanelReadArgs({ kind, mode, version, edition }) {
+	if (![
+		"convert",
+		"reverse",
+		"assistant",
+		"optimize"
+	].includes(kind)) throw Error("模板用途无效");
+	if (mode != null && ![
+		"mixed",
+		"tags",
+		"natural"
+	].includes(mode)) throw Error("模板模式无效");
+	if (version != null && !["v5", "v4.5"].includes(version)) throw Error("生图模型无效");
+	if (edition != null && !["1.0.0", "2.0.0"].includes(edition)) throw Error("技能版本无效");
+	return {
+		kind,
+		...mode ? { mode } : {},
+		...version ? { templateVersion: version } : {},
+		...version === "v4.5" ? { skillVersion: "1.0.0" } : edition ? { skillVersion: edition } : {}
+	};
+}
+function templatePanelSaveArgs(snapshot, body, reset = false) {
+	if (!snapshot || !snapshot.revision) throw Error("请先读取当前版本模板");
+	if (!["1.0.0", "2.0.0"].includes(snapshot.skillVersion)) throw Error("模板版本快照已过期，请重新读取");
+	if (snapshot.templateVersion === "v4.5" && snapshot.skillVersion === "2.0.0") throw Error("2.0.0 仅适用于 V5 Full");
+	return {
+		...templatePanelReadArgs({
+			kind: snapshot.kind,
+			mode: snapshot.mode,
+			version: snapshot.templateVersion,
+			edition: snapshot.skillVersion
+		}),
+		expectedRevision: snapshot.revision,
+		body: reset ? "" : body,
+		restoreDefault: reset
+	};
+}
+//#endregion
 //#region harness/plugins/studio-library/template-panel.js
 const h$2 = react.default.createElement;
 function TemplatePanel({ call }) {
 	const fileInput = (0, react.useRef)(null);
-	const [kind, setKind] = (0, react.useState)("convert"), [mode, setMode] = (0, react.useState)(null), [version, setVersion] = (0, react.useState)(null);
+	const [kind, setKind] = (0, react.useState)("convert"), [mode, setMode] = (0, react.useState)(null), [version, setVersion] = (0, react.useState)(null), [edition, setEdition] = (0, react.useState)(null);
 	const [snapshot, setSnapshot] = (0, react.useState)(null), [body, setBody] = (0, react.useState)(""), [busy, setBusy] = (0, react.useState)(false), [error, setError] = (0, react.useState)(""), [message, setMessage] = (0, react.useState)("");
+	const clear = () => {
+		setSnapshot(null);
+		setBody("");
+		setError("");
+		setMessage("");
+	};
 	(0, react.useEffect)(() => {
 		let live = true;
 		setSnapshot(null);
 		setError("");
-		call("studio_prompt_template", {
+		call("studio_prompt_template", templatePanelReadArgs({
 			kind,
-			...mode ? { mode } : {},
-			...version ? { templateVersion: version } : {}
-		}).then((s) => {
+			mode,
+			version,
+			edition
+		})).then((s) => {
 			if (live) {
 				setSnapshot(s);
 				setBody(s.body);
@@ -1610,23 +1656,18 @@ function TemplatePanel({ call }) {
 		call,
 		kind,
 		mode,
-		version
+		version,
+		edition
 	]);
 	const save = async (reset = false) => {
+		if (!snapshot || busy) return;
 		setBusy(true);
 		setError("");
 		try {
-			const s = await call("studio_save_prompt_template", {
-				kind: snapshot.kind,
-				mode: snapshot.mode,
-				templateVersion: snapshot.templateVersion,
-				expectedRevision: snapshot.revision,
-				body: reset ? "" : body,
-				restoreDefault: reset
-			});
+			const s = await call("studio_save_prompt_template", templatePanelSaveArgs(snapshot, body, reset));
 			setSnapshot(s);
 			setBody(s.body);
-			setMessage("已保存到软件共用模板；下一次提示词请求生效，未生成图片。");
+			setMessage("已保存当前模型、技能版本与模式；其他版本及自定义内容保留，未生成图片。");
 		} catch (e) {
 			setError(e.message);
 		} finally {
@@ -1636,7 +1677,7 @@ function TemplatePanel({ call }) {
 	async function importFile(event) {
 		const file = event.target.files?.[0];
 		event.target.value = "";
-		if (!file) return;
+		if (!file || !snapshot) return;
 		setError("");
 		try {
 			if (file.size > 24e4) throw Error("模板文件过大");
@@ -1645,36 +1686,58 @@ function TemplatePanel({ call }) {
 				const json = JSON.parse(value);
 				value = typeof json === "string" ? json : json.body ?? json[snapshot.mode];
 			}
-			if (typeof value !== "string" || !value.trim() || value.length > 6e4) throw Error("请导入 TXT 文本或包含 body / 当前模式字段的 JSON");
+			if (typeof value !== "string" || !value.trim() || value.length > 6e4) throw Error("请导入 TXT / MD 文本或包含 body / 当前模式字段的 JSON");
 			setBody(value);
 			setMessage("已载入草稿；检查后点击保存，不会自动覆盖模板。");
 		} catch (e) {
 			setError(e.message);
 		}
 	}
-	return h$2("section", { className: "studio-library" }, h$2("h3", null, "软件共用提示词模板"), h$2("p", { className: "studio-library-muted" }, "文字描述使用转换模板，参考图使用反推模板。默认混合模式；导入和编辑保存到软件同一套模板，风格与负面提示词不变。"), h$2("div", { className: "studio-library-toolbar" }, h$2("label", null, "用途 ", h$2("select", {
+	const target = version ?? snapshot?.templateVersion ?? "v5", selectedEdition = target === "v4.5" ? "1.0.0" : edition ?? snapshot?.skillVersion ?? "1.0.0";
+	return h$2("section", { className: "studio-library" }, h$2("h3", null, "软件共用提示词模板"), h$2("p", { className: "studio-library-muted" }, "六套默认技能按用途与模式独立选用。1.0.0 保留旧模板；2.0.0 仅面向 NovelAI V5 Full，V4.5 使用 1.0.0。版本切换不会覆盖另一版本的自定义内容。"), h$2("div", { className: "studio-library-toolbar" }, h$2("label", null, "用途 ", h$2("select", {
 		value: kind,
 		disabled: busy,
 		onChange: (e) => {
 			setKind(e.target.value);
 			setVersion(null);
-			setMessage("");
+			setEdition(null);
+			clear();
 		}
-	}, h$2("option", { value: "convert" }, "文字转换"), h$2("option", { value: "reverse" }, "图片反推"))), h$2("label", null, "模式 ", h$2("select", {
+	}, ...Object.entries({
+		convert: "文字转换",
+		reverse: "图片反推",
+		assistant: "提示词助手",
+		optimize: "提示词优化"
+	}).map(([value, label]) => h$2("option", {
+		key: value,
+		value
+	}, label)))), h$2("label", null, "模式 ", h$2("select", {
 		value: mode ?? snapshot?.mode ?? "mixed",
 		disabled: busy,
 		onChange: (e) => {
 			setMode(e.target.value);
-			setMessage("");
+			clear();
 		}
-	}, h$2("option", { value: "mixed" }, "混合模式"), h$2("option", { value: "tags" }, "标签"), h$2("option", { value: "natural" }, "自然语言"))), h$2("label", null, "版本 ", h$2("select", {
-		value: version ?? snapshot?.templateVersion ?? "v5",
+	}, h$2("option", { value: "mixed" }, "混合模式"), h$2("option", { value: "tags" }, "标签"), h$2("option", { value: "natural" }, "自然语言"))), h$2("label", null, "生图模型 ", h$2("select", {
+		value: target,
 		disabled: busy,
 		onChange: (e) => {
-			setVersion(e.target.value);
-			setMessage("");
+			const next = e.target.value;
+			setVersion(next);
+			if (next === "v4.5") setEdition("1.0.0");
+			clear();
 		}
-	}, h$2("option", { value: "v5" }, "V5"), h$2("option", { value: "v4.5" }, "V4.5")))), snapshot ? h$2(react.default.Fragment, null, h$2("p", null, snapshot.source === "custom" ? "当前内容：软件自定义模板" : "当前内容：软件内置模板"), h$2("textarea", {
+	}, h$2("option", { value: "v5" }, "NovelAI V5 Full"), h$2("option", { value: "v4.5" }, "NovelAI V4.5"))), h$2("label", null, "技能版本 ", h$2("select", {
+		value: selectedEdition,
+		disabled: busy,
+		onChange: (e) => {
+			setEdition(target === "v4.5" ? "1.0.0" : e.target.value);
+			clear();
+		}
+	}, h$2("option", { value: "1.0.0" }, "1.0.0"), h$2("option", {
+		value: "2.0.0",
+		disabled: target === "v4.5"
+	}, "2.0.0")))), snapshot ? h$2(react.default.Fragment, null, h$2("p", null, `${snapshot.templateVersion} · ${snapshot.skillVersion} · ${snapshot.source === "custom" ? "自定义模板" : "内置模板"}`), h$2("textarea", {
 		"aria-label": "共用模板内容",
 		rows: 12,
 		value: body,
@@ -1687,7 +1750,7 @@ function TemplatePanel({ call }) {
 	}), h$2("div", { className: "studio-library-toolbar" }, h$2("input", {
 		ref: fileInput,
 		type: "file",
-		accept: ".txt,.json",
+		accept: ".txt,.md,.json",
 		hidden: true,
 		disabled: busy,
 		onChange: importFile
@@ -1700,7 +1763,7 @@ function TemplatePanel({ call }) {
 	}, "保存模板与选择"), h$2("button", {
 		disabled: busy,
 		onClick: () => save(true)
-	}, "恢复当前模式默认模板"))) : h$2("p", null, error ? "模板读取未完成" : "读取本机软件模板…"), error ? h$2("p", { role: "alert" }, error) : null, message ? h$2("p", { role: "status" }, message) : null);
+	}, "恢复当前版本和模式默认模板"))) : h$2("p", null, error ? "模板读取未完成" : "读取本机软件模板…"), error ? h$2("p", { role: "alert" }, error) : null, message ? h$2("p", { role: "status" }, message) : null);
 }
 //#endregion
 //#region harness/plugins/studio-library/jev-client.js

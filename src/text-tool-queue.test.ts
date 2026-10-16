@@ -268,7 +268,7 @@ describe("advisory prompt conversion warnings", () => {
     } finally { vi.useRealTimers(); }
   });
 
-  it("keeps each concurrent warning paired with its result under existing last-completion-wins semantics", async () => {
+  it("keeps each concurrent warning paired with its result without letting a stale-input result overwrite the current one", async () => {
     const first = deferred<{ ok: boolean; result: string; warnings: string[] }>();
     const second = deferred<{ ok: boolean; result: string; warnings: string[] }>();
     stubNaiDesktop({ convertPrompt: vi.fn().mockImplementationOnce(() => first.promise).mockImplementationOnce(() => second.promise) });
@@ -282,8 +282,10 @@ describe("advisory prompt conversion warnings", () => {
     first.resolve({ ok: true, result: "first result", warnings: ["first warning"] });
     await a;
     const state = useAppStore.getState();
-    expect(state.convertResult).toBe("first result");
-    expect(state.convertResultWarnings).toEqual(["first warning"]);
+    expect(state.convertResult).toBe("second result");
+    expect(state.convertResultWarnings).toEqual(["second warning"]);
+    expect(state.convertJobs.find(job=>job.result==="first result")?.message).toContain("旧结果");
+    expect(state.convertHistory.find(item=>item.result==="first result")?.stale).toBe(true);
     for (const item of [...state.convertJobs, ...state.convertHistory]) expect(item.warnings).toEqual([item.result === "first result" ? "first warning" : "second warning"]);
   });
 });

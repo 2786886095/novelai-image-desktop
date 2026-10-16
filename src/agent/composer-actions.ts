@@ -18,7 +18,7 @@ export function normalizeStudioComposerActions(value: unknown): AgentComposerAct
     } else {
       const templateKind = ['convert','reverse','optimize','assistant'].includes(raw.templateKind) ? raw.templateKind : 'convert';
       if (kind === 'template-apply' && templateKind === 'reverse') continue;
-      action = {kind, templateKind, mode: ['mixed','tags','natural'].includes(raw.mode) ? raw.mode : 'mixed', templateVersion: raw.templateVersion === 'v4.5' ? 'v4.5' : 'v5'};
+      action = {kind, templateKind, mode: ['mixed','tags','natural'].includes(raw.mode) ? raw.mode : 'mixed', templateVersion: raw.templateVersion === 'v4.5' ? 'v4.5' : 'v5',...(raw.skillVersion==='1.0.0'||raw.skillVersion==='2.0.0'?{skillVersion:raw.skillVersion}:{})};
     }
     if (!output.some(item => JSON.stringify(item) === JSON.stringify(action))) output.push(action);
   }
@@ -57,7 +57,7 @@ export function studioComposerTurn(text: string, rawActions: unknown, settings: 
       if (!preset) throw new Error('所选预设模板已不存在，请重新选择。');
       return 'Apply this saved prompt preset to the user text; do not generate images or echo the preset body:\n'+JSON.stringify({name:preset.name,prefix:preset.prefix,suffix:preset.suffix,negativePrompt:preset.negativePrompt});
     }
-    const fields = {kind:action.templateKind, ...(['convert','reverse'].includes(action.templateKind ?? '') ? {mode:action.mode,templateVersion:action.templateVersion} : {})};
+    const fields = {kind:action.templateKind,mode:action.mode,templateVersion:action.templateVersion,...(action.skillVersion?{skillVersion:action.skillVersion}:{})};
     if (action.kind === 'template-read') return 'Read the selected template with studio_prompt_template and these fields, then briefly explain its purpose. Do not dump its body unless explicitly requested: '+JSON.stringify(fields);
     if (action.kind === 'template-save') return 'The user selected saving a template. Read the current template/revision with langbai_templates, then propose a save using the user text as the intended change. If the change/body is missing, ask for it. Never fabricate expectedRevision; require the normal application confirmation before writing: '+JSON.stringify(fields);
     return 'Process the user text using the selected template. Use langbai_convert_prompt for convert, or langbai_edit_prompt for optimize/assistant; read the template first. If text/instruction is missing, ask for it. Return the result briefly, without repeating template instructions. Do not generate images: '+JSON.stringify(fields);

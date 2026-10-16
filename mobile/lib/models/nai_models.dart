@@ -1,6 +1,9 @@
 library;
 
 import 'automatic_comparison.dart';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
+import '../prompts/prompt_skill_legacy_fingerprints.dart';
 import '../prompts/negative_prompt_library.dart';
 import 'ui_typography.dart';
 import '../prompts/translation.dart';
@@ -992,6 +995,14 @@ class AppSettings {
   List<String> stylePromptPresetGroups;
   List<Map<String,String>> negativePromptPresets;
   List<PositivePromptPreset> positivePromptPresets;
+  String reversePromptSkillVersion;
+  String convertPromptSkillVersion;
+  String promptAssistantSkillVersion;
+  String promptAssistantTemplateVersion;
+  Map<String, String> reversePromptTemplatesV2;
+  Map<String, String> convertPromptTemplatesV2;
+  String promptOptimizeTemplateV2;
+  String promptAssistantTemplateV2;
   Map<String, String> reversePromptTemplates;
   Map<String, String> reversePromptTemplatesV45;
   Map<String, String> convertPromptTemplatesV45;
@@ -1123,6 +1134,14 @@ class AppSettings {
     List<String>? stylePromptPresetGroups,
     List<Map<String,String>>? negativePromptPresets,
     List<PositivePromptPreset>? positivePromptPresets,
+    String? reversePromptSkillVersion,
+    String? convertPromptSkillVersion,
+    String? promptAssistantSkillVersion,
+    String? promptAssistantTemplateVersion,
+    Map<String, String>? reversePromptTemplatesV2,
+    Map<String, String>? convertPromptTemplatesV2,
+    this.promptOptimizeTemplateV2 = '',
+    this.promptAssistantTemplateV2 = '',
     Map<String, String>? reversePromptTemplates,
     Map<String, String>? reversePromptTemplatesV45,
     Map<String, String>? convertPromptTemplatesV45,
@@ -1166,7 +1185,17 @@ class AppSettings {
     this.autoBackupRetentionCount = 7,
     this.autoBackupIncludeImages = false,
     this.autoBackupAssetPolicyVersion = 1,
-  })  : automaticComparison=normalizeAutomaticComparison(automaticComparison), reverseConvertPromptPresets =
+  })  : reversePromptSkillVersion = normalizePromptSkillVersion(reversePromptSkillVersion,
+            model: reversePromptTemplateVersion, legacy: [reversePromptTemplates,reversePromptTemplatesV45]),
+        convertPromptSkillVersion = normalizePromptSkillVersion(convertPromptSkillVersion,
+            model: convertPromptTemplateVersion, legacy: [convertPromptTemplates,convertPromptTemplatesV45]),
+        promptAssistantSkillVersion = normalizePromptSkillVersion(promptAssistantSkillVersion,
+            model: promptAssistantTemplateVersion ?? convertPromptTemplateVersion,
+            legacy: [convertPromptTemplates,convertPromptTemplatesV45,promptOptimizeTemplate,promptAssistantTemplate]),
+        promptAssistantTemplateVersion = promptAssistantTemplateVersion ?? convertPromptTemplateVersion,
+        reversePromptTemplatesV2 = reversePromptTemplatesV2 ?? {},
+        convertPromptTemplatesV2 = convertPromptTemplatesV2 ?? {},
+        automaticComparison=normalizeAutomaticComparison(automaticComparison), reverseConvertPromptPresets =
             normalizeImageSystemPresets(reverseConvertPromptPresets),
         reverseConvertPromptPresetId = reverseConvertPromptPresetId ?? 'builtin-ig5-convert',
         convertSystemPromptPresetId = convertSystemPromptPresetId ?? '',
@@ -1266,6 +1295,14 @@ class AppSettings {
         'negativePromptPresets': negativePromptPresets,
         'positivePromptPresets':
             positivePromptPresets.map((item) => item.toJson()).toList(),
+        'reversePromptSkillVersion': reversePromptSkillVersion,
+        'convertPromptSkillVersion': convertPromptSkillVersion,
+        'promptAssistantSkillVersion': promptAssistantSkillVersion,
+        'promptAssistantTemplateVersion': promptAssistantTemplateVersion,
+        'reversePromptTemplatesV2': reversePromptTemplatesV2,
+        'convertPromptTemplatesV2': convertPromptTemplatesV2,
+        'promptOptimizeTemplateV2': promptOptimizeTemplateV2,
+        'promptAssistantTemplateV2': promptAssistantTemplateV2,
         'reversePromptTemplates': reversePromptTemplates,
         'reversePromptTemplatesV45': reversePromptTemplatesV45,
         'convertPromptTemplatesV45': convertPromptTemplatesV45,
@@ -1431,6 +1468,15 @@ class AppSettings {
                     (item.prompt.trim().isNotEmpty || item.captions.isNotEmpty))
                 .toList() ??
             [],
+        reversePromptSkillVersion: _optionalPromptSkillVersion(j['reversePromptSkillVersion']),
+        convertPromptSkillVersion: _optionalPromptSkillVersion(j['convertPromptSkillVersion']),
+        promptAssistantSkillVersion: _optionalPromptSkillVersion(j['promptAssistantSkillVersion']),
+        promptAssistantTemplateVersion: j['promptAssistantTemplateVersion'] == 'v4.5' ? 'v4.5' :
+            j['promptAssistantTemplateVersion'] == 'v5' ? 'v5' : null,
+        reversePromptTemplatesV2: _stringMap(j['reversePromptTemplatesV2']),
+        convertPromptTemplatesV2: _stringMap(j['convertPromptTemplatesV2']),
+        promptOptimizeTemplateV2: _stringValue(j['promptOptimizeTemplateV2'], ''),
+        promptAssistantTemplateV2: _stringValue(j['promptAssistantTemplateV2'], ''),
         reversePromptTemplates: _stringMap(j['reversePromptTemplates']),
         reversePromptTemplatesV45: _stringMap(j['reversePromptTemplatesV45']),
         convertPromptTemplatesV45: _stringMap(j['convertPromptTemplatesV45']),
@@ -1831,4 +1877,18 @@ List<PositivePromptPreset> mergeLegacyPositivePresets(
 ({int width, int height}) maxNaiEnhanceSize(int width, int height) {
   final factor = math.min(2.0, math.sqrt(naiMaxPixelArea / (width * height)));
   return (width: (width * factor).floor(), height: (height * factor).floor());
+}
+
+// Editions are separate from the target NovelAI generation model. Never move
+// user-authored legacy bodies into the new edition or overwrite their slots.
+String? _optionalPromptSkillVersion(dynamic value) =>
+    value == '1.0.0' || value == '2.0.0' ? value as String : null;
+String normalizePromptSkillVersion(String? value,
+    {required String model, List<dynamic> legacy = const []}) {
+  if (model == 'v4.5') return '1.0.0';
+  if (value == '1.0.0' || value == '2.0.0') return value!;
+  bool hasBody(dynamic item) => item is Map
+      ? item.values.any(hasBody)
+      : item is String && item.trim().isNotEmpty && !shippedPromptSkillFingerprints.contains(sha256.convert(utf8.encode(item.trim().replaceAll('\r\n','\n'))).toString());
+  return legacy.any(hasBody) ? '1.0.0' : '2.0.0';
 }

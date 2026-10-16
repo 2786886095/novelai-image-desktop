@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../models/nai_models.dart';
 
 class PromptTemplateLibrary {
+  final Map<String, dynamic> skillCatalogV2;
   final Map<String, String> reverse;
   final Map<String, String> reverseV45;
   final Map<String, String> convert;
@@ -16,8 +17,10 @@ class PromptTemplateLibrary {
   final Map<String, List<String>> legacyPure;
   final Map<String, String> modeSuffix;
   final Map<String, String> promptEditDefaults;
+  final Map<String, String> promptEditDefaultsV2;
 
   const PromptTemplateLibrary({
+    this.skillCatalogV2 = const {},
     this.reverse = const {},
     this.reverseV45 = const {},
     this.convert = const {},
@@ -29,12 +32,14 @@ class PromptTemplateLibrary {
     this.legacyPure = const {},
     this.modeSuffix = const {},
     this.promptEditDefaults = const {},
+    this.promptEditDefaultsV2 = const {},
   });
 
   factory PromptTemplateLibrary.fromJson(Map<String, dynamic> json) {
     Map<String, String> readMap(String key) => (json[key] as Map? ?? const {})
         .map((key, value) => MapEntry(key.toString(), value.toString()));
     return PromptTemplateLibrary(
+      skillCatalogV2: Map<String,dynamic>.from(json['skillCatalogV2'] as Map? ?? const {}),
       reverse: readMap('reverse'),
       reverseV45: readMap('reverseV45'),
       convert: readMap('convert'),
@@ -46,6 +51,7 @@ class PromptTemplateLibrary {
       legacyPure: (json['legacyPure'] as Map? ?? const {}).map((k,v)=>MapEntry(k.toString(),(v as List).cast<String>())),
       modeSuffix: readMap('modeSuffix'),
       promptEditDefaults: readMap('promptEditDefaults'),
+      promptEditDefaultsV2: readMap('promptEditDefaultsV2'),
     );
   }
 
@@ -83,7 +89,16 @@ class PromptTemplateLibrary {
     return filtered+safeguards+(suffix.startsWith(emptyGuards)?suffix.substring(emptyGuards.length):suffix);
   }
 
-  String resolve(String kind,ReversePromptMode mode,Map<String,String> overrides,{required String templateVersion,bool scoped=false,String fallback=''}) {
+  String resolve(String kind,ReversePromptMode mode,Map<String,String> overrides,{required String templateVersion,String skillVersion='1.0.0',bool scoped=false,String fallback=''}) {
+    if (skillVersion == '2.0.0') {
+      if (templateVersion != 'v5') throw const FormatException('技能 2.0.0 仅支持 NovelAI V5 Full；V4.5 请使用 1.0.0。');
+      final custom=overrides[mode.value]?.trim()??'';
+      if(custom.isNotEmpty)return custom;
+      final matches=(skillCatalogV2['templates'] as List? ?? const []).whereType<Map>().where((t)=>t['task']==kind&&t['mode']==mode.value);
+      if(matches.length!=1 || matches.first['body'] is! String)throw const FormatException('内置技能 2.0.0 资源缺失；未回退其他模板。');
+      return matches.first['body'] as String;
+    }
+    if(skillVersion!='1.0.0')throw const FormatException('未知技能版本');
     final saved=overrides[mode.value]?.trim()??'';
     String norm(String text)=>text.trim().replaceAll('\r\n','\n');
     final shipped=(legacyPure['$kind.${mode.value}']??[]).any((old)=>norm(old)==norm(saved));

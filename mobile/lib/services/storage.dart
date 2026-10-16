@@ -39,7 +39,46 @@ class SavedImageHistoryException implements Exception {
   String toString() => 'Image saved but history could not be persisted';
 }
 
+// Reserve the final name atomically. Existence checks alone race across Storage
+// instances and must not treat an existing directory or symlink as a free name.
+Future<File> writeUniqueImageFile(Directory directory, String baseName,
+    String extension, List<int> bytes) async {
+  var file = File('${directory.path}/$baseName.$extension');
+  var suffix = 1;
+  while (true) {
+    try {
+      await file.create(exclusive: true);
+      break;
+    } on PathExistsException {
+      // The OS's exclusive-create result is authoritative even while another
+      // writer's open/truncate makes a concurrent metadata lookup transient.
+      file = File('${directory.path}/$baseName-${suffix++}.$extension');
+    } on FileSystemException {
+      if (await FileSystemEntity.type(file.path, followLinks: false) ==
+          FileSystemEntityType.notFound) rethrow;
+      file = File('${directory.path}/$baseName-${suffix++}.$extension');
+    }
+  }
+  try {
+    await file.writeAsBytes(bytes, flush: true);
+    return file;
+  } catch (_) {
+    // This call owns only its successfully reserved path, never an old output.
+    try { await file.delete(); } catch (_) {}
+    rethrow;
+  }
+}
+
 class Storage {
+  // A coarse/frozen clock is a supported test input, never image identity.
+  final DateTime Function() _imageClock;
+  static final String _imageProcessNonce = List.generate(4,
+      (_) => Random.secure().nextInt(1 << 32).toRadixString(16).padLeft(8, '0')).join();
+  static int _imageIdentitySequence = 0;
+  static String _newImageId(DateTime now) =>
+      '${now.microsecondsSinceEpoch}-$_imageProcessNonce-${++_imageIdentitySequence}';
+  Storage({DateTime Function()? imageClock}) : _imageClock = imageClock ?? DateTime.now;
+
   // All instances share one settings transaction queue. Secure-key writes and
   // preference commits cannot interleave with UI, Agent or backup writes.
   static Future<void>? _historyTail;
@@ -912,27 +951,31 @@ class Storage {
       _saveVerifiedString('batch_run_v1', jsonEncode(run), '批量任务记录保存失败');
 
   Future<List<HistoryItem>> getHistory() async {
-    if (_cacheRevision != _historyRevision) _historyCache = null;
-    _cacheRevision = _historyRevision;
-    if (_historyCache != null) return List.of(_historyCache!);
-    final raw = (await _prefs).getString(_kHistory);
-    if (raw == null) {
-      _historyCache = [];
-      return [];
-    }
-    try {
-      // Parse off the UI isolate for large libraries so boot doesn't jank.
-      final list = raw.length > _kIsolateJsonThreshold
-          ? await compute(_decodeJsonList, raw)
-          : _decodeJsonList(raw);
-      final items = list
-          .map((e) => HistoryItem.fromJson(e as Map<String, dynamic>))
-          .toList();
+    while (true) {
+      final readRevision = _historyRevision;
+      if (_cacheRevision != readRevision) _historyCache = null;
+      _cacheRevision = readRevision;
+      if (_historyCache != null) return List.of(_historyCache!);
+      final raw = (await _prefs).getString(_kHistory);
+      List<HistoryItem> items;
+      try {
+        // Large parsing yields to a worker isolate. A same-instance commit may
+        // install a newer cache while this read (including a failed decode) waits.
+        final list = raw == null ? const <dynamic>[]
+            : raw.length > _kIsolateJsonThreshold
+                ? await compute(_decodeJsonList, raw)
+                : _decodeJsonList(raw);
+        items = list
+            .map((e) => HistoryItem.fromJson(e as Map<String, dynamic>))
+            .toList();
+      } catch (_) {
+        items = [];
+      }
+      // Applies equally to decoded, absent and invalid snapshots. Never tag an
+      // older result with a newer revision or return it over a completed commit.
+      if (_historyRevision != readRevision) continue;
       _historyCache = items;
       return List.of(items);
-    } catch (_) {
-      _historyCache = [];
-      return [];
     }
   }
 
@@ -1087,9 +1130,9 @@ class Storage {
     int? height,
     String? groupId,
   }) async {
-    final now = DateTime.now();
+    final now = _imageClock();
     final date = '${now.year}-${_pad(now.month)}-${_pad(now.day)}';
-    final id = '${now.microsecondsSinceEpoch}';
+    final id = _newImageId(now);
     final settings = await getSettings();
     final sequence = ++_saveSequence;
     final baseName = _renderImageName(
@@ -1107,8 +1150,8 @@ class Storage {
     final output = settings.keepImageMetadata ? bytes : stripPngMetadata(bytes);
     // Save into <base>/<date>/<group>/ (custom path or app documents).
     final images = await _imageSaveDir(settings, date, groupId);
-    final filePath = await _uniqueFilePath(images, baseName, 'png');
-    await File(filePath).writeAsBytes(output, flush: true);
+    final file = await writeUniqueImageFile(images, baseName, 'png', output);
+    final filePath = file.path;
     if (settings.saveToGallery) {
       try {
         await Gal.putImage(filePath, album: 'Langbai NovelAI Studio');
@@ -1148,13 +1191,12 @@ class Storage {
       Uint8List bytes, Map<String, Object> request, AppSettings snapshot,
       {String? groupId, String feature = 'openai-images'}) async {
     final output = snapshot.keepImageMetadata ? bytes : stripPngMetadata(bytes);
-    final now = DateTime.now();
+    final now = _imageClock();
     final date = '${now.year}-${_pad(now.month)}-${_pad(now.day)}';
-    final id =
-        '${now.microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
+    final id = _newImageId(now);
     final dir = await _imageSaveDir(snapshot, date, groupId);
-    final filePath = await _uniqueFilePath(dir, 'compatible-$date-$id', 'png');
-    await File(filePath).writeAsBytes(output, flush: true);
+    final file = await writeUniqueImageFile(dir, 'compatible-$date-$id', 'png', output);
+    final filePath = file.path;
     final header =
         bytes.buffer.asByteData(bytes.offsetInBytes, bytes.lengthInBytes);
     final item = HistoryItem(
@@ -1193,7 +1235,7 @@ class Storage {
     GenerateParams params,
     int seed,
   ) async {
-    final now = DateTime.now();
+    final now = _imageClock();
     final date = '${now.year}-${_pad(now.month)}-${_pad(now.day)}';
     final settings = await getSettings();
     final output = settings.keepImageMetadata ? bytes : stripPngMetadata(bytes);
@@ -1201,9 +1243,8 @@ class Storage {
     final dir = Directory(
         '${root.path}${Platform.pathSeparator}langbai-novelai-studio${Platform.pathSeparator}artist-lab-random');
     if (!dir.existsSync()) dir.createSync(recursive: true);
-    final id = 'artist-lab-temp-${now.microsecondsSinceEpoch}';
-    final file = File('${dir.path}${Platform.pathSeparator}$id.png');
-    await file.writeAsBytes(output, flush: true);
+    final id = 'artist-lab-temp-${_newImageId(now)}';
+    final file = await writeUniqueImageFile(dir, id, 'png', output);
     return HistoryItem(
       id: id,
       filePath: file.path,
@@ -1384,19 +1425,6 @@ class Storage {
     return name.isEmpty ? '${now.millisecondsSinceEpoch}-$sequence' : name;
   }
 
-  Future<String> _uniqueFilePath(
-    Directory directory,
-    String baseName,
-    String extension,
-  ) async {
-    var path = '${directory.path}/$baseName.$extension';
-    var suffix = 1;
-    while (await File(path).exists()) {
-      path = '${directory.path}/$baseName-${suffix++}.$extension';
-    }
-    return path;
-  }
-
   Future<File> saveOnlineGalleryImage(
     List<int> bytes, {
     required String source,
@@ -1437,11 +1465,7 @@ class Storage {
     final baseName = _safeFilePrefix(imageId.trim().isEmpty
         ? DateTime.now().microsecondsSinceEpoch.toString()
         : imageId);
-    final filePath =
-        await _uniqueFilePath(output, baseName, normalizedExtension);
-    final file = File(filePath);
-    await file.writeAsBytes(bytes, flush: true);
-    return file;
+    return writeUniqueImageFile(output, baseName, normalizedExtension, bytes);
   }
 }
 

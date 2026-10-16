@@ -13,7 +13,7 @@ import 'package:novelai_mobile/services/nai_api.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 
 class _MemorySettings extends Storage {
-  AppSettings saved = AppSettings();
+  AppSettings saved = AppSettings(reversePromptSkillVersion:'1.0.0',convertPromptSkillVersion:'1.0.0',promptAssistantSkillVersion:'1.0.0',);
   AgentWorkspace workspace = AgentWorkspace();
   bool failNextSave = false;
   @override
@@ -90,6 +90,7 @@ void main() {
   test('four derived Agent reads equal the runtime resolver', () async {
     final storage = _MemorySettings();
     final app = AppState(storage: storage);
+    app.settings..reversePromptSkillVersion='1.0.0'..convertPromptSkillVersion='1.0.0'..promptAssistantSkillVersion='1.0.0';
     addTearDown(app.dispose);
     app.promptTemplates = await PromptTemplateLibrary.load();
     const mixed = '保留蓝伞、左手、前景遮挡 AUDIT_SOURCE_DETAIL；Tag 65–75%';
@@ -112,6 +113,7 @@ void main() {
   test('Agent optimize and assistant use the actual Settings overlay', () async {
     final storage = _MemorySettings();
     final app = AppState(storage: storage);
+    app.settings..reversePromptSkillVersion='1.0.0'..convertPromptSkillVersion='1.0.0'..promptAssistantSkillVersion='1.0.0';
     addTearDown(app.dispose);
     app.settings
       ..promptOptimizeTemplate = 'ACTUAL_OPTIMIZE_POLICY'
@@ -141,6 +143,7 @@ void main() {
   test('save then read uses Settings; failed persistence preserves old overlay', () async {
     final storage = _MemorySettings();
     final app = AppState(storage: storage);
+    app.settings..reversePromptSkillVersion='1.0.0'..convertPromptSkillVersion='1.0.0'..promptAssistantSkillVersion='1.0.0';
     addTearDown(app.dispose);
     app.settings.promptOptimizeTemplate = 'old saved policy';
     await storage.setSettings(app.settings);
@@ -165,6 +168,7 @@ void main() {
     final storage = _MemorySettings();
     final api = _CaptureEditApi();
     final app = AppState(storage: storage, api: api);
+    app.settings..reversePromptSkillVersion='1.0.0'..convertPromptSkillVersion='1.0.0'..promptAssistantSkillVersion='1.0.0';
     addTearDown(app.dispose);
     app.promptTemplates = await PromptTemplateLibrary.load();
     app.settings
@@ -202,6 +206,7 @@ void main() {
     final storage = _MemorySettings();
     final api = _CaptureEditApi();
     final app = AppState(storage: storage, api: api);
+    app.settings..reversePromptSkillVersion='1.0.0'..convertPromptSkillVersion='1.0.0'..promptAssistantSkillVersion='1.0.0';
     addTearDown(app.dispose);
     app.settings
       ..agentApiBaseUrl = 'https://provider.invalid/v1'
@@ -228,6 +233,7 @@ void main() {
     final storage = _MemorySettings();
     final api = _CaptureEditApi();
     final app = AppState(storage: storage, api: api);
+    app.settings..reversePromptSkillVersion='1.0.0'..convertPromptSkillVersion='1.0.0'..promptAssistantSkillVersion='1.0.0';
     addTearDown(app.dispose);
     app.settings
       ..agentApiBaseUrl = 'https://provider.invalid/v1'
@@ -267,6 +273,7 @@ void main() {
     final storage = _MemorySettings();
     final api = _CaptureEditApi();
     final app = AppState(storage: storage, api: api);
+    app.settings..reversePromptSkillVersion='1.0.0'..convertPromptSkillVersion='1.0.0'..promptAssistantSkillVersion='1.0.0';
     addTearDown(app.dispose);
     app.settings
       ..agentApiBaseUrl = 'https://provider.invalid/v1'
@@ -294,6 +301,7 @@ void main() {
         'optimize': 'legacy optimize rule',
         'assistant': 'legacy custom rule'});
     final app = AppState(storage: storage);
+    app.settings..reversePromptSkillVersion='1.0.0'..convertPromptSkillVersion='1.0.0'..promptAssistantSkillVersion='1.0.0';
     addTearDown(app.dispose);
     app.settings.promptAssistantTemplate = 'new Settings custom rule';
     await storage.setSettings(app.settings);
@@ -316,6 +324,7 @@ void main() {
       ..workspace = AgentWorkspace(agentTemplates: {'optimize': 'legacy rule'})
       ..failNextSave = true;
     final app = AppState(storage: storage);
+    app.settings..reversePromptSkillVersion='1.0.0'..convertPromptSkillVersion='1.0.0'..promptAssistantSkillVersion='1.0.0';
     addTearDown(app.dispose);
     final controller = AgentController(app: app);
     addTearDown(controller.dispose);

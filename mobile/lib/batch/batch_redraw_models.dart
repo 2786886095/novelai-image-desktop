@@ -218,6 +218,8 @@ class BatchRedrawProject {
   String sizeMode;
   String sizeBulk;
   ReversePromptMode aiMode;
+  String? aiTemplateVersion;
+  String? aiSkillVersion;
   String promptBulk;
   bool reuseMainReferences;
   List<VibeTransferItem> vibeImages;
@@ -235,6 +237,8 @@ class BatchRedrawProject {
     this.sizeMode = 'adaptive',
     this.sizeBulk = '',
     this.aiMode = ReversePromptMode.tags,
+    this.aiTemplateVersion,
+    this.aiSkillVersion,
     this.promptBulk = '',
     this.reuseMainReferences = false,
     List<VibeTransferItem>? vibeImages,
@@ -263,6 +267,8 @@ class BatchRedrawProject {
         'sizeMode': sizeMode,
         'sizeBulk': sizeBulk,
         'aiMode': aiMode.value,
+        if(aiTemplateVersion!=null)'aiTemplateVersion':aiTemplateVersion,
+        if(aiSkillVersion!=null)'aiSkillVersion':aiSkillVersion,
         'promptBulk': promptBulk,
         'reuseMainReferences': reuseMainReferences,
         'vibeImages': vibeImages.map((item) => item.toJson()).toList(),
@@ -297,6 +303,8 @@ class BatchRedrawProject {
         (value) => value.value == json['aiMode']?.toString(),
         orElse: () => ReversePromptMode.tags,
       ),
+      aiTemplateVersion:['v5','v4.5'].contains(json['aiTemplateVersion'])?json['aiTemplateVersion'] as String:null,
+      aiSkillVersion:json['aiTemplateVersion']=='v4.5'?'1.0.0':['1.0.0','2.0.0'].contains(json['aiSkillVersion'])?json['aiSkillVersion'] as String:null,
       promptBulk: json['promptBulk']?.toString() ?? '',
       reuseMainReferences: json['reuseMainReferences'] == true,
       vibeImages: (json['vibeImages'] as List? ?? const [])

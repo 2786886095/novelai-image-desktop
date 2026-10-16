@@ -10,6 +10,7 @@ const platform=process.argv[2],device=process.argv[3],entry=process.argv[4]||'co
 const entries=Object.fromEntries(Object.entries(mobileNativeEntries).map(([id,spec])=>[id,spec.testFile]));
 const expectedChecks=Object.fromEntries(Object.entries(mobileNativeEntries).map(([id,spec])=>[id,spec.expectedChecks]));
 if(!Object.hasOwn(entries,entry))throw Error('Unknown bounded component entry.');
+if(mobileNativeEntries[entry].platforms&&!mobileNativeEntries[entry].platforms.includes(platform))throw Error('Native entry is not supported on this target; missing platform scenarios remain unverified.');
 if(Number(process.argv[6])!==expectedChecks[entry])throw Error('The CI controller must inject the fixed independent expected check count.');
 if(!['android','ios'].includes(platform)||!device)throw Error('usage: write-ci-input.mjs android|ios DISPOSABLE_DEVICE');
 if(process.env.GITHUB_ACTIONS!=='true')throw Error('This creator is restricted to fresh GitHub runner device jobs.');
@@ -38,6 +39,16 @@ const input={platform,device,isolated:true,sourceRoot,projectRoot:path.join(sour
   flutter:'flutter',adb:sdk?path.join(sdk,'platform-tools','adb'):'adb',androidSdk:sdk,
   javaHome:process.env.JAVA_HOME,sourceSha:result.stdout.trim(),sourceSnapshotSha256:crypto.createHash('sha256').update(manifest).digest('hex'),
   timeoutMs:1500000,journeyTimeoutMs:300000};
+if(mobileNativeEntries[entry].predecessor){
+  const predecessor=mobileNativeEntries[entry].predecessor;
+  const priorRoot=path.join(process.env.RUNNER_TEMP,`feature-native-${platform}`,predecessor);
+  const receipt=path.join(priorRoot,'native-mobile-receipt.json');
+  const scenarios=path.join(priorRoot,'native-mobile-scenarios-receipt.json');
+  // The native runner validates exact receipt bytes, native process identity
+  // and source-qualified scenario evidence again before preserving any data.
+  if(!fs.existsSync(receipt)||!fs.existsSync(scenarios))throw Error('Cold entry requires completed predecessor native and qualified scenario receipts.');
+  input.predecessorReceipt=receipt;
+}
 const target=path.join(outputRoot,'native-input.json');fs.writeFileSync(target,JSON.stringify(input,null,2)+'\n');
 if(process.env.GITHUB_ENV)fs.appendFileSync(process.env.GITHUB_ENV,`FEATURE_NATIVE_INPUT=${target}\nFEATURE_NATIVE_OUTPUT=${outputRoot}\n`);
 console.log(`NATIVE_INPUT=${target} sourceSHA=${input.sourceSha} isolatedDisposableTarget=${device} entry=${entry}`);

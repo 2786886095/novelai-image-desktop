@@ -1,0 +1,83 @@
+[
+  {
+    "name": "handoff",
+    "mode": "tags",
+    "prompt": "2girls, cafe, indoors, evening, upper body, from side, wooden counter, brass pendant lamp, warm lighting, window, sunset, sunlight, blurry background, brick wall, wooden shelf, white mug, coffee maker, potted plant, glass jar, coffee cup, saucer, latte art | girl, adult woman, bob cut, black hair, blunt bangs, hair behind ear, green eyes, mole under eye, stud earrings, white shirt, collared shirt, sleeves rolled up, black bowtie, black apron, smile, closed mouth, looking at another, outstretched arm, holding plate, source#giving, white plate, strawberry shortcake | girl, adult woman, long hair, red hair, low ponytail, hairclip, blue eyes, freckles, round eyewear, yellow sweater, ribbed sweater, turtleneck, sleeves past wrists, blush, open mouth, looking at food, leaning forward, reaching, target#giving",
+    "declaredUnits": 58,
+    "tagWords": 110,
+    "naturalWords": 0,
+    "tagPercent": 100.0
+  },
+  {
+    "name": "single_object",
+    "mode": "tags",
+    "prompt": "1girl, adult woman, library, indoors, day, upper body, straight-on, bookshelf, book stack, wooden ladder, desk lamp, arched window, sunlight, light rays, warm lighting, blurry background, globe, curtains, wooden table, armchair, potted plant, upper-floor railing, long hair, brown hair, wavy hair, hair over shoulder, swept bangs, sidelocks, ahoge, blue hair ribbon, green eyes, long eyelashes, eyeshadow, half-closed eyes, thick eyebrows, blush, looking at viewer, head tilt, pearl earrings, beige cardigan, open cardigan, long sleeves, white blouse, frilled collar, lace trim, brooch, pink nails, ring, wristwatch, holding book, red book, closed book, green ribbon bookmark, blank cover",
+    "declaredUnits": 53,
+    "tagWords": 94,
+    "naturalWords": 0,
+    "tagPercent": 100.0
+  },
+  {
+    "name": "still_life",
+    "mode": "tags",
+    "prompt": "no humans, still life, oil painting (medium), indoors, day, straight-on, wooden table, wood grain, beige cloth, book stack, green book, blue book, brown book, white vase, sunflower, daisy, green leaves, petals, lavender, red apple, green apple, pear, purple grapes, lemon, fig, walnut, teacup, saucer, tea, steam, teaspoon, unlit candle, brass candlestand, wax drips, unworn eyewear, pocket watch, gold chain, quill, inkwell, blank envelope, wax seal, key, seashell, green bottle, cork, wine glass, window, white curtains, beige wall, sunlight, shadow, soft lighting, blurry background",
+    "declaredUnits": 52,
+    "tagWords": 81,
+    "naturalWords": 0,
+    "tagPercent": 100.0
+  },
+  {
+    "name": "handoff",
+    "mode": "natural",
+    "prompt": "Two adult girls are inside a cafe in the evening with a wooden counter between them. The image is an upper body view from the side. A brass pendant lamp hangs in the room and the lighting is warm. A window in the background shows a sunset and the scene has evening sunlight. The background is blurred and shows a brick wall and a wooden shelf. A white mug, a coffee maker, a potted plant and a glass jar also appear in the background. The scene also has an unattended coffee cup with latte art and a saucer. | The girl on the left has a black bob cut with blunt bangs and hair tucked behind one ear. She has green eyes and a mole under one eye and wears stud earrings. She wears a white collared shirt with rolled-up sleeves, a black bowtie and a black apron. She smiles with her mouth closed and looks at the girl on the right. She holds a white plate with a strawberry shortcake on it. Her arm is stretched forward and her right hand supports the plate from underneath. She is passing the plate to the girl on the right. | The girl on the right has long red hair tied in a low ponytail with a hairclip. She has blue eyes and freckles and wears round glasses. She wears a yellow ribbed turtleneck sweater with sleeves past her wrists. She blushes with her mouth open and looks at the cake. She leans forward and reaches out to receive the plate. Her left fingertips touch the edge of the plate nearest to her and her right hand rests on the counter.",
+    "declaredUnits": 64,
+    "tagWords": 0,
+    "naturalWords": 277,
+    "tagPercent": 0.0
+  },
+  {
+    "name": "single_object",
+    "mode": "natural",
+    "prompt": "One adult girl is alone inside a library during the day. The image is an upper body view at a straight-on angle. Behind her are a bookshelf, a stack of books, a wooden ladder and a desk lamp. An arched window appears in the background and there is sunlight with visible light rays. The lighting is warm and the background is blurred. A globe, curtains, a wooden table, an armchair, a potted plant and a railing on an upper level also appear in the background. She has long wavy brown hair that falls over her shoulder and a single ahoge on top of her head. Her bangs are swept to the side and sidelocks hang beside her face. A blue ribbon is tied in her hair. Her half-closed green eyes have long eyelashes and sit under thick eyebrows. She wears eyeshadow and the visible parts of her cheeks are blushing. She tilts her head and looks at the viewer. She wears pearl earrings. She wears an open beige cardigan with long sleeves over a white blouse. The blouse has a frilled collar and lace trim at the cuffs. She wears a brooch. Her nails are painted pink and she wears a ring and a wristwatch. She holds a closed red book and a green bookmark ribbon hangs from between its pages. She grips the left and right sides of the book with both hands. The blank front cover faces the viewer. The top edge of the book sits just below the bridge of her nose and covers her mouth and the lower half of her face.",
+    "declaredUnits": 56,
+    "tagWords": 0,
+    "naturalWords": 266,
+    "tagPercent": 0.0
+  },
+  {
+    "name": "still_life",
+    "mode": "natural",
+    "prompt": "This is an oil painting of a still life with no people. The scene is indoors during the day and is viewed straight on. A wooden table shows visible wood grain. A beige cloth lies on the table under a stack of three books. The green book is at the bottom with the blue book in the middle and the brown book on top. A white vase stands on the brown book and holds sunflowers and daisies with green leaves. Scattered petals and a bundle of lavender lie on the table. A red apple sits in front of the stack and hides the lower edge of the green book. A pear sits behind the stack and is partly hidden by it. A green apple, purple grapes, a lemon, a fig and a walnut also lie on the table. A teacup of steaming tea rests on a saucer that also holds a teaspoon. An unlit candle with wax drips stands in a brass candlestand. A pair of unworn glasses and a pocket watch on a gold chain lie on the table. A quill and an inkwell sit on the table. A blank envelope is closed with a wax seal. A key and a seashell lie on the table. A green bottle is stopped with a cork. A wine glass stands on the table. The background shows a beige wall and a window with white curtains. Soft sunlight lights the scene and the objects cast shadows. The background is blurred.",
+    "declaredUnits": 59,
+    "tagWords": 0,
+    "naturalWords": 248,
+    "tagPercent": 0.0
+  },
+  {
+    "name": "handoff",
+    "mode": "mixed",
+    "prompt": "2girls, cafe, indoors, evening, upper body, from side, wooden counter, brass pendant lamp, warm lighting, window, sunset, sunlight, blurry background, brick wall, wooden shelf, white mug, coffee maker, potted plant, glass jar, coffee cup, saucer, latte art, The counter stands between the two girls. | girl, adult woman, bob cut, black hair, blunt bangs, hair behind ear, green eyes, mole under eye, stud earrings, white shirt, collared shirt, sleeves rolled up, black bowtie, black apron, smile, closed mouth, looking at another, outstretched arm, holding plate, source#giving, white plate, strawberry shortcake, She supports the cake plate from underneath with her right hand and passes it toward the girl on the right. | girl, adult woman, long hair, red hair, low ponytail, hairclip, blue eyes, freckles, round eyewear, yellow sweater, ribbed sweater, turtleneck, sleeves past wrists, blush, open mouth, looking at food, leaning forward, reaching, target#giving, She touches the edge of the plate nearest to her with her left fingertips and rests her right hand on the counter.",
+    "declaredUnits": 61,
+    "tagWords": 110,
+    "naturalWords": 49,
+    "tagPercent": 69.18
+  },
+  {
+    "name": "single_object",
+    "mode": "mixed",
+    "prompt": "1girl, adult woman, library, indoors, day, upper body, straight-on, bookshelf, book stack, wooden ladder, desk lamp, arched window, sunlight, light rays, warm lighting, blurry background, globe, curtains, wooden table, armchair, potted plant, upper-floor railing, long hair, brown hair, wavy hair, hair over shoulder, swept bangs, sidelocks, ahoge, blue hair ribbon, green eyes, long eyelashes, eyeshadow, half-closed eyes, thick eyebrows, blush, looking at viewer, head tilt, pearl earrings, beige cardigan, open cardigan, long sleeves, white blouse, frilled collar, lace trim, brooch, pink nails, ring, wristwatch, holding book, red book, closed book, green ribbon bookmark, blank cover, She grips the left and right sides of the book with both hands. The book's top edge sits below her nose bridge and hides her mouth and lower face. The front cover faces the viewer. The bookmark hangs from between the pages.",
+    "declaredUnits": 57,
+    "tagWords": 94,
+    "naturalWords": 42,
+    "tagPercent": 69.12
+  },
+  {
+    "name": "still_life",
+    "mode": "mixed",
+    "prompt": "no humans, still life, oil painting (medium), indoors, day, straight-on, wooden table, wood grain, beige cloth, three-book stack, green book, blue book, brown book, white vase, sunflower, daisy, green leaves, petals, lavender, red apple, green apple, pear, purple grapes, lemon, fig, walnut, teacup, saucer, tea, steam, teaspoon, unlit candle, brass candlestand, wax drips, unworn eyewear, pocket watch, gold chain, quill, inkwell, blank envelope, wax seal, key, seashell, green bottle, cork, wine glass, window, white curtains, beige wall, sunlight, shadow, soft lighting, blurry background, The stack rests on the cloth with green below blue below brown. The vase on the top book holds the flowers. The red apple hides the bottom book's lower edge. The stack partly hides the pear behind it.",
+    "declaredUnits": 56,
+    "tagWords": 81,
+    "naturalWords": 38,
+    "tagPercent": 68.07
+  }
+]

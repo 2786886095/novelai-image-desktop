@@ -1,4 +1,5 @@
 import {normalizeStudioDefaults} from '../../src/agent/preferences';
+import {defaultPromptSkills} from '../../src/agent/prompt-skills';
 import { normalizeStudioComposerActions } from '../../src/agent/composer-actions';
 import {studioBuiltinPreset,studioPresetId,STUDIO_DEFAULT_PRESET_ID,type StudioConversationOptions} from '../../src/agent/workspace-controls';
 import {decodeSystemPromptFile,importImageSystemPrompt,MAX_SYSTEM_PROMPT_IMPORT_BYTES,SystemPromptImportError} from '../../src/tavern/system-prompt-import';
@@ -66,10 +67,7 @@ function now() {
 }
 
 function defaultSkills(): AgentSkill[] {
-  // The pre-release Agent skill system is intentionally not migrated into the
-  // roleplay product. Keep the legacy collection empty so old backup readers
-  // remain structurally compatible without surfacing obsolete concepts.
-  return [];
+  return defaultPromptSkills();
 }
 
 export function createEmptyAgentWorkspace(): AgentWorkspaceData {
@@ -380,12 +378,13 @@ export function normalizeAgentWorkspace(raw: unknown, preserveRuntimeStatus = fa
   const skillById = new Map<string, AgentSkill>();
   for (const skill of [...builtIns, ...inputSkills]) {
     if (!skill || typeof skill.id !== "string" || typeof skill.name !== "string" || typeof skill.instructions !== "string") continue;
+    const builtin=builtIns.find(item=>item.id===skill.id);
     skillById.set(skill.id, {
       id: skill.id,
-      name: skill.name.trim().slice(0, 80) || "未命名技能",
-      description: typeof skill.description === "string" ? skill.description.trim().slice(0, 300) : "",
-      instructions: skill.instructions,
-      enabled: skill.enabled !== false,
+      name: builtin?.name ?? (skill.name.trim().slice(0, 80) || "未命名技能"),
+      description: builtin?.description ?? (typeof skill.description === "string" ? skill.description.trim().slice(0, 300) : ""),
+      instructions: builtin?.instructions ?? skill.instructions,
+      enabled: builtin ? skill.enabled === true : skill.enabled !== false,
       builtIn: builtIns.some((item) => item.id === skill.id),
       createdAt: typeof skill.createdAt === "string" ? skill.createdAt : now(),
       updatedAt: typeof skill.updatedAt === "string" ? skill.updatedAt : now(),

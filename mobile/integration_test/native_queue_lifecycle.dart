@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_print
 // Native queue lifecycle/unsupported-platform guard supplement. No fake platform, provider or profile.
 import 'dart:convert';
+import 'native_foreground.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -31,6 +32,7 @@ Future<void> main() async {
   void require(bool value, String message) { if (!value) throw StateError(message); }
   try {
     require((Platform.isAndroid || Platform.isIOS) && const bool.fromEnvironment('FEATURE_ISOLATED_DEVICE'), 'Disposable native Android emulator/iOS Simulator required.');
+    await nativeForegroundBarrier();
     if (Platform.isIOS) {
       runApp(const MaterialApp(home: Scaffold(body: Center(child: Text('Native iOS queue policy checks')))));
       await WidgetsBinding.instance.endOfFrame;

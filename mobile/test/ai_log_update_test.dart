@@ -62,6 +62,8 @@ void main() {
       proxyMode: 'direct',
       visionApiUrl: 'http://127.0.0.1:${server.port}',
       visionApiModel: 'local-test',
+      reversePromptSkillVersion: '1.0.0',
+      reversePromptTemplates: {'tags':'Return tags.'},
       promptCodexEnhanceEnabled: false,
     );
     final result = await api.reversePrompt(

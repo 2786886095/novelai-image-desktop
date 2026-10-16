@@ -138,7 +138,9 @@ void main() {
   test(
       'template versions edit and reset independently; V4.5 conversion is bundled',
       () async {
-    final app = AppState();
+    // This pre-V2 test covers the independent legacy model slots. Fresh V2
+    // default/implicit V4.5 compatibility is tested in slot-selection tests.
+    final app = AppState()..settings=AppSettings(reversePromptSkillVersion:'1.0.0',convertPromptSkillVersion:'1.0.0');
     app.promptTemplates = await PromptTemplateLibrary.load();
     app.settings.convertPromptTemplateVersion = 'v4.5';
     expect(app.resolvedPromptTemplate('convert', ReversePromptMode.mixed),

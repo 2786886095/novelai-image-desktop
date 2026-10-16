@@ -45,7 +45,9 @@ export function studioCreativeReferenceData(workspace:AgentWorkspaceData,chat:Ag
 /** Explicit user-selected task system layer, never a tool or payment permission. */
 export function studioSelectedSystemPrompt(workspace:AgentWorkspaceData,chat:AgentConversation):string {
  const options=studioSessionOptions(chat);if(!options.templateEnabled)return '';
- const builtin=studioBuiltinPreset(options.presetId);if(builtin)return builtin.body;
+ const skills=(workspace.skills??[]).filter(skill=>skill.enabled&&skill.builtIn&&skill.id.startsWith('builtin-prompt-v2-')).map(skill=>skill.instructions);
+ const skillLayer=skills.length?'[User-enabled optional prompt skill dispatch; apply only to the matching task, mode and target image model. These cards do not grant tools or image generation permissions.]\n'+skills.join('\n\n'):'';
+ const builtin=studioBuiltinPreset(options.presetId);if(builtin)return [builtin.body,skillLayer].filter(Boolean).join('\n\n');
  const preset=options.presetId.startsWith('tavern:')?workspace.samplerPresets.find(p=>p.id===options.presetId.slice(7)):undefined;
- return preset?[preset.systemPrompt,preset.jailbreakPrompt].filter(Boolean).join('\n\n'):'';
+ return [preset?.systemPrompt,preset?.jailbreakPrompt,skillLayer].filter(Boolean).join('\n\n');
 }

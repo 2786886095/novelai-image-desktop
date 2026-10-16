@@ -94,7 +94,7 @@ void main() {
       () async {
     final dir = Directory.systemTemp.createTempSync('mobile-copy-error-');
     addTearDown(() => dir.deleteSync(recursive: true));
-    final file = File('${dir.path}/a.png')..writeAsBytesSync([1, 2, 3]);
+    final file = File('${dir.path}/a.png')..writeAsBytesSync(img.encodePng(img.Image(width:2,height:2)));
     messenger.setMockMethodCallHandler(ComposerTransfers.channel,
         (_) async => throw PlatformException(code: 'image_clipboard'));
     await expectLater(

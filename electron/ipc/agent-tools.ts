@@ -345,11 +345,11 @@ export async function executeAgentTool(
       case "langbai_templates": return sharedTemplateWorkflow.execute(request);
       case "langbai_edit_prompt": {
         if(!['optimize','custom'].includes(String(args.kind)))throw Error('编辑用途需要 optimize 或 custom');
-        const base=templateSelection(getSettings(),{...args,kind:'convert'});
-        const overlay=templateSelection(getSettings(),{kind:args.kind==='optimize'?'optimize':'assistant'});
+        const overlay=templateSelection(getSettings(),{...args,kind:args.kind==='optimize'?'optimize':'assistant'});
+        const base=templateSelection(getSettings(),{...args,kind:'convert',mode:overlay.mode,templateVersion:overlay.templateVersion,skillVersion:overlay.skillVersion});
         const result=await convertPromptText(text(args.currentPrompt,24_000),base.mode,false,base.templateVersion as 'v4.5'|'v5',{
           kind:args.kind as 'optimize'|'custom',instruction:text(args.instruction,8_000),
-        });
+        },overlay.skillVersion);
         return response(result.ok,result.ok?'提示词编辑完成':'提示词编辑失败',{...result,template:{kind:overlay.kind,source:overlay.source,bodySha256:overlay.bodySha256,baseTemplateSha256:base.bodySha256}});
       }
       case "langbai_get_generation_state": {
@@ -616,8 +616,9 @@ export async function executeAgentTool(
           text(args.hint, 1_000),
           bool(args.knownCharacter),
           template.templateVersion as "v4.5" | "v5",
+          template.skillVersion,
         );
-        return response(result.ok, result.ok ? "图片反推完成" : "图片反推失败", {...result, template: {kind: template.kind, mode: template.mode, version: template.templateVersion, source: template.source, bodySha256:template.bodySha256}});
+        return response(result.ok, result.ok ? "图片反推完成" : "图片反推失败", {...result, template: {kind: template.kind, mode: template.mode, version: template.templateVersion, skillVersion:template.skillVersion, source: template.source, bodySha256:template.bodySha256}});
       }
       case "langbai_convert_prompt": {
         const template = templateSelection(getSettings(), {...args, kind: "convert"});
@@ -626,8 +627,10 @@ export async function executeAgentTool(
           template.mode,
           bool(args.knownCharacter),
           template.templateVersion as "v4.5" | "v5",
+          undefined,
+          template.skillVersion,
         );
-        return response(result.ok, result.ok ? "提示词转换完成" : "提示词转换失败", {...result, template: {kind: template.kind, mode: template.mode, version: template.templateVersion, source: template.source, bodySha256:template.bodySha256}});
+        return response(result.ok, result.ok ? "提示词转换完成" : "提示词转换失败", {...result, template: {kind: template.kind, mode: template.mode, version: template.templateVersion, skillVersion:template.skillVersion, source: template.source, bodySha256:template.bodySha256}});
       }
         case "langbai_list_history": {
           const groups = getHistoryGroups();

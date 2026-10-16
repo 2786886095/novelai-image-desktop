@@ -1,0 +1,34 @@
+import {afterEach,beforeEach,expect,it,vi} from 'vitest';
+import {useAppStore} from './store';
+import type {AppSettings} from './types';
+const priorVariants={namePrompt:'previous named',featurePrompt:'previous features'};
+const settings=()=>({language:'en-US',reversePromptTemplateVersion:'v5',reversePromptSkillVersion:'2.0.0',convertPromptTemplateVersion:'v5',convertPromptSkillVersion:'2.0.0',reversePromptTemplatesV2:{tags:'',natural:'',mixed:''},convertPromptTemplatesV2:{tags:'',natural:'',mixed:''}} as AppSettings);
+beforeEach(()=>{vi.useFakeTimers();useAppStore.setState(useAppStore.getInitialState(),true);useAppStore.setState({settings:settings(),inspectImageBase64:'synthetic-image',reversePromptText:'previous reverse',reversePromptVariants:priorVariants,convertInput:'original input',convertResult:'previous convert',convertResultVariants:priorVariants});});
+afterEach(()=>{vi.clearAllTimers();vi.useRealTimers();vi.unstubAllGlobals();});
+it.each(['edition','model','template','mode','image','hint'] as const)('a pending reverse response after %s changes is retained only in its original job',async change=>{
+ let resolve!:(value:any)=>void;const promise=new Promise(resolveValue=>{resolve=resolveValue;}),history=vi.fn(),api=vi.fn((..._args:unknown[])=>promise);vi.stubGlobal('window',{naiDesktop:{reversePrompt:api,addReverseHistoryItem:history}});
+ const running=useAppStore.getState().runReversePrompt(),current=useAppStore.getState();
+ if(change==='edition')useAppStore.setState({settings:{...current.settings!,reversePromptSkillVersion:'1.0.0'}});
+ if(change==='model')useAppStore.setState({settings:{...current.settings!,reversePromptTemplateVersion:'v4.5'}});
+ if(change==='template')useAppStore.setState({settings:{...current.settings!,reversePromptTemplatesV2:{tags:'changed',natural:'',mixed:''}}});
+ if(change==='mode')useAppStore.setState({reversePromptMode:'natural'});
+ if(change==='image')useAppStore.setState({inspectImageBase64:'different image'});
+ if(change==='hint')useAppStore.setState({reversePromptHint:'different scope hint'});
+ resolve({ok:true,prompt:'outdated result',variants:{namePrompt:'old task',featurePrompt:'old features'}});await running;
+ expect(useAppStore.getState().reversePromptText).toBe('previous reverse');expect(useAppStore.getState().reversePromptVariants).toEqual(priorVariants);expect(history).toHaveBeenCalledWith(expect.objectContaining({stale:true,templateVersion:'v5',skillVersion:'2.0.0'}));
+ expect(useAppStore.getState().reverseJobs[0]).toMatchObject({status:'done',result:'outdated result',templateVersion:'v5',skillVersion:'2.0.0',message:expect.stringContaining('not replaced')});
+ expect(api.mock.calls[0][6]).toBe('2.0.0');
+});
+it.each(['edition','model','template','mode','input'] as const)('a pending conversion response after %s changes cannot replace the current result',async change=>{
+ let resolve!:(value:any)=>void;const promise=new Promise(resolveValue=>{resolve=resolveValue;}),history=vi.fn(),api=vi.fn((..._args:unknown[])=>promise);vi.stubGlobal('window',{naiDesktop:{convertPrompt:api,addConvertHistoryItem:history}});
+ const running=useAppStore.getState().runConvertPrompt(),current=useAppStore.getState();
+ if(change==='edition')useAppStore.setState({settings:{...current.settings!,convertPromptSkillVersion:'1.0.0'}});
+ if(change==='model')useAppStore.setState({settings:{...current.settings!,convertPromptTemplateVersion:'v4.5'}});
+ if(change==='template')useAppStore.setState({settings:{...current.settings!,convertPromptTemplatesV2:{tags:'changed',natural:'',mixed:''}}});
+ if(change==='mode')useAppStore.setState({convertMode:'natural'});
+ if(change==='input')useAppStore.setState({convertInput:'new input'});
+ resolve({ok:true,result:'outdated conversion'});await running;
+ expect(useAppStore.getState().convertResult).toBe('previous convert');expect(useAppStore.getState().convertResultVariants).toEqual(priorVariants);expect(history).toHaveBeenCalledWith(expect.objectContaining({stale:true,templateVersion:'v5',skillVersion:'2.0.0'}));
+ expect(useAppStore.getState().convertJobs[0]).toMatchObject({status:'done',result:'outdated conversion',templateVersion:'v5',skillVersion:'2.0.0',message:expect.stringContaining('not replaced')});
+ expect(api.mock.calls[0][4]).toBeUndefined();expect(api.mock.calls[0][5]).toBe('2.0.0');
+});

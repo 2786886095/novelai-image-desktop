@@ -61,6 +61,7 @@ void main(){
     test('real executor pipeline: $action; saved template, draft restoration and no extra generation',() async {
       SharedPreferences.setMockInitialValues({});final api=Api();
       final actual=App(api);addTearDown(actual.dispose);
+      actual.settings..reversePromptSkillVersion='1.0.0'..convertPromptSkillVersion='1.0.0'..promptAssistantSkillVersion='1.0.0';
       actual.promptTemplates=await PromptTemplateLibrary.load();
       actual.settings.convertPromptTemplates={'mixed':'CUSTOM TEMPLATE {{input}}'};
       await actual.storage.setSettings(actual.settings);

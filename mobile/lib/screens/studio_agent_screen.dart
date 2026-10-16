@@ -1,3 +1,5 @@
+import 'prompt_skill_selector.dart';
+import '../prompts/prompt_skill_selection.dart';
 import '../ui/effort_control.dart';
 import '../ui/global_typography.dart';
 import 'studio_question_cards.dart';
@@ -206,8 +208,9 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
   }
 
   Future<void> _showActionPanel(String intent) async {
-    var kind = 'convert', mode = 'mixed', version = 'v5', presetId = '';
+    var kind = 'convert', mode = 'mixed', presetId = '';
     final app = _agent!.app;
+    var version=app.settings.convertPromptTemplateVersion,edition=app.settings.convertPromptSkillVersion;
     await showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
@@ -225,10 +228,10 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
               final body = ['convert', 'reverse'].contains(kind)
                   ? app.resolvedPromptTemplate(
                       kind, ReversePromptMode.values.byName(mode),
-                      templateVersion: version)
+                      templateVersion: version,skillVersion:edition)
                   : kind == 'optimize'
-                      ? app.settings.promptOptimizeTemplate
-                      : app.settings.promptAssistantTemplate;
+                      ? (promptSkillOverlay(app.settings,'optimize',edition).trim().isNotEmpty?promptSkillOverlay(app.settings,'optimize',edition):(edition=='2.0.0'?app.promptTemplates.promptEditDefaultsV2:app.promptTemplates.promptEditDefaults)['optimize']??'')
+                      : (promptSkillOverlay(app.settings,'assistant',edition).trim().isNotEmpty?promptSkillOverlay(app.settings,'assistant',edition):(edition=='2.0.0'?app.promptTemplates.promptEditDefaultsV2:app.promptTemplates.promptEditDefaults)['custom']??'');
               return Padding(
                   padding: EdgeInsets.only(
                       bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
@@ -297,47 +300,13 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                           ],
                                           onChanged: (value) => change(
                                               () => kind = value ?? 'convert')),
-                                      if (['convert', 'reverse']
-                                          .contains(kind)) ...[
-                                        const SizedBox(height: 12),
-                                        StudioDropdownButtonFormField<String>(
-                                            value: mode,
-                                            isExpanded: true,
-                                            decoration: InputDecoration(
-                                                labelText: _t('templateMode')),
-                                            items: [
-                                              for (final m in [
-                                                'mixed',
-                                                'tags',
-                                                'natural'
-                                              ])
-                                                DropdownMenuItem(
-                                                    value: m,
-                                                    child: _agentMenuLabel(
-                                                        Icons.text_fields,
-                                                        _t('mode_$m')))
-                                            ],
-                                            onChanged: (value) => change(
-                                                () => mode = value ?? 'mixed')),
-                                        const SizedBox(height: 12),
-                                        StudioDropdownButtonFormField<String>(
-                                            value: version,
-                                            isExpanded: true,
-                                            decoration: InputDecoration(
-                                                labelText:
-                                                    _t('templateVersion')),
-                                            items: [
-                                              for (final v in ['v5', 'v4.5'])
-                                                DropdownMenuItem(
-                                                    value: v,
-                                                    child: _agentMenuLabel(
-                                                        Icons.layers_outlined,
-                                                        v.toUpperCase()))
-                                            ],
-                                            onChanged: (value) => change(
-                                                () => version = value ?? 'v5')),
-                                      ],
-                                      const SizedBox(height: 12),
+                                      const SizedBox(height:12),
+                                      StudioDropdownButtonFormField<String>(value:mode,decoration:InputDecoration(labelText:_t('templateMode')),
+                                        items:[for(final m in ['mixed','tags','natural'])DropdownMenuItem(value:m,child:Text(_t('mode_$m')))],
+                                        onChanged:(v)=>change(()=>mode=v??'mixed')),
+                                      const SizedBox(height:12),
+                                      PromptSkillSelector(model:version,edition:edition,language:app.settings.language,onChanged:(model,revision)=>change((){version=model;edition=revision;})),
+                                      const SizedBox(height:12),
                                       ExpansionTile(
                                           title: Text(_t('readTemplate')),
                                           children: [
@@ -370,7 +339,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                                         templateKind: kind,
                                                         mode: mode,
                                                         templateVersion:
-                                                            version));
+                                                            version,skillVersion:edition));
                                               },
                                         icon: const Icon(Icons.add),
                                         label: Text(_t('stageAction'))),

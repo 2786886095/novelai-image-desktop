@@ -31,8 +31,9 @@ void main(){
    if(status==200)expect(result.text,echo,reason:'never redact actual successful prompt output');
   });
  }
+ // Prior raw variant retention is a legacy protocol fixture, not a V2 catalog fixture.
  test('conversion failure preserves prior variants, prompt and history',()async{
-  final api=_Api(),a=AppState(api:api,storage:_Storage())..convertInput='new input'..convertResult='prior prompt'..convertResultVariants=const PromptVariants(namePrompt:'prior name',featurePrompt:'prior feature');addTearDown(a.dispose);
+  final api=_Api(),a=AppState(api:api,storage:_Storage())..settings=AppSettings(convertPromptSkillVersion:'1.0.0')..convertInput='new input'..convertResult='prior prompt'..convertResultVariants=const PromptVariants(namePrompt:'prior name',featurePrompt:'prior feature');addTearDown(a.dispose);
   final running=a.convertPrompt();await Future<void>.delayed(Duration.zero);expect(a.convertResultVariants?.namePrompt,'prior name');
   api.complete.complete(const AiTextResult(ok:false,message:'synthetic failure'));await running;
   expect(a.convertResult,'prior prompt');expect(a.convertResultVariants?.featurePrompt,'prior feature');expect(a.convertHistory,isEmpty);

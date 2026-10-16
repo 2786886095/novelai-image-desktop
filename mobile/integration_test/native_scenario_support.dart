@@ -1,6 +1,7 @@
 // Native acceptance helpers. No platform, Storage, network or API mocks.
 // ignore_for_file: avoid_print
 import 'dart:async';
+import 'native_foreground.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -71,13 +72,17 @@ class NativeScenarios {
       require(const bool.fromEnvironment('FEATURE_ISOLATED_DEVICE'), 'Disposable device is mandatory');
       require(RegExp(r'^[a-f0-9]{40}$').hasMatch(sourceSha), 'Committed source identity required');
       require(RegExp(r'^[a-f0-9]{64}$').hasMatch(profileSha), 'Profile identity required');
-      require(const {'library33':33,'generation24':24}[testEntry] == expected, 'Registered native entry/count identity required');
-      print('FEATURE_ACCEPTANCE_BEGIN:${jsonEncode({'sourceSha':sourceSha,'profileSha':profileSha,'platform':Platform.operatingSystem,'kind':'device','nativeOnly':true,'mockOnly':false,'paidCalls':0,'testEntry':testEntry,'expectedChecks':expected})}');
+      require(const {'library33':33,'generation24':24,'text15':15,'skill_reopen1':1,'batch_mcp7':7,'comic_openai6':6,'image_agent3':3,'tools3':3,'ui9':9,'os6':6,'android_update2':2}[testEntry] == expected, 'Registered native entry/count identity required');
+      print('FEATURE_ACCEPTANCE_BEGIN:${jsonEncode({'sourceSha':sourceSha,'profileSha':profileSha,'platform':Platform.operatingSystem,'kind':'device','nativeOnly':true,'mockOnly':false,'paidCalls':0,'testEntry':testEntry,'expectedChecks':expected,'nativePid':pid})}');
       if (Platform.isAndroid) FlutterForegroundTask.initCommunicationPort();
       BackgroundQueueService.initialize();
       runApp(const MaterialApp(home:Scaffold(body:Text('Isolated native client scenarios'))));
-      await frame();
-      await (await SharedPreferences.getInstance()).clear();
+      await nativeForegroundBarrier(renderBootstrap:false);
+      const coldEntry=testEntry=='skill_reopen1';
+      const predecessorVerified=bool.fromEnvironment('FEATURE_PREDECESSOR_VERIFIED');
+      require(!coldEntry || predecessorVerified,'Cold entry requires a runner-verified qualified predecessor and fresh process');
+      require(!predecessorVerified || coldEntry,'Predecessor preservation is limited to the registered cold entry');
+      if(!coldEntry)await (await SharedPreferences.getInstance()).clear();
       // Read-only real native bridge probe. Unsupported/missing handler is
       // evidence of a gap, never an accepted install/activation scenario.
       try {

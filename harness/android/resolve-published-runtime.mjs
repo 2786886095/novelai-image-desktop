@@ -27,9 +27,17 @@ export async function reusePublishedRuntime({lock,out,fetcher=fetch,checkSource}
 if(process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){
  const lock=JSON.parse(await fs.readFile('harness/android/runtime-lock.json','utf8'));
  const reused=await reusePublishedRuntime({lock,out:'artifacts/android-runtime',fetcher:url=>fetch(url,{signal:AbortSignal.timeout(600000)}),checkSource:tag=>{
-  // Runtime sources are immutable. The responsive overlay is always staged from the APK,
-  // not the inert copy in rootfs; native launcher and presentation have the app version.
-  execFileSync('git',['diff','--exit-code',tag,'HEAD','--','harness',':!harness/android/resolve-published-runtime.mjs',':!harness/android/tests',':!harness/plugins/studio-responsive',':!harness/build-responsive.mjs'],{stdio:'inherit',timeout:30000});
+  // Runtime sources remain immutable. Like the existing responsive overlay, these
+  // exact template inputs rebuild/stage current app-owned assets. Startup replaces
+  // only untouched seed plugins with hash-verified managed assets; custom plugins
+  // remain active. Do not exempt whole library/tools directories, hosts or protocol.
+  execFileSync('git',['diff','--exit-code',tag,'HEAD','--','harness',':!harness/android/resolve-published-runtime.mjs',':!harness/android/tests',':!harness/plugins/studio-responsive',':!harness/build-responsive.mjs',
+   ':!harness/plugins/studio-library/lib/client.js',
+   ':!harness/plugins/studio-library/template-panel.js',
+   ':!harness/plugins/studio-library/template-selection.js',
+   ':!harness/plugins/studio-library/template-selection.test.mjs',
+   ':!harness/plugins/studio-tools/index.js',
+  ],{stdio:'inherit',timeout:30000});
  }});
  if(process.env.GITHUB_OUTPUT)await fs.appendFile(process.env.GITHUB_OUTPUT,`reused=${reused}\n`);
  console.log(reused?'PUBLISHED_RUNTIME_REUSED: exact public archive and hash verified':'NEW_COMPONENT_BUILD_REQUIRED');

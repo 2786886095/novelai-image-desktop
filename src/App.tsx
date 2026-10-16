@@ -14,7 +14,7 @@ import {InpaintEngineSwitch,OpenAIImageEditSettingsCard,OpenAIInpaintControls,Op
 import { NaiAccountManager } from './components/NaiAccountManager';
 import {FilePathDialog} from './components/FilePathDialog';
 import {HistoryItemMenu} from './components/HistoryItemMenu';
-import {PROMPT_OPTIMIZE_TEMPLATE, PROMPT_CUSTOM_TEMPLATE} from "./data/prompt-edit-templates";
+import {PROMPT_OPTIMIZE_TEMPLATE, PROMPT_CUSTOM_TEMPLATE, PROMPT_OPTIMIZE_TEMPLATE_V2, PROMPT_CUSTOM_TEMPLATE_V2} from "./data/prompt-edit-templates";
 import {workflowText} from './workflow-text';
 import {inpaintSizePlan} from './inpaint-size';
 import {resolvePromptSizeSlot} from './prompt-size-slot';
@@ -29,6 +29,10 @@ import {takeRequestedSettingsSection} from './prompt-ui-settings';
 import {PromptToolsPopover} from './components/PromptToolsPopover';
 import {SlidingPromptToolbar,PromptResizeHandle} from './components/PromptEditorChrome';
 import {PromptAssistant} from './components/PromptAssistant';
+import {PromptSkillControls} from './components/PromptSkillControls';
+import {skillVersionForModel} from './prompt-skill-settings';
+import {selectPromptSkillTemplate} from './prompt-skill';
+import type {PromptSkillVersion} from './types';
 import {resolvePromptAssistantMode} from './prompt-assistant';
 import {usePromptHistory} from './use-prompt-history';
 import {promptEditorText} from './prompt-editor-text';
@@ -1600,8 +1604,9 @@ export function PromptAndParams({
   const latestPromptValues=useRef({positivePrompt:effectivePositivePrompt,negativePrompt:params.negativePrompt});
   latestPromptValues.current={positivePrompt:effectivePositivePrompt,negativePrompt:params.negativePrompt};
   const assistantMode=resolvePromptAssistantMode(settings);
-  const assistantVersion=settings?.convertPromptTemplateVersion??'v5';
-  const assistantContext=JSON.stringify([!!promptOverride,params.model,assistantMode,assistantVersion,settings?.convertPromptTemplates,settings?.convertPromptTemplatesV45,settings?.convertSystemPrompt,settings?.promptOptimizeTemplate,settings?.promptAssistantTemplate]);
+  const assistantVersion=settings?.promptAssistantTemplateVersion??settings?.convertPromptTemplateVersion??'v5';
+  const assistantEdition=skillVersionForModel(settings?.promptAssistantSkillVersion,assistantVersion);
+  const assistantContext=JSON.stringify([!!promptOverride,params.model,assistantMode,assistantVersion,assistantEdition,settings?.convertPromptTemplatesV2,settings?.promptOptimizeTemplateV2,settings?.promptAssistantTemplateV2,settings?.convertPromptTemplates,settings?.convertPromptTemplatesV45,settings?.convertSystemPrompt,settings?.promptOptimizeTemplate,settings?.promptAssistantTemplate]);
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
   const stylePromptPresets: StylePromptPreset[] = settings?.stylePromptPresets ?? [];
   const stylePreviewRecoverySignature = stylePromptPresets
@@ -2302,7 +2307,7 @@ export function PromptAndParams({
         if(expectedContext!==JSON.stringify([promptKey,!!promptOverride])||latestPromptValues.current[promptKey]!==expected){setToast(editorText.stale);return false;}
         setTranslateBackup(backup=>({...backup,[promptKey]:expected}));setPromptValue(next);return true;
       }}/>}
-      {assistantKind&&<PromptAssistant kind={assistantKind} currentValue={effectivePositivePrompt} context={assistantContext} mode={assistantMode} version={assistantVersion} language={settings?.language} onClose={()=>setAssistantKind(null)} onApply={(next,expected)=>{
+      {assistantKind&&<PromptAssistant kind={assistantKind} currentValue={effectivePositivePrompt} context={assistantContext} mode={assistantMode} version={assistantVersion} edition={assistantEdition} language={settings?.language} onClose={()=>setAssistantKind(null)} onApply={(next,expected)=>{
         if(latestPromptValues.current.positivePrompt!==expected)return false;
         positiveHistory.commit(next);return true;
       }}/>}
@@ -4061,9 +4066,9 @@ function ReversePanel() {
     setToast(t("shared.reusedToGenerate"));
   }
 
-  async function setReverseTemplateVersion(version: "v4.5" | "v5") {
-    if (version === reverseTemplateVersion) return;
+  async function setReverseTemplateVersion(version: "v4.5" | "v5", edition: PromptSkillVersion) {
     await window.naiDesktop.setSetting("reversePromptTemplateVersion", version);
+    await window.naiDesktop.setSetting("reversePromptSkillVersion", skillVersionForModel(edition,version));
     await refreshSettings();
   }
 
@@ -4113,21 +4118,7 @@ function ReversePanel() {
 
         {hasImage && metadataReport && <MetadataApplyPanel report={metadataReport} language={normalizeAppLanguage(language)} />}
 
-        <div className="reverse-scope-card reverse-template-version-card">
-          <span className="field-label-row">{t("inspect.templateVersionTitle")}</span>
-          <div className="mode-selector compact">
-            {(["v4.5", "v5"] as const).map((version) => (
-              <button
-                key={version}
-                className={clsx("mode-btn", reverseTemplateVersion === version && "active")}
-                onClick={() => void setReverseTemplateVersion(version)}
-              >
-                {t(`inspect.templateVersion.${version === "v4.5" ? "v45" : "v5"}`)}
-              </button>
-            ))}
-          </div>
-          <small>{t("inspect.templateVersionHint")}</small>
-        </div>
+        <PromptSkillControls model={reverseTemplateVersion} edition={skillVersionForModel(settings?.reversePromptSkillVersion,reverseTemplateVersion)} language={language} disabled={reverseBusy} onChange={(model,edition)=>void setReverseTemplateVersion(model,edition).catch(error=>setToast(String(error)))}/>
 
         <div className="mode-selector">
           {modes.map(([val, label, tip]) => (
@@ -4376,9 +4367,9 @@ function PromptConverterPanel() {
     setToast(f("prompt.templateApplied", { name: tpl.name }));
   }
 
-  async function setConvertTemplateVersion(version: ReversePromptTemplateVersion) {
-    if (version === convertTemplateVersion) return;
+  async function setConvertTemplateVersion(version: ReversePromptTemplateVersion, edition: PromptSkillVersion) {
     await window.naiDesktop.setSetting("convertPromptTemplateVersion", version);
+    await window.naiDesktop.setSetting("convertPromptSkillVersion", skillVersionForModel(edition,version));
     await refreshSettings();
   }
 
@@ -4400,22 +4391,7 @@ function PromptConverterPanel() {
           />
         </label>
 
-        <div className="reverse-scope-card reverse-template-version-card">
-          <span className="field-label-row">{t("convert.templateVersionTitle")}</span>
-          <div className="mode-selector compact">
-            {(["v4.5", "v5"] as const).map((version) => (
-              <button
-                type="button"
-                key={version}
-                className={clsx("mode-btn", convertTemplateVersion === version && "active")}
-                onClick={() => void setConvertTemplateVersion(version)}
-              >
-                {t(`inspect.templateVersion.${version === "v4.5" ? "v45" : "v5"}`)}
-              </button>
-            ))}
-          </div>
-          <small>{t("convert.templateVersionHint")}</small>
-        </div>
+        <PromptSkillControls model={convertTemplateVersion} edition={skillVersionForModel(settings?.convertPromptSkillVersion,convertTemplateVersion)} language={language} disabled={convertBusy} onChange={(model,edition)=>void setConvertTemplateVersion(model,edition).catch(error=>setToast(String(error)))}/>
 
         <div className="mode-selector">
           {([
@@ -6387,8 +6363,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     "v4.5": V45_SCOPED_REVERSE_SYSTEM_PROMPTS,
                     v5: reverseTemplateDefaults,
                   }}
-                  onChange={(version, next) => void update(
-                    version === "v4.5" ? "reversePromptTemplatesV45" : "reversePromptTemplates",
+                  v2Values={settings.reversePromptTemplatesV2}
+                  v2Defaults={Object.fromEntries((["tags","natural","mixed"] as const).map(mode=>[mode,selectPromptSkillTemplate({edition:"2.0.0",targetModel:"v5",task:"reverse",mode,legacyTemplate:""})])) as unknown as ModePromptTemplates}
+                  onChange={(version, next, edition) => void update(
+                    edition === "2.0.0" ? "reversePromptTemplatesV2" : version === "v4.5" ? "reversePromptTemplatesV45" : "reversePromptTemplates",
                     next,
                   )}
                 />
@@ -6402,22 +6380,25 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     "v4.5": V45_CONVERT_SYSTEM_PROMPTS,
                     v5: CONVERT_SYSTEM_PROMPTS,
                   }}
-                  onChange={(version, next) => void update(
-                    version === "v4.5" ? "convertPromptTemplatesV45" : "convertPromptTemplates",
+                  v2Values={settings.convertPromptTemplatesV2}
+                  v2Defaults={Object.fromEntries((["tags","natural","mixed"] as const).map(mode=>[mode,selectPromptSkillTemplate({edition:"2.0.0",targetModel:"v5",task:"convert",mode,legacyTemplate:""})])) as unknown as ModePromptTemplates}
+                  onChange={(version, next, edition) => void update(
+                    edition === "2.0.0" ? "convertPromptTemplatesV2" : version === "v4.5" ? "convertPromptTemplatesV45" : "convertPromptTemplates",
                     next,
                   )}
                 />
+                <PromptSkillControls model={settings.promptAssistantTemplateVersion??settings.convertPromptTemplateVersion} edition={skillVersionForModel(settings.promptAssistantSkillVersion,settings.promptAssistantTemplateVersion??settings.convertPromptTemplateVersion)} language={settings.language} onChange={(model,edition)=>{void update("promptAssistantTemplateVersion",model);void update("promptAssistantSkillVersion",edition);}}/>
                 <SingleTemplateEditor
                   title={promptEditorText(settings.language).optimize}
-                  value={settings.promptOptimizeTemplate ?? ""}
-                  defaultValue={PROMPT_OPTIMIZE_TEMPLATE}
-                  onChange={(next) => void update("promptOptimizeTemplate", next)}
+                  value={(settings.promptAssistantSkillVersion === "2.0.0" ? settings.promptOptimizeTemplateV2 : settings.promptOptimizeTemplate) ?? ""}
+                  defaultValue={settings.promptAssistantSkillVersion === "2.0.0" ? PROMPT_OPTIMIZE_TEMPLATE_V2 : PROMPT_OPTIMIZE_TEMPLATE}
+                  onChange={(next) => void update(settings.promptAssistantSkillVersion === "2.0.0" ? "promptOptimizeTemplateV2" : "promptOptimizeTemplate", next)}
                 />
                 <SingleTemplateEditor
                   title={promptEditorText(settings.language).custom}
-                  value={settings.promptAssistantTemplate ?? ""}
-                  defaultValue={PROMPT_CUSTOM_TEMPLATE}
-                  onChange={(next) => void update("promptAssistantTemplate", next)}
+                  value={(settings.promptAssistantSkillVersion === "2.0.0" ? settings.promptAssistantTemplateV2 : settings.promptAssistantTemplate) ?? ""}
+                  defaultValue={settings.promptAssistantSkillVersion === "2.0.0" ? PROMPT_CUSTOM_TEMPLATE_V2 : PROMPT_CUSTOM_TEMPLATE}
+                  onChange={(next) => void update(settings.promptAssistantSkillVersion === "2.0.0" ? "promptAssistantTemplateV2" : "promptAssistantTemplate", next)}
                 />
               </div>
             )}
@@ -6933,38 +6914,32 @@ function VersionedModeTemplateEditor({
   title,
   values,
   defaults,
+  v2Values,
+  v2Defaults,
   onChange,
 }: {
   title: string;
+  v2Values?: ModePromptTemplates;
+  v2Defaults: ModePromptTemplates;
   values: Record<ReversePromptTemplateVersion, ModePromptTemplates>;
   defaults: Record<ReversePromptTemplateVersion, ModePromptTemplates>;
   onChange: (
     version: ReversePromptTemplateVersion,
     next: ModePromptTemplates,
+    edition: PromptSkillVersion,
   ) => void;
 }) {
   const language = useAppStore((state) => state.settings?.language);
-  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const [version, setVersion] = useState<ReversePromptTemplateVersion>("v5");
+  const [edition,setEdition]=useState<PromptSkillVersion>("2.0.0");
   return (
     <div className="versioned-template-editor">
-      <div className="mode-selector compact template-version-selector" role="group" aria-label={title}>
-        {(["v4.5", "v5"] as const).map((item) => (
-          <button
-            type="button"
-            key={item}
-            className={clsx("mode-btn", version === item && "active")}
-            onClick={() => setVersion(item)}
-          >
-            {t(`inspect.templateVersion.${item === "v4.5" ? "v45" : "v5"}`)}
-          </button>
-        ))}
-      </div>
+      <PromptSkillControls model={version} edition={edition} language={language} onChange={(model,next)=>{setVersion(model);setEdition(next);}}/>
       <ModeTemplateEditor
         title={title}
-        value={values[version]}
-        defaults={defaults[version]}
-        onChange={(next) => onChange(version, next)}
+        value={edition === "2.0.0" ? v2Values ?? {tags:"",natural:"",mixed:""} : values[version]}
+        defaults={edition === "2.0.0" ? v2Defaults : defaults[version]}
+        onChange={(next) => onChange(version, next, edition)}
       />
     </div>
   );

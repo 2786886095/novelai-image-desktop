@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_print
 // Seven bounded native client scenarios; never a declaration that all 195 pass.
 import 'dart:convert';
+import 'native_foreground.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -50,6 +51,7 @@ Future<void> main()async{
   _assert(RegExp(r'^[a-f0-9]{40}$').hasMatch(_sha),'Source SHA required');
   _assert(RegExp(r'^[a-f0-9]{64}$').hasMatch(_profile),'Profile SHA required');
   if(Platform.isAndroid)FlutterForegroundTask.initCommunicationPort();BackgroundQueueService.initialize();
+  await nativeForegroundBarrier();
   await _run();_assert(_checks.length==7&&_errors.isEmpty,'Incomplete scenarios or native async error');
   print('FEATURE_ACCEPTANCE_DONE:${jsonEncode({'sourceSha':_sha,'profileSha':_profile,'exitStatus':0,'checks':_checks.length,'platform':Platform.operatingSystem,'paidCalls':0})}');
  }catch(error,stack){print('FEATURE_ACCEPTANCE_FAILURE:$error\n$stack');print('FEATURE_ACCEPTANCE_DONE:${jsonEncode({'sourceSha':_sha,'profileSha':_profile,'exitStatus':1,'checks':_checks.length,'platform':Platform.operatingSystem,'paidCalls':0})}');}
@@ -74,7 +76,7 @@ Future<void> _run()async{
   }catch(error,stack){_errors.add(error);print('FEATURE_FIXTURE_ERROR:$error\n$stack');r.response.statusCode=500;await r.response.close();}
  });
  final base='http://127.0.0.1:${server.port}';
- final app=AppState(api:api,storage:storage)..settings=AppSettings(imageBaseUrl:base,apiBaseUrl:base,visionApiUrl:base,visionApiModel:'fixture',allowCustomEndpoint:true,allowCustomEndpointFallback:false,proxyMode:'direct',saveToGallery:false,streamPreviewEnabled:false,imageOutputDir:root.path,reverseConvertDshEnabled:false,promptCodexEnhanceEnabled:false,promptRuleAutoRepairEnabled:false,reversePromptTemplates:{'natural':'Neutral natural caption'})..params=GenerateParams(width:1024,height:1024,seed:42,seedMode:'fixed')..workbenchImage=source..i2iOriginalImage=source..inpaintSourceMode='latest';
+ final app=AppState(api:api,storage:storage)..settings=AppSettings(imageBaseUrl:base,apiBaseUrl:base,visionApiUrl:base,visionApiModel:'fixture',allowCustomEndpoint:true,allowCustomEndpointFallback:false,proxyMode:'direct',saveToGallery:false,streamPreviewEnabled:false,imageOutputDir:root.path,reverseConvertDshEnabled:false,promptCodexEnhanceEnabled:false,promptRuleAutoRepairEnabled:false,reversePromptSkillVersion:'1.0.0',reversePromptTemplates:{'natural':'Neutral natural caption'})..params=GenerateParams(width:1024,height:1024,seed:42,seedMode:'fixed')..workbenchImage=source..i2iOriginalImage=source..inpaintSourceMode='latest';
  await storage.setSettings(app.settings);
  try{
   await storage.setToken('FIXTURE_ONLY_NOT_A_USER_TOKEN');await storage.setVisionKey('FIXTURE_ONLY_NOT_A_USER_KEY');

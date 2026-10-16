@@ -1,3 +1,4 @@
+import 'prompt_skill_selector.dart';
 import '../ui/global_typography.dart';
 import '../ui/zoomable_image.dart';
 import '../ui/studio_dropdown.dart';
@@ -972,6 +973,8 @@ class _PromptsStep extends StatelessWidget {
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
       children: [
+        PromptSkillSelector(model:project.aiTemplateVersion??controller.app.settings.reversePromptTemplateVersion,edition:project.aiSkillVersion??((project.aiTemplateVersion??controller.app.settings.reversePromptTemplateVersion)=='v4.5'?'1.0.0':controller.app.settings.reversePromptSkillVersion),language:language,onChanged:controller.busy?null:(model,edition){project.aiTemplateVersion=model;project.aiSkillVersion=edition;controller.changed();}),
+        const SizedBox(height:12),
         StudioDropdownButtonFormField<ReversePromptMode>(
           value: project.aiMode,
           decoration: InputDecoration(
@@ -982,7 +985,7 @@ class _PromptsStep extends StatelessWidget {
               .map((mode) => DropdownMenuItem(
                   value: mode, child: Text(t('promptMode.${mode.value}'))))
               .toList(),
-          onChanged: (value) {
+          onChanged: controller.busy?null:(value) {
             if (value == null) return;
             project.aiMode = value;
             controller.changed();

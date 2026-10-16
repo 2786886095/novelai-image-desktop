@@ -21,7 +21,8 @@ String studioComposerActionLabel(AgentComposerAction action, AppState app) {
               ''
           : studioAgentText(
               app.settings.language, 'templateKind_${action.templateKind}');
-  return [studioAgentText(app.settings.language, key), detail]
+  final selection=action.kind.startsWith('template-')?'${action.templateVersion} · ${action.skillVersion??'current'} · ${action.mode}':'';
+  return [studioAgentText(app.settings.language, key), detail,selection]
       .where((s) => s.isNotEmpty)
       .join(' · ');
 }
@@ -47,10 +48,9 @@ String studioComposerProviderText(
     }
     final fields = {
       'kind': action.templateKind,
-      if (['convert', 'reverse'].contains(action.templateKind)) ...{
-        'mode': action.mode,
-        'templateVersion': action.templateVersion
-      }
+      if(action.skillVersion!=null)'skillVersion':action.skillVersion,
+      'mode': action.mode,
+      'templateVersion': action.templateVersion,
     };
     if (action.kind == 'template-read') {
       parts.add(

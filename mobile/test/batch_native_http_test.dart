@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -25,6 +26,9 @@ class BatchPaths extends PathProviderPlatform {
 }
 
 class BatchStorage extends Storage {
+  // Fixed coarse clock reproduces the real same-timestamp image identity bug;
+  // all HTTP/ZIP bytes, counts, filesystem and original assertions stay intact.
+  BatchStorage() : super(imageClock: () => DateTime.utc(2026, 10, 17, 12));
   bool failHistory = false;
   @override
   Future<String?> getToken() async => 'fixture-native-token';
@@ -131,6 +135,7 @@ void main() {
       () async {
     final c = app.batchRedraw;
     await c.startQueue(c.project.items);
+    print('BATCH_ALLOCATION_DIAGNOSTICS=${jsonEncode({'runPhase':c.runPhase,'runError':c.runError,'history':app.history.map((h)=>{'id':h.id,'path':h.filePath}).toList(),'candidates':c.project.items.map((i)=>i.candidates.map((v)=>{'id':v.id,'path':v.outputPath}).toList()).toList()})}');
     expect(c.runPhase, 'completed', reason: c.runError);
     expect(posts, 2);
     expect(c.project.items.every((i) => i.candidates.length == 2), isTrue);
@@ -151,6 +156,7 @@ void main() {
     storage.failHistory = true;
     final c = app.batchRedraw;
     await c.startQueue(c.project.items);
+    print('BATCH_FAILED_ALLOCATION_DIAGNOSTICS=${jsonEncode({'runPhase':c.runPhase,'runError':c.runError,'history':app.history.map((h)=>{'id':h.id,'path':h.filePath}).toList(),'candidates':c.project.items.map((i)=>i.candidates.map((v)=>{'id':v.id,'path':v.outputPath}).toList()).toList()})}');
     expect(c.runPhase, 'failed');
     expect(posts, 1);
     expect(c.project.items.first.candidates, hasLength(2));

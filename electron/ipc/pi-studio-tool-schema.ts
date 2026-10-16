@@ -9,7 +9,7 @@ const choice=(...values:(string|number)[]):Schema=>({enum:values});
 const flag:Schema={type:'boolean'};
 const id=requiredText(200);
 const refs:Schema={type:'array',maxItems:16,items:{type:'object',additionalProperties:true}};
-const template={kind:choice('convert','reverse','optimize','assistant'),mode:choice('mixed','tags','natural'),templateVersion:choice('v5','v4.5')};
+const template={kind:choice('convert','reverse','optimize','assistant'),mode:choice('mixed','tags','natural'),templateVersion:choice('v5','v4.5'),skillVersion:choice('1.0.0','2.0.0')};
 const generation={positivePrompt:requiredText(20_000),negativePrompt:text(20_000),stylePrompt:text(20_000),count:integer(1,8),model:text(120),
   width:integer(64,4096),height:integer(64,4096),steps:integer(1,50),cfgScale:number(0,20),scale:number(0,20),cfgRescale:number(0,1),
   seed:integer(0,4294967295),seedMode:choice('random','fixed'),sampler:text(100),noiseSchedule:text(100),smea:flag,smeaDyn:flag,variety:flag,
@@ -23,7 +23,7 @@ export function studioPiToolSchema(name:string):Schema {
     case 'langbai_search_web':properties={query:requiredText(800),limit:integer(1,8)};required=['query'];break;
     case 'studio_prompt_template':properties=template;break;
     case 'langbai_templates':properties={...template,action:choice('read','select','save','restore'),expectedRevision:text(128),body:text(60_000)};required=['action'];break;
-    case 'langbai_edit_prompt':properties={kind:choice('optimize','custom'),currentPrompt:text(24_000),instruction:text(8_000),mode:template.mode,templateVersion:template.templateVersion};required=['kind','currentPrompt'];break;
+    case 'langbai_edit_prompt':properties={kind:choice('optimize','custom'),currentPrompt:text(24_000),instruction:text(8_000),mode:template.mode,templateVersion:template.templateVersion,skillVersion:template.skillVersion};required=['kind','currentPrompt'];break;
     case 'langbai_search_tags':properties={query:requiredText(1000),limit:integer(1,100)};required=['query'];break;
     case 'langbai_search_artist_styles':properties={query:text(1000),limit:integer(1,100)};break;
     case 'langbai_search_online_gallery':properties={source:choice('aitag','artist-ranking','danbooru','safebooru','gelbooru','quicktag','tags-gallery'),query:text(2000),page:integer(1,1000),pageSize:integer(1,100),sort:text(50)};required=['source','query'];break;
@@ -37,8 +37,8 @@ export function studioPiToolSchema(name:string):Schema {
     case 'langbai_inpaint_image':properties={...generation,inpaintModel:choice(...NAI_INPAINT_MODELS.map(item=>item.value)),attachmentId:id,maskAttachmentId:id,strength:number(0,1),noise:number(0,1)};required=['attachmentId','maskAttachmentId','positivePrompt'];break;
     case 'langbai_upscale_image':properties={attachmentId:id,scale:choice(2,4)};required=['attachmentId','scale'];break;
     case 'langbai_director':properties={attachmentId:id,tool:text(100),prompt:text(20_000),emotion:text(50),emotionLevel:number(0,1),defry:integer(0,5)};required=['attachmentId','tool'];break;
-    case 'langbai_reverse_prompt':properties={attachmentId:id,scope:choice('full','character','object','scene'),hint:text(1000),knownCharacter:flag,mode:template.mode,templateVersion:template.templateVersion};required=['attachmentId'];break;
-    case 'langbai_convert_prompt':properties={text:requiredText(24_000),knownCharacter:flag,mode:template.mode,templateVersion:template.templateVersion};required=['text'];break;
+    case 'langbai_reverse_prompt':properties={attachmentId:id,scope:choice('full','character','object','scene'),hint:text(1000),knownCharacter:flag,mode:template.mode,templateVersion:template.templateVersion,skillVersion:template.skillVersion};required=['attachmentId'];break;
+    case 'langbai_convert_prompt':properties={text:requiredText(24_000),knownCharacter:flag,mode:template.mode,templateVersion:template.templateVersion,skillVersion:template.skillVersion};required=['text'];break;
     case 'langbai_save_prompt_preset':properties={name:requiredText(100),prompt:requiredText()};required=['name','prompt'];break;
     case 'langbai_apply_prompt':properties={positivePrompt:text(),negativePrompt:text(),stylePrompt:text(),append:flag};required=['positivePrompt'];break;
     case 'langbai_memory_upsert':properties={memoryId:text(200),title:requiredText(200),content:requiredText(),scope:choice('global','conversation'),tags:{type:'array',items:text(100),maxItems:20}};required=['title','content'];break;

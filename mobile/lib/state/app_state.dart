@@ -44,6 +44,7 @@ import '../models/nai_models.dart';
 import '../prompts/capsule_data.dart';
 import '../prompts/prompt_mode.dart';
 import '../prompts/prompt_templates.dart';
+import '../prompts/prompt_skill_selection.dart';
 import '../prompts/prompt_tools.dart';
 import '../prompts/positive_prompt_presets.dart';
 import '../references/reference_presets.dart';
@@ -306,6 +307,14 @@ class AppState extends ChangeNotifier {
   I2IParams i2i = I2IParams();
   String i2iSizeMode = 'adaptive';
   AugmentOptions augmentOptions = AugmentOptions();
+  GenerationScope? _directorScope;
+  bool get postprocessRunning => _directorScope != null;
+  void cancelPostprocess() {
+    final scope=_directorScope;
+    if(scope==null)return;
+    scope.cancel();status=scope.cancellationMessage;notifyListeners();
+  }
+
   AppSettings settings = AppSettings();
   PromptTemplateLibrary promptTemplates = const PromptTemplateLibrary();
   AccountSummary account = const AccountSummary(hasToken: false);
@@ -3083,10 +3092,20 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> augment() async {
+    if(busy)throw StateError('Another image operation is running');
     if (_naiChanging) throw StateError('账号正在切换，未提交请求');
     _naiOperationCount++;
+    final scope=GenerationScope(cancellationMessage:switch(settings.language){
+      'zh-TW'=>'後處理已取消，保留原圖。','en-US'=>'Postprocessing cancelled; original preserved.',
+      'ja-JP'=>'後処理をキャンセルしました。元画像を保持しました。','ko-KR'=>'후처리가 취소되어 원본을 보존했습니다。',
+      _=>'后期处理已取消，保留原图。'});
+    _directorScope=scope;
+    final snapshot=AppSettings.fromJson(settings.toJson()),tool=directorTool;
+    final options=AugmentOptions(defry:augmentOptions.defry,colorizePrompt:augmentOptions.colorizePrompt,emotion:augmentOptions.emotion,emotionLevel:augmentOptions.emotionLevel);
+    var savedOutputs = false;
     try {
-    await _withTokenRun((token) async {
+    await scope.run(()=>_withTokenRun((token) async {
+      scope.check();
       final image = await _workbenchBytes();
       final dims = workbenchImage;
       if (dims == null) throw Exception(_rt('error.imageRequired'));
@@ -3094,7 +3113,7 @@ class AppState extends ChangeNotifier {
       final before = await _authorizeQuotedRun(
         token,
         (fresh) => calculateDirectorAnlas(
-          tool: directorTool,
+          tool: tool,
           account: fresh,
           language: settings.language,
         ),
@@ -3109,16 +3128,17 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       final images = await api.augment(
         token,
-        settings,
+        snapshot,
         prepared.bytes,
         prepared.width,
         prepared.height,
-        directorTool,
-        augmentOptions,
+        tool,
+        options,
       );
       if (images.isEmpty) throw Exception(_rt('error.directorNoImages'));
       final items = <HistoryItem>[];
       for (final bytes in images) {
+        if (scope.cancelled) break;
         final restored = prepared.resized
             ? resizeImageToSize(
                 bytes,
@@ -3127,14 +3147,28 @@ class AppState extends ChangeNotifier {
               )
             : bytes;
         items.add(await storage.saveImage(restored, params, 0,
-            feature: 'director-$directorTool',
-            model: 'director-$directorTool',
+            feature: 'director-$tool',
+            model: 'director-$tool',
             width: prepared.originalWidth,
             height: prepared.originalHeight,
             groupId: generationGroupId.ifEmptyNull));
+        savedOutputs = true;
       }
-      comparisonAutoOpenPending=true;comparisonSurface='postprocess:director';comparisonBefore=dims;comparisonAfter=WorkingImage(filePath:items.first.filePath,width:items.first.width,height:items.first.height);
-      await _commitCompletedHistory(items, useAsWorkbench: true);
+      // Persistence cannot be undone safely once an output is durable. A Stop
+      // during save/preload retains those outputs in history, but must never
+      // activate them or replace the editor. Close the cancellation window at
+      // the synchronous editor commit, before listeners can issue another Stop.
+      await _preloadCompletedItems(items);
+      if (_compatibleDisposed) return;
+      if (scope.cancelled) {
+        history.insertAll(0, items);
+        notifyListeners();
+      } else if (items.isNotEmpty) {
+        if (identical(_directorScope, scope)) _directorScope = null;
+        comparisonAutoOpenPending=true;comparisonSurface='postprocess:director';comparisonBefore=dims;comparisonAfter=WorkingImage(filePath:items.first.filePath,width:items.first.width,height:items.first.height);
+        _prependHistory(items, useAsWorkbench: true);
+      }
+      scope.check();
       final resizeNote = prepared.resized
           ? _rf('status.directorRestoreNote', {
               'width': prepared.originalWidth,
@@ -3145,8 +3179,15 @@ class AppState extends ChangeNotifier {
         'note': resizeNote,
         'spent': await _finishQuotedRun(token, before),
       });
-    });
-    } finally { _naiOperationCount--; notifyListeners(); }
+    }));
+    } finally {
+      if(identical(_directorScope,scope))_directorScope=null;
+      if(scope.cancelled){status=scope.cancellationMessage+(savedOutputs?switch(snapshot.language){
+        'zh-TW'=>' 已儲存的結果仍保留於歷史記錄。','en-US'=>' Saved outputs remain in history.',
+        'ja-JP'=>' 保存済みの結果は履歴に残ります。','ko-KR'=>' 저장된 결과는 기록에 남아 있습니다.',
+        _=>' 已保存的结果仍保留在历史记录。'}:'');}
+      _naiOperationCount--;notifyListeners();
+    }
   }
 
   // Concurrent — every call fires its API request immediately and updates
@@ -3154,13 +3195,17 @@ class AppState extends ChangeNotifier {
   // can be in flight (the button never disables while one runs), and a
   // foreground service keeps this specific request alive if the app is
   // backgrounded mid-request.
-  Future<void> reversePrompt({String? templateVersion}) async {
+  Future<TextToolJob?> reversePrompt({String? templateVersion, String? skillVersion}) async {
     if(templateVersion != null && !['v5','v4.5'].contains(templateVersion)) throw ArgumentError('Invalid template version');
     final chosenVersion = templateVersion ?? settings.reversePromptTemplateVersion;
     final chosenMode=reverseMode, chosenScope=reverseScope, chosenHint=reverseHint, chosenKnown=reverseKnownCharacter;
-    final requestSettings=AppSettings.fromJson(settings.toJson())..reversePromptTemplateVersion=chosenVersion;
-    final templateBody=resolvedPromptTemplate('reverse',chosenMode,scoped:chosenScope!=ReversePromptScope.full,templateVersion:chosenVersion);
+    final chosenSkill=skillVersion??(chosenVersion=='v4.5'?'1.0.0':settings.reversePromptSkillVersion);
+    final requestSettings=AppSettings.fromJson(settings.toJson())..reversePromptTemplateVersion=chosenVersion..reversePromptSkillVersion=chosenSkill;
+    final templateBody=resolvedPromptTemplate('reverse',chosenMode,scoped:chosenScope!=ReversePromptScope.full,templateVersion:chosenVersion,skillVersion:chosenSkill);
     final sourcePath = workbenchImage?.filePath;
+    String currentContext()=>jsonEncode([settings.reversePromptTemplateVersion,settings.reversePromptSkillVersion,reverseMode.value,reverseScope.value,reverseHint,reverseKnownCharacter,resolvedPromptTemplate('reverse',reverseMode,scoped:reverseScope!=ReversePromptScope.full),workbenchImage?.filePath,settings.visionApiUrl,settings.visionApiModel]);
+    final requestContext=currentContext();
+    bool isCurrentContext(){try{return requestContext==currentContext();}catch(_){return false;}}
     final image = await _workbenchBytes();
     final key = await storage.getVisionKey() ?? '';
     final job = TextToolJob(
@@ -3201,16 +3246,19 @@ class AppState extends ChangeNotifier {
     // "Cancel" just removes the job from the tracker (the in-flight HTTP
     // request itself isn't aborted) — but once it resolves, treat a removed
     // job as truly cancelled: no result overwrite, no toast, no history entry.
-    if (!reverseJobs.any((j) => j.id == job.id)) return;
+    if (!reverseJobs.any((j) => j.id == job.id)) return null;
     if (res.ok) {
       job.status = TextToolJobStatus.done;
       job.result = res.text;
       job.variants = res.variants;
       job.codexMatches = res.codexMatches;
-      reverseResult = res.text;
-      reversePromptVariants = res.variants;
-      reverseCodexMatches = res.codexMatches;
-      status = _rt('status.reverseDone');
+      if(chosenSkill=='2.0.0')job.message=res.message;
+      if(isCurrentContext()){
+        reverseResult = res.text;
+        reversePromptVariants = res.variants;
+        reverseCodexMatches = res.codexMatches;
+        status = _rt('status.reverseDone');
+      }else{job.message='任务已完成并保留在历史；当前模型、技能、输入或模板已变化，未覆盖当前结果。';}
       final historyItem = TextToolHistoryItem(
         id: job.id,
         mode: chosenMode,
@@ -3231,6 +3279,7 @@ class AppState extends ChangeNotifier {
       status = res.message;
     }
     notifyListeners();
+    return job;
   }
 
   // Concurrent, same reasoning as reversePrompt.
@@ -3240,21 +3289,26 @@ class AppState extends ChangeNotifier {
     required String kind,
   }) async {
     final snapshot = AppSettings.fromJson(settings.toJson());
-    final version = snapshot.convertPromptTemplateVersion;
+    final version = snapshot.promptAssistantTemplateVersion;
+    final edition = snapshot.promptAssistantSkillVersion;
     final mode = ReversePromptMode.values.firstWhere((m)=>m.value==snapshot.promptAssistantMode,orElse:()=>ReversePromptMode.mixed);
-    final template = resolvedPromptTemplate('convert', mode, templateVersion: version);
+    final template = resolvedPromptTemplate('convert', mode, templateVersion: version, skillVersion: edition);
     final key = await storage.getConvertKey() ?? '';
     return api.assistPrompt(settings: snapshot, apiKey: key,
       currentPrompt: currentPrompt, instruction: instruction, kind: kind,
       mode: mode, templateVersion: version, conversionTemplate: template);
   }
 
-  Future<void> convertPrompt({String? templateVersion}) async {
+  Future<TextToolJob?> convertPrompt({String? templateVersion, String? skillVersion}) async {
     if(templateVersion != null && !['v5','v4.5'].contains(templateVersion)) throw ArgumentError('Invalid template version');
     final chosenVersion = templateVersion ?? settings.convertPromptTemplateVersion;
     final chosenMode=convertMode, chosenInput=convertInput, chosenKnown=convertKnownCharacter;
-    final requestSettings=AppSettings.fromJson(settings.toJson())..convertPromptTemplateVersion=chosenVersion;
-    final templateBody=resolvedPromptTemplate('convert',chosenMode,templateVersion:chosenVersion);
+    final chosenSkill=skillVersion??(chosenVersion=='v4.5'?'1.0.0':settings.convertPromptSkillVersion);
+    final requestSettings=AppSettings.fromJson(settings.toJson())..convertPromptTemplateVersion=chosenVersion..convertPromptSkillVersion=chosenSkill;
+    final templateBody=resolvedPromptTemplate('convert',chosenMode,templateVersion:chosenVersion,skillVersion:chosenSkill);
+    String currentContext()=>jsonEncode([settings.convertPromptTemplateVersion,settings.convertPromptSkillVersion,convertMode.value,convertInput,convertKnownCharacter,resolvedPromptTemplate('convert',convertMode),settings.convertApiUrl,settings.convertApiModel]);
+    final requestContext=currentContext();
+    bool isCurrentContext(){try{return requestContext==currentContext();}catch(_){return false;}}
     final key = await storage.getConvertKey() ?? '';
     final job = TextToolJob(
       id: '${DateTime.now().microsecondsSinceEpoch}',
@@ -3289,16 +3343,19 @@ class AppState extends ChangeNotifier {
     );}catch(_){res=const AiTextResult(ok:false,message:'AI request failed; previous prompt was preserved.');}
     try{await BackgroundQueueService.stop(owner);}catch(_){}
     // See reversePrompt: a removed job is treated as cancelled.
-    if (!convertJobs.any((j) => j.id == job.id)) return;
+    if (!convertJobs.any((j) => j.id == job.id)) return null;
     if (res.ok) {
       job.status = TextToolJobStatus.done;
       job.result = res.text;
       job.variants = res.variants;
       job.codexMatches = res.codexMatches;
-      convertResult = res.text;
-      convertResultVariants = res.variants;
-      convertCodexMatches = res.codexMatches;
-      status = _rt('status.convertDone');
+      if(chosenSkill=='2.0.0')job.message=res.message;
+      if(isCurrentContext()){
+        convertResult = res.text;
+        convertResultVariants = res.variants;
+        convertCodexMatches = res.codexMatches;
+        status = _rt('status.convertDone');
+      }else{job.message='任务已完成并保留在历史；当前模型、技能、输入或模板已变化，未覆盖当前结果。';}
       final historyItem = TextToolHistoryItem(
         id: job.id,
         mode: chosenMode,
@@ -3318,6 +3375,7 @@ class AppState extends ChangeNotifier {
       status = res.message;
     }
     notifyListeners();
+    return job;
   }
 
   void _scheduleTextJobDismiss(void Function() action) {
@@ -3412,12 +3470,14 @@ class AppState extends ChangeNotifier {
     ReversePromptMode mode, {
     bool scoped = false,
     String? templateVersion,
+    String? skillVersion,
   }) {
     if(templateVersion != null && !['v5','v4.5'].contains(templateVersion)) throw ArgumentError('Invalid template version');
     final key = mode.value;
     if (kind == 'reverse' || kind == 'convert') {
       final version=templateVersion??(kind=='reverse'?settings.reversePromptTemplateVersion:settings.convertPromptTemplateVersion);
-      return promptTemplates.resolve(kind,mode,promptOverrides(kind,templateVersion:version),templateVersion:version,scoped:scoped);
+      final edition=skillVersion??(version=='v4.5'?'1.0.0':kind=='reverse'?settings.reversePromptSkillVersion:settings.convertPromptSkillVersion);
+      return promptTemplates.resolve(kind,mode,promptOverrides(kind,templateVersion:version,skillVersion:edition),templateVersion:version,skillVersion:edition,scoped:scoped);
     }
     if (kind == 'comic') {
       final override = settings.comicAnalyzePromptTemplates[key]?.trim() ?? settings.comicPromptTemplate.trim();
@@ -3426,31 +3486,29 @@ class AppState extends ChangeNotifier {
     return '';
   }
 
-  Map<String,String> promptOverrides(String kind, {String? templateVersion}) => switch(kind){
-    'reverse' => (templateVersion ?? settings.reversePromptTemplateVersion)=='v4.5'?settings.reversePromptTemplatesV45:settings.reversePromptTemplates,
-    'convert' => (templateVersion ?? settings.convertPromptTemplateVersion)=='v4.5'?settings.convertPromptTemplatesV45:settings.convertPromptTemplates,
-    'comic' => settings.comicAnalyzePromptTemplates,
-    _ => throw ArgumentError.value(kind),
-  };
+  Map<String,String> promptOverrides(String kind, {String? templateVersion, String? skillVersion}) {
+    if (kind == 'comic') return settings.comicAnalyzePromptTemplates;
+    if (kind != 'reverse' && kind != 'convert') throw ArgumentError.value(kind);
+    final version = templateVersion ?? promptSkillModel(settings, kind);
+    // Model selection is authoritative when an edition was not explicitly
+    // requested: V4.5 has only the compatible legacy edition. Never store its
+    // edits in the V5-only V2 slot, even while the UI setting still says V2.
+    final edition = skillVersion ??
+        (version == 'v4.5' ? '1.0.0' : promptSkillEdition(settings, kind));
+    return promptSkillOverrides(settings, kind, edition, version);
+  }
 
-  Future<void> setPromptTemplate(
-    String kind,
-    ReversePromptMode mode,
-    String value,
-  ) async {
-    final key = mode.value;
+  Future<void> setPromptTemplate(String kind, ReversePromptMode mode, String value,
+      {String? templateVersion,String? skillVersion}) async {
     await setSettings((settings) {
-      promptOverrides(kind)[key] = value;
+      promptOverrides(kind,templateVersion:templateVersion,skillVersion:skillVersion)[mode.value] = value;
     });
   }
 
-  Future<void> resetPromptTemplate(
-    String kind,
-    ReversePromptMode mode,
-  ) async {
-    final key = mode.value;
+  Future<void> resetPromptTemplate(String kind, ReversePromptMode mode,
+      {String? templateVersion,String? skillVersion}) async {
     await setSettings((settings) {
-      promptOverrides(kind).remove(key);
+      promptOverrides(kind,templateVersion:templateVersion,skillVersion:skillVersion).remove(mode.value);
       if (kind == 'comic') settings.comicPromptTemplate = '';
     });
   }
@@ -4217,6 +4275,7 @@ class AppState extends ChangeNotifier {
     _comic?.dispose();
     _batchRedraw?.dispose();
     _compatibleDisposed = true;
+    _directorScope?.cancel();
     _compatibleCancellation?.cancel();
     for(final timer in _textJobTimers){timer.cancel();}
     _textJobTimers.clear();

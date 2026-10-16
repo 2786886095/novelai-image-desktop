@@ -80,11 +80,13 @@ class _FakeStorage extends Storage {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  // These legacy queue fixtures intentionally use tiny raw prompts, not the
+  // V2 catalog/audit protocol. Keep the original lifecycle assertions intact.
   AppState buildState(_ScriptedApi api, _FakeStorage storage) => AppState(
         api: api,
         storage: storage,
         offlineTags: _StubOfflineTags(),
-      )..settings = AppSettings(proxyMode: 'direct');
+      )..settings = AppSettings(proxyMode: 'direct', reversePromptSkillVersion: '1.0.0', convertPromptSkillVersion: '1.0.0');
 
   test('captures template mode, explicit version and history input before awaiting keys',() async {
     final complete=Completer<AiTextResult>();

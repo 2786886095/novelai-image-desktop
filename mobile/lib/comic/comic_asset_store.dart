@@ -10,6 +10,19 @@ import 'package:share_plus/share_plus.dart';
 import 'comic_models.dart';
 import 'comic_project_transfer.dart';
 
+/// Exclusive durable archive write. Never overwrite or remove a pre-existing
+/// path, including an existing symlink. Only a file created by this call is
+/// removed when its own write/check fails.
+Future<void> writeComicArchiveExclusive(File file,List<int> bytes,void Function() check) async {
+  check();
+  await file.create(exclusive:true);
+  try {
+    await file.writeAsBytes(bytes,flush:true);check();
+    if(sha256.convert(await file.readAsBytes()).toString()!=sha256.convert(bytes).toString())throw StateError('导出文件回读校验失败');
+    check();
+  }catch(_){if(await file.exists())await file.delete();rethrow;}
+}
+
 /// Shared file boundary for software UI and Agent comic operations.
 class ComicAssetStore {
   final Future<Directory> Function() root;
@@ -92,7 +105,7 @@ class ComicAssetStore {
   }
 
   Future<Map<String, dynamic>> exportSelected(ComicProject project,
-      Map<String, dynamic> portable, void Function() check) async {
+      Map<String, dynamic> portable, void Function() check,{bool shareResult=true}) async {
     check();
     final archive = Archive(), prompts = StringBuffer('# ${project.title}\n\n');
     final imageMap = <Map<String, dynamic>>[];
@@ -128,7 +141,7 @@ class ComicAssetStore {
     }
     final bytes = ZipEncoder().encode(archive);
     ZipDecoder().decodeBytes(bytes, verify: true);
-    return _saveAndShare(bytes, 'zip', count, check);
+    return _saveAndShare(bytes, 'zip', count, check,shareResult:shareResult);
   }
 
   Future<Map<String, dynamic>> exportProject(
@@ -140,29 +153,12 @@ class ComicAssetStore {
   }
 
   Future<Map<String, dynamic>> _saveAndShare(List<int> bytes, String extension,
-      int count, void Function() check) async {
+      int count, void Function() check,{bool shareResult=true}) async {
     final dir = await root();
     await dir.create(recursive: true);
     check();
-    final id = 'comic-export-${comicId()}',
-        temp = File(path.join(dir.path, '$id.tmp')),
-        file = File(path.join(dir.path, '$id.$extension'));
-    await temp.create(exclusive: true);
-    try {
-      await temp.writeAsBytes(bytes, flush: true);
-      check();
-      await temp.rename(file.path);
-      check();
-      if (sha256.convert(await file.readAsBytes()).toString() !=
-          sha256.convert(bytes).toString()) {
-        throw StateError('导出文件回读校验失败');
-      }
-      check();
-    } catch (_) {
-      if (await temp.exists()) await temp.delete();
-      if (await file.exists()) await file.delete();
-      rethrow;
-    }
+    final id = 'comic-export-${comicId()}',file=File(path.join(dir.path,'$id.$extension'));
+    await writeComicArchiveExclusive(file,bytes,check);
     final digest = sha256.convert(bytes).toString();
     final receipt = <String, dynamic>{
       'id': id,
@@ -170,8 +166,10 @@ class ComicAssetStore {
       'count': count,
       'bytes': bytes.length,
       'sha256': digest,
-      'shared': false
+      'shared': false,
+      'saved': true
     };
+    if(!shareResult)return receipt;
     try {
       await share(file);
       receipt['shared'] = true;

@@ -6,10 +6,11 @@ import {CompactIconButton} from './CompactPromptControls';
 import {Icon} from './icons';
 import {promptEditorText} from '../prompt-editor-text';
 import type {PromptEditRequest} from '../prompt-assistant';
-import type {ReversePromptMode,ReversePromptTemplateVersion} from '../types';
+import type {ReversePromptMode,ReversePromptTemplateVersion,PromptSkillVersion} from '../types';
+import {PromptSkillControls} from './PromptSkillControls';
 
-export function PromptAssistant({kind,currentValue,context,mode,version,language,onApply,onClose}:{
- kind:PromptEditRequest['kind'];currentValue:string;context:string;mode:ReversePromptMode;version:ReversePromptTemplateVersion;language:unknown;
+export function PromptAssistant({kind,currentValue,context,mode,version,edition,language,onApply,onClose}:{
+ kind:PromptEditRequest['kind'];currentValue:string;context:string;mode:ReversePromptMode;version:ReversePromptTemplateVersion;edition:PromptSkillVersion;language:unknown;
  onApply:(next:string,expected:string)=>boolean;onClose:()=>void;
 }) {
  const text=promptEditorText(language),title=kind==='optimize'?text.optimize:text.custom;
@@ -24,6 +25,12 @@ export function PromptAssistant({kind,currentValue,context,mode,version,language
   setModeBusy(true);
   sequence.current++;setPreview(null);setError('');
   try{await window.naiDesktop.setSetting('promptAssistantMode',next as ReversePromptMode);await useAppStore.getState().refreshSettings();}
+  catch(e){setError(e instanceof Error?e.message:text.failed);}
+  finally{setModeBusy(false);}
+ }
+ async function changeSkill(model:ReversePromptTemplateVersion,next:PromptSkillVersion){
+  if(busy||modeBusy)return;setModeBusy(true);sequence.current++;setPreview(null);setError('');
+  try{await window.naiDesktop.setSetting('promptAssistantTemplateVersion',model);await window.naiDesktop.setSetting('promptAssistantSkillVersion',next);await useAppStore.getState().refreshSettings();}
   catch(e){setError(e instanceof Error?e.message:text.failed);}
   finally{setModeBusy(false);}
  }
@@ -45,7 +52,7 @@ export function PromptAssistant({kind,currentValue,context,mode,version,language
   const id=++sequence.current,source=currentValue,requestContext=context;
   setBusy(true);setError('');setPreview(null);
   try {
-   const reply=await window.naiDesktop.convertPrompt(source,mode,false,version,{kind,instruction});
+   const reply=await window.naiDesktop.convertPrompt(source,mode,false,version,{kind,instruction},edition);
    if(id!==sequence.current)return;
    if(!reply.ok||!reply.result?.trim()){setError(reply.message||text.failed);return;}
    setPreview({value:reply.result,source,context:requestContext,warnings:reply.warnings ? [...reply.warnings] : [],stats:reply.validation?`${reply.validation.total} ${text.units} · Tag ${reply.validation.tags} (${reply.validation.tagPercent}%) · ${text.natural} ${reply.validation.natural}`:undefined});
@@ -56,6 +63,7 @@ export function PromptAssistant({kind,currentValue,context,mode,version,language
   <header><h2>{title}</h2><CompactIconButton label={text.cancel} icon="close" onClick={onClose}/></header>
   <div className="prompt-assistant-body">
    {!ready?<div className="prompt-api-required"><p>{setup.missing}</p><button type="button" className="btn btn-primary" onClick={configure}>{setup.configure}</button></div>:<>
+    <PromptSkillControls model={version} edition={edition} language={language} disabled={busy||modeBusy} onChange={(model,next)=>void changeSkill(model,next)}/>
     <div className="prompt-assistant-mode"><SelectMenu value={mode} options={(['tags','natural','mixed'] as const).map((value,index)=>({value,label:text.modes[index]}))} label={text.template} ariaLabel={text.template} disabled={busy||modeBusy} onChange={next=>void changeMode(next)}/><small>{version==='v4.5'?'NAI V4.5':'NAI V5'}</small></div>
    <label className="prompt-assistant-source">{text.current}<textarea readOnly value={currentValue} placeholder={text.empty}/></label>
    {kind==='custom'&&<label className="prompt-assistant-instruction">{text.instruction}<textarea maxLength={8000} value={instruction} onChange={e=>{setInstruction(e.target.value);setPreview(null);}} placeholder={text.hint} disabled={busy||modeBusy}/></label>}

@@ -1,3 +1,5 @@
+import '../prompts/prompt_mode.dart';
+import '../prompts/prompt_skill_selection.dart';
 import 'image_provider.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -224,7 +226,8 @@ List<Map<String, dynamic>> agentToolSchemas() => [
           '只读：读取用户当前保存的提示词模板正文、来源与 revision。', {
         'kind': _string('用途', ['convert', 'reverse', 'optimize', 'assistant']),
         'mode': _string('输出模式', ['mixed', 'tags', 'natural']),
-        'templateVersion': _string('版本', ['v5', 'v4.5']),
+        'templateVersion': _string('目标生图模型（提示词规则）', ['v5', 'v4.5']),
+        'skillVersion': _string('技能版本', ['1.0.0', '2.0.0']),
       }),
       _function(
           'langbai_templates',
@@ -233,7 +236,8 @@ List<Map<String, dynamic>> agentToolSchemas() => [
             'action': _string('操作', ['read', 'select', 'save', 'restore']),
             'kind': _string('用途', ['convert', 'reverse', 'optimize', 'assistant']),
             'mode': _string('输出模式', ['mixed', 'tags', 'natural']),
-            'templateVersion': _string('版本', ['v5', 'v4.5']),
+            'templateVersion': _string('目标生图模型（提示词规则）', ['v5', 'v4.5']),
+        'skillVersion': _string('技能版本', ['1.0.0', '2.0.0']),
             'body': _string('模板内容，不是文件路径'),
             'expectedRevision': _string('先读取模板的 revision')
           },
@@ -511,7 +515,8 @@ List<Map<String, dynamic>> agentToolSchemas() => [
         {
           'attachmentId': _string('图片 attachmentId'),
           'mode': _string('输出形式', ['tags', 'natural', 'mixed']),
-          'templateVersion': _string('模板版本', ['v5', 'v4.5']),
+          'templateVersion': _string('目标生图模型（提示词规则）', ['v5', 'v4.5']),
+        'skillVersion': _string('技能版本', ['1.0.0', '2.0.0']),
           'hint': _string('主体或目标提示'),
           'scope': _string('反推范围', ['full', 'character', 'object', 'scene']),
           'knownCharacter': {'type': 'boolean'},
@@ -524,7 +529,8 @@ List<Map<String, dynamic>> agentToolSchemas() => [
         {
           'text': _string('待转换文本'),
           'mode': _string('输出形式', ['tags', 'natural', 'mixed']),
-          'templateVersion': _string('模板版本', ['v5', 'v4.5']),
+          'templateVersion': _string('目标生图模型（提示词规则）', ['v5', 'v4.5']),
+        'skillVersion': _string('技能版本', ['1.0.0', '2.0.0']),
           'knownCharacter': {'type': 'boolean'},
         },
         required: ['text'],
@@ -537,7 +543,8 @@ List<Map<String, dynamic>> agentToolSchemas() => [
           'currentPrompt': _string('当前正面提示词'),
           'instruction': _string('自定义修改要求；custom 必填'),
           'mode': _string('模板模式', ['mixed', 'tags', 'natural']),
-          'templateVersion': _string('模板版本', ['v5', 'v4.5']),
+          'templateVersion': _string('目标生图模型（提示词规则）', ['v5', 'v4.5']),
+        'skillVersion': _string('技能版本', ['1.0.0', '2.0.0']),
         },
         required: ['kind', 'currentPrompt'],
       ),
@@ -769,26 +776,27 @@ class AgentToolExecutor {
   });
 
   ({String kind, String prompt, String instruction, ReversePromptMode mode,
-    String version}) _editInput(Map<String, dynamic> args) {
+    String version,String edition}) _editInput(Map<String, dynamic> args) {
     final kind = args['kind'];
     final prompt = args['currentPrompt'];
     final instruction = args['instruction'] ?? '';
     final modeValue = args['mode'] ?? app.settings.promptAssistantMode;
-    final version = args['templateVersion'] ?? app.settings.convertPromptTemplateVersion;
+    final version = args['templateVersion'] ?? app.settings.promptAssistantTemplateVersion;
+    final edition=args['skillVersion']??(version=='v4.5'?'1.0.0':app.settings.promptAssistantSkillVersion);
     if (!['optimize', 'custom'].contains(kind) ||
         prompt is! String || prompt.trim().isEmpty || prompt.length > 24000 ||
         instruction is! String || instruction.length > 8000 ||
         (kind == 'custom' && instruction.trim().isEmpty) ||
         !['mixed', 'tags', 'natural'].contains(modeValue) ||
-        !['v5', 'v4.5'].contains(version) ||
+        !['v5', 'v4.5'].contains(version) || !['1.0.0','2.0.0'].contains(edition) || (edition=='2.0.0'&&version!='v5') ||
         args.keys.any((key) => !{'kind', 'currentPrompt', 'instruction',
-          'mode', 'templateVersion'}.contains(key))) {
+          'mode', 'templateVersion','skillVersion'}.contains(key))) {
       throw StateError('提示词编辑参数无效；custom 需要修改要求。');
     }
     return (kind: kind as String, prompt: prompt.trim(),
       instruction: instruction.trim(),
       mode: ReversePromptMode.values.byName(modeValue as String),
-      version: version as String);
+      version: version as String,edition:edition as String);
   }
 
   Future<String> editPromptRevision(Map<String, dynamic> args) async {
@@ -797,7 +805,7 @@ class AgentToolExecutor {
     final key = await app.storage.getConvertKey() ?? '';
     return sha256.convert(utf8.encode(jsonEncode([
       input.kind, input.prompt, input.instruction, input.mode.value,
-      input.version, settings.convertApiUrl, settings.convertApiModel,
+      input.version,input.edition,settings.promptAssistantSkillVersion,settings.promptAssistantTemplateVersion,settings.convertPromptTemplatesV2,settings.promptOptimizeTemplateV2,settings.promptAssistantTemplateV2, settings.convertApiUrl, settings.convertApiModel,
       settings.proxyMode, settings.proxyUrl, settings.proxyForAi,
       settings.convertPromptTemplates, settings.convertPromptTemplatesV45,
       settings.promptOptimizeTemplate, settings.promptAssistantTemplate,
@@ -809,7 +817,7 @@ class AgentToolExecutor {
     final input = _editInput(args);
     return {'kind': input.kind, 'currentPrompt': input.prompt,
       if (input.kind == 'custom') 'instruction': input.instruction,
-      'mode': input.mode.value, 'templateVersion': input.version,
+      'mode': input.mode.value, 'templateVersion': input.version,'skillVersion':input.edition,
       'estimatedCost': null, 'estimateSource': 'provider-unknown',
       'warning': '文本服务可能收费；确认后只返回编辑结果，不生成图片。'};
   }
@@ -1179,6 +1187,7 @@ class AgentToolExecutor {
             app.settings.lockNegativePrompt,
             app.settings.savedNegativePrompt,
             app.settings.agentPromptTemplateMode,
+            app.settings.convertPromptSkillVersion,app.settings.reversePromptSkillVersion,app.settings.convertPromptTemplatesV2,app.settings.reversePromptTemplatesV2,
             app.settings.convertPromptTemplateVersion,
             app.settings.reversePromptTemplateVersion,
             app.settings.convertPromptTemplates,
@@ -1192,6 +1201,7 @@ class AgentToolExecutor {
         if (args['mode'] != null) 'mode': args['mode'],
         if (args['templateVersion'] != null)
           'templateVersion': args['templateVersion'],
+        if(args['skillVersion']!=null)'skillVersion':args['skillVersion'],
       });
       return await runTemplateGeneration(
           args,
@@ -1204,7 +1214,7 @@ class AgentToolExecutor {
         sessions.ensureActive(sessionId);
         if (revision() != initial) throw StateError('模板或工作台参数已变化；未继续提交生图');
       }, template: {
-        for (final key in ['mode', 'templateVersion']) key: selected[key],
+        for (final key in ['mode', 'templateVersion','skillVersion']) key: selected[key],
         'bodySha256':
             sha256.convert(utf8.encode(selected['body'] as String)).toString()
       });
@@ -1741,38 +1751,28 @@ class AgentToolExecutor {
           app.reverseScope = ReversePromptScope.values.byName(scope);
           app.reverseHint = _text(args['hint']);
           app.reverseKnownCharacter = args['knownCharacter'] == true;
-          final before = app.reverseHistory.length;
-          await app.reversePrompt(
-              templateVersion: args['templateVersion'] as String?);
-          if (app.reverseHistory.length <= before ||
-              app.reverseResult.trim().isEmpty) {
-            throw StateError(app.displayStatus);
-          }
+          final completedJob = await app.reversePrompt(
+              templateVersion: args['templateVersion'] as String?,skillVersion:args['skillVersion'] as String?);
+          if(completedJob==null||completedJob.status!=TextToolJobStatus.done||(completedJob.result??'').trim().isEmpty){throw StateError(completedJob?.message??app.displayStatus);}
           return AgentToolResult(
-              ok: true, title: title, output: app.reverseResult);
+              ok: true, title: title, output: completedJob.result!);
         case 'langbai_convert_prompt':
           app.convertInput = _text(args['text']);
           app.convertMode = _mode(args['mode']);
           app.convertKnownCharacter = args['knownCharacter'] == true;
-          final before = app.convertHistory.length;
-          await app.convertPrompt(
-              templateVersion: args['templateVersion'] as String?);
-          if (app.convertHistory.length <= before ||
-              app.convertResult.trim().isEmpty) {
-            throw StateError(app.displayStatus);
-          }
+          final completedConvertJob = await app.convertPrompt(
+              templateVersion: args['templateVersion'] as String?,skillVersion:args['skillVersion'] as String?);
+          if(completedConvertJob==null||completedConvertJob.status!=TextToolJobStatus.done||(completedConvertJob.result??'').trim().isEmpty){throw StateError(completedConvertJob?.message??app.displayStatus);}
           return AgentToolResult(
-              ok: true, title: title, output: app.convertResult);
+              ok: true, title: title, output: completedConvertJob.result!);
         case 'langbai_edit_prompt':
           final input = _editInput(args);
           final settings = AppSettings.fromJson(app.settings.toJson())
-            ..convertPromptTemplateVersion = input.version;
+            ..promptAssistantTemplateVersion = input.version..promptAssistantSkillVersion=input.edition;
           final library = await PromptTemplateLibrary.load();
           final template = library.resolve('convert', input.mode,
-              input.version == 'v4.5'
-                  ? settings.convertPromptTemplatesV45
-                  : settings.convertPromptTemplates,
-              templateVersion: input.version);
+              promptSkillOverrides(settings,'convert',input.edition,input.version),
+              templateVersion: input.version,skillVersion:input.edition);
           final result = await app.api.assistPrompt(
               settings: settings,
               apiKey: await app.storage.getConvertKey() ?? '',

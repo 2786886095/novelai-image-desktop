@@ -26,6 +26,7 @@ class AgentTemplateWorkflow {
       'kind',
       'mode',
       'templateVersion',
+      'skillVersion',
       if (action != 'read') 'expectedRevision',
       if (action == 'save') 'body'
     ];
@@ -38,6 +39,7 @@ class AgentTemplateWorkflow {
         !['mixed', 'natural', 'tags'].contains(args['mode'])) {
       throw StateError('请选择混合、自然语言或标签模式');
     }
+    if (args['skillVersion'] != null && !['1.0.0','2.0.0'].contains(args['skillVersion']))throw StateError('技能版本应为1.0.0/2.0.0');
     if (args['templateVersion'] != null &&
         !['v5', 'v4.5'].contains(args['templateVersion'])) {
       throw StateError('模板版本应为 v5/v4.5');
@@ -57,7 +59,7 @@ class AgentTemplateWorkflow {
   }
 
   Map<String, dynamic> _selector(Map<String, dynamic> args) => {
-        for (final k in ['kind', 'mode', 'templateVersion'])
+        for (final k in ['kind', 'mode', 'templateVersion','skillVersion'])
           if (args.containsKey(k)) k: args[k]
       };
   Future<Map<String, dynamic>> approvalSummary(
@@ -73,6 +75,7 @@ class AgentTemplateWorkflow {
       'kind': before['kind'],
       'mode': before['mode'],
       'templateVersion': before['templateVersion'],
+      'skillVersion': before['skillVersion'],
       if (args['action'] == 'save') 'body': args['body']
     };
   }

@@ -1,0 +1,102 @@
+// Disposable-emulator preparation only. This does not emit native CHECK/DONE
+// records, retry product assertions, or replace a real platform channel.
+const decodeXml = value => value.replace(/&apos;/g, "'").replace(/&quot;/g, '"')
+  .replace(/&amp;/g, '&').replace(/&#39;/g, "'");
+
+export function observedAndroidModal(xml, appLabel = 'Langbai NovelAI Studio') {
+  const nodes = [...String(xml).matchAll(/<node\b[^>]*>/g)].map(([raw]) =>
+    Object.fromEntries([...raw.matchAll(/([\w-]+)="([^"]*)"/g)]
+      .map(([, key, value]) => [key, decodeXml(value)])));
+  const text = nodes.map(node => node.text || '').join('\n');
+  const point = node => {
+    const bounds = /^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$/.exec(node?.bounds || '');
+    if (!bounds || +bounds[3] <= +bounds[1] || +bounds[4] <= +bounds[2]) return null;
+    return [Math.floor((+bounds[1] + +bounds[3]) / 2), Math.floor((+bounds[2] + +bounds[4]) / 2)];
+  };
+  if (/isn['’]t responding|is not responding/i.test(text)) {
+    // The historical artifact shows Pixel Launcher, not a product ANR. Never
+    // dismiss a product/unknown ANR and then count its journey as healthy.
+    if (!/Pixel Launcher isn['’]t responding|Pixel Launcher is not responding/.test(text)) {
+      return {kind: 'unhandled-anr', text};
+    }
+    const button = nodes.find(node => node['resource-id'] === 'android:id/aerr_close' &&
+      /^(Close app|Close)$/i.test(node.text || ''));
+    const tap = point(button);
+    return tap ? {kind: 'launcher-anr', tap} : {kind: 'unhandled-anr', text};
+  }
+  if (text.includes(`Allow ${appLabel} to send you notifications?`)) {
+    const button = nodes.find(node => node['resource-id'] ===
+      'com.android.permissioncontroller:id/permission_allow_button' && /^Allow$/i.test(node.text || ''));
+    const tap = point(button);
+    return tap ? {kind: 'test-app-notification', tap} : {kind: 'unhandled-notification', text};
+  }
+  return null;
+}
+
+function ensureResult(result, description) {
+  if (result.exitStatus !== 0 || result.error) throw Error(`${description}: exit=${result.exitStatus} error=${result.error || 'none'}`);
+  return result.stdout.trim();
+}
+
+export function validateAndroidPreflightTarget({device, appId}) {
+  if (!/^emulator-\d+$/.test(device || '')) throw Error('Disposable Android emulator required for preflight.');
+  if (!/^[a-zA-Z]\w*(?:\.[a-zA-Z]\w*)+$/.test(appId || '')) throw Error('Explicit isolated test package required for preflight.');
+}
+
+export async function inspectAndroidForeground({adb, device, appId, command, phase = () => {}}) {
+  validateAndroidPreflightTarget({device, appId});
+  const adbCommand = args => command([adb, '-s', device, ...args], undefined, 20000);
+  const dumped = ensureResult(adbCommand(['shell', 'uiautomator', 'dump', '/data/local/tmp/acceptance-window.xml']), 'Native window dump failed');
+  if (!/dumped to:\s*\/data\/local\/tmp\/acceptance-window\.xml/.test(dumped)) {
+    throw Error('Native window dump did not confirm a fresh hierarchy; stale XML is not accepted.');
+  }
+  const xml = ensureResult(adbCommand(['shell', 'cat', '/data/local/tmp/acceptance-window.xml']), 'Native window read failed');
+  if (!/<hierarchy\b/.test(xml)) throw Error('Native window hierarchy is missing.');
+  const modal = observedAndroidModal(xml);
+  if (modal?.kind?.startsWith('unhandled-')) throw Error(`Unhealthy Android native foreground: ${modal.kind}: ${modal.text}`);
+  if (modal) {
+    phase({stage: 'observed-modal', kind: modal.kind, tap: modal.tap});
+    ensureResult(adbCommand(['shell', 'input', 'tap', ...modal.tap.map(String)]), 'Observed native dialog tap failed');
+  }
+  const focus = ensureResult(adbCommand(['shell', 'dumpsys', 'window', 'windows']), 'Native foreground inspection failed');
+  const lines = focus.split(/\r?\n/).filter(line => /mCurrentFocus=|mFocusedApp=/.test(line));
+  phase({stage: 'foreground', focus: lines});
+  return {modal, focus: lines};
+}
+
+export async function prepareAndroidNative({adb, device, appId, command, phase = () => {},
+  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), now = Date.now, timeoutMs = 45000,
+  grantNotifications = false} = {}) {
+  validateAndroidPreflightTarget({device, appId});
+  const adbCommand = args => command([adb, '-s', device, ...args], undefined, 20000);
+  if (ensureResult(adbCommand(['shell', 'getprop', 'ro.kernel.qemu']), 'Emulator identity read failed') !== '1') {
+    throw Error('Refusing preflight outside an actual disposable Android emulator.');
+  }
+  ensureResult(adbCommand(['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP']), 'Emulator wake failed');
+  ensureResult(adbCommand(['shell', 'wm', 'dismiss-keyguard']), 'Emulator unlock failed');
+  if (grantNotifications) {
+    const sdk = Number(ensureResult(adbCommand(['shell', 'getprop', 'ro.build.version.sdk']), 'Android SDK read failed'));
+    if (!Number.isInteger(sdk) || sdk < 1) throw Error('Unknown actual Android SDK.');
+    if (sdk >= 33) {
+      ensureResult(adbCommand(['shell', 'pm', 'grant', appId, 'android.permission.POST_NOTIFICATIONS']), 'Isolated notification permission grant failed');
+      const permission = ensureResult(adbCommand(['shell', 'dumpsys', 'package', appId]), 'Notification permission inspection failed');
+      if (!/android\.permission\.POST_NOTIFICATIONS:\s+granted=true\b/.test(permission)) {
+        throw Error('Isolated notification permission was not observed granted in the actual package state.');
+      }
+      phase({stage: 'notification-permission', sdk, appId, permission: 'granted=true observed'});
+    } else phase({stage: 'notification-permission-not-required', sdk, appId});
+  }
+  const deadline = now() + timeoutMs;
+  let stable = 0;
+  while (now() < deadline) {
+    const boot = ensureResult(adbCommand(['shell', 'getprop', 'sys.boot_completed']), 'Boot state read failed');
+    const result = await inspectAndroidForeground({adb, device, appId, command, phase});
+    // Two independently observed clean windows, not a guessed sleep, are needed
+    // before launching the real entry. No CHECK result is fabricated here.
+    stable = boot === '1' && !result.modal && result.focus.length > 0 &&
+      !result.focus.some(line => /mCurrentFocus=null/.test(line)) ? stable + 1 : 0;
+    if (stable >= 2) {phase({stage: 'ready', appId, stableObservations: stable}); return;}
+    await sleep(500);
+  }
+  throw Error(`Disposable Android native foreground did not stabilize within ${timeoutMs}ms.`);
+}

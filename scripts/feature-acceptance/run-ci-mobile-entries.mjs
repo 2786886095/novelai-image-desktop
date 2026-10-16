@@ -1,10 +1,11 @@
-import {mobileNativeEntries,isMobileScenarioEntry} from './mobile-entry-specs.mjs';
+import {mobileNativeEntries,isMobileScenarioEntry,selectMobileNativeEntries} from './mobile-entry-specs.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {createEntryWorkspace,captureSourceState} from './mobile-entry-workspace.mjs';
 import {buildMobileScenarioReceipt} from './mobile-scenario-receipt.mjs';
 const platform=process.argv[2],device=process.argv[3];
+const entryGroup=process.argv[4]??'all',selectedEntries=selectMobileNativeEntries(entryGroup,platform);
 if(process.env.GITHUB_ACTIONS!=='true'||!['android','ios'].includes(platform)||!device||!process.env.RUNNER_TEMP)throw Error('Fresh CI mobile target required.');
 const root=path.join(process.env.RUNNER_TEMP,`feature-native-${platform}`);fs.mkdirSync(root,{recursive:true});
 const commands=[],entries=[];let failed=false;
@@ -17,11 +18,16 @@ function run(sourceRoot,args,timeout=2100000){
 const sha=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8'});commands.push({command:['git','rev-parse','HEAD'],stdout:sha.stdout??'',stderr:sha.stderr??'',exitStatus:sha.status});
 if(sha.status!==0||sha.stdout.trim()!==process.env.GITHUB_SHA)throw Error('CI checkout identity mismatch.');
 const assets=path.join(root,'official-assets');
-const save=()=>fs.writeFileSync(path.join(root,'CI_COMPONENT_COMMANDS.json'),JSON.stringify({sourceSha:sha.stdout.trim(),platform,device,entries,commands,exitStatus:failed?1:0,full195Certified:false,completeFeatureRowsCertified:0},null,2)+'\n');
-for(const entry of Object.keys(mobileNativeEntries)){
+const save=()=>fs.writeFileSync(path.join(root,'CI_COMPONENT_COMMANDS.json'),JSON.stringify({sourceSha:sha.stdout.trim(),platform,device,entryGroup,selectedEntries,entries,commands,exitStatus:failed?1:0,full195Certified:false,completeFeatureRowsCertified:0},null,2)+'\n');
+for(const entry of selectedEntries){
  const component={entry,expectedChecks:expectedChecks[entry],status:'failed',sourceQualified:false,full195Certified:false,scope:'bounded actual target-platform components only; not entire feature rows'};entries.push(component);
  let workspace;
  try {
+  const predecessor=mobileNativeEntries[entry].predecessor;
+  if(predecessor){
+   const prior=entries.find(row=>row.entry===predecessor);
+   if(!prior||prior.status!=='passed'||prior.sourceQualified!==true||prior.exitStatus!==0||!prior.scenarioReceipt)throw Error('Cold native entry blocked: predecessor has not completed qualified same-source acceptance.');
+  }
   workspace=createEntryWorkspace({repositoryRoot:process.cwd(),sourceSha:sha.stdout.trim(),entry,platform,runnerTemp:process.env.RUNNER_TEMP,evidenceRoot:root});
   component.workspace=workspace.sourceRoot;component.initialSource=workspace.before;component.originalCheckout=workspace.original;
   // Gradle's production buildAgentPresentation hook imports the locked Node

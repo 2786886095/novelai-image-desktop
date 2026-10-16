@@ -16,6 +16,7 @@ import { generateArtistMatchRecipes, type GeneratedArtistRecipe } from "./artist
 import type { AppLanguage, HistoryItem } from "./types";
 import RandomArtistLab from "./RandomArtistLab";
 import DetectiveArtistLab from "./DetectiveArtistLab";
+import {InlineReversePromptSkillControls, callSelectedInlineReverse, reversePromptSelectionIdentity} from './components/InlineReversePromptSkillControls';
 
 type TargetImage = { filePath: string; fileUrl: string; name: string; width?: number; height?: number };
 type LabResult = GeneratedArtistRecipe & {
@@ -125,7 +126,6 @@ export function TargetArtistLab({ onBack }: { onBack: () => void }) {
   const language = useAppStore((state) => state.settings?.language ?? "zh-CN");
   const params = useAppStore((state) => state.params);
   const reverseMode = useAppStore(state => state.reversePromptMode);
-  const templateVersion = useAppStore(state => state.settings?.reversePromptTemplateVersion);
   const applyParams = useAppStore((state) => state.applyParams);
   const refreshAccount = useAppStore((state) => state.refreshAccount);
   const refreshHistory = useAppStore((state) => state.refreshHistory);
@@ -137,6 +137,8 @@ export function TargetArtistLab({ onBack }: { onBack: () => void }) {
   const [message, setMessage] = useState("");
   const [modelStatus, setModelStatus] = useState<ArtistLabModelStatus | null>(null);
   const cancelRef = useRef(false);
+  const reversingRef = useRef(false);
+  const reverseSource = useRef(session); reverseSource.current=session;
   const patch = (next: Partial<Session>) => setSession((current) => ({ ...current, ...next }));
 
   useEffect(() => {
@@ -152,16 +154,21 @@ export function TargetArtistLab({ onBack }: { onBack: () => void }) {
   };
 
   const reverseContent = async () => {
+    if(reversingRef.current||running)return;
     if (!session.target) return setMessage(text.needTarget);
-    setReversing(true);
+    const context=reversePromptSelectionIdentity(useAppStore.getState().settings), target=session.target.filePath, original=session.basePrompt;
+    reversingRef.current=true;setReversing(true);
     try {
       const response = await fetch(session.target.fileUrl);
-      const result = await window.naiDesktop.reversePrompt(bytesToBase64(new Uint8Array(await response.arrayBuffer())), reverseMode, "full", "只提取主体、构图、环境与动作；不要输出 artist 标签、画师名或纯画风词。", false, templateVersion);
+      const base64=bytesToBase64(new Uint8Array(await response.arrayBuffer()));
+      if(context!==reversePromptSelectionIdentity(useAppStore.getState().settings))throw Error('反推版本或模型已改变，请重新反推。');
+      const result = await callSelectedInlineReverse(base64, reverseMode, "只提取主体、构图、环境与动作；不要输出 artist 标签、画师名或纯画风词。");
       if (!result.ok || !result.prompt) throw new Error(result.message);
+      if(context!==reversePromptSelectionIdentity(useAppStore.getState().settings)||reverseSource.current.target?.filePath!==target||reverseSource.current.basePrompt!==original||useAppStore.getState().reversePromptMode!==reverseMode)throw Error('图片、提示词或反推选项已改变，旧结果未覆盖当前内容。');
       patch({ basePrompt: result.prompt });
       setMessage("");
     } catch (error: any) { setMessage(interpolate(text.reverseFail, { message: error?.message ?? String(error) })); }
-    finally { setReversing(false); }
+    finally { reversingRef.current=false;setReversing(false); }
   };
 
   const updateResult = (id: string, update: Partial<LabResult>) => setSession((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, ...update } : item) }));
@@ -296,7 +303,8 @@ export function TargetArtistLab({ onBack }: { onBack: () => void }) {
       <article className="artist-lab-panel artist-lab-controls">
         <label><span>{text.model}</span><SelectMenuCompat value={session.modelMode} onChange={(event) => patch({ modelMode: event.target.value as ArtistLabModelMode })}><option value="high">{text.high}</option><option value="light">{text.light}</option></SelectMenuCompat></label>
         <div className="artist-model-cache"><span>{text.cache}: {modelStatus ? `${formatBytes(modelStatus.cachedBytes)} · ${modelStatus.cachedFiles}` : "—"}</span><Button variant="ghost" onClick={async () => setModelStatus(await window.naiDesktop.artistLabClearModels())}>{text.clear}</Button></div>
-        <label><span>{text.prompt}</span><textarea value={session.basePrompt} onChange={(event) => patch({ basePrompt: event.target.value })} /></label><Button onClick={() => void reverseContent()} disabled={!session.target || reversing}>{reversing ? text.reversing : text.reverse}</Button>
+        <InlineReversePromptSkillControls disabled={running||reversing}/>
+        <label><span>{text.prompt}</span><textarea value={session.basePrompt} onChange={(event) => patch({ basePrompt: event.target.value })} /></label><Button onClick={() => void reverseContent()} disabled={!session.target || reversing||running}>{reversing ? text.reversing : text.reverse}</Button>
         <label><span>{text.fixedStyle}</span><textarea value={session.sharedStylePrompt} onChange={(event) => patch({ sharedStylePrompt: event.target.value })} /></label>
         <div className="artist-run-options">
           <CommittedNumberInput label={text.batch} value={session.batchSize} min={1} max={40} normalize={(value) => Math.max(1, Math.min(40, Math.round(value)))} disabled={running} onCommit={(batchSize) => patch({ batchSize, ...planArtistImages(session.imageBudget, batchSize) })} />

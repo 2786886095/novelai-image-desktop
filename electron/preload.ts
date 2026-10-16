@@ -373,6 +373,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     hint?: string,
     knownCharacter?: boolean,
     templateVersion?: string,
+    skillVersion?: import("../src/types").PromptSkillVersion,
   ) =>
     ipcRenderer.invoke(
       "nai:reversePrompt",
@@ -382,9 +383,10 @@ contextBridge.exposeInMainWorld("naiDesktop", {
       hint,
       knownCharacter,
       templateVersion,
+      skillVersion,
     ),
-  convertPrompt: (text: string, mode: string, knownCharacter?: boolean, templateVersion?: string, assistant?: import("../src/prompt-assistant").PromptEditRequest) =>
-    ipcRenderer.invoke("nai:convertPrompt", text, mode, knownCharacter, templateVersion, assistant),
+  convertPrompt: (text: string, mode: string, knownCharacter?: boolean, templateVersion?: string, assistant?: import("../src/prompt-assistant").PromptEditRequest, skillVersion?: import("../src/types").PromptSkillVersion) =>
+    ipcRenderer.invoke("nai:convertPrompt", text, mode, knownCharacter, templateVersion, assistant, skillVersion),
   comicConvertPanels: (request: ComicConvertRequest) =>
     ipcRenderer.invoke("comic:convertPanels", request),
   comicCheckConsistency: (request: ComicConsistencyRequest) =>
@@ -395,6 +397,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     scope?: string,
     hint?: string,
     knownCharacter?: boolean,
+    templateVersion?: import("../src/types").ReversePromptTemplateVersion,
+    skillVersion?: import("../src/types").PromptSkillVersion,
   ) =>
     ipcRenderer.invoke(
       "comic:reverseAsset",
@@ -403,6 +407,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
       scope,
       hint,
       knownCharacter,
+      templateVersion,
+      skillVersion,
     ),
   comicGeneratePanel: (request: ComicGeneratePanelRequest) =>
     ipcRenderer.invoke("comic:generatePanel", request),

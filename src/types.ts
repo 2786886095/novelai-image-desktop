@@ -12,6 +12,7 @@ export const PROJECT_REPOSITORY =
 
 export type ReversePromptMode = "tags" | "natural" | "mixed";
 export type ReversePromptTemplateVersion = "v4.5" | "v5";
+export type PromptSkillVersion = "1.0.0" | "2.0.0";
 export type ReversePromptScope = "full" | "character" | "object" | "scene";
 export type TagServerType = "rest" | "http" | "sse" | "stdio";
 export type TranslateProvider = "google" | "baidu" | "ai";
@@ -555,6 +556,8 @@ export type TextToolJobStatus = "processing" | "done" | "failed";
 
 export interface TextToolJob {
   id: string;
+  templateVersion?: ReversePromptTemplateVersion;
+  skillVersion?: PromptSkillVersion;
   label: string;
   mode: ReversePromptMode;
   knownCharacter: boolean;
@@ -569,6 +572,9 @@ export interface TextToolJob {
 /** Persisted record of a completed convert/reverse result. */
 export interface TextToolHistoryItem {
   id: string;
+  stale?: boolean;
+  templateVersion?: ReversePromptTemplateVersion;
+  skillVersion?: PromptSkillVersion;
   mode: ReversePromptMode;
   knownCharacter: boolean;
   input: string;
@@ -1539,6 +1545,8 @@ export interface AppSettings {
   // Per-version reverse-prompt system templates (empty = built-in default).
   reversePromptTemplates: ModePromptTemplates;
   reversePromptTemplatesV45: ModePromptTemplates;
+  reversePromptSkillVersion?: PromptSkillVersion;
+  reversePromptTemplatesV2?: ModePromptTemplates;
   /** Built-in DSH Infinite Gen 3 adapter, scoped to Tavern image, reverse, and convert only. */
   reverseConvertDshEnabled: boolean;
   reverseConvertDshMode: "focused" | "strict";
@@ -1557,6 +1565,10 @@ export interface AppSettings {
   promptAssistantTemplate: string;
   /** Independent editor mode; absent legacy settings default to mixed. */
   promptAssistantMode?: ReversePromptMode;
+  promptAssistantTemplateVersion?: ReversePromptTemplateVersion;
+  promptAssistantSkillVersion?: PromptSkillVersion;
+  promptOptimizeTemplateV2?: string;
+  promptAssistantTemplateV2?: string;
   // Text-only prompt conversion API, intentionally separated from vision reverse-prompt.
   convertApiUrl: string;
   convertApiKey: string;
@@ -1584,6 +1596,8 @@ export interface AppSettings {
   convertPromptTemplateVersion: ReversePromptTemplateVersion;
   convertPromptTemplates: ModePromptTemplates;
   convertPromptTemplatesV45: ModePromptTemplates;
+  convertPromptSkillVersion?: PromptSkillVersion;
+  convertPromptTemplatesV2?: ModePromptTemplates;
   // Optional Danbooru / MCP-compatible tag search service.
   tagServerEnabled: boolean;
   tagServerUrl: string;
@@ -2095,6 +2109,7 @@ export interface NaiDesktopApi {
     hint?: string,
     knownCharacter?: boolean,
     templateVersion?: ReversePromptTemplateVersion,
+    skillVersion?: PromptSkillVersion,
   ) => Promise<{
     ok: boolean;
     prompt?: string;
@@ -2107,6 +2122,7 @@ export interface NaiDesktopApi {
     knownCharacter?: boolean,
     templateVersion?: ReversePromptTemplateVersion,
     assistant?: import("./prompt-assistant").PromptEditRequest,
+    skillVersion?: PromptSkillVersion,
   ) => Promise<ConvertPromptResult>;
   getConvertHistory: () => Promise<TextToolHistoryItem[]>;
   addConvertHistoryItem: (
@@ -2133,6 +2149,8 @@ export interface NaiDesktopApi {
     scope?: ReversePromptScope,
     hint?: string,
     knownCharacter?: boolean,
+    templateVersion?: ReversePromptTemplateVersion,
+    skillVersion?: PromptSkillVersion,
   ) => Promise<{
     ok: boolean;
     prompt?: string;

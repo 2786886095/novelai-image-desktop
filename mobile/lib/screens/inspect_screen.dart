@@ -1,3 +1,5 @@
+import 'prompt_skill_selector.dart';
+import '../prompts/prompt_skill_selection.dart';
 import '../ui/global_typography.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:io';
@@ -110,12 +112,7 @@ class _ReversePanelState extends State<_ReversePanel> {
             ),
             const SizedBox(height: 12),
           ],
-          _ReverseTemplateVersionSelector(
-            value: s.settings.reversePromptTemplateVersion,
-            onChanged: (value) => s.setSettings(
-              (settings) => settings.reversePromptTemplateVersion = value,
-            ),
-          ),
+          _PromptSkillCard(kind:'reverse',state:s),
           const SizedBox(height: 12),
           _ModeSelector(
               value: s.reverseMode,
@@ -281,7 +278,7 @@ class _ConvertPanelState extends State<_ConvertPanel> {
             },
           ),
           const SizedBox(height: 12),
-          _ReverseTemplateVersionSelector(titleKey:'convert.templateVersionTitle',value:s.settings.convertPromptTemplateVersion,onChanged:(v)=>s.setSettings((x)=>x.convertPromptTemplateVersion=v)),
+          _PromptSkillCard(kind:'convert',state:s),
           const SizedBox(height:12),
           _ModeSelector(
               value: s.convertMode,
@@ -508,8 +505,7 @@ class _TextToolJobList extends StatelessWidget {
                 },
                 title: Text(job.label,
                     maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: job.status == TextToolJobStatus.failed &&
-                        job.message != null
+                subtitle: job.message != null
                     ? Text(job.message!,
                         maxLines: 1, overflow: TextOverflow.ellipsis)
                     : null,
@@ -849,56 +845,16 @@ class _ModeSelector extends StatelessWidget {
   }
 }
 
-class _ReverseTemplateVersionSelector extends StatelessWidget {
-  final String titleKey;
-  final String value;
-  final ValueChanged<String> onChanged;
-
-  const _ReverseTemplateVersionSelector({
-    this.titleKey = 'inspect.templateVersionTitle',
-    required this.value,
-    required this.onChanged,
-  });
-
+class _PromptSkillCard extends StatelessWidget {
+  final String kind;
+  final AppState state;
+  const _PromptSkillCard({required this.kind,required this.state});
   @override
-  Widget build(BuildContext context) {
-    final language = context.watch<AppState>().settings.language;
-    String t(String key) => mobileUiTextFor(language, key);
-    final selected = value == 'v4.5' ? 'v4.5' : 'v5';
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              t(titleKey),
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 8),
-            SegmentedButton<String>(
-              segments: [
-                ButtonSegment(
-                  value: 'v4.5',
-                  label: Text(t('inspect.templateVersion.v45')),
-                ),
-                ButtonSegment(
-                  value: 'v5',
-                  label: Text(t('inspect.templateVersion.v5')),
-                ),
-              ],
-              selected: {selected},
-              onSelectionChanged: (selection) => onChanged(selection.first),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              t('inspect.templateVersionHint'),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context)=>Card(margin:EdgeInsets.zero,child:Padding(
+    padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      Text(mobileUiTextFor(state.settings.language,kind=='reverse'?'inspect.templateVersionTitle':'convert.templateVersionTitle'),style:Theme.of(context).textTheme.titleSmall),
+      const SizedBox(height:8),
+      PromptSkillSelector(model:promptSkillModel(state.settings,kind),edition:promptSkillEdition(state.settings,kind),language:state.settings.language,
+        onChanged:(model,edition)=>state.setSettings((s)=>selectPromptSkill(s,kind,edition,model))),
+    ])));
 }

@@ -33,3 +33,29 @@ it('production batch commit saves template, mode and version together; a failed 
  fail=false;expect(service.execute({tool:'studio_save_prompt_template',args}).ok).toBe(true);expect(s.agentPromptTemplateMode).toBe('natural');expect(s.convertPromptTemplates.natural).toBe('new natural');expect(commits).toBe(2);
  expect(service.execute({tool:'studio_prompt_template',args:{approved:true}}).ok).toBe(false);
 });
+it('V2 Agent selection returns exactly one registered body and isolated custom slot',()=>{
+ const s={...settings(),reversePromptTemplateVersion:'v5',reversePromptSkillVersion:'2.0.0',reversePromptTemplatesV2:{tags:'V2 TAG OVERRIDE',natural:'',mixed:''}} as AppSettings;
+ expect(templateSelection(s,{kind:'reverse',mode:'tags'})).toMatchObject({key:'reversePromptTemplatesV2',skillVersion:'2.0.0',body:'V2 TAG OVERRIDE',source:'custom'});
+ const natural=templateSelection(s,{kind:'reverse',mode:'natural'});
+ expect(natural.body).toContain('纯自然语言');expect(natural.body).not.toContain('V2 TAG OVERRIDE');
+ expect(()=>templateSelection(s,{kind:'reverse',templateVersion:'v4.5'})).toThrow('仅适用于');
+ expect(templateSelection(s,{kind:'reverse',templateVersion:'v4.5',skillVersion:'1.0.0'}).key).toBe('reversePromptTemplatesV45');
+});
+it('V2 save/restore affects only selected edition and mode, preserving prior overrides and other modes',()=>{
+ let s={...settings(),convertPromptSkillVersion:'2.0.0',convertPromptTemplatesV2:{tags:'V2 tags',natural:'V2 prose',mixed:'V2 mixed'}} as AppSettings;
+ const original=structuredClone(s),service=createPromptTemplateTools(()=>s,(key,value)=>{s={...s,[key]:value};});
+ const fields={kind:'convert',mode:'tags',templateVersion:'v5',skillVersion:'2.0.0'};
+ const before=templateSelection(s,fields);
+ expect(service.execute({tool:'studio_save_prompt_template',args:{...fields,expectedRevision:before.revision,body:'changed tags'}}).ok).toBe(true);
+ expect(s.convertPromptTemplates).toEqual(original.convertPromptTemplates);expect(s.convertPromptTemplatesV2).toEqual({tags:'changed tags',natural:'V2 prose',mixed:'V2 mixed'});
+ const current=templateSelection(s,fields);expect(service.execute({tool:'studio_save_prompt_template',args:{...fields,expectedRevision:current.revision,body:'',restoreDefault:true}}).ok).toBe(true);
+ expect(s.convertPromptTemplatesV2).toEqual({tags:'',natural:'V2 prose',mixed:'V2 mixed'});expect(templateSelection(s,fields).source).toBe('builtin');
+ expect(service.execute({tool:'studio_save_prompt_template',args:{...fields,expectedRevision:before.revision,body:'stale'}}).ok).toBe(false);
+});
+it('assistant model and edition are independent of conversion, including overlay restore',()=>{
+ let s={...settings(),convertPromptTemplateVersion:'v4.5',convertPromptSkillVersion:'1.0.0',promptAssistantTemplateVersion:'v5',promptAssistantSkillVersion:'2.0.0',promptOptimizeTemplate:'OLD USER OVERLAY',promptOptimizeTemplateV2:'NEW USER OVERLAY'} as AppSettings;
+ const selected=templateSelection(s,{kind:'optimize'});expect(selected).toMatchObject({templateVersion:'v5',skillVersion:'2.0.0',key:'promptOptimizeTemplateV2',body:'NEW USER OVERLAY'});
+ const service=createPromptTemplateTools(()=>s,(key,value)=>{s={...s,[key]:value};});
+ expect(service.execute({tool:'studio_save_prompt_template',args:{kind:'optimize',expectedRevision:selected.revision,body:'',restoreDefault:true}}).ok).toBe(true);
+ expect(s.promptOptimizeTemplate).toBe('OLD USER OVERLAY');expect(s.promptOptimizeTemplateV2).toBe('');expect(s.convertPromptTemplateVersion).toBe('v4.5');
+});

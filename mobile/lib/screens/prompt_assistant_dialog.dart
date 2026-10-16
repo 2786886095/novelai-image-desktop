@@ -1,3 +1,5 @@
+import 'prompt_skill_selector.dart';
+import '../prompts/prompt_skill_selection.dart';
 import 'dart:convert';
 import '../ui/studio_dropdown.dart';
 import 'package:flutter/material.dart';
@@ -101,7 +103,7 @@ class _PromptAssistantDialogState extends State<PromptAssistantDialog> {
   String result = '', error = '';
   bool busy = false;
   String? resultContext;
-  String signature(){final s=context.read<AppState>().settings;return jsonEncode([s.promptAssistantMode,s.convertPromptTemplateVersion,s.convertPromptTemplates,s.convertPromptTemplatesV45,s.promptOptimizeTemplate,s.promptAssistantTemplate]);}
+  String signature(){final s=context.read<AppState>().settings;return jsonEncode([widget.kind,widget.source,instruction.text,s.promptAssistantMode,s.promptAssistantTemplateVersion,s.promptAssistantSkillVersion,s.convertPromptTemplates,s.convertPromptTemplatesV45,s.convertPromptTemplatesV2,s.promptOptimizeTemplate,s.promptAssistantTemplate,s.promptOptimizeTemplateV2,s.promptAssistantTemplateV2]);}
   List<String> modeLabels()=>switch(normalizeAppLocaleCode(context.read<AppState>().settings.language)){'zh-CN'=>['标签','自然语言','混合'],'zh-TW'=>['標籤','自然語言','混合'],'ja-JP'=>['タグ','自然言語','混合'],'ko-KR'=>['태그','자연어','혼합'],_=>['Tags','Natural','Mixed']};
 
   @override
@@ -154,6 +156,8 @@ class _PromptAssistantDialogState extends State<PromptAssistantDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                PromptSkillSelector(model:context.watch<AppState>().settings.promptAssistantTemplateVersion,edition:context.watch<AppState>().settings.promptAssistantSkillVersion,language:context.watch<AppState>().settings.language,onChanged:busy?null:(model,edition)async{setState((){result='';error='';resultContext=null;});await context.read<AppState>().setSettings((s)=>selectPromptSkill(s,'assistant',edition,model));}),
+                const SizedBox(height:12),
                 StudioDropdownButtonFormField<String>(
                     value:context.watch<AppState>().settings.promptAssistantMode,
                     decoration:InputDecoration(labelText:labels['template']),

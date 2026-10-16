@@ -1,11 +1,12 @@
 import {PreviewImageViewer, type PreviewImage} from "./components/PreviewImageViewer";
 import {useFeatureText} from "./feature-i18n";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./detective-download.css";
 import { downloadDiagnosticLabel } from "./detective-download-diagnostics";
 import { AppPortal, Button, CommittedNumberInput, SelectMenu } from "./components/ui";
 import { confirmAction } from "./components/confirm";
 import { useAppStore } from "./store";
+import {InlineReversePromptSkillControls, callSelectedInlineReverse, reversePromptSelectionIdentity} from './components/InlineReversePromptSkillControls';
 import { imagePasteProps } from "./image-paste";
 import { detectiveRoundBudget, detectiveRounds, detectiveParameters, resetDetectiveDraft, type DetectiveParameters, type DetectiveSnapshot } from "./artist-detective-contract";
 
@@ -34,6 +35,7 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
   const ft=useFeatureText();
   const language=useAppStore(s=>s.settings?.language);
   const [draft, setDraft] = useState(restore);
+  const liveDraft=useRef(draft);liveDraft.current=draft;
   const [preview,setPreview] = useState<{images:PreviewImage[];index:number}|null>(null);
   const [snapshot, setSnapshot] = useState<DetectiveSnapshot | null>(null);
   const [download, setDownload] = useState<Download | null>(null);
@@ -90,6 +92,7 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
   });
   const reverse = () => action(async () => {
     if (!draft.target) return;
+    const context=reversePromptSelectionIdentity(useAppStore.getState().settings),source=JSON.stringify([draft.target.filePath,draft.prompt,draft.subjectHint,draft.knownCharacter,draft.reverseMode]);
     const blob = await (await fetch(draft.target.fileUrl)).blob();
     const data = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1]);
@@ -97,9 +100,12 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
     });
     const hint = ["只提取人物、服装、动作、镜头与场景。不写画师名或 artist 标签；不复制对话文字。",
       draft.subjectHint.trim() ? `用户的目标/角色提示：${draft.subjectHint.trim()}` : ""].filter(Boolean).join("\n");
-    const result = await window.naiDesktop.reversePrompt(data, draft.reverseMode, "full", hint, draft.knownCharacter, templateVersion);
+    if(context!==reversePromptSelectionIdentity(useAppStore.getState().settings))throw Error('反推版本或模型已改变，请重新反推。');
+    const result = await callSelectedInlineReverse(data,draft.reverseMode,hint,draft.knownCharacter);
     const prompt = (draft.knownCharacter ? result.variants?.namePrompt : undefined) || result.prompt;
     if (!result.ok || !prompt) throw new Error(result.message);
+    const current=liveDraft.current;
+    if(context!==reversePromptSelectionIdentity(useAppStore.getState().settings)||source!==JSON.stringify([current.target?.filePath,current.prompt,current.subjectHint,current.knownCharacter,current.reverseMode]))throw Error('图片、提示词或反推选项已改变，旧结果未覆盖当前内容。');
     patch({ prompt });
   });
   const clearResults = () => action(async () => {
@@ -156,6 +162,7 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
         </details>}
         <label><span>{ft("固定内容提示词")}</span><textarea disabled={active} value={draft.prompt} onChange={e => patch({ prompt: e.target.value })} /></label>
         <section className="detective-caption-options" aria-label={ft("反推范围与角色")}>
+          <InlineReversePromptSkillControls disabled={active}/>
           <SelectMenu label={ft("反推模式")} ariaLabel={ft("反推模式")} disabled={active} value={draft.reverseMode} options={[
             {value:"mixed",label:ft("混合模式")},{value:"tags",label:ft("Danbooru 标签")},{value:"natural",label:ft("自然语言")}
           ]} onChange={value=>patch({reverseMode:value as Draft["reverseMode"]})}/>

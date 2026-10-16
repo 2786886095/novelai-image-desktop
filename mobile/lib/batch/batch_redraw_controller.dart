@@ -1,3 +1,4 @@
+import '../prompts/prompt_skill_selection.dart';
 import 'package:crypto/crypto.dart';
 import '../services/generation_scope.dart';
 import '../services/comic_image_service.dart';
@@ -601,6 +602,17 @@ class BatchRedrawController extends ChangeNotifier {
     final targets =
         project.items.where((item) => item.prompt.trim().isEmpty).toList();
     if (targets.isEmpty || busy) return;
+    final capturedProject=project,mode=project.aiMode;
+    final model=project.aiTemplateVersion??app.settings.reversePromptTemplateVersion;
+    final edition=project.aiSkillVersion??(model=='v4.5'?'1.0.0':app.settings.reversePromptSkillVersion);
+    final settings=AppSettings.fromJson(jsonDecode(jsonEncode(app.settings.toJson())))
+      ..reversePromptTemplateVersion=model..reversePromptSkillVersion=edition;
+    checkPromptSkillSelection(edition,model);
+    final template=app.resolvedPromptTemplate('reverse',mode,templateVersion:model,skillVersion:edition);
+    final inputs=targets.map((item)=>(item:item,base64:item.base64,prompt:item.prompt)).toList();
+    String contextRevision(){final selectedModel=project.aiTemplateVersion??app.settings.reversePromptTemplateVersion;final selectedEdition=project.aiSkillVersion??(selectedModel=='v4.5'?'1.0.0':app.settings.reversePromptSkillVersion);return jsonEncode([project.aiMode.value,selectedModel,selectedEdition,app.resolvedPromptTemplate('reverse',project.aiMode,templateVersion:selectedModel,skillVersion:selectedEdition),app.settings.visionApiUrl,app.settings.visionApiModel]);}
+    final initial=contextRevision();
+    bool current(){try{return identical(capturedProject,project)&&initial==contextRevision();}catch(_){return false;}}
     final key = await app.storage.getVisionKey() ?? '';
     if (key.isEmpty) {
       status = _rt('batch.visionKeyRequired');
@@ -608,22 +620,25 @@ class BatchRedrawController extends ChangeNotifier {
       return;
     }
     busy = true;
-    var done = 0;
+    var done = 0,stale=false;
     try {
-      for (final item in targets) {
+      for (final input in inputs) {
+        final item=input.item;
+        if(!current()){stale=true;status='批量反推选择或模板已变化；停止旧请求，未覆盖提示词。';break;}
         status = _rf('batch.reversing', {'name': item.name});
         notifyListeners();
         final result = await app.api.reversePrompt(
-          settings: app.settings,
+          settings: settings,
           apiKey: key,
-          image: base64Decode(item.base64),
-          mode: project.aiMode,
+          image: base64Decode(input.base64),
+          mode: mode,
           scope: ReversePromptScope.full,
           hint: '',
           knownCharacter: false,
-          systemTemplate: app.resolvedPromptTemplate('reverse', project.aiMode),
-          templateVersion: app.settings.reversePromptTemplateVersion,
+          systemTemplate: template,
+          templateVersion: model,
         );
+        if(!current()||item.base64!=input.base64||item.prompt!=input.prompt){stale=true;status='批量反推选择、输入或模板已变化；已保留当前提示词。';break;}
         if (result.ok) {
           item.prompt = result.text;
           done++;
@@ -634,10 +649,10 @@ class BatchRedrawController extends ChangeNotifier {
         }
         changed();
       }
-      status = _rf('batch.reverseDone', {
+      if(current()&&!stale){status = _rf('batch.reverseDone', {
         'done': done,
         'total': targets.length,
-      });
+      });}
     } finally {
       busy = false;
       changed();

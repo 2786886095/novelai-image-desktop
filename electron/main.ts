@@ -1088,6 +1088,7 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
       hint?: string,
       knownCharacter?: boolean,
       templateVersion?: string,
+      skillVersion?: import("../src/types").PromptSkillVersion,
     ) =>
       reversePromptImage(
         imageBase64,
@@ -1096,17 +1097,19 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
         hint,
         knownCharacter,
         templateVersion === "v4.5" || templateVersion === "v5" ? templateVersion : undefined,
+        skillVersion,
       ),
   );
   accountBoundHandle(
     "nai:convertPrompt",
-    (_event, text: string, mode: string, knownCharacter?: boolean, templateVersion?: string, assistant?: import("../src/prompt-assistant").PromptEditRequest) =>
+    (_event, text: string, mode: string, knownCharacter?: boolean, templateVersion?: string, assistant?: import("../src/prompt-assistant").PromptEditRequest, skillVersion?: import("../src/types").PromptSkillVersion) =>
       convertPromptText(
         text,
         (mode as "tags" | "natural" | "mixed") ?? "tags",
         knownCharacter,
         templateVersion === "v4.5" ? "v4.5" : "v5",
         assistant,
+        skillVersion,
       ),
   );
   accountBoundHandle(
@@ -1127,6 +1130,8 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
       scope?: string,
       hint?: string,
       knownCharacter?: boolean,
+      templateVersion?: import("../src/types").ReversePromptTemplateVersion,
+      skillVersion?: import("../src/types").PromptSkillVersion,
     ) =>
       reversePromptImage(
         imageBase64,
@@ -1134,6 +1139,8 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
         scope,
         hint,
         knownCharacter,
+        templateVersion,
+        skillVersion,
       ),
   );
   accountBoundHandle(

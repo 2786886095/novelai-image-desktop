@@ -149,7 +149,7 @@ export function createStudioAgentService(deps:StudioAgentDependencies) {
       const {settings,state,revision}=await current();
       if(request.action==='read') {
         if(args.refreshTemplates===true){
-          const keys=['agentPromptTemplateMode','convertPromptTemplates','convertPromptTemplatesV45','reversePromptTemplates','reversePromptTemplatesV45','convertPromptTemplateVersion','reversePromptTemplateVersion'] as const;
+          const keys=['agentPromptTemplateMode','convertPromptTemplates','convertPromptTemplatesV45','convertPromptTemplatesV2','reversePromptTemplates','reversePromptTemplatesV45','reversePromptTemplatesV2','convertPromptTemplateVersion','reversePromptTemplateVersion','convertPromptSkillVersion','reversePromptSkillVersion','promptAssistantMode','promptAssistantTemplateVersion','promptAssistantSkillVersion','promptOptimizeTemplate','promptAssistantTemplate','promptOptimizeTemplateV2','promptAssistantTemplateV2'] as const;
           deps.setState({settings:{...state.settings,...Object.fromEntries(keys.map(key=>[key,settings[key]]))} as AppSettings});
         }
         const libraryKeys=new Set(['stylePromptPresets','positivePromptPresets','characterPromptPresets','promptChunks','lastGenerationState']);

@@ -3,6 +3,7 @@
 // No fake platform channels, fake Storage, fake NaiApi, mock preferences,
 // credential-bearing accounts, or paid/public generation providers are used.
 import 'dart:convert';
+import 'native_foreground.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -89,6 +90,7 @@ Future<void> _run() async {
   FlutterError.onError = (details){uiErrors.add(details);FlutterError.presentError(details);};
     expect(Platform.isAndroid || Platform.isIOS, true, reason: 'Host Flutter is not native mobile acceptance.');
     expect(const bool.fromEnvironment('FEATURE_ISOLATED_DEVICE'), true, reason: 'Run only on a disposable simulator/emulator, never a human device.');
+    await nativeForegroundBarrier();
     // Reset only the test app on the explicitly disposable device. No platform
     // interface is replaced, and every subsequent preference write is native.
     await (await SharedPreferences.getInstance()).clear();

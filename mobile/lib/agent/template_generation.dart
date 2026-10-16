@@ -4,7 +4,7 @@ import 'agent_models.dart';
 const templateGenerationTool = 'studio_generate_from_description';
 
 Map<String, dynamic> templateGenerationArgs(Map<String, dynamic> input) {
-  const allowed = {'text', 'imageAttachmentId', 'mode', 'templateVersion', 'generate'};
+  const allowed = {'text', 'imageAttachmentId', 'mode', 'templateVersion','skillVersion', 'generate'};
   if (input.keys.any((key) => !allowed.contains(key))) {
     throw StateError('未知模板生图参数');
   }
@@ -24,6 +24,7 @@ Map<String, dynamic> templateGenerationArgs(Map<String, dynamic> input) {
   if (input['templateVersion'] != null && !['v5', 'v4.5'].contains(input['templateVersion'])) {
     throw StateError('模板版本无效');
   }
+  if(input['skillVersion']!=null&&!['1.0.0','2.0.0'].contains(input['skillVersion']))throw StateError('技能版本无效');
   final generate = input['generate'] ?? <String, dynamic>{};
   if (generate is! Map<String, dynamic> || generate.keys.any((key) => !{
     'count', 'model', 'width', 'height', 'steps', 'cfgScale', 'seed', 'sampler', 'noiseSchedule'
@@ -53,6 +54,7 @@ Future<AgentToolResult> runTemplateGeneration(
     if (image != null) ...{'attachmentId': image, 'hint': input['text'] ?? '', 'scope': 'full'},
     if (input['mode'] != null) 'mode': input['mode'],
     if (input['templateVersion'] != null) 'templateVersion': input['templateVersion'],
+    if(input['skillVersion']!=null)'skillVersion':input['skillVersion'],
   });
   if (!converted.ok || converted.output.trim().isEmpty) {
     return AgentToolResult(ok: false, title: '模板生图未完成', output: '${converted.output}\n本次任务结束，未执行生图；不要自动重试或重复确认。');

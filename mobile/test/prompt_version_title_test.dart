@@ -40,9 +40,9 @@ void main() {
       });
     }
   }
-  test('conversion settings use conversion title, reverse binding is retained', () {
+  test('settings use shared generation-model and edition selector with distinct task bindings', () {
     final source = File('lib/screens/settings_screen.dart').readAsStringSync();
-    expect(source.contains("value:s.convertPromptTemplateVersion,decoration:InputDecoration(labelText:mobileUiTextFor(s.language,'convert.templateVersionTitle')"), isTrue);
-    expect(source.contains("value:s.reversePromptTemplateVersion,decoration:InputDecoration(labelText:mobileUiTextFor(s.language,'inspect.templateVersionTitle')"), isTrue);
+    expect(source,contains("PromptSkillSelector(model:promptSkillModel(s,'convert'),edition:promptSkillEdition(s,'convert')"));
+    expect(source,contains("PromptSkillSelector(model:promptSkillModel(s,'reverse'),edition:promptSkillEdition(s,'reverse')"));
   });
 }

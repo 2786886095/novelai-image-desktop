@@ -1056,10 +1056,9 @@ class _DirectorPanel extends StatelessWidget {
           SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                  onPressed:
-                      s.busy || s.workbenchImage == null ? null : s.augment,
-                  icon: const Icon(Icons.tune),
-                  label: Text(t('tools.runPost')))),
+                  onPressed: s.postprocessRunning ? s.cancelPostprocess : s.busy || s.workbenchImage == null ? null : s.augment,
+                  icon: Icon(s.postprocessRunning ? Icons.stop : Icons.tune),
+                  label: Text(t(s.postprocessRunning ? 'common.cancel' : 'tools.runPost')))),
         ]),
       ),
     );

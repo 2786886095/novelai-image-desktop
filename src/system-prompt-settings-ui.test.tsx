@@ -103,3 +103,27 @@ it("deleting a shared custom choice restores each feature's own default through 
   expect(h.settings.reverseConvertPromptPresets.some((p: any) => p.id === custom.id)).toBe(false);
   expect(h.settings.convertSystemPromptPresetId).toBe("builtin-ig5-convert"); expect(h.settings.reverseSystemPromptPresetId).toBe("builtin-ig5-reverse");
 });
+it('settings editor saves only the chosen model/edition map and preserves the old custom bodies',async()=>{
+ h.section='templates';Object.assign(h.settings,{reversePromptTemplateVersion:'v5',convertPromptTemplateVersion:'v5',promptAssistantTemplateVersion:'v5',promptAssistantSkillVersion:'2.0.0',reversePromptTemplatesV2:{tags:'V2 reverse',natural:'V2 natural',mixed:'V2 mixed'},convertPromptTemplatesV2:{tags:'V2 convert',natural:'',mixed:''},promptOptimizeTemplate:'old optimization',promptAssistantTemplate:'old assistant'});
+ const original=structuredClone(h.settings),nodes=render();
+ const editors=nodes.filter(n=>typeof n.type==='function'&&n.type.name==='VersionedModeTemplateEditor');expect(editors).toHaveLength(2);
+ await editors[0].props.onChange('v5',{tags:'new reverse',natural:'V2 natural',mixed:'V2 mixed'},'2.0.0');
+ expect(h.settings.reversePromptTemplatesV2.tags).toBe('new reverse');expect(h.settings.reversePromptTemplates).toEqual(original.reversePromptTemplates);
+ await editors[1].props.onChange('v4.5',{tags:'V45 edit',natural:'',mixed:''},'1.0.0');
+ expect(h.settings.convertPromptTemplatesV45.tags).toBe('V45 edit');expect(h.settings.convertPromptTemplatesV2).toEqual(original.convertPromptTemplatesV2);
+ const overlay=nodes.filter(n=>typeof n.type==='function'&&n.type.name==='SingleTemplateEditor');expect(overlay).toHaveLength(2);
+ await overlay[0].props.onChange('new optimization');await overlay[1].props.onChange('new assistant');
+ expect(h.settings.promptOptimizeTemplateV2).toBe('new optimization');expect(h.settings.promptAssistantTemplateV2).toBe('new assistant');
+ expect(h.settings.promptOptimizeTemplate).toBe(original.promptOptimizeTemplate);expect(h.settings.promptAssistantTemplate).toBe(original.promptAssistantTemplate);
+});
+it('actual per-mode restore handler preserves other V2 modes and the entire legacy map',async()=>{
+ h.section='templates';Object.assign(h.settings,{reversePromptTemplateVersion:'v5',convertPromptTemplateVersion:'v5',reversePromptTemplatesV2:{tags:'V2 custom tag',natural:'V2 custom prose',mixed:'V2 custom mixed'}});
+ const original=structuredClone(h.settings),editor=render().find(n=>typeof n.type==='function'&&n.type.name==='VersionedModeTemplateEditor')!;
+ h.slots=[];h.cursor=0;const children=walk((editor.type as any)(editor.props));
+ const modes=children.find(n=>typeof n.type==='function'&&n.type.name==='ModeTemplateEditor')!;
+ h.slots=[];h.cursor=0;const controls=walk((modes.type as any)(modes.props));
+ const restore=controls.find(n=>n.type==='button'&&String(n.props.title).includes('selected mode'))??controls.filter(n=>n.type==='button').at(-1)!;
+ restore.props.onClick();await tick();
+ expect(h.settings.reversePromptTemplatesV2.tags).toBe(editor.props.v2Defaults.tags);
+ expect(h.settings.reversePromptTemplatesV2.natural).toBe('V2 custom prose');expect(h.settings.reversePromptTemplatesV2.mixed).toBe('V2 custom mixed');expect(h.settings.reversePromptTemplates).toEqual(original.reversePromptTemplates);
+});

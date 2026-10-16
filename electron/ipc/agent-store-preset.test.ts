@@ -12,6 +12,14 @@ import { createEmptyAgentWorkspace, normalizeAgentWorkspace } from "./agent-stor
 import { LYRA_IMAGE_SAMPLER_ID, TAVERN_PRESET_LIBRARY_VERSION } from "../../src/tavern/builtins";
 
 describe("Tavern preset library persistence", () => {
+  it('adds six disabled versioned prompt skills without replacing user skills or enabled choices',()=>{
+    const workspace=createEmptyAgentWorkspace();expect(workspace.skills).toHaveLength(6);expect(workspace.skills.every(skill=>!skill.enabled)).toBe(true);
+    const first={...workspace.skills[0],enabled:true,instructions:'cannot replace builtin contract'};
+    const user={id:'user-skill',name:'My existing skill',description:'User content',instructions:'USER INSTRUCTIONS',enabled:true,createdAt:'2001-01-01',updatedAt:'2001-01-02'};
+    const normalized=normalizeAgentWorkspace({...workspace,skills:[first,user]});
+    expect(normalized.skills).toHaveLength(7);expect(normalized.skills.find(skill=>skill.id===first.id)).toMatchObject({enabled:true,instructions:workspace.skills[0].instructions});expect(normalized.skills.find(skill=>skill.id===user.id)).toEqual({...user,builtIn:false});
+    const reopened=normalizeAgentWorkspace(JSON.parse(JSON.stringify(normalized)));expect(reopened.skills).toEqual(normalized.skills);
+  });
   it("seeds only the Lyra preset for a fresh workspace", () => {
     const workspace = createEmptyAgentWorkspace();
     expect(workspace.samplerPresets).toHaveLength(1);

@@ -55,6 +55,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final api = CaptureTemplateApi();
     final app = AppState(api: api, storage: TemplateVault());
+    app.settings..reversePromptSkillVersion='1.0.0'..convertPromptSkillVersion='1.0.0'..promptAssistantSkillVersion='1.0.0';
     addTearDown(app.dispose);
     app.promptTemplates = await PromptTemplateLibrary.load();
     app.settings.convertPromptTemplates = {'mixed': 'V5 MIXED {{input}}'};

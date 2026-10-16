@@ -1,3 +1,5 @@
+import 'prompt_skill_selector.dart';
+import '../prompts/prompt_skill_selection.dart';
 import 'external_mcp_settings.dart';
 import 'openai_edit_settings.dart';
 import '../ui/global_typography.dart';
@@ -696,7 +698,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ]),
           _Section(title: settingsText.promptTemplatesSection, children: [
             Text(settingsDetailText.reverseTemplateTitle),
-            StudioDropdownButtonFormField<String>(value:s.reversePromptTemplateVersion,decoration:InputDecoration(labelText:mobileUiTextFor(s.language,'inspect.templateVersionTitle')),items:const [DropdownMenuItem(value:'v4.5',child:Text('NAI 4.5')),DropdownMenuItem(value:'v5',child:Text('NAI V5'))],onChanged:(v){if(v!=null)state.setSettings((x)=>x.reversePromptTemplateVersion=v);}),
+            PromptSkillSelector(model:promptSkillModel(s,'reverse'),edition:promptSkillEdition(s,'reverse'),language:s.language,onChanged:(model,edition)=>state.setSettings((x)=>selectPromptSkill(x,'reverse',edition,model))),
             ...ReversePromptMode.values.map((mode) => _TemplateTile(
                   title: mode.label,
                   customizedLabel: settingsDetailText.customized,
@@ -708,7 +710,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 )),
             const Divider(),
             Text(settingsDetailText.convertTemplateTitle),
-            StudioDropdownButtonFormField<String>(value:s.convertPromptTemplateVersion,decoration:InputDecoration(labelText:mobileUiTextFor(s.language,'convert.templateVersionTitle')),items:const [DropdownMenuItem(value:'v4.5',child:Text('NAI 4.5')),DropdownMenuItem(value:'v5',child:Text('NAI V5'))],onChanged:(v){if(v!=null)state.setSettings((x)=>x.convertPromptTemplateVersion=v);}),
+            PromptSkillSelector(model:promptSkillModel(s,'convert'),edition:promptSkillEdition(s,'convert'),language:s.language,onChanged:(model,edition)=>state.setSettings((x)=>selectPromptSkill(x,'convert',edition,model))),
             ...ReversePromptMode.values.map((mode) => _TemplateTile(
                   title: mode.label,
                   customizedLabel: settingsDetailText.customized,
@@ -1044,6 +1046,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   ) async {
     final state = context.read<AppState>();
     final detailText = settingsDetailTextFor(state.settings.language);
+    final model=promptSkillModel(state.settings,kind),edition=promptSkillEdition(state.settings,kind);
     final label = kind == 'reverse'
         ? '${detailText.reverseTemplateTitle} · ${mode.label}'
         : kind == 'convert'
@@ -1052,9 +1055,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => _TemplateEditorScope(
-        initialText: state.resolvedPromptTemplate(kind, mode),
+        initialText: state.resolvedPromptTemplate(kind, mode,templateVersion:model,skillVersion:edition),
         builder: (controller) => AlertDialog(
-        title: Text(label),
+        title: Text('$label · $model · $edition'),
         content: SizedBox(
           // Wide on tablets, but never wider than the dialog on a phone (the old
           // fixed 720 overflowed small screens).
@@ -1074,7 +1077,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () async {
-              await state.resetPromptTemplate(kind, mode);
+              await state.resetPromptTemplate(kind, mode,templateVersion:model,skillVersion:edition);
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
             child: Text(detailText.resetDefault),
@@ -1085,7 +1088,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           FilledButton(
             onPressed: () async {
-              await state.setPromptTemplate(kind, mode, controller.text);
+              await state.setPromptTemplate(kind, mode, controller.text,templateVersion:model,skillVersion:edition);
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
             child: Text(detailText.save),

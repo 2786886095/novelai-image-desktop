@@ -248,18 +248,20 @@ class AgentComposerAction {
   final String kind;
   final String templateKind, mode, templateVersion;
   final String? templateId;
+  final String? skillVersion;
   const AgentComposerAction(this.kind,
       {this.templateKind = 'convert',
       this.mode = 'mixed',
       this.templateVersion = 'v5',
-      this.templateId});
+      this.templateId,this.skillVersion});
   Map<String, dynamic> toJson() => {
         'kind': kind,
         if (kind == 'prompt-preset') 'templateId': templateId,
         if (kind != 'web-search' && kind != 'prompt-preset') ...{
           'templateKind': templateKind,
           'mode': mode,
-          'templateVersion': templateVersion
+          'templateVersion': templateVersion,
+          if(skillVersion!=null)'skillVersion':skillVersion,
         }
       };
 }
@@ -291,7 +293,8 @@ List<AgentComposerAction> normalizeAgentComposerActions(dynamic raw) {
             ? item['mode'] as String
             : 'mixed',
         templateVersion: item['templateVersion'] == 'v4.5' ? 'v4.5' : 'v5',
-        templateId: kind == 'prompt-preset' ? id as String : null);
+        templateId: kind == 'prompt-preset' ? id as String : null,
+        skillVersion:['1.0.0','2.0.0'].contains(item['skillVersion'])?item['skillVersion'] as String:null);
     if (!output
         .any((a) => jsonEncode(a.toJson()) == jsonEncode(action.toJson()))) {
       output.add(action);
@@ -432,6 +435,7 @@ class AgentConversation {
   String? selectedTemplateKind;
   String? selectedTemplateMode;
   String? selectedTemplateVersion;
+  String? selectedTemplateSkillVersion;
   String status;
   AgentContextSnapshot context;
   AgentTokenUsage? lastTurnUsage;
@@ -465,6 +469,7 @@ class AgentConversation {
     this.selectedTemplateKind,
     this.selectedTemplateMode,
     this.selectedTemplateVersion,
+    this.selectedTemplateSkillVersion,
     this.status = 'idle',
     AgentContextSnapshot? context,
     this.lastTurnUsage,
@@ -516,6 +521,7 @@ class AgentConversation {
         selectedTemplateKind: json['selectedTemplateKind']?.toString(),
         selectedTemplateMode: json['selectedTemplateMode']?.toString(),
         selectedTemplateVersion: json['selectedTemplateVersion']?.toString(),
+        selectedTemplateSkillVersion:['1.0.0','2.0.0'].contains(json['selectedTemplateSkillVersion'])?json['selectedTemplateSkillVersion'] as String:null,
         status: const {'idle', 'running', 'waiting-permission', 'error'}
                 .contains(json['status'])
             ? json['status'].toString()
@@ -572,6 +578,7 @@ class AgentConversation {
           'selectedTemplateMode': selectedTemplateMode,
         if (selectedTemplateVersion != null)
           'selectedTemplateVersion': selectedTemplateVersion,
+        if(selectedTemplateSkillVersion!=null)'selectedTemplateSkillVersion':selectedTemplateSkillVersion,
         'status': status,
         'context': context.toJson(),
         if (lastTurnUsage != null) 'lastTurnUsage': lastTurnUsage!.toJson(),
@@ -685,9 +692,14 @@ class AgentMemory {
       };
 }
 
-List<AgentSkill> defaultAgentSkills() {
-  return [];
-}
+List<AgentSkill> defaultAgentSkills() => [
+  for(final task in ['reverse','convert'])for(final mode in ['tags','natural','mixed'])AgentSkill(
+    id:'builtin-prompt-v2-$task-$mode',
+    name:'${task=='reverse'?'图片反推':'文字转换'} · ${mode=='tags'?'纯Tag':mode=='natural'?'纯自然语言':'混合'} · 2.0.0',
+    description:'NovelAI V5 Full 默认技能；只在选中对应用途和格式时调用。',builtIn:true,enabled:false,
+    createdAt:'2026-10-17T00:00:00Z',updatedAt:'2026-10-17T00:00:00Z',
+    instructions:'条件技能：仅当用户选择 $task / $mode / 2.0.0 / V5 Full 时，先用studio_prompt_template读取 kind=$task, mode=$mode, templateVersion=v5, skillVersion=2.0.0。执行时仅使用当前选中的一份正文，不与其他五种格式合并。不授予额外工具或付费权限；优先调用软件对应的反推/转换工具。未选择时不要套用此格式。'),
+];
 
 class AgentWorkspace {
   int version;

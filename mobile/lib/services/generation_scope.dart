@@ -8,12 +8,13 @@ class GenerationScope {
   static GenerationScope? get current =>
       Zone.current[_zoneKey] as GenerationScope?;
   final void Function()? beforeSubmit;
+  final String cancellationMessage;
   final void Function(String, AppSettings)? assertCredentials;
   final Set<void Function()> _cancelHandlers = {};
   bool cancelled = false;
-  GenerationScope({this.beforeSubmit, this.assertCredentials});
+  GenerationScope({this.beforeSubmit, this.assertCredentials, this.cancellationMessage='漫画任务已停止，未继续提交图片'});
   void check() {
-    if (cancelled) throw StateError('漫画任务已停止，未继续提交图片');
+    if (cancelled) throw StateError(cancellationMessage);
     beforeSubmit?.call();
   }
 

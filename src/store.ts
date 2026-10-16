@@ -1,3 +1,4 @@
+import {promptSkillRequestContext,promptSkillStaleText} from './prompt-skill-settings';
 import { normalizeHistoryWidth, readHistoryCollapsed, HISTORY_COLLAPSE_AT } from './workspace-history';
 import {favoritesText} from './favorites-text';
 import {naiAccountSummaryMatches} from './nai-accounts';
@@ -1928,6 +1929,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   async runReversePrompt() {
     const { inspectImageBase64, inspectImagePath, reversePromptMode, reversePromptScope, reversePromptHint, reverseKnownCharacter } = get();
     const templateVersion = get().settings?.reversePromptTemplateVersion ?? "v5";
+    const skillVersion=get().settings?.reversePromptSkillVersion;
+    const requestContext=promptSkillRequestContext(get().settings,'reverse');
+    const unchanged=()=>{const current=get();return current.inspectImageBase64===inspectImageBase64&&current.reversePromptMode===reversePromptMode&&current.reversePromptScope===reversePromptScope&&current.reversePromptHint===reversePromptHint&&current.reverseKnownCharacter===reverseKnownCharacter&&promptSkillRequestContext(current.settings,'reverse')===requestContext;};
     if (!inspectImageBase64) {
       set({ toast: storeText(get().settings, "toast.needImage") });
       return;
@@ -1936,6 +1940,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       label: reversePromptHint.trim() || storeText(get().settings, "inspect.run"),
       mode: reversePromptMode,
+      templateVersion,
+      skillVersion,
       knownCharacter: reverseKnownCharacter,
       status: "processing",
       addedAt: Date.now(),
@@ -1945,14 +1951,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ reverseJobs: [job, ...get().reverseJobs] });
     let result;
     try {
-      result = await window.naiDesktop.reversePrompt(
-        inspectImageBase64,
-        reversePromptMode,
-        reversePromptScope,
-        reversePromptHint,
-        reverseKnownCharacter,
-        templateVersion,
-      );
+      const args=[inspectImageBase64,reversePromptMode,reversePromptScope,reversePromptHint,reverseKnownCharacter,templateVersion] as const;
+      result = skillVersion===undefined ? await window.naiDesktop.reversePrompt(...args) : await window.naiDesktop.reversePrompt(...args,skillVersion);
     } catch (error) {
       if (!get().reverseJobs.some((j) => j.id === job.id)) return;
       const message = compactStoreError(get().settings, error);
@@ -1967,19 +1967,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     // job as truly cancelled: no result overwrite, no toast, no history entry.
     if (!get().reverseJobs.some((j) => j.id === job.id)) return;
     if (result.ok && result.prompt) {
+      const stale=!unchanged(),staleMessage=promptSkillStaleText(get().settings?.language);
       set({
         reverseJobs: get().reverseJobs.map((j) =>
-          j.id === job.id ? { ...j, status: "done", result: result.prompt, variants: result.variants } : j,
+          j.id === job.id ? { ...j, status: "done", result: result.prompt, variants: result.variants, ...(stale?{message:staleMessage}:{}) } : j,
         ),
-        reversePromptText: result.prompt,
-        reversePromptVariants: result.variants ?? null,
-        toast: storeText(get().settings, "toast.inspectDone"),
+        ...(!stale?{reversePromptText: result.prompt,reversePromptVariants: result.variants ?? null}:{}),
+        toast: stale?staleMessage:storeText(get().settings, "toast.inspectDone"),
       });
       const historyItem: TextToolHistoryItem = {
         id: job.id,
         mode: reversePromptMode,
+        templateVersion,
+        skillVersion,
         knownCharacter: reverseKnownCharacter,
         input: reversePromptHint,
+        ...(stale?{stale:true}:{}),
         sourceImagePath: inspectImagePath || undefined,
         result: result.prompt,
         variants: result.variants,
@@ -1987,7 +1990,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
       set({ reverseHistory: [historyItem, ...get().reverseHistory] });
       void window.naiDesktop.addReverseHistoryItem(historyItem);
-      setTimeout(() => get().removeReverseJob(job.id), TEXTTOOL_DONE_AUTO_DISMISS_MS);
+      if(!stale)setTimeout(() => get().removeReverseJob(job.id), TEXTTOOL_DONE_AUTO_DISMISS_MS);
     } else {
       set({
         reverseJobs: get().reverseJobs.map((j) => (j.id === job.id ? { ...j, status: "failed", message: result.message } : j)),
@@ -2039,6 +2042,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   async runConvertPrompt() {
     const { convertInput, convertMode, convertKnownCharacter } = get();
     const templateVersion = get().settings?.convertPromptTemplateVersion ?? "v5";
+    const skillVersion=get().settings?.convertPromptSkillVersion;
+    const requestContext=promptSkillRequestContext(get().settings,'convert');
+    const unchanged=()=>{const current=get();return current.convertInput===convertInput&&current.convertMode===convertMode&&current.convertKnownCharacter===convertKnownCharacter&&promptSkillRequestContext(current.settings,'convert')===requestContext;};
     if (!convertInput.trim()) {
       set({ toast: storeText(get().settings, "toast.needConvertInput") });
       return;
@@ -2047,6 +2053,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       label: convertInput.trim().slice(0, 60),
       mode: convertMode,
+      templateVersion,
+      skillVersion,
       knownCharacter: convertKnownCharacter,
       status: "processing",
       addedAt: Date.now(),
@@ -2055,12 +2063,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ convertJobs: [job, ...get().convertJobs] });
     let result;
     try {
-      result = await window.naiDesktop.convertPrompt(
-        convertInput,
-        convertMode,
-        convertKnownCharacter,
-        templateVersion,
-      );
+      const args=[convertInput,convertMode,convertKnownCharacter,templateVersion] as const;
+      result = skillVersion===undefined ? await window.naiDesktop.convertPrompt(...args) : await window.naiDesktop.convertPrompt(...args,undefined,skillVersion);
     } catch (error) {
       if (!get().convertJobs.some((j) => j.id === job.id)) return;
       const message = compactStoreError(get().settings, error);
@@ -2073,20 +2077,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     // See runReversePrompt: a removed job is treated as cancelled.
     if (!get().convertJobs.some((j) => j.id === job.id)) return;
     if (result.ok && result.result) {
+      const stale=!unchanged(),staleMessage=promptSkillStaleText(get().settings?.language);
       set({
         convertJobs: get().convertJobs.map((j) =>
-          j.id === job.id ? { ...j, status: "done", result: result.result, variants: result.variants, warnings: result.warnings ? [...result.warnings] : [] } : j,
+          j.id === job.id ? { ...j, status: "done", result: result.result, variants: result.variants, warnings: result.warnings ? [...result.warnings] : [], ...(stale?{message:staleMessage}:{}) } : j,
         ),
-        convertResult: result.result,
-        convertResultWarnings: result.warnings ? [...result.warnings] : [],
-        convertResultVariants: result.variants ?? null,
-        toast: storeText(get().settings, "toast.convertDone"),
+        ...(!stale?{convertResult: result.result,convertResultWarnings: result.warnings ? [...result.warnings] : [],convertResultVariants: result.variants ?? null}:{}),
+        toast: stale?staleMessage:storeText(get().settings, "toast.convertDone"),
       });
       const historyItem: TextToolHistoryItem = {
         id: job.id,
         mode: convertMode,
+        templateVersion,
+        skillVersion,
         knownCharacter: convertKnownCharacter,
         input: convertInput,
+        ...(stale?{stale:true}:{}),
         result: result.result,
         variants: result.variants,
         warnings: result.warnings ? [...result.warnings] : [],
@@ -2094,7 +2100,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
       set({ convertHistory: [historyItem, ...get().convertHistory] });
       void window.naiDesktop.addConvertHistoryItem(historyItem);
-      setTimeout(() => get().removeConvertJob(job.id), TEXTTOOL_DONE_AUTO_DISMISS_MS);
+      if(!stale)setTimeout(() => get().removeConvertJob(job.id), TEXTTOOL_DONE_AUTO_DISMISS_MS);
     } else {
       set({
         convertJobs: get().convertJobs.map((j) => (j.id === job.id ? { ...j, status: "failed", message: result.message } : j)),

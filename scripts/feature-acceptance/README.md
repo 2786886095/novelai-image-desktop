@@ -38,8 +38,8 @@ deleting or exempting any of the 195 required feature rows.
 
 ## Separate native CI entries (all remain partial)
 
-`feature-acceptance.yml` does not publish. Android/iOS run six independent
-entries: core19, metadata/favorites16, queue-lifecycle4, release-parity7, library33 and generation24. Each has a separate
+`feature-acceptance.yml` does not publish. The original six entries remain:
+core19, metadata/favorites16, queue-lifecycle4, release-parity7, library33 and generation24. Each has a separate
 input, native receipt, literal command ledger and output directory. A failing
 entry does not hide other independent observations, but the CI job fails.
 Only the actual checkout Git SHA is accepted in CI. Ten pinned official public
@@ -97,6 +97,32 @@ not promoted. The shared host entry policy is also used by the pristine Git
 worktree creator, preventing newly registered entries from being rejected by an
 outdated three-entry allowlist. Host policy tests exercise real disposable Git
 worktrees; they are not native device feature proofs.
+
+## Versioned skill and expanded client entries
+
+The original 118 scenario requirements remain, with four additional requirements
+for skill versions, target-model compatibility, inline stale-result protection,
+editing overlays, and cold-process preference/custom-slot retention. There are
+still 39 features and 195 required feature/platform slots; now 122 scenario IDs.
+
+The fixed host registry also includes text15, skill_reopen1, batch_mcp7,
+comic_openai6, image_agent3, tools3, ui9, os6, and Android-only android_update2.
+Eight independent CI shards run all applicable registered entries. Sharding is
+not a waiver: unsupported iOS updater scenarios remain missing in the matrix.
+Each entry keeps its independently fixed CHECK total and exact scenario inventory;
+neither the app's DONE count nor merely opening a screen certifies a feature.
+
+text15 and skill_reopen1 must run consecutively on the same disposable device.
+The latter alone may retain test app data after qualified same-source predecessor
+receipts are read back. It requires a force-stop/closed predecessor and a different
+native PID; a new Dart object or cached SharedPreferences read is not a cold restart.
+All ordinary entries still clear only their disposable test app data.
+
+TLS fixture certificates and private keys are public synthetic test material.
+They add trust only in the disposable test process, keep normal hostname checks,
+and never install system trust, bypass TLS checks, or use real provider credentials.
+Desktop bootstrap phases and bounded macOS-only stack diagnostics are artifacts,
+not acceptance checks or substitutes for failed native scenarios.
 
 The desktop library runner covers actual native/renderer styles, negative
 libraries, font loading/import/removal/reset and the real bundled-catalog Worker,

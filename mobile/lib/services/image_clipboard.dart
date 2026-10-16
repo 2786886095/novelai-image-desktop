@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -7,7 +8,8 @@ import 'package:image/image.dart' as img;
 import 'composer_transfers.dart';
 import '../images/png_metadata.dart';
 
-/// Original mode never decodes/re-encodes the source or synthesizes parameters.
+/// Cleaning re-encodes pixels. Original publishing validates a native decode,
+/// but never re-encodes its source bytes or synthesizes parameters.
 Uint8List prepareClipboardImage(Uint8List source) {
   const png = [137, 80, 78, 71, 13, 10, 26, 10];
   if (source.length >= 8 && png.asMap().entries.every((e) => source[e.key] == e.value)) {
@@ -23,7 +25,20 @@ Uint8List prepareClipboardImage(Uint8List source) {
 class ImageClipboard {
   static Future<bool> copy(String path,
       {required bool withOriginalMetadata}) async {
-    final source = await File(path).readAsBytes();
+    final file=File(path),size=await File(path).length();
+    if(size<=0 || size>48*1024*1024)throw const FormatException('Unsupported image size');
+    final source = await file.readAsBytes();
+    if(source.isEmpty || source.length>48*1024*1024)throw const FormatException('Unsupported image size');
+    if(withOriginalMetadata){
+      final buffer=await ui.ImmutableBuffer.fromUint8List(source);
+      ui.ImageDescriptor? descriptor;ui.Codec? codec;ui.FrameInfo? frame;
+      try{
+        descriptor=await ui.ImageDescriptor.encoded(buffer);
+        if(descriptor.width<=0 || descriptor.height<=0 || descriptor.width*descriptor.height>64*1024*1024)throw const FormatException('Unsupported image dimensions');
+        codec=await descriptor.instantiateCodec();frame=await codec.getNextFrame();
+      }catch(_){throw const FormatException('Unsupported image');}
+      finally{frame?.image.dispose();codec?.dispose();descriptor?.dispose();buffer.dispose();}
+    }
     final bytes = withOriginalMetadata
         ? source
         : await compute(prepareClipboardImage, source);

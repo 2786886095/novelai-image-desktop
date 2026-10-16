@@ -8,6 +8,7 @@ import {DEFAULT_OPENAI_IMAGE_EDIT,normalizeOpenAIImageEditSettings} from "../../
 import { currentNaiAccount, getNaiAccountSummary, rememberNaiAccountSummary, naiAccountsBusy, configureLegacyNaiBinding, boundLegacyNaiAccount, legacyNaiBindingAllowed, naiAccountRevision } from './nai-accounts-runtime';
 import { ensureNaiAccountsLoaded } from './nai-accounts';
 import {normalizeNovelAiSettings,NOVELAI_ONLY_MESSAGE} from '../../src/novelai-only-settings';
+import {normalizePromptSkillSettings} from "../../src/prompt-skill-settings";
 import { refreshShippedTemplates } from "../../src/data/prompt-template-migration";
 import {STYLE_SORTS,styleMetadata} from "../../src/style-library";
 import {mergeCharacterPresets} from "../../src/positive-prompt-presets";
@@ -230,6 +231,8 @@ export function defaultSettings(): AppSettings {
     visionSystemPrompt: "",
     reversePromptMode: "tags" as const,
     reversePromptTemplateVersion: "v5" as const,
+    reversePromptSkillVersion: "2.0.0" as const,
+    reversePromptTemplatesV2: emptyModeTemplates(),
     reversePromptTemplates: emptyModeTemplates(),
     reversePromptTemplatesV45: emptyModeTemplates(),
     reverseConvertDshEnabled: true,
@@ -243,6 +246,10 @@ export function defaultSettings(): AppSettings {
     promptOptimizeTemplate: "",
     promptAssistantTemplate: "",
     promptAssistantMode: "mixed" as const,
+    promptAssistantTemplateVersion: "v5" as const,
+    promptAssistantSkillVersion: "2.0.0" as const,
+    promptOptimizeTemplateV2: "",
+    promptAssistantTemplateV2: "",
     convertApiUrl: "https://api.openai.com/v1",
     convertApiKey: "",
     convertApiModel: "gpt-4o-mini",
@@ -259,6 +266,8 @@ export function defaultSettings(): AppSettings {
     agentVisionEnabled: true,
     convertMode: "tags" as const,
     convertPromptTemplateVersion: "v5" as const,
+    convertPromptSkillVersion: "2.0.0" as const,
+    convertPromptTemplatesV2: emptyModeTemplates(),
     convertPromptTemplates: { tags: "", natural: "", mixed: "" },
     convertPromptTemplatesV45: { tags: "", natural: "", mixed: "" },
     tagServerEnabled: false,
@@ -346,6 +355,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   settings.language = normalizeLanguage(settings.language);
   settings.reversePromptTemplateVersion = settings.reversePromptTemplateVersion === "v4.5" ? "v4.5" : "v5";
   settings.convertPromptTemplateVersion = settings.convertPromptTemplateVersion === "v4.5" ? "v4.5" : "v5";
+  Object.assign(settings, normalizePromptSkillSettings(rawSettings));
   settings.reverseConvertPromptPresets = normalizeImageTaskPromptPresets(
     rawSettings.reverseConvertPromptPresets,
   );

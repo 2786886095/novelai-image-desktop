@@ -8,13 +8,13 @@ export function createTemplateWorkflow(
  async function run(request:AgentToolBridgeRequest):Promise<AgentToolBridgeResponse> {
   try {
    const {action,...args}=validateTemplateRequest(request.args);
-   const read=()=>templates.execute({tool:'studio_prompt_template',args:{...('kind'in args?{kind:args.kind}:{}),...('mode'in args?{mode:args.mode}:{}),...('templateVersion'in args?{templateVersion:args.templateVersion}:{})}});
+   const read=()=>templates.execute({tool:'studio_prompt_template',args:{...('kind'in args?{kind:args.kind}:{}),...('mode'in args?{mode:args.mode}:{}),...('templateVersion'in args?{templateVersion:args.templateVersion}:{}),...('skillVersion'in args?{skillVersion:args.skillVersion}:{})}});
    const before=read();if(!before.ok)return before;
    if(action==='read')return before;
    if((before.data as Record<string,unknown>).revision!==args.expectedRevision)throw Error('软件模板已变化，请重新读取');
    let backupPath:string|undefined;
    if(action==='save'||action==='restore') {
-    if(!await approve({...request,args:{action,kind:args.kind??'convert',mode:(before.data as Record<string,unknown>).mode,templateVersion:(before.data as Record<string,unknown>).templateVersion,...(action==='save'?{body:args.body}:{})}}))throw Error('已取消，模板保持原样');
+    if(!await approve({...request,args:{action,kind:args.kind??'convert',mode:(before.data as Record<string,unknown>).mode,templateVersion:(before.data as Record<string,unknown>).templateVersion,skillVersion:(before.data as Record<string,unknown>).skillVersion,...(action==='save'?{body:args.body}:{})}}))throw Error('已取消，模板保持原样');
     const checked=read();if(!checked.ok||(checked.data as Record<string,unknown>).revision!==args.expectedRevision)throw Error('确认期间模板变化，请重新读取');
     backupPath=await backup();if(!backupPath)throw Error('修改前备份未完成');
    }

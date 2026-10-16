@@ -66,6 +66,7 @@ void main() {
       () async {
     final storage = _Vault();
     final app = AppState(storage: storage);
+    app.settings..reversePromptSkillVersion='1.0.0'..convertPromptSkillVersion='1.0.0'..promptAssistantSkillVersion='1.0.0';
     await storage.setSettings(app.settings);
     final tools = AgentTemplateTools(app);
     final workflow = AgentTemplateWorkflow(app,
@@ -97,13 +98,14 @@ void main() {
   test('explicit template actions inject saved bodies for all four kinds', () async {
     final storage = _Vault();
     final app = AppState(storage: storage)
-      ..settings = AppSettings(
+      ..settings = AppSettings(reversePromptSkillVersion:'1.0.0',convertPromptSkillVersion:'1.0.0',promptAssistantSkillVersion:'1.0.0',
         agentApiBaseUrl: 'https://example.invalid/v1',
         agentApiModel: 'fixture',
         convertPromptTemplates: {'mixed': 'saved convert body'},
         reversePromptTemplates: {'mixed': 'saved reverse body'},
         promptOptimizeTemplate: 'saved optimize body',
         promptAssistantTemplate: 'saved assistant body');
+    app.settings..reversePromptSkillVersion='1.0.0'..convertPromptSkillVersion='1.0.0'..promptAssistantSkillVersion='1.0.0';
     final provider = _CaptureProvider();
     await storage.setSettings(app.settings);
     final controller = AgentController(app: app, provider: provider)

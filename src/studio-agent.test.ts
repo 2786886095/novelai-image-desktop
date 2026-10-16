@@ -105,3 +105,16 @@ it('a delayed ordinary Agent settings read does not rewind a newer image service
  expect((await f.call('apply',{expectedRevision:await f.revision(),target:'settings',patch:{theme:'dark'}})).ok).toBe(true);
  expect(f.state.settings?.theme).toBe('dark');expect(f.state.settings?.imageApiKey).toBe('new-key');expect(f.state.settings?.imageServiceVersion).toBe(2);
 });
+
+
+it('actual template refresh adopts Harness edition/model and independent custom slots without discarding UI drafts',async()=>{
+ const f=fixture();f.change({settings:{...f.settings,theme:'dark',reversePromptSkillVersion:'1.0.0',convertPromptSkillVersion:'1.0.0',promptAssistantSkillVersion:'1.0.0',reversePromptTemplateVersion:'v4.5',convertPromptTemplateVersion:'v4.5',promptAssistantTemplateVersion:'v4.5',promptAssistantMode:'tags',reversePromptTemplates:{tags:'renderer-old-reverse',natural:'',mixed:''},convertPromptTemplates:{tags:'renderer-old-convert',natural:'',mixed:''},promptOptimizeTemplate:'renderer-old-optimize',promptAssistantTemplate:'renderer-old-assistant'}});
+ const saved:Partial<AppSettings>={agentPromptTemplateMode:'natural',reversePromptSkillVersion:'2.0.0',convertPromptSkillVersion:'2.0.0',promptAssistantSkillVersion:'2.0.0',reversePromptTemplateVersion:'v5',convertPromptTemplateVersion:'v5',promptAssistantTemplateVersion:'v5',promptAssistantMode:'mixed',reversePromptTemplates:{tags:'saved legacy reverse $&',natural:'',mixed:''},reversePromptTemplatesV45:{natural:'saved 4.5 reverse',tags:'',mixed:''},reversePromptTemplatesV2:{tags:'saved v2 reverse',mixed:'saved v2 mixed',natural:''},convertPromptTemplates:{tags:'saved legacy convert',natural:'',mixed:''},convertPromptTemplatesV45:{natural:'saved 4.5 convert',tags:'',mixed:''},convertPromptTemplatesV2:{natural:'saved v2 convert',tags:'',mixed:''},promptOptimizeTemplate:'saved legacy optimize',promptAssistantTemplate:'saved legacy assistant',promptOptimizeTemplateV2:'saved V2 optimize $1',promptAssistantTemplateV2:'saved V2 assistant $&'};
+ f.configure(saved);const generationDraft=f.state.params;
+ const reply=await f.call('read',{refreshTemplates:true});expect(reply.ok).toBe(true);
+ for(const[key,value]of Object.entries(saved))expect(f.state.settings?.[key as keyof AppSettings],key).toEqual(value);
+ expect(f.state.settings?.theme).toBe('dark');expect(f.state.params).toBe(generationDraft);expect(f.commit).not.toHaveBeenCalled();
+ f.configure({reversePromptSkillVersion:'1.0.0',reversePromptTemplateVersion:'v4.5',promptAssistantSkillVersion:'1.0.0',promptAssistantTemplateVersion:'v4.5'});
+ expect((await f.call('read',{refreshTemplates:true})).ok).toBe(true);
+ expect(f.state.settings?.reversePromptSkillVersion).toBe('1.0.0');expect(f.state.settings?.reversePromptTemplateVersion).toBe('v4.5');expect(f.state.settings?.promptAssistantSkillVersion).toBe('1.0.0');expect(f.state.settings?.promptAssistantTemplateVersion).toBe('v4.5');expect(f.state.settings?.reversePromptTemplatesV2).toEqual(saved.reversePromptTemplatesV2);
+});

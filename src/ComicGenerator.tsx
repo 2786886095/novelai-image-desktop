@@ -15,6 +15,7 @@ import {
   localizedDesktopOptionLabel,
 } from "./i18n";
 import { useAppStore } from "./store";
+import {InlineReversePromptSkillControls, callSelectedInlineReverse, reversePromptSelectionIdentity} from './components/InlineReversePromptSkillControls';
 import {
   batchRedrawCandidates,
   normalizeBatchRedrawCandidateCount,
@@ -1006,13 +1007,20 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
     setAiFilling(true);
     useAppStore.setState({ batchCancelRequested: false });
     const mode = useAppStore.getState().batchRedraw.aiMode;
+    const context=reversePromptSelectionIdentity(useAppStore.getState().settings);
+    let failure='';
     try {
       for (const it of targets) {
         if (useAppStore.getState().batchCancelRequested) break;
-        const res = await window.naiDesktop.reversePrompt(it.base64, mode, "full", "", false, useAppStore.getState().settings?.reversePromptTemplateVersion);
-        if (res.ok && res.prompt)
+        if(context!==reversePromptSelectionIdentity(useAppStore.getState().settings)||useAppStore.getState().batchRedraw.aiMode!==mode)throw Error('反推版本、模型或模式已改变，队列已停止，请重新反推。');
+        const res = await callSelectedInlineReverse(it.base64,mode);
+        if(context!==reversePromptSelectionIdentity(useAppStore.getState().settings)||useAppStore.getState().batchRedraw.aiMode!==mode)throw Error('反推版本、模型或模式已改变，旧结果未应用。');
+        const current=useAppStore.getState().batchRedraw.items.find(item=>item.id===it.id);
+        if (res.ok && res.prompt && current?.base64===it.base64 && current.prompt===it.prompt)
           patchItem(it.id, { prompt: res.prompt.trim() });
+        else if(!res.ok)failure=res.message;
       }
+      if(failure)throw Error(failure);
       setToast(t("batch.toast.aiDone"));
     } catch (error) {
       setToast(
@@ -1584,10 +1592,12 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
                 }}
               />
             </label>
+            <InlineReversePromptSkillControls disabled={aiFilling||running}/>
             <span className="redraw-ai-mode">
               {t("batch.prompts.reverseMode")}
               <SelectMenuCompat
                 value={project.aiMode}
+                disabled={aiFilling||running}
                 onChange={(e) =>
                   patch({ aiMode: e.target.value as ReversePromptMode })
                 }

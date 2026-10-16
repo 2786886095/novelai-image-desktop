@@ -1,4 +1,6 @@
 import '../ui/global_typography.dart';
+import 'prompt_skill_selector.dart';
+import '../prompts/prompt_skill_selection.dart';
 import '../i18n/comic_provider_text.dart';
 import '../ui/studio_dropdown.dart';
 import '../ui/zoomable_image.dart';
@@ -896,6 +898,7 @@ class _PanelEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.read<ComicController>();
+    final app = context.watch<AppState>();
     final t = _text(context);
     return _SectionCard(
       title: '${panel.index}. ${panel.title}',
@@ -943,6 +946,17 @@ class _PanelEditor extends StatelessWidget {
               controller.changed();
             },
           ),
+          const SizedBox(height:12),
+          PromptSkillSelector(model:app.settings.convertPromptTemplateVersion,edition:app.settings.convertPromptSkillVersion,
+            language:app.settings.language,onChanged:controller.convertingPanel(panel.id)?null:(model,edition)=>app.setSettings((s)=>selectPromptSkill(s,'convert',edition,model))),
+          const SizedBox(height:8),
+          SegmentedButton<ReversePromptMode>(segments:[for(final mode in ReversePromptMode.values)ButtonSegment(value:mode,label:Text(mobileUiTextFor(app.settings.language,'promptMode.${mode.value}')))],
+            selected:{app.convertMode},onSelectionChanged:controller.convertingPanel(panel.id)?null:(value){app.convertMode=value.first;app.markChanged();}),
+          const SizedBox(height:8),
+          OutlinedButton.icon(key:ValueKey('comic-convert-${panel.id}'),
+            onPressed:controller.convertingPanel(panel.id)||controller.queueRunning||panel.prompt.trim().isEmpty?null:()=>_run(context,()=>controller.convertPanelPrompt(panel)),
+            icon:Icon(controller.convertingPanel(panel.id)?Icons.hourglass_top:Icons.translate),
+            label:Text(mobileUiTextFor(app.settings.language,'inspect.startConvert'))),
           if (controller.project.sizeMode == ComicSizeMode.perPanel) ...[
             const SizedBox(height: 12),
             StudioDropdownButtonFormField<String>(
@@ -1240,6 +1254,9 @@ class _GenerateStep extends StatelessWidget {
                           icon: const Icon(Icons.archive_outlined),
                           label: Text(t('comic.exportZip')),
                         ),
+                        OutlinedButton.icon(key:const ValueKey('comic-save-selected-zip'),
+                          onPressed:!controller.exporting&&panels.any((p)=>p.selectedCandidate!=null)?()=>_run(context,controller.saveSelectedZip):null,
+                          icon:const Icon(Icons.save_alt),label:Text(t('comic.saveZip'))),
                       ],
                     ),
                   ],

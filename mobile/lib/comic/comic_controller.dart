@@ -359,6 +359,42 @@ class ComicController extends ChangeNotifier {
     changed('comic.imported');
   }
 
+  final Set<String> _convertingPanels = {};
+  bool convertingPanel(String id) => _convertingPanels.contains(id);
+
+  /// Uses exactly the selected conversion skill/model/mode, not a comic-only
+  /// hidden template. A changed project, input or AI context never gets an old
+  /// response applied; no image request is made by this text operation.
+  Future<void> convertPanelPrompt(ComicPanel panel) async {
+    if (_disposed || queueRunning || _editing || _convertingPanels.contains(panel.id) || !project.panels.contains(panel) || panel.prompt.trim().isEmpty) {
+      throw StateError('Comic panel is unavailable, empty or already running');
+    }
+    final sourceProject=project, expected=revision, input=panel.prompt, mode=app.convertMode;
+    final snapshot=AppSettings.fromJson(app.settings.toJson());
+    final version=snapshot.convertPromptTemplateVersion, edition=snapshot.convertPromptSkillVersion;
+    final template=app.resolvedPromptTemplate('convert',mode,templateVersion:version,skillVersion:edition);
+    String context()=>jsonEncode([app.settings.convertPromptTemplateVersion,app.settings.convertPromptSkillVersion,
+      app.convertMode.value,app.settings.convertApiUrl,app.settings.convertApiModel,
+      app.resolvedPromptTemplate('convert',app.convertMode)]);
+    final requestContext=context();
+    bool current()=>!_disposed && identical(project,sourceProject) && revision==expected && panel.prompt==input && context()==requestContext;
+    _convertingPanels.add(panel.id);notifyListeners();
+    try {
+      final key=await app.storage.getConvertKey()??'';
+      if(!current())throw StateError('Comic conversion context changed before submission');
+      final result=await app.api.convertPrompt(settings:snapshot,apiKey:key,text:input,mode:mode,
+        knownCharacter:false,systemTemplate:template);
+      if(!current())throw StateError('Comic conversion context changed; original panel preserved');
+      if(!result.ok || result.text.trim().isEmpty)throw StateError(result.message);
+      final next=ComicProject.fromJson(project.toJson(),project.globalParams,trustOutputs:true);
+      next.panels.firstWhere((p)=>p.id==panel.id).prompt=result.text;
+      await commitProject(expected,next);
+      changed('comic.convertDone','Converted panel ${panel.index}; ${result.message}');
+    } finally {
+      _convertingPanels.remove(panel.id);if(!_disposed)notifyListeners();
+    }
+  }
+
   Future<void> pickImportFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -375,7 +411,7 @@ class ComicController extends ChangeNotifier {
 
   Future<void> exportProjectJson() => _export(false);
 
-  Future<void> _export(bool zip) async {
+  Future<void> _export(bool zip,{bool shareResult=true}) async {
     if (exporting) throw StateError('导出正在进行，请等待完成');
     final expected = revision;
     assertRevision(expected);
@@ -388,15 +424,15 @@ class ComicController extends ChangeNotifier {
     try {
       final receipt = zip
           ? await assets.exportSelected(snapshot,
-              portableComicProject(snapshot), () => assertRevision(expected))
+              portableComicProject(snapshot), () => assertRevision(expected),shareResult:shareResult)
           : await assets.exportProject(
               snapshot, () => assertRevision(expected));
       lastExport = receipt;
-      if (receipt['shared'] != true) {
+      if (shareResult && receipt['shared'] != true) {
         throw StateError('文件已保存，系统分享未确认完成：${receipt['filePath']}');
       }
-      statusKey = zip ? 'comic.zipShared' : 'comic.jsonShared';
-      statusDetail = '';
+      statusKey = !shareResult?'comic.zipSaved':zip ? 'comic.zipShared' : 'comic.jsonShared';
+      statusDetail = shareResult?'':'${_t('comic.zipSaved')}: ${receipt['filePath']}';
     } catch (error) {
       statusDetail = error.toString();
       rethrow;
@@ -1086,6 +1122,7 @@ class ComicController extends ChangeNotifier {
   }
 
   Future<void> exportSelectedZip() => _export(true);
+  Future<void> saveSelectedZip() => _export(true,shareResult:false);
 
   @override
   void dispose() {

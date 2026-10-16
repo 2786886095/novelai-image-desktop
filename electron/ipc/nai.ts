@@ -18,6 +18,8 @@ import {bindAgentImageProvider} from './agent-image-provider';
 import {authorizeAgentComicRequest} from './comic-run-authorization';
 import {readComicImage,readComicReferences,buildComicSelectedZip,writeComicZip} from './comic-assets';
 import {reverseTemplateProtocol} from "../../src/reverse-template";
+import {normalizePromptSkillVersion,selectPromptSkillTemplate,supportsPromptSkillModel,renderPromptSkillTemplate} from '../../src/prompt-skill';
+import {parsePromptSkillV2Response,PROMPT_SKILL_V2_RUNTIME,promptSkillKnownCharacterInstruction} from '../../src/prompt-skill-audit';
 import {classifyAiPromptResponse,visionPromptRequestError,redactAiCredentials} from "./ai-prompt-response";
 import { planUpscale } from "../../src/upscale-plan";
 import {matchingVibeEncoding, validateVibeModel} from "../../src/vibe-file";
@@ -2794,6 +2796,7 @@ async function callVisionApi(
   label = "AI 反推",
   record = true,
   jsonRequired = false,
+  retryEmpty = true,
 ): Promise<{ ok: boolean; content?: string; message: string }> {
   const settings = getSettings();
   const { visionApiUrl, visionApiKey, visionApiModel } = settings;
@@ -2842,7 +2845,7 @@ async function callVisionApi(
     let result = classifyAiPromptResponse(resp.data);
     // Reasoning models burn the whole budget on hidden reasoning → empty content
     // with finish_reason "length". Retry once with a much larger budget.
-    if (!result.ok && result.retryableEmptyLength) {
+    if (retryEmpty && !result.ok && result.retryableEmptyLength) {
       resp = await post(Math.max(maxTokens * 8, 32000));
       result = classifyAiPromptResponse(resp.data);
     }
@@ -3325,11 +3328,13 @@ export async function reversePromptImage(
   hint: string = "",
   knownCharacter = false,
   templateVersion?: "v4.5" | "v5",
+  skillVersion?: "1.0.0" | "2.0.0",
 ): Promise<{
   ok: boolean;
   prompt?: string;
   variants?: { namePrompt: string; featurePrompt: string };
   message: string;
+  warnings?: string[];
 }> {
   const settings = getSettings();
   const safeScope = (
@@ -3351,6 +3356,20 @@ export async function reversePromptImage(
     .filter(Boolean)
     .join("\n");
   const safeTemplateVersion = (templateVersion ?? settings.reversePromptTemplateVersion) === "v4.5" ? "v4.5" : "v5";
+  const edition=normalizePromptSkillVersion(skillVersion??settings.reversePromptSkillVersion);
+  if(edition==='2.0.0') {
+    if(!supportsPromptSkillModel(edition,safeTemplateVersion))return {ok:false,message:'技能模板2.0.0仅支持NovelAI V5 Full；V4.5请选1.0.0，已保留原提示词'};
+    const template=selectPromptSkillTemplate({edition,targetModel:safeTemplateVersion,task:'reverse',mode,legacyTemplate:'',overrides:settings.reversePromptTemplatesV2});
+    const system=injectDshImageAiSystemPrompt({task:'reverse',enabled:settings.reverseConvertDshEnabled,mode:settings.reverseConvertDshMode,
+      sharedPreset:selectedImageTaskPromptPreset(settings.reverseConvertPromptPresets,settings.reverseSystemPromptPresetId??settings.reverseConvertPromptPresetId,'reverse'),
+      systemPrompt:[renderPromptSkillTemplate(template,'<provided in the user message>',true),PROMPT_SKILL_V2_RUNTIME,promptSkillKnownCharacterInstruction(knownCharacter)].filter(Boolean).join('\n\n')});
+    const image=await prepareVisionImage(imageBase64);
+    const reply=await callVisionApi(system,[{type:'image_url',image_url:{url:`data:${image.mime};base64,${image.base64}`,detail:'high'}},{type:'text',text:userScopeText+'\n请依据实际上传图片与所选2.0.0模板输出。'}],7000,`AI反推 · ${safeTemplateVersion} · 技能${edition} · ${mode}`,true,knownCharacter,false);
+    if(!reply.ok)return {ok:false,message:'反推失败，已保留原提示词：'+reply.message};
+    try{const parsed=parsePromptSkillV2Response(reply.content??'',mode,knownCharacter);return {ok:true,...parsed,message:'反推完成：仅格式与可计数单元检查，来源事实需人工复核'};}
+    catch(error){return {ok:false,message:'反推未通过技能2.0.0检查，已保留原提示词：'+(error instanceof Error?error.message:String(error))};}
+  }
+
   const builtInTemplates =
     safeTemplateVersion === "v4.5"
       ? safeScope === "full"
@@ -4238,6 +4257,7 @@ export async function convertPromptText(
   knownCharacter = false,
   templateVersion: "v4.5" | "v5" = "v5",
   assistant?: PromptEditRequest,
+  skillVersion?: "1.0.0" | "2.0.0",
 ): Promise<{
   ok: boolean;
   result?: string;
@@ -4247,6 +4267,22 @@ export async function convertPromptText(
   message: string;
 }> {
   const settings = getSettings();
+  const edition=normalizePromptSkillVersion(skillVersion??(assistant?settings.promptAssistantSkillVersion:settings.convertPromptSkillVersion));
+  if(edition==='2.0.0') {
+    const targetModel=templateVersion==='v4.5'?'v4.5':'v5';
+    if(!supportsPromptSkillModel(edition,targetModel))return {ok:false,message:'技能模板2.0.0仅支持NovelAI V5 Full；V4.5请选1.0.0，已保留原提示词'};
+    let prepared:ReturnType<typeof preparePromptAssistance>|undefined;
+    if(assistant){try{prepared=preparePromptAssistance(chineseText,assistant,settings,edition);}catch(error){return {ok:false,message:error instanceof Error?error.message:String(error)};}knownCharacter=false;}
+    const template=selectPromptSkillTemplate({edition,targetModel,task:'convert',mode,legacyTemplate:'',overrides:settings.convertPromptTemplatesV2});
+    const system=injectDshImageAiSystemPrompt({task:'convert',enabled:settings.reverseConvertDshEnabled,mode:settings.reverseConvertDshMode,
+      sharedPreset:selectedImageTaskPromptPreset(settings.reverseConvertPromptPresets,settings.convertSystemPromptPresetId??settings.reverseConvertPromptPresetId,'convert'),
+      systemPrompt:[renderPromptSkillTemplate(template,'<provided in the user message>'),prepared?.systemSuffix,PROMPT_SKILL_V2_RUNTIME,promptSkillKnownCharacterInstruction(knownCharacter)].filter(Boolean).join('\n\n')});
+    const reply=await callConvertApi(system,prepared?.userText??chineseText,7000,`${assistant?'提示词'+(assistant.kind==='optimize'?'优化':'助手'):'文字转换'} · ${targetModel} · 技能${edition} · ${mode}`,true,false,knownCharacter);
+    if(!reply.ok)return {ok:false,message:'转换失败，已保留原提示词：'+reply.message};
+    try{const parsed=parsePromptSkillV2Response(reply.content??'',mode,knownCharacter);return {ok:true,result:parsed.prompt,variants:parsed.variants,warnings:parsed.warnings,message:'转换完成：仅格式与可计数单元检查，来源事实需人工复核'};}
+    catch(error){return {ok:false,message:'提示词未通过技能2.0.0检查，已保留原提示词，未提交生图：'+(error instanceof Error?error.message:String(error))};}
+  }
+
   let assistance: ReturnType<typeof preparePromptAssistance> | undefined;
   if (assistant !== undefined) {
     try { assistance=preparePromptAssistance(chineseText,assistant,settings); }

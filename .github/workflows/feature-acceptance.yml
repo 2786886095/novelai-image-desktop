@@ -79,7 +79,7 @@ jobs:
           sudo chown root:root node_modules/electron/dist/chrome-sandbox
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - name: Check bounded native command and fixture cleanup
-        run: node --test scripts/feature-acceptance/bounded-native-command.test.mjs scripts/feature-acceptance/generation-fixture-cleanup.test.mjs
+        run: node --test scripts/feature-acceptance/bounded-native-command.test.mjs scripts/feature-acceptance/generation-fixture-cleanup.test.mjs scripts/feature-acceptance/android-native-preflight.test.mjs scripts/feature-acceptance/desktop-native-diagnostics.test.mjs scripts/feature-acceptance/mobile-native-predecessor.test.mjs scripts/feature-acceptance/desktop-native-expansion.test.mjs
       - name: Fetch and verify the pinned Windows-only component seed
         if: runner.os == 'Windows'
         env:
@@ -106,8 +106,10 @@ jobs:
           printf '%s' "$keyring_password" | timeout --signal=TERM --kill-after=5s 15s gnome-keyring-daemon --unlock --components=secrets
           unset keyring_password
           failed=0
-          for pair in desktop-native:desktop-acceptance desktop-offline-native:desktop-offline-acceptance desktop-ai-native:desktop-ai-acceptance desktop-generation-native:desktop-generation-acceptance desktop-library-native:desktop-library-acceptance desktop-system-native:desktop-system-acceptance desktop-browser-native:desktop-browser-acceptance desktop-advanced-native:desktop-advanced-acceptance; do
-            if [ "$RUNNER_OS" = Windows ] && [ "${pair%%:*}" = desktop-system-native ]; then
+          for pair in desktop-native:desktop-acceptance desktop-offline-native:desktop-offline-acceptance desktop-ai-native:desktop-ai-acceptance desktop-generation-native:desktop-generation-acceptance desktop-library-native:desktop-library-acceptance desktop-system-native:desktop-system-acceptance desktop-browser-native:desktop-browser-acceptance desktop-advanced-native:desktop-advanced-acceptance desktop-tools-gallery-native:desktop-tools-gallery-acceptance; do
+            if [ "${pair%%:*}" = desktop-tools-gallery-native ]; then
+                node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" "$RUNNER_TEMP/desktop-generation-acceptance" || failed=1
+              elif [ "$RUNNER_OS" = Windows ] && [ "${pair%%:*}" = desktop-system-native ]; then
                 node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" .tmp/harness-release240 || failed=1
               else
                 node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" || failed=1
@@ -117,8 +119,10 @@ jobs:
           KEYRING_SESSION
           else
             failed=0
-            for pair in desktop-native:desktop-acceptance desktop-offline-native:desktop-offline-acceptance desktop-ai-native:desktop-ai-acceptance desktop-generation-native:desktop-generation-acceptance desktop-library-native:desktop-library-acceptance desktop-system-native:desktop-system-acceptance desktop-browser-native:desktop-browser-acceptance desktop-advanced-native:desktop-advanced-acceptance; do
-              if [ "$RUNNER_OS" = Windows ] && [ "${pair%%:*}" = desktop-system-native ]; then
+            for pair in desktop-native:desktop-acceptance desktop-offline-native:desktop-offline-acceptance desktop-ai-native:desktop-ai-acceptance desktop-generation-native:desktop-generation-acceptance desktop-library-native:desktop-library-acceptance desktop-system-native:desktop-system-acceptance desktop-browser-native:desktop-browser-acceptance desktop-advanced-native:desktop-advanced-acceptance desktop-tools-gallery-native:desktop-tools-gallery-acceptance; do
+              if [ "${pair%%:*}" = desktop-tools-gallery-native ]; then
+                node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" "$RUNNER_TEMP/desktop-generation-acceptance" || failed=1
+              elif [ "$RUNNER_OS" = Windows ] && [ "${pair%%:*}" = desktop-system-native ]; then
                 node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" .tmp/harness-release240 || failed=1
               else
                 node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" || failed=1
@@ -156,6 +160,8 @@ jobs:
             ${{ runner.temp }}/desktop-generation-acceptance/*-scenarios.json
             ${{ runner.temp }}/desktop-generation-acceptance/*/command-ledger.json
             ${{ runner.temp }}/desktop-generation-acceptance/*/*REPORT.json
+            ${{ runner.temp }}/desktop-generation-acceptance/*/BOOTSTRAP_PHASES.jsonl
+            ${{ runner.temp }}/desktop-generation-acceptance/*/MAC_NATIVE_STALL*
             ${{ runner.temp }}/desktop-generation-acceptance/*/source-before/**
             ${{ runner.temp }}/desktop-generation-acceptance/*/source-after/**
             ${{ runner.temp }}/desktop-library-acceptance/*-receipt.json
@@ -168,6 +174,8 @@ jobs:
             ${{ runner.temp }}/desktop-system-acceptance/*-scenarios.json
             ${{ runner.temp }}/desktop-system-acceptance/*/command-ledger.json
             ${{ runner.temp }}/desktop-system-acceptance/*/*REPORT.json
+            ${{ runner.temp }}/desktop-system-acceptance/*/BOOTSTRAP_PHASES.jsonl
+            ${{ runner.temp }}/desktop-system-acceptance/*/MAC_NATIVE_STALL*
             ${{ runner.temp }}/desktop-system-acceptance/*/source-before/**
             ${{ runner.temp }}/desktop-system-acceptance/*/source-after/**
             ${{ runner.temp }}/desktop-browser-acceptance/*-receipt.json
@@ -182,9 +190,18 @@ jobs:
             ${{ runner.temp }}/desktop-advanced-acceptance/*/*REPORT.json
             ${{ runner.temp }}/desktop-advanced-acceptance/*/source-before/**
             ${{ runner.temp }}/desktop-advanced-acceptance/*/source-after/**
+            ${{ runner.temp }}/desktop-tools-gallery-acceptance/*-receipt.json
+            ${{ runner.temp }}/desktop-tools-gallery-acceptance/*/command-ledger.json
+            ${{ runner.temp }}/desktop-tools-gallery-acceptance/*/*REPORT.json
+            ${{ runner.temp }}/desktop-tools-gallery-acceptance/*/source-before/**
+            ${{ runner.temp }}/desktop-tools-gallery-acceptance/*/source-after/**
           if-no-files-found: error
 
   android-components:
+    strategy:
+      fail-fast: false
+      matrix:
+        entry-group: [core, metadata, library, generation, text, workflows, ui, os]
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -290,15 +307,19 @@ jobs:
           disable-linux-hw-accel: false
           emulator-options: -no-window -no-audio -no-snapshot -gpu swiftshader_indirect -no-boot-anim -accel on
           script: |
-            node scripts/feature-acceptance/run-ci-mobile-entries.mjs android emulator-5554
+            node scripts/feature-acceptance/run-ci-mobile-entries.mjs android emulator-5554 "${{ matrix.entry-group }}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: native-components-android-${{ github.sha }}
+          name: native-components-android-${{ matrix.entry-group }}-${{ github.sha }}
           path: ${{ runner.temp }}/feature-native-android/
           if-no-files-found: error
 
   ios-components:
+    strategy:
+      fail-fast: false
+      matrix:
+        entry-group: [core, metadata, library, generation, text, workflows, ui, os]
     runs-on: macos-14
     timeout-minutes: 75
     steps:
@@ -366,11 +387,11 @@ jobs:
         run: |
           node scripts/feature-acceptance/create-disposable-ios-simulator.mjs
       - name: Run independently counted component and client-scenario entries
-        run: node scripts/feature-acceptance/run-ci-mobile-entries.mjs ios "$FEATURE_SIMULATOR"
+        run: node scripts/feature-acceptance/run-ci-mobile-entries.mjs ios "$FEATURE_SIMULATOR" "${{ matrix.entry-group }}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: native-components-ios-${{ github.sha }}
+          name: native-components-ios-${{ matrix.entry-group }}-${{ github.sha }}
           path: ${{ runner.temp }}/feature-native-ios/
           if-no-files-found: error
       - name: Stop only the newly created test simulator
