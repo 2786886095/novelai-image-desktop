@@ -10,13 +10,15 @@ const {pngWithComment}=require('../../tests/image-clipboard-fixture.cjs');
 const fixture=vi.hoisted(()=>({spawn:vi.fn(),readBuffer:vi.fn(),readImage:vi.fn(),root:'',intended:Buffer.alloc(0)}));
 vi.mock('node:child_process',()=>({spawn:fixture.spawn}));
 vi.mock('electron',()=>({app:{getPath:()=>fixture.root},clipboard:{readBuffer:fixture.readBuffer,readImage:fixture.readImage,writeBuffer:vi.fn(),availableFormats:()=>[]}}));
+const originalPlatform=Object.getOwnPropertyDescriptor(process,'platform')!;
 let child:any;const secret='PRIVATE_PATH_PROMPT_ACCOUNT_TOKEN_DO_NOT_LOG';
 beforeEach(async()=>{
+ Object.defineProperty(process,'platform',{value:'win32'});
  vi.resetAllMocks();fixture.root=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'copy-diag-fixture-')));
  child=Object.assign(new EventEmitter(),{stderr:new EventEmitter(),stdin:Object.assign(new EventEmitter(),{end:vi.fn((data:string)=>fixture.intended=Buffer.from(data,'base64'))}),kill:vi.fn()});
  fixture.spawn.mockReturnValue(child);fixture.readBuffer.mockImplementation(()=>fixture.intended);fixture.readImage.mockReturnValue({isEmpty:()=>false});
 });
-afterEach(async()=>{vi.useRealTimers();await fs.rm(fixture.root,{recursive:true,force:true});});
+afterEach(async()=>{vi.useRealTimers();Object.defineProperty(process,'platform',originalPlatform);await fs.rm(fixture.root,{recursive:true,force:true});});
 async function copy({diagnostics=true,keep=true,stderr='',event='close',exit=1,alter=false,empty=false}:any={}){
  const original=pngWithComment();const file=path.join(fixture.root,'private-source.png');await fs.writeFile(file,original);
  const pending=copyImageWithMetadata(toLocalMediaUrl(file),keep,diagnostics);

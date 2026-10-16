@@ -38,7 +38,7 @@ Future<void> _run() async {
     await _random(c, tls);
     await _navigation(c, tls);
     require(tls.errors.isEmpty, 'Native TLS fixture failed: ${tls.errors}');
-    suite.pending('tools',
+    coverageGap('tools',
         'Not certified by mounting tool routes. Full six exposed tool outputs/error/cancel flows require separate operational scenarios.');
   } finally {
     await nativeUiMount(c.app, const SizedBox.shrink());
@@ -653,3 +653,12 @@ Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
     'savedOrder': saved
   });
 }
+
+// Diagnostic only: gaps remain explicit but never occupy the reserved Agent
+// capability namespace, create CHECKs, or contribute acceptance coverage.
+// ignore: avoid_print
+void coverageGap(String feature, String reason) => print(
+    'FEATURE_NATIVE_COVERAGE_GAP:${jsonEncode({'sourceSha':sourceSha,
+      'profileSha':profileSha,'platform':Platform.operatingSystem,
+      'testEntry':testEntry,'feature':feature,'status':'not-certified',
+      'kind':'diagnostic','reason':reason,'paidCalls':0})}');

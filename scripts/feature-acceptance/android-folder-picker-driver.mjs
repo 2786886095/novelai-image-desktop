@@ -31,6 +31,35 @@ export function folderPacket(logs){
  if(unique.length>1)throw Error('Multiple distinct folder requests');
  return unique.length?JSON.parse(unique[0]):null;
 }
+// Android 14 Settings can expose its permission switch as a Compose row.
+// Only the exact labelled, checkable parent is actionable: proximity to a
+// flattened label or an unrelated checkbox never establishes its identity.
+function composePermissionRow(xml){
+ const stack=[],rows=[];
+ for(const [raw] of xml.matchAll(/<\/?node\b[^>]*>/g)){
+  if(raw.startsWith('</')){if(!stack.length)throw Error('Unbalanced permission hierarchy');stack.pop();continue;}
+  const attrs=Object.fromEntries([...raw.matchAll(/([\w-]+)="([^"]*)"/g)].map(([,k,v])=>[k,decode(v)]));
+  const row={attrs,parent:stack.at(-1),children:[]};
+  if(row.parent)row.parent.children.push(row);
+  rows.push(row);if(!raw.endsWith('/>'))stack.push(row);
+ }
+ if(stack.length)throw Error('Unbalanced permission hierarchy');
+ const isLabel=n=>n.attrs.package==='com.android.settings'&&n.attrs.class==='android.widget.TextView'&&n.attrs.text==='Allow access to manage all files';
+ const labels=rows.filter(isLabel),candidates=rows.filter(n=>n.children.some(isLabel));
+ const inCompose=n=>{for(let p=n.parent;p;p=p.parent)if(p.attrs.package==='com.android.settings'&&p.attrs.class==='androidx.compose.ui.platform.ComposeView')return true;return false;};
+ const matching=candidates.filter(n=>n.attrs.package==='com.android.settings'&&n.attrs.class==='android.view.View'&&inCompose(n));
+ if(!matching.length)return null;
+ if(matching.length!==1||labels.length!==1)throw Error('Ambiguous Compose permission row');
+ const row=matching[0],n=row.attrs,label=row.children.find(isLabel).attrs;
+ if(n['resource-id']!==''||n.checkable!=='true'||n.clickable!=='true'||n.enabled!=='true'||!['false','true'].includes(n.checked)||
+    label.enabled!=='true'||label.checkable!=='false'||label.clickable!=='false')throw Error('Unrecognized Compose permission row state');
+ // Validate both rectangles before using the parent centre, and require the
+ // exact descendant label to be geometrically contained by that same row.
+ point(n);point(label);
+ const rect=b=>b.match(/\d+/g).map(Number),a=rect(n.bounds),b=rect(label.bounds);
+ if(b[0]<a[0]||b[1]<a[1]||b[2]>a[2]||b[3]>a[3])throw Error('Compose permission label is outside its parent');
+ return n;
+}
 export function folderUiAction(xml,{folderName,appId,deviceModel},state){
  const nodes=hierarchyNodes(xml),text=nodes.map(n=>n.text||'').join('\n');
  if(/isn['’]t responding|is not responding|keeps stopping/i.test(text))throw Error('Unhealthy OS/application dialog during folder selection');
@@ -70,7 +99,7 @@ export function folderUiAction(xml,{folderName,appId,deviceModel},state){
  if(nodes.some(n=>n.package==='com.android.settings')){
   if(!state.useTapped)throw Error('Permission settings appeared before real folder selection');
   if(!/Allow access to manage all files/i.test(text))throw Error('Unrecognized Android settings page');
-  const sw=find(n=>n.package==='com.android.settings'&&['android:id/switch_widget','com.android.settings:id/switch_widget'].includes(n['resource-id'])&&n.class==='android.widget.Switch');
+  const sw=find(n=>n.package==='com.android.settings'&&['android:id/switch_widget','com.android.settings:id/switch_widget'].includes(n['resource-id'])&&n.class==='android.widget.Switch')||composePermissionRow(xml);
   if(!sw)return {kind:'wait-permission-switch'};
   if(sw.checked==='false'){state.permissionTapped=true;return tap('enable-observed-all-files-permission',sw);}
   if(sw.checked!=='true')throw Error('Unknown permission switch state');

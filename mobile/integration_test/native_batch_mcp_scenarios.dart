@@ -13,6 +13,8 @@ import 'package:novelai_mobile/screens/external_mcp_settings.dart';
 import 'package:novelai_mobile/screens/tools_screen.dart';
 import 'package:novelai_mobile/services/background_queue_service.dart';
 import 'package:novelai_mobile/services/storage.dart';
+import 'package:novelai_mobile/agent/external_mcp_server.dart';
+import 'package:novelai_mobile/i18n/platform_feature_text.dart';
 import 'native_scenario_support.dart';
 
 final suite = NativeScenarios(7);
@@ -25,6 +27,73 @@ Future<void> waitUntil(bool Function() ready, String message) async {
     require(DateTime.now().isBefore(until), message);
     await Future<void>.delayed(const Duration(milliseconds: 30));
   }
+}
+
+// Fixture-only ownership: a pending HTTP future is observed immediately, so a
+// failed UI assertion cannot produce a later unhandled force-close error.
+class NativeMcpPendingRpc {
+  final Future<({Map<String,dynamic>? body,Object? error,StackTrace? stack})> outcome;
+  bool consumed=false;
+  NativeMcpPendingRpc(Future<Map<String,dynamic>> request):outcome=request.then(
+    (body)=>(body:body,error:null,stack:null),
+    onError:(Object error,StackTrace stack)=>(body:null,error:error,stack:stack));
+  Future<Map<String,dynamic>> reply() async {
+    consumed=true;
+    final value=await bounded(outcome);
+    if(value.error!=null)Error.throwWithStackTrace(value.error!,value.stack!);
+    return value.body!;
+  }
+}
+
+Future<void> closeNativeMcpRequests(List<NativeMcpPendingRpc> requests,
+    {required void Function() closeClient,required Future<void> Function() stopServer,
+    Object? primaryError}) async {
+  Object? cleanupError;StackTrace? cleanupStack;
+  void record(Object error,StackTrace stack){cleanupError??=error;cleanupStack??=stack;}
+  try{closeClient();}catch(error,stack){record(error,stack);}
+  try{await bounded(stopServer());}catch(error,stack){record(error,stack);}
+  for(final request in requests){
+    try{
+      final value=await bounded(request.outcome);
+      if(!request.consumed && value.error!=null){
+        if(primaryError==null)record(value.error!,value.stack!);
+        else print('MCP_FIXTURE_CLEANUP_OBSERVED:${value.error.runtimeType}');
+      }
+    }catch(error,stack){record(error,stack);}
+  }
+  if(cleanupError!=null){
+    if(primaryError==null)Error.throwWithStackTrace(cleanupError!,cleanupStack!);
+    print('MCP_FIXTURE_CLEANUP_SECONDARY:${cleanupError.runtimeType}');
+  }
+}
+
+Future<void> decideNativeMcpApproval(ExternalMcpServer mcp,String language,bool allow,
+    {Future<void> Function()? renderFrame}) async {
+  await waitUntil(()=>mcp.approvals.isNotEmpty,'Native MCP approval did not render');
+  require(mcp.approvals.length==1,'Expected one owned native MCP approval');
+  final request=Map<String,dynamic>.from(mcp.approvals.single);
+  final identity=jsonEncode([request['session'],request['id'],request['title'],request['parameters']]);
+  await (renderFrame??frame)();
+  require(mcp.approvals.length==1 && jsonEncode([mcp.approvals.single['session'],mcp.approvals.single['id'],mcp.approvals.single['title'],mcp.approvals.single['parameters']])==identity,
+      'Native MCP approval changed before UI decision');
+  final label=platformFeatureText(language,allow?'approve':'cancel');
+  final parameters=const JsonEncoder.withIndent('  ').convert(request['parameters']);
+  final choices=elements((w)=>(w is FilledButton || w is TextButton) &&
+    ((w is FilledButton?w.child:(w as TextButton).child) is Text) &&
+    ((w is FilledButton?w.child:(w as TextButton).child) as Text).data==label).where((element){
+    Element? card;
+    element.visitAncestorElements((ancestor){if(ancestor.widget is Card){card=ancestor;return false;}return true;});
+    if(card==null)return false;
+    var title=false,summary=false;
+    void walk(Element e){final w=e.widget;if(w is Text && w.data==request['title'])title=true;
+      if(w is SelectableText && w.data==parameters)summary=true;e.visitChildren(walk);}
+    walk(card!);return title&&summary;
+  }).toList();
+  require(choices.length==1,'Actual native MCP $label button missing or ambiguous for owned request');
+  final w=choices.single.widget;
+  final action=w is FilledButton?w.onPressed:(w as TextButton).onPressed;
+  require(action!=null,'Actual native MCP $label button is disabled');
+  action!(); // Invoke only the real production row button, never server.decide.
 }
 
 Future<void> _run() async {
@@ -270,25 +339,12 @@ Future<void> _run() async {
         Map<String, dynamic>.from(
             jsonDecode(response['result']['content'][0]['text'] as String)
                 as Map);
-    Future<void> decide(bool allow) async {
-      await waitUntil(
-          () => mcp.approvals.isNotEmpty, 'Native MCP approval did not render');
-      await frame();
-      final label = allow ? 'Approve' : 'Cancel';
-      final choices = elements((w) =>
-          (w is FilledButton || w is TextButton) &&
-          ((w is FilledButton ? w.child : (w as TextButton).child) is Text) &&
-          ((w is FilledButton ? w.child : (w as TextButton).child) as Text)
-                  .data ==
-              label);
-      require(choices.isNotEmpty, 'Actual native MCP $label button missing');
-      final w = choices.last.widget;
-      if (w is FilledButton) {
-        w.onPressed!();
-      } else {
-        (w as TextButton).onPressed!();
-      }
+    final pendingRequests=<NativeMcpPendingRpc>[];
+    NativeMcpPendingRpc observe(Future<Map<String,dynamic>> request){
+      final owned=NativeMcpPendingRpc(request);pendingRequests.add(owned);return owned;
     }
+    Future<void> decide(bool allow)=>decideNativeMcpApproval(mcp,app.settings.language,allow);
+    Object? mcpPrimaryError;
 
     try {
       final initialized =
@@ -314,33 +370,33 @@ Future<void> _run() async {
         'registeredTools': names.length,
         'productionGenerationStateRead': true
       });
-      final pendingImport = tool('import_image', {'path': source.path});
+      final pendingImport = observe(tool('import_image', {'path': source.path}));
       await decide(true);
-      final imported = payload(await bounded(pendingImport)),
+      final imported = payload(await pendingImport.reply()),
           id = imported['attachmentId'] as String;
       require(
           imported['filePath'] != source.path &&
               digest(await File(imported['filePath']).readAsBytes()) ==
                   sourceHash,
           'Native MCP import did not copy exact source');
-      final pendingMask = tool('make_mask', {
+      final pendingMask = observe(tool('make_mask', {
         'image': id,
         'units': 'fraction',
         'shapes': [
           {'x': .25, 'y': .25, 'width': .5, 'height': .5, 'shape': 'rect'}
         ]
-      });
+      }));
       await decide(true);
-      final mask = payload(await bounded(pendingMask));
+      final mask = payload(await pendingMask.reply());
       require(
           (mask['coverage'] as num) > .2 &&
               (mask['coverage'] as num) < .3 &&
               await File(mask['maskPath']).exists(),
           'MCP actual mask operation failed');
-      final pendingApply = tool('apply_to_workbench', {'image': id});
+      final pendingApply = observe(tool('apply_to_workbench', {'image': id}));
       await decide(true);
       require(
-          (await bounded(pendingApply))['result']['isError'] != true &&
+          (await pendingApply.reply())['result']['isError'] != true &&
               app.workbenchImage?.filePath == imported['filePath'],
           'Native MCP apply operation failed');
       suite.check('external-mcp-server', 'actual-local-tool-request', {
@@ -351,10 +407,10 @@ Future<void> _run() async {
         'sourceUntouched': digest(await source.readAsBytes()) == sourceHash
       });
       final beforeDenied = app.workbenchImage?.filePath,
-          denied = tool('apply_to_workbench', {'image': id});
+          denied = observe(tool('apply_to_workbench', {'image': id}));
       await decide(false);
       require(
-          (await denied)['result']['isError'] == true &&
+          (await denied.reply())['result']['isError'] == true &&
               app.workbenchImage?.filePath == beforeDenied,
           'Denied MCP operation mutated state');
       final badAuth = await rpc('tools/list', token: 'SYNTHETIC_WRONG'),
@@ -375,9 +431,12 @@ Future<void> _run() async {
         'zeroHumanBudgetNoImageRequest': true,
         'noSecretsInReceipt': true
       });
+    } catch(error) {
+      mcpPrimaryError=error;
+      rethrow;
     } finally {
-      client.close(force: true);
-      await app.externalMcp.toggle();
+      await closeNativeMcpRequests(pendingRequests,closeClient:()=>client.close(force:true),
+        stopServer:()=>app.externalMcp.toggle(),primaryError:mcpPrimaryError);
     }
 
     // Actual director cancellation affordance and scoped transport, plus invalid

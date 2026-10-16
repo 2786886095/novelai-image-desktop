@@ -134,9 +134,9 @@ Future<void> runNativeOsScenarios(NativeScenarios suite) async {
     require(failed.error=='network'&&!failed.hasUpdate,'Production update network failure was not reported');
     require(tls.errors.isEmpty,'TLS fixture had a request assertion failure');
     suite.check('updates','version-check-platform-links',{'productionCheckAppUpdate':true,'actualNativeTlsAndHttpConnect':true,'nativePlatform':Platform.operatingSystem,'currentVersion':info.currentVersion,'fixtureVersion':info.latestVersion,'releaseUrl':info.releaseUrl,'androidIntegrityMetadata':Platform.isAndroid,'readOnlyRequests':tls.requests.length,'tunnelHosts':tls.connections.toSet().toList(),'fixtureCaSha256':tls.certificateDigest,'normalHostnameVerificationEnabled':true,'upstreamNetworkFailureVisible':true,'credentialOrBodySent':false,'installerExecuted':false});
-    suite.pending('output-management','folder-choice-history-link needs an actual native OS picker; no path substitution was used');
-    suite.pending('metadata-import','Full online official runtime/default local bytes/format/privacy scenario remains a separate native journey');
-    if(Platform.isIOS)suite.pending('updates','iOS has release-link check but no production Android APK download/install bridge; Android updater calls are not promoted to iOS parity');
+    coverageGap('output-management','folder-choice-history-link needs an actual native OS picker; no path substitution was used');
+    coverageGap('metadata-import','Full online official runtime/default local bytes/format/privacy scenario remains a separate native journey');
+    if(Platform.isIOS)coverageGap('updates','iOS has release-link check but no production Android APK download/install bridge; Android updater calls are not promoted to iOS parity');
   } finally {await tls?.close();await c.close();}
 }
 
@@ -147,3 +147,12 @@ Future<void> _mountTypography(AppState app,TextScaler scaler) async {
       child:const Scaffold(body:SingleChildScrollView(padding:EdgeInsets.all(8),child:TypographySettings())))))))));
   await frame();await frame();
 }
+
+// Diagnostic only: gaps remain explicit but never occupy the reserved Agent
+// capability namespace, create CHECKs, or contribute acceptance coverage.
+// ignore: avoid_print
+void coverageGap(String feature, String reason) => print(
+    'FEATURE_NATIVE_COVERAGE_GAP:${jsonEncode({'sourceSha':sourceSha,
+      'profileSha':profileSha,'platform':Platform.operatingSystem,
+      'testEntry':testEntry,'feature':feature,'status':'not-certified',
+      'kind':'diagnostic','reason':reason,'paidCalls':0})}');

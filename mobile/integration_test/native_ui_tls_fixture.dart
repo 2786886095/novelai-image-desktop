@@ -111,7 +111,10 @@ class NativeUiTlsFixture {
           request.response.statusCode = 503;
         } else {
           request.response.headers.contentType = ContentType.json;
-          request.response.write(jsonEncode([
+          request.response.write(jsonEncode(
+              (int.tryParse(request.uri.queryParameters['page'] ?? '1') ?? 1) > 1
+                  ? []
+                  : [
             {'id': 1, 'name': 'native_artist_a', 'post_count': 100},
             {'id': 2, 'name': 'native_artist_b', 'post_count': 80},
             {

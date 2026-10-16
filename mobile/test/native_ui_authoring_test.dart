@@ -136,7 +136,7 @@ void main() {
       'navigation/return-edit-no-lost-state',
       'navigation/ordering-persist-narrow-window'
     ]);
-    expect(source, contains("suite.pending('tools'"));
+    expect(source, contains("coverageGap('tools'"));
     expect(source, isNot(contains("suite.check('tools'")));
   });
 }
