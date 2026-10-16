@@ -1,13 +1,15 @@
+import {mobileNativeEntries,isMobileScenarioEntry} from './mobile-entry-specs.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {createEntryWorkspace,captureSourceState} from './mobile-entry-workspace.mjs';
+import {buildMobileScenarioReceipt} from './mobile-scenario-receipt.mjs';
 const platform=process.argv[2],device=process.argv[3];
 if(process.env.GITHUB_ACTIONS!=='true'||!['android','ios'].includes(platform)||!device||!process.env.RUNNER_TEMP)throw Error('Fresh CI mobile target required.');
 const root=path.join(process.env.RUNNER_TEMP,`feature-native-${platform}`);fs.mkdirSync(root,{recursive:true});
 const commands=[],entries=[];let failed=false;
 // Independent CI policy, never inferred from an application's DONE self-report.
-const expectedChecks={core19:19,metadata_favorites16:16,queue_lifecycle4:4};
+const expectedChecks=Object.fromEntries(Object.entries(mobileNativeEntries).map(([id,spec])=>[id,spec.expectedChecks]));
 function run(sourceRoot,args,timeout=2100000){
  const argv=[process.execPath,...args];const r=spawnSync(argv[0],argv.slice(1),{cwd:sourceRoot,encoding:'utf8',timeout,maxBuffer:100*1024*1024,env:{...process.env,STUDIO_NODE_BINARY:process.execPath}});
  const row={command:argv,cwd:sourceRoot,stdout:r.stdout??'',stderr:r.stderr??'',exitStatus:r.status,signal:r.signal,error:r.error?.message??null};commands.push(row);process.stdout.write(row.stdout);process.stderr.write(row.stderr);return r.status===0&&!r.error;
@@ -16,7 +18,7 @@ const sha=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8'});commands.push(
 if(sha.status!==0||sha.stdout.trim()!==process.env.GITHUB_SHA)throw Error('CI checkout identity mismatch.');
 const assets=path.join(root,'official-assets');
 const save=()=>fs.writeFileSync(path.join(root,'CI_COMPONENT_COMMANDS.json'),JSON.stringify({sourceSha:sha.stdout.trim(),platform,device,entries,commands,exitStatus:failed?1:0,full195Certified:false,completeFeatureRowsCertified:0},null,2)+'\n');
-for(const entry of ['core19','metadata_favorites16','queue_lifecycle4']){
+for(const entry of Object.keys(mobileNativeEntries)){
  const component={entry,expectedChecks:expectedChecks[entry],status:'failed',sourceQualified:false,full195Certified:false,scope:'bounded actual target-platform components only; not entire feature rows'};entries.push(component);
  let workspace;
  try {
@@ -46,6 +48,16 @@ for(const entry of ['core19','metadata_favorites16','queue_lifecycle4']){
    component.requiresPostBuildPatchReview=!component.sourceQualified;
    if(!component.sourceQualified){if(component.nativeExitStatus===0)component.status='review-required';failed=true;}
   } catch(error){component.postBuildProvenanceFailure=error.message;component.requiresPostBuildPatchReview=true;component.sourceQualified=false;failed=true;}
+  if(isMobileScenarioEntry(entry)&&component.nativeExitStatus===0){
+   try{
+    const nativeReceipt=JSON.parse(fs.readFileSync(path.join(root,entry,'native-mobile-receipt.json'),'utf8'));
+    const scenarios=buildMobileScenarioReceipt({nativeReceipt,sourceQualified:component.sourceQualified,nativeRuntime:nativeReceipt.nativeRuntime});
+    component.scenarioReceipt=path.join(root,entry,'native-mobile-scenarios-receipt.json');
+    fs.writeFileSync(component.scenarioReceipt,JSON.stringify(scenarios,null,2)+'\n');
+    const reopened=JSON.parse(fs.readFileSync(component.scenarioReceipt,'utf8'));
+    if(reopened.checks.length!==mobileNativeEntries[entry].scenarioChecks||reopened.sourceQualified!==component.sourceQualified)throw Error('Scenario receipt readback differs.');
+   }catch(error){component.scenarioReceiptFailure=error.message;component.status='failed';failed=true;}
+  }
   component.exitStatus=component.status==='passed'&&component.sourceQualified?0:1;
   save();
  }

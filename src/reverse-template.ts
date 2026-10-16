@@ -1,5 +1,22 @@
 import {auditMixedEnvelope, mixedEnvelopeInstruction, mixedTemplateContract,normalizeMixedEnvelope} from './prompt-template-audit';
 
+// Accept only an entire JSON document, optionally wrapped for transport. Never
+// recover a guessed object from prose or accept an unmatched Markdown fence.
+function parseTemplateJson(raw: string): any {
+  const text = raw.trim();
+  let json = text;
+  if (text.startsWith('```')) {
+    const fenced = /^```(?:json)?[ \t\r\n]*([\s\S]*?)[ \t\r\n]*```$/i.exec(text);
+    if (!fenced) throw Error('内部模板结果需要完整配对的 JSON 代码围栏');
+    json = fenced[1];
+  } else {
+    // Older generic prompt cleaning could leave the language marker behind.
+    // Only an anchored marker followed by a JSON object/array is a wrapper.
+    json = text.replace(/^json(?=\s*[\[{])\s*/i, '');
+  }
+  return JSON.parse(json);
+}
+
 /** Count each variant independently; character identity is not an exemption. */
 export function reverseTemplateProtocol(template:string, mode:string, knownCharacter:boolean, task:'reverse'|'convert'='reverse') {
   const tagRange=mode==='tags'?(template.match(/计数口径[^\n]*?(\d{1,3})\s*[–—-]\s*(\d{1,3})/)??template.match(/有效语义单元[\s\S]{0,80}?(\d{1,3})\s*[–—-]\s*(\d{1,3})/)):null;
@@ -11,7 +28,7 @@ export function reverseTemplateProtocol(template:string, mode:string, knownChara
       (task==='reverse'?'\n可见证据边界：光照不等于可见光源。太阳圆盘不可见时不写 sun；可见受光山坡可保留 sunlight/alpenglow 等实际光照，不能推定画外物体。无法确认日出或日落时不指定 morning/sunrise/sunset，仅描述可见的暖光、色彩和阴影。地貌与材质词不以同义项重复计数，rock/stone 仅一个有效单元；保留 stone floor 等不同限定事实。foreground/background 等空泛层级词不能代替具体可见物体及其位置。信息不足达到模板下限时保留不确定性，不用太阳、时间或材质近义词凑数。':'')+
       (knownCharacter ? '\n本次内部协议覆盖前文的字符串 JSON 协议：返回 {"namePrompt":{"segments":[{"units":[]}]},"featurePrompt":{"segments":[{"units":[]}]}}。两个字段均为完整 envelope，各自独立满足所选模板；不要把一个版本缩减成短标签列表。' : ''),
     parse(raw:string,source='') {
-      const value=JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));
+      const value=parseTemplateJson(raw);
       const audit=(envelope:unknown)=>{
         // Visual facts are supplied by the image, not inferred from the UI's help text.
         const result=auditMixedEnvelope(normalizeMixedEnvelope(JSON.stringify(envelope)),source,contract,

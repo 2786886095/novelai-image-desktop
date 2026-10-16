@@ -2,7 +2,7 @@ import { isInsideInpaintSurface } from "./inpaint-pointer";
 import {useResultComparison} from "./use-result-comparison";
 import {normalizeAutomaticComparison} from './automatic-comparison';
 import {workflowText} from './workflow-text';
-import {focusedInpaintPlan,type InpaintRegion} from './focused-inpaint';
+import {clampFocusedInpaintDrag,clipInpaintRegion,type InpaintRegion} from './focused-inpaint';
 import {RangeInput} from './components/RangeInput';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "./components/icons";
@@ -22,6 +22,7 @@ import {
 } from "./inpaint-mask";
 import { desktopUiText } from "./i18n";
 import { useAppStore } from "./store";
+import { inpaintEditText } from "./inpaint-edit-session";
 
 function clampZoom(value: number) {
   return Math.min(8, Math.max(1, value));
@@ -49,6 +50,7 @@ function recolorMaskCanvas(
 
 export function InpaintCanvas() {
   const language = useAppStore((state) => state.settings?.language);
+  const openaiEngine = useAppStore((state) => state.settings?.inpaintEngine) === 'openai';
   const workflow=workflowText(language);
   const automaticComparison=useAppStore(s=>normalizeAutomaticComparison(s.settings?.automaticComparison).inpaint);
   const workbenchImage = useAppStore((state) => state.workbenchImage);
@@ -66,12 +68,21 @@ export function InpaintCanvas() {
   const maskRevision = useAppStore((state) => state.maskRevision);
   const setInpaintMask = useAppStore((state) => state.setInpaintMask);
   const loadWorkbenchFromPath = useAppStore((state) => state.loadWorkbenchFromPath);
+  const editSession = useAppStore((state) => state.inpaintEditSession);
+  const editRestore = useAppStore((state) => state.inpaintEditRestore);
+  const restoringEdit = useAppStore((state) => state.isRestoringInpaintEditSession);
+  const isGenerating = useAppStore((state) => state.isGenerating);
+  const restoreEdit = useAppStore((state) => state.restoreInpaintEditSession);
+  const acknowledgeEditRestore = useAppStore((state) => state.acknowledgeInpaintEditRestore);
+  const editText = inpaintEditText(language);
   const region=useAppStore(s=>s.inpaintRegion),setRegion=useAppStore(s=>s.setInpaintRegion);
   const [selectingRegion,setSelectingRegion]=useState(false),[draftRegion,setDraftRegion]=useState<InpaintRegion|null>(null);
   const regionStart=useRef<{x:number;y:number}|null>(null);
   useEffect(()=>{setSelectingRegion(false);setDraftRegion(null);regionStart.current=null;},[workbenchImage?.filePath]);
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const initializedEditorRef = useRef<{ image: typeof workbenchImage; revision: number } | null>(null);
+  const hydratedRestoreRef = useRef<number | null>(null);
   const compareClipRef = useRef<HTMLDivElement>(null);
   const compareDividerRef = useRef<HTMLButtonElement>(null);
   const compareDraggingRef = useRef(false);
@@ -117,10 +128,51 @@ export function InpaintCanvas() {
   useEffect(() => {
     if (!canvasRef.current || !workbenchImage) return;
     const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (editRestore) {
+      if (hydratedRestoreRef.current === editRestore.revision) return;
+      try {
+        if (!ctx) throw new Error("Canvas context unavailable.");
+        if (editRestore.sourceFilePath !== workbenchImage.filePath || editRestore.width !== workbenchImage.width || editRestore.height !== workbenchImage.height) {
+          throw new Error("The editing source changed during restoration.");
+        }
+        // Prepare the entire restored raster before resizing/clearing the visible canvas.
+        let restored: ImageData | null = null;
+        if (editRestore.maskRgba) {
+          restored = ctx.createImageData(editRestore.width, editRestore.height);
+          restored.data.set(buildInpaintMaskPreview(editRestore.maskRgba, editRestore.width, editRestore.height, brushColor));
+        }
+        canvas.width = editRestore.width;
+        canvas.height = editRestore.height;
+        ctx.globalCompositeOperation = "source-over";
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (restored) ctx.putImageData(restored, 0, 0);
+        historyRef.current = [];
+        redoRef.current = [];
+        setHistoryCount(0);
+        setRedoCount(0);
+        setSelectingRegion(false);
+        setDraftRegion(null);
+        regionStart.current = null;
+        drawingRef.current = false;
+        drawingPointerRef.current = null;
+        lastPointRef.current = null;
+        setPreviewMaskUrl("");
+        setShowExportPreview(false);
+        hydratedRestoreRef.current = editRestore.revision;
+        initializedEditorRef.current = { image: workbenchImage, revision: maskRevision };
+        if (!editRestore.rollback) setCompareEnabled(false);
+        acknowledgeEditRestore(editRestore.revision, true);
+      } catch (error) {
+        acknowledgeEditRestore(editRestore.revision, false, String(error));
+      }
+      return;
+    }
+    // Acknowledging hydration clears its payload, not the mask we just restored.
+    if (initializedEditorRef.current?.image === workbenchImage && initializedEditorRef.current.revision === maskRevision) return;
+    if (!ctx) return;
     canvas.width = workbenchImage.width || 1;
     canvas.height = workbenchImage.height || 1;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
     ctx.globalCompositeOperation = "source-over";
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     historyRef.current = [];
@@ -130,7 +182,8 @@ export function InpaintCanvas() {
     setInpaintMask(null);
     setPreviewMaskUrl("");
     setShowExportPreview(false);
-  }, [workbenchImage, maskRevision, setInpaintMask]);
+    initializedEditorRef.current = { image: workbenchImage, revision: maskRevision };
+  }, [workbenchImage, maskRevision, setInpaintMask, editRestore, acknowledgeEditRestore, setCompareEnabled]);
 
   useEffect(() => {
     setStageZoom(1);
@@ -154,6 +207,7 @@ export function InpaintCanvas() {
   }, []);
 
   const exportMask = useCallback(() => {
+    if (useAppStore.getState().isRestoringInpaintEditSession) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const w = canvas.width;
@@ -331,6 +385,7 @@ export function InpaintCanvas() {
   }, []);
 
   const undoLastStroke = useCallback(() => {
+    if (useAppStore.getState().isRestoringInpaintEditSession) return;
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     const previous = historyRef.current.pop();
@@ -345,6 +400,7 @@ export function InpaintCanvas() {
   }, [brushColor, exportMask]);
 
   const redoNextStroke = useCallback(() => {
+    if (useAppStore.getState().isRestoringInpaintEditSession) return;
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     const next = redoRef.current.pop();
@@ -363,6 +419,7 @@ export function InpaintCanvas() {
       target instanceof HTMLElement &&
       Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
     const keyDown = (event: KeyboardEvent) => {
+      if (useAppStore.getState().isRestoringInpaintEditSession) return;
       if (event.code === "Space" && !isEditable(event.target)) {
         event.preventDefault();
         spaceHeldRef.current = true;
@@ -559,8 +616,15 @@ export function InpaintCanvas() {
           <span>{t("inpaint.dropToLoad")}</span>
         </div>
       )}
-      <div className="inpaint-mask-toolbar">
-        <button type="button" className="btn" aria-pressed={selectingRegion||!!region} title={workflow.regionHint} onClick={()=>{setSelectingRegion(v=>!v);setCompareEnabled(false);setShowExportPreview(false);}}>{workflow.region}</button>
+      <div className="inpaint-mask-toolbar" inert={restoringEdit ? true : undefined}>
+        {editSession && currentImage?.id === editSession.resultId ? (
+          <button type="button" className="btn" data-testid="inpaint-return-edit"
+            disabled={isGenerating || restoringEdit} aria-label={editText.returnEdit} title={editText.hint}
+            onClick={() => { void restoreEdit(); }}>
+            {restoringEdit ? editText.restoring : editText.returnEdit}
+          </button>
+        ) : null}
+        <button type="button" className="btn" aria-pressed={selectingRegion||!!region} title={openaiEngine ? workflow.regionLabel : workflow.regionHint} onClick={()=>{setSelectingRegion(v=>!v);setCompareEnabled(false);setShowExportPreview(false);}}>{workflow.region}</button>
         {region&&<button type="button" className="btn" onClick={()=>{setRegion(null);setDraftRegion(null);setSelectingRegion(false);}}>{workflow.clearRegion}</button>}
         <button
           type="button"
@@ -741,11 +805,12 @@ export function InpaintCanvas() {
           className="inpaint-mask-canvas"
           style={{
             opacity: showExportPreview || (compareEnabled && canCompare) ? 0 : brushOpacity,
-            pointerEvents: compareEnabled && canCompare ? "none" : undefined,
+            pointerEvents: restoringEdit || (compareEnabled && canCompare) ? "none" : undefined,
             cursor: selectingRegion ? "crosshair" : isPanning ? "grabbing" : spaceHeld ? "grab" : "none",
             ...canvasZoomStyle,
           }}
           onPointerDown={(event) => {
+            if (useAppStore.getState().isRestoringInpaintEditSession) return;
             if(selectingRegion&&event.button===0){event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);regionStart.current=getPoint(event.clientX,event.clientY);setDraftRegion(null);return;}
             if (event.button === 1 || spaceHeldRef.current) {
               event.preventDefault();
@@ -773,7 +838,8 @@ export function InpaintCanvas() {
             drawSamples([event.nativeEvent]);
           }}
           onPointerMove={(event) => {
-            if(selectingRegion&&regionStart.current){const point=getPoint(event.clientX,event.clientY),start=regionStart.current;if(point){const x=Math.max(0,Math.min(workbenchImage.width,point.x)),y=Math.max(0,Math.min(workbenchImage.height,point.y));setDraftRegion({x:Math.min(start.x,x),y:Math.min(start.y,y),width:Math.abs(x-start.x),height:Math.abs(y-start.y)});}return;}
+            if (useAppStore.getState().isRestoringInpaintEditSession) return;
+            if(selectingRegion&&regionStart.current){const point=getPoint(event.clientX,event.clientY),start=regionStart.current;if(point){if(openaiEngine){const x=Math.max(0,Math.min(workbenchImage.width,point.x)),y=Math.max(0,Math.min(workbenchImage.height,point.y));setDraftRegion({x:Math.min(start.x,x),y:Math.min(start.y,y),width:Math.abs(x-start.x),height:Math.abs(y-start.y)});}else{setDraftRegion(clampFocusedInpaintDrag(start,point,workbenchImage.width,workbenchImage.height));}}return;}
             if (panPointerRef.current === event.pointerId && panningRef.current) {
               const start = panStartRef.current;
               setStagePan({
@@ -793,7 +859,7 @@ export function InpaintCanvas() {
             drawSamples(coalesced?.length ? coalesced : [native]);
           }}
           onPointerEnter={(event) => updateCursor(event.clientX, event.clientY)}
-          onPointerUp={(event) => {if(selectingRegion&&regionStart.current){try{if(draftRegion)setRegion(focusedInpaintPlan(draftRegion,workbenchImage.width,workbenchImage.height).region);}catch(e){useAppStore.getState().setToast(String(e));}regionStart.current=null;setDraftRegion(null);setSelectingRegion(false);if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);return;}finishPointer(event);}}
+          onPointerUp={(event) => {if(selectingRegion&&regionStart.current){try{if(draftRegion && (openaiEngine || (draftRegion.width >= 32 && draftRegion.height >= 32)))setRegion(openaiEngine ? clipInpaintRegion(draftRegion,workbenchImage.width,workbenchImage.height) : draftRegion);}catch(e){useAppStore.getState().setToast(String(e));}regionStart.current=null;setDraftRegion(null);setSelectingRegion(false);if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);return;}finishPointer(event);}}
           onPointerCancel={(event) => {regionStart.current=null;setDraftRegion(null);finishPointer(event, true);}}
           onLostPointerCapture={(event) => {
             regionStart.current = null;

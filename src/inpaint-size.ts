@@ -1,4 +1,4 @@
-import { focusedInpaintPlan, type InpaintRegion } from './focused-inpaint';
+import { clipInpaintRegion, focusedInpaintPlan, type InpaintRegion } from './focused-inpaint';
 
 export type InpaintSizeMode = 'original' | 'custom';
 export type InpaintSize = { width: number; height: number };
@@ -27,7 +27,7 @@ export function restoreInpaintSizeState(saved: { inpaintSizeMode?: unknown; inpa
 }
 
 export function scaledInpaintRegion(region: InpaintRegion, source: InpaintSize, output: InpaintSize) {
-  const clipped = focusedInpaintPlan(region, source.width, source.height).region;
+  const clipped = clipInpaintRegion(region, source.width, source.height);
   const sx = output.width / source.width, sy = output.height / source.height;
   const x = Math.floor(clipped.x * sx), y = Math.floor(clipped.y * sy);
   return { x, y, width: Math.ceil((clipped.x + clipped.width) * sx) - x,
@@ -36,7 +36,10 @@ export function scaledInpaintRegion(region: InpaintRegion, source: InpaintSize, 
 
 export function inpaintSizePlan(mode: InpaintSizeMode, custom: InpaintSize, source: InpaintSize,
   region?: InpaintRegion | null, language?: string) {
+  if (region) {
+    const focused = focusedInpaintPlan(region, source.width, source.height);
+    return { outputSize: { width: source.width, height: source.height }, requestSize: focused.size, region: focused.region };
+  }
   const outputSize = validateInpaintSize(mode === 'custom' ? custom : source, language);
-  const requestSize = region ? focusedInpaintPlan(scaledInpaintRegion(region, source, outputSize), outputSize.width, outputSize.height).size : outputSize;
-  return { outputSize, requestSize };
+  return { outputSize, requestSize: outputSize };
 }

@@ -5,6 +5,8 @@ import 'openai_images.dart' as envelope;
 import 'novelai_image_envelope.dart';
 import 'generation_scope.dart';
 import '../prompts/reverse_template.dart';
+import '../prompts/ai_prompt_response.dart';
+import '../inpaint/focused_inpaint.dart';
 import '../prompts/prompt_templates.dart';
 import '../images/upscale_plan.dart';
 import 'dart:convert';
@@ -164,6 +166,9 @@ class NaiApi {
   final _rng = Random.secure();
   final Map<String, String> _vibeEncodeCache = {};
   final List<AiCallLogEntry> _aiCallLog = [];
+  final Set<String> _aiCredentials={};
+  void _rememberAiCredential(String value){final key=value.trim();if(key.isNotEmpty){_aiCredentials.add(key);}}
+  String _redactAiDiagnostic(String value)=>redactAiCredentials(value,_aiCredentials);
   final PromptCodexRetrievalService _promptCodex =
       PromptCodexRetrievalService();
   final OfflineTagStore _offlineTags = OfflineTagStore();
@@ -367,7 +372,7 @@ class NaiApi {
         return AiTextResult(
           ok: false,
           message:
-              'Baidu Translate failed: ${data['error_msg'] ?? data['error_code']}',
+              redactAiCredentials('Baidu Translate failed: ${data['error_msg'] ?? data['error_code']}',[secret]),
         );
       }
       final rows = data['trans_result'];
@@ -390,7 +395,7 @@ class NaiApi {
               sourceLanguage: _detectedSource(
                   sourceLanguage == 'auto' ? data['from'] : sourceLanguage));
     } catch (error) {
-      return AiTextResult(ok: false, message: 'Baidu Translate failed: $error');
+      return AiTextResult(ok: false, message: redactAiCredentials('Baidu Translate failed: $error',[secret]));
     }
   }
 
@@ -626,8 +631,9 @@ class NaiApi {
     double strength,
     double noise, {
     GenerateExtras? extras,
+    InpaintRegion? region,
   }) async {
-    final taskExtras = extras?.copy() ?? GenerateExtras();
+    final taskExtras = focusedInpaintExtras(extras ?? GenerateExtras(),region,width,height);
     params = params.normalized();
     final seed = params.seedMode != 'random' && params.seed > 0
         ? params.seed
@@ -637,6 +643,7 @@ class NaiApi {
       await processingImageBytes(maskBytes),
       targetWidth: params.width,
       targetHeight: params.height,
+      region: region,
     );
     final candidates = <String>[inpaintModel];
     if (inpaintModel == 'nai-diffusion-5-curated-inpainting') {
@@ -1151,7 +1158,7 @@ class NaiApi {
         final response=await _chat(settings,settings.visionApiUrl,apiKey,settings.visionApiModel,
           '$system\n\n${protocol.instruction}',
           [...user,if(feedback.isNotEmpty){'type':'text','text':'上次未通过模板校验：$feedback。请对照同一图片重写完整结果，不补不可见内容。'}],
-          maxTokens:knownCharacter?7000:4000,label:'AI reverse · $selectedVersion · ${mode.value}',apiKind:'vision',preserveRaw:true);
+          maxTokens:knownCharacter?7000:4000,label:'AI reverse · $selectedVersion · ${mode.value}',apiKind:'vision',preserveRaw:true,jsonRequired:true);
         if(!response.ok)return response;
         try {final parsed=protocol.parse(response.text);return AiTextResult(ok:true,message:'Success',text:parsed.prompt,variants:parsed.variants);}
         catch(error){feedback=error.toString();}
@@ -1426,7 +1433,7 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
       for(var attempt=0;attempt<3;attempt++){
         final reply=await _chat(settings,settings.convertApiUrl,apiKey,settings.convertApiModel,'$system\n${protocol.instruction}',
           '$user${feedback.isEmpty?'':'\n模板验收未通过：$feedback。仅修正问题，保留原提示词中未被本次修改涉及的事实。'}',
-          maxTokens:7000,label:'Prompt assistant · $kind · $templateVersion · template check',apiKind:'convert',preserveRaw:true);
+          maxTokens:7000,label:'Prompt assistant · $kind · $templateVersion · template check',apiKind:'convert',preserveRaw:true,jsonRequired:true);
         if(!reply.ok)return reply;
         try{final parsed=protocol.parse(reply.text,source:kind=='optimize'?currentPrompt:'$currentPrompt\n${instruction.trim()}');return AiTextResult(ok:true,message:'模板验收通过',text:parsed.prompt);}
         catch(error){feedback=error.toString();}
@@ -1517,7 +1524,7 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
         final response=await _chat(settings,settings.convertApiUrl,apiKey,settings.convertApiModel,
           '$system\n\n${protocol.instruction}\n原始用户要求优先；保留明确人数、发色、瞳色、场景和构图。未指定细节可合理补充，但不能新增与要求冲突的内容。',
           '$user${feedback.isEmpty?'':'\n上次未通过模板校验：$feedback。按原始要求返回完整合格结果，不改变已指定事实。'}',
-          maxTokens:knownCharacter?7000:4000,label:'Prompt conversion · ${settings.convertPromptTemplateVersion} · ${mode.value}',apiKind:'convert',preserveRaw:true);
+          maxTokens:knownCharacter?7000:4000,label:'Prompt conversion · ${settings.convertPromptTemplateVersion} · ${mode.value}',apiKind:'convert',preserveRaw:true,jsonRequired:true);
         if(!response.ok)return response;
         try {
           final parsed=protocol.parse(response.text,source:text);
@@ -1699,6 +1706,7 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
       apiKind: source == 'reverse' ? 'vision' : 'convert',
       recordLog: recordLog,
       maxTokens: knownCharacter ? 7000 : 4000,
+      preserveRaw: knownCharacter || source=='reverse',
     );
     if (!raw.ok) return raw;
     // Pair completeness is enforced by reversePrompt/convertPrompt, where the
@@ -2136,7 +2144,8 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
       {int maxTokens = 2000,
       String label = 'AI call',
       String apiKind = 'convert',
-      bool recordLog = true, bool preserveRaw = false}) async {
+      bool recordLog = true, bool preserveRaw = false, bool jsonRequired = false}) async {
+    _rememberAiCredential(apiKey);
     final effectiveModel = model.trim().isEmpty ? 'gpt-4o-mini' : model.trim();
     final userSummary = _summarizeAiUser(user);
     try {
@@ -2152,7 +2161,7 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
                   body: jsonEncode({
                     'model': effectiveModel,
                     'max_tokens': tokens,
-                    if (preserveRaw && Uri.tryParse(_base(apiUrl, apiUrl))?.host == 'api.deepseek.com')
+                    if (jsonRequired && Uri.tryParse(_base(apiUrl, apiUrl))?.host == 'api.deepseek.com')
                       'response_format': {'type':'json_object'},
                     if (shouldDisableDeepSeekThinking(apiUrl, effectiveModel))
                       'thinking': {'type': 'disabled'},
@@ -2170,7 +2179,7 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
       if (res.statusCode >= 400) {
         final result = AiTextResult(
           ok: false,
-          message: 'AI call failed (HTTP ${res.statusCode}): ${res.body}',
+          message: apiKind=='vision' ? '视觉模型请求失败（HTTP ${res.statusCode}），请检查服务配置及请求支持情况。' : _redactAiDiagnostic('AI call failed (HTTP ${res.statusCode}): ${res.body}'),
         );
         if (recordLog) {
           _addAiLog(
@@ -2178,41 +2187,22 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
         }
         return result;
       }
-      var data = jsonDecode(res.body);
-      var content =
-          data['choices']?[0]?['message']?['content']?.toString().trim() ?? '';
-      var finish = data['choices']?[0]?['finish_reason']?.toString();
-      // Reasoning models spend the whole budget on hidden reasoning, returning
-      // empty content with finish_reason "length". Retry once with a much larger
-      // budget so the actual answer has room (billed per real token).
-      if (content.isEmpty && finish == 'length') {
+      var parsed = classifyPromptResponse(jsonDecode(res.body));
+      if (!parsed.ok && parsed.retryableEmptyLength) {
         res = await postChat(max(maxTokens * 8, 32000));
-        if (res.statusCode < 400) {
-          data = jsonDecode(res.body);
-          content =
-              data['choices']?[0]?['message']?['content']?.toString().trim() ??
-                  '';
-          finish = data['choices']?[0]?['finish_reason']?.toString();
-        }
+        if(res.statusCode>=400)return AiTextResult(ok:false,message:'AI call failed (HTTP ${res.statusCode})');
+        parsed=classifyPromptResponse(jsonDecode(res.body));
       }
-      final result = content.isEmpty || finish == 'length'
-          ? AiTextResult(
-              ok: false,
-              message: finish == 'length'
-                  ? 'The API response was truncated. No partial prompt was accepted.'
-                  : 'AI returned empty content')
-          : AiTextResult(
-              ok: true,
-              message: 'Success',
-              text: preserveRaw ? content.trim() : _cleanPrompt(content),
-            );
+      final result = !parsed.ok
+          ? AiTextResult(ok:false,message:parsed.message)
+          : AiTextResult(ok:true,message:'Success',text:preserveRaw?parsed.content.trim():_cleanPrompt(parsed.content));
       if (recordLog) {
         _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
       }
       return result;
     } catch (e) {
       final result = AiTextResult(
-          ok: false, message: e.toString().replaceFirst('Exception: ', ''));
+          ok: false, message: apiKind=='vision' ? '视觉模型请求失败，未生成可用提示词；请检查网络和服务配置。' : _redactAiDiagnostic(e.toString().replaceFirst('Exception: ', '')));
       if (recordLog) {
         _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
       }
@@ -2231,13 +2221,13 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
     _aiCallLog.add(AiCallLogEntry(
       id: '${DateTime.now().microsecondsSinceEpoch}',
       time: DateTime.now(),
-      label: label,
-      api: apiKind,
-      model: model,
-      systemPrompt: system,
-      userText: user,
+      label: _redactAiDiagnostic(label),
+      api: _redactAiDiagnostic(apiKind),
+      model: _redactAiDiagnostic(model),
+      systemPrompt: _redactAiDiagnostic(system),
+      userText: _redactAiDiagnostic(user),
       ok: result.ok,
-      response: result.ok ? result.text : result.message,
+      response: _redactAiDiagnostic(result.ok ? result.text : result.message),
     ));
     if (_aiCallLog.length > 200) _aiCallLog.removeAt(0);
   }

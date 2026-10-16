@@ -17,15 +17,14 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 > Bring your own **NovelAI Persistent API Token**. Model access and generation charges depend on your NovelAI account. Optional image analysis, prompt conversion and Tavern AI services require separate configuration.
 
-## Changes in this update
+## Candidate changes (not released)
 
-- Desktop and mobile inpainting forward character positive/negative prompts, positions and Precise References.
-- Character/reference capabilities use the actual inpaint model, avoiding rejection or truncation based on the unrelated main model.
-- Agent/MCP inpaint estimates, budgets and submission use the same effective model and references.
-- Precise Reference estimates scale with reference and image counts; image-to-image batches cover every image while Vibe encoding is counted once.
-- Incompatible Precise Reference and Vibe combinations are explicitly rejected before encoding or generation.
+- Focused inpainting adapts only the region to a valid working size and composites it onto the original-size canvas; restore the original image, mask and region for further editing. Mobile receives the corresponding workflow.
+- Image analysis accepts fenced JSON and structured results. Refusal, truncation, invalid output or cancellation preserves existing prompts and results rather than applying refusal text.
+- Failed or cancelled conversion preserves both existing variants. Configured AI keys are redacted at the covered diagnostic/log boundaries without rewriting successful prompt content.
+- Invalid image bytes cannot replace the current workbench image before full decode succeeds.
 
-**Verification limits:** Estimates are not measured charges. Controlled tests do not certify paid generation or the full 39 × 5 feature matrix. The maintainer's previous iOS verification waiver remains in effect. The unsigned IPA requires your own signing and cannot be installed directly on a stock iPhone. See [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) for files and hashes, and [main](https://github.com/2786886095/novelai-image-desktop/tree/main) for current source.
+**Release status:** This branch is awaiting acceptance, not a new formal release. All 39 × 5 platform-feature checks are required, including iOS validation. Controlled local tests are not paid-provider acceptance. Mobile artist iteration and some platforms' local Agent functionality remain unsupported or unverified; build success does not close those gaps. [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) remains the previously released build, not this candidate. An unsigned IPA still requires your own signing and cannot install directly on a stock iPhone.
 
 ## Quick start
 

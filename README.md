@@ -21,15 +21,14 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 [![Build Mobile](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml)
 [![License: MIT](https://img.shields.io/badge/Code-MIT-586069)](./LICENSE)
 
-## 本轮更新
+## 本轮候选更新（尚未发行）
 
-- 局部重绘同步传递角色正／负面提示、位置与精准参考，桌面和移动端参数链保持一致。
-- 独立重绘按实际重绘模型判断角色和参考能力，不再被主生成模型错误拦截或截断。
-- 智能体／MCP 重绘估价、预算和提交共用实际模型及参考参数。
-- 多精准参考按参考数及张数计费估算；图生图批量总价覆盖全部图片，Vibe 编码仍只计一次。
-- 精准参考与 Vibe 混用在任何编码／生成请求前明确拒绝，不静默丢弃其中一种。
+- 选区重绘保留原图画布，只将选区适配到合法工作尺寸，结果贴回原图；支持恢复重绘前原图、蒙版和选区。移动端补齐对应流程。
+- 反推兼容 JSON 代码围栏与结构化结果；拒答、截断、无效结果和取消时保留原提示词及已有结果，不将拒答当成提示词应用。
+- 转换失败或取消时保留已有双版本结果；配置的 AI 密钥在已覆盖的错误诊断及日志边界脱敏，不改写成功返回的提示词。
+- 无效图片在完整解码通过前不替换现有工作图，避免损坏文件清空当前图片。
 
-**验证边界：** 估价是参考，不替代实际服务端扣费；受控测试不等于真实付费生成或完整 39 × 5 功能验收。沿用维护者要求跳过 iOS 验证，未签名 IPA 需自行签名，不能直接安装普通 iPhone。平台文件、源码身份和哈希见 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest)，当前源码见 [main](https://github.com/2786886095/novelai-image-desktop/tree/main)。
+**发行状态：** 此分支仍在验收，尚未发布新正式版。五端 39 × 5 验收必须完成，iOS 验证不再豁免；本地受控测试不等于实际付费服务验证。当前仍有跨端功能缺口（移动端画师迭代、部分平台本地 Agent），不能用构建成功代替功能通过。已发行文件继续以 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 为准，不能将其视为本候选包。未签名 IPA 仍需自行签名，不能直接安装普通 iPhone。
 
 <a id="quick-start"></a>
 ## 先完成你的第一张图

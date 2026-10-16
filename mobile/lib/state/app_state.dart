@@ -24,6 +24,9 @@ import '../services/completion_sound.dart';
 import '../images/style_prompt_restore.dart';
 import '../images/upscale_plan.dart';
 import '../inpaint/inpaint_size.dart';
+import '../inpaint/inpaint_mask.dart';
+import '../inpaint/inpaint_edit_session.dart';
+import '../i18n/inpaint_parity_text.dart';
 import '../services/vibe_file.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -317,8 +320,39 @@ class AppState extends ChangeNotifier {
   String i2iSourceMode = 'original';
   String inpaintSourceMode = 'original';
   String inpaintEngine = 'novelai';
+  InpaintRegion? inpaintRegion;
+  List<InpaintStroke> inpaintEditorStrokes=[];
+  bool inpaintEditorInverted=false;
+  int inpaintEditRevision=0;
+  bool isRestoringInpaintEditSession=false;
+  InpaintEditSession? inpaintEditSession;
+  void setInpaintEditorData(List<InpaintStroke> strokes,bool inverted){inpaintEditorStrokes=copyInpaintStrokes(strokes);inpaintEditorInverted=inverted;}
+  void setInpaintRegion(InpaintRegion? value){
+    if(busy||isRestoringInpaintEditSession)return;
+    final source=inpaintSourceMode=='original'?i2iOriginalImage??workbenchImage:workbenchImage;
+    inpaintRegion=value==null||source==null?null:inpaintEngine=='novelai'?clampFocusedInpaintRegion(value,source.width,source.height):clipInpaintRegion(value,source.width,source.height);notifyListeners();
+  }
+  InpaintEditSession _captureInpaintEdit(WorkingImage source,Uint8List mask)=>InpaintEditSession(source:source,original:i2iOriginalImage,sourceMode:inpaintSourceMode,engine:inpaintEngine,sizeMode:inpaintSizeMode,customSize:inpaintCustomSize,region:inpaintRegion,maskBytes:mask,strokes:inpaintEditorStrokes,inverted:inpaintEditorInverted);
+  void _completeInpaintEdit(InpaintEditSession session){inpaintEditSession=session;inpaintRegion=null;inpaintEditorStrokes=[];inpaintEditorInverted=false;inpaintEditRevision++;}
+  Future<bool> restoreInpaintEditSession() async {
+    final session=inpaintEditSession;
+    if(session==null||busy||isRestoringInpaintEditSession)return false;
+    isRestoringInpaintEditSession=true;notifyListeners();
+    try{
+      final bytes=await File(session.source.filePath).readAsBytes();
+      await validateNovelAiNativeImage(bytes);await validateNovelAiNativeImage(session.maskBytes);
+      if(decodeImageDimensions(bytes)!=(session.source.width,session.source.height)||decodeImageDimensions(session.maskBytes)!=(session.source.width,session.source.height))throw const FormatException('Original image or mask dimensions changed.');
+      if(inpaintEditSession!=session||busy)return false;
+      workbenchImage=session.source;i2iOriginalImage=session.original;inpaintSourceMode=session.sourceMode;inpaintEngine=session.engine;
+      inpaintSizeMode=session.sizeMode;inpaintCustomSize=session.customSize;inpaintRegion=session.region;
+      setInpaintEditorData(session.strokes,session.inverted);inpaintEditRevision++;
+      comparisonBefore=null;comparisonAfter=null;comparisonSurface=null;comparisonAutoOpenPending=false;
+      return true;
+    }catch(_){status=inpaintParityText(settings.language,'restoreError');return false;}
+    finally{isRestoringInpaintEditSession=false;notifyListeners();}
+  }
   bool get openAIEditReady => (settings.openAIEdit['credentialId'] as String? ?? '').isNotEmpty;
-  void setInpaintEngine(String value) {if(busy)return;inpaintEngine=value=='openai'?'openai':'novelai';markChanged();}
+  void setInpaintEngine(String value) {if(busy||isRestoringInpaintEditSession)return;inpaintEngine=value=='openai'?'openai':'novelai';final r=inpaintRegion;if(r!=null)setInpaintRegion(r);markChanged();}
   Future<void> saveOpenAIEditSettings(Map<String,dynamic> value,String key,String expectedId) async {
     if(busy)throw StateError('Image operation is running');
     final next=await storage.saveOpenAIEditConfiguration(value,key,expectedId:expectedId);
@@ -754,6 +788,7 @@ class AppState extends ChangeNotifier {
     inpaintSourceMode = next;
     if (target != null && target.filePath != workbenchImage?.filePath) {
       workbenchImage = target;
+      inpaintRegion=null;setInpaintEditorData([],false);inpaintEditRevision++;
     }
     notifyListeners();
   }
@@ -1924,8 +1959,8 @@ class AppState extends ChangeNotifier {
   GenerateParams get inpaintOutputParams {
     final source = inpaintSourceMode == 'original' ? i2iOriginalImage ?? workbenchImage : workbenchImage;
     if (source == null) throw FormatException(inpaintSizeText(settings.language)['missing']!);
-    final size = resolveInpaintSize(inpaintSizeMode, inpaintCustomSize, (width: source.width, height: source.height), settings.language);
-    return params.copy()..width = size.width..height = size.height;
+    final size = inpaintSizePlan(inpaintSizeMode,inpaintCustomSize,(width:source.width,height:source.height),region:inpaintRegion,language:settings.language).requestSize;
+    return params.copy()..model=inpaintModel.replaceFirst(RegExp(r'-inpainting$'),'')..width = size.width..height = size.height;
   }
 
   bool get usesRelayBillingReference => naiAccounts.active?.profile.relay == true;
@@ -2881,6 +2916,7 @@ class AppState extends ChangeNotifier {
     final id=snapshot.openAIEdit['credentialId'] as String? ?? '';
     final sourceMode=inpaintSourceMode,source=sourceMode=='original'?i2iOriginalImage??workbenchImage:workbenchImage;
     if(source==null)throw StateError('Source image required');
+    final editSession=_captureInpaintEdit(source,maskBytes);
     final prompt=inpaintPositivePrompt,group=generationGroupId;
     final cancel=CompatibleImageCancellation();_compatibleCancellation=cancel;
     busy=true;lastAnlasSpent=null;
@@ -2904,6 +2940,7 @@ class AppState extends ChangeNotifier {
         on SavedImageHistoryException catch(e) {saved.add(e.item);rethrow;}
       }
       if(saved.isNotEmpty && !_compatibleDisposed) {
+        _completeInpaintEdit(editSession);
         comparisonAutoOpenPending=true;comparisonSurface='inpaint';comparisonBefore=source;
         comparisonAfter=WorkingImage(filePath:saved.first.filePath,width:output.width,height:output.height);
         await _commitCompletedHistory(saved,useAsWorkbench:sourceMode=='latest' && workbenchImage?.filePath==source.filePath);
@@ -2932,9 +2969,11 @@ class AppState extends ChangeNotifier {
       if (source == null) throw Exception(_rt('error.originalImageRequired'));
       final image = await File(source.filePath).readAsBytes();
       final dims = source;
-      final outputParams = inpaintOutputParams;
-      final targetWidth = outputParams.width;
-      final targetHeight = outputParams.height;
+      final editSession=_captureInpaintEdit(source,maskBytes);
+      final plan=inpaintSizePlan(inpaintSizeMode,inpaintCustomSize,(width:source.width,height:source.height),region:inpaintRegion,language:settings.language);
+      final taskRegion=plan.region;
+      final targetWidth = plan.outputSize.width;
+      final targetHeight = plan.outputSize.height;
       // Inpaint keeps its own independent positive prompt
       // (inpaintPositivePrompt) instead of reusing params.positivePrompt —
       // the rest of params (size, sampler, negative prompt, etc.) is still
@@ -2943,8 +2982,8 @@ class AppState extends ChangeNotifier {
         ..model = taskModel.replaceFirst(RegExp(r'-inpainting$'), '')
         ..positivePrompt = expandPromptWildcards(inpaintPositivePrompt)
         ..negativePrompt = expandPromptWildcards(params.negativePrompt)
-        ..width = targetWidth
-        ..height = targetHeight;
+        ..width = plan.requestSize.width
+        ..height = plan.requestSize.height;
       final before = await _authorizeQuotedRun(
         token,
         (fresh) => calculateInpaintAnlas(
@@ -2972,7 +3011,7 @@ class AppState extends ChangeNotifier {
           dims.height,
           taskStrength,
           0,
-          extras: taskExtras);
+          extras: taskExtras,region: taskRegion);
       if (images.isEmpty) throw Exception(_rt('error.inpaintNoImages'));
       final items = <HistoryItem>[];
       for (final bytes in images) {
@@ -2983,6 +3022,7 @@ class AppState extends ChangeNotifier {
             height: targetHeight,
             groupId: generationGroupId.ifEmptyNull));
       }
+      _completeInpaintEdit(editSession);
       comparisonAutoOpenPending=true;
       comparisonSurface = 'inpaint';
       comparisonBefore = source;
@@ -3135,7 +3175,6 @@ class AppState extends ChangeNotifier {
     );
     final owner = 'reverse-${job.id}';
     reverseJobs = [job, ...reverseJobs];
-    reverseCodexMatches = [];
     notifyListeners();
     try {
       await BackgroundQueueService.start(
@@ -3146,7 +3185,8 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       // Notification permission or OEM restrictions must not block the request.
     }
-    final res = await api.reversePrompt(
+    AiTextResult res;
+    try { res = await api.reversePrompt(
       settings: requestSettings,
       apiKey: key,
       image: image,
@@ -3156,8 +3196,8 @@ class AppState extends ChangeNotifier {
       knownCharacter: chosenKnown,
       systemTemplate: templateBody,
       templateVersion: chosenVersion,
-    );
-    await BackgroundQueueService.stop(owner);
+    ); } catch (_) {res=const AiTextResult(ok:false,message:'视觉模型请求失败，未生成可用提示词；请检查网络和服务配置。');}
+    try {await BackgroundQueueService.stop(owner);}catch(_){}
     // "Cancel" just removes the job from the tracker (the in-flight HTTP
     // request itself isn't aborted) — but once it resolves, treat a removed
     // job as truly cancelled: no result overwrite, no toast, no history entry.
@@ -3228,7 +3268,6 @@ class AppState extends ChangeNotifier {
     );
     final owner = 'convert-${job.id}';
     convertJobs = [job, ...convertJobs];
-    convertCodexMatches = [];
     notifyListeners();
     try {
       await BackgroundQueueService.start(
@@ -3239,15 +3278,16 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       // Notification permission or OEM restrictions must not block the request.
     }
-    final res = await api.convertPrompt(
+    AiTextResult res;
+    try {res = await api.convertPrompt(
       settings: requestSettings,
       apiKey: key,
       text: chosenInput,
       mode: chosenMode,
       knownCharacter: chosenKnown,
       systemTemplate: templateBody,
-    );
-    await BackgroundQueueService.stop(owner);
+    );}catch(_){res=const AiTextResult(ok:false,message:'AI request failed; previous prompt was preserved.');}
+    try{await BackgroundQueueService.stop(owner);}catch(_){}
     // See reversePrompt: a removed job is treated as cancelled.
     if (!convertJobs.any((j) => j.id == job.id)) return;
     if (res.ok) {

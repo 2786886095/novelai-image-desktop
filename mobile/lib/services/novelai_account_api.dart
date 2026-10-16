@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../billing/anlas.dart';
 import '../images/image_processing.dart';
+import '../inpaint/focused_inpaint.dart';
 import '../images/upscale_plan.dart';
 import '../models/nai_models.dart';
 import 'generation_scope.dart';
@@ -373,8 +374,8 @@ class NovelAiAccountApi extends NaiApi {
           int width,
           int height,
           double strength,
-          double noise, {GenerateExtras? extras}) {
-    final taskExtras = extras?.copy() ?? GenerateExtras();
+          double noise, {GenerateExtras? extras, InpaintRegion? region}) {
+    final taskExtras = focusedInpaintExtras(extras ?? GenerateExtras(),region,width,height);
     return _run(token, settings, (snapshot, frozen) async {
         final p = params.normalized();
         final seed =
@@ -383,7 +384,7 @@ class NovelAiAccountApi extends NaiApi {
             await processingImageBytes(imageBytes),
             await processingImageBytes(maskBytes),
             targetWidth: p.width,
-            targetHeight: p.height);
+            targetHeight: p.height, region:region);
         p
           ..model = inpaintModel
           ..width = prepared.width

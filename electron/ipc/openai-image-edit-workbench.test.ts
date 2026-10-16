@@ -48,6 +48,20 @@ async function redServer() {
 }
 
 describe("openAIInpaintWorkbench", () => {
+  it("does not inherit NovelAI's 589824-pixel selection limit for an OpenAI focused crop", async () => {
+    state.workbench=await sharp({create:{width:1500,height:1100,channels:4,background:'#123456'}}).png().toBuffer();
+    state.settings={outputDir,openaiImageEdit:{baseUrl:'https://fixture.invalid/v1',model:'fixture-image'},openaiImageEditApiKey:'synthetic-fixture-only'};
+    const mask=await sharp({create:{width:1500,height:1100,channels:4,background:'#ffffff'}}).png().toBuffer();
+    let captured:number[]=[];
+    const edit=vi.spyOn(editRunner,'runOpenAIImageEdit').mockImplementation(async input=>{
+      const image=await sharp(input.source).metadata(),maskSize=await sharp(input.mask!).metadata();
+      captured=[image.width!,image.height!,maskSize.width!,maskSize.height!];
+      throw Error('fixture stops before any provider request');
+    });
+    await openAIInpaintWorkbench({prompt:'large OpenAI crop',maskBase64:mask.toString('base64'),region:{x:64,y:64,width:1024,height:768}});
+    expect(edit).toHaveBeenCalledOnce();expect(captured).toEqual([1024,768,1024,768]);
+  });
+
   it("edits only the focused region, keeps every other pixel and records an OpenAI history item", async () => {
     const server = await redServer();
     state.workbench = await sharp({ create: { width: 200, height: 100, channels: 3, background: "#0000ff" } }).png().toBuffer();

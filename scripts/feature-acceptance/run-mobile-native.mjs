@@ -1,8 +1,10 @@
+import {mobileNativeEntries,isMobileScenarioEntry} from './mobile-entry-specs.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { collectResidentFlutter, createNativeProof } from './native-proof-stream.mjs';
+import {fullFeatureProfiles,profileSha256} from './full-feature-profiles.mjs';
 
 // A recording runner, not a publisher or a replacement for the release gate.
 // Its one JSON input is also used for executable-harness B/M/R/P verification.
@@ -32,6 +34,7 @@ function command(argv, cwd = input.projectRoot, timeout = 120000) {
 let exitStatus = 1;
 let checks = [];
 let failure;
+let nativeCompletion=null, nativeRuntime=null;
 try {
   if (!input.isolated || !['android', 'ios'].includes(input.platform)) {
     throw new Error('Only an explicitly disposable Android emulator/iOS simulator is allowed.');
@@ -69,6 +72,16 @@ try {
     const prepared = command([input.flutter, 'pub', 'get'], input.projectRoot, input.dependencyTimeoutMs || 300000);
     if (prepared.exitStatus !== 0 || prepared.error) throw new Error('Native entry dependency preparation failed.');
   }
+  const extraDartDefines=[];
+  if(isMobileScenarioEntry(input.entry)){
+    if(input.expectedChecks!==mobileNativeEntries[input.entry].expectedChecks||input.profileSha256!==profileSha256)throw Error('Independent parity count/profile mismatch.');
+    extraDartDefines.push(`--dart-define=FEATURE_PROFILE_SHA=${profileSha256}`);
+    const version=command([input.flutter,'--version','--machine'],input.projectRoot,120000);
+    if(version.exitStatus!==0||version.error)throw Error('Cannot identify actual Flutter SDK.');
+    const info=JSON.parse(version.stdout);
+    if(typeof info.frameworkVersion!=='string'||!info.frameworkVersion)throw Error('Missing actual Flutter version.');
+    nativeRuntime={type:'flutter',version:info.frameworkVersion,frameworkRevision:info.frameworkRevision??null};
+  }
   let nativeStdout = '', nativeStderr = '';
   let nativeCommand;
   let completion;
@@ -76,7 +89,7 @@ try {
   if (input.platform === 'android') {
     const result = command([input.flutter, 'run', '-t', input.testFile || 'integration_test/native_feature_journeys.dart',
       '-d', input.device, '--no-pub', '--no-resident',
-      '--dart-define=FEATURE_ISOLATED_DEVICE=true', `--dart-define=FEATURE_SOURCE_SHA=${sourceSha}`],
+      '--dart-define=FEATURE_ISOLATED_DEVICE=true', `--dart-define=FEATURE_SOURCE_SHA=${sourceSha}`, ...extraDartDefines],
       input.projectRoot, input.timeoutMs || 1200000);
     if (result.exitStatus !== 0) throw new Error(`Native build/install/launch failed (exit ${result.exitStatus}).`);
     const pidResult = command([input.adb, '-s', input.device, 'shell', 'pidof', input.appId]);
@@ -109,7 +122,7 @@ try {
     if (screenshot.exitStatus === 0) command([input.adb, '-s', input.device, 'pull', '/data/local/tmp/acceptance-native.png', path.join(outputRoot, 'native-screen.png')]);
   } else {
     nativeCommand = [input.flutter, 'run', '--machine', '-t', input.testFile || 'integration_test/native_feature_journeys.dart',
-      '-d', input.device, '--no-pub', '--dart-define=FEATURE_ISOLATED_DEVICE=true', `--dart-define=FEATURE_SOURCE_SHA=${sourceSha}`];
+      '-d', input.device, '--no-pub', '--dart-define=FEATURE_ISOLATED_DEVICE=true', `--dart-define=FEATURE_SOURCE_SHA=${sourceSha}`, ...extraDartDefines];
     resident = await collectResidentFlutter({ command: nativeCommand, cwd: input.projectRoot, env: process.env,
       sourceSha, platform: input.platform, device: input.device, expectedChecks: input.expectedChecks,
       timeoutMs: input.timeoutMs || 1500000, journeyTimeoutMs: input.journeyTimeoutMs || 300000,
@@ -129,9 +142,17 @@ try {
   const proof = createNativeProof({ sourceSha, platform: input.platform, expectedChecks: input.expectedChecks });
   for (const line of (nativeStdout + '\n' + nativeStderr).split(/\r?\n/)) proof.line(line);
   const parsed = proof.finish();
+  nativeCompletion=parsed.completion;
+  if(isMobileScenarioEntry(input.entry)){
+    if(parsed.completion?.profileSha!==profileSha256)throw Error('Native DONE profile mismatch.');
+    for(const check of parsed.checks){
+      if(check.profileSha!==profileSha256)throw Error('Native CHECK profile mismatch.');
+      if(check.acceptanceLevel==='scenario'&&!fullFeatureProfiles[check.feature]?.scenarios.includes(check.scenario))throw Error('Unknown native scenario.');
+    }
+  }
   checks = parsed.checks.map(check => ({ ...check, command: nativeCommand, stdout: nativeStdout, stderr: nativeStderr,
     exitStatus: input.platform === 'ios' ? resident.actualCloseCode : completion?.exitStatus ?? 1, skipped: false,
-    acceptanceLevel: 'component-only', sourceSnapshotSha256: input.sourceSnapshotSha256 || null }));
+    acceptanceLevel: isMobileScenarioEntry(input.entry)&&check.acceptanceLevel==='scenario'?'scenario':'component-only', sourceSnapshotSha256: input.sourceSnapshotSha256 || null }));
   if (!parsed.passed || (resident && !resident.passed)) throw new Error('Native journey failed: ' + [...parsed.errors, ...(resident?.errors || [])].join('; '));
   if (input.platform === 'android') command([input.adb, '-s', input.device, 'shell', 'am', 'force-stop', input.appId]);
   exitStatus = 0;
@@ -144,6 +165,7 @@ try {
     sourceSnapshotSha256: input.sourceSnapshotSha256 || null,
     platform: input.platform, device: input.device, isolated: input.isolated,
     completeFeatureRowsCertified: 0, full195Certified: false,
+    entry:input.entry??null, nativeRuntime,nativeCompletion,
     expectedChecks: input.expectedChecks ?? null, checks, ledger, exitStatus, failure: failure || null,
     boundary: 'Real target native component journeys. No paid/public generation call, human profile, publishing, or whole-feature certification.' };
   const target = path.join(outputRoot, 'native-mobile-receipt.json');

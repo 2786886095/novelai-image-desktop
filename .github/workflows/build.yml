@@ -22,6 +22,10 @@ on:
         description: Successful Build Mobile run with the identical mobile source tree
         type: string
         required: false
+      feature_run:
+        description: Same-source native feature run containing complete 39-by-5 execution evidence
+        type: string
+        required: false
 
 # Needed for softprops/action-gh-release to create/attach to Releases on v* tags.
 permissions:
@@ -57,6 +61,11 @@ jobs:
     timeout-minutes: 45
 
     steps:
+      - name: Preserve exact source bytes before checkout
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: git config --global core.autocrlf false
+
       - name: Checkout
         uses: actions/checkout@v5
 
@@ -182,6 +191,11 @@ jobs:
     runs-on: macos-15-intel
     timeout-minutes: 15
     steps:
+      - name: Preserve exact source bytes before checkout
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: git config --global core.autocrlf false
+
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
@@ -215,6 +229,11 @@ jobs:
       contents: write
       actions: read
     steps:
+      - name: Preserve exact source bytes before checkout
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: git config --global core.autocrlf false
+
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
@@ -227,6 +246,14 @@ jobs:
           path: release-assets
           merge-multiple: true
           run-id: ${{ inputs.verified_build_run || github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Download complete same-source five-platform feature evidence
+        if: inputs.feature_run != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: five-platform-feature-evidence
+          path: release-evidence
+          run-id: ${{ inputs.feature_run }}
           github-token: ${{ github.token }}
       - name: Verify mobile source, versions, signatures and installer hashes; then publish
         env:

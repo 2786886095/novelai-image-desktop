@@ -385,23 +385,33 @@ export async function moveReferencePresetToGroup(
   };
 }
 
-export async function exportReferencePresets(
-  request: ReferencePresetExportRequest = {},
-  userDataRoot?: string,
-): Promise<ReferencePresetOperationResult> {
-  const library = await listReferencePresets(userDataRoot);
-  const presets = request.presetId
+function selectedExportPresets(
+  library: ReferencePresetLibrary,
+  request: ReferencePresetExportRequest,
+) {
+  return request.presetId
     ? library.presets.filter((item) => item.id === request.presetId)
     : request.group !== undefined
       ? library.presets.filter((item) => item.group === request.group)
       : library.presets;
+}
+
+export async function exportReferencePresetsFile(
+  request: ReferencePresetExportRequest,
+  filePath: string,
+  userDataRoot?: string,
+): Promise<ReferencePresetOperationResult> {
+  const library = await listReferencePresets(userDataRoot);
+  const presets = selectedExportPresets(library, request);
   if (!presets.length) return { ok: false, message: "没有可导出的预设。" };
-  const result = await dialog.showSaveDialog({
-    title: "导出参考图预设",
-    defaultPath: `${request.presetId ? presets[0].name : request.group || "reference-presets"}.nairp`,
-    filters: [{ name: "Langbai 参考图预设", extensions: ["nairp"] }],
-  });
-  if (result.canceled || !result.filePath) return { ok: false, message: "已取消导出。" };
+  return writeReferencePresetArchive(library, presets, filePath);
+}
+
+async function writeReferencePresetArchive(
+  library: ReferencePresetLibrary,
+  presets: ReferencePreset[],
+  filePath: string,
+): Promise<ReferencePresetOperationResult> {
   const zip = new JSZip();
   const manifestPresets: Record<string, unknown>[] = [];
   for (let index = 0; index < presets.length; index++) {
@@ -426,10 +436,27 @@ export async function exportReferencePresets(
     }),
   );
   await fs.writeFile(
-    result.filePath,
+    filePath,
     await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }),
   );
-  return { ok: true, path: result.filePath, count: presets.length };
+  return { ok: true, path: filePath, count: presets.length };
+}
+
+
+export async function exportReferencePresets(
+  request: ReferencePresetExportRequest = {},
+  userDataRoot?: string,
+): Promise<ReferencePresetOperationResult> {
+  const library = await listReferencePresets(userDataRoot);
+  const presets = selectedExportPresets(library, request);
+  if (!presets.length) return { ok: false, message: "没有可导出的预设。" };
+  const result = await dialog.showSaveDialog({
+    title: "导出参考图预设",
+    defaultPath: `${request.presetId ? presets[0].name : request.group || "reference-presets"}.nairp`,
+    filters: [{ name: "Langbai 参考图预设", extensions: ["nairp"] }],
+  });
+  if (result.canceled || !result.filePath) return { ok: false, message: "已取消导出。" };
+  return writeReferencePresetArchive(library, presets, result.filePath);
 }
 
 export async function importReferencePresets(
@@ -441,8 +468,15 @@ export async function importReferencePresets(
     filters: [{ name: "Langbai 参考图预设", extensions: ["nairp", "zip"] }],
   });
   if (result.canceled || !result.filePaths[0]) return { ok: false, message: "已取消导入。" };
+  return importReferencePresetsFile(result.filePaths[0], userDataRoot);
+}
+
+export async function importReferencePresetsFile(
+  filePath: string,
+  userDataRoot?: string,
+): Promise<ReferencePresetOperationResult> {
   try {
-    const zip = await JSZip.loadAsync(await fs.readFile(result.filePaths[0]));
+    const zip = await JSZip.loadAsync(await fs.readFile(filePath));
     const manifestEntry = zip.file("manifest.json");
     if (!manifestEntry) throw new Error("Missing manifest");
     const manifest = JSON.parse(await manifestEntry.async("string")) as {

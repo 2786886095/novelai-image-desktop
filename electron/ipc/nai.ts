@@ -3,6 +3,7 @@ import {extractEmbeddedImageMetadata} from '../image-metadata';
 import {prepareGooglePromptTranslation} from '../../src/google-prompt-translation';
 import {resolveTranslationTarget,baiduTranslationTarget,translationLanguageName,normalizeTranslationSource,parseTranslationReply} from '../../src/translation';
 import {prepareFocusedInpaintInput,compositeFocusedPatch} from './focused-inpaint';
+import {FOCUSED_INPAINT_WORK_MAX_PIXELS} from '../../src/focused-inpaint';
 import {parseNaiAccountSummary} from './nai-account-summary';
 import {validateNaiAccountReadOnly,requireNaiAccountValidation} from './nai-accounts-validation';
 import { currentNaiAccount, getNaiAccountSummary } from './nai-accounts-runtime';
@@ -16,10 +17,11 @@ import {bindAgentImageProvider} from './agent-image-provider';
 import {authorizeAgentComicRequest} from './comic-run-authorization';
 import {readComicImage,readComicReferences,buildComicSelectedZip,writeComicZip} from './comic-assets';
 import {reverseTemplateProtocol} from "../../src/reverse-template";
+import {classifyAiPromptResponse,visionPromptRequestError,redactAiCredentials} from "./ai-prompt-response";
 import { planUpscale } from "../../src/upscale-plan";
 import {matchingVibeEncoding, validateVibeModel} from "../../src/vibe-file";
 import {normalizeNovelAiEndpoint} from '../../src/nai-endpoint';
-import { processableImage, validateImage, MAX_IMAGE_BYTES, isWebp } from "./image-codec";
+import { processableImage, validateImage, MAX_IMAGE_BYTES, MAX_IMAGE_PIXELS, isWebp } from "./image-codec";
 import { writeUniqueImageFile } from "./image-output";
 import { app, dialog, nativeImage } from "electron";
 import { Readable } from "node:stream";
@@ -1673,6 +1675,7 @@ export function prepareInpaintAssets(
   imageBuffer: Buffer,
   maskBase64: string,
   targetSize?: Pick<GenerateParams, "width" | "height">,
+  options?: { focused?: boolean },
 ): PreparedInpaintAssets {
   const sourcePng = PNG.sync.read(bufferToPng(imageBuffer));
   const originalWidth = sourcePng.width;
@@ -1684,7 +1687,10 @@ export function prepareInpaintAssets(
   }
   const width = ceilToMultiple(requestedWidth, INPAINT_SIZE_MULTIPLE);
   const height = ceilToMultiple(requestedHeight, INPAINT_SIZE_MULTIPLE);
-  if (width > 1600 || height > 1600) {
+  if (options?.focused && (!Number.isInteger(requestedWidth) || !Number.isInteger(requestedHeight) || requestedWidth % INPAINT_SIZE_MULTIPLE !== 0 || requestedHeight % INPAINT_SIZE_MULTIPLE !== 0 || width * height > FOCUSED_INPAINT_WORK_MAX_PIXELS)) {
+    throw new Error("局部重绘工作尺寸必须为 64 的整数倍且不超过 1048576 像素。");
+  }
+  if (!options?.focused && (width > 1600 || height > 1600)) {
     throw new Error(
       `重绘输出尺寸 ${width}×${height} 超出 NovelAI 允许范围；请在尺寸选择中缩小到不超过 1600×1600。`,
     );
@@ -2736,28 +2742,7 @@ export async function loadImageFile(): Promise<LoadImageResult> {
     properties: ["openFile"],
   });
   if (result.canceled || result.filePaths.length === 0) return { ok: false };
-
-  try {
-    const filePath = result.filePaths[0];
-    const buffer = await fs.readFile(filePath);
-    const dims = readImageDimensions(buffer);
-    workbenchImagePath = filePath;
-    return {
-      ok: true,
-      image: {
-        filePath,
-        fileUrl: toLocalMediaUrl(filePath),
-        width: dims.width,
-        height: dims.height,
-      },
-      metadata: await extractEmbeddedImageMetadata(buffer),
-    };
-  } catch (error: any) {
-    return {
-      ok: false,
-      message: `加载图片失败：${error?.message ?? "未知错误"}`,
-    };
-  }
+  return loadImageFromPath(result.filePaths[0]);
 }
 
 export function clearWorkbenchImage() {
@@ -2785,8 +2770,14 @@ function summarizeUserContent(
     .join("\n");
 }
 
-function recordAiCall(entry: Omit<AiCallLogEntry, "id" | "time">): void {
-  aiCallLog.push({ ...entry, id: crypto.randomUUID(), time: Date.now() });
+function recordAiCall(entry: Omit<AiCallLogEntry, "id" | "time">, requestSecrets: readonly unknown[] = []): void {
+  const settings = getSettings();
+  const secrets = [...requestSecrets, settings.visionApiKey, settings.convertApiKey, settings.translateAiApiKey];
+  aiCallLog.push({ ...entry,
+    systemPrompt: redactAiCredentials(entry.systemPrompt, secrets),
+    userText: redactAiCredentials(entry.userText, secrets),
+    response: redactAiCredentials(entry.response, secrets),
+    id: crypto.randomUUID(), time: Date.now() });
   if (aiCallLog.length > AI_LOG_LIMIT) aiCallLog.shift();
 }
 
@@ -2865,20 +2856,15 @@ async function callVisionApi(
 
   try {
     let resp = await post(maxTokens);
-    let content: string = resp.data?.choices?.[0]?.message?.content ?? "";
-    let fin = resp.data?.choices?.[0]?.finish_reason;
+    let result = classifyAiPromptResponse(resp.data);
     // Reasoning models burn the whole budget on hidden reasoning → empty content
     // with finish_reason "length". Retry once with a much larger budget.
-    if (!content.trim() && fin === "length") {
+    if (!result.ok && result.retryableEmptyLength) {
       resp = await post(Math.max(maxTokens * 8, 32000));
-      content = resp.data?.choices?.[0]?.message?.content ?? "";
-      fin = resp.data?.choices?.[0]?.finish_reason;
+      result = classifyAiPromptResponse(resp.data);
     }
-    if (!content.trim()) {
-      const message =
-        fin === "length"
-          ? "API 返回被长度截断（内容为空）：该模型把配额全用在了推理上，请改用非推理模型，或在该服务调高最大输出长度。"
-          : "API 返回内容为空：请确认「模型」填的是该服务支持的模型名（例如 xAI 用 grok-4.3，而非默认 gpt-4o-mini），可点「检测模型」选择。";
+    if (!result.ok) {
+      const message = result.message;
       if (record) {
         recordAiCall({
           label,
@@ -2888,11 +2874,13 @@ async function callVisionApi(
           userText: summarizeUserContent(userContent),
           ok: false,
           response: message,
-        });
+        }, [visionApiKey]);
       }
       return { ok: false, message };
     }
-    const cleaned = cleanPromptOutput(content);
+    // The only consumer parses template/variant JSON or cleans final text fields.
+    // Cleaning here would destroy JSON fences, escaped newlines and quoted text.
+    const content = result.content.trim();
     if (record) {
       recordAiCall({
         label,
@@ -2901,16 +2889,12 @@ async function callVisionApi(
         systemPrompt,
         userText: summarizeUserContent(userContent),
         ok: true,
-        response: cleaned,
-      });
+        response: content,
+      }, [visionApiKey]);
     }
-    return { ok: true, content: cleaned, message: "成功" };
+    return { ok: true, content, message: "成功" };
   } catch (error: any) {
-    const msg =
-      error?.response?.data?.error?.message ??
-      error?.response?.data?.message ??
-      error?.message ??
-      "未知错误";
+    const msg = visionPromptRequestError(error);
     if (record) {
       recordAiCall({
         label,
@@ -2920,7 +2904,7 @@ async function callVisionApi(
         userText: summarizeUserContent(userContent),
         ok: false,
         response: String(msg),
-      });
+      }, [visionApiKey]);
     }
     return { ok: false, message: msg };
   }
@@ -3024,7 +3008,7 @@ async function callConvertApi(
           userText,
           ok: false,
           response: message,
-        });
+        }, [apiKey]);
       }
       return { ok: false, message };
     }
@@ -3039,15 +3023,16 @@ async function callConvertApi(
         userText,
         ok: true,
         response: cleaned,
-      });
+      }, [apiKey]);
     }
     return { ok: true, content: cleaned, message: "成功" };
   } catch (error: any) {
-    const msg =
+    const rawMessage =
       error?.response?.data?.error?.message ??
       error?.response?.data?.message ??
       error?.message ??
       "未知错误";
+    const msg = redactAiCredentials(String(rawMessage), [apiKey, settings.visionApiKey, settings.convertApiKey, settings.translateAiApiKey]);
     if (record) {
       recordAiCall({
         label,
@@ -3057,7 +3042,7 @@ async function callConvertApi(
         userText,
         ok: false,
         response: String(msg),
-      });
+      }, [apiKey]);
     }
     return { ok: false, message: msg };
   }
@@ -4467,7 +4452,13 @@ export async function loadImageFromPath(
 ): Promise<LoadImageResult> {
   try {
     const buffer = await fs.readFile(filePath);
+    // A filename/header is not proof of a decodable image. Do not replace the
+    // current workbench source until decoding and metadata handling succeed.
+    await sharp(buffer, {limitInputPixels: MAX_IMAGE_PIXELS, pages: 1})
+      .resize({width: 1, height: 1}).raw().toBuffer();
     const dims = readImageDimensions(buffer);
+    if (!(dims.width > 0 && dims.height > 0)) throw new Error("图片尺寸无效或当前格式无法读取。");
+    const metadata = await extractEmbeddedImageMetadata(buffer);
     workbenchImagePath = filePath;
     return {
       ok: true,
@@ -4477,7 +4468,7 @@ export async function loadImageFromPath(
         width: dims.width,
         height: dims.height,
       },
-      metadata: await extractEmbeddedImageMetadata(buffer),
+      metadata,
     };
   } catch (error: any) {
     return {
@@ -4813,13 +4804,9 @@ export async function inpaintImage(
   extras?: GenerateExtras,
 ): Promise<GenerateResult> {
   // Inpaint has its own model selector, independent of text-to-image.
-  params = normalizeGenerateParams({
-    ...params,
-    model: normalizeModel(inpaintModel) as GenerateParams["model"],
-  });
   const token = getToken();
   if (!token) return { ok: false, message: "请先配置 API Token。", items: [] };
-  if (!params.positivePrompt.trim())
+  if (typeof params.positivePrompt !== "string" || !params.positivePrompt.trim())
     return { ok: false, message: "请输入正面提示词。", items: [] };
   if (!workbenchImagePath)
     return { ok: false, message: "请先加载原图。", items: [] };
@@ -4832,9 +4819,19 @@ export async function inpaintImage(
     if (extras?.preciseReferences?.length && extras.vibeImages?.length) {
       throw new Error("精准参考不能与氛围迁移同时使用，请移除其中一种参考。");
     }
-    const preparedExtras = await prepareExtras(params, extras, job.controller.signal);
     const { buffer } = await readWorkbenchImage();
-    const focused = region ? prepareFocusedInpaintInput(bufferToPng(buffer),Buffer.from(stripBase64Prefix(maskBase64),'base64'),region,params,resizeImageBufferToPng) : null;
+    const focused = region ? prepareFocusedInpaintInput(bufferToPng(buffer),Buffer.from(stripBase64Prefix(maskBase64),'base64'),region) : null;
+    params = {
+      ...normalizeGenerateParams({
+        ...params,
+        model: normalizeModel(inpaintModel) as GenerateParams["model"],
+        ...(focused ? focused.size : {}),
+      }),
+      // Focused work dimensions have their own validated area/64-grid contract;
+      // the generic generation normalizer has unrelated whole-image edge caps.
+      ...(focused ? focused.size : {}),
+    };
+    const preparedExtras = await prepareExtras(params, extras, job.controller.signal);
     // Custom centers are stored relative to the whole canvas. The infill model
     // sees the crop, so remap both positive/negative caption centers together.
     // AI-choice captions keep their sentinel position. Never mutate saved input.
@@ -4847,7 +4844,7 @@ export async function inpaintImage(
       } : {...c}),
     } : preparedExtras;
     const preparedAssets = focused
-      ? prepareInpaintAssets(focused.crop,focused.cropMask.toString('base64'),focused.size)
+      ? prepareInpaintAssets(focused.crop,focused.cropMask.toString('base64'),focused.size,{focused:true})
       : prepareInpaintAssets(buffer, maskBase64, params);
     const actualSeed =
       params.seedMode !== "random" && params.seed >= 0
@@ -4874,6 +4871,10 @@ export async function inpaintImage(
         height: preparedAssets.height,
       };
       const payload = buildPayload(inpaintParams, actualSeed, requestExtras);
+      if(focused) {
+        payload.parameters.width=preparedAssets.width;
+        payload.parameters.height=preparedAssets.height;
+      }
       payload.action = "infill";
       logInfo(`inpaint request: model=${model} characters=${normalizedCharCaptions(requestExtras, model, params.preservePromptText).length} precise=${requestExtras?.preciseReferences?.length ?? 0} vibe=${requestExtras?.vibeImages?.length ?? 0} focused=${Boolean(focused)}`);
       applyOfficialInpaintParameters(
@@ -5397,11 +5398,13 @@ async function aiTranslate(
     const output = cleanPromptOutput(String(response.data?.choices?.[0]?.message?.content ?? "")).trim();
     const parsed = parseTranslationReply(output, sourceLanguage);
     if (!parsed.text) return { ok: false, error: "AI 翻译结果为空，请检查模型是否支持 Chat Completions。" };
-    recordAiCall({ label: "AI 翻译", api: "translate", model, systemPrompt, userText: text, ok: true, response: output });
+    recordAiCall({ label: "AI 翻译", api: "translate", model, systemPrompt, userText: text, ok: true, response: output }, [apiKey]);
     return { ok: true, ...parsed };
   } catch (error: any) {
-    const message = error?.response?.data?.error?.message ?? error?.response?.data?.message ?? error?.message ?? "未知错误";
-    recordAiCall({ label: "AI 翻译", api: "translate", model, systemPrompt, userText: text, ok: false, response: String(message) });
+    const rawMessage = error?.response?.data?.error?.message ?? error?.response?.data?.message ?? error?.message ?? "未知错误";
+    const settings = getSettings();
+    const message = redactAiCredentials(String(rawMessage), [apiKey, settings.visionApiKey, settings.convertApiKey, settings.translateAiApiKey]);
+    recordAiCall({ label: "AI 翻译", api: "translate", model, systemPrompt, userText: text, ok: false, response: String(message) }, [apiKey]);
     return { ok: false, error: `AI 翻译失败：${message}` };
   }
 }

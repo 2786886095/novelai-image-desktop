@@ -1,3 +1,4 @@
+import {mobileNativeEntries,isMobileScenarioEntry} from './mobile-entry-specs.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -5,7 +6,7 @@ import {spawnSync} from 'node:child_process';
 
 // One immutable checkout per bounded entry. Never copy a runner's dirty files,
 // .dart_tool, Pods or platform project into another entry's compilation tree.
-const entryNames = new Set(['core19', 'metadata_favorites16', 'queue_lifecycle4']);
+const entryNames = new Set(Object.keys(mobileNativeEntries));
 const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const within = (parent, child) => {
   const relative = path.relative(parent, child);

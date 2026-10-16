@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'dart:isolate';
+import '../inpaint/focused_inpaint.dart';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -56,6 +57,8 @@ class PreparedDirectorImage {
 }
 
 class PreparedInpaintAssets {
+  final Uint8List? originalImageBytes;
+  final InpaintRegion? region;
   final Uint8List imageBytes;
   final Uint8List maskBytes;
   final Uint8List blendAlpha;
@@ -66,6 +69,8 @@ class PreparedInpaintAssets {
   final bool resized;
 
   const PreparedInpaintAssets({
+    this.originalImageBytes,
+    this.region,
     required this.imageBytes,
     required this.maskBytes,
     required this.blendAlpha,
@@ -412,14 +417,24 @@ PreparedInpaintAssets prepareInpaintAssets(
   Uint8List maskBytes, {
   int? targetWidth,
   int? targetHeight,
+  InpaintRegion? region,
 }) {
-  final source = image_lib.decodeImage(imageBytes, frame: 0);
-  final mask = image_lib.decodeImage(maskBytes, frame: 0);
+  var source = image_lib.decodeImage(imageBytes, frame: 0);
+  var mask = image_lib.decodeImage(maskBytes, frame: 0);
   if (source == null) {
     throw const FormatException('Could not read inpaint source image');
   }
   if (mask == null) {
     throw const FormatException('Could not read inpaint mask');
+  }
+  final originalWidth=source.width,originalHeight=source.height;
+  if(region!=null){
+    final plan=focusedInpaintPlan(region,source.width,source.height);
+    if(plan.region!=region)throw const FormatException('Selection changed or exceeds the focused area limit.');
+    if(mask.width!=source.width||mask.height!=source.height)throw const FormatException('Mask must match original dimensions.');
+    targetWidth=plan.size.width;targetHeight=plan.size.height;
+    source=image_lib.copyCrop(source,x:region.x,y:region.y,width:region.width,height:region.height);
+    mask=image_lib.copyCrop(mask,x:region.x,y:region.y,width:region.width,height:region.height);
   }
   final requestedWidth = targetWidth ?? source.width;
   final requestedHeight = targetHeight ?? source.height;
@@ -428,7 +443,7 @@ PreparedInpaintAssets prepareInpaintAssets(
   }
   final width = max(64, (requestedWidth / 64).ceil() * 64);
   final height = max(64, (requestedHeight / 64).ceil() * 64);
-  if (width > 1600 || height > 1600) {
+  if (region==null && (width > 1600 || height > 1600)) {
     throw FormatException(
       'Inpaint output ${width}x$height exceeds the NovelAI limit; select dimensions within 1600x1600.',
     );
@@ -513,8 +528,10 @@ PreparedInpaintAssets prepareInpaintAssets(
     ),
     width: width,
     height: height,
-    originalWidth: source.width,
-    originalHeight: source.height,
+    originalWidth: originalWidth,
+    originalHeight: originalHeight,
+    originalImageBytes: region==null?null:Uint8List.fromList(imageBytes),
+    region: region,
     resized: resized,
   );
 }
@@ -665,7 +682,16 @@ Uint8List compositeInpaintResult(
     }
   }
 
-  final encoded = Uint8List.fromList(image_lib.encodePng(composited));
+  var output=composited;
+  final region=prepared.region;
+  if(region!=null){
+    final original=image_lib.decodeImage(prepared.originalImageBytes!);
+    if(original==null)throw const FormatException('Could not decode original canvas');
+    final patch=image_lib.copyResize(composited,width:region.width,height:region.height,interpolation:image_lib.Interpolation.cubic);
+    image_lib.compositeImage(original,patch,dstX:region.x,dstY:region.y);
+    output=original;
+  }
+  final encoded = Uint8List.fromList(image_lib.encodePng(output));
   return _copyPngMetadataChunks(generatedBytes, encoded);
 }
 

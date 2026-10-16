@@ -33,11 +33,11 @@ describe('conversion and reverse first request routing',()=>{
   it(`${kind} retains a routing failure rather than silently posting direct`,async()=>{
    fixture.route.mockRejectedValue(new Error('Fixture proxy unavailable'));
    expect((await call(kind)).ok).toBe(false);expect(fixture.post).not.toHaveBeenCalled();
-   expect(getAiCallLog()[0]).toMatchObject({ok:false,response:'Fixture proxy unavailable'});
+   expect(getAiCallLog()[0]).toMatchObject({ok:false,response:kind==='reverse'?'视觉模型请求失败，未生成可用提示词；请检查网络和服务配置。':'Fixture proxy unavailable'});
   });
   it(`${kind} does not retry authentication or replay a paid request`,async()=>{
    fixture.post.mockRejectedValue({response:{status:401,data:{error:{message:'Fixture unauthorized'}}}});
-   const result=await call(kind);expect(result.ok).toBe(false);expect(result.message).toContain('Fixture unauthorized');
+   const result=await call(kind);expect(result.ok).toBe(false);expect(result.message).toContain(kind==='reverse'?'HTTP 401':'Fixture unauthorized');
    expect(fixture.route).toHaveBeenCalledTimes(1);expect(fixture.post).toHaveBeenCalledTimes(1);
   });
  }

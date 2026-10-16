@@ -6,7 +6,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { DEFAULT_PARAMS, type AppSettings, type GenerateResult, type HistoryItem, type OpenAIInpaintRequest } from "../../src/types";
 import { normalizeOpenAIImageEditSettings } from "../../src/openai-image-edit";
-import { focusedInpaintPlan, type InpaintRegion } from "../../src/focused-inpaint";
+import { clipInpaintRegion, type InpaintRegion } from "../../src/focused-inpaint";
 import { rgba, runOpenAIImageEdit } from "./openai-image-edit";
 import { addHistory, getHistoryGroups, getSettings } from "./store";
 import { writeUniqueImageFile } from "./image-output";
@@ -54,7 +54,7 @@ export async function saveOpenAIEditResults(images: Buffer[], meta: { prompt: st
 }
 
 function cropRegion(region: InpaintRegion, width: number, height: number) {
-  return focusedInpaintPlan(region, width, height).region;
+  return clipInpaintRegion(region, width, height);
 }
 
 /** Inpaint panel entry point: current workbench image + editor mask. */

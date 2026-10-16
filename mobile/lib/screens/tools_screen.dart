@@ -14,6 +14,7 @@ import '../billing/anlas.dart';
 import '../i18n/anlas_billing_text.dart';
 import '../i18n/app_locales.dart';
 import '../i18n/runtime_text.dart';
+import '../i18n/inpaint_parity_text.dart';
 import '../inpaint/inpaint_mask.dart';
 import '../models/nai_models.dart';
 import '../state/app_state.dart';
@@ -121,6 +122,8 @@ class _InpaintPanel extends StatefulWidget {
 
 class _InpaintPanelState extends State<_InpaintPanel> {
   final strokes = <InpaintStroke>[];
+  int _editRevision=-1;
+  void _syncEditor(AppState state){if(_editRevision==state.inpaintEditRevision)return;_editRevision=state.inpaintEditRevision;strokes..clear()..addAll(copyInpaintStrokes(state.inpaintEditorStrokes));inverted=state.inpaintEditorInverted;_maskRaster=null;}
   InpaintMaskRaster? _maskRaster;
   double brush = 4;
   double imageOpacity = 1;
@@ -148,6 +151,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
   Future<void> _runInpaint(AppState state) async {
     final image = state.workbenchImage;
     if (image == null || (strokes.isEmpty && !inverted)) return;
+    state.setInpaintEditorData(strokes,inverted);
     final mask = await renderInpaintMask(
       strokes: strokes,
       width: image.width,
@@ -195,6 +199,8 @@ class _InpaintPanelState extends State<_InpaintPanel> {
           image: workbench,
           language: language,
           initialStrokes: strokes,
+          initialRegion: context.read<AppState>().inpaintRegion,
+          novelAiSelection: context.read<AppState>().inpaintEngine=='novelai',
           initialInverted: inverted,
           initialBrush: brush,
           initialImageOpacity: imageOpacity,
@@ -205,6 +211,8 @@ class _InpaintPanelState extends State<_InpaintPanel> {
       ),
     );
     if (!mounted || result == null) return;
+    context.read<AppState>().setInpaintRegion(result.region);
+    context.read<AppState>().setInpaintEditorData(result.strokes,result.inverted);
     final nextStrokes = copyInpaintStrokes(result.strokes);
     final nextRaster = InpaintMaskRaster(
       sourceWidth: math.max(1, workbench.width),
@@ -337,10 +345,12 @@ class _InpaintPanelState extends State<_InpaintPanel> {
       spacing: 6,
       runSpacing: 6,
       children: [
+        if(state.inpaintEditSession!=null) OutlinedButton.icon(key:const ValueKey('inpaint-return-edit'),style:compactStyle,
+          onPressed:state.busy||state.isRestoringInpaintEditSession?null:()async{await state.restoreInpaintEditSession();},icon:const Icon(Icons.history),label:Text(inpaintParityText(language,'return'))),
         OutlinedButton.icon(
           key: const ValueKey('edit-inpaint-mask'),
           style: compactStyle,
-          onPressed: workbench == null ? null : () => _openEditor(workbench),
+          onPressed: workbench == null || state.busy || state.isRestoringInpaintEditSession ? null : () => _openEditor(workbench),
           icon: const Icon(Icons.draw_outlined),
           label: Text(t('tools.editMask')),
         ),
@@ -385,6 +395,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    _syncEditor(state);
     final language = state.settings.language;
     String t(String key) => mobileUiTextFor(language, key);
     final workbench = state.workbenchImage;
@@ -428,7 +439,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
               source: state.workbenchImage == null ? null :
                 (width: (state.inpaintSourceMode == 'original' ? state.i2iOriginalImage ?? state.workbenchImage! : state.workbenchImage!).width,
                  height: (state.inpaintSourceMode == 'original' ? state.i2iOriginalImage ?? state.workbenchImage! : state.workbenchImage!).height),
-              onMode: state.setInpaintSizeMode, onSize: state.setInpaintCustomSize),
+              region:state.inpaintRegion,onMode: state.setInpaintSizeMode, onSize: state.setInpaintCustomSize),
             const SizedBox(height: 16),
             Text(
               language.startsWith('zh') ? '生成后下次重绘使用' : 'Next redraw source',

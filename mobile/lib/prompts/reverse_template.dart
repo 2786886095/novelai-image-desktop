@@ -34,7 +34,13 @@ ${knownCharacter ? '返回两个完整envelope：{"namePrompt":{"segments":[]},"
 每项为一个有效单元（通常无逗号；引号内画面文字允许逗号和中文，不能拆开）。单人一个 segment，多人 base 与角色各一个 segment，角色段以 girl/boy/other 开头。Tag 65–75%，自然短语25–35%，总计 $min–$max。优先遵守不虚构和短输入例外；信息充分时建议60单元（42 Tag、18自然短语），不要用重复、伪造关系、同义词或不可见细节凑数。Tag 不得假标 natural；自然短语描述有证据的空间和身体关系。角色身份不替代可见动作、构图、道具、环境。
 ${knownCharacter ? '本次内部协议覆盖前文的字符串 JSON 协议：返回 {"namePrompt":{"segments":[{"units":[]}]},"featurePrompt":{"segments":[{"units":[]}]}}，两个完整版本各自独立满足模板。' : ''}''') + (conversion ? '\n这是文本转换，不是图片反推。遵从所选模板与原始用户要求：只有模板允许扩写且用户未禁止时，未限定的次要细节可以合理补充（光线、材质、构图），但不能改变人数、身份、明确外貌、关键服装、动作关系和场景。用户要求严格不扩写时不为计数目标编造；无法同时满足时拒绝结果。' : '\n反推只使用图像可见证据和用户指定范围，不为凑数杜撰细节。可见证据边界：光照不等于可见光源。太阳圆盘不可见时不写 sun；可见受光山坡可保留 sunlight/alpenglow 等实际光照，不能推定画外物体。无法确认日出或日落时不指定 morning/sunrise/sunset，仅描述可见的暖光、色彩和阴影。地貌与材质词不以同义项重复计数，rock/stone 仅一个有效单元；保留 stone floor 等不同限定事实。foreground/background 等空泛层级词不能代替具体可见物体及其位置。信息不足达到模板下限时保留不确定性，不用太阳、时间或材质近义词凑数。');
   ({String prompt, PromptVariants? variants}) parse(String raw,{String source=''}) {
-    final value=jsonDecode(raw.trim().replaceFirst(RegExp(r'^```(?:json)?\s*',caseSensitive:false),'').replaceFirst(RegExp(r'\s*```$'),''));
+    var json=raw.trim();
+    if(json.startsWith('```')){
+      final fence=RegExp(r'^```(?:json)?[ \t\r\n]*([\s\S]*?)[ \t\r\n]*```$',caseSensitive:false).firstMatch(json);
+      if(fence==null)throw const FormatException('JSON fence must be complete and paired.');
+      json=fence[1]!;
+    }else{json=json.replaceFirst(RegExp(r'^json(?=\s*[\[{])\s*',caseSensitive:false),'');}
+    final value=jsonDecode(json);
     if(!knownCharacter)return (prompt:_audit(value,source),variants:null);
     final name=_audit(value['namePrompt'],source),feature=_audit(value['featurePrompt'],source);
     return (prompt:name,variants:PromptVariants(namePrompt:name,featurePrompt:feature));

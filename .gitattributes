@@ -6,3 +6,11 @@
 # Preserve hash-pinned upstream fonts, OFL notices and catalog bytes on every OS.
 /public/ui-fonts/** -text
 /mobile/assets/ui-fonts/** -text
+
+# These checked-in upstream resources have byte-level provenance hashes.
+# A Windows checkout must not silently rewrite their text line endings.
+/shared/ig5-image-prompts.json -text
+/shared/ig5-NOTICE.txt -text
+/shared/ig5-LICENSE.txt -text
+/shared/official-image-metadata-fixtures/** -text
+/shared/image-metadata-compat-fixtures/** -text

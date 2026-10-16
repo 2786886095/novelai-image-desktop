@@ -20,7 +20,7 @@ The test intentionally resets only that disposable test application's native
 preferences. It uses real platform plugins, production state/API/parser/storage
 code, real filesystem and real HTTP; it does not replace those with fake APIs.
 
-Implemented first journey coverage includes credential/preferences/clipboard
+Existing bounded journey coverage includes credential/preferences/clipboard
 roundtrips; generation-to-history/files; character and negative payloads; V5
 Medium; img2img/inpaint/colorize/upscale; offline selected metadata application;
 favorites copy/rename/remove; selective archive restore; group move, managed
@@ -38,8 +38,8 @@ deleting or exempting any of the 195 required feature rows.
 
 ## Separate native CI entries (all remain partial)
 
-`feature-acceptance.yml` does not publish. Android/iOS run three independent
-entries: core19, metadata/favorites16, and queue-lifecycle4. Each has a separate
+`feature-acceptance.yml` does not publish. Android/iOS run six independent
+entries: core19, metadata/favorites16, queue-lifecycle4, release-parity7, library33 and generation24. Each has a separate
 input, native receipt, literal command ledger and output directory. A failing
 entry does not hide other independent observations, but the CI job fails.
 Only the actual checkout Git SHA is accepted in CI. Ten pinned official public
@@ -55,3 +55,58 @@ available runtime/version compatibility, never an unrelated first/last pair.
 Linux reuses the release CI's Xvfb/CJK-font and root-owned setuid Chromium sandbox
 configuration; it does not disable the sandbox. All 195 release slots remain
 required and no component success is automatically promoted to a whole row.
+
+## Client scenario profiles and strict aggregation
+
+`full-feature-profiles.mjs` binds the 39 actual client feature IDs to explicit
+scenario IDs. This is client acceptance using production state/API/storage,
+real native codecs/files/plugins and isolated loopback services, not a claim
+about upstream model visual quality, live subscription prices or paid accounts.
+No provider credentials are needed. A hash of the definitions travels with each
+scenario receipt and with `FEATURE_PROFILE_SHA` in the native parity app.
+
+The AI records profile follows the actual existing panel: refresh, expand,
+clear-all and the in-memory-log versus persisted text-history boundary. It does
+not invent filter/selective-delete controls or require memory logs to persist.
+
+`run-desktop-offline-native.mjs OUTPUT SOURCE_SHA` executes 18 production native
+filesystem/library scenarios, then launches a separate Electron process to
+reopen their stored records and verify image bytes. Fresh GitHub runners also
+execute three native clipboard scenarios; a human desktop clipboard is never
+modified. Both source snapshots must be clean and raw-byte identical to HEAD.
+Uncommitted local observations explicitly remain unqualified.
+
+`release_parity7` is independent of the old fixed 19/16/4 component counts. Its
+seven actual CHECKs must match a real DONE and source/profile identity. Only its
+four explicitly asserted inpaint scenarios are adapted into a scenario receipt;
+the other three reverse checks remain bounded components. The native source
+post-build dirty guard is unchanged: tool-generated tracked edits require review
+and cannot become a qualified release proof by allowlisting or restoring files.
+
+`build-full-feature-matrix.mjs EVIDENCE OUTPUT SHA VERSION --require-full` copies
+and hashes receipt bytes, accepts only clean same-SHA native scenario proofs,
+and keeps missing/partial rows visible. It checks all registered scenarios for
+each of all 195 feature/platform slots, then invokes the original release
+contract and on-disk evidence verifier. Missing evidence exits nonzero. A host
+unit test of the aggregator is never itself feature acceptance evidence.
+
+
+The new mobile scenario entries have independent CHECK totals 7/33/24. Their
+explicit scenario counts are 4/30/23; the remaining 3/3/1 bounded components are
+not promoted. The shared host entry policy is also used by the pristine Git
+worktree creator, preventing newly registered entries from being rejected by an
+outdated three-entry allowlist. Host policy tests exercise real disposable Git
+worktrees; they are not native device feature proofs.
+
+The desktop library runner covers actual native/renderer styles, negative
+libraries, font loading/import/removal/reset and the real bundled-catalog Worker,
+then validates independent-process persisted data. The desktop browser runner
+uses a Node-disabled sandboxed Chromium renderer, actual production metadata
+Worker/WASM and explicit ID-only loopback public assets, actual NAIRP file
+writer/importer plus reference manager selection, and native AppTabBar navigation.
+NAIRP file API execution is not described as OS file-dialog automation.
+
+`feature-parity.json` is a byte-identical alias of `FULL_FEATURE_MATRIX.json` for
+the publisher. Both retain all pending and partial slots. The artifact name is
+`five-platform-feature-evidence`; its relative evidence paths and SHA bindings
+are preserved. Native CI and the strict matrix must actually pass before release.

@@ -18,10 +18,10 @@ it('restores modes and independent custom values; migrates missing fields to ori
   expect(restoreInpaintSizeState({ inpaintSizeMode: 'original', inpaintCustomSize: custom }).inpaintCustomSize).toEqual(custom);
   expect(restoreInpaintSizeState({ inpaintSizeMode: 'unknown', inpaintCustomSize: { width: -1, height: Infinity } }).inpaintCustomSize).toEqual({ width: 1024, height: 1024 });
 });
-it('focused requests use crop dimensions but keep the chosen final canvas', () => {
+it('focused requests use crop dimensions but always keep the original canvas', () => {
   const region = { x: 128, y: 128, width: 256, height: 256 };
   const plan = inpaintSizePlan('custom', custom, source, region);
-  expect(plan.outputSize).toEqual(custom);
+  expect(plan.outputSize).toEqual(source);
   expect(plan.requestSize.width % 64).toBe(0);
   expect(plan.requestSize.height % 64).toBe(0);
   expect(scaledInpaintRegion(region, source, source)).toEqual(region);

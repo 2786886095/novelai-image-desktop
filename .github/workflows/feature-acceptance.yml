@@ -1,14 +1,15 @@
-name: Native Feature Acceptance Components
+name: Native Client Feature Acceptance
 
 on:
   push:
-    branches: ['codex/release-2.5.8-mobile-parity']
+    branches: ['codex/release-2.5.10']
   workflow_dispatch:
 
-# This workflow collects bounded native journeys. It never publishes or replaces
+# This workflow executes client scenarios and preserves bounded observations. It never publishes or replaces
 # the existing 195-feature release verification contract.
 permissions:
   contents: read
+  actions: read
 
 jobs:
   desktop-components:
@@ -17,7 +18,7 @@ jobs:
       matrix:
         os: [windows-latest, macos-14, ubuntu-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - name: Preserve exact committed bytes before checkout
         shell: bash
@@ -77,6 +78,11 @@ jobs:
           node -e "console.log(require('electron'))"
           sudo chown root:root node_modules/electron/dist/chrome-sandbox
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+      - name: Fetch and verify the pinned Windows-only component seed
+        if: runner.os == 'Windows'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/fetch-harness-seed.mjs
       - name: Execute real host native production components
         shell: bash
         run: |
@@ -84,7 +90,7 @@ jobs:
             keyring_home="$(mktemp -d "$RUNNER_TEMP/native-keyring-home.XXXXXX")"
             chmod 700 "$keyring_home"
             export NATIVE_KEYRING_HOME="$keyring_home"
-            timeout --signal=TERM --kill-after=10s 180s dbus-run-session -- xvfb-run -a bash --noprofile --norc -euo pipefail <<'KEYRING_SESSION'
+            timeout --signal=TERM --kill-after=10s 1800s dbus-run-session -- xvfb-run -a bash --noprofile --norc -euo pipefail <<'KEYRING_SESSION'
           set +x
           export HOME="$NATIVE_KEYRING_HOME"
           export XDG_DATA_HOME="$HOME/.local/share"
@@ -97,10 +103,26 @@ jobs:
           printf '::add-mask::%s\n' "$keyring_password"
           printf '%s' "$keyring_password" | timeout --signal=TERM --kill-after=5s 15s gnome-keyring-daemon --unlock --components=secrets
           unset keyring_password
-          node scripts/feature-acceptance/run-desktop-native.mjs "$RUNNER_TEMP/desktop-acceptance" "$GITHUB_SHA"
+          failed=0
+          for pair in desktop-native:desktop-acceptance desktop-offline-native:desktop-offline-acceptance desktop-ai-native:desktop-ai-acceptance desktop-generation-native:desktop-generation-acceptance desktop-library-native:desktop-library-acceptance desktop-system-native:desktop-system-acceptance desktop-browser-native:desktop-browser-acceptance desktop-advanced-native:desktop-advanced-acceptance; do
+            if [ "$RUNNER_OS" = Windows ] && [ "${pair%%:*}" = desktop-system-native ]; then
+                node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" .tmp/harness-release240 || failed=1
+              else
+                node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" || failed=1
+              fi
+          done
+          exit "$failed"
           KEYRING_SESSION
           else
-            node scripts/feature-acceptance/run-desktop-native.mjs "$RUNNER_TEMP/desktop-acceptance" "$GITHUB_SHA"
+            failed=0
+            for pair in desktop-native:desktop-acceptance desktop-offline-native:desktop-offline-acceptance desktop-ai-native:desktop-ai-acceptance desktop-generation-native:desktop-generation-acceptance desktop-library-native:desktop-library-acceptance desktop-system-native:desktop-system-acceptance desktop-browser-native:desktop-browser-acceptance desktop-advanced-native:desktop-advanced-acceptance; do
+              if [ "$RUNNER_OS" = Windows ] && [ "${pair%%:*}" = desktop-system-native ]; then
+                node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" .tmp/harness-release240 || failed=1
+              else
+                node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" || failed=1
+              fi
+            done
+            exit "$failed"
           fi
       - uses: actions/upload-artifact@v4
         if: always()
@@ -114,6 +136,50 @@ jobs:
             ${{ runner.temp }}/desktop-acceptance/*/SETUP.json
             ${{ runner.temp }}/desktop-acceptance/*/desktop-journeys.cjs
             ${{ runner.temp }}/desktop-acceptance/*/compile.json
+            ${{ runner.temp }}/desktop-offline-acceptance/*-receipt.json
+            ${{ runner.temp }}/desktop-offline-acceptance/*/command-ledger.json
+            ${{ runner.temp }}/desktop-offline-acceptance/*/OFFLINE_NATIVE_REPORT.json
+            ${{ runner.temp }}/desktop-offline-acceptance/*/OFFLINE_REOPEN.json
+            ${{ runner.temp }}/desktop-offline-acceptance/*/REOPEN_EXPECTED.json
+            ${{ runner.temp }}/desktop-offline-acceptance/*/source-before/**
+            ${{ runner.temp }}/desktop-offline-acceptance/*/source-after/**
+            ${{ runner.temp }}/desktop-ai-acceptance/*-receipt.json
+            ${{ runner.temp }}/desktop-ai-acceptance/*-scenarios.json
+            ${{ runner.temp }}/desktop-ai-acceptance/*/command-ledger.json
+            ${{ runner.temp }}/desktop-ai-acceptance/*/*REPORT.json
+            ${{ runner.temp }}/desktop-ai-acceptance/*/COLD_REOPEN.json
+            ${{ runner.temp }}/desktop-ai-acceptance/*/source-before/**
+            ${{ runner.temp }}/desktop-ai-acceptance/*/source-after/**
+            ${{ runner.temp }}/desktop-generation-acceptance/*-receipt.json
+            ${{ runner.temp }}/desktop-generation-acceptance/*-scenarios.json
+            ${{ runner.temp }}/desktop-generation-acceptance/*/command-ledger.json
+            ${{ runner.temp }}/desktop-generation-acceptance/*/*REPORT.json
+            ${{ runner.temp }}/desktop-generation-acceptance/*/source-before/**
+            ${{ runner.temp }}/desktop-generation-acceptance/*/source-after/**
+            ${{ runner.temp }}/desktop-library-acceptance/*-receipt.json
+            ${{ runner.temp }}/desktop-library-acceptance/*/command-ledger.json
+            ${{ runner.temp }}/desktop-library-acceptance/*/LIBRARY_NATIVE_REPORT.json
+            ${{ runner.temp }}/desktop-library-acceptance/*/LIBRARY_REOPEN.json
+            ${{ runner.temp }}/desktop-library-acceptance/*/source-before/**
+            ${{ runner.temp }}/desktop-library-acceptance/*/source-after/**
+            ${{ runner.temp }}/desktop-system-acceptance/*-receipt.json
+            ${{ runner.temp }}/desktop-system-acceptance/*-scenarios.json
+            ${{ runner.temp }}/desktop-system-acceptance/*/command-ledger.json
+            ${{ runner.temp }}/desktop-system-acceptance/*/*REPORT.json
+            ${{ runner.temp }}/desktop-system-acceptance/*/source-before/**
+            ${{ runner.temp }}/desktop-system-acceptance/*/source-after/**
+            ${{ runner.temp }}/desktop-browser-acceptance/*-receipt.json
+            ${{ runner.temp }}/desktop-browser-acceptance/*/command-ledger.json
+            ${{ runner.temp }}/desktop-browser-acceptance/*/BROWSER_NATIVE_REPORT.json
+            ${{ runner.temp }}/desktop-browser-acceptance/*/source-before/**
+            ${{ runner.temp }}/desktop-browser-acceptance/*/source-after/**
+            ${{ runner.temp }}/desktop-browser-acceptance/*/official-assets/PUBLIC_ASSET_GETS.json
+            ${{ runner.temp }}/desktop-browser-acceptance/*/BROWSER_REOPEN.json
+            ${{ runner.temp }}/desktop-advanced-acceptance/*-receipt.json
+            ${{ runner.temp }}/desktop-advanced-acceptance/*/command-ledger.json
+            ${{ runner.temp }}/desktop-advanced-acceptance/*/*REPORT.json
+            ${{ runner.temp }}/desktop-advanced-acceptance/*/source-before/**
+            ${{ runner.temp }}/desktop-advanced-acceptance/*/source-after/**
           if-no-files-found: error
 
   android-components:
@@ -297,7 +363,7 @@ jobs:
         shell: bash
         run: |
           node scripts/feature-acceptance/create-disposable-ios-simulator.mjs
-      - name: Run all three actual iOS native component entries
+      - name: Run independently counted component and client-scenario entries
         run: node scripts/feature-acceptance/run-ci-mobile-entries.mjs ios "$FEATURE_SIMULATOR"
       - uses: actions/upload-artifact@v4
         if: always()
@@ -308,3 +374,32 @@ jobs:
       - name: Stop only the newly created test simulator
         if: always() && env.FEATURE_SIMULATOR != ''
         run: xcrun simctl shutdown "$FEATURE_SIMULATOR"
+
+  full-client-feature-matrix:
+    if: always()
+    needs: [desktop-components, android-components, ios-components]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-components-*-${{ github.sha }}
+          path: ${{ runner.temp }}/all-native-evidence
+          merge-multiple: false
+      - name: Check matrix rejection rules
+        run: node --test scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/mobile-scenario-receipt.test.mjs scripts/feature-acceptance/mobile-entry-consistency.test.mjs
+      - name: Require all 39 client features on all five actual platforms
+        shell: bash
+        run: |
+          version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json","utf8")).version')"
+          node scripts/feature-acceptance/build-full-feature-matrix.mjs "$RUNNER_TEMP/all-native-evidence" "$RUNNER_TEMP/full-feature-matrix" "$GITHUB_SHA" "$version" --require-full
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: five-platform-feature-evidence
+          path: ${{ runner.temp }}/full-feature-matrix/
+          if-no-files-found: error

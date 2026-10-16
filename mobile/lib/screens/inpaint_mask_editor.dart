@@ -7,9 +7,12 @@ import 'package:flutter/services.dart';
 
 import '../i18n/app_locales.dart';
 import '../inpaint/inpaint_mask.dart';
+import '../inpaint/focused_inpaint.dart';
+import '../i18n/inpaint_parity_text.dart';
 import '../models/nai_models.dart';
 
 class InpaintMaskEditResult {
+  final InpaintRegion? region;
   final List<InpaintStroke> strokes;
   final bool inverted;
   final double brush;
@@ -19,6 +22,7 @@ class InpaintMaskEditResult {
   final InpaintBrushShape brushShape;
 
   const InpaintMaskEditResult({
+    this.region,
     required this.strokes,
     required this.inverted,
     required this.brush,
@@ -31,6 +35,8 @@ class InpaintMaskEditResult {
 
 class InpaintMaskEditor extends StatefulWidget {
   final WorkingImage image;
+  final InpaintRegion? initialRegion;
+  final bool novelAiSelection;
   final Object? language;
   final List<InpaintStroke> initialStrokes;
   final bool initialInverted;
@@ -44,6 +50,8 @@ class InpaintMaskEditor extends StatefulWidget {
   const InpaintMaskEditor({
     super.key,
     required this.image,
+    this.initialRegion,
+    this.novelAiSelection=true,
     required this.language,
     this.initialStrokes = const [],
     this.initialInverted = false,
@@ -83,6 +91,9 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
   Offset _lastPinchCenter = Offset.zero;
   bool _erase = false;
   bool _showMask = true;
+  bool _selectRegion=false;
+  InpaintRegion? _region;
+  Offset? _regionAnchor;
 
   String t(String key) => mobileUiTextFor(widget.language, key);
 
@@ -90,6 +101,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
   void initState() {
     super.initState();
     _strokes = copyInpaintStrokes(widget.initialStrokes);
+    _region=widget.initialRegion;
     _inverted = widget.initialInverted;
     _brushShape = widget.initialBrushShape;
     _brush =
@@ -209,6 +221,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
   }
 
   void _pointerDown(PointerDownEvent event) {
+    if(_selectRegion){_regionAnchor=_toNormalized(event.localPosition);return;}
     _pointers[event.pointer] = event.localPosition;
     if (_pointers.length == 1 && !_transformedThisGesture) {
       _drawPointer = event.pointer;
@@ -223,6 +236,11 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
   }
 
   void _pointerMove(PointerMoveEvent event) {
+    if(_selectRegion){
+      final anchor=_regionAnchor,end=_toNormalized(event.localPosition);if(anchor==null||end==null)return;
+      final ax=anchor.dx*widget.image.width,ay=anchor.dy*widget.image.height,ex=end.dx*widget.image.width,ey=end.dy*widget.image.height;
+      setState((){_region=widget.novelAiSelection?clampFocusedInpaintDrag(ax,ay,ex,ey,widget.image.width,widget.image.height):(x:math.min(ax,ex).round(),y:math.min(ay,ey).round(),width:(ax-ex).abs().round(),height:(ay-ey).abs().round());});return;
+    }
     if (!_pointers.containsKey(event.pointer)) return;
     _pointers[event.pointer] = event.localPosition;
     if (_pointers.length >= 2) {
@@ -238,6 +256,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
   }
 
   void _pointerUp(PointerEvent event) {
+    if(_selectRegion){setState((){if((_region?.width??0)<32||(_region?.height??0)<32)_region=null;_regionAnchor=null;});return;}
     setState(() {
       final wasDrawing = _drawPointer == event.pointer;
       if (wasDrawing && !_transformedThisGesture && _activeStroke == null) {
@@ -330,6 +349,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
       context,
       InpaintMaskEditResult(
         strokes: copyInpaintStrokes(_strokes),
+        region: _region,
         inverted: _inverted,
         brush: _brush,
         imageOpacity: _imageOpacity,
@@ -399,6 +419,9 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
                               ),
                             ),
                           ),
+                        if(_region!=null) Positioned(left:_region!.x/widget.image.width*fitted.width,top:_region!.y/widget.image.height*fitted.height,
+                          width:_region!.width/widget.image.width*fitted.width,height:_region!.height/widget.image.height*fitted.height,
+                          child:IgnorePointer(child:Container(key:const ValueKey('focused-inpaint-region'),decoration:BoxDecoration(border:Border.all(color:Colors.cyan,width:2)),child:Align(alignment:Alignment.topLeft,child:Text('${_region!.width}×${_region!.height}',style:const TextStyle(color:Colors.cyan,fontSize:12)))))),
                         IgnorePointer(
                           child: RepaintBoundary(
                             child: CustomPaint(
@@ -777,6 +800,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
         leadingWidth: 80,
         title: studioAppBarTitle(context, Text(t('tools.maskEditorTitle'))),
         actions: [
+          IconButton(key:const ValueKey('select-inpaint-region'),tooltip:inpaintParityText(widget.language,'select'),isSelected:_selectRegion,onPressed:()=>setState(()=>_selectRegion=!_selectRegion),icon:const Icon(Icons.crop)),
           IconButton(
             key: const ValueKey('inpaint-mask-visibility-toggle'),
             tooltip: t(_showMask ? 'tools.hideMask' : 'tools.showMask'),

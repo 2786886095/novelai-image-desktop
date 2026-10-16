@@ -3569,7 +3569,7 @@ export function InpaintPanel({ openSettings }: { openSettings: () => void }) {
         <PromptAndParams
           includeModel={false}
           includeSize={false}
-          sizeControls={<InpaintSizeControls mode={sizeMode} custom={customSize} source={sizeSource} language={language} onMode={setSizeMode} onSize={setCustomSize}/>}
+          sizeControls={<InpaintSizeControls mode={sizeMode} custom={customSize} source={sizeSource} region={region} language={language} onMode={setSizeMode} onSize={setCustomSize}/>}
           promptOverride={{ value: inpaintPositivePrompt, onChange: setInpaintPositivePrompt }}
         />
         {!sizeError && <FeatureCostCard label={t("cost.beforeRun")} feature="inpaint" sizeOverride={sizePlan?.requestSize} />}

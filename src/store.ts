@@ -1,8 +1,9 @@
 import { normalizeHistoryWidth, readHistoryCollapsed, HISTORY_COLLAPSE_AT } from './workspace-history';
 import {favoritesText} from './favorites-text';
 import {naiAccountSummaryMatches} from './nai-accounts';
-import {type InpaintRegion} from './focused-inpaint';
+import {clampFocusedInpaintRegion,type InpaintRegion} from './focused-inpaint';
 import {inpaintSizePlan,restoreInpaintSizeState,type InpaintSize,type InpaintSizeMode} from './inpaint-size';
+import {decodeInpaintEditMask,validateInpaintEditSource,inpaintEditText,type InpaintEditSession,type InpaintEditRestorePayload} from "./inpaint-edit-session";
 import {retainedPrompts} from "./retained-prompts";
 import { mergeImageSettings, mergeFullSettings } from "./compatible-image-settings-sync";
 import {localizedStoreText} from "./store-i18n";
@@ -75,6 +76,10 @@ let workbenchLoadRevision = 0;
 // Invalidates a slow post-generation balance refresh as soon as a newer run or
 // cancellation starts, so stale bookkeeping can never overwrite newer UI.
 let generationSettlementRevision = 0;
+let inpaintEditRequestRevision = 0;
+let inpaintEditRestoreRevision = 0;
+type InpaintEditorState = Pick<AppState, "workbenchImage" | "i2iOriginalImage" | "inpaintSourceMode" | "inpaintMask" | "inpaintRegion" | "inpaintSizeMode" | "inpaintCustomSize" | "comparisonBeforeImage" | "comparisonSurface" | "comparisonAutoOpenRequest">;
+let pendingInpaintEditRestore: { revision: number; previous: InpaintEditorState; sessionId: string } | null = null;
 const storeIpcListenerOwner = {};
 const storeIpcListenerRegistryKey = "__langbaiNovelAiStoreIpcListeners";
 
@@ -200,6 +205,11 @@ interface AppState {
   brushShape: InpaintBrushShape;
   inpaintMask: string | null;
   inpaintRegion: InpaintRegion | null;
+  inpaintEditSession: InpaintEditSession | null;
+  inpaintEditRestore: InpaintEditRestorePayload | null;
+  isRestoringInpaintEditSession: boolean;
+  restoreInpaintEditSession: () => Promise<boolean>;
+  acknowledgeInpaintEditRestore: (revision: number, ok: boolean, message?: string) => void;
   setInpaintRegion: (region:InpaintRegion|null)=>void;
   maskRevision: number;
   upscaleScale: UpscaleScale;
@@ -555,6 +565,30 @@ async function runAfterImageRefresh(
     } catch {
       /* workbench reload is best-effort */
     }
+  }
+}
+
+function inpaintEditorState(state: AppState): InpaintEditorState {
+  return { workbenchImage: state.workbenchImage, i2iOriginalImage: state.i2iOriginalImage,
+    inpaintSourceMode: state.inpaintSourceMode, inpaintMask: state.inpaintMask,
+    inpaintRegion: state.inpaintRegion, inpaintSizeMode: state.inpaintSizeMode,
+    inpaintCustomSize: state.inpaintCustomSize, comparisonBeforeImage: state.comparisonBeforeImage,
+    comparisonSurface: state.comparisonSurface, comparisonAutoOpenRequest: state.comparisonAutoOpenRequest };
+}
+function submittedInpaintEdit(state: AppState, source: WorkingImage, engine: InpaintEditSession["engine"], region: InpaintRegion | null, revision: number): InpaintEditSession {
+  return { id: `inpaint-edit-${Date.now()}-${revision}`, source: { ...source },
+    originalImage: state.i2iOriginalImage ? { ...state.i2iOriginalImage } : null,
+    sourceMode: state.inpaintSourceMode, engine, maskBase64: state.inpaintMask,
+    region: region ? { ...region } : null, sizeMode: state.inpaintSizeMode,
+    customSize: { ...state.inpaintCustomSize }, resultId: "" };
+}
+function validateSavedInpaintRegion(session: InpaintEditSession) {
+  const r = session.region;
+  if (!r) return;
+  if (![r.x, r.y, r.width, r.height].every(Number.isInteger) || r.x < 0 || r.y < 0 || r.width < 8 || r.height < 8 || r.x + r.width > session.source.width || r.y + r.height > session.source.height) throw Error("The saved editing region is outside its original image.");
+  if (session.engine === "novelai") {
+    const clamped = clampFocusedInpaintRegion(r, session.source.width, session.source.height);
+    if (Object.keys(r).some(k => r[k as keyof InpaintRegion] !== clamped[k as keyof InpaintRegion])) throw Error("The saved editing region no longer meets the inpaint limits.");
   }
 }
 
@@ -918,6 +952,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   brushMode: "paint",
   brushShape: "round",
   inpaintMask: null, inpaintRegion: null,
+  inpaintEditSession: null, inpaintEditRestore: null, isRestoringInpaintEditSession: false,
   maskRevision: 0,
   upscaleScale: 4,
   directorTool: "bg-removal",
@@ -1366,7 +1401,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async refreshSettings() {
     const settings = await window.naiDesktop.getSettings();
-    set((state) => ({ settings: mergeFullSettings(state.settings, settings) }));
+    set((state) => {
+      const nextSettings = mergeFullSettings(state.settings, settings);
+      let inpaintRegion = state.inpaintRegion;
+      // An OpenAI crop can exceed NovelAI's area cap. Update the displayed ROI
+      // at the engine transition, not silently for the first time on submission.
+      if (state.settings?.inpaintEngine === "openai" && nextSettings.inpaintEngine !== "openai" && inpaintRegion) {
+        const source = state.inpaintSourceMode === "original"
+          ? state.i2iOriginalImage ?? state.workbenchImage : state.workbenchImage;
+        try {
+          inpaintRegion = source ? clampFocusedInpaintRegion(inpaintRegion, source.width, source.height) : null;
+        } catch {
+          inpaintRegion = null;
+        }
+      }
+      return { settings: nextSettings, inpaintRegion };
+    });
   },
 
   async refreshAccount() {
@@ -1527,6 +1577,96 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
 
+  async restoreInpaintEditSession() {
+    const state = get(), session = state.inpaintEditSession;
+    if (!session || state.isGenerating || state.isRestoringInpaintEditSession) return false;
+    const failure = (message: string) => `${inpaintEditText(get().settings?.language).failed}: ${message}`;
+    const engine = state.settings?.inpaintEngine === "openai" ? "openai" : "novelai";
+    if (engine !== session.engine) { set({ toast: failure("Switch back to the engine used for this inpaint first.") }); return false; }
+    const previous = inpaintEditorState(state), revision = ++inpaintEditRestoreRevision;
+    const loadRevision = ++workbenchLoadRevision, settlement = generationSettlementRevision;
+    let loadedMainSource = false, committed = false;
+    set({ isRestoringInpaintEditSession: true });
+    try {
+      const result = await window.naiDesktop.loadImageFromPath(session.source.filePath);
+      if (!result.ok || !result.image) throw Error(result.message || "The original image could not be loaded.");
+      loadedMainSource = true;
+      if (result.image.width !== session.source.width || result.image.height !== session.source.height) throw Error("The original image dimensions have changed since inpainting.");
+      await validateInpaintEditSource(result.image);
+      const maskRgba = await decodeInpaintEditMask(session.maskBase64, result.image.width, result.image.height);
+      validateSavedInpaintRegion(session);
+      if (revision !== inpaintEditRestoreRevision || loadRevision !== workbenchLoadRevision || settlement !== generationSettlementRevision || get().isGenerating || get().inpaintEditSession !== session) return false;
+      const restored = result.image;
+      pendingInpaintEditRestore = { revision, previous, sessionId: session.id };
+      set({ workbenchImage: restored,
+        i2iOriginalImage: session.originalImage ? (session.originalImage.filePath === restored.filePath ? restored : { ...session.originalImage }) : null,
+        inpaintSourceMode: session.sourceMode, inpaintMask: session.maskBase64,
+        inpaintRegion: session.region ? { ...session.region } : null,
+        inpaintSizeMode: session.sizeMode, inpaintCustomSize: { ...session.customSize },
+        comparisonAutoOpenRequest: null, maskRevision: get().maskRevision + 1,
+        inpaintEditRestore: { revision, sessionId: session.id, sourceFilePath: restored.filePath,
+          width: restored.width, height: restored.height, maskBase64: session.maskBase64, maskRgba },
+      });
+      committed = true;
+      return true;
+    } catch (error) {
+      if (revision === inpaintEditRestoreRevision) { const message = failure((error as Error).message); set({ toast: message, statusText: message }); }
+      return false;
+    } finally {
+      if (!committed) {
+        // The read IPC also selects the main-process workbench. Keep that pointer
+        // aligned with the editor that won a failed or stale restore, without a clearing store action.
+        if (loadedMainSource && get().workbenchImage?.filePath) {
+          try { await window.naiDesktop.loadImageFromPath(get().workbenchImage!.filePath); }
+          catch { /* The next generation reloads its fixed source before any paid request. */ }
+        }
+        if (revision === inpaintEditRestoreRevision) set({ isRestoringInpaintEditSession: false });
+      }
+    }
+  },
+
+  acknowledgeInpaintEditRestore(revision, ok, message) {
+    const state = get(), payload = state.inpaintEditRestore, pending = pendingInpaintEditRestore;
+    if (!payload || payload.revision !== revision || !pending || pending.revision !== revision) return;
+    if (ok) {
+      pendingInpaintEditRestore = null;
+      set({ inpaintEditRestore: null, isRestoringInpaintEditSession: false });
+      return;
+    }
+    const failed = `${inpaintEditText(state.settings?.language).failed}: ${message || "Canvas hydration failed."}`;
+    if (payload.rollback) {
+      pendingInpaintEditRestore = null;
+      set({ inpaintEditRestore: null, isRestoringInpaintEditSession: false, toast: failed, statusText: failed });
+      return;
+    }
+    const rollbackRevision = ++inpaintEditRestoreRevision;
+    pendingInpaintEditRestore = { ...pending, revision: rollbackRevision };
+    void (async () => {
+      const previous = pending.previous, source = previous.workbenchImage;
+      try {
+        const maskRgba = source ? await decodeInpaintEditMask(previous.inpaintMask, source.width, source.height) : null;
+        if (source) {
+          const reloaded = await window.naiDesktop.loadImageFromPath(source.filePath);
+          if (!reloaded.ok || !reloaded.image || reloaded.image.width !== source.width || reloaded.image.height !== source.height) throw Error("The previous editing image could not be reloaded.");
+          await validateInpaintEditSource(reloaded.image);
+        }
+        if (pendingInpaintEditRestore?.revision !== rollbackRevision || get().inpaintEditRestore?.revision !== revision) return;
+        set({ ...previous, maskRevision: get().maskRevision + 1, toast: failed, statusText: failed,
+          inpaintEditRestore: source ? { revision: rollbackRevision, sessionId: pending.sessionId,
+            sourceFilePath: source.filePath, width: source.width, height: source.height,
+            maskBase64: previous.inpaintMask, maskRgba, rollback: true } : null,
+          isRestoringInpaintEditSession: Boolean(source),
+        });
+        if (!source) pendingInpaintEditRestore = null;
+      } catch (error) {
+        if (pendingInpaintEditRestore?.revision !== rollbackRevision) return;
+        pendingInpaintEditRestore = null;
+        set({ ...previous, maskRevision: get().maskRevision + 1, inpaintEditRestore: null,
+          isRestoringInpaintEditSession: false, toast: `${failed} ${(error as Error).message}`, statusText: failed });
+      }
+    })();
+  },
+
   setInpaintModel(model) {
     set({ inpaintModel: model });
     persistGenerationState(get);
@@ -1589,7 +1729,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     persistGenerationState(get);
   },
 
-  setInpaintRegion(region) {set({inpaintRegion:region});},
+  setInpaintRegion(region) {const state=get();const source=state.inpaintSourceMode==='original' ? state.i2iOriginalImage ?? state.workbenchImage : state.workbenchImage;set({inpaintRegion:region && source && state.settings?.inpaintEngine !== 'openai' ? clampFocusedInpaintRegion(region,source.width,source.height) : region});},
   setInpaintMask(mask) {
     set({ inpaintMask: mask });
   },
@@ -1800,7 +1940,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       status: "processing",
       addedAt: Date.now(),
     };
-    set({ reverseJobs: [job, ...get().reverseJobs], reversePromptVariants: null });
+    // Keep the last usable result visible until a new request succeeds. A failed
+    // or cancelled request must not erase its existing character variants.
+    set({ reverseJobs: [job, ...get().reverseJobs] });
     let result;
     try {
       result = await window.naiDesktop.reversePrompt(
@@ -1909,7 +2051,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       status: "processing",
       addedAt: Date.now(),
     };
-    set({ convertJobs: [job, ...get().convertJobs], convertResultVariants: null });
+    // Keep both variants until a new conversion succeeds, just like reverse.
+    set({ convertJobs: [job, ...get().convertJobs] });
     let result;
     try {
       result = await window.naiDesktop.convertPrompt(
@@ -2666,7 +2809,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async inpaint() {
     const state = get();
-    if(state.isGenerating)return;
+    if(state.isGenerating || state.isRestoringInpaintEditSession)return;
     if (!requireToken(set, state.account.hasToken, state.settings)) return;
     if (!state.workbenchImage) {
       set({ toast: storeText(state.settings, "toast.needOriginal"), statusText: storeText(state.settings, "status.needOriginal") });
@@ -2682,6 +2825,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     let sizePlan;
     try { sizePlan = inpaintSizePlan(state.inpaintSizeMode, state.inpaintCustomSize, sourceImage, state.inpaintRegion, state.settings?.language); }
     catch (error) { const message = (error as Error).message; set({ toast: message, statusText: message, lastError: message }); return; }
+    if ('region' in sizePlan && sizePlan.region) set({inpaintRegion:sizePlan.region});
+    const editRevision = ++inpaintEditRequestRevision, editSettlement = generationSettlementRevision, editLoadRevision = workbenchLoadRevision;
+    const editSession = submittedInpaintEdit(state, sourceImage, "novelai", ('region' in sizePlan ? sizePlan.region : state.inpaintRegion) ?? null, editRevision);
     let loadedSource;
     try {
       loadedSource = await window.naiDesktop.loadImageFromPath(sourceImage.filePath);
@@ -2703,8 +2849,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ toast: message, statusText: message });
       return;
     }
-    // Keep the independent inpaint prompt and the user-selected output size.
-    // The main process scales source and mask together before local compositing.
+    if (editRevision !== inpaintEditRequestRevision || editSettlement !== generationSettlementRevision || editLoadRevision !== workbenchLoadRevision || get().isRestoringInpaintEditSession) return;
+    // Focused mode keeps the original canvas; only its crop determines work size.
+    // Ordinary custom-size inpaint retains its existing whole-canvas semantics.
     const inpaintParams: GenerateParams = {
       ...state.params,
       model: normalizeNAIBaseModel(state.inpaintModel).replace(/-medium$/, "") as GenerateParams["model"],
@@ -2764,7 +2911,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         state.inpaintMask!,
         state.inpaintStrength,
         0,
-        state.inpaintRegion ?? undefined,
+        ('region' in sizePlan ? sizePlan.region : state.inpaintRegion) ?? undefined,
         inpaintExtras,
       ),
       anlasBefore,
@@ -2774,6 +2921,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     showPartialImages(set, get, result, { compareBefore: sourceImage, comparisonSurface: "inpaint" });
     if (result.ok && result.items.length > 0) {
       const current = result.items[0];
+      if (editRevision === inpaintEditRequestRevision && editSettlement === generationSettlementRevision && get().isGenerating) set({ inpaintEditSession: { ...editSession, resultId: current.id } });
       await refreshAfterImage(set, get, current, {
         compareBefore: sourceImage,
         comparisonSurface: "inpaint",
@@ -2792,7 +2940,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async openaiInpaint() {
     const state = get();
-    if (state.isGenerating) return;
+    if (state.isGenerating || state.isRestoringInpaintEditSession) return;
     const language = state.settings?.language;
     if (!state.workbenchImage) {
       set({ toast: storeText(state.settings, "toast.needOriginal"), statusText: storeText(state.settings, "status.needOriginal") });
@@ -2811,12 +2959,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     const sourceImage = state.inpaintSourceMode === "original"
       ? state.i2iOriginalImage ?? state.workbenchImage
       : state.workbenchImage;
+    const editRevision = ++inpaintEditRequestRevision, editSettlement = generationSettlementRevision, editLoadRevision = workbenchLoadRevision;
+    const editSession = submittedInpaintEdit(state, sourceImage, "openai", state.inpaintRegion, editRevision);
     const loadedSource = await window.naiDesktop.loadImageFromPath(sourceImage.filePath).catch(() => null);
     if (!loadedSource?.ok || !loadedSource.image) {
       const message = storeText(state.settings, "status.imageLoadFailed");
       set({ toast: message, statusText: message });
       return;
     }
+    if (editRevision !== inpaintEditRequestRevision || editSettlement !== generationSettlementRevision || editLoadRevision !== workbenchLoadRevision || get().isRestoringInpaintEditSession) return;
     const runId = `openai-edit-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     workbenchLoadRevision += 1;
     set({
@@ -2844,6 +2995,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const message = featureText(language, result.message);
     showPartialImages(set, get, result, { compareBefore: sourceImage, comparisonSurface: "inpaint" });
     if (result.ok && result.items.length > 0) {
+      if (editRevision === inpaintEditRequestRevision && editSettlement === generationSettlementRevision && get().isGenerating) set({ inpaintEditSession: { ...editSession, resultId: result.items[0].id } });
       await refreshAfterImage(set, get, result.items[0], {
         compareBefore: sourceImage,
         comparisonSurface: "inpaint",

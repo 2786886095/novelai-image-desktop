@@ -1,3 +1,7 @@
+import 'focused_inpaint.dart';
+
+export 'focused_inpaint.dart';
+
 typedef InpaintSize = ({int width, int height});
 
 Map<String, String> inpaintSizeText(String language) {
@@ -21,4 +25,9 @@ InpaintSize resolveInpaintSize(String mode, InpaintSize custom, InpaintSize sour
   int dimension(dynamic v) => v is num && v.isFinite && v == v.round() && v >= 64 && v <= 1600 ? v.toInt() : 1024;
   return (mode: saved['inpaintSizeMode'] == 'custom' ? 'custom' : 'original',
     custom: (width: dimension(raw is Map ? raw['width'] : null), height: dimension(raw is Map ? raw['height'] : null)));
+}
+
+({InpaintSize outputSize,InpaintSize requestSize,InpaintRegion? region}) inpaintSizePlan(String mode,InpaintSize custom,InpaintSize source,{InpaintRegion? region,String language='en-US'}){
+ if(region!=null){final plan=focusedInpaintPlan(region,source.width,source.height);return(outputSize:source,requestSize:plan.size,region:plan.region);}
+ final size=resolveInpaintSize(mode,custom,source,language);return(outputSize:size,requestSize:size,region:null);
 }
