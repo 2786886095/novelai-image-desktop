@@ -57,9 +57,11 @@ app.whenReady().then(async()=>{
  if(config.disposableClipboard){
   assert.equal(process.env.GITHUB_ACTIONS,'true','Never write a human desktop clipboard');
   await check('clipboard','native-unicode-text',()=>{const text='Native isolated clipboard 龙白 🧪';clipboard.writeText(text);assert.equal(clipboard.readText(),text);return {nativeUnicodeRoundtrip:true};});
+  const diagnoseClipboard=(stage,elapsedMs,status)=>{if(process.env.WIN_CLIPBOARD_DIAGNOSTIC!=='1')return;const record={category:'native-clipboard',stage,elapsedMs,status,formats:[],png:[],image:{}};try{record.formats=clipboard.availableFormats().map(f=>['PNG','image/png','public.png','CF_DIB','CF_DIBV5','CF_BITMAP','text/plain','text/html','Text','UnicodeText'].includes(f)?f:'other');for(const format of ['PNG','image/png','public.png']){const value=clipboard.readBuffer(format);record.png.push({format,bytes:value.length,sha256:hash(value)});}const image=clipboard.readImage();record.image={empty:image.isEmpty(),size:image.getSize()};}catch{record.category='native-readback-error';}console.error('WIN_CLIPBOARD_DIAG:'+JSON.stringify(record));};
   await check('clipboard','png-metadata-copy-paste',async()=>{
    const api=production('electron/ipc/image-clipboard.js'),media=production('electron/ipc/local-media-protocol.js'),file=await writer.writeUniqueImageFile(output,'clipboard','png',bytes);
-   const result=await api.copyImageWithMetadata(media.toLocalMediaUrl(file));assert.equal(result.status,'copied');
+   const diagnosticStarted=Date.now();diagnoseClipboard('before-on',0,'not-called');
+   const result=await api.copyImageWithMetadata(media.toLocalMediaUrl(file));diagnoseClipboard('after-on',Date.now()-diagnosticStarted,result.status);assert.equal(result.status,'copied');
    const pasted=await api.readClipboardImageFiles();assert.equal(hash(Buffer.from(pasted[0].bytes)),imageHash);
    // Remain inside the existing disposable-runner gate: no human-host clipboard probes.
    const {PNG}=require(path.join(config.deps,'pngjs')),meta=production('src/png-meta.js'),codecs=production('src/png-metadata-codecs.js');

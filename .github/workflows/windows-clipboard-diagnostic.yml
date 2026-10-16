@@ -1,0 +1,40 @@
+name: Windows clipboard diagnostic only
+on:
+  push:
+    branches: [codex/diag-win-clipboard-079-20261017]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      WIN_CLIPBOARD_DIAGNOSTIC: '1'
+    steps:
+      - name: Preserve exact checkout bytes
+        shell: bash
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+        with:
+          lfs: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund --silent
+      - name: Check diagnostic script syntax
+        run: |
+          node --check scripts/feature-acceptance/desktop-offline-journeys.cjs
+          node --check scripts/feature-acceptance/run-windows-clipboard-diagnostic.mjs
+      - name: Actual original-count Windows offline scenarios with classified diagnostics
+        shell: pwsh
+        run: node scripts/feature-acceptance/run-windows-clipboard-diagnostic.mjs "$env:RUNNER_TEMP/clipboard-diagnostic" "$env:GITHUB_SHA"
+      - name: Upload only safe diagnostic summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-clipboard-diagnostic
+          path: ${{ runner.temp }}/clipboard-diagnostic/WINDOWS_CLIPBOARD_DIAGNOSTIC.json
+          if-no-files-found: error
