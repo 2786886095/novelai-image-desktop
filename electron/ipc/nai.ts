@@ -53,6 +53,7 @@ import {
   supportsNAIVariety,
   MAX_NAI_DIRECTOR_INPUT_PIXELS,
   MAX_NAI_UPSCALE_OUTPUT_DIMENSION,
+  type AppSettings,
   type AccountSummary,
   type AnlasQuoteRequest,
   type AnlasQuoteResult,
@@ -2928,8 +2929,9 @@ async function callConvertApi(
   record = true,
   retryEmpty = true,
   jsonRequired = false,
+  settingsSnapshot?: AppSettings,
 ): Promise<{ ok: boolean; content?: string; message: string }> {
-  const settings = getSettings();
+  const settings = settingsSnapshot ?? getSettings();
   const apiUrl = settings.convertApiUrl.trim();
   const apiKey = settings.convertApiKey.trim();
   const model = settings.convertApiModel.trim() || "gpt-4o-mini";
@@ -3175,8 +3177,9 @@ function parseTagServerPayload(payload: unknown): TagSuggestion[] {
 async function queryTagServer(
   query: string,
   limit = 12,
+  settingsSnapshot?: AppSettings,
 ): Promise<TagSuggestion[]> {
-  const settings = getSettings();
+  const settings = settingsSnapshot ?? getSettings();
   if (!settings.tagServerEnabled || !query.trim()) return [];
   const type = settings.tagServerType ?? "rest";
   // MCP transports (Streamable HTTP / SSE / stdio) go through the MCP client.
@@ -3199,7 +3202,7 @@ async function queryTagServer(
   if (settings.tagServerApiKey.trim())
     headers.Authorization = `Bearer ${settings.tagServerApiKey.trim()}`;
 
-  const px = proxyConfig("mcp");
+  const px = settingsSnapshot ? await proxyConfigForUrl("mcp", `${base}/search`, settings) : proxyConfig("mcp");
   const attempts = [
     () =>
       axios.get(`${base}/search`, {
@@ -3561,47 +3564,60 @@ function extractJsonObject(text: string): any | null {
 export async function convertComicPanels(
   request: ComicConvertRequest,
 ): Promise<ComicConvertResult> {
-  if (!request.panels.length)
+  try { request=structuredClone(request); }
+  catch { return {ok:false,message:"漫画分镜请求无法读取。",panels:[]}; }
+  if (!Array.isArray(request?.panels) || !request.panels.length)
     return { ok: false, message: "没有需要转换的分镜。", panels: [] };
-  const settings = getSettings();
+  // One immutable batch: settings/slots/provider and every panel/context field.
+  const settings = structuredClone(getSettings());
+  const targetModel=request.templateVersion!==undefined?request.templateVersion:settings.convertPromptTemplateVersion!==undefined?settings.convertPromptTemplateVersion:'v5';
+  const edition=request.skillVersion!==undefined?request.skillVersion:settings.convertPromptSkillVersion!==undefined?settings.convertPromptSkillVersion:'1.0.0';
+  const reject=(message:string):ComicConvertResult=>({ok:false,message,panels:request.panels.map(panel=>({panelId:panel.panelId,enPrompt:'',error:message}))});
+  if(targetModel!=='v4.5'&&targetModel!=='v5')return reject('不支持的生图模型模板版本，未请求转换API。');
+  if(edition!=='1.0.0'&&edition!=='2.0.0')return reject('不支持的技能版本，未请求转换API。');
+  if(!supportsPromptSkillModel(edition,targetModel))return reject('技能模板2.0.0仅支持NovelAI V5 Full；V4.5请选1.0.0，未请求转换API。');
+  const mode=request.mode;
+  if(mode!=='tags'&&mode!=='natural'&&mode!=='mixed')return reject('不支持的提示词模式，未请求转换API。');
   if (!settings.convertApiKey.trim() || !settings.convertApiUrl.trim()) {
+    if(edition==='2.0.0')return reject('技能2.0.0需要配置转换API；未使用旧版本地模板兜底。');
     return {
       ok: true,
-      message: `未配置转换 API，已使用本地模板兜底生成 ${request.panels.length} 镜英文提示词；建议配置宽松的转换模型以获得更精确的剧情画面。`,
+      message: `未配置转换 API，已使用本地模板兜底生成 ${request.panels.length} 镜英文提示词（技能1.0.0 · ${targetModel}）；建议配置转换模型以获得更精确的剧情画面。`,
       panels: request.panels.map((panel) => ({
         panelId: panel.panelId,
         enPrompt: buildComicLocalPrompt(request, panel),
       })),
     };
   }
-  const mode = request.mode;
-  const systemPrompt = [
+  const systemPrompt = edition==='1.0.0' ? [
     resolveModePrompt(
       mode,
-      settings.convertPromptTemplates,
+      targetModel==='v4.5'?settings.convertPromptTemplatesV45:settings.convertPromptTemplates,
       settings.convertSystemPrompt,
-      CONVERT_SYSTEM_PROMPTS,
+      targetModel==='v4.5'?V45_CONVERT_SYSTEM_PROMPTS:CONVERT_SYSTEM_PROMPTS,
     ),
     "",
     "你正在为连续漫画生成 NovelAI 生图提示词。必须保持角色、服装、地点、时间线和关键道具前后一致。",
     "每次只输出当前分镜的最终英文提示词，不要解释，不要 Markdown。",
     "必须参考全局设定、参考图反推描述、上一个/当前/下一个中文分镜描述，保持同一角色、场景、物品的英文表达一致。",
     "避免色情、裸露、夸张身体特写。",
-  ].join("\n");
+  ].join("\n") : '';
 
   const out: ComicConvertResult["panels"] = [];
   let fallbackCount = 0;
   for (const panel of request.panels) {
     const tagHints =
-      mode === "natural" || !settings.mcpForConvert
+      edition==='2.0.0' || mode === "natural" || !settings.mcpForConvert
         ? []
-        : await queryTagServer(panel.cnPrompt, 16);
+        : await queryTagServer(panel.cnPrompt, 16, settings);
     const userText = [
       `Output mode: ${mode}`,
       "Global story prompt:",
       request.globalPrompt || "(empty)",
       "Global character setting:",
       request.globalCharacterSetting || "(empty)",
+      "Continuity bible:",
+      request.continuityBible || "(empty)",
       "Global style prompt:",
       request.globalStylePrompt || "(empty)",
       "Reference image reverse prompts:",
@@ -3624,16 +3640,24 @@ export async function convertComicPanels(
       panel.previousPrompts.length
         ? panel.previousPrompts.join("\n")
         : "(none)",
-      modeUserInstruction(mode, "convert"),
+      edition==='1.0.0'?modeUserInstruction(mode, "convert", false, targetModel):"",
       tagHints.length
         ? `Candidate tags: ${tagHints.map((x) => x.tag).join(", ")}`
         : "",
     ].join("\n\n");
+    if(edition==='2.0.0') {
+      const result=await convertPromptTextV2(userText,mode,false,targetModel,undefined,settings,`漫画分镜转换 #${panel.index} · ${targetModel} · 技能${edition} · ${mode}`);
+      out.push(result.ok&&result.result
+        ? {panelId:panel.panelId,enPrompt:result.result}
+        : {panelId:panel.panelId,enPrompt:'',error:result.message});
+      continue;
+    }
     const result = await callConvertApi(
       systemPrompt,
       userText,
       4096,
       `漫画分镜转换 #${panel.index}`,
+      true, true, false, settings,
     );
     if (!result.ok) {
       fallbackCount += 1;
@@ -3647,10 +3671,11 @@ export async function convertComicPanels(
     let content = cleanPromptOutput(result.content ?? "");
     if (modeNeedsRepair(mode, content)) {
       const repaired = await callConvertApi(
-        modeRepairSystemPrompt(mode),
+        modeRepairSystemPrompt(mode, targetModel),
         buildModeRepairUserText(mode, panel.cnPrompt, content),
         900,
         `漫画分镜转换修复 #${panel.index}`,
+        true, true, false, settings,
       );
       if (repaired.ok && repaired.content)
         content = cleanPromptOutput(repaired.content);
@@ -3667,7 +3692,7 @@ export async function convertComicPanels(
   const failed = out.filter((p) => p.error).length;
   return {
     ok: failed < out.length,
-    message: `转换完成：成功 ${out.length - failed}，失败 ${failed}${fallbackCount ? `；其中 ${fallbackCount} 镜使用本地模板兜底` : ""}。`,
+    message: `转换完成：成功 ${out.length - failed}，失败 ${failed}${fallbackCount ? `；其中 ${fallbackCount} 镜使用本地模板兜底` : ""}（技能${edition} · ${targetModel}）。${edition==='2.0.0'?'仅格式与可计数单元检查，来源事实需人工复核。':''}`,
     panels: out,
   };
 }
@@ -4251,6 +4276,31 @@ function isInsideDir(child: string, parent: string): boolean {
   return rel.length > 0 && !rel.startsWith("..") && !path.isAbsolute(rel);
 }
 
+/** Shared V2 request/parser path. A comic batch supplies one captured config. */
+async function convertPromptTextV2(
+  chineseText: string,
+  mode: "tags" | "natural" | "mixed",
+  knownCharacter: boolean,
+  templateVersion: "v4.5" | "v5",
+  assistant: PromptEditRequest | undefined,
+  settings: AppSettings,
+  label?: string,
+): ReturnType<typeof convertPromptText> {
+  const edition='2.0.0' as const;
+    const targetModel=templateVersion==='v4.5'?'v4.5':'v5';
+    if(!supportsPromptSkillModel(edition,targetModel))return {ok:false,message:'技能模板2.0.0仅支持NovelAI V5 Full；V4.5请选1.0.0，已保留原提示词'};
+    let prepared:ReturnType<typeof preparePromptAssistance>|undefined;
+    if(assistant){try{prepared=preparePromptAssistance(chineseText,assistant,settings,edition);}catch(error){return {ok:false,message:error instanceof Error?error.message:String(error)};}knownCharacter=false;}
+    const template=selectPromptSkillTemplate({edition,targetModel,task:'convert',mode,legacyTemplate:'',overrides:settings.convertPromptTemplatesV2});
+    const system=injectDshImageAiSystemPrompt({task:'convert',enabled:settings.reverseConvertDshEnabled,mode:settings.reverseConvertDshMode,
+      sharedPreset:selectedImageTaskPromptPreset(settings.reverseConvertPromptPresets,settings.convertSystemPromptPresetId??settings.reverseConvertPromptPresetId,'convert'),
+      systemPrompt:[renderPromptSkillTemplate(template,'<provided in the user message>'),prepared?.systemSuffix,PROMPT_SKILL_V2_RUNTIME,promptSkillKnownCharacterInstruction(knownCharacter)].filter(Boolean).join('\n\n')});
+    const reply=await callConvertApi(system,prepared?.userText??chineseText,7000,label??`${assistant?'提示词'+(assistant.kind==='optimize'?'优化':'助手'):'文字转换'} · ${targetModel} · 技能${edition} · ${mode}`,true,false,knownCharacter,settings);
+    if(!reply.ok)return {ok:false,message:'转换失败，已保留原提示词：'+reply.message};
+    try{const parsed=parsePromptSkillV2Response(reply.content??'',mode,knownCharacter);return {ok:true,result:parsed.prompt,variants:parsed.variants,warnings:parsed.warnings,message:'转换完成：仅格式与可计数单元检查，来源事实需人工复核'};}
+    catch(error){return {ok:false,message:'提示词未通过技能2.0.0检查，已保留原提示词，未提交生图：'+(error instanceof Error?error.message:String(error))};}
+}
+
 export async function convertPromptText(
   chineseText: string,
   mode: "tags" | "natural" | "mixed" = "tags",
@@ -4268,20 +4318,7 @@ export async function convertPromptText(
 }> {
   const settings = getSettings();
   const edition=normalizePromptSkillVersion(skillVersion??(assistant?settings.promptAssistantSkillVersion:settings.convertPromptSkillVersion));
-  if(edition==='2.0.0') {
-    const targetModel=templateVersion==='v4.5'?'v4.5':'v5';
-    if(!supportsPromptSkillModel(edition,targetModel))return {ok:false,message:'技能模板2.0.0仅支持NovelAI V5 Full；V4.5请选1.0.0，已保留原提示词'};
-    let prepared:ReturnType<typeof preparePromptAssistance>|undefined;
-    if(assistant){try{prepared=preparePromptAssistance(chineseText,assistant,settings,edition);}catch(error){return {ok:false,message:error instanceof Error?error.message:String(error)};}knownCharacter=false;}
-    const template=selectPromptSkillTemplate({edition,targetModel,task:'convert',mode,legacyTemplate:'',overrides:settings.convertPromptTemplatesV2});
-    const system=injectDshImageAiSystemPrompt({task:'convert',enabled:settings.reverseConvertDshEnabled,mode:settings.reverseConvertDshMode,
-      sharedPreset:selectedImageTaskPromptPreset(settings.reverseConvertPromptPresets,settings.convertSystemPromptPresetId??settings.reverseConvertPromptPresetId,'convert'),
-      systemPrompt:[renderPromptSkillTemplate(template,'<provided in the user message>'),prepared?.systemSuffix,PROMPT_SKILL_V2_RUNTIME,promptSkillKnownCharacterInstruction(knownCharacter)].filter(Boolean).join('\n\n')});
-    const reply=await callConvertApi(system,prepared?.userText??chineseText,7000,`${assistant?'提示词'+(assistant.kind==='optimize'?'优化':'助手'):'文字转换'} · ${targetModel} · 技能${edition} · ${mode}`,true,false,knownCharacter);
-    if(!reply.ok)return {ok:false,message:'转换失败，已保留原提示词：'+reply.message};
-    try{const parsed=parsePromptSkillV2Response(reply.content??'',mode,knownCharacter);return {ok:true,result:parsed.prompt,variants:parsed.variants,warnings:parsed.warnings,message:'转换完成：仅格式与可计数单元检查，来源事实需人工复核'};}
-    catch(error){return {ok:false,message:'提示词未通过技能2.0.0检查，已保留原提示词，未提交生图：'+(error instanceof Error?error.message:String(error))};}
-  }
+  if(edition==='2.0.0') return convertPromptTextV2(chineseText,mode,knownCharacter,templateVersion,assistant,settings);
 
   let assistance: ReturnType<typeof preparePromptAssistance> | undefined;
   if (assistant !== undefined) {

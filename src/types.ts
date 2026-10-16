@@ -664,6 +664,9 @@ export interface ComicConvertPanelInput {
 
 export interface ComicConvertRequest {
   mode: ReversePromptMode;
+  /** Missing axes inherit saved conversion selections; old callers remain valid. */
+  templateVersion?: ReversePromptTemplateVersion;
+  skillVersion?: PromptSkillVersion;
   globalPrompt: string;
   globalCharacterSetting: string;
   continuityBible: string;

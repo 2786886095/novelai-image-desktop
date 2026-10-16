@@ -26,8 +26,8 @@ beforeEach(async () => {
   detectiveDownloadVariant("full");
   await detectiveDownloadDirectory();
 });
-afterEach(() => { vi.restoreAllMocks(); Object.defineProperty(process,"platform",originalPlatform); Object.defineProperty(process,"arch",originalArch); fs.rmSync(mock.root, { recursive: true, force: true }); });
-const done = async () => { await vi.waitFor(() => expect(detectiveDownloadStatus().busy).toBe(false)); return detectiveDownloadStatus(); };
+afterEach(async () => { detectiveDownloadCancel(); await vi.waitFor(()=>expect(detectiveDownloadStatus().busy).toBe(false),{timeout:5000,interval:20}); vi.restoreAllMocks(); Object.defineProperty(process,"platform",originalPlatform); Object.defineProperty(process,"arch",originalArch); fs.rmSync(mock.root, { recursive: true, force: true }); });
+const done = async () => { await vi.waitFor(() => expect(detectiveDownloadStatus().busy).toBe(false),{timeout:5000,interval:20}); return detectiveDownloadStatus(); };
 it('uses the current language for the native directory picker',async()=>{
  for(const [language,title] of [['zh-CN','选择模型与运行环境存放位置'],['zh-TW','選擇模型與執行環境儲存位置'],['en-US','Choose model and runtime location'],['ja-JP','モデルと実行環境の保存先を選択'],['ko-KR','모델 및 실행 환경 저장 위치 선택']]){mock.language=language;await detectiveDownloadDirectory();expect(mock.titles.at(-1)).toBe(title);}mock.language='zh-CN';
 });
