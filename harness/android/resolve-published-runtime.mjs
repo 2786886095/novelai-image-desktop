@@ -32,6 +32,8 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1]
   // only untouched seed plugins with hash-verified managed assets; custom plugins
   // remain active. Do not exempt whole library/tools directories, hosts or protocol.
   execFileSync('git',['diff','--exit-code',tag,'HEAD','--','harness',':!harness/android/resolve-published-runtime.mjs',':!harness/android/tests',':!harness/plugins/studio-responsive',':!harness/build-responsive.mjs',
+   ':!harness/android/test-runner/README.md',
+   ':!harness/android/test-runner/arm64-emulator.mjs',
    ':!harness/plugins/studio-library/lib/client.js',
    ':!harness/plugins/studio-library/template-panel.js',
    ':!harness/plugins/studio-library/template-selection.js',

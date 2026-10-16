@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import Foundation
+import Darwin
 
 // Actual document-picker grants, not arbitrary path permission. Bookmarks stay
 // in this app's defaults; resolved grants live until this bridge/process ends so
@@ -234,13 +235,29 @@ final class OutputFolderBridge: NSObject, UIDocumentPickerDelegate, UIAdaptivePr
           guard values.isRegularFile == true, values.isSymbolicLink != true, let count = values.fileSize,
                 count > 0, count <= limit else { throw self.problem("Invalid or oversized image") }
           if probeOnly { probed = true; return }
-          let handle = try FileHandle(forReadingFrom: coordinated)
-          defer { try? handle.close() }
+          // POSIX read reports errno on iOS 12 instead of raising an ObjC
+          // FileHandle exception. All IO stays inside this coordinated grant.
+          let descriptor = Darwin.open(coordinated.path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
+          guard descriptor >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil) }
+          defer { _ = Darwin.close(descriptor) }
+          var descriptorValues = stat()
+          if Darwin.fstat(descriptor, &descriptorValues) != 0 {
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil)
+          }
+          guard (descriptorValues.st_mode & mode_t(S_IFMT)) == mode_t(S_IFREG),
+                descriptorValues.st_size > 0, descriptorValues.st_size <= off_t(limit) else { throw self.problem("Invalid or oversized image descriptor") }
           var data = Data()
+          var buffer = [UInt8](repeating: 0, count: 64 * 1024)
           while data.count <= limit {
-            let chunk = try handle.read(upToCount: min(64 * 1024, limit + 1 - data.count)) ?? Data()
-            if chunk.isEmpty { break }
-            data.append(chunk)
+            let requested = min(buffer.count, limit + 1 - data.count)
+            let count = buffer.withUnsafeMutableBytes { Darwin.read(descriptor, $0.baseAddress!, requested) }
+            if count < 0 {
+              let code = errno
+              if code == EINTR { continue }
+              throw NSError(domain: NSPOSIXErrorDomain, code: Int(code), userInfo: nil)
+            }
+            if count == 0 { break }
+            data.append(contentsOf: buffer.prefix(count))
           }
           guard !data.isEmpty, data.count <= limit else { throw self.problem("Image changed size during read") }
           bytes = data
@@ -250,8 +267,9 @@ final class OutputFolderBridge: NSObject, UIDocumentPickerDelegate, UIAdaptivePr
         if let failure = error ?? (readError as NSError?) {
           // Provider offline/permission/materialization failures can resemble a
           // missing file. Only a local app-container no-such-file is deletable.
-          let missing = !external && failure.domain == NSCocoaErrorDomain &&
-            [NSFileNoSuchFileError, NSFileReadNoSuchFileError].contains(failure.code)
+          let missing = !external && ((failure.domain == NSCocoaErrorDomain &&
+            [NSFileNoSuchFileError, NSFileReadNoSuchFileError].contains(failure.code)) ||
+            (failure.domain == NSPOSIXErrorDomain && failure.code == Int(ENOENT)))
           result(FlutterError(code: missing ? "output_image_missing" : "output_folder_read",
             message: "Image unavailable; reconnect or reselect its folder. Original history was retained", details: nil))
         } else if probeOnly && probed { result(["available": true, "coordinated": true]) }

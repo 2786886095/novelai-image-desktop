@@ -114,7 +114,7 @@
             android:name="flutterEmbedding"
             android:value="2" />
         <provider
-            android:name="androidx.core.content.FileProvider"
+            android:name=".ImageClipboardFileProvider"
             android:authorities="${applicationId}.image_clipboard"
             android:exported="false"
             android:grantUriPermissions="true">

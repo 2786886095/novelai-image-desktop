@@ -135,3 +135,29 @@ test('Android production startup applies the managed patch after seed patches wi
   const liveLock=JSON.parse(await fs.readFile(path.join(project,'harness/android/runtime-lock.json'),'utf8'));
   assert.equal(liveLock.version,'0.1.8');assert.equal(liveLock.protocol,1);assert.equal(liveLock.upstream,'0.1.7-rc.2');
 });
+
+// QA launchers/docs are not copied into the immutable runtime. These exact two
+// exceptions must not become a blanket exemption for test-runner siblings.
+const exactQaOnlyPaths=[
+  'harness/android/test-runner/README.md',
+  'harness/android/test-runner/arm64-emulator.mjs',
+];
+test('real resolver CLI permits only the two exact non-packaged Android QA inputs',async t=>{
+  for(const changes of [...exactQaOnlyPaths.map(name=>[name]),exactQaOnlyPaths])await t.test(changes.join(', '),()=>fixture(async(root,bytes)=>{
+    for(const name of changes)await write(root,name,await fs.readFile(path.join(project,name)));
+    git(root,'add','--','harness');git(root,'commit','--quiet','-m','Exact non-runtime QA files');
+    const result=runResolver(root);
+    assert.equal(result.status,0,result.stderr);assert.match(result.stdout,/PUBLISHED_RUNTIME_REUSED/);
+    assert.deepEqual(await fs.readFile(path.join(root,'artifacts/android-runtime/agent-rootfs.zip')),bytes);
+    assert.equal(await fs.readFile(path.join(root,'github-output.txt'),'utf8'),'reused=true\n');
+  }));
+});
+test('real resolver CLI still rejects unknown test-runner siblings',()=>fixture(async root=>{
+  await write(root,'harness/android/test-runner/unknown-runtime-input.mjs','Not an approved exception\n');
+  git(root,'add','--','harness');git(root,'commit','--quiet','-m','Unknown QA-directory input');
+  const result=runResolver(root);
+  assert.notEqual(result.status,0,result.stdout);assert.match(result.stderr,/Command failed: git diff --exit-code/);
+  assert.doesNotMatch(result.stdout,/PUBLISHED_RUNTIME_REUSED|NEW_COMPONENT_BUILD_REQUIRED/);
+  await assert.rejects(fs.stat(path.join(root,'artifacts/android-runtime/agent-rootfs.zip')),/ENOENT/);
+  await assert.rejects(fs.stat(path.join(root,'github-output.txt')),/ENOENT/);
+}));
