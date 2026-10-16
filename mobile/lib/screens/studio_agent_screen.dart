@@ -1,3 +1,4 @@
+import '../images/coordinated_file_image.dart';
 import 'prompt_skill_selector.dart';
 import '../prompts/prompt_skill_selection.dart';
 import '../ui/effort_control.dart';
@@ -883,7 +884,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
       close: close);
   Future<void> _preview(AgentAttachment image) async {
     await showGalleryImagePreview(context, images: [
-      Image.file(File(image.filePath),
+      imageFile(File(image.filePath),
           errorBuilder: (_, __, ___) => Text(_t('missingImage')))
     ], captions: [
       image.name
@@ -1046,7 +1047,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                     onTap: () => _preview(image),
                                     child: ClipRRect(
                                         borderRadius: BorderRadius.circular(12),
-                                        child: Image.file(File(image.filePath),
+                                        child: imageFile(File(image.filePath),
                                             height: 240,
                                             errorBuilder: (_, __, ___) =>
                                                 Text(_t('missingImage'))))))),
@@ -1342,7 +1343,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                           padding: const EdgeInsets.only(right: 8),
                           child: InputChip(
                               avatar: file.kind == 'image'
-                                  ? Image.file(File(file.filePath),
+                                  ? imageFile(File(file.filePath),
                                       errorBuilder: (_, __, ___) =>
                                           const Icon(Icons.image_outlined))
                                   : const Icon(Icons.attachment),

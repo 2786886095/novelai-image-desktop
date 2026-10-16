@@ -8,7 +8,7 @@ export function buildFullFeatureMatrix({version,sourceSha,receipts=[]}){
  for(const item of receipts){
   const r=item.receipt;
   if(r?.schema!=='client-feature-scenarios/v1'){diagnostics.push({artifact:item.artifact,classification:'legacy-component-only',sourceSha:r?.sourceSha??null,platform:r?.platform??null});continue;}
-  try{assertScenarioReceipt(r,{sourceSha});accepted.push(item);}catch(error){diagnostics.push({artifact:item.artifact,classification:'not-release-qualified',reason:error.message,sourceSha:r?.sourceSha??null,platform:r?.platform??null});}
+  try{assertScenarioReceipt(r,{sourceSha,androidAgentProof:item.androidAgentProof});accepted.push(item);}catch(error){diagnostics.push({artifact:item.artifact,classification:'not-release-qualified',reason:error.message,sourceSha:r?.sourceSha??null,platform:r?.platform??null});}
  }
  const features=releaseFeatures.map(id=>({id,platforms:Object.fromEntries(releasePlatforms.map(platform=>{
   const requiredScenarios=[...fullFeatureProfiles[id].scenarios],all=[],local=[],component=[];
@@ -18,7 +18,7 @@ export function buildFullFeatureMatrix({version,sourceSha,receipts=[]}){
   }}
   for(const item of accepted)if(item.receipt.platform===platform)for(const check of item.receipt.checks)if(check.feature===id)all.push({check,item});
   const completedScenarios=[...new Set(all.map(x=>x.check.scenario))],missingScenarios=requiredScenarios.filter(s=>!completedScenarios.includes(s));
-  const evidence=[];for(const{check,item}of all){const key=item.artifact+'|'+check.kind;if(evidence.some(e=>e._key===key))continue;evidence.push({_key:key,sourceSha,feature:id,platform,kind:check.kind,exitStatus:0,skipped:false,artifact:item.artifact,sha256:item.sha256});}
+  const evidence=[];for(const{check,item}of all){const key=item.artifact+'|'+check.kind;if(evidence.some(e=>e._key===key))continue;evidence.push({_key:key,sourceSha,feature:id,platform,kind:check.kind,exitStatus:0,skipped:false,artifact:item.artifact,sha256:item.sha256,...(item.androidAgentProofArtifact?{companionProofArtifact:item.androidAgentProofArtifact,companionProofSha256:item.androidAgentProofFileSha256}:{})});}
   const status=missingScenarios.length===0?'verified':all.length||local.length||component.length?'partial':'pending';
   return[platform,{status,requiredScenarios,completedScenarios,missingScenarios,unqualifiedObservedScenarios:[...new Set(local)].filter(s=>!completedScenarios.includes(s)),componentObservations:[...new Set(component)],evidence:status==='verified'?evidence.map(({_key,...proof})=>proof):[]}];
  }))}));
@@ -30,7 +30,17 @@ export function collectReceiptFiles(evidenceRoot,outputRoot){
  const root=fs.realpathSync(evidenceRoot),destination=path.join(outputRoot,'evidence');fs.mkdirSync(destination,{recursive:true});const rows=[];
  function walk(dir){for(const ent of fs.readdirSync(dir,{withFileTypes:true})){if(ent.isSymbolicLink())continue;const full=path.join(dir,ent.name);if(ent.isDirectory()){if(!['node_modules','.git','source','compiled','profile','disposable-profile','library-profile','browser-profile','isolated-native-profile','isolated-offline-profile','environment','evidence'].includes(ent.name))walk(full);}else if(ent.isFile()&&/(?:^|[-_])(?:receipt|scenarios)\.json$/i.test(ent.name)){
    const stat=fs.statSync(full);if(stat.size>64*1024*1024)throw Error('Receipt exceeds bounded64MiB: '+path.relative(root,full));const bytes=fs.readFileSync(full);let receipt;try{receipt=JSON.parse(bytes);}catch{throw Error('Malformed execution receipt: '+path.relative(root,full));}
-   const hash=sha(bytes),name=hash+'.json',target=path.join(destination,name);if(!fs.existsSync(target))fs.writeFileSync(target,bytes,{flag:'wx'});if(sha(fs.readFileSync(target))!==hash)throw Error('Evidence copy mismatch');rows.push({artifact:path.posix.join('evidence',name),sha256:hash,receipt,origin:path.relative(root,full)});
+   const hash=sha(bytes),name=hash+'.json',target=path.join(destination,name);if(!fs.existsSync(target))fs.writeFileSync(target,bytes,{flag:'wx'});if(sha(fs.readFileSync(target))!==hash)throw Error('Evidence copy mismatch');const row={artifact:path.posix.join('evidence',name),sha256:hash,receipt,origin:path.relative(root,full)};
+   if(receipt.nativeRuntime?.type==='android-instrumentation'){
+    const proofFile=path.join(path.dirname(full),'controller-proof.json');
+    if(fs.existsSync(proofFile)){
+     const stat=fs.lstatSync(proofFile);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>64*1024*1024)throw Error('Android controller proof must be a bounded sibling regular file');
+     const proofBytes=fs.readFileSync(proofFile),proofSha=sha(proofBytes),proofName=proofSha+'.controller-proof.json';
+     row.androidAgentProof=JSON.parse(proofBytes);row.androidAgentProofArtifact=path.posix.join('evidence',proofName);row.androidAgentProofFileSha256=proofSha;
+     const copy=path.join(destination,proofName);if(!fs.existsSync(copy))fs.writeFileSync(copy,proofBytes,{flag:'wx'});if(sha(fs.readFileSync(copy))!==proofSha)throw Error('Android controller proof evidence copy mismatch');
+    }
+   }
+   rows.push(row);
   }}}
  walk(root);return rows;
 }

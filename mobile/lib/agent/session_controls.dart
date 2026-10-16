@@ -1,3 +1,4 @@
+import '../images/image_file_access.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -246,10 +247,7 @@ class AgentSessionControls {
     }
     final entry = selected.isEmpty ? images.first : selected.first;
     final file = File(entry.filePath);
-    if (!await file.exists() || await file.length() > 32 * 1024 * 1024) {
-      throw StateError('预览图过大或已失效');
-    }
-    final bytes = await file.readAsBytes(),
+    final bytes = await ImageFiles.read(file.path, maxBytes: 32 * 1024 * 1024),
         decoder = img.findDecoderForData(bytes);
     final info = decoder?.startDecode(bytes);
     if (info == null || info.width * info.height > 40000000) {

@@ -1,3 +1,5 @@
+import '../images/image_file_access.dart';
+import '../images/coordinated_file_image.dart';
 import '../ui/global_typography.dart';
 import 'prompt_skill_selector.dart';
 import '../prompts/prompt_skill_selection.dart';
@@ -467,7 +469,7 @@ class _PreciseReferenceSection extends StatelessWidget {
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(10),
-                              child: Image.file(
+                              child: imageFile(
                                 File(reference.filePath),
                                 width: 84,
                                 height: 112,
@@ -1068,7 +1070,7 @@ class _PanelPreciseReferences extends StatelessWidget {
                               panel, asset, value == true),
                           secondary: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Image.file(File(asset.filePath),
+                            child: imageFile(File(asset.filePath),
                                 width: 48,
                                 height: 48,
                                 fit: BoxFit.cover,
@@ -1347,7 +1349,7 @@ class _ResultCard extends StatelessWidget {
                           ? panel.error
                           : t('comic.noCandidate'),
                     )
-                  : Image.file(
+                  : imageFile(
                       File(selected.outputPath),
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) =>
@@ -1386,7 +1388,7 @@ class _ResultCard extends StatelessWidget {
                             ),
                           ),
                           clipBehavior: Clip.antiAlias,
-                          child: Image.file(
+                          child: imageFile(
                             File(candidate.outputPath),
                             fit: BoxFit.cover,
                           ),
@@ -1940,13 +1942,13 @@ Future<void> _preview(BuildContext context, String path) async {
       .panels
       .expand((panel) => panel.candidates)
       .map((candidate) => candidate.outputPath)
-      .where((path) => path.isNotEmpty && File(path).existsSync())
+      .where((path) => path.isNotEmpty && ImageFiles.keepVisible(path))
       .toSet()
       .toList();
   if (!paths.contains(path)) paths.add(path);
   await showGalleryImagePreview(context,
       images: paths
-          .map((path) => Image.file(File(path), fit: BoxFit.contain))
+          .map((path) => imageFile(File(path), fit: BoxFit.contain))
           .toList(),
       initialIndex: paths.indexOf(path));
 }

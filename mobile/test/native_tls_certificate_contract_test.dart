@@ -100,11 +100,16 @@ void main() {
   final rootBytes = base64Decode(nativeTlsRootDerBase64),
       root = _der(rootBytes);
   test(
-      'public CA is independent and PEM/DER trust bytes select documented platform formats',
+      'public CA is independent and both selectors use pinned-engine PEM trust',
       () {
     expect(_ca(root), isTrue);
     expect(_pem(nativeTlsRootPemBase64).single, orderedEquals(rootBytes));
-    expect(nativeFixtureRootBytes(ios: true), orderedEquals(rootBytes));
+    expect(nativeFixtureRootBytes(ios: true),
+        orderedEquals(base64Decode(nativeTlsRootPemBase64)));
+    for (final ios in [false, true]) {
+      SecurityContext(withTrustedRoots: false)
+          .setTrustedCertificatesBytes(nativeFixtureRootBytes(ios: ios));
+    }
     expect(nativeFixtureRootBytes(ios: false),
         orderedEquals(base64Decode(nativeTlsRootPemBase64)));
     final t = root.children.first.children;
@@ -178,6 +183,51 @@ void main() {
       c.usePrivateKeyBytes(bytes, password: nativeTlsFixturePkcs12Password);
     });
   }
+  test(
+      'pinned-engine explicit PEM key and chain perform TLS and reject unknown CA and wrong host',
+      () async {
+    final context = nativeFixtureServerContext(
+        chainBase64: nativeUiChainBase64,
+        keyBase64: nativeUiPrivateKey,
+        pkcs12Base64: nativeUiPkcs12Base64);
+    final server =
+        await SecureServerSocket.bind(InternetAddress.loopbackIPv4, 0, context);
+    final sockets = <Socket>[];
+    final listener = server.listen((socket) {
+      sockets.add(socket);
+      socket.listen((_) {}, onError: (Object _) {});
+    }, onError: (Object _) {});
+    Future<SecureSocket> connect(SecurityContext trust, String host) async {
+      final plain =
+          await Socket.connect(InternetAddress.loopbackIPv4, server.port);
+      sockets.add(plain);
+      final secure =
+          await SecureSocket.secure(plain, host: host, context: trust)
+              .timeout(const Duration(seconds: 5));
+      sockets.add(secure);
+      return secure;
+    }
+
+    try {
+      final valid =
+          await connect(nativeFixtureClientContext(), 'relay-a.native.invalid');
+      expect(valid.peerCertificate!.der,
+          orderedEquals(_pem(nativeUiCertificate).single));
+      await expectLater(
+          connect(SecurityContext(withTrustedRoots: false),
+              'relay-a.native.invalid'),
+          throwsA(isA<HandshakeException>()));
+      await expectLater(
+          connect(nativeFixtureClientContext(), 'wrong-host.native.invalid'),
+          throwsA(isA<HandshakeException>()));
+    } finally {
+      for (final socket in sockets) {
+        socket.destroy();
+      }
+      await server.close();
+      await listener.cancel();
+    }
+  });
   test('bounded DER parser rejects indefinite lengths and trailing data', () {
     expect(() => _der(Uint8List.fromList([0x30, 0x80, 0, 0])),
         throwsFormatException);

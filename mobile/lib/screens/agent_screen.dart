@@ -1,3 +1,5 @@
+import '../images/image_file_access.dart';
+import '../images/coordinated_file_image.dart';
 import '../ui/effort_control.dart';
 import '../ui/global_typography.dart';
 import '../agent/compatible_proposal.dart';
@@ -15,7 +17,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../agent/agent_controller.dart';
 import '../agent/agent_models.dart';
@@ -1415,18 +1416,18 @@ class _AgentScreenState extends State<AgentScreen> {
         spacing: 8,
         runSpacing: 8,
         children: attachments.map((item) {
-          if (item.kind == 'image' && File(item.filePath).existsSync()) {
+          if (item.kind == 'image' && ImageFiles.keepVisible(item.filePath)) {
             return GestureDetector(
               onDoubleTap: () => _openGeneratedImage(
                   item,
                   attachments
                       .where((image) =>
                           image.kind == 'image' &&
-                          File(image.filePath).existsSync())
+                          ImageFiles.keepVisible(image.filePath))
                       .toList()),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.file(File(item.filePath),
+                child: imageFile(File(item.filePath),
                     width: 148, height: 110, fit: BoxFit.cover),
               ),
             );
@@ -1444,7 +1445,7 @@ class _AgentScreenState extends State<AgentScreen> {
   Widget _generatedImages(AgentMessage message) {
     final images = message.tools
         .expand((tool) => tool.generatedImages)
-        .where((item) => File(item.filePath).existsSync())
+        .where((item) => ImageFiles.keepVisible(item.filePath))
         .toList();
     if (images.isEmpty) return const SizedBox.shrink();
     return Padding(
@@ -1463,7 +1464,7 @@ class _AgentScreenState extends State<AgentScreen> {
                       aspectRatio: (item.width ?? 1) / (item.height ?? 1),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(14),
-                        child: Image.file(File(item.filePath),
+                        child: imageFile(File(item.filePath),
                             fit: BoxFit.contain),
                       ),
                     ),
@@ -1480,13 +1481,13 @@ class _AgentScreenState extends State<AgentScreen> {
     await showGalleryImagePreview(
       context,
       images: images
-          .map((image) => Image.file(File(image.filePath), fit: BoxFit.contain))
+          .map((image) => imageFile(File(image.filePath), fit: BoxFit.contain))
           .toList(),
       initialIndex: images.indexOf(item),
       captions: images.map((image) => image.name).toList(),
       actionsBuilder: (_, index) => IconButton.filledTonal(
         tooltip: text['saveShare']!,
-        onPressed: () => Share.shareXFiles([XFile(images[index].filePath)],
+        onPressed: () => shareImageFile(context, images[index].filePath,
             text: images[index].name),
         icon: const Icon(Icons.download_rounded),
       ),

@@ -1,3 +1,5 @@
+import 'image_file_access.dart';
+import 'coordinated_file_image.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -13,9 +15,9 @@ typedef CompletedImagePreloader = Future<void> Function(String filePath);
 /// into a failed one.
 Future<void> preloadCompletedFileImage(String filePath) async {
   final file = File(filePath);
-  if (!await file.exists()) return;
+  if (!ImageFiles.keepVisible(filePath)) return;
 
-  final provider = FileImage(file);
+  final provider = imageFileProvider(file);
   final stream = provider.resolve(ImageConfiguration.empty);
   final ready = Completer<void>();
   late final ImageStreamListener listener;

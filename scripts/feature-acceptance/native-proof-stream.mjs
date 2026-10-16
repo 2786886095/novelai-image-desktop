@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import {createNativeCheckChunks} from './native-proof-chunks.mjs';
 import {mobileNativeEntries,isMobileScenarioEntry} from './mobile-entry-specs.mjs';
 
 // Flutter 3.24 run --machine: framed app.start/app.log/app.stop plus plain
@@ -15,8 +16,12 @@ export function createNativeProof({ sourceSha, platform, expectedChecks, profile
     value.mockOnly === false && isMobileScenarioEntry(testEntry) && value.testEntry === testEntry &&
     (!mobileNativeEntries[testEntry].platforms || mobileNativeEntries[testEntry].platforms.includes(platform));
   let completion = null, begin = null;
+  const chunks=createNativeCheckChunks({testEntry});
   function line(text) {
     if (/Unhandled Exception:|FEATURE_NATIVE_ASYNC_ERROR:|FEATURE_ACCEPTANCE_FAILURE:/.test(text)) errors.push('Native asynchronous/journey error: ' + text);
+    const packet=chunks.consume(text,{begin,expectedId:checks.length+1});
+    if(packet.handled){if(packet.literal)line(packet.literal);return;}
+    if(chunks.active&&text.includes('FEATURE_ACCEPTANCE_'))errors.push('Proof marker interrupted explicit native chunks');
     const reserved = [...text.matchAll(/FEATURE_ACCEPTANCE_/g)];
     if (!reserved.length) return;
     if (reserved.length !== 1) { errors.push('Merged native proof lines are forbidden.'); return; }
@@ -57,7 +62,7 @@ export function createNativeProof({ sourceSha, platform, expectedChecks, profile
     }
   }
   function finish() {
-    const failure = [...errors];
+    const failure = [...errors,...chunks.finishErrors()];
     if (requireNativeBegin && !begin) failure.push('Required same-entry native BEGIN/PID is missing.');
     if (!completion || completion.exitStatus !== 0 || completion.checks !== expectedChecks || checks.length !== expectedChecks) failure.push(`Native journey incomplete: expected ${expectedChecks}, checks ${checks.length}, DONE ${completion?.checks}, exit ${completion?.exitStatus}.`);
     return { checks, pending, begin, completion, errors: failure, passed: failure.length === 0 };
@@ -109,7 +114,7 @@ export async function collectResidentFlutter({ command, cwd, env, sourceSha, pla
     }, completionTailMs);
   }
   function nativeLine(text, channel) {
-    if (!appId && /FEATURE_ACCEPTANCE_(CHECK|DONE|BEGIN|PENDING):/.test(text)) protocolErrors.push('Native proof before matching current app.start.');
+    if (!appId && /FEATURE_ACCEPTANCE_(CHECK|DONE|BEGIN|PENDING):|NATIVE_PROOF_CHUNK:/.test(text)) protocolErrors.push('Native proof before matching current app.start.');
     if (channel === 'stderr') nativeStderr += text + '\n'; else nativeStdout += text + '\n';
     const beforeChecks = proof.checksCount, beforeErrors = proof.errorsCount;
     proof.line(text);

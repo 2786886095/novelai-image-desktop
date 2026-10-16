@@ -1,3 +1,4 @@
+import '../images/coordinated_file_image.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -50,7 +51,7 @@ class _BeforeAfterCompareState extends State<BeforeAfterCompare> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.file(File(widget.afterPath), fit: BoxFit.contain),
+                  imageFile(File(widget.afterPath), fit: BoxFit.contain),
                   ClipRect(
                     child: Align(
                       alignment: Alignment.centerLeft,
@@ -58,7 +59,7 @@ class _BeforeAfterCompareState extends State<BeforeAfterCompare> {
                       child: SizedBox(
                         width: constraints.maxWidth,
                         height: constraints.maxHeight,
-                        child: Image.file(
+                        child: imageFile(
                           File(widget.beforePath),
                           fit: BoxFit.contain,
                         ),

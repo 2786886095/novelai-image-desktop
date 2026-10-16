@@ -1,3 +1,4 @@
+import '../images/image_file_access.dart';
 import 'gallery_download.dart';
 import 'aitag_error.dart';
 import 'dart:async';
@@ -341,7 +342,7 @@ class AitagImageCache {
     if (await file.exists()) {
       if (await file.length() <= _maxCachedImageBytes) {
         try {
-          validateGalleryImage(await file.readAsBytes());
+          validateGalleryImage(await ImageFiles.read(file.path, maxBytes: _maxCachedImageBytes));
           await file.setLastModified(DateTime.now());
           return file;
         } on FormatException {/* Replace invalid legacy cache bodies. */}

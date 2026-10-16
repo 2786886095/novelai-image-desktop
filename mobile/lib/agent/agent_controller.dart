@@ -1,3 +1,4 @@
+import '../images/image_file_access.dart';
 import 'template_tools.dart';
 import 'model_selections.dart';
 import 'agent_questions.dart';
@@ -604,18 +605,21 @@ class AgentController extends ChangeNotifier {
           '.yaml',
           '.yml'
         }.contains(extension)) continue;
-        final length = await source.length();
+        final imageBytes = _kind(extension) == 'image'
+            ? await ImageFiles.read(source.path, maxBytes: 48 * 1024 * 1024) : null;
+        final length = imageBytes?.length ?? await source.length();
         if (length <= 0 || length > 48 * 1024 * 1024) continue;
         total += length;
         if (total > 192 * 1024 * 1024) break;
         final target = File(p.join(directory.path,
             '${agentId('attachment')}-${_safeName(p.basename(sourcePath))}'));
-        await source.copy(target.path);
+        if (imageBytes == null) { await source.copy(target.path); }
+        else { await target.writeAsBytes(imageBytes, flush: true); }
         int? width, height;
         if (_kind(extension) == 'image') {
           try {
             final dims =
-                AppState.readImageDimensions(await target.readAsBytes());
+                AppState.readImageDimensions(await ImageFiles.read(target.path));
             width = dims.$1;
             height = dims.$2;
           } catch (_) {}
@@ -687,10 +691,8 @@ class AgentController extends ChangeNotifier {
     }
     if (path == null) throw StateError('所选图片已不可用。');
     final file = File(path);
-    final size = await file.length();
-    if (size <= 0 || size > 48 * 1024 * 1024) {
-      throw StateError('图片大小超出附件限制。');
-    }
+    final bytes = await ImageFiles.read(file.path, maxBytes: 48 * 1024 * 1024);
+    final size = bytes.length;
     final directory =
         await app.storage.agentAttachmentsDirectory(conversation.id);
     final extension = p.extension(path).toLowerCase();
@@ -707,7 +709,7 @@ class AgentController extends ChangeNotifier {
         : '.png';
     final target =
         File(p.join(directory.path, '${agentId('attachment')}$safeExtension'));
-    await file.copy(target.path);
+    await target.writeAsBytes(bytes, flush: true);
     final attachment = AgentAttachment(
         id: agentId('attachment'),
         name: p.basename(target.path),
@@ -769,7 +771,7 @@ class AgentController extends ChangeNotifier {
     for (final item in app.history.take(50)) {
       var size = 0;
       try {
-        size = File(item.filePath).lengthSync();
+        size = ImageFiles.displaySize(item.filePath);
       } catch (_) {}
       add(AgentAttachment(
         id: item.id,
@@ -790,7 +792,7 @@ class AgentController extends ChangeNotifier {
     final metadata =
         '[attachmentId=${attachment.id}; name=${attachment.name}; type=${attachment.mime}; bytes=${attachment.size}]';
     final file = File(attachment.filePath);
-    if (!file.existsSync()) {
+    if (!(attachment.kind == 'image' ? ImageFiles.keepVisible(file.path) : file.existsSync())) {
       return {'type': 'text', 'text': '$metadata (file missing)'};
     }
     if (attachment.kind == 'image' && app.settings.agentVisionEnabled) {
@@ -800,7 +802,7 @@ class AgentController extends ChangeNotifier {
           'text': '$metadata (image exceeds 20 MB vision limit)'
         };
       }
-      final encoded = base64Encode(await file.readAsBytes());
+      final encoded = base64Encode(await ImageFiles.read(file.path, maxBytes: 20 * 1024 * 1024));
       return {
         'type': 'image_url',
         'image_url': {'url': 'data:${attachment.mime};base64,$encoded'},

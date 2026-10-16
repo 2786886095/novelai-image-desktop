@@ -55,4 +55,5 @@ export const mobileScenarioInventories=Object.freeze({
   ...keys('updates',['version-check-platform-links'])]),
  android_update2:Object.freeze(keys('updates',['download-verify-failure','profile-preserved-update-boundary'])),
  ios_update2:Object.freeze(keys('updates',['download-verify-failure','profile-preserved-update-boundary'])),
+ android_folder1:Object.freeze(keys('output-management',['folder-choice-history-link'])),
 });

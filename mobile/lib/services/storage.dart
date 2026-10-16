@@ -1,3 +1,4 @@
+import '../images/image_file_access.dart';
 import 'works_batch.dart';
 import 'openai_image_edit.dart';
 import 'unified_storage.dart';
@@ -78,7 +79,14 @@ class Storage {
   static int _imageIdentitySequence = 0;
   static String _newImageId(DateTime now) =>
       '${now.microsecondsSinceEpoch}-$_imageProcessNonce-${++_imageIdentitySequence}';
-  Storage({DateTime Function()? imageClock}) : _imageClock = imageClock ?? DateTime.now;
+  final ImageFileReader _imageReader;
+  Storage({DateTime Function()? imageClock, ImageFileReader? imageReader})
+      : _imageClock = imageClock ?? DateTime.now,
+        _imageReader = imageReader ?? ImageFiles.reader;
+  Future<Uint8List> readImage(String path, {int maxBytes = 64 * 1024 * 1024}) =>
+      _imageReader.read(path, maxBytes: maxBytes);
+  String? metadataInspectorSourcePath;
+  void associateMetadataInspectorSource(String? path) { metadataInspectorSourcePath = path; }
 
   // All instances share one settings transaction queue. Secure-key writes and
   // preference commits cannot interleave with UI, Agent or backup writes.
@@ -106,8 +114,8 @@ class Storage {
     await writeHistory(rows.where((h)=>!result.removedIds.contains(h.id)).toList());return result;
   });
   Future<Set<String>> reconcileMissingHistory() => historyTransaction(() async {
-    final files=await worksFiles(),rows=await getHistory(),ids=<String>{};
-    for(final h in rows){if(await files.conclusivelyMissing(h.filePath))ids.add(h.id);}
+    final files=_imageReader.coordinated?null:await worksFiles(),rows=await getHistory(),ids=<String>{};
+    for(final h in rows){if(_imageReader.coordinated ? await _imageReader.probe(h.filePath)==ImageAvailability.missing : await files!.conclusivelyMissing(h.filePath))ids.add(h.id);}
     if(ids.isNotEmpty)await writeHistory(rows.where((h)=>!ids.contains(h.id)).toList());return ids;
   });
 
@@ -531,6 +539,7 @@ class Storage {
     await file.writeAsBytes(bytes, flush: true);
     final snapshot = (file: file, name: originalName);
     _metadataInspectorSession = snapshot;
+    metadataInspectorSourcePath = null;
     return snapshot;
   }
 
@@ -564,7 +573,7 @@ class Storage {
     required String sourceName,
   }) async {
     final source = File(sourcePath);
-    if (!source.existsSync()) return null;
+    if (!ImageFiles.keepVisible(sourcePath)) return null;
     final lower = sourceName.toLowerCase();
     final extension = lower.endsWith('.jpeg')
         ? '.jpeg'
@@ -584,7 +593,7 @@ class Storage {
         '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}';
     final destination =
         File('${directory.path}${Platform.pathSeparator}$id$extension');
-    await source.copy(destination.path);
+    await destination.writeAsBytes(await readImage(source.path), flush: true);
     return StylePromptPreviewImage(
       id: id,
       name: sourceName,
@@ -645,7 +654,7 @@ class Storage {
       final library = ReferencePresetLibrary.fromJson(
           jsonDecode(raw) as Map<String, dynamic>);
       final valid = library.presets
-          .where((preset) => File(preset.filePath).existsSync())
+          .where((preset) => ImageFiles.keepVisible(preset.filePath))
           .toList();
       if (valid.length != library.presets.length) {
         final repaired =
@@ -703,8 +712,8 @@ class Storage {
     for (var index = 0; index < presets.length; index++) {
       final preset = presets[index];
       final source = File(preset.filePath);
-      if (!source.existsSync()) continue;
-      final bytes = await source.readAsBytes();
+      if (!ImageFiles.keepVisible(source.path)) continue;
+      final bytes = await readImage(source.path);
       final asset =
           'images/${index + 1}${_referenceImageExtension(source.path)}';
       archive.addFile(ArchiveFile(asset, bytes.length, bytes));
@@ -1171,7 +1180,8 @@ class Storage {
     final filePath = file.path;
     if (settings.saveToGallery) {
       try {
-        await Gal.putImage(filePath, album: 'Langbai NovelAI Studio');
+        if (Platform.isIOS) { await Gal.putImageBytes(await readImage(filePath), album: 'Langbai NovelAI Studio'); }
+        else { await Gal.putImage(filePath, album: 'Langbai NovelAI Studio'); }
       } catch (_) {
         // The app-private original and history entry remain available even when
         // gallery permission is denied or a device gallery is unavailable.
@@ -1240,7 +1250,8 @@ class Storage {
     }
     if (snapshot.saveToGallery) {
       try {
-        await Gal.putImage(filePath, album: 'Langbai NovelAI Studio');
+        if (Platform.isIOS) { await Gal.putImageBytes(await readImage(filePath), album: 'Langbai NovelAI Studio'); }
+        else { await Gal.putImage(filePath, album: 'Langbai NovelAI Studio'); }
       } catch (_) {/* App-private copy remains. */}
     }
     return item;
@@ -1354,7 +1365,7 @@ class Storage {
       }
     }
     try {
-      await target.writeAsBytes(await source.readAsBytes(), flush: true);
+      await target.writeAsBytes(await readImage(source.path), flush: true);
     } catch (_) {
       try {
         await target.delete();
@@ -1378,7 +1389,7 @@ class Storage {
     final bytes = await buildHistoryArchive(
       items,
       groups,
-      (path) => File(path).readAsBytes(),
+      (path) => readImage(path),
       language,
     );
     final temp = await getTemporaryDirectory();

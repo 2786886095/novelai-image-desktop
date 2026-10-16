@@ -1,3 +1,4 @@
+import '../images/image_file_access.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -183,7 +184,7 @@ class MobileLocalFavorites extends ChangeNotifier {
 
   Future<LocalFavorite> add(HistoryItem history) => _serial(() async {
         final source = File(history.filePath);
-        if (await FileSystemEntity.type(source.path, followLinks: false) !=
+        if (!Platform.isIOS && await FileSystemEntity.type(source.path, followLinks: false) !=
             FileSystemEntityType.file) {
           throw FileSystemException('Original image unavailable', source.path);
         }
@@ -196,7 +197,7 @@ class MobileLocalFavorites extends ChangeNotifier {
         }
         final data = await _read();
         final directory = await _safeDirectory(data.directory);
-        final bytes = await source.readAsBytes();
+        final bytes = await ImageFiles.read(source.path);
         final hash = sha256.convert(bytes).toString();
         for (final saved in data.items) {
           if (saved.sourceId == history.id && saved.sha256 == hash) {
@@ -225,7 +226,7 @@ class MobileLocalFavorites extends ChangeNotifier {
         }
         try {
           await destination.writeAsBytes(bytes, flush: true);
-          final copied = await destination.readAsBytes();
+          final copied = await ImageFiles.read(destination.path);
           if (sha256.convert(copied).toString() != hash) {
             throw const FileSystemException(
                 'Favorite copy integrity check failed');
@@ -271,11 +272,11 @@ class MobileLocalFavorites extends ChangeNotifier {
         if (await target.exists()) {
           throw const FileSystemException('Favorite name already exists');
         }
-        if (await FileSystemEntity.type(source.path, followLinks: false) !=
+        if (!Platform.isIOS && await FileSystemEntity.type(source.path, followLinks: false) !=
             FileSystemEntityType.file) {
           throw FileSystemException('Favorite image unavailable', source.path);
         }
-        final bytes = await source.readAsBytes();
+        final bytes = await ImageFiles.read(source.path);
         if (sha256.convert(bytes).toString() != old.sha256) {
           throw const FileSystemException('Favorite image changed on disk');
         }
@@ -320,7 +321,7 @@ class MobileLocalFavorites extends ChangeNotifier {
               throw FileSystemException(
                   'Missing or conflicting favorite image', target.path);
             }
-            final bytes = await old.readAsBytes();
+            final bytes = await ImageFiles.read(old.path);
             if (sha256.convert(bytes).toString() != item.sha256) {
               throw FileSystemException(
                   'Favorite image changed on disk', old.path);

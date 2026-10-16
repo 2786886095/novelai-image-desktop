@@ -1,3 +1,4 @@
+import '../images/image_file_access.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -58,12 +59,12 @@ class MobileMcpTools {
     final found=imported.where((a)=>a.id==value);
     if(found.isNotEmpty)return found.first;
     final history=app.history.where((h)=>h.id==value);
-    if(history.isNotEmpty){final h=history.first;return AgentAttachment(id:h.id,name:'history.png',mime:'image/png',size:await File(h.filePath).length(),kind:'image',filePath:h.filePath,width:h.width,height:h.height);}
+    if(history.isNotEmpty){final h=history.first;return AgentAttachment(id:h.id,name:'history.png',mime:'image/png',size:(await ImageFiles.read(h.filePath)).length,kind:'image',filePath:h.filePath,width:h.width,height:h.height);}
     throw StateError('Unknown image ID. Import an image first.');
   }
   Future<im.Image> _read(String path) async {
-    if(await FileSystemEntity.type(path,followLinks:false)!=FileSystemEntityType.file || await File(path).length()>64*1024*1024)throw StateError('Image is not a bounded regular file');
-    final bytes=await File(path).readAsBytes();
+    if(!Platform.isIOS && (await FileSystemEntity.type(path,followLinks:false)!=FileSystemEntityType.file || await File(path).length()>64*1024*1024))throw StateError('Image is not a bounded regular file');
+    final bytes=await ImageFiles.read(path);
     if(bytes.length>64*1024*1024)throw StateError('Image too large');
     final decoder=im.findDecoderForData(bytes);
     final info=decoder?.startDecode(bytes);
@@ -126,14 +127,14 @@ class MobileMcpTools {
     }
     final transformed=_agentNames.containsKey(name)?await _args(name,args):args;
     final imageHashes=<String,String>{};
-    for(final key in ['image','mask']) {if(args[key] is String){final image=await _resolve(args[key]);imageHashes[image.filePath]=sha256.convert(await File(image.filePath).readAsBytes()).toString();}}
+    for(final key in ['image','mask']) {if(args[key] is String){final image=await _resolve(args[key]);imageHashes[image.filePath]=sha256.convert(await ImageFiles.read(image.filePath)).toString();}}
     final prepared=_paid.contains(name)?await controller.tools.prepareImageOperation(_agentNames[name]!,transformed,List.of(imported)):null;
     return McpOperation(mutating:_paid.contains(name)||['import_image','make_mask','apply_to_workbench'].contains(name),
       summary:{'operation':name,'parameters':args,if(quote!=null)'estimatedAnlas':quote.amount,'maxAnlasPerCall':budget()},
       execute:() async {
         if(_paid.contains(name)||['import_image','make_mask','apply_to_workbench'].contains(name)) {
           if(app.busy || revision!=_revision())throw StateError('Context changed after preparation');
-          for(final entry in imageHashes.entries) {if(sha256.convert(await File(entry.key).readAsBytes()).toString()!=entry.value)throw StateError('Image changed');}
+          for(final entry in imageHashes.entries) {if(sha256.convert(await ImageFiles.read(entry.key)).toString()!=entry.value)throw StateError('Image changed');}
         }
         if(prepared!=null){final fresh=await _quote(name,args);if(!fresh.ok || fresh.amount==null || fresh.amount!>budget())throw StateError('Budget changed');
           if(app.busy || revision!=_revision())throw StateError('Context changed before execution');
@@ -142,7 +143,7 @@ class MobileMcpTools {
         if(name=='estimate_cost') {final q=await _quote(args['operation'],Map<String,dynamic>.from(args['arguments'] as Map? ?? {}));return _ok({'amount':q.amount,'ok':q.ok,'source':q.source.name});}
         if(name=='import_image'){
           final path=args['path'] as String;await _read(path);
-          final bytes=await File(path).readAsBytes();
+          final bytes=await ImageFiles.read(path);
           if(bytes.length>64*1024*1024 || imported.length>=1024)throw StateError('Attachment limit');
           final info=im.findDecoderForData(bytes)?.startDecode(bytes);
           if(info==null || info.width*info.height>64*1024*1024)throw StateError('Image changed');

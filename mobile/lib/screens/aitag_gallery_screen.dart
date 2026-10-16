@@ -1,3 +1,4 @@
+import '../images/coordinated_file_image.dart';
 import 'dart:async';
 import '../ui/global_typography.dart';
 import 'gallery_favorites_screen.dart';
@@ -772,7 +773,7 @@ class _CachedAitagImage extends StatelessWidget {
     return FutureBuilder(
       future: service.cachedImage(url, retentionDays: days),
       builder: (context, snapshot) {
-        if (snapshot.hasData) return Image.file(snapshot.data!, fit: fit);
+        if (snapshot.hasData) return imageFile(snapshot.data!, fit: fit);
         if (snapshot.hasError) {
           return Image.network(url,
               fit: fit,

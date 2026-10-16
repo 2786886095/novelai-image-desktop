@@ -1,3 +1,4 @@
+import '../images/image_file_access.dart';
 import '../prompts/prompt_mode.dart';
 import '../prompts/prompt_skill_selection.dart';
 import 'image_provider.dart';
@@ -910,7 +911,7 @@ class AgentToolExecutor {
   AgentAttachment _historyAttachment(HistoryItem item) {
     var size = 0;
     try {
-      size = File(item.filePath).lengthSync();
+      size = ImageFiles.displaySize(item.filePath);
     } catch (_) {}
     return AgentAttachment(
       id: item.id,
@@ -935,7 +936,7 @@ class AgentToolExecutor {
   AgentAttachment _referencePresetAttachment(ReferencePreset preset) {
     var size = 0;
     try {
-      size = File(preset.filePath).lengthSync();
+      size = ImageFiles.displaySize(preset.filePath);
     } catch (_) {}
     return AgentAttachment(
       id: 'reference-preset:${preset.id}',
@@ -952,16 +953,16 @@ class AgentToolExecutor {
 
   AgentAttachment _findAttachment(String id, List<AgentAttachment> available) {
     final direct = available.where((item) => item.id == id).firstOrNull;
-    if (direct != null && File(direct.filePath).existsSync()) return direct;
+    if (direct != null && ImageFiles.keepVisible(direct.filePath)) return direct;
     final history = app.history.where((item) => item.id == id).firstOrNull;
-    if (history != null && File(history.filePath).existsSync()) {
+    if (history != null && ImageFiles.keepVisible(history.filePath)) {
       return _historyAttachment(history);
     }
     if (id.startsWith('reference-preset:')) {
       final presetId = id.substring('reference-preset:'.length);
       final preset =
           app.referencePresets.where((item) => item.id == presetId).firstOrNull;
-      if (preset != null && File(preset.filePath).existsSync()) {
+      if (preset != null && ImageFiles.keepVisible(preset.filePath)) {
         return _referencePresetAttachment(preset);
       }
     }
@@ -986,11 +987,7 @@ class AgentToolExecutor {
       throw StateError('attachmentId=$id 不是图片附件。');
     }
     final file = File(attachment.filePath);
-    final length = await file.length();
-    if (length > 48 * 1024 * 1024) {
-      throw StateError('attachmentId=$id 超过 48 MB。');
-    }
-    return base64Encode(await file.readAsBytes());
+    return base64Encode(await ImageFiles.read(file.path, maxBytes: 48 * 1024 * 1024));
   }
 
   Future<void> _applyGenerationInput(
@@ -1497,7 +1494,7 @@ class AgentToolExecutor {
               : 'all';
           final limit = _int(args['limit'], 24, 1, 100);
           final matches = app.referencePresets.where((preset) {
-            if (!File(preset.filePath).existsSync()) return false;
+            if (!ImageFiles.keepVisible(preset.filePath)) return false;
             if (kind != 'all' && preset.kind.jsonValue != kind) return false;
             if (group.isNotEmpty && preset.group != group) return false;
             return query.isEmpty || preset.localizedSearchText.contains(query);
@@ -1545,11 +1542,8 @@ class AgentToolExecutor {
           final attachment =
               _findAttachment(_text(args['attachmentId'], 200), available);
           final file = File(attachment.filePath);
-          if (file.lengthSync() > 48 * 1024 * 1024) {
-            throw StateError('图片超过 48 MB，无法读取内嵌参数。');
-          }
           final report = inspectImageMetadata(
-              parseImageTextMetadata(await file.readAsBytes()));
+              parseImageTextMetadata(await ImageFiles.read(file.path, maxBytes: 48 * 1024 * 1024)));
           return AgentToolResult(
             ok: true,
             title: title,
@@ -1580,7 +1574,7 @@ class AgentToolExecutor {
           final limit = _int(args['limit'], 12, 1, 50);
           final items = app.history
               .where((item) =>
-                  item.filePath.isNotEmpty && File(item.filePath).existsSync())
+                  item.filePath.isNotEmpty && ImageFiles.keepVisible(item.filePath))
               .take(limit)
               .toList();
           return AgentToolResult(
@@ -1696,7 +1690,7 @@ class AgentToolExecutor {
           app.inpaintSourceMode='latest';
           app.inpaintPositivePrompt = _text(args['positivePrompt']);
           app.inpaintStrength = _double(args['strength'], 1, 0.1, 1);
-          final maskBytes = await File(mask.filePath).readAsBytes();
+          final maskBytes = await ImageFiles.read(mask.filePath);
           final images =
               await _collectNewImages(before, () => app.inpaint(maskBytes));
           return AgentToolResult(

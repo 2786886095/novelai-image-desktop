@@ -1,3 +1,5 @@
+import '../images/image_file_access.dart';
+import '../images/coordinated_file_image.dart';
 import '../ui/global_typography.dart';
 import '../ui/studio_theme.dart';
 import '../ui/studio_dropdown.dart';
@@ -946,7 +948,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
             .where((item) {
           final imageId = item.image?.id ?? '';
           final imagePath = item.image?.filePath ?? '';
-          if (imagePath.isNotEmpty && !File(imagePath).existsSync()) {
+          if (imagePath.isNotEmpty && !ImageFiles.keepVisible(imagePath)) {
             item.image = null;
             if (item.status == 'done') item.status = 'failed';
           }
@@ -1434,7 +1436,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                                         onTap: busy ? null : () {
                                           final gallery = items.where((item) => item.image != null).toList();
                                           showGalleryImagePreview(context,
-                                            images: gallery.map((item) => Image.file(File(item.image!.filePath), fit: BoxFit.contain,
+                                            images: gallery.map((item) => imageFile(File(item.image!.filePath), fit: BoxFit.contain,
                                               errorBuilder: (_, __, ___) => const Icon(Icons.broken_image))).toList(),
                                             initialIndex: gallery.indexOf(i),
                                             captions: gallery.map((item) => names[item.recipe.id] ?? item.recipe.prompt).toList(),
@@ -1445,7 +1447,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                                               }, child: Text(t[0])),
                                           );
                                         },
-                                        child: Image.file(File(i.image!.filePath), width: 112, height: 128,
+                                        child: imageFile(File(i.image!.filePath), width: 112, height: 128,
                                           fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image)),
                                       )),
                                     Expanded(
@@ -1533,7 +1535,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         .toList();
     await showGalleryImagePreview(context,
         images: list
-            .map((i) => Image.file(File(i.image!.filePath),
+            .map((i) => imageFile(File(i.image!.filePath),
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) =>
                     const Icon(Icons.broken_image_outlined)))
@@ -1720,7 +1722,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                                   _previewResult(result, text, app),
                               child: Tooltip(
                                 message: text['previewImage']!,
-                                child: Image.file(
+                                child: imageFile(
                                   File(result.image!.filePath),
                                   width: double.infinity,
                                   fit: BoxFit.contain,

@@ -1,3 +1,4 @@
+import '../images/image_file_access.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -96,11 +97,11 @@ class HistoryExports {
             (filePath) async {
           if (!RegExp(r'\.(png|jpe?g|webp|gif|avif)$', caseSensitive: false)
                   .hasMatch(filePath) ||
-              await FileSystemEntity.type(filePath, followLinks: false) !=
-                  FileSystemEntityType.file) {
+              (!Platform.isIOS && await FileSystemEntity.type(filePath, followLinks: false) !=
+                  FileSystemEntityType.file)) {
             throw StateError('图片已移动或不是普通文件；本次导出未完成');
           }
-          return File(filePath).readAsBytes();
+          return ImageFiles.read(filePath);
         }, language);
         ZipDecoder().decodeBytes(bytes, verify: true);
         final dir = await root();

@@ -66,10 +66,19 @@ class IosOutputFolder {
     return File(file);
   }
 
-  static Future<Uint8List> read(String path) async {
+  static Future<bool> probe(String path) async {
+    if (!Platform.isIOS) throw UnsupportedError('iOS folder bridge required');
+    final value = await _channel.invokeMapMethod<String, dynamic>('probe', {'path': path});
+    if (value?['coordinated'] != true || value?['available'] != true) {
+      throw const FormatException('Native image access could not be confirmed');
+    }
+    return true;
+  }
+
+  static Future<Uint8List> read(String path, {int maxBytes = 64 * 1024 * 1024}) async {
     if (!Platform.isIOS) throw UnsupportedError('iOS folder bridge required');
     final bytes =
-        await _channel.invokeMethod<Uint8List>('read', {'path': path});
+        await _channel.invokeMethod<Uint8List>('read', {'path': path, 'maxBytes': maxBytes});
     if (bytes == null) {
       throw const FormatException('Native output is unavailable');
     }

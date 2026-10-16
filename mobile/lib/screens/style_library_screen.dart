@@ -1,3 +1,4 @@
+import '../images/coordinated_file_image.dart';
 import '../ui/global_typography.dart';
 import 'dart:io';
 import 'dart:async';
@@ -524,9 +525,9 @@ class _StyleEditorState extends State<_StyleEditor> {
                                     initialIndex: p.previewImages.indexOf(im),
                                     images: p.previewImages
                                         .map(
-                                            (x) => Image.file(File(x.filePath)))
+                                            (x) => imageFile(File(x.filePath)))
                                         .toList()),
-                                child: Image.file(File(im.filePath),
+                                child: imageFile(File(im.filePath),
                                     height: 100,
                                     width: 112,
                                     fit: BoxFit.contain)),
@@ -788,12 +789,12 @@ class _StylePreviewCover extends StatelessWidget {
                 key: ValueKey('style-preview-${preset.id}-$index'),
                 onTap: () => showGalleryImagePreview(context,
                     initialIndex: index,
-                    images: images.map((im) => Image.file(File(im.filePath), fit: BoxFit.contain)).toList()),
+                    images: images.map((im) => imageFile(File(im.filePath), fit: BoxFit.contain)).toList()),
                 child: ConstrainedBox(
                     constraints: const BoxConstraints(minHeight: 44, maxHeight: 144),
                     child: ClipRRect(
                         borderRadius: BorderRadius.circular(6),
-                        child: Image.file(File(images[index].filePath),
+                        child: imageFile(File(images[index].filePath),
                             width: 96,
                             fit: BoxFit.contain,
                             errorBuilder: (_, __, ___) => const SizedBox(

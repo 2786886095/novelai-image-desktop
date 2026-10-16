@@ -13,6 +13,16 @@ class AgentInstrumentation: Instrumentation() {
     private var arguments=Bundle()
     override fun onCreate(args: Bundle?) {super.onCreate(args);arguments=args?:Bundle();start()}
     override fun onStart(){
+        // Reject before creating evidence or entering its catch writer. A runner
+        // aimed at the ordinary installation must not modify that profile.
+        if(targetContext.packageName!="com.codex.novelai.novelai_mobile.agenttest"){
+            finish(Activity.RESULT_CANCELED,Bundle().apply{putString("stream","QA package isolation required\n")})
+            return
+        }
+        if(arguments.getString("acceptance3")=="true"){
+            AgentAcceptance(this,arguments).run()
+            return
+        }
         val evidence=JSONObject().put("deviceSdk",android.os.Build.VERSION.SDK_INT).put("abi",android.os.Build.SUPPORTED_ABIS[0])
         val checks=org.json.JSONArray()
         fun pass(name:String){checks.put(name);sendStatus(0,Bundle().apply{putString("stream","PASS $name\n")})}
@@ -128,7 +138,7 @@ class AgentInstrumentation: Instrumentation() {
             agent?.stop();finish(Activity.RESULT_CANCELED,Bundle().apply{putString("stream","ANDROID DEVICE QA FAILED: ${error.toString().take(3000)}\n")})
         }
     }
-    private fun openTestActivity():AgentQaActivity {
+    internal fun openTestActivity():AgentQaActivity {
         // Do not wait for an idle Flutter message queue: ongoing frame/poll work
         // can starve startActivitySync even when the app is already foreground.
         val app=targetContext.applicationContext as android.app.Application

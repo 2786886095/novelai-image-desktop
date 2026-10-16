@@ -1,4 +1,4 @@
-import 'dart:io';
+import '../images/image_file_access.dart';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -25,9 +25,7 @@ Uint8List prepareClipboardImage(Uint8List source) {
 class ImageClipboard {
   static Future<bool> copy(String path,
       {required bool withOriginalMetadata}) async {
-    final file=File(path),size=await File(path).length();
-    if(size<=0 || size>48*1024*1024)throw const FormatException('Unsupported image size');
-    final source = await file.readAsBytes();
+    final source = await ImageFiles.read(path, maxBytes: 48*1024*1024);
     if(source.isEmpty || source.length>48*1024*1024)throw const FormatException('Unsupported image size');
     if(withOriginalMetadata){
       final buffer=await ui.ImmutableBuffer.fromUint8List(source);

@@ -1,3 +1,4 @@
+import '../images/image_file_access.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -50,11 +51,9 @@ class ComicAssetStore {
             });
 
   Future<Uint8List> _image(String filename) async {
-    if (await FileSystemEntity.type(filename, followLinks: false) !=
+    if (!Platform.isIOS && await FileSystemEntity.type(filename, followLinks: false) !=
         FileSystemEntityType.file) throw StateError('图片不存在或不是普通文件，请重新选择');
-    final file = File(filename), size = await File(filename).length();
-    if (size == 0 || size > 32 * 1024 * 1024) throw StateError('图片大小须在32MiB以内');
-    final bytes = await file.readAsBytes();
+    final bytes = await ImageFiles.read(filename, maxBytes: 32 * 1024 * 1024);
     if (bytes.length > 32 * 1024 * 1024) throw StateError('图片过大');
     img.Image? image;
     try {

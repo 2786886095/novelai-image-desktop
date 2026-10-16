@@ -1,6 +1,7 @@
+import '../images/image_file_access.dart';
+import '../images/coordinated_file_image.dart';
 import '../agent/external_mcp_runtime.dart';
 import '../services/works_batch.dart';
-import 'package:flutter/painting.dart';
 import '../services/openai_image_edit.dart';
 import '../i18n/platform_feature_text.dart';
 import '../models/ui_typography.dart';
@@ -348,7 +349,7 @@ class AppState extends ChangeNotifier {
     if(session==null||busy||isRestoringInpaintEditSession)return false;
     isRestoringInpaintEditSession=true;notifyListeners();
     try{
-      final bytes=await File(session.source.filePath).readAsBytes();
+      final bytes=await storage.readImage(session.source.filePath);
       await validateNovelAiNativeImage(bytes);await validateNovelAiNativeImage(session.maskBytes);
       if(decodeImageDimensions(bytes)!=(session.source.width,session.source.height)||decodeImageDimensions(session.maskBytes)!=(session.source.width,session.source.height))throw const FormatException('Original image or mask dimensions changed.');
       if(inpaintEditSession!=session||busy)return false;
@@ -1285,7 +1286,7 @@ class AppState extends ChangeNotifier {
       throw StateError('Cannot restore image parameters during generation.');
     }
     final revision = ++_workbenchLoadRevision;
-    final bytes = await File(filePath).readAsBytes();
+    final bytes = await storage.readImage(filePath);
     final dims = readImageDimensions(bytes);
     final report =
         inspectImageMetadata(await compute(parseImageTextMetadata, bytes));
@@ -1323,7 +1324,7 @@ class AppState extends ChangeNotifier {
   List<HistoryItem> get generationPreviewHistory => history
       .where((item) =>
           (selectedGroupId.isEmpty || item.groupId == selectedGroupId) &&
-          File(item.filePath).existsSync())
+          ImageFiles.keepVisible(item.filePath))
       .toList();
 
   Future<void> setWorkbenchFromHistory(HistoryItem item) async {
@@ -1454,7 +1455,7 @@ class AppState extends ChangeNotifier {
   Future<String?> addVibeImage(String filePath) async {
     if (extras.vibeImages.length >= 16) return _rt('status.vibeLimit');
     try {
-      final bytes = await File(filePath).readAsBytes();
+      final bytes = await storage.readImage(filePath);
       readImageDimensions(bytes);
       // Another read or bundle import may have filled the last slot while waiting.
       if (extras.vibeImages.length >= 16) return _rt('status.vibeLimit');
@@ -1473,7 +1474,7 @@ class AppState extends ChangeNotifier {
 
   Future<String?> addPreciseReference(String filePath) async {
     try {
-      final bytes = await File(filePath).readAsBytes();
+      final bytes = await storage.readImage(filePath);
       final dims = readImageDimensions(bytes);
       extras.preciseReferences.add(PreciseReferenceItem(
         base64: base64Encode(bytes),
@@ -1729,7 +1730,7 @@ class AppState extends ChangeNotifier {
       try {
         final source = File(sourcePath);
         if (!source.existsSync()) return _rt('referencePresets.sourceMissing');
-        final bytes = await source.readAsBytes();
+        final bytes = await storage.readImage(source.path);
         final dimensions = decodeImageDimensions(bytes);
         final id = _newReferencePresetId();
         final path = await storage.persistReferencePresetImage(
@@ -1840,7 +1841,7 @@ class AppState extends ChangeNotifier {
     try {
       final file = File(preset.filePath);
       if (!file.existsSync()) throw const FileSystemException();
-      final encoded = base64Encode(await file.readAsBytes());
+      final encoded = base64Encode(await storage.readImage(file.path));
       if (preset.kind == ReferencePresetKind.vibe) {
         if (extras.vibeImages.length >= 16) return _rt('status.vibeLimit');
         extras.vibeImages.add(VibeTransferItem(
@@ -2640,7 +2641,7 @@ class AppState extends ChangeNotifier {
           ? (i2iOriginalImage ?? workbenchImage)
           : workbenchImage;
       if (source == null) throw Exception(_rt('error.workbenchRequired'));
-      final image = await File(source.filePath).readAsBytes();
+      final image = await storage.readImage(source.filePath);
       final total = batchCount.clamp(1, 999);
       final initialBatchIntervalSeconds =
           total > 1 ? normalizeBatchIntervalSeconds(batchIntervalSeconds) : 0;
@@ -2933,7 +2934,7 @@ class AppState extends ChangeNotifier {
     status=text('editRunning');notifyListeners();
     final saved=<HistoryItem>[];
     try {
-      final bytes=await File(source.filePath).readAsBytes(),key=await storage.getOpenAIEditKey(id);
+      final bytes=await storage.readImage(source.filePath),key=await storage.getOpenAIEditKey(id);
       final output=await runOpenAIImageEdit(c,apiKey:key??'',source:bytes,mask:Uint8List.fromList(maskBytes),prompt:prompt,
         cancellation:cancel,clientForUri:(uri)=>createProxyHttpClientForUri(snapshot,uri,scope:ProxyScope.ai),
         beforeSubmit:() {
@@ -2976,7 +2977,7 @@ class AppState extends ChangeNotifier {
           ? (i2iOriginalImage ?? workbenchImage)
           : workbenchImage;
       if (source == null) throw Exception(_rt('error.originalImageRequired'));
-      final image = await File(source.filePath).readAsBytes();
+      final image = await storage.readImage(source.filePath);
       final dims = source;
       final editSession=_captureInpaintEdit(source,maskBytes);
       final plan=inpaintSizePlan(inpaintSizeMode,inpaintCustomSize,(width:source.width,height:source.height),region:inpaintRegion,language:settings.language);
@@ -3414,7 +3415,7 @@ class AppState extends ChangeNotifier {
     var changed = false;
     for (final item in reverseHistory) {
       final path = item.sourceImagePath;
-      if (path != null && path.isNotEmpty && !File(path).existsSync()) {
+      if (path != null && path.isNotEmpty && await ImageFiles.confirmedMissing(path)) {
         changed = true;
         continue;
       }
@@ -3881,7 +3882,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<HistoryItem> saveArtistLabFavorite(HistoryItem temporary) async {
-    final bytes = await File(temporary.filePath).readAsBytes();
+    final bytes = await storage.readImage(temporary.filePath);
     final groupId = await ensureHistoryGroup('画风实验室-随机抽卡');
     final params = GenerateParams.fromJson(temporary.params);
     final item = await storage.saveImage(
@@ -4026,7 +4027,7 @@ class AppState extends ChangeNotifier {
   }
   void _forgetHistoryImages(Set<String> ids,List<HistoryItem> previous) {
     final paths=previous.where((h)=>ids.contains(h.id) && !history.any((live)=>live.filePath==h.filePath)).map((h)=>h.filePath).toSet();
-    for(final path in paths){unawaited(FileImage(File(path)).evict());}
+    for(final path in paths){unawaited(imageFileProvider(File(path)).evict());}
     if(current!=null && ids.contains(current!.id))current=history.firstOrNull;
     if(paths.contains(workbenchImage?.filePath)){_workbenchLoadRevision++;workbenchImage=null;}
     if(paths.contains(i2iOriginalImage?.filePath))i2iOriginalImage=null;
@@ -4226,7 +4227,7 @@ class AppState extends ChangeNotifier {
   Future<Uint8List> _workbenchBytes() async {
     final img = workbenchImage;
     if (img == null) throw Exception(_rt('error.workbenchRequired'));
-    return File(img.filePath).readAsBytes();
+    return storage.readImage(img.filePath);
   }
 
   void _prependHistory(List<HistoryItem> items, {bool useAsWorkbench = false}) {

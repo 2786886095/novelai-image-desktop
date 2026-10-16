@@ -1,3 +1,4 @@
+import '../images/image_file_access.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -370,7 +371,9 @@ class TavernCardService {
     final bytes = selected.bytes ??
         (selected.path == null
             ? null
-            : await File(selected.path!).readAsBytes());
+            : p.extension(selected.name).toLowerCase() == '.png'
+                ? await ImageFiles.read(selected.path!)
+                : await File(selected.path!).readAsBytes());
     if (bytes == null || bytes.isEmpty || bytes.length > 64 * 1024 * 1024) {
       throw const FormatException('角色卡为空或超过 64 MB。');
     }
@@ -449,7 +452,7 @@ class TavernCardService {
     final bytes = selected.bytes ??
         (selected.path == null
             ? null
-            : await File(selected.path!).readAsBytes());
+            : await ImageFiles.read(selected.path!, maxBytes: 32 * 1024 * 1024));
     if (bytes == null || bytes.isEmpty || bytes.length > 32 * 1024 * 1024) {
       throw const FormatException('图片为空或超过 32 MB。');
     }

@@ -15,6 +15,8 @@ class _ReadFile implements File {
   @override
   Future<Uint8List> readAsBytes() => bytes;
   @override
+  Future<int> length() => bytes.then((value) => value.length);
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 

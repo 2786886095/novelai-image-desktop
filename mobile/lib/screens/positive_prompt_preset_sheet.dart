@@ -1,3 +1,4 @@
+import '../images/coordinated_file_image.dart';
 import '../ui/zoomable_image.dart';
 import 'dart:convert';
 import 'character_preset_bar.dart' show characterPresetLabels;
@@ -407,7 +408,7 @@ class _PositivePromptPresetSheetState
 
   void _showImage(PositivePromptPreset preset, StylePromptPreviewImage image) {
     showGalleryImagePreview(context, images: [
-      Image.file(File(image.filePath),
+      imageFile(File(image.filePath),
           fit: BoxFit.contain,
           errorBuilder: (_, __, ___) =>
               const Icon(Icons.broken_image_outlined, color: Colors.white70))
@@ -466,7 +467,7 @@ class _PositivePromptPresetSheetState
                       ),
                       child: first == null
                           ? const Icon(Icons.bookmark_outline)
-                          : Image.file(
+                          : imageFile(
                               File(first.filePath),
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) =>
@@ -554,7 +555,7 @@ class _PositivePromptPresetSheetState
                       )
                     : InkWell(
                         onTap: () => _showImage(preset, active),
-                        child: Image.file(
+                        child: imageFile(
                           File(active.filePath),
                           fit: BoxFit.contain,
                           errorBuilder: (_, __, ___) => const Center(
@@ -594,7 +595,7 @@ class _PositivePromptPresetSheetState
                               borderRadius: BorderRadius.circular(8),
                             ),
                             clipBehavior: Clip.antiAlias,
-                            child: Image.file(File(image.filePath),
+                            child: imageFile(File(image.filePath),
                                 fit: BoxFit.cover),
                           ),
                         ),

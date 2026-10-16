@@ -71,6 +71,11 @@ export async function installVerifiedBundle(source: string, destination: string,
         const written = await fs.readFile(output, {signal});
         if (crypto.createHash('sha256').update(written).digest('hex') !== expected)
           throw new Error(`Component integrity mismatch: ${name}`);
+        // Exclusive writes do not copy arbitrary source permissions.
+        // Only the verified Node entry needs executable mode on POSIX.
+        if (process.platform !== 'win32' && name === manifest.node) {
+          await fs.chmod(output, 0o755);
+        }
         signal.throwIfAborted();
         if (!failed) progress(++completed, entries.length);
       }

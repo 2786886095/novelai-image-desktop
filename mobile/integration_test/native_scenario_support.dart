@@ -2,6 +2,7 @@
 // ignore_for_file: avoid_print
 import 'dart:async';
 import 'native_foreground.dart';
+import 'native_proof_log.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -72,7 +73,7 @@ class NativeScenarios {
       require(const bool.fromEnvironment('FEATURE_ISOLATED_DEVICE'), 'Disposable device is mandatory');
       require(RegExp(r'^[a-f0-9]{40}$').hasMatch(sourceSha), 'Committed source identity required');
       require(RegExp(r'^[a-f0-9]{64}$').hasMatch(profileSha), 'Profile identity required');
-      require(const {'library33':33,'generation24':24,'text15':15,'skill_reopen1':1,'batch_mcp7':7,'comic_openai6':6,'image_agent3':3,'tools3':3,'ui9':9,'os6':6,'android_update2':2,'ios_update2':2,'metadata_import3':3,'gallery3':3}[testEntry] == expected, 'Registered native entry/count identity required');
+      require(const {'library33':33,'generation24':24,'text15':15,'skill_reopen1':1,'batch_mcp7':7,'comic_openai6':6,'image_agent3':3,'tools3':3,'ui9':9,'os6':6,'android_update2':2,'ios_update2':2,'android_folder1':1,'metadata_import3':3,'gallery3':3}[testEntry] == expected, 'Registered native entry/count identity required');
       print('FEATURE_ACCEPTANCE_BEGIN:${jsonEncode({'sourceSha':sourceSha,'profileSha':profileSha,'platform':Platform.operatingSystem,'kind':'device','nativeOnly':true,'mockOnly':false,'paidCalls':0,'testEntry':testEntry,'expectedChecks':expected,'nativePid':pid})}');
       if (Platform.isAndroid) FlutterForegroundTask.initCommunicationPort();
       BackgroundQueueService.initialize();
@@ -112,7 +113,7 @@ class NativeScenarios {
       'acceptanceLevel':complete?'scenario':'component',
       'scope':'observed client behavior only; no paid upstream or model-quality claim',
       'mockOnly':false,'paidCalls':0,'observed':observed};
-    checks.add(record); print('FEATURE_ACCEPTANCE_CHECK:${jsonEncode(record)}');
+    checks.add(record); printNativeCheck(record, entry: testEntry, id: checks.length);
   }
   void pending(String feature, String reason) => print('FEATURE_ACCEPTANCE_PENDING:${jsonEncode({
     'sourceSha':sourceSha,'profileSha':profileSha,'platform':Platform.operatingSystem,

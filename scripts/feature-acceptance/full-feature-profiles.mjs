@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import {androidAgentScenarioReceipt,androidAgentRuntimeType} from './android-agent-contract.mjs';
 import {releaseFeatures,releasePlatforms} from '../release-platform-contract.mjs';
 
 // Client acceptance: real production functions/state/editor, native files/plugins,
@@ -54,7 +55,7 @@ export const fullFeatureProfiles=Object.freeze(Object.fromEntries(releaseFeature
 export const profileSha256=crypto.createHash('sha256').update(JSON.stringify(fullFeatureProfiles)).digest('hex');
 export {releaseFeatures,releasePlatforms};
 
-export function assertScenarioReceipt(receipt,{sourceSha,platform}={}){
+export function assertScenarioReceipt(receipt,{sourceSha,platform,androidAgentProof}={}){
   assert.equal(receipt?.schema,'client-feature-scenarios/v1');
   assert.ok(/^[a-f0-9]{40}$/i.test(receipt.sourceSha),'Scenario receipt needs committed source identity');
   if(sourceSha)assert.equal(receipt.sourceSha,sourceSha,'Scenario source differs');
@@ -65,7 +66,11 @@ export function assertScenarioReceipt(receipt,{sourceSha,platform}={}){
   assert.equal(receipt.isolated,true,'Disposable profile/device required');
   assert.equal(receipt.sourceQualified,true,'Native source must be qualified, not dirty or uncommitted');
   assert.equal(receipt.exitStatus,0,'Failed process receipt cannot certify scenarios');
-  assert.ok(receipt.nativeRuntime&&['electron','flutter'].includes(receipt.nativeRuntime.type)&&typeof receipt.nativeRuntime.version==='string'&&receipt.nativeRuntime.version,'Actual target native runtime required');
+  if(receipt.nativeRuntime?.type===androidAgentRuntimeType){
+    assert.equal(receipt.platform,'android','Dedicated Android proof cannot certify other platforms');
+    assert.ok(androidAgentProof,'Actual sibling Android controller proof is required');
+    assert.deepEqual(receipt,androidAgentScenarioReceipt(androidAgentProof,{sourceSha:receipt.sourceSha,profileSha256}),'Android receipt must equal independently revalidated exact three-scenario proof');
+  }else assert.ok(receipt.nativeRuntime&&['electron','flutter'].includes(receipt.nativeRuntime.type)&&typeof receipt.nativeRuntime.version==='string'&&receipt.nativeRuntime.version,'Actual target native runtime required');
   assert.ok(Array.isArray(receipt.checks)&&receipt.checks.length>0);
   const seen=new Set();
   for(const check of receipt.checks){

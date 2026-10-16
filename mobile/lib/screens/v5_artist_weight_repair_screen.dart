@@ -1,3 +1,4 @@
+import '../images/coordinated_file_image.dart';
 import '../ui/global_typography.dart';
 import '../ui/studio_theme.dart';
 import '../ui/studio_dropdown.dart';
@@ -1129,7 +1130,7 @@ class _V5ArtistWeightRepairScreenState
         .toList();
     await showGalleryImagePreview(context,
         images: list
-            .map((i) => Image.file(File(i.image!.filePath),
+            .map((i) => imageFile(File(i.image!.filePath),
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) =>
                     const Icon(Icons.broken_image_outlined)))
@@ -1175,7 +1176,7 @@ class _V5ArtistWeightRepairScreenState
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.file(
+                        imageFile(
                           File(result.image!.filePath),
                           fit: BoxFit.contain,
                           errorBuilder: (_, __, ___) => const Icon(

@@ -1,4 +1,4 @@
-import 'dart:io';
+import '../images/image_file_access.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../i18n/image_actions_text.dart';
@@ -12,7 +12,7 @@ import '../state/app_state.dart';
 Future<void> showLocalImageActions(BuildContext context, String path) async {
   final state = context.read<AppState>();
   final language = state.settings.language;
-  final exists = File(path).existsSync();
+  final exists = ImageFiles.keepVisible(path);
   final item = state.history.where((item) => item.filePath == path).firstOrNull;
   final messenger = ScaffoldMessenger.maybeOf(context);
   final action = await showModalBottomSheet<String>(

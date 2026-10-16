@@ -1,3 +1,4 @@
+import '../images/image_file_access.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as path;
@@ -14,7 +15,7 @@ class AgentFileActions {
 
   AgentFileActions({required this.historyPaths, Future<void> Function(File)? open})
       : open = open ?? ((file) async {
-          await Share.shareXFiles([XFile(file.path)]);
+          await Share.shareXFiles([await ImageFiles.forSharing(file.path)]);
         });
 
   Future<AgentToolResult> execute(Map<String, dynamic> args) async {
@@ -40,7 +41,7 @@ class AgentFileActions {
       if (!historyPaths().any((item) => path.normalize(path.absolute(item)) == normalized)) {
         throw StateError('此图片不在本机生成历史中');
       }
-      if (await FileSystemEntity.type(normalized, followLinks: false) != FileSystemEntityType.file) {
+      if (!Platform.isIOS && await FileSystemEntity.type(normalized, followLinks: false) != FileSystemEntityType.file) {
         throw StateError('图片已移动、已删除或不是普通文件');
       }
       if (_opening) throw StateError('图片面板已在打开，请稍后再试');

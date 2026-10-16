@@ -1,3 +1,4 @@
+import '../images/image_file_access.dart';
 import '../services/comic_image_service.dart';
 import 'comic_asset_store.dart';
 import 'comic_project_transfer.dart';
@@ -658,7 +659,7 @@ class ComicController extends ChangeNotifier {
       if (assets.isEmpty) throw StateError('漫画参考记录不存在，请重新选择参考图');
       final asset = assets.first;
       try {
-        final bytes = await File(asset.filePath).readAsBytes();
+        final bytes = await ImageFiles.read(asset.filePath);
         precise.add(PreciseReferenceItem(
           base64: base64Encode(bytes),
           sourcePath: asset.filePath,

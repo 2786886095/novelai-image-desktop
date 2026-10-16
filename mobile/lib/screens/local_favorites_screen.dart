@@ -1,10 +1,11 @@
+import '../images/image_file_access.dart';
+import '../images/coordinated_file_image.dart';
 import '../ui/global_typography.dart';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../i18n/local_favorites_text.dart';
 import '../i18n/app_locales.dart';
@@ -148,8 +149,8 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
     showGalleryImagePreview(context,
         images: [
           for (final file in files)
-            file.existsSync()
-                ? Image.file(file, fit: BoxFit.contain)
+            ImageFiles.keepVisible(file.path)
+                ? imageFile(file, fit: BoxFit.contain)
                 : Center(
                     child: Text(localFavoritesText(language, 'missing'),
                         style: const TextStyle(color: Colors.white)))
@@ -160,7 +161,7 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
         footerBuilder: (context, current) => FilledButton.tonalIcon(
             icon: const Icon(Icons.auto_awesome),
             label: Text(localFavoritesText(language, 'apply')),
-            onPressed: files[current].existsSync() ? () async {
+            onPressed: ImageFiles.keepVisible(files[current].path) ? () async {
               await _run(() => this.context.read<AppState>()
                   .importGenerationImage(files[current].path));
               if (context.mounted && error == null) Navigator.pop(context);
@@ -169,8 +170,8 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
             tooltip: mobileUiTextFor(language, 'gallery.share'),
             color: Colors.white,
             icon: const Icon(Icons.share_outlined),
-            onPressed: files[current].existsSync()
-                ? () => Share.shareXFiles([XFile(files[current].path)])
+            onPressed: ImageFiles.keepVisible(files[current].path)
+                ? () => shareImageFile(context, files[current].path)
                 : null));
   }
 
@@ -324,11 +325,11 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
       {bool masonry = false}) {
     final file =
         File('${library!.directory}${Platform.pathSeparator}${item.fileName}');
-    final exists = file.existsSync();
+    final exists = ImageFiles.keepVisible(file.path);
     final image = InkWell(
         onTap: exists ? () => _preview(items, index, language) : null,
         child: exists
-            ? Image.file(file,
+            ? imageFile(file,
                 width: double.infinity,
                 fit: masonry ? BoxFit.fitWidth : BoxFit.cover,
                 cacheWidth: 440)

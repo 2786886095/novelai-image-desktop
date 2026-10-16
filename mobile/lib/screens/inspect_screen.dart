@@ -1,3 +1,5 @@
+import '../images/image_file_access.dart';
+import '../images/coordinated_file_image.dart';
 import 'prompt_skill_selector.dart';
 import '../prompts/prompt_skill_selection.dart';
 import '../ui/global_typography.dart';
@@ -92,9 +94,9 @@ class _ReversePanelState extends State<_ReversePanel> {
             aspectRatio: 1,
             child: Card(
               clipBehavior: Clip.antiAlias,
-              child: path != null && File(path).existsSync()
+              child: path != null && ImageFiles.keepVisible(path)
                   ? ZoomableImage(
-                      image: Image.file(File(path), fit: BoxFit.contain),
+                      image: imageFile(File(path), fit: BoxFit.contain),
                     )
                   : Center(
                       child: FilledButton.icon(

@@ -1,4 +1,5 @@
 import {mobileNativeEntries,isMobileScenarioEntry} from './mobile-entry-specs.mjs';
+import {driveAndroidFolderPicker,folderPacket} from './android-folder-picker-driver.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -132,10 +133,19 @@ try {
     observedAndroidPid=Number(pid);
     nativeCommand = [input.adb, '-s', input.device, 'logcat', '-d', '-v', 'raw', `--pid=${pid}`];
     const end = Date.now() + (input.journeyTimeoutMs || 240000);
-    let poll = 0;
+    let poll = 0, folderDriven = false;
     while (Date.now() < end) {
       const logs = spawnSync(nativeCommand[0], nativeCommand.slice(1), { encoding: 'utf8', timeout: 15000, maxBuffer: 20 * 1024 * 1024 });
       nativeStdout = logs.stdout ?? ''; nativeStderr = logs.stderr ?? '';
+      if(input.entry==='android_folder1'&&!folderDriven){
+        const request=folderPacket(nativeStdout);
+        if(request){
+          const begins=[...nativeStdout.matchAll(/FEATURE_ACCEPTANCE_BEGIN:(\{[^\r\n]*\})/g)];
+          if(begins.length!==1)throw Error('Folder picker needs exactly one real native BEGIN');
+          await driveAndroidFolderPicker({...input,sourceSha,profileSha:profileSha256,nativePid:observedAndroidPid,begin:JSON.parse(begins[0][1]),request,command,phase:androidPhase});
+          folderDriven=true;
+        }
+      }
       const match = nativeStdout.match(/FEATURE_ACCEPTANCE_DONE:(\{[^\r\n]*\})/);
       if (match) { completion = JSON.parse(match[1]); break; }
       if (poll++ % 5 === 0) {

@@ -1,3 +1,4 @@
+import '../images/image_file_access.dart';
 import '../prompts/prompt_skill_selection.dart';
 import 'package:crypto/crypto.dart';
 import '../services/generation_scope.dart';
@@ -364,7 +365,7 @@ class BatchRedrawController extends ChangeNotifier {
     for (final path in paths) {
       try {
         final file = File(path);
-        final bytes = await file.readAsBytes();
+        final bytes = await ImageFiles.read(file.path);
         final dimensions = AppState.readImageDimensions(bytes);
         project.items.add(BatchRedrawItem(
           id: _id(),
@@ -482,7 +483,7 @@ class BatchRedrawController extends ChangeNotifier {
 
   Future<String?> addReference(String path, {required bool precise}) async {
     try {
-      final bytes = await File(path).readAsBytes();
+      final bytes = await ImageFiles.read(path);
       final dimensions = AppState.readImageDimensions(bytes);
       if (precise) {
         project.preciseReferences.add(PreciseReferenceItem(
@@ -506,7 +507,7 @@ class BatchRedrawController extends ChangeNotifier {
 
   Future<String?> addReferencePreset(ReferencePreset preset) async {
     try {
-      final bytes = await File(preset.filePath).readAsBytes();
+      final bytes = await ImageFiles.read(preset.filePath);
       if (preset.kind == ReferencePresetKind.precise) {
         project.preciseReferences.add(PreciseReferenceItem(
           base64: base64Encode(bytes),
@@ -1091,8 +1092,8 @@ class BatchRedrawController extends ChangeNotifier {
       prompts.writeln('${index + 1}. ${item.name}\n${item.prompt}\n');
       final selected = item.selectedCandidate;
       final outputPath = selected?.outputPath ?? item.outputPath;
-      if (outputPath.isNotEmpty && File(outputPath).existsSync()) {
-        final bytes = await File(outputPath).readAsBytes();
+      if (outputPath.isNotEmpty && ImageFiles.keepVisible(outputPath)) {
+        final bytes = await ImageFiles.read(outputPath);
         archive.addFile(ArchiveFile(
           'images/${(index + 1).toString().padLeft(3, '0')}.png',
           bytes.length,

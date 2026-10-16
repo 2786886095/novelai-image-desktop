@@ -1,3 +1,4 @@
+import '../images/image_file_access.dart';
 import 'unified_storage.dart';
 import 'dart:convert';
 import 'compatible_image_backup.dart';
@@ -301,13 +302,22 @@ class DataBackupService {
     Map<String, Map<String, dynamic>> assets,
     String? filePath, {
     required bool includeAssets,
+    bool isImage = true,
   }) async {
     if (!includeAssets || filePath == null || filePath.isEmpty) return null;
     final file = File(filePath);
-    if (!file.existsSync()) return null;
-    final size = await file.length();
-    if (size <= 0 || size > _maxAssetBytes) return null;
-    final bytes = await file.readAsBytes();
+    final Uint8List bytes;
+    if (isImage) {
+      if (!ImageFiles.keepVisible(file.path)) return null;
+      try { bytes = await ImageFiles.read(file.path, maxBytes: Platform.isIOS ? 64 * 1024 * 1024 : _maxAssetBytes); }
+      on ImageAccessException catch (e) { if (e.code == 'image_size') return null; rethrow; }
+    } else {
+      // Text/PDF/other Agent attachments are not image-provider resources.
+      if (!file.existsSync()) return null;
+      final size = await file.length();
+      if (size <= 0 || size > _maxAssetBytes) return null;
+      bytes = await file.readAsBytes();
+    }
     final digest = sha256.convert(bytes).toString();
     final previous = assets[digest];
     if (previous != null) return Map<String, dynamic>.from(previous);
@@ -387,7 +397,8 @@ class DataBackupService {
           assets,
           includeAssets: includeAssets,
         );
-      } catch (_) {
+      } on ImageAccessException { rethrow; }
+      catch (_) {
         cloned['image'] = null;
       }
     }
@@ -408,6 +419,7 @@ class DataBackupService {
       assets,
       attachment.filePath,
       includeAssets: includeAssets,
+      isImage: attachment.kind == 'image' || attachment.mime.startsWith('image/'),
     );
     return json;
   }
@@ -1052,8 +1064,8 @@ class DataBackupService {
     for (final item in items) {
       try {
         final file = File(item.filePath);
-        if (!file.existsSync()) continue;
-        final digest = sha256.convert(await file.readAsBytes()).toString();
+        if (!ImageFiles.keepVisible(file.path)) continue;
+        final digest = sha256.convert(await ImageFiles.read(file.path)).toString();
         result.putIfAbsent(digest, () => []).add(item);
       } catch (_) {}
     }
@@ -1301,7 +1313,7 @@ class DataBackupService {
     for (final preset in presets) {
       try {
         hashes.add(sha256
-            .convert(await File(preset.filePath).readAsBytes())
+            .convert(await ImageFiles.read(preset.filePath))
             .toString());
       } catch (_) {}
     }
@@ -1352,7 +1364,7 @@ class DataBackupService {
     for (final preview in previews) {
       try {
         hashes.add(sha256
-            .convert(await File(preview.filePath).readAsBytes())
+            .convert(await ImageFiles.read(preview.filePath))
             .toString());
       } catch (_) {}
     }

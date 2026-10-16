@@ -1,3 +1,5 @@
+import '../images/image_file_access.dart';
+import '../images/coordinated_file_image.dart';
 import 'prompt_skill_selector.dart';
 import '../ui/global_typography.dart';
 import '../ui/zoomable_image.dart';
@@ -48,9 +50,9 @@ String _batchSizePath(BatchRedrawProject project, BatchRedrawItem item) {
 }
 
 Future<void> _previewBatchImage(BuildContext context, String path) async {
-  if (path.isEmpty || !File(path).existsSync()) return;
+  if (path.isEmpty || !ImageFiles.keepVisible(path)) return;
   await showGalleryImagePreview(context,
-      images: [Image.file(File(path), fit: BoxFit.contain)]);
+      images: [imageFile(File(path), fit: BoxFit.contain)]);
 }
 
 class BatchRedrawScreen extends StatelessWidget {
@@ -1682,7 +1684,7 @@ class _BatchResultTile extends StatelessWidget {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              Image.file(
+                              imageFile(
                                 File(candidate.outputPath),
                                 fit: BoxFit.cover,
                                 cacheWidth: 160,
@@ -1764,8 +1766,8 @@ class _BatchImage extends StatelessWidget {
     final path = output
         ? (item.selectedCandidate?.outputPath ?? item.outputPath)
         : item.sourcePath;
-    if (path.isNotEmpty && File(path).existsSync()) {
-      return Image.file(
+    if (path.isNotEmpty && ImageFiles.keepVisible(path)) {
+      return imageFile(
         File(path),
         fit: BoxFit.contain,
         cacheWidth: 480,

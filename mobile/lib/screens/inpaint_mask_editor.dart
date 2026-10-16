@@ -1,3 +1,4 @@
+import '../images/coordinated_file_image.dart';
 import '../ui/global_typography.dart';
 import 'dart:io';
 import 'dart:math' as math;
@@ -67,7 +68,7 @@ class InpaintMaskEditor extends StatefulWidget {
   State<InpaintMaskEditor> createState() => _InpaintMaskEditorState();
 }
 
-class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
+class _InpaintMaskEditorState extends State<InpaintMaskEditor> with WidgetsBindingObserver {
   late final List<InpaintStroke> _strokes;
   final List<InpaintStroke> _redo = [];
   final Map<int, Offset> _pointers = {};
@@ -100,6 +101,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _strokes = copyInpaintStrokes(widget.initialStrokes);
     _region=widget.initialRegion;
     _inverted = widget.initialInverted;
@@ -129,10 +131,16 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _brushController.dispose();
     _preview.dispose();
     _cursorController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) setState(() {});
   }
 
   void _syncCursorStyle() => _cursorController.updateStyle(
@@ -395,10 +403,11 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> {
                             child: Image(
                               key: const ValueKey('inpaint-mask-source-image'),
                               image: widget.imageProvider ??
-                                  FileImage(File(widget.image.filePath)),
+                                  imageFileProvider(File(widget.image.filePath)),
                               fit: BoxFit.fill,
                               filterQuality: FilterQuality.medium,
-                              gaplessPlayback: true,
+                              gaplessPlayback: false,
+                              errorBuilder: imageAccessErrorWidget,
                             ),
                           ),
                         ),

@@ -1,3 +1,5 @@
+import '../images/image_file_access.dart';
+import '../images/coordinated_file_image.dart';
 import '../ui/global_typography.dart';
 import '../ui/negative_prompt_library.dart';
 import '../prompts/negative_prompt_library.dart';
@@ -1226,7 +1228,7 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
       StylePromptPreviewImage image) {
     showGalleryImagePreview(context,
         images: preset.previewImages
-            .map((i) => Image.file(File(i.filePath),
+            .map((i) => imageFile(File(i.filePath),
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) =>
                     const Icon(Icons.broken_image_outlined)))
@@ -1264,7 +1266,7 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                           final item = state.history[index];
                           return InkWell(
                               onTap: () => Navigator.pop(context, item),
-                              child: Image.file(File(item.filePath),
+                              child: imageFile(File(item.filePath),
                                   fit: BoxFit.contain,
                                   errorBuilder: (_, __, ___) =>
                                       const Icon(Icons.broken_image_outlined)));
@@ -1408,7 +1410,7 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                                         onLongPress: () => _showPreview(
                                             context, preset, image),
                                         child: SizedBox.expand(
-                                          child: Image.file(
+                                          child: imageFile(
                                             File(image.filePath),
                                             fit: BoxFit.contain,
                                             errorBuilder: (_, __, ___) =>
@@ -1997,10 +1999,10 @@ class _PreviewCard extends StatelessWidget {
                 gaplessPlayback: true,
                 filterQuality: FilterQuality.medium,
               )
-            else if (path != null && File(path).existsSync())
+            else if (path != null && ImageFiles.keepVisible(path))
               ZoomableImage(
-                image: Image.file(File(path), fit: BoxFit.contain),
-                gallery: paths.map((p) => Image.file(File(p), fit: BoxFit.contain)).toList(),
+                image: imageFile(File(path), fit: BoxFit.contain),
+                gallery: paths.map((p) => imageFile(File(p), fit: BoxFit.contain)).toList(),
                 imagePaths: paths,
                 initialIndex: historyIndex < 0 ? 0 : historyIndex,
                 onIndexChanged: historyIndex < 0 ? null :
@@ -3537,8 +3539,8 @@ class _ReferenceThumbnail extends StatelessWidget {
                   cacheWidth: (dimension * 2.5).round(),
                   filterQuality: FilterQuality.low,
                 )
-              : path.isNotEmpty && File(path).existsSync()
-                  ? Image.file(
+              : path.isNotEmpty && ImageFiles.keepVisible(path)
+                  ? imageFile(
                       File(path),
                       fit: BoxFit.contain,
                       cacheWidth: (dimension * 2.5).round(),
@@ -3902,7 +3904,7 @@ class _ReferencePresetLibraryPanelState
           cacheWidth: 384,
           filterQuality: FilterQuality.low,
         )
-      : Image.file(
+      : imageFile(
           File(path),
           fit: BoxFit.contain,
           cacheWidth: 384,
@@ -3966,7 +3968,7 @@ class _ReferencePresetLibraryPanelState
                 children: [
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 220),
-                    child: Image.file(File(picked.path), fit: BoxFit.contain),
+                    child: imageFile(File(picked.path), fit: BoxFit.contain),
                   ),
                   const SizedBox(height: 12),
                   TextField(

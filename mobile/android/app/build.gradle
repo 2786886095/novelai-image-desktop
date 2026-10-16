@@ -51,6 +51,14 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         testInstrumentationRunner = "com.codex.novelai.novelai_mobile.agent.AgentInstrumentation"
+        if (project.hasProperty('studioAgentQa')) {
+            // Flutter debug otherwise bundles emulator/32-bit ABIs as well.
+            // Restrict only the separate ARM64 device QA installation.
+            ndk {
+                abiFilters.clear()
+                abiFilters.add('arm64-v8a')
+            }
+        }
     }
 
     signingConfigs {

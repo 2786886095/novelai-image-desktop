@@ -1,3 +1,5 @@
+import '../images/image_file_access.dart';
+import '../images/coordinated_file_image.dart';
 import 'openai_edit_settings.dart';
 import '../ui/effort_control.dart';
 import '../ui/global_typography.dart';
@@ -94,9 +96,9 @@ class _WorkbenchPreview extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (work != null && File(work.filePath).existsSync())
+            if (work != null && ImageFiles.keepVisible(work.filePath))
               ZoomableImage(
-                image: Image.file(File(work.filePath), fit: BoxFit.contain),
+                image: imageFile(File(work.filePath), fit: BoxFit.contain),
               )
             else
               Center(
@@ -182,7 +184,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
       images: [AspectRatio(
         aspectRatio: raster.sourceWidth / raster.sourceHeight,
         child: Stack(fit: StackFit.expand, children: [
-          Image.file(File(workbench.filePath), fit: BoxFit.fill),
+          imageFile(File(workbench.filePath), fit: BoxFit.fill),
           CustomPaint(key: const ValueKey('inpaint-mask-exact-preview'),
             painter: _InpaintMaskRasterPainter(raster: raster, inverted: inverted,
               color: maskColor.withOpacity(maskOpacity))),
@@ -303,7 +305,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
                       fit: StackFit.expand,
                       children: [
                         RepaintBoundary(
-                          child: Image.file(
+                          child: imageFile(
                             File(workbench.filePath),
                             fit: BoxFit.fill,
                             filterQuality: FilterQuality.medium,

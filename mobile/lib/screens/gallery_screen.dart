@@ -1,3 +1,5 @@
+import '../images/image_file_access.dart';
+import '../images/coordinated_file_image.dart';
 import '../i18n/platform_feature_text.dart';
 import '../ui/global_typography.dart';
 import '../ui/image_actions_menu.dart';
@@ -22,17 +24,17 @@ const _ungroupedFilter = '__ungrouped';
 
 /// Copies a history image into the metadata inspector's durable snapshot.
 /// Keeping this separate from navigation makes grouped and ungrouped items use
-/// the exact same persistence path and lets the file survive later moves.
+/// the same explicit session snapshot, while retaining its source association.
 Future<void> stageHistoryImageForMetadata(
   AppState state,
   HistoryItem item,
 ) async {
   final file = File(item.filePath);
-  if (!file.existsSync()) throw StateError('Image file no longer exists.');
   await state.storage.saveMetadataInspectorImage(
-    await file.readAsBytes(),
+    await state.storage.readImage(file.path),
     _fileName(item.filePath),
   );
+  state.storage.associateMetadataInspectorSource(item.filePath);
 }
 
 class GalleryScreen extends StatefulWidget {
@@ -384,14 +386,14 @@ class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserv
             controller: controller,
             padding: const EdgeInsets.all(16),
             children: [
-              if (file.existsSync())
+              if (ImageFiles.keepVisible(file.path))
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: SizedBox(
                     height: 420,
                     child: ZoomableImage(
-                      image: Image.file(file, fit: BoxFit.contain),
-                      gallery: navigation.map((i) => Image.file(
+                      image: imageFile(file, fit: BoxFit.contain),
+                      gallery: navigation.map((i) => imageFile(
                           File(i.filePath), fit: BoxFit.contain)).toList(),
                       imagePaths: navigation.map((i) => i.filePath).toList(),
                       initialIndex: navigation.indexWhere((i) => i.id == item.id),
@@ -454,7 +456,7 @@ class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserv
                   FilledButton.tonalIcon(
                     icon: const Icon(Icons.data_object_outlined),
                     label: Text(t('gallery.viewMetadata')),
-                    onPressed: !file.existsSync()
+                    onPressed: !ImageFiles.keepVisible(file.path)
                         ? null
                         : () async {
                             final messenger = ScaffoldMessenger.of(context);
@@ -497,10 +499,7 @@ class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserv
                   FilledButton.tonalIcon(
                     icon: const Icon(Icons.share_outlined),
                     label: Text(t('gallery.share')),
-                    onPressed: () => Share.shareXFiles(
-                      [XFile(item.filePath)],
-                      text: item.prompt,
-                    ),
+                    onPressed: () => shareImageFile(context, item.filePath, text: item.prompt),
                   ),
                   FilledButton.tonalIcon(
                     key: const ValueKey('gallery-view-file-path'),
@@ -511,7 +510,7 @@ class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserv
                   FilledButton.tonalIcon(
                     icon: const Icon(Icons.star_border),
                     label: Text(localFavoritesText(language, 'add')),
-                    onPressed: !file.existsSync()
+                    onPressed: !ImageFiles.keepVisible(file.path)
                         ? null
                         : () async {
                             final messenger = ScaffoldMessenger.of(context);
@@ -756,7 +755,7 @@ class _HistoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final file = File(item.filePath);
-    if (!file.existsSync()) {
+    if (!ImageFiles.keepVisible(file.path)) {
       // File deleted/moved on disk → drop it from the library instead of showing
       // a broken tile. Scheduled post-frame so we never mutate state mid-build.
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -776,7 +775,7 @@ class _HistoryTile extends StatelessWidget {
           children: [
             if(selecting)SizedBox(height:28,child:Checkbox(value:selected,onChanged:onSelect==null?null:(_)=>onSelect!())),
             Expanded(
-              child: Image.file(
+              child: imageFile(
                 file,
                 fit: BoxFit.cover,
                 cacheWidth: 360,

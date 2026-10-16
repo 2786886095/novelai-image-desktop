@@ -29,6 +29,7 @@ final class OutputFolderBridge: NSObject, UIDocumentPickerDelegate, UIAdaptivePr
       case "status": result(self.status())
       case "write": self.write(call.arguments, result)
       case "read": self.read(call.arguments, result)
+      case "probe": self.read(call.arguments, result, probeOnly: true)
       default: result(FlutterMethodNotImplemented)
       }
     }
@@ -120,26 +121,43 @@ final class OutputFolderBridge: NSObject, UIDocumentPickerDelegate, UIAdaptivePr
     return url.standardizedFileURL.path.hasPrefix(base + "/")
   }
 
+  private func canonicalAppURL(_ raw: String) -> URL? {
+    guard raw.hasPrefix("/"), !raw.contains("\\"),
+          raw.rangeOfCharacter(from: .controlCharacters) == nil,
+          !raw.dropFirst().split(separator: "/", omittingEmptySubsequences: false).contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }) else { return nil }
+    let url = URL(fileURLWithPath: raw).standardizedFileURL
+    let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true).standardizedFileURL
+    let realHome = home.resolvingSymlinksInPath()
+    // /var -> /private/var is a system alias ABOVE the container. A symlink
+    // within the app tree, even one that points back inside, is not authorized.
+    for spelling in [home, realHome] where url == spelling || beneath(url, spelling) {
+      let suffix = String(url.path.dropFirst(spelling.path.count))
+      let expected = URL(fileURLWithPath: realHome.path + suffix).standardizedFileURL
+      if url.resolvingSymlinksInPath().path == expected.path { return url }
+    }
+    return nil
+  }
+
   private func authorizedRoot(_ root: String) -> URL? {
     if let granted = grants[root] { return granted }
-    // Existing app-managed output and isolated acceptance directories remain
-    // valid without an external grant. A supplied external path never creates
-    // permission, and symlinks must not turn this into an escape hatch.
-    guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return nil }
-    let url = URL(fileURLWithPath: root).standardizedFileURL
-    guard url.path == root, url == docs.standardizedFileURL || beneath(url, docs),
-          url.resolvingSymlinksInPath() == docs.resolvingSymlinksInPath() ||
-          beneath(url.resolvingSymlinksInPath(), docs.resolvingSymlinksInPath()) else { return nil }
-    return url
+    // App-owned Documents/Library/tmp are actual sandbox resources, not an
+    // external grant. Keeping their original path also supports session imports.
+    return canonicalAppURL(root)
   }
 
   private func write(_ arguments: Any?, _ result: @escaping FlutterResult) {
-    guard let args = arguments as? [String: Any], let root = args["root"] as? String, let url = authorizedRoot(root),
-          let folders = args["folders"] as? [String], folders.count <= 2, folders.allSatisfy(component),
-          let stem = args["stem"] as? String, component(stem), let typed = args["bytes"] as? FlutterStandardTypedData,
+    guard let args = arguments as? [String: Any], let root = args["root"] as? String,
+          let url = authorizedRoot(root) else {
+      result(FlutterError(code: "output_folder_permission", message: "Output root is neither an active folder grant nor an app-owned directory", details: nil)); return
+    }
+    guard let folders = args["folders"] as? [String], folders.count <= 2, folders.allSatisfy(component),
+          let stem = args["stem"] as? String, component(stem) else {
+      result(FlutterError(code: "output_folder_invalid", message: "Invalid output subfolder or image name", details: nil)); return
+    }
+    guard let typed = args["bytes"] as? FlutterStandardTypedData,
           typed.data.count >= 8, typed.data.count <= 64 * 1024 * 1024,
           Array(typed.data.prefix(8)) == [137, 80, 78, 71, 13, 10, 26, 10] else {
-      result(FlutterError(code: "output_folder_invalid", message: "A currently authorized folder and bounded PNG are required", details: nil)); return
+      result(FlutterError(code: "output_folder_invalid", message: "Output requires a bounded PNG", details: nil)); return
     }
     let bytes = typed.data
     worker.async {
@@ -174,30 +192,71 @@ final class OutputFolderBridge: NSObject, UIDocumentPickerDelegate, UIAdaptivePr
     }
   }
 
-  private func read(_ arguments: Any?, _ result: @escaping FlutterResult) {
+  // Resolve authorization on the main thread before queueing IO. A remembered
+  // but inactive grant is NOT a missing file, and never falls back to a sandbox
+  // copy. App-container URLs are legitimate image-picker/import/session files.
+  private func read(_ arguments: Any?, _ result: @escaping FlutterResult, probeOnly: Bool = false) {
     guard let args = arguments as? [String: Any], let raw = args["path"] as? String,
-          let root = grants.keys.sorted(by: { $0.count > $1.count }).first(where: { raw.hasPrefix($0 + "/") }),
-          let base = grants[root] else {
-      result(FlutterError(code: "output_folder_permission", message: "History file has no active saved folder grant", details: nil)); return
+          raw.hasPrefix("/"), !raw.contains("\\"),
+          raw.rangeOfCharacter(from: .controlCharacters) == nil,
+          !raw.dropFirst().split(separator: "/", omittingEmptySubsequences: false).contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }) else {
+      result(FlutterError(code: "output_folder_invalid", message: "Invalid image path", details: nil)); return
+    }
+    let limit = args["maxBytes"] as? Int ?? 64 * 1024 * 1024
+    guard limit > 0, limit <= 64 * 1024 * 1024 else {
+      result(FlutterError(code: "output_folder_invalid", message: "Invalid image size limit", details: nil)); return
     }
     let file = URL(fileURLWithPath: raw).standardizedFileURL
-    guard file.path == raw, beneath(file, base),
-          beneath(file.resolvingSymlinksInPath(), base.resolvingSymlinksInPath()),
-          file.pathExtension.lowercased() == "png" else {
-      result(FlutterError(code: "output_folder_invalid", message: "Invalid output image path", details: nil)); return
+    let remembered = records.compactMap { $0["path"] as? String }.sorted(by: { $0.count > $1.count })
+      .first(where: { raw.hasPrefix($0 + "/") })
+    let base: URL
+    let external: Bool
+    if let root = remembered {
+      guard let granted = grants[root] else {
+        result(FlutterError(code: "output_folder_permission", message: "Output folder access expired; reselect the folder. History was retained", details: nil)); return
+      }
+      base = granted; external = true
+    } else {
+      guard canonicalAppURL(raw) != nil else {
+        result(FlutterError(code: "output_folder_permission", message: "Image has no active saved folder grant", details: nil)); return
+      }
+      base = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true); external = false
+    }
+    guard file.path == raw, beneath(file.resolvingSymlinksInPath(), base.resolvingSymlinksInPath()) else {
+      result(FlutterError(code: "output_folder_invalid", message: "Image path left its authorized folder", details: nil)); return
     }
     worker.async {
-      var error: NSError?, bytes: Data?, readError: Error?
+      var error: NSError?, bytes: Data?, readError: Error?, probed = false
       NSFileCoordinator().coordinate(readingItemAt: file, options: [], error: &error) { coordinated in
         do {
+          guard self.beneath(coordinated.resolvingSymlinksInPath(), base.resolvingSymlinksInPath()) else { throw self.problem("Coordinated image left authorized folder") }
           let values = try coordinated.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
-          guard values.isRegularFile == true, values.isSymbolicLink != true, let count = values.fileSize, count <= 64 * 1024 * 1024 else { throw self.problem("Invalid output image") }
-          bytes = try Data(contentsOf: coordinated)
+          guard values.isRegularFile == true, values.isSymbolicLink != true, let count = values.fileSize,
+                count > 0, count <= limit else { throw self.problem("Invalid or oversized image") }
+          if probeOnly { probed = true; return }
+          let handle = try FileHandle(forReadingFrom: coordinated)
+          defer { try? handle.close() }
+          var data = Data()
+          while data.count <= limit {
+            let chunk = try handle.read(upToCount: min(64 * 1024, limit + 1 - data.count)) ?? Data()
+            if chunk.isEmpty { break }
+            data.append(chunk)
+          }
+          guard !data.isEmpty, data.count <= limit else { throw self.problem("Image changed size during read") }
+          bytes = data
         } catch { readError = error }
       }
       DispatchQueue.main.async {
-        if error != nil || readError != nil || bytes == nil { result(FlutterError(code: "output_folder_read", message: "History output is unavailable; choose its folder again", details: nil)) }
-        else { result(FlutterStandardTypedData(bytes: bytes!)) }
+        if let failure = error ?? (readError as NSError?) {
+          // Provider offline/permission/materialization failures can resemble a
+          // missing file. Only a local app-container no-such-file is deletable.
+          let missing = !external && failure.domain == NSCocoaErrorDomain &&
+            [NSFileNoSuchFileError, NSFileReadNoSuchFileError].contains(failure.code)
+          result(FlutterError(code: missing ? "output_image_missing" : "output_folder_read",
+            message: "Image unavailable; reconnect or reselect its folder. Original history was retained", details: nil))
+        } else if probeOnly && probed { result(["available": true, "coordinated": true]) }
+        else if let data = bytes { result(FlutterStandardTypedData(bytes: data)) }
+        else { result(FlutterError(code: "output_folder_read", message: "Image unavailable; original history was retained", details: nil)) }
       }
     }
   }
