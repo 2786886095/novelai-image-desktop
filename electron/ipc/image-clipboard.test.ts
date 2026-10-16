@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { pathToFileURL } from "node:url";
+import {PNG} from 'pngjs';
+import sharp from 'sharp';
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { MAX_IMAGE_BYTES, MAX_IMAGE_PIXELS } from "./image-codec";
 import { localMediaUrlToPath, toLocalMediaUrl } from "./local-media-protocol";
@@ -99,6 +101,27 @@ describe("original PNG clipboard paste", () => {
 });
 
 describe("trusted native metadata copy", () => {
+  it('strongly prepares OFF bytes before any mocked native clipboard write', async () => {
+    const input = await fs.readFile(path.resolve('shared/official-image-metadata-fixtures/rgba-8-plain.png'));
+    const {file,url} = await source(input);
+    expect(await copyImageWithMetadata(url,false)).toEqual({status:'copied'});
+    const intended = [...fixture.raw.values()][0], image = PNG.sync.read(intended);
+    expect(image.data.every((value,i)=>i%4===3?value===255:!(value&1))).toBe(true);
+    expect(intended).not.toEqual(input);
+    expect(await fs.readFile(file)).toEqual(input);
+  });
+  it('does not write unsafe source bytes when OFF sanitization fails', async () => {
+    const corrupt = Buffer.from(png); corrupt[29] ^= 1;
+    expect(await copyImageWithMetadata((await source(corrupt)).url,false)).toEqual({status:'failed'});
+    expect(fixture.writer).not.toHaveBeenCalled(); expect(fixture.writeBuffer).not.toHaveBeenCalled();
+  });
+  it('explicitly converts a non-PNG local image before OFF cleanup', async () => {
+    const jpeg = await sharp(png).jpeg().toBuffer();
+    const {url} = await source(jpeg,'source.jpg');
+    expect(await copyImageWithMetadata(url,false)).toEqual({status:'copied'});
+    const image = PNG.sync.read([...fixture.raw.values()][0]);
+    expect(image.data.every((value,i)=>i%4===3?value===255:!(value&1))).toBe(true);
+  });
   it("copies a registered local PNG exactly without modifying the source", async () => {
     const { file, url } = await source();
     expect(localMediaUrlToPath(url)).toBe(file);

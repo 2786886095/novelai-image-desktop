@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/images/png_metadata.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
+import 'png_privacy_fixtures.dart';
 
 void main() {
   test('reads PNG tEXt chunks and maps NovelAI parameters', () {
@@ -173,17 +174,16 @@ void main() {
         containsAll(<String>['positivePrompt', 'steps']));
   });
 
-  test('strips textual PNG metadata without changing non-PNG input', () {
-    final bytes = _makePng({
-      'Description': 'private prompt',
-      'Comment': '{"seed":123}',
-    });
+  test('strips textual PNG metadata and rejects non-PNG privacy input', () {
+    // Use an actual PNG: privacy export must reject the zero-CRC parser-only
+    // fixture below instead of claiming that malformed bytes were cleaned.
+    final bytes = privacyFixture('none', text: true);
     final stripped = stripPngMetadata(bytes);
 
     expect(parsePngTextMetadata(stripped), isEmpty);
     expect(stripped.sublist(0, 8), bytes.sublist(0, 8));
     final plain = Uint8List.fromList([1, 2, 3]);
-    expect(identical(stripPngMetadata(plain), plain), isTrue);
+    expect(() => stripPngMetadata(plain), throwsFormatException);
   });
 
   test('reads A1111 / Forge metadata and maps NovelAI-compatible values', () {

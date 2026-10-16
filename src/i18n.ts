@@ -5765,7 +5765,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.openOutputDir": "打开输出目录",
     "settings.keepMetadata": "保留图片元数据（提示词 / 种子 / 参数）",
     "settings.keepMetadataDesc":
-      "开启：保存的 PNG 内嵌生成信息，便于日后反查或重新导入参数。关闭：保存“干净”图片、抹除内嵌的提示词/种子/参数，适合对外分享（不影响画面，无损）。",
+      "开启：保留 PNG 生成信息。关闭：清除文本、EXIF 等元数据及像素隐写载体后，整图重新编码为 PNG；保留尺寸和透明通道，像素可能有轻微变化，不是像素无损。仅影响之后保存的图片，不追溯历史图片或备份。",
     "settings.onboarding": "重新查看新手引导",
     "settings.imageNameTemplate": "图片命名模板",
     "settings.imageNameHint":
@@ -5946,7 +5946,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.openOutputDir": "開啟輸出目錄",
     "settings.keepMetadata": "保留圖片中繼資料（提示詞 / 種子 / 參數）",
     "settings.keepMetadataDesc":
-      "開啟：保存的 PNG 內嵌生成資訊，便於日後反查或重新匯入參數。關閉：保存「乾淨」圖片、抹除內嵌資訊，適合對外分享（不影響畫面，無損）。",
+      "開啟：保留 PNG 生成資訊。關閉：清除文字、EXIF 等中繼資料及像素隱寫載體後，整圖重新編碼為 PNG；保留尺寸與透明通道，像素可能有輕微變化，並非像素無損。僅影響之後儲存的圖片，不追溯歷史圖片或備份。",
     "settings.onboarding": "重新查看新手引導",
     "settings.imageNameTemplate": "圖片命名範本",
     "settings.imageNameHint":
@@ -6128,7 +6128,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.openOutputDir": "Open output folder",
     "settings.keepMetadata": "Keep image metadata (prompt / seed / parameters)",
     "settings.keepMetadataDesc":
-      "On: saved PNGs embed generation info for later inspection or parameter import. Off: save clean images and remove embedded prompt/seed/parameters for sharing. Image pixels are unchanged.",
+      "On: retain PNG generation information. Off: remove text, EXIF and other metadata, sanitize pixel steganography carriers, then re-encode the entire PNG. Dimensions and transparency are retained; pixels may change slightly, so this is not pixel-lossless. Only affects future saves, not existing images or backups.",
     "settings.onboarding": "Show onboarding again",
     "settings.imageNameTemplate": "Image naming template",
     "settings.imageNameHint":
@@ -6314,7 +6314,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.keepMetadata":
       "画像メタデータを保持（プロンプト / シード / パラメータ）",
     "settings.keepMetadataDesc":
-      "オン：保存 PNG に生成情報を埋め込み、後で確認や再読み込みができます。オフ：共有向けに埋め込み情報を削除したクリーン画像を保存します（画質は無損失）。",
+      "オン：PNG の生成情報を保持します。オフ：テキスト・EXIF などのメタデータと画素のステガノグラフィ用領域を消去し、画像全体を PNG に再エンコードします。サイズと透明度は保持しますが、画素がわずかに変化するため画素単位での無損失ではありません。今後の保存のみが対象で、過去の画像やバックアップは変更しません。",
     "settings.onboarding": "オンボーディングを再表示",
     "settings.imageNameTemplate": "画像名テンプレート",
     "settings.imageNameHint":
@@ -6500,7 +6500,7 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.keepMetadata":
       "이미지 메타데이터 보존(프롬프트 / 시드 / 매개변수)",
     "settings.keepMetadataDesc":
-      "켬: 저장 PNG에 생성 정보를 포함해 나중에 확인하거나 매개변수를 다시 가져올 수 있습니다. 끔: 공유용으로 포함 정보를 제거한 깨끗한 이미지를 저장합니다(화질 손실 없음).",
+      "켬: PNG 생성 정보를 유지합니다. 끔: 텍스트·EXIF 등의 메타데이터와 픽셀 스테가노그래피 영역을 지운 뒤 전체 PNG를 다시 인코딩합니다. 크기와 투명도는 유지하지만 픽셀이 미세하게 변하므로 픽셀 무손실은 아닙니다. 이후 저장에만 적용되며 기존 이미지나 백업은 변경하지 않습니다.",
     "settings.onboarding": "온보딩 다시 보기",
     "settings.imageNameTemplate": "이미지 이름 템플릿",
     "settings.imageNameHint":

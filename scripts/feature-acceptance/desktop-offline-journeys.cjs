@@ -57,7 +57,44 @@ app.whenReady().then(async()=>{
  if(config.disposableClipboard){
   assert.equal(process.env.GITHUB_ACTIONS,'true','Never write a human desktop clipboard');
   await check('clipboard','native-unicode-text',()=>{const text='Native isolated clipboard 龙白 🧪';clipboard.writeText(text);assert.equal(clipboard.readText(),text);return {nativeUnicodeRoundtrip:true};});
-  await check('clipboard','png-metadata-copy-paste',async()=>{const api=production('electron/ipc/image-clipboard.js'),media=production('electron/ipc/local-media-protocol.js'),file=await writer.writeUniqueImageFile(output,'clipboard','png',bytes);const result=await api.copyImageWithMetadata(media.toLocalMediaUrl(file));assert.equal(result.status,'copied');const pasted=await api.readClipboardImageFiles();assert.equal(hash(Buffer.from(pasted[0].bytes)),imageHash);return {nativePngOriginalBytesMatched:true,pngSha256:imageHash};});
+  await check('clipboard','png-metadata-copy-paste',async()=>{
+   const api=production('electron/ipc/image-clipboard.js'),media=production('electron/ipc/local-media-protocol.js'),file=await writer.writeUniqueImageFile(output,'clipboard','png',bytes);
+   const result=await api.copyImageWithMetadata(media.toLocalMediaUrl(file));assert.equal(result.status,'copied');
+   const pasted=await api.readClipboardImageFiles();assert.equal(hash(Buffer.from(pasted[0].bytes)),imageHash);
+   // Remain inside the existing disposable-runner gate: no human-host clipboard probes.
+   const {PNG}=require(path.join(config.deps,'pngjs')),meta=production('src/png-meta.js'),codecs=production('src/png-metadata-codecs.js');
+   const privateComment=JSON.stringify({prompt:'native clipboard private fixture',seed:44});
+   const inspect=input=>meta.inspectImageMetadata({...meta.parseImageMeta(Uint8Array.from(input).buffer),...codecs.readPngStealthMetadata(input)}).imported;
+   const textChunk=data=>{const chunk=Buffer.alloc(data.length+12);chunk.writeUInt32BE(data.length);chunk.write('tEXt',4);data.copy(chunk,8);let crc=0xffffffff;for(const byte of chunk.subarray(4,-4)){crc^=byte;for(let bit=0;bit<8;bit++)crc=crc&1?0xedb88320^(crc>>>1):crc>>>1;}chunk.writeUInt32BE((crc^0xffffffff)>>>0,chunk.length-4);return chunk;};
+   const privacyFixture=kind=>{
+    const png=new PNG({width:64,height:64});for(let i=0;i<png.data.length;i+=4)png.data.set([103,151,217,121],i);
+    if(kind==='known-stego'){
+     const payload=require('node:zlib').gzipSync(Buffer.from(JSON.stringify({Comment:privateComment}))),length=Buffer.alloc(4);length.writeUInt32BE(payload.length*8);
+     const stream=Buffer.concat([Buffer.from('stealth_pngcomp'),length,payload]);assert(stream.length*8<=png.width*png.height);
+     for(let bit=0;bit<stream.length*8;bit++){const x=Math.floor(bit/png.height),y=bit%png.height,index=(y*png.width+x)*4+3;png.data[index]=(png.data[index]&254)|((stream[bit>>>3]>>>(7-(bit&7)))&1);}
+    }
+    const encoded=PNG.sync.write(png);return kind==='text'?Buffer.concat([encoded.subarray(0,-12),textChunk(Buffer.from('Comment\0'+privateComment)),encoded.subarray(-12)]):encoded;
+   };
+   const off=[];
+   for(const fixture of ['partial-alpha','known-stego','text']){
+    const original=privacyFixture(fixture),sourceHash=hash(original),sourcePixels=PNG.sync.read(original);
+    assert(sourcePixels.data.some((value,i)=>i%4===3&&value!==255));
+    if(fixture==='known-stego')assert.equal(codecs.readPngStealthMetadata(original).Comment,privateComment);
+    if(fixture!=='partial-alpha')assert.equal(inspect(original).positivePrompt,'native clipboard private fixture');
+    const source=await writer.writeUniqueImageFile(output,'clipboard-off-'+fixture,'png',original);
+    assert.equal((await api.copyImageWithMetadata(media.toLocalMediaUrl(source),false)).status,'copied');
+    const actual=await api.readClipboardImageFiles();assert.equal(actual.length,1);const cleaned=Buffer.from(actual[0].bytes),pixels=PNG.sync.read(cleaned);
+    assert.deepEqual([pixels.width,pixels.height],[sourcePixels.width,sourcePixels.height]);
+    let maxRgbaDelta=0;for(let i=0;i<pixels.data.length;i++)maxRgbaDelta=Math.max(maxRgbaDelta,Math.abs(pixels.data[i]-sourcePixels.data[i]));
+    assert(maxRgbaDelta<=1,'OFF must preserve RGBA within one level');
+    assert(pixels.data.every((value,i)=>i%4===3?value===120:!(value&1)),'OFF must retain partial alpha and clear channel LSBs');
+    assert.deepEqual(codecs.readPngStealthMetadata(cleaned),{});assert.deepEqual(inspect(cleaned),{});
+    assert.notEqual(hash(cleaned),sourceHash);assert.equal(hash(fs.readFileSync(source)),sourceHash);
+    off.push({fixture,nativePngReadback:true,sourceSha256:sourceHash,pngSha256:hash(cleaned),sourceBytesUnchanged:true,metadataUnreadable:true,partialAlphaPreserved:true,maxRgbaDelta,rgbLsbCleared:true});
+   }
+   assert.equal(hash(fs.readFileSync(file)),imageHash);
+   return {nativePngOriginalBytesMatched:true,pngSha256:imageHash,nativeOffPrivacyFixtures:off};
+  });
   await check('clipboard','invalid-input-no-file-leak',async()=>{const api=production('electron/ipc/image-clipboard.js');await assert.rejects(api.savePastedImageFiles([{bytes:new Uint8Array([1,2,3])}]));const dir=path.join(profile,'image-inputs');assert(!fs.existsSync(dir)||fs.readdirSync(dir).length===0);return {invalidPasteNoManagedFile:true};});
   clipboard.clear();
  }

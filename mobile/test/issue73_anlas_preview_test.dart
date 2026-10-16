@@ -11,6 +11,18 @@ import 'package:novelai_mobile/services/novelai_accounts.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 import 'package:novelai_mobile/screens/generate_screen.dart';
 import 'package:novelai_mobile/screens/tools_screen.dart';
+class FixtureVaultIo {
+  final File file; FixtureVaultIo(this.file);
+  Future<void> _tail=Future<void>.value();
+  Future<T> _serialized<T>(Future<T> Function() action) {
+    final result=_tail.then((_)=>action());
+    _tail=result.then<void>((_){},onError:(Object _,StackTrace __){});
+    return result;
+  }
+  Future<bool> exists()=>file.exists();
+  Future<String> readAsString()=>_serialized(file.readAsString);
+  Future<void> writeAsString(String value)=>_serialized(()async{await file.writeAsString(value);});
+}
 const opus=AccountSummary(hasToken:true,tierLevel:3,hasActiveSubscription:true,anlasBalance:19788,opusUsage:OpusGenerationUsage(percent:99,isNegative:false,timeUntilNextPercent:3600));
 const relaySummary=AccountSummary(hasToken:true,hasActiveSubscription:false);
 class FixtureStorage extends NovelAiAccountStorage {
@@ -28,12 +40,12 @@ class FixtureApi extends NaiApi {
   }
 }
 class Fixture {
-  final Directory root; final File vault; final NovelAiAccounts accounts; final AppState state;final FixtureApi api;final String officialId,relayId;
+  final Directory root; final FixtureVaultIo vault; final NovelAiAccounts accounts; final AppState state;final FixtureApi api;final String officialId,relayId;
   Fixture(this.root,this.vault,this.accounts,this.state,this.api,this.officialId,this.relayId);
   Future<void> dispose() async {state.dispose();/* Retain this synthetic fixture directory: background refresh may hold its handle. */}
 }
 Future<Fixture> fixture({String language='zh-CN',bool relay=true}) async {
-  final root=await Directory.systemTemp.createTemp('anlas-synthetic-'); final vault=File('${root.path}/synthetic-vault.json');
+  final root=await Directory.systemTemp.createTemp('anlas-synthetic-'); final vault=FixtureVaultIo(File('${root.path}/synthetic-vault.json'));
   final a=NovelAiAccounts(read:()async=>await vault.exists()?vault.readAsString():null,write:(v)=>vault.writeAsString(v));
   await a.load(legacyToken:()async=>null,legacySettings:()async=>AppSettings());
   final o=await a.addVerified(label:'synthetic-official',method:'token',token:'synthetic-fixture-official',verify:(_)async=>opus);

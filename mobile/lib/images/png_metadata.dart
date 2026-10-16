@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:image/image.dart' as image_lib;
 import 'dart:typed_data';
+import 'package:archive/archive.dart' show getCrc32;
 
 import '../models/nai_models.dart';
 
@@ -637,24 +638,225 @@ Map<String, String> _readTiffMetadata(Uint8List bytes, int tiffStart) {
 
 Uint8List stripPngMetadata(Uint8List bytes) {
   const signature = <int>[137, 80, 78, 71, 13, 10, 26, 10];
-  if (bytes.length < 8) return bytes;
+  if (bytes.length < 8) throw const FormatException('Privacy export requires PNG');
   for (var index = 0; index < signature.length; index++) {
-    if (bytes[index] != signature[index]) return bytes;
+    if (bytes[index] != signature[index]) throw const FormatException('Privacy export requires PNG');
   }
-  const metadataTypes = {'tEXt', 'iTXt', 'zTXt', 'eXIf'};
+  // This synchronous privacy API accepts PNG only. Callers must not save
+  // unsupported original bytes while presenting them as privacy-cleaned.
+  if (bytes.length > 64 * 1024 * 1024) {
+    throw const FormatException('PNG exceeds the metadata privacy size limit');
+  }
+  const pixelTypes = {'IHDR', 'PLTE', 'tRNS', 'IDAT', 'IEND'};
   final data = ByteData.sublistView(bytes);
   final output = BytesBuilder(copy: false)..add(bytes.sublist(0, 8));
-  var offset = 8;
+  final compressed = <Uint8List>[];
+  var offset = 8, width = 0, height = 0, depth = 0, color = 0, interlace = 0;
+  var seenHeader = false, seenPalette = false, seenData = false, seenTransparency = false;
+  var paletteEntries = 0;
+  var dataEnded = false, seenEnd = false;
   while (offset + 12 <= bytes.length) {
     final length = data.getUint32(offset, Endian.big);
     final end = offset + 12 + length;
-    if (end > bytes.length) return bytes;
+    if (length > 0x7fffffff || end > bytes.length) {
+      throw const FormatException('Truncated PNG chunk');
+    }
+    for (var i = offset + 4; i < offset + 8; i++) {
+      if (!((bytes[i] >= 65 && bytes[i] <= 90) ||
+          (bytes[i] >= 97 && bytes[i] <= 122))) {
+        throw const FormatException('Invalid PNG chunk type');
+      }
+    }
+    if ((bytes[offset + 6] & 32) != 0 ||
+        getCrc32(Uint8List.sublistView(bytes, offset + 4, end - 4)) !=
+            data.getUint32(end - 4, Endian.big)) {
+      throw const FormatException('Invalid PNG chunk checksum or reserved bit');
+    }
     final type = ascii.decode(bytes.sublist(offset + 4, offset + 8));
-    if (!metadataTypes.contains(type)) output.add(bytes.sublist(offset, end));
+    if (!seenHeader && type != 'IHDR') {
+      throw const FormatException('PNG must begin with IHDR');
+    }
+    if (type == 'IHDR') {
+      if (seenHeader || length != 13) {
+        throw const FormatException('Invalid or duplicate PNG IHDR');
+      }
+      seenHeader = true;
+      width = data.getUint32(offset + 8);
+      height = data.getUint32(offset + 12);
+      depth = bytes[offset + 16];
+      color = bytes[offset + 17];
+      interlace = bytes[offset + 20];
+      final depths = <int, Set<int>>{
+        0: {1, 2, 4, 8, 16}, 2: {8, 16}, 3: {1, 2, 4, 8},
+        4: {8, 16}, 6: {8, 16}
+      };
+      if (width == 0 || height == 0 || width * height > 16 * 1024 * 1024 ||
+          depths[color]?.contains(depth) != true ||
+          bytes[offset + 18] != 0 || bytes[offset + 19] != 0 || interlace > 1) {
+        throw const FormatException('Unsupported PNG dimensions or pixel format');
+      }
+    } else if (type == 'PLTE') {
+      if (seenPalette || seenData || length == 0 || length > 768 ||
+          length % 3 != 0 || color == 0 || color == 4 ||
+          (color == 3 && length ~/ 3 > (1 << depth))) {
+        throw const FormatException('Invalid PNG palette');
+      }
+      seenPalette = true;
+      paletteEntries = length ~/ 3;
+    } else if (type == 'tRNS') {
+      if (seenTransparency || seenData ||
+          (color == 0 ? length != 2 : color == 2 ? length != 6 :
+           color == 3 ? !seenPalette || length == 0 || length > paletteEntries : true)) {
+        throw const FormatException('Invalid PNG transparency');
+      }
+      seenTransparency = true;
+    } else if (type == 'IDAT') {
+      if (dataEnded || (color == 3 && !seenPalette)) {
+        throw const FormatException('Invalid PNG image data order');
+      }
+      seenData = true;
+      compressed.add(Uint8List.sublistView(bytes, offset + 8, end - 4));
+    } else if (type == 'IEND') {
+      if (length != 0 || !seenData) {
+        throw const FormatException('Invalid PNG IEND');
+      }
+      seenEnd = true;
+    } else {
+      if (seenData) dataEnded = true;
+      // Do not silently sanitize just the first frame of an animated PNG.
+      if (type == 'acTL' || type == 'fcTL' || type == 'fdAT' ||
+          (bytes[offset + 4] & 32) == 0) {
+        throw const FormatException('Unsupported PNG chunk for privacy export');
+      }
+    }
+    if (pixelTypes.contains(type)) output.add(bytes.sublist(offset, end));
     offset = end;
     if (type == 'IEND') break;
   }
-  return output.takeBytes();
+  if (!seenEnd) throw const FormatException('Incomplete PNG');
+  // IEND is the image boundary: never retain a trailing metadata/payload stream.
+  final stripped = output.takeBytes();
+  final channels = <int, int>{0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[color]!;
+  final passes = <(int, int)>[];
+  void pass(int x, int y, int dx, int dy) {
+    if (width <= x || height <= y) return;
+    final columns = (width - x + dx - 1) ~/ dx;
+    final rows = (height - y + dy - 1) ~/ dy;
+    passes.add(((columns * channels * depth + 7) ~/ 8, rows));
+  }
+  if (interlace == 0) {
+    pass(0, 0, 1, 1);
+  } else {
+    for (final p in const [(0,0,8,8), (4,0,8,8), (0,4,4,8),
+      (2,0,4,4), (0,2,2,4), (1,0,2,2), (0,1,1,2)]) {
+      pass(p.$1, p.$2, p.$3, p.$4);
+    }
+  }
+  try {
+    final sink = _PngPrivacyPixelSink(passes);
+    final inflate = ZLibDecoder().startChunkedConversion(sink);
+    for (final chunk in compressed) {
+      for (var i = 0; i < chunk.length; i += 4096) {
+        inflate.add(Uint8List.sublistView(chunk, i, (i + 4096).clamp(0, chunk.length)));
+      }
+    }
+    inflate.close();
+    final decoder = image_lib.PngDecoder(maxPixels: 16 * 1024 * 1024);
+    final info = decoder.startDecode(_metadataPixelPng(stripped));
+    final pixels = info == null ? null : decoder.decodeFrame(0);
+    if (pixels == null || pixels.width != width || pixels.height != height) {
+      throw const FormatException('PNG pixels cannot be verified');
+    }
+    if (color == 3 && pixels.any((pixel) => pixel.index >= paletteEntries)) {
+      throw const FormatException('PNG pixel references a missing palette entry');
+    }
+    final is16 = depth == 16;
+    if (is16 && pixels.format != image_lib.Format.uint16) {
+      throw const FormatException('16-bit PNG precision could not be preserved');
+    }
+    final clean = image_lib.Image(width: width, height: height,
+        format: is16 ? image_lib.Format.uint16 : image_lib.Format.uint8,
+        numChannels: 4);
+    final maximum = is16 ? 65535 : 255;
+    // Read the native channels, never carrying text, EXIF, ICC, XMP, custom
+    // chunks, palette metadata or any other source object into the fresh PNG.
+    List<int> rgba(image_lib.Pixel pixel) {
+      if (!pixels.hasPalette && pixels.numChannels <= 2) {
+        var gray = pixel[0].toInt();
+        if (depth < 8) gray = (gray * 255 / ((1 << depth) - 1)).round();
+        return [gray, gray, gray,
+          pixels.numChannels == 2 ? pixel[1].toInt() : maximum];
+      }
+      return [pixel.r.toInt(),pixel.g.toInt(),pixel.b.toInt(),pixel.a.toInt()];
+    }
+    final opaque = pixels.every((pixel) =>
+        rgba(pixel)[3] >= (is16 ? 254 * 257 : 254));
+    // No signature/length recognition is involved. Reset every RGB and alpha
+    // carrier bit even when a header is damaged or the payload is unfamiliar.
+    for (final pixel in pixels) {
+      final values = rgba(pixel);
+      clean.setPixelRgba(pixel.x, pixel.y,
+          is16 ? _privacyEven16(values[0]) : values[0] & 254,
+          is16 ? _privacyEven16(values[1]) : values[1] & 254,
+          is16 ? _privacyEven16(values[2]) : values[2] & 254,
+          opaque ? maximum : is16 ? _privacyEven16(values[3]) : values[3] & 254);
+    }
+    return image_lib.encodePng(clean);
+  } on FormatException {
+    rethrow;
+  } catch (_) {
+    throw const FormatException('PNG pixels could not be sanitized safely');
+  }
+}
+
+// Preserve 16-bit sample detail while neutralizing native LSB, Pillow high-byte
+// LSB, and round(sample/257) LSB. Pick the closest valid native sample, not an
+// 8-bit sample multiplied by 257. Each 8-bit interpretation changes by <= 1.
+int _privacyEven16(int value) {
+  final high = value >> 8, rounded = (value / 257).round();
+  var best = -1, distance = 65536;
+  for (final h in [high & 254, (high & 254) + 2]) {
+    if (h > 254 || (h - high).abs() > 1 || (h - rounded).abs() > 1) continue;
+    final low = (256 * h > 257 * h - 128 ? 256 * h : 257 * h - 128);
+    final upper = (256 * h + 255 < 257 * h + 128 ? 256 * h + 255 : 257 * h + 128);
+    final lowEven = ((low + 1) ~/ 2) * 2, upperEven = (upper ~/ 2) * 2;
+    final candidate = (value & 65534).clamp(lowEven, upperEven);
+    final delta = (candidate - value).abs();
+    if (delta < distance || (delta == distance && candidate < best)) {
+      best = candidate; distance = delta;
+    }
+  }
+  if (best < 0) throw const FormatException('16-bit PNG sample cannot be cleaned safely');
+  return best;
+}
+
+// Bound decompression by exact PNG scanline geometry without allocating the
+// inflated image. Also reject incomplete/extra rows and invalid filter bytes.
+class _PngPrivacyPixelSink extends ByteConversionSinkBase {
+  final List<(int, int)> passes;
+  var pass = 0, row = 0, remaining = 0;
+  _PngPrivacyPixelSink(this.passes);
+  @override
+  void add(List<int> chunk) {
+    var cursor = 0;
+    while (cursor < chunk.length) {
+      if (pass >= passes.length) throw const FormatException('Extra PNG pixel data');
+      if (remaining == 0) {
+        if (chunk[cursor++] > 4) throw const FormatException('Invalid PNG filter');
+        remaining = passes[pass].$1;
+      }
+      final count = remaining < chunk.length - cursor ? remaining : chunk.length - cursor;
+      cursor += count;
+      remaining -= count;
+      if (remaining == 0 && ++row == passes[pass].$2) { pass++; row = 0; }
+    }
+  }
+  @override
+  void close() {
+    if (pass != passes.length || remaining != 0) {
+      throw const FormatException('Truncated PNG pixel data');
+    }
+  }
 }
 
 ImportedGenerateParams parseImportedGenerateParams(

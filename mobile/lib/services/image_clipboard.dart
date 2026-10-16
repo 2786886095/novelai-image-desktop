@@ -5,38 +5,19 @@ import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 
 import 'composer_transfers.dart';
+import '../images/png_metadata.dart';
 
 /// Original mode never decodes/re-encodes the source or synthesizes parameters.
 Uint8List prepareClipboardImage(Uint8List source) {
+  const png = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (source.length >= 8 && png.asMap().entries.every((e) => source[e.key] == e.value)) {
+    return stripPngMetadata(source);
+  }
+  // Preserve the existing non-PNG clipboard conversion feature. Its output is
+  // PNG and receives the same complete pixel-carrier reset as saved PNGs.
   final decoded = img.decodeImage(source);
   if (decoded == null) throw const FormatException('Unsupported image');
-  // Copy pixels into a fresh image: no EXIF, text, ICC or animation metadata.
-  final clean =
-      img.Image(width: decoded.width, height: decoded.height, numChannels: 4);
-  for (final pixel in decoded) {
-    clean.setPixelRgba(pixel.x, pixel.y, pixel.r, pixel.g, pixel.b, pixel.a);
-  }
-  if (decoded.width * decoded.height >= 120 && decoded.numChannels >= 4) {
-    final signature = String.fromCharCodes(List.generate(15, (byte) {
-      var value = 0;
-      for (var bit = 0; bit < 8; bit++) {
-        final cursor = byte * 8 + bit;
-        value = (value << 1) |
-            (decoded
-                    .getPixel(cursor ~/ decoded.height, cursor % decoded.height)
-                    .a
-                    .toInt() &
-                1);
-      }
-      return value;
-    }));
-    if (signature == 'stealth_pngcomp' || signature == 'stealth_pnginfo') {
-      // Remove the hidden alpha-channel header too (one imperceptible bit).
-      final first = clean.getPixel(0, 0);
-      clean.setPixelRgba(0, 0, first.r, first.g, first.b, first.a.toInt() ^ 1);
-    }
-  }
-  return Uint8List.fromList(img.encodePng(clean));
+  return stripPngMetadata(Uint8List.fromList(img.encodePng(decoded)));
 }
 
 class ImageClipboard {

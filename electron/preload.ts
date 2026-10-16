@@ -77,6 +77,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   favoritesRemove: (id:string) => ipcRenderer.invoke('favorites:remove',id),
   favoritesChooseDirectory: () => ipcRenderer.invoke('favorites:directory'),
   copyImageWithMetadata: (srcURL:string) => ipcRenderer.invoke('image:copyMetadata',srcURL),
+  preparePngForClipboard: (bytes:Uint8Array) => ipcRenderer.invoke('image:prepareClipboardPng',bytes),
   onImageCopyNotice: (callback:(message:string)=>void) => {
     const listener=(_event:Electron.IpcRendererEvent,message:string)=>callback(message);
     ipcRenderer.on('image-copy:notice',listener);return ()=>ipcRenderer.removeListener('image-copy:notice',listener);

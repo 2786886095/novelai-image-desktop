@@ -93,20 +93,23 @@ function pngChunk(type: string, data = Buffer.alloc(0)) {
   chunk.writeUInt32BE(data.length, 0);
   chunk.write(type, 4, 4, "ascii");
   data.copy(chunk, 8);
-  // stripPngMetadata only needs chunk framing; CRC contents do not affect the
-  // lossless chunk filter and are deliberately left zeroed in this fixture.
+  let crc = 0xffffffff;
+  for (const byte of chunk.subarray(4, chunk.length - 4)) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit++) crc = (crc & 1) ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
+  }
+  chunk.writeUInt32BE((crc ^ 0xffffffff) >>> 0, chunk.length - 4);
   return chunk;
 }
 
 function pngWithGenerationMetadata() {
+  const image = PNG.sync.write(solidPng(16, 16, [20, 40, 60, 255]));
   return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    pngChunk("IHDR", Buffer.alloc(13)),
+    image.subarray(0, 33),
     pngChunk("tEXt", Buffer.from("Description\u00001girl, private prompt")),
     pngChunk("iTXt", Buffer.from("Comment\u0000\u0000\u0000\u0000\u0000{\"seed\":123}")),
     pngChunk("eXIf", Buffer.from("private exif")),
-    pngChunk("IDAT", Buffer.from([1, 2, 3, 4])),
-    pngChunk("IEND"),
+    image.subarray(33),
   ]);
 }
 
@@ -442,7 +445,7 @@ describe("paid request retry boundary", () => {
 });
 
 describe("image metadata save preference", () => {
-  it("removes PNG generation metadata without re-encoding image chunks", () => {
+  it("strongly re-encodes PNG and removes generation metadata", () => {
     const source = pngWithGenerationMetadata();
     const stripped = stripPngMetadata(source);
 
@@ -453,13 +456,14 @@ describe("image metadata save preference", () => {
     expect(stripped.subarray(0, 8)).toEqual(source.subarray(0, 8));
   });
 
-  it("uses the same preference for every save path and leaves non-PNG bytes untouched", () => {
+  it("uses the same preference for every save path and fails closed for non-PNG privacy exports", () => {
     const source = pngWithGenerationMetadata();
     expect(prepareImageBufferForSave(source, true)).toBe(source);
     expect(prepareImageBufferForSave(source, false).toString("latin1")).not.toContain("Description");
 
     const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
-    expect(prepareImageBufferForSave(jpeg, false)).toBe(jpeg);
+    expect(() => prepareImageBufferForSave(jpeg, false)).toThrow(/仅支持 PNG/);
+    expect(prepareImageBufferForSave(jpeg, true)).toBe(jpeg);
   });
 });
 

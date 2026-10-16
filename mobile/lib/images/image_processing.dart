@@ -401,7 +401,10 @@ Uint8List prepareDirectorReferenceImage(Uint8List bytes) {
 
 Uint8List resizeImageToSize(Uint8List bytes, int width, int height) {
   final source = image_lib.decodeImage(bytes, frame: 0);
-  if (source == null || width <= 0 || height <= 0) return bytes;
+  if (source == null) {
+    throw const FormatException('Could not read source image');
+  }
+  if (width <= 0 || height <= 0) return bytes;
   if (source.width == width && source.height == height) return bytes;
   final resized = image_lib.copyResize(
     source,

@@ -30,7 +30,39 @@ app.whenReady().then(async()=>{
  await check('reference-presets','groups-edit-reopen',async()=>{assert.equal((await refs.createReferencePresetGroup('Native C')).ok,true);assert.equal((await refs.moveReferencePresetToGroup(vibe.id,'Native C')).preset.group,'Native C');assert.equal((await refs.deleteReferencePresetGroup('Native C')).ok,true);const disk=await refs.listReferencePresets();assert.equal(disk.presets.find(p=>p.id===vibe.id).group,'');assert.equal(fs.existsSync(vibe.filePath),true);const temporary=await refs.saveReferencePreset({name:'Delete native',kind:'vibe',base64:image.toString('base64'),extension:'png'});assert.equal((await refs.deleteReferencePreset(temporary.preset.id)).ok,true);assert.equal(fs.existsSync(temporary.preset.filePath),false);assert.equal(sha(fs.readFileSync(sourceFile)),sha(image));return{createMoveDeleteGroupPreservesPresetBytes:true,deleteSelectedPresetOnly:true,independentColdReopenRequired:true};});
  await check('reference-presets','apply-and-invalid',async()=>{await js('window.browserMountReference()');await wait('document.querySelectorAll(".reference-preset-card").length===2');await js('[...document.querySelectorAll(".reference-preset-card")].forEach(n=>n.click())');await delay(35);await js('document.querySelector(".reference-preset-picker-footer button:last-child").click()');await wait('window.browserStore.getState().vibeImages.length===1&&window.browserStore.getState().preciseReferences.length===1');const actual=await js('({vibe:window.browserStore.getState().vibeImages[0],precise:window.browserStore.getState().preciseReferences[0]})');assert.equal(actual.vibe.base64,image.toString('base64'));assert.equal(actual.vibe.infoExtracted,.8);assert.equal(actual.precise.type,'character');assert.equal(actual.precise.fidelity,.9);const before=JSON.stringify(await refs.listReferencePresets()),bad=path.join(profile,'invalid.nairp');fs.writeFileSync(bad,'bad archive');assert.equal((await refs.importReferencePresetsFile(bad)).ok,false);assert.equal(JSON.stringify(await refs.listReferencePresets()),before);assert.equal((await refs.readReferencePreset('missing-native')).ok,false);assert.equal((await refs.saveReferencePreset({name:'',kind:'vibe',base64:image.toString('base64')})).ok,false);return{actualProductionManagerSelectedApply:true,vibeAndPreciseParametersMatched:true,malformedArchiveAndMissingPresetNoMutation:true};});
  await js('window.browserMountNav()');await wait('!!document.querySelector(".tab-navigation-row")');
- const pageNavigate=async id=>{const trace=window.__navigationDiagnostic??=[];const visible=()=>[...document.querySelectorAll('.tab-navigation-row>.tab-bar>[data-tab]')];const direct=visible().find(n=>n.dataset.tab===id);if(direct){trace.push({id,kind:'direct',label:direct.textContent});direct.click();return;}const trigger=document.querySelector('.tab-overflow-control .select-menu-trigger');if(!trigger)throw Error('No actual overflow trigger for '+id);if(trigger.getAttribute('aria-expanded')!=='true')trigger.click();let menu;const deadline=performance.now()+7500;while(performance.now()<deadline){menu=document.getElementById(trigger.getAttribute('aria-controls'));if(trigger.getAttribute('aria-expanded')==='true'&&menu?.getAttribute('role')==='listbox'&&!menu.inert&&menu.getAttribute('aria-hidden')!=='true'&&menu.querySelectorAll('[role=option]').length)break;await new Promise(r=>setTimeout(r,25));}if(!menu||trigger.getAttribute('aria-expanded')!=='true'||menu.inert||menu.getAttribute('aria-hidden')==='true'||menu.getAttribute('role')!=='listbox'||!menu.getClientRects().length)throw Error('Actual live overflow listbox unavailable for '+id);const shown=visible().map(n=>n.dataset.tab),hidden=window.navOrder.loadTabOrder().filter(x=>!shown.includes(x)),index=hidden.indexOf(id),options=[...menu.querySelectorAll('[role=option]')],button=options[index];trace.push({id,kind:'controlled-live-listbox',controls:trigger.getAttribute('aria-controls'),expanded:trigger.getAttribute('aria-expanded'),inert:menu.inert,hidden,index,scopedOptions:options.map(n=>n.textContent),globalOptions:[...document.querySelectorAll('[role=option]')].map(n=>n.textContent),chosenText:button?.textContent});if(!button||button.disabled)throw Error('Actual live overflow route missing '+id);button.click();};
+ const pageNavigate=async id=>{
+  const trace=window.__navigationDiagnostic??=[];
+  const deadline=performance.now()+7500;
+  const shown=()=>[...document.querySelectorAll('.tab-navigation-row>.tab-bar>[data-tab]')];
+  while(performance.now()<deadline){
+   // Layout can move this route out of overflow while the menu is opening.
+   const direct=shown().find(node=>node.dataset.tab===id);
+   if(direct&&!direct.disabled&&direct.getClientRects().length&&!direct.closest('[inert]')){
+    const opened=document.querySelector('.tab-overflow-control .select-menu-trigger[aria-expanded="true"]');
+    if(opened)opened.click();
+    trace.push({id,kind:'rechecked-direct',label:direct.textContent});
+    direct.click();return;
+   }
+   const trigger=document.querySelector('.tab-overflow-control .select-menu-trigger');
+   if(trigger){
+    if(trigger.getAttribute('aria-expanded')!=='true')trigger.click();
+    const menu=document.getElementById(trigger.getAttribute('aria-controls'));
+    if(trigger.getAttribute('aria-expanded')==='true'&&menu?.getAttribute('role')==='listbox'&&!menu.inert&&menu.getAttribute('aria-hidden')!=='true'&&menu.getClientRects().length){
+     const measured=[...document.querySelectorAll('.tab-measure-strip [data-measure]')].find(node=>node.dataset.measure===id);
+     const label=measured?.querySelector('span:last-child')?.textContent?.trim();
+     const options=[...menu.querySelectorAll('[role=option]')];
+     const matching=label?options.filter(node=>node.querySelector('.select-menu-option-content>span:last-child')?.textContent?.trim()===label):[];
+     if(matching.length>1)throw Error('Actual overflow route label is ambiguous '+id);
+     if(matching.length===1&&!matching[0].disabled){
+      trace.push({id,kind:'unique-live-measured-label',label,controls:trigger.getAttribute('aria-controls')});
+      matching[0].click();return;
+     }
+    }
+   }
+   await new Promise(resolve=>setTimeout(resolve,25));
+  }
+  throw Error('Actual route unavailable after bounded live-menu/direct wait '+id);
+ };
  const navigate=async id=>{await js('('+pageNavigate.toString()+')('+JSON.stringify(id)+')');await wait('window.browserStore.getState().activeTab==='+JSON.stringify(id));};
  await check('navigation','all-platform-routes',async()=>{const ids=await js('window.navModel.ACTIVE_TABS');assert.equal(ids.length,14);for(const id of ids)await navigate(id);return{actualAppTabBarClickedRoutes:ids,overflowOptionsUsedWhereNeeded:true,actualPlatform:process.platform};});
  await check('navigation','return-edit-no-lost-state',async()=>{const source={filePath:sourceFile,fileUrl:load('electron/ipc/local-media-protocol.js').toLocalMediaUrl(sourceFile),width:64,height:64};await js('window.browserStore.setState({workbenchImage:'+JSON.stringify(source)+',i2iOriginalImage:'+JSON.stringify(source)+',inpaintMask:'+JSON.stringify(image.toString('base64'))+',inpaintRegion:{x:8,y:8,width:32,height:32}});window.browserStore.getState().setParam("positivePrompt","NAVIGATION_KEEP_PROMPT")');const project='JSON.stringify((()=>{const s=window.browserStore.getState();return{source:s.workbenchImage,original:s.i2iOriginalImage,mask:s.inpaintMask,roi:s.inpaintRegion,params:s.params}})())',before=await js(project);for(const id of ['inpaint','tools','convert','generate','inpaint'])await navigate(id);assert.equal(await js(project),before);return{actualAppTabBarRouteReturnPreservesSourceMaskRoiParams:true,routes:['inpaint','tools','convert','generate','inpaint'],notGenerationReturnButtonProof:true};});

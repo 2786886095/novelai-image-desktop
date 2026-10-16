@@ -1,3 +1,4 @@
+import {removePngGenerationMetadata, removePngMetadataChunks} from './png-privacy';
 import {localGenerationTime} from "./history-generation-time";
 import {extractEmbeddedImageMetadata} from '../image-metadata';
 import {prepareGooglePromptTranslation} from '../../src/google-prompt-translation';
@@ -1996,7 +1997,7 @@ export function copyPngMetadataChunks(source: Buffer, target: Buffer): Buffer {
   }
   if (metadata.length === 0) return target;
 
-  const cleanTarget = stripPngMetadata(target);
+  const cleanTarget = removePngMetadataChunks(target);
   let insertAt = 8;
   while (insertAt + 12 <= cleanTarget.length) {
     const length = cleanTarget.readUInt32BE(insertAt);
@@ -2013,27 +2014,9 @@ export function copyPngMetadataChunks(source: Buffer, target: Buffer): Buffer {
   ]);
 }
 
-/**
- * Remove embedded metadata (tEXt/iTXt/zTXt/eXIf — where NovelAI stores the
- * prompt / seed / parameters JSON) from a PNG WITHOUT re-encoding the pixels, so
- * it stays lossless. Non-PNG buffers are returned untouched.
- */
+/** Strong PNG export: fresh pixels only, with alpha/RGB LSB carriers cleared. */
 export function stripPngMetadata(buffer: Buffer): Buffer {
-  if (buffer.length < 8 || !buffer.subarray(0, 8).equals(PNG_SIGNATURE))
-    return buffer;
-  const out: Buffer[] = [buffer.subarray(0, 8)];
-  let offset = 8;
-  while (offset + 12 <= buffer.length) {
-    const length = buffer.readUInt32BE(offset);
-    const type = buffer.toString("ascii", offset + 4, offset + 8);
-    const chunkEnd = offset + 12 + length; // length(4) + type(4) + data + crc(4)
-    if (chunkEnd > buffer.length) break; // malformed — keep the rest as-is
-    if (!PNG_METADATA_CHUNKS.has(type))
-      out.push(buffer.subarray(offset, chunkEnd));
-    offset = chunkEnd;
-    if (type === "IEND") break;
-  }
-  return Buffer.concat(out);
+  return removePngGenerationMetadata(buffer);
 }
 
 /** Apply the user's metadata preference at every image save boundary. */

@@ -1102,10 +1102,12 @@ class Storage {
       model ?? p.model,
       feature,
     );
+    // Verify privacy removal before any durable image/gallery/history write.
+    // Keep mode intentionally preserves the caller's exact bytes.
+    final output = settings.keepImageMetadata ? bytes : stripPngMetadata(bytes);
     // Save into <base>/<date>/<group>/ (custom path or app documents).
     final images = await _imageSaveDir(settings, date, groupId);
     final filePath = await _uniqueFilePath(images, baseName, 'png');
-    final output = settings.keepImageMetadata ? bytes : stripPngMetadata(bytes);
     await File(filePath).writeAsBytes(output, flush: true);
     if (settings.saveToGallery) {
       try {
@@ -1145,13 +1147,14 @@ class Storage {
   Future<HistoryItem> saveCompatibleImage(
       Uint8List bytes, Map<String, Object> request, AppSettings snapshot,
       {String? groupId, String feature = 'openai-images'}) async {
+    final output = snapshot.keepImageMetadata ? bytes : stripPngMetadata(bytes);
     final now = DateTime.now();
     final date = '${now.year}-${_pad(now.month)}-${_pad(now.day)}';
     final id =
         '${now.microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
     final dir = await _imageSaveDir(snapshot, date, groupId);
     final filePath = await _uniqueFilePath(dir, 'compatible-$date-$id', 'png');
-    await File(filePath).writeAsBytes(bytes, flush: true);
+    await File(filePath).writeAsBytes(output, flush: true);
     final header =
         bytes.buffer.asByteData(bytes.offsetInBytes, bytes.lengthInBytes);
     final item = HistoryItem(
@@ -1192,14 +1195,14 @@ class Storage {
   ) async {
     final now = DateTime.now();
     final date = '${now.year}-${_pad(now.month)}-${_pad(now.day)}';
+    final settings = await getSettings();
+    final output = settings.keepImageMetadata ? bytes : stripPngMetadata(bytes);
     final root = await getTemporaryDirectory();
     final dir = Directory(
         '${root.path}${Platform.pathSeparator}langbai-novelai-studio${Platform.pathSeparator}artist-lab-random');
     if (!dir.existsSync()) dir.createSync(recursive: true);
     final id = 'artist-lab-temp-${now.microsecondsSinceEpoch}';
     final file = File('${dir.path}${Platform.pathSeparator}$id.png');
-    final settings = await getSettings();
-    final output = settings.keepImageMetadata ? bytes : stripPngMetadata(bytes);
     await file.writeAsBytes(output, flush: true);
     return HistoryItem(
       id: id,

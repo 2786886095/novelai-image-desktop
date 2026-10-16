@@ -343,6 +343,9 @@ class NovelAiAccountApi extends NaiApi {
           I2IParams i2i) =>
       _run(token, settings, (snapshot, frozen) async {
         final p = params.normalized();
+        // Validate input before payload building or any reference encoding.
+        final preparedImage = resizeImageToSize(
+            await processingImageBytes(imageBytes), p.width, p.height);
         final seed =
             p.seedMode != 'random' && p.seed > 0 ? p.seed : randomSeed();
         final strength = i2i.strength,
@@ -352,8 +355,7 @@ class NovelAiAccountApi extends NaiApi {
             await buildPayload(token, frozen, p, seed, extras.copy());
         payload['action'] = 'img2img';
         final parameters = payload['parameters'] as Map<String, dynamic>;
-        parameters['image'] = base64Encode(resizeImageToSize(
-            await processingImageBytes(imageBytes), p.width, p.height));
+        parameters['image'] = base64Encode(preparedImage);
         parameters['strength'] = strength.clamp(0, 1);
         parameters['noise'] = 0;
         parameters['extra_noise_seed'] =

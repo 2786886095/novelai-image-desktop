@@ -1,4 +1,6 @@
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
+import {PNG} from 'pngjs';
+import {removePngGenerationMetadata} from '../electron/ipc/png-privacy';
 import {useAppStore} from './store';
 import {resolveCanvasImage} from './canvas-preview';
 import {isImageCopyShortcut,imagePngBlob} from './image-copy';
@@ -59,14 +61,42 @@ it('supports Ctrl/Cmd+C but not other shortcuts or repeated keys',()=>{
  expect(isImageCopyShortcut(key)).toBe(true);expect(isImageCopyShortcut({...key,ctrlKey:false,metaKey:true,key:'C'})).toBe(true);
  for(const change of [{key:'v'},{shiftKey:true},{altKey:true},{repeat:true},{ctrlKey:false}])expect(isImageCopyShortcut({...key,...change})).toBe(false);
 });
-it('copies full PNG bytes without resizing and surfaces failed reads',async()=>{
- const png=new Blob(['original'],{type:'image/png'});vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,blob:async()=>png}));expect(await imagePngBlob('image.png')).toBe(png);
- vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:false}));await expect(imagePngBlob('missing')).rejects.toThrow('IMAGE_COPY_READ_FAILED');
+function clipboardPng(width:number,height:number) {
+ const image=new PNG({width,height});
+ for(let i=0;i<image.data.length;i+=4){image.data[i]=101;image.data[i+1]=151;image.data[i+2]=201;image.data[i+3]=255;}
+ return PNG.sync.write(image);
+}
+function sanitizerBridge() {
+ const sanitize=vi.fn(async(bytes:Uint8Array)=>Uint8Array.from(removePngGenerationMetadata(Buffer.from(bytes))));
+ vi.stubGlobal('window',{naiDesktop:{preparePngForClipboard:sanitize}});
+ return sanitize;
+}
+it('strongly sanitizes full-size PNG without resizing and surfaces failed reads',async()=>{
+ const bytes=clipboardPng(800,600),snapshot=Buffer.from(bytes),png=new Blob([Uint8Array.from(bytes)],{type:'image/png'});
+ const sanitize=sanitizerBridge();
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,blob:async()=>png}));
+ const output=await imagePngBlob('image.png');
+ expect(output).not.toBe(png);expect(output.type).toBe('image/png');
+ expect(sanitize).toHaveBeenCalledOnce();expect(sanitize.mock.calls[0][0]).toEqual(Uint8Array.from(bytes));
+ const clean=PNG.sync.read(Buffer.from(await output.arrayBuffer()));
+ expect([clean.width,clean.height]).toEqual([800,600]);
+ expect(clean.data.every((value,i)=>i%4===3?value===255:!(value&1))).toBe(true);
+ expect(bytes).toEqual(snapshot);
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:false}));
+ await expect(imagePngBlob('missing')).rejects.toThrow('IMAGE_COPY_READ_FAILED');
+ expect(sanitize).toHaveBeenCalledOnce();
 });
-it('converts WebP to full-sized clipboard PNG and releases decoded resources',async()=>{
- const source=new Blob(['webp'],{type:'image/webp'}),png=new Blob(['png'],{type:'image/png'});
+it('converts WebP to full-sized strongly sanitized clipboard PNG and releases decoded resources',async()=>{
+ const source=new Blob(['webp'],{type:'image/webp'}),bytes=clipboardPng(1200,800),png=new Blob([Uint8Array.from(bytes)],{type:'image/png'});
+ const sanitize=sanitizerBridge();
  const close=vi.fn(),drawImage=vi.fn();const bitmap={width:1200,height:800,close};
  const canvas={width:0,height:0,getContext:()=>({drawImage}),toBlob:(done:(blob:Blob)=>void)=>done(png)};
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,blob:async()=>source}));vi.stubGlobal('createImageBitmap',vi.fn().mockResolvedValue(bitmap));vi.stubGlobal('document',{createElement:()=>canvas});
- expect(await imagePngBlob('input.webp')).toBe(png);expect([canvas.width,canvas.height]).toEqual([1200,800]);expect(drawImage).toHaveBeenCalledWith(bitmap,0,0);expect(close).toHaveBeenCalledOnce();
+ const output=await imagePngBlob('input.webp');
+ expect(output).not.toBe(png);expect(output.type).toBe('image/png');
+ expect(sanitize).toHaveBeenCalledOnce();expect(sanitize.mock.calls[0][0]).toEqual(Uint8Array.from(bytes));
+ const clean=PNG.sync.read(Buffer.from(await output.arrayBuffer()));
+ expect([clean.width,clean.height]).toEqual([1200,800]);
+ expect(clean.data.every((value,i)=>i%4===3?value===255:!(value&1))).toBe(true);
+ expect([canvas.width,canvas.height]).toEqual([1200,800]);expect(drawImage).toHaveBeenCalledWith(bitmap,0,0);expect(close).toHaveBeenCalledOnce();
 });

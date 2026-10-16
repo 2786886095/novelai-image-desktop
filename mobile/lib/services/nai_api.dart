@@ -578,6 +578,9 @@ class NaiApi {
   ) async {
     imageBytes = await processingImageBytes(imageBytes);
     params = params.normalized();
+    // Decode and resize before payload building can encode paid references.
+    final preparedImage =
+        resizeImageToSize(imageBytes, params.width, params.height);
     final seed = params.seedMode != 'random' && params.seed > 0
         ? params.seed
         : randomSeed();
@@ -592,9 +595,7 @@ class NaiApi {
       );
       payload['action'] = 'img2img';
       final p = payload['parameters'] as Map<String, dynamic>;
-      p['image'] = base64Encode(
-        resizeImageToSize(imageBytes, params.width, params.height),
-      );
+      p['image'] = base64Encode(preparedImage);
       p['strength'] = i2i.strength.clamp(0, 1);
       if (i2i.upscaledEnhance && params.model.startsWith('nai-diffusion-5-')) {
         p['upscaled_enhance'] = true;

@@ -75,6 +75,7 @@ Future<void> _run()async{
  });
  final base='http://127.0.0.1:${server.port}';
  final app=AppState(api:api,storage:storage)..settings=AppSettings(imageBaseUrl:base,apiBaseUrl:base,visionApiUrl:base,visionApiModel:'fixture',allowCustomEndpoint:true,allowCustomEndpointFallback:false,proxyMode:'direct',saveToGallery:false,streamPreviewEnabled:false,imageOutputDir:root.path,reverseConvertDshEnabled:false,promptCodexEnhanceEnabled:false,promptRuleAutoRepairEnabled:false,reversePromptTemplates:{'natural':'Neutral natural caption'})..params=GenerateParams(width:1024,height:1024,seed:42,seedMode:'fixed')..workbenchImage=source..i2iOriginalImage=source..inpaintSourceMode='latest';
+ await storage.setSettings(app.settings);
  try{
   await storage.setToken('FIXTURE_ONLY_NOT_A_USER_TOKEN');await storage.setVisionKey('FIXTURE_ONLY_NOT_A_USER_KEY');
   final strokes=[InpaintStroke(brushCells:16,points:[const Offset(.37,.42),const Offset(.39,.44)])];

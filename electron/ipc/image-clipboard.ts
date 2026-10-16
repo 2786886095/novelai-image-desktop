@@ -5,21 +5,33 @@ import { randomUUID } from "node:crypto";
 import { MAX_IMAGE_BYTES, MAX_IMAGE_PIXELS, validateImage } from "./image-codec";
 import { localMediaUrlToPath } from "./local-media-protocol";
 import { writeWindowsPngClipboard } from "./windows-png-clipboard";
+import { removePngGenerationMetadata } from './png-privacy';
+import sharp from 'sharp';
 import type { CopyImageMetadataResult } from "../../src/types";
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const pngFormat = () => process.platform === "win32" ? "PNG" : process.platform === "darwin" ? "public.png" : "image/png";
 function isPng(bytes: Buffer) { return bytes.length >= 24 && bytes.subarray(0, 8).equals(PNG_SIGNATURE); }
 
-/** Main context-menu/IPC entry point, called ONLY when copyImageMetadata is ON.
- * `copied` means original bytes were read back from a standard PNG format and
- * a normal native image is available. Otherwise the caller MUST use its existing
- * native/browser copy and show an unsupported/failed preservation notice.
+/** Pure byte-only bridge: no URLs, filesystem access or clipboard side effects. */
+export function preparePngForClipboard(raw: unknown): Uint8Array {
+  if (!(raw instanceof Uint8Array) || !raw.byteLength || raw.byteLength > 64 * 1024 * 1024) {
+    throw new Error('IMAGE_COPY_INVALID_PNG_BYTES');
+  }
+  return Uint8Array.from(removePngGenerationMetadata(Buffer.from(raw)));
+}
+
+/** Main context-menu/IPC entry point. ON preserves the original PNG exactly;
+ * OFF strongly cleans pixels and metadata before writing. `copied` means the
+ * intended bytes were read back from a standard PNG format and
+ * a normal native image is available. ON callers may use their preservation
+ * fallback with a notice; OFF callers MUST fail closed without a raw fallback.
  * Never fetch renderer URLs or accept guessed file paths. */
-export async function copyImageWithMetadata(srcURL: string): Promise<CopyImageMetadataResult> {
+export async function copyImageWithMetadata(srcURL: string, keepImageMetadata = true): Promise<CopyImageMetadataResult> {
   if (typeof srcURL !== "string") return {status:"unsupported"};
   const file = localMediaUrlToPath(srcURL);
-  if (!file || path.extname(file).toLowerCase() !== ".png" || file.startsWith("\\\\")) return {status:"unsupported"};
+  const extension = file ? path.extname(file).toLowerCase() : '';
+  if (!file || (keepImageMetadata ? extension !== '.png' : !/^\.(png|jpe?g|webp|gif|avif)$/.test(extension)) || file.startsWith("\\\\")) return {status:"unsupported"};
   try {
     // Reject links/junction redirection and Windows ADS, including exposed names
     // whose underlying file changed after main registered the local-media URL.
@@ -42,13 +54,15 @@ export async function copyImageWithMetadata(srcURL: string): Promise<CopyImageMe
       if (length !== stat.size) return {status:"failed"};
       bytes = buffer.subarray(0, length);
     } finally { await handle.close(); }
-    if (!isPng(bytes)) return {status:"unsupported"};
+    if (keepImageMetadata && !isPng(bytes)) return {status:"unsupported"};
     const metadata = await validateImage(bytes);
-    if (metadata.extension !== "png") return {status:"unsupported"};
-    if (process.platform === "win32") await writeWindowsPngClipboard(bytes);
-    else clipboard.writeBuffer(pngFormat(), bytes);
+    if (keepImageMetadata && metadata.extension !== "png") return {status:"unsupported"};
+    const png = keepImageMetadata || isPng(bytes) ? bytes : await sharp(bytes, {limitInputPixels: MAX_IMAGE_PIXELS, pages: 1}).ensureAlpha().png().toBuffer();
+    const intended = keepImageMetadata ? bytes : Buffer.from(preparePngForClipboard(png));
+    if (process.platform === "win32") await writeWindowsPngClipboard(intended);
+    else clipboard.writeBuffer(pngFormat(), intended);
     // Never claim preservation merely because a write did not throw.
-    if (!clipboard.readBuffer(pngFormat()).equals(bytes) || clipboard.readImage().isEmpty()) return {status:"failed"};
+    if (!clipboard.readBuffer(pngFormat()).equals(intended) || clipboard.readImage().isEmpty()) return {status:"failed"};
     return {status:"copied"};
   } catch {
     // Paths, generation parameters and arbitrary error strings stay private.

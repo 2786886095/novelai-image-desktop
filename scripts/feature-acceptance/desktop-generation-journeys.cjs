@@ -9,7 +9,8 @@ function progress(event){const record={...event,pid:process.pid,platform:process
 // Start before whenReady: a startup stall must also be bounded and diagnosed.
 const watchdog=setTimeout(()=>{progress({phase:'watchdog',failed:true});console.error('GENERATION_NATIVE_WATCHDOG');app.exit(124)},220000);
 progress({phase:'starting'});
-async function check(feature,scenario,fn){progress({phase:'scenario-start',feature,scenario});try{const observed=await fn();checks.push({feature,scenario,pass:true,observed});progress({phase:'scenario-pass',feature,scenario});}catch(e){checks.push({feature,scenario,pass:false,error:e.stack||String(e)});progress({phase:'scenario-fail',feature,scenario});console.error(feature+'/'+scenario,e.stack||e);}}
+function fixturePhase(feature,scenario){const event={feature,scenario,stage:'begin'},line=JSON.stringify(event);fs.appendFileSync(path.join(run,'PHASE_EVENTS.jsonl'),line+'\n');console.log('FEATURE_FIXTURE_PHASE '+line);}
+async function check(feature,scenario,fn){progress({phase:'scenario-start',feature,scenario});try{fixturePhase(feature,scenario);const observed=await fn();checks.push({feature,scenario,pass:true,observed});progress({phase:'scenario-pass',feature,scenario});}catch(e){checks.push({feature,scenario,pass:false,error:e.stack||String(e)});progress({phase:'scenario-fail',feature,scenario});console.error(feature+'/'+scenario,e.stack||e);}}
 
 // Every scenario has finished: release deliberately held fixture HTTP responses.
 // This is test-server cleanup only; product transport and assertions are unchanged.

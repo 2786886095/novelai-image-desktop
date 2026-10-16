@@ -4073,7 +4073,7 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
         imageNameVars:
             '可用變數：{date} {time} {seq} {seed} {model} {type} {name} {ts}',
         keepMetadataTitle: '保留 PNG 元資料',
-        keepMetadataSubtitle: '關閉後保存時移除提示詞等文字元資料，便於隱私分享。',
+        keepMetadataSubtitle: '開啟：保留 PNG 生成資訊。關閉：清除文字、EXIF 等中繼資料及像素隱寫載體後，整圖重新編碼為 PNG；保留尺寸與透明通道，像素可能有輕微變化，並非像素無損。僅影響之後儲存的圖片，不追溯歷史圖片或備份。',
         saveToGalleryTitle: '自動保存到系統相簿',
         saveToGallerySubtitle: '應用內仍保存一份原圖；關閉後可從圖庫手動分享或匯出。',
         customized: '已自訂',
@@ -4178,7 +4178,7 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
             'Available variables: {date} {time} {seq} {seed} {model} {type} {name} {ts}',
         keepMetadataTitle: 'Keep PNG metadata',
         keepMetadataSubtitle:
-            'When disabled, saved images remove prompt text metadata for privacy sharing.',
+            'On: retain PNG generation information. Off: remove text, EXIF and other metadata, sanitize pixel steganography carriers, then re-encode the entire PNG. Dimensions and transparency are retained; pixels may change slightly, so this is not pixel-lossless. Only affects future saves, not existing images or backups.',
         saveToGalleryTitle: 'Auto-save to system gallery',
         saveToGallerySubtitle:
             'The app still keeps the original internally; when off, share or export manually from Gallery.',
@@ -4279,7 +4279,7 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
         imageNameVars:
             '使用可能な変数：{date} {time} {seq} {seed} {model} {type} {name} {ts}',
         keepMetadataTitle: 'PNG メタデータを保持',
-        keepMetadataSubtitle: '無効にすると保存時にプロンプトなどのテキストメタデータを削除し、プライバシー共有に向きます。',
+        keepMetadataSubtitle: 'オン：PNG の生成情報を保持します。オフ：テキスト・EXIF などのメタデータと画素のステガノグラフィ用領域を消去し、画像全体を PNG に再エンコードします。サイズと透明度は保持しますが、画素がわずかに変化するため画素単位での無損失ではありません。今後の保存のみが対象で、過去の画像やバックアップは変更しません。',
         saveToGalleryTitle: 'システム写真へ自動保存',
         saveToGallerySubtitle: 'アプリ内には元画像を保持します。無効時はギャラリーから手動で共有/書き出しできます。',
         customized: 'カスタマイズ済み',
@@ -4381,7 +4381,7 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
         imageNameVars:
             '사용 가능한 변수: {date} {time} {seq} {seed} {model} {type} {name} {ts}',
         keepMetadataTitle: 'PNG 메타데이터 유지',
-        keepMetadataSubtitle: '끄면 저장 시 프롬프트 등 텍스트 메타데이터를 제거해 개인정보 공유에 적합합니다.',
+        keepMetadataSubtitle: '켬: PNG 생성 정보를 유지합니다. 끔: 텍스트·EXIF 등의 메타데이터와 픽셀 스테가노그래피 영역을 지운 뒤 전체 PNG를 다시 인코딩합니다. 크기와 투명도는 유지하지만 픽셀이 미세하게 변하므로 픽셀 무손실은 아닙니다. 이후 저장에만 적용되며 기존 이미지나 백업은 변경하지 않습니다.',
         saveToGalleryTitle: '시스템 갤러리에 자동 저장',
         saveToGallerySubtitle:
             '앱 내부에는 원본이 계속 저장됩니다. 끄면 갤러리에서 수동으로 공유하거나 내보낼 수 있습니다.',
@@ -4480,7 +4480,7 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
         imageNameVars:
             '可用变量：{date} {time} {seq} {seed} {model} {type} {name} {ts}',
         keepMetadataTitle: '保留 PNG 元数据',
-        keepMetadataSubtitle: '关闭后保存时移除提示词等文本元数据，便于隐私分享。',
+        keepMetadataSubtitle: '开启：保留 PNG 生成信息。关闭：清除文本、EXIF 等元数据及像素隐写载体后，整图重新编码为 PNG；保留尺寸和透明通道，像素可能有轻微变化，不是像素无损。仅影响之后保存的图片，不追溯历史图片或备份。',
         saveToGalleryTitle: '自动保存到系统相册',
         saveToGallerySubtitle: '应用内仍保存一份原图；关闭后可从图库手动分享或导出。',
         customized: '已自定义',

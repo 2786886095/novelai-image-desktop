@@ -2045,6 +2045,8 @@ export interface NaiDesktopApi {
   readClipboardImageFiles: () => Promise<Array<{name:string;bytes:Uint8Array}>>;
   /** ON-only desktop copy. Non-copied results require ordinary copy + notice. */
   copyImageWithMetadata?: (srcURL: string) => Promise<CopyImageMetadataResult>;
+  /** Pure bounded PNG sanitizer. Missing/rejected bridges must fail closed. */
+  preparePngForClipboard?: (bytes: Uint8Array) => Promise<Uint8Array>;
   savePastedImageFiles: (images: Array<{name:string;bytes:Uint8Array}>) => Promise<string[]>;
   loadImage: () => Promise<LoadImageResult>;
   loadImageFromPath: (filePath: string) => Promise<LoadImageResult>;

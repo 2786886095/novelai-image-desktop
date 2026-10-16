@@ -17,7 +17,7 @@ import {registerHarnessLauncher, harnessNeedsExitConfirmation, confirmHarnessExi
 import { detectiveStatus, detectiveConfigure, detectiveStart, detectiveStop, detectiveOpenResults, detectiveClearResults, detectiveVerifyRuntime, detectiveSelectModel } from "./ipc/artist-detective";
 import { detectiveDownloadStatus, detectiveDownloadStart, detectiveDownloadCancel, detectiveDownloadDirectory, detectiveDownloadVariant } from "./ipc/detective-download";
 import { recoverLegacyCredentials } from "./ipc/credential-recovery";
-import { copyImageWithMetadata, readClipboardImageFiles, savePastedImageFiles } from "./ipc/image-clipboard";
+import { copyImageWithMetadata, preparePngForClipboard, readClipboardImageFiles, savePastedImageFiles } from "./ipc/image-clipboard";
 import {
   app,
   dialog,
@@ -332,7 +332,20 @@ function attachEditContextMenu(win: BrowserWindow) {
       Menu.buildFromTemplate([{label: labels[language] ?? "Copy image",
         click: () => {
           if(win.isDestroyed())return;
-          if(!getSettings().copyImageMetadata){win.webContents.copyImageAt(params.x,params.y);return;}
+          if(!getSettings().copyImageMetadata){
+            void copyImageWithMetadata(params.srcURL,false).then(result=>{
+              if(win.isDestroyed())return;
+              const notices:Record<string,string[]>={
+                'zh-CN':['已复制图片（已强力清除原数据）','复制图片失败；未写入未经清理的原图'],
+                'zh-TW':['已複製圖片（已強力清除原資料）','複製圖片失敗；未寫入未清理的原圖'],
+                'ja-JP':['画像をコピーしました（元データを強力に除去）','画像をコピーできませんでした。未処理の元画像はコピーしていません'],
+                'ko-KR':['이미지 복사 완료 (원본 데이터 강력 제거)','이미지 복사 실패; 정리되지 않은 원본은 복사하지 않았습니다'],
+              };
+              const text=notices[language]??['Image copied (embedded data strongly removed)','Copy failed; no uncleaned original was copied'];
+              win.webContents.send('image-copy:notice',text[result.status==='copied'?0:1]);
+            });
+            return;
+          }
           void copyImageWithMetadata(params.srcURL).then(result=>{
             if(win.isDestroyed())return;
             if(result.status!=='copied')win.webContents.copyImageAt(params.x,params.y);
@@ -1046,6 +1059,7 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   accountBoundHandle("agent:readClipboardFiles", () => readAgentClipboardFiles());
   ipcMain.handle("imageInput:readClipboard", () => readClipboardImageFiles());
   ipcMain.handle('image:copyMetadata',(_event,srcURL:string)=>getSettings().copyImageMetadata===true?copyImageWithMetadata(srcURL):{status:'unsupported'});
+  ipcMain.handle('image:prepareClipboardPng',(_event,bytes:unknown)=>preparePngForClipboard(bytes));
   ipcMain.handle("imageInput:save", (_event, images: unknown) => savePastedImageFiles(images));
   accountBoundHandle("nai:loadImage", () => loadImageFile());
   accountBoundHandle("nai:loadImageFromPath", (_event, filePath: string) =>

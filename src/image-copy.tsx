@@ -2,8 +2,8 @@ import {useEffect} from 'react';
 import {useAppStore} from './store';
 import type {CopyImageMetadataResult, NaiDesktopApi} from './types';
 
-/** Shared Ctrl/Cmd+C dispatch. OFF deliberately uses the pre-existing browser
- * write/sanitization path; only explicit ON may call the optional native IPC. */
+/** Shared Ctrl/Cmd+C dispatch. OFF uses the strongly sanitized Blob path;
+ * only explicit ON may call the native original-metadata copy IPC. */
 export async function copyImageForClipboard(src: string, metadataEnabled: boolean,
   nativeCopy: NaiDesktopApi['copyImageWithMetadata'], write: (src:string)=>Promise<unknown>,
 ): Promise<CopyImageMetadataResult | undefined> {
@@ -26,19 +26,29 @@ export function isImageCopyShortcut(event: Pick<KeyboardEvent,'key'|'ctrlKey'|'m
   return (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && !event.repeat && event.key.toLowerCase() === 'c';
 }
 
-export async function imagePngBlob(src: string): Promise<Blob> {
+export async function imagePngBlob(src: string,
+  sanitize = typeof window === 'undefined' ? undefined : window.naiDesktop?.preparePngForClipboard,
+): Promise<Blob> {
+  if (!sanitize) throw new Error('IMAGE_COPY_PRIVACY_UNAVAILABLE');
   const response = await fetch(src);
   if (!response.ok) throw new Error('IMAGE_COPY_READ_FAILED');
   const blob = await response.blob();
-  if (blob.type === 'image/png') return blob;
+  if (!blob.size || blob.size > 64 * 1024 * 1024) throw new Error('IMAGE_COPY_INVALID_SIZE');
+  const original = new Uint8Array(await blob.arrayBuffer());
+  const pngSignature = [137,80,78,71,13,10,26,10];
+  if (pngSignature.every((byte, i) => original[i] === byte)) {
+    return new Blob([Uint8Array.from(await sanitize(original))], {type:'image/png'});
+  }
   const bitmap = await createImageBitmap(blob);
   try {
+    if (!bitmap.width || !bitmap.height || bitmap.width * bitmap.height > 64 * 1024 * 1024) throw new Error('IMAGE_COPY_INVALID_DIMENSIONS');
     const canvas = document.createElement('canvas');
     canvas.width = bitmap.width; canvas.height = bitmap.height;
     const context = canvas.getContext('2d');
     if (!context) throw new Error('IMAGE_COPY_DECODE_FAILED');
     context.drawImage(bitmap,0,0);
-    return await new Promise<Blob>((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error('IMAGE_COPY_ENCODE_FAILED')),'image/png'));
+    const png = await new Promise<Blob>((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error('IMAGE_COPY_ENCODE_FAILED')),'image/png'));
+    return new Blob([Uint8Array.from(await sanitize(new Uint8Array(await png.arrayBuffer())))], {type:'image/png'});
   } finally { bitmap.close(); }
 }
 
