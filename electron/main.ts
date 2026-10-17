@@ -14,7 +14,7 @@ import { openAIInpaintWorkbench } from "./ipc/openai-image-edit-workbench";
 import {registerImageFavoritesIpc,favoriteContextMenuItem,imageParametersContextMenuItem} from "./ipc/image-favorites-ipc";
 import {portableRecoveryPath, activatePortableRecovery, listPortableRecoveries} from './ipc/portable-projects';
 import {registerHarnessLauncher, harnessNeedsExitConfirmation, confirmHarnessExit, stopHarnessForUpdate,resetHarnessExitAfterUpdateFailure} from "./ipc/harness-launcher";
-import { detectiveStatus, detectiveConfigure, detectiveStart, detectiveStop, detectiveOpenResults, detectiveClearResults, detectiveVerifyRuntime, detectiveSelectModel } from "./ipc/artist-detective";
+import { detectiveStatus, detectiveConfigure, detectiveStart, detectiveResume, detectiveStop, detectiveOpenResults, detectiveClearResults, detectiveVerifyRuntime, detectiveSelectModel } from "./ipc/artist-detective";
 import { detectiveDownloadStatus, detectiveDownloadStart, detectiveDownloadCancel, detectiveDownloadDirectory, detectiveDownloadVariant } from "./ipc/detective-download";
 import { recoverLegacyCredentials } from "./ipc/credential-recovery";
 import { copyImageWithMetadata, preparePngForClipboard, readClipboardImageFiles, savePastedImageFiles } from "./ipc/image-clipboard";
@@ -850,6 +850,7 @@ ipcMain.handle("artistDetective:downloadCancel", () => detectiveDownloadCancel()
 ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirectory());
   ipcMain.handle("artistDetective:configure", (_event, kind) => detectiveConfigure(kind));
   ipcMain.handle("artistDetective:start", (_event, request) => detectiveStart(request));
+  ipcMain.handle("artistDetective:resume", (_event, request) => detectiveResume(request));
   ipcMain.handle("artistDetective:stop", () => detectiveStop());
   ipcMain.handle("artistDetective:openResults", () => detectiveOpenResults());
   ipcMain.handle("artistDetective:verifyRuntime", () => detectiveVerifyRuntime());

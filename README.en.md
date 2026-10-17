@@ -19,13 +19,15 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## Candidate changes (not released)
 
+- Default skills: image analysis and text conversion each offer pure tags, natural language and mixed output, with separate skill-edition (1.0.0/2.0.0) and target-image-model choices. Edition 2.0.0 preserves the six V5 Full originals; V4.5 uses 1.0.0. Assistant, optimization, inline analysis, batch and Agent flows use the corresponding selection and retain per-edition custom text. This selects the prompt format, not the generation panel model or AI provider model.
 - Acceptance and builds: correct small-window inpainting hit targets, navigation-menu selectors, and mobile mask/request fixtures; incomplete observations remain incomplete rather than being promoted to feature passes.
 - Focused inpainting adapts only the region to a valid working size and composites it onto the original-size canvas; restore the original image, mask and region for further editing. Mobile receives the corresponding workflow.
 - Image analysis accepts fenced JSON and structured results. Refusal, truncation, invalid output or cancellation preserves existing prompts and results rather than applying refusal text.
 - Failed or cancelled conversion preserves both existing variants. Configured AI keys are redacted at the covered diagnostic/log boundaries without rewriting successful prompt content.
 - Invalid image bytes cannot replace the current workbench image before full decode succeeds.
+- Artist model download: correct the light package’s extraction-directory entry to `novelai-desktop-assets`, matching its archive root so a directory mismatch does not hide the downloaded model; package version, size and SHA-256 remain unchanged.
 
-**Release status:** This branch is awaiting acceptance, not a new formal release. All 39 × 5 platform-feature checks are required, including iOS validation. Controlled local tests are not paid-provider acceptance. Mobile artist iteration and some platforms' local Agent functionality remain unsupported or unverified; build success does not close those gaps. [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) remains the previously released build, not this candidate. An unsigned IPA still requires your own signing and cannot install directly on a stock iPhone.
+**Release status:** This branch is awaiting acceptance, not a new formal release. The declared matrix remains 39 × 5 = 195 slots: 191 require acceptance and 4 are explicitly not-supported, not passes. Artist style retrieval, scoring and iteration are required locally on Windows only; generation still uses the NovelAI API, without connecting to the user’s GPU computer. That feature is not supported on macOS, Linux, Android or iOS. The other 38 features remain required on all five platforms; some platforms’ local Agent and native-validation gaps remain unresolved, with no iOS validation waiver. This does not mean that 191 slots have passed; controlled local tests or builds cannot replace device or paid-provider acceptance. [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) remains the previously released build, not this candidate. An unsigned IPA still requires your own signing and cannot install directly on a stock iPhone.
 
 ## Quick start
 

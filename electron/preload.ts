@@ -211,6 +211,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   artistDetectiveDownloadDirectory: () => ipcRenderer.invoke("artistDetective:downloadDirectory"),
   artistDetectiveConfigure: (kind: "python" | "assets") => ipcRenderer.invoke("artistDetective:configure", kind),
   artistDetectiveStart: (request: import("../src/artist-detective-contract").DetectiveRunRequest) => ipcRenderer.invoke("artistDetective:start", request),
+  artistDetectiveResume: (request: import("../src/artist-detective-contract").DetectiveResumeRequest) => ipcRenderer.invoke("artistDetective:resume", request),
   artistDetectiveStop: () => ipcRenderer.invoke("artistDetective:stop"),
   artistDetectiveOpenResults: () => ipcRenderer.invoke("artistDetective:openResults"),
   artistDetectiveVerifyRuntime: () => ipcRenderer.invoke("artistDetective:verifyRuntime"),

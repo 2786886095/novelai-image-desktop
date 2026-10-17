@@ -84,4 +84,14 @@ class IosOutputFolder {
     }
     return bytes;
   }
+  // Called only by Storage's iOS mutation adapter. There is no File fallback.
+  static Future<Map<String, dynamic>?> mutate(String method,
+      Map<String, dynamic> arguments) async {
+    if (!Platform.isIOS) throw UnsupportedError('iOS folder bridge required');
+    if (!['describe', 'copyForRename', 'deleteFile'].contains(method)) {
+      throw ArgumentError.value(method);
+    }
+    return _channel.invokeMapMethod<String, dynamic>(method, arguments);
+  }
+
 }

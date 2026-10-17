@@ -18,7 +18,7 @@
       "sha256": "90b09b7f70cc0182ed9cbe5cc5b51bb759177635f6a22e7d45ae2df922d76014",
       "kind": "assets",
       "variant": "light",
-      "directory": "novelai-light-desktop-assets"
+      "directory": "novelai-desktop-assets"
     },
     {
       "file": "artist-detective-runtime-win-x64-cu128-f970abe.zip",

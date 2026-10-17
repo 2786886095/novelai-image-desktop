@@ -43,7 +43,7 @@ export function validateAndroidPreflightTarget({device, appId}) {
   if (!/^[a-zA-Z]\w*(?:\.[a-zA-Z]\w*)+$/.test(appId || '')) throw Error('Explicit isolated test package required for preflight.');
 }
 
-export async function inspectAndroidForeground({adb, device, appId, command, phase = () => {}}) {
+export async function inspectAndroidForeground({adb, device, appId, command, phase = () => {}, currentFocusOnly = false}) {
   validateAndroidPreflightTarget({device, appId});
   const adbCommand = args => command([adb, '-s', device, ...args], undefined, 20000);
   // A failed dump must never expose a prior observation from this fixed path.
@@ -80,6 +80,28 @@ export async function inspectAndroidForeground({adb, device, appId, command, pha
     phase({stage: 'focus-query-fallback', from: 'window windows', to: 'window', reason: 'focus fields absent'});
     focus = ensureResult(adbCommand(['shell', 'dumpsys', 'window']), 'Native full foreground inspection failed');
     lines = focus.split(/\r?\n/).filter(line => /mCurrentFocus=|mFocusedApp=/.test(line));
+  }
+  if (currentFocusOnly && !modal && /WINDOW MANAGER LAST ANR/.test(focus)) {
+    // Complete dumps include historical DisplayContent snapshots. Never discard
+    // a null by choosing the last line: issue a new current-only OS query.
+    phase({stage: 'current-focus-query', reason: 'historical-last-anr', to: 'window displays'});
+    const current = adbCommand(['shell', 'dumpsys', 'window', 'displays']);
+    const text = ensureResult(current, 'Native current-display inspection failed');
+    if (current.stderr.trim() || current.signal || current.timedOut || current.outputOverflow || current.cleanupComplete === false ||
+        /WINDOW MANAGER LAST ANR/.test(text) ||
+        !/^WINDOW MANAGER DISPLAY CONTENTS \(dumpsys window displays\)\s*$/m.test(text)) {
+      throw Error('Native current-display observation is invalid or historical.');
+    }
+    const currentLines = text.split(/\r?\n/).filter(line => /mCurrentFocus=|mFocusedApp=/.test(line));
+    if (currentLines.filter(line => /mCurrentFocus=/.test(line)).length !== 1 ||
+        currentLines.filter(line => /mFocusedApp=/.test(line)).length !== 1) {
+      throw Error('Native current-display focus fields are missing or ambiguous.');
+    }
+    if (!/^\s*mCurrentFocus=(?:null|Window\{[^}\r\n]+\})\s*$/.test(currentLines.find(line => /mCurrentFocus=/.test(line))) ||
+        !/^\s*mFocusedApp=(?:null|ActivityRecord\{[^}\r\n]+\})\s*$/.test(currentLines.find(line => /mFocusedApp=/.test(line)))) {
+      throw Error('Native current-display focus fields are malformed.');
+    }
+    lines = currentLines;
   }
   phase({stage: 'foreground', focus: lines});
   return {modal, focus: lines};
@@ -123,7 +145,7 @@ export async function prepareAndroidNative({adb, device, appId, command, phase =
     const boot = ensureResult(adbCommand(['shell', 'getprop', 'sys.boot_completed']), 'Boot state read failed');
     let result;
     try {
-      result = await inspectAndroidForeground({adb, device, appId, command: boundedCommand, phase});
+      result = await inspectAndroidForeground({adb, device, appId, command: boundedCommand, phase, currentFocusOnly: true});
     } catch (error) {
       if (!closedLauncherAnr || error.code !== 'ANDROID_LAUNCHER_NULL_HIERARCHY') throw error;
       if (++nullHierarchyAttempts > 3) throw Error('Launcher recovery null hierarchy retry budget exhausted.');

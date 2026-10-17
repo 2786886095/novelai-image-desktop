@@ -4072,14 +4072,19 @@ class AppState extends ChangeNotifier {
           return [...additions,...rows.map((item)=>item.id==id?committed:item)];
         });
       } catch (_) {
-        try {await File(renamed.filePath).delete();}catch(_){}
+        try {await storage.discardRenameCopy(renamed);}catch(_){}
         rethrow;
       }
       if (current?.id==id) current=committed;
       if(workbenchImage?.filePath==original.filePath)workbenchImage=WorkingImage(filePath:committed.filePath,width:committed.width,height:committed.height);
-      if(!history.any((item)=>item.id!=id&&item.filePath==original.filePath)){
-        try{await File(original.filePath).delete();}catch(_){/* Durable new name remains authoritative; retain old copy on cleanup failure. */}
-      }
+      final cleaned=await storage.finishRenameCopy(original,renamed,
+        deleteOriginal:!history.any((item)=>item.id!=id&&item.filePath==original.filePath));
+      if(!cleaned){status=switch(settings.language){
+        'en-US'=>'New name saved. Old-path cleanup was not confirmed; inspect the original location.',
+        'zh-TW'=>'新名稱已保存；未能確認舊路徑清理，請核對原位置。',
+        'ja-JP'=>'新しい名前は保存済みです。旧パスの削除は未確認です。元の場所を確認してください。',
+        'ko-KR'=>'새 이름은 저장되었습니다. 이전 경로 정리를 확인하지 못했습니다. 원래 위치를 확인하세요.',
+        _=>'新名称已保存；未能确认旧路径清理，请核对原位置。'};}
       notifyListeners();
     } finally { _historyFileOperations.remove(id); }
   }

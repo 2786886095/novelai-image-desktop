@@ -8,6 +8,9 @@ import io
 import json
 import math
 import os
+import re
+import stat
+import uuid
 import sys
 import threading
 import time
@@ -95,21 +98,52 @@ def transport_failure_message(status, request_url, language="en-US"):
     return f"Generation endpoint {origin}: HTTP {status}; paid request not retried; completed images retained"
 
 
-def network_failure_message(kind, request_url, language="en-US"):
+NETWORK_CODES = frozenset({"connection-refused", "dns", "timeout", "reset", "tls", "cancelled", "other"})
+
+
+def network_failure_message(kind, request_url, language="en-US", code="other"):
+    """Describe the observed boundary, never assume that a proxy caused it."""
     origin = urlsplit(request_url).hostname
-    texts = {
-        "zh-CN": "自动迭代连接 {origin} 失败，已使用软件的代理设置。请检查代理是否运行及端口是否正确，或切换合适的连接方式。未切换生图接口；结果不确定时不重发付费请求，已生成图片保留。",
-        "zh-TW": "自動迭代連線 {origin} 失敗，已使用軟體的代理設定。請檢查代理與連接埠，或切換合適的連線方式。未切換生圖介面；結果不確定時不重送付費請求，已生成圖片保留。",
-        "en-US": "Iteration could not connect to {origin} using the application's proxy settings. Check the proxy and port or select the appropriate connection mode. No endpoint switch or retry of uncertain paid requests; completed images retained.",
-        "ja-JP": "アプリのプロキシ設定で {origin} に接続できません。プロキシとポートを確認してください。接続先の自動切替・結果不明の有料リクエスト再送は行わず、生成済み画像は保持します。",
-        "ko-KR": "앱의 프록시 설정으로 {origin}에 연결하지 못했습니다. 프록시와 포트를 확인하세요. 서버 자동 변경이나 결과가 불확실한 유료 요청 재전송은 하지 않으며 생성된 이미지는 유지됩니다.",
-    }
+    if kind == "connect":
+        texts = {
+            "zh-CN": "连接 {origin} 未建立，本次请求未提交。可检查网络、代理设置及服务状态后手动继续；已完成图片保留。",
+            "zh-TW": "未能建立 {origin} 連線，本次請求未提交。可檢查網路、代理設定及服務狀態後手動繼續；已完成圖片保留。",
+            "en-US": "Could not establish the connection to {origin}; this request was not submitted. Check network, proxy settings and service availability before manually resuming. Completed images retained.",
+            "ja-JP": "{origin} との接続が成立せず、今回は送信されていません。ネットワーク・プロキシ設定・サービス状態を確認して手動で続行できます。生成済み画像は保持します。",
+            "ko-KR": "{origin} 연결이 성립되지 않아 이번 요청은 전송되지 않았습니다. 네트워크·프록시 설정·서비스 상태 확인 후 수동으로 계속할 수 있습니다. 완료 이미지는 보존됩니다.",
+        }
+    else:
+        texts = {
+            "zh-CN": "与 {origin} 的请求结果尚未确认，可能已经生成或扣费。不会自动重发；已完成图片保留。手动继续须明确确认可能再次扣费。",
+            "zh-TW": "與 {origin} 的請求結果尚未確認，可能已生成或扣費。不會自動重送；已完成圖片保留。手動繼續須明確確認可能再次扣費。",
+            "en-US": "The outcome of the request to {origin} is uncertain; it may already have generated or been charged. No automatic replay. Completed images retained. Manually resending requires explicit confirmation of a possible additional charge.",
+            "ja-JP": "{origin} へのリクエスト結果が未確認で、生成や課金が済んでいる可能性があります。自動再送せず生成済み画像を保持します。手動再送には追加課金の可能性への明示的な確認が必要です。",
+            "ko-KR": "{origin} 요청 결과가 불확실하며 이미 생성·과금됐을 수 있습니다. 자동 재전송하지 않고 완료 이미지를 보존합니다. 수동 재전송에는 추가 과금 가능성에 대한 명시적 확인이 필요합니다.",
+        }
     return texts.get(language, texts["en-US"]).format(origin=origin) + " [" + kind + "]"
+
+
+def record_run_failure(output, command, error, secrets):
+    """Persist safe pause metadata without tokens, raw headers or error bodies."""
+    output = Path(output)
+    details = getattr(error, "resume_details", {})
+    detail = details.get("message") if details else str(error)
+    for secret in secrets:
+        if secret:
+            detail = detail.replace(secret, "[redacted]")
+    # Do not let the original pause message overwrite its redacted form.
+    safe_details = {**details, "message": detail[:600]} if details else {}
+    failure = {"type": type(error).__name__, **safe_details, "message": detail[:600]}
+    atomic_json(output / "failure.json", failure)
+    if details:
+        atomic_json(output / "status.json", {"stage": "paused", "completed": len(list((output / "spool/results").glob("*/*.json"))), "budget": command["budget"], **safe_details})
+    print("RUN_FAILED " + type(error).__name__ + ": " + detail[:600], flush=True)
 
 
 class LiveGenerator(NovelAIGenerator):
     def __init__(self, root, catalog, budget, token, check, progress,
-                 image_base_url="https://image.novelai.net", language="en-US", transport_bridge=None):
+                 image_base_url="https://image.novelai.net", language="en-US", transport_bridge=None,
+                 resume=False, resume_authorization=None):
         # The upstream spool scans every requests/*.json as a render request.
         # Keep transport diagnostics outside that directory, including old runs.
         root = Path(root)
@@ -138,9 +172,136 @@ class LiveGenerator(NovelAIGenerator):
             self.transport_url = transport_bridge["url"]
             # Never send the upstream Token to the loopback capability endpoint.
             self.transport_headers = {"x-studio-bridge-key": key}
+        self.resume = resume
+        self.resume_authorization = resume_authorization
+        self._validate_resume()
         self.client = httpx.Client(trust_env=False, timeout=httpx.Timeout(180, connect=30),
                                    limits=httpx.Limits(max_keepalive_connections=0), follow_redirects=False)
         self.next_request_at = 0.0
+
+    def _directory(self, name):
+        directory = self.store.root / name
+        directory.mkdir(exist_ok=True)
+        info = directory.lstat()
+        if directory.is_symlink() or getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+            raise RuntimeError("Recovery directory contains an external alias")
+        return directory
+
+    def _archive_error(self, key):
+        current = self._directory("transport-errors") / f"{key}.json"
+        if current.exists():
+            history = self._directory("transport-history")
+            os.replace(current, history / f"{key}.{time.time_ns()}.{uuid.uuid4()}.json")
+
+    def _pause(self, key, reason, code="other", status=None):
+        code = code if code in NETWORK_CODES else "other"
+        message = network_failure_message("connect" if reason == "connect" else "uncertain", self.request_url, self.language, code)
+        if reason == "rate_limited":
+            message = "NovelAI HTTP 429 persists after bounded backoff; completed images retained"
+        return {"paused": True, "resumable": True, "pendingRequestHash": key,
+                "reason": reason, "safeCode": code,
+                "requiresPaidReplayConfirmation": reason == "uncertain", "message": message,
+                **({"httpStatus": status} if isinstance(status, int) else {})}
+
+    def _persist_pause(self, key, reason, code="other", status=None):
+        self._archive_error(key)
+        value = {"request_hash": key, "status": status if isinstance(status, int) else reason,
+                 **self._pause(key, reason, code, status)}
+        atomic_json(self.store.root / "transport-errors" / f"{key}.json", value)
+        return value
+
+    @staticmethod
+    def _error_with_details(error, details):
+        error.resume_details = details
+        return error
+
+    def _verify_cached(self):
+        pending = []
+        for marker in sorted((self.store.root / "requests").glob("*.json")):
+            key = marker.stem
+            if not re.fullmatch(r"[a-f0-9]{64}", key):
+                raise RuntimeError("Invalid saved request identity")
+            path = self.store.result_path(key)
+            if path.exists():
+                value = json.loads(path.read_text())
+                image = Path(value["image"]).resolve(strict=True)
+                if not image.is_relative_to(self.store.root.resolve()):
+                    raise RuntimeError("Cached image points outside its spool")
+                self.store.result(key, verify=True)
+            else:
+                pending.append(key)
+        return pending
+
+    @staticmethod
+    def _definite_preconnect(previous, key):
+        return (previous.get("status") == "connect" and previous.get("reason") == "connect"
+                and previous.get("request_hash") == key and previous.get("pendingRequestHash") == key
+                and previous.get("requiresPaidReplayConfirmation") is False)
+
+    def _validate_resume(self):
+        if type(self.resume) is not bool:
+            raise ValueError("Invalid resume flag")
+        auth = self.resume_authorization
+        if auth is not None:
+            if not self.resume or not isinstance(auth, dict) or set(auth) != {"requestHash", "consentId", "allowUncertainReplay"} or auth["allowUncertainReplay"] is not True:
+                raise ValueError("Invalid explicit single-request replay authorization")
+            if not isinstance(auth["requestHash"], str) or not re.fullmatch(r"[a-f0-9]{64}", auth["requestHash"]):
+                raise ValueError("Invalid recovery request hash")
+            try:
+                consent = uuid.UUID(auth["consentId"])
+                if consent.version != 4 or str(consent) != auth["consentId"]:
+                    raise ValueError()
+            except (ValueError, TypeError, AttributeError):
+                raise ValueError("Invalid recovery consent identity") from None
+            if (self.store.root / "recovery" / f"{auth['consentId']}.json").exists():
+                raise RuntimeError("Recovery consent was already consumed; a new explicit confirmation is required")
+        if not self.resume:
+            return
+        pending = self._verify_cached()
+        if len(list((self.store.root / "requests").glob("*.json"))) > self.max_renders:
+            raise ValueError("Saved requests exceed the frozen image budget")
+        if len(pending) > 1:
+            raise RuntimeError("Multiple unresolved requests; keep this spool for diagnosis")
+        if auth is not None and pending != [auth["requestHash"]]:
+            raise ValueError("Recovery consent does not match the unresolved request")
+        if pending:
+            key = pending[0]
+            path = self.store.root / "transport-errors" / f"{key}.json"
+            previous = json.loads(path.read_text()) if path.exists() else {}
+            safe = previous.get("status") == 429 or self._definite_preconnect(previous, key)
+            if auth is not None and safe:
+                raise ValueError("An uncertain-paid replay authorization is not applicable to this request")
+            if not safe and auth is None:
+                details = self._pause(key, "uncertain", previous.get("safeCode", "other"))
+                raise self._error_with_details(RuntimeError("Unresolved previous submission; explicit paid replay confirmation is required"), details)
+
+    def _consume_authorization(self, key, marker, error_marker):
+        auth = self.resume_authorization
+        if auth is None or auth["requestHash"] != key:
+            raise RuntimeError("Unresolved previous submission; not automatically resending a paid request")
+        receipt = self._directory("recovery") / f"{auth['consentId']}.json"
+        value = {"schema": "single-uncertain-replay-consent/v1", "requestHash": key,
+                 "consentId": auth["consentId"], "possibleExtraPaidAttempt": 1,
+                 "createdEpoch": time.time(), "originalRequestSha256": file_sha256(marker),
+                 "previousDiagnosticSha256": file_sha256(error_marker) if error_marker.exists() else None}
+        try:
+            descriptor = os.open(receipt, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            raise RuntimeError("Recovery consent was already consumed") from None
+        # A partial receipt after a crash also consumes the nonce conservatively.
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(value, stream, ensure_ascii=False, sort_keys=True)
+            stream.flush()
+            os.fsync(stream.fileno())
+        self.resume_authorization = None
+        orphan = self.store.result_path(key).with_suffix(".png")
+        if orphan.exists():
+            info = orphan.lstat()
+            if not stat.S_ISREG(info.st_mode) or orphan.is_symlink() or getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT or info.st_size > 64 * 1024 * 1024:
+                raise RuntimeError("Unresolved image artifact is not a bounded local regular file")
+            archive = self._directory("recovery-artifacts") / f"{key}.{time.time_ns()}.{uuid.uuid4()}.png"
+            # Preserve an image saved before its receipt JSON could be committed.
+            os.replace(orphan, archive)
 
     def wait(self, seconds):
         # Short cancellable sleeps also make transport fixtures deterministic.
@@ -165,7 +326,7 @@ class LiveGenerator(NovelAIGenerator):
         for rate_attempt in range(7):
             for connection_attempt in range(3):
                 self.check()
-                error_marker.unlink(missing_ok=True)
+                self._archive_error(key)
                 self.wait(max(0, self.next_request_at - time.monotonic()))
                 try:
                     response = self.client.post(
@@ -174,25 +335,32 @@ class LiveGenerator(NovelAIGenerator):
                     )
                     failure = response.headers.get("x-studio-network-failure")
                     if self.transport_url != self.request_url and failure:
-                        message = network_failure_message(failure, self.request_url, self.language)
-                        if failure == "connect":
-                            raise httpx.ConnectError(message)
-                        raise httpx.ReadError(message)
+                        kind = "connect" if failure == "connect" else "uncertain"
+                        code = response.headers.get("x-studio-network-code", "other")
+                        details = self._persist_pause(key, kind, code)
+                        error_type = httpx.ConnectError if kind == "connect" else httpx.ReadError
+                        raise self._error_with_details(error_type(details["message"]), details)
                     self.next_request_at = time.monotonic() + 3.0
                     break
-                except (httpx.ConnectError, httpx.ConnectTimeout):
+                except (httpx.ConnectError, httpx.ConnectTimeout) as error:
+                    code = "timeout" if isinstance(error, httpx.ConnectTimeout) else "other"
+                    details = getattr(error, "resume_details", None) or self._persist_pause(key, "connect", code)
                     if connection_attempt == 2:
-                        raise
+                        raise self._error_with_details(type(error)(details["message"]), details) from None
                     self.progress("generating", request_hash=key, connection_retry=connection_attempt + 1)
                     self.wait(2 * (connection_attempt + 1))
+                except httpx.TransportError as error:
+                    code = "timeout" if isinstance(error, httpx.TimeoutException) else "reset" if isinstance(error, httpx.ReadError) else "other"
+                    details = getattr(error, "resume_details", None) or self._persist_pause(key, "uncertain", code)
+                    raise self._error_with_details(type(error)(details["message"]), details) from None
             if response.status_code != 429:
                 return response
             delay = self.retry_seconds(response.headers.get("Retry-After"), rate_attempt)
-            event = {"status": 429, "retry_not_before": time.time() + delay, "wait_seconds": delay}
+            event = {"status": 429, "request_hash": key, "retry_not_before": time.time() + delay, "wait_seconds": delay, **self._pause(key, "rate_limited", status=429)}
             atomic_json(error_marker, event)
             atomic_json(self.store.root / "rate-limits" / f"{key}.{time.time_ns()}.json", event)
             if rate_attempt == 6:
-                raise RuntimeError("NovelAI HTTP 429 persists after bounded backoff; completed images retained")
+                raise self._error_with_details(RuntimeError("NovelAI HTTP 429 persists after bounded backoff; completed images retained"), event)
             self.progress("rate_limited", request_hash=key, retry=rate_attempt + 1, wait_seconds=delay)
             self.wait(delay)
         raise RuntimeError("Generation transport exhausted")
@@ -215,26 +383,39 @@ class LiveGenerator(NovelAIGenerator):
             marker = self.store.root / "requests" / f"{key}.json"
             error_marker = self.store.root / "transport-errors" / f"{key}.json"
             retry_rejected = False
+            if self.resume_authorization is not None and self.resume_authorization["requestHash"] != key:
+                raise RuntimeError("Next uncached request differs from explicit recovery authorization")
             if marker.exists():
                 previous_error = json.loads(error_marker.read_text()) if error_marker.exists() else {}
-                if previous_error.get("status") != 429:
-                    raise RuntimeError("Unresolved previous submission; not automatically resending a paid request")
-                retry_rejected = True
-                delay = max(60, previous_error.get("retry_not_before", 0) - time.time())
-                self.progress("rate_limited", request_hash=key, wait_seconds=delay, resuming=True)
-                self.wait(delay)
+                if previous_error.get("status") == 429:
+                    retry_rejected = True
+                    delay = max(60, previous_error.get("retry_not_before", 0) - time.time())
+                    self.progress("rate_limited", request_hash=key, wait_seconds=delay, resuming=True)
+                    self.wait(delay)
+                elif self.resume and self._definite_preconnect(previous_error, key):
+                    retry_rejected = True
+                elif self.resume_authorization is not None:
+                    self._consume_authorization(key, marker, error_marker)
+                    retry_rejected = True
+                else:
+                    details = self._pause(key, "uncertain", previous_error.get("safeCode", "other"))
+                    raise self._error_with_details(RuntimeError("Unresolved previous submission; not automatically resending a paid request"), details)
             count = sum(not p.name.endswith(".error.json") for p in (self.store.root / "requests").glob("*.json"))
             if not retry_rejected and count >= self.max_renders:
                 raise ValueError("Configured image budget exhausted")
-            atomic_json(marker, record)
+            if marker.exists():
+                if json.loads(marker.read_text()) != record:
+                    raise RuntimeError("Saved request differs from the frozen payload")
+            else:
+                atomic_json(marker, record)
             # Any subsequent uncertain failure must not inherit a stale 429 marker.
-            error_marker.unlink(missing_ok=True)
+            self._archive_error(key)
             self.progress("generating", request_hash=key)
             response = self.submit(job["request"], key, marker)
-            error_marker.unlink(missing_ok=True)
+            self._archive_error(key)
             if response.status_code != 200:
-                atomic_json(error_marker, {"status": response.status_code})
-                raise RuntimeError(transport_failure_message(response.status_code, self.request_url, self.language))
+                details = self._persist_pause(key, "uncertain", status=response.status_code)
+                raise self._error_with_details(RuntimeError(transport_failure_message(response.status_code, self.request_url, self.language)), details)
             if len(response.content) > 64 * 1024 * 1024:
                 raise RuntimeError("Generation response exceeded image size bound")
             with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
@@ -315,7 +496,8 @@ def main(command):
     generator = LiveGenerator(out / "spool", asset / "retrieval/catalog.json", budget, command.pop("token"), check, progress,
                               image_base_url=command.get("imageBaseUrl", "https://image.novelai.net"),
                               language=command.get("language", "en-US"),
-                              transport_bridge=command.get("transportBridge"))
+                              transport_bridge=command.get("transportBridge"),
+                              resume=command.get("resume", False), resume_authorization=command.get("resumeAuthorization"))
     generator.prompt_budget = NovelAIPromptBudget(asset / "tokenizers/t5")
     initial = proposed["targets"][0]["initializers"]
     rank = resources.surrogate.for_target(hypothesis["content_tags"], hypothesis["style_tags"], reference)
@@ -343,11 +525,6 @@ if __name__ == "__main__":
         with exclusive_lock(output / "run.lock", blocking=False):
             main(command)
     except Exception as error:
-        # Never persist raw request objects, headers, credentials or exception tracebacks.
-        detail = str(error)
-        for secret in secrets:
-            if secret:
-                detail = detail.replace(secret, "[redacted]")
-        atomic_json(output / "failure.json", {"type": type(error).__name__, "message": detail[:600]})
-        print("RUN_FAILED " + type(error).__name__ + ": " + detail[:600], flush=True)
+        # No automatic replay: durable pause metadata names only the one pending request.
+        record_run_failure(output, command, error, secrets)
         sys.exit(1)

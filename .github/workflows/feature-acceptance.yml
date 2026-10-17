@@ -417,13 +417,15 @@ jobs:
           pattern: native-components-*-${{ github.sha }}
           path: ${{ runner.temp }}/all-native-evidence
           merge-multiple: false
+      - name: Install locked rejection-test dependencies (no lifecycle scripts)
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Check matrix rejection rules
-        run: node --test scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/mobile-scenario-receipt.test.mjs scripts/feature-acceptance/mobile-entry-consistency.test.mjs scripts/feature-acceptance/native-proof-stream.test.mjs scripts/feature-acceptance/native-resident-pending.test.mjs scripts/feature-acceptance/native-begin-entry-parity.test.mjs scripts/feature-acceptance/metadata-import-wrapper.test.mjs scripts/feature-acceptance/prepare-android-image.test.mjs
-      - name: Require all 39 client features on all five actual platforms
+        run: node --test scripts/feature-acceptance/release-feature-scope.test.mjs scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/mobile-scenario-receipt.test.mjs scripts/feature-acceptance/mobile-entry-consistency.test.mjs scripts/feature-acceptance/native-proof-stream.test.mjs scripts/feature-acceptance/native-resident-pending.test.mjs scripts/feature-acceptance/native-begin-entry-parity.test.mjs scripts/feature-acceptance/metadata-import-wrapper.test.mjs scripts/feature-acceptance/prepare-android-image.test.mjs
+      - name: Require 191 scoped cells across all five platforms (four Artist cells explicitly not-supported)
         shell: bash
         run: |
           version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json","utf8")).version')"
-          node scripts/feature-acceptance/build-full-feature-matrix.mjs "$RUNNER_TEMP/all-native-evidence" "$RUNNER_TEMP/full-feature-matrix" "$GITHUB_SHA" "$version" --require-full
+          node scripts/feature-acceptance/build-full-feature-matrix.mjs "$RUNNER_TEMP/all-native-evidence" "$RUNNER_TEMP/full-feature-matrix" "$GITHUB_SHA" "$version" --require-release-scope
       - uses: actions/upload-artifact@v4
         if: always()
         with:

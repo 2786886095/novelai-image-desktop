@@ -26,6 +26,7 @@ import 'package:novelai_mobile/state/app_state.dart';
 import 'package:novelai_mobile/ui/studio_shell.dart';
 import 'native_scenario_support.dart';
 import 'native_ui_actions.dart';
+import 'native_account_wait_diagnostic.dart';
 import 'native_ui_tls_fixture.dart';
 
 final suite = NativeScenarios(9);
@@ -68,9 +69,22 @@ Future<void> _switchInSelector(AppState app, String label, String id) async {
       'account dropdown $label');
   await nativeUiTap(nativeUiElements(
       (w) => w is Text && (w.data?.startsWith('$label ·') ?? false)).last);
-  await nativeUiWait(
-      () => app.naiAccounts.active?.profile.id == id && !app.naiAccountLocked,
-      'account selected and read-only refresh finished');
+  final diagnostic=NativeAccountWaitDiagnostic(
+    () => app.naiAccounts.active?.profile.id == id && !app.naiAccountLocked,
+    () => NativeAccountWaitState(
+    activeMatch:app.naiAccounts.active?.profile.id==id,
+    locked:app.naiAccountLocked,
+    apiInFlight:app.api is NovelAiAccountApi && (app.api as NovelAiAccountApi).inFlight,
+    vaultLocked:app.naiAccounts.locked,busy:app.busy,
+    queueRunning:app.generationQueueRunning,queueAdding:app.queueAdding));
+  try {
+    await nativeUiWait(diagnostic.selectedAndIdle,
+        'account selected and read-only refresh finished');
+    diagnostic.finish(success:true);
+  } catch (_) {
+    diagnostic.finish(success:false);
+    rethrow;
+  }
 }
 
 Future<void> _accounts(NativeContext c, NativeUiTlsFixture tls) async {

@@ -9,6 +9,23 @@ const MAX_BODY = 256 * 1024;
 const MAX_IMAGE = 64 * 1024 * 1024;
 const PRECONNECT = new Set(["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN"]);
 
+// Only fixed labels cross the capability bridge. Never expose exception text,
+// arbitrary codes, proxy addresses, request bodies or credentials to the worker.
+function networkFailureCode(code: string) {
+  switch (code) {
+    case "ECONNREFUSED": return "connection-refused";
+    case "ENOTFOUND": case "EAI_AGAIN": return "dns";
+    case "ECONNABORTED": case "ETIMEDOUT": return "timeout";
+    case "ECONNRESET": case "EPIPE": return "reset";
+    case "CERT_HAS_EXPIRED": case "CERT_NOT_YET_VALID":
+    case "DEPTH_ZERO_SELF_SIGNED_CERT": case "SELF_SIGNED_CERT_IN_CHAIN":
+    case "UNABLE_TO_VERIFY_LEAF_SIGNATURE": case "UNABLE_TO_GET_ISSUER_CERT":
+    case "UNABLE_TO_GET_ISSUER_CERT_LOCALLY": case "ERR_TLS_CERT_ALTNAME_INVALID": return "tls";
+    case "ERR_CANCELED": case "ABORT_ERR": return "cancelled";
+    default: return "other";
+  }
+}
+
 /** A per-worker capability, not a general proxy. The host retains the frozen
  * account/endpoint and performs exactly one outbound POST using the same proxy
  * policy as ordinary generation. No redirects, remote-error echoes or fallback. */
@@ -28,9 +45,11 @@ export async function startDetectiveGenerationBridge(binding: {
   const used = new Set<string>();
   const abort = new AbortController();
   let busy = false, closed = false;
-  const reply = (res: ServerResponse, status: number, kind?: "connect" | "uncertain") => {
+  const reply = (res: ServerResponse, status: number, kind?: "connect" | "uncertain",
+    code?: ReturnType<typeof networkFailureCode>) => {
     if (res.destroyed) return;
-    res.writeHead(status, kind ? { "x-studio-network-failure": kind } : {});
+    res.writeHead(status, kind ? { "x-studio-network-failure": kind,
+      "x-studio-network-code": code ?? "other" } : {});
     res.end();
   };
   const server = createServer(async (req, res) => {
@@ -82,11 +101,12 @@ export async function startDetectiveGenerationBridge(binding: {
         res.end(response.status === 200 ? Buffer.from(response.data) : undefined);
       }
     } catch (error: any) {
-      const code = String(error?.cause?.code ?? error?.code ?? "");
+      const code = typeof error?.cause?.code === "string" ? error.cause.code
+        : typeof error?.code === "string" ? error.code : "";
       const preconnect = PRECONNECT.has(code);
       if (preconnect && hash) used.delete(hash);
       // 598/599 are private bridge statuses, never mistaken for upstream success.
-      reply(res, preconnect ? 599 : 598, preconnect ? "connect" : "uncertain");
+      reply(res, preconnect ? 599 : 598, preconnect ? "connect" : "uncertain", networkFailureCode(code));
     } finally { busy = false; }
   });
   server.requestTimeout = 10_000;

@@ -16,10 +16,31 @@ export const releaseFeatures = Object.freeze([
   'agent-components','updates','works-batch-edit','missing-file-reconciliation',
 ]);
 
+// The user narrowed only local Artist retrieval/scoring/iteration to Windows.
+// This does not waive any other feature, platform package, or release gate.
+export const releaseScopeId = 'artist-iteration-windows-only/v1';
+export const artistIterationScenarios = Object.freeze(['model-runtime-lifecycle','search-score-selected-generation','install-resume-error']);
+export function releaseFeatureApplicability(feature, platform) {
+  assert.ok(releaseFeatures.includes(feature),'Unrecognized feature: '+feature);
+  assert.ok(releasePlatforms.includes(platform),'Unrecognized platform: '+platform);
+  return feature==='artist-iteration' && platform!=='windows' ? 'not-supported' : 'required';
+}
+const releaseScope = Object.freeze({
+  id:releaseScopeId,
+  applicability:Object.freeze(releaseFeatures.map(feature=>Object.freeze({feature,platforms:Object.freeze(Object.fromEntries(releasePlatforms.map(platform=>[platform,releaseFeatureApplicability(feature,platform)])))}))),
+});
+export const releaseScopeSha256 = crypto.createHash('sha256').update(JSON.stringify(releaseScope)).digest('hex');
+export const releaseScopeCounts = Object.freeze({declaredSlots:195,requiredSlots:191,notSupportedSlots:4});
+
 export function assertReleasePlatformContract(report, {version, sourceSha}) {
   assert.ok(/^\d+\.\d+\.\d+$/.test(version),'Invalid release version');
   assert.ok(/^[a-f0-9]{40}$/i.test(sourceSha),'Invalid immutable source SHA');
-  assert.equal(report?.schema,1,'Five-platform feature evidence is required');
+  assert.equal(report?.schema,2,'Explicit scoped five-platform feature evidence is required');
+  assert.equal(report.releaseScopeId,releaseScopeId,'Release scope identity differs');
+  assert.equal(report.releaseScopeSha256,releaseScopeSha256,'Release applicability policy differs');
+  assert.equal(report.full195Certified,false,'Four not-supported cells must never certify full195');
+  assert.equal(report.releaseReady,false,'Feature scope alone cannot certify publication readiness');
+  assert.equal(report.releaseScopeCertified,true,'All required scoped cells must be certified');
   assert.equal(report.version,version,'Feature evidence version differs');
   assert.equal(report.sourceSha,sourceSha,'Feature evidence belongs to another source');
   assert.deepEqual([...report.platforms].sort(),[...releasePlatforms].sort(),
@@ -31,6 +52,18 @@ export function assertReleasePlatformContract(report, {version, sourceSha}) {
     assert.ok(!seen.has(feature.id),'Duplicate feature: '+feature.id);seen.add(feature.id);
     for(const platform of releasePlatforms) {
       const result=feature.platforms?.[platform];
+      const applicability=releaseFeatureApplicability(feature.id,platform);
+      assert.equal(result?.applicability,applicability,`${feature.id}/${platform} applicability differs`);
+      if(applicability==='not-supported') {
+        assert.equal(result.status,'not-supported','Not-supported is not a verified execution');
+        const fields=new Set(['applicability','status','reasonCode','declaredScenarios','requiredScenarios','completedScenarios','missingScenarios','excludedObservedScenarios','unqualifiedObservedScenarios','componentObservations','evidence']);
+        assert.ok(Object.keys(result).every(field=>fields.has(field)),'Not-supported cells cannot carry pass/execution claims');
+        assert.equal(result.reasonCode,releaseScopeId,'Not-supported reason differs');
+        assert.deepEqual(result.declaredScenarios,[...artistIterationScenarios],'Excluded scenario declarations differ');
+        for(const field of ['requiredScenarios','completedScenarios','missingScenarios','evidence'])
+          assert.deepEqual(result[field],[],`Not-supported ${field} must be explicitly empty`);
+        continue;
+      }
       assert.equal(result?.status,'verified',`${feature.id}/${platform} is not accepted`);
       assert.ok(Array.isArray(result.evidence) && result.evidence.length>0,
         `${feature.id}/${platform} has no execution evidence`);
@@ -49,10 +82,16 @@ export function assertReleasePlatformContract(report, {version, sourceSha}) {
     }
   }
   assert.deepEqual([...seen].sort(),[...releaseFeatures].sort(),'Incomplete feature inventory');
+  for(const [field,value] of Object.entries(releaseScopeCounts))
+    assert.equal(report.summary?.[field],value,'Scoped summary differs: '+field);
+  assert.equal(report.summary.verifiedSlots,191,'Required scoped feature coverage is incomplete');
+  assert.equal(report.summary.partialSlots,0);assert.equal(report.summary.pendingSlots,0);
   return {platforms:releasePlatforms.length,features:releaseFeatures.length};
 }
 
 export function assertReleaseEvidenceFiles(report, evidenceRoot) {
+  // Validate the exact policy before an empty not-supported evidence array can be skipped.
+  assertReleasePlatformContract(report,{version:report?.version,sourceSha:report?.sourceSha});
   const root=fs.realpathSync(evidenceRoot);
   for(const feature of report.features) for(const platform of releasePlatforms)
     for(const proof of feature.platforms[platform].evidence) {

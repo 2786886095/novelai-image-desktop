@@ -8,7 +8,7 @@ import { confirmAction } from "./components/confirm";
 import { useAppStore } from "./store";
 import {InlineReversePromptSkillControls, callSelectedInlineReverse, reversePromptSelectionIdentity} from './components/InlineReversePromptSkillControls';
 import { imagePasteProps } from "./image-paste";
-import { detectiveRoundBudget, detectiveRounds, detectiveParameters, resetDetectiveDraft, type DetectiveParameters, type DetectiveSnapshot } from "./artist-detective-contract";
+import { detectiveRoundBudget, detectiveRounds, detectiveParameters, detectiveRecoveryLabels, resetDetectiveDraft, type DetectiveParameters, type DetectiveSnapshot } from "./artist-detective-contract";
 
 type Target = { filePath: string; fileUrl: string; name: string };
 type Draft = { target: Target | null; prompt: string; style: string; subjectHint: string; knownCharacter: boolean; reverseMode: "tags" | "natural" | "mixed"; budget: number; parameters: DetectiveParameters };
@@ -43,6 +43,7 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
   const [busy, setBusy] = useState(false);
   const applyParams = useAppStore(s => s.applyParams);
   const templateVersion = useAppStore(s => s.settings?.reversePromptTemplateVersion) === "v4.5" ? "v4.5" : "v5";
+  const recoveryText=detectiveRecoveryLabels(language);
   const runtimeVerified = snapshot?.runtimeValidation?.state === 'passed';
   const runtimeChecking = snapshot?.runtimeValidation?.state === 'checking';
   const active = !!snapshot?.running || busy || !!download?.busy || runtimeChecking;
@@ -205,11 +206,14 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
     </section>
     <section className="artist-lab-actions">
       {snapshot?.running ? <Button variant="danger" disabled={busy} onClick={() => void action(() => window.naiDesktop.artistDetectiveStop())}>{ft("停止（保留当前请求结果）")}</Button>
-        : <Button variant="primary" disabled={active || !runtimeVerified || !draft.target || !draft.prompt.trim()} onClick={() => void action(() => window.naiDesktop.artistDetectiveStart({ image: draft.target!.filePath, prompt: draft.prompt, style: draft.style, budget: draft.budget, parameters: draft.parameters }))}>{ft("开始自动迭代")}</Button>}
-      <span role="status">{snapshot ? ft("{stage} · {done}/{total} 张",{stage:ft(STAGE[snapshot.stage] ?? snapshot.stage),done:snapshot.completed,total:snapshot.budget}) : ft("读取状态…")}</span>
+        : <Button variant="primary" disabled={active || !runtimeVerified || !draft.target || !draft.prompt.trim()} onClick={() => void action(() => window.naiDesktop.artistDetectiveStart({ image: draft.target!.filePath, prompt: draft.prompt, style: draft.style, budget: draft.budget, parameters: draft.parameters }))}>{snapshot?.directory ? recoveryText.newRun : ft("开始自动迭代")}</Button>}
+      {!snapshot?.running && snapshot?.recovery?.supported && snapshot.recovery.manifestSha256 && <Button disabled={active} onClick={()=>void action(()=>window.naiDesktop.artistDetectiveResume({directory:snapshot.directory!,manifestSha256:snapshot.recovery!.manifestSha256!,pendingRequestHash:snapshot.recovery!.pendingRequestHash}))}>{recoveryText.resume}</Button>}
+      <span role="status">{snapshot ? ft("{stage} · {done}/{total} 张",{stage:snapshot.stage==='paused'?recoveryText.paused:ft(STAGE[snapshot.stage] ?? snapshot.stage),done:snapshot.completed,total:snapshot.budget}) : ft("读取状态…")}</span>
       <Button disabled={!snapshot?.directory} onClick={() => void window.naiDesktop.artistDetectiveOpenResults()}>{ft("打开结果目录")}</Button>
       <Button disabled={active || !snapshot?.directory} onClick={() => void clearResults()}>{ft("清空迭代结果")}</Button>
     </section>
+    {!snapshot?.running && snapshot?.recovery?.message && <p role="status">{ft(snapshot.recovery.message)}</p>}
+    {!snapshot?.running && snapshot?.recovery?.requiresPaidReplayConfirmation && <p role="status">{recoveryText.warning}</p>}
     {(error || snapshot?.message) && <p className="artist-error" role="alert">{ft(error || snapshot?.message || "")}</p>}
     {!!snapshot?.candidates.length && <section className="artist-gallery-section"><h3>{snapshot.candidates[0].phase === "finalists" ? ft("最终候选 · 4 个新 Seed 的平均相似度") : ft("搜索候选 · 2 个固定 Seed 的平均相似度")}</h3><div className="artist-candidate-grid">{snapshot.candidates.map((item, i) => <article className="artist-candidate done" key={item.image + item.phase}>
       <header className="artist-candidate-header"><b>#{i + 1} · {item.score.toFixed(4)}</b><span>{ft(item.phase === 'finalists' ? '最终复测' : '搜索候选')}</span></header>

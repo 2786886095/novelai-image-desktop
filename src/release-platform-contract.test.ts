@@ -1,11 +1,11 @@
 import {describe,it,expect} from 'vitest';
-import {assertReleasePlatformContract,assertReleaseEvidenceFiles,releaseFeatures,releasePlatforms} from '../scripts/release-platform-contract.mjs';
+import {assertReleasePlatformContract,assertReleaseEvidenceFiles,releaseFeatures,releasePlatforms,releaseFeatureApplicability,releaseScopeId,releaseScopeSha256,releaseScopeCounts,artistIterationScenarios} from '../scripts/release-platform-contract.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 const sourceSha='a'.repeat(40),version='2.5.7';
-const complete=()=>({schema:1,version,sourceSha,platforms:[...releasePlatforms],features:releaseFeatures.map(id=>({id,platforms:Object.fromEntries(releasePlatforms.map(platform=>[platform,{status:'verified',evidence:[{sourceSha,feature:id,platform,exitStatus:0,skipped:false,kind:'integration',artifact:'neutral-fixture.json',sha256:'b'.repeat(64)}]}]))}))});
+const complete=()=>({schema:2,version,sourceSha,releaseScopeId,releaseScopeSha256,full195Certified:false,releaseScopeCertified:true,releaseReady:false,summary:{...releaseScopeCounts,verifiedSlots:191,partialSlots:0,pendingSlots:0},platforms:[...releasePlatforms],features:releaseFeatures.map(id=>({id,platforms:Object.fromEntries(releasePlatforms.map(platform=>[platform,releaseFeatureApplicability(id,platform)==='not-supported'?{applicability:'not-supported',status:'not-supported',reasonCode:releaseScopeId,declaredScenarios:[...artistIterationScenarios],requiredScenarios:[],completedScenarios:[],missingScenarios:[],evidence:[]}:{applicability:'required',status:'verified',evidence:[{sourceSha,feature:id,platform,exitStatus:0,skipped:false,kind:'integration',artifact:'neutral-fixture.json',sha256:'b'.repeat(64)}]}]))}))});
 describe('five-platform publication contract (synthetic evidence schema, not device acceptance)',()=>{
   it('accepts a complete fixture without certifying the actual application',()=>expect(assertReleasePlatformContract(complete(),{version,sourceSha})).toEqual({platforms:5,features:39}));
   it('rejects Windows-only scope',()=>{const r=complete();r.platforms=['windows'];expect(()=>assertReleasePlatformContract(r,{version,sourceSha})).toThrow();});
@@ -26,7 +26,7 @@ describe('five-platform publication contract (synthetic evidence schema, not dev
       const checks=r.features.flatMap(f=>releasePlatforms.map(platform=>({sourceSha,feature:f.id,platform,kind:'integration',exitStatus:0,skipped:false,command:['neutral-fixture'],stdout:'synthetic schema check',stderr:''})));
       const data=JSON.stringify({checks});fs.writeFileSync(path.join(root,'synthetic-schema-fixture.json'),data);
       const sha=crypto.createHash('sha256').update(data).digest('hex');
-      for(const f of r.features) for(const p of releasePlatforms) {f.platforms[p].evidence[0].artifact='synthetic-schema-fixture.json';f.platforms[p].evidence[0].sha256=sha;}
+      for(const f of r.features) for(const p of releasePlatforms) {if(f.platforms[p].status==='not-supported')continue;f.platforms[p].evidence[0].artifact='synthetic-schema-fixture.json';f.platforms[p].evidence[0].sha256=sha;}
       expect(()=>assertReleaseEvidenceFiles(r,root)).not.toThrow();
       fs.appendFileSync(path.join(root,'synthetic-schema-fixture.json'),' ');
       expect(()=>assertReleaseEvidenceFiles(r,root)).toThrow('bytes changed');

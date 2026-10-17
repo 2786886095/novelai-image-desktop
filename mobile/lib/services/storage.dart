@@ -1,3 +1,4 @@
+import 'works_batch_file_access.dart';
 import '../images/image_file_access.dart';
 import 'works_batch.dart';
 import 'openai_image_edit.dart';
@@ -80,9 +81,12 @@ class Storage {
   static String _newImageId(DateTime now) =>
       '${now.microsecondsSinceEpoch}-$_imageProcessNonce-${++_imageIdentitySequence}';
   final ImageFileReader _imageReader;
-  Storage({DateTime Function()? imageClock, ImageFileReader? imageReader})
+  final WorksBatchFileAccess? _worksFileAccess;
+  final Map<String,WorksRenameCopy> _renameCopies={};
+  Storage({DateTime Function()? imageClock, ImageFileReader? imageReader, WorksBatchFileAccess? fileAccess})
       : _imageClock = imageClock ?? DateTime.now,
-        _imageReader = imageReader ?? ImageFiles.reader;
+        _imageReader = imageReader ?? ImageFiles.reader,
+        _worksFileAccess = fileAccess ?? (Platform.isIOS ? IosWorksBatchFileAccess() : null);
   Future<Uint8List> readImage(String path, {int maxBytes = 64 * 1024 * 1024}) =>
       _imageReader.read(path, maxBytes: maxBytes);
   String? metadataInspectorSourcePath;
@@ -103,7 +107,7 @@ class Storage {
   });
   Future<WorksBatchFiles> worksFiles() async {
     final settings=await getSettings();return WorksBatchFiles([await imagesDir(),
-      if(settings.imageOutputDir.trim().isNotEmpty)Directory(settings.imageOutputDir.trim())]);
+      if(settings.imageOutputDir.trim().isNotEmpty)Directory(settings.imageOutputDir.trim())],fileAccess:_worksFileAccess);
   }
   Future<List<HistoryItem>> moveHistoryItems(Set<String> ids,String? group) => historyTransaction(() async {
     if(group!=null && group.isNotEmpty && !(await getGroups()).any((g)=>g.id==group))throw StateError('Group no longer exists');
@@ -1316,6 +1320,20 @@ class Storage {
   Future<void> deleteHistoryFiles(Iterable<String> filePaths) async {
     final targets = filePaths.where((path) => path.isNotEmpty).toSet();
     if (targets.isEmpty) return;
+    if(_worksFileAccess!=null) {
+      await historyTransaction(() async {
+        final policy=await worksFiles(),descriptions=<WorksFileDescription>[];
+        for(final path in targets) {
+          final file=await _worksFileAccess.describe(path,policy.managedRoots);
+          if(!file.missing && (!file.regular || file.managedRoot==null))throw const FileSystemException('Output is not an owned regular file');
+          descriptions.add(file);
+        }
+        for(final file in descriptions) {if(file.regular)await _worksFileAccess.delete(file);}
+        final rows=await getHistory();
+        await writeHistory(rows.where((h)=>!targets.contains(h.filePath)).toList());
+      });
+      return;
+    }
     // Reject directories and links before deleting anything. A failed deletion
     // must not silently remove its history entry or be reported as successful.
     for (final path in targets) {
@@ -1338,6 +1356,18 @@ class Storage {
     HistoryItem item,
     String requestedName,
   ) async {
+    if(_worksFileAccess!=null) {
+      if(_renameCopies.length>=512)throw StateError('Too many pending image rename receipts');
+      final policy=await worksFiles();
+      final source=await _worksFileAccess.describe(item.filePath,policy.managedRoots);
+      final stem=safeFileStem(requestedName);
+      if(!source.regular)throw StateError('Image unavailable or not a regular file');
+      final extension=path_util.posix.extension(item.filePath);
+      if(path_util.posix.basename(item.filePath)==stem+(extension.isEmpty?'.png':extension))return item;
+      final copy=await _worksFileAccess.copyForRename(source,stem);
+      _renameCopies[copy.destination.path]=copy;
+      return HistoryItem.fromJson({...item.toJson(),'filePath':copy.destination.path});
+    }
     final source = File(item.filePath);
     if (await FileSystemEntity.type(source.path, followLinks: false) !=
         FileSystemEntityType.file) {
@@ -1375,6 +1405,30 @@ class Storage {
     // The caller commits the history index before cleaning up the old path.
     // This also keeps other history rows that share the source image usable.
     return HistoryItem.fromJson({...item.toJson(), 'filePath': target.path});
+  }
+
+  /// Cleanup is bounded by the original process-local identity receipt. A
+  /// concurrently replaced file must survive both rollback and postcommit cleanup.
+  Future<void> discardRenameCopy(HistoryItem renamed) async {
+    if(_worksFileAccess==null){await File(renamed.filePath).delete();return;}
+    final copy=_renameCopies.remove(renamed.filePath);
+    if(copy==null)throw StateError('Rename creation receipt is unavailable');
+    await _worksFileAccess.delete(copy.destination);
+  }
+  Future<bool> finishRenameCopy(HistoryItem original,HistoryItem renamed,{required bool deleteOriginal}) async {
+    if(_worksFileAccess==null) {
+      if(deleteOriginal){try{await File(original.filePath).delete();}catch(_){return false;}}
+      return true;
+    }
+    final copy=_renameCopies.remove(renamed.filePath);
+    if(copy==null || copy.source.path!=original.filePath)return false;
+    // Imported/shared files are record-only; a remembered access grant is not ownership.
+    if(!deleteOriginal || copy.source.managedRoot==null)return true;
+    try {
+      final current=await worksFiles();
+      if(!current.managedRoots.contains(copy.source.managedRoot))return true;
+      await _worksFileAccess.delete(copy.source);return true;
+    } catch(_){return false;}
   }
 
   Future<String> exportHistoryZip(

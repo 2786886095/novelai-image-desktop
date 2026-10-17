@@ -1898,6 +1898,7 @@ export interface NaiDesktopApi {
   artistDetectiveDownloadDirectory: () => Promise<import("../electron/ipc/detective-download").DetectiveDownloadStatus>;
   artistDetectiveConfigure: (kind: "python" | "assets") => Promise<import("./artist-detective-contract").DetectiveSnapshot>;
   artistDetectiveStart: (request: import("./artist-detective-contract").DetectiveRunRequest) => Promise<import("./artist-detective-contract").DetectiveSnapshot>;
+  artistDetectiveResume: (request: import("./artist-detective-contract").DetectiveResumeRequest) => Promise<import("./artist-detective-contract").DetectiveSnapshot>;
   artistDetectiveStop: () => Promise<import("./artist-detective-contract").DetectiveSnapshot>;
   artistDetectiveOpenResults: () => Promise<void>;
   artistDetectiveVerifyRuntime: () => Promise<import("./artist-detective-contract").DetectiveSnapshot>;

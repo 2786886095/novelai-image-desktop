@@ -20,7 +20,7 @@ test('same-source Android three-scenario fixture cannot credit any other slot/pl
  const m=run([item]);assert.equal(m.summary.verifiedSlots,1);assert.equal(m.full195Certified,false);
  assert.equal(m.features.find(x=>x.id==='agent-components').platforms.android.status,'verified');
  assert.equal(m.features.find(x=>x.id==='agent-components').platforms.ios.status,'pending');
- assert.equal(m.summary.requiredSlots,195);assert.equal(m.profileSha256,profileSha256);
+ assert.equal(m.summary.requiredSlots,191);assert.equal(m.summary.declaredSlots,195);assert.equal(m.summary.notSupportedSlots,4);assert.equal(m.profileSha256,profileSha256);
 });
 test('collector reopens fixed sibling proof and copies raw SHA, never follows arbitrary path',()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-admission-unit-')),input=path.join(root,'in'),output=path.join(root,'out');fs.mkdirSync(input);fs.mkdirSync(output);

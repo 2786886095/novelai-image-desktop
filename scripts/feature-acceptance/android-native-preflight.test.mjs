@@ -266,3 +266,87 @@ test('product or unknown ANR after a real launcher recovery is never dismissed o
   assert.equal(f.commands.filter(x=>x.args.startsWith('shell input tap ')).length,1);assert.equal(f.phases.some(x=>x.stage==='ready'),false);
  }
 });
+
+
+// Minimal redacted form of the real O job117252083583 batch_mcp7 dump.
+// Original full107366B SHA/source/provenance are in external O/current-native-failure-03.
+// LAST ANR's null and the later current LauncherWindow refer to different times.
+const historicalLastAnrFocus = 'WINDOW MANAGER LAST ANR (dumpsys window lastanr)\n' +
+  '  Reason: Input dispatching timed out (Application does not have a focused window)\n' +
+  'Last ANR continued\nWINDOW MANAGER DISPLAY CONTENTS (dumpsys window displays)\n' +
+  '  Display: mDisplayId=0 (organized)\n  mCurrentFocus=null\n' +
+  '  mFocusedApp=ActivityRecord{old u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t7}\n' +
+  'WINDOW MANAGER SESSIONS (dumpsys window sessions)\n';
+// This new command response is an explicit host contract, NOT a recorded new
+// native dumpsys call. A genuine current displays read still needs actual CI.
+const currentDisplayFocus = 'WINDOW MANAGER DISPLAY CONTENTS (dumpsys window displays)\n' +
+  '  Display: mDisplayId=0 (organized)\n' +
+  '  mCurrentFocus=Window{current u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity}\n' +
+  '  mFocusedApp=ActivityRecord{current u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t7}\n';
+function lastAnrFixture({display = currentDisplayFocus, result = {}} = {}) {
+  const f = recordedFixture({fullDump: historicalLastAnrFocus + currentDisplayFocus}), original = f.options.command;
+  f.options.command = (...args) => {
+    const r = original(...args);
+    if (args[0].slice(3).join(' ') === 'shell dumpsys window displays') return {...r, stdout: display, ...result};
+    return r;
+  };
+  return f;
+}
+
+test('real mixed historical-LAST-ANR focus requires two fresh current-only display queries in preflight', async () => {
+  const f = lastAnrFixture(); await prepareAndroidNative(f.options);
+  assert.equal(f.commands.filter(a => a.slice(3).join(' ') === 'shell dumpsys window displays').length, 2);
+  assert.equal(f.phases.filter(e => e.stage === 'current-focus-query').length, 2);
+  assert.equal(f.phases.at(-1).stage, 'ready'); assert.equal(f.phases.at(-1).stableObservations, 2);
+  assert.equal(f.commands.some(a => a.includes('tap') || a.includes('grant')), false);
+  assert(f.phases.filter(e => e.stage === 'foreground').every(e => !e.focus.some(l => /mCurrentFocus=null/.test(l))));
+});
+
+test('historical nonnull focus cannot hide a current explicit null focus or create readiness', async () => {
+  const f = lastAnrFixture({display: currentDisplayFocus.replace(/mCurrentFocus=Window\{[^\n]+/, 'mCurrentFocus=null')});
+  await assert.rejects(prepareAndroidNative(f.options), /did not stabilize/);
+  assert.equal(f.phases.some(e => e.stage === 'ready'), false);
+  assert(f.phases.filter(e => e.stage === 'foreground').every(e => e.focus.some(l => /mCurrentFocus=null/.test(l))));
+});
+
+test('current focus with missing, duplicate or historical fields fails rather than choosing a plausible last line', async () => {
+  for (const display of [currentDisplayFocus.replace(/.*mCurrentFocus=.*\n/, ''),
+    currentDisplayFocus.replace(/.*mFocusedApp=.*\n/, ''),
+    currentDisplayFocus + '  mCurrentFocus=Window{foreign u0 com.foreign/.Activity}\n',
+    currentDisplayFocus + '  mFocusedApp=ActivityRecord{foreign}\n',
+    currentDisplayFocus.replace(/mCurrentFocus=Window\{[^\n]+/, 'mCurrentFocus=Window{truncated'),
+    currentDisplayFocus.replace(/mFocusedApp=ActivityRecord\{[^\n]+/, 'mFocusedApp=unrecognized'),
+    historicalLastAnrFocus + currentDisplayFocus, 'mCurrentFocus=Window{unlabelled}\nmFocusedApp=ActivityRecord{unlabelled}']) {
+    const f = lastAnrFixture({display});
+    await assert.rejects(prepareAndroidNative(f.options), /current-display/);
+    assert.equal(f.phases.some(e => e.stage === 'ready'), false);
+  }
+});
+
+test('current-only command errors, stderr, timeout, signal and overflow never become healthy observations', async () => {
+  for (const result of [{exitStatus: 1}, {error: 'failed'}, {stderr: 'unexpected'}, {timedOut: true},
+    {signal: 'SIGTERM'}, {outputOverflow: true}, {cleanupComplete: false}]) {
+    const f = lastAnrFixture({result});
+    await assert.rejects(prepareAndroidNative(f.options), /current-display/);
+    assert.equal(f.phases.some(e => e.stage === 'ready'), false);
+  }
+});
+
+test('a fresh complete dump without historical snapshots does not add queries or change direct inspector behavior', async () => {
+  const cleanFull = recordedFixture(); await prepareAndroidNative(cleanFull.options);
+  assert.equal(cleanFull.commands.some(a => a.slice(3).join(' ') === 'shell dumpsys window displays'), false);
+  const direct = lastAnrFixture(); const observed = await inspectAndroidForeground(direct.options);
+  assert(observed.focus.some(l => /mCurrentFocus=null/.test(l)));
+  assert.equal(direct.commands.some(a => a.slice(3).join(' ') === 'shell dumpsys window displays'), false);
+});
+
+test('historical-focus correction keeps new queries inside the same hard45second readiness budget', async () => {
+  const f = lastAnrFixture(), original = f.options.command, timeouts = [];
+  f.options.command = (argv, cwd, timeout) => {
+    if (argv.slice(3).join(' ') === 'shell dumpsys window displays') timeouts.push(timeout);
+    return original(argv, cwd, timeout);
+  };
+  await prepareAndroidNative(f.options); assert.equal(timeouts.length, 2);
+  assert(timeouts.every(t => t > 0 && t <= f.options.timeoutMs));
+  assert.equal(f.phases.at(-1).stableObservations, 2);
+});

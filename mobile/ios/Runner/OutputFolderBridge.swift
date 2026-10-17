@@ -31,6 +31,7 @@ final class OutputFolderBridge: NSObject, UIDocumentPickerDelegate, UIAdaptivePr
       case "write": self.write(call.arguments, result)
       case "read": self.read(call.arguments, result)
       case "probe": self.read(call.arguments, result, probeOnly: true)
+      case "describe", "copyForRename", "deleteFile": self.mutate(call.method, call.arguments, result)
       default: result(FlutterMethodNotImplemented)
       }
     }
@@ -278,4 +279,192 @@ final class OutputFolderBridge: NSObject, UIDocumentPickerDelegate, UIAdaptivePr
       }
     }
   }
+  // Receipts are bounded, process-local identities, not persisted permissions or
+  // proof that every remembered grant is a current managed output directory.
+  private struct MutationContext {
+    let base: URL
+    let external: Bool
+    let managedRoot: String?
+  }
+  private struct MutationRecord {
+    let file: URL
+    let context: MutationContext
+    let identity: String
+    let created: Bool
+  }
+  private var mutationReceipts: [String: MutationRecord] = [:]
+  private var mutationOrder: [String] = []
+
+  private func mutationContext(_ raw: String, _ roots: [String]) throws -> MutationContext {
+    guard raw.hasPrefix("/"), !raw.contains("\\"),
+          raw.rangeOfCharacter(from: .controlCharacters) == nil,
+          !raw.dropFirst().split(separator: "/", omittingEmptySubsequences: false).contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }),
+          roots.count <= 2 else { throw problem("Invalid mutation path") }
+    let file = URL(fileURLWithPath: raw).standardizedFileURL
+    let remembered = records.compactMap { $0["path"] as? String }.sorted(by: { $0.count > $1.count }).first(where: { raw.hasPrefix($0 + "/") })
+    let base: URL
+    let external: Bool
+    if let root = remembered {
+      guard let grant = grants[root] else { throw problem("Directory permission unavailable; history retained") }
+      base = grant; external = true
+    } else {
+      guard canonicalAppURL(raw) != nil else { throw problem("No current native access to image") }
+      base = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true); external = false
+    }
+    // Ownership is the caller's CURRENT managed-root policy, not grants.keys.
+    let owned = roots.first(where: { root in
+      guard let authorized = authorizedRoot(root), beneath(file, authorized) else { return false }
+      return authorized.standardizedFileURL.path == root
+    })
+    return MutationContext(base: base, external: external, managedRoot: owned)
+  }
+  private func checkedMutationURL(_ original: URL, _ coordinated: URL, _ context: MutationContext) throws {
+    let base = context.base.standardizedFileURL
+    guard beneath(original, base) else { throw problem("Mutation left its authorized root") }
+    let realBase = base.resolvingSymlinksInPath()
+    let suffix = String(original.path.dropFirst(base.path.count))
+    let expected = URL(fileURLWithPath: realBase.path + suffix).standardizedFileURL
+    guard coordinated.resolvingSymlinksInPath().path == expected.path,
+          beneath(expected, realBase) else { throw problem("Coordinator changed file identity or root") }
+    // Permit only system aliases above root, never links within its subtree.
+    var cursor = realBase
+    for part in suffix.split(separator: "/") {
+      cursor.appendPathComponent(String(part))
+      var info = stat()
+      if Darwin.lstat(cursor.path, &info) == 0 {
+        guard (info.st_mode & mode_t(S_IFMT)) != mode_t(S_IFLNK) else { throw problem("Nested links cannot authorize mutation") }
+      } else if errno != ENOENT { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil) }
+    }
+  }
+  private func mutationIdentity(_ file: URL) throws -> (String, stat) {
+    var info = stat()
+    guard Darwin.lstat(file.path, &info) == 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: nil) }
+    return (mutationIdentityValue(info), info)
+  }
+  private func mutationIdentityValue(_ info: stat) -> String {
+    "\(info.st_dev):\(info.st_ino):\(info.st_size):\(info.st_mtimespec.tv_sec):\(info.st_mtimespec.tv_nsec):\(info.st_ctimespec.tv_sec):\(info.st_ctimespec.tv_nsec)"
+  }
+  private func regularMutationFile(_ info: stat) -> Bool {
+    (info.st_mode & mode_t(S_IFMT)) == mode_t(S_IFREG) && info.st_size > 0 && info.st_size <= 64 * 1024 * 1024
+  }
+  private func mutationDescription(_ file: URL, _ context: MutationContext, _ state: String,
+                                   identity: String? = nil, created: Bool = false) -> [String: Any] {
+    var value: [String: Any] = ["path":file.path, "root":context.base.path, "state":state,
+      "coordinated":true, "available":true, "created":created]
+    if let managed = context.managedRoot { value["managedRoot"] = managed }
+    if let identity = identity {
+      let token = UUID().uuidString.lowercased()
+      mutationReceipts[token] = MutationRecord(file:file, context:context, identity:identity, created:created)
+      mutationOrder.append(token)
+      if mutationOrder.count > 512 { mutationReceipts.removeValue(forKey: mutationOrder.removeFirst()) }
+      value["receipt"] = token
+    }
+    return value
+  }
+  private func readMutationBytes(_ file: URL, _ expected: String) throws -> Data {
+    let fd = Darwin.open(file.path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
+    guard fd >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code:Int(errno), userInfo:nil) }
+    defer { _ = Darwin.close(fd) }
+    var before = stat()
+    guard Darwin.fstat(fd, &before) == 0, regularMutationFile(before), mutationIdentityValue(before) == expected, try mutationIdentity(file).0 == expected else { throw problem("Image identity changed before copy") }
+    var data = Data(), buffer = [UInt8](repeating:0, count:64 * 1024)
+    while data.count <= 64 * 1024 * 1024 {
+      let requested = min(buffer.count, 64 * 1024 * 1024 + 1 - data.count)
+      let count = buffer.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress!, requested) }
+      if count < 0 { if errno == EINTR { continue }; throw NSError(domain:NSPOSIXErrorDomain, code:Int(errno), userInfo:nil) }
+      if count == 0 { break }
+      data.append(contentsOf:buffer.prefix(count))
+    }
+    guard data.count == Int(before.st_size), try mutationIdentity(file).0 == expected else { throw problem("Image identity changed during copy") }
+    return data
+  }
+  private func mutate(_ method: String, _ arguments: Any?, _ result: @escaping FlutterResult) {
+    guard let args = arguments as? [String: Any], let path = args["path"] as? String else {
+      result(FlutterError(code:"output_folder_invalid", message:"Invalid mutation request", details:nil)); return
+    }
+    let context: MutationContext
+    do {
+      let roots: [String]
+      if method == "describe" { guard let selected = args["managedRoots"] as? [String] else { throw problem("Managed roots required") }; roots = selected }
+      else { roots = [] }
+      context = try mutationContext(path, roots)
+    } catch { result(FlutterError(code:"output_folder_permission", message:"Image provider unavailable; history retained", details:nil)); return }
+    let file = URL(fileURLWithPath:path).standardizedFileURL
+    worker.async {
+      do {
+        var coordinationError: NSError?, operationError: Error?, output: [String: Any]?
+        if method == "describe" {
+          NSFileCoordinator().coordinate(readingItemAt:file, options:[], error:&coordinationError) { actual in
+            do {
+              try self.checkedMutationURL(file, actual, context)
+              do {
+                let (identity, info) = try self.mutationIdentity(actual)
+                output = self.mutationDescription(file, context, self.regularMutationFile(info) ? "file" : "other", identity:self.regularMutationFile(info) ? identity : nil)
+              } catch let error as NSError where !context.external && error.domain == NSPOSIXErrorDomain && error.code == Int(ENOENT) {
+                // Only an accessible app-container parent may establish missing.
+                _ = try FileManager.default.contentsOfDirectory(atPath:actual.deletingLastPathComponent().path)
+                output = self.mutationDescription(file, context, "missing")
+              }
+            } catch { operationError = error }
+          }
+        } else {
+          guard let token = args["receipt"] as? String, let record = self.mutationReceipts[token],
+                record.file.path == path, record.context.base.path == context.base.path else { throw self.problem("Mutation identity receipt expired") }
+          if method == "copyForRename" {
+            guard let stem = args["stem"] as? String, self.component(stem) else { throw self.problem("Invalid image name") }
+            let parent = file.deletingLastPathComponent()
+            let ext = file.pathExtension.isEmpty ? "png" : file.pathExtension
+            var copied = false
+            var cachedBytes: Data?
+            // Coordinate each exact candidate item, not just its parent (a
+            // parent-directory writer does not wait for every child reader).
+            for index in 1...10000 {
+              let name = stem + (index == 1 ? "" : "-\(index)") + "." + ext
+              let logical = parent.appendingPathComponent(name)
+              var collision = false
+              NSFileCoordinator().coordinate(readingItemAt:file, options:[], writingItemAt:logical, options:[], error:&coordinationError) { actual, destination in
+                do {
+                  try self.checkedMutationURL(file, actual, record.context)
+                  try self.checkedMutationURL(logical, destination, record.context)
+                  guard try self.mutationIdentity(actual).0 == record.identity else { throw self.problem("Source identity changed during rename") }
+                  let bytes: Data
+                  if let cached = cachedBytes { bytes = cached }
+                  else { bytes = try self.readMutationBytes(actual, record.identity); cachedBytes = bytes }
+                  do { try bytes.write(to:destination, options:.withoutOverwriting) }
+                  catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileWriteFileExistsError { collision = true; return }
+                  let (identity, info) = try self.mutationIdentity(destination)
+                  guard self.regularMutationFile(info) else { throw self.problem("Created file identity unavailable") }
+                  output = ["sourcePath":path,"sourceReceipt":token,"coordinated":true,"createdExclusive":true,
+                    "destination":self.mutationDescription(logical,record.context,"file",identity:identity,created:true)]
+                  copied = true
+                } catch { operationError = error }
+              }
+              if coordinationError != nil || operationError != nil || copied { break }
+              guard collision else { throw self.problem("No exclusive destination was created") }
+            }
+            if coordinationError == nil && operationError == nil && !copied { throw self.problem("Unique rename limit reached") }
+          } else {
+            guard method == "deleteFile", record.created || record.context.managedRoot != nil else { throw self.problem("Access permission is not ownership") }
+            NSFileCoordinator().coordinate(writingItemAt:file, options:.forDeleting, error:&coordinationError) { actual in
+              do {
+                try self.checkedMutationURL(file, actual, record.context)
+                let (identity, info) = try self.mutationIdentity(actual)
+                guard identity == record.identity, self.regularMutationFile(info) else { throw self.problem("File was concurrently replaced; retained") }
+                try FileManager.default.removeItem(at:actual)
+                self.mutationReceipts.removeValue(forKey:token)
+                output = ["path":path,"receipt":token,"coordinated":true,"identityVerified":true,"deleted":true]
+              } catch { operationError = error }
+            }
+          }
+        }
+        if let error = coordinationError { throw error }
+        if let error = operationError { throw error }
+        guard let output = output else { throw self.problem("No coordinated mutation result") }
+        DispatchQueue.main.async { result(output) }
+      } catch {
+        DispatchQueue.main.async { result(FlutterError(code:"output_folder_mutation", message:"Coordinated image mutation failed; no fallback was used. Reconnect or reselect its folder", details:nil)) }
+      }
+    }
+  }
+
 }

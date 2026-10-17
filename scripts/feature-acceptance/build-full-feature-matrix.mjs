@@ -1,6 +1,6 @@
 import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';import {pathToFileURL} from 'node:url';
 import {releaseFeatures,releasePlatforms,fullFeatureProfiles,profileSha256,assertScenarioReceipt} from './full-feature-profiles.mjs';
-import {assertReleasePlatformContract,assertReleaseEvidenceFiles} from '../release-platform-contract.mjs';
+import {assertReleasePlatformContract,assertReleaseEvidenceFiles,releaseFeatureApplicability,releaseScopeId,releaseScopeSha256,releaseScopeCounts} from '../release-platform-contract.mjs';
 const sha=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
 
 export function buildFullFeatureMatrix({version,sourceSha,receipts=[]}){
@@ -19,11 +19,18 @@ export function buildFullFeatureMatrix({version,sourceSha,receipts=[]}){
   for(const item of accepted)if(item.receipt.platform===platform)for(const check of item.receipt.checks)if(check.feature===id)all.push({check,item});
   const completedScenarios=[...new Set(all.map(x=>x.check.scenario))],missingScenarios=requiredScenarios.filter(s=>!completedScenarios.includes(s));
   const evidence=[];for(const{check,item}of all){const key=item.artifact+'|'+check.kind;if(evidence.some(e=>e._key===key))continue;evidence.push({_key:key,sourceSha,feature:id,platform,kind:check.kind,exitStatus:0,skipped:false,artifact:item.artifact,sha256:item.sha256,...(item.androidAgentProofArtifact?{companionProofArtifact:item.androidAgentProofArtifact,companionProofSha256:item.androidAgentProofFileSha256}:{})});}
+  const applicability=releaseFeatureApplicability(id,platform);
+  if(applicability==='not-supported') {
+   // Keep original scenario IDs and observations, but never invent a pass/proof.
+   const excludedObservedScenarios=[...completedScenarios];
+   if(all.length||local.length||component.length)diagnostics.push({classification:'outside-explicit-release-scope',feature:id,platform,scenarios:excludedObservedScenarios,artifacts:[...new Set(all.map(x=>x.item.artifact))]});
+   return[platform,{applicability,status:'not-supported',reasonCode:releaseScopeId,declaredScenarios:requiredScenarios,requiredScenarios:[],completedScenarios:[],missingScenarios:[],excludedObservedScenarios,unqualifiedObservedScenarios:[...new Set(local)],componentObservations:[...new Set(component)],evidence:[]}];
+  }
   const status=missingScenarios.length===0?'verified':all.length||local.length||component.length?'partial':'pending';
-  return[platform,{status,requiredScenarios,completedScenarios,missingScenarios,unqualifiedObservedScenarios:[...new Set(local)].filter(s=>!completedScenarios.includes(s)),componentObservations:[...new Set(component)],evidence:status==='verified'?evidence.map(({_key,...proof})=>proof):[]}];
+  return[platform,{applicability,status,declaredScenarios:[...requiredScenarios],requiredScenarios,completedScenarios,missingScenarios,unqualifiedObservedScenarios:[...new Set(local)].filter(s=>!completedScenarios.includes(s)),componentObservations:[...new Set(component)],evidence:status==='verified'?evidence.map(({_key,...proof})=>proof):[]}];
  }))}));
  const slots=features.flatMap(f=>releasePlatforms.map(p=>({feature:f.id,platform:p,...f.platforms[p]}))),verified=slots.filter(s=>s.status==='verified').length;
- return{schema:1,version,sourceSha,platforms:[...releasePlatforms],profileSha256,features,summary:{requiredSlots:195,verifiedSlots:verified,partialSlots:slots.filter(s=>s.status==='partial').length,pendingSlots:slots.filter(s=>s.status==='pending').length,missingScenarioSlots:slots.reduce((n,s)=>n+s.missingScenarios.length,0)},full195Certified:verified===195&&/^[a-f0-9]{40}$/i.test(sourceSha),diagnostics,boundary:'Client features only. Actual production native/runtime, loopback integration and disposable devices qualify; upstream paid visual quality/billing is not fabricated. Components, uncommitted/dirty source or skipped checks never certify whole rows.'};
+ return{schema:2,version,sourceSha,platforms:[...releasePlatforms],profileSha256,releaseScopeId,releaseScopeSha256,features,summary:{...releaseScopeCounts,verifiedSlots:verified,partialSlots:slots.filter(s=>s.status==='partial').length,pendingSlots:slots.filter(s=>s.status==='pending').length,missingScenarioSlots:slots.reduce((n,s)=>n+s.missingScenarios.length,0)},full195Certified:false,releaseScopeCertified:verified===releaseScopeCounts.requiredSlots&&slots.filter(s=>s.status==='not-supported').length===releaseScopeCounts.notSupportedSlots&&/^[a-f0-9]{40}$/i.test(sourceSha),releaseReady:false,diagnostics,boundary:'All39 features and five platform packages remain declared. Only artist-iteration outside Windows is explicitly not-supported, never passed. Other191 cells retain real native/runtime acceptance; scope certification alone is not publication readiness. Components, dirty source, failed or skipped checks never certify rows.'};
 }
 
 export function collectReceiptFiles(evidenceRoot,outputRoot){
@@ -45,22 +52,23 @@ export function collectReceiptFiles(evidenceRoot,outputRoot){
  walk(root);return rows;
 }
 
-export function writeFullFeatureMatrix({evidenceRoot,outputRoot,sourceSha,version,requireFull=false}){
+export function writeFullFeatureMatrix({evidenceRoot,outputRoot,sourceSha,version,requireFull=false,requireReleaseScope=false}){
  fs.mkdirSync(outputRoot,{recursive:true});const receipts=collectReceiptFiles(evidenceRoot,outputRoot),report=buildFullFeatureMatrix({sourceSha,version,receipts});
- if(report.full195Certified){assertReleasePlatformContract(report,{sourceSha,version});assertReleaseEvidenceFiles(report,outputRoot);}
+ if(report.releaseScopeCertified){assertReleasePlatformContract(report,{sourceSha,version});assertReleaseEvidenceFiles(report,outputRoot);}
  fs.writeFileSync(path.join(outputRoot,'FULL_FEATURE_MATRIX.json'),JSON.stringify(report,null,2)+'\n');
- const lines=['# Five-platform client acceptance matrix','',`Source: ${sourceSha}; version: ${version}; verified: ${report.summary.verifiedSlots}/195.`, '', '| Feature | Windows | macOS | Linux | Android | iOS |','|---|---|---|---|---|---|'];
+ const lines=['# Five-platform client acceptance matrix','',`Source: ${sourceSha}; version: ${version}; verified required cells: ${report.summary.verifiedSlots}/191; declared: 195; not-supported: 4 (not passes).`, '', '| Feature | Windows | macOS | Linux | Android | iOS |','|---|---|---|---|---|---|'];
  for(const f of report.features)lines.push('| '+f.id+' | '+releasePlatforms.map(p=>`${f.platforms[p].status} ${f.platforms[p].completedScenarios.length}/${f.platforms[p].requiredScenarios.length}`).join(' | ')+' |');
- lines.push('','Pending/partial is not a release pass. See JSON missingScenarios and receipt diagnostics.');fs.writeFileSync(path.join(outputRoot,'FULL_FEATURE_MATRIX.md'),lines.join('\n')+'\n');
+ lines.push('','Pending/partial is not a release pass. Not-supported is not a pass or full195 certification. See JSON missingScenarios and receipt diagnostics.');fs.writeFileSync(path.join(outputRoot,'FULL_FEATURE_MATRIX.md'),lines.join('\n')+'\n');
  const reopened=fs.readFileSync(path.join(outputRoot,'FULL_FEATURE_MATRIX.json'));
  // The publisher consumes this exact filename. Preserve the matrix verbatim,
  // including pending/partial status; an alias is not a certification override.
  const publisherFile=path.join(outputRoot,'feature-parity.json');fs.writeFileSync(publisherFile,reopened);
  if(!fs.readFileSync(publisherFile).equals(reopened))throw Error('Publisher evidence alias bytes differ');
- console.log(JSON.stringify({file:path.join(outputRoot,'FULL_FEATURE_MATRIX.json'),publisherFile,bytes:reopened.length,sha256:sha(reopened),...report.summary,full195Certified:report.full195Certified}));
- return{report,exitStatus:requireFull&&!report.full195Certified?1:0};
+ console.log(JSON.stringify({file:path.join(outputRoot,'FULL_FEATURE_MATRIX.json'),publisherFile,bytes:reopened.length,sha256:sha(reopened),...report.summary,full195Certified:report.full195Certified,releaseScopeCertified:report.releaseScopeCertified,releaseReady:report.releaseReady}));
+ return{report,exitStatus:(requireFull&&!report.full195Certified)||(requireReleaseScope&&!report.releaseScopeCertified)?1:0};
 }
 if(process.argv[1]&&pathToFileURL(path.resolve(process.argv[1])).href===import.meta.url){
- const[evidenceRoot,outputRoot,sourceSha,version,...flags]=process.argv.slice(2);if(!evidenceRoot||!outputRoot||!sourceSha||!/^\d+\.\d+\.\d+$/.test(version??''))throw Error('usage: build-full-feature-matrix.mjs EVIDENCE_ROOT OUTPUT_ROOT SOURCE_SHA VERSION [--require-full]');
- process.exitCode=writeFullFeatureMatrix({evidenceRoot,outputRoot,sourceSha,version,requireFull:flags.includes('--require-full')}).exitStatus;
+ const[evidenceRoot,outputRoot,sourceSha,version,...flags]=process.argv.slice(2);if(!evidenceRoot||!outputRoot||!sourceSha||!/^\d+\.\d+\.\d+$/.test(version??''))throw Error('usage: build-full-feature-matrix.mjs EVIDENCE_ROOT OUTPUT_ROOT SOURCE_SHA VERSION [--require-full | --require-release-scope]');
+ if(flags.some(flag=>!['--require-full','--require-release-scope'].includes(flag))||new Set(flags).size!==flags.length)throw Error('Unknown or repeated acceptance flag');
+ process.exitCode=writeFullFeatureMatrix({evidenceRoot,outputRoot,sourceSha,version,requireFull:flags.includes('--require-full'),requireReleaseScope:flags.includes('--require-release-scope')}).exitStatus;
 }

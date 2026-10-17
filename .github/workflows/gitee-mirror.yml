@@ -13,12 +13,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: gitee-mirror-${{ github.repository }}${{ (github.event_name == 'push' && (github.ref == 'refs/heads/codex/release-2.5.8-mobile-parity' || github.ref == 'refs/heads/codex/release-2.5.8-formal' || github.ref == 'refs/heads/codex/release-2.6.0')) && '-candidate-native' || '' }}
+  group: gitee-mirror-${{ github.repository }}${{ (startsWith(github.ref, 'refs/heads/codex/') || (github.event_name == 'delete' && github.event.ref_type == 'branch' && startsWith(github.event.ref, 'codex/'))) && '-candidate-native' || '' }}
   cancel-in-progress: true
 
 jobs:
   mirror:
-    if: ${{ github.event_name != 'push' || (github.ref != 'refs/heads/codex/release-2.5.8-mobile-parity' && github.ref != 'refs/heads/codex/release-2.5.8-formal' && github.ref != 'refs/heads/codex/release-2.6.0') }}
+    if: ${{ !(startsWith(github.ref, 'refs/heads/codex/') || (github.event_name == 'delete' && github.event.ref_type == 'branch' && startsWith(github.event.ref, 'codex/'))) }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out full history

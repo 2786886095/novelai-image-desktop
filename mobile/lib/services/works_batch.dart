@@ -1,3 +1,4 @@
+import 'works_batch_file_access.dart';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../models/nai_models.dart';
@@ -11,7 +12,9 @@ class WorksBatchResult {
 /// Regular files inside accessible managed roots only. No arbitrary import is unlinked.
 class WorksBatchFiles {
   final List<Directory> roots;
-  WorksBatchFiles(this.roots);
+  final WorksBatchFileAccess? fileAccess;
+  WorksBatchFiles(this.roots, {this.fileAccess});
+  List<String> get managedRoots => roots.map((r)=>r.path).toSet().toList();
   Future<bool> _managed(String path) async {
     final absolute=p.normalize(p.absolute(path));
     for(final root in roots) {
@@ -29,6 +32,10 @@ class WorksBatchFiles {
   }
   Future<bool> conclusivelyMissing(String path) async {
     if(path.isEmpty)return false;
+    if(fileAccess!=null) {
+      try {return (await fileAccess!.describe(path,managedRoots)).missing;}
+      catch (_) {return false;}
+    }
     try {
       if(await FileSystemEntity.type(path,followLinks:false)!=FileSystemEntityType.notFound)return false;
       final absolute=p.normalize(p.absolute(path));
@@ -55,6 +62,7 @@ class WorksBatchFiles {
     } catch (_) {return false;}
   }
   Future<WorksBatchResult> delete(List<HistoryItem> history,Set<String> ids) async {
+    if(fileAccess!=null)return _deleteCoordinated(history,ids);
     final removed=<String>{},failed=<String>{},paths=<String>[];
     final selected=history.where((h)=>ids.contains(h.id)).toList();
     final unselectedPaths=history.where((h)=>!ids.contains(h.id)).map((h)=>p.normalize(p.absolute(h.filePath))).toSet();
@@ -83,4 +91,26 @@ class WorksBatchFiles {
     }
     return WorksBatchResult(removed,failed,paths);
   }
+  Future<WorksBatchResult> _deleteCoordinated(List<HistoryItem> history,Set<String> ids) async {
+    final removed=<String>{},failed=<String>{},paths=<String>[];
+    final shared=history.where((h)=>!ids.contains(h.id)).map((h)=>h.filePath).toSet();
+    final successes=<String>{},failures=<String>{};
+    for(final item in history.where((h)=>ids.contains(h.id))) {
+      final path=item.filePath;
+      if(failures.contains(path)){failed.add(item.id);continue;}
+      try {
+        if(!successes.contains(path)) {
+          final file=await fileAccess!.describe(path,managedRoots);
+          if(!file.regular && !file.missing)throw const FileSystemException('Not a regular file');
+          if(file.regular && file.managedRoot!=null && !shared.contains(path)) {
+            await fileAccess!.delete(file);paths.add(path);
+          }
+          successes.add(path);
+        }
+        removed.add(item.id);
+      }catch(_){failed.add(item.id);failures.add(path);}
+    }
+    return WorksBatchResult(removed,failed,paths);
+  }
+
 }

@@ -1,0 +1,12 @@
+import {beforeEach, expect, it, vi} from 'vitest';
+import {renderToStaticMarkup} from 'react-dom/server';
+const fixture=vi.hoisted(()=>({index:0,recovery:{supported:true,manifestSha256:'a'.repeat(64),pendingRequestHash:'b'.repeat(64),requiresPaidReplayConfirmation:true,message:''} as any}));
+vi.mock('react',async original=>{const React=await original<typeof import('react')>();return {...React,useState:(initial:unknown)=>{const n=fixture.index++;if(n===2)return [{ready:true,runtimeValidation:{state:'passed'},running:false,stage:'paused',completed:137,budget:300,directory:'owned-run',recovery:fixture.recovery,candidates:[]},()=>{}];return React.useState(initial);}};});
+vi.mock('./feature-i18n',()=>({useFeatureText:()=>((key:string,params:Record<string,unknown>={})=>key.replace(/\{(\w+)\}/g,(_,k)=>String(params[k]??`{${k}}`)))}));
+vi.mock('./store',()=>({useAppStore:(select:(s:any)=>unknown)=>select({applyParams:()=>{},settings:{}})}));
+import DetectiveArtistLab from './DetectiveArtistLab';
+beforeEach(()=>{fixture.index=0;fixture.recovery={supported:true,manifestSha256:'a'.repeat(64),pendingRequestHash:'b'.repeat(64),requiresPaidReplayConfirmation:true,message:''};});
+const render=()=>renderToStaticMarkup(<DetectiveArtistLab onBack={()=>{}}/>);
+it('exposes manual same-run resume without pretending an uncertain request is free',()=>{const html=render();expect(html).toContain('继续当前任务');expect(html).toContain('可能已扣费');expect(html).toContain('已完成图片不会重生成');expect(html).toContain('137/300');expect(html).toContain('新建自动迭代');});
+it('explains the legacy limitation instead of relabelling Start as recovery',()=>{fixture.recovery={supported:false,message:'旧任务缺少原账号与接口绑定，无法安全恢复；图片仍保留。'};const html=render();expect(html).toContain('无法安全恢复');expect(html).not.toContain('继续当前任务');});
+it('retains ordinary safe resume without a spurious paid-replay warning',()=>{fixture.recovery.requiresPaidReplayConfirmation=false;const html=render();expect(html).toContain('继续当前任务');expect(html).not.toContain('该次结果不明');});
