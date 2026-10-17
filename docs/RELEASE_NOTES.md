@@ -1,3 +1,4 @@
+<!-- release-state: pending-validation; candidate-not-published -->
 # 更新记录
 
 ## Latest · 本轮候选更新（尚未正式发布）
@@ -15,12 +16,12 @@
 - **诊断保护**：在已覆盖的错误及日志边界脱敏配置的 AI 密钥（含 URL 编码形式），不改写成功的提示词；不承诺任意未知编码均可识别。
 - **图片导入**：完整解码通过后才替换当前工作图，损坏图片不清空现有图。
 
-- **验收与构建**：修正小窗口画布与导航菜单的测试定位、移动端蒙版及请求参数夹具，并加强超时及未完成证据处理；五端结果仍需按最终同源执行证据确认。
+- **验收与构建**：修正小窗口画布与导航菜单的测试定位、移动端蒙版及请求参数夹具，并加强超时及未完成证据处理；本轮四端结果按最终同源执行证据确认。
 
 - **画师模型下载**：修正轻量包清单的解压目录为 `novelai-desktop-assets`，与包内根目录一致，避免下载后因目录错配而找不到模型；不改变下载包版本、大小或 SHA-256。
 
-### 尚未满足的发行条件
+### 发行范围与验收说明
 
-声明矩阵仍为 39 × 5＝195 项：191 项必须验收，4 项明确为 not-supported，不能计作通过。画风检索／评分／迭代只要求 Windows 本机完成，生图仍使用 NovelAI API，不连接用户的 GPU 电脑；macOS、Linux、Android、iOS 不支持此功能。其余 38 项功能仍须五端验收，部分平台本地 Agent 及原生验证缺口仍待解决，iOS 功能验证不豁免。191 项尚未全部验收，尚未发布新正式版；受控本地测试或构建成功不能替代真实付费服务或全部设备验收。未签名 IPA 仍需自行签名，不能直接安装普通 iPhone；Windows 签名与 macOS 公证须按最终制品证据披露。
+本轮以 Windows、macOS、Linux、Android 四端为功能验收范围，另附 iOS 未签名 IPA（需自行签名后安装）。39 × 4＝156 项中153项必须验收，3项为非 Windows 画风迭代的 not-supported，不计作通过。画风检索／评分／迭代只要求 Windows 本机完成，生图仍使用 NovelAI API，不连接远程 GPU；其余38项仍须四端验收。上述是范围和要求，不是通过数。最终功能结果、安装包身份、Windows 签名与 macOS 公证状态以同源执行证据和最终制品记录为准。
 
-现有正式版下载：[Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest)；默认分支：[main](https://github.com/2786886095/novelai-image-desktop/tree/main)。这些链接不代表本候选已经发行。
+现有正式版下载：[Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest)；默认分支：[main](https://github.com/2786886095/novelai-image-desktop/tree/main)。这些入口不代表任何尚未正式发行的候选已经发布。

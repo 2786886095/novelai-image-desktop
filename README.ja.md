@@ -1,7 +1,8 @@
+<!-- release-state: pending-validation; candidate-not-published -->
 # Langbai NovelAI Studio
 
-> **最新リリース（Latest）**：[Latest ページ](https://github.com/2786886095/novelai-image-desktop/releases/latest)で、Windows・macOS・Linux・Android・iOS の現在の配布ファイル、バージョン、導入条件、検証記録を確認してください。
-> 配布ファイルがあることや GitHub の「安定版」分類は、全39機能・実機・実サービスアカウントの検証完了を意味しません。現在確認済みの配布について、その全体検証は未完了です。
+> **最新リリース（Latest）**：[Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) は実際に公開済みの添付ファイルを示します。この Windows・macOS・Linux・Android 候補版は検証中で、まだ公開されていません。追加パッケージとして iOS の未署名 IPA を添付する予定です。現在の Latest と混同しないでください。
+> 配布ファイルがあることや GitHub の「安定版」分類は、全39機能・実機・実サービスアカウントの検証完了を意味しません。同一ソースの実際の検証記録を確認してください。
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
@@ -27,7 +28,7 @@
 - 破損画像は完全なデコードに成功するまで現在の作業画像を置き換えません。
 - 画師モデルのダウンロード：軽量パッケージの展開先項目をアーカイブ内のルートと同じ `novelai-desktop-assets` に修正し、ディレクトリ不一致でモデルが見つからない問題を防ぎます。配布パッケージの版・サイズ・SHA-256 は変更しません。
 
-**公開状況：** このブランチは検証中で、新しい正式版は未公開です。宣言上のマトリクスは 39 × 5＝195 項目を維持し、191 項目は検証必須、4 項目は明示的な not-supported（合格ではない）です。画風の検索・評価・反復は Windows 本機のみを必須とし、画像生成には引き続き NovelAI API を使い、ユーザーの GPU PC には接続しません。この機能は macOS・Linux・Android・iOS では非対応です。ほかの38機能は5プラットフォームすべてで検証が必要で、一部のローカル Agent とネイティブ検証の不足は未解決です。iOS 検証の免除はなく、191 項目の合格を意味しません。ローカルの制御テストやビルド成功は、デバイス・実課金サービスの検証を代替しません。[Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) は既存の公開版で、この候補版ではありません。未署名 IPA は自身の署名が必要で、通常の iPhone に直接インストールできません。
+**機能検証の範囲：** Windows・macOS・Linux・Android の4プラットフォームです。39 × 4＝156項目のうち153項目が検証必須、Windows 以外の画風反復3項目は not-supported です。画風検索・評価・反復は Windows 本機で実行し、画像生成は引き続き NovelAI API を使い、外部 GPU PC には接続しません。ほかの38機能は4プラットフォームすべてで検証が必要です。この数値は合格数ではありません。同一ソースの検証結果・配布ファイル・導入制限は [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) の実際の記録を確認してください。候補版のビルド成功だけでは検証完了を意味しません。
 
 ## はじめ方
 
@@ -81,11 +82,11 @@ Windows のローカル Artist Detective は現在 **NAI 4.5 Full のみ**対応
 | macOS Intel／Apple silicon | [Universal DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [Universal ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 署名・公証の状態は Latest の説明を確認してください。現在確認済みの配布では公証を確認できておらず、システムの信頼確認が出る場合があります。 |
 | Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 実行権限を付けて起動し、新しいファイルへ手動で交換してください。 |
 | Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Latest のインストールと署名の説明に従ってください。手動インストールが必要で、現在確認済みの配布について実機や上書き更新の全体検証は完了していません。 |
-| iOS | [IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Latest の添付ファイルが**未署名 IPA**なら、**通常の iPhone にそのままインストールできません**。自分で署名する必要があります。自分の端末への導入には有効な Apple 署名とプロビジョニングが必要です。Latest の説明で明示されない限り、App Store や TestFlight で利用できるとは判断しないでください。 |
+| iOS（追加パッケージ） | [未署名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 自分で署名してからインストールしてください。 |
 
 **更新は手動で行ってください。** Latest の説明が対応する更新経路を明示していない限り、現在のパッケージを自分でダウンロードしてください。更新用メタデータが必ず添付されるとは限らず、内部バージョンやタグの形式によってはアプリ内更新が新しいバイナリを提示しません。交換前に設定と作品をバックアップし、更新を強制するために既存データを削除したり旧アプリをアンインストールしたりしないでください。
 
-ダウンロードする添付ファイルの検証記録とチェックサムは [Latest ページ](https://github.com/2786886095/novelai-image-desktop/releases/latest)で確認してください。検証ファイルの名前や有無はリリースにより変わる場合があります。[main のリポジトリソース](https://github.com/2786886095/novelai-image-desktop/tree/main)は現在のブランチであり、特定のバイナリの厳密なビルド元を証明するものではありません。その対応関係は配布の検証記録を参照してください。「安定版」での公開は全39機能・実機・有料の実サービスアカウントの検証完了を意味せず、現在確認済みの配布については未完了です。[変更履歴（中国語）](./docs/RELEASE_NOTES.md)。
+ダウンロードする添付ファイルの検証記録とチェックサムは [Latest ページ](https://github.com/2786886095/novelai-image-desktop/releases/latest)で確認してください。検証ファイルの名前や有無はリリースにより変わる場合があります。[main のリポジトリソース](https://github.com/2786886095/novelai-image-desktop/tree/main)は現在のブランチであり、特定のバイナリの厳密なビルド元を証明するものではありません。その対応関係は配布の検証記録を参照してください。「安定版」での公開は全39機能・実機・有料の実サービスアカウントの検証完了を意味せず、同一ソースの実際の検証記録を確認してください。[変更履歴（中国語）](./docs/RELEASE_NOTES.md)。
 
 Windows のインストーラー版とポータブル版は `%APPDATA%\novelai-image-desktop\` を共有します。ポータブル版でも**すべてのデータが実行ファイルの横に保存されるわけではありません**。交換前に設定と作品をバックアップしてください。デスクトップとモバイルの機能は同一ではなく、ローカル画風反復は Windows 専用です。[OS ごとの差異](./docs/guide/FEATURES.md#platforms)。
 

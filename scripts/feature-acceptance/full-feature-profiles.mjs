@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {androidAgentScenarioReceipt,androidAgentRuntimeType} from './android-agent-contract.mjs';
-import {releaseFeatures,releasePlatforms} from '../release-platform-contract.mjs';
+import {releaseFeatures,releasePlatforms,supportedPlatforms} from '../release-platform-contract.mjs';
 
 // Client acceptance: real production functions/state/editor, native files/plugins,
 // and real HTTP/process integration may use disposable local services. This does
@@ -53,13 +53,13 @@ export const fullFeatureProfiles=Object.freeze(Object.fromEntries(releaseFeature
   acceptance:'real client native/integration/device execution; no source-only, compile-only, mock-only, or component-count substitution',
 })])));
 export const profileSha256=crypto.createHash('sha256').update(JSON.stringify(fullFeatureProfiles)).digest('hex');
-export {releaseFeatures,releasePlatforms};
+export {releaseFeatures,releasePlatforms,supportedPlatforms};
 
 export function assertScenarioReceipt(receipt,{sourceSha,platform,androidAgentProof}={}){
   assert.equal(receipt?.schema,'client-feature-scenarios/v1');
   assert.ok(/^[a-f0-9]{40}$/i.test(receipt.sourceSha),'Scenario receipt needs committed source identity');
   if(sourceSha)assert.equal(receipt.sourceSha,sourceSha,'Scenario source differs');
-  assert.ok(releasePlatforms.includes(receipt.platform));
+  assert.ok(supportedPlatforms.includes(receipt.platform));
   if(platform)assert.equal(receipt.platform,platform,'Scenario platform differs');
   assert.equal(receipt.profileSha256,profileSha256,'Scenario acceptance definitions differ');
   assert.equal(receipt.mockedModules,false,'Mock modules cannot certify a native scenario');

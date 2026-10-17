@@ -31,11 +31,68 @@ Future<void> nativeUiWait(bool Function() test, String reason,
   throw StateError('Native UI did not reach: $reason');
 }
 
+bool _nativeTargetReceivesPointer(Element element, RenderBox box) {
+  final position = box.localToGlobal(box.size.center(Offset.zero));
+  final result = HitTestResult();
+  GestureBinding.instance.hitTestInView(result, position, View.of(element).viewId);
+  final descendants = <RenderObject>{};
+  void collect(RenderObject object) {
+    descendants.add(object);
+    object.visitChildren(collect);
+  }
+  collect(box);
+  return result.path.any((entry) => descendants.contains(entry.target));
+}
+
+Future<void> _revealNativePointerTarget(Element element) async {
+  // ensureVisible can leave a cached child outside the outer viewport when
+  // a non-scrollable shrink-wrapped GridView nests inside the actual ListView.
+  // Correct only by real ancestor scroll positions; never call the callback.
+  for (var attempt = 0; attempt < 8; attempt++) {
+    final object = element.findRenderObject();
+    require(object is RenderBox && object.attached && object.hasSize,
+        'Native target has no laid-out RenderBox');
+    final box = object as RenderBox;
+    if (_nativeTargetReceivesPointer(element, box)) return;
+    final ancestors = <ScrollableState>[];
+    element.visitAncestorElements((parent) {
+      if (parent is StatefulElement && parent.state is ScrollableState) {
+        ancestors.add(parent.state as ScrollableState);
+      }
+      return true;
+    });
+    var moved = false;
+    for (final ancestor in ancestors.reversed) {
+      final viewport = ancestor.context.findRenderObject();
+      final position = ancestor.position;
+      if (viewport is! RenderBox || !viewport.attached || !viewport.hasSize ||
+          !position.hasContentDimensions) continue;
+      final target = box.localToGlobal(box.size.center(Offset.zero));
+      final center = viewport.localToGlobal(viewport.size.center(Offset.zero));
+      final delta = position.axis == Axis.vertical
+          ? target.dy - center.dy : target.dx - center.dx;
+      final next = (position.pixels + delta)
+          .clamp(position.minScrollExtent, position.maxScrollExtent).toDouble();
+      if ((next - position.pixels).abs() < .5) continue;
+      position.jumpTo(next);
+      moved = true;
+      await frame();
+      break;
+    }
+    if (!moved) break;
+  }
+  final object = element.findRenderObject();
+  require(object is RenderBox && object.attached && object.hasSize &&
+      _nativeTargetReceivesPointer(element, object),
+      'Native target is not on the actual pointer hit path');
+}
+
 int _pointer = 9300;
 Future<void> nativeUiTap(Element element) async {
   await Scrollable.ensureVisible(element,
       alignment: .5, duration: Duration.zero);
   await frame();
+  await _revealNativePointerTarget(element);
   final object = element.findRenderObject();
   require(object is RenderBox && object.attached && object.hasSize,
       'Native target has no laid-out RenderBox');

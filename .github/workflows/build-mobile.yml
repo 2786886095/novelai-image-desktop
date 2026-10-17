@@ -11,7 +11,7 @@ on:
         type: boolean
         default: false
       skip_ios_verification:
-        description: Skip iOS validation only when explicitly requested; Android validation and all builds remain enabled
+        description: Historical compatibility flag; iOS functional checks remain excluded and Android validation stays enabled
         type: boolean
         default: false
 
@@ -181,8 +181,8 @@ jobs:
 
 
   ios:
-    # These hotfixes are desktop-only; future releases are unaffected.
-    if: "github.ref_name != 'v2.2.7' && github.ref_name != 'v2.2.8' && !contains(github.event.head_commit.message, 'release: v2.2.7') && !contains(github.event.head_commit.message, 'release: v2.2.8')"
+    # iOS functional release job stays disabled; unsigned packaging is a separate supplement.
+    if: false
     runs-on: macos-latest
     timeout-minutes: 45
     defaults:
@@ -243,3 +243,83 @@ jobs:
           draft: true
           body_path: docs/RELEASE_NOTES.md
           files: mobile/novelai-mobile-unsigned.ipa
+
+  ios-package:
+    # User-approved unsigned package only; no iOS functional/native certification.
+    runs-on: macos-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Preserve exact source bytes before checkout
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+          cache: true
+      - name: Install package build dependencies
+        run: flutter pub get
+      - name: Compile unsigned iOS package (no functional verification)
+        run: flutter build ios --release --no-codesign
+      - name: Package unsigned IPA (requires user signing)
+        run: |
+          cd build/ios/iphoneos
+          mkdir -p Payload
+          cp -r Runner.app Payload/
+          zip -qr ../../../novelai-mobile-unsigned.ipa Payload
+          cd -
+          ls -lh novelai-mobile-unsigned.ipa
+      - name: Emit source-bound unsigned package receipt
+        env:
+          PACKAGE_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$PACKAGE_SOURCE_SHA"
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, plistlib, re, stat, zipfile
+          asset = pathlib.Path('novelai-mobile-unsigned.ipa')
+          source = os.environ['PACKAGE_SOURCE_SHA']
+          assert re.fullmatch('[a-f0-9]{40}', source)
+          package = json.loads(pathlib.Path('../package.json').read_text())
+          spec = re.search(r'^version:\s*([^\s+]+)\+(\d+)\s*$', pathlib.Path('pubspec.yaml').read_text(), re.M)
+          assert spec and spec[1] == package['version']
+          assert stat.S_ISREG(asset.lstat().st_mode) and not asset.is_symlink()
+          with zipfile.ZipFile(asset) as archive:
+              infos = archive.infolist()
+              names = [item.filename for item in infos]
+              main = [name for name in names if re.fullmatch(r'Payload/[^/]+\.app/Info\.plist', name)]
+              assert len(main) == 1 and len(names) == len(set(names))
+              prefix = main[0][:-len('Info.plist')]
+              info = plistlib.loads(archive.read(main[0]))
+              executable = info['CFBundleExecutable']
+              assert isinstance(executable, str) and executable not in ('', '.', '..') and '/' not in executable and '\\' not in executable
+              entry = archive.getinfo(prefix + executable)
+              assert entry.file_size > 0 and not entry.is_dir() and not stat.S_ISLNK(entry.external_attr >> 16)
+              assert str(info['CFBundleShortVersionString']) == spec[1] and str(info['CFBundleVersion']) == spec[2]
+              assert info['CFBundleIdentifier'] == 'com.codex.novelai.novelaiMobile'
+              assert prefix + 'embedded.mobileprovision' not in names
+              assert not any(item.filename.startswith(prefix + '_CodeSignature/') and not item.is_dir() for item in infos)
+              assert archive.testzip() is None
+          digest = hashlib.sha256()
+          with asset.open('rb') as file:
+              for chunk in iter(lambda: file.read(1024 * 1024), b''):
+                  digest.update(chunk)
+          receipt = {'schema': 'unsigned-ios-package/v1', 'sourceSha': source, 'version': spec[1], 'buildNumber': spec[2], 'asset': asset.name, 'bytes': asset.stat().st_size, 'sha256': digest.hexdigest(), 'bundleIdentifier': info['CFBundleIdentifier'], 'packageKind': 'unsigned-ipa', 'unsigned': True, 'functionalCertificationGranted': False}
+          pathlib.Path('ios-package-verification.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          print(json.dumps(receipt, sort_keys=True))
+          PY
+      - name: Upload unsigned IPA and package receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: novelai-mobile-ios-ipa-unsigned
+          path: |
+            mobile/novelai-mobile-unsigned.ipa
+            mobile/ios-package-verification.json
+          if-no-files-found: error

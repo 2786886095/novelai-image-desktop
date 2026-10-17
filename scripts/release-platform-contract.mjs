@@ -5,7 +5,10 @@ import crypto from 'node:crypto';
 
 // Product scope, not a build-success checklist. A synchronized version number
 // or an APK/IPA artifact is not evidence that a feature was ported.
-export const releasePlatforms = Object.freeze(['windows','macos','linux','android','ios']);
+// Current release excludes iOS by explicit user request; its product/native support remains.
+export const supportedPlatforms = Object.freeze(['windows','macos','linux','android','ios']);
+export const releasePlatforms = Object.freeze(['windows','macos','linux','android']);
+export const releaseExcludedPlatforms = Object.freeze(['ios']);
 export const releaseFeatures = Object.freeze([
   'generation','image-to-image','enhance','inpaint','postprocess','reverse','convert',
   'metadata-import','tools','reference-presets','online-gallery','image-agent',
@@ -16,9 +19,9 @@ export const releaseFeatures = Object.freeze([
   'agent-components','updates','works-batch-edit','missing-file-reconciliation',
 ]);
 
-// The user narrowed only local Artist retrieval/scoring/iteration to Windows.
-// This does not waive any other feature, platform package, or release gate.
-export const releaseScopeId = 'artist-iteration-windows-only/v1';
+// The user excluded iOS from this release and narrowed Artist iteration to Windows.
+// All other features remain required on every current release target.
+export const releaseScopeId = 'artist-iteration-windows-only-no-ios/v1';
 export const artistIterationScenarios = Object.freeze(['model-runtime-lifecycle','search-score-selected-generation','install-resume-error']);
 export function releaseFeatureApplicability(feature, platform) {
   assert.ok(releaseFeatures.includes(feature),'Unrecognized feature: '+feature);
@@ -27,29 +30,35 @@ export function releaseFeatureApplicability(feature, platform) {
 }
 const releaseScope = Object.freeze({
   id:releaseScopeId,
+  excludedPlatforms:releaseExcludedPlatforms,
   applicability:Object.freeze(releaseFeatures.map(feature=>Object.freeze({feature,platforms:Object.freeze(Object.fromEntries(releasePlatforms.map(platform=>[platform,releaseFeatureApplicability(feature,platform)])))}))),
 });
 export const releaseScopeSha256 = crypto.createHash('sha256').update(JSON.stringify(releaseScope)).digest('hex');
-export const releaseScopeCounts = Object.freeze({declaredSlots:195,requiredSlots:191,notSupportedSlots:4});
+export const releaseScopeCounts = Object.freeze({declaredSlots:156,requiredSlots:153,notSupportedSlots:3});
 
 export function assertReleasePlatformContract(report, {version, sourceSha}) {
   assert.ok(/^\d+\.\d+\.\d+$/.test(version),'Invalid release version');
   assert.ok(/^[a-f0-9]{40}$/i.test(sourceSha),'Invalid immutable source SHA');
-  assert.equal(report?.schema,2,'Explicit scoped five-platform feature evidence is required');
+  assert.equal(report?.schema,2,'Explicit scoped four-platform feature evidence is required');
   assert.equal(report.releaseScopeId,releaseScopeId,'Release scope identity differs');
   assert.equal(report.releaseScopeSha256,releaseScopeSha256,'Release applicability policy differs');
-  assert.equal(report.full195Certified,false,'Four not-supported cells must never certify full195');
+  assert.equal(report.full195Certified,false,'Excluded iOS and not-supported cells must never certify full195');
+  assert.equal(report.full156Certified,false,'Three not-supported cells must never certify full156');
   assert.equal(report.releaseReady,false,'Feature scope alone cannot certify publication readiness');
   assert.equal(report.releaseScopeCertified,true,'All required scoped cells must be certified');
   assert.equal(report.version,version,'Feature evidence version differs');
   assert.equal(report.sourceSha,sourceSha,'Feature evidence belongs to another source');
   assert.deepEqual([...report.platforms].sort(),[...releasePlatforms].sort(),
-    'Release scope must include all five platforms exactly once');
+    'Release scope must include all four platforms exactly once');
+  assert.deepEqual(report.supportedPlatforms,[...supportedPlatforms],'Product/native support inventory differs');
+  assert.deepEqual(report.excludedPlatforms,[...releaseExcludedPlatforms],'Explicit release exclusions differ');
   assert.ok(Array.isArray(report.features),'Feature matrix is required');
   const seen=new Set();
   for(const feature of report.features) {
     assert.ok(releaseFeatures.includes(feature.id),'Unrecognized feature: '+feature.id);
     assert.ok(!seen.has(feature.id),'Duplicate feature: '+feature.id);seen.add(feature.id);
+    assert.deepEqual(Object.keys(feature.platforms??{}).sort(),[...releasePlatforms].sort(),
+      'Feature platform keys must match this release exactly');
     for(const platform of releasePlatforms) {
       const result=feature.platforms?.[platform];
       const applicability=releaseFeatureApplicability(feature.id,platform);
@@ -84,7 +93,7 @@ export function assertReleasePlatformContract(report, {version, sourceSha}) {
   assert.deepEqual([...seen].sort(),[...releaseFeatures].sort(),'Incomplete feature inventory');
   for(const [field,value] of Object.entries(releaseScopeCounts))
     assert.equal(report.summary?.[field],value,'Scoped summary differs: '+field);
-  assert.equal(report.summary.verifiedSlots,191,'Required scoped feature coverage is incomplete');
+  assert.equal(report.summary.verifiedSlots,153,'Required scoped feature coverage is incomplete');
   assert.equal(report.summary.partialSlots,0);assert.equal(report.summary.pendingSlots,0);
   return {platforms:releasePlatforms.length,features:releaseFeatures.length};
 }

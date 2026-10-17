@@ -3080,15 +3080,15 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         ),
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(12, 7, 7, 7),
-                          child: Row(
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              Expanded(
-                                child: Text(
-                                  _resetDrawHint(app.settings.language),
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
+                              Text(
+                                _resetDrawHint(app.settings.language),
+                                style: Theme.of(context).textTheme.bodySmall,
                               ),
-                              const SizedBox(width: 8),
                               TextButton.icon(
                                 onPressed: () =>
                                     _restoreDrawDefaults(app.settings.language),

@@ -1,6 +1,7 @@
+<!-- release-state: pending-validation; candidate-not-published -->
 # Langbai NovelAI Studio
 
-> 下載請以 [Latest 發行頁](https://github.com/2786886095/novelai-image-desktop/releases/latest)的最新說明與附件為準，選擇 Windows、macOS、Linux、Android、iOS 套件。穩定版分類不代表 39 項功能已全部驗收；iOS 簽署狀態與安裝方式也以該頁說明為準。
+> 下載請以實際已公開的 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 附件為準；本分支 Windows、macOS、Linux、Android 四端候選仍在驗收、尚未發行，計畫附帶 iOS 未簽名 IPA。請勿將本候選與目前 Latest 混淆。
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
@@ -26,7 +27,7 @@ NovelAI 圖像創作工作臺，介面支援簡體中文、繁體中文、英語
 - 損壞圖片通過完整解碼前，不會取代目前工作圖。
 - 畫師模型下載：修正輕量套件清單的解壓目錄為 `novelai-desktop-assets`，與套件內根目錄一致，避免下載後因目錄不符而找不到模型；不改變下載套件版本、大小或 SHA-256。
 
-**發行狀態：** 此分支仍待驗收，尚未發行新正式版。宣告矩陣仍為 39 × 5＝195 項，其中 191 項必須驗收，4 項明確標為 not-supported，不計作通過：畫風檢索／評分／迭代僅要求 Windows 本機完成，生圖仍使用 NovelAI API，不連接使用者的 GPU 電腦；macOS、Linux、Android、iOS 不支援此功能。其餘 38 項功能仍須五端驗收，部分平台本機 Agent 及原生驗證缺口仍待解決，iOS 驗證不豁免；這不表示 191 項已通過，受控本機測試或建置成功不能取代裝置及實際付費服務驗證。[Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 仍是既有發行版，不是本候選包。未簽名 IPA 仍需自行簽名，不能直接安裝普通 iPhone。
+**本輪功能驗收範圍：** Windows、macOS、Linux、Android 四端。本輪宣告39 × 4＝156項，153項必須驗收，3項為畫風迭代在非 Windows 端的 not-supported。畫風檢索／評分／迭代僅要求 Windows 本機完成，生圖仍使用 NovelAI API，不連接使用者的 GPU 電腦；其餘38項仍須四端驗收。這些數字不是通過數，最終同源執行結果、套件與安裝限制以 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 的實際證據為準，候選建置不能取代正式驗收。
 
 ## 快速開始
 
@@ -82,11 +83,11 @@ Windows 本機 Artist Detective 流程目前僅開放 **NAI 4.5 Full**。完整�
 | macOS Intel／Apple 晶片 | [通用 ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 選擇通用 ZIP 套件；簽署與公證狀態以 Latest 說明為準。 |
 | Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 加入執行權限後開啟。 |
 | Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 從 Latest 附件下載 APK 並手動安裝。 |
-| iOS | [IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 目前附件為 unsigned IPA，需使用有效憑證及描述檔自行簽名（簽署）；不能直接安裝到一般 iPhone，也不是 App Store 套件。最新簽署狀態與安裝方式以 Latest 頁說明為準。 |
+| iOS（附加套件） | [未簽名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 需自行簽署後安裝。 |
 
 **請手動從 Latest 下載與安裝。** 不能僅靠 GitHub 的 Latest 標記推斷軟體內自動更新可用；是否提供更新清單、版本能否辨識及各平臺更新方式，請確認該次發行的說明。
 
-校驗資料、檔案雜湊及執行紀錄以 [Latest 頁](https://github.com/2786886095/novelai-image-desktop/releases/latest)提供的附件或說明為準，下載後請核對對應套件雜湊。穩定版分類不等於五端 39 項功能矩陣已完整驗收；目前尚未齊備，不應視為全部功能通過。
+校驗資料、檔案雜湊及執行紀錄以 [Latest 頁](https://github.com/2786886095/novelai-image-desktop/releases/latest)提供的附件或說明為準，下載後請核對對應套件雜湊。穩定版分類不能取代本輪四端同源功能驗收記錄，請核對實際結果。
 
 Windows 安裝版與可攜版共用 `%APPDATA%\novelai-image-desktop\`。可攜版**不表示所有資料都存在程式旁**。替換套件前請備份設定與作品。桌面與行動端功能不完全相同，本機畫風迭代僅 Windows 提供。[平臺差異](./docs/guide/FEATURES.md#platforms)。
 

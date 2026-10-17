@@ -1,6 +1,6 @@
 import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';import {pathToFileURL} from 'node:url';
 import {releaseFeatures,releasePlatforms,fullFeatureProfiles,profileSha256,assertScenarioReceipt} from './full-feature-profiles.mjs';
-import {assertReleasePlatformContract,assertReleaseEvidenceFiles,releaseFeatureApplicability,releaseScopeId,releaseScopeSha256,releaseScopeCounts} from '../release-platform-contract.mjs';
+import {assertReleasePlatformContract,assertReleaseEvidenceFiles,supportedPlatforms,releaseExcludedPlatforms,releaseFeatureApplicability,releaseScopeId,releaseScopeSha256,releaseScopeCounts} from '../release-platform-contract.mjs';
 const sha=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
 
 export function buildFullFeatureMatrix({version,sourceSha,receipts=[]}){
@@ -8,7 +8,7 @@ export function buildFullFeatureMatrix({version,sourceSha,receipts=[]}){
  for(const item of receipts){
   const r=item.receipt;
   if(r?.schema!=='client-feature-scenarios/v1'){diagnostics.push({artifact:item.artifact,classification:'legacy-component-only',sourceSha:r?.sourceSha??null,platform:r?.platform??null});continue;}
-  try{assertScenarioReceipt(r,{sourceSha,androidAgentProof:item.androidAgentProof});accepted.push(item);}catch(error){diagnostics.push({artifact:item.artifact,classification:'not-release-qualified',reason:error.message,sourceSha:r?.sourceSha??null,platform:r?.platform??null});}
+  try{assertScenarioReceipt(r,{sourceSha,androidAgentProof:item.androidAgentProof});if(!releasePlatforms.includes(r.platform)){diagnostics.push({artifact:item.artifact,classification:'outside-explicit-release-platform',sourceSha:r.sourceSha,platform:r.platform});continue;}accepted.push(item);}catch(error){diagnostics.push({artifact:item.artifact,classification:'not-release-qualified',reason:error.message,sourceSha:r?.sourceSha??null,platform:r?.platform??null});}
  }
  const features=releaseFeatures.map(id=>({id,platforms:Object.fromEntries(releasePlatforms.map(platform=>{
   const requiredScenarios=[...fullFeatureProfiles[id].scenarios],all=[],local=[],component=[];
@@ -30,7 +30,7 @@ export function buildFullFeatureMatrix({version,sourceSha,receipts=[]}){
   return[platform,{applicability,status,declaredScenarios:[...requiredScenarios],requiredScenarios,completedScenarios,missingScenarios,unqualifiedObservedScenarios:[...new Set(local)].filter(s=>!completedScenarios.includes(s)),componentObservations:[...new Set(component)],evidence:status==='verified'?evidence.map(({_key,...proof})=>proof):[]}];
  }))}));
  const slots=features.flatMap(f=>releasePlatforms.map(p=>({feature:f.id,platform:p,...f.platforms[p]}))),verified=slots.filter(s=>s.status==='verified').length;
- return{schema:2,version,sourceSha,platforms:[...releasePlatforms],profileSha256,releaseScopeId,releaseScopeSha256,features,summary:{...releaseScopeCounts,verifiedSlots:verified,partialSlots:slots.filter(s=>s.status==='partial').length,pendingSlots:slots.filter(s=>s.status==='pending').length,missingScenarioSlots:slots.reduce((n,s)=>n+s.missingScenarios.length,0)},full195Certified:false,releaseScopeCertified:verified===releaseScopeCounts.requiredSlots&&slots.filter(s=>s.status==='not-supported').length===releaseScopeCounts.notSupportedSlots&&/^[a-f0-9]{40}$/i.test(sourceSha),releaseReady:false,diagnostics,boundary:'All39 features and five platform packages remain declared. Only artist-iteration outside Windows is explicitly not-supported, never passed. Other191 cells retain real native/runtime acceptance; scope certification alone is not publication readiness. Components, dirty source, failed or skipped checks never certify rows.'};
+ return{schema:2,version,sourceSha,platforms:[...releasePlatforms],supportedPlatforms:[...supportedPlatforms],excludedPlatforms:[...releaseExcludedPlatforms],profileSha256,releaseScopeId,releaseScopeSha256,features,summary:{...releaseScopeCounts,verifiedSlots:verified,partialSlots:slots.filter(s=>s.status==='partial').length,pendingSlots:slots.filter(s=>s.status==='pending').length,missingScenarioSlots:slots.reduce((n,s)=>n+s.missingScenarios.length,0)},full195Certified:false,full156Certified:false,releaseScopeCertified:verified===releaseScopeCounts.requiredSlots&&slots.filter(s=>s.status==='not-supported').length===releaseScopeCounts.notSupportedSlots&&/^[a-f0-9]{40}$/i.test(sourceSha),releaseReady:false,diagnostics,boundary:'Current release declares39 features on four platforms (156 cells). iOS source/native support and diagnostics remain but all39 iOS cells are excluded from this release, never passed. Only artist-iteration outside Windows is not-supported on the other three release targets. All153 required cells retain real native/runtime acceptance; scope certification alone is not publication readiness. Components, dirty source, failed or skipped checks never certify rows.'};
 }
 
 export function collectReceiptFiles(evidenceRoot,outputRoot){
@@ -56,15 +56,15 @@ export function writeFullFeatureMatrix({evidenceRoot,outputRoot,sourceSha,versio
  fs.mkdirSync(outputRoot,{recursive:true});const receipts=collectReceiptFiles(evidenceRoot,outputRoot),report=buildFullFeatureMatrix({sourceSha,version,receipts});
  if(report.releaseScopeCertified){assertReleasePlatformContract(report,{sourceSha,version});assertReleaseEvidenceFiles(report,outputRoot);}
  fs.writeFileSync(path.join(outputRoot,'FULL_FEATURE_MATRIX.json'),JSON.stringify(report,null,2)+'\n');
- const lines=['# Five-platform client acceptance matrix','',`Source: ${sourceSha}; version: ${version}; verified required cells: ${report.summary.verifiedSlots}/191; declared: 195; not-supported: 4 (not passes).`, '', '| Feature | Windows | macOS | Linux | Android | iOS |','|---|---|---|---|---|---|'];
+ const lines=['# Four-platform release acceptance matrix','',`Source: ${sourceSha}; version: ${version}; verified required cells: ${report.summary.verifiedSlots}/153; declared: 156; not-supported: 3 (not passes).`, 'iOS is explicitly excluded from this release; its source/native support and historical195-cell evidence are retained, not certified here.', '', '| Feature | Windows | macOS | Linux | Android |','|---|---|---|---|---|'];
  for(const f of report.features)lines.push('| '+f.id+' | '+releasePlatforms.map(p=>`${f.platforms[p].status} ${f.platforms[p].completedScenarios.length}/${f.platforms[p].requiredScenarios.length}`).join(' | ')+' |');
- lines.push('','Pending/partial is not a release pass. Not-supported is not a pass or full195 certification. See JSON missingScenarios and receipt diagnostics.');fs.writeFileSync(path.join(outputRoot,'FULL_FEATURE_MATRIX.md'),lines.join('\n')+'\n');
+ lines.push('','Pending/partial is not a release pass. Not-supported is not a pass or full156/full195 certification. See JSON missingScenarios and receipt diagnostics.');fs.writeFileSync(path.join(outputRoot,'FULL_FEATURE_MATRIX.md'),lines.join('\n')+'\n');
  const reopened=fs.readFileSync(path.join(outputRoot,'FULL_FEATURE_MATRIX.json'));
  // The publisher consumes this exact filename. Preserve the matrix verbatim,
  // including pending/partial status; an alias is not a certification override.
  const publisherFile=path.join(outputRoot,'feature-parity.json');fs.writeFileSync(publisherFile,reopened);
  if(!fs.readFileSync(publisherFile).equals(reopened))throw Error('Publisher evidence alias bytes differ');
- console.log(JSON.stringify({file:path.join(outputRoot,'FULL_FEATURE_MATRIX.json'),publisherFile,bytes:reopened.length,sha256:sha(reopened),...report.summary,full195Certified:report.full195Certified,releaseScopeCertified:report.releaseScopeCertified,releaseReady:report.releaseReady}));
+ console.log(JSON.stringify({file:path.join(outputRoot,'FULL_FEATURE_MATRIX.json'),publisherFile,bytes:reopened.length,sha256:sha(reopened),...report.summary,full195Certified:report.full195Certified,full156Certified:report.full156Certified,releaseScopeCertified:report.releaseScopeCertified,releaseReady:report.releaseReady}));
  return{report,exitStatus:(requireFull&&!report.full195Certified)||(requireReleaseScope&&!report.releaseScopeCertified)?1:0};
 }
 if(process.argv[1]&&pathToFileURL(path.resolve(process.argv[1])).href===import.meta.url){

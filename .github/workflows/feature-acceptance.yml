@@ -5,8 +5,8 @@ on:
     branches: ['codex/release-2.6.0']
   workflow_dispatch:
 
-# This workflow executes client scenarios and preserves bounded observations. It never publishes or replaces
-# the existing 195-feature release verification contract.
+# This workflow executes the current four-platform release scope and preserves bounded observations.
+# Product/native profiles remain intact; iOS is explicitly excluded from this release, not reported as passed.
 permissions:
   contents: read
   actions: read
@@ -320,6 +320,8 @@ jobs:
           if-no-files-found: error
 
   ios-components:
+    # Explicit user release exclusion: no iOS native prerequisite for this four-platform release.
+    if: false
     strategy:
       fail-fast: false
       matrix:
@@ -404,7 +406,7 @@ jobs:
 
   full-client-feature-matrix:
     if: always()
-    needs: [desktop-components, android-components, ios-components]
+    needs: [desktop-components, android-components]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -421,7 +423,7 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Check matrix rejection rules
         run: node --test scripts/feature-acceptance/release-feature-scope.test.mjs scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/mobile-scenario-receipt.test.mjs scripts/feature-acceptance/mobile-entry-consistency.test.mjs scripts/feature-acceptance/native-proof-stream.test.mjs scripts/feature-acceptance/native-resident-pending.test.mjs scripts/feature-acceptance/native-begin-entry-parity.test.mjs scripts/feature-acceptance/metadata-import-wrapper.test.mjs scripts/feature-acceptance/prepare-android-image.test.mjs
-      - name: Require 191 scoped cells across all five platforms (four Artist cells explicitly not-supported)
+      - name: Require 153 scoped cells across four release platforms (three Artist cells not-supported; iOS excluded)
         shell: bash
         run: |
           version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json","utf8")).version')"
@@ -429,6 +431,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: five-platform-feature-evidence
+          name: four-platform-feature-evidence
           path: ${{ runner.temp }}/full-feature-matrix/
           if-no-files-found: error

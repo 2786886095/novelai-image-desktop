@@ -22,3 +22,10 @@ export function assertMobileMetadataGates(run) {
     requireGate(matches[0]);
   }
 }
+
+// Explicit current-release adapter; the default mobile check above stays dual-platform strict.
+export function assertAndroidMetadataGate(run) {
+  const matches = run?.jobs?.filter(job => job.name === 'android') ?? [];
+  if (matches.length !== 1) throw new Error('Missing or duplicate metadata platform: android');
+  requireGate(matches[0]);
+}

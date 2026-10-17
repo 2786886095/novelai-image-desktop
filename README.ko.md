@@ -1,6 +1,7 @@
+<!-- release-state: pending-validation; candidate-not-published -->
 # Langbai NovelAI Studio
 
-> 다운로드는 [Latest 릴리스 페이지](https://github.com/2786886095/novelai-image-desktop/releases/latest)의 최신 안내와 첨부 파일을 기준으로 Windows, macOS, Linux, Android, iOS 패키지를 선택하세요. 안정판 분류는 전체 39개 기능 검증 완료를 뜻하지 않으며, iOS 서명·설치 상태도 해당 페이지 안내를 확인하세요.
+> 다운로드는 실제로 공개된 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 첨부 파일을 기준으로 하세요. 이 Windows/macOS/Linux/Android 후보는 검증 중이며 아직 출시되지 않았습니다. 미서명 iOS IPA를 추가 패키지로 첨부할 예정이며 현재 Latest와 혼동하면 안 됩니다.
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
@@ -26,7 +27,7 @@
 - 손상된 이미지가 완전히 디코딩되기 전에는 현재 작업 이미지를 교체하지 않습니다.
 - 화가 모델 다운로드: 경량 패키지의 압축 해제 디렉터리 항목을 실제 아카이브 루트인 `novelai-desktop-assets`로 수정하여 다운로드 후 경로 불일치로 모델을 찾지 못하는 문제를 방지합니다. 패키지 버전·크기·SHA-256은 변경하지 않습니다.
 
-**출시 상태:** 이 브랜치는 검증 중이며 새 정식 버전은 아직 출시되지 않았습니다. 선언된 매트릭스는 39 × 5 = 195개를 유지하며, 191개는 검증 필수이고 4개는 명시적인 not-supported로 통과가 아닙니다. 화풍 검색·평가·반복은 Windows 기기 내 실행만 필수이며, 이미지 생성은 계속 NovelAI API를 사용하고 사용자의 GPU 컴퓨터에 연결하지 않습니다. 이 기능은 macOS·Linux·Android·iOS에서 지원하지 않습니다. 나머지 38개 기능은 5개 플랫폼 모두 검증해야 하며 일부 플랫폼의 로컬 Agent 및 네이티브 검증 격차는 미해결입니다. iOS 검증 면제는 없으며 191개가 통과했다는 뜻이 아닙니다. 통제된 로컬 테스트나 빌드 성공은 기기 및 실제 유료 서비스 검증을 대체하지 않습니다. [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest)는 기존 출시본이며 이 후보가 아닙니다. 미서명 IPA는 직접 서명이 필요하며 일반 iPhone에 바로 설치할 수 없습니다.
+**기능 검증 범위:** Windows, macOS, Linux, Android 4개 플랫폼입니다. 39 × 4 = 156개 중 153개는 검증 필수, Windows 이외 화풍 반복 3개는 not-supported입니다. 화풍 검색·평가·반복은 Windows 기기에서 실행하고 생성은 NovelAI API를 사용하며 원격 GPU 컴퓨터에 연결하지 않습니다. 나머지 38개 기능은 4개 플랫폼 모두 검증해야 합니다. 이 숫자는 통과 수가 아닙니다. 동일 소스 검증 기록, 패키지와 설치 제한은 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest)의 실제 자료를 확인하세요. 후보 빌드 성공만으로 검증 완료를 뜻하지 않습니다.
 
 ## 빠른 시작
 
@@ -82,11 +83,11 @@ Tavern Agent는 사용자 확인 후 검증된 호환 구성 요소를 설치하
 | macOS Intel / Apple silicon | [Universal ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 공통 ZIP 패키지를 선택하세요. 서명·공증 상태는 Latest 안내를 확인하세요. |
 | Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 실행 권한을 부여한 뒤 실행하세요. |
 | Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Latest 첨부 파일에서 APK를 받아 수동 설치하세요. |
-| iOS | [IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 현재 첨부 파일은 unsigned IPA이며 유효한 인증서와 프로비저닝 프로파일로 직접 서명해야 합니다. 일반 iPhone에 그대로 설치할 수 없고 App Store 패키지도 아닙니다. 최신 서명·설치 안내는 Latest 페이지를 기준으로 확인하세요. |
+| iOS (추가 패키지) | [미서명 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 직접 서명 후 설치해야 합니다. |
 
 **Latest에서 직접 다운로드하여 수동 설치하세요.** GitHub의 Latest 표시만으로 앱 내 자동 업데이트가 가능하다고 판단할 수 없습니다. 업데이트 목록 제공 여부, 버전 인식과 플랫폼별 업데이트 방식은 해당 릴리스 설명을 확인하세요.
 
-검증 자료, 파일 해시와 실행 기록은 [Latest 페이지](https://github.com/2786886095/novelai-image-desktop/releases/latest)가 제공하는 설명 및 첨부 파일을 확인하고 다운로드한 패키지의 해시와 비교하세요. 안정판 분류는 전체 39개 기능의 플랫폼별 검증을 뜻하지 않으며 현재 전체 검증은 아직 완료되지 않았습니다.
+검증 자료, 파일 해시와 실행 기록은 [Latest 페이지](https://github.com/2786886095/novelai-image-desktop/releases/latest)가 제공하는 설명 및 첨부 파일을 확인하고 다운로드한 패키지의 해시와 비교하세요. 안정판 분류는 전체 39개 기능의 플랫폼별 검증을 뜻하지 않으며 동일 소스의 실제 검증 기록을 확인하세요.
 
 Windows 설치판과 포터블은 `%APPDATA%\novelai-image-desktop\`을 공유합니다. 포터블이라고 **모든 데이터가 실행 파일 옆에 저장되는 것은 아닙니다**. 패키지를 교체하기 전에 설정과 작품을 백업하세요. 데스크톱과 모바일의 기능은 같지 않으며 로컬 화풍 반복 작업은 Windows 전용입니다. [플랫폼 차이](./docs/guide/FEATURES.md#platforms).
 

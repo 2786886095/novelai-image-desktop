@@ -24,14 +24,16 @@ function json(file:string):any {
   return JSON.parse(fs.readFileSync(file,'utf8'));
 }
 function within(root:string,file:string) {
-  const relative=path.relative(root,path.resolve(file));
-  if(!relative || relative==='..' || relative.startsWith('..'+path.sep) || path.isAbsolute(relative))throw fail();
-  let current=root;
+  const canonicalRoot=fs.realpathSync(root),resolved=path.resolve(file);
+  const outside=(relative:string)=>!relative || relative==='..' || relative.startsWith('..'+path.sep) || path.isAbsolute(relative);
+  let relative=path.relative(path.resolve(root),resolved),current=path.resolve(root);
+  if(outside(relative)){relative=path.relative(canonicalRoot,resolved);current=canonicalRoot;}
+  if(outside(relative))throw fail();
   for(const part of relative.split(path.sep)) {
     current=path.join(current,part);
     if(fs.lstatSync(current).isSymbolicLink())throw fail();
   }
-  const actual=path.relative(fs.realpathSync(root),fs.realpathSync(file));
+  const actual=path.relative(canonicalRoot,fs.realpathSync(file));
   if(actual==='..'||actual.startsWith('..'+path.sep)||path.isAbsolute(actual))throw fail();
 }
 export function detectiveOwnedRun(userData:string,directory:string):string {
@@ -133,7 +135,7 @@ export function detectiveVerifiedResults(directory:string,verifyBytes=true):{cou
       if(!/^[a-f0-9]{64}\.json$/.test(name))continue;
       const file=path.join(branch,name);within(directory,file);const row=json(file),key=name.slice(0,-5);
       if(row.request_hash!==key || !HEX.test(row.image_sha256??'') || typeof row.image!=='string' || hashes.has(key))throw fail();
-      within(directory,row.image);if(path.resolve(row.image)!==path.join(branch,key+'.png'))throw fail();regular(row.image);
+      within(directory,row.image);const expectedImage=path.join(branch,key+'.png');within(directory,expectedImage);if(fs.realpathSync(row.image)!==fs.realpathSync(expectedImage))throw fail();regular(row.image);
       if(verifyBytes && detectiveFileHash(row.image)!==row.image_sha256)throw fail();hashes.add(key);
     }
   }

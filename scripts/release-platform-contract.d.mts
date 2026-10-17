@@ -1,4 +1,6 @@
+export const supportedPlatforms: readonly string[];
 export const releasePlatforms: readonly string[];
+export const releaseExcludedPlatforms: readonly string[];
 export const releaseFeatures: readonly string[];
 export function assertReleasePlatformContract(
   report: unknown,
@@ -6,8 +8,8 @@ export function assertReleasePlatformContract(
 ): {platforms: number; features: number};
 export function assertReleaseEvidenceFiles(report: unknown, evidenceRoot: string): void;
 
-export const releaseScopeId: 'artist-iteration-windows-only/v1';
+export const releaseScopeId: 'artist-iteration-windows-only-no-ios/v1';
 export const artistIterationScenarios: readonly string[];
 export function releaseFeatureApplicability(feature: string, platform: string): 'required' | 'not-supported';
 export const releaseScopeSha256: string;
-export const releaseScopeCounts: Readonly<{declaredSlots: 195; requiredSlots: 191; notSupportedSlots: 4}>;
+export const releaseScopeCounts: Readonly<{declaredSlots: 156; requiredSlots: 153; notSupportedSlots: 3}>;
