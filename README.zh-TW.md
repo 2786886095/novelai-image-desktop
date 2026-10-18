@@ -1,7 +1,7 @@
-<!-- release-state: pending-validation; candidate-not-published -->
+<!-- release-summary: current-version-only; downloads: Latest -->
 # Langbai NovelAI Studio
 
-> 下載請以實際已公開的 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 附件為準；本分支 Windows、macOS、Linux、Android 四端候選仍在驗收、尚未發行，計畫附帶 iOS 未簽名 IPA。請勿將本候選與目前 Latest 混淆。
+> [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 提供目前的發行說明與實際附件；安裝方式與限制請見下方下載區。
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
@@ -17,17 +17,15 @@ NovelAI 圖像創作工作臺，介面支援簡體中文、繁體中文、英語
 
 > 需設定自己的 **NovelAI Persistent API Token**。模型權限與生成費用依 NovelAI 帳號而定。圖片反推、提示詞轉換與酒館等選用 AI 服務需另外設定。
 
-## 本輪候選更新（尚未發行）
+## 本次更新
 
-- 預設技能：圖片反推、文字轉換各提供純 Tag、純自然語言、混合三種模式，可選擇技能 1.0.0／2.0.0 與目標生圖模型。2.0.0 保留六份 V5 Full 原稿，V4.5 使用 1.0.0；助手、最佳化、內嵌反推、批次及智慧體使用對應選擇，自訂內容分版保留。目標選擇只決定提示詞格式，不會自動更換生成面板或 AI 介面模型。
-- 驗收與建置：修正小視窗重繪畫布命中、導覽選單定位及行動端蒙版／請求參數的測試夾具；保留未完成項，不把採集紀錄當成功能通過。
-- 選區重繪只調整選區工作尺寸，再貼回原尺寸畫布；可恢復重繪前原圖、遮罩與選區。行動端補齊對應流程。
-- 反推支援 JSON 程式碼圍欄與結構化結果；拒答、截斷、無效結果或取消時保留原提示詞及結果，不套用拒答文字。
-- 轉換失敗或取消時保留既有雙版本結果；在已覆蓋的錯誤診斷與日誌邊界遮蔽已設定的 AI 金鑰，不修改成功提示詞內容。
-- 損壞圖片通過完整解碼前，不會取代目前工作圖。
-- 畫師模型下載：修正輕量套件清單的解壓目錄為 `novelai-desktop-assets`，與套件內根目錄一致，避免下載後因目錄不符而找不到模型；不改變下載套件版本、大小或 SHA-256。
+- 手機生成頁頂部改為精簡的固定單行配置，減少多餘留白。
+- 保留帳戶等級、餘額與獨立重新整理入口；橫向時保留至少 48 dp 觸控範圍。
+- 保留系統字級縮放。
 
-**本輪功能驗收範圍：** Windows、macOS、Linux、Android 四端。本輪宣告39 × 4＝156項，153項必須驗收，3項為畫風迭代在非 Windows 端的 not-supported。畫風檢索／評分／迭代僅要求 Windows 本機完成，生圖仍使用 NovelAI API，不連接使用者的 GPU 電腦；其餘38項仍須四端驗收。這些數字不是通過數，最終同源執行結果、套件與安裝限制以 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 的實際證據為準，候選建置不能取代正式驗收。
+應用程式字級 200% × 系統字級 130% 等極大字級下，底部列仍可能裁切；本次不包含整頁版面修正。
+
+歷史更新見[更新紀錄](./docs/RELEASE_NOTES.md)。
 
 ## 快速開始
 
@@ -87,7 +85,7 @@ Windows 本機 Artist Detective 流程目前僅開放 **NAI 4.5 Full**。完整�
 
 **請手動從 Latest 下載與安裝。** 不能僅靠 GitHub 的 Latest 標記推斷軟體內自動更新可用；是否提供更新清單、版本能否辨識及各平臺更新方式，請確認該次發行的說明。
 
-校驗資料、檔案雜湊及執行紀錄以 [Latest 頁](https://github.com/2786886095/novelai-image-desktop/releases/latest)提供的附件或說明為準，下載後請核對對應套件雜湊。穩定版分類不能取代本輪四端同源功能驗收記錄，請核對實際結果。
+校驗資料、檔案雜湊及執行紀錄以 [Latest 頁](https://github.com/2786886095/novelai-image-desktop/releases/latest)提供的附件或說明為準，下載後請核對對應套件雜湊。尚未完成所有機型的完整實機驗證。
 
 Windows 安裝版與可攜版共用 `%APPDATA%\novelai-image-desktop\`。可攜版**不表示所有資料都存在程式旁**。替換套件前請備份設定與作品。桌面與行動端功能不完全相同，本機畫風迭代僅 Windows 提供。[平臺差異](./docs/guide/FEATURES.md#platforms)。
 

@@ -267,6 +267,43 @@ Future<void> _showOpusUsageDialog(BuildContext context) async {
   );
 }
 
+double _singleLineGenerateToolbarHeight(
+  BuildContext context,
+  String title,
+  String accountLabel,
+) {
+  final theme = Theme.of(context);
+  final scaler = MediaQuery.textScalerOf(context);
+  double lineHeight(String text, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: Directionality.of(context),
+      textScaler: scaler,
+      locale: Localizations.maybeLocaleOf(context),
+      maxLines: 1,
+    )..layout();
+    final height = painter.height;
+    painter.dispose();
+    return height;
+  }
+
+  final titleStyle = theme.appBarTheme.titleTextStyle ??
+      theme.textTheme.titleLarge ??
+      const TextStyle(fontSize: 22);
+  final accountStyle = theme.textButtonTheme.style?.textStyle?.resolve({}) ??
+      theme.textTheme.labelLarge ??
+      const TextStyle(fontSize: 14);
+  // This title is single-line: do not inherit the global two-line allowance.
+  // Keep enlarged text and at least a 48dp interactive toolbar.
+  return max(
+    kMinInteractiveDimension,
+    (max(lineHeight(title, titleStyle),
+                lineHeight(accountLabel, accountStyle)) +
+            12)
+        .ceilToDouble(),
+  );
+}
+
 class GenerateScreen extends StatelessWidget {
   const GenerateScreen({super.key});
 
@@ -290,6 +327,12 @@ class GenerateScreen extends StatelessWidget {
     final wide = windowClass != StudioWindowClass.phone || landscapePhone;
     final showV5Allowance =
         state.account.tierLevel == 3 && p.model.startsWith('nai-diffusion-5-');
+    final title = state.workbenchImage == null
+        ? text.titleTextToImage
+        : text.titleImageLoaded;
+    final accountLabel = state.account.hasToken
+                    ? '${state.account.tierName ?? "API"} · ${state.account.anlasBalance ?? "—"}${!showV5Allowance || state.account.opusUsage == null ? "" : " · V5 ${state.account.opusUsage!.isNegative ? 0 : state.account.opusUsage!.percent.clamp(0, 100).round()}%"}'
+                    : text.notConfigured;
 
     final preview = GenerationImageTransfers(
         child: _PreviewCard(onPick: () => _pickImage(context)));
@@ -372,11 +415,11 @@ class GenerateScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: landscapePhone ? 48 : null,
+        toolbarHeight: windowClass == StudioWindowClass.phone
+            ? _singleLineGenerateToolbarHeight(context, title, accountLabel)
+            : null,
         title: studioAppBarTitle(context, Text(
-          state.workbenchImage == null
-              ? text.titleTextToImage
-              : text.titleImageLoaded,
+          title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         )),
@@ -391,7 +434,8 @@ class GenerateScreen extends StatelessWidget {
                   : state.refreshAnlas,
               style: landscapePhone
                   ? TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
+                      visualDensity: VisualDensity.standard,
+                      minimumSize: const Size(48, 48),
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                     )
                   : null,
@@ -399,9 +443,7 @@ class GenerateScreen extends StatelessWidget {
                   ? Icons.sync_problem_outlined
                   : Icons.refresh),
               label: Text(
-                state.account.hasToken
-                    ? '${state.account.tierName ?? "API"} · ${state.account.anlasBalance ?? "—"}${!showV5Allowance || state.account.opusUsage == null ? "" : " · V5 ${state.account.opusUsage!.isNegative ? 0 : state.account.opusUsage!.percent.clamp(0, 100).round()}%"}'
-                    : text.notConfigured,
+                accountLabel,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

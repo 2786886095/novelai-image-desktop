@@ -1,8 +1,7 @@
-<!-- release-state: pending-validation; candidate-not-published -->
+<!-- release-summary: current-version-only; downloads: Latest -->
 # Langbai NovelAI Studio
 
-> **Latest release**: [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) remains the actually published assets. This Windows/macOS/Linux/Android candidate is awaiting acceptance and is not published; An unsigned iOS IPA is planned as an additional package. Do not confuse this candidate with the current Latest.
-> Package availability or GitHub's stable label does **not** prove full 39-feature, physical-device or production-provider acceptance. Consult the same-source scoped verification records rather than assuming acceptance from a package or stable label.
+> [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) provides the current release notes and actual assets. See the download section for installation limits.
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
@@ -18,17 +17,15 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 > Bring your own **NovelAI Persistent API Token**. Model access and generation charges depend on your NovelAI account. Optional image analysis, prompt conversion and Tavern AI services require separate configuration.
 
-## Candidate changes (not released)
+## What changed
 
-- Default skills: image analysis and text conversion each offer pure tags, natural language and mixed output, with separate skill-edition (1.0.0/2.0.0) and target-image-model choices. Edition 2.0.0 preserves the six V5 Full originals; V4.5 uses 1.0.0. Assistant, optimization, inline analysis, batch and Agent flows use the corresponding selection and retain per-edition custom text. This selects the prompt format, not the generation panel model or AI provider model.
-- Acceptance and builds: correct small-window inpainting hit targets, navigation-menu selectors, and mobile mask/request fixtures; incomplete observations remain incomplete rather than being promoted to feature passes.
-- Focused inpainting adapts only the region to a valid working size and composites it onto the original-size canvas; restore the original image, mask and region for further editing. Mobile receives the corresponding workflow.
-- Image analysis accepts fenced JSON and structured results. Refusal, truncation, invalid output or cancellation preserves existing prompts and results rather than applying refusal text.
-- Failed or cancelled conversion preserves both existing variants. Configured AI keys are redacted at the covered diagnostic/log boundaries without rewriting successful prompt content.
-- Invalid image bytes cannot replace the current workbench image before full decode succeeds.
-- Artist model download: correct the light package’s extraction-directory entry to `novelai-desktop-assets`, matching its archive root so a directory mismatch does not hide the downloaded model; package version, size and SHA-256 remain unchanged.
+- Give the mobile generation page a compact, fixed single-line top bar with less wasted space.
+- Keep account tier, balance and a separate refresh action; retain a touch target of at least 48 dp in landscape.
+- Preserve the system text-size setting.
 
-**Feature acceptance scope:** Windows, macOS, Linux and Android. The release declares 39 × 4 = 156 cells: 153 require acceptance and 3 non-Windows Artist-iteration cells are not-supported. Artist retrieval, scoring and iteration run locally on Windows; generation still uses the NovelAI API, without a remote GPU computer. The other 38 features remain required on all four release platforms. Counts are requirements, not passed results. Use the actual same-source evidence, packages and installation limits on [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest); candidate builds alone do not establish acceptance.
+At extreme sizing such as 200% app text × 130% system text, the bottom bar can still clip. This is not a whole-page layout fix.
+
+See the [release history (Chinese)](./docs/RELEASE_NOTES.md) for earlier changes.
 
 ## Quick start
 
@@ -86,7 +83,7 @@ Open the [Latest release page](https://github.com/2786886095/novelai-image-deskt
 
 **Manual updates:** download the current package yourself unless the Latest notes explicitly confirm a supported updater path. An updater manifest is not guaranteed, and package versions or tag naming may not trigger an in-app update; do not assume the updater will offer new bytes. Back up settings and works before replacement. Do not uninstall or delete existing data merely to force an update.
 
-Use the verification and checksum files attached to the [Latest page](https://github.com/2786886095/novelai-image-desktop/releases/latest) for the assets you download; their names and availability can change between releases. [Repository source on main](https://github.com/2786886095/novelai-image-desktop/tree/main) is the current repository branch, not proof of a particular binary's exact build source; use the release verification records for that identity. Stable publication does not establish full 39-feature, physical-device or paid production-provider acceptance, use the same-source scoped evidence for the actual result. [Release notes (Chinese)](./docs/RELEASE_NOTES.md).
+Use the verification and checksum files attached to the [Latest page](https://github.com/2786886095/novelai-image-desktop/releases/latest) for the assets you download; their names and availability can change between releases. [Repository source on main](https://github.com/2786886095/novelai-image-desktop/tree/main) is the current repository branch, not proof of a particular binary's exact build source; use the release verification records for that identity. Full physical-device validation across all supported devices is not complete. [Release notes (Chinese)](./docs/RELEASE_NOTES.md).
 
 Windows installer and portable builds share `%APPDATA%\novelai-image-desktop\`. Portable does **not** mean all user data is stored beside the executable. Back up settings and images before replacing packages. Desktop and mobile features may differ; local Artist Detective iteration is Windows-only. [Platform differences](./docs/guide/FEATURES.md#platforms).
 

@@ -1,10 +1,10 @@
-<!-- release-state: pending-validation; candidate-not-published -->
+<!-- release-summary: current-version-only; downloads: Latest -->
 # Langbai NovelAI Studio
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
 
-**当前发行入口：** [GitHub Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 仍以已发布的实际附件为准；本分支的 Windows、macOS、Linux、Android 四端候选尚在验收、尚未发布，拟附带 iOS 未签名 IPA。不要把本候选当成现有 Latest。
+**下载入口：** [GitHub Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 提供当前发行说明与实际附件；安装方式与限制见下方下载区。
 
 ### 从一句灵感，到一组作品。
 
@@ -22,17 +22,15 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 [![Build Mobile](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml)
 [![License: MIT](https://img.shields.io/badge/Code-MIT-586069)](./LICENSE)
 
-## 本轮候选更新（尚未发行）
+## 本次更新
 
-- 默认技能：图片反推、文字转换各提供纯 Tag、纯自然语言、混合三种模式，可选择技能 1.0.0／2.0.0 和目标生图模型。2.0.0 保留六份 V5 Full 原稿，V4.5 使用 1.0.0；助手、优化、内嵌反推、批量和智能体使用对应选择，自定义内容分版保留。目标选择只决定提示词格式，不自动更换生成面板或 AI 接口模型。
-- 验收与构建：修正小窗口重绘画布命中、导航菜单定位及移动端蒙版/请求参数的测试夹具；保留未完成项，不将采集记录冒充功能通过。
-- 选区重绘保留原图画布，只将选区适配到合法工作尺寸，结果贴回原图；支持恢复重绘前原图、蒙版和选区。移动端补齐对应流程。
-- 反推兼容 JSON 代码围栏与结构化结果；拒答、截断、无效结果和取消时保留原提示词及已有结果，不将拒答当成提示词应用。
-- 转换失败或取消时保留已有双版本结果；配置的 AI 密钥在已覆盖的错误诊断及日志边界脱敏，不改写成功返回的提示词。
-- 无效图片在完整解码通过前不替换现有工作图，避免损坏文件清空当前图片。
-- 画师模型下载：修正轻量包清单的解压目录为 `novelai-desktop-assets`，与包内根目录一致，避免下载后因目录错配而找不到模型；不改变下载包版本、大小或 SHA-256。
+- 手机生成页顶部栏改为紧凑的固定单行布局，减少多余顶部空白。
+- 保留账户等级、积分和独立刷新入口；横屏刷新按钮保留至少 48 dp 触控区域。
+- 保留系统字号缩放。
 
-**本轮功能验收范围：** Windows、macOS、Linux、Android 四端。本轮声明 39 × 4＝156 项，153 项必需验收，3 项为画风迭代在非 Windows 端的 not-supported。画风检索／评分／迭代仅要求 Windows 本机完成，生图仍使用 NovelAI API，不连接用户的 GPU 电脑；其余 38 项仍须四端验收。这些数量不是通过数，最终同源执行结果、制品与安装限制以 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 的实际证据为准，候选构建不能替代正式验收。
+应用字号 200% × 系统字号 130% 等极大字号下，底部栏仍可能裁切；本次不包含整页布局修复。
+
+历史更新见[更新记录](./docs/RELEASE_NOTES.md)。
 
 <a id="quick-start"></a>
 ## 先完成你的第一张图
@@ -102,7 +100,7 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 
 **本次请手动下载安装。** 将 GitHub 发布页设为 Latest 不会自动产生新版本、更新清单或有效的自动更新标签；是否支持软件内更新应按 Latest 的真实说明核对，不能仅凭 Latest 标记保证自动升级。
 
-**稳定版分类不能代替验收记录。** 请核对本轮四端范围的同源执行证据；受控网络 fixture、模拟器或构建成功不能证明所有真机和真实付费账号端到端通过。Windows Authenticode 签名和 macOS 签名／公证状态以 Latest 最终制品证据为准。已发行源码同步到 [main](https://github.com/2786886095/novelai-image-desktop/tree/main)，不重新命名旧包冒充新构建。
+尚未完成所有机型的完整实机验收。Windows 签名与 macOS 签名／公证状态以 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 的实际说明为准。
 
 #68 全角逗号分隔、#70 翻译方向保存、#71 翻译状态布局位移的具体缺陷已关闭；#69 真实环境 TLS 根因仍未确认，保持开放。不声称解决所有网络故障或所有 422。
 
