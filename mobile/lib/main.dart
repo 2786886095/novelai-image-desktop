@@ -159,7 +159,7 @@ class _HomeShellState extends State<HomeShell> {
     super.initState();
     _loadNavigationOrder();
     _pages = [
-      const Column(children: [SafeArea(bottom: false, child: NovelAiAccountSelector()), Expanded(child: GenerateScreen())]),
+      const SafeArea(bottom: false, child: Column(children: [NovelAiAccountSelector(), Expanded(child: GenerateScreen())])),
       const ToolsScreen(kind: ToolPageKind.inpaint),
       const ToolsScreen(kind: ToolPageKind.postprocess),
       const InspectScreen(kind: InspectPageKind.reverse),

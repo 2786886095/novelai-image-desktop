@@ -119,6 +119,10 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Verify mobile build and displayed version identity
+        working-directory: .
+        run: python3 scripts/verify-mobile-version.py
+
       - name: Validate mobile source
         if: ${{ !inputs.candidate_build_only }}
         run: flutter analyze --no-pub && flutter test --no-pub
@@ -206,6 +210,10 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Verify mobile build and displayed version identity
+        working-directory: .
+        run: python3 scripts/verify-mobile-version.py
+
       - name: Validate mobile source
         if: ${{ !inputs.candidate_build_only && !(github.event_name == 'workflow_dispatch' && inputs.skip_ios_verification == true) }}
         run: flutter analyze --no-pub && flutter test --no-pub
@@ -267,6 +275,10 @@ jobs:
           cache: true
       - name: Install package build dependencies
         run: flutter pub get
+
+      - name: Verify mobile build and displayed version identity
+        working-directory: .
+        run: python3 scripts/verify-mobile-version.py
       - name: Compile unsigned iOS package (no functional verification)
         run: flutter build ios --release --no-codesign
       - name: Package unsigned IPA (requires user signing)

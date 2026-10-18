@@ -427,7 +427,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             16, 16, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
         children: [
           const NovelAiAccountSelector(),
+          const SizedBox(height: 12),
           const CompatibleImageSettingsCard(),
+          const SizedBox(height: 12),
           Card(
             child: ListTile(
               leading: Icon(
@@ -444,6 +446,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onPressed: state.refreshAnlas),
             ),
           ),
+          const SizedBox(height: 12),
           if (Platform.isIOS) const IosUpdateCard() else
           Card(
             child: ListTile(
@@ -479,7 +482,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
             ),
           ),
+          const SizedBox(height: 12),
           const OpenAIEditSettingsCard(),
+          const SizedBox(height: 12),
           const ExternalMcpSettingsCard(),
           _Section(
               title: settingsText.updateSourceTitle,

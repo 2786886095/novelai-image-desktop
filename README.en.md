@@ -19,9 +19,10 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## What changed
 
-- Give the mobile generation page a compact, fixed single-line top bar with less wasted space.
-- Keep account tier, balance and a separate refresh action; retain a touch target of at least 48 dp in landscape.
-- Preserve the system text-size setting.
+- Fix duplicated status-bar space on the mobile generation page; keep the compact text-to-image/image-to-image title and balance-refresh bar fixed while content scrolls.
+- Add 12 dp spacing between settings cards.
+- Fix the mobile version display and repeated update prompts.
+- Add build-version consistency checks to prevent a mismatch between the displayed app version and the package version.
 
 At extreme sizing such as 200% app text × 130% system text, the bottom bar can still clip. This is not a whole-page layout fix.
 
