@@ -19,12 +19,10 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## What changed
 
-- Fix duplicated status-bar space on the mobile generation page; keep the compact text-to-image/image-to-image title and balance-refresh bar fixed while content scrolls.
-- Add 12 dp spacing between settings cards.
-- Fix the mobile version display and repeated update prompts.
-- Add build-version consistency checks to prevent a mismatch between the displayed app version and the package version.
-
-At extreme sizing such as 200% app text × 130% system text, the bottom bar can still clip. This is not a whole-page layout fix.
+- Remove pagination from local favorites in Masonry mode: continuously scroll through all filtered results. Desktop cards follow the selected order from left to right, with equal widths, variable heights and original image proportions.
+- Appending desktop favorites while scrolling keeps the current position instead of jumping back to the top.
+- Keep Grid pagination, saved/generation-time sorting, date filters and previews in the full filtered order.
+- Mobile also removes Masonry pagination and lazily builds consecutive ordered rows. Shorter images can leave empty space below them; this is not a tightly packed masonry layout.
 
 See the [release history (Chinese)](./docs/RELEASE_NOTES.md) for earlier changes.
 
@@ -80,7 +78,7 @@ Open the [Latest release page](https://github.com/2786886095/novelai-image-deskt
 | macOS Intel / Apple silicon | [Universal DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [Universal ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Check the Latest signing and notarization notes. Notarization has not been confirmed for the currently verified delivery; system trust prompts may apply. |
 | Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Grant execution permission, then run; replace the package manually. |
 | Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Follow the Latest installation and signature notes. Install manually; full physical-device and in-place-upgrade acceptance is not established for the currently verified delivery. |
-| iOS (additional package) | [Unsigned IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Requires your own signing before installation. |
+| iOS (additional package) | [Unsigned IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Requires your own signing; it cannot be installed directly on a normal iPhone. |
 
 **Manual updates:** download the current package yourself unless the Latest notes explicitly confirm a supported updater path. An updater manifest is not guaranteed, and package versions or tag naming may not trigger an in-app update; do not assume the updater will offer new bytes. Back up settings and works before replacement. Do not uninstall or delete existing data merely to force an update.
 

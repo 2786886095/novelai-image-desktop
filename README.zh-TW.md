@@ -19,12 +19,10 @@ NovelAI 圖像創作工作臺，介面支援簡體中文、繁體中文、英語
 
 ## 本次更新
 
-- 修正手機生成頁重複的狀態列留白；文生圖／圖生圖標題與餘額重新整理列維持精簡固定，不隨內容捲動。
-- 設定頁卡片之間增加 12 dp 分組間距。
-- 修正手機版版本顯示與重複提示更新的問題。
-- 新增建置版本一致性檢查，避免應用程式顯示版本與安裝套件版本不符。
-
-應用程式字級 200% × 系統字級 130% 等極大字級下，底部列仍可能裁切；本次不包含整頁版面修正。
+- 收藏夾瀑布流取消分頁，連續捲動存取全部篩選結果；桌面端依既有排序由左至右顯示等寬、不等高卡片，圖片保留原始比例。
+- 桌面端捲動追加收藏時保留目前位置，不再跳回清單頂端。
+- 保留網格模式分頁、收藏／生成時間排序、日期篩選與依完整篩選順序預覽。
+- 行動端同步取消瀑布流分頁，採用連續延遲建構的有序多欄列；短圖下方可能留白，並非緊密排列的瀑布流。
 
 歷史更新見[更新紀錄](./docs/RELEASE_NOTES.md)。
 
@@ -82,7 +80,7 @@ Windows 本機 Artist Detective 流程目前僅開放 **NAI 4.5 Full**。完整�
 | macOS Intel／Apple 晶片 | [通用 ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 選擇通用 ZIP 套件；簽署與公證狀態以 Latest 說明為準。 |
 | Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 加入執行權限後開啟。 |
 | Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 從 Latest 附件下載 APK 並手動安裝。 |
-| iOS（附加套件） | [未簽名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 需自行簽署後安裝。 |
+| iOS（附加套件） | [未簽名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 需自行簽署後安裝，無法直接安裝至一般 iPhone。 |
 
 **請手動從 Latest 下載與安裝。** 不能僅靠 GitHub 的 Latest 標記推斷軟體內自動更新可用；是否提供更新清單、版本能否辨識及各平臺更新方式，請確認該次發行的說明。
 

@@ -189,8 +189,9 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
       (current?.items ?? const <LocalFavorite>[]).where((item)=>date.isEmpty||item.prefix.startsWith(date)),view);
     final pages = (filtered.length / pageSize).ceil().clamp(1, 999999);
     final shownPage = page.clamp(1, pages);
-    final visible =
-        filtered.skip((shownPage - 1) * pageSize).take(pageSize).toList();
+    final visible = layout == 'masonry'
+        ? filtered
+        : filtered.skip((shownPage - 1) * pageSize).take(pageSize).toList();
     return Scaffold(
       appBar: AppBar(title: studioAppBarTitle(context, Text(t('title'))), actions: [
         IconButton(
@@ -240,7 +241,7 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
                                   DropdownMenuItem(value: v, child: Text(t(v))))
                               .toList(),
                           onChanged: busy?null:(v)=>_run(()=>store.saveView(layout:v))),
-                      StudioDropdownButton<int>(
+                      if (layout != 'masonry') StudioDropdownButton<int>(
                           value: pageSize,
                           items: [12, 24, 48, 96]
                               .map((n) => DropdownMenuItem(
@@ -268,28 +269,29 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
                 : visible.isEmpty
                     ? Center(child: Text(t('empty')))
                     : LayoutBuilder(builder: (context, bounds) {
-                        final columns =
-                            (bounds.maxWidth / 190).floor().clamp(2, 6);
+                        final columns = (bounds.maxWidth / 190)
+                            .floor().clamp(layout == 'masonry' ? 1 : 2, 6);
                         if (layout == 'masonry') {
-                          return ListView(
+                          // Ordered rows keep the existing sort readable from
+                          // left to right. Unlike CSS-style columns, every next
+                          // row continues the same sequence. Rows are lazy and
+                          // use the complete filter, not a hidden finite page.
+                          return ListView.builder(
+                              key: const ValueKey('favorites-masonry'),
                               padding: const EdgeInsets.all(8),
-                              children: [
-                                Row(
+                              itemCount: (visible.length / columns).ceil(),
+                              itemBuilder: (context, row) => Row(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
                                       for (var col = 0; col < columns; col++)
                                         Expanded(
-                                            child: Column(children: [
-                                          for (var i = col;
-                                              i < visible.length;
-                                              i += columns)
-                                            _card(visible[i], visible, i,
-                                                language,
-                                                masonry: true),
-                                        ])),
-                                    ]),
-                              ]);
+                                            child: row * columns + col < visible.length
+                                                ? _card(visible[row * columns + col],
+                                                    visible, row * columns + col,
+                                                    language, masonry: true)
+                                                : const SizedBox.shrink()),
+                                    ]));
                         }
                         return GridView.builder(
                             padding: const EdgeInsets.all(8),
@@ -303,7 +305,7 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
                             itemBuilder: (context, i) =>
                                 _card(visible[i], visible, i, language));
                       })),
-        if (pages > 1)
+        if (layout != 'masonry' && pages > 1)
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             IconButton(
                 tooltip: t('previous'),
@@ -326,19 +328,28 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
     final file =
         File('${library!.directory}${Platform.pathSeparator}${item.fileName}');
     final exists = ImageFiles.keepVisible(file.path);
+    // The original dimensions are part of the validated favorite prefix.
+    // Reserve that ratio before file decoding so lazy rows do not collapse
+    // to zero height and materialize the entire library during the first frame.
+    final dimensions = RegExp(r'^\d{8}_(\d+)x(\d+)_').firstMatch(item.prefix);
+    final sourceWidth = int.tryParse(dimensions?.group(1) ?? '') ?? 0;
+    final sourceHeight = int.tryParse(dimensions?.group(2) ?? '') ?? 0;
+    final ratio = sourceWidth > 0 && sourceHeight > 0
+        ? sourceWidth / sourceHeight : 1.0;
     final image = InkWell(
         onTap: exists ? () => _preview(items, index, language) : null,
         child: exists
             ? imageFile(file,
                 width: double.infinity,
-                fit: masonry ? BoxFit.fitWidth : BoxFit.cover,
+                fit: masonry ? BoxFit.contain : BoxFit.cover,
                 cacheWidth: 440)
             : Center(child: Text(localFavoritesText(language, 'missing'))));
     return Card(
+        key: ValueKey('favorite-${item.id}'),
         clipBehavior: Clip.antiAlias,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           if (masonry)
-            (exists ? image : SizedBox(height: 160, child: image))
+            AspectRatio(aspectRatio: ratio, child: image)
           else
             Expanded(child: image),
           Text(item.fileName, maxLines: 1, overflow: TextOverflow.ellipsis),

@@ -26,6 +26,7 @@ vi.mock('react',async original=>({...await original<typeof import('react')>(),
  useMemo:(fn:()=>unknown,deps?:unknown[])=>harness.memo(fn,deps),
  useCallback:(fn:unknown,deps?:unknown[])=>harness.memo(()=>fn,deps),
  useEffect:(fn:()=>void|(()=>void),deps?:unknown[])=>harness.effect(fn,deps),
+ useLayoutEffect:(fn:()=>void|(()=>void),deps?:unknown[])=>harness.effect(fn,deps),
 }));
 vi.mock('./store',()=>({useAppStore:(selector:(state:typeof harness.store)=>unknown)=>selector(harness.store)}));
 vi.mock('./apply-image-parameters',()=>({applyImageParameters:vi.fn()}));
@@ -150,4 +151,22 @@ it.each(['zh-CN','zh-TW','en-US','ja-JP','ko-KR'])('contains five-language sorti
  for(const key of ['sortBy','savedAt','generatedAt','sortDirection','newestFirst','oldestFirst','sortHelp','unknownGeneratedHint','unknownGenerated','viewSaveFailed'] as const)expect(text[key].trim()).not.toBe('');
  expect(text.savedAt).not.toBe(text.generatedAt);expect(text.newestFirst).not.toBe(text.oldestFirst);expect(text.unknownGeneratedHint).toContain('{count}');
  if(language!=='en-US')for(const key of ['sortBy','savedAt','generatedAt','sortDirection','newestFirst','oldestFirst','sortHelp','unknownGeneratedHint','unknownGenerated','viewSaveFailed'] as const)expect(text[key]).not.toBe(favoritesText('en-US')[key]);
+});
+
+it('masonry streams beyond pageSize without discarding grid pagination preferences',async()=>{
+ const text=favoritesText('zh-CN'),base=library.items[0];
+ library={directory:'synthetic-130',items:Array.from({length:130},(_,i)=>({...base,id:'stream-'+i,prefix:'20261014_'+i,name:String(i),filePath:'fixture/'+i+'.png',fileUrl:'fixture://'+i,missing:false,savedAt:new Date(Date.UTC(2026,9,14,0,i)).toISOString()}))};
+ harness.list.mockResolvedValue(library);window.dispatchEvent(new Event('studio:favorites-changed'));await settle();
+ change(text.pageSize,'12');change(text.layout,'masonry');await settle();
+ expect(cards()).toHaveLength(48);expect(cards().slice(0,3)).toEqual(['stream-129','stream-128','stream-127']);
+ expect(select(text.pageSize)).toBeUndefined();expect(nodes().some(x=>x.props.className==='favorites-pagination')).toBe(false);
+ expect(visible(tree)).toContain(text.loadedCount.replace('{shown}','48').replace('{total}','130'));
+ expect(JSON.parse(values.get(FAVORITES_VIEW_KEY)!)).toEqual({pageSize:12,layout:'masonry',sortBy:'savedAt',sortDirection:'desc'});
+ change(text.sortDirection,'asc');await settle();expect(cards().slice(0,3)).toEqual(['stream-0','stream-1','stream-2']);
+ change(text.layout,'grid');await settle();expect(select(text.pageSize).props.value).toBe(12);expect(cards()).toHaveLength(12);
+ nodes().find(x=>x.props['aria-label']==='Next')!.props.onClick();render();expect(cards()[0]).toBe('stream-12');
+});
+it.each(['zh-CN','zh-TW','en-US','ja-JP','ko-KR'])('localizes continuous browsing copy: %s',language=>{
+ const text=favoritesText(language);for(const key of ['continuousHelp','loadedCount','allLoaded'] as const)expect(text[key].trim()).not.toBe('');
+ expect(text.loadedCount).toContain('{shown}');expect(text.loadedCount).toContain('{total}');expect(text.allLoaded).toContain('{total}');
 });

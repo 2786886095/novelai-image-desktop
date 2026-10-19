@@ -24,12 +24,10 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 
 ## 本次更新
 
-- 修复手机生成页重复状态栏留白；文生图／图生图标题与积分刷新栏保持紧凑固定，不随内容下滑。
-- 设置页卡片之间增加 12 dp 分组间距。
-- 修复手机版本显示与重复提示更新的问题。
-- 增加构建版本一致性检查，避免应用显示版本与安装包版本不一致。
-
-应用字号 200% × 系统字号 130% 等极大字号下，底部栏仍可能裁切；本次不包含整页布局修复。
+- 收藏夹瀑布流取消分页，连续滚动访问全部筛选结果；桌面端按现有排序从左到右显示等宽、不等高卡片，图片保留原始比例。
+- 桌面端滚动追加收藏时保留当前位置，不再跳回列表顶部。
+- 保留网格模式分页、收藏／生成时间排序、日期筛选与按完整筛选顺序预览。
+- 移动端同步取消瀑布流分页，采用连续懒构建的有序多列行；短图下方可能留白，并非紧贴式瀑布流。
 
 历史更新见[更新记录](./docs/RELEASE_NOTES.md)。
 
@@ -95,7 +93,7 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 | macOS · Intel / Apple Silicon | [Universal DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 通用 DMG 或 ZIP；签名 / 公证状态以 Latest 说明为准 |
 | Linux x86_64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | AppImage，添加执行权限后运行 |
 | Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | APK，手动安装；先核对签名与升级说明，勿为更新而删除旧数据 |
-| iOS（附加包） | [未签名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 需自行签名后安装 |
+| iOS（附加包） | [未签名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 需自行签名后安装，不能直接安装到普通 iPhone |
 
 校验清单、SHA256、签名和安装限制以 [Latest 的说明与附件](https://github.com/2786886095/novelai-image-desktop/releases/latest)为准；首页不写死发行版本、日期标签、校验文件名或带版本的安装包名。历史四端预览校验文件不用于替代当前发行清单。
 
