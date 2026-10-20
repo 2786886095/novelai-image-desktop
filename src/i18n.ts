@@ -399,6 +399,8 @@ const TOOLS_HUB_TEXT = {
       "读取 NovelAI、Stable Diffusion WebUI / Forge 与 ComfyUI 图片的完整内嵌参数，并可一键套用兼容项。",
     aitagTitle: "AI绘画咒语图库",
     aitagDesc: "原生搜索 AITag 公开作品，并查看每张图片的生成提示词与原参数。",
+    comfyLocalTitle: "本地 ComfyUI",
+    comfyLocalDesc: "在软件内启动本机服务，导入工作流并选择模型生图，不自动打开网页。",
     artistLabTitle: "画风实验室",
     artistLabDesc:
       "固定内容与 Seed，自动测试带权画师串，并用本地模型按目标画风排序。仅 Windows。",
@@ -423,6 +425,8 @@ const TOOLS_HUB_TEXT = {
       "讀取 NovelAI、Stable Diffusion WebUI / Forge 與 ComfyUI 圖片的完整內嵌參數，並可一鍵套用相容項目。",
     aitagTitle: "AI 繪畫咒語圖庫",
     aitagDesc: "原生搜尋 AITag 公開作品，並查看每張圖片的生成提示詞與原參數。",
+    comfyLocalTitle: "本機 ComfyUI",
+    comfyLocalDesc: "在軟體內啟動本機服務，匯入工作流並選擇模型生圖，不自動開啟網頁。",
     artistLabTitle: "畫風實驗室",
     artistLabDesc:
       "固定內容與 Seed，自動測試帶權畫師串，並以本機模型按目標畫風排序。僅 Windows。",
@@ -449,6 +453,8 @@ const TOOLS_HUB_TEXT = {
     aitagTitle: "AI Art Prompt Gallery",
     aitagDesc:
       "Search AITag public works natively and inspect prompts and original generation metadata.",
+    comfyLocalTitle: "Local ComfyUI",
+    comfyLocalDesc: "Start a local service, import workflows, and select models without automatically opening a browser.",
     artistLabTitle: "Artist Style Lab",
     artistLabDesc:
       "Keep content and seed fixed, test weighted artist strings, and rank target style locally. Windows only.",
@@ -475,6 +481,8 @@ const TOOLS_HUB_TEXT = {
     aitagTitle: "AI イラスト呪文ギャラリー",
     aitagDesc:
       "AITag の公開作品をネイティブ検索し、画像ごとのプロンプトと生成パラメータを確認します。",
+    comfyLocalTitle: "ローカル ComfyUI",
+    comfyLocalDesc: "ローカルサービスを起動し、ワークフローとモデルで画像生成。ブラウザーは自動で開きません。",
     artistLabTitle: "画風ラボ",
     artistLabDesc:
       "内容と Seed を固定して重み付き画家タグを自動テストし、端末内モデルで目標画風順に並べます。Windows 専用。",
@@ -501,6 +509,8 @@ const TOOLS_HUB_TEXT = {
     aitagTitle: "AI 그림 프롬프트 갤러리",
     aitagDesc:
       "AITag 공개 작품을 기본 화면에서 검색하고 이미지별 프롬프트와 생성 매개변수를 확인합니다.",
+    comfyLocalTitle: "로컬 ComfyUI",
+    comfyLocalDesc: "앱에서 로컬 서비스를 시작하고 워크플로와 모델로 이미지를 생성합니다. 브라우저를 자동으로 열지 않습니다。",
     artistLabTitle: "화풍 실험실",
     artistLabDesc:
       "내용과 Seed를 고정해 가중치 작가 태그를 자동 테스트하고 로컬 모델로 목표 화풍 순위를 계산합니다. Windows 전용.",
@@ -525,6 +535,8 @@ const TOOLS_HUB_TEXT = {
     | "metadataDesc"
     | "aitagTitle"
     | "aitagDesc"
+    | "comfyLocalTitle"
+    | "comfyLocalDesc"
     | "artistLabTitle"
     | "artistLabDesc"
     | "v5ArtistRepairTitle"

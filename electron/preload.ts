@@ -1,3 +1,4 @@
+import { COMFY_IPC, type ComfyLocalApi, type ComfyResponse, type ComfyEvent } from "../src/comfyui/contract";
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { createImageSaveTracker, type ImageSaveNotice } from "../src/image-save-feedback";
 import type {
@@ -653,3 +654,47 @@ contextBridge.exposeInMainWorld("naiDesktop", {
 });
 
 contextBridge.exposeInMainWorld('naiAccounts', { list: () => ipcRenderer.invoke('naiAccounts:list'), state: () => ipcRenderer.invoke('naiAccounts:state'), select: (id?: string) => ipcRenderer.invoke('naiAccounts:select', id), login: (input: import('./ipc/nai-accounts-login').OfficialLoginInput) => ipcRenderer.invoke('naiAccounts:login', input), migrate: () => ipcRenderer.invoke('naiAccounts:migrate'), add: (input: import('../src/nai-accounts').NaiAccountInput) => ipcRenderer.invoke('naiAccounts:add', input), remove: (id: string) => ipcRenderer.invoke('naiAccounts:remove', id), reveal: (id:string) => ipcRenderer.invoke('naiAccounts:reveal',id), probe: (id: string) => ipcRenderer.invoke('naiAccounts:probe', id) });
+
+
+// The local ComfyUI bridge is deliberately separate from account-bound NovelAI
+// APIs. Paths and prompt graphs remain owned/validated by the main process.
+function invokeComfy<T>(channel: string, ...args: unknown[]): Promise<ComfyResponse<T>> {
+  return ipcRenderer.invoke(channel, ...args).catch(() => ({
+    ok: false as const,
+    error: { code: "internal" as const, message: "ComfyUI request could not be completed." },
+  }));
+}
+const comfyBridge: ComfyLocalApi = {
+  getState: () => invokeComfy(COMFY_IPC.getState),
+  snapshot: () => invokeComfy(COMFY_IPC.snapshot),
+  chooseInstallDirectory: () => invokeComfy(COMFY_IPC.chooseInstallDirectory),
+  choosePython: () => invokeComfy(COMFY_IPC.choosePython),
+  chooseOutputDirectory: () => invokeComfy(COMFY_IPC.chooseOutputDirectory),
+  detectInstall: () => invokeComfy(COMFY_IPC.detectInstall),
+  setLaunchOptions: (patch) => invokeComfy(COMFY_IPC.setLaunchOptions, patch),
+  setConnection: (target) => invokeComfy(COMFY_IPC.setConnection, target),
+  start: () => invokeComfy(COMFY_IPC.start),
+  connect: () => invokeComfy(COMFY_IPC.connect),
+  stop: (options) => invokeComfy(COMFY_IPC.stop, options),
+  disconnect: () => invokeComfy(COMFY_IPC.disconnect),
+  refreshInventory: () => invokeComfy(COMFY_IPC.refreshInventory),
+  importWorkflowFile: () => invokeComfy(COMFY_IPC.importWorkflowFile),
+  importWorkflowJson: (text, name) => invokeComfy(COMFY_IPC.importWorkflowJson, text, name),
+  listWorkflows: () => invokeComfy(COMFY_IPC.listWorkflows),
+  renameWorkflow: (id, name) => invokeComfy(COMFY_IPC.renameWorkflow, id, name),
+  deleteWorkflow: (id) => invokeComfy(COMFY_IPC.deleteWorkflow, id),
+  analyzeWorkflow: (id, values) => invokeComfy(COMFY_IPC.analyzeWorkflow, id, values),
+  run: (request) => invokeComfy(COMFY_IPC.run, request),
+  cancel: (id) => invokeComfy(COMFY_IPC.cancel, id),
+  listResults: () => invokeComfy(COMFY_IPC.listResults),
+  openResult: (id) => invokeComfy(COMFY_IPC.openResult, id),
+  openResultsFolder: () => invokeComfy(COMFY_IPC.openResultsFolder),
+  reuseResult: (id) => invokeComfy(COMFY_IPC.reuseResult, id),
+  onEvent: (callback) => {
+    if (typeof callback !== "function") return () => undefined;
+    const listener = (_event: Electron.IpcRendererEvent, event: ComfyEvent) => callback(event);
+    ipcRenderer.on(COMFY_IPC.event, listener);
+    return () => { ipcRenderer.removeListener(COMFY_IPC.event, listener); };
+  },
+};
+contextBridge.exposeInMainWorld("naiComfy", comfyBridge);

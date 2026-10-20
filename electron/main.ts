@@ -1,3 +1,4 @@
+import { registerComfyIpc, comfyHasActiveJobs, cancelComfyJobs, comfyNeedsQuitCleanup, shutdownOwnedComfy, shutdownOwnedComfySync, resetComfyAfterUpdateFailure } from "./ipc/comfyui-ipc";
 import {UiFontRepository} from "./ipc/ui-fonts";
 import { fetchOfficialMetadataAsset, cancelOfficialMetadataAssetDownloads } from "./ipc/official-metadata-assets";
 import crypto from "node:crypto";
@@ -719,7 +720,9 @@ function createWindow() {
       ["09-records", "records"],
       ["10-records", "records"],
     ].find(([needle]) => normalizedUiCapturePath.includes(needle))?.[1];
-    const captureSurface = normalizedUiCapturePath.includes("v5-artist-repair")
+    const captureSurface = normalizedUiCapturePath.includes("comfyui-local")
+      ? "comfyui-local"
+      : normalizedUiCapturePath.includes("v5-artist-repair")
       ? "v5ArtistRepair"
       : normalizedUiCapturePath.includes("artist-string-draw")
       ? "artistStringDraw"
@@ -792,6 +795,7 @@ function registerIpc() {
   registerNaiAccountsIpc();
   registerImageFavoritesIpc();
   registerCompatibleImageIpc(() => mainWindow);
+  registerComfyIpc(() => mainWindow, () => getSettings().outputDir);
   // OpenAI Images edits: billed by the provider, independent of the NovelAI account binding.
   ipcMain.handle("openai:inpaint", (_event, request: import("../src/types").OpenAIInpaintRequest) => openAIInpaintWorkbench(request));
   accountBoundHandle("agent:getWorkspace", () => readAgentWorkspace());
@@ -1589,11 +1593,12 @@ app.whenReady().then(async () => {
   }, 30_000);
   proxyRefreshTimer.unref();
   registerIpc();
-  registerHarnessLauncher(() => mainWindow,{isBusy:hasActiveAgentRequests,stop:stopAgentRuntime});
+  registerHarnessLauncher(() => mainWindow,{isBusy:() => hasActiveAgentRequests() || comfyHasActiveJobs(),stop:async () => { await cancelComfyJobs(); await stopAgentRuntime(); }});
   wireAutoUpdater(() => mainWindow, async () => {
+    await shutdownOwnedComfy("update");
     await stopHarnessForUpdate();
     await stopAgentRuntime();
-  },resetHarnessExitAfterUpdateFailure);
+  },() => { resetHarnessExitAfterUpdateFailure(); resetComfyAfterUpdateFailure(); });
   createWindow();
   void syncMcpServer();
 
@@ -1609,12 +1614,30 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
+let comfyQuitCleanupStarted = false;
+let comfyQuitCleanupFinished = false;
 app.on("before-quit", (event) => {
   if (harnessNeedsExitConfirmation()) {
     event.preventDefault();
     void confirmHarnessExit(mainWindow).then(confirmed => { if (confirmed) app.quit(); });
     return;
   }
+  if (!comfyQuitCleanupFinished && comfyNeedsQuitCleanup()) {
+    event.preventDefault();
+    if (!comfyQuitCleanupStarted) {
+      comfyQuitCleanupStarted = true;
+      void shutdownOwnedComfy("quit").catch(error => console.warn("[comfyui] quit cleanup failed", error)).finally(() => {
+        comfyQuitCleanupFinished = true;
+        app.quit();
+      });
+    }
+    return;
+  }
   void stopAgentRuntime();
   void mcpServer?.close();
+});
+
+app.on("will-quit", () => {
+  try { shutdownOwnedComfySync(); }
+  catch (error) { console.warn("[comfyui] final owned-process cleanup failed", error); }
 });

@@ -7225,7 +7225,7 @@ function MainPage() {
       useAppStore.getState().setActiveTab(captureSurface);
     } else if (captureSurface === "aitag") {
       useAppStore.getState().setActiveTab("onlineGallery");
-    } else if (captureSurface === "randomArtist" || captureSurface === "v5ArtistRepair" || captureSurface === "artistStringDraw") {
+    } else if (captureSurface === "randomArtist" || captureSurface === "v5ArtistRepair" || captureSurface === "artistStringDraw" || captureSurface === "comfyui-local") {
       useAppStore.getState().setActiveTab("tools");
     } else if (captureSurface === "settings") {
       useAppStore.getState().setShowSettings(true);

@@ -19,12 +19,12 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## What changed
 
-- Remove pagination from local favorites in Masonry mode: continuously scroll through all filtered results. Desktop cards follow the selected order from left to right, with equal widths, variable heights and original image proportions.
-- Appending desktop favorites while scrolling keeps the current position instead of jumping back to the top.
-- Keep Grid pagination, saved/generation-time sorting, date filters and previews in the full filtered order.
-- Mobile also removes Masonry pagination and lazily builds consecutive ordered rows. Shorter images can leave empty space below them; this is not a tightly packed masonry layout.
+- Desktop now has **Tools → Local ComfyUI**: start locally inside the app, view readiness and stop safely without opening a browser; existing loopback instances can also be connected.
+- Import workflows, select actual diffusion models/encoders/VAEs, monitor jobs, preview images and reuse parameters. Direct-prompt API starters cover MOSS-Image SFT, Anima Base and Krea 2 Turbo.
+- All three models generated images through the Windows app. macOS/Linux model inference is not yet tested; Android/iOS do not gain a local ComfyUI entry. Bring your own desktop Python, ComfyUI and models.
+- Independent records do not overwrite NovelAI accounts or history. [Local ComfyUI guide (Chinese)](./docs/COMFYUI_LOCAL.md).
 
-See the [release history (Chinese)](./docs/RELEASE_NOTES.md) for earlier changes.
+[Release notes](./docs/RELEASE_NOTES.md).
 
 ## Quick start
 

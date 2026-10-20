@@ -3239,5 +3239,971 @@
     "Transport is Streamable HTTP (stateless, no legacy SSE endpoint); protocol versions 2024-11-05 to 2025-11-25.",
     "トランスポートは Streamable HTTP（ステートレス、旧 SSE エンドポイント非対応）、プロトコルバージョンは 2024-11-05 ～ 2025-11-25 です。",
     "전송 방식은 Streamable HTTP(상태 비저장, 구형 SSE 엔드포인트 미지원)이며 프로토콜 버전은 2024-11-05 ~ 2025-11-25입니다."
+  ],
+  "本地 ComfyUI": [
+    "本地 ComfyUI",
+    "本機 ComfyUI",
+    "Local ComfyUI",
+    "ローカル ComfyUI",
+    "로컬 ComfyUI"
+  ],
+  "本机启动，不打开网页；配置、工作流与结果独立保存。": [
+    "本机启动，不打开网页；配置、工作流与结果独立保存。",
+    "本機啟動，不開啟網頁；設定、工作流與結果獨立儲存。",
+    "Runs locally without opening a browser. Settings, workflows, and results are stored separately.",
+    "ブラウザーを開かずローカル起動。設定・ワークフロー・結果は独立して保存します。",
+    "브라우저 없이 로컬로 실행합니다. 설정, 워크플로, 결과는 따로 저장합니다."
+  ],
+  "当前环境没有本地 ComfyUI 桌面桥，请使用桌面版。": [
+    "当前环境没有本地 ComfyUI 桌面桥，请使用桌面版。",
+    "目前環境沒有本機 ComfyUI 桌面橋，請使用桌面版。",
+    "The local ComfyUI bridge is unavailable. Use the desktop application.",
+    "ローカル ComfyUI 接続がありません。デスクトップ版をご利用ください。",
+    "로컬 ComfyUI 연결 기능이 없습니다. 데스크톱 앱을 사용하세요."
+  ],
+  "返回工具首页": [
+    "返回工具首页",
+    "返回工具首頁",
+    "Back to tools",
+    "ツールに戻る",
+    "도구로 돌아가기"
+  ],
+  "服务与运行环境": [
+    "服务与运行环境",
+    "服務與執行環境",
+    "Service and runtime",
+    "サービスと実行環境",
+    "서비스 및 실행 환경"
+  ],
+  "未启动": [
+    "未启动",
+    "未啟動",
+    "Not started",
+    "未起動",
+    "시작 전"
+  ],
+  "检测端口": [
+    "检测端口",
+    "偵測連接埠",
+    "Checking port",
+    "ポートを確認中",
+    "포트 확인 중"
+  ],
+  "启动中": [
+    "启动中",
+    "啟動中",
+    "Starting",
+    "起動中",
+    "시작 중"
+  ],
+  "启动完成": [
+    "启动完成",
+    "啟動完成",
+    "Ready",
+    "起動完了",
+    "시작 완료"
+  ],
+  "启动完成 · 外部实例": [
+    "启动完成 · 外部实例",
+    "啟動完成 · 外部執行個體",
+    "Ready · external instance",
+    "起動完了 · 外部インスタンス",
+    "시작 완료 · 외부 인스턴스"
+  ],
+  "停止中": [
+    "停止中",
+    "停止中",
+    "Stopping",
+    "停止中",
+    "중지 중"
+  ],
+  "已停止": [
+    "已停止",
+    "已停止",
+    "Stopped",
+    "停止済み",
+    "중지됨"
+  ],
+  "启动失败": [
+    "启动失败",
+    "啟動失敗",
+    "Start failed",
+    "起動失敗",
+    "시작 실패"
+  ],
+  "等待 HTTP 就绪 {elapsed}": [
+    "等待 HTTP 就绪 {elapsed}",
+    "等待 HTTP 就緒 {elapsed}",
+    "Waiting for HTTP readiness {elapsed}",
+    "HTTP の準備を待機 {elapsed}",
+    "HTTP 준비 대기 {elapsed}"
+  ],
+  "选择 ComfyUI 目录": [
+    "选择 ComfyUI 目录",
+    "選擇 ComfyUI 目錄",
+    "Choose ComfyUI directory",
+    "ComfyUI フォルダーを選択",
+    "ComfyUI 폴더 선택"
+  ],
+  "选择 Python": [
+    "选择 Python",
+    "選擇 Python",
+    "Choose Python",
+    "Python を選択",
+    "Python 선택"
+  ],
+  "选择输出目录": [
+    "选择输出目录",
+    "選擇輸出目錄",
+    "Choose output directory",
+    "出力先を選択",
+    "출력 폴더 선택"
+  ],
+  "尚未配置": [
+    "尚未配置",
+    "尚未設定",
+    "Not configured",
+    "未設定",
+    "설정 안 됨"
+  ],
+  "就绪超时（秒）": [
+    "就绪超时（秒）",
+    "就緒逾時（秒）",
+    "Readiness timeout (seconds)",
+    "準備タイムアウト（秒）",
+    "준비 제한 시간(초)"
+  ],
+  "禁用云端 API 节点": [
+    "禁用云端 API 节点",
+    "停用雲端 API 節點",
+    "Disable cloud API nodes",
+    "クラウド API ノードを無効化",
+    "클라우드 API 노드 비활성화"
+  ],
+  "安全模式（禁用第三方节点）": [
+    "安全模式（禁用第三方节点）",
+    "安全模式（停用第三方節點）",
+    "Safe mode (disable custom nodes)",
+    "セーフモード（カスタムノード無効）",
+    "안전 모드(사용자 노드 비활성화)"
+  ],
+  "额外启动参数（安全白名单）": [
+    "额外启动参数（安全白名单）",
+    "額外啟動參數（安全白名單）",
+    "Extra launch arguments (safe allowlist)",
+    "追加起動引数（許可リスト）",
+    "추가 실행 인수(허용 목록)"
+  ],
+  "保存启动配置": [
+    "保存启动配置",
+    "儲存啟動設定",
+    "Save launch settings",
+    "起動設定を保存",
+    "실행 설정 저장"
+  ],
+  "启动本地 ComfyUI": [
+    "启动本地 ComfyUI",
+    "啟動本機 ComfyUI",
+    "Start local ComfyUI",
+    "ローカル ComfyUI を起動",
+    "로컬 ComfyUI 시작"
+  ],
+  "连接已有实例": [
+    "连接已有实例",
+    "連線既有執行個體",
+    "Connect to running instance",
+    "起動済みのサービスに接続",
+    "실행 중 인스턴스 연결"
+  ],
+  "停止本软件启动的服务": [
+    "停止本软件启动的服务",
+    "停止本軟體啟動的服務",
+    "Stop service started by this app",
+    "このアプリが起動したサービスを停止",
+    "앱에서 시작한 서비스 중지"
+  ],
+  "断开连接": [
+    "断开连接",
+    "中斷連線",
+    "Disconnect",
+    "切断",
+    "연결 해제"
+  ],
+  "这是外部实例，断开不会结束它。": [
+    "这是外部实例，断开不会结束它。",
+    "這是外部執行個體，中斷連線不會結束它。",
+    "This is an external instance. Disconnecting will not stop it.",
+    "外部インスタンスです。切断しても終了しません。",
+    "외부 인스턴스입니다. 연결을 끊어도 종료하지 않습니다."
+  ],
+  "重新检测": [
+    "重新检测",
+    "重新偵測",
+    "Probe again",
+    "再検出",
+    "다시 감지"
+  ],
+  "运行日志": [
+    "运行日志",
+    "執行記錄",
+    "Runtime logs",
+    "実行ログ",
+    "실행 로그"
+  ],
+  "暂无日志": [
+    "暂无日志",
+    "尚無記錄",
+    "No logs yet",
+    "ログはまだありません",
+    "로그 없음"
+  ],
+  "本机平台未经实机验收，模型支持以本机分析结果为准。": [
+    "本机平台未经实机验收，模型支持以本机分析结果为准。",
+    "本機平台未經實機驗收，模型支援以本機分析結果為準。",
+    "This platform has not been validated on hardware. Model support depends on local analysis.",
+    "このプラットフォームは実機未検証です。モデル対応はローカル解析によります。",
+    "이 플랫폼은 실기기 검증 전입니다. 모델 지원은 로컬 분석 결과에 따릅니다."
+  ],
+  "工作流库": [
+    "工作流库",
+    "工作流庫",
+    "Workflow library",
+    "ワークフロー",
+    "워크플로 라이브러리"
+  ],
+  "导入 JSON 或图片元数据": [
+    "导入 JSON 或图片元数据",
+    "匯入 JSON 或圖片中繼資料",
+    "Import JSON or image metadata",
+    "JSON・画像メタデータを読み込み",
+    "JSON 또는 이미지 메타데이터 가져오기"
+  ],
+  "粘贴 JSON": [
+    "粘贴 JSON",
+    "貼上 JSON",
+    "Paste JSON",
+    "JSON を貼り付け",
+    "JSON 붙여넣기"
+  ],
+  "导入粘贴内容": [
+    "导入粘贴内容",
+    "匯入貼上內容",
+    "Import pasted content",
+    "貼り付け内容を読み込み",
+    "붙여넣은 내용 가져오기"
+  ],
+  "工作流名称": [
+    "工作流名称",
+    "工作流名稱",
+    "Workflow name",
+    "ワークフロー名",
+    "워크플로 이름"
+  ],
+  "暂无工作流，先连接服务，再导入自己的工作流。": [
+    "暂无工作流，先连接服务，再导入自己的工作流。",
+    "尚無工作流，先連線服務，再匯入自己的工作流。",
+    "No workflows yet. Connect the service, then import your workflow.",
+    "サービスに接続してからワークフローを読み込んでください。",
+    "워크플로가 없습니다. 서비스에 연결한 후 가져오세요."
+  ],
+  "重命名工作流": [
+    "重命名工作流",
+    "重新命名工作流",
+    "Rename workflow",
+    "名前を変更",
+    "워크플로 이름 변경"
+  ],
+  "删除工作流": [
+    "删除工作流",
+    "刪除工作流",
+    "Delete workflow",
+    "ワークフローを削除",
+    "워크플로 삭제"
+  ],
+  "确认删除工作流？结果图片不会删除。": [
+    "确认删除工作流？结果图片不会删除。",
+    "確認刪除工作流？結果圖片不會刪除。",
+    "Delete this workflow? Result images will be kept.",
+    "削除しますか？結果画像は保持されます。",
+    "워크플로를 삭제할까요? 결과 이미지는 유지됩니다."
+  ],
+  "确认删除": [
+    "确认删除",
+    "確認刪除",
+    "Delete",
+    "削除",
+    "삭제"
+  ],
+  "重新分析": [
+    "重新分析",
+    "重新分析",
+    "Analyze again",
+    "再解析",
+    "다시 분석"
+  ],
+  "连接后才能分析并取得本机模型清单。": [
+    "连接后才能分析并取得本机模型清单。",
+    "連線後才能分析並取得本機模型清單。",
+    "Connect to analyze and retrieve local model choices.",
+    "接続後に解析してローカルモデル一覧を取得します。",
+    "연결 후 분석하고 로컬 모델 목록을 가져올 수 있습니다."
+  ],
+  "分析报告": [
+    "分析报告",
+    "分析報告",
+    "Analysis report",
+    "解析レポート",
+    "분석 보고서"
+  ],
+  "阻断项 {count}": [
+    "阻断项 {count}",
+    "阻擋項 {count}",
+    "Blocking issues {count}",
+    "ブロック項目 {count}",
+    "차단 항목 {count}"
+  ],
+  "待确认 {count}": [
+    "待确认 {count}",
+    "待確認 {count}",
+    "Confirmations {count}",
+    "確認項目 {count}",
+    "확인 필요 {count}"
+  ],
+  "警告 {count}": [
+    "警告 {count}",
+    "警告 {count}",
+    "Warnings {count}",
+    "警告 {count}",
+    "경고 {count}"
+  ],
+  "未发现阻断项": [
+    "未发现阻断项",
+    "未發現阻擋項",
+    "No blocking issues found",
+    "ブロック項目なし",
+    "차단 항목 없음"
+  ],
+  "模型家族": [
+    "模型家族",
+    "模型家族",
+    "Model family",
+    "モデルファミリー",
+    "모델 계열"
+  ],
+  "自动识别 / 其他": [
+    "自动识别 / 其他",
+    "自動識別 / 其他",
+    "Auto-detect / other",
+    "自動検出 / その他",
+    "자동 감지 / 기타"
+  ],
+  "家族仅用于筛选和提示，不代表已验证兼容。": [
+    "家族仅用于筛选和提示，不代表已验证兼容。",
+    "家族僅用於篩選與提示，不代表已驗證相容。",
+    "Family selection is a filter and a hint, not proof of compatibility.",
+    "ファミリーは絞り込みのヒントで、互換性の証明ではありません。",
+    "계열 선택은 필터와 힌트일 뿐 호환성 검증이 아닙니다."
+  ],
+  "此工作流含云端 API 节点，本地模式禁止运行。": [
+    "此工作流含云端 API 节点，本地模式禁止运行。",
+    "此工作流含雲端 API 節點，本機模式禁止執行。",
+    "This workflow contains cloud API nodes and cannot run in local mode.",
+    "クラウド API ノードを含むためローカルでは実行できません。",
+    "클라우드 API 노드가 있어 로컬 모드에서 실행할 수 없습니다."
+  ],
+  "第三方节点会以你的本机权限运行 Python 代码。请核对清单后确认。": [
+    "第三方节点会以你的本机权限运行 Python 代码。请核对清单后确认。",
+    "第三方節點會以你的本機權限執行 Python 程式碼。請核對清單後確認。",
+    "Custom nodes run Python code with your local permissions. Review the list before accepting.",
+    "カスタムノードは端末の権限で Python を実行します。一覧を確認してください。",
+    "사용자 노드는 로컬 권한으로 Python 코드를 실행합니다. 목록을 검토하세요."
+  ],
+  "我信任这份节点清单": [
+    "我信任这份节点清单",
+    "我信任這份節點清單",
+    "I trust this node list",
+    "このノード一覧を信頼する",
+    "이 노드 목록을 신뢰합니다"
+  ],
+  "我接受未经验证的 UI 工作流转换结果": [
+    "我接受未经验证的 UI 工作流转换结果",
+    "我接受未經驗證的 UI 工作流轉換結果",
+    "I accept the unverified UI workflow conversion",
+    "未検証の UI ワークフロー変換を承認する",
+    "검증되지 않은 UI 워크플로 변환에 동의합니다"
+  ],
+  "参数与模型": [
+    "参数与模型",
+    "參數與模型",
+    "Parameters and models",
+    "パラメーターとモデル",
+    "매개변수 및 모델"
+  ],
+  "模型、编码器和 VAE 分别绑定本机加载节点，不会自动替换成同名家族。": [
+    "模型、编码器和 VAE 分别绑定本机加载节点，不会自动替换成同名家族。",
+    "模型、編碼器與 VAE 分別綁定本機載入節點，不會自動替換為同名家族。",
+    "Model, encoder, and VAE choices bind to individual local loaders; a family name never substitutes model files.",
+    "モデル・エンコーダー・VAE は個別のローダーに対応し、ファミリー名では置換しません。",
+    "모델, 인코더, VAE는 각 로더에 연결되며 계열 이름으로 파일을 대체하지 않습니다."
+  ],
+  "没有识别到可调参数，请检查工作流和分析报告。": [
+    "没有识别到可调参数，请检查工作流和分析报告。",
+    "未識別到可調參數，請檢查工作流和分析報告。",
+    "No adjustable parameters found. Check the workflow and report.",
+    "調整項目がありません。ワークフローとレポートを確認してください。",
+    "조절 가능한 매개변수가 없습니다. 워크플로와 보고서를 확인하세요."
+  ],
+  "正面提示词": [
+    "正面提示词",
+    "正面提示詞",
+    "Positive prompt",
+    "正のプロンプト",
+    "긍정 프롬프트"
+  ],
+  "负面提示词": [
+    "负面提示词",
+    "負面提示詞",
+    "Negative prompt",
+    "負のプロンプト",
+    "부정 프롬프트"
+  ],
+  "宽度": [
+    "宽度",
+    "寬度",
+    "Width",
+    "幅",
+    "너비"
+  ],
+  "高度": [
+    "高度",
+    "高度",
+    "Height",
+    "高さ",
+    "높이"
+  ],
+  "步数": [
+    "步数",
+    "步數",
+    "Steps",
+    "ステップ数",
+    "단계 수"
+  ],
+  "种子": [
+    "种子",
+    "種子",
+    "Seed",
+    "シード",
+    "시드"
+  ],
+  "批量数": [
+    "批量数",
+    "批次數",
+    "Batch size",
+    "バッチ数",
+    "배치 크기"
+  ],
+  "模型文件": [
+    "模型文件",
+    "模型檔案",
+    "Model file",
+    "モデルファイル",
+    "모델 파일"
+  ],
+  "文本编码器": [
+    "文本编码器",
+    "文字編碼器",
+    "Text encoder",
+    "テキストエンコーダー",
+    "텍스트 인코더"
+  ],
+  "VAE 文件": [
+    "VAE 文件",
+    "VAE 檔案",
+    "VAE file",
+    "VAE ファイル",
+    "VAE 파일"
+  ],
+  "调度器": [
+    "调度器",
+    "排程器",
+    "Scheduler",
+    "スケジューラー",
+    "스케줄러"
+  ],
+  "重绘强度": [
+    "重绘强度",
+    "重繪強度",
+    "Denoise",
+    "ノイズ除去強度",
+    "디노이즈"
+  ],
+  "每次随机种子": [
+    "每次随机种子",
+    "每次隨機種子",
+    "Randomize seed each run",
+    "毎回シードをランダムにする",
+    "실행마다 시드 무작위"
+  ],
+  "更改参数绑定": [
+    "更改参数绑定",
+    "更改參數綁定",
+    "Change parameter bindings",
+    "パラメーター割り当てを変更",
+    "매개변수 연결 변경"
+  ],
+  "绑定节点": [
+    "绑定节点",
+    "綁定節點",
+    "Bound node",
+    "割り当てノード",
+    "연결 노드"
+  ],
+  "参数类型": [
+    "参数类型",
+    "參數類型",
+    "Parameter kind",
+    "パラメーター種別",
+    "매개변수 종류"
+  ],
+  "提交生图任务": [
+    "提交生图任务",
+    "提交生圖工作",
+    "Queue generation",
+    "生成をキューに追加",
+    "생성 작업 대기열 추가"
+  ],
+  "请先修复阻断项并完成风险确认。": [
+    "请先修复阻断项并完成风险确认。",
+    "請先修復阻擋項並完成風險確認。",
+    "Resolve blocking issues and complete confirmations first.",
+    "ブロック項目を修正して確認を完了してください。",
+    "차단 문제를 해결하고 위험 확인을 완료하세요."
+  ],
+  "任务与结果": [
+    "任务与结果",
+    "工作與結果",
+    "Jobs and results",
+    "ジョブと結果",
+    "작업 및 결과"
+  ],
+  "暂无任务": [
+    "暂无任务",
+    "尚無工作",
+    "No jobs yet",
+    "ジョブなし",
+    "작업 없음"
+  ],
+  "排队中": [
+    "排队中",
+    "排隊中",
+    "Queued",
+    "待機中",
+    "대기 중"
+  ],
+  "运行中": [
+    "运行中",
+    "執行中",
+    "Running",
+    "実行中",
+    "실행 중"
+  ],
+  "正在提交": [
+    "正在提交",
+    "正在提交",
+    "Submitting",
+    "送信中",
+    "제출 중"
+  ],
+  "已完成": [
+    "已完成",
+    "已完成",
+    "Completed",
+    "完了",
+    "완료"
+  ],
+  "已失败": [
+    "已失败",
+    "已失敗",
+    "Failed",
+    "失敗",
+    "실패"
+  ],
+  "取消中": [
+    "取消中",
+    "取消中",
+    "Canceling",
+    "キャンセル中",
+    "취소 중"
+  ],
+  "取消任务": [
+    "取消任务",
+    "取消工作",
+    "Cancel job",
+    "ジョブをキャンセル",
+    "작업 취소"
+  ],
+  "队列位置 {position}": [
+    "队列位置 {position}",
+    "佇列位置 {position}",
+    "Queue position {position}",
+    "キュー位置 {position}",
+    "대기열 위치 {position}"
+  ],
+  "当前节点 {node}": [
+    "当前节点 {node}",
+    "目前節點 {node}",
+    "Current node {node}",
+    "現在のノード {node}",
+    "현재 노드 {node}"
+  ],
+  "复用参数": [
+    "复用参数",
+    "重用參數",
+    "Reuse parameters",
+    "パラメーターを再利用",
+    "매개변수 재사용"
+  ],
+  "相同参数再生成": [
+    "相同参数再生成",
+    "相同參數再生成",
+    "Generate again",
+    "同じ設定で再生成",
+    "같은 설정으로 다시 생성"
+  ],
+  "预览结果": [
+    "预览结果",
+    "預覽結果",
+    "Preview result",
+    "結果をプレビュー",
+    "결과 미리 보기"
+  ],
+  "关闭预览": [
+    "关闭预览",
+    "關閉預覽",
+    "Close preview",
+    "プレビューを閉じる",
+    "미리 보기 닫기"
+  ],
+  "输出文件": [
+    "输出文件",
+    "輸出檔案",
+    "Output file",
+    "出力ファイル",
+    "출력 파일"
+  ],
+  "刷新任务与结果": [
+    "刷新任务与结果",
+    "重新整理工作與結果",
+    "Refresh jobs and results",
+    "ジョブと結果を更新",
+    "작업 및 결과 새로 고침"
+  ],
+  "正在处理…": [
+    "正在处理…",
+    "正在處理…",
+    "Working…",
+    "処理中…",
+    "처리 중…"
+  ],
+  "未选择": [
+    "未选择",
+    "未選擇",
+    "Not selected",
+    "未選択",
+    "선택 안 됨"
+  ],
+  "未知": [
+    "未知",
+    "未知",
+    "Unknown",
+    "不明",
+    "알 수 없음"
+  ],
+  "本地服务无响应，请查看日志；不会自动结束进程。": [
+    "本地服务无响应，请查看日志；不会自动结束进程。",
+    "本機服務無回應，請查看記錄；不會自動結束程序。",
+    "The local service is unresponsive. Check logs; the process will not be terminated automatically.",
+    "サービスが応答しません。自動終了せずログを確認します。",
+    "로컬 서비스가 응답하지 않습니다. 로그를 확인하세요. 자동 종료하지 않습니다."
+  ],
+  "此版本不支持部分安全启动参数，请查看实际启动参数。": [
+    "此版本不支持部分安全启动参数，请查看实际启动参数。",
+    "此版本不支援部分安全啟動參數，請查看實際啟動參數。",
+    "This version does not support some safety flags. Review the actual launch arguments.",
+    "一部の安全引数に非対応です。実際の起動引数を確認してください。",
+    "일부 안전 실행 옵션을 지원하지 않습니다. 실제 실행 인수를 확인하세요."
+  ],
+  "端口需要是 1–65535 的整数，超时需要是正整数。": [
+    "端口需要是 1–65535 的整数，超时需要是正整数。",
+    "連接埠必須是 1–65535 的整數，逾時必須是正整數。",
+    "Port must be an integer from 1 to 65535; timeout must be a positive integer.",
+    "ポートは1～65535、タイムアウトは正の整数で指定してください。",
+    "포트는 1~65535의 정수, 제한 시간은 양의 정수여야 합니다."
+  ],
+  "原始诊断": [
+    "原始诊断",
+    "原始診斷",
+    "Raw diagnostics",
+    "元の診断情報",
+    "원본 진단"
+  ],
+  "失败节点 {node}": [
+    "失败节点 {node}",
+    "失敗節點 {node}",
+    "Failed node {node}",
+    "失敗ノード {node}",
+    "실패 노드 {node}"
+  ],
+  "已加载配置": [
+    "已加载配置",
+    "已載入設定",
+    "Settings loaded",
+    "設定を読み込みました",
+    "설정 로드됨"
+  ],
+  "配置已保存": [
+    "配置已保存",
+    "設定已儲存",
+    "Settings saved",
+    "設定を保存しました",
+    "설정 저장됨"
+  ],
+  "确认指纹": [
+    "确认指纹",
+    "確認指紋",
+    "Confirmation fingerprint",
+    "確認フィンガープリント",
+    "확인 지문"
+  ],
+  "筛选工作流": [
+    "筛选工作流",
+    "篩選工作流",
+    "Filter workflows",
+    "ワークフローを絞り込み",
+    "워크플로 필터"
+  ],
+  "官方模板": [
+    "官方模板",
+    "官方範本",
+    "Official templates",
+    "公式テンプレート",
+    "공식 템플릿"
+  ],
+  "加载本机官方模板": [
+    "加载本机官方模板",
+    "載入本機官方範本",
+    "Load local official templates",
+    "ローカル公式テンプレートを読み込み",
+    "로컬 공식 템플릿 로드"
+  ],
+  "本机未提供模板列表，可手动导入。": [
+    "本机未提供模板列表，可手动导入。",
+    "本機未提供範本清單，可手動匯入。",
+    "No template list is available locally. Import a workflow manually.",
+    "テンプレート一覧がありません。手動で読み込めます。",
+    "로컬 템플릿 목록이 없습니다. 수동으로 가져올 수 있습니다."
+  ],
+  "ComfyUI 尚未配置，请选择本地目录和 Python。": [
+    "ComfyUI 尚未配置，请选择本地目录和 Python。",
+    "ComfyUI 尚未設定，請選擇本機目錄與 Python。",
+    "Configure ComfyUI by choosing its local directory and Python.",
+    "ComfyUI のフォルダーと Python を選択してください。",
+    "ComfyUI 로컬 폴더와 Python을 선택하세요."
+  ],
+  "ComfyUI 安装目录无效。": [
+    "ComfyUI 安装目录无效。",
+    "ComfyUI 安裝目錄無效。",
+    "The ComfyUI installation directory is invalid.",
+    "ComfyUI のインストール先が無効です。",
+    "ComfyUI 설치 폴더가 올바르지 않습니다."
+  ],
+  "Python 不可用，请重新选择解释器。": [
+    "Python 不可用，请重新选择解释器。",
+    "Python 無法使用，請重新選擇解譯器。",
+    "Python is unavailable. Choose another interpreter.",
+    "Python が利用できません。別の実行ファイルを選択してください。",
+    "Python을 사용할 수 없습니다. 인터프리터를 다시 선택하세요."
+  ],
+  "无法读取此 ComfyUI 的启动参数帮助。": [
+    "无法读取此 ComfyUI 的启动参数帮助。",
+    "無法讀取此 ComfyUI 的啟動參數說明。",
+    "Could not read the launch-argument help for this ComfyUI installation.",
+    "この ComfyUI の起動引数ヘルプを取得できません。",
+    "ComfyUI 실행 인수 도움말을 읽을 수 없습니다."
+  ],
+  "端口已被其他程序占用，请更换端口；不会结束其他程序。": [
+    "端口已被其他程序占用，请更换端口；不会结束其他程序。",
+    "連接埠已被其他程式占用，請更換；不會結束其他程式。",
+    "Another program is using this port. Choose a different port; that program will not be stopped.",
+    "他のプログラムが使用中です。別のポートを選択してください。他のプログラムは終了しません。",
+    "다른 프로그램이 포트를 사용 중입니다. 포트를 바꾸세요. 다른 프로그램을 종료하지 않습니다."
+  ],
+  "系统保留或禁止使用此端口，请更换端口。": [
+    "系统保留或禁止使用此端口，请更换端口。",
+    "系統保留或禁止使用此連接埠，請更換。",
+    "This port is reserved or blocked by the system. Choose another port.",
+    "システム予約・禁止ポートです。別のポートを選択してください。",
+    "시스템 예약 또는 차단 포트입니다. 다른 포트를 선택하세요."
+  ],
+  "无法创建 ComfyUI 进程。": [
+    "无法创建 ComfyUI 进程。",
+    "無法建立 ComfyUI 程序。",
+    "Could not start the ComfyUI process.",
+    "ComfyUI プロセスを作成できません。",
+    "ComfyUI 프로세스를 시작할 수 없습니다."
+  ],
+  "ComfyUI 在就绪前退出，请查看退出码和日志。": [
+    "ComfyUI 在就绪前退出，请查看退出码和日志。",
+    "ComfyUI 在就緒前結束，請查看結束代碼與記錄。",
+    "ComfyUI exited before becoming ready. Check its exit code and logs.",
+    "準備完了前に終了しました。終了コードとログを確認してください。",
+    "준비 완료 전에 종료되었습니다. 종료 코드와 로그를 확인하세요."
+  ],
+  "等待 ComfyUI 就绪超时，已清理本软件创建的进程。": [
+    "等待 ComfyUI 就绪超时，已清理本软件创建的进程。",
+    "等待 ComfyUI 就緒逾時，已清理本軟體建立的程序。",
+    "ComfyUI readiness timed out. The process created by this app was cleaned up.",
+    "準備がタイムアウトしました。このアプリが作成したプロセスは終了しました。",
+    "ComfyUI 준비 시간이 초과되었습니다. 앱이 만든 프로세스를 정리했습니다."
+  ],
+  "服务归属校验失败，不会接管其他进程。": [
+    "服务归属校验失败，不会接管其他进程。",
+    "服務歸屬驗證失敗，不會接管其他程序。",
+    "Service ownership could not be verified. Other processes will not be taken over.",
+    "サービスの所有権を検証できません。他のプロセスは操作しません。",
+    "서비스 소유권을 확인할 수 없습니다. 다른 프로세스를 제어하지 않습니다."
+  ],
+  "ComfyUI 意外退出，请查看日志。": [
+    "ComfyUI 意外退出，请查看日志。",
+    "ComfyUI 意外結束，請查看記錄。",
+    "ComfyUI exited unexpectedly. Check the logs.",
+    "ComfyUI が予期せず終了しました。ログを確認してください。",
+    "ComfyUI가 예기치 않게 종료되었습니다. 로그를 확인하세요."
+  ],
+  "无法连接本机服务，请确认它已经启动。": [
+    "无法连接本机服务，请确认它已经启动。",
+    "無法連線本機服務，請確認已啟動。",
+    "Could not connect to the local service. Make sure it is running.",
+    "ローカルサービスに接続できません。起動を確認してください。",
+    "로컬 서비스에 연결할 수 없습니다. 실행 중인지 확인하세요."
+  ],
+  "该端口返回的不是可识别的 ComfyUI 服务。": [
+    "该端口返回的不是可识别的 ComfyUI 服务。",
+    "此連接埠回傳的不是可識別的 ComfyUI 服務。",
+    "This port did not return a recognizable ComfyUI service.",
+    "このポートは認識可能な ComfyUI サービスではありません。",
+    "이 포트의 서비스는 인식 가능한 ComfyUI가 아닙니다."
+  ],
+  "尚未确认服务已停止，请查看诊断信息。": [
+    "尚未确认服务已停止，请查看诊断信息。",
+    "尚未確認服務已停止，請查看診斷資訊。",
+    "Service shutdown has not been confirmed. Check the diagnostics.",
+    "停止を確認できません。診断情報を確認してください。",
+    "서비스 중지를 확인하지 못했습니다. 진단 정보를 확인하세요."
+  ],
+  "模型缺失时可先选择本机替代文件，再重新分析。": [
+    "模型缺失时可先选择本机替代文件，再重新分析。",
+    "模型缺少時可先選擇本機替代檔案，再重新分析。",
+    "If a model is missing, choose a local replacement and analyze again.",
+    "モデルが不足している場合はローカルの代替を選び再解析してください。",
+    "모델이 없으면 로컬 대체 파일을 선택한 후 다시 분석하세요."
+  ],
+  "当前值不在本机可选项中：{value}": [
+    "当前值不在本机可选项中：{value}",
+    "目前值不在本機選項中：{value}",
+    "Current value is not available locally: {value}",
+    "現在の値がローカルにありません：{value}",
+    "현재 값을 로컬에서 사용할 수 없습니다: {value}"
+  ],
+  "尚未分析": [
+    "尚未分析",
+    "尚未分析",
+    "Not analyzed",
+    "未解析",
+    "분석 전"
+  ],
+  "正在校验": [
+    "正在校验",
+    "正在驗證",
+    "Validating",
+    "検証中",
+    "검증 중"
+  ],
+  "保存结果中": [
+    "保存结果中",
+    "儲存結果中",
+    "Saving results",
+    "結果を保存中",
+    "결과 저장 중"
+  ],
+  "本机地址": [
+    "本机地址",
+    "本機位址",
+    "Loopback address",
+    "ループバックアドレス",
+    "루프백 주소"
+  ],
+  "配置与启动参数": [
+    "配置与启动参数",
+    "設定與啟動參數",
+    "Configuration and launch arguments",
+    "設定と起動引数",
+    "설정 및 실행 인수"
+  ],
+  "检测到本机已有 ComfyUI，可连接。": [
+    "检测到本机已有 ComfyUI，可连接。",
+    "偵測到本機已有 ComfyUI，可連線。",
+    "A running local ComfyUI was detected. You can connect to it.",
+    "起動済みの ComfyUI を検出しました。接続できます。",
+    "실행 중인 로컬 ComfyUI를 찾았습니다. 연결할 수 있습니다."
+  ],
+  "上次会话可能留下进程 PID {pid}，本软件不会自动结束它。": [
+    "上次会话可能留下进程 PID {pid}，本软件不会自动结束它。",
+    "上次工作階段可能留下程序 PID {pid}，本軟體不會自動結束它。",
+    "A previous session may have left process PID {pid}. This app will not terminate it automatically.",
+    "前回のプロセス PID {pid} が残っている可能性があります。自動で終了しません。",
+    "이전 세션의 PID {pid} 프로세스가 남아 있을 수 있습니다. 자동으로 종료하지 않습니다."
+  ],
+  "协议测试服务，不代表真实模型推理。": [
+    "协议测试服务，不代表真实模型推理。",
+    "協定測試服務，不代表真實模型推論。",
+    "Protocol test service, not real model inference.",
+    "プロトコルのテストサービスであり、実モデルの推論ではありません。",
+    "프로토콜 테스트 서비스이며 실제 모델 추론이 아닙니다."
+  ],
+  "使用软件默认输出目录的 ComfyUI 子目录": [
+    "使用软件默认输出目录的 ComfyUI 子目录",
+    "使用軟體預設輸出目錄的 ComfyUI 子目錄",
+    "Use the ComfyUI subfolder of the app output directory",
+    "アプリ出力先の ComfyUI サブフォルダーを使用",
+    "앱 출력 폴더의 ComfyUI 하위 폴더 사용"
+  ],
+  "另有 {count} 个非静态图片输出保留在 ComfyUI 输出目录。": [
+    "另有 {count} 个非静态图片输出保留在 ComfyUI 输出目录。",
+    "另有 {count} 個非靜態圖片輸出保留在 ComfyUI 輸出目錄。",
+    "{count} non-still-image outputs remain in the ComfyUI output directory.",
+    "静止画以外の出力 {count} 件は ComfyUI 出力先にあります。",
+    "정지 이미지가 아닌 출력 {count}개가 ComfyUI 출력 폴더에 남아 있습니다."
+  ],
+  "每行一个参数；选项和值分两行，路径不加引号。主进程会校验安全白名单。": [
+    "每行一个参数；选项和值分两行，路径不加引号。主进程会校验安全白名单。",
+    "每行一個參數；選項與值分兩行，路徑不加引號。主程序會驗證安全白名單。",
+    "One argument per line. Put an option and its value on separate lines; do not quote paths. The main process validates the safety allowlist.",
+    "1行に1引数。オプションと値は別の行にし、パスを引用符で囲まないでください。メインプロセスが許可リストを検証します。",
+    "한 줄에 인수 하나를 입력하세요. 옵션과 값은 다른 줄에 쓰고 경로에 따옴표를 붙이지 마세요. 메인 프로세스가 허용 목록을 검증합니다."
+  ],
+  "当前分支不再使用以下 {count} 个参数；仅在确认清理后移除，其他输入保留。": [
+    "当前分支不再使用以下 {count} 个参数；仅在确认清理后移除，其他输入保留。",
+    "目前分支不再使用以下 {count} 個參數；僅於確認清理後移除，其他輸入保留。",
+    "This branch no longer uses these {count} parameters. They are removed only after confirmation; other inputs are kept.",
+    "現在の分岐では以下の {count} 個のパラメーターを使用しません。確認後にのみ削除し、他の入力は保持します。",
+    "현재 분기는 다음 매개변수 {count}개를 사용하지 않습니다. 확인 후에만 삭제하며 다른 입력은 유지합니다."
+  ],
+  "清除失效参数并重新分析": [
+    "清除失效参数并重新分析",
+    "清除失效參數並重新分析",
+    "Clear obsolete parameters and analyze again",
+    "無効なパラメーターを削除して再解析",
+    "유효하지 않은 매개변수를 지우고 다시 분석"
   ]
 }
