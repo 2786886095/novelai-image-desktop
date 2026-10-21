@@ -9,7 +9,7 @@ import { detectInstallLayout } from './comfyui-install';
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 function harness() {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'comfy-controller-'))); roots.push(root);
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'comfy-controller-'))); roots.push(root);
   const softwareHome = path.join(root, 'software'), userData = path.join(root, 'profile'), desktopDirectory = path.join(root, 'desktop');
   for (const p of [softwareHome, userData, desktopDirectory]) fs.mkdirSync(p);
   const adopt = vi.fn(async () => ({ schema: 1 } as never)), openExternal = vi.fn(async () => undefined);

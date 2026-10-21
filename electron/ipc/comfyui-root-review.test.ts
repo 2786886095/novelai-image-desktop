@@ -32,7 +32,7 @@ function deferred<T>() { let resolve!: (value: T) => void; const promise = new P
 const free = () => ({ kind: 'free', target: { host: '127.0.0.1', port: 8188, baseUrl: 'http://127.0.0.1:8188' } });
 async function service() {
   const parent = process.env.COMFY_ROOT_REVIEW_EVIDENCE_DIR || os.tmpdir(); await fs.mkdir(parent, { recursive: true });
-  const root = await fs.mkdtemp(path.join(parent, 'comfy-root-review-')); roots.push(root);
+  const root = await fs.realpath(await fs.mkdtemp(path.join(parent, 'comfy-root-review-'))); roots.push(root);
   const originalStore = path.join(root, 'novelai-image-desktop.json'); await fs.writeFile(originalStore, '{"synthetic-account-sentinel":"never overwrite"}');
   const originalSha = hash(await fs.readFile(originalStore));
   const options: ComfyLocalServiceOptions = { userData: root, defaultOutputDirectory: () => path.join(root, 'output'),
@@ -90,7 +90,7 @@ it('metadata differences remain visible warnings and never blanket-block the use
 afterEach(async () => {
   vi.restoreAllMocks(); hooks.probe.mockReset(); hooks.random.mockClear();
   if (!process.env.COMFY_ROOT_REVIEW_EVIDENCE_DIR) for (const root of roots) {
-    if (path.dirname(root) !== path.resolve(os.tmpdir()) || !path.basename(root).startsWith('comfy-root-review-')) throw new Error('UNSAFE_REVIEW_CLEANUP');
+    if (path.dirname(root) !== await fs.realpath(os.tmpdir()) || !path.basename(root).startsWith('comfy-root-review-')) throw new Error('UNSAFE_REVIEW_CLEANUP');
     await fs.rm(root, { recursive: true, force: true });
   }
   roots.length = 0;

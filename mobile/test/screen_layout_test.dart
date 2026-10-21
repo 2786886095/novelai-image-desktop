@@ -420,6 +420,9 @@ void main() {
       'compact update check error',
     );
 
+    await tester.scrollUntilVisible(find.text('检查失败'), 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
     expect(find.text('检查失败'), findsOneWidget);
     expect(find.textContaining('SocketConnection'), findsNothing);
     expect(tester.takeException(), isNull);

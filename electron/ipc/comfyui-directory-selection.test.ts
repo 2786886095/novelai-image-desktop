@@ -14,7 +14,8 @@ const roots:string[]=[],services:ComfyLocalService[]=[];
 async function setup(){
  const temp=await fs.realpath(os.tmpdir()),root=await fs.mkdtemp(path.join(temp,'comfy-directory-test-'));roots.push(root);
  const source=path.join(root,'ComfyUI'),exe=process.platform==='win32'?'python.exe':'python';await fs.mkdir(source);await fs.writeFile(path.join(source,'main.py'),'# STATIC NEVER EXECUTED');
- for(const name of ['python','.ext']){await fs.mkdir(path.join(root,name));await fs.writeFile(path.join(root,name,exe),'STATIC NEVER EXECUTED');}
+ // The real path preflight checks X_OK on POSIX; the dependency/help probes below remain mocked.
+ for(const name of ['python','.ext']){await fs.mkdir(path.join(root,name));const python=path.join(root,name,exe);await fs.writeFile(python,'STATIC NEVER EXECUTED');await fs.chmod(python,0o755);}
  const legacy=path.join(root,'python',exe),ext=path.join(root,'.ext',exe);
  mocks.probe.mockResolvedValue({kind:'free',target:{host:'127.0.0.1',port:8188,baseUrl:'http://127.0.0.1:8188'}});
  mocks.help.mockImplementation(async (install:ComfyInstallInspection)=>({...install,helpProbe:'passed',supportedFlags:['--port'],checkedAt:'2026-10-21T00:00:00Z'}));
