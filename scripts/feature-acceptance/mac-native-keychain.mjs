@@ -99,20 +99,35 @@ export async function prepareMacNativeKeychain({run, env = process.env,
   const restore = () => cleanup ??= (async () => {
     if (!snapshotComplete) return;
     const errors = [];
-    // security(1): -s without a keychain unsets it (SetDomainDefault NULL).
-    // An originally absent default must stay absent; never invent login.keychain.
+    // Try the documented setters first, but trust only independent reads:
+    // Apple's optional(NULL) can resolve the current default, and its empty
+    // search setter can leave saved preferences unchanged. Never invent login.
     try { call(['default-keychain', '-d', 'user', '-s', ...originalDefault], {allowAbsentUnset: originalDefault.length === 0}); } catch (error) { errors.push(clean(error.message)); }
     try { call(['list-keychains', '-d', 'user', '-s', ...originalSearch]); } catch (error) { errors.push(clean(error.message)); }
     try {
-      const currentDefault = paths(call(['default-keychain', '-d', 'user'], {allowNoDefault: true}));
-      const currentSearch = paths(call(['list-keychains', '-d', 'user']));
+      let currentDefault = paths(call(['default-keychain', '-d', 'user'], {allowNoDefault: true}));
+      let currentSearch = paths(call(['list-keychains', '-d', 'user']));
+      // For an originally empty disposable HOME only, deleting this exact owned
+      // Keychain uses SecKeychainDelete's remove/default-clear path instead of
+      // the ineffective empty setters. No foreign or partly restored list may
+      // enter this fallback, and every command/read error remains fatal.
+      if (errors.length === 0 && originalDefault.length === 0 && originalSearch.length === 0 &&
+          creationAttempted && JSON.stringify(currentDefault) === JSON.stringify([keychain]) &&
+          JSON.stringify(currentSearch) === JSON.stringify([keychain])) {
+        if (!ownedFile()) throw Error('Owned native Keychain is missing before empty-snapshot cleanup');
+        call(['delete-keychain', keychain]);
+        state.deleted = !fs.existsSync(keychain);
+        if (!state.deleted) throw Error('Owned native Keychain was not deleted');
+        currentDefault = paths(call(['default-keychain', '-d', 'user'], {allowNoDefault: true}));
+        currentSearch = paths(call(['list-keychains', '-d', 'user']));
+      }
       if (JSON.stringify(currentDefault) !== JSON.stringify(originalDefault) || JSON.stringify(currentSearch) !== JSON.stringify(originalSearch))
         throw Error('Native Keychain preferences did not restore byte-exact path lists');
       state.restored = errors.length === 0;
     } catch (error) { errors.push(clean(error.message)); }
-    // Never delete a still-selected keychain after a failed restoration. Retain
-    // that exact owned path and restoration diagnostics for the disposable job.
-    if (state.restored && creationAttempted) {
+    // Outside the guarded empty-snapshot path, never delete a still-selected
+    // Keychain after failed restoration. Preserve all cleanup diagnostics.
+    if (state.restored && creationAttempted && !state.deleted) {
       try {
         if (ownedFile()) call(['delete-keychain', keychain]);
         state.deleted = !fs.existsSync(keychain);

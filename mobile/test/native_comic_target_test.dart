@@ -20,6 +20,30 @@ import '../integration_test/native_ui_actions.dart';
 import '../integration_test/native_ui_scenarios.dart'
     show openNativeComicFromTools;
 
+const _requiredRobotoNames = [
+  'roboto-regular.ttf',
+  'roboto-medium.ttf',
+  'roboto-bold.ttf'
+];
+
+String _asciiLower(String value) => String.fromCharCodes(
+    value.codeUnits.map((unit) => unit >= 65 && unit <= 90 ? unit + 32 : unit));
+
+List<File> _resolveRequiredRobotoFiles(Iterable<File> entries) {
+  final files = entries.toList();
+  return _requiredRobotoNames.map((required) {
+    final matches = files
+        .where((file) => _asciiLower(path.basename(file.path)) == required)
+        .toList();
+    if (matches.length != 1) {
+      throw StateError(
+          'Expected one SDK font $required; found ${matches.length}: '
+          '${matches.map((file) => path.basename(file.path)).join(', ')}');
+    }
+    return matches.single;
+  }).toList();
+}
+
 Future<void> _drive(WidgetTester tester, Future<void> action) async {
   var completed = false;
   Object? failure;
@@ -110,14 +134,14 @@ void main() {
         Directory.fromUri(config.uri.resolve(flutter['rootUri'] as String));
     final sdk = package.parent.parent;
     final font = FontLoader('Roboto');
-    for (final file in [
-      'roboto-regular.ttf',
-      'roboto-medium.ttf',
-      'roboto-bold.ttf'
-    ]) {
-      font.addFont(Future.value(ByteData.sublistView(File(path.join(
-              sdk.path, 'bin', 'cache', 'artifacts', 'material_fonts', file))
-          .readAsBytesSync())));
+    final fonts = Directory(
+        path.join(sdk.path, 'bin', 'cache', 'artifacts', 'material_fonts'));
+    // Flutter SDK releases differ in filename case. Enumerate actual files,
+    // require all three unique ASCII case-insensitive matches, and load those
+    // exact paths. No Ahem fallback or silently substituted font is permitted.
+    for (final file
+        in _resolveRequiredRobotoFiles(fonts.listSync().whereType<File>())) {
+      font.addFont(Future.value(ByteData.sublistView(file.readAsBytesSync())));
     }
     await font.load();
   });
@@ -140,6 +164,50 @@ void main() {
       throw StateError('Host diagnostic sandbox escaped its owned temp root');
     }
     await sandbox.delete(recursive: true);
+  });
+
+  test('SDK font resolver uses actual mixed-case file paths in required order',
+      () {
+    final fonts = Directory(path.join(sandbox.path, 'fonts'))..createSync();
+    final names = [
+      'Roboto-Bold.ttf',
+      'ROBOTO-REGULAR.TTF',
+      'roboto-Medium.ttf'
+    ];
+    for (var i = 0; i < names.length; i++) {
+      File(path.join(fonts.path, names[i])).writeAsBytesSync([i + 1]);
+    }
+    File(path.join(fonts.path, 'unrelated.ttf')).writeAsBytesSync([99]);
+    final resolved =
+        _resolveRequiredRobotoFiles(fonts.listSync().whereType<File>());
+    expect(resolved.map((file) => path.basename(file.path)),
+        ['ROBOTO-REGULAR.TTF', 'roboto-Medium.ttf', 'Roboto-Bold.ttf']);
+    expect(resolved.map((file) => file.readAsBytesSync().single), [2, 3, 1]);
+  });
+
+  test('SDK font resolver rejects missing required weight without fallback',
+      () {
+    final files = ['Roboto-Regular.ttf', 'Roboto-Bold.ttf']
+        .map((name) => File(path.join(sandbox.path, name)));
+    expect(
+        () => _resolveRequiredRobotoFiles(files),
+        throwsA(isA<StateError>().having((error) => error.message, 'message',
+            contains('roboto-medium.ttf; found 0'))));
+  });
+
+  test('SDK font resolver rejects case-insensitive ambiguity', () {
+    // Use enumerated path identities so this remains testable even on a
+    // case-insensitive host filesystem where both files cannot be created.
+    final files = [
+      'Roboto-Regular.ttf',
+      'roboto-regular.ttf',
+      'Roboto-Medium.ttf',
+      'Roboto-Bold.ttf'
+    ].map((name) => File(path.join(sandbox.path, name)));
+    expect(
+        () => _resolveRequiredRobotoFiles(files),
+        throwsA(isA<StateError>().having((error) => error.message, 'message',
+            contains('roboto-regular.ttf; found 2'))));
   });
 
   testWidgets(

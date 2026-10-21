@@ -45,7 +45,7 @@ function fixture(t, {missingDefault = false, missingResponse = ciMissingDefault}
   return {temp, run, original, state, input, report, assertPrivate};
 }
 
-function filesystemPreferencesFixture(t, {dropWrites = false} = {}) {
+function filesystemPreferencesFixture(t, {dropWrites = false, appleEmptySetters = false, retainPreferencesOnDelete = false} = {}) {
   const f = fixture(t, {missingDefault: true}); f.state.currentSearch = [];
   const prefs = path.join(f.run, 'environment', 'HOME', 'Library', 'Preferences', 'com.apple.security.plist');
   const read = () => fs.existsSync(prefs) ? JSON.parse(fs.readFileSync(prefs, 'utf8'))
@@ -54,9 +54,22 @@ function filesystemPreferencesFixture(t, {dropWrites = false} = {}) {
   f.input.execute = (binary, args, options) => {
     // Each fake process reloads disk. Match Apple's best-effort open behavior:
     // a missing parent leaves no preferences even when the setter exits zero.
-    Object.assign(f.state, read());
+    const before = read(); Object.assign(f.state, before);
     const answer = memoryExecute(binary, args, options);
-    if (!dropWrites && answer.status === 0 && ['default-keychain', 'list-keychains'].includes(args[0]) && args.includes('-s')) {
+    // Apple source: optional(NULL) returns the current default. An empty
+    // search setter clears its "set" flag, so save leaves that plist key.
+    // The recording fake is deliberately filesystem-backed across processes.
+    const emptySetter = appleEmptySetters && args.includes('-s') && args.at(-1) === '-s' &&
+      ['default-keychain', 'list-keychains'].includes(args[0]);
+    if (emptySetter) Object.assign(f.state, before);
+    const removed = appleEmptySetters && args[0] === 'delete-keychain' && answer.status === 0 && !fs.existsSync(args.at(-1));
+    if (removed) {
+      const owned = args.at(-1);
+      f.state.currentDefault = before.currentDefault.filter(file => file !== owned);
+      f.state.currentSearch = before.currentSearch.filter(file => file !== owned);
+    }
+    if (!dropWrites && answer.status === 0 && !emptySetter &&
+        ((['default-keychain', 'list-keychains'].includes(args[0]) && args.includes('-s')) || removed && !retainPreferencesOnDelete)) {
       try {fs.writeFileSync(prefs, JSON.stringify({currentDefault: f.state.currentDefault, currentSearch: f.state.currentSearch}));}
       catch (error) {if (error.code !== 'ENOENT') throw error;}
     }
@@ -65,6 +78,96 @@ function filesystemPreferencesFixture(t, {dropWrites = false} = {}) {
   };
   return {...f, prefs, read};
 }
+
+test('Apple empty-setter semantics restore a double-empty snapshot only by exact owned deletion and fresh dual reads', async t => {
+  const f = filesystemPreferencesFixture(t, {appleEmptySetters: true});
+  const cleanup = await prepareMacNativeKeychain(f.input), owned = f.report().keychain;
+  await cleanup(); await cleanup();
+  assert.deepEqual(f.read(), {currentDefault: [], currentSearch: []});
+  assert.equal(f.report().prepared, true); assert.equal(f.report().restored, true); assert.equal(f.report().deleted, true);
+  assert.equal(fs.existsSync(owned), false); assert.equal(fs.readFileSync(f.original, 'utf8'), 'ORIGINAL PRISTINE BYTES');
+  const calls = f.state.calls.map(call => call.args), deletion = calls.findIndex(args => args[0] === 'delete-keychain');
+  assert.deepEqual(calls[deletion], ['delete-keychain', owned]);
+  assert.equal(calls.filter(args => args[0] === 'delete-keychain').length, 1);
+  assert.deepEqual(calls.slice(deletion - 2, deletion), [['default-keychain', '-d', 'user'], ['list-keychains', '-d', 'user']]);
+  assert.deepEqual(calls.slice(deletion + 1), [['default-keychain', '-d', 'user'], ['list-keychains', '-d', 'user']]); f.assertPrivate();
+});
+
+test('ineffective empty setters never authorize fallback for any nonempty original snapshot', async t => {
+  for (const original of [{currentDefault: [], currentSearch: ['ORIGINAL']}, {currentDefault: ['ORIGINAL'], currentSearch: []}]) await t.test(JSON.stringify(original), async sub => {
+    const f = filesystemPreferencesFixture(sub, {appleEmptySetters: true});
+    fs.mkdirSync(path.dirname(f.prefs), {recursive: true});
+    fs.writeFileSync(f.prefs, JSON.stringify(Object.fromEntries(Object.entries(original).map(([key, value]) => [key, value.map(() => f.original)]))));
+    const cleanup = await prepareMacNativeKeychain(f.input);
+    await assert.rejects(cleanup(), /did not restore byte-exact/);
+    assert.equal(f.report().restored, false); assert.equal(f.report().deleted, false);
+    assert.equal(fs.existsSync(f.report().keychain), true); assert.ok(!f.state.calls.some(call => call.args[0] === 'delete-keychain'));
+    assert.equal(fs.readFileSync(f.original, 'utf8'), 'ORIGINAL PRISTINE BYTES'); f.assertPrivate();
+  });
+});
+
+test('double-empty fallback rejects foreign, duplicate or partly restored current lists', async t => {
+  for (const variant of ['foreign-default', 'foreign-search', 'duplicate-search', 'default-already-empty']) await t.test(variant, async sub => {
+    const f = filesystemPreferencesFixture(sub, {appleEmptySetters: true}), cleanup = await prepareMacNativeKeychain(f.input), owned = f.report().keychain;
+    const currentDefault = variant === 'foreign-default' ? [f.original] : variant === 'default-already-empty' ? [] : [owned];
+    const currentSearch = variant === 'foreign-search' ? [owned, f.original] : variant === 'duplicate-search' ? [owned, owned] : [owned];
+    fs.writeFileSync(f.prefs, JSON.stringify({currentDefault, currentSearch}));
+    await assert.rejects(cleanup(), /did not restore byte-exact/);
+    assert.equal(f.report().restored, false); assert.equal(f.report().deleted, false); assert.equal(fs.existsSync(owned), true);
+    assert.ok(!f.state.calls.some(call => call.args[0] === 'delete-keychain')); assert.equal(fs.readFileSync(f.original, 'utf8'), 'ORIGINAL PRISTINE BYTES'); f.assertPrivate();
+  });
+});
+
+test('double-empty fallback cannot conceal setter or fresh-read failures', async t => {
+  for (const phase of ['unset', 'search-set', 'default-read', 'search-read']) await t.test(phase, async sub => {
+    const f = filesystemPreferencesFixture(sub, {appleEmptySetters: true}), cleanup = await prepareMacNativeKeychain(f.input);
+    f.state.fail = args => {
+      const selected = phase === 'unset' ? isEmptyUnset(args) : phase === 'search-set' ? args[0] === 'list-keychains' && args.includes('-s')
+        : phase === 'default-read' ? args[0] === 'default-keychain' && !args.includes('-s') : args[0] === 'list-keychains' && !args.includes('-s');
+      return selected ? {status: 1, stdout: '', stderr: 'STRICT_' + phase + '_FAILURE'} : null;
+    };
+    await assert.rejects(cleanup(), new RegExp('STRICT_' + phase + '_FAILURE'));
+    assert.equal(f.report().restored, false); assert.equal(f.report().deleted, false); assert.equal(fs.existsSync(f.report().keychain), true);
+    assert.ok(!f.state.calls.some(call => call.args[0] === 'delete-keychain')); f.assertPrivate();
+  });
+});
+
+test('double-empty fallback rechecks owned path and rejects symlink replacement', async t => {
+  const f = filesystemPreferencesFixture(t, {appleEmptySetters: true}), cleanup = await prepareMacNativeKeychain(f.input), owned = f.report().keychain;
+  const foreign = path.join(f.temp, 'foreign'); fs.mkdirSync(foreign); fs.writeFileSync(path.join(foreign, 'KEEP'), 'PRISTINE');
+  fs.unlinkSync(owned); fs.symlinkSync(foreign, owned, process.platform === 'win32' ? 'junction' : 'dir');
+  await assert.rejects(cleanup(), /changed Keychain cleanup target/);
+  assert.equal(f.report().restored, false); assert.equal(f.report().deleted, false); assert.equal(fs.readFileSync(path.join(foreign, 'KEEP'), 'utf8'), 'PRISTINE');
+  assert.ok(!f.state.calls.some(call => call.args[0] === 'delete-keychain')); f.assertPrivate();
+});
+
+test('double-empty fallback requires successful deletion, actual absence and empty reread preferences', async t => {
+  for (const phase of ['delete-failure', 'delete-zero-no-unlink', 'stale-preferences', 'post-delete-read-error']) await t.test(phase, async sub => {
+    const f = filesystemPreferencesFixture(sub, {appleEmptySetters: true, retainPreferencesOnDelete: phase === 'stale-preferences'});
+    const cleanup = await prepareMacNativeKeychain(f.input), owned = f.report().keychain;
+    f.state.fail = args => args[0] === 'delete-keychain' && phase === 'delete-failure' ? {status: 1, stdout: '', stderr: 'DELETE_DENIED'}
+      : args[0] === 'delete-keychain' && phase === 'delete-zero-no-unlink' ? {status: 0, stdout: '', stderr: ''}
+      : phase === 'post-delete-read-error' && !fs.existsSync(owned) && args[0] === 'default-keychain' && !args.includes('-s') ? {status: 1, stdout: '', stderr: 'POST_DELETE_DENIED'} : null;
+    await assert.rejects(cleanup(), /DELETE_DENIED|not deleted|did not restore byte-exact|POST_DELETE_DENIED/);
+    assert.equal(f.report().restored, false); assert.equal(f.report().deleted, ['stale-preferences', 'post-delete-read-error'].includes(phase));
+    assert.equal(fs.existsSync(owned), !['stale-preferences', 'post-delete-read-error'].includes(phase));
+    assert.equal(f.state.calls.filter(call => call.args[0] === 'delete-keychain').length, 1);
+    assert.equal(fs.readFileSync(f.original, 'utf8'), 'ORIGINAL PRISTINE BYTES'); f.assertPrivate();
+  });
+});
+
+test('successful double-empty cleanup still rethrows an independent setup failure', async t => {
+  const f = filesystemPreferencesFixture(t, {appleEmptySetters: true}); let selectionRead = false;
+  f.state.fail = args => {
+    if (!selectionRead && args[0] === 'default-keychain' && !args.includes('-s') && f.state.currentDefault.length) {
+      selectionRead = true; return {status: 0, stdout: '    "' + f.original + '"\n', stderr: ''};
+    }
+  };
+  await assert.rejects(prepareMacNativeKeychain(f.input), /Dedicated native Keychain was not selected/);
+  assert.equal(f.report().prepared, false); assert.equal(f.report().restored, true); assert.equal(f.report().deleted, true);
+  assert.equal(f.report().setupFailure, 'Dedicated native Keychain was not selected'); assert.equal(f.report().failure, 'Dedicated native Keychain was not selected');
+  assert.equal(f.report().restorationFailure, null); f.assertPrivate();
+});
 
 test('non-macOS path is a true no-op, including actual Windows execution', async () => {
   let called = false;
@@ -150,7 +253,7 @@ test('exact observed CI DomainDefault user absence is restored as unset, not inv
   assert.deepEqual(f.state.currentDefault, []); assert.deepEqual(f.state.currentSearch, [f.original]);
   assert.equal(f.report().restored, true); assert.equal(f.report().deleted, true);
   assert.deepEqual(f.report().originalDefault, []);
-  // Apple security(1): -s with no keychain unsets, not an empty-string filename.
+  // The documented argless setter is attempted, never an empty-string filename.
   assert.equal(f.state.calls.filter(call => JSON.stringify(call.args) === JSON.stringify(['default-keychain', '-d', 'user', '-s'])).length, 1);
   assert.equal(f.report().commands.filter(call => call.stderr === ciMissingDefault.stderr && call.exitStatus === 1).length, 2);
   assert.equal(fs.existsSync(owned), false); assert.equal(fs.readFileSync(f.original, 'utf8'), 'ORIGINAL PRISTINE BYTES'); f.assertPrivate();
