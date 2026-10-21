@@ -27,7 +27,9 @@ test('AI controller keeps existing 180s/45s bounds, real independent cold OS inv
  const fail=await command([process.execPath,'-e','setInterval(()=>{},1000)'],300);assert.equal(fail.exitStatus,124);assert.equal(fail.timedOut,true);assert.equal(fail.cleanupComplete,true);assert(fail.elapsedMs<6500);assert.deepEqual(JSON.parse(fs.readFileSync(path.join(run,'command-ledger.json'))),ledger);
 });
 test('tools/gallery uses actual sandbox renderer, native CA trust and never disables TLS or exposes clipboard',()=>{
- assert.match(tools,/sandbox:true,nodeIntegration:false,contextIsolation:true/);assert.match(runner,/NODE_EXTRA_CA_CERTS=tlsCert/);
+ assert.match(tools,/sandbox:true,nodeIntegration:false,contextIsolation:true/);assert.match(runner,/NODE_EXTRA_CA_CERTS=tlsCa/);
+ assert.match(runner,/createNativeFixtureTls\(\{directory:run,hosts:\['safebooru\.donmai\.us','cdn\.donmai\.us'\],openssl,command\}\)/);
+ assert.doesNotMatch(runner,/'-addext'/);assert.match(tools,/cert:fs\.readFileSync\(config\.tlsCert\)/);
  assert.match(runner,/runBoundedNativeCommand\(argv,\{cwd:run,env,timeout:240000/);assert.match(tools,/220000/);
  assert.doesNotMatch(runner+tools,/NODE_TLS_REJECT_UNAUTHORIZED|rejectUnauthorized:false|ignore-certificate-errors|navigator\.clipboard|require\('electron'\)\.clipboard/);
  assert.match(tools,/getHistoryDates:\(\)=>store\.getHistoryDates\(\)/);assert.match(tools,/detail\.media\[0\]\.downloadUrl/);

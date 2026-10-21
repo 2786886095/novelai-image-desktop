@@ -22,7 +22,7 @@ test('system controller preserves the native deadline, inventory and failed time
 test('the actual system command adapter records literal streams and force-cleans a real timed-out child', async () => {
   const run = fs.mkdtempSync(path.join(os.tmpdir(), 'system-controller-test-')), ledger = [];
   const declaration = system.slice(system.indexOf('async function command('), system.indexOf('\nconst harnessSeed'));
-  const command = new Function('fs', 'path', 'run', 'ledger', 'tlsCert', 'runBoundedNativeCommand', 'req', 'startMacNativeStallDiagnostics',
+  const command = new Function('fs', 'path', 'run', 'ledger', 'tlsCa', 'runBoundedNativeCommand', 'req', 'startMacNativeStallDiagnostics',
     declaration + ';return command;')(fs, path, run, ledger, path.join(run, 'absent-cert'), runBoundedNativeCommand, () => 'not-electron', () => async () => {});
   const ok = await command([process.execPath, '-e', 'process.stdout.write("SYSTEM_OUT\\n");process.stderr.write("SYSTEM_ERR\\n")']);
   assert.equal(ok.exitStatus, 0); assert.equal(ok.stdout, 'SYSTEM_OUT\n'); assert.equal(ok.stderr, 'SYSTEM_ERR\n');

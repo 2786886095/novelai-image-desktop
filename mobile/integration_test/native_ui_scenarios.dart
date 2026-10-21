@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:novelai_mobile/main.dart' show HomeShell;
+import 'package:novelai_mobile/i18n/runtime_text.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/artist/artist_recipe.dart';
 import 'package:novelai_mobile/artist/custom_artist_pool.dart';
@@ -57,6 +58,43 @@ AppSettings _proxied(AppSettings base, NativeUiTlsFixture tls) =>
       ..proxyForUpdate = true
       ..proxyForTranslate = true
       ..proxyForMcp = true;
+// Integration-fixture boot only. This is the production AppState.load path,
+// not a booted flag override. Native storage remains the real OS implementation.
+Future<void> loadNativeNavigation(AppState app, Storage storage) async {
+  final proxy = Uri.tryParse(app.settings.proxyUrl);
+  require(
+      app.settings.proxyMode == 'custom' &&
+          proxy?.scheme == 'http' &&
+          proxy?.hasPort == true &&
+          InternetAddress.tryParse(proxy!.host)?.isLoopback == true &&
+          app.settings.proxyForNai && app.settings.proxyForAi &&
+          app.settings.proxyForUpdate && app.settings.proxyForTranslate &&
+          app.settings.proxyForMcp,
+      'Navigation boot requires the closed loopback proxy for every scope');
+  final proxyUrl = app.settings.proxyUrl;
+  await storage.setSettings(app.settings);
+  await storage.markNetworkOnboardingSeen();
+  final token = await storage.getToken();
+  require(token == null || token.isEmpty,
+      'Navigation boot must not refresh a real or stale account credential');
+  final expectedParams = await storage.getParams();
+  final expectedHistory = await storage.getHistory();
+  require(app.settings.persistGenerateParams,
+      'Navigation fixture requires durable generation-parameter restoration');
+  await app.load();
+  require(app.status == runtimeTextFor(app.settings.language, 'common.ready') &&
+      jsonEncode(app.params.toJson()) == jsonEncode(expectedParams.toJson()) &&
+      jsonEncode(app.history.map((h) => h.toJson()).toList()) ==
+          jsonEncode(expectedHistory.map((h) => h.toJson()).toList()),
+      'Production navigation boot did not read durable parameters/history');
+  require(app.booted && !app.needsNetworkOnboarding &&
+      app.settings.proxyMode == 'custom' && app.settings.proxyUrl == proxyUrl &&
+      app.settings.proxyForNai && app.settings.proxyForAi &&
+      app.settings.proxyForUpdate && app.settings.proxyForTranslate &&
+      app.settings.proxyForMcp,
+      'Production navigation boot did not restore its isolated settings');
+}
+
 Future<void> _switchInSelector(AppState app, String label, String id) async {
   await nativeUiWait(() => !app.naiAccountLocked, 'account selector idle');
   final selector = nativeUiElements((w) => w is DropdownButton<String>);
@@ -523,6 +561,11 @@ Future<void> _nativeBack() async {
 Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
   final app = c.app;
   app.settings = _proxied(app.settings, tls)..reduceMotion = true;
+  final bootRequests = tls.requests.length;
+  await loadNativeNavigation(app, c.storage);
+  require(!tls.requests.skip(bootRequests).any((r) => r['method'] == 'POST'),
+      'Read-only navigation boot submitted an unexpected request');
+  // load restores durable state. Apply these navigation drafts only afterward.
   app.params.model = 'nai-diffusion-5-full';
   final file = File('${c.root.path}/navigation-original.png');
   await file.writeAsBytes(png(64, 64));

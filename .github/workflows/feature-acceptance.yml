@@ -85,7 +85,7 @@ jobs:
           sudo chown root:root node_modules/electron/dist/chrome-sandbox
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - name: Check bounded native command and fixture cleanup
-        run: node --test scripts/feature-acceptance/bounded-native-command.test.mjs scripts/feature-acceptance/mac-native-keychain.test.mjs scripts/feature-acceptance/generation-fixture-cleanup.test.mjs scripts/feature-acceptance/android-native-preflight.test.mjs scripts/feature-acceptance/desktop-native-diagnostics.test.mjs scripts/feature-acceptance/mobile-native-predecessor.test.mjs scripts/feature-acceptance/desktop-native-expansion.test.mjs scripts/feature-acceptance/native-begin-entry-parity.test.mjs scripts/feature-acceptance/metadata-import-wrapper.test.mjs scripts/feature-acceptance/prepare-android-image.test.mjs
+        run: node --test scripts/feature-acceptance/bounded-native-command.test.mjs scripts/feature-acceptance/mac-native-keychain.test.mjs scripts/feature-acceptance/native-fixture-tls.test.mjs scripts/feature-acceptance/native-controller-bootstrap.test.mjs scripts/feature-acceptance/generation-fixture-cleanup.test.mjs scripts/feature-acceptance/android-native-preflight.test.mjs scripts/feature-acceptance/desktop-native-diagnostics.test.mjs scripts/feature-acceptance/mobile-native-predecessor.test.mjs scripts/feature-acceptance/desktop-native-expansion.test.mjs scripts/feature-acceptance/native-begin-entry-parity.test.mjs scripts/feature-acceptance/metadata-import-wrapper.test.mjs scripts/feature-acceptance/prepare-android-image.test.mjs
       - name: Fetch and verify the pinned Windows-only component seed
         if: runner.os == 'Windows'
         env:
@@ -274,6 +274,10 @@ jobs:
           cache: true
       - run: flutter pub get
         working-directory: mobile
+      - name: Check production navigation bootstrap regression
+        if: matrix.entry-group == 'ui'
+        working-directory: mobile
+        run: flutter test --no-pub test/native_navigation_boot_test.dart test/app_state_boot_test.dart
       - name: Require runner-only KVM access and usable acceleration
         shell: bash
         run: |

@@ -8,7 +8,9 @@ import os from 'node:os';
 import {prepareMacNativeKeychain} from './mac-native-keychain.mjs';
 import {runBoundedNativeCommand} from './bounded-native-command.mjs';
 
-function fixture(t, {missingDefault = false} = {}) {
+const ciMissingDefault = {status: 1, stdout: '', stderr: 'security: SecKeychainCopyDomainDefault user: A default keychain could not be found.\n'};
+
+function fixture(t, {missingDefault = false, missingResponse = ciMissingDefault} = {}) {
   const temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'mac-keychain-controller-test-')));
   t.after(() => fs.rmSync(temp, {recursive: true, force: true}));
   const run = path.join(temp, 'run'); fs.mkdirSync(run);
@@ -22,7 +24,7 @@ function fixture(t, {missingDefault = false} = {}) {
     let stdout = '';
     if (args[0] === 'default-keychain') {
       if (args.includes('-s')) state.currentDefault = args.slice(args.indexOf('-s') + 1);
-      else if (!state.currentDefault.length) return {status: 44, stdout: '', stderr: 'security: SecKeychainCopyDefault: A default keychain could not be found.\n'};
+      else if (!state.currentDefault.length) return {...missingResponse};
       else stdout = quote(state.currentDefault);
     } else if (args[0] === 'list-keychains') {
       if (args.includes('-s')) state.currentSearch = args.slice(args.indexOf('-s') + 1);
@@ -70,9 +72,80 @@ test('real native setup and restoration plan keeps originals and redacts every p
   assert.deepEqual(f.state.currentDefault, [f.original]); assert.deepEqual(f.state.currentSearch, [f.original]);
   assert.equal(fs.readFileSync(f.original, 'utf8'), 'ORIGINAL PRISTINE BYTES'); f.assertPrivate();
 });
-test('an actually absent original default is restored as unset, not invented', async t => {
+test('exact observed CI DomainDefault user absence is restored as unset, not invented', async t => {
   const f = fixture(t, {missingDefault: true}), cleanup = await prepareMacNativeKeychain(f.input);
-  await cleanup(); assert.deepEqual(f.state.currentDefault, []); assert.equal(f.report().restored, true); f.assertPrivate();
+  const owned = f.report().keychain;
+  assert.equal(f.report().prepared, true); assert.deepEqual(f.state.currentDefault, [owned]);
+  await cleanup(); await cleanup();
+  assert.deepEqual(f.state.currentDefault, []); assert.deepEqual(f.state.currentSearch, [f.original]);
+  assert.equal(f.report().restored, true); assert.equal(f.report().deleted, true);
+  assert.deepEqual(f.report().originalDefault, []);
+  // Apple security(1): -s with no keychain unsets, not an empty-string filename.
+  assert.equal(f.state.calls.filter(call => JSON.stringify(call.args) === JSON.stringify(['default-keychain', '-d', 'user', '-s'])).length, 1);
+  assert.equal(f.report().commands.filter(call => call.stderr === ciMissingDefault.stderr && call.exitStatus === 1).length, 2);
+  assert.equal(fs.existsSync(owned), false); assert.equal(fs.readFileSync(f.original, 'utf8'), 'ORIGINAL PRISTINE BYTES'); f.assertPrivate();
+});
+
+test('legacy non-domain CopyDefault absence still requires its actual error exit', async t => {
+  const f = fixture(t, {missingDefault: true, missingResponse: {status: 1, stdout: '', stderr: 'security: SecKeychainCopyDefault: A default keychain could not be found.\n'}});
+  const cleanup = await prepareMacNativeKeychain(f.input); await cleanup();
+  assert.deepEqual(f.state.currentDefault, []); assert.equal(f.report().restored, true); assert.equal(f.report().deleted, true); f.assertPrivate();
+});
+
+test('only the exact user-domain no-default error may pass the initial read', async t => {
+  const cases = [
+    ['permission denied', {status: 1, stdout: '', stderr: 'security: SecKeychainCopyDomainDefault user: User interaction is not allowed.\n'}],
+    ['other domain', {...ciMissingDefault, stderr: ciMissingDefault.stderr.replace(' user:', ' system:')}],
+    ['prefixed diagnostic', {...ciMissingDefault, stderr: 'permission denied\n' + ciMissingDefault.stderr}],
+    ['trailing diagnostic', {...ciMissingDefault, stderr: ciMissingDefault.stderr + 'permission denied\n'}],
+    ['nonempty stdout', {...ciMissingDefault, stdout: 'unexpected stdout'}],
+    ['unrecognized status', {...ciMissingDefault, status: 44}],
+    ['usage status', {...ciMissingDefault, status: 2}],
+    ['terminated child', {...ciMissingDefault, status: null, signal: 'SIGTERM'}],
+    ['spawn error', {...ciMissingDefault, error: new Error('ETIMEDOUT')}],
+    ['legacy wrong status', {status: 44, stdout: '', stderr: 'security: SecKeychainCopyDefault: A default keychain could not be found.\n'}],
+    ['missing security prefix', {...ciMissingDefault, stderr: ciMissingDefault.stderr.slice('security: '.length)}],
+  ];
+  for (const [name, response] of cases) await t.test(name, async sub => {
+    const f = fixture(sub, {missingDefault: true}); f.state.fail = () => response;
+    await assert.rejects(prepareMacNativeKeychain(f.input), /Native Keychain command failed/);
+    assert.equal(f.report().prepared, false); assert.equal(f.report().restored, false); assert.equal(f.report().deleted, false);
+    assert.equal(f.state.calls.length, 1); assert.deepEqual(f.state.currentDefault, []); assert.deepEqual(f.state.currentSearch, [f.original]);
+    assert.equal(fs.readFileSync(f.original, 'utf8'), 'ORIGINAL PRISTINE BYTES'); f.assertPrivate();
+  });
+});
+
+test('absent default and empty original search list both restore without invented entries', async t => {
+  const f = fixture(t, {missingDefault: true}); f.state.currentSearch = [];
+  const cleanup = await prepareMacNativeKeychain(f.input); await cleanup();
+  assert.deepEqual(f.state.currentDefault, []); assert.deepEqual(f.state.currentSearch, []);
+  assert.ok(f.state.calls.some(call => JSON.stringify(call.args) === JSON.stringify(['list-keychains', '-d', 'user', '-s'])));
+  assert.equal(f.report().restored, true); assert.equal(f.report().deleted, true); f.assertPrivate();
+});
+
+test('failed unset never permits deleting a still-selected owned keychain', async t => {
+  const f = fixture(t, {missingDefault: true}), cleanup = await prepareMacNativeKeychain(f.input);
+  f.state.fail = args => JSON.stringify(args) === JSON.stringify(['default-keychain', '-d', 'user', '-s']) ? {status: 1, stdout: '', stderr: 'unset denied'} : null;
+  await assert.rejects(cleanup(), /unset denied/);
+  assert.equal(f.report().restored, false); assert.equal(f.report().deleted, false);
+  assert.equal(fs.existsSync(f.report().keychain), true); assert.deepEqual(f.state.currentSearch, [f.original]);
+  assert.ok(!f.state.calls.some(call => call.args[0] === 'delete-keychain')); f.assertPrivate();
+});
+
+test('successful unset exit without a restored empty default is detected before deletion', async t => {
+  const f = fixture(t, {missingDefault: true}), cleanup = await prepareMacNativeKeychain(f.input);
+  f.state.fail = args => JSON.stringify(args) === JSON.stringify(['default-keychain', '-d', 'user', '-s']) ? {status: 0, stdout: '', stderr: ''} : null;
+  await assert.rejects(cleanup(), /did not restore byte-exact/);
+  assert.equal(f.report().restored, false); assert.equal(f.report().deleted, false); assert.equal(fs.existsSync(f.report().keychain), true);
+  assert.ok(!f.state.calls.some(call => call.args[0] === 'delete-keychain')); f.assertPrivate();
+});
+
+test('a different security error while verifying restoration is never treated as absence', async t => {
+  const f = fixture(t, {missingDefault: true}), cleanup = await prepareMacNativeKeychain(f.input);
+  f.state.fail = args => args[0] === 'default-keychain' && !args.includes('-s') ? {status: 1, stdout: '', stderr: 'security: SecKeychainCopyDomainDefault user: authorization denied.\n'} : null;
+  await assert.rejects(cleanup(), /authorization denied/);
+  assert.equal(f.report().restored, false); assert.equal(f.report().deleted, false); assert.equal(fs.existsSync(f.report().keychain), true);
+  assert.ok(!f.state.calls.some(call => call.args[0] === 'delete-keychain')); f.assertPrivate();
 });
 test('partial setup failure restores the captured lists and deletes only its owned file', async t => {
   const f = fixture(t); let failed = false;

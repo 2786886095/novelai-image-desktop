@@ -56,8 +56,13 @@ export async function prepareMacNativeKeychain({run, env = process.env,
     const row = {command, stdout: clean(raw.stdout), stderr: clean(raw.stderr),
       exitStatus: raw.status, error: raw.error ? clean(raw.error.message || raw.error) : null};
     ledger.push(row); save();
-    const absent = allowNoDefault && !row.error && !row.stdout.trim() &&
-      /SecKeychainCopyDefault: A default keychain could not be found\.?\s*$/.test(row.stderr.trim());
+    // Apple's security CLI returns 1 for this exact missing-default error.
+    // DomainDefault is emitted by -d user; do not swallow other domains,
+    // authorization failures, mixed diagnostics, signals or spawn errors.
+    const absent = allowNoDefault && args.length === 3 &&
+      args[0] === 'default-keychain' && args[1] === '-d' && args[2] === 'user' &&
+      row.exitStatus === 1 && !row.error && !row.stdout.trim() &&
+      /^security: SecKeychainCopy(?:DomainDefault user|Default): A default keychain could not be found\.$/.test(row.stderr.trim());
     if (row.error || row.exitStatus !== 0 && !absent)
       throw Error('Native Keychain command failed: ' + JSON.stringify(row));
     return absent ? '' : row.stdout;
@@ -75,6 +80,8 @@ export async function prepareMacNativeKeychain({run, env = process.env,
   const restore = () => cleanup ??= (async () => {
     if (!snapshotComplete) return;
     const errors = [];
+    // security(1): -s without a keychain unsets it (SetDomainDefault NULL).
+    // An originally absent default must stay absent; never invent login.keychain.
     try { call(['default-keychain', '-d', 'user', '-s', ...originalDefault]); } catch (error) { errors.push(clean(error.message)); }
     try { call(['list-keychains', '-d', 'user', '-s', ...originalSearch]); } catch (error) { errors.push(clean(error.message)); }
     try {
