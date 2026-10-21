@@ -281,7 +281,11 @@ jobs:
       - name: Check production navigation bootstrap regression
         if: matrix.entry-group == 'ui'
         working-directory: mobile
-        run: flutter test --no-pub test/native_navigation_boot_test.dart test/app_state_boot_test.dart
+        run: flutter test --no-pub test/native_navigation_boot_test.dart test/app_state_boot_test.dart test/native_comic_target_test.dart
+      - name: Check native failure diagnostic retention without suppressing errors
+        if: matrix.entry-group == 'workflows'
+        working-directory: mobile
+        run: flutter test --no-pub test/native_failure_diagnostics_test.dart
       - name: Require runner-only KVM access and usable acceleration
         shell: bash
         run: |

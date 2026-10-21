@@ -8,6 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:novelai_mobile/main.dart' show HomeShell;
 import 'package:novelai_mobile/i18n/runtime_text.dart';
+import 'package:novelai_mobile/i18n/app_locales.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/artist/artist_recipe.dart';
 import 'package:novelai_mobile/artist/custom_artist_pool.dart';
@@ -558,6 +559,104 @@ Future<void> _nativeBack() async {
   await nativeUiTap(back.first);
 }
 
+// A ListView retains its scroll offset and lazily disposes off-screen tiles.
+// Its first currently mounted ListTile is not the first business tool. Reveal
+// the production hub's real scroll position, then bind the unique Comic label.
+Future<void> openNativeComicFromTools(AppState app) async {
+  final hubs = nativeUiElements((widget) => widget is ToolsHubScreen);
+  require(hubs.length == 1, 'Expected one current production tools hub');
+  final hub = hubs.single;
+  final comicTitle = mobileToolsHubTextFor(app.settings.language).comicTitle;
+  require(comicTitle.trim().isNotEmpty, 'Production Comic tool label is empty');
+  List<Element> descendants(bool Function(Element) predicate) {
+    final result = <Element>[];
+    void visit(Element element) {
+      if (!nativeUiVisible(element)) return;
+      if (predicate(element)) result.add(element);
+      element.visitChildren(visit);
+    }
+
+    require(hub.mounted && nativeUiVisible(hub),
+        'Production tools hub is no longer current');
+    hub.visitChildren(visit);
+    return result;
+  }
+
+  final scrollables = descendants((element) =>
+          element is StatefulElement && element.state is ScrollableState)
+      .map((element) => (element as StatefulElement).state as ScrollableState)
+      .where((state) => state.position.axis == Axis.vertical)
+      .toList();
+  require(scrollables.length == 1,
+      'Expected one production tools hub vertical scroll position');
+  final position = scrollables.single.position;
+  await nativeUiWait(() => position.hasContentDimensions,
+      'production tools hub scroll layout');
+  require(
+      position.minScrollExtent.isFinite && position.maxScrollExtent.isFinite,
+      'Production tools hub scroll bounds are invalid');
+  String? targetTitle;
+  String diagnostic() => jsonEncode({
+        'kind': 'diagnostic',
+        'expectedTitle': comicTitle,
+        'targetTitle': targetTitle,
+        'scrollOffset': position.hasPixels ? position.pixels : null,
+        'minScrollExtent': position.minScrollExtent,
+        'maxScrollExtent': position.maxScrollExtent,
+        'mountedTitles': hub.mounted && nativeUiVisible(hub)
+            ? descendants((element) => element.widget is ListTile)
+                .map((element) => (element.widget as ListTile).title)
+                .whereType<Text>()
+                .map((text) => text.data)
+                .toList()
+            : <String>[],
+        'currentRoutes': {
+          'toolsHub':
+              nativeUiElements((widget) => widget is ToolsHubScreen).length,
+          'comic': nativeUiElements((widget) => widget is ComicScreen).length,
+          'batch':
+              nativeUiElements((widget) => widget is BatchRedrawScreen).length,
+        },
+      });
+  try {
+    position.jumpTo(position.minScrollExtent);
+    await frame();
+
+    List<Element> comicTiles() => descendants((element) {
+          final widget = element.widget;
+          return widget is ListTile &&
+              widget.onTap != null &&
+              widget.title is Text &&
+              (widget.title as Text).data == comicTitle;
+        });
+    await nativeUiWait(() => comicTiles().isNotEmpty,
+        'uniquely identified production Comic tool');
+    final targets = comicTiles();
+    require(targets.length == 1, 'Production Comic tool identity is ambiguous');
+    targetTitle = ((targets.single.widget as ListTile).title as Text).data;
+    require(targetTitle == comicTitle, 'Production Comic tool title changed');
+    final labels = <Element>[];
+    void findLabel(Element element) {
+      if (element.widget is Text && (element.widget as Text).data == comicTitle) {
+        labels.add(element);
+      }
+      element.visitChildren(findLabel);
+    }
+
+    targets.single.visitChildren(findLabel);
+    require(labels.length == 1, 'Production Comic tool title is ambiguous');
+    // These are bounded public-UI diagnostics, never acceptance/proof markers.
+    // ignore: avoid_print
+    print('FEATURE_NATIVE_COMIC_TARGET:before-pointer:${diagnostic()}');
+    // Keep the native hit-test path. Never invoke ListTile.onTap directly.
+    await nativeUiTap(labels.single);
+    // ignore: avoid_print
+    print('FEATURE_NATIVE_COMIC_TARGET:after-pointer:${diagnostic()}');
+  } catch (error) {
+    throw StateError('$error; Comic target: ${diagnostic()}');
+  }
+}
+
 Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
   final app = c.app;
   app.settings = _proxied(app.settings, tls)..reduceMotion = true;
@@ -634,7 +733,7 @@ Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
       'Actual tools hub route missing');
   final tiles = nativeUiElements((w) => w is ListTile && w.onTap != null);
   require(tiles.isNotEmpty, 'Actual tool route links missing');
-  await nativeUiTap(tiles.first);
+  await openNativeComicFromTools(app);
   await nativeUiWait(() => nativeUiElements((w) => w is ComicScreen).isNotEmpty,
       'actual comic nested route');
   await _nativeBack();

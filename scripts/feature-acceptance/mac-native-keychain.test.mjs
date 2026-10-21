@@ -45,6 +45,27 @@ function fixture(t, {missingDefault = false, missingResponse = ciMissingDefault}
   return {temp, run, original, state, input, report, assertPrivate};
 }
 
+function filesystemPreferencesFixture(t, {dropWrites = false} = {}) {
+  const f = fixture(t, {missingDefault: true}); f.state.currentSearch = [];
+  const prefs = path.join(f.run, 'environment', 'HOME', 'Library', 'Preferences', 'com.apple.security.plist');
+  const read = () => fs.existsSync(prefs) ? JSON.parse(fs.readFileSync(prefs, 'utf8'))
+    : {currentDefault: [], currentSearch: []};
+  const memoryExecute = f.input.execute;
+  f.input.execute = (binary, args, options) => {
+    // Each fake process reloads disk. Match Apple's best-effort open behavior:
+    // a missing parent leaves no preferences even when the setter exits zero.
+    Object.assign(f.state, read());
+    const answer = memoryExecute(binary, args, options);
+    if (!dropWrites && answer.status === 0 && ['default-keychain', 'list-keychains'].includes(args[0]) && args.includes('-s')) {
+      try {fs.writeFileSync(prefs, JSON.stringify({currentDefault: f.state.currentDefault, currentSearch: f.state.currentSearch}));}
+      catch (error) {if (error.code !== 'ENOENT') throw error;}
+    }
+    Object.assign(f.state, read());
+    return answer;
+  };
+  return {...f, prefs, read};
+}
+
 test('non-macOS path is a true no-op, including actual Windows execution', async () => {
   let called = false;
   await (await prepareMacNativeKeychain({platform: 'win32', execute: () => {called = true;}}))();
@@ -63,6 +84,52 @@ test('an existing HOME ancestor escape is rejected before any foreign directory 
   fs.symlinkSync(foreign, path.join(f.run, 'environment'), process.platform === 'win32' ? 'junction' : 'dir');
   await assert.rejects(prepareMacNativeKeychain(f.input), /HOME ancestor escaped/);
   assert.equal(fs.existsSync(path.join(foreign, 'HOME')), false); assert.equal(f.state.calls.length, 0);
+});
+test('owned HOME preference parent exists before security without adding Keychains or CF overrides', async t => {
+  const f = filesystemPreferencesFixture(t), cleanup = await prepareMacNativeKeychain(f.input);
+  const home = path.join(f.run, 'environment', 'HOME');
+  for (const directory of [path.join(f.run, 'environment'), home, path.join(home, 'Library'), path.dirname(f.prefs)]) {
+    assert.equal(fs.lstatSync(directory).isDirectory(), true); assert.equal(fs.lstatSync(directory).isSymbolicLink(), false);
+    assert.equal(fs.realpathSync(directory), directory);
+  }
+  assert.equal(fs.existsSync(path.join(home, 'Library', 'Keychains')), false);
+  assert.ok(f.state.calls.every(c => c.options.env.HOME === home && !Object.hasOwn(c.options.env, 'CFFIXED_USER_HOME')));
+  assert.deepEqual(f.read().currentDefault, [f.report().keychain]); assert.deepEqual(f.read().currentSearch, [f.report().keychain]);
+  await cleanup(); assert.deepEqual(f.read(), {currentDefault: [], currentSearch: []});
+  assert.equal(f.report().restored, true); assert.equal(f.report().deleted, true); f.assertPrivate();
+});
+test('filesystem-backed preferences preserve the exact preexisting default and ordered search', async t => {
+  const f = filesystemPreferencesFixture(t), second = path.join(f.temp, 'second.keychain-db'); fs.writeFileSync(second, 'SECOND PRISTINE');
+  fs.mkdirSync(path.dirname(f.prefs), {recursive: true});
+  const original = {currentDefault: [f.original], currentSearch: [second, f.original]};
+  fs.writeFileSync(f.prefs, JSON.stringify(original));
+  const cleanup = await prepareMacNativeKeychain(f.input); await cleanup();
+  assert.deepEqual(f.read(), original); assert.equal(f.report().restored, true); assert.equal(f.report().deleted, true);
+  assert.equal(fs.readFileSync(second, 'utf8'), 'SECOND PRISTINE'); assert.equal(fs.readFileSync(f.original, 'utf8'), 'ORIGINAL PRISTINE BYTES'); f.assertPrivate();
+});
+test('setter exit zero without persisted preferences still fails actual selection readback', async t => {
+  const f = filesystemPreferencesFixture(t, {dropWrites: true});
+  await assert.rejects(prepareMacNativeKeychain(f.input), /SecKeychainCopyDomainDefault user/);
+  assert.equal(f.report().prepared, false); assert.match(f.report().setupFailure, /SecKeychainCopyDomainDefault user/);
+  assert.equal(f.report().restored, true); assert.equal(f.report().deleted, true); f.assertPrivate();
+});
+test('every HOME directory level rejects both foreign and internal symlink aliases before security', async t => {
+  for (const segments of [['environment'], ['environment', 'HOME'], ['environment', 'HOME', 'Library'], ['environment', 'HOME', 'Library', 'Preferences']]) {
+    for (const placement of ['foreign', 'internal']) await t.test(segments.join('/') + ':' + placement, async sub => {
+      const f = fixture(sub), link = path.join(f.run, ...segments), target = path.join(placement === 'foreign' ? f.temp : f.run, 'alias-target');
+      fs.mkdirSync(path.dirname(link), {recursive: true}); fs.mkdirSync(target); fs.writeFileSync(path.join(target, 'KEEP'), 'PRISTINE');
+      fs.symlinkSync(target, link, process.platform === 'win32' ? 'junction' : 'dir');
+      await assert.rejects(prepareMacNativeKeychain(f.input), /HOME.*escaped/);
+      assert.equal(f.state.calls.length, 0); assert.deepEqual(fs.readdirSync(target), ['KEEP']); assert.equal(fs.readFileSync(path.join(target, 'KEEP'), 'utf8'), 'PRISTINE');
+    });
+  }
+});
+test('Library and Preferences regular files are never replaced or traversed', async t => {
+  for (const segments of [['environment', 'HOME', 'Library'], ['environment', 'HOME', 'Library', 'Preferences']]) await t.test(segments.at(-1), async sub => {
+    const f = fixture(sub), target = path.join(f.run, ...segments); fs.mkdirSync(path.dirname(target), {recursive: true}); fs.writeFileSync(target, 'PRISTINE FILE');
+    await assert.rejects(prepareMacNativeKeychain(f.input), /HOME.*escaped/);
+    assert.equal(f.state.calls.length, 0); assert.equal(fs.readFileSync(target, 'utf8'), 'PRISTINE FILE');
+  });
 });
 test('real native setup and restoration plan keeps originals and redacts every password', async t => {
   const f = fixture(t), cleanup = await prepareMacNativeKeychain(f.input), prepared = f.report();

@@ -27,13 +27,25 @@ export async function prepareMacNativeKeychain({run, env = process.env,
   const temp = fs.realpathSync(env.RUNNER_TEMP), output = fs.realpathSync(run);
   if (!inside(temp, output)) throw Error('Native Keychain evidence must stay inside real RUNNER_TEMP');
   const home = path.join(output, 'environment', 'HOME');
-  let ancestor = path.dirname(home);
-  while (!fs.existsSync(ancestor)) ancestor = path.dirname(ancestor);
-  const existingAncestor = fs.realpathSync(ancestor);
-  if (existingAncestor !== output && !inside(output, existingAncestor))
-    throw Error('Native Keychain HOME ancestor escaped its run');
-  fs.mkdirSync(home, {recursive: true});
-  if (!inside(output, fs.realpathSync(home))) throw Error('Native Keychain HOME escaped its run');
+  // Apple's legacy Keychain preferences writer does not create the parent of
+  // HOME/Library/Preferences/com.apple.security.plist or propagate every I/O error.
+  // Create only the required owned preference directory, checking every level.
+  let directory = output;
+  for (const part of ['environment', 'HOME', 'Library', 'Preferences']) {
+    const parent = fs.lstatSync(directory);
+    if (!parent.isDirectory() || parent.isSymbolicLink() || fs.realpathSync(directory) !== directory ||
+        directory !== output && !inside(output, directory))
+      throw Error('Native Keychain HOME ancestor escaped its run');
+    const next = path.join(directory, part);
+    const existing = fs.lstatSync(next, {throwIfNoEntry: false});
+    if (existing && (!existing.isDirectory() || existing.isSymbolicLink() || fs.realpathSync(next) !== next))
+      throw Error('Native Keychain HOME ancestor escaped its run');
+    if (!existing) fs.mkdirSync(next, {mode: 0o700});
+    const created = fs.lstatSync(next);
+    if (!created.isDirectory() || created.isSymbolicLink() || fs.realpathSync(next) !== next || !inside(output, next))
+      throw Error('Native Keychain HOME directory escaped its run');
+    directory = next;
+  }
   const securityEnv = {...env, HOME: home};
   for (const key of Object.keys(securityEnv))
     if (/(?:API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/i.test(key)) delete securityEnv[key];

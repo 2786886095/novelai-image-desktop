@@ -56,17 +56,127 @@ Future<void> mount(AppState app, Widget child) async {
   await frame(); await frame();
 }
 
+// Diagnostic logs are deliberately separate from native acceptance proof markers.
+// They explain failures; they never certify a check or relax the strict error gate.
+class NativeFailureDiagnostics {
+  static const maxRecords = 16;
+  static const maxExceptionBytes = 1024;
+  static const maxStackBytes = 6144;
+  static const maxContextBytes = 1024;
+  final String sourceIdentity;
+  final String profileIdentity;
+  final String entry;
+  final void Function(String) _output;
+  int observed = 0;
+  int retained = 0;
+  int dropped = 0;
+  int outputFailures = 0;
+  NativeFailureDiagnostics({required this.sourceIdentity,
+    required this.profileIdentity, required this.entry,
+    void Function(String)? output}) : _output = output ?? print;
+
+  static String _safeString(Object? Function() value) {
+    try { return value()?.toString() ?? ''; }
+    catch (_) { return '<unprintable diagnostic>'; }
+  }
+  static String _bounded(String value, int maxBytes) {
+    // Redact before truncation so a credential crossing the bound cannot leak.
+    var text = value.replaceAll(
+      RegExp(r'Bearer\s+[^\s"\x27,;<>]+', caseSensitive: false),
+      'Bearer <redacted>');
+    text = text.replaceAllMapped(RegExp(
+      r'''(["']?(?:authorization|api[_-]?key|key|token|password|secret|access[_-]?token|refresh[_-]?token)["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s&,;]+)''',
+      caseSensitive: false), (m) => '${m[1]}<redacted>');
+    text = text.replaceAll(RegExp(r'https?://[^/\s]+@'), '<redacted-url>@');
+    // Keep repository-relative stack locations, not disposable/private roots.
+    text = text.replaceAll(RegExp(r'file:///[^\s]*?/source/'), '<source>/');
+    text = text.replaceAll(RegExp(r'''file:///[^\s"'<>)]*|[A-Za-z]:[\\/][^\r\n"'<>)]*|/(?:data|home|Users|private|var|tmp|storage|sdcard|mnt)/[^\s"'<>)]*'''), '<private-path>');
+    final out = StringBuffer();
+    var used = 0;
+    for (final rune in text.runes) {
+      final part = String.fromCharCode(rune), size = utf8.encode(part).length;
+      if (used + size > maxBytes) break;
+      out.write(part); used += size;
+    }
+    return out.toString();
+  }
+
+  void _emit(String line) {
+    try { _output(line); } catch (_) { outputFailures++; }
+  }
+  void _record(String kind, Object error, StackTrace? stack,
+      {required int checkIndex, String? library, String? context,
+      bool? silent}) {
+    observed++;
+    if (retained >= maxRecords) { dropped++; return; }
+    retained++;
+    final record = <String, Object?>{
+      'schema': 'native-failure-diagnostic/v1',
+      'sourceSha': _bounded(sourceIdentity, 64),
+      'profileSha': _bounded(profileIdentity, 64),
+      'entry': _bounded(entry, 64), 'id': retained,
+      'kind': kind, 'checkIndex': checkIndex,
+      'exception': _bounded(_safeString(() => error), maxExceptionBytes),
+      'stack': _bounded(_safeString(() => stack), maxStackBytes),
+      'library': _bounded(library ?? '', 256),
+      'context': _bounded(context ?? '', maxContextBytes), 'silent': silent,
+    };
+    final bytes = utf8.encode(jsonEncode(record));
+    final hash = digest(bytes), count = (bytes.length / 384).ceil();
+    for (var index = 0; index < count; index++) {
+      final end = (index + 1) * 384;
+      _emit('NATIVE_DIAGNOSTIC_CHUNK:${jsonEncode({
+        'v': 1, 'id': retained, 'index': index, 'count': count,
+        'bytes': bytes.length, 'sha256': hash,
+        'data': base64Encode(bytes.sublist(index * 384,
+          end < bytes.length ? end : bytes.length)),
+      })}');
+    }
+  }
+  void framework(FlutterErrorDetails details, {required int checkIndex}) =>
+    _record('framework', details.exception, details.stack,
+      checkIndex: checkIndex, library: details.library,
+      context: _safeString(() => details.context?.toDescription()),
+      silent: details.silent);
+  void asynchronous(Object error, StackTrace stack, {required int checkIndex}) =>
+    _record('async', error, stack, checkIndex: checkIndex);
+  void finish({required int checkIndex}) {
+    if (observed == 0) return;
+    _emit('NATIVE_DIAGNOSTIC_SUMMARY:${jsonEncode({
+      'schema': 'native-failure-diagnostic-summary/v1',
+      'sourceSha': _bounded(sourceIdentity, 64),
+      'profileSha': _bounded(profileIdentity, 64),
+      'entry': _bounded(entry, 64), 'checkIndex': checkIndex,
+      'observed': observed, 'retained': retained, 'dropped': dropped,
+      'outputFailures': outputFailures,
+    })}');
+  }
+}
+
 class NativeScenarios {
   final int expected;
   final checks = <Map<String,Object?>>[];
   final errors = <Object>[];
-  NativeScenarios(this.expected);
+  final NativeFailureDiagnostics failureDiagnostics;
+  NativeScenarios(this.expected, {NativeFailureDiagnostics? diagnostics})
+    : failureDiagnostics = diagnostics ?? NativeFailureDiagnostics(
+        sourceIdentity: sourceSha, profileIdentity: profileSha, entry: testEntry);
+  void recordFrameworkFailure(FlutterErrorDetails details) {
+    errors.add(details.exception);
+    failureDiagnostics.framework(details, checkIndex: checks.length);
+    FlutterError.presentError(details);
+  }
+  bool recordAsyncFailure(Object error, StackTrace stack) {
+    errors.add(error);
+    failureDiagnostics.asynchronous(error, stack, checkIndex: checks.length);
+    return true;
+  }
+  void verifyNoFrameworkFailures() =>
+    require(errors.isEmpty, 'Native framework/async failure');
   Future<void> run(Future<void> Function() body) async {
     WidgetsFlutterBinding.ensureInitialized();
-    ui.PlatformDispatcher.instance.onError = (error, stack) {
-      errors.add(error); print('FEATURE_NATIVE_ASYNC_ERROR:$error\n$stack'); return true;
-    };
-    FlutterError.onError = (details) { errors.add(details.exception); FlutterError.presentError(details); };
+    ui.PlatformDispatcher.instance.onError = recordAsyncFailure;
+    FlutterError.onError = recordFrameworkFailure;
     var status = 1;
     try {
       require(Platform.isAndroid || Platform.isIOS, 'Native mobile engine required');
@@ -99,9 +209,10 @@ class NativeScenarios {
       }
       await body();
       require(checks.length == expected, 'Incomplete fixed checks: ${checks.length}/$expected');
-      require(errors.isEmpty, 'Native framework/async failure');
+      verifyNoFrameworkFailures();
       status = 0;
     } catch (error, stack) { print('FEATURE_ACCEPTANCE_FAILURE:$error\n$stack'); }
+    finally { failureDiagnostics.finish(checkIndex: checks.length); }
     print('FEATURE_ACCEPTANCE_DONE:${jsonEncode({'sourceSha':sourceSha,'profileSha':profileSha,'exitStatus':status,'checks':checks.length,'platform':Platform.operatingSystem,'paidCalls':0})}');
   }
   void check(String feature, String scenario, Map<String,Object?> observed,
