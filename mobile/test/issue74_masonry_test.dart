@@ -98,7 +98,7 @@ void main(){
     final persisted=(await tester.runAsync(()=>MobileLocalFavorites.instance.list()))!;
     final filesUnchanged=items.every((item)=>sha256.convert(File('${saved.path}/${item.fileName}').readAsBytesSync()).toString()==item.sha256);
     final output={'initialCards':initialCards,'initialOrder':initialOrder,'stableSortOrder':stableSortOrder,'masonryPageControl':pageControl,'masonryPageSizeControl':pageSizeControl,'initialCaptionX':[firstRect.left,secondRect.left,thirdRect.left],'initialCaptionY':[firstRect.top,secondRect.top,thirdRect.top],'leftToRight':leftToRight,'imageSizes':ratioImages,'extentBefore':extentBefore,'lastReachable':lastReachable,'seenItems':seen.length,'previewTotal':previewTotal,'gridPaginationRetained':gridPages,'gridPageSizeRetained':gridSize,'storedPageSize':persisted.view.pageSize,'indexUnchangedBeforeSwitch':indexUnchangedBeforeSwitch,'filesUnchanged':filesUnchanged,'errors':[...initialErrors,...screenErrors,...errors(tester)]};
-    debugPrint('ISSUE74_MOBILE '+jsonEncode(output));
+    debugPrint('ISSUE74_MOBILE ${jsonEncode(output)}');
     expect(output['errors'],isEmpty);expect(pageControl,isFalse);expect(pageSizeControl,isFalse);
     expect(initialCards,lessThan(30));expect(leftToRight,isTrue);expect(lastReachable,isTrue);expect(seen.length,130);expect(previewTotal,130);
     expect(stableSortOrder,isTrue);

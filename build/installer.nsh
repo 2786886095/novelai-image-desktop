@@ -117,3 +117,17 @@ Function RestoreLegacyRuntime
   ${EndIf}
 FunctionEnd
 !endif
+
+; New uninstallers also fail closed on nested Comfy data. Old binaries cannot be retroactively changed.
+!macro customUnInit
+  InitPluginsDir
+  File /oname=$PLUGINSDIR\protect-comfy-data.ps1 "${BUILD_RESOURCES_DIR}\protect-update-data.ps1"
+  nsExec::ExecToStack /TIMEOUT=30000 '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\protect-comfy-data.ps1" -InstallDir "$INSTDIR" -ComfyOnly'
+  Pop $0
+  Pop $1
+  ${If} $0 != 0
+    MessageBox MB_OK|MB_ICONSTOP "ComfyUI data may be inside the application directory. Uninstall stopped; no data was removed.$\r$\n$1"
+    SetErrorLevel 20
+    Quit
+  ${EndIf}
+!macroend

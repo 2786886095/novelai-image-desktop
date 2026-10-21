@@ -2,6 +2,7 @@
   [Parameter(Mandatory=$true)][string]$InstallDir,
   [string]$AppDataDir = [Environment]::GetFolderPath('ApplicationData'),
   [switch]$MigrateWorkspace,
+  [switch]$ComfyOnly,
   [string]$ExecutableName = 'Langbai NovelAI Studio.exe'
 )
 $ErrorActionPreference = 'Stop'
@@ -75,8 +76,68 @@ function Stop-IfDataAtRisk {
     exit 20
   }
 }
+function Add-ComfyPath($Value) {
+  if ($null -eq $Value -or $Value -eq '') { return }
+  if ($Value -isnot [string] -or $Value -match '[\x00\r\n]' -or $Value -notmatch '^[A-Za-z]:[\\/]') { throw 'Invalid ComfyUI data path.' }
+  if (Test-InstallData $Value) { [void]$risks.Add($Value) }
+}
+function Read-ComfyEnvelope([string]$File) {
+  $present = $false
+  foreach ($candidate in @($File, ($File + '.bak'))) {
+    if (-not (Test-Path -LiteralPath $candidate)) { continue }
+    $present = $true
+    try {
+      $item = Get-Item -LiteralPath $candidate -Force
+      if ($item.PSIsContainer -or $item.Length -gt 67108864 -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { throw 'Unsafe ComfyUI store.' }
+      $envelope = Get-Content -LiteralPath $candidate -Raw -Encoding UTF8 | ConvertFrom-Json
+      if ($envelope.version -ne 1 -or -not $envelope.PSObject.Properties['data'] -or $null -eq $envelope.data) { throw 'Invalid ComfyUI envelope.' }
+      return ,$envelope.data
+    } catch { }
+  }
+  if ($present) { throw "Cannot verify ComfyUI store: $File" }
+  return $null
+}
+function Inspect-ComfyData {
+  $queue = New-Object 'System.Collections.Generic.Queue[object]'
+  if (Test-Path -LiteralPath $InstallDir -PathType Container) { $queue.Enqueue(@{Path=$InstallDir;Depth=0}) }
+  $examined = 0
+  while ($queue.Count -gt 0) {
+    $next = $queue.Dequeue(); $directory = $next.Path
+    if (((Test-Path -LiteralPath (Join-Path $directory 'main.py') -PathType Leaf) -and (Test-Path -LiteralPath (Join-Path $directory 'comfy') -PathType Container)) -or (Test-Path -LiteralPath (Join-Path $directory 'python_embeded\python.exe') -PathType Leaf)) { [void]$risks.Add($directory) }
+    if ($next.Depth -ge 2) { continue }
+    foreach ($item in ([IO.DirectoryInfo]::new($directory)).EnumerateFileSystemInfos()) {
+      $examined++; if ($examined -gt 4096) { throw 'ComfyUI install-tree inspection exceeded safety limit.' }
+      if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { [void]$risks.Add($item.FullName); continue }
+      if (($item.Attributes -band [IO.FileAttributes]::Directory) -ne 0) { $queue.Enqueue(@{Path=$item.FullName;Depth=($next.Depth+1)}) }
+    }
+  }
+  foreach ($profileName in @('novelai-image-desktop', 'Langbai NovelAI Studio', 'langbai-novelai-studio', 'NovelAI Studio')) {
+    $comfy = Join-Path (Join-Path $AppDataDir $profileName) 'comfyui-local'
+    if (-not (Test-Path -LiteralPath $comfy)) { continue }
+    if (((Get-Item -LiteralPath $comfy -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'ComfyUI store is a link.' }
+    Add-ComfyPath $comfy
+    $config = Read-ComfyEnvelope (Join-Path $comfy 'settings.json')
+    if ($null -ne $config) {
+      if ($config -isnot [pscustomobject] -or ($null -ne $config.install -and $config.install -isnot [pscustomobject])) { throw 'Invalid ComfyUI settings.' }
+      foreach ($key in @('root','cwd','python','mainPy')) { Add-ComfyPath $config.install.$key }
+      Add-ComfyPath $config.outputDirectory
+    }
+    $registry = Read-ComfyEnvelope (Join-Path $comfy 'environments.json')
+    if ($null -ne $registry) {
+      if ($registry -isnot [pscustomobject] -or $registry.environments -isnot [array]) { throw 'Invalid ComfyUI registry.' }
+      Add-ComfyPath $registry.selectedRoot
+      foreach ($environment in $registry.environments) { if ($environment -isnot [pscustomobject]) { throw 'Invalid ComfyUI environment.' }; foreach ($key in @('root','python','launcherPath','modelDirectory')) { Add-ComfyPath $environment.$key } }
+    }
+    $results = Read-ComfyEnvelope (Join-Path $comfy 'results.json')
+    if ($null -ne $results -and $results -isnot [array]) { throw 'Invalid ComfyUI results.' }
+    foreach ($result in $results) { if ($result -isnot [pscustomobject]) { throw 'Invalid ComfyUI result.' }; Add-ComfyPath $result.filePath }
+  }
+}
 try {
   $risks = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+  Inspect-ComfyData
+  Stop-IfDataAtRisk
+  if ($ComfyOnly) { Write-Output 'UPDATE_DATA_CHECK_OK'; exit 0 }
   # A known data directory alone is sufficient to stop. Do not spend the
   # installer timeout scanning thousands of unrelated history entries first.
   foreach ($name in @('outputs', 'LangbaiWorkspace')) {

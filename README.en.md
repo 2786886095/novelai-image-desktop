@@ -19,12 +19,14 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## What changed
 
-- Remove pagination from local favorites in Masonry mode: continuously scroll through all filtered results. Desktop cards follow the selected order from left to right, with equal widths, variable heights and original image proportions.
-- Appending desktop favorites while scrolling keeps the current position instead of jumping back to the top.
-- Keep Grid pagination, saved/generation-time sorting, date filters and previews in the full filtered order.
-- Mobile also removes Masonry pagination and lazily builds consecutive ordered rows. Shorter images can leave empty space below them; this is not a tightly packed masonry layout.
+- **Local ComfyUI workspace**: a single-page environment guide shows the next action from the actual state. Selecting the main folder detects existing Python in known layouts; an explicit start checks for an available port. Dependencies are never silently installed or upgraded. Safe mode is off by default and can be enabled in advanced settings; third-party workflows still require separate confirmation.
+- **Workflows and parameters**: MOSS-Image SFT, Anima Base and Krea 2 Turbo direct-prompt starters, plus API JSON, provably convertible UI JSON and image-metadata import. Restart restores the last workflow and per-workflow drafts without starting a service or generating. Save built-ins as named copies; save your own library record in place without changing the source file.
+- **Frequent sizes**: built-in 1024×1024, 832×1216 and 1216×832 presets plus custom sizes, applied only to width/height inputs and ranges actually supported by the workflow.
+- **Tasks and results**: compact cards and details for the latest 100 records, with 12/24/48/60 items per page; open result locations, reuse parameters and refresh the workspace. Refresh preserves edits without restarting or generating; unfinished tasks are not automatically resubmitted after restart.
+- **Five-language display and layout**: independent scrolling, overlay layering and parameter layout fixes; display mappings cover 116 registered node classes and 434 class/input pairs. Unknown nodes, file names, enum tokens and raw IDs stay unchanged; this is not universal plugin or dynamic-workflow support.
+- **Scope**: earlier Windows testing generated images with all three models. The latest UI/guide changes have isolated regression coverage, not new GPU or five-platform device acceptance. macOS/Linux inference remains unverified; Android/iOS have no local ComfyUI entry. Independent records do not overwrite NovelAI accounts or history. [Guide (Chinese)](./docs/COMFYUI_LOCAL.md).
 
-See the [release history (Chinese)](./docs/RELEASE_NOTES.md) for earlier changes.
+[Release notes](./docs/RELEASE_NOTES.md).
 
 ## Quick start
 
@@ -90,7 +92,7 @@ Windows installer and portable builds share `%APPDATA%\novelai-image-desktop\`. 
 
 - **Does open source mean free generation?** No. NovelAI account permissions, subscription limits and actual Anlas charges still apply. Displayed costs are estimates.
 - **Do I need optional AI APIs for basic generation?** No. Start with a NovelAI token. Image analysis, prompt conversion and conversation models have independent configuration and billing.
-- **Does reading SD or ComfyUI metadata run those models?** No. Compatible prompts, sizes and seeds can be reused; model, VAE, LoRA and workflow information is for inspection.
+- **Does reading SD or ComfyUI metadata run those models?** No. The metadata tool only reads and reuses compatible values. The separate desktop Local ComfyUI workspace needs a configured, connected environment to execute supported workflows; NovelAI does not run those models.
 - **Is mobile limited to basic generation?** No. It also includes Tavern, comics, references, gallery, image analysis and metadata tools; platform feature sets are not identical.
 
 [Connection and saving troubleshooting (Chinese)](./docs/guide/GETTING_STARTED.md#troubleshooting).

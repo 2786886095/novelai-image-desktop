@@ -191,7 +191,7 @@ async function runDownload(_preferredSource: string): Promise<{ ok: boolean; mes
   if (process.platform !== "win32") {
     return { ok: false, message: "当前平台请从发行页面手动下载安装包。" };
   }
-  try { assertUpdateOutputProtection(installedAppDir(), readStore(), {installerMigratesWorkspace:true}); }
+  try { assertUpdateOutputProtection(installedAppDir(), readStore(), {installerMigratesWorkspace:true,comfyUserData:app.getPath("userData")}); }
   catch (error) { const message = error instanceof Error ? error.message : String(error); send({ kind: "error", message }); return { ok: false, message }; }
   downloadedInstallerPath = "";
   downloadedVersion = "";
@@ -246,7 +246,7 @@ function scheduleAutomaticInstall() {
 export async function installUpdate(lease?:symbol,signal?:AbortSignal,onStarted?:()=>Promise<void>) {
   if(updateLease&&updateLease!==lease)throw Error('软件更新由已批准任务独占');
   if (process.platform !== "win32" || !downloadedInstallerPath || installLaunchInFlight) {if(lease)throw Error('当前没有可安装的软件更新');return;}
-  try { assertUpdateOutputProtection(installedAppDir(), readStore(), {installerMigratesWorkspace:true}); }
+  try { assertUpdateOutputProtection(installedAppDir(), readStore(), {installerMigratesWorkspace:true,comfyUserData:app.getPath("userData")}); }
   catch (error) { send({ kind: "error", message: error instanceof Error ? error.message : String(error) }); if(lease)throw error;return; }
   installLaunchInFlight = true;
   let processStarted=false;
@@ -257,7 +257,7 @@ export async function installUpdate(lease?:symbol,signal?:AbortSignal,onStarted?
     await prepareInstall();
     signal?.throwIfAborted();await verify();
     // Settings may change while the runtime is stopping.
-    assertUpdateOutputProtection(installedAppDir(), readStore(), {installerMigratesWorkspace:true});
+    assertUpdateOutputProtection(installedAppDir(), readStore(), {installerMigratesWorkspace:true,comfyUserData:app.getPath("userData")});
     signal?.throwIfAborted();
     const child = spawn(downloadedInstallerPath, automaticInstallerArgs(), {
       detached: true,
@@ -301,7 +301,7 @@ export function desktopAppUpdateAdapter(log:(message:string)=>void):AppUpdateAda
   },
   download:async(plan,signal,progress)=>{
    if(!lease||updateLease!==lease)throw Error('更新任务未取得独占交接');
-   assertUpdateOutputProtection(installedAppDir(),readStore(),{installerMigratesWorkspace:true});
+   assertUpdateOutputProtection(installedAppDir(),readStore(),{installerMigratesWorkspace:true,comfyUserData:app.getPath("userData")});
    downloadedInstallerPath='';downloadedVersion='';downloadedSha512='';
    const result=await downloadPlan(plan,signal,progress);signal.throwIfAborted();
    downloadedInstallerPath=result.path;downloadedVersion=result.version;

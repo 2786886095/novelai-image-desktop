@@ -25,12 +25,40 @@ from PIL import Image
 from artist_detective.desktop.assets import runtime_config
 from artist_detective.desktop.locking import exclusive_lock
 from artist_detective.desktop.worker import Resources
-from artist_detective.io import atomic_json, file_sha256
+from artist_detective.io import atomic_json as _upstream_atomic_json, file_sha256
 from artist_detective.novelai import NovelAIGenerator
 from artist_detective.captions.budget import NovelAIPromptBudget
 from artist_detective.reconstruction.proposals import predict_recipes
 from artist_detective.reconstruction.scoring import joined
 from artist_detective.reconstruction.search import SearchConfig, run_search
+
+
+WINDOWS_REPLACE_DELAYS = (0.025, 0.05, 0.1, 0.2, 0.4, 0.8)
+
+
+def atomic_json(path, value):
+    """Keep upstream temp/write/fsync/replace semantics; retry only local sharing conflicts.
+
+    Never retry generation, delete the destination, bypass permissions, or fall
+    back to a non-atomic write. Permanent denial still raises the original error.
+    """
+    for attempt in range(len(WINDOWS_REPLACE_DELAYS) + 1):
+        try:
+            return _upstream_atomic_json(path, value)
+        except OSError as error:
+            if (getattr(error, "winerror", None) not in (5, 32, 33)
+                    or attempt == len(WINDOWS_REPLACE_DELAYS)):
+                error.local_persistence_path = str(path)
+                raise
+            time.sleep(WINDOWS_REPLACE_DELAYS[attempt])
+
+
+def persist_progress(output, budget, stage, **values):
+    output = Path(output)
+    completed = len(list((output / "spool/results").glob("*/*.json")))
+    event = {"stage": stage, "completed": completed, "budget": budget, **values}
+    atomic_json(output / "status.json", event)
+    print(json.dumps({k: v for k, v in event.items() if k not in ("results",)}), flush=True)
 
 
 def configure_parameters(value=None):
@@ -124,20 +152,45 @@ def network_failure_message(kind, request_url, language="en-US", code="other"):
 
 
 def record_run_failure(output, command, error, secrets):
-    """Persist safe pause metadata without tokens, raw headers or error bodies."""
+    """Preserve the original error even if the diagnostic file is also unwritable."""
     output = Path(output)
+
+    def safe_text(value):
+        text = str(value)
+        for secret in secrets:
+            if secret:
+                text = text.replace(secret, "[redacted]")
+        return text[:600]
+
     details = getattr(error, "resume_details", {})
-    detail = details.get("message") if details else str(error)
-    for secret in secrets:
-        if secret:
-            detail = detail.replace(secret, "[redacted]")
-    # Do not let the original pause message overwrite its redacted form.
-    safe_details = {**details, "message": detail[:600]} if details else {}
-    failure = {"type": type(error).__name__, **safe_details, "message": detail[:600]}
-    atomic_json(output / "failure.json", failure)
+    detail = safe_text(details.get("message") if details else error)
+    local_file = getattr(error, "local_persistence_path", None)
+    if local_file:
+        labels = {
+            "zh-CN": "本地文件写入失败（不是网络断开）：",
+            "zh-TW": "本機檔案寫入失敗（並非網路中斷）：",
+            "en-US": "Local file write failed (not a network disconnect): ",
+            "ja-JP": "ローカルファイルの書き込みに失敗（ネットワーク切断ではありません）: ",
+            "ko-KR": "로컬 파일 쓰기 실패(네트워크 연결 끊김 아님): ",
+        }
+        detail = (labels.get(command.get("language"), labels["en-US"]) + detail)[:600]
+    safe_details = {**details, "message": detail} if details else {}
+    failure = {"type": type(error).__name__, **safe_details, "message": detail}
+    if local_file:
+        failure.update({"category": "local-storage", "localFile": Path(local_file).name,
+                        "winerror": getattr(error, "winerror", None)})
+    # run.log is already open in the host: don't lose this primary diagnosis if
+    # the filesystem also refuses failure.json or the paused status update.
+    print("RUN_FAILED " + type(error).__name__ + ": " + detail, flush=True)
+    updates = [(output / "failure.json", failure)]
     if details:
-        atomic_json(output / "status.json", {"stage": "paused", "completed": len(list((output / "spool/results").glob("*/*.json"))), "budget": command["budget"], **safe_details})
-    print("RUN_FAILED " + type(error).__name__ + ": " + detail[:600], flush=True)
+        updates.append((output / "status.json", {"stage": "paused", "completed": len(list((output / "spool/results").glob("*/*.json"))), "budget": command["budget"], **safe_details}))
+    for destination, value in updates:
+        try:
+            atomic_json(destination, value)
+        except Exception as persistence_error:
+            print("RUN_FAILURE_RECORD_FAILED " + type(persistence_error).__name__ + ": "
+                  + safe_text(persistence_error), flush=True)
 
 
 class LiveGenerator(NovelAIGenerator):
@@ -238,6 +291,12 @@ class LiveGenerator(NovelAIGenerator):
                 and previous.get("request_hash") == key and previous.get("pendingRequestHash") == key
                 and previous.get("requiresPaidReplayConfirmation") is False)
 
+    @staticmethod
+    def _definite_rate_limit(previous, key):
+        return (previous.get("status") == 429 and previous.get("reason") == "rate_limited"
+                and previous.get("request_hash") == key and previous.get("pendingRequestHash") == key
+                and previous.get("requiresPaidReplayConfirmation") is False)
+
     def _validate_resume(self):
         if type(self.resume) is not bool:
             raise ValueError("Invalid resume flag")
@@ -268,7 +327,7 @@ class LiveGenerator(NovelAIGenerator):
             key = pending[0]
             path = self.store.root / "transport-errors" / f"{key}.json"
             previous = json.loads(path.read_text()) if path.exists() else {}
-            safe = previous.get("status") == 429 or self._definite_preconnect(previous, key)
+            safe = self._definite_rate_limit(previous, key) or self._definite_preconnect(previous, key)
             if auth is not None and safe:
                 raise ValueError("An uncertain-paid replay authorization is not applicable to this request")
             if not safe and auth is None:
@@ -387,7 +446,7 @@ class LiveGenerator(NovelAIGenerator):
                 raise RuntimeError("Next uncached request differs from explicit recovery authorization")
             if marker.exists():
                 previous_error = json.loads(error_marker.read_text()) if error_marker.exists() else {}
-                if previous_error.get("status") == 429:
+                if self._definite_rate_limit(previous_error, key):
                     retry_rejected = True
                     delay = max(60, previous_error.get("retry_not_before", 0) - time.time())
                     self.progress("rate_limited", request_hash=key, wait_seconds=delay, resuming=True)
@@ -403,6 +462,10 @@ class LiveGenerator(NovelAIGenerator):
             count = sum(not p.name.endswith(".error.json") for p in (self.store.root / "requests").glob("*.json"))
             if not retry_rejected and count >= self.max_renders:
                 raise ValueError("Configured image budget exhausted")
+            # A progress write is local bookkeeping, not evidence of a sent
+            # request. Fail here before creating a NEW intent marker so a local
+            # status lock cannot be misclassified as an uncertain paid attempt.
+            self.progress("generating", request_hash=key)
             if marker.exists():
                 if json.loads(marker.read_text()) != record:
                     raise RuntimeError("Saved request differs from the frozen payload")
@@ -410,7 +473,6 @@ class LiveGenerator(NovelAIGenerator):
                 atomic_json(marker, record)
             # Any subsequent uncertain failure must not inherit a stale 429 marker.
             self._archive_error(key)
-            self.progress("generating", request_hash=key)
             response = self.submit(job["request"], key, marker)
             self._archive_error(key)
             if response.status_code != 200:
@@ -455,10 +517,7 @@ def main(command):
             cancelled.set()
             raise RuntimeError("Run stopped; completed images retained")
     def progress(stage, **values):
-        completed = len(list((out / "spool/results").glob("*/*.json")))
-        event = {"stage": stage, "completed": completed, "budget": command["budget"], **values}
-        atomic_json(out / "status.json", event)
-        print(json.dumps({k: v for k, v in event.items() if k not in ("results",)}), flush=True)
+        persist_progress(out, command["budget"], stage, **values)
 
     asset = Path(command["assets"])
     image = Path(command["image"])

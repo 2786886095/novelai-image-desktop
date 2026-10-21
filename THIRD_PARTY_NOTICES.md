@@ -123,3 +123,8 @@ These original, unmodified fonts are distributed under SIL Open Font License 1.1
 - Platform boundary: packaging the desktop adaptations does not assert Android
   or iOS default-prompt parity. Their separate Flutter implementation and declared
   assets determine what is actually enabled on those platforms.
+
+
+## ComfyUI archive import: 7-Zip 26.04 (Windows x64)
+
+Unmodified 7za.exe from the official 7-Zip Extra distribution is included only for local ZIP/7z import. The original LGPL-2.1-or-later and BSD license text, NOTICE and exact binary/source provenance ship beside it in resources/comfy-archive/. Upstream source: https://github.com/ip7z/7zip/tree/26.04 ; distribution: https://www.7-zip.org/download.html . This is not the Aki/ComfyUI environment and does not download or include image model weights.

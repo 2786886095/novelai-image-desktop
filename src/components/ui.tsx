@@ -378,6 +378,7 @@ export function SelectMenuCompat({
   onChange,
   disabled,
   className,
+  popoverClassName,
   name,
   title,
   "aria-label": ariaLabel,
@@ -385,6 +386,7 @@ export function SelectMenuCompat({
 }: Omit<SelectHTMLAttributes<HTMLSelectElement>, "value" | "defaultValue" | "multiple" | "size"> & {
   value?: string | number;
   defaultValue?: string | number;
+  popoverClassName?: string;
 }) {
   const options = useMemo(() => collectSelectOptions(children), [children]);
   const triggerId = useId();
@@ -420,6 +422,7 @@ export function SelectMenuCompat({
       ariaDescribedBy={ariaDescribedBy}
       id={triggerId}
       className={clsx("select-menu-compat", className)}
+      popoverClassName={popoverClassName}
       disabled={disabled}
     />
   );

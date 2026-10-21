@@ -16,3 +16,69 @@ it('verifies cached files and rejects modified/missing images rather than loweri
 it('requires explicit paid consent when an old transport marker lacks trustworthy outcome metadata',()=>{const {manifestSha256:h}=create();const key='a'.repeat(64);write(path.join(run,'spool/requests',key+'.json'),JSON.stringify({request_hash:key}));write(path.join(run,'failure.json'),JSON.stringify({paused:true,pendingRequestHash:key,reason:'connect'}));expect(detectiveRecovery(run,h)).toMatchObject({supported:true,pendingRequestHash:key,requiresPaidReplayConfirmation:true});});
 it('rejects duplicate/multiple unresolved requests and never fabricates a legacy binding',()=>{const {manifestSha256:h}=create();for(const key of ['a'.repeat(64),'b'.repeat(64)])write(path.join(run,'spool/requests',key+'.json'),JSON.stringify({request_hash:key}));expect(detectiveRecovery(run,h).supported).toBe(false);expect(detectiveRecovery(run).supported).toBe(false);});
 it.each(['https://user:secret@fixture.invalid','https://fixture.invalid?token=secret','http://outside.invalid'])('rejects unsafe/secret-bearing endpoint before a manifest is persisted: %s',endpoint=>{binding.imageBaseUrl=endpoint;expect(create).toThrow();expect(fs.existsSync(path.join(run,'run-manifest.json'))).toBe(false);});
+
+const recoveryKey='c'.repeat(64),otherRecoveryKey='d'.repeat(64);
+const pendingMarker=(key=recoveryKey)=>write(path.join(run,'spool/requests',key+'.json'),JSON.stringify({request_hash:key}));
+const rejectedReceipt=(kind:'connect'|'rate_limited',key=recoveryKey)=>({request_hash:key,pendingRequestHash:key,status:kind==='connect'?'connect':429,reason:kind,requiresPaidReplayConfirmation:false,safeCode:kind==='connect'?'dns':'other'});
+const saveReceipt=(value:unknown,key=recoveryKey)=>write(path.join(run,'spool/transport-errors',key+'.json'),JSON.stringify(value));
+
+it.each(['connect','rate_limited'] as const)('uses the actual pending request to validate a %s receipt despite missing or stale progress',kind=>{
+ const {manifestSha256:h}=create();pendingMarker();saveReceipt(rejectedReceipt(kind));
+ // A WinError5 while replacing status may leave it missing, with only request_hash,
+ // or pointing at an older request. None may override the durable pending identity.
+ for(const progress of [undefined,{stage:'generating',request_hash:recoveryKey},{stage:'paused',pendingRequestHash:otherRecoveryKey}]) {
+  const file=path.join(run,'status.json');if(progress)write(file,JSON.stringify(progress));else if(fs.existsSync(file))fs.unlinkSync(file);
+  write(path.join(run,'failure.json'),JSON.stringify({type:'PermissionError',message:'synthetic local status replacement denied'}));
+  expect(detectiveRecovery(run,h)).toMatchObject({supported:true,pendingRequestHash:recoveryKey,requiresPaidReplayConfirmation:false});
+ }
+});
+it.each(['connect','rate_limited'] as const)('does not let stale paused failure metadata hide a matching %s receipt',kind=>{
+ const {manifestSha256:h}=create();pendingMarker();saveReceipt(rejectedReceipt(kind));
+ write(path.join(run,'status.json'),JSON.stringify({stage:'generating',request_hash:recoveryKey}));
+ write(path.join(run,'failure.json'),JSON.stringify({paused:true,pendingRequestHash:otherRecoveryKey,requiresPaidReplayConfirmation:true}));
+ expect(detectiveRecovery(run,h)).toMatchObject({supported:true,pendingRequestHash:recoveryKey,requiresPaidReplayConfirmation:false});
+});
+it.each(['connect','rate_limited'] as const)('recognizes a complete matching %s receipt without changing the frozen run',kind=>{
+ const {manifestSha256:h}=create();pendingMarker();const receipt=rejectedReceipt(kind);saveReceipt(receipt);
+ write(path.join(run,'status.json'),JSON.stringify({stage:'paused',pendingRequestHash:recoveryKey}));
+ const bytes=fs.readFileSync(path.join(run,'spool/transport-errors',recoveryKey+'.json'));
+ expect(detectiveRecovery(run,h)).toMatchObject({supported:true,pendingRequestHash:recoveryKey,requiresPaidReplayConfirmation:false});
+ expect(fs.readFileSync(path.join(run,'spool/transport-errors',recoveryKey+'.json'))).toEqual(bytes);
+});
+for(const kind of ['connect','rate_limited'] as const)for(const field of ['status','reason','request_hash','pendingRequestHash','requiresPaidReplayConfirmation'] as const){
+ it(`keeps ${kind} receipt with missing ${field} uncertain`,()=>{
+  const {manifestSha256:h}=create();pendingMarker();const saved:any=rejectedReceipt(kind);delete saved[field];saveReceipt(saved);
+  write(path.join(run,'status.json'),JSON.stringify({stage:'paused',pendingRequestHash:recoveryKey}));
+  expect(detectiveRecovery(run,h)).toMatchObject({supported:true,pendingRequestHash:recoveryKey,requiresPaidReplayConfirmation:true});
+ });
+}
+for(const kind of ['connect','rate_limited'] as const)for(const mutation of ['request_hash','pendingRequestHash','reason','requiresPaidReplayConfirmation'] as const){
+ it(`keeps ${kind} receipt with forged ${mutation} uncertain`,()=>{
+  const {manifestSha256:h}=create();pendingMarker();const saved:any=rejectedReceipt(kind);
+  saved[mutation]=mutation==='requiresPaidReplayConfirmation'?true:mutation==='reason'?'uncertain':otherRecoveryKey;saveReceipt(saved);
+  write(path.join(run,'status.json'),JSON.stringify({stage:'paused',pendingRequestHash:recoveryKey}));
+  expect(detectiveRecovery(run,h)).toMatchObject({supported:true,pendingRequestHash:recoveryKey,requiresPaidReplayConfirmation:true});
+ });
+}
+it.each(['connect','rate_limited'] as const)('does not borrow a different request hash %s receipt',kind=>{
+ const {manifestSha256:h}=create();pendingMarker();saveReceipt(rejectedReceipt(kind,otherRecoveryKey),otherRecoveryKey);
+ write(path.join(run,'status.json'),JSON.stringify({stage:'paused',pendingRequestHash:recoveryKey,requiresPaidReplayConfirmation:false,reason:kind}));
+ expect(detectiveRecovery(run,h)).toMatchObject({supported:true,pendingRequestHash:recoveryKey,requiresPaidReplayConfirmation:true});
+});
+it.each(['missing','uncertain'] as const)('never excuses a %s outcome because the local status write failed',kind=>{
+ const {manifestSha256:h}=create();pendingMarker();if(kind==='uncertain')saveReceipt({...rejectedReceipt('connect'),status:'uncertain',reason:'uncertain',requiresPaidReplayConfirmation:true});
+ write(path.join(run,'failure.json'),JSON.stringify({type:'PermissionError',message:'synthetic local status replacement denied'}));
+ expect(detectiveRecovery(run,h)).toMatchObject({supported:true,pendingRequestHash:recoveryKey,requiresPaidReplayConfirmation:true});
+});
+it('does not manufacture a pending request from stale status or failure metadata',()=>{
+ const {manifestSha256:h}=create();write(path.join(run,'status.json'),JSON.stringify({stage:'paused',pendingRequestHash:recoveryKey}));
+ write(path.join(run,'failure.json'),JSON.stringify({paused:true,pendingRequestHash:otherRecoveryKey,requiresPaidReplayConfirmation:true}));saveReceipt(rejectedReceipt('connect'));
+ const recovery=detectiveRecovery(run,h);expect(recovery).toMatchObject({supported:true,requiresPaidReplayConfirmation:false});expect(recovery.pendingRequestHash).toBeUndefined();
+});
+it('reuses a committed result despite stale pending metadata after a local status failure',()=>{
+ const {manifestSha256:h}=create();pendingMarker();const image=path.join(run,'spool/results/native',recoveryKey+'.png');write(image,'cached-result');
+ write(image.slice(0,-4)+'.json',JSON.stringify({request_hash:recoveryKey,image,image_sha256:sha('cached-result')}));
+ write(path.join(run,'failure.json'),JSON.stringify({type:'PermissionError',message:'synthetic local status replacement denied'}));
+ write(path.join(run,'status.json'),JSON.stringify({stage:'paused',pendingRequestHash:recoveryKey}));
+ const recovery=detectiveRecovery(run,h);expect(recovery).toMatchObject({supported:true,requiresPaidReplayConfirmation:false});expect(recovery.pendingRequestHash).toBeUndefined();expect(detectiveVerifiedResults(run).count).toBe(1);
+});

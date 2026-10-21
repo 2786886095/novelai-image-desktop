@@ -93,23 +93,23 @@ export function detectiveRecovery(directory:string,manifestSha256?:string):Detec
   if(!manifestSha256)return {supported:false,message:'旧任务缺少原账号与接口绑定，无法安全恢复；图片仍保留。'};
   try {
     readDetectiveRunManifest(directory,manifestSha256);
-    let status:any={},failure:any={};
+    let status:any={};
     if(fs.existsSync(path.join(directory,'status.json')))status=json(path.join(directory,'status.json'));
-    if(fs.existsSync(path.join(directory,'failure.json')))failure=json(path.join(directory,'failure.json'));
-    const event=failure.paused===true?failure:status;
     if(status.stage==='complete')return {supported:false,message:'此任务已完成；结果仍保留。'};
-    const pendingRequestHash=typeof event.pendingRequestHash==='string'&&HEX.test(event.pendingRequestHash)?event.pendingRequestHash:undefined;
     // A marker with no verified result is always uncertain unless the durable
     // transport record proves pre-connect/429. Never trust a renderer boolean.
     const pending=detectivePendingRequests(directory);
     if(pending.length>1)throw fail();
-    if(pending.length===1 && pending[0]!==pendingRequestHash)return {supported:true,manifestSha256,pendingRequestHash:pending[0],requiresPaidReplayConfirmation:true};
+    // Progress/failure replacement may fail or lag behind the spool. Only the
+    // actual unresolved marker may select a receipt or a paid replay identity.
+    const pendingRequestHash=pending[0];
     let safelyRejected=false;
     if(pending.length===1 && pendingRequestHash) {
       const diagnostic=path.join(directory,'spool/transport-errors',pendingRequestHash+'.json');
       if(fs.existsSync(diagnostic)) {
         within(directory,diagnostic);const saved=json(diagnostic);
-        safelyRejected=(saved.status==='connect' && saved.reason==='connect' && saved.request_hash===pendingRequestHash && saved.pendingRequestHash===pendingRequestHash && saved.requiresPaidReplayConfirmation===false) || saved.status===429;
+        const matches=saved.request_hash===pendingRequestHash && saved.pendingRequestHash===pendingRequestHash && saved.requiresPaidReplayConfirmation===false;
+        safelyRejected=matches && ((saved.status==='connect' && saved.reason==='connect') || (saved.status===429 && saved.reason==='rate_limited'));
       }
     }
     return {supported:true,manifestSha256,pendingRequestHash,requiresPaidReplayConfirmation:pending.length===1 && !safelyRejected};
