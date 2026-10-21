@@ -42,10 +42,11 @@ export async function prepareMacNativeKeychain({run, env = process.env,
   const password = crypto.randomBytes(32).toString('hex');
   const ledger = [], file = path.join(output, 'MAC_NATIVE_KEYCHAIN.json');
   const state = {schema: 'disposable-mac-native-keychain/v1', run: output, keychain,
-    prepared: false, restored: false, deleted: false, failure: null, commands: ledger};
+    prepared: false, restored: false, deleted: false, failure: null,
+    setupFailure: null, restorationFailure: null, commands: ledger};
   const clean = value => String(value ?? '').split(password).join('<redacted-keychain-password>');
   const save = () => fs.writeFileSync(file, JSON.stringify(state, null, 2) + '\n');
-  function call(args, {allowNoDefault = false} = {}) {
+  function call(args, {allowNoDefault = false, allowAbsentUnset = false} = {}) {
     // Passwords are necessarily local CLI arguments, never persisted in argv,
     // stdout/stderr, thrown errors or uploaded diagnostics. No shell is used.
     let raw;
@@ -63,7 +64,13 @@ export async function prepareMacNativeKeychain({run, env = process.env,
       args[0] === 'default-keychain' && args[1] === '-d' && args[2] === 'user' &&
       row.exitStatus === 1 && !row.error && !row.stdout.trim() &&
       /^security: SecKeychainCopy(?:DomainDefault user|Default): A default keychain could not be found\.$/.test(row.stderr.trim());
-    if (row.error || row.exitStatus !== 0 && !absent)
+    // A no-default result can also occur on a user-default unset request. This exact restore-only case is provisional: restoration
+    // below must still independently read back no default and the original list.
+    const absentUnset = allowAbsentUnset && args.length === 4 &&
+      args[0] === 'default-keychain' && args[1] === '-d' && args[2] === 'user' && args[3] === '-s' &&
+      row.exitStatus === 1 && !row.error && !row.stdout.trim() &&
+      /^security: SecKeychainSetDomainDefault user: A default keychain could not be found\.$/.test(row.stderr.trim());
+    if (row.error || row.exitStatus !== 0 && !absent && !absentUnset)
       throw Error('Native Keychain command failed: ' + JSON.stringify(row));
     return absent ? '' : row.stdout;
   }
@@ -82,7 +89,7 @@ export async function prepareMacNativeKeychain({run, env = process.env,
     const errors = [];
     // security(1): -s without a keychain unsets it (SetDomainDefault NULL).
     // An originally absent default must stay absent; never invent login.keychain.
-    try { call(['default-keychain', '-d', 'user', '-s', ...originalDefault]); } catch (error) { errors.push(clean(error.message)); }
+    try { call(['default-keychain', '-d', 'user', '-s', ...originalDefault], {allowAbsentUnset: originalDefault.length === 0}); } catch (error) { errors.push(clean(error.message)); }
     try { call(['list-keychains', '-d', 'user', '-s', ...originalSearch]); } catch (error) { errors.push(clean(error.message)); }
     try {
       const currentDefault = paths(call(['default-keychain', '-d', 'user'], {allowNoDefault: true}));
@@ -101,7 +108,7 @@ export async function prepareMacNativeKeychain({run, env = process.env,
       }
       catch (error) { errors.push(clean(error.message)); }
     }
-    if (errors.length) { state.failure = errors.join('\n'); save(); throw Error(state.failure); }
+    if (errors.length) { state.restorationFailure = errors.join('\n'); state.failure = state.restorationFailure; save(); throw Error(state.restorationFailure); }
     save();
   })();
   try {
@@ -121,8 +128,14 @@ export async function prepareMacNativeKeychain({run, env = process.env,
       throw Error('Dedicated native Keychain was not selected');
     state.prepared = true; save(); return restore;
   } catch (error) {
-    state.failure = clean(error.message); save();
-    try { await restore(); } catch (cleanupError) { throw Error(state.failure + '\nRestoration failed: ' + clean(cleanupError.message)); }
-    throw Error(state.failure);
+    // Cleanup can fail too; never overwrite the original setup failure with
+    // only its restoration error (including non-command selection failures).
+    const setupFailure = clean(error.message);
+    state.setupFailure = setupFailure; state.failure = setupFailure; save();
+    try { await restore(); } catch (cleanupError) {
+      state.failure = setupFailure + '\nRestoration failed: ' + clean(cleanupError.message); save();
+      throw Error(state.failure);
+    }
+    throw Error(setupFailure);
   }
 }

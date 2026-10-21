@@ -158,6 +158,7 @@ jobs:
             ${{ runner.temp }}/desktop-ai-acceptance/*-receipt.json
             ${{ runner.temp }}/desktop-ai-acceptance/*-scenarios.json
             ${{ runner.temp }}/desktop-ai-acceptance/*/command-ledger.json
+            ${{ runner.temp }}/desktop-ai-acceptance/*/MAC_NATIVE_KEYCHAIN.json
             ${{ runner.temp }}/desktop-ai-acceptance/*/*REPORT.json
             ${{ runner.temp }}/desktop-ai-acceptance/*/COLD_REOPEN.json
             ${{ runner.temp }}/desktop-ai-acceptance/*/source-before/**
@@ -165,6 +166,7 @@ jobs:
             ${{ runner.temp }}/desktop-generation-acceptance/*-receipt.json
             ${{ runner.temp }}/desktop-generation-acceptance/*-scenarios.json
             ${{ runner.temp }}/desktop-generation-acceptance/*/command-ledger.json
+            ${{ runner.temp }}/desktop-generation-acceptance/*/MAC_NATIVE_KEYCHAIN.json
             ${{ runner.temp }}/desktop-generation-acceptance/*/*REPORT.json
             ${{ runner.temp }}/desktop-generation-acceptance/*/BOOTSTRAP_PHASES.jsonl
             ${{ runner.temp }}/desktop-generation-acceptance/*/MAC_NATIVE_STALL*
@@ -179,6 +181,7 @@ jobs:
             ${{ runner.temp }}/desktop-system-acceptance/*-receipt.json
             ${{ runner.temp }}/desktop-system-acceptance/*-scenarios.json
             ${{ runner.temp }}/desktop-system-acceptance/*/command-ledger.json
+            ${{ runner.temp }}/desktop-system-acceptance/*/MAC_NATIVE_KEYCHAIN.json
             ${{ runner.temp }}/desktop-system-acceptance/*/*REPORT.json
             ${{ runner.temp }}/desktop-system-acceptance/*/BOOTSTRAP_PHASES.jsonl
             ${{ runner.temp }}/desktop-system-acceptance/*/MAC_NATIVE_STALL*
@@ -193,6 +196,7 @@ jobs:
             ${{ runner.temp }}/desktop-browser-acceptance/*/BROWSER_REOPEN.json
             ${{ runner.temp }}/desktop-advanced-acceptance/*-receipt.json
             ${{ runner.temp }}/desktop-advanced-acceptance/*/command-ledger.json
+            ${{ runner.temp }}/desktop-advanced-acceptance/*/MAC_NATIVE_KEYCHAIN.json
             ${{ runner.temp }}/desktop-advanced-acceptance/*/*REPORT.json
             ${{ runner.temp }}/desktop-advanced-acceptance/*/source-before/**
             ${{ runner.temp }}/desktop-advanced-acceptance/*/source-after/**

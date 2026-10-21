@@ -1,0 +1,77 @@
+name: Mac native Keychain diagnostics
+
+on:
+  push:
+    branches: [codex/comfy-five-platform-release]
+    paths:
+      - scripts/feature-acceptance/mac-native-keychain.mjs
+      - scripts/feature-acceptance/mac-native-keychain.test.mjs
+      - .github/workflows/mac-native-keychain-diagnostic.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-keychain-lifecycle:
+    runs-on: macos-14
+    timeout-minutes: 10
+    steps:
+      - name: Preserve exact checkout bytes
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+      - name: Real isolated Keychain preparation and restoration only
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import crypto from 'node:crypto';
+          import {execFileSync} from 'node:child_process';
+          import {prepareMacNativeKeychain} from './scripts/feature-acceptance/mac-native-keychain.mjs';
+          const output = path.join(process.env.RUNNER_TEMP, 'mac-keychain-diagnostic');
+          fs.mkdirSync(output);
+          const git = args => execFileSync('git', ['--no-optional-locks', ...args]);
+          const head = git(['rev-parse', 'HEAD']).toString().trim();
+          if (!/^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA || '') || head !== process.env.GITHUB_SHA)
+            throw Error('Diagnostic checkout must equal immutable workflow SHA');
+          git(['diff', '--cached', '--exit-code']);
+          const rows = git(['ls-files', '--stage', '-z']).toString().split('\0').filter(Boolean);
+          if (!rows.length) throw Error('Empty source index');
+          for (const row of rows) {
+            const match = /^([0-7]{6}) ([a-f0-9]{40}) 0\t([\s\S]+)$/.exec(row);
+            if (!match || !['100644', '100755'].includes(match[1])) throw Error('Nonregular source entry');
+            const data = fs.readFileSync(match[3]);
+            const oid = crypto.createHash('sha1').update(Buffer.from('blob ' + data.length + '\0')).update(data).digest('hex');
+            if (oid !== match[2]) throw Error('Raw source mismatch: ' + match[3]);
+          }
+          fs.writeFileSync(path.join(output, 'SOURCE_BINDING.json'), JSON.stringify({sourceSha: head,
+            rawIndexFilesVerified: rows.length, diagnosticOnly: true, featureReceiptProduced: false}, null, 2));
+          const result = {sourceSha: head, diagnosticOnly: true, featureReceiptProduced: false,
+            nativeAcceptanceClaimed: false, prepared: false, restored: false, exitStatus: 1};
+          try {
+            const restore = await prepareMacNativeKeychain({run: output});
+            result.prepared = true;
+            await restore();
+            result.restored = true;
+            result.exitStatus = 0;
+          } catch (error) {
+            result.failure = String(error.message);
+          }
+          fs.writeFileSync(path.join(output, 'RESULT.json'), JSON.stringify(result, null, 2));
+          console.log(JSON.stringify(result));
+          process.exitCode = result.exitStatus;
+          NODE
+      - name: Upload exact sanitized diagnostics, never a feature receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-keychain-diagnostic
+          path: |
+            ${{ runner.temp }}/mac-keychain-diagnostic/SOURCE_BINDING.json
+            ${{ runner.temp }}/mac-keychain-diagnostic/MAC_NATIVE_KEYCHAIN.json
+            ${{ runner.temp }}/mac-keychain-diagnostic/RESULT.json
+          if-no-files-found: error

@@ -10,6 +10,9 @@ import {runBoundedNativeCommand} from './bounded-native-command.mjs';
 
 const ciMissingDefault = {status: 1, stdout: '', stderr: 'security: SecKeychainCopyDomainDefault user: A default keychain could not be found.\n'};
 
+const ciUnsetNoDefault = {status: 1, stdout: '', stderr: 'security: SecKeychainSetDomainDefault user: A default keychain could not be found.\n'};
+const isEmptyUnset = args => JSON.stringify(args) === JSON.stringify(['default-keychain', '-d', 'user', '-s']);
+
 function fixture(t, {missingDefault = false, missingResponse = ciMissingDefault} = {}) {
   const temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'mac-keychain-controller-test-')));
   t.after(() => fs.rmSync(temp, {recursive: true, force: true}));
@@ -181,6 +184,107 @@ test('successful CLI exit with an undeleted owned keychain still fails cleanup',
   f.state.fail = args => args[0] === 'delete-keychain' ? {status: 0, stdout: '', stderr: ''} : null;
   await assert.rejects(cleanup(), /not deleted/); assert.equal(f.report().deleted, false); f.assertPrivate();
 });
+test('exact CI unset-no-default error is allowed only with verified absent default and original search', async t => {
+  const f = fixture(t, {missingDefault: true}), cleanup = await prepareMacNativeKeychain(f.input);
+  f.state.fail = args => {if (isEmptyUnset(args)) {f.state.currentDefault = []; return {...ciUnsetNoDefault};}};
+  await cleanup(); await cleanup();
+  assert.equal(f.report().restored, true); assert.equal(f.report().deleted, true);
+  assert.deepEqual(f.state.currentDefault, []); assert.deepEqual(f.state.currentSearch, [f.original]);
+  const unset = f.report().commands.filter(row => row.command.length === 5 && row.command.at(-1) === '-s');
+  assert.equal(unset.length, 1); assert.equal(unset[0].stderr, ciUnsetNoDefault.stderr); assert.equal(unset[0].exitStatus, 1);
+  assert.equal(f.report().commands.filter(row => row.stderr === ciMissingDefault.stderr).length, 2);
+  assert.equal(fs.readFileSync(f.original, 'utf8'), 'ORIGINAL PRISTINE BYTES'); f.assertPrivate();
+});
+
+test('exact unset diagnostic cannot hide a still-selected owned default', async t => {
+  const f = fixture(t, {missingDefault: true}), cleanup = await prepareMacNativeKeychain(f.input);
+  f.state.fail = args => isEmptyUnset(args) ? {...ciUnsetNoDefault} : null;
+  await assert.rejects(cleanup(), /did not restore byte-exact/);
+  assert.equal(f.report().restored, false); assert.equal(f.report().deleted, false); assert.equal(fs.existsSync(f.report().keychain), true);
+  assert.ok(!f.state.calls.some(c => c.args[0] === 'delete-keychain')); f.assertPrivate();
+});
+
+test('exact unset diagnostic cannot hide a search-list mismatch', async t => {
+  const f = fixture(t, {missingDefault: true}), cleanup = await prepareMacNativeKeychain(f.input);
+  f.state.fail = args => {
+    if (isEmptyUnset(args)) {f.state.currentDefault = []; return {...ciUnsetNoDefault};}
+    if (args[0] === 'list-keychains' && args.includes('-s')) return {status: 0, stdout: '', stderr: ''};
+  };
+  await assert.rejects(cleanup(), /did not restore byte-exact/);
+  assert.deepEqual(f.state.currentDefault, []); assert.equal(f.report().restored, false); assert.equal(f.report().deleted, false);
+  assert.ok(!f.state.calls.some(c => c.args[0] === 'delete-keychain')); f.assertPrivate();
+});
+
+test('restoring a nonempty original default never accepts an unset-only diagnostic', async t => {
+  const f = fixture(t), cleanup = await prepareMacNativeKeychain(f.input);
+  f.state.fail = args => args[0] === 'default-keychain' && args.includes('-s') && args.at(-1) === f.original ? {...ciUnsetNoDefault} : null;
+  await assert.rejects(cleanup(), /SecKeychainSetDomainDefault/);
+  assert.equal(f.report().restored, false); assert.equal(f.report().deleted, false); assert.equal(fs.existsSync(f.report().keychain), true);
+  assert.ok(!f.state.calls.some(c => c.args[0] === 'delete-keychain')); f.assertPrivate();
+});
+
+test('only the precise unset user/status1/empty-stdout error can be reconciled', async t => {
+  const cases = [
+    ['permission', {...ciUnsetNoDefault, stderr: 'security: SecKeychainSetDomainDefault user: authorization denied.\n'}],
+    ['other domain', {...ciUnsetNoDefault, stderr: ciUnsetNoDefault.stderr.replace(' user:', ' system:')}],
+    ['extra diagnostic', {...ciUnsetNoDefault, stderr: ciUnsetNoDefault.stderr + 'additional error\n'}],
+    ['nonempty stdout', {...ciUnsetNoDefault, stdout: 'unexpected stdout'}],
+    ['wrong status', {...ciUnsetNoDefault, status: 44}],
+    ['usage status', {...ciUnsetNoDefault, status: 2}],
+    ['signal', {...ciUnsetNoDefault, status: null, signal: 'SIGTERM'}],
+    ['spawn error', {...ciUnsetNoDefault, error: new Error('ETIMEDOUT')}],
+    ['wrong function', {...ciMissingDefault}],
+  ];
+  for (const [name, response] of cases) await t.test(name, async sub => {
+    const f = fixture(sub, {missingDefault: true}), cleanup = await prepareMacNativeKeychain(f.input);
+    f.state.fail = args => {if (isEmptyUnset(args)) {f.state.currentDefault = []; return response;}};
+    await assert.rejects(cleanup(), /Native Keychain command failed/);
+    assert.equal(f.report().restored, false); assert.equal(f.report().deleted, false);
+    assert.ok(!f.state.calls.some(c => c.args[0] === 'delete-keychain')); f.assertPrivate();
+  });
+});
+
+test('a setup SetDomainDefault error with an explicit path is never an accepted unset', async t => {
+  const f = fixture(t, {missingDefault: true});
+  f.state.fail = args => {
+    if (args[0] === 'default-keychain' && args.includes('-s') && args.length === 5) return {...ciUnsetNoDefault};
+    if (isEmptyUnset(args)) {f.state.currentDefault = []; return {...ciUnsetNoDefault};}
+  };
+  await assert.rejects(prepareMacNativeKeychain(f.input), /SecKeychainSetDomainDefault/);
+  assert.match(f.report().setupFailure, /acceptance\.keychain-db/);
+  assert.equal(f.report().prepared, false); assert.equal(f.report().restored, true); assert.equal(f.report().deleted, true);
+  assert.equal(f.report().restorationFailure, null); f.assertPrivate();
+});
+
+test('setup and restoration failures retain independent redacted diagnostics', async t => {
+  const f = fixture(t, {missingDefault: true});
+  f.state.fail = args => args[0] === 'unlock-keychain' ? {status: 1, stdout: '', stderr: 'ORIGINAL_SETUP_FAILURE'}
+    : isEmptyUnset(args) ? {status: 1, stdout: '', stderr: 'RESTORE_DENIED'} : null;
+  let error;
+  try {await prepareMacNativeKeychain(f.input);} catch (caught) {error = caught;}
+  assert.match(error.message, /ORIGINAL_SETUP_FAILURE/); assert.match(error.message, /RESTORE_DENIED/);
+  assert.match(f.report().setupFailure, /ORIGINAL_SETUP_FAILURE/);
+  assert.match(f.report().restorationFailure, /RESTORE_DENIED/);
+  assert.match(f.report().failure, /ORIGINAL_SETUP_FAILURE/); assert.match(f.report().failure, /RESTORE_DENIED/);
+  assert.equal(f.report().prepared, false); assert.equal(f.report().restored, false); assert.equal(f.report().deleted, false);
+  f.assertPrivate(error.message);
+});
+
+test('reconciled unset still cannot turn an earlier failed setup into success', async t => {
+  const f = fixture(t, {missingDefault: true}); let selectionRead = false;
+  f.state.fail = args => {
+    if (args[0] === 'default-keychain' && !args.includes('-s') && f.state.currentDefault.length && !selectionRead) {
+      selectionRead = true; return {status: 0, stdout: '    "' + f.original + '"\n', stderr: ''};
+    }
+    if (isEmptyUnset(args)) {f.state.currentDefault = []; return {...ciUnsetNoDefault};}
+  };
+  await assert.rejects(prepareMacNativeKeychain(f.input), /Dedicated native Keychain was not selected/);
+  assert.equal(f.report().setupFailure, 'Dedicated native Keychain was not selected');
+  assert.equal(f.report().restorationFailure, null);
+  assert.equal(f.report().failure, 'Dedicated native Keychain was not selected');
+  assert.equal(f.report().prepared, false); assert.equal(f.report().restored, true); assert.equal(f.report().deleted, true); f.assertPrivate();
+});
+
 test('the actual advanced controller adapter bounds a real stalled child and retains literal streams', async t => {
   const f = fixture(t), ledger = [], source = fs.readFileSync(new URL('./run-desktop-advanced-native.mjs', import.meta.url), 'utf8');
   const declaration = source.slice(source.indexOf('async function command('), source.indexOf('\nconst expected'));
