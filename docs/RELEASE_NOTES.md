@@ -12,7 +12,9 @@
 
 **已知验证范围**：此前 Windows 本机软件内已用三种模型完成真实出图及启动／停止／重启。最新布局、环境引导、节点显示、草稿与保存采用隔离的单元／浏览器回归，未因此新增真实 GPU 推理或用户环境验收。macOS／Linux 模型推理尚未实机验收，Android／iOS 没有本机 ComfyUI 入口。基础配方不包含官方模板的全部可选分支，不承诺任意插件、动态工作流或第三方环境兼容。
 
-**正式发行与安装限制**：正式功能验收以本次发布流水线提供的证据为准；本地候选回归不等于五端功能验收完成。现有功能发行门覆盖 Windows／macOS／Linux／Android 的 153 项要求；iOS 仅为附加的未签名 IPA 打包范围，不授予 iOS 功能验收。IPA 需自行签名，不能直接安装到普通 iPhone，不是 App Store／TestFlight 版本。Windows 代码签名、macOS 签名／公证、Android 升级及自动更新能力均以实际制品与 Latest 证据为准，当前不承诺完成。
+本次发行中，本地 Agent 组件（`agent-components`）与画风自动迭代（`artist-iteration`）仅承诺 Windows；macOS／Linux／Android 的这两项共 6 格明确为 not-supported，不计通过。Windows 两项各自原有的三场景真实验收仍必须完成，生图智能体等其余 37 项功能继续保留四端要求。
+
+**正式发行与安装限制**：正式功能验收以本次发布流水线提供的证据为准；本地候选回归不等于五端功能验收完成。现有功能发行门保留 156 个声明单元，覆盖 Windows／macOS／Linux／Android 的 150 个必需功能／平台单元及上述 6 格 not-supported；旧候选包与回执只对应其各自源 SHA，不能替代最终提交的同源验收。iOS 仅为附加的未签名 IPA 打包范围，不授予 iOS 功能验收。IPA 需自行签名，不能直接安装到普通 iPhone，不是 App Store／TestFlight 版本。Windows 代码签名、macOS 签名／公证、Android 升级及自动更新能力均以实际制品与 Latest 证据为准，当前不承诺完成。
 
 [本地 ComfyUI 使用说明](https://github.com/2786886095/novelai-image-desktop/blob/main/docs/COMFYUI_LOCAL.md) · [历史更新](https://github.com/2786886095/novelai-image-desktop/tree/main/docs/history)
 下载与实际附件：[Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest)；当前源码：[main](https://github.com/2786886095/novelai-image-desktop/tree/main)。

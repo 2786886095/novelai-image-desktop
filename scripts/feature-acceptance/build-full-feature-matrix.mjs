@@ -1,6 +1,7 @@
 import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';import {pathToFileURL} from 'node:url';
 import {releaseFeatures,releasePlatforms,fullFeatureProfiles,profileSha256,assertScenarioReceipt} from './full-feature-profiles.mjs';
 import {assertReleasePlatformContract,assertReleaseEvidenceFiles,supportedPlatforms,releaseExcludedPlatforms,releaseFeatureApplicability,releaseScopeId,releaseScopeSha256,releaseScopeCounts} from '../release-platform-contract.mjs';
+import {windowsArtistRuntimeType} from './windows-artist-contract.mjs';
 const sha=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
 
 export function buildFullFeatureMatrix({version,sourceSha,receipts=[]}){
@@ -8,7 +9,7 @@ export function buildFullFeatureMatrix({version,sourceSha,receipts=[]}){
  for(const item of receipts){
   const r=item.receipt;
   if(r?.schema!=='client-feature-scenarios/v1'){diagnostics.push({artifact:item.artifact,classification:'legacy-component-only',sourceSha:r?.sourceSha??null,platform:r?.platform??null});continue;}
-  try{assertScenarioReceipt(r,{sourceSha,androidAgentProof:item.androidAgentProof});if(!releasePlatforms.includes(r.platform)){diagnostics.push({artifact:item.artifact,classification:'outside-explicit-release-platform',sourceSha:r.sourceSha,platform:r.platform});continue;}accepted.push(item);}catch(error){diagnostics.push({artifact:item.artifact,classification:'not-release-qualified',reason:error.message,sourceSha:r?.sourceSha??null,platform:r?.platform??null});}
+  try{assertScenarioReceipt(r,{sourceSha,androidAgentProof:item.androidAgentProof,windowsArtistProof:item.windowsArtistProof});if(!releasePlatforms.includes(r.platform)){diagnostics.push({artifact:item.artifact,classification:'outside-explicit-release-platform',sourceSha:r.sourceSha,platform:r.platform});continue;}accepted.push(item);}catch(error){diagnostics.push({artifact:item.artifact,classification:'not-release-qualified',reason:error.message,sourceSha:r?.sourceSha??null,platform:r?.platform??null});}
  }
  const features=releaseFeatures.map(id=>({id,platforms:Object.fromEntries(releasePlatforms.map(platform=>{
   const requiredScenarios=[...fullFeatureProfiles[id].scenarios],all=[],local=[],component=[];
@@ -18,7 +19,7 @@ export function buildFullFeatureMatrix({version,sourceSha,receipts=[]}){
   }}
   for(const item of accepted)if(item.receipt.platform===platform)for(const check of item.receipt.checks)if(check.feature===id)all.push({check,item});
   const completedScenarios=[...new Set(all.map(x=>x.check.scenario))],missingScenarios=requiredScenarios.filter(s=>!completedScenarios.includes(s));
-  const evidence=[];for(const{check,item}of all){const key=item.artifact+'|'+check.kind;if(evidence.some(e=>e._key===key))continue;evidence.push({_key:key,sourceSha,feature:id,platform,kind:check.kind,exitStatus:0,skipped:false,artifact:item.artifact,sha256:item.sha256,...(item.androidAgentProofArtifact?{companionProofArtifact:item.androidAgentProofArtifact,companionProofSha256:item.androidAgentProofFileSha256}:{})});}
+  const evidence=[];for(const{check,item}of all){const key=item.artifact+'|'+check.kind;if(evidence.some(e=>e._key===key))continue;evidence.push({_key:key,sourceSha,feature:id,platform,kind:check.kind,exitStatus:0,skipped:false,artifact:item.artifact,sha256:item.sha256,...(item.androidAgentProofArtifact?{companionProofArtifact:item.androidAgentProofArtifact,companionProofSha256:item.androidAgentProofFileSha256}:{}),...(item.windowsArtistProofArtifact?{companionProofArtifact:item.windowsArtistProofArtifact,companionProofSha256:item.windowsArtistProofFileSha256}:{})});}
   const applicability=releaseFeatureApplicability(id,platform);
   if(applicability==='not-supported') {
    // Keep original scenario IDs and observations, but never invent a pass/proof.
@@ -30,7 +31,7 @@ export function buildFullFeatureMatrix({version,sourceSha,receipts=[]}){
   return[platform,{applicability,status,declaredScenarios:[...requiredScenarios],requiredScenarios,completedScenarios,missingScenarios,unqualifiedObservedScenarios:[...new Set(local)].filter(s=>!completedScenarios.includes(s)),componentObservations:[...new Set(component)],evidence:status==='verified'?evidence.map(({_key,...proof})=>proof):[]}];
  }))}));
  const slots=features.flatMap(f=>releasePlatforms.map(p=>({feature:f.id,platform:p,...f.platforms[p]}))),verified=slots.filter(s=>s.status==='verified').length;
- return{schema:2,version,sourceSha,platforms:[...releasePlatforms],supportedPlatforms:[...supportedPlatforms],excludedPlatforms:[...releaseExcludedPlatforms],profileSha256,releaseScopeId,releaseScopeSha256,features,summary:{...releaseScopeCounts,verifiedSlots:verified,partialSlots:slots.filter(s=>s.status==='partial').length,pendingSlots:slots.filter(s=>s.status==='pending').length,missingScenarioSlots:slots.reduce((n,s)=>n+s.missingScenarios.length,0)},full195Certified:false,full156Certified:false,releaseScopeCertified:verified===releaseScopeCounts.requiredSlots&&slots.filter(s=>s.status==='not-supported').length===releaseScopeCounts.notSupportedSlots&&/^[a-f0-9]{40}$/i.test(sourceSha),releaseReady:false,diagnostics,boundary:'Current release declares39 features on four platforms (156 cells). iOS source/native support and diagnostics remain but all39 iOS cells are excluded from this release, never passed. Only artist-iteration outside Windows is not-supported on the other three release targets. All153 required cells retain real native/runtime acceptance; scope certification alone is not publication readiness. Components, dirty source, failed or skipped checks never certify rows.'};
+ return{schema:2,version,sourceSha,platforms:[...releasePlatforms],supportedPlatforms:[...supportedPlatforms],excludedPlatforms:[...releaseExcludedPlatforms],profileSha256,releaseScopeId,releaseScopeSha256,features,summary:{...releaseScopeCounts,verifiedSlots:verified,partialSlots:slots.filter(s=>s.status==='partial').length,pendingSlots:slots.filter(s=>s.status==='pending').length,missingScenarioSlots:slots.reduce((n,s)=>n+s.missingScenarios.length,0)},full195Certified:false,full156Certified:false,releaseScopeCertified:verified===releaseScopeCounts.requiredSlots&&slots.filter(s=>s.status==='not-supported').length===releaseScopeCounts.notSupportedSlots&&/^[a-f0-9]{40}$/i.test(sourceSha),releaseReady:false,diagnostics,boundary:'Current release declares39 features on four platforms (156 cells). iOS source/native support and diagnostics remain but all39 iOS cells are excluded from this release, never passed. Local agent-components and artist-iteration are Windows-only; both are not-supported on the other three release targets (six cells, never passes). All150 required cells retain real native/runtime acceptance; scope certification alone is not publication readiness. Components, dirty source, failed or skipped checks never certify rows.'};
 }
 
 export function collectReceiptFiles(evidenceRoot,outputRoot){
@@ -47,6 +48,15 @@ export function collectReceiptFiles(evidenceRoot,outputRoot){
      const copy=path.join(destination,proofName);if(!fs.existsSync(copy))fs.writeFileSync(copy,proofBytes,{flag:'wx'});if(sha(fs.readFileSync(copy))!==proofSha)throw Error('Android controller proof evidence copy mismatch');
     }
    }
+   if(receipt.nativeRuntime?.type===windowsArtistRuntimeType){
+    const proofFile=path.join(path.dirname(full),'controller-proof.json');
+    if(fs.existsSync(proofFile)){
+     const stat=fs.lstatSync(proofFile);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>64*1024*1024)throw Error('Windows Artist controller proof must be a bounded sibling regular file');
+     const proofBytes=fs.readFileSync(proofFile),proofSha=sha(proofBytes),proofName=proofSha+'.windows-artist-proof.json';
+     row.windowsArtistProof=JSON.parse(proofBytes);row.windowsArtistProofArtifact=path.posix.join('evidence',proofName);row.windowsArtistProofFileSha256=proofSha;
+     const copy=path.join(destination,proofName);if(!fs.existsSync(copy))fs.writeFileSync(copy,proofBytes,{flag:'wx'});if(sha(fs.readFileSync(copy))!==proofSha)throw Error('Windows Artist controller proof evidence copy mismatch');
+    }
+   }
    rows.push(row);
   }}}
  walk(root);return rows;
@@ -56,7 +66,7 @@ export function writeFullFeatureMatrix({evidenceRoot,outputRoot,sourceSha,versio
  fs.mkdirSync(outputRoot,{recursive:true});const receipts=collectReceiptFiles(evidenceRoot,outputRoot),report=buildFullFeatureMatrix({sourceSha,version,receipts});
  if(report.releaseScopeCertified){assertReleasePlatformContract(report,{sourceSha,version});assertReleaseEvidenceFiles(report,outputRoot);}
  fs.writeFileSync(path.join(outputRoot,'FULL_FEATURE_MATRIX.json'),JSON.stringify(report,null,2)+'\n');
- const lines=['# Four-platform release acceptance matrix','',`Source: ${sourceSha}; version: ${version}; verified required cells: ${report.summary.verifiedSlots}/153; declared: 156; not-supported: 3 (not passes).`, 'iOS is explicitly excluded from this release; its source/native support and historical195-cell evidence are retained, not certified here.', '', '| Feature | Windows | macOS | Linux | Android |','|---|---|---|---|---|'];
+ const lines=['# Four-platform release acceptance matrix','',`Source: ${sourceSha}; version: ${version}; verified required cells: ${report.summary.verifiedSlots}/150; declared: 156; not-supported: 6 (not passes).`, 'iOS is explicitly excluded from this release; its source/native support and historical195-cell evidence are retained, not certified here.', '', '| Feature | Windows | macOS | Linux | Android |','|---|---|---|---|---|'];
  for(const f of report.features)lines.push('| '+f.id+' | '+releasePlatforms.map(p=>`${f.platforms[p].status} ${f.platforms[p].completedScenarios.length}/${f.platforms[p].requiredScenarios.length}`).join(' | ')+' |');
  lines.push('','Pending/partial is not a release pass. Not-supported is not a pass or full156/full195 certification. See JSON missingScenarios and receipt diagnostics.');fs.writeFileSync(path.join(outputRoot,'FULL_FEATURE_MATRIX.md'),lines.join('\n')+'\n');
  const reopened=fs.readFileSync(path.join(outputRoot,'FULL_FEATURE_MATRIX.json'));

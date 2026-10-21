@@ -390,9 +390,26 @@ Future<void> _random(NativeContext c, NativeUiTlsFixture tls) async {
       w.onPressed != null).last);
   await nativeUiWait(() => app.history.any((h) => h.feature == 'artist-lab'),
       'actual artist Favorite action committed native history');
-  final saved = app.history.firstWhere((h) => h.feature == 'artist-lab'),
-      favorites =
-          jsonDecode(prefs.getString('${prefix}favorites') ?? '[]') as List;
+  final saved = app.history.firstWhere((h) => h.feature == 'artist-lab');
+  // History is committed before the widget finishes its sequential preferences
+  // writes. Read back the real native preferences, not just the shared cache or
+  // a fixed delay, before asserting that the Favorite action has persisted.
+  List<dynamic> favorites = const [];
+  final persistenceWait = Stopwatch()..start();
+  const persistenceBudget = Duration(seconds: 10);
+  for (var attempt = 0; attempt < 400; attempt++) {
+    final remaining = persistenceBudget - persistenceWait.elapsed;
+    if (remaining <= Duration.zero) break;
+    await prefs.reload().timeout(remaining);
+    favorites =
+        jsonDecode(prefs.getString('${prefix}favorites') ?? '[]') as List;
+    if (favorites.length == 1 &&
+        favorites.single['liked'] == true &&
+        favorites.single['image']['id'] == saved.id) {
+      break;
+    }
+    await frame();
+  }
   require(
       favorites.length == 1 &&
           favorites.single['liked'] == true &&

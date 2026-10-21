@@ -1,14 +1,18 @@
 import {describe,it,expect} from 'vitest';
-import {assertReleasePlatformContract,assertReleaseEvidenceFiles,releaseFeatures,releasePlatforms,supportedPlatforms,releaseExcludedPlatforms,releaseFeatureApplicability,releaseScopeId,releaseScopeSha256,releaseScopeCounts,artistIterationScenarios} from '../scripts/release-platform-contract.mjs';
+import {assertReleasePlatformContract,assertReleaseEvidenceFiles,releaseFeatures,releasePlatforms,supportedPlatforms,releaseExcludedPlatforms,releaseFeatureApplicability,releaseScopeId,releaseScopeSha256,releaseScopeCounts,artistIterationScenarios,agentComponentScenarios} from '../scripts/release-platform-contract.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import {profileSha256} from '../scripts/feature-acceptance/full-feature-profiles.mjs';
+import {createWindowsArtistUnitProof} from '../scripts/feature-acceptance/windows-artist-contract-fixture.mjs';
+import {windowsArtistScenarioReceipt} from '../scripts/feature-acceptance/windows-artist-contract.mjs';
 const sourceSha='a'.repeat(40),version='2.5.7';
-const complete=()=>({schema:2,version,sourceSha,releaseScopeId,releaseScopeSha256,full195Certified:false,full156Certified:false,releaseScopeCertified:true,releaseReady:false,summary:{...releaseScopeCounts,verifiedSlots:153,partialSlots:0,pendingSlots:0},platforms:[...releasePlatforms],supportedPlatforms:[...supportedPlatforms],excludedPlatforms:[...releaseExcludedPlatforms],features:releaseFeatures.map(id=>({id,platforms:Object.fromEntries(releasePlatforms.map(platform=>[platform,releaseFeatureApplicability(id,platform)==='not-supported'?{applicability:'not-supported',status:'not-supported',reasonCode:releaseScopeId,declaredScenarios:[...artistIterationScenarios],requiredScenarios:[],completedScenarios:[],missingScenarios:[],evidence:[]}:{applicability:'required',status:'verified',evidence:[{sourceSha,feature:id,platform,exitStatus:0,skipped:false,kind:'integration',artifact:'neutral-fixture.json',sha256:'b'.repeat(64)}]}]))}))});
+const complete=()=>({schema:2,version,sourceSha,profileSha256,releaseScopeId,releaseScopeSha256,full195Certified:false,full156Certified:false,releaseScopeCertified:true,releaseReady:false,summary:{...releaseScopeCounts,verifiedSlots:150,partialSlots:0,pendingSlots:0},platforms:[...releasePlatforms],supportedPlatforms:[...supportedPlatforms],excludedPlatforms:[...releaseExcludedPlatforms],features:releaseFeatures.map(id=>({id,platforms:Object.fromEntries(releasePlatforms.map(platform=>[platform,releaseFeatureApplicability(id,platform)==='not-supported'?{applicability:'not-supported',status:'not-supported',reasonCode:releaseScopeId,declaredScenarios:[...(id==='artist-iteration'?artistIterationScenarios:agentComponentScenarios)],requiredScenarios:[],completedScenarios:[],missingScenarios:[],evidence:[]}:{applicability:'required',status:'verified',evidence:[{sourceSha,feature:id,platform,exitStatus:0,skipped:false,kind:'integration',artifact:'neutral-fixture.json',sha256:'b'.repeat(64)}]}]))}))});
 describe('four-platform publication contract with retained five-platform product support (synthetic evidence schema, not device acceptance)',()=>{
   it('accepts a complete fixture without certifying the actual application',()=>expect(assertReleasePlatformContract(complete(),{version,sourceSha})).toEqual({platforms:4,features:39}));
   it('rejects old five-platform scope and injected excluded iOS cells',()=>{const r={...complete(),releaseScopeId:'artist-iteration-windows-only/v1'};expect(()=>assertReleasePlatformContract(r,{version,sourceSha})).toThrow();const x=complete();Object.assign(x.features[0].platforms,{ios:{...x.features[0].platforms.android}});expect(()=>assertReleasePlatformContract(x,{version,sourceSha})).toThrow();});
+  it.each(['agent-components','artist-iteration'])('rejects exempting Windows %s',feature=>{const r=complete(),row=r.features.find(f=>f.id===feature)!;row.platforms.windows={...row.platforms.macos};expect(()=>assertReleasePlatformContract(r,{version,sourceSha})).toThrow();});
   it('rejects Windows-only scope',()=>{const r=complete();r.platforms=['windows'];expect(()=>assertReleasePlatformContract(r,{version,sourceSha})).toThrow();});
   it('rejects absent feature evidence',()=>expect(()=>assertReleasePlatformContract(undefined,{version,sourceSha})).toThrow());
   it('rejects a different source',()=>{const r=complete();r.sourceSha='c'.repeat(40);expect(()=>assertReleasePlatformContract(r,{version,sourceSha})).toThrow();});
@@ -28,6 +32,12 @@ describe('four-platform publication contract with retained five-platform product
       const data=JSON.stringify({checks});fs.writeFileSync(path.join(root,'synthetic-schema-fixture.json'),data);
       const sha=crypto.createHash('sha256').update(data).digest('hex');
       for(const f of r.features) for(const p of releasePlatforms) {if(f.platforms[p].status==='not-supported')continue;f.platforms[p].evidence[0].artifact='synthetic-schema-fixture.json';f.platforms[p].evidence[0].sha256=sha;}
+      // Windows Artist has a separate exact-proof route, not a generic schema
+      // check. The shared builder is explicitly UNIT_ONLY (never device proof).
+      const fixture=createWindowsArtistUnitProof({profileSha256}),receipt=windowsArtistScenarioReceipt(fixture.proof,fixture.bindings);
+      const proofText=JSON.stringify(fixture.proof),receiptText=JSON.stringify(receipt),hash=(text:string)=>crypto.createHash('sha256').update(text).digest('hex');
+      fs.writeFileSync(path.join(root,'controller-proof.json'),proofText);fs.writeFileSync(path.join(root,'artist-receipt.json'),receiptText);
+      Object.assign(r.features.find(f=>f.id==='artist-iteration')!.platforms.windows.evidence[0],{kind:'native-runtime',artifact:'artist-receipt.json',sha256:hash(receiptText),companionProofArtifact:'controller-proof.json',companionProofSha256:hash(proofText)});
       expect(()=>assertReleaseEvidenceFiles(r,root)).not.toThrow();
       fs.appendFileSync(path.join(root,'synthetic-schema-fixture.json'),' ');
       expect(()=>assertReleaseEvidenceFiles(r,root)).toThrow('bytes changed');

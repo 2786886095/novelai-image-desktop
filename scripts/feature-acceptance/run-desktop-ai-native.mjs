@@ -1,3 +1,4 @@
+import {prepareMacNativeKeychain} from './mac-native-keychain.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -27,8 +28,9 @@ async function command(argv,timeout=300000){
 }
 const expected=[['reverse','mode-and-scope-system-import'],['reverse','valid-json-and-visible-result'],['reverse','refusal-truncated-invalid-preserve'],['convert','three-modes-and-import'],['convert','structured-variants-preserve-escapes'],['convert','errors-preserve-results'],['translation','languages-source-detect'],['translation','preserve-tags-weights'],['translation','failure-cancel-no-overwrite'],['ai-records','record-request-response-status'],['ai-records','refresh-expand-clear-memory-history-boundary'],['ai-records','sensitive-fields-redacted'],['reverse','versioned-skill-catalog-and-models'],['reverse','inline-controls-stale-no-apply'],['convert','versioned-skill-editing-overlays'],['settings','skill-selection-custom-cold-reopen'],['settings','persist-and-reopen'],['settings','independent-service-proxy'],['settings','invalid-change-no-destruction'],['external-mcp-server','tool-discovery-native-bridge'],['external-mcp-server','actual-local-tool-request'],['external-mcp-server','auth-errors-budget-safety']];
 
-let status=1,checks=[];
+let status=1,checks=[],stopKeychain=async()=>{};
 try{
+ stopKeychain=await prepareMacNativeKeychain({run});
  const config=JSON.parse(fs.readFileSync(path.join(source,'tsconfig.electron.json'),'utf8'));
  config.compilerOptions.outDir=path.join(run,'compiled');config.compilerOptions.rootDir=source;config.compilerOptions.typeRoots=[path.join(deps,'@types')];
  config.include=[...config.include,'src/translation-session.ts'].map(p=>path.join(source,p));config.exclude=config.exclude.map(p=>path.join(source,p));
@@ -53,9 +55,10 @@ try{
  if(persisted)persisted.observed={...persisted.observed,coldProcessExitStatus:cold.exitStatus,coldProcessPid:reopened.pid,actualCredentialReopened:true,coldCommand:cold.command,coldStdout:cold.stdout,coldStderr:cold.stderr};
  checks=report.cases.map(item=>({feature:item.feature,scenario:item.scenario,acceptanceLevel:'scenario',sourceSha,platform,kind:'integration',exitStatus:item.pass?0:1,skipped:false,command:actual.command,stdout:actual.stdout,stderr:actual.stderr,observed:item.observed||{error:item.error}}));
  status=actual.exitStatus===0&&report.passed===report.total&&report.total===expected.length?0:1;
+ await stopKeychain();
  const headAfter=spawnSync('git',['rev-parse','HEAD'],{cwd:source,encoding:'utf8'});
  const after=captureSourceState({sourceRoot:source,sourceSha:headBefore.stdout.trim(),evidenceDirectory:path.join(run,'source-after')});
  const receipt={schema:'client-feature-scenarios/v1',sourceSha,platform,profileSha256,sourceQualified:qualified&&after.clean&&after.rawMatchesHead&&headAfter.stdout.trim()===headBefore.stdout.trim(),isolated:true,mockedModules:false,exitStatus:status,nativeRuntime:{type:'electron',version:report.electron},checks,run,ledger,boundaries:['Production client APIs/storage/real loopback and real renderer store, not upstream visual quality or live paid account acceptance.','AI call log is intentionally in-memory; text-tool history and settings persistence are tested separately.']};
  fs.writeFileSync(path.join(output,`desktop-ai-${platform}-scenarios.json`),JSON.stringify(receipt,null,2));
 }catch(e){console.error(e.stack||e);}
-finally{fs.writeFileSync(path.join(output,'RESULT.json'),JSON.stringify({sourceSha,platform,run,exitStatus:status,checks:checks.length,passed:checks.filter(x=>x.exitStatus===0).length},null,2));process.exitCode=status;}
+finally{try{await stopKeychain();}catch(error){status=1;console.error(error.stack||error);}fs.writeFileSync(path.join(output,'RESULT.json'),JSON.stringify({sourceSha,platform,run,exitStatus:status,checks:checks.length,passed:checks.filter(x=>x.exitStatus===0).length},null,2));process.exitCode=status;}

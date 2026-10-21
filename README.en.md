@@ -25,6 +25,7 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 - **Tasks and results**: compact cards and details for the latest 100 records, with 12/24/48/60 items per page; open result locations, reuse parameters and refresh the workspace. Refresh preserves edits without restarting or generating; unfinished tasks are not automatically resubmitted after restart.
 - **Five-language display and layout**: independent scrolling, overlay layering and parameter layout fixes; display mappings cover 116 registered node classes and 434 class/input pairs. Unknown nodes, file names, enum tokens and raw IDs stay unchanged; this is not universal plugin or dynamic-workflow support.
 - **Scope**: earlier Windows testing generated images with all three models. The latest UI/guide changes have isolated regression coverage, not new GPU or five-platform device acceptance. macOS/Linux inference remains unverified; Android/iOS have no local ComfyUI entry. Independent records do not overwrite NovelAI accounts or history. [Guide (Chinese)](./docs/COMFYUI_LOCAL.md).
+- **Current release scope**: local Agent components and Artist iteration are Windows-only; they are not promised on macOS/Linux/Android. The other 37 features still require acceptance on all four release targets, including the separate image agent. All 150 required feature/platform cells need real acceptance; six not-supported cells are not passes. iOS is an additional unsigned IPA requiring your own signing.
 
 [Release notes](./docs/RELEASE_NOTES.md).
 
@@ -56,7 +57,7 @@ Tavern, comic creation and reference presets have separate workflows. Comic fram
 
 The Windows local Artist Detective workflow currently exposes **NAI 4.5 Full only**. The full local scoring model requires at least 8 GB VRAM; the light model targets lower-memory devices, but no universal minimum has been verified. NovelAI generates images in the cloud; local CUDA scores style similarity. A similarity score is **not a reconstruction percentage**. Runtime and model downloads are separate from the desktop application.
 
-Tavern Agent updates install validated compatible components after confirmation, not arbitrary upstream releases. User-added or modified plugins are preserved; compatibility with every third-party plugin combination is not guaranteed. [Agent update and recovery notes (Chinese)](./docs/TAVERN_AGENT_UPDATES.md).
+On Windows, local Tavern Agent component updates install validated compatible components after confirmation, not arbitrary upstream releases. User-added or modified plugins are preserved; compatibility with every third-party plugin combination is not guaranteed. [Agent update and recovery notes (Chinese)](./docs/TAVERN_AGENT_UPDATES.md).
 
 ## Preview
 
@@ -86,7 +87,7 @@ Open the [Latest release page](https://github.com/2786886095/novelai-image-deskt
 
 Use the verification and checksum files attached to the [Latest page](https://github.com/2786886095/novelai-image-desktop/releases/latest) for the assets you download; their names and availability can change between releases. [Repository source on main](https://github.com/2786886095/novelai-image-desktop/tree/main) is the current repository branch, not proof of a particular binary's exact build source; use the release verification records for that identity. Full physical-device validation across all supported devices is not complete. [Release notes (Chinese)](./docs/RELEASE_NOTES.md).
 
-Windows installer and portable builds share `%APPDATA%\novelai-image-desktop\`. Portable does **not** mean all user data is stored beside the executable. Back up settings and images before replacing packages. Desktop and mobile features may differ; local Artist Detective iteration is Windows-only. [Platform differences](./docs/guide/FEATURES.md#platforms).
+Windows installer and portable builds share `%APPDATA%\novelai-image-desktop\`. Portable does **not** mean all user data is stored beside the executable. Back up settings and images before replacing packages. Desktop and mobile features may differ; local Agent components and Artist Detective iteration are Windows-only. [Platform differences](./docs/guide/FEATURES.md#platforms).
 
 ## FAQ
 

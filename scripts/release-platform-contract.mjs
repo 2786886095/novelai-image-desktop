@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import {profileSha256 as expectedProfileSha256} from './feature-acceptance/full-feature-profile-definitions.mjs';
+import {windowsArtistRuntimeType,windowsArtistScenarioReceipt} from './feature-acceptance/windows-artist-contract.mjs';
 
 // Product scope, not a build-success checklist. A synchronized version number
 // or an APK/IPA artifact is not evidence that a feature was ported.
@@ -19,14 +21,15 @@ export const releaseFeatures = Object.freeze([
   'agent-components','updates','works-batch-edit','missing-file-reconciliation',
 ]);
 
-// The user excluded iOS from this release and narrowed Artist iteration to Windows.
+// The user approved an unsigned iOS supplement and Windows-only local Agent components and Artist iteration.
 // All other features remain required on every current release target.
-export const releaseScopeId = 'artist-iteration-windows-only-no-ios/v1';
+export const releaseScopeId = 'windows-local-capabilities-no-ios/v2';
 export const artistIterationScenarios = Object.freeze(['model-runtime-lifecycle','search-score-selected-generation','install-resume-error']);
+export const agentComponentScenarios = Object.freeze(['install-verify-activate','stop-restore-recovery','missing-config-actual-process']);
 export function releaseFeatureApplicability(feature, platform) {
   assert.ok(releaseFeatures.includes(feature),'Unrecognized feature: '+feature);
   assert.ok(releasePlatforms.includes(platform),'Unrecognized platform: '+platform);
-  return feature==='artist-iteration' && platform!=='windows' ? 'not-supported' : 'required';
+  return (feature==='artist-iteration' || feature==='agent-components') && platform!=='windows' ? 'not-supported' : 'required';
 }
 const releaseScope = Object.freeze({
   id:releaseScopeId,
@@ -34,16 +37,17 @@ const releaseScope = Object.freeze({
   applicability:Object.freeze(releaseFeatures.map(feature=>Object.freeze({feature,platforms:Object.freeze(Object.fromEntries(releasePlatforms.map(platform=>[platform,releaseFeatureApplicability(feature,platform)])))}))),
 });
 export const releaseScopeSha256 = crypto.createHash('sha256').update(JSON.stringify(releaseScope)).digest('hex');
-export const releaseScopeCounts = Object.freeze({declaredSlots:156,requiredSlots:153,notSupportedSlots:3});
+export const releaseScopeCounts = Object.freeze({declaredSlots:156,requiredSlots:150,notSupportedSlots:6});
 
 export function assertReleasePlatformContract(report, {version, sourceSha}) {
   assert.ok(/^\d+\.\d+\.\d+$/.test(version),'Invalid release version');
   assert.ok(/^[a-f0-9]{40}$/i.test(sourceSha),'Invalid immutable source SHA');
   assert.equal(report?.schema,2,'Explicit scoped four-platform feature evidence is required');
+  assert.equal(report.profileSha256,expectedProfileSha256,'Scenario acceptance profile differs from current source definitions');
   assert.equal(report.releaseScopeId,releaseScopeId,'Release scope identity differs');
   assert.equal(report.releaseScopeSha256,releaseScopeSha256,'Release applicability policy differs');
   assert.equal(report.full195Certified,false,'Excluded iOS and not-supported cells must never certify full195');
-  assert.equal(report.full156Certified,false,'Three not-supported cells must never certify full156');
+  assert.equal(report.full156Certified,false,'Six not-supported cells must never certify full156');
   assert.equal(report.releaseReady,false,'Feature scope alone cannot certify publication readiness');
   assert.equal(report.releaseScopeCertified,true,'All required scoped cells must be certified');
   assert.equal(report.version,version,'Feature evidence version differs');
@@ -68,7 +72,7 @@ export function assertReleasePlatformContract(report, {version, sourceSha}) {
         const fields=new Set(['applicability','status','reasonCode','declaredScenarios','requiredScenarios','completedScenarios','missingScenarios','excludedObservedScenarios','unqualifiedObservedScenarios','componentObservations','evidence']);
         assert.ok(Object.keys(result).every(field=>fields.has(field)),'Not-supported cells cannot carry pass/execution claims');
         assert.equal(result.reasonCode,releaseScopeId,'Not-supported reason differs');
-        assert.deepEqual(result.declaredScenarios,[...artistIterationScenarios],'Excluded scenario declarations differ');
+        assert.deepEqual(result.declaredScenarios,[...(feature.id==='artist-iteration'?artistIterationScenarios:agentComponentScenarios)],'Excluded scenario declarations differ');
         for(const field of ['requiredScenarios','completedScenarios','missingScenarios','evidence'])
           assert.deepEqual(result[field],[],`Not-supported ${field} must be explicitly empty`);
         continue;
@@ -93,7 +97,7 @@ export function assertReleasePlatformContract(report, {version, sourceSha}) {
   assert.deepEqual([...seen].sort(),[...releaseFeatures].sort(),'Incomplete feature inventory');
   for(const [field,value] of Object.entries(releaseScopeCounts))
     assert.equal(report.summary?.[field],value,'Scoped summary differs: '+field);
-  assert.equal(report.summary.verifiedSlots,153,'Required scoped feature coverage is incomplete');
+  assert.equal(report.summary.verifiedSlots,150,'Required scoped feature coverage is incomplete');
   assert.equal(report.summary.partialSlots,0);assert.equal(report.summary.pendingSlots,0);
   return {platforms:releasePlatforms.length,features:releaseFeatures.length};
 }
@@ -113,6 +117,22 @@ export function assertReleaseEvidenceFiles(report, evidenceRoot) {
       assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),proof.sha256,
         'Execution evidence bytes changed');
       const evidence=JSON.parse(bytes.toString('utf8'));
+      const artist=feature.id==='artist-iteration'&&platform==='windows';
+      if(artist)assert.equal(evidence.nativeRuntime?.type,windowsArtistRuntimeType,'Windows Artist evidence requires the dedicated GPU controller');
+      if(artist||proof.companionProofArtifact!==undefined||proof.companionProofSha256!==undefined){
+        assert.ok(typeof proof.companionProofArtifact==='string'&&!path.isAbsolute(proof.companionProofArtifact),'Companion proof must be a relative file');
+        assert.match(proof.companionProofSha256??'',/^[a-f0-9]{64}$/,'Companion proof SHA-256 is required');
+        const candidate=path.resolve(root,proof.companionProofArtifact),stat=fs.lstatSync(candidate);
+        assert.ok(stat.isFile()&&!stat.isSymbolicLink()&&stat.size<=64*1024*1024,'Companion proof must be a bounded regular file');
+        const companion=fs.realpathSync(candidate),rel=path.relative(root,companion);
+        assert.ok(rel&&rel!=='..'&&!rel.startsWith('..'+path.sep)&&!path.isAbsolute(rel),'Companion proof must stay in the evidence directory');
+        const companionBytes=fs.readFileSync(companion);
+        assert.equal(crypto.createHash('sha256').update(companionBytes).digest('hex'),proof.companionProofSha256,'Companion proof bytes changed');
+        if(artist){
+          assert.match(report.profileSha256??'',/^[a-f0-9]{64}$/,'Scenario profile identity required');
+          assert.deepEqual(evidence,windowsArtistScenarioReceipt(JSON.parse(companionBytes.toString('utf8')),{sourceSha:report.sourceSha,profileSha256:expectedProfileSha256}),'Artist execution receipt differs from the current source-bound GPU proof');
+        }
+      }
       assert.ok(evidence.checks?.some(check=>
         check.feature===feature.id && check.platform===platform && check.sourceSha===report.sourceSha &&
         check.kind===proof.kind && check.exitStatus===0 && check.skipped===false &&

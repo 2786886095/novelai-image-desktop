@@ -1,0 +1,83 @@
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+
+export const windowsArtistRuntimeType='windows-artist-gpu';
+export const windowsArtistScenarioIds=Object.freeze(['model-runtime-lifecycle','search-score-selected-generation','install-resume-error']);
+export const windowsArtistControllerPaths=Object.freeze(['scripts/feature-acceptance/run-windows-artist-native.mjs','scripts/feature-acceptance/windows-artist-contract.mjs','scripts/feature-acceptance/windows-artist-journeys.cjs']);
+const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
+const hex=(s,n=64)=>typeof s==='string'&&new RegExp(`^[a-f0-9]{${n}}$`).test(s);
+const positive=n=>Number.isSafeInteger(n)&&n>0;
+const pinned=JSON.parse(fs.readFileSync(new URL('../../electron/ipc/detective-release.json',import.meta.url),'utf8'));
+export const windowsArtistPackages=Object.freeze(pinned.packages.filter(x=>x.kind==='runtime'||x.variant==='full').map(x=>Object.freeze({file:x.file,bytes:x.bytes,sha256:x.sha256,kind:x.kind})).sort((a,b)=>a.file.localeCompare(b.file)));
+export const windowsArtistFullManifestSha256='d2cd57e99a5028bdb270a92a1502f7c0a92eebce2071022866b29df1d94ac3b9';
+export const windowsArtistEncoderSha256='698abc7f7a1e99b876732c9e5c925b91220367919fb5808224e741e241876ebf';
+export function readWindowsArtistControllerHashes(sourceRoot){assert(path.isAbsolute(sourceRoot));return windowsArtistControllerPaths.map(relative=>{const file=path.join(sourceRoot,relative),stat=fs.lstatSync(file);assert(stat.isFile()&&!stat.isSymbolicLink());return {path:relative,sha256:sha(fs.readFileSync(file))};});}
+export function windowsArtistControllerSources(){return readWindowsArtistControllerHashes(fileURLToPath(new URL('../../',import.meta.url)));}
+function command(c){assert(c&&Array.isArray(c.command)&&c.command.length>0);assert(c.command.every(s=>typeof s==='string'&&s.length>0));assert.equal(c.exitStatus,0);assert.equal(typeof c.stdout,'string');assert.equal(typeof c.stderr,'string');assert(!c.timedOut&&!c.outputOverflow&&!c.error);}
+function file(f){assert(f&&hex(f.sha256)&&Number.isSafeInteger(f.bytes)&&f.bytes>=0);}
+function source(s,sourceSha){assert(s);assert.equal(s.sourceSha,sourceSha);assert.equal(s.clean,true);assert.equal(s.rawMatchesHead,true);assert(positive(s.trackedFiles));assert(hex(s.manifestSha256));}
+function validation(v){assert(v);for(const k of ['python','torch','cuda','gpu'])assert(typeof v[k]==='string'&&v[k].length>0);assert.equal(v.architecture,'PE-Spatial-G14-448');assert(Number.isFinite(v.selfScore)&&v.selfScore>=.99&&v.selfScore<=1.0001);}
+function allTrue(o,keys){for(const k of keys)assert.equal(o?.[k],true,k);}
+function rejectUnitMarkers(value,seen=new Set()){
+ const marker=/(?:UNIT_ONLY|UNIT_FIXTURE|["'](?:unitOnly|unitFixture|mocktrue)["']\s*:)/;
+ if(typeof value==='string'){assert(!marker.test(value),'Unit fixture data cannot certify native execution');return;}
+ if(!value||typeof value!=='object')return;
+ assert(!seen.has(value),'Cyclic native proof is not JSON');seen.add(value);
+ for(const[key,child]of Object.entries(value)){assert(!['unitOnly','unitFixture','mocktrue'].includes(key)&&!/(?:UNIT_ONLY|UNIT_FIXTURE)/.test(key),'Unit fixture data cannot certify native execution');rejectUnitMarkers(child,seen);}
+ seen.delete(value);
+}
+function gpuObservation(g){command(g.gpuCommand);command(g.computeCommand);assert.deepEqual(g.gpuCommand.command,['nvidia-smi','--query-gpu=index,name,driver_version,memory.total,memory.free','--format=csv,noheader,nounits']);assert.deepEqual(g.computeCommand.command,['nvidia-smi','--query-compute-apps=pid,used_memory','--format=csv,noheader,nounits']);const rows=g.gpuCommand.stdout.trim().split(/\r?\n/).filter(Boolean);assert.equal(rows.length,1);const [index,name,,total,free]=rows[0].split(',').map(x=>x.trim());assert.equal(index,'0');assert.equal(g.gpu,name);assert.equal(g.freeMiB,Number(free));assert.equal(g.totalMiB,Number(total));assert(g.freeMiB>=10240&&g.totalMiB>=g.freeMiB);assert.equal(g.otherComputeProcesses,0);assert.equal(g.computeCommand.stdout.trim().split(/\r?\n/).filter(x=>x.trim()&&!/^No running processes found/i.test(x)).length,0,'Never interrupt another compute task');}
+export function parseWindowsArtistStream(stdout){
+ const events=[];
+ for(const line of stdout.split(/\r?\n/)){if(!line.startsWith('WINDOWS_ARTIST_'))continue;const m=/^WINDOWS_ARTIST_(BEGIN|CHECK|DONE|FAILED) (\{.*\})$/.exec(line);assert(m,'Malformed reserved Artist native event');events.push({type:m[1],value:JSON.parse(m[2])});}
+ assert.deepEqual(events.map(x=>x.type),['BEGIN','CHECK','CHECK','CHECK','DONE'],'Exact three native Artist scenarios required');
+ assert.deepEqual(events.filter(x=>x.type==='CHECK').map(x=>x.value.scenario),windowsArtistScenarioIds);
+ return events;
+}
+/** Strict admission of a newly executed native GPU proof, not a source/unit count.
+ * This verifies a controller's observations; it is not a hardware attestation. */
+export function assertWindowsArtistProof(p,{sourceSha,profileSha256,controllerHashes}={}){
+ assert(hex(sourceSha,40)&&hex(profileSha256),'Independent source/profile binding required');
+ rejectUnitMarkers(p);
+ assert.equal(p?.schema,'windows-artist-controller/v1');assert.equal(p.platform,'windows');assert.equal(p.sourceSha,sourceSha);assert.equal(p.profileSha256,profileSha256);assert(hex(p.nonce));
+ allTrue(p,['sourceQualified','isolated']);assert.equal(p.mockedModules,false);assert.equal(p.exitStatus,0);assert.equal(p.paidCalls,0);
+ assert.deepEqual(p.controllerSources,controllerHashes??windowsArtistControllerSources(),'Controller bytes differ from current candidate');
+ source(p.sourceBefore,sourceSha);source(p.sourceAfter,sourceSha);assert.equal(p.sourceBefore.manifestSha256,p.sourceAfter.manifestSha256);
+ assert.equal(p.host.platform,'win32');assert.equal(p.host.arch,'x64');gpuObservation(p.host);
+ assert.deepEqual(p.archives.map(({file,bytes,sha256,kind})=>({file,bytes,sha256,kind})),windowsArtistPackages);for(const a of p.archives)allTrue(a,['verifiedBefore','unchangedAfter']);
+ assert.equal(p.inputs.manifestSha256,windowsArtistFullManifestSha256);assert.equal(p.inputs.encoderSha256,windowsArtistEncoderSha256);assert.equal(p.inputs.assetFiles,31);assert.equal(p.inputs.assetBytes,8972559560);
+ assert(hex(p.inputs.runtimeSha256)&&hex(p.inputs.beforeSha256)&&hex(p.inputs.afterSha256));assert.equal(p.inputs.beforeSha256,p.inputs.afterSha256);allTrue(p.inputs,['allAssetPinsVerified','originalInputsUnchanged']);
+ allTrue(p.isolation,['allAppPathsExternal','allCachePathsExternal','bytecodeDisabled','offlineModels','noRealAccounts','noExistingWindowControl']);
+ command(p.primeCommand);command(p.nativeCommand);assert(positive(p.primeCommand.pid)&&positive(p.nativeCommand.pid));assert.notEqual(p.primeCommand.pid,p.nativeCommand.pid);
+ for(const[c,phase]of [[p.primeCommand,'prime'],[p.nativeCommand,'main']])assert.deepEqual([c.command[0].replaceAll('\\','/'),...c.command.slice(1)],['node_modules/electron/dist/electron.exe','windows-artist-journeys.cjs',phase]);
+ assert.equal(typeof p.primeReportText,'string');assert.equal(sha(p.primeReportText),p.primeReportSha256);const prime=JSON.parse(p.primeReportText);assert.equal(prime.sourceSha,sourceSha);assert.equal(prime.nonce,p.nonce);assert.equal(prime.nativePid,p.primeCommand.pid);assert.equal(prime.completed,1);assert.equal(prime.exitStatus,0);validation(prime.validation);allTrue(prime,['actualWorkerObserved','actualWorkerStopped','noPendingRequest']);assert(positive(prime.workerPid));
+ assert.equal(prime.schema,'windows-artist-prime/v1');assert.equal(prime.profileSha256,profileSha256);assert(p.primeCommand.stdout.split(/\r?\n/).includes('WINDOWS_ARTIST_PRIME_DONE '+JSON.stringify(prime)));assert.equal(prime.validation.gpu,p.host.gpu);
+ assert.deepEqual(prime.gpuChecks.map(x=>x.label),['runtime-validation','prime-search']);prime.gpuChecks.forEach(gpuObservation);
+ assert.equal(typeof p.nativeReportText,'string');assert.equal(sha(p.nativeReportText),p.nativeReportSha256);const report=JSON.parse(p.nativeReportText),events=parseWindowsArtistStream(p.nativeCommand.stdout);
+ assert.deepEqual(report,events.at(-1).value);for(const k of ['sourceSha','profileSha256','nonce'])assert.equal(report[k],p[k]);
+ assert.equal(report.schema,'windows-artist-native/v1');assert.equal(report.platform,'win32');assert.equal(report.nativePid,p.nativeCommand.pid);assert.equal(events[0].value.nativePid,report.nativePid);assert.equal(events[0].value.nonce,p.nonce);assert.equal(events[0].value.sourceSha,sourceSha);assert.equal(events[0].value.profileSha256,profileSha256);
+ assert.equal(report.status,'passed');assert.equal(report.mockedModules,false);assert.equal(report.isolated,true);assert.equal(report.paidCalls,0);assert(typeof report.electron==='string'&&report.electron.length>0);
+ assert.deepEqual(report.gpuChecks.map(x=>x.label),['resume-search','installation']);report.gpuChecks.forEach(gpuObservation);
+ assert.deepEqual(report.checks,events.filter(x=>x.type==='CHECK').map(x=>x.value));assert.deepEqual(report.checks.map(x=>x.feature),windowsArtistScenarioIds.map(()=>'artist-iteration'));assert.deepEqual(report.checks.map(x=>x.scenario),windowsArtistScenarioIds);assert(report.checks.every(x=>x.pass===true));
+ const [l,s,i]=report.checks.map(x=>x.observed);
+ validation(l.validation);assert.deepEqual(l.validation,prime.validation);assert.equal(l.firstNativePid,prime.nativePid);assert.equal(l.reopenedNativePid,report.nativePid);assert.equal(l.primeReportSha256,p.primeReportSha256);allTrue(l,['coldProcessReopen','persistedValidationReused','configurationByteIdentical','actualRendererIpc','stopExitObserved']);
+ assert.equal(s.budget,24);assert.equal(s.completed,24);assert.equal(s.loopbackPosts,23);assert.equal(s.totalIterationPosts,24);assert.equal(s.selectedGenerationPosts,1);assert.equal(s.finalists.length,4);assert.equal(s.searchRenders,8);assert.equal(s.finalistRenders,16);assert.equal(s.freshSeeds.length,4);assert.equal(new Set(s.freshSeeds).size,4);assert.equal(s.searchSeeds.length,2);assert(!s.freshSeeds.some(x=>s.searchSeeds.includes(x)));
+ for(const f of s.finalists){assert(Number.isFinite(f.meanScore)&&f.meanScore>=-1&&f.meanScore<=1.0001);assert.equal(f.renders.length,4);for(const r of f.renders){assert(Number.isFinite(r.score)&&r.score>=-1&&r.score<=1.0001);assert(s.freshSeeds.includes(r.seed));assert(hex(r.imageSha256));}}
+ for(let x=1;x<s.finalists.length;x++)assert(s.finalists[x-1].meanScore>=s.finalists[x].meanScore);
+ assert.equal(s.scorerCheckpointSha256,windowsArtistEncoderSha256);assert(hex(s.scorerIdentitySha256)&&hex(s.surrogateIdentitySha256)&&hex(s.proposalsSha256)&&hex(s.searchResultSha256));
+ allTrue(s,['realCudaScorer','realPredictorRetrieval','realSurrogate','actualRendererAppliedSelected','selectedStyleMatchesRequest','historyRecordSaved','savedFirstImageUnchanged','noDuplicateIterationPost']);
+ assert(typeof s.selectedStyle==='string'&&s.selectedStyle.includes('artist:('));file(s.selectedImage);assert.equal(s.selectedImage.sha256,s.selectedTransportImageSha256);assert(hex(s.historyRecordSha256));
+ allTrue(i,['actualProductionDownloader','cancelledPartialRetained','range206Resumed','rangeMismatchRejected','configurationPreservedOnError','actualPinnedArchives','actualTarExtraction','actualGpuValidation','activatedOnlyAfterValidation','existingImagesUnchanged','oldInputsUnchanged']);
+ assert(positive(i.cancelledBytes)&&i.cancelledBytes<windowsArtistPackages.find(x=>x.kind==='assets').bytes);assert.equal(i.resumedOffset,i.cancelledBytes);assert.equal(i.completedPackages,windowsArtistPackages.length);validation(i.installedValidation);assert.equal(i.installedValidation.gpu,p.host.gpu);assert.equal(i.stage,'complete');assert(hex(i.installedPythonSha256)&&hex(i.installedManifestSha256));assert.equal(i.installedManifestSha256,windowsArtistFullManifestSha256);
+ allTrue(p.transport,['tlsVerified','loopbackOnly','realZipImages']);assert.equal(p.transport.nonLoopbackConnections,0);assert.equal(p.transport.paidCalls,0);assert.equal(p.transport.generationPosts,25);assert(p.transport.packageRange206>=2);assert.equal(p.transport.pinUrlOverrides,0);assert(hex(p.transport.ledgerSha256));
+ assert(Array.isArray(p.transport.requests));assert.equal(sha(JSON.stringify(p.transport.requests,null,2)+'\n'),p.transport.ledgerSha256);const generation=p.transport.requests.filter(x=>x.kind==='generation'),packages=p.transport.requests.filter(x=>x.kind==='package');assert.equal(generation.length,25);assert.equal(generation.filter(x=>x.phase==='prime').length,1);assert.equal(new Set(generation.slice(0,24).map(x=>x.bodySha256)).size,24);for(const r of generation){assert.equal(r.status,200);assert.equal(r.path,'/ai/generate-image');for(const k of ['bodySha256','inputSha256','imageSha256'])assert(hex(r[k]));assert(Number.isSafeInteger(r.seed)&&r.seed>=0&&r.seed<=4294967295);assert([[832,1216],[1216,832],[1024,1024]].some(([w,h])=>r.width===w&&r.height===h));}assert.equal(generation.at(-1).imageSha256,s.selectedImage.sha256);for(const f of s.finalists)for(const r of f.renders)assert(generation.some(g=>g.imageSha256===r.imageSha256&&g.seed===r.seed));
+ assert.equal(packages.filter(x=>x.status===206).length,p.transport.packageRange206);assert(packages.some(x=>x.phase==='range-error'&&x.status===206));for(const pin of windowsArtistPackages){const good=packages.filter(x=>x.phase==='good'&&x.file===pin.file);assert.equal(good.length,1);assert.equal(good[0].bytes,pin.bytes-good[0].rangeStart);assert.equal(good[0].rangeStart,pin.kind==='assets'?i.cancelledBytes:0);}for(const r of packages){assert(windowsArtistPackages.some(x=>x.file===r.file));assert([200,206].includes(r.status));assert(Number.isSafeInteger(r.rangeStart)&&r.rangeStart>=0);assert(Number.isSafeInteger(r.bytes)&&r.bytes>=0);}
+ assert(Array.isArray(p.artifacts)&&p.artifacts.length>=8);const names=new Set();for(const a of p.artifacts){assert(/^[a-z0-9][a-z0-9.-]{0,100}$/.test(a.path));assert(!names.has(a.path));names.add(a.path);file(a);}
+ for(const name of ['prime-report.json','native-report.json','tls-requests.json','inputs-before.json','inputs-after.json','source-before.json','source-after.json','selected-image.png'])assert(names.has(name),'Missing proof artifact '+name);
+ assert.equal(p.artifacts.find(x=>x.path==='prime-report.json').sha256,p.primeReportSha256);assert.equal(p.artifacts.find(x=>x.path==='native-report.json').sha256,p.nativeReportSha256);assert.equal(p.artifacts.find(x=>x.path==='selected-image.png').sha256,s.selectedImage.sha256);
+ return report;
+}
+export function windowsArtistScenarioReceipt(proof,bindings){const report=assertWindowsArtistProof(proof,bindings);return {schema:'client-feature-scenarios/v1',sourceSha:proof.sourceSha,platform:'windows',profileSha256:proof.profileSha256,sourceQualified:true,isolated:true,mockedModules:false,exitStatus:0,nativeRuntime:{type:windowsArtistRuntimeType,version:`Electron ${report.electron}; CUDA ${report.checks[0].observed.validation.cuda}`},windowsArtistProofSha256:sha(JSON.stringify(proof)),checks:report.checks.map(({feature,scenario,observed})=>({feature,scenario,observed,sourceSha:proof.sourceSha,platform:'windows',acceptanceLevel:'scenario',kind:'native-runtime',exitStatus:0,skipped:false,command:proof.nativeCommand.command,stdout:proof.nativeCommand.stdout,stderr:proof.nativeCommand.stderr}))};}

@@ -71,6 +71,8 @@ Windows 可从环境页打开作者官方获取页，自行下载完整整合包
 
 此前已在 Windows 本机用 MOSS-Image SFT、Anima Base、Krea 2 Turbo 实际生成并核对结果，以及验证启动／停止／重启。最新工作台、引导、翻译、保存与草稿改动经过隔离的单元／浏览器回归，未新增真实用户环境或 GPU 生图验收；macOS／Linux 模型推理尚未实机验收。任意插件和任意工作流不在此保证范围。
 
-正式功能验收以本次发布流水线提供并绑定实际制品的证据为准，本地候选回归不等于五端功能验收完成。现有发行功能门是 Windows／macOS／Linux／Android 的 153 项要求；iOS 为附加未签名 IPA 打包，不等于 iOS 功能验收。需自行签名，不能直接安装到普通 iPhone。完整制品、签名、校验与平台限制以 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 的实际证据为准。
+本次发行中，本地 Agent 组件（`agent-components`）与画风自动迭代（`artist-iteration`）仅承诺 Windows；macOS／Linux／Android 的这两项共 6 格明确为 not-supported，不计通过。Windows 两项各自原有的三场景真实验收仍必须完成，生图智能体等其余 37 项功能继续保留四端要求。
+
+正式功能验收以本次发布流水线提供并绑定实际制品的证据为准，本地候选回归不等于五端功能验收完成。现有发行功能门保留 156 个声明单元，其中 Windows／macOS／Linux／Android 共 150 个必需功能／平台单元，另 6 格 not-supported 不计通过；旧候选制品不能充当最终新源 SHA 的验收。iOS 为附加未签名 IPA 打包，不等于 iOS 功能验收。需自行签名，不能直接安装到普通 iPhone。完整制品、签名、校验与平台限制以 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 的实际证据为准。
 
 早期总体方案和共享接口契约由 Claude CLI 的 `claude-opus-5-5` 制定；当时 CLI 达到周额度后，后续实现、集成和验收依据已保存方案由执行团队完成，未把这些代码冒称为 CLI 已完成。策划记录不代替功能验收。
