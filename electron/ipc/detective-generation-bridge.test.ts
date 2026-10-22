@@ -39,6 +39,21 @@ describe("iteration host transport: real local TCP, no paid endpoint", () => {
     axios.post(b.connection.url, body, { proxy: false, validateStatus: () => true,
       headers: { "x-studio-bridge-key": b.connection.key, ...headers }, timeout: 3000 });
 
+  it.each([200, 201, 202, 206, 299])("forwards HTTP %s bounded binary bytes unchanged without implying an image was validated", async status => {
+    const binary = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0xff, 0x80, 0x01, 0x00]);
+    let calls = 0;
+    const endpoint = await serve((req, res) => { calls++; req.resume(); res.writeHead(status); res.end(binary); });
+    const b = await start(endpoint, { proxyMode: "direct" }, 1);
+    const res = await axios.post(b.connection.url, payload(), { proxy: false, validateStatus: () => true,
+      responseType: "arraybuffer", headers: { "x-studio-bridge-key": b.connection.key }, timeout: 3000 });
+    expect(res.status).toBe(status);
+    expect(Buffer.from(res.data)).toEqual(binary);
+    expect(res.headers["content-type"]).toBe("application/zip");
+    expect(calls).toBe(1);
+    expect((await post(b)).status).toBe(409);
+    expect(calls).toBe(1);
+  });
+
   it("follows a manual proxy although the origin's TCP port refuses direct connections", async () => {
     const port = await closedPort(); const seen: any[] = [];
     const proxy = await serve((q, s) => { seen.push({ url: q.url, token: q.headers.authorization,

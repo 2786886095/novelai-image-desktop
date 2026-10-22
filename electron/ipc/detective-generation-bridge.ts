@@ -90,15 +90,18 @@ export async function startDetectiveGenerationBridge(binding: {
         maxRedirects: 0, validateStatus: () => true, signal: abort.signal,
       });
       if (response.status === 429) used.delete(hash);
-      // The worker needs only status + Retry-After, never a secret-bearing error body.
+      // A 2xx status admits bytes, not a completed image: the worker still
+      // verifies the ZIP, PNG content and exact dimensions before saving.
+      const successfulStatus = response.status >= 200 && response.status < 300;
+      // Non-success replies expose only status + Retry-After, never an error body.
       const headers: Record<string, string> = {};
       if (response.status === 429 && response.headers["retry-after"] !== undefined) {
         headers["retry-after"] = String(response.headers["retry-after"]).slice(0, 128);
       }
-      if (response.status === 200) headers["content-type"] = "application/zip";
+      if (successfulStatus) headers["content-type"] = "application/zip";
       if (!res.destroyed) {
         res.writeHead(response.status, headers);
-        res.end(response.status === 200 ? Buffer.from(response.data) : undefined);
+        res.end(successfulStatus ? Buffer.from(response.data) : undefined);
       }
     } catch (error: any) {
       const code = typeof error?.cause?.code === "string" ? error.cause.code

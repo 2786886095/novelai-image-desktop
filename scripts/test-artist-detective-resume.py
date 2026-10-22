@@ -63,6 +63,69 @@ class ResumeTests(unittest.TestCase):
         initial=[[{'tag':a['tag'],'weight':1}] for a in self.artists[:16]]
         with patch.object(live.time,'sleep'):
             return run_search(target,initial,[a['tag'] for a in self.artists],g,lambda images:[.5]*len(images),self.root/'search',SearchConfig.for_budget(300,random_seed=246813579,proposal_pool_multiplier=8),scorer_identity={'host_fixture':True},proposal_ranker=lambda recipes:[.5]*len(recipes),proposal_ranker_identity={'host_fixture':True})
+    def test_http_2xx_valid_zip_requires_verified_dimensions_and_caches_without_another_post(self):
+        expected_png = zipfile.ZipFile(io.BytesIO(self.zip)).read("image.png")
+        for status in (200, 201, 202, 206, 299):
+            with self.subTest(status=status):
+                before = len(self.posts)
+                g = self.gen(lambda _, status=status: httpx.Response(status, content=self.zip))
+                body = {**self.body, "seed": 1000 + status}
+                first = self.generate(g, [body])
+                self.assertEqual(len(first), 1)
+                self.assertEqual(len(self.posts), before + 1)
+                self.assertEqual(Path(first[0]["image"]).read_bytes(), expected_png)
+                self.assertEqual(first[0]["image_sha256"], hashlib.sha256(expected_png).hexdigest())
+                with Image.open(first[0]["image"]) as image:
+                    self.assertEqual(image.format, "PNG")
+                    self.assertEqual(image.size, (832, 1216))
+                    image.verify()
+                self.assertEqual(self.generate(g, [body]), first)
+                self.assertEqual(len(self.posts), before + 1)
+
+    def test_invalid_2xx_or_non_success_never_commits_an_image_or_silently_replays(self):
+        def png_zip(content):
+            output = io.BytesIO()
+            with zipfile.ZipFile(output, "w") as archive:
+                archive.writestr("image.png", content)
+            return output.getvalue()
+        wrong = io.BytesIO()
+        Image.new("RGB", (32, 32), "white").save(wrong, format="PNG")
+        cases = [("bad-zip", 201, b"not a ZIP", zipfile.BadZipFile, "not a zip file"),
+                 ("bad-png", 201, png_zip(b"not a PNG"), OSError, "cannot identify image"),
+                 ("wrong-dimensions", 201, png_zip(wrong.getvalue()), RuntimeError, "dimensions differ"),
+                 ("queued-json", 202, b'{"state":"queued","id":"SYNTHETIC_ONLY"}', zipfile.BadZipFile, "not a zip file"),
+                 ("empty", 204, b"", zipfile.BadZipFile, "not a zip file"),
+                 ("other-2xx-empty", 299, b"", zipfile.BadZipFile, "not a zip file"),
+                 ("http-error", 503, b"SYNTHETIC_PRIVATE_ERROR", RuntimeError, "HTTP 503")]
+        original_root = self.root
+        for name, status, content, exception, message in cases:
+            with self.subTest(name=name):
+                self.root = original_root / name
+                self.root.mkdir()
+                try:
+                    before = len(self.posts)
+                    g = self.gen(lambda _, status=status, content=content: httpx.Response(status, content=content))
+                    with self.assertRaisesRegex(exception, message) as caught:
+                        self.generate(g)
+                    live.record_run_failure(self.root, {"budget": 300, "language": "zh-CN"}, caught.exception, [])
+                    self.assertEqual(len(self.result_files()), 0)
+                    pending = self.pending()
+                    self.assertEqual(len(pending), 1)
+                    marker_before = pending[0].read_bytes()
+                    self.assertEqual(len(self.posts), before + 1)
+                    with self.assertRaisesRegex(RuntimeError, "Unresolved previous submission"):
+                        self.generate(g)
+                    with self.assertRaisesRegex(RuntimeError, "explicit paid replay confirmation") as recovery:
+                        self.gen(resume=True)
+                    self.assertTrue(recovery.exception.resume_details["requiresPaidReplayConfirmation"])
+                    self.assertEqual(recovery.exception.resume_details["pendingRequestHash"], pending[0].stem)
+                    self.assertEqual(pending[0].read_bytes(), marker_before)
+                    self.assertEqual(len(self.result_files()), 0)
+                    self.assertEqual(len(self.posts), before + 1)
+                    self.assertNotIn("SYNTHETIC_PRIVATE_ERROR", (self.root / "failure.json").read_text())
+                finally:
+                    self.root = original_root
+
     def test_full_300_real_spool_has_no100_limit_and_no301_expansion(self):
         g=self.gen();r=self.search(g);self.assertEqual(len(self.posts),300);self.assertEqual(len(self.result_files()),300);self.assertEqual(r['budget']['total'],300)
         with self.assertRaisesRegex(ValueError,'budget exhausted'):self.generate(g,[{**self.body,'seed':4294967295}])

@@ -475,7 +475,8 @@ class LiveGenerator(NovelAIGenerator):
             self._archive_error(key)
             response = self.submit(job["request"], key, marker)
             self._archive_error(key)
-            if response.status_code != 200:
+            # A 2xx response still has to pass all ZIP, PNG and dimension checks.
+            if not 200 <= response.status_code < 300:
                 details = self._persist_pause(key, "uncertain", status=response.status_code)
                 raise self._error_with_details(RuntimeError(transport_failure_message(response.status_code, self.request_url, self.language)), details)
             if len(response.content) > 64 * 1024 * 1024:
