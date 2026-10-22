@@ -269,3 +269,9 @@ describe("Character Tavern prompt assembly", () => {
     });
   });
 });
+
+it('retains plaintext-only user turns for native text materialization', () => {
+  const character=createTavernCharacter('软件智能生图');const preset=createTavernSamplerPreset();const item=message('');item.id='text-only';item.attachments=[{id:'txt',kind:'text',name:'novel.txt',mime:'text/plain',size:9,filePath:'not-read-in-renderer.txt',createdAt:'2026-10-22T00:00:00Z'}];
+  const prompt=buildTavernPromptMessages({conversation:conversation([item]),characters:[character],activeCharacter:character,lorebooks:[],preset});
+  expect(prompt[1]).toEqual({role:'user',sourceMessageId:'text-only',content:'[User attached reference files.]'});
+});

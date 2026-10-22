@@ -16,6 +16,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import type { Readable } from "node:stream";
 import type {
+  AgentAttachment,
   AgentConversation,
   AgentEvent,
   AgentMessage,
@@ -40,9 +41,11 @@ import { injectDshImageAiSystemPrompt } from "./dsh-reverse-convert";
 import { getSettings } from "./store";
 import { proxyConfig } from "./proxy";
 import {
+  agentAttachmentsDirectory,
   readAgentWorkspace,
   updateAgentConversation,
 } from "./agent-store";
+import { agentTextAttachmentContent, MAX_TURN_TEXT_ATTACHMENT_BYTES } from './agent-text-attachments';
 import { executeAgentTool } from "./agent-tools";
 import { completeStudioPiTurn, completeStudioPiSummary } from "./pi-agent-turn";
 import { studioGenerationFingerprint, studioGenerationPreparations } from './pi-studio-tools';
@@ -184,13 +187,30 @@ function imageDataUrl(filePath: string, mime: string, size: number) {
   return `data:${mime};base64,${fs.readFileSync(filePath).toString("base64")}`;
 }
 
-function promptMessagesWithImages(messages: TavernPromptMessage[], conversationId: string) {
+function textAttachmentContent(attachments: AgentAttachment[], conversationId: string, strict = true) {
+  return attachments.some(item => item.kind !== 'image')
+    ? agentTextAttachmentContent(attachments, conversationId, agentAttachmentsDirectory(), strict) : '';
+}
+
+function conversationAttachmentTexts(conversation: AgentConversation) {
+  const texts = new Map<string, string>();
+  let totalBytes = 0;
+  for (const item of effectiveContextMessages(conversation.messages, conversation.lastSummary, conversation.lastCompactedAt)) {
+    if (item.role !== 'user' || item.status === 'streaming') continue;
+    const text = textAttachmentContent(item.attachments, conversation.id, false);
+    totalBytes += Buffer.byteLength(text);
+    if (totalBytes > MAX_TURN_TEXT_ATTACHMENT_BYTES) throw new Error('历史附件正文总量超过 4 MiB，未截断发送；请新建对话或拆分资料。');
+    if (text) texts.set(item.id, text);
+  }
+  return texts;
+}
+
+function promptMessagesWithImages(messages: TavernPromptMessage[], conversationId: string, attachmentTexts?: Map<string, string>) {
   const settings = getSettings();
   const plain = (message: TavernPromptMessage, content = message.content): TavernPromptMessage => ({
     role: message.role,
     content,
   });
-  if (!settings.agentVisionEnabled) return messages.map((message) => plain(message));
   const conversation = readAgentWorkspace().conversations.find((item) => item.id === conversationId);
   if (!conversation) return messages.map((message) => plain(message));
   const sourceById = new Map(effectiveContextMessages(
@@ -206,13 +226,15 @@ function promptMessagesWithImages(messages: TavernPromptMessage[], conversationI
     if (message.role !== "user" || !message.sourceMessageId) return plain(message);
     const backing = sourceById.get(message.sourceMessageId);
     if (!backing || backing.role !== "user") return plain(message);
-    const images = backing.attachments
+    const attachmentText = attachmentTexts?.get(backing.id) ?? textAttachmentContent(backing.attachments, conversationId, false);
+    const text = contentText(message.content) + attachmentText;
+    const images = settings.agentVisionEnabled ? backing.attachments
       .filter((attachment) => !attachment.unavailable)
       .map((attachment) => imageDataUrl(attachment.filePath, attachment.mime, attachment.size))
-      .filter((value): value is string => Boolean(value)) ?? [];
-    if (!images.length) return plain(message);
+      .filter((value): value is string => Boolean(value)) : [];
+    if (!images.length) return plain(message, attachmentText ? text : message.content);
     return plain(message, [
-        { type: "text", text: contentText(message.content) },
+        { type: "text", text },
         ...images.map((url) => ({ type: "image_url", image_url: { url } })),
       ]);
   });
@@ -815,7 +837,7 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
   const userMessageId = crypto.randomUUID();
   const selected = new Set(request.attachmentIds ?? conversation.draftAttachments.map((item) => item.id));
   if (!request.text.trim() && !turnInput.actions.length && !conversation.draftAttachments.some((item) => selected.has(item.id))) {
-    return { ok: false, message: '请输入消息或添加图片。' };
+    return { ok: false, message: '请输入消息或添加附件。' };
   }
   const messageId = crypto.randomUUID();
   const controller = new AbortController();
@@ -824,19 +846,50 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
   let streamed = '';
   try {
     const settings = getSettings();
+    // Validate current files before consuming drafts, committing an empty user
+    // bubble, or invoking a model for compaction. Never feed file data into the
+    // composer action/permission parser above.
+    const selectedAttachments = conversation.draftAttachments.filter(item => selected.has(item.id));
+    const currentAttachmentText = textAttachmentContent(selectedAttachments, request.conversationId);
+    const attachmentTexts = conversationAttachmentTexts(conversation);
+    attachmentTexts.set(userMessageId, currentAttachmentText);
+    if ([...attachmentTexts.values()].reduce((sum, text) => sum + Buffer.byteLength(text), 0) > MAX_TURN_TEXT_ATTACHMENT_BYTES) {
+      throw new Error('本回合正文与历史附件总量超过 4 MiB，未截断发送；请拆分资料或新建对话。');
+    }
     const referenceWorkspace=readAgentWorkspace(),referenceChat=structuredClone(conversation);
     referenceChat.messages.push({id:userMessageId,role:'user',content:turnInput.visibleText,attachments:[],tools:[],status:'complete',createdAt:timestamp()});
     const sessionOptions=studioSessionOptions(conversation);
     const lore=activeLorebookEntries(referenceWorkspace.lorebooks.filter(b=>conversation.lorebookIds.includes(b.id)),referenceChat.messages,settings.lastGenerationState?.params.model);
     const resourceContext=studioCreativeReferenceData(referenceWorkspace,referenceChat,lore);
     const configuredSystemPrompt=studioSelectedSystemPrompt(referenceWorkspace,referenceChat);
-    const snapshot = createContextSnapshot(effectiveContextMessages(conversation.messages, conversation.lastSummary, conversation.lastCompactedAt),
-      settings.agentContextWindow, settings.agentAutoCompactThreshold, conversation.lastTurnUsage);
-    snapshot.used += estimateTextTokens(turnInput.providerText)+estimateTextTokens(resourceContext)+estimateTextTokens(configuredSystemPrompt) + conversation.draftAttachments.filter(item => selected.has(item.id)).length * 1_200;
+    const currentTextTokens = estimateTextTokens(currentAttachmentText);
+    const historicalTextTokens = [...attachmentTexts].reduce((sum, [id, text]) => sum + (id === userMessageId ? 0 : estimateTextTokens(text)), 0);
+    const attachmentTokens = currentTextTokens + historicalTextTokens;
+    const pendingTokens = estimateTextTokens(turnInput.providerText) + estimateTextTokens(resourceContext) + estimateTextTokens(configuredSystemPrompt)
+      + selectedAttachments.filter(item => item.kind === 'image').length * 1_200;
+    const contextSnapshot = () => {
+      const latest = readAgentWorkspace().conversations.find(item => item.id === request.conversationId) ?? conversation;
+      const messages = effectiveContextMessages(latest.messages, latest.lastSummary, latest.lastCompactedAt);
+      const value = createContextSnapshot(messages, settings.agentContextWindow, settings.agentAutoCompactThreshold, latest.lastTurnUsage);
+      const estimated = createContextSnapshot(messages, settings.agentContextWindow, settings.agentAutoCompactThreshold);
+      // Measured provider usage already includes historical document bodies.
+      // Older pre-fix usage may not: take the larger full estimate, not both.
+      value.used = Math.max(value.used, estimated.used + historicalTextTokens) + pendingTokens + currentTextTokens;
+      return value;
+    };
+    const snapshot = contextSnapshot();
+    // Attachment messages are protected during compaction. If their actual
+    // decoded bodies alone cannot fit, fail without a pointless summary call.
+    if (attachmentTokens && attachmentTokens + pendingTokens + 512 >= snapshot.limit) {
+      throw new Error('附件正文超过当前模型的输入预算，未截断发送；请拆分文件或提高已确认支持的上下文上限。');
+    }
     if (shouldAutoCompact(snapshot, settings.agentAutoCompact, settings.agentAutoCompactThreshold)) {
       const compacted = await compactConversationWithController(request.conversationId, controller);
       controller.signal.throwIfAborted();
       if (!compacted.ok) throw new Error(compacted.message);
+    }
+    if (attachmentTokens && contextSnapshot().used + 512 >= snapshot.limit) {
+      throw new Error('正文与历史记录超过当前模型的输入预算，未截断发送；请压缩旧对话、拆分文件或新建对话。');
     }
     controller.signal.throwIfAborted();
     updateAgentConversation(request.conversationId, (target) => {
@@ -871,7 +924,7 @@ async function sendStudioPiMessage(request: AgentSendRequest) {
       settings: getSettings(), conversationId: request.conversationId, messageId,
       reasoningEffort: current.reasoningEffort && current.reasoningEffort!=="auto" ? current.reasoningEffort : getSettings().agentReasoningEffort??"auto",
       sessionOptions,resourceContext,configuredSystemPrompt,
-      prompt: promptMessagesWithImages(transcript, request.conversationId),
+      prompt: promptMessagesWithImages(transcript, request.conversationId, attachmentTexts),
       signal: controller.signal, onText: (delta) => { streamed += delta; deltas.push(delta); }, emit,
       onTool: (tool) => {
         updateAgentConversation(request.conversationId, (target) => {
@@ -970,6 +1023,29 @@ export async function sendAgentMessage(request: AgentSendRequest) {
   const settings = getSettings();
   const imageProviderBinding = bindAgentImageProvider(settings);
   const compatible = imageProviderBinding.provider === "openai-images";
+  const selectedAttachmentIds = new Set(request.attachmentIds ?? conversation.draftAttachments.map(item => item.id));
+  const selectedAttachments = conversation.draftAttachments.filter(item => selectedAttachmentIds.has(item.id));
+  const userMessageId = crypto.randomUUID();
+  let attachmentTexts = new Map<string, string>();
+  try {
+    if (!request.regenerateMessageId) {
+      if (!request.text.trim() && !selectedAttachments.length) return { ok: false, message: '请输入消息或添加附件。' };
+      const currentText = textAttachmentContent(selectedAttachments, request.conversationId);
+      attachmentTexts = conversationAttachmentTexts(conversation);
+      attachmentTexts.set(userMessageId, currentText);
+      if ([...attachmentTexts.values()].reduce((sum, text) => sum + Buffer.byteLength(text), 0) > MAX_TURN_TEXT_ATTACHMENT_BYTES) {
+        return { ok: false, message: '本回合正文与历史附件总量超过 4 MiB，未截断发送；请拆分资料或新建对话。' };
+      }
+      const bodyTokens = [...attachmentTexts.values()].reduce((sum, text) => sum + estimateTextTokens(text), 0);
+      const snapshot = createContextSnapshot(effectiveContextMessages(conversation.messages, conversation.lastSummary, conversation.lastCompactedAt), settings.agentContextWindow, settings.agentAutoCompactThreshold, conversation.lastTurnUsage);
+      const estimated = createContextSnapshot(effectiveContextMessages(conversation.messages, conversation.lastSummary, conversation.lastCompactedAt), settings.agentContextWindow, settings.agentAutoCompactThreshold);
+      const historicalTokens = bodyTokens - estimateTextTokens(currentText);
+      const used = Math.max(snapshot.used, estimated.used + historicalTokens) + estimateTextTokens(currentText);
+      if (bodyTokens && used + estimateTextTokens(request.text) + 512 >= snapshot.limit) {
+        return { ok: false, message: '附件正文与历史记录超过当前模型的输入预算，未截断发送；请拆分资料或新建对话。' };
+      }
+    }
+  } catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) }; }
   const previousMessage = conversation.messages.at(-1);
   const repeatImage = !request.regenerateMessageId && isRepeatImageRequest(request.text)
     && !request.attachmentIds?.length && !conversation.draftAttachments.length
@@ -1020,12 +1096,12 @@ export async function sendAgentMessage(request: AgentSendRequest) {
       assistant.characterId = character.id;
     } else {
       const text = request.text.trim();
-      if (!text && !target.draftAttachments.length) throw new Error("请输入消息或添加图片。");
+      if (!text && !selectedAttachments.length) throw new Error("请输入消息或添加附件。");
       const selectedIds = new Set(request.attachmentIds ?? target.draftAttachments.map((item) => item.id));
       const attachments = target.draftAttachments.filter((item) => selectedIds.has(item.id));
       target.draftAttachments = target.draftAttachments.filter((item) => !selectedIds.has(item.id));
       target.messages.push({
-        id: crypto.randomUUID(),
+        id: userMessageId,
         role: "user",
         content: text,
         attachments,
@@ -1139,7 +1215,7 @@ export async function sendAgentMessage(request: AgentSendRequest) {
       });
     }
     prompt.splice(1, 0, { role: "system", content: imageStateContext(imageBase, compatible ? undefined : imageDefaults.model) + (compatible ? "\n" + compatibleProposalContext(settings.compatibleImage?.model, settings.compatibleImage?.size) : "") });
-    const turn = await completeProvider(promptMessagesWithImages(prompt, request.conversationId), controller, (delta) => deltas.push(delta));
+    const turn = await completeProvider(promptMessagesWithImages(prompt, request.conversationId, attachmentTexts), controller, (delta) => deltas.push(delta));
     deltas.flush();
     if (turn.issue || !turn.content.trim()) {
       updateAgentConversation(request.conversationId, target => {

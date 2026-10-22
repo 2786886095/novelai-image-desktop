@@ -10,7 +10,7 @@ const mocked=vi.hoisted(()=>({workspace:null as any,post:vi.fn(),generate:vi.fn(
 vi.mock('axios',()=>({default:{post:mocked.post}}));
 vi.mock('./proxy',()=>({proxyConfig:()=>({})}));
 vi.mock('./store',()=>({getSettings:()=>({agentApiBaseUrl:'https://fixture.invalid',agentApiModel:'fixture',agentApiKey:'fixture-token',agentApiProtocol:mocked.protocol,agentMaxOutputTokens:1000,agentAutoCompact:false,reverseConvertDshEnabled:false,...mocked.imageSettings})}));
-vi.mock('./agent-store',()=>({readAgentWorkspace:()=>structuredClone(mocked.workspace),updateAgentConversation:(id:string,f:(v:any)=>void)=>{const c=mocked.workspace.conversations.find((c:any)=>c.id===id);if(c)f(c);}}));
+vi.mock('./agent-store',()=>({agentAttachmentsDirectory:()=>imageRoot,readAgentWorkspace:()=>structuredClone(mocked.workspace),updateAgentConversation:(id:string,f:(v:any)=>void)=>{const c=mocked.workspace.conversations.find((c:any)=>c.id===id);if(c)f(c);}}));
 vi.mock('./agent-tools',()=>({executeAgentTool:mocked.generate}));
 vi.mock('./dsh-reverse-convert',()=>({injectDshImageAiSystemPrompt:({systemPrompt}:{systemPrompt:string})=>systemPrompt}));
 import {sendAgentMessage,setAgentEventSink,abortAgentMessage,generateTavernImage} from './agent-runtime';
@@ -260,4 +260,16 @@ it('image provider changed during chat does not charge a different provider',asy
  mocked.imageSettings={imageProvider:'openai-images',imageApiKey:'fixture-key',compatibleImage:{baseUrl:'https://image.invalid/v1',model:'image',size:'auto',responseFormat:'auto',extensions:{}}};
  mocked.post.mockImplementationOnce(async()=>{mocked.imageSettings.imageProvider='novelai';return block(repaired);});
  await send();expect(mocked.generate).not.toHaveBeenCalled();expect(latest().imageProposal.status).toBe('error');expect(latest().imageProposal.error).toContain('配置已变化');
+});
+
+it('legacy text files survive actual initial and repair prompt assembly exactly once with vision off',async()=>{
+ const dir=path.join(imageRoot,'chat');fs.mkdirSync(dir);const filePath=path.join(dir,'novel.txt');const body='旧酒馆合成正文：月光照进走廊。';fs.writeFileSync(filePath,body);
+ mocked.workspace.conversations[0].draftAttachments=[{id:'text-only',name:'novel.txt',kind:'text',mime:'text/plain',filePath,size:Buffer.byteLength(body),createdAt:'2026-10-22T00:00:00Z'}];
+ mocked.post.mockResolvedValueOnce(block(invalid)).mockResolvedValueOnce(block(repaired));
+ expect((await send()).ok).toBe(true);expect(mocked.post).toHaveBeenCalledTimes(2);
+ for(const call of mocked.post.mock.calls){const messages=call[1].messages;const user=messages.filter((m:any)=>m.role==='user').map((m:any)=>m.content).join('\n');expect(user.split(body)).toHaveLength(2);expect(messages.filter((m:any)=>m.role==='system').map((m:any)=>m.content).join('')).not.toContain(body);}
+});
+it('legacy selected-empty attachment subset cannot consume remaining drafts or call provider',async()=>{
+ mocked.workspace.conversations[0].draftAttachments=[{id:'unselected',name:'file.txt',kind:'text',mime:'text/plain',filePath:'not-read.txt',size:4,createdAt:'2026-10-22T00:00:00Z'}];const before=structuredClone(mocked.workspace.conversations[0].messages);
+ expect((await sendAgentMessage({conversationId:'chat',text:'',attachmentIds:[]})).ok).toBe(false);expect(mocked.post).not.toHaveBeenCalled();expect(mocked.workspace.conversations[0].draftAttachments).toHaveLength(1);expect(mocked.workspace.conversations[0].messages).toEqual(before);
 });

@@ -283,7 +283,7 @@ export function buildTavernPromptMessages(context: TavernPromptContext): TavernP
     if (message.status === "streaming" || message.role === "system") continue;
     const content = visibleMessageContent(message).trim();
     const imageAttachmentCount = message.attachments.filter((item) => item.kind === "image").length;
-    if (!content && !message.imageProposal && !imageAttachmentCount) continue;
+    if (!content && !message.imageProposal && !message.attachments.length) continue;
     const proposal = message.imageProposal;
     const imageContext = proposal ? {
       positivePrompt: proposal.positivePrompt,
@@ -301,7 +301,7 @@ export function buildTavernPromptMessages(context: TavernPromptContext): TavernP
       sourceMessageId: message.id,
       content: imageContext
         ? `${content || "Image proposal prepared."}\n\n<langbai-current-image>${JSON.stringify(imageContext)}</langbai-current-image>`
-        : content || `[User attached ${imageAttachmentCount} image${imageAttachmentCount === 1 ? "" : "s"}.]`,
+        : content || (imageAttachmentCount ? `[User attached ${imageAttachmentCount} image${imageAttachmentCount === 1 ? "" : "s"}.]` : '[User attached reference files.]'),
     });
   }
   return messages;
