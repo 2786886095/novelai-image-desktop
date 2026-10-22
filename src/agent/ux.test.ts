@@ -113,7 +113,11 @@ it('keeps the source renderer in the actual timeline and uses the existing exter
  const collection=readFileSync(new URL('../components/AgentModelCollection.tsx',import.meta.url),'utf8');
  expect(collection).toContain("result.models.length?t('foundModels'):t('emptyModels')");
  expect(collection).toContain('t("modelSource_"+m.metadataSource)');
- expect(source).toContain('setChatActions(actions,id)');expect(source).toContain('sendAgentMessage({ conversationId: id, text: input, actions })');
+ expect(source).toContain('setChatActions(actions,id)');
+ expect(source).toContain('const input=draftTextRef.current[id]??text');
+ expect(source).toContain('const attachmentIds=source.draftAttachments.map(item=>item.id)');
+ expect(source).toContain('sendAgentMessage({conversationId:id,text:input.trim(),actions,attachmentIds})');
+ expect(source).toContain("if(decision==='restore'){setText(input,id);setChatActions(actions,id);}");
 });
 
 it('flow progress follows actual preparation and generation, never reference attachments', () => {

@@ -2,9 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentAttachment } from '../../src/agent/types';
 
-export const MAX_TEXT_ATTACHMENT_BYTES = 1_048_576;
-export const MAX_TURN_TEXT_ATTACHMENT_BYTES = 4_194_304;
-const TEXT_EXTENSIONS = new Set(['.txt', '.md', '.json', '.jsonl', '.csv', '.tsv', '.yaml', '.yml']);
+import { AGENT_TEXT_EXTENSIONS, MAX_TEXT_ATTACHMENT_BYTES, MAX_TURN_TEXT_ATTACHMENT_BYTES } from '../../src/agent/attachment-feedback';
+export { MAX_TEXT_ATTACHMENT_BYTES, MAX_TURN_TEXT_ATTACHMENT_BYTES } from '../../src/agent/attachment-feedback';
+const TEXT_EXTENSIONS = new Set<string>(AGENT_TEXT_EXTENSIONS);
 
 /** Deliberately no PDF/office decoder, charset guessing, URL fetch or executable import. */
 export function decodeAgentTextAttachment(bytes: Uint8Array): string {

@@ -6,6 +6,9 @@ import {PreviewImageViewer} from './components/PreviewImageViewer';
 import {AnchoredPopover} from './components/AnchoredPopover';
 import {createStudioScrollFollower} from './agent/scroll-follower';
 import { normalizeStudioComposerActions, studioComposerActionLabel } from './agent/composer-actions';
+import { appendStudioComposerRecovery, createStudioComposerInteractions, studioSendRecoveryDecision, type StudioComposerFlight, type StudioComposerRecovery } from './agent/composer-interaction';
+import {AgentFileAttachments} from './components/AgentFileAttachments';
+import {agentDraftAttachmentIssue} from './agent/attachment-feedback';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
@@ -66,8 +69,7 @@ export function AgentAttachmentIcon({kind}: Pick<AgentAttachment, 'kind'>) {
 
 /** Sent files remain visible even when the user supplied no typed message. */
 export function AgentMessageFiles({attachments, language}: {attachments: AgentAttachment[]; language: unknown}) {
-  const files = attachments.filter(item => item.kind !== 'image');
-  return files.length ? <div className="pi-attachments">{files.map(item => <div key={item.id} title={item.name}><AgentAttachmentIcon kind={item.kind}/><span>{item.name}</span>{item.unavailable && <small role="status">{studioUxText(language, 'reattach')}</small>}</div>)}</div> : null;
+  return <AgentFileAttachments attachments={attachments} language={language} mode="message"/>;
 }
 
 /** Studio's own tools and durable conversations; no new general Agent powers. */
@@ -94,6 +96,13 @@ export default function PiAgentPage({ active }: { active: boolean }) {
   const [compacting, setCompacting] = useState(false);
   const [uploading,setUploading]=useState(false),[dragging,setDragging]=useState(false);
   const uploadLock=useRef(false);
+  const composerInteractions=useRef(createStudioComposerInteractions());
+  const draftTextRef=useRef<Record<string,string>>({});
+  const draftActionsRef=useRef<Record<string,AgentComposerAction[]>>({});
+  type RecoveryEntry=StudioComposerRecovery & {id:number};
+  const recoveryRef=useRef<Record<string,RecoveryEntry[]>>({});
+  const [sendRecoveries,setSendRecoveries]=useState<Record<string,RecoveryEntry[]>>({});
+  const chatErrors=useRef<Record<string,string>>({});
   const selectedModels=settings?selectedAgentModels(settings):[];
   const [draftActions, setDraftActions] = useState<Record<string, AgentComposerAction[]>>({});
   const contextRef=useRef<HTMLButtonElement>(null),[contextOpen,setContextOpen]=useState(false);
@@ -177,14 +186,17 @@ export default function PiAgentPage({ active }: { active: boolean }) {
   const running = busy || compacting || !!pending || !!pendingQuestion || chat?.status === 'running' || chat?.status === 'waiting-permission';
   // Local preference persistence blocks conflicting edits, but is not a model run.
   const controlsBusy = running || optionsBusy;
+  const navigationBusy = controlsBusy || uploading;
   const sessionOptions=studioSessionOptions(chat);
   const text = chat ? drafts[chat.id] ?? '' : '';
   const selectedActions = chat ? draftActions[chat.id] ?? [] : [];
-  useEffect(() => {if(chat)try{const cached=sessionStorage.getItem(`studio-agent-actions:${chat.id}`);if(cached)setDraftActions(current=>({...current,[chat.id]:current[chat.id]??normalizeStudioComposerActions(JSON.parse(cached))}));}catch{/* Optional named-selection cache. */}},[chat?.id]);
+  const draftIssue=agentDraftAttachmentIssue(chat?.draftAttachments??[]);
+  const currentRecoveries=chat?sendRecoveries[chat.id]??[]:[];
+  useEffect(() => {if(chat)try{const cached=sessionStorage.getItem(`studio-agent-actions:${chat.id}`);if(cached&&draftActionsRef.current[chat.id]===undefined){const actions=normalizeStudioComposerActions(JSON.parse(cached));draftActionsRef.current[chat.id]=actions;setDraftActions(current=>({...current,[chat.id]:current[chat.id]??actions}));}}catch{/* Optional named-selection cache. */}},[chat?.id]);
   useEffect(() => {
-    setError('');
+    setError(chat?chatErrors.current[chat.id]??'':'');
     if (chat) {
-      try { const saved = sessionStorage.getItem(`studio-agent-draft:${chat.id}`); if (saved) setDrafts((current) => ({ ...current, [chat.id]: current[chat.id] ?? saved })); } catch { /* Optional session cache. */ }
+      try { const saved = sessionStorage.getItem(`studio-agent-draft:${chat.id}`); if (saved&&draftTextRef.current[chat.id]===undefined){draftTextRef.current[chat.id]=saved;setDrafts((current) => ({ ...current, [chat.id]: current[chat.id] ?? saved }));} } catch { /* Optional session cache. */ }
     }
   }, [chat?.id]);
   useLayoutEffect(() => {
@@ -211,12 +223,14 @@ export default function PiAgentPage({ active }: { active: boolean }) {
 
   const setText = (value: string, id = chat?.id) => {
     if (!id) return;
+    draftTextRef.current[id]=value;composerInteractions.current.edited(id);
     setDrafts((current) => ({ ...current, [id]: value }));
     try { sessionStorage.setItem(`studio-agent-draft:${id}`, value); } catch { /* Draft still retained while page is mounted. */ }
   };
   const prefill = (value: string) => { setText(value); inputRef.current?.focus(); };
   const setChatActions = (value: AgentComposerAction[], id=chat?.id) => {
     if(!id)return; const actions=normalizeStudioComposerActions(value);
+    draftActionsRef.current[id]=actions;composerInteractions.current.edited(id);
     setDraftActions(current=>({...current,[id]:actions}));
     try{sessionStorage.setItem(`studio-agent-actions:${id}`,JSON.stringify(actions));}catch{/* Remains in memory. */}
   };
@@ -229,45 +243,82 @@ export default function PiAgentPage({ active }: { active: boolean }) {
     if(controlsBusy)return;setOptionsBusy(true);setError('');
     try{const result=await window.naiDesktop.importStudioResources(kind);if(result.ok){updateWorkspace(result.workspace);if(!result.cancelled&&result.message)useAppStore.getState().setToast(result.message);}else setError(result.message??t('statusError'));}catch(reason){setError(String(reason));}finally{setOptionsBusy(false);}
   };
+  const setChatError=(id:string,value:string)=>{chatErrors.current[id]=value;if(selectedId.current===id)setError(value);};
+  const updateRecovery=(id:string,entries:RecoveryEntry[])=>{recoveryRef.current={...recoveryRef.current,[id]:entries};setSendRecoveries(recoveryRef.current);};
+  const dismissRecovery=(id:string,recoveryId:number)=>updateRecovery(id,(recoveryRef.current[id]??[]).filter(item=>item.id!==recoveryId));
+  const appendRecovery=(id:string,recoveryId:number)=>{
+    if(selectedId.current!==id)return;
+    const recovery=recoveryRef.current[id]?.find(item=>item.id===recoveryId);if(!recovery)return;
+    const merged=appendStudioComposerRecovery({text:draftTextRef.current[id]??'',actions:draftActionsRef.current[id]??[]},recovery);
+    if(!merged){setChatError(id,t('unsentActionLimit'));return;}
+    setText(merged.text,id);setChatActions(merged.actions,id);dismissRecovery(id,recoveryId);inputRef.current?.focus();
+  };
   const run = async () => {
-    if (archived || !chat || controlsBusy || uploadLock.current || !configured || (!text.trim() && !selectedActions.length && !chat.draftAttachments.length)) return;
-    const input = text.trim(); const id = chat.id; const actions = selectedActions;
-    const before = chat.messages.filter((item) => item.role === 'user').length;
-    setText('', id); setChatActions([],id); setError(''); setBusy(true); scrollFollower.current?.latest();
-    try {
-      const result = await window.naiDesktop.sendAgentMessage({ conversationId: id, text: input, actions });
-      if (!result.ok) {
-        const after = latestWorkspace.current?.conversations.find((item) => item.id === id)?.messages.filter((item) => item.role === 'user').length ?? before;
-        if (after === before) {setText(input, id);setChatActions(actions,id);}
-        setError(result.message ?? t('statusError'));
-      }
-    } catch (reason) {
-      const after = latestWorkspace.current?.conversations.find((item) => item.id === id)?.messages.filter((item) => item.role === 'user').length ?? before;
-      if (after === before) {setText(input, id);setChatActions(actions,id);}
-      setError(String(reason));
-    }
-    finally { setBusy(false); }
+    if (archived || !chat || controlsBusy || uploadLock.current || !configured || selectedId.current!==chat.id) return;
+    const id=chat.id,source=latestWorkspace.current?.conversations.find(item=>item.id===id)??chat;
+    const input=draftTextRef.current[id]??text,actions=normalizeStudioComposerActions(draftActionsRef.current[id]??selectedActions);
+    const issue=agentDraftAttachmentIssue(source.draftAttachments);if(issue){setChatError(id,t(issue.key));return;}
+    if(!input.trim()&&!actions.length&&!source.draftAttachments.length)return;
+    const flight=composerInteractions.current.beginSend(id);if(!flight)return;
+    const attachmentIds=source.draftAttachments.map(item=>item.id);
+    const before=source.messages.filter(item=>item.role==='user').length;
+    setText('',id);setChatActions([],id);const clearedRevision=composerInteractions.current.revision(id);
+    setChatError(id,'');setBusy(true);scrollFollower.current?.latest();
+    const recover=async(message:string)=>{
+      let confirmedUsers:number|undefined;
+      try {const fresh=await window.naiDesktop.getAgentWorkspace();confirmedUsers=fresh.conversations.find(item=>item.id===id)?.messages.filter(item=>item.role==='user').length;}
+      catch {/* Unknown admission must never automatically repopulate a retry. */}
+      const observedUsers=latestWorkspace.current?.conversations.find(item=>item.id===id)?.messages.filter(item=>item.role==='user').length;
+      const decision=studioSendRecoveryDecision({beforeUsers:before,observedUsers,confirmedUsers,clearedRevision,currentRevision:composerInteractions.current.revision(id)});
+      if(decision==='restore'){setText(input,id);setChatActions(actions,id);}
+      else if(decision==='retain'&&(input||actions.length))updateRecovery(id,[...(recoveryRef.current[id]??[]),{id:flight.id,text:input,actions}]);
+      setChatError(id,message);
+    };
+    try {const result=await window.naiDesktop.sendAgentMessage({conversationId:id,text:input.trim(),actions,attachmentIds});if(!result.ok)await recover(result.message??t('statusError'));}
+    catch(reason){await recover(String(reason));}
+    finally {if(composerInteractions.current.finish(flight))setBusy(false);}
+  };
+  const beginUpload=(id:string)=>{
+    if(uploadLock.current){setChatError(id,t('attachmentImportBusy'));return;}
+    const flight=composerInteractions.current.beginUpload(id);if(!flight)return;
+    uploadLock.current=true;setUploading(true);setChatError(id,'');return flight;
+  };
+  const finishUpload=(flight:StudioComposerFlight)=>{if(composerInteractions.current.finish(flight)){uploadLock.current=false;setUploading(false);}};
+  const refreshImportedWorkspace=async(id:string)=>{
+    const value=await window.naiDesktop.getAgentWorkspace(),selected=selectedId.current;
+    // A late import may update its origin's files, never pull a different chat
+    // back into view if selection changed outside these disabled controls.
+    updateWorkspace(selected&&selected!==id&&value.conversations.some(item=>item.id===selected)?{...value,selectedConversationId:selected}:value);
   };
   const importAttachments = async (sourcePaths?: string[]) => {
-    if (archived || !chat || uploadLock.current) return;
-    uploadLock.current=true;setUploading(true);
+    if (archived || !chat) return;
+    const id=chat.id,flight=beginUpload(id);if(!flight)return;
     try {
-      const result = await window.naiDesktop.importAgentFiles(chat.id, sourcePaths);
-      if (!result.ok && !result.cancelled) setError(result.message ?? t('statusError'));
-      updateWorkspace(await window.naiDesktop.getAgentWorkspace());
-    } catch (reason) { setError(String(reason)); }
-    finally{uploadLock.current=false;setUploading(false);}
+      const result=await window.naiDesktop.importAgentFiles(id,sourcePaths);
+      if(result.cancelled)return;
+      if(!result.ok){setChatError(id,result.message??t('statusError'));return;}
+      await refreshImportedWorkspace(id);
+    } catch(reason){setChatError(id,String(reason));}
+    finally {finishUpload(flight);}
+  };
+  const importDataForChat=async(id:string,files:File[]|Array<{name:string;bytes:Uint8Array}>)=>{
+    if(!files.length)return;
+    if(files.length>64)throw Error(t('attachmentLimit'));
+    let total=0;const inputs:Array<{name:string;bytes:Uint8Array}>=[];
+    for(const file of files){const isFile=typeof (file as File).arrayBuffer==='function';const size=isFile?(file as File).size:(file as {bytes:Uint8Array}).bytes.length;total+=size;if(!size||size>48*1024*1024||total>192*1024*1024)throw Error(t('attachmentLimit'));inputs.push({name:file.name||'clipboard.png',bytes:isFile?new Uint8Array(await (file as File).arrayBuffer()):(file as {bytes:Uint8Array}).bytes});}
+    const result=await window.naiDesktop.importAgentFileData(id,inputs);if(!result.ok)throw Error(result.message??t('statusError'));
+    await refreshImportedWorkspace(id);
   };
   const importFileData=async(files:File[]|Array<{name:string;bytes:Uint8Array}>)=>{
-    if(archived||!chat||uploadLock.current||!files.length)return;
-    const id=chat.id;uploadLock.current=true;setUploading(true);setError('');
-    try {
-      if(files.length>64)throw Error(t('attachmentLimit'));
-      let total=0;const inputs:Array<{name:string;bytes:Uint8Array}>=[];
-      for(const file of files){const isFile=typeof (file as File).arrayBuffer==='function';const size=isFile?(file as File).size:(file as {bytes:Uint8Array}).bytes.length;total+=size;if(!size||size>48*1024*1024||total>192*1024*1024)throw Error(t('attachmentLimit'));inputs.push({name:file.name||'clipboard.png',bytes:isFile?new Uint8Array(await (file as File).arrayBuffer()):(file as {bytes:Uint8Array}).bytes});}
-      const result=await window.naiDesktop.importAgentFileData(id,inputs);if(!result.ok)setError(result.message??t('statusError'));
-      updateWorkspace(await window.naiDesktop.getAgentWorkspace());
-    }catch(reason){setError(String(reason));}finally{uploadLock.current=false;setUploading(false);}
+    if(archived||!chat||!files.length)return;
+    const id=chat.id,flight=beginUpload(id);if(!flight)return;
+    try{await importDataForChat(id,files);}catch(reason){setChatError(id,String(reason));}finally{finishUpload(flight);}
+  };
+  const importClipboardFiles=async()=>{
+    if(archived||!chat)return;
+    const id=chat.id,flight=beginUpload(id);if(!flight)return;
+    try{const files=await window.naiDesktop.readAgentClipboardFiles();await importDataForChat(id,files);}
+    catch(reason){setChatError(id,String(reason));}finally{finishUpload(flight);}
   };
   const compact = async () => {
     if (archived || !chat || controlsBusy || !configured) return;
@@ -350,11 +401,11 @@ export default function PiAgentPage({ active }: { active: boolean }) {
   const chats = workspace?.conversations.filter(item=>!!item.archivedAt===archivedView).filter((item)=>item.title.toLocaleLowerCase().includes(search.toLocaleLowerCase())) ?? [];
 
   const changeArchived = async (id: string, value: boolean) => {
-    if (controlsBusy) return;
+    if (navigationBusy) return;
     try {const result=await window.naiDesktop.setAgentConversationArchived(id,value);if(result.ok){updateWorkspace(result.workspace);if(!value)setArchivedView(false);}else setError(result.message??t('statusError'));}catch(reason){setError(String(reason));}
   };
   const deleteChat=async(item:AgentConversation)=>{
-    if(controlsBusy||['running','waiting-permission'].includes(item.status))return;
+    if(navigationBusy||['running','waiting-permission'].includes(item.status))return;
     if(!await confirmAction(t('deleteChatConfirm',item.title),t('deleteChat'),undefined,undefined,{confirm:t('deleteChat'),cancel:t('cancel')}))return;
     await mutateChat(window.naiDesktop.deleteAgentConversation(item.id));
   };
@@ -363,10 +414,10 @@ export default function PiAgentPage({ active }: { active: boolean }) {
   return <div className={`pi-agent${sidebarOpen?' has-left-pane':''}${resourcesOpen?' has-right-pane':''}`}>
     <div id="pi-conversations-pane" className="pi-pane-slot pi-pane-left" {...disclosureAttributes(sidebarOpen)} onKeyDown={event=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();setSidebarOpen(false);leftToggle.current?.focus();}}}>
     {sidebarPresent&&<aside id="pi-conversations" className="pi-sidebar is-open" aria-label={t('chats')}>
-      <button disabled={controlsBusy} title={controlsBusy?t('busySwitch'):undefined} onClick={()=>{setArchivedView(false);void mutateChat(window.naiDesktop.createAgentConversation(t('newChat')))}}><LuPlus/>{t('newChat')}</button>
+      <button disabled={navigationBusy} title={navigationBusy?t('busySwitch'):undefined} onClick={()=>{setArchivedView(false);void mutateChat(window.naiDesktop.createAgentConversation(t('newChat')))}}><LuPlus/>{t('newChat')}</button>
       <label className="pi-search"><LuSearch aria-hidden/><input aria-label={t('searchChats')} placeholder={t('searchChats')} value={search} onChange={(event)=>setSearch(event.target.value)}/></label>
       <div className="pi-chat-scope" aria-label={t('chats')}><button aria-pressed={!archivedView} onClick={()=>setArchivedView(false)}><LuMessageSquare/>{t('activeChats')}</button><button aria-pressed={archivedView} onClick={()=>setArchivedView(true)}><LuArchive/>{t('archivedChats')}</button></div>
-      <nav ref={chatListMotion}>{chats.map(item=><div className={`pi-chat-row${item.id===chat?.id?' is-active':''}`} key={item.id}><button className="pi-chat-select" aria-current={item.id===chat?.id?'page':undefined} disabled={controlsBusy} title={controlsBusy?t('busySwitch'):item.title} onClick={()=>void mutateChat(window.naiDesktop.selectAgentConversation(item.id))}>{item.archivedAt?<LuArchive/>:<LuMessageSquare/>}<span>{item.title}</span></button><SelectMenu value="" minMenuWidth={148} ariaLabel={`${t('chatActions')}: ${item.title}`} label={<LuEllipsis/>} className="pi-chat-more" popoverClassName="pi-chat-menu" disabled={controlsBusy} options={[{value:'rename',label:t('rename'),icon:<LuPencil/>},item.archivedAt?{value:'restore',label:t('restoreChat'),icon:<LuArchiveRestore/>}:{value:'archive',label:t('archiveChat'),icon:<LuArchive/>},{value:'delete',label:t('deleteChat'),icon:<LuTrash2/>,disabled:['running','waiting-permission'].includes(item.status)}]} onChange={action=>rowAction(item,action)}/></div>)}{!chats.length&&<p>{t(archivedView?'noArchivedChats':'noChats')}</p>}</nav>
+      <nav ref={chatListMotion}>{chats.map(item=><div className={`pi-chat-row${item.id===chat?.id?' is-active':''}`} key={item.id}><button className="pi-chat-select" aria-current={item.id===chat?.id?'page':undefined} disabled={navigationBusy} title={navigationBusy?t('busySwitch'):item.title} onClick={()=>void mutateChat(window.naiDesktop.selectAgentConversation(item.id))}>{item.archivedAt?<LuArchive/>:<LuMessageSquare/>}<span>{item.title}</span></button><SelectMenu value="" minMenuWidth={148} ariaLabel={`${t('chatActions')}: ${item.title}`} label={<LuEllipsis/>} className="pi-chat-more" popoverClassName="pi-chat-menu" disabled={navigationBusy} options={[{value:'rename',label:t('rename'),icon:<LuPencil/>},item.archivedAt?{value:'restore',label:t('restoreChat'),icon:<LuArchiveRestore/>}:{value:'archive',label:t('archiveChat'),icon:<LuArchive/>},{value:'delete',label:t('deleteChat'),icon:<LuTrash2/>,disabled:['running','waiting-permission'].includes(item.status)}]} onChange={action=>rowAction(item,action)}/></div>)}{!chats.length&&<p>{t(archivedView?'noArchivedChats':'noChats')}</p>}</nav>
       <div className="pi-sidebar-footer"><span className={`pi-model-dot ${configured?'is-ready':''}`}/><span role="status">{pending?t('statusPending'):running?t('statusRunning'):t(configured?'ready':'missingModel')}</span><button className="pi-icon" disabled={controlsBusy} aria-label={t('modelSettings')} title={t('modelSettings')} onClick={openSettings}><LuSettings/></button></div>
     </aside>}
     </div>
@@ -387,14 +438,17 @@ export default function PiAgentPage({ active }: { active: boolean }) {
         {running&&!pending&&!pendingQuestion && <div className="pi-working" role="status"><span className="pi-pulse"/><span>{t('workingBody')}</span></div>}
       </div></main>{away&&<button className="pi-latest" onClick={()=>{scrollFollower.current?.latest()}}><LuArrowDown/>{t('latest')}</button>}</div>
       {pending && <div className="pi-decision-tray" aria-label={t("decisionArea")}>{pending.type==='langbai_generate_image'?plan(pending.metadata??{},true):<section className="pi-plan"><header><strong>{t('confirmTool',pending.title)}</strong></header><div className="pi-plan-body"><p>{t('confirmationHint')}</p>{pending.metadata?.positivePrompt!=null&&<p>{String(pending.metadata.positivePrompt)}</p>}{Boolean(pending.metadata?.paid)&&<p className="pi-cost">{typeof pending.metadata?.estimatedAnlas==='number'?t('estimatedCost',String(pending.metadata.estimatedAnlas)):t('unknownCost')} {t('paidWarning')}</p>}<details><summary>{t('details')}</summary><pre>{JSON.stringify(pending.metadata,null,2)}</pre></details></div><footer><button disabled={answering} onClick={()=>void respond('reject')}>{t('cancel')}</button><button className="pi-primary" disabled={answering} onClick={()=>void respond('once')}>{t('confirm')}</button></footer></section>}</div>}
-      {error && <div role="alert" className="pi-notice pi-notice-error pi-global-error"><span>{error}</span><button className="pi-icon" aria-label={t('close')} onClick={()=>setError('')}><LuX/></button></div>}
-      <div className={`pi-compose-area${dragging?' is-file-dragging':''}`} onDragOver={e=>{if(!archived&&chat&&Array.from(e.dataTransfer.types).includes('Files')){e.preventDefault();e.dataTransfer.dropEffect='copy';setDragging(true);}}} onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node|null))setDragging(false);}} onDrop={e=>{setDragging(false);if(Array.from(e.dataTransfer.types).includes('Files')){e.preventDefault();void importFileData(Array.from(e.dataTransfer.files));}}}>
+      {error && <div role="alert" className="pi-notice pi-notice-error pi-global-error"><span>{error}</span><button className="pi-icon" aria-label={t('close')} onClick={()=>{if(chat)setChatError(chat.id,'');else setError('');}}><LuX/></button></div>}
+      <div className={`pi-compose-area${dragging?' is-file-dragging':''}`} onDragOver={e=>{if(Array.from(e.dataTransfer.types).includes('Files')){e.preventDefault();const accepts=!archived&&!!chat&&!uploadLock.current;e.dataTransfer.dropEffect=accepts?'copy':'none';setDragging(accepts);}}} onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node|null))setDragging(false);}} onDrop={e=>{setDragging(false);if(Array.from(e.dataTransfer.types).includes('Files')){e.preventDefault();void importFileData(Array.from(e.dataTransfer.files));}}}>
         {uploading&&<p role="status">{t('uploadingAttachments')}</p>}{running&&!!chat?.draftAttachments.length&&<small>{t('nextMessageAttachments')}</small>}
-        {!!chat?.draftAttachments.length && <div className="pi-attachments">{chat.draftAttachments.map(item=><div key={item.id}>{item.kind==='image'&&item.fileUrl?<button className="pi-thumb" onClick={()=>setImage(item)} aria-label={t('preview')}><img src={item.fileUrl} alt={item.name}/></button>:<AgentAttachmentIcon kind={item.kind}/>}<span>{item.name}</span><button className="pi-icon" disabled={archived||uploading} aria-label={t('removeAttachment')} onClick={()=>void mutateChat(window.naiDesktop.deleteAgentAttachment(chat.id,item.id))}><LuX/></button></div>)}</div>}
+        {!!chat?.draftAttachments.some(item=>item.kind==='image') && <div className="pi-attachments">{chat.draftAttachments.filter(item=>item.kind==='image').map(item=><div key={item.id}>{item.kind==='image'&&item.fileUrl?<button className="pi-thumb" onClick={()=>setImage(item)} aria-label={t('preview')}><img src={item.fileUrl} alt={item.name}/></button>:<AgentAttachmentIcon kind={item.kind}/>}<span>{item.name}</span><button className="pi-icon" disabled={archived||uploading} aria-label={t('removeAttachment')} onClick={()=>void mutateChat(window.naiDesktop.deleteAgentAttachment(chat.id,item.id))}><LuX/></button></div>)}</div>}
+        <AgentFileAttachments attachments={chat?.draftAttachments??[]} language={settings?.language} mode="draft" disabled={archived||uploading} onRemove={id=>{if(chat)void mutateChat(window.naiDesktop.deleteAgentAttachment(chat.id,id));}}/>
+        {draftIssue&&<p className="pi-notice" role="status" data-agent-draft-issue>{t(draftIssue.key)}</p>}
+        {chat&&currentRecoveries.map(recovery=><section className="pi-send-recovery" key={recovery.id} aria-label={t('unsentDraftTitle')}><strong>{t('unsentDraftTitle')}</strong><p>{t('unsentDraftHint')}</p>{recovery.text&&<pre>{recovery.text}</pre>}{!!recovery.actions.length&&<div className="pi-selected-actions">{recovery.actions.map((action,index)=><span key={index}>{studioComposerActionLabel(action,settings?.language,settings?.promptTemplates)}</span>)}</div>}<div><button type="button" onClick={()=>appendRecovery(chat.id,recovery.id)}>{t('appendUnsentDraft')}</button><button type="button" disabled={!recovery.text} onClick={()=>void copy(recovery.text,`recovery-${chat.id}-${recovery.id}`)}>{t(copied===`recovery-${chat.id}-${recovery.id}`?'copied':'copyUnsentDraft')}</button><button type="button" onClick={()=>dismissRecovery(chat.id,recovery.id)}>{t('dismissUnsentDraft')}</button></div></section>)}
         {!!selectedActions.length&&<div className="pi-selected-actions" aria-label={t('selectedActions')}>{selectedActions.map((action,index)=><span key={index}><LuWrench aria-hidden/><span>{studioComposerActionLabel(action,settings?.language,settings?.promptTemplates)}</span><button className="pi-icon" disabled={archived||controlsBusy} aria-label={`${t('removeAction')}: ${studioComposerActionLabel(action,settings?.language,settings?.promptTemplates)}`} onClick={()=>setChatActions(selectedActions.filter((_,i)=>i!==index))}><LuX/></button></span>)}</div>}
         <div className="pi-composer-shell" style={{height:effectiveComposerHeight}}>
         <div className="pi-composer-grip" role="separator" tabIndex={0} aria-orientation="horizontal" aria-label={t('resizeComposer')} title={t('resizeComposer')} aria-valuemin={108} aria-valuemax={Math.round(resizeMax())} aria-valuenow={effectiveComposerHeight} onPointerDown={e=>{if(e.button!==0)return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);resizePress.current={y:e.clientY,height:effectiveComposerHeight};}} onPointerMove={e=>{const start=resizePress.current;if(start)resizeComposer(start.height+start.y-e.clientY);}} onPointerUp={()=>{resizePress.current=null;}} onPointerCancel={()=>{resizePress.current=null;}} onLostPointerCapture={()=>{resizePress.current=null;}} onKeyDown={e=>{if(['ArrowUp','ArrowDown','Home','End'].includes(e.key)){e.preventDefault();resizeComposer(e.key==='Home'?108:e.key==='End'?resizeMax():effectiveComposerHeight+(e.key==='ArrowUp'?16:-16));}}}><span/></div>
-        <div className="pi-composer"><button className="pi-icon" disabled={archived||!chat||uploading} aria-label={t('addAttachment')} onClick={()=>void importAttachments()}><LuPlus/></button><textarea readOnly={archived} onPaste={event=>{const files=Array.from(event.clipboardData.files);if(files.length){event.preventDefault();void importFileData(files);}else if(!event.clipboardData.getData('text/plain')&&!archived&&chat&&!uploadLock.current){void window.naiDesktop.readAgentClipboardFiles().then(images=>{if(images.length)void importFileData(images);}).catch(reason=>setError(String(reason)));}}} ref={inputRef} aria-label={t('compose')} title={t('sendHint')} value={text} rows={1} onChange={event=>setText(event.target.value)} placeholder={t(archived?'archivedReadOnly':'hint')} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing&&event.nativeEvent.keyCode!==229){event.preventDefault();void run()}}}/>{running?<button className="pi-icon pi-stop" aria-label={t('stop')} onClick={()=>chat&&void window.naiDesktop.abortAgentMessage(chat.id)}><LuSquare/></button>:<button className="pi-primary pi-icon" aria-label={t('send')} disabled={archived||uploading||optionsBusy||!configured||(!text.trim()&&!selectedActions.length&&!chat?.draftAttachments.length)} onClick={()=>void run()}><LuArrowUp/></button>}</div><div className="pi-compose-meta">
+        <div className="pi-composer"><button className="pi-icon" disabled={archived||!chat||uploading} aria-label={t('addAttachment')} onClick={()=>void importAttachments()}><LuPlus/></button><textarea readOnly={archived} onPaste={event=>{const files=Array.from(event.clipboardData.files);if(files.length){event.preventDefault();void importFileData(files);}else if(!event.clipboardData.getData('text/plain')&&!archived&&chat){void importClipboardFiles();}}} ref={inputRef} aria-label={t('compose')} title={t('sendHint')} value={text} rows={1} onChange={event=>setText(event.target.value)} placeholder={t(archived?'archivedReadOnly':'hint')} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing&&event.nativeEvent.keyCode!==229){event.preventDefault();void run()}}}/>{running?<button className="pi-icon pi-stop" aria-label={t('stop')} onClick={()=>chat&&void window.naiDesktop.abortAgentMessage(chat.id)}><LuSquare/></button>:<button className="pi-primary pi-icon" aria-label={t('send')} disabled={archived||uploading||controlsBusy||!!draftIssue||!configured||(!text.trim()&&!selectedActions.length&&!chat?.draftAttachments.length)} onClick={()=>void run()}><LuArrowUp/></button>}</div><div className="pi-compose-meta">
           <div className="pi-execution-modes" role="group" aria-label={t('approvalMode')}><button disabled={archived||controlsBusy||!chat} aria-pressed={sessionOptions.approvalMode==='confirm'} title={t('confirmModeHint')} onClick={()=>void saveOptions({studioApprovalMode:'confirm'})}><LuShieldCheck/>{t('confirmMode')}</button><button className={sessionOptions.approvalMode==='auto'?'pi-full-auto':''} disabled={archived||controlsBusy||!chat} aria-pressed={sessionOptions.approvalMode==='auto'} title={t('autoModeHint')} onClick={()=>void saveOptions({studioApprovalMode:'auto'})}><LuZap/>{t('autoMode')}</button></div>
           <button className="pi-option-toggle" disabled={archived||controlsBusy||!chat} aria-pressed={sessionOptions.webSearchEnabled} title={t('webToggleHint')} onClick={()=>void saveOptions({studioWebSearchEnabled:!sessionOptions.webSearchEnabled})}><LuSearch/>{t('webQuery')}</button>
           <button className="pi-option-toggle" disabled={archived||controlsBusy||!chat} aria-pressed={sessionOptions.templateEnabled} title={t('presetSwitchHint')} onClick={()=>void saveOptions({studioTemplateEnabled:!sessionOptions.templateEnabled})}><LuFileText/>{t('presetToggle')}</button>
@@ -411,7 +465,7 @@ export default function PiAgentPage({ active }: { active: boolean }) {
     </div>
     {modelPickerOpen&&<AgentDialog title={t('modelSettings')} close={()=>{if(!saving)setModelPickerOpen(false)}}><div className="pi-model-list">{selectedModels.map(model=><button disabled={saving||controlsBusy} key={model.id} aria-pressed={model.id===settings?.agentApiModel} onClick={()=>void chooseModel(model.id)}><LuBot aria-hidden/><span>{model.displayName}</span>{model.id===settings?.agentApiModel&&<LuCheck aria-hidden/>}<small>{model.contextWindow.toLocaleString()} · {t('reasoning_'+model.reasoningEffort)}</small></button>)}</div><footer><button disabled={saving||controlsBusy} onClick={()=>{setModelPickerOpen(false);openSettings()}}><LuSettings/>{t('advancedSettings')}</button></footer></AgentDialog>}
     {settingsOpen&&<AgentDialog title={t('modelSettings')} close={()=>{if(!saving)setSettingsOpen(false)}}><p>{t('configureHint')}</p><p className="pi-notice">{t('imageApi')}</p><label>{t('providerPreset')}<SelectMenu ariaLabel={t('providerPreset')} popoverClassName="pi-provider-menu" disabled={saving} value={providerPreset} options={[{value:'',label:t('selectProvider'),icon:<LuNetwork/>},...AGENT_PROVIDER_PRESETS.map(preset=>({value:preset.id,label:preset.label,icon:providerIcon(preset.id)}))]} onChange={id=>{const preset=AGENT_PROVIDER_PRESETS.find(item=>item.id===id);setProviderPreset(id);if(preset)setModelDraft({...modelDraft,agentApiProtocol:preset.protocol,agentApiBaseUrl:preset.baseUrl,agentApiModel:preset.model,agentProviderName:preset.providerName,agentContextWindow:preset.contextWindow,agentMaxOutputTokens:preset.maxOutputTokens,agentVisionEnabled:preset.vision,agentApiKey:''})}}/></label><label>{t('apiAddress')}<input autoFocus placeholder="https://your-provider.example/v1" value={modelDraft.agentApiBaseUrl??''} onChange={e=>setModelDraft({...modelDraft,agentApiBaseUrl:e.target.value})}/></label><label>{t('modelId')}<input value={modelDraft.agentApiModel??''} onChange={e=>setModelDraft({...modelDraft,agentApiModel:e.target.value})}/></label><label>{t('apiKey')}<input type="password" autoComplete="off" value={modelDraft.agentApiKey??''} onChange={e=>setModelDraft({...modelDraft,agentApiKey:e.target.value})}/></label><AgentModelCollection draft={modelDraft} disabled={saving} onChange={patch=>setModelDraft(current=>({...current,...patch}))}/><details><summary>{t('details')}</summary><label>{t('protocol')}<SelectMenu ariaLabel={t('protocol')} popoverClassName="pi-provider-menu" disabled={saving} value={modelDraft.agentApiProtocol??'openai-compatible'} options={[{value:'openai-compatible',label:'OpenAI Chat Completions',icon:providerIcon('openai')},{value:'openai-responses',label:'OpenAI Responses',icon:providerIcon('openai')},{value:'anthropic-messages',label:'Anthropic Messages',icon:providerIcon('anthropic')},{value:'google-gemini',label:'Google Gemini',icon:providerIcon('gemini')}]} onChange={protocol=>setModelDraft({...modelDraft,agentApiProtocol:protocol as AppSettings['agentApiProtocol']})}/></label><label className="pi-check"><input type="checkbox" checked={modelDraft.agentVisionEnabled!==false} onChange={e=>setModelDraft({...modelDraft,agentVisionEnabled:e.target.checked})}/>{t('imageAnalysis')}</label></details>{configError&&<p role="alert" className="pi-error">{configError}</p>}<footer><button disabled={saving} onClick={()=>setSettingsOpen(false)}>{t('cancel')}</button><button className="pi-primary" disabled={saving} onClick={()=>void saveModel()}>{t(saving?'saveBusy':'save')}</button></footer></AgentDialog>}
-    {chatAction&&<AgentDialog title={t('rename')} close={()=>setChatAction(undefined)}><label>{t('chatName')}<input autoFocus value={chatName} maxLength={100} onChange={e=>setChatName(e.target.value)}/></label><footer><button onClick={()=>setChatAction(undefined)}>{t('cancel')}</button><button className="pi-primary" disabled={!chatName.trim()||controlsBusy} onClick={()=>{void mutateChat(window.naiDesktop.renameAgentConversation(chatAction.id,chatName.trim()));setChatAction(undefined)}}>{t('save')}</button></footer></AgentDialog>}
+    {chatAction&&<AgentDialog title={t('rename')} close={()=>setChatAction(undefined)}><label>{t('chatName')}<input autoFocus value={chatName} maxLength={100} onChange={e=>setChatName(e.target.value)}/></label><footer><button onClick={()=>setChatAction(undefined)}>{t('cancel')}</button><button className="pi-primary" disabled={!chatName.trim()||navigationBusy} onClick={()=>{void mutateChat(window.naiDesktop.renameAgentConversation(chatAction.id,chatName.trim()));setChatAction(undefined)}}>{t('save')}</button></footer></AgentDialog>}
     {image?.fileUrl&&<AppPortal><div className="tavern-image-lightbox" role="dialog" aria-modal="true" aria-label={t('preview')}><button className="tavern-image-lightbox-close" aria-label={t('close')} onClick={()=>setImage(undefined)}><LuX/></button><PreviewImageViewer images={[{src:image.fileUrl,alt:image.name}]} index={0} onIndex={()=>{}} showNavigation={false} onBackgroundClick={()=>setImage(undefined)}/></div></AppPortal>}
   </div>;
 }

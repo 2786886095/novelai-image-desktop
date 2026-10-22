@@ -1545,5 +1545,117 @@
     "A task-scoped rewrite of IG5 workflow rules, not an upstream image preset. Applied in the actual system layer without granting tools, network access or payment approval.",
     "IG5の一般ルールを画像タスク向けに改写。実際のシステム層に適用しますが、ツール・ネットワーク・支払い権限は付与しません。",
     "IG5 일반 작업 규칙의 이미지 작업용 적용입니다. 실제 시스템 계층에 적용되지만 도구·네트워크·결제 권한을 부여하지 않습니다."
+  ],
+  "pendingTextFiles": [
+    "待发送文件",
+    "待傳送檔案",
+    "Files to send",
+    "送信待ちファイル",
+    "전송 대기 파일"
+  ],
+  "messageTextFiles": [
+    "消息附件",
+    "訊息附件",
+    "Message attachments",
+    "メッセージの添付",
+    "메시지 첨부"
+  ],
+  "attachmentStaged": [
+    "待发送，正文尚未读取",
+    "待傳送，正文尚未讀取",
+    "Not sent; text is read on send",
+    "未送信・本文は送信時に読み込み",
+    "전송 전 · 전송할 때 본문 읽기"
+  ],
+  "attachmentReference": [
+    "文本附件",
+    "文字附件",
+    "Text attachment",
+    "テキスト添付",
+    "텍스트 첨부"
+  ],
+  "attachmentUnavailable": [
+    "附件不可用，请移除后重新选择",
+    "附件無法使用，請移除後重新選擇",
+    "File unavailable; remove it and attach it again",
+    "利用できません。削除して添付し直してください",
+    "파일을 사용할 수 없습니다. 제거 후 다시 첨부하세요"
+  ],
+  "attachmentUnsupported": [
+    "此格式暂不支持，请转为 TXT 等纯文本",
+    "此格式暫不支援，請轉為 TXT 等純文字",
+    "Unsupported format; convert it to TXT or another supported plain-text format",
+    "未対応形式です。TXTなどのプレーンテキストに変換してください",
+    "지원하지 않는 형식입니다. TXT 등 일반 텍스트로 변환하세요"
+  ],
+  "attachmentOversize": [
+    "纯文本附件超过 1 MiB，请拆分后重新添加",
+    "純文字附件超過 1 MiB，請拆分後重新新增",
+    "Text file exceeds 1 MiB; split it before attaching again",
+    "テキストが1 MiBを超えています。分割して添付し直してください",
+    "텍스트 파일이 1 MiB를 초과합니다. 나눠서 다시 첨부하세요"
+  ],
+  "attachmentInvalidSize": [
+    "文件为空或大小无效，请重新选择",
+    "檔案為空或大小無效，請重新選擇",
+    "File is empty or its size is invalid; choose it again",
+    "ファイルが空かサイズが無効です。選び直してください",
+    "파일이 비어 있거나 크기가 잘못되었습니다. 다시 선택하세요"
+  ],
+  "textAttachmentHint": [
+    "纯文本支持 TXT、MD、JSON/JSONL、CSV/TSV、YAML；每份不超过 1 MiB。支持 UTF-8 或带 BOM 的 UTF-16，发送时读取，不静默截断。",
+    "純文字支援 TXT、MD、JSON/JSONL、CSV/TSV、YAML；每份不超過 1 MiB。支援 UTF-8 或含 BOM 的 UTF-16，傳送時讀取，不會靜默截斷。",
+    "TXT, MD, JSON/JSONL, CSV/TSV and YAML: up to 1 MiB per file. UTF-8 or UTF-16 with BOM. Text is read on send and never silently truncated.",
+    "TXT、MD、JSON/JSONL、CSV/TSV、YAML：1ファイル1 MiBまで。UTF-8またはBOM付きUTF-16に対応。送信時に読み込み、無断で切り詰めません。",
+    "TXT, MD, JSON/JSONL, CSV/TSV, YAML: 파일당 최대 1 MiB. UTF-8 또는 BOM이 있는 UTF-16을 지원합니다. 전송할 때 읽으며 알림 없이 자르지 않습니다."
+  ],
+  "unsentDraftTitle": [
+    "上次发送内容",
+    "上次傳送內容",
+    "Previous send content",
+    "前回送信した内容",
+    "이전 전송 내용"
+  ],
+  "unsentDraftHint": [
+    "发送未完成，内容已保留；请先核对聊天记录，避免重复发送。",
+    "傳送未完成，內容已保留；請先核對聊天記錄，避免重複傳送。",
+    "The send did not complete. Your content is retained. Check the conversation before sending again to avoid duplicates.",
+    "送信が完了していません。内容は保持されています。重複送信を避けるため、先に会話履歴をご確認ください。",
+    "전송이 완료되지 않아 내용을 보관했습니다. 중복 전송을 피하려면 먼저 대화 기록을 확인하세요."
+  ],
+  "appendUnsentDraft": [
+    "追加到当前草稿",
+    "附加至目前草稿",
+    "Append to current draft",
+    "現在の下書きに追加",
+    "현재 초안에 추가"
+  ],
+  "copyUnsentDraft": [
+    "复制原文",
+    "複製原文",
+    "Copy original text",
+    "元の文章をコピー",
+    "원문 복사"
+  ],
+  "dismissUnsentDraft": [
+    "关闭提示",
+    "關閉提示",
+    "Dismiss notice",
+    "通知を閉じる",
+    "알림 닫기"
+  ],
+  "unsentActionLimit": [
+    "最多保留四项操作，请先移除部分标签再恢复。",
+    "最多保留四項操作，請先移除部分標籤再還原。",
+    "Up to four actions can be kept. Remove some action tags before restoring.",
+    "操作は最大4件です。一部のタグを削除してから復元してください。",
+    "작업은 최대 4개까지 유지할 수 있습니다. 일부 태그를 제거한 후 복원하세요."
+  ],
+  "attachmentImportBusy": [
+    "本次附件未添加；请在当前导入完成后重新添加。",
+    "本次附件未新增；請在目前匯入完成後重新新增。",
+    "These files were not added. Wait for the current import to finish, then add them again.",
+    "今回のファイルは追加されていません。現在の取り込みが完了してから、再度追加してください。",
+    "이번 파일은 추가되지 않았습니다. 현재 가져오기가 끝난 후 다시 추가하세요."
   ]
 }

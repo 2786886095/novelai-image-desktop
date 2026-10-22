@@ -237,3 +237,29 @@ html.motion-reduced .pi-agent.pi-context-popover{animation:none}
 .pi-compose-area.is-file-dragging {outline:2px solid var(--accent);outline-offset:2px;}
 
 .pi-image-effort{border:0;margin:0;padding:12px;max-width:min(360px,calc(100vw - 32px));min-width:0}.pi-image-effort>small{overflow-wrap:anywhere}
+
+/* Agent attachment states describe local staging, never a model read receipt. */
+.pi-attachments.pi-file-attachments{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;min-width:0;max-width:100%;margin:6px 0}
+.pi-file-attachments.is-draft{max-height:min(190px,26dvh);overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.pi-attachments.pi-file-attachments>.pi-file-card{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:8px;align-items:start;min-height:48px;min-width:0;max-width:100%;padding:8px 10px;border:1px solid var(--pi-line);border-radius:10px;background:var(--pi-card);box-sizing:border-box}
+.pi-file-card>svg{width:18px;height:18px;margin-top:3px;color:var(--pi-accent);flex-shrink:0}
+.pi-file-body{display:flex;flex-direction:column;gap:3px;min-width:0;max-width:100%}
+.pi-file-name{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;font-size:13px;line-height:1.5;color:var(--pi-text)}
+.pi-file-meta,.pi-file-body>small{font-size:12px;line-height:1.5;overflow-wrap:anywhere;white-space:normal;color:var(--pi-muted)}
+.pi-file-card.has-issue{border-color:var(--danger,var(--pi-accent))}.pi-file-card.has-issue>svg,.pi-file-card.has-issue .pi-file-meta{color:var(--danger,var(--pi-text))}
+.pi-agent .pi-file-remove{align-self:center;min-width:32px;min-height:32px;flex-shrink:0}
+.pi-file-help{margin:0;padding:1px 2px;font-size:12px;line-height:1.55;white-space:normal;overflow-wrap:anywhere;color:var(--pi-muted)}
+.pi-send-recovery{margin:6px 0;padding:10px 12px;border:1px solid var(--pi-line);border-radius:10px;background:var(--pi-card);max-height:min(180px,27dvh);overflow:auto;overscroll-behavior:contain}
+.pi-send-recovery>strong{font-size:13px}.pi-send-recovery p{margin:5px 0;font-size:12px;line-height:1.55;color:var(--pi-muted);overflow-wrap:anywhere}
+.pi-send-recovery footer,.pi-send-recovery-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px}.pi-agent .pi-send-recovery button{font-size:12px;min-height:32px}
+@media(max-width:760px),(pointer:coarse){.pi-agent .pi-file-remove{min-width:44px;min-height:44px}.pi-agent .pi-send-recovery button{min-height:44px}.pi-file-attachments.is-draft{max-height:min(180px,25dvh)}}
+
+/* Keep the editable row above a wrapping controls row, even at 390px. */
+.pi-composer-shell{min-height:min-content}
+.pi-composer-shell .pi-composer{flex:1 0 56px;min-height:56px;box-sizing:border-box}
+.pi-composer-shell .pi-composer textarea{min-height:44px;max-height:100%;box-sizing:border-box}
+
+.pi-file-attachments .pi-file-body,.pi-file-attachments .pi-file-name{max-width:100%;white-space:normal}
+.pi-file-attachments .pi-file-name{font-size:13px}
+.pi-send-recovery>div:last-child{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.pi-send-recovery>pre{max-height:96px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:6px 8px;border-radius:6px;background:var(--pi-bg);font-size:12px;line-height:1.5}
