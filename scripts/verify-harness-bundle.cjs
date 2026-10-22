@@ -2,6 +2,7 @@
 // Restore ONLY explicitly hashed bundle members, then verify the final seed bytes.
 const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('node:crypto');
 module.exports=async function(context){
+ await require('./verify-runtime-dependencies.cjs')(context);
  if(context.electronPlatformName!=='win32')return;
  const pkg=JSON.parse(await fs.readFile(path.join(context.packager.projectDir,'package.json'),'utf8'));
  const entry=(pkg.build.win?.extraResources ?? pkg.build.extraResources ?? []).find(item=>item.to==='harness-seed');
