@@ -9,6 +9,7 @@ function compatibleSubscription(data:unknown,legacyFormat:boolean):boolean {
  const sub=body?.subscription??body?.information?.subscription??body?.data?.subscription??body?.data?.information?.subscription??body;
  if(!sub||typeof sub!=='object'||Array.isArray(sub))return false;
  // The legacy /user/data contract can omit active or encode tier as a decimal string.
+ // Anlas is optional metadata, not an authentication requirement. Missing is not zero.
  const tier=typeof sub.tier==='number'?sub.tier:legacyFormat&&typeof sub.tier==='string'&&/^\d+$/.test(sub.tier)?Number(sub.tier):NaN;
  return Number.isSafeInteger(tier)&&tier>=0&&(typeof sub.active==='boolean'||legacyFormat&&sub.active===undefined);
 }

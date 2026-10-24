@@ -91,8 +91,17 @@ export async function installVerifiedBundle(source: string, destination: string,
 export function redactHarnessLog(value: string) {
   return value.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
     .replace(/https?:\/\/127\.0\.0\.1:\d+[^\s]*/g, '[本地 Agent 地址]')
-    .replace(/(authorization\s*[:=]\s*)(?:bearer\s+)?[^\s,;]+/gi, '$1[redacted]')
-    .replace(/((?:api[_-]?key|access[_-]?token|token|secret|password)\s*["']?\s*[:=]\s*["']?)[^\s,"';}]+/gi, '$1[redacted]')
+    // Handle complete quoted values, including optional Bearer/Basic prefixes.
+    // Spaces and escaped quotes belong to the credential. Also hide a truncated
+    // value at end of line; child output may be cut before its closing quote.
+    .replace(/((?:authorization|api[_-]?key|access[_-]?token|token|secret|password)\s*["']?\s*[:=][ \t]*)(?:(?:bearer|basic)[ \t]+)?("(?:\\[^\r\n]|[^"\\\r\n])*(?:"|\\?$)|'(?:\\[^\r\n]|[^'\\\r\n])*(?:'|\\?$))/gim,
+      (_match, prefix: string, quoted: string) => {
+        const quote = quoted[0];
+        const closing = quoted.length > 1 && quoted.endsWith(quote) ? quote : '';
+        return `${prefix}${quote}[redacted]${closing}`;
+      })
+    .replace(/(authorization\s*["']?\s*[:=][ \t]*)(?:(?:bearer|basic)[ \t]+)?[^\s,"';}]+/gi, '$1[redacted]')
+    .replace(/((?:api[_-]?key|access[_-]?token|token|secret|password)\s*["']?\s*[:=][ \t]*)[^\s,"';}]+/gi, '$1[redacted]')
     .replace(/\bsk-[a-zA-Z0-9_-]{8,}/g, '[redacted]');
 }
 export function engineLaunchUrl(text: string) {

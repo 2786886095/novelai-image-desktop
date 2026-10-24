@@ -8,6 +8,28 @@ afterEach(()=>{vi.restoreAllMocks();if(path.dirname(fixture.root)!==path.resolve
 const call=(name:string,...args:unknown[])=>fixture.handlers.get(name)!({},...args);
 const candidate={method:'relay',label:'OWNED QA',token:'QA_ONLY_NEWAPI_PLACEHOLDER',apiBaseUrl:'https://owned-novelai-relay.invalid',imageBaseUrl:''};
 async function setup(){const store=await import('./store');store.setToken('QA_ONLY_PRISTINE');const api=await import('./nai-accounts');api.registerNaiAccountsIpc();call('naiAccounts:list');return store;}
+it.each(['native-without-balance','models-only'] as const)('verified IPC save and selection do not require an Anlas balance: %s',async(mode)=>{
+ const store=await setup();const axios=(await import('axios')).default;
+ const post=vi.spyOn(axios,'post').mockImplementation(()=>{throw Error('No paid verification request');});
+ const calls:string[]=[];
+ vi.spyOn(axios,'get').mockImplementation(async(url,config)=>{
+  expect(new URL(url).origin).toBe(candidate.apiBaseUrl);
+  expect(config?.headers?.Authorization).toBe(`Bearer ${candidate.token}`);
+  expect(config?.maxRedirects).toBe(0);calls.push(new URL(url).pathname);
+  if(mode==='native-without-balance')return {status:200,data:{subscription:{tier:0}}};
+  return url.endsWith('/v1/models')?{status:200,data:{object:'list',data:[{id:'nai-diffusion-5-full'}]}}:{status:404};
+ });
+ const profile=await call('naiAccounts:add',candidate);
+ expect(call('naiAccounts:list')).toContainEqual(profile);
+ call('naiAccounts:select',profile.id);
+ expect(store.getToken()).toBe(candidate.token);
+ const runtime=await import('./nai-accounts-runtime');
+ const summary=runtime.getNaiAccountSummary(runtime.currentNaiAccount());
+ expect(summary.anlasBalance).toBeUndefined();
+ expect(summary.hasActiveSubscription).not.toBe(true);
+ expect(calls).toEqual(mode==='native-without-balance'?['/user/data']:['/user/data','/user/subscription','/v1/models']);
+ expect(post).not.toHaveBeenCalled();
+});
 it('actual verified IPC add saves a NovelAI-only New API credential encrypted; no fake subscription or Anlas',async()=>{
  const store=await setup();const axios=(await import('axios')).default;
  const original=fs.readFileSync(path.join(fixture.root,'novelai-image-desktop.json'));

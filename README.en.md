@@ -19,6 +19,8 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## What changed
 
+- **Agent log credential masking**: Handles quoted JSON/inspected-object fields and common Bearer/Basic credential formats. Added synthetic regressions cover the real engine log/snapshot path; no real credentials were used, and this does not establish any past real-world leak.
+- **Authentication and Anlas balance regressions**: Anlas balance is not a required authentication field; added regressions confirm that a valid read-only native or model-list authentication result can be used to save and select an account. Missing balance remains unknown, not zero or free quota; HTTP 401/403 are still rejected.
 - **Image-agent attachments**: a TXT attachment without typed text now contributes its readable content to the current user message, never to system instructions.
 - **Send and draft feedback**: attachment-reading and send states, explicit recovery of failed drafts without overwriting newer edits or duplicate submission, plus attachment-list, conversation-switching and narrow-screen chat improvements.
 - **Artist response handling**: successful 2xx responses still require ZIP, image-content and requested-dimension validation before a result is saved. Uncertain requests are not automatically replayed.

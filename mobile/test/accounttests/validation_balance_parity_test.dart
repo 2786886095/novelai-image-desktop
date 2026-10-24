@@ -37,6 +37,65 @@ void main() {
     expect(result.anlasBalance,107); expect(result.tierName,'Paper');
     expect(result.hasActiveSubscription,false); expect(api.inFlight,false);
   });
+  for (final route in ['native-tier-only', 'models-only']) {
+    test('$route verifies and selects credentials without requiring an Anlas balance', () async {
+      final vault = await memoryVault(legacy: 'PREVIOUS-FIXTURE');
+      final calls = <http.Request>[];
+      const token = 'BALANCE-UNKNOWN-FIXTURE';
+      AccountSummary? verified;
+      final api = NovelAiAccountApi(vault, clientFactory: (_, __) => MockClient((request) async {
+        calls.add(request);
+        expect(request.method, 'GET');
+        expect(request.followRedirects, false);
+        expect(request.maxRedirects, 0);
+        expect(request.headers['Authorization'], 'Bearer $token');
+        expect(request.url.origin, 'https://balance-relay.invalid');
+        if (route == 'native-tier-only') {
+          expect(request.url.path, '/user/data');
+          return http.Response(jsonEncode({'subscription': {'tier': 0, 'active': false}}), 200);
+        }
+        if (request.url.path == '/user/data' || request.url.path == '/user/subscription') {
+          return http.Response('', 404);
+        }
+        expect(request.url.path, '/v1/models');
+        return http.Response(jsonEncode({'object': 'list', 'data': [
+          {'id': 'nai-diffusion-5-full'}
+        ]}), 200);
+      }));
+      final saved = await vault.addVerified(label: 'Balance unknown', method: 'relay',
+        token: ' $token ', apiBaseUrl: 'https://balance-relay.invalid', imageBaseUrl: '',
+        verify: (snapshot) async {
+          verified = await api.verifyCandidate(snapshot, AppSettings());
+          return verified!;
+        });
+      expect(verified!.hasToken, true);
+      expect(verified!.stale, false);
+      expect(verified!.anlasBalance, isNull);
+      expect(verified!.hasActiveSubscription, false);
+      expect(verified!.opusUsage, isNull);
+      expect(verified!.opusUsageUpdatedAt, isNull);
+      expect(vault.profiles.length, 2);
+      expect(vault.active!.profile.id, saved.id);
+      expect(vault.active!.token, token);
+      final cached = vault.cachedSummary(saved.id);
+      expect(cached.hasToken, true);
+      expect(cached.anlasBalance, isNull); // Unknown is not a fabricated zero.
+      expect(cached.hasActiveSubscription, false);
+      expect(cached.opusUsage, isNull);
+      expect(cached.opusUsageUpdatedAt, isNull);
+      expect(calls.map((request) => request.url.path).toList(), route == 'native-tier-only'
+        ? ['/user/data'] : ['/user/data', '/user/subscription', '/v1/models']);
+      final readOnlyCalls = calls.length;
+      await vault.operation((snapshot) async {
+        expect(snapshot.profile.id, saved.id);
+        expect(snapshot.token, token);
+        expect(snapshot.profile.relay, true);
+      }, expectedToken: token, profileId: saved.id);
+      expect(calls.length, readOnlyCalls); // A credential lease itself sends nothing.
+      expect(api.inFlight, false);
+      expect(vault.locked, false);
+    });
+  }
   for(final status in [301,401,403,400,429,500]) {
     test('read-only HTTP $status cannot save or fall back to an official or paid route',() async {
       final vault=await memoryVault(legacy:'OLD-FIXTURE'); final calls=<http.Request>[];
