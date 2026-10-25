@@ -7,6 +7,7 @@ import '../models/nai_models.dart';
 import '../services/proxy_http_client.dart';
 import 'agent_models.dart';
 import 'agent_provider_catalog.dart';
+import 'anthropic_thinking.dart';
 
 class AgentProviderException implements Exception {
   final String message;
@@ -460,14 +461,21 @@ class AgentProviderClient {
             };
           }).toList()
         : const <Map<String, dynamic>>[];
+    final thinkingOptions = anthropicThinkingOptions(
+      settings.agentApiModel,
+      generationConfig?['reasoningEffort'],
+    );
     final response = await _send(
         settings, _endpoint(settings.agentApiBaseUrl, '/v1/messages'), apiKey, {
       'model': settings.agentApiModel.trim(),
       'max_tokens':
           generationConfig?['maxOutputTokens'] ?? settings.agentMaxOutputTokens,
-      if (generationConfig?['temperature'] != null)
+      ...thinkingOptions.fields,
+      if (!thinkingOptions.omitSampling &&
+          generationConfig?['temperature'] != null)
         'temperature': generationConfig!['temperature'],
-      if (generationConfig?['topP'] != null) 'top_p': generationConfig!['topP'],
+      if (!thinkingOptions.omitSampling && generationConfig?['topP'] != null)
+        'top_p': generationConfig!['topP'],
       if (generationConfig?['stop'] is List &&
           (generationConfig!['stop'] as List).isNotEmpty)
         'stop_sequences': generationConfig['stop'],

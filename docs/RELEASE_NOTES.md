@@ -1,5 +1,14 @@
 # 更新记录
 
+## 2.6.7 · Anthropic Messages 思考强度
+
+- **生图智能体思考强度**：桌面端与移动端为已知支持 adaptive thinking 的 Claude 模型正确发送 `thinking: { type: "adaptive" }` 及所选低／中／高对应的 `output_config.effort`。`auto` 不注入这两个字段，交由服务端默认处理。按明确模型集合识别受支持模型及有限网关别名；旧版、未知及未来模型不推定支持，不强制切换。
+- **采样与失败行为**：显式 adaptive 时省略不兼容的 `temperature`／`top_p`；自动模式保留 Claude Opus／Sonnet 4.6 的原采样兼容行为，已知始终思考模型省略不支持的采样项。保留工具、图像块、端点、认证头及输出上限，不自动增加 `max_tokens`；HTTP 400 原样报错，不静默降级或重试。
+- **已有定向验证**：62 项桌面端与 52 项移动端回归、TypeScript 类型检查及 Dart 分析已通过。请求验证仅使用脚本化 HTTP 与本机回环夹具，未向真实 Anthropic 或第三方中转端点发起验证；不能据此承诺任意中转站或未知模型兼容。
+- **平台制品与证据**：各平台包、签名、安装与更新限制以 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 的实际附件及验证证据为准；源码同步本身不代表五端原生验收完成，也不单独证明安装验证或自动更新可用。当前源码入口为 [main](https://github.com/2786886095/novelai-image-desktop/tree/main)。
+
+既有支持范围保持不变：本地 Agent 组件与画风自动迭代仅承诺 Windows，macOS／Linux／Android 的这两项共 6 格为 not-supported、不计通过；生图智能体等其余 37 项功能的四端范围不变。本次未新增 150 个必需功能／平台单元的完整验收，也未新增 GPU 或五端实机验收。Windows 画风自动迭代的三个 GPU 原生场景仍未完成。iOS 仅为附加的未签名 IPA 打包范围，需自行签名，不能直接安装到普通 iPhone，不是 App Store／TestFlight 版本。平台签名、安装及更新能力以实际制品证据为准。
+
 ## 2.6.6 · 日志遮盖与认证回归
 
 - **Agent 日志凭据遮盖**：修复 JSON／对象检查输出中的引号字段，以及 Bearer／Basic 等常见凭据格式。新增合成回归覆盖真实引擎的日志／快照路径；未使用真实凭据，也不代表已证实曾发生真实泄漏。

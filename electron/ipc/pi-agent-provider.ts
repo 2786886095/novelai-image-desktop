@@ -6,6 +6,7 @@ import type { StreamFn } from '@earendil-works/pi-agent-core' with { 'resolution
 import type { Api, Model, Context, SimpleStreamOptions, AssistantMessage } from '@earendil-works/pi-ai' with { 'resolution-mode': 'import' };
 import { proxyConfigForUrl } from './proxy';
 import { knownAgentModel, agentProviderRequiresApiKey } from '../../src/agent/provider-catalog';
+import { anthropicThinkingCapabilities } from '../../src/agent/anthropic-thinking';
 
 const API = {
   'openai-compatible': 'openai-completions',
@@ -54,15 +55,18 @@ export function studioPiFetch(settings: AppSettings): typeof fetch {
 /** Pi understands the LLM transport; NovelAI image settings are separate. */
 export function studioPiModel(settings: AppSettings): Model<Api> {
   const api = API[settings.agentApiProtocol];
+  const thinking = api === 'anthropic-messages'
+    ? anthropicThinkingCapabilities(settings.agentApiModel) : undefined;
   return {
     id: settings.agentApiModel.trim(),
     name: settings.agentApiModel.trim(),
     api,
     provider: 'langbai-studio',
     baseUrl: settings.agentApiBaseUrl.trim().replace(/\/$/, ''),
-    reasoning: knownAgentModel(settings.agentApiModel)?.reasoning === true || ["low","medium","high"].includes(settings.agentReasoningEffort??"auto"),
+    reasoning: thinking?.adaptive === true || knownAgentModel(settings.agentApiModel)?.reasoning === true || ["low","medium","high"].includes(settings.agentReasoningEffort??"auto"),
     // Auto means provider defaults, not an unsupported explicit `none` effort.
     thinkingLevelMap: { off: null },
+    ...(thinking ? { compat: { forceAdaptiveThinking: true, supportsTemperature: thinking.supportsTemperature } } : {}),
     input: settings.agentVisionEnabled ? ['text', 'image'] : ['text'],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: settings.agentContextWindow,

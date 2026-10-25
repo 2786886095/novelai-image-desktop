@@ -246,11 +246,13 @@ it.each([
     expect(bodies[0].reasoning.effort).toBe('low'); expect(bodies[1].reasoning.effort).toBe('medium'); expect(bodies[2].reasoning.effort).toBe('high');
     expect(bodies[3].reasoning).toBeUndefined();
   } else if (protocol === 'anthropic-messages') {
-    expect(bodies[0].thinking.type).toBe('enabled'); expect(bodies[0].thinking.budget_tokens).toBeGreaterThan(0);
-    expect(bodies[1].thinking.budget_tokens).toBeGreaterThan(bodies[0].thinking.budget_tokens);
-    expect(bodies[2].thinking.budget_tokens).toBeGreaterThan(bodies[1].thinking.budget_tokens);
-    expect(bodies[2].thinking.budget_tokens).toBeLessThan(bodies[2].max_tokens);
+    for (const [index, effort] of ['low', 'medium', 'high'].entries()) {
+      expect(bodies[index].thinking.type).toBe('adaptive');
+      expect(bodies[index].thinking.budget_tokens).toBeUndefined();
+      expect(bodies[index].output_config.effort).toBe(effort);
+    }
     expect(bodies[3].thinking).toBeUndefined();
+    expect(bodies[3].output_config).toBeUndefined();
   } else {
     expect(bodies[0].generationConfig.thinkingConfig.thinkingLevel).toBe('LOW');
     expect(bodies[1].generationConfig.thinkingConfig.thinkingLevel).toBe('MEDIUM');

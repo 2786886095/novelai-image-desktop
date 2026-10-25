@@ -26,6 +26,96 @@ http.StreamedResponse _response(
       headers: {'content-type': contentType},
     );
 
+Future<Map<String, dynamic>> _anthropicRequestBody({
+  required String model,
+  required String effort,
+}) async {
+  Map<String, dynamic>? body;
+  var calls = 0;
+  final client = AgentProviderClient(clientFactory: (settings, uri) async {
+    expect(uri.toString(), 'https://fixture.invalid/v1/messages');
+    return _ScriptedClient((request) async {
+      calls++;
+      expect(request.method, 'POST');
+      expect(request.headers['x-api-key'], 'fixture-key');
+      expect(request.headers['anthropic-version'], '2023-06-01');
+      body = Map<String, dynamic>.from(
+        jsonDecode((request as http.Request).body) as Map,
+      );
+      return _response(200, jsonEncode({
+        'content': [{'type': 'text', 'text': 'fixture response'}],
+        'usage': {'input_tokens': 2, 'output_tokens': 3},
+      }));
+    });
+  });
+  final result = await client.complete(
+    settings: AppSettings(
+      agentApiProtocol: 'anthropic-messages',
+      agentApiBaseUrl: 'https://fixture.invalid/v1',
+      agentApiModel: model,
+      agentMaxOutputTokens: 1200,
+    ),
+    apiKey: 'fixture-key',
+    messages: const [
+      {'role': 'system', 'content': 'fixture guide'},
+      {
+        'role': 'user',
+        'content': [
+          {'type': 'text', 'text': 'look'},
+          {
+            'type': 'image_url',
+            'image_url': {'url': 'data:image/png;base64,AA=='}
+          },
+        ],
+      },
+      {
+        'role': 'assistant',
+        'content': 'searching',
+        'tool_calls': [
+          {
+            'id': 'fixture-call',
+            'type': 'function',
+            'function': {
+              'name': 'langbai_search_tags',
+              'arguments': '{"query":"smile"}',
+            },
+          },
+        ],
+      },
+      {
+        'role': 'tool',
+        'tool_call_id': 'fixture-call',
+        'content': 'fixture tags',
+      },
+    ],
+    tools: const [
+      {
+        'type': 'function',
+        'function': {
+          'name': 'langbai_search_tags',
+          'description': 'search',
+          'parameters': {'type': 'object'},
+        },
+      },
+    ],
+    generationConfig: {
+      'reasoningEffort': effort,
+      'maxOutputTokens': 321,
+      'temperature': 0.7,
+      'topP': 0.9,
+      'stop': ['fixture stop'],
+    },
+    onDelta: (_) {},
+  );
+  expect(calls, 1);
+  expect(result.content, 'fixture response');
+  expect(body?['model'], model.trim());
+  expect(body?['max_tokens'], 321);
+  expect(body?['stop_sequences'], ['fixture stop']);
+  expect(body?['system'], 'fixture guide');
+  return body!;
+}
+
 void main() {
   for (final status in ['incomplete', 'failed']) {
     test('Responses retains terminal $status state and usage', () async {
@@ -48,6 +138,187 @@ void main() {
   }
 
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('Anthropic adaptive thinking request contract', () {
+    for (final effort in ['low', 'medium', 'high']) {
+      test('preserves selected $effort effort and native content', () async {
+        final body = await _anthropicRequestBody(
+          model: 'claude-opus-4-6',
+          effort: effort,
+        );
+        expect(body['thinking'], {'type': 'adaptive'});
+        expect(body['output_config'], {'effort': effort});
+        expect(body.containsKey('temperature'), isFalse);
+        expect(body.containsKey('top_p'), isFalse);
+        expect(body.containsKey('reasoning_effort'), isFalse);
+        expect(body['tools'], [
+          {
+            'name': 'langbai_search_tags',
+            'description': 'search',
+            'input_schema': {'type': 'object'},
+          },
+        ]);
+        expect(body['messages'], [
+          {
+            'role': 'user',
+            'content': [
+              {'type': 'text', 'text': 'look'},
+              {
+                'type': 'image',
+                'source': {
+                  'type': 'base64',
+                  'media_type': 'image/png',
+                  'data': 'AA==',
+                },
+              },
+            ],
+          },
+          {
+            'role': 'assistant',
+            'content': [
+              {'type': 'text', 'text': 'searching'},
+              {
+                'type': 'tool_use',
+                'id': 'fixture-call',
+                'name': 'langbai_search_tags',
+                'input': {'query': 'smile'},
+              },
+            ],
+          },
+          {
+            'role': 'user',
+            'content': [
+              {
+                'type': 'tool_result',
+                'tool_use_id': 'fixture-call',
+                'content': 'fixture tags',
+              },
+            ],
+          },
+        ]);
+      });
+    }
+
+    for (final model in [
+      'claude-opus-4-6',
+      'claude-opus-4-7',
+      'claude-opus-4-8',
+      'claude-opus-5',
+      'claude-opus-5-5',
+      'claude-sonnet-4-6',
+      'claude-sonnet-5',
+      'claude-sonnet-5-5',
+      'claude-haiku-5-5',
+      'claude-fable-5',
+      'claude-fable-5-1',
+      'claude-mythos-preview',
+      'claude-mythos-5',
+      'claude-mythos-5-1',
+      ' vendor/Claude-Opus-4.6-20260205 ',
+      'vendor/nested/claude-sonnet-4.6-latest',
+      'claude-opus-4-7-thinking',
+      'claude-sonnet-5:thinking',
+      'claude-opus-5-5-20261001-thinking',
+      'claude-mythos-5-1-latest:thinking',
+    ]) {
+      test('recognizes known adaptive model $model', () async {
+        final body = await _anthropicRequestBody(model: model, effort: 'medium');
+        expect(body['thinking'], {'type': 'adaptive'});
+        expect(body['output_config'], {'effort': 'medium'});
+      });
+    }
+
+    for (final model in ['claude-opus-4-6', 'claude-sonnet-4-6']) {
+      test('auto leaves 4.6 thinking and sampling to the provider: $model',
+          () async {
+        final body = await _anthropicRequestBody(model: model, effort: 'auto');
+        expect(body.containsKey('thinking'), isFalse);
+        expect(body.containsKey('output_config'), isFalse);
+        expect(body['temperature'], 0.7);
+        expect(body['top_p'], 0.9);
+      });
+    }
+
+    for (final model in [
+      'claude-opus-4-7',
+      'claude-opus-4-8',
+      'claude-opus-5',
+      'claude-opus-5-5',
+      'claude-sonnet-5',
+      'claude-sonnet-5-5',
+      'claude-haiku-5-5',
+      'claude-fable-5',
+      'claude-fable-5-1',
+      'claude-mythos-preview',
+      'claude-mythos-5',
+      'claude-mythos-5-1',
+    ]) {
+      test('auto omits unsupported sampling without forcing effort: $model',
+          () async {
+        final body = await _anthropicRequestBody(model: model, effort: 'auto');
+        expect(body.containsKey('thinking'), isFalse);
+        expect(body.containsKey('output_config'), isFalse);
+        expect(body.containsKey('temperature'), isFalse);
+        expect(body.containsKey('top_p'), isFalse);
+      });
+    }
+
+    for (final model in [
+      'claude-sonnet-4-5',
+      'claude-opus-4-5-20251101',
+      'claude-test',
+      'claude-sonnet-6',
+      'claude-opus-4-9',
+      'claude-sonnet-5-unknown',
+    ]) {
+      test('preserves older and unknown model behavior: $model', () async {
+        final body = await _anthropicRequestBody(model: model, effort: 'high');
+        expect(body.containsKey('thinking'), isFalse);
+        expect(body.containsKey('output_config'), isFalse);
+        expect(body['temperature'], 0.7);
+        expect(body['top_p'], 0.9);
+      });
+    }
+
+    test('a 400 error is surfaced without retrying or downgrading effort',
+        () async {
+      final bodies = <Map<String, dynamic>>[];
+      final client = AgentProviderClient(clientFactory: (settings, uri) async =>
+          _ScriptedClient((request) async {
+            bodies.add(Map<String, dynamic>.from(
+              jsonDecode((request as http.Request).body) as Map,
+            ));
+            return _response(400, jsonEncode({
+              'error': {'message': 'unsupported thinking effort fixture'},
+            }));
+          }));
+      await expectLater(
+        client.complete(
+          settings: AppSettings(
+            agentApiProtocol: 'anthropic-messages',
+            agentApiBaseUrl: 'https://fixture.invalid',
+            agentApiModel: 'claude-opus-4-6',
+          ),
+          apiKey: 'fixture-key',
+          messages: const [{'role': 'user', 'content': 'fixture'}],
+          tools: const [],
+          generationConfig: const {
+            'reasoningEffort': 'high',
+            'maxOutputTokens': 321,
+          },
+          onDelta: (_) {},
+        ),
+        throwsA(isA<AgentProviderException>()
+            .having((error) => error.statusCode, 'statusCode', 400)
+            .having((error) => error.message, 'message',
+                'unsupported thinking effort fixture')),
+      );
+      expect(bodies, hasLength(1));
+      expect(bodies.single['thinking'], {'type': 'adaptive'});
+      expect(bodies.single['output_config'], {'effort': 'high'});
+      expect(bodies.single['max_tokens'], 321);
+    });
+  });
 
   test('streams content, tool calls, and mutually exclusive token usage',
       () async {
