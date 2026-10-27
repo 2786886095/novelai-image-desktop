@@ -8,10 +8,28 @@ import {profileSha256} from '../scripts/feature-acceptance/full-feature-profiles
 import {createWindowsArtistUnitProof} from '../scripts/feature-acceptance/windows-artist-contract-fixture.mjs';
 import {windowsArtistScenarioReceipt} from '../scripts/feature-acceptance/windows-artist-contract.mjs';
 const sourceSha='a'.repeat(40),version='2.5.7';
-const complete=()=>({schema:2,version,sourceSha,profileSha256,releaseScopeId,releaseScopeSha256,full195Certified:false,full156Certified:false,releaseScopeCertified:true,releaseReady:false,summary:{...releaseScopeCounts,verifiedSlots:150,partialSlots:0,pendingSlots:0},platforms:[...releasePlatforms],supportedPlatforms:[...supportedPlatforms],excludedPlatforms:[...releaseExcludedPlatforms],features:releaseFeatures.map(id=>({id,platforms:Object.fromEntries(releasePlatforms.map(platform=>[platform,releaseFeatureApplicability(id,platform)==='not-supported'?{applicability:'not-supported',status:'not-supported',reasonCode:releaseScopeId,declaredScenarios:[...(id==='artist-iteration'?artistIterationScenarios:agentComponentScenarios)],requiredScenarios:[],completedScenarios:[],missingScenarios:[],evidence:[]}:{applicability:'required',status:'verified',evidence:[{sourceSha,feature:id,platform,exitStatus:0,skipped:false,kind:'integration',artifact:'neutral-fixture.json',sha256:'b'.repeat(64)}]}]))}))});
-describe('four-platform publication contract with retained five-platform product support (synthetic evidence schema, not device acceptance)',()=>{
-  it('accepts a complete fixture without certifying the actual application',()=>expect(assertReleasePlatformContract(complete(),{version,sourceSha})).toEqual({platforms:4,features:39}));
-  it('rejects old five-platform scope and injected excluded iOS cells',()=>{const r={...complete(),releaseScopeId:'artist-iteration-windows-only/v1'};expect(()=>assertReleasePlatformContract(r,{version,sourceSha})).toThrow();const x=complete();Object.assign(x.features[0].platforms,{ios:{...x.features[0].platforms.android}});expect(()=>assertReleasePlatformContract(x,{version,sourceSha})).toThrow();});
+const complete=()=>({schema:2,version,sourceSha,profileSha256,releaseScopeId,releaseScopeSha256,full195Certified:false,full156Certified:false,releaseScopeCertified:true,releaseReady:false,summary:{...releaseScopeCounts,verifiedSlots:Number(releaseScopeCounts.requiredSlots),partialSlots:0,pendingSlots:0},platforms:[...releasePlatforms],supportedPlatforms:[...supportedPlatforms],excludedPlatforms:[...releaseExcludedPlatforms],features:releaseFeatures.map(id=>({id,platforms:Object.fromEntries(releasePlatforms.map(platform=>[platform,releaseFeatureApplicability(id,platform)==='not-supported'?{applicability:'not-supported',status:'not-supported',reasonCode:releaseScopeId,declaredScenarios:[...(id==='artist-iteration'?artistIterationScenarios:agentComponentScenarios)],requiredScenarios:[],completedScenarios:[],missingScenarios:[],evidence:[]}:{applicability:'required',status:'verified',evidence:[{sourceSha,feature:id,platform,exitStatus:0,skipped:false,kind:'integration',artifact:'neutral-fixture.json',sha256:'b'.repeat(64)}]}]))}))});
+describe('five-platform publication contract with unchanged Windows-local exceptions (synthetic evidence schema, not device acceptance)',()=>{
+  it('accepts a complete fixture without certifying the actual application',()=>expect(assertReleasePlatformContract(complete(),{version,sourceSha})).toEqual({platforms:5,features:39}));
+  it('rejects obsolete scope declarations including the previous four-platform policy',()=>{
+    for(const oldScope of ['artist-iteration-windows-only/v1','windows-local-capabilities-no-ios/v2']){
+      const r={...complete(),releaseScopeId:oldScope};expect(()=>assertReleasePlatformContract(r,{version,sourceSha})).toThrow();
+    }
+  });
+  it('rejects the previous four-platform release shape and excluded iOS cells',()=>{
+    const r=complete();r.platforms=r.platforms.filter(p=>p!=='ios');r.excludedPlatforms=['ios'];
+    for(const row of r.features)delete row.platforms.ios;
+    Object.assign(r.summary,{declaredSlots:156,requiredSlots:150,notSupportedSlots:6,verifiedSlots:150});
+    expect(()=>assertReleasePlatformContract(r,{version,sourceSha})).toThrow();
+  });
+  it('rejects an iOS cell copied from Android instead of actual iOS-bound evidence',()=>{
+    const r=complete();r.features[0].platforms.ios={...r.features[0].platforms.android};
+    expect(()=>assertReleasePlatformContract(r,{version,sourceSha})).toThrow();
+  });
+  it('requires all 187 supported cells and never counts eight Windows-only exceptions as verified',()=>{
+    const r=complete();expect(r.summary).toMatchObject({declaredSlots:195,requiredSlots:187,notSupportedSlots:8,verifiedSlots:187});
+    r.summary.verifiedSlots=195;expect(()=>assertReleasePlatformContract(r,{version,sourceSha})).toThrow();
+  });
   it.each(['agent-components','artist-iteration'])('rejects exempting Windows %s',feature=>{const r=complete(),row=r.features.find(f=>f.id===feature)!;row.platforms.windows={...row.platforms.macos};expect(()=>assertReleasePlatformContract(r,{version,sourceSha})).toThrow();});
   it('rejects Windows-only scope',()=>{const r=complete();r.platforms=['windows'];expect(()=>assertReleasePlatformContract(r,{version,sourceSha})).toThrow();});
   it('rejects absent feature evidence',()=>expect(()=>assertReleasePlatformContract(undefined,{version,sourceSha})).toThrow());

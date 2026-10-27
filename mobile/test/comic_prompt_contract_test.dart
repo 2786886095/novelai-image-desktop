@@ -90,7 +90,7 @@ void main() {
     expect(p.exact, true);
     expect(p.notes, 'Same blue umbrella.');
     expect(p.lines.length, 2);
-    final request = ComicPromptRequest(
+    final request = (const ComicPromptRequest(
             requestId: 'r',
             action: 'generate',
             format: ComicPromptFormat.japanesePage,
@@ -98,7 +98,7 @@ void main() {
             pages: 1,
             totalPages: 5,
             batchFrom: 5,
-            continuity: 'Same umbrella')
+            continuity: 'Same umbrella'))
         .envelope();
     expect(request, contains('第5至5页'));
     expect(request, contains('每行一页'));

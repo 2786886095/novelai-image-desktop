@@ -12,3 +12,10 @@ it('no desktop stylesheet inherits the Windows motion switch',()=>{
 it('all preview families share a single viewport/backdrop stylesheet',()=>{expect(read('src/components/PreviewImageViewer.tsx')).toContain("import '../preview-unified.css'");const css=read('src/preview-unified.css');for(const name of ['style-image-lightbox','image-preview-dialog-backdrop','reference-catalog-preview-backdrop','tavern-image-lightbox','redraw-lightbox'])expect(css).toContain(name);});
 it('works filters use direct trigger children and the grid gets the remaining height',()=>{const css=read('src/works-library.css');expect(css).toContain('grid-template-columns:minmax(180px,1fr) 160px 140px auto auto');expect(css).toContain('.works-grid {flex:1 1 0;min-height:0;max-height:none;');});
 it('toolbar floats inside the input instead of reserving a permanent row',()=>{expect(read('src/layout-motion.css')).toContain('position:absolute;left:8px;right:8px;bottom:14px;margin:0;');expect(read('src/components/PromptEditorChrome.tsx')).toContain("open?'chevronDown':'sparkles'");});
+it('comic planning and template library motion use the explicit application preference',()=>{
+ const comic=read('src/comic/comic-prompt-composer.css'),library=read('src/features/settings/template-library.css');
+ expect(comic).toMatch(/html\.motion-reduced\s+\.comic-composer-segments>button\s*\{\s*transition:\s*none/);
+ expect(library).toMatch(/html\.motion-reduced\s+\.template-library button\s*\{\s*transition:\s*none/);
+ // Full motion retains the interaction transition even if Windows prefers less.
+ expect(comic).toMatch(/(?:^|\n)\.comic-composer-segments>button\s*\{[^}]*transition:\s*background 160ms/);
+});

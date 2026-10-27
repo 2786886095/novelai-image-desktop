@@ -594,8 +594,10 @@ describe("desktop UI consistency guards", () => {
     expect(ui).toContain("if (open && renderMenu) updatePosition();");
     expect(ui).toContain("[open, renderMenu, updatePosition]");
     expect(styles).toMatch(/\.select-menu-popover\s*\{[^}]*overscroll-behavior:\s*contain/s);
-    expect(tagComic).toContain('<option value="">{text(language, "useProjectSize")}</option>');
+    expect(tagComic).toContain('<option value="">{copy("useProjectSize")}</option>');
     expect(tagComic).toContain('if (event.target.value === "")');
+    // The inherited size is represented by absence, never by a guessed preset.
+    expect(tagComic).toMatch(/if \(event\.target\.value === ""\)\s*\{\s*patchPanel\(activePanel\.id,[\s\S]*?imageSize:\s*undefined,[\s\S]*?return;/);
   });
 
   it("keeps every top-level tab mounted with animated transitions and a shared indicator", () => {
@@ -668,7 +670,15 @@ describe("desktop UI consistency guards", () => {
     expect(app).toContain('scope={`tab:${activeTab}`}');
     expect(boundary).toContain("getDerivedStateFromError");
     const comicQueue = fs.readFileSync(path.join(projectRoot, "src", "comic", "generation-queue.ts"), "utf8");
-    expect(comic).toContain('useComicGenerationQueue()');
+    expect(comic).toContain('useComicGenerationQueue(scope)');
+    expect(comic).toContain('useComicProject(scope)');
+    const scopedQueue = fs.readFileSync(path.join(projectRoot, "src", "comic", "use-comic-generation.ts"), "utf8");
+    // Project, run receipt and shared queue identity must use the same workspace.
+    expect(scopedQueue).toContain('new Map<ComicWorkspaceScope,ComicGenerationQueue>()');
+    expect(scopedQueue).toContain('store:getComicProjectStore(scope)');
+    expect(scopedQueue).toContain('runStorageKey:comicScopeRunKey(scope)');
+    expect(scopedQueue).toContain('shared.set(scope,queue)');
+    expect(scopedQueue).toContain('otherScope!==scope&&other.active');
     expect(comicQueue).toContain('result=await deps.generate(request)');
     expect(comicQueue).toMatch(/finally\s*\{[\s\S]*deps\.store\.setBusy\(false\)/);
     expect(tavern).toMatch(/catch \(error\) \{\s*if \(sceneRequest === undefined\) setComposer\(text\)/);

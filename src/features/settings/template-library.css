@@ -22,4 +22,4 @@
 .template-library-legacy {border-top:1px solid var(--border);padding-top:14px;margin-top:14px}.template-library-legacy>summary {padding:10px 0;cursor:pointer;font-weight:600}.template-library-legacy[open] {display:grid;gap:14px}
 .convert-target-picker {display:flex;gap:8px;padding-bottom:14px}.convert-target-picker button {flex:1;min-height:40px}.convert-target-picker button[aria-pressed=true] {border-color:var(--accent);color:var(--accent);background:var(--accent-soft,rgba(125,78,218,.1))}
 @media(max-width:680px){.template-library__layout{grid-template-columns:minmax(0,1fr)}.template-library__slots{grid-template-columns:repeat(2,minmax(0,1fr))}.template-library__detail{padding:12px}.template-library__header{flex-wrap:wrap}.template-library textarea.template-library__body{min-height:260px}}
-@media(prefers-reduced-motion:reduce){.template-library button{transition:none}}
+html.motion-reduced .template-library button{transition:none}
