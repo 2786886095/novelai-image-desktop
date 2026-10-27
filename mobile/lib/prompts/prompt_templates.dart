@@ -6,6 +6,7 @@ import '../models/nai_models.dart';
 
 class PromptTemplateLibrary {
   final Map<String, dynamic> skillCatalogV2;
+  final Map<String, dynamic> skillCatalogV3;
   final Map<String, String> reverse;
   final Map<String, String> reverseV45;
   final Map<String, String> convert;
@@ -21,6 +22,7 @@ class PromptTemplateLibrary {
 
   const PromptTemplateLibrary({
     this.skillCatalogV2 = const {},
+    this.skillCatalogV3 = const {},
     this.reverse = const {},
     this.reverseV45 = const {},
     this.convert = const {},
@@ -40,6 +42,7 @@ class PromptTemplateLibrary {
         .map((key, value) => MapEntry(key.toString(), value.toString()));
     return PromptTemplateLibrary(
       skillCatalogV2: Map<String,dynamic>.from(json['skillCatalogV2'] as Map? ?? const {}),
+      skillCatalogV3: Map<String,dynamic>.from(json['skillCatalogV3'] as Map? ?? const {}),
       reverse: readMap('reverse'),
       reverseV45: readMap('reverseV45'),
       convert: readMap('convert'),
@@ -57,8 +60,9 @@ class PromptTemplateLibrary {
 
   static Future<PromptTemplateLibrary> load() async {
     final raw = await rootBundle.loadString('assets/prompt_templates.json');
-    return PromptTemplateLibrary.fromJson(
-        jsonDecode(raw) as Map<String, dynamic>);
+    final data=jsonDecode(raw) as Map<String,dynamic>;
+    data['skillCatalogV3']=jsonDecode(await rootBundle.loadString('assets/prompt-skill-catalog-v3.json'));
+    return PromptTemplateLibrary.fromJson(data);
   }
 
   String get(String kind, ReversePromptMode mode) {
@@ -89,7 +93,17 @@ class PromptTemplateLibrary {
     return filtered+safeguards+(suffix.startsWith(emptyGuards)?suffix.substring(emptyGuards.length):suffix);
   }
 
-  String resolve(String kind,ReversePromptMode mode,Map<String,String> overrides,{required String templateVersion,String skillVersion='1.0.0',bool scoped=false,String fallback=''}) {
+  String resolve(String kind,ReversePromptMode mode,Map<String,String> overrides,{required String templateVersion,String skillVersion='1.0.0',bool scoped=false,String fallback='',String? libraryBody}) {
+    if (skillVersion == '3.0.0') {
+      if (templateVersion != 'v5') throw const FormatException('技能 3.0.0 仅支持 NovelAI V5 Full。');
+      if (libraryBody != null) {
+        if (libraryBody.trim().isEmpty) throw const FormatException('所选模板正文无效；未回退内置。');
+        return libraryBody;
+      }
+      final matches=(skillCatalogV3['templates'] as List? ?? const []).whereType<Map>().where((t)=>t['task']==kind&&t['mode']==mode.value);
+      if(matches.length!=1 || matches.first['body'] is! String) throw const FormatException('内置技能 3.0.0 资源缺失；未回退其他模板。');
+      return matches.first['body'] as String;
+    }
     if (skillVersion == '2.0.0') {
       if (templateVersion != 'v5') throw const FormatException('技能 2.0.0 仅支持 NovelAI V5 Full；V4.5 请使用 1.0.0。');
       final custom=overrides[mode.value]?.trim()??'';

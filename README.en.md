@@ -19,13 +19,14 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## What changed
 
-- **Anthropic Messages thinking strength**: fixes ignored low/medium/high choices in the image agent. Known supported models send `thinking.type: adaptive` with the selected `output_config.effort`; `auto` leaves thinking fields to server defaults. Older and unknown models are not forced into adaptive thinking.
-- **Request compatibility**: explicit adaptive thinking omits incompatible `temperature`/`top_p`. Auto retains Claude 4.6 sampling compatibility; known always-on-thinking models omit unsupported sampling controls. Output limits are not raised automatically, and HTTP 400 never silently downgrades or retries.
-- **Verified scope and limits**: 62 desktop and 52 mobile targeted regressions, TypeScript checks and Dart analysis passed using scripted HTTP/loopback fixtures only, not live Anthropic or third-party gateway endpoints. No new full 150-cell, GPU or five-platform device acceptance is claimed.
-- **Delivery evidence**: platform packages, signing, installation and update limits are determined by the actual attachments and verification evidence on Latest. Source synchronization alone does not establish five-platform native acceptance.
-- **Current release scope**: local Agent components and Artist iteration are Windows-only; they are not promised on macOS/Linux/Android. The four-platform scope of the other 37 features, including the separate image agent, is unchanged. At the maintainer’s explicit request, this is a direct release without additional full-feature or image-generation acceptance; it does not certify all 150 required feature/platform cells. The three Windows Artist GPU native scenarios remain incomplete; six not-supported cells are not passes. iOS is an additional unsigned IPA requiring your own signing and cannot be installed directly on an ordinary iPhone.
+- **Comics and templates on all five platforms**: desktop, Android and iOS include the Japanese comic generator and image/comic prompt targets. Full-page and single-panel formats both count pages, one prompt line per page. Comics do not use the three image modes.
+- **Explicit workflow**: request an AI page recommendation or enter 1–30 pages. Batches contain up to four full pages or eight single-panel pages; continuation is manual. Edit/copy results and confirm import into the existing candidate/main-image workflow. No automatic image generation or paid resubmission.
+- **Unified template library**: six image v3 templates and two complete original comic templates. Read-only built-ins, named copies, TXT/MD/JSON import, custom editing, selection/reset, JSON export and backup/restore. Older editions and custom content remain intact; existing selections are not silently upgraded.
+- **Interaction safeguards**: independent projects/drafts, owner-scoped cancellation, stale-result protection and retained truncated replies. Fixes vertically crushed settings header actions. Template text never changes global model, style, negative or billing settings.
+- **Platforms and evidence**: formal releases require same-source native acceptance across five platforms; consult Latest assets for the actual evidence. Loopback fixtures do not certify remote model quality or billing. Local Agent components and automatic style iteration remain Windows-only; eight other-platform cells are unsupported, not passed. The iOS IPA is unsigned and requires personal signing; it cannot be installed directly on a normal iPhone. Other signing, upgrade and update limits are documented in Latest.
 
-[Release notes](./docs/RELEASE_NOTES.md).
+See [release history](./docs/RELEASE_NOTES.md).
+
 
 ## Quick start
 

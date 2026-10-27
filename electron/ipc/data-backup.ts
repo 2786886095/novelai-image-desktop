@@ -8,6 +8,7 @@ import {exportNaiAccountsBackup,prepareNaiAccountsBackupRestore} from './nai-acc
 import fs from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
+import {decodePromptTemplateLibraryBackup,exportPromptTemplateLibraryBackup,getPromptTemplateLibrary,mergePromptTemplateLibraryBackup} from "./template-library";
 import {DATA_BACKUP_CATEGORIES as CATEGORY_CONTRACT} from "../../src/data-backup-contract";
 import {exportPortableProjects, inspectPortableProjects, restorePortableProjects, portableSummaries} from './portable-projects';
 import type {
@@ -632,6 +633,8 @@ async function buildArchive(
       promptChunks: data.settings.promptChunks ?? [],
     };
     zip.file("data/prompt-presets.json", JSON.stringify(payload));
+    const templateLibrary=exportPromptTemplateLibraryBackup();
+    if(templateLibrary)zip.file("data/prompt-template-library.json",templateLibrary);
     summaries.push(summary(
       "promptPresets",
       payload.promptTemplates.length + styles.length + positivePrompts.length + payload.promptChunks.length,
@@ -1455,9 +1458,14 @@ export async function importDataBackup(
   let accountRestore: Awaited<ReturnType<typeof prepareNaiAccountsBackupRestore>> | undefined;
   let archive: Awaited<ReturnType<typeof loadArchive>>;
   let portable: Awaited<ReturnType<typeof inspectPortableProjects>>;
+  let templateBackup:Buffer|null=null,templateRevision:string|undefined;
   try {
     archive = await loadArchive(request.path);
     portable = await inspectPortableProjects(archive.zip, new Set(categories));
+    if(categories.includes("promptPresets")){
+      const entry=archive.zip.file("data/prompt-template-library.json");
+      if(entry){templateBackup=await entry.async("nodebuffer");decodePromptTemplateLibraryBackup(templateBackup);const current=getPromptTemplateLibrary();if(current.readOnly)throw Error('当前模板库损坏，原始字节保留，禁止覆盖。');templateRevision=current.revision;}
+    }
     if (categories.includes("apiCredentials")) {
       const payload = await readJsonEntry<{ settings?: Record<string, unknown>;novelAiAccounts?:unknown } | null>(archive.zip, "data/api-credentials.json", null);
       if (!payload || !payload.settings || typeof payload.settings !== 'object' || Array.isArray(payload.settings)) throw new Error('备份缺少有效的 API 配置。');
@@ -1677,6 +1685,10 @@ export async function importDataBackup(
     }
     delete next.settings.imageServiceRevision;
     delete next.settings.imageServiceVersion;
+    if(templateBackup&&templateRevision!==undefined){
+      const result=mergePromptTemplateLibraryBackup(templateBackup,templateRevision);if(!result.ok)throw Error(result.message);
+      counters.count+=result.addedIds?.length??0;next.settings.templateLibraryRevision=result.state.revision;
+    }
     if(accountRestore){const beforeWrite=readStore();accountRestore(()=>writeStore(next,replaceCredentials),()=>writeStore(beforeWrite,replaceCredentials));}
     else writeStore(next, replaceCredentials);
 

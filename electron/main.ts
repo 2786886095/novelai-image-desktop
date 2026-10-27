@@ -1,3 +1,5 @@
+import {runComicPromptRequest, cancelComicPromptRequest} from './ipc/nai';
+import {getPromptTemplateLibrary, mutatePromptTemplateLibrary} from './ipc/template-library';
 import { registerComfyIpc, comfyHasActiveJobs, cancelComfyJobs, comfyNeedsQuitCleanup, shutdownOwnedComfy, shutdownOwnedComfySync, resetComfyAfterUpdateFailure } from "./ipc/comfyui-ipc";
 import {UiFontRepository} from "./ipc/ui-fonts";
 import { fetchOfficialMetadataAsset, cancelOfficialMetadataAssetDownloads } from "./ipc/official-metadata-assets";
@@ -1117,6 +1119,11 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
         skillVersion,
       ),
   );
+  // Text/template operations are independent of the selected NovelAI account.
+  ipcMain.handle("comicPrompt:run", (event, request: import("../src/comic/comic-prompt").ComicPromptRequest) => runComicPromptRequest(request,event.sender.id));
+  ipcMain.handle("comicPrompt:cancel", (event, requestId:string) => cancelComicPromptRequest(requestId,event.sender.id));
+  ipcMain.handle("templateLibrary:get", () => getPromptTemplateLibrary());
+  ipcMain.handle("templateLibrary:mutate", (_event, request:import("../shared/template-library").TemplateLibraryMutation) => {const result=mutatePromptTemplateLibrary(request);if(result.ok)setSetting("templateLibraryRevision",result.state.revision);return result;});
   accountBoundHandle(
     "comic:convertPanels",
     (_event, request: ComicConvertRequest) => convertComicPanels(request),

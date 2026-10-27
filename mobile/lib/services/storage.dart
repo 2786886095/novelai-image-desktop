@@ -939,6 +939,53 @@ class Storage {
     });
   }
 
+  // The Japanese tool owns independent project/run/draft keys. The original
+  // tag-comic keys and overridable APIs remain unchanged for existing callers.
+  Future<ComicProject> getJapaneseComicProject(GenerateParams fallbackParams) async {
+    final prefs = await _prefs;
+    await prefs.private.reload();
+    final raw = prefs.getString('japanese_comic_project_v1');
+    if (raw == null) return ComicProject.empty(fallbackParams);
+    return ComicProject.fromJson(jsonDecode(raw) as Map<String, dynamic>, fallbackParams, trustOutputs: true);
+  }
+
+  Future<void> setJapaneseComicProject(ComicProject project) => _saveVerifiedString(
+      'japanese_comic_project_v1', jsonEncode(project.toJson()), 'Japanese comic project save failed');
+
+  Future<ComicProject?> getJapaneseComicBackup(GenerateParams fallbackParams) async {
+    final prefs = await _prefs;
+    await prefs.private.reload();
+    final raw = prefs.getString('japanese_comic_project_backup_v1');
+    return raw == null ? null : ComicProject.fromJson(jsonDecode(raw) as Map<String, dynamic>, fallbackParams, trustOutputs: true);
+  }
+
+  Future<void> setJapaneseComicBackup(ComicProject project) => _saveVerifiedString(
+      'japanese_comic_project_backup_v1', jsonEncode(project.toJson()), 'Japanese comic backup failed');
+
+  Future<Map<String, dynamic>?> getJapaneseComicRun() async {
+    final prefs = await _prefs;
+    await prefs.private.reload();
+    final raw = prefs.getString('japanese_comic_run_v1');
+    return raw == null ? null : Map<String, dynamic>.from(jsonDecode(raw) as Map);
+  }
+
+  Future<void> setJapaneseComicRun(Map<String, dynamic> run) => _saveVerifiedString(
+      'japanese_comic_run_v1', jsonEncode(run), 'Japanese comic run save failed');
+
+  String _comicDraftKey(String owner) {
+    if (!['japanese', 'convert'].contains(owner)) throw ArgumentError('Invalid comic draft owner');
+    return 'comic_prompt_draft_${owner}_v1';
+  }
+
+  Future<String?> getComicPromptDraft(String owner) async {
+    final key = _comicDraftKey(owner), prefs = await _prefs;
+    await prefs.private.reload();
+    return prefs.getString(key);
+  }
+
+  Future<void> setComicPromptDraft(String owner, String raw) => _saveVerifiedString(
+      _comicDraftKey(owner), raw, 'Comic prompt draft save failed');
+
   Future<BatchRedrawProject> getBatchRedrawProject(
       GenerateParams fallbackParams) async {
     final raw = (await _prefs).getString(_kBatchRedrawProject);

@@ -11,7 +11,7 @@ class AgentLibraryTools {
   final AppState app;
   final DataBackupService backup;
   AgentLibraryTools(this.app, {DataBackupService? backup})
-      : backup = backup ?? DataBackupService(app.storage);
+      : backup = backup ?? DataBackupService(app.storage,templateLibrary:app.templateLibrary);
   String _key(String c) =>
       c == 'styles' ? 'stylePromptPresets' : 'positivePromptPresets';
   bool _settings(String c) => c == 'styles' || c == 'positivePresets';

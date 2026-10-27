@@ -2,11 +2,14 @@ import {useSyncExternalStore} from 'react';
 import {useAppStore} from '../store';
 import {getComicProjectStore} from './use-comic-project';
 import {createComicGenerationQueue,type ComicGenerationQueue} from './generation-queue';
-let shared:ComicGenerationQueue|undefined;
-let balanceBefore:number|undefined;
-export function getComicGenerationQueue(){
- return shared??=createComicGenerationQueue({
-  store:getComicProjectStore(),storage:localStorage,
+import {comicScopeRunKey,type ComicWorkspaceScope} from './comic-scope';
+const shared=new Map<ComicWorkspaceScope,ComicGenerationQueue>();
+export function getComicGenerationQueue(scope:ComicWorkspaceScope='tag-comic'){
+ const existing=shared.get(scope);if(existing)return existing;
+ let balanceBefore:number|undefined;
+ const queue=createComicGenerationQueue({
+  store:getComicProjectStore(scope),storage:localStorage,runStorageKey:comicScopeRunKey(scope),
+  beforeLaunch:()=>{for(const [otherScope,other] of shared)if(otherScope!==scope&&other.active)throw Error('另一个漫画队列正在运行，请先停止并等候完成 / Another comic queue is running.');},
   hasToken:async()=>(await window.naiDesktop.hasToken()).hasToken,
   prepareService:requests=>window.naiDesktop.tagComicPrepareImageService(requests),
   async quote(tasks,service){
@@ -23,9 +26,10 @@ export function getComicGenerationQueue(){
   async afterSaved(_request,result){
    // Generation output has already been persisted. Refresh failures must not replay a paid request.
    let after:number|undefined;if(result.items.every(item=>item.generationProvider!=='openai-images')){try{after=(await useAppStore.getState().refreshAccount()).anlasBalance;}catch{/* Ancillary account refresh. */}}
-   if(typeof balanceBefore==='number'&&typeof after==='number'){const amount=Math.max(0,balanceBefore-after);getComicProjectStore().update(p=>({...p,panels:p.panels.map(panel=>panel.id===_request.panelId?{...panel,candidates:panel.candidates.map(c=>c.historyItemId===result.items[0].id?{...c,actualAnlas:amount}:c)}:panel)}));}
+   if(typeof balanceBefore==='number'&&typeof after==='number'){const amount=Math.max(0,balanceBefore-after);getComicProjectStore(scope).update(p=>({...p,panels:p.panels.map(panel=>panel.id===_request.panelId?{...panel,candidates:panel.candidates.map(c=>c.historyItemId===result.items[0].id?{...c,actualAnlas:amount}:c)}:panel)}));}
    try{await useAppStore.getState().refreshHistory(result.items[0].date);}catch{/* Native history already owns the files. */}
   },
  });
+ shared.set(scope,queue);return queue;
 }
-export function useComicGenerationQueue(){const service=getComicGenerationQueue();const run=useSyncExternalStore(service.subscribe,service.getSnapshot);return {service,run,queue:service.active?run:null};}
+export function useComicGenerationQueue(scope:ComicWorkspaceScope='tag-comic'){const service=getComicGenerationQueue(scope);const run=useSyncExternalStore(service.subscribe,service.getSnapshot);return {service,run,queue:service.active?run:null};}

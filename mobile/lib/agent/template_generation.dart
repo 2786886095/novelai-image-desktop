@@ -24,7 +24,8 @@ Map<String, dynamic> templateGenerationArgs(Map<String, dynamic> input) {
   if (input['templateVersion'] != null && !['v5', 'v4.5'].contains(input['templateVersion'])) {
     throw StateError('模板版本无效');
   }
-  if(input['skillVersion']!=null&&!['1.0.0','2.0.0'].contains(input['skillVersion']))throw StateError('技能版本无效');
+  if(input['skillVersion']!=null&&!['1.0.0','2.0.0','3.0.0'].contains(input['skillVersion']))throw StateError('技能版本无效');
+  if(input['skillVersion']=='3.0.0'&&input['templateVersion']=='v4.5')throw StateError('3.0.0仅支持V5 Full。');
   final generate = input['generate'] ?? <String, dynamic>{};
   if (generate is! Map<String, dynamic> || generate.keys.any((key) => !{
     'count', 'model', 'width', 'height', 'steps', 'cfgScale', 'seed', 'sampler', 'noiseSchedule'

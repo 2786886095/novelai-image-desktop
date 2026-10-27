@@ -390,6 +390,10 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ),
   convertPrompt: (text: string, mode: string, knownCharacter?: boolean, templateVersion?: string, assistant?: import("../src/prompt-assistant").PromptEditRequest, skillVersion?: import("../src/types").PromptSkillVersion) =>
     ipcRenderer.invoke("nai:convertPrompt", text, mode, knownCharacter, templateVersion, assistant, skillVersion),
+  comicPrompt: (request:import("../src/comic/comic-prompt").ComicPromptRequest) => ipcRenderer.invoke("comicPrompt:run",request),
+  cancelComicPrompt: (requestId:string) => ipcRenderer.invoke("comicPrompt:cancel",requestId),
+  templateLibraryGet: () => ipcRenderer.invoke("templateLibrary:get"),
+  templateLibraryMutate: (request:import("../shared/template-library").TemplateLibraryMutation) => ipcRenderer.invoke("templateLibrary:mutate",request),
   comicConvertPanels: (request: ComicConvertRequest) =>
     ipcRenderer.invoke("comic:convertPanels", request),
   comicCheckConsistency: (request: ComicConsistencyRequest) =>

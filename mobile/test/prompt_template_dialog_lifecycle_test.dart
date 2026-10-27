@@ -47,6 +47,14 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(section);
         await tester.pumpAndSettle();
+        // The original editors remain under the explicit legacy disclosure.
+        // Follow that production navigation before checking their focused dialogs.
+        final legacy = find.byWidgetPredicate((w) => w is ExpansionTile && w.title is Text && (w.title as Text).data == '旧版模板与提示词助手');
+        expect(legacy, findsOneWidget);
+        await tester.ensureVisible(legacy);
+        await tester.pumpAndSettle();
+        await tester.tap(legacy);
+        await tester.pumpAndSettle();
         final tiles = find.ancestor(
             of: find.text('Mixed'), matching: find.byType(ListTile));
         expect(tiles, findsNWidgets(2));

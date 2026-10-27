@@ -6,6 +6,7 @@ import {V45_CONVERT_SYSTEM_PROMPTS,V45_REVERSE_SYSTEM_PROMPTS} from '../../src/d
 import {PROMPT_OPTIMIZE_TEMPLATE,PROMPT_CUSTOM_TEMPLATE} from '../../src/data/prompt-edit-templates';
 import {PROMPT_OPTIMIZE_TEMPLATE_V2,PROMPT_CUSTOM_TEMPLATE_V2} from '../../src/data/prompt-edit-templates';
 import {normalizePromptSkillVersion,selectPromptSkillTemplate,supportsPromptSkillModel} from '../../src/prompt-skill';
+import {resolveTemplateLibrarySlot} from './template-library';
 
 // The editor and the image tools address the SAME Studio settings, not a plugin copy.
 export const TEMPLATE_UI_TOOLS=['studio_prompt_template','studio_save_prompt_template'] as const;
@@ -18,9 +19,14 @@ export function templateSelection(settings:AppSettings,args:Args={}) {
   if(!['mixed','tags','natural'].includes(String(mode)))throw Error('请选择混合、标签或自然语言模式');
   const version=args.templateVersion??(editing?settings.promptAssistantTemplateVersion??settings.convertPromptTemplateVersion:kind==='convert'?settings.convertPromptTemplateVersion:settings.reversePromptTemplateVersion)??'v5';
   if(version!=='v5'&&version!=='v4.5')throw Error('模板版本需要 v5 或 v4.5');
-  if(args.skillVersion!==undefined&&!['1.0.0','2.0.0'].includes(String(args.skillVersion)))throw Error('技能版本需要 1.0.0 或 2.0.0');
+  if(args.skillVersion!==undefined&&!['1.0.0','2.0.0','3.0.0'].includes(String(args.skillVersion)))throw Error('技能版本需要 1.0.0、2.0.0 或 3.0.0');
   const skillVersion=normalizePromptSkillVersion(args.skillVersion??(editing?settings.promptAssistantSkillVersion:kind==='convert'?settings.convertPromptSkillVersion:settings.reversePromptSkillVersion));
   if(!supportsPromptSkillModel(skillVersion,version))throw Error('2.0.0 仅适用于 NovelAI V5 Full；V4.5 请选择 1.0.0');
+  if(editing&&skillVersion==='3.0.0')throw Error('提示词助手不提供3.0.0叠加模板，请使用2.0.0');
+  if(!editing&&skillVersion==='3.0.0'){
+    const selected=resolveTemplateLibrarySlot(`image.${kind as 'convert'|'reverse'}.${mode as ReversePromptMode}`);
+    return {kind,mode:mode as ReversePromptMode,templateVersion:version as ReversePromptTemplateVersion,skillVersion,key:'templateLibrary',body:selected.body,bodySha256:selected.sha256,revision:selected.revision,source:selected.source};
+  }
   if(kind==='optimize'||kind==='assistant') {
     const key=kind==='optimize'?(skillVersion==='2.0.0'?'promptOptimizeTemplateV2':'promptOptimizeTemplate'):(skillVersion==='2.0.0'?'promptAssistantTemplateV2':'promptAssistantTemplate');
     const saved=settings[key],body=saved?.trim()||(kind==='optimize'?(skillVersion==='2.0.0'?PROMPT_OPTIMIZE_TEMPLATE_V2:PROMPT_OPTIMIZE_TEMPLATE):(skillVersion==='2.0.0'?PROMPT_CUSTOM_TEMPLATE_V2:PROMPT_CUSTOM_TEMPLATE));
@@ -46,6 +52,7 @@ export function createPromptTemplateTools(read:()=>AppSettings,write:(key:Settin
         if(Object.keys(request.args).some(k=>!allowed.includes(k)))throw Error('未知模板参数');
         const selected=templateSelection(read(),request.args);
         if(request.tool==='studio_save_prompt_template') {
+          if(selected.skillVersion==='3.0.0'&&(request.args.body!==undefined||request.args.restoreDefault===true))throw Error('3.0.0原稿不可覆盖，请在设置模板库另存自定义副本');
           if(request.args.expectedRevision!==selected.revision)throw Error('软件模板已变化，请重新读取后再保存');
           const editing=selected.kind==='optimize'||selected.kind==='assistant';
           const patch:Partial<AppSettings>=editing?{promptAssistantMode:selected.mode,promptAssistantTemplateVersion:selected.templateVersion,promptAssistantSkillVersion:selected.skillVersion}:{agentPromptTemplateMode:selected.mode,[selected.kind==='convert'?'convertPromptTemplateVersion':'reversePromptTemplateVersion']:selected.templateVersion,[selected.kind==='convert'?'convertPromptSkillVersion':'reversePromptSkillVersion']:selected.skillVersion};

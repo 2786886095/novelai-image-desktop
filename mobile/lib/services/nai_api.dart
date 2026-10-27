@@ -1,3 +1,4 @@
+import '../prompts/prompt_skill_v3.dart';
 import '../prompts/prompt_skill_selection.dart';
 import '../prompts/prompt_skill_v2.dart';
 import '../prompts/ig5_image_prompts.dart';
@@ -33,6 +34,7 @@ import 'proxy_http_client.dart';
 
 class AiTextResult {
   final bool ok;
+  final bool truncated;
   final String message;
   final String text;
   final String? sourceLanguage;
@@ -42,6 +44,7 @@ class AiTextResult {
     required this.ok,
     required this.message,
     this.text = '',
+    this.truncated = false,
     this.sourceLanguage,
     this.variants,
     this.codexMatches = const [],
@@ -1079,6 +1082,37 @@ class NaiApi {
     );
   }
 
+  /// Uses only the configured conversion transport; never submits image generation.
+  /// The caller owns a GenerationScope so cancellation never targets another task.
+  Future<AiTextResult> comicPromptText({required AppSettings settings,
+    required String apiKey, required String system, required String user,
+    required bool recommend}) async {
+    if (apiKey.trim().isEmpty) return const AiTextResult(ok:false,message:'Enter the conversion API Key first');
+    GenerationScope.current?.check();
+    final result = await _chat(settings,settings.convertApiUrl,apiKey,
+      settings.convertApiModel,system,user,maxTokens:recommend?3000:16000,
+      label:recommend?'Comic page recommendation':'Comic page prompts',apiKind:'convert',
+      preserveRaw:true,preserveTruncated:true,retryEmpty:false);
+    GenerationScope.current?.check();
+    return result;
+  }
+
+  Future<AiTextResult> _runPromptSkillV3({required AppSettings settings,
+    required String apiKey,required bool reverse,required bool knownCharacter,
+    required String template,required Object user}) async {
+    final system=[template.replaceAll('{{input}}','<provided in user message>').replaceAll('{{image}}','<uploaded image>'),
+      promptSkillV3Runtime,promptSkillV2KnownInstruction(knownCharacter)].where((s)=>s.trim().isNotEmpty).join('\n\n');
+    final reply=await _chat(settings,reverse?settings.visionApiUrl:settings.convertApiUrl,
+      apiKey,reverse?settings.visionApiModel:settings.convertApiModel,system,user,
+      maxTokens:12000,label:'Prompt skill 3.0.0 · ${reverse?'reverse':'convert'}',
+      apiKind:reverse?'vision':'convert',preserveRaw:true,preserveTruncated:true,
+      jsonRequired:knownCharacter,retryEmpty:false);
+    if(!reply.ok)return reply;
+    try {final parsed=parsePromptSkillV3Response(reply.text,knownCharacter:knownCharacter);
+      return AiTextResult(ok:true,message:parsed.warnings.join(' '),text:parsed.prompt,variants:parsed.variants);
+    } catch(e) {return AiTextResult(ok:false,message:'技能3.0.0未接受结果：$e',text:reply.text);}
+  }
+
   Future<AiTextResult> reversePrompt({
     required AppSettings settings,
     required String apiKey,
@@ -1097,8 +1131,16 @@ class NaiApi {
       );
     }
     final selectedVersion=['v4.5','v5'].contains(templateVersion) ? templateVersion : settings.reversePromptTemplateVersion;
-    final library=await PromptTemplateLibrary.load();
     final edition=settings.reversePromptSkillVersion;
+    if(edition=='3.0.0') {
+      checkPromptSkillSelection(edition,selectedVersion);
+      if(systemTemplate.trim().isEmpty)throw const FormatException('V3 template snapshot is required');
+      return _runPromptSkillV3(settings:settings,apiKey:apiKey,reverse:true,knownCharacter:knownCharacter,template:systemTemplate,user:[
+        {'type':'image_url','image_url':{'url':'data:${_imageMime(image)};base64,${base64Encode(image)}','detail':'high'}},
+        {'type':'text','text':jsonEncode({'scope':scope.value,'hint':hint,'mode':mode.value})},
+      ]);
+    }
+    final library=await PromptTemplateLibrary.load();
     final effectiveTemplate=library.resolve('reverse',mode,promptSkillOverrides(settings,'reverse',edition,selectedVersion),templateVersion:selectedVersion,skillVersion:edition,fallback:systemTemplate);
     if(edition=='2.0.0'){return _runPromptSkillV2(settings:settings,apiKey:apiKey,task:'reverse',mode:mode,knownCharacter:knownCharacter,template:effectiveTemplate,user:[
       {'type':'image_url','image_url':{'url':'data:${_imageMime(image)};base64,${base64Encode(image)}','detail':'high'}},
@@ -1485,6 +1527,12 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
         ok: false,
         message: 'Enter the conversion API Key first',
       );
+    }
+    if(settings.convertPromptSkillVersion=='3.0.0') {
+      checkPromptSkillSelection('3.0.0',settings.convertPromptTemplateVersion);
+      if(systemTemplate.trim().isEmpty)throw const FormatException('V3 template snapshot is required');
+      return _runPromptSkillV3(settings:settings,apiKey:apiKey,reverse:false,knownCharacter:knownCharacter,
+        template:systemTemplate,user:jsonEncode({'task':'convert','input':text,'mode':mode.value}));
     }
     if(settings.convertPromptSkillVersion=='2.0.0'){
       final library=await PromptTemplateLibrary.load();
@@ -2179,7 +2227,7 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
       {int maxTokens = 2000,
       String label = 'AI call',
       String apiKind = 'convert',
-      bool recordLog = true, bool preserveRaw = false, bool jsonRequired = false, bool retryEmpty = true}) async {
+      bool recordLog = true, bool preserveRaw = false, bool preserveTruncated = false, bool jsonRequired = false, bool retryEmpty = true}) async {
     _rememberAiCredential(apiKey);
     final effectiveModel = model.trim().isEmpty ? 'gpt-4o-mini' : model.trim();
     final userSummary = _summarizeAiUser(user);
@@ -2222,14 +2270,17 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
         }
         return result;
       }
-      var parsed = classifyPromptResponse(jsonDecode(res.body));
+      var decoded = jsonDecode(res.body);
+      var parsed = classifyPromptResponse(decoded);
       if (retryEmpty && !parsed.ok && parsed.retryableEmptyLength) {
         res = await postChat(max(maxTokens * 8, 32000));
         if(res.statusCode>=400)return AiTextResult(ok:false,message:'AI call failed (HTTP ${res.statusCode})');
-        parsed=classifyPromptResponse(jsonDecode(res.body));
+        decoded=jsonDecode(res.body);
+        parsed=classifyPromptResponse(decoded);
       }
       final result = !parsed.ok
-          ? AiTextResult(ok:false,message:parsed.message)
+          ? AiTextResult(ok:false,message:parsed.message, truncated:preserveTruncated&&parsed.kind=='truncated',
+              text:preserveTruncated&&parsed.kind=='truncated'?_truncatedChatText(decoded):'')
           : AiTextResult(ok:true,message:'Success',text:preserveRaw?parsed.content.trim():_cleanPrompt(parsed.content));
       if (recordLog) {
         _addAiLog(label, apiKind, effectiveModel, system, userSummary, result);
@@ -2566,4 +2617,10 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
         .take(limit)
         .toList(growable: false);
   }
+}
+
+// Called only after the response classifier accepted the shape and identified length truncation.
+String _truncatedChatText(dynamic data) {
+  final content=data['choices'][0]['message']['content'];
+  return content is String?content:content is List?content.map((p)=>p['text'] as String).join():'';
 }

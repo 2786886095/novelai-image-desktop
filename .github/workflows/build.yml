@@ -23,7 +23,7 @@ on:
         type: string
         required: false
       feature_run:
-        description: Same-source native feature run for the current four-platform release scope (Windows/macOS/Linux/Android)
+        description: Same-source native feature run for all five release platforms (Windows/macOS/Linux/Android/iOS)
         type: string
         required: false
 
@@ -260,11 +260,11 @@ jobs:
           merge-multiple: true
           run-id: ${{ inputs.verified_build_run || github.run_id }}
           github-token: ${{ github.token }}
-      - name: Download complete same-source four-platform feature evidence
+      - name: Download complete same-source five-platform feature evidence
         if: inputs.feature_run != ''
         uses: actions/download-artifact@v4
         with:
-          name: four-platform-feature-evidence
+          name: five-platform-feature-evidence
           path: release-evidence
           run-id: ${{ inputs.feature_run }}
           github-token: ${{ github.token }}

@@ -1,3 +1,4 @@
+import '../prompts/template_library.dart';
 import '../images/image_file_access.dart';
 import '../images/coordinated_file_image.dart';
 import '../agent/external_mcp_runtime.dart';
@@ -182,6 +183,14 @@ class AppState extends ChangeNotifier {
     return _batchRedraw!;
   }
 
+  final MobileTemplateLibrary templateLibrary;
+  void _templateLibraryChanged() { if (!_compatibleDisposed) notifyListeners(); }
+  ComicController? _japaneseComic;
+  ComicController get japaneseComic {
+    if (_japaneseComic == null) { _japaneseComic = ComicController(this, workspace: 'japanese'); unawaited(_japaneseComic!.load()); }
+    return _japaneseComic!;
+  }
+
   ComicController? _comic;
   ComicController get comic {
     if(_comic==null){_comic=ComicController(this);unawaited(_comic!.load());}
@@ -280,10 +289,12 @@ class AppState extends ChangeNotifier {
   AppState({
     NaiApi? api,
     Storage? storage,
+    MobileTemplateLibrary? templateLibrary,
     OfflineTagStore? offlineTags,
     CompletedImagePreloader? preloadCompletedImage,
   })  : api = api ?? NovelAiAccountApi(NovelAiAccounts.shared),
         storage = storage ?? NovelAiAccountStorage(NovelAiAccounts.shared),
+        templateLibrary = templateLibrary ?? MobileTemplateLibrary(),
         offlineTags = offlineTags ?? OfflineTagStore(),
         _preloadCompletedImage =
             preloadCompletedImage ?? preloadCompletedFileImage {
@@ -300,6 +311,7 @@ class AppState extends ChangeNotifier {
         notifyListeners();
       };
     }
+    this.templateLibrary.addListener(_templateLibraryChanged);
     BackgroundQueueService.addCancelHandler(cancelGeneration);
   }
 
@@ -499,6 +511,7 @@ class AppState extends ChangeNotifier {
     try {
       promptTemplates = await PromptTemplateLibrary.load();
       settings = await storage.getSettings();
+      await templateLibrary.load();
     try { await ensureUiFont(settings.uiTypography.font); } catch (_) { /* Missing fonts use system fallback without destroying the saved choice. */ }
       if (storage is NovelAiAccountStorage) {
         await (storage as NovelAiAccountStorage).ready();
@@ -668,7 +681,7 @@ class AppState extends ChangeNotifier {
         return;
       }
       try {
-        await DataBackupService(storage).runAutomaticBackup();
+        await DataBackupService(storage,templateLibrary:templateLibrary).runAutomaticBackup();
       } catch (_) {
         // Automatic backup is best-effort; manual export and import remain
         // available even when the platform file system is temporarily busy.
@@ -3201,10 +3214,18 @@ class AppState extends ChangeNotifier {
     final chosenVersion = templateVersion ?? settings.reversePromptTemplateVersion;
     final chosenMode=reverseMode, chosenScope=reverseScope, chosenHint=reverseHint, chosenKnown=reverseKnownCharacter;
     final chosenSkill=skillVersion??(chosenVersion=='v4.5'?'1.0.0':settings.reversePromptSkillVersion);
+    if(chosenSkill=='3.0.0') {
+      final beforeRefresh=jsonEncode([settings.reversePromptTemplateVersion,settings.reversePromptSkillVersion,reverseMode.value,reverseScope.value,reverseHint,reverseKnownCharacter,workbenchImage?.filePath,settings.visionApiUrl,settings.visionApiModel]);
+      await templateLibrary.load();
+      if(templateLibrary.readOnly||beforeRefresh!=jsonEncode([settings.reversePromptTemplateVersion,settings.reversePromptSkillVersion,reverseMode.value,reverseScope.value,reverseHint,reverseKnownCharacter,workbenchImage?.filePath,settings.visionApiUrl,settings.visionApiModel])) {
+        status=templateLibrary.error??'Request inputs changed while loading templates; nothing was submitted.';
+        notifyListeners();return null;
+      }
+    }
     final requestSettings=AppSettings.fromJson(settings.toJson())..reversePromptTemplateVersion=chosenVersion..reversePromptSkillVersion=chosenSkill;
     final templateBody=resolvedPromptTemplate('reverse',chosenMode,scoped:chosenScope!=ReversePromptScope.full,templateVersion:chosenVersion,skillVersion:chosenSkill);
     final sourcePath = workbenchImage?.filePath;
-    String currentContext()=>jsonEncode([settings.reversePromptTemplateVersion,settings.reversePromptSkillVersion,reverseMode.value,reverseScope.value,reverseHint,reverseKnownCharacter,resolvedPromptTemplate('reverse',reverseMode,scoped:reverseScope!=ReversePromptScope.full),workbenchImage?.filePath,settings.visionApiUrl,settings.visionApiModel]);
+    String currentContext()=>jsonEncode([settings.reversePromptTemplateVersion,settings.reversePromptSkillVersion,reverseMode.value,reverseScope.value,reverseHint,reverseKnownCharacter,resolvedPromptTemplate('reverse',reverseMode,scoped:reverseScope!=ReversePromptScope.full),workbenchImage?.filePath,settings.visionApiUrl,settings.visionApiModel,chosenSkill=='3.0.0'?templateLibrary.revision:null]);
     final requestContext=currentContext();
     bool isCurrentContext(){try{return requestContext==currentContext();}catch(_){return false;}}
     final image = await _workbenchBytes();
@@ -3244,6 +3265,7 @@ class AppState extends ChangeNotifier {
       templateVersion: chosenVersion,
     ); } catch (_) {res=const AiTextResult(ok:false,message:'视觉模型请求失败，未生成可用提示词；请检查网络和服务配置。');}
     try {await BackgroundQueueService.stop(owner);}catch(_){}
+    final credentialUnchanged=(await storage.getVisionKey()??'')==key;
     // "Cancel" just removes the job from the tracker (the in-flight HTTP
     // request itself isn't aborted) — but once it resolves, treat a removed
     // job as truly cancelled: no result overwrite, no toast, no history entry.
@@ -3254,7 +3276,7 @@ class AppState extends ChangeNotifier {
       job.variants = res.variants;
       job.codexMatches = res.codexMatches;
       if(chosenSkill=='2.0.0')job.message=res.message;
-      if(isCurrentContext()){
+      if(isCurrentContext()&&credentialUnchanged){
         reverseResult = res.text;
         reversePromptVariants = res.variants;
         reverseCodexMatches = res.codexMatches;
@@ -3305,9 +3327,17 @@ class AppState extends ChangeNotifier {
     final chosenVersion = templateVersion ?? settings.convertPromptTemplateVersion;
     final chosenMode=convertMode, chosenInput=convertInput, chosenKnown=convertKnownCharacter;
     final chosenSkill=skillVersion??(chosenVersion=='v4.5'?'1.0.0':settings.convertPromptSkillVersion);
+    if(chosenSkill=='3.0.0') {
+      final beforeRefresh=jsonEncode([settings.convertPromptTemplateVersion,settings.convertPromptSkillVersion,convertMode.value,convertInput,convertKnownCharacter,settings.convertApiUrl,settings.convertApiModel]);
+      await templateLibrary.load();
+      if(templateLibrary.readOnly||beforeRefresh!=jsonEncode([settings.convertPromptTemplateVersion,settings.convertPromptSkillVersion,convertMode.value,convertInput,convertKnownCharacter,settings.convertApiUrl,settings.convertApiModel])) {
+        status=templateLibrary.error??'Request inputs changed while loading templates; nothing was submitted.';
+        notifyListeners();return null;
+      }
+    }
     final requestSettings=AppSettings.fromJson(settings.toJson())..convertPromptTemplateVersion=chosenVersion..convertPromptSkillVersion=chosenSkill;
     final templateBody=resolvedPromptTemplate('convert',chosenMode,templateVersion:chosenVersion,skillVersion:chosenSkill);
-    String currentContext()=>jsonEncode([settings.convertPromptTemplateVersion,settings.convertPromptSkillVersion,convertMode.value,convertInput,convertKnownCharacter,resolvedPromptTemplate('convert',convertMode),settings.convertApiUrl,settings.convertApiModel]);
+    String currentContext()=>jsonEncode([settings.convertPromptTemplateVersion,settings.convertPromptSkillVersion,convertMode.value,convertInput,convertKnownCharacter,resolvedPromptTemplate('convert',convertMode),settings.convertApiUrl,settings.convertApiModel,chosenSkill=='3.0.0'?templateLibrary.revision:null]);
     final requestContext=currentContext();
     bool isCurrentContext(){try{return requestContext==currentContext();}catch(_){return false;}}
     final key = await storage.getConvertKey() ?? '';
@@ -3343,6 +3373,7 @@ class AppState extends ChangeNotifier {
       systemTemplate: templateBody,
     );}catch(_){res=const AiTextResult(ok:false,message:'AI request failed; previous prompt was preserved.');}
     try{await BackgroundQueueService.stop(owner);}catch(_){}
+    final credentialUnchanged=(await storage.getConvertKey()??'')==key;
     // See reversePrompt: a removed job is treated as cancelled.
     if (!convertJobs.any((j) => j.id == job.id)) return null;
     if (res.ok) {
@@ -3351,7 +3382,7 @@ class AppState extends ChangeNotifier {
       job.variants = res.variants;
       job.codexMatches = res.codexMatches;
       if(chosenSkill=='2.0.0')job.message=res.message;
-      if(isCurrentContext()){
+      if(isCurrentContext()&&credentialUnchanged){
         convertResult = res.text;
         convertResultVariants = res.variants;
         convertCodexMatches = res.codexMatches;
@@ -3478,6 +3509,10 @@ class AppState extends ChangeNotifier {
     if (kind == 'reverse' || kind == 'convert') {
       final version=templateVersion??(kind=='reverse'?settings.reversePromptTemplateVersion:settings.convertPromptTemplateVersion);
       final edition=skillVersion??(version=='v4.5'?'1.0.0':kind=='reverse'?settings.reversePromptSkillVersion:settings.convertPromptSkillVersion);
+      if (edition == '3.0.0') {
+        checkPromptSkillSelection(edition, version);
+        return templateLibrary.resolve('image.$kind.${mode.value}').body;
+      }
       return promptTemplates.resolve(kind,mode,promptOverrides(kind,templateVersion:version,skillVersion:edition),templateVersion:version,skillVersion:edition,scoped:scoped);
     }
     if (kind == 'comic') {
@@ -4279,6 +4314,9 @@ class AppState extends ChangeNotifier {
   void dispose() {
     externalMcp.dispose();
     _comic?.dispose();
+    _japaneseComic?.dispose();
+    templateLibrary.removeListener(_templateLibraryChanged);
+    templateLibrary.dispose();
     _batchRedraw?.dispose();
     _compatibleDisposed = true;
     _directorScope?.cancel();

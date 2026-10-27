@@ -16,3 +16,10 @@
 /THIRD_PARTY_NOTICES.md -text
 /shared/official-image-metadata-fixtures/** -text
 /shared/image-metadata-compat-fixtures/** -text
+
+# Exact user-supplied template bytes and generated mobile catalogs.
+/shared/templates/** -text
+/shared/prompt-skill-catalog-v3.json -text
+/shared/comic-template-catalog.json -text
+/mobile/assets/prompt-skill-catalog-v3.json -text
+/mobile/assets/comic-template-catalog.json -text

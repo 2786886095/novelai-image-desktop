@@ -11,7 +11,7 @@ export function reversePromptSelection(settings: AppSettings | null | undefined)
 }
 export function reversePromptSelectionIdentity(settings: AppSettings | null | undefined): string {
   return JSON.stringify([reversePromptSelection(settings), settings?.reversePromptTemplates,
-    settings?.reversePromptTemplatesV45, settings?.reversePromptTemplatesV2,
+    settings?.reversePromptTemplatesV45, settings?.reversePromptTemplatesV2, settings?.templateLibraryRevision,
     settings?.reverseConvertPromptPresetId,settings?.reverseSystemPromptPresetId,settings?.reverseConvertPromptPresets,
     settings?.reverseConvertDshEnabled,settings?.reverseConvertDshMode,
     settings?.visionApiUrl,settings?.visionApiModel,settings?.visionApiKey]);

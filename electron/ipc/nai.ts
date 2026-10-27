@@ -18,7 +18,9 @@ import {bindAgentImageProvider} from './agent-image-provider';
 import {authorizeAgentComicRequest} from './comic-run-authorization';
 import {readComicImage,readComicReferences,buildComicSelectedZip,writeComicZip} from './comic-assets';
 import {reverseTemplateProtocol} from "../../src/reverse-template";
-import {normalizePromptSkillVersion,selectPromptSkillTemplate,supportsPromptSkillModel,renderPromptSkillTemplate} from '../../src/prompt-skill';
+import {normalizePromptSkillVersion,selectPromptSkillTemplate,supportsPromptSkillModel,renderPromptSkillTemplate,parsePromptSkillV3Response,PROMPT_SKILL_V3_RUNTIME} from '../../src/prompt-skill';
+import {resolveTemplateLibrarySlot} from './template-library';
+import {comicPromptEnvelope,parseComicRecommendation,parseComicPromptPages,validateComicPromptRequest,type ComicPromptRequest,type ComicPromptResult} from '../../src/comic/comic-prompt';
 import {parsePromptSkillV2Response,PROMPT_SKILL_V2_RUNTIME,promptSkillKnownCharacterInstruction} from '../../src/prompt-skill-audit';
 import {classifyAiPromptResponse,visionPromptRequestError,redactAiCredentials} from "./ai-prompt-response";
 import { planUpscale } from "../../src/upscale-plan";
@@ -2930,7 +2932,9 @@ async function callConvertApi(
   retryEmpty = true,
   jsonRequired = false,
   settingsSnapshot?: AppSettings,
-): Promise<{ ok: boolean; content?: string; message: string }> {
+  signal?: AbortSignal,
+  preserveRaw = false,
+): Promise<{ ok: boolean; content?: string; message: string; finishReason?: string }> {
   const settings = settingsSnapshot ?? getSettings();
   const apiUrl = settings.convertApiUrl.trim();
   const apiKey = settings.convertApiKey.trim();
@@ -2965,6 +2969,7 @@ async function callConvertApi(
           "Content-Type": "application/json",
         },
         timeout: 180_000,
+        ...(signal ? {signal} : {}),
         ...await proxyConfigForUrl("ai", `${base}/chat/completions`, settings),
       },
     );
@@ -2998,10 +3003,10 @@ async function callConvertApi(
           response: message,
         }, [apiKey]);
       }
-      return { ok: false, message };
+      return { ok: false, message, ...(preserveRaw?{content,finishReason:fin}:{} ) };
     }
-    if (fin === "length") return {ok:false,message:"提示词响应被截断，未交给生图；请缩短描述或提高转换服务输出上限。"};
-    const cleaned = cleanPromptOutput(content);
+    if (fin === "length") return {ok:false,content:preserveRaw?content:undefined,finishReason:fin,message:"提示词响应被截断，未交给生图；请缩短描述或提高转换服务输出上限。"};
+    const cleaned = preserveRaw ? content : cleanPromptOutput(content);
     if (record) {
       recordAiCall({
         label,
@@ -3013,7 +3018,7 @@ async function callConvertApi(
         response: cleaned,
       }, [apiKey]);
     }
-    return { ok: true, content: cleaned, message: "成功" };
+    return { ok: true, content: cleaned, message: "成功", finishReason:fin };
   } catch (error: any) {
     const rawMessage =
       error?.response?.data?.error?.message ??
@@ -3331,7 +3336,7 @@ export async function reversePromptImage(
   hint: string = "",
   knownCharacter = false,
   templateVersion?: "v4.5" | "v5",
-  skillVersion?: "1.0.0" | "2.0.0",
+  skillVersion?: "1.0.0" | "2.0.0" | "3.0.0",
 ): Promise<{
   ok: boolean;
   prompt?: string;
@@ -3360,6 +3365,19 @@ export async function reversePromptImage(
     .join("\n");
   const safeTemplateVersion = (templateVersion ?? settings.reversePromptTemplateVersion) === "v4.5" ? "v4.5" : "v5";
   const edition=normalizePromptSkillVersion(skillVersion??settings.reversePromptSkillVersion);
+  if(edition==='3.0.0') {
+    if(!supportsPromptSkillModel(edition,safeTemplateVersion))return {ok:false,message:'技能模板3.0.0仅支持NovelAI V5 Full；V4.5请选1.0.0，已保留原提示词'};
+    let selected:ReturnType<typeof resolveTemplateLibrarySlot>;
+    try{selected=resolveTemplateLibrarySlot(`image.reverse.${mode}`);}catch(error){return {ok:false,message:'模板库不可用，已保留原提示词：'+(error instanceof Error?error.message:String(error))};}
+    const template=selectPromptSkillTemplate({edition,targetModel:safeTemplateVersion,task:'reverse',mode,legacyTemplate:'',librarySlot:selected});
+    const system=[renderPromptSkillTemplate(template,'<provided in the user message>',true),PROMPT_SKILL_V3_RUNTIME,promptSkillKnownCharacterInstruction(knownCharacter)].join('\n\n');
+    const image=await prepareVisionImage(imageBase64);
+    const reply=await callVisionApi(system,[{type:'image_url',image_url:{url:`data:${image.mime};base64,${image.base64}`,detail:'high'}},{type:'text',text:userScopeText}],7000,`AI反推 · ${safeTemplateVersion} · 技能3.0.0 · ${mode}`,true,knownCharacter,false);
+    if(!reply.ok)return {ok:false,message:'反推失败，已保留原提示词：'+reply.message};
+    if(isComicPromptRefusal(reply.content??''))return {ok:false,message:'模型未返回可用提示词，已保留原提示词'};
+    try{const parsed=parsePromptSkillV3Response(reply.content??'',knownCharacter);return {ok:true,...parsed,message:'反推完成：使用所选3.0.0原稿；图像事实请人工复核'};}
+    catch(error){return {ok:false,message:'反推结果不可用，已保留原提示词：'+(error instanceof Error?error.message:String(error))};}
+  }
   if(edition==='2.0.0') {
     if(!supportsPromptSkillModel(edition,safeTemplateVersion))return {ok:false,message:'技能模板2.0.0仅支持NovelAI V5 Full；V4.5请选1.0.0，已保留原提示词'};
     const template=selectPromptSkillTemplate({edition,targetModel:safeTemplateVersion,task:'reverse',mode,legacyTemplate:'',overrides:settings.reversePromptTemplatesV2});
@@ -4307,7 +4325,7 @@ export async function convertPromptText(
   knownCharacter = false,
   templateVersion: "v4.5" | "v5" = "v5",
   assistant?: PromptEditRequest,
-  skillVersion?: "1.0.0" | "2.0.0",
+  skillVersion?: "1.0.0" | "2.0.0" | "3.0.0",
 ): Promise<{
   ok: boolean;
   result?: string;
@@ -4317,7 +4335,20 @@ export async function convertPromptText(
   message: string;
 }> {
   const settings = getSettings();
-  const edition=normalizePromptSkillVersion(skillVersion??(assistant?settings.promptAssistantSkillVersion:settings.convertPromptSkillVersion));
+  const requestedEdition=normalizePromptSkillVersion(skillVersion??(assistant?settings.promptAssistantSkillVersion:settings.convertPromptSkillVersion));
+  const edition=assistant&&requestedEdition==='3.0.0'?'2.0.0':requestedEdition;
+  if(edition==='3.0.0') {
+    if(!supportsPromptSkillModel(edition,templateVersion))return {ok:false,message:'技能模板3.0.0仅支持NovelAI V5 Full；V4.5请选1.0.0'};
+    let selected:ReturnType<typeof resolveTemplateLibrarySlot>;
+    try{selected=resolveTemplateLibrarySlot(`image.convert.${mode}`);}catch(error){return {ok:false,message:'模板库不可用，已保留原提示词：'+(error instanceof Error?error.message:String(error))};}
+    const template=selectPromptSkillTemplate({edition,targetModel:templateVersion,task:'convert',mode,legacyTemplate:'',librarySlot:selected});
+    const system=[renderPromptSkillTemplate(template,'<provided in the user message>'),PROMPT_SKILL_V3_RUNTIME,promptSkillKnownCharacterInstruction(knownCharacter)].join('\n\n');
+    const reply=await callConvertApi(system,chineseText,7000,`文字转换 · ${templateVersion} · 技能3.0.0 · ${mode}`,true,false,knownCharacter,settings,undefined,true);
+    if(!reply.ok)return {ok:false,message:'转换失败，已保留原提示词：'+reply.message};
+    if(isComicPromptRefusal(reply.content??''))return {ok:false,message:'模型未返回可用提示词，已保留原提示词'};
+    try{const parsed=parsePromptSkillV3Response(reply.content??'',knownCharacter);return {ok:true,result:parsed.prompt,variants:parsed.variants,warnings:parsed.warnings,message:'转换完成：使用所选3.0.0原稿'};}
+    catch(error){return {ok:false,message:'转换结果不可用，已保留原提示词：'+(error instanceof Error?error.message:String(error))};}
+  }
   if(edition==='2.0.0') return convertPromptTextV2(chineseText,mode,knownCharacter,templateVersion,assistant,settings);
 
   let assistance: ReturnType<typeof preparePromptAssistance> | undefined;
@@ -5558,4 +5589,47 @@ export async function listConfiguredMcpTools() {
   const settings=getSettings(),type=settings.tagServerType;
   if(type==='rest') throw Error('REST does not expose MCP tools/list');
   return mcpListTools({type,url:settings.tagServerUrl,apiKey:settings.tagServerApiKey,tool:settings.tagServerTool,command:settings.tagServerCommand,args:settings.tagServerArgs});
+}
+
+/** Text-only comic operations have request-owned cancellation, no generation side effects. */
+const comicPromptControllers=new Map<string,AbortController>();
+function comicOwnerKey(id:string,ownerId?:number|string){return `${ownerId??'local'}:${id}`;}
+export function cancelComicPromptRequest(requestId:string,ownerId?:number|string):boolean {
+ if(typeof requestId!=='string')return false;
+ const controller=comicPromptControllers.get(comicOwnerKey(requestId,ownerId));
+ if(!controller)return false;controller.abort();return true;
+}
+export async function runComicPromptRequest(request:ComicPromptRequest,ownerId?:number|string):Promise<ComicPromptResult> {
+ const base={requestId:request?.requestId??'',action:request?.action??'generate',format:request?.format??'jp-page'} as Pick<ComicPromptResult,'requestId'|'action'|'format'>;
+ let range:ReturnType<typeof validateComicPromptRequest>;
+ try{range=validateComicPromptRequest(request);}catch(error){return {...base,ok:false,code:'invalid-input',message:error instanceof Error?error.message:String(error)};}
+ const key=comicOwnerKey(request.requestId,ownerId);
+ if(comicPromptControllers.has(key))return {...base,ok:false,code:'busy',message:'同一请求仍在运行，请勿重复提交'};
+ const controller=new AbortController();comicPromptControllers.set(key,controller);
+ try{
+  const settings={...getSettings()};
+  if(!settings.convertApiUrl?.trim()||!settings.convertApiKey?.trim())return {...base,ok:false,code:'config_missing',message:'请先配置转换API；不会以本地示例冒充AI生成'};
+  const selected=resolveTemplateLibrarySlot(`comic.${request.format}`);
+  if(request.templateRevision!==undefined&&request.templateRevision!==selected.revision)return {...base,ok:false,code:'stale_template',message:'模板已变化，请重新确认后生成'};
+  const metadata={templateRevision:selected.revision,templateName:selected.name,...range};
+  const system=selected.body.includes('{{input}}')?renderPromptSkillTemplate(selected.body,request.input):selected.body;
+  const user=comicPromptEnvelope(selected.body.includes('{{input}}')?{...request,input:'<provided in selected template>'}:request,range);
+  const maxTokens=request.action==='recommend'?800:Math.min(16000,1000+range.pages*(request.format==='jp-page'?3000:1500));
+  const reply=await callConvertApi(system,user,maxTokens,`漫画提示词 · ${request.format} · ${request.action}`,true,false,false,settings,controller.signal,true);
+  if(controller.signal.aborted)return {...base,...metadata,ok:false,code:'cancelled',message:'已停止本地等待；服务端可能已经处理或计费'};
+  const raw=reply.content??'';
+  if(resolveTemplateLibrarySlot(`comic.${request.format}`).revision!==selected.revision)return {...base,...metadata,ok:false,raw,code:'stale_template',message:'请求期间模板已变化，旧结果仅保留原文，不自动使用'};
+  if(!reply.ok){
+   const parsed=request.action==='generate'&&(raw||reply.finishReason==='length')?parseComicPromptPages(raw,range.pages,reply.finishReason==='length'):undefined;
+   return {...base,...metadata,...parsed,ok:false,raw,code:'request_failed',message:reply.message};
+  }
+  if(isComicPromptRefusal(raw))return {...base,...metadata,ok:false,raw,code:'parse_failed',message:'转换服务未返回漫画提示词，未提交生图'};
+  if(request.action==='recommend'){
+   try{return {...base,...metadata,...parseComicRecommendation(raw),ok:true,raw,message:'已从转换API获得推荐页数，可自行调整'};}
+   catch(error){return {...base,...metadata,ok:false,raw,code:'parse_failed',message:error instanceof Error?error.message:String(error)};}
+  }
+  const parsed=parseComicPromptPages(raw,range.pages,reply.finishReason==='length');
+  return {...base,...metadata,...parsed,ok:parsed.countStatus==='exact',code:parsed.countStatus==='exact'?undefined:'parse_failed',message:parsed.countStatus==='exact'?'本批提示词已生成；确认导入后仍需手动生图':`结果${parsed.countStatus==='truncated'?'疑似截断':'格式或页数不匹配'}：期望${range.pages}页，实际${parsed.lines.length}行。原文已保留，不自动导入`};
+ }catch(error){return {...base,ok:false,code:controller.signal.aborted?'cancelled':'network',message:controller.signal.aborted?'已停止本地等待；服务端可能已计费':redactAiCredentials(error instanceof Error?error.message:String(error),[getSettings().convertApiKey])};}
+ finally{if(comicPromptControllers.get(key)===controller)comicPromptControllers.delete(key);}
 }

@@ -11,8 +11,8 @@ class AgentTemplateWorkflow {
       AgentTemplateTools? templates})
       : templates = templates ?? AgentTemplateTools(app),
         backup = backup ??
-            (() async => (await DataBackupService(app.storage).createBackup(
-                    {DataBackupCategory.configuration},
+            (() async => (await DataBackupService(app.storage,templateLibrary:app.templateLibrary).createBackup(
+                    {DataBackupCategory.configuration,DataBackupCategory.promptPresets},
                     internal: true))
                 .path);
 
@@ -28,7 +28,7 @@ class AgentTemplateWorkflow {
       'templateVersion',
       'skillVersion',
       if (action != 'read') 'expectedRevision',
-      if (action == 'save') 'body'
+      if (action == 'save') ...['body','name']
     ];
     if (args.keys.any((k) => !allowed.contains(k))) throw StateError('未知模板参数');
     if (args['kind'] != null &&
@@ -39,7 +39,9 @@ class AgentTemplateWorkflow {
         !['mixed', 'natural', 'tags'].contains(args['mode'])) {
       throw StateError('请选择混合、自然语言或标签模式');
     }
-    if (args['skillVersion'] != null && !['1.0.0','2.0.0'].contains(args['skillVersion']))throw StateError('技能版本应为1.0.0/2.0.0');
+    if (args['skillVersion'] != null && !['1.0.0','2.0.0','3.0.0'].contains(args['skillVersion']))throw StateError('技能版本应为1.0.0/2.0.0/3.0.0');
+    if(args['skillVersion']=='3.0.0'&&(['optimize','assistant'].contains(args['kind'])||args['templateVersion']=='v4.5'))throw StateError('3.0.0仅提供V5 Full反推/转换模板。');
+    if(args['name']!=null&&(args['name'] is! String||(args['name'] as String).trim().isEmpty||(args['name'] as String).runes.length>60))throw StateError('模板名称应为1–60字。');
     if (args['templateVersion'] != null &&
         !['v5', 'v4.5'].contains(args['templateVersion'])) {
       throw StateError('模板版本应为 v5/v4.5');
@@ -76,7 +78,7 @@ class AgentTemplateWorkflow {
       'mode': before['mode'],
       'templateVersion': before['templateVersion'],
       'skillVersion': before['skillVersion'],
-      if (args['action'] == 'save') 'body': args['body']
+      if (args['action'] == 'save') ...{'body': args['body'],if(args.containsKey('name'))'name':args['name']}
     };
   }
 
@@ -96,7 +98,7 @@ class AgentTemplateWorkflow {
     final after = await templates.execute('studio_save_prompt_template', {
       ..._selector(args),
       'expectedRevision': args['expectedRevision'],
-      if (args['action'] == 'save') 'body': args['body'],
+      if (args['action'] == 'save') ...{'body': args['body'],if(args.containsKey('name'))'name':args['name']},
       if (args['action'] == 'restore') ...{'body': '', 'restoreDefault': true}
     });
     return {
@@ -104,7 +106,7 @@ class AgentTemplateWorkflow {
       'saved': true,
       if (backupPath != null) ...{
         'backupPath': backupPath,
-        'restoreInstructions': '在 Agent 备份列表检查此文件，仅选择配置分类，再确认恢复。也可重新读取模板后保存旧内容。'
+        'restoreInstructions': '在 Agent 备份列表检查此文件，选择配置与提示词预设分类后确认恢复。模板库按副本合并并保留当前选择；如需回到旧正文，请在模板库明确选用恢复副本。也可重新读取模板后保存旧内容。'
       }
     };
   }

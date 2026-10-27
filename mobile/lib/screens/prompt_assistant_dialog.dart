@@ -156,7 +156,7 @@ class _PromptAssistantDialogState extends State<PromptAssistantDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                PromptSkillSelector(model:context.watch<AppState>().settings.promptAssistantTemplateVersion,edition:context.watch<AppState>().settings.promptAssistantSkillVersion,language:context.watch<AppState>().settings.language,onChanged:busy?null:(model,edition)async{setState((){result='';error='';resultContext=null;});await context.read<AppState>().setSettings((s)=>selectPromptSkill(s,'assistant',edition,model));}),
+                PromptSkillSelector(allowV3:false,model:context.watch<AppState>().settings.promptAssistantTemplateVersion,edition:context.watch<AppState>().settings.promptAssistantSkillVersion,language:context.watch<AppState>().settings.language,onChanged:busy?null:(model,edition)async{setState((){result='';error='';resultContext=null;});await context.read<AppState>().setSettings((s)=>selectPromptSkill(s,'assistant',edition,model));}),
                 const SizedBox(height:12),
                 StudioDropdownButtonFormField<String>(
                     value:context.watch<AppState>().settings.promptAssistantMode,

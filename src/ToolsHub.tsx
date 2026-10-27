@@ -1,3 +1,4 @@
+import {comicComposerText} from './comic/comic-composer-text';
 import { createElement, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import { getToolsHubText } from "./i18n";
 import { useAppStore } from "./store";
@@ -31,6 +32,7 @@ function createPreloadedTool(
 }
 
 const comicTool = createPreloadedTool(() => import("./comic/TagComicGenerator").then((module) => ({ default: module.TagComicGenerator })));
+const japaneseComicTool = createPreloadedTool(() => import("./comic/TagComicGenerator").then((module) => ({ default: (props:ToolScreenProps) => <module.TagComicGenerator {...props} scope="jp-comic" /> })));
 const redrawTool = createPreloadedTool(() => import("./ComicGenerator").then((module) => ({ default: module.BatchRedraw })));
 const artistLabTool = createPreloadedTool(() => import("./ArtistLab"));
 const promptCodexTool = createPreloadedTool(() => import("./PromptCodex"));
@@ -39,6 +41,7 @@ const comfyLocalTool = createPreloadedTool(() => import("./ComfyLocalTool"));
 const artistStringDrawTool = createPreloadedTool(() => import("./ArtistStringWeightDraw"));
 
 const TagComicGenerator = comicTool.Component;
+const JapaneseComicGenerator = japaneseComicTool.Component;
 const BatchRedraw = redrawTool.Component;
 const ArtistLab = artistLabTool.Component;
 const PromptCodex = promptCodexTool.Component;
@@ -46,10 +49,11 @@ const V5ArtistWeightRepair = v5ArtistRepairTool.Component;
 const ComfyLocalTool = comfyLocalTool.Component;
 const ArtistStringWeightDraw = artistStringDrawTool.Component;
 
-type ToolId = "hub" | "comic" | "redraw" | "artistLab" | "promptCodex" | "v5ArtistRepair" | "artistStringDraw" | "comfyuiLocal";
+type ToolId = "hub" | "comic" | "japaneseComic" | "redraw" | "artistLab" | "promptCodex" | "v5ArtistRepair" | "artistStringDraw" | "comfyuiLocal";
 
 const TOOL_ICONS: Record<Exclude<ToolId, "hub">, IconName> = {
   comic: "collections",
+  japaneseComic: "collections",
   redraw: "draw",
   artistLab: "palette",
   promptCodex: "code",
@@ -60,6 +64,7 @@ const TOOL_ICONS: Record<Exclude<ToolId, "hub">, IconName> = {
 
 const TOOL_LOADERS: Partial<Record<ToolId, () => Promise<void>>> = {
   comic: comicTool.preload,
+  japaneseComic: japaneseComicTool.preload,
   redraw: redrawTool.preload,
   artistLab: artistLabTool.preload,
   promptCodex: promptCodexTool.preload,
@@ -123,6 +128,7 @@ function ToolLoading({ title }: { title: string }) {
 export default function ToolsHub() {
   const language = useAppStore((state) => state.settings?.language);
   const text = useMemo(() => getToolsHubText(language), [language]);
+  const japaneseComicText = comicComposerText(language);
   const codexText = useMemo(() => promptCodexCardText(language), [language]);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const isWindows = window.naiDesktop.platform === "win32";
@@ -132,6 +138,7 @@ export default function ToolsHub() {
   const [activeTool, setActiveTool] = useState<ToolId>(() => {
     const capture = new URLSearchParams(window.location.search).get("uiCapture");
     if (capture === "comfyui-local" && window.naiComfy) return "comfyuiLocal";
+    if (capture === "japanese-comic") return "japaneseComic";
     if (capture === "v5ArtistRepair") return "v5ArtistRepair";
     if (capture === "artistStringDraw") return "artistStringDraw";
     if (capture === "randomArtist") return isWindows ? "artistLab" : "hub";
@@ -168,6 +175,7 @@ export default function ToolsHub() {
       <Suspense fallback={<ToolLoading title={title} />}>
         {activeTool === "comfyuiLocal" && window.naiComfy ? <ComfyLocalTool onBack={back} /> : null}
         {activeTool === "comic" ? <TagComicGenerator onBack={back} /> : null}
+        {activeTool === "japaneseComic" ? <JapaneseComicGenerator onBack={back} /> : null}
         {activeTool === "redraw" ? <BatchRedraw onBack={back} /> : null}
         {activeTool === "promptCodex" ? <PromptCodex onBack={back} /> : null}
         {activeTool === "artistLab" && isWindows ? <ArtistLab onBack={back} /> : null}
@@ -184,6 +192,7 @@ export default function ToolsHub() {
       </section>
       <section className="tool-card-grid">
         {window.naiComfy ? <button type="button" className="tool-card ready" {...toolCardHandlers("comfyuiLocal")} onClick={() => setActiveTool("comfyuiLocal")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.comfyuiLocal} /></i><b>{text.comfyLocalTitle}</b></span><span>{text.comfyLocalDesc}</span><small>{text.ready}</small></button> : null}
+        <button type="button" className="tool-card ready" {...toolCardHandlers("japaneseComic")} onClick={() => setActiveTool("japaneseComic")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.japaneseComic} /></i><b>{japaneseComicText.newToolTitle}</b></span><span>{japaneseComicText.newToolDescription}</span><small>{text.ready}</small></button>
         <button type="button" className="tool-card ready" {...toolCardHandlers("comic")} onClick={() => setActiveTool("comic")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.comic} /></i><b>{text.comicTitle}</b></span><span>{text.comicDesc}</span><small>{text.ready}</small></button>
         <button type="button" className="tool-card ready" {...toolCardHandlers("promptCodex")} onClick={() => setActiveTool("promptCodex")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.promptCodex} /></i><b>{codexText.title}</b></span><span>{codexText.desc}</span><small>{text.ready}</small></button>
         <button type="button" className="tool-card ready" {...toolCardHandlers("redraw")} onClick={() => setActiveTool("redraw")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.redraw} /></i><b>{text.batchTitle}</b></span><span>{text.batchDesc}</span><small>{text.ready}</small></button>

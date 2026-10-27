@@ -38,7 +38,7 @@ export const STUDIO_WRITABLE:Record<string,Record<string,FieldRule>>={
     agentAutoCompact:bool,agentVisionEnabled:bool,
     reversePromptMode:choice('tags','natural','mixed'),convertMode:choice('tags','natural','mixed'),promptAssistantMode:choice('tags','natural','mixed'),
     reversePromptTemplateVersion:choice('v4.5','v5'),convertPromptTemplateVersion:choice('v4.5','v5'),promptAssistantTemplateVersion:choice('v4.5','v5'),
-    reversePromptSkillVersion:choice('1.0.0','2.0.0'),convertPromptSkillVersion:choice('1.0.0','2.0.0'),promptAssistantSkillVersion:choice('1.0.0','2.0.0'),promptOptimizeTemplateV2:str,promptAssistantTemplateV2:str,
+    reversePromptSkillVersion:choice('1.0.0','2.0.0','3.0.0'),convertPromptSkillVersion:choice('1.0.0','2.0.0','3.0.0'),promptAssistantSkillVersion:choice('1.0.0','2.0.0'),promptOptimizeTemplateV2:str,promptAssistantTemplateV2:str,
     reverseConvertDshEnabled:bool,reverseConvertDshMode:choice('focused','strict'),promptOptimizeTemplate:str,promptAssistantTemplate:str,
     translateProvider:choice('google','baidu','ai'),translateAiModel:str,
     stylePromptPresetSort:choice(...STYLE_SORTS),

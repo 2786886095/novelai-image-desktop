@@ -205,7 +205,7 @@ export interface AgentComposerAction {
   templateKind?: 'convert' | 'reverse' | 'optimize' | 'assistant';
   mode?: 'mixed' | 'tags' | 'natural';
   templateVersion?: 'v5' | 'v4.5';
-  skillVersion?: '1.0.0' | '2.0.0';
+  skillVersion?: '1.0.0' | '2.0.0' | '3.0.0';
   templateId?: string;
 }
 

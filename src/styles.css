@@ -2010,7 +2010,7 @@ button { user-select: none; }
   font-size: 15px;
   font-weight: 700;
 }
-.modal header button {
+.modal > header button {
   border: 0;
   background: transparent;
   font-size: 20px;
@@ -2024,7 +2024,7 @@ button { user-select: none; }
   justify-content: center;
   transition: background 0.12s, color 0.12s;
 }
-.modal header button:hover { background: var(--bg-hover); color: var(--text-primary); }
+.modal > header button:hover { background: var(--bg-hover); color: var(--text-primary); }
 
 /* ── Settings modal ──────────────────────────────────────────────────────────── */
 .settings-modal { width: 1128px; height: 710px; }

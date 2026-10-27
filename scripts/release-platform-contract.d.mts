@@ -8,9 +8,9 @@ export function assertReleasePlatformContract(
 ): {platforms: number; features: number};
 export function assertReleaseEvidenceFiles(report: unknown, evidenceRoot: string): void;
 
-export const releaseScopeId: 'windows-local-capabilities-no-ios/v2';
+export const releaseScopeId: 'windows-local-capabilities-five-platform/v3';
 export const artistIterationScenarios: readonly string[];
 export const agentComponentScenarios: readonly string[];
 export function releaseFeatureApplicability(feature: string, platform: string): 'required' | 'not-supported';
 export const releaseScopeSha256: string;
-export const releaseScopeCounts: Readonly<{declaredSlots: 156; requiredSlots: 150; notSupportedSlots: 6}>;
+export const releaseScopeCounts: Readonly<{declaredSlots: 195; requiredSlots: 187; notSupportedSlots: 8}>;

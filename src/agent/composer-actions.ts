@@ -18,7 +18,7 @@ export function normalizeStudioComposerActions(value: unknown): AgentComposerAct
     } else {
       const templateKind = ['convert','reverse','optimize','assistant'].includes(raw.templateKind) ? raw.templateKind : 'convert';
       if (kind === 'template-apply' && templateKind === 'reverse') continue;
-      action = {kind, templateKind, mode: ['mixed','tags','natural'].includes(raw.mode) ? raw.mode : 'mixed', templateVersion: raw.templateVersion === 'v4.5' ? 'v4.5' : 'v5',...(raw.skillVersion==='1.0.0'||raw.skillVersion==='2.0.0'?{skillVersion:raw.skillVersion}:{})};
+      action = {kind, templateKind, mode: ['mixed','tags','natural'].includes(raw.mode) ? raw.mode : 'mixed', templateVersion: raw.templateVersion === 'v4.5' ? 'v4.5' : 'v5',...(raw.skillVersion==='1.0.0'||raw.skillVersion==='2.0.0'||raw.skillVersion==='3.0.0'?{skillVersion:raw.skillVersion}:{})};
     }
     if (!output.some(item => JSON.stringify(item) === JSON.stringify(action))) output.push(action);
   }

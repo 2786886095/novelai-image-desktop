@@ -31,6 +31,7 @@ export function selectComicTasks(project:TagComicProject,mode:string,panelIds:st
 }
 export type ComicQueueDependencies={
  store:ComicProjectStore;storage:Pick<Storage,'getItem'|'setItem'>;
+ runStorageKey?:string;beforeLaunch?:()=>void;
  hasToken:()=>Promise<boolean>;
  prepareService?:(requests:TagComicGenerateRequest[])=>Promise<ComicImageService>;
  quote:(tasks:PreparedComicTask[],service?:ComicImageService)=>Promise<number|null>;
@@ -40,13 +41,14 @@ export type ComicQueueDependencies={
 };
 /** One application-owned queue; subscribing/unsubscribing a page never starts/stops work. */
 export function createComicGenerationQueue(deps:ComicQueueDependencies){
+ const runStorageKey=deps.runStorageKey??COMIC_RUN_KEY;
  const listeners=new Set<()=>void>();let work:Promise<void>=Promise.resolve(),cancelled=false,inFlight=false;let stopSignal=new AbortController();
  let state:ComicRunState={id:null,projectId:null,phase:'idle',total:0,done:0,inFlightPanelId:null,error:null,updatedAt:new Date().toISOString()};
  let readError:string|null=null;
  function emit(next:ComicRunState){state=next;for(const listener of listeners)listener();}
- function publish(patch:Partial<ComicRunState>){const next={...state,...patch,updatedAt:new Date().toISOString()};deps.storage.setItem(COMIC_RUN_KEY,JSON.stringify(next));emit(next);}
+ function publish(patch:Partial<ComicRunState>){const next={...state,...patch,updatedAt:new Date().toISOString()};deps.storage.setItem(runStorageKey,JSON.stringify(next));emit(next);}
  try{
-  const raw=deps.storage.getItem(COMIC_RUN_KEY);
+  const raw=deps.storage.getItem(runStorageKey);
   if(raw){const saved=JSON.parse(raw);if(!saved||typeof saved.id!=='string'||typeof saved.projectId!=='string'||!['preparing','confirming','running','stopping','completed','cancelled','failed','interrupted'].includes(saved.phase)||!Number.isSafeInteger(saved.total)||!Number.isSafeInteger(saved.done)||saved.total<1||saved.done<0||saved.done>saved.total)throw Error('漫画任务记录无效，原始记录保留');
    state={id:saved.id,projectId:saved.projectId,phase:saved.phase,total:saved.total,done:saved.done,inFlightPanelId:typeof saved.inFlightPanelId==='string'?saved.inFlightPanelId:null,error:typeof saved.error==='string'?saved.error:null,updatedAt:String(saved.updatedAt??'')};
    if(active(state.phase))publish({phase:'interrupted',inFlightPanelId:null,error:'上次漫画任务未核实完成；已保存图片保留，未自动重试。'});
@@ -111,6 +113,7 @@ export function createComicGenerationQueue(deps:ComicQueueDependencies){
   async wait(runId:string){if(runId!==state.id)throw Error('漫画任务已变化，请重新读取');const current=work;await current;if(runId!==state.id)throw Error('漫画任务已被下一轮替换，请检查历史');return state;},
   launch(tasks:ComicQueueTask[],options:{runId?:string;expectedRevision:string;confirm:(summary:{count:number;quote:number|null;signal:AbortSignal;imageProvider?:ComicImageService["provider"];model?:string;size?:string})=>Promise<boolean>}){
    if(readError)throw Error(readError);
+   deps.beforeLaunch?.();
    const before=deps.store.read();if(active(state.phase)||before.busy)throw Error('漫画队列正在运行，请先停止并等待读回');
    if(before.revision!==options.expectedRevision)throw Error('漫画工程已变化，请重新读取');
    const prepared=prepareComicTasks(before.project,tasks),id=options.runId??crypto.randomUUID();

@@ -35,6 +35,14 @@ export const mobileScenarioInventories=Object.freeze({
   ...keys('ai-records',['record-request-response-status','refresh-expand-clear-memory-history-boundary','sensitive-fields-redacted']),
   ...keys('translation',['languages-source-detect','preserve-tags-weights','failure-cancel-no-overwrite'])]),
  skill_reopen1:Object.freeze(keys('settings',['skill-selection-custom-cold-reopen'])),
+ japanese_comic8:Object.freeze([
+  ...keys('comic',['japanese-entry-scope-native','prompt-recommend-manual-batches-native','prompt-cancel-truncated-stale-native','prompt-import-backup-native']),
+  ...keys('convert',['image-comic-target-persist-native','comic-prompt-wire-json-native']),
+  ...keys('settings',['template-library-v3-custom-native']),
+  ...keys('backup',['template-library-v3-backup-native'])]),
+ japanese_comic_reopen2:Object.freeze([
+  ...keys('settings',['template-library-cold-reopen-native']),
+  ...keys('comic',['japanese-project-draft-cold-reopen-native'])]),
  batch_mcp7:Object.freeze([
   ...keys('batch',['queue-order-owner-lifecycle','cancel-errors-retry','history-output']),
   ...keys('external-mcp-server',['tool-discovery-native-bridge','actual-local-tool-request','auth-errors-budget-safety']),

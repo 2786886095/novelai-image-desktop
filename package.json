@@ -1,6 +1,6 @@
 {
   "name": "langbai-novelai-studio",
-  "version": "2.6.7",
+  "version": "2.6.8",
   "private": true,
   "description": "Langbai NovelAI Studio: API-only NovelAI image generation desktop client with Chinese UI.",
   "author": "Langbai",
@@ -116,7 +116,8 @@
       "!node_modules/@huggingface/transformers/dist/transformers.js",
       "!node_modules/@huggingface/transformers/dist/transformers.min.js",
       "!node_modules/@huggingface/transformers/dist/transformers.web*",
-      "package.json"
+      "package.json",
+      "shared/templates/**"
     ],
     "win": {
       "icon": "build/icon.ico",
@@ -146,7 +147,8 @@
         "!artifacts/**",
         "!.tmp/**",
         "!**/.env",
-        "!**/.env.*"
+        "!**/.env.*",
+        "shared/templates/**"
       ],
       "extraResources": [
         {
@@ -247,7 +249,8 @@
         "!artifacts/**",
         "!.tmp/**",
         "!**/.env",
-        "!**/.env.*"
+        "!**/.env.*",
+        "shared/templates/**"
       ]
     },
     "linux": {
@@ -278,7 +281,8 @@
         "!artifacts/**",
         "!.tmp/**",
         "!**/.env",
-        "!**/.env.*"
+        "!**/.env.*",
+        "shared/templates/**"
       ]
     },
     "dmg": {

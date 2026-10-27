@@ -1,3 +1,5 @@
+import '../i18n/template_feature_text.dart';
+import '../comic/comic_prompt_composer.dart';
 import '../images/image_file_access.dart';
 import '../images/coordinated_file_image.dart';
 import 'prompt_skill_selector.dart';
@@ -268,6 +270,17 @@ class _ConvertPanelState extends State<_ConvertPanel> {
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(16),
         children: [
+          Wrap(spacing:8,runSpacing:8,children:[
+            for(final target in ['image','comic']) ChoiceChip(
+              key:ValueKey('convert-target-$target'),
+              label:Text(templateFeatureText(language,target)),
+              selected:s.settings.convertPromptTarget==target,
+              onSelected:(_)=>s.setSettings((settings)=>settings.convertPromptTarget=target)),
+          ]),
+          const SizedBox(height:12),
+          if(s.settings.convertPromptTarget=='comic')
+            ComicPromptComposer(app:s,draftKey:'convert')
+          else ...[
           TextField(
             controller: _inputCtrl,
             maxLines: 5,
@@ -359,6 +372,7 @@ class _ConvertPanelState extends State<_ConvertPanel> {
           ),
           const SizedBox(height: 8),
           Text(s.status),
+          ],
         ],
       ),
     );

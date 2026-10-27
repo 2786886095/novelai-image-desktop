@@ -15,7 +15,7 @@ class AgentBackupTools {
   final _catalog = <String, String>{};
   final _checks = <String, Map<String, dynamic>>{};
   AgentBackupTools(this.app, {DataBackupService? service, this.refresh})
-      : service = service ?? DataBackupService(app.storage);
+      : service = service ?? DataBackupService(app.storage,templateLibrary:app.templateLibrary);
   String _hash(Object value) =>
       sha256.convert(utf8.encode(jsonEncode(value))).toString();
   Future<String> _digest(String file) async =>

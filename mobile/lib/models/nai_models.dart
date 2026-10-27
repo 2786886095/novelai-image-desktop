@@ -25,7 +25,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.6.7';
+const appVersion = '2.6.8';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -1028,6 +1028,7 @@ class AppSettings {
   String reversePromptMode;
   String reversePromptTemplateVersion;
   String convertPromptMode;
+  String convertPromptTarget;
   String inpaintModel;
   double inpaintStrength;
   double inpaintNoise;
@@ -1165,6 +1166,7 @@ class AppSettings {
     this.reversePromptMode = 'tags',
     this.reversePromptTemplateVersion = 'v5',
     this.convertPromptMode = 'natural',
+    this.convertPromptTarget = 'image',
     this.inpaintModel = 'nai-diffusion-5-full-inpainting',
     this.inpaintStrength = 1,
     this.inpaintNoise = 0,
@@ -1189,7 +1191,7 @@ class AppSettings {
             model: reversePromptTemplateVersion, legacy: [reversePromptTemplates,reversePromptTemplatesV45]),
         convertPromptSkillVersion = normalizePromptSkillVersion(convertPromptSkillVersion,
             model: convertPromptTemplateVersion, legacy: [convertPromptTemplates,convertPromptTemplatesV45]),
-        promptAssistantSkillVersion = normalizePromptSkillVersion(promptAssistantSkillVersion,
+        promptAssistantSkillVersion = normalizePromptSkillVersion(promptAssistantSkillVersion, allowV3:false,
             model: promptAssistantTemplateVersion ?? convertPromptTemplateVersion,
             legacy: [convertPromptTemplates,convertPromptTemplatesV45,promptOptimizeTemplate,promptAssistantTemplate]),
         promptAssistantTemplateVersion = promptAssistantTemplateVersion ?? convertPromptTemplateVersion,
@@ -1327,6 +1329,7 @@ class AppSettings {
         'reversePromptMode': reversePromptMode,
         'reversePromptTemplateVersion': reversePromptTemplateVersion,
         'convertPromptMode': convertPromptMode,
+        'convertPromptTarget': convertPromptTarget,
         'inpaintModel': inpaintModel,
         'inpaintStrength': inpaintStrength,
         'inpaintNoise': inpaintNoise,
@@ -1529,6 +1532,7 @@ class AppSettings {
         reversePromptTemplateVersion:
             j['reversePromptTemplateVersion'] == 'v4.5' ? 'v4.5' : 'v5',
         convertPromptMode: j['convertPromptMode'] ?? 'natural',
+        convertPromptTarget: j['convertPromptTarget'] == 'comic' ? 'comic' : 'image',
         inpaintModel: _supportedOptionValue(j['inpaintModel'], naiInpaintModels,
             'nai-diffusion-5-full-inpainting'),
         inpaintStrength:
@@ -1882,10 +1886,11 @@ List<PositivePromptPreset> mergeLegacyPositivePresets(
 // Editions are separate from the target NovelAI generation model. Never move
 // user-authored legacy bodies into the new edition or overwrite their slots.
 String? _optionalPromptSkillVersion(dynamic value) =>
-    value == '1.0.0' || value == '2.0.0' ? value as String : null;
+    value == '1.0.0' || value == '2.0.0' || value == '3.0.0' ? value as String : null;
 String normalizePromptSkillVersion(String? value,
-    {required String model, List<dynamic> legacy = const []}) {
+    {required String model, List<dynamic> legacy = const [], bool allowV3 = true}) {
   if (model == 'v4.5') return '1.0.0';
+  if (value == '3.0.0' && allowV3) return value!;
   if (value == '1.0.0' || value == '2.0.0') return value!;
   bool hasBody(dynamic item) => item is Map
       ? item.values.any(hasBody)

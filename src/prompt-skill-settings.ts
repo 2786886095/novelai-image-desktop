@@ -11,7 +11,7 @@ export function hasCustomLegacySkill(value:unknown,task:'reverse'|'convert') {
  return modes.some(mode=>{const text=(value as Partial<ModePromptTemplates>)[mode];return typeof text==='string'&&!!text.trim()&&!same(text,defaults[mode])&&!isShippedModePrompt(text,mode);});
 }
 export function skillVersionForModel(edition:unknown,model:ReversePromptTemplateVersion,fallback:PromptSkillVersion='2.0.0'):PromptSkillVersion {
- return model==='v4.5'?'1.0.0':edition==='1.0.0'||edition==='2.0.0'?edition:fallback;
+ return model==='v4.5'?'1.0.0':edition==='1.0.0'||edition==='2.0.0'||edition==='3.0.0'?edition:fallback;
 }
 /** Read legacy selections before defaults merge; keep genuine user edits in their
  * original 1.0.0 slots. New edition slots never consume or erase those edits. */
@@ -25,7 +25,7 @@ export function normalizePromptSkillSettings(raw:Partial<AppSettings>) {
  return {
   reversePromptSkillVersion:skillVersionForModel(raw.reversePromptSkillVersion,reverseModel,reverseCustom?'1.0.0':'2.0.0'),
   convertPromptSkillVersion:skillVersionForModel(raw.convertPromptSkillVersion,convertModel,convertCustom?'1.0.0':'2.0.0'),
-  promptAssistantSkillVersion:skillVersionForModel(raw.promptAssistantSkillVersion,assistantModel,overlayCustom||convertCustom?'1.0.0':'2.0.0'),
+  promptAssistantSkillVersion:skillVersionForModel(raw.promptAssistantSkillVersion==='3.0.0'?'2.0.0':raw.promptAssistantSkillVersion,assistantModel,overlayCustom||convertCustom?'1.0.0':'2.0.0'),
   promptAssistantTemplateVersion:assistantModel,
  };
 }
@@ -34,6 +34,7 @@ export function promptSkillRequestContext(settings:Partial<AppSettings>|null|und
  const keys: (keyof AppSettings)[]=task==='reverse'
   ? ['reversePromptSkillVersion','reversePromptTemplateVersion','reversePromptTemplates','reversePromptTemplatesV45','reversePromptTemplatesV2','visionApiModel','visionApiUrl','reverseSystemPromptPresetId']
   : ['convertPromptSkillVersion','convertPromptTemplateVersion','convertPromptTemplates','convertPromptTemplatesV45','convertPromptTemplatesV2','convertApiModel','convertApiUrl','convertSystemPromptPresetId'];
+ keys.push('templateLibraryRevision');
  keys.push('reverseConvertDshEnabled','reverseConvertDshMode','reverseConvertPromptPresets','reverseConvertPromptPresetId');
  return JSON.stringify(keys.map(key=>settings?.[key]));
 }

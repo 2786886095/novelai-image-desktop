@@ -1,3 +1,5 @@
+import {TemplateLibraryPanel, templateLibraryCopy} from './features/settings/TemplateLibraryPanel';
+import {ComicPromptComposer} from './comic/ComicPromptComposer';
 import { anlasBillingDisplay, visibleAnlasQuote, type ScopedAnlasQuote } from "./anlas-billing";
 import { McpServerSettings } from "./components/McpServerSettings";
 import { estimateOpusImages, estimateOpusUsagePercent } from "./anlas";
@@ -4320,7 +4322,7 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
 }
 
 // ── Prompt Converter panel ────────────────────────────────────────────────────
-function PromptConverterPanel() {
+export function PromptConverterPanel() {
   const convertInput = useAppStore((state) => state.convertInput);
   const convertResult = useAppStore((state) => state.convertResult);
   const convertResultWarnings = useAppStore((state) => state.convertResultWarnings);
@@ -4350,6 +4352,9 @@ function PromptConverterPanel() {
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const convertBusy = convertJobs.some((job) => job.status === "processing");
+  const [convertTarget,setConvertTarget] = useState<'image'|'comic'>(()=>{try{return localStorage.getItem('langbai.convert.target.v1')==='comic'?'comic':'image';}catch{return 'image';}});
+  const templateCopy=templateLibraryCopy(language);
+  const targetPicker=<div className="convert-target-picker" role="group" aria-label={templateCopy[32]}>{(['image','comic'] as const).map((kind,index)=><Button key={kind} aria-pressed={convertTarget===kind} onClick={()=>{setConvertTarget(kind);try{localStorage.setItem('langbai.convert.target.v1',kind);}catch{}}}>{templateCopy[33+index]}</Button>)}</div>;
   useEffect(() => {
     void loadConvertHistory();
   }, [loadConvertHistory]);
@@ -4373,6 +4378,8 @@ function PromptConverterPanel() {
     await refreshSettings();
   }
 
+  if(convertTarget==='comic') return <div className="panel-scroll"><div className="convert-header"><strong>{t("convert.title")}</strong><small>{templateCopy[28]}</small></div>{targetPicker}<ComicPromptComposer draftKey="langbai.convert.comic-draft.v1" initialInput={convertInput} language={language}/></div>;
+
   return (
     <>
       <div className="panel-scroll">
@@ -4380,6 +4387,7 @@ function PromptConverterPanel() {
           <strong>{t("convert.title")}</strong>
           <small>{t("convert.subtitle")}</small>
         </div>
+        {targetPicker}
         <label className="field">
           <span>{t("convert.input")}</span>
           <textarea
@@ -6349,10 +6357,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             )}
             {section === "templates" && (
               <div className="settings-form">
-                <div className="info-card">
-                  <strong>{t("settings.unifiedTemplate")}</strong>
-                  <span>{t("settings.unifiedTemplateDesc")}</span>
-                </div>
+                <TemplateLibraryPanel settings={settings} onSettingsChanged={refreshSettings}/>
+                <details className="template-library-legacy"><summary>{templateLibraryCopy(settings.language)[31]}</summary>
                 <VersionedModeTemplateEditor
                   title={t("settings.reverseTemplateTitle")}
                   values={{
@@ -6387,7 +6393,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     next,
                   )}
                 />
-                <PromptSkillControls model={settings.promptAssistantTemplateVersion??settings.convertPromptTemplateVersion} edition={skillVersionForModel(settings.promptAssistantSkillVersion,settings.promptAssistantTemplateVersion??settings.convertPromptTemplateVersion)} language={settings.language} onChange={(model,edition)=>{void update("promptAssistantTemplateVersion",model);void update("promptAssistantSkillVersion",edition);}}/>
+                <PromptSkillControls allowV3={false} model={settings.promptAssistantTemplateVersion??settings.convertPromptTemplateVersion} edition={skillVersionForModel(settings.promptAssistantSkillVersion,settings.promptAssistantTemplateVersion??settings.convertPromptTemplateVersion)} language={settings.language} onChange={(model,edition)=>{void update("promptAssistantTemplateVersion",model);void update("promptAssistantSkillVersion",edition);}}/>
                 <SingleTemplateEditor
                   title={promptEditorText(settings.language).optimize}
                   value={(settings.promptAssistantSkillVersion === "2.0.0" ? settings.promptOptimizeTemplateV2 : settings.promptOptimizeTemplate) ?? ""}
@@ -6400,6 +6406,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   defaultValue={settings.promptAssistantSkillVersion === "2.0.0" ? PROMPT_CUSTOM_TEMPLATE_V2 : PROMPT_CUSTOM_TEMPLATE}
                   onChange={(next) => void update(settings.promptAssistantSkillVersion === "2.0.0" ? "promptAssistantTemplateV2" : "promptAssistantTemplate", next)}
                 />
+                </details>
               </div>
             )}
             {section === "prompt" && (
@@ -6934,7 +6941,7 @@ function VersionedModeTemplateEditor({
   const [edition,setEdition]=useState<PromptSkillVersion>("2.0.0");
   return (
     <div className="versioned-template-editor">
-      <PromptSkillControls model={version} edition={edition} language={language} onChange={(model,next)=>{setVersion(model);setEdition(next);}}/>
+      <PromptSkillControls allowV3={false} model={version} edition={edition} language={language} onChange={(model,next)=>{setVersion(model);setEdition(next);}}/>
       <ModeTemplateEditor
         title={title}
         value={edition === "2.0.0" ? v2Values ?? {tags:"",natural:"",mixed:""} : values[version]}

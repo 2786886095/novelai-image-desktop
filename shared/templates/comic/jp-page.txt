@@ -1,0 +1,445 @@
+# NovelAI Diffusion V5 漫画提示词模板 · v4.1
+
+> 适用：NovelAI Diffusion **V5 Full**（主）/ V5 Curated（容量约减半，不用于整页）。
+> 标记：**[官方]** = NovelAI 官方文档原文；**[实拍]** = 来自 126 页参考漫画的统计；**[经验]** = 实测得出、官方没有承诺；**[实测]** = 2026-10 Studio/MCP 受控结果；**[推论]** = 由单图实测外推到整页，尚未在整页上单独验证。
+> 变更：v3.0 加 P 档 / L1–L21 版式库 / RTL 镜像 / 气泡排版；v3.1 加彩色档 / 旁白层 / 满版出血 / 流水线；v4.0 删实测叙事并统一矛盾口径。
+> v4.1 系列：默认不用负面 / 不写画师串 / 不写色彩档词 / 关 Quality Tags / 画幅×景别 / 人物框 25–30 / 负权重剂量 / 单代理生成 / 新增 §5.2.1 特色版式 S1–S8。
+
+---
+
+## 0 · 出图设置（不做好这几项，prompt 写得再对也出不来）
+
+| # | 设置 | 写法 / 原因 |
+|---|---|---|
+| 1 | 负面提示词 / negativePrompt | **默认不用**（不传，用软件默认；模板正文也不写负面/UC） | **默认不加任何负面提示词。** 唯一硬约束：**整页出图时软件默认负面里不能有 `multiple views / screentone / halftone`**，否则分格与网点会被压掉——出整页前在软件里关掉这三项即可，不需要在 prompt 里写负面 |
+| 2 | effort | 用 **High**。选 Medium 会丢弃负面词 [官方] |
+| 3 | Quality Tags | **关（`qualityPreset: none`），所有页都关，不分有字无字。** 开 standard 时，质量词会被工具追加到 prompt 最末尾，落在 `Text:` 之后，被画成页面文字 [实测]。质量词由 style 字段的头部提供（Studio 的 `lockedStylePrompt` 已含 `masterpiece, best quality`），prompt 行和 Quality Tags 都不再写 |
+| 4 | 风格提示词 / stylePrompt | **不传，继承软件默认**（`stylePrompt: inherit`）。**模板不生成、不代填任何画师串**，正文也不写画师名/风格词 | 沿用用户软件里锁定的默认风格提示词（`lockedStylePrompt`）。**默认不加任何风格提示词，也不自己写画师串**——风格由用户自己的设置决定，模板只产出画面内容。（实测参考：把 `stylePrompt` 留空 vs 继承画师串是两种画风——留空更接近 V5 原生动漫质感、继承更接近厚涂插画；本项目按用户设置走继承） |
+| 5 | 尺寸 | 整页：竖 `832x1216`；2×2、3×2 优先 `1024x1024`。**P0 splash 和 A 逐格**按景别选画幅：中近景竖 `832x1216`，要建立格 / 全景时改横 `1216x832`（见 §7 格形表）。不在 prompt 里写尺寸词。总像素不超过 1024×1024 |
+| 6 | 成本 | 订阅内 V5 文生图实际扣费 0 Anlas，`estimate_cost` 报的 30 是估算值，不要据此缩减批量 [实测] |
+
+
+
+## 1 · 输出契约
+
+1. **一行一页**（A 模式是一行一格），行内不换行。附注只给：设置清单、角色位置表、文字清单。不复述规则。
+2. prompt **纯英文**。中文只能出现在 `Text:` 载荷和载体句的引号里。
+3. 不写画师名，不写质量词（`masterpiece / best quality / very aesthetic / absurdres`），不写尺寸或画幅词（`16:9 / portrait orientation`）。
+4. tag 全部小写，用半角 `, ` 分隔。自然语言也拆成 2–4 个短语，每个逗号片段算 1 个语义单元，不写一整段长句。
+5. 分段符是 ` | `（两侧各一个空格）。每段以 `girl` / `boy` / `other` 开头，不带数字。
+6. **禁止「同上 / same as before」**。每格、每框都写满自己可见的内容。
+
+---
+
+## 2 · 模式判定
+
+**第一步：定 P 档（这一页要讲几个瞬间）**
+
+| P 档 | 格数 | 用途 | 走法 | 可选版式 |
+|---|---|---|---|---|
+| **P0** | 1 | 封面、扉页、高潮 splash | A 骨架，竖页尺寸，**不写版式句、不写 `comic`** | L1 |
+| **P2** | 2 | 前后对照、铺垫转冲击 | B | L11 / L13 / L14 |
+| **P3–4** | 3–4 | 标准对话页、正反打 | B（最稳） | L2 / L4 / L7 / L8 / L9 / L12 / L15 / L18 / L19 / L20 |
+| **P5–7** | 5–7 | 快节奏对话、反应蒙太奇、动作分解 | B，方图优先；连续两次版式崩再拆两张 | L3 / L5 / L6 / L10 / L16 / L17 |
+| **P8+** | ≥8 | 信息页、群像 | **A 逐格出图 + 后期拼页**，附注写明 | — |
+
+主力区间是 3–6 格 [实拍]。
+
+**第二步：定模式**
+
+- **A 单格**：用户明确要单格；输入是一行一格的分镜表；P0；P8+；某一格 ≥3 人。
+- **B 整页**：其余情况。条件：每格可识别人物 ≤2，全页不同身份 ≤3。
+- **C 一致性**：同一身份出现在 ≥2 格时叠加，先输出角色卡（§8）。
+
+---
+
+## 3 · 长度与容量
+
+| 项 | A 单格 | B 整页 |
+|---|---|---|
+| 语义单元 | 按复杂度算：`T ≈ 5N² + 15N + E + C + L`（N 人数；E 环境 简单 8 / 中等 18 / 复杂 25；C 多层服装 +15；L 多层光 +15；视角不计）。取 `T×0.9 ~ T×1.1`，留 10–20% 余量。锚点：1 人简单 26、2 人中等 65、3 人复杂 110–130 [实测] | 主串 15–35 + 人物框 × 25–30 + `other` / 手部框 × 8–30（见 §5.1）。例：4 个人物框 115–155，6 个人物框 165–215。超 1400 token 或人物框 >6 就拆页。**A 档公式不能套到 B 档**（人数是身份数，不是画面人数） |
+| Tag 占比 | 65–75% | 55–75%（版式句和格位句必须用自然语言） |
+| token | 整行 ≤1400（Full 约 1471 [官方]），Curated ≤680 | 同左；超限先删主串里的场景短语 |
+| 文字 | 每条 ≤40 字符 | 每条 ≤40 字符，全页 ≤4 条、合计 ≤200 字符 |
+
+估算：词数 × 1.3 ≈ token。超限时先删重复的环境短语，**不删人物锚和道具锚**。写满会掉分 [实测]，不要为了凑上限灌无关词。
+
+---
+
+## 4 · A 单格（P0 splash / P8+ 逐格）
+
+**A 模式的骨架、密度公式、景别与服装细则以《单分镜漫画模板》为准**，本模板不重复。这里只保留三条与整页相关的规定：
+
+- 一行一格，人数 tag = 角色段数，不加 `solo`。
+- 竖图不用 `wide shot / very wide shot`（见 §7 格形表）；要建立格就改横图。
+- P0 页不写版式句、不写 `comic`。
+
+---
+
+## 5 · B 整页骨架
+
+### 5.1 主串 + 每格一个角色框
+
+```text
+<去重人数tag>, comic, <色彩档词>, <介质tag×0–2>, <high complexity×0–1>, <读序句>, <版式句>, <格线句×0–1>, <全页场景tag×0–6>, <全页场景短语×0–2>, <-1::改属性 ::×0–1>, <-3::删物体 ::×0–1>, <text, 语言tag, 旁白载体句, Text: 旁白×0–1组> | girl, in the <格位称呼> panel: <景别> <机位>, <本框锚串>, <状态/表情/动作tag>, <动作关系句>, <细节短语×3–5>, <台词载体句, Text: 台词×0–1组> | girl, in the <格位称呼> panel: …
+```
+
+| 槽位 | 规则 |
+|---|---|
+| 人数 tag | 本页**不同身份**的数量（同一个人出现 3 格仍写 `1girl`）。这是 B 模式唯一允许「人数 ≠ 段数」的情况，要在附注写明 |
+| `comic` | 版式 tag 只写这一个。竖排四格条漫改写 `4koma`。不并写 `manga / multiple views / split screen / reference sheet` |
+| 读序句 | 默认 RTL：`a black-and-white manga page read right to left then top to bottom`（彩色档写 `a full-color manga page …`）。全页只写一句 |
+| 框开头 | `girl, in the <格位称呼> panel: <景别> <机位>` 算一个逗号片段。**同一格里有两人时，两框的开头片段逐字相同** |
+| 镜头词 | 写进该格的框里，**不写进主串**（写进主串会让所有格共用同一个机位） |
+| **一格一框** | **默认一格只放一个人物框。** 同格两框实测会让其中一个框落到相邻格（§14 示例的 5 框版在 4 个变体里全部落错格）。剧情必须同格两人时，优先在界面里用 `Custom` 定位，或退到 B2 |
+| 手部/道具格 | 合成一框，以动作主体开头：`girl, in …: close-up of hands`。写清手从哪边入画、碰到什么 |
+| 无人空镜格 | 不开框，只在主串加一句：`the top right panel shows only the empty stairwell door` [经验] |
+| 框长度 | **每个人物框 25–30 个逗号片段（硬边界）**。单图实测：<25 会和别的框合并成一个身体；>30 会被自己的 tag 改写 [实测]。B 页框数多、结构同多人单图，沿用此边界；v4.0 示例的 6–12 片段框对比 25 片段框的合并率尚未在整页验证 **[推论]**。计数口径：开头片段算 1；带权重指纹每项算 1；**本行前面已出现过的无权重 tag 不计**（会被去重）。同格两框各自 ≥25。`other` 框和不露脸的 `close-up of hands` 框不受下限约束，上限仍是 30 |
+| 框内配比 | 开头 1 + 指纹 3 + 本框独有的服装状态 3–5 + 表情 / 视线 2–3 + 姿态 / 手 3–4 + 动作关系句 1–2 + 本框环境与光线细节 4–6 + 细节短语 3–5 + 台词组 0–2 ≈ 25–30。目标贴近 25–27，不写满 [实测] |
+
+**界面形态**：主串粘进 Prompt，各段依次粘进 `Character 1…N` 框。界面里有角色框时，`|` 语法失效，二者只能用一种 [官方]。角色位置改成 `Custom`，把每个框放到它所在格的区域；同一格的两个框按站位左右分开。角色框通道（MCP `characterPrompts`）**最多 6 个框**。框数 >6 的页面改走 §5.8 单串通道，或者拆页。
+
+**B2 备用（每人一段）**：段数 = 身份数，各格动作写在主串里（`in the top right panel she …`），段里只写外观锚。只在 B1 连续出现「框内容跑到别的格」时使用。
+
+### 5.2 版式库（核心资产）
+
+**生成语法**：`the page is divided into <N> panels: <行组1>, <行组2>, and <行组3>`。行组从上往下写，**最多 3 行**（实拍 100% 的页都是 1–3 行），各行组格数之和 = N。
+行组用词：`one full-width panel across the top / in the middle / across the bottom`、`two equal panels side by side …`、`three panels side by side …`、`one tall panel taking the full height of the left half`、`two panels stacked on the right`、`one huge panel taking the bottom two-thirds of the page`、`three horizontal strips stacked from top to bottom`。
+
+下表的格位称呼按物理位置写。RTL 页的写法见 §5.3。
+
+| 编号 | 格 | 版式句（主串用） | 格位称呼 |
+|---|---|---|---|
+| **L1** | 1 | **不写版式句**，走 §4 A 骨架 | — |
+| **L2** | 3 | `the page is divided into three panels: one full-width panel across the top and two equal panels side by side across the bottom` | full-width top / bottom left / bottom right |
+| **L3** | 5 | `the page is divided into five panels: two panels side by side across the top, one full-width panel in the middle, and two panels side by side across the bottom` | top left / top right / full-width middle / bottom left / bottom right |
+| **L4** | 4 | `the page is divided into four panels: one full-width panel across the top, two equal panels side by side in the middle, and one full-width panel across the bottom` | full-width top / middle left / middle right / full-width bottom |
+| **L5** | 6 | `the page is divided into six panels: three panels side by side across the top and three panels side by side across the bottom` | top left / top center / top right / bottom left / bottom center / bottom right |
+| **L6** | 6 | `the page is divided into six panels: one full-width panel across the top, two equal panels side by side in the middle, and three panels side by side across the bottom` | full-width top / middle left / middle right / bottom left / bottom center / bottom right |
+| **L7** | 3 | `the page is divided into three panels: one large panel across the top two-thirds of the page and two equal panels side by side across the bottom` | large top / bottom left / bottom right |
+| **L8** | 3 | `the page is divided into three panels: one tall panel taking the full height of the left half and two panels stacked on the right` | tall left / upper right / lower right |
+| **L9** | 4 | `the page is divided into four panels: one large panel across the top half of the page and three equal panels side by side across the bottom` | large top / bottom left / bottom center / bottom right |
+| **L10** | 5 | `the page is divided into five panels: four small panels stacked on the left and one tall panel taking the full height of the right half` | top left / upper left / lower left / bottom left / tall right |
+| **L11** | 2 | `the page is divided into two panels: one narrow full-width strip across the top and one large panel taking the rest of the page` | top strip / large bottom |
+| **L12** | 4 | `the page is divided into four panels: two panels side by side across the top, one full-width panel in the middle, and one full-width panel across the bottom` | top left / top right / full-width middle / full-width bottom |
+| **L13** | 2 | `the page is divided into two panels: one wide panel across the top half and one wide panel across the bottom half` | wide top / wide bottom |
+| **L14** | 2 | `the page is divided into two panels: one tall panel on the left half and one tall panel on the right half` | tall left / tall right |
+| **L15** | 4 | `the page is divided into four panels: two panels side by side across the top and two panels side by side across the bottom` | top left / top right / bottom left / bottom right |
+| **L16** | 5 | `the page is divided into five panels: one huge panel on the right taking the full height of the page, two narrow panels stacked on the upper left, one small square panel on the middle left, and one wide panel across the bottom left` | huge right / narrow top left / narrow upper left / small middle left / wide bottom left |
+| **L17** | 7 | `the page is divided into seven panels: two panels side by side across the top, three panels side by side in the middle, and two panels side by side across the bottom` | top left / top right / middle left / middle center / middle right / bottom left / bottom right |
+| **L18** | 3 | `the page is divided into three horizontal strips stacked from top to bottom` | top strip / middle strip / bottom strip |
+| **L19** | 4 | `the page is divided into four panels: one huge panel across the top half of the page that extends past the page edges and three equal panels side by side across the bottom` | huge top / bottom left / bottom center / bottom right |
+| **L20** | 3 | `the page is divided into three panels: two small panels side by side across the top and one huge panel taking the bottom two-thirds of the page` | small top left / small top right / huge bottom |
+| **L21** | 3 | **禁用**：出血大格 + 右下 2 小格。不对称留白会被模型补成第 4 格，写 `exactly three panels` 也压不住 [经验] | 改用 L7 或 L19 |
+
+**选版式纪律**（v4.1b 按 8 张实测改写）
+
+1. **一页只写一条版式句**，格数写死在句子里。
+2. **格数优先，不是对称优先**。实测：能保住格数的真正原因是「**行组占满整行 + 格数写死在句子里**」，
+   不是「对称」——斜切格、极端不等宽、跨栏格、内嵌小格、黑底格**都能保住格数**（见 §5.2.1）。
+   所以**不要为了保格数牺牲版面特色**，那样整话都是等宽网格，最没特色。
+3. 张力页用 L7 / L9 / L19 / L20；对话页用 L2 / L4 / L15；蒙太奇用 L3 / L6 / L10 / L16。
+4. **禁区只剩两类**（v4.1b 收窄）：
+   - **前景覆盖人物**（无框人物叠穿多格）——实测失败，会画出普通网格；
+   - **破框**（手臂越出格线）——实测版式对、但越界效果没出来。
+   这两类改**后期合成 / 分层资产**。**斜切格不再是禁区**（实测成立）。
+5. `diagonal / slanted / inset / overlapping` **可以写**（实测成立），但必须配完整的「格数写死 + 行组占满」句子，
+   不能只甩一个 `diagonal panels`。
+
+### 5.2.1 特色版式库 S1–S8（2026-10-27 实测，同 seed 单变量）
+
+> 21 个 L 编号里有 19 个是「等宽行堆叠」，整话都用它们就会「太没特色」。下面 8 种是专门解决这个问题的，
+> 全部在**同一场景、同一角色、同一 seed、黑白档、1024×1024**下出图验证过。
+
+| 编号 | 格数 | 特色 | 版式句（可直接用） | 实测 |
+|---|---|---|---|---|
+| **S1 主次对比** | 4 | 大格占 2/3 + 底部三条**窄横格** | `the page is divided into four panels: one huge panel taking the top two-thirds of the page and three narrow horizontal strips stacked across the bottom` | ✅ 成立 |
+| **S2 跨栏格** | 7 | 三栏 → **通栏带** → 三栏，动线被打断 | `the page is divided into seven panels: three panels side by side across the top, one full-width panel across the middle, and three panels side by side across the bottom` | ✅ 成立（7 框超过角色框上限 6，走 §5.8 单串通道） |
+| **S3 斜切格** | 4 | 斜向格线，最「有漫画味」 | `the page is divided into four panels with diagonal slanted panel borders cutting across the page` ＋ `the gutters slant diagonally across the page, the panel edges cut at an angle` | ✅ 成立（单 seed；**例外：斜切格没有行组**，靠 `divided into four panels` 的格数锁死，复验前别用在 5 格以上的页） |
+| **S4 极端不等宽** | 2 | 左 1/3 竖条 + 右 2/3 宽格，面积差拉满 | `the page is divided into two panels: one narrow tall panel taking the left one third of the page and one wide panel taking the right two thirds` | ✅ 成立 |
+| **S5 内嵌小格** | 2＋1 | 斜置**无框**小格压在大格角上 | `...and one wide panel across the bottom, a small borderless inset panel overlapping the bottom right corner of the large panel, the inset shows only her hand and the wax seal, the inset frame tilted slightly, the inset casting a soft shadow on the panel beneath` | ✅ 成立 |
+| **S6 黑底强调格** | 3 | 中间一格纯黑底，对比最强 | `one full-width panel with a solid black background in the middle` ＋ `the middle panel has a solid black background, the figure lit only by moonlight, high contrast, no background detail` | ✅ 成立 |
+| **S7 破框** | — | 手臂越出格线进入留白 | `her right arm breaking past the right edge of her panel into the white gutter, the sleeve crossing the gutter, the hand entering the neighbouring panel space, strong foreshortening on the forearm` | ⚠️ 版式对、**越界效果没出来** → 改后期合成 |
+| **S8 前景覆盖** | — | 无框人物叠穿底层多格 | `a single borderless figure of the white-haired girl overlaid in front of the bottom panels, her outline cutting through the panel borders, her body crossing two panels` | ❌ **失败**（画出普通网格）→ 改分层资产 |
+
+**配比建议**（可选，单 seed 证据，复验后再升级为「建议」）：**每 3–4 页里可以安排 1 页用 S1–S6 中的一种**。
+L2 / L4 / L15 这类等宽网格只用来「过场」，不要整话都用。
+
+**S1–S6 的共同前提**（缺一个就容易崩格数）：
+1. 格数写死在句子里（`divided into N panels`）；
+2. 行组占满整行（`across the top / in the middle / across the bottom`）；
+3. 景别与格形配对（竖条格 / 小格只放中近景，见 §7 格形表）；
+4. 每框 25–30 个有效片段（§5.1）。
+
+### 5.3 格位称呼 + RTL 镜像规程
+
+- 可用词：纵向 `top / upper / middle / lower / bottom`；横向 `left / center / right`；跨度 `full-width / tall / wide / narrow / small / large / huge`；形态 `panel / strip`。
+- **禁用**：`panel 1` 这类数字编号（会被画成文字）、`first / second panel` 序数、单独使用的 `above / below`。
+- **RTL 读序**（本模板默认）：剧情按 右→左、上→下 分配。2×2 的顺序是 右上 → 左上 → 右下 → 左下。气泡和旁白框也从格内右上起。
+- **镜像规程**：版式库按 LTR 排布写。要让 RTL 页保持同样的视觉动线（比如首读格是大格），就把**版式句和全部格位称呼里的 `left ↔ right` 同步互换**（`tall left ↔ tall right` 也一起换）。不含左右的称呼（`full-width top / huge bottom / top strip`）不动。
+- **对称版式不镜像**（L2 / L4 / L15 / L18 / L20 这类版式句本身不含 left/right 时）：**格位称呼按物理位置写、不互换**，RTL 只通过「读序句 + 内容分配顺序（先写右格、再写左格）」实现。只有当版式句或称呼里出现 left/right（如 L8 的 `tall left`）时才互换。照字面把 `middle left` 换成右边那格，模型必然错位 [经验]。
+- **三处必须一致**：读序句、版式句、各框的格位片段。改读序就整页一起改。
+- **正反打**：开左右两个等大的近景格，一人一边，机位同侧（`from the front` 或 `from the side`）。不写 `over the shoulder` [实拍]。
+
+### 5.4 镜头与张力
+
+- **平视是默认机位**（实拍 85% 是平视）。仰视和倾斜只用在冲击页。俯视是躺、趴、坐类场景的默认机位 [实拍]。
+- 每格至少写 1 个机位或景别词，相邻格的机位不重复。
+- 每格的机位只能有一组，而且互相不冲突：`from above` 和 `from below`、`low angle` 和 `high angle` 不同写；**`from the front` 和「低头 / 看手」不同写**，要低头就用 `from above`（V5 一律保机位、放弃低头）。视角类 tag 写到 1–3 个就够了，再多会扣分 [实测]。
+
+| 目的 | 写进该格框 |
+|---|---|
+| 压迫 / 体量差 | `from below, low angle looking up` |
+| 怼镜头 | `arm thrust toward the viewer, strong foreshortening` |
+| 速度 / 冲击 | `motion blur, speed lines` / `emphasis lines` |
+| 不安 | `dutch angle` |
+| 情绪顶点 | `extreme close-up`（眼、手指、刀锋） |
+| 破框 | **不要写进 prompt**（实测版式对、越界效果出不来）。改后期合成：单格出图让手臂自然出画，拼页时把该格裁成无框压到相邻留白上 |
+
+**高张力页**：主格写占页比例（`one huge panel … taking the full height of the page`，占页 40–60%），插格只写一件细节（`close-up` / `close-up of hands`）。
+
+**分镜性格**：拿不准时用 B 型（近景对话、以气泡为主）；变身、身体变化题材用 A 型（每页 2–3 格写 `close-up` 或 `extreme close-up`，以旁白框为主）。
+
+### 5.5 页面节奏
+
+1. **每页一个视觉重音**：最大、最近或最黑的那一格。放在 L7 / L9 / L19 / L20 的大格里，或压成 `close-up`，或给它 `solid black background`。
+2. **景别配方**：建立格（`wide shot / full body`，`wide shot` 只放在横向格 full-width / wide / strip；方格里的建立格用单人 `full body`）、对话格（`upper body / cowboy shot`）、反应格（`portrait / close-up`）、细节格（`close-up of hands`）每页至少凑 2 类。**同一景别连续不超过 2 格**。
+3. **翻页钩子**：最后一格（RTL 是左下）必须是未完成的动作、新揭露的信息、情绪顶点或视线出画，不用平淡台词收页。
+4. **呼吸**：连续 2–3 页 P5–7 之后接 1 页 P0 或 P2；每 6–8 页安排 1 页 P0；**连续 3 页同 P 档要改**。
+5. 每格至少推进一项（状态、信息、关系或空间）。纯重复镜头的格直接删掉。
+
+**写作顺序**：① 定 P 档 → ② 选 L 编号 → ③ 定重音格 → ④ 分配景别 → ⑤ 定翻页钩子 → ⑥ 写主串和各框。
+
+### 5.6 框线、出血、黑底
+
+| 要什么 | 写法 | 注意 |
+|---|---|---|
+| 标准格线 | 主串写 `thin black panel borders with narrow white gutters` | 默认写法；张力页可以改成 `thick` |
+| 无框页 | 主串写 `borderless panels` | 不同时写格线句 |
+| 出血大格 | 该格写 `the panel extends past the page edges` | **不用动词 `bleeds`，会被画成血** [经验] |
+| **满版无页边距** | 主串写 **`borderless panels, full bleed, edge to edge, no page margins`**；**或**在格线句后加行内负权重 **`-1::white border, page margin, frame ::`**。两种写法实测都把外圈白边压到 **0px**（基线 26–30px）[经验] | 光写 `no page margins` 压不住；`borderless / full bleed / edge to edge` 和行内负权重才是关键。仍失败再用裁切兜底 |
+| 黑底强调格 | 该格写 `the panel has a solid black background` | 每页最多 1 格。黑白档用了黑底格，就删掉该页网点 |
+| 网点 | 主串介质位写 `screentones` | 复数是规范形 |
+
+`border` / `white border` 指整图外框，不是格线。格线只用 `panel borders` 来写。
+
+**裁白边**（**兜底，不是首选**）：先用上面的写法；只有仍留白边时才跑：
+```powershell
+python tools/crop_margins.py --in images/xxx --out images/xxx_cropped --thr 0.97 --safety 2
+```
+从四边向内跳过「≥97% 近白」的行/列，保留 2px 余量。
+
+**白边实测结论**：`no page margins` 压不住（四边 26–30px）；"
+`borderless panels, full bleed, edge to edge` 与正文负权重 `-1::white border, page margin, frame ::` **都能压到 0px**。
+白边只在浅色场景（白墙 / 走廊 / 雪地）出现，暗背景页模型自己填满。
+
+### 5.7 B 模式硬规则
+
+1. **格数 = 格位称呼去重数**（同一格里的两个框只算一格）。
+2. **人数 tag = 去重身份数**，不是框数，也不是格数。
+3. **一页只写一条版式句**。**P0 页不写版式句、不写 `comic`**；叙事页必须写版式句，否则会被画成整页单格。
+4. 每格自带「谁 + 在哪 + 什么状态或动作」，不依赖前一格。
+5. 台词写进**说话者所在格的框**里，旁白写进主串。
+
+### 5.8 单串通道（API / `gen_batch` 只下发 positivePrompt 时）
+
+本模板的 `|` 分段是给 Studio 界面和单串 API 用的：整行作为一个 `positivePrompt` 下发，`|` 只是给人读的分隔符，模型靠语义理解「girl, in the top right panel: …」来定位。
+
+- **同格两人**：拆成两段（两框），开头片段逐字相同。**宽景（`wide shot` / `full body`）里两人同框常被压成一人**，改用 `upper body` / `cowboy shot` 更稳 [经验]。
+- **只有一人的格**：仍要开一段（`girl, in …`），不要只写主串，否则该格会掉人。
+- **纯物件格**：用 `other, in the … panel: …`；`other` **不计入身份数**。
+
+---
+
+## 6 · 色彩档：**默认不写任何色彩档词**
+
+> ⚠️ **默认：prompt 里一个色彩档词都不写。**
+> 不加 `monochrome / greyscale / screentones / pure black and white / no color`，
+> **也不加** `full color / anime coloring / cel shading / colorful`。
+> **色彩由软件的「风格提示词」与设置决定，模板只负责画面内容。**
+>
+> 日式漫画「惯例是黑白」——但**那要用户明确说「要黑白 / 网点 / 日式黑白漫画」才走黑白档**。
+> 用户没说，就按默认走：不写色彩档词，出什么色由风格串决定。
+
+| 项 | 黑白档（**只有用户明确要求时才用**） | **默认（不写任何色彩档词）** |
+|---|---|---|
+| 主串风格位 | `monochrome, greyscale, screentones, pure black and white, no color` | **什么都不写**（连 `full color` 也不写） |
+| 读序句 | `a black-and-white manga page read right to left then top to bottom` | `a manga page read right to left then top to bottom`（**不带色彩形容词**） |
+| 角色段 | **全部改成明暗词**：`black / white / grey hair`、`grey eyes`、`dark necktie`；用黑白版角色卡（§8 1b） | 写原色：`brown hair`、`amber eyes`、`red umbrella` |
+| 光线 / 动作句 | 去掉色相和**色温**：`blue moonlight → low moonlight`、`orange dusk light → low dusk light`、`warm lamp light → single desk lamp light`。`cool / cold / warm / golden` 都不写 [实测] | 正常写光色：`warm lamp light`、`blue moonlight`、`overcast afternoon` |
+| 负面 | 不写（默认不用负面提示词） | 不写 |
+
+- `monochrome` 必须和 `greyscale` 同写 [官方]。
+- **黑白档四处都要查色相与色温词**：base 光线、角色段、动作句、细节句。只要留一个（`aqua eyes`、`red boots`、`cool moonlight`），整页就会被拉回彩色 [经验][实测]。
+- 半黑白（只保留头发和眼睛的颜色）：`greyscale, 1.2::greyscale with colored hair, greyscale with colored eyes ::`。只有发色和瞳色写原色 [经验]。
+- **禁用词**（仅指**独立 tag**；版式句、格线句、满版句里作为英文单词出现的 `panel(s)` 不算）：`panel, panels, multiple panels, page layout, comic panel, dialogue box, text focus, halftone, ultra complexity, multiple views, polka dot`，以及日文 tag。`lineart` 指未上色的线稿，不用来表达「线条清楚」。
+
+---
+
+## 7 · 景别与服装
+
+- 一格（或一框）只写一个景别，服装和身体 tag 要和景别一致 [官方]。
+
+**格形 × 景别（硬规则）**
+
+| 格形 | 允许 | 禁止 |
+|---|---|---|
+| 整张竖图（P0 / A 逐格 `832x1216`） | `upper body / cowboy shot / portrait / close-up` | `wide shot / very wide shot` [实测]；`full body` 慎用 |
+| 整张横图（`1216x832`） | `wide shot / very wide shot / full body` | — |
+| B 页横向格：`full-width …`、`wide top/bottom`、`… strip` | 可放 `wide shot / full body`（`wide shot` 建立格只放这里） | — |
+| B 页方格（2×2、3×2 的单格） | `upper body / cowboy shot / portrait / close-up`；单人 `full body` 可用 | `wide shot / very wide shot` [推论] |
+| B 页竖条格 / 小格：`tall left/right`、`small …` | `upper body / cowboy shot / portrait / close-up` | `wide shot / very wide shot` **[推论]**；`full body` 慎用 |
+
+一个序列里横图（或横向建立格）不超过 1/4，超过就成「风景集」[实测]。
+
+- 建立格：`wide shot` + 2–3 条场景短语（按上表只放横向格 / 横图）。对话格：`upper body` / `cowboy shot`（`cowboy shot` 不写鞋袜；竖幅里取景偏松、接近全身 [实测]，要半身就写 `upper body`）。反应格：`close-up` / `portrait`（只写头部锚和领口）。动作格：`full body` + `speed lines`。
+- 首格不放全页最长的台词，否则容易只画出气泡、没有人 [经验]。
+- 小格里的姿势用 tag（`sitting`、`kneeling`）代替长从句，减少多肢体崩坏。
+- **细节页 / 手部页豁免**：整页都是手部或局部特写时，允许相邻格同景别，但**手指形态与机位必须显式不同**（`fingers spread` vs `fingers closed`、`from above` vs `from the side`），否则会画成重复镜头 [经验]。
+- **四类必写** [实测，跨 seed 4/4]：① 关键结构写具体（`three tall window panes, thick wooden mullions`）；② 颜色隔离（`black coat, black pants, red ribbon only`）；③ 同类物体点数量（`second white paper cup on the table`）；④ 体型（`slim, petite`）。可以用描述性短语，不必是词表 tag。**同一组物体只数一次**：不要同时写 `three streetlights` 和 `three iron lamp posts`（可能画出六盏）。
+
+---
+
+## 8 · 角色一致性（C 规程）
+
+1. **角色卡**（先输出，跨页不改）：`【角色卡】<代号> | 段首: girl | H: <头部锚 6–10，含发色+发型+瞳色> | B: <体型锚 1–2，如 slim, petite> | O: <服装锚 4–8，含主色> | P: <道具锚 0–3> | ID: <带权重指纹>`。发色、发型、服装、体型四项必须写出来。**不写不等于中性，等于每次随机** [实测]。
+   **1b. 黑白档另备一张「黑白版角色卡」**，代号不变，H / O / P 全部换成明暗词，用哪套就逐字复用哪套：`brown eyes → dark eyes`、`pale blue summer dress → pale grey summer dress`、`red ribbon → bright white ribbon`。关键色道具改写成**明度**而不是 `dark`（`red umbrella → bright white umbrella`），保住「这件东西在画面里是亮的」这条线索 [实测]。
+2. **V5 会在同一行内全局去重重复的 tag**，而且是跨角色去重：B 页里第二次出现的 `black hair, school uniform` 会被静默删掉 [经验]。所以：
+   - **A 模式**（一行一格）：每行把 H 整串逐字照抄，O 按景别整项删减，不换同义词、不调顺序。
+   - **B 模式**（一行多框）：每框用**带权重的身份指纹**锁定，`1.2::black hair ::, 1.2::long hair ::, 1.2::grey eyes ::`（发色 + 发型 + 瞳色）。带权重的锚串不会被去重，能把漂色的头发锁回来。其余每框写**变化项**：景别、表情、动作、持物，并用变化项把本框补到 25 个片段（见 §5.1）；不要靠重复无权重锚凑数，那些会被去重。
+   - 两个角色有相同特征时（都是黑发），靠权重指纹 + 各自独有的特征（发型、痣、配饰）区分。
+3. **状态表**（一格一行）：`格位 | 服装状态 | 左手 | 右手 | 伤势 | 站位`。已成立的状态不因新动作而重置；伤势出现后，所有可见格都要写。
+4. **场景锚 S / 光线锚 L**：同一地点逐字复用；近景格只保留镜头内的那部分。
+5. 表情只写在段里，相邻格的表情不完全相同。base 不放表情 tag（放了会全员同一张脸）。
+6. seed 不能锁定身份 [官方]：对比改动时固定 seed，重掷时换 seed。V5 没有 Precise Reference / Vibe Transfer [官方]，要锁脸就用 V4.5 的定妆图配 Precise Reference，或者 V5 Image2Image 低强度重绘（写在附注里）。
+
+---
+
+## 9 · 文字层
+
+| 路线 | 何时用 | 写法 |
+|---|---|---|
+| **T0 后期排字**（正式出版默认） | 中文长对白；交给 BCS / 气泡字幕排字 | prompt 不写 `text`、`Text:`、引号。留位置用 `empty space above her head`，防止随机气泡用 `-3::speech bubble ::`（气泡是物体，`-1` 只削属性、可能留下空框；整页 `-1` vs `-3` 尚未对比，单格 `-1` 已 10/10 有效）**[推论]**。原文进「文字清单」（格位 / 说话人 / 载体 / 原文） |
+| **T1 单格图内字** | 道具字、招牌，或 1–2 句短对白 | base 加 `text, english text`（中文写 `chinese text`），载体句复述原文，最后写 `Text: "原文"` |
+| **T2 整页图内字** | B 模式，全页 ≤4 条 | 台词逐格写进说话者框的末尾；旁白写在主串末尾 |
+
+**硬规则**
+1. **`Text:` 必须是所在段（主串或该框）的最后一项**，后面再写的任何内容都可能被画成字 [官方]。包括工具**自动追加**的内容：Quality Tags 追加的质量词、行末负权重，都会被画成字 [实测]。所以 `qualityPreset` 必须是 `none`，负权重必须在 `text` 组之前。
+2. 用 `Text:` 时，同一段必须有 `text` + 语言 tag [官方]。
+3. **每页至少一条旁白或台词**。没有文字的页读者看不懂剧情。走 T0 时写进文字清单。
+4. **P0 页的 `Text:` 必须配载体句**，只写 `Text:` 不会出字 [经验]。
+5. **每页最多 2 种载体**（气泡 / 旁白框 / 标题带 / 拟声任选 2 种，多了会互相吞）。每格最多 2 个气泡。
+6. **主串旁白 + 格框台词可以同页**（校验器会提示但不拦），只要载体 ≤2 种、文字 ≤4 条。
+7. **拟声不进 `Text:`**：写 tag `sound effects` + `bold hand-drawn lettering SLAM beside the fist`。拟声的语言要和页面一致，中文页写英文拟声会被同化成汉字。
+8. 字数：中文每条 ≤12–16 字（竖排每列 8–14 字），英文每条 ≤20 字符。日文载荷时 UC 加 `furigana, ruby`。
+9. 静默格什么都不写，不写 `no text in this panel`。
+
+**载体句**（每条算一个逗号片段，**句中不得再出现逗号**——否则会被拆成多个单元、预算虚高 [经验]）
+- 旁白（横排）：`a square narrator box in the top right corner reads in Chinese lettering, Text: "原文"`（LTR 页改 `top left`）
+- 旁白（竖排）：`a tall vertical narrator box at the right edge of the page reads in vertical Chinese lettering, Text: "原文"`
+- 台词（竖排）：`a tall vertical speech bubble beside her mouth reads in vertical Chinese lettering, Text: "原文"`
+- 对白：`a speech bubble in the upper right corner of the panel clear of her face with its tail pointing at her mouth, Text: "原文"`
+- 竖排中文：`a tall vertical speech bubble beside her reads in vertical Chinese lettering`
+- 内心：`a cloud-shaped thought bubble above her head`（不和 `speech bubble` 同格叠用）
+- 标题带：`a wide dark red title band across the top of the huge panel reads in bold Chinese lettering`（同页不再放气泡）
+
+---
+
+## 10 · 权重与排除
+
+- 权重只用 `数值::tag ::` 这一种写法（`::` 前保留一个空格），常用 1.2，不混用 `{}` / `[]` [官方]。
+- **正面负权重剂量** [实测，同 seed 受控]：
+
+  | 写法 | 效果 | 用途 |
+  |---|---|---|
+  | `-1::tag ::` | 削掉属性，物体还在 | 改属性：压白边 `-1::white border, page margin, frame ::`（实测白边 28/24/53/59 → 0/0/0/0，彩像素仍 0%）｜⚠️ **不要用它「去色」**，见下方黑白档硬规则 |
+  | `-2::tag ::` | 相对 -1 零增量 | **不用** |
+  | `-3::tag ::` | 删掉物体 | 删物体：多余道具；随机气泡 `-3::speech bubble ::` **[推论]** |
+
+- **数量**：同一剂量的排除项合并成一组。全行最多 **一组 `-1` + 一组 `-3`**，两组连写。
+- **位置**：主串里放在场景短语之后、`text` 组之前；**框里同样放在该框的台词组之前**。放到 `Text:` 后面会被画成文字 [实测]。
+- **前提**：先删掉 prompt 里对同一元素的同义描述（包括载体句、细节句），否则负权重会被同义句压过、看起来无效 [实测]。
+- `negativePrompt` 字段删不掉 prompt 里正面写到的内容。要删就改正面，或者用正文 `-3::` [实测]。
+
+**⚠️ 黑白档硬规则：正文负权重不能用来「去色」** [实测，同 seed 双向对照]
+
+黑白档 prompt **不加**正文负权重 → 彩像素 0%；加了 `-1::color, warm tint ::` → **64.9–71%（变蓝）**；删掉又回到 0%。
+机制：正面 `monochrome, greyscale, no color` 已在压色，再否定「颜色」会把模型推向「有颜色的夜景」——**反向出彩**。
+
+- ✅ 能用的负权重：`-1::white border, page margin, frame ::`（压白边）、`-1::warm ::`（彩色档救「黑」）
+- ❌ 不能用的：`-1::color ::` / `-1::colorful ::` / `-1::colored ::`
+- 去色只靠：正面风格位 + 四处（base 光线 / 角色段 / 动作句 / 细节句）不留色相与色温词
+
+---
+
+## 11 · 失败分支
+
+| 症状 | 先改 prompt | 还不行 |
+|---|---|---|
+| 格数不对 / 多切一格 | 核对版式句格数 = 称呼去重数；删掉第二条版式句；核对行组是否占满整行（格数优先，不是对称优先，见 §5.2） | 换方图；拆成两张或改 A |
+| 两格并成一格 / 格线消失 | 加格线句；两格写不同景别（`full body` 和 `close-up`），再加 `separate panels, thick gutters between panels` | 改成「上 1 宽 + 下 2」 |
+| 框内容跑到别的格 | 各框格位片段与主串逐字一致；同格两框的开头片段相同 | 前端改 `Custom` 定位，或改 B2 |
+| 叙事页画成单格 / 单格图自发分格 | 叙事页补版式句；P0 删掉 `comic`；整页确认软件默认负面里没有 `multiple views` | 加 `-1::multiple views ::` |
+| 某格主角消失 / 跨格不像同一人 | 每格开一个角色框（不写只有 base 的格）；身份指纹改成带权重锚串 | 定妆图 + V4.5 Precise Reference |
+| 黑白页出彩色 | ① 先查**正文里有没有 `-1::color, warm tint ::`**——有就删掉（实测加了它彩像素 0%→65%）② 查四处（base 光线 / 角色段 / 动作句 / 细节句）的色相词与色温词，全部改成明暗词 ③ 补 `pure black and white, no color` | 换 seed；**不要**用正文负权重去色，改用 negativePrompt 字段 |
+| 网点出不来 / 整图发灰 | UC 不是 Heavy；UC 里没有 `screentone/halftone/dithering`（含锁定负面）；effort 用 High；删 `ultra complexity`；黑底格和网点不同页 | — |
+| 多格页外圈留白边 | 每个框写 `extends past the edge of the image`，负面压白边 | 后期裁切 |
+| 出血格画出了血 | `bleeds` 改成 `extends past the page edges` | — |
+| 文字不出 / 气泡是空的 | `Text:` 放到最末；补 `text` + 语言 tag；P0 页补载体句 | 改 T0 |
+| 气泡里出现 `masterpiece` 等英文 / 负权重语法 | `qualityPreset: none`；负权重挪到 `text` 组之前 | — |
+| 多句挤进一个气泡 / 标题带吞掉气泡 / 拟声进了气泡 | 台词逐格写进各自框的 `Text:`；每页 ≤2 种载体；把拟声从 `Text:` 里拿出来 | 拆页 |
+| 乱码 / 错字 / 英文拟声变汉字 | 每条缩短；载体句复述原文；拟声语言和页面一致 | 改 T0 |
+| 整页读不懂 | 补旁白，每页至少一条 | — |
+| 画面平、不像漫画 | 按 §5.4 补镜头词；确认模型是 Full；确认软件里默认风格串还在（模板不传 `stylePrompt`，风格靠继承，别把它清空） | 换 seed |
+| 出图慢（15 秒以上一张） | 删掉风格串里的 `high complexity`；彩色档不加风格串 | — |
+| 两个人合成一个身体 / 道具跑到别人身上 | 该框补到 ≥25 个有效片段（§5.1）；同格两人别用 `wide shot` | 拆成两格或改 A |
+| 角色长出不该有的部件 / 发型被改 | 该框是否 >30；删掉同框互斥项（`twintails` 与 `side ponytail`） | — |
+| 黑发变棕、黑衣变橄榄 | 暖逆光会让「黑」失守，加 `-1::warm ::`，改冷暖中性光 | 换 seed |
+| 手部崩坏 | `hand focus` 无效；换手势（并拢 / 侧向）或让手出画 | — |
+
+---
+
+## 12 · 自检清单
+
+| # | 检查项 |
+|---|---|
+| 1 | 一行一页，无换行；` \| ` 两侧各一空格；每段以 `girl/boy/other` 开头 |
+| 2 | 纯英文（`Text:` 和引号内除外）；没有画师名、质量词、尺寸词、禁用词 |
+| 3 | P 档已判定；P0 没有版式句和 `comic`；其余页的版式句取自 L 库，**每页只有一条** |
+| 4 | 版式句格数 = P 档格数 = 格位称呼去重数；没有 `panel 1` 这类编号 |
+| 5 | 人数：A 是人数 = 段数；B 是人数 = 去重身份数（附注已写明例外） |
+| 6 | 读序句只有一句；RTL 页的读序句、版式句、各框称呼三处一致，左右已同步镜像 |
+| 7 | 单元数符合 §3 公式；每框 / 每格只有 1 个景别，镜头词在框里不在主串；机位不互斥 |
+| 8 | **色彩档：默认一个色彩档词都不写**（不加 `monochrome/greyscale/screentones`，也不加 `full color`），读序句不带色彩形容词；走黑白档时四处都没有色相词与色温词，负面追加了 `color, colorful…` |
+| 9 | B 页的身份指纹用了带权重锚串；A 页的 H 串和角色卡逐字相同；角色卡有体型 |
+| 10 | 每页至少一条旁白或台词；`Text:` 是段末项且同段有语言 tag；P0 有载体句；每页 ≤2 种载体；拟声不在 `Text:` 里 |
+| 11 | 满版页每个框都写了 extends 句，负面压了白边；没有用 `bleeds` |
+| 12 | 负面不传（默认不用）；软件默认负面里没有会压掉分格的词；设置齐全（V5 Full / High / No Default UC / `qualityPreset: none` / 尺寸） |
+| 13 | 主串（base）里没有人物外貌、服装、表情、动作短语（B2 备用模式除外）；每个人物框 25–30 个有效片段；竖图和竖格里没有 `wide shot`；`qualityPreset: none`；整页显式传了 `negativePrompt` |
+
+---
+
+## 13 · 生产流程（不依赖外部脚本）
+
+`
+① 剧本 → 分镜事件表（一页一行：P 档 / 版式编号 / 场景 / 光线 / 每格内容与文字）
+② 1 个代理串行写完全部页的 prompt（同时校对事件表自身的矛盾）
+③ 可开 N 个子代理并行检查，每个只查 1 页，只出问题清单、不改稿
+④ 回到同 1 个代理，只改被指出的项
+⑤ 串行出图（并发会 429）
+`
+
+**生成分工（硬规则）**：生成要全局视野，归一个代理；检查只看局部，可以并行。
+实测：50 页由 50 个子代理各写 1 页 → 身份指纹出现 16 种变体；1 个代理写 → 2 种。
+
+**交付前自检**：按 §12 清单逐项过。改过的页要连同相邻两页一起复查。
+## 14 · 示例：B 模式 · S1 大格版式 · RTL · 默认彩色 · 两人四框 · 旁白 + 台词（T2）
+
+```text
+2girls, comic, a manga page read right to left then top to bottom, the page is divided into four panels: one huge panel taking the top two-thirds of the page and three narrow horizontal strips stacked across the bottom, thin black panel borders with narrow white gutters, rooftop, outdoors, night, city skyline, water tower, chain-link fence, low moonlight, -1::white border, page margin, frame ::, text, chinese text, a square narrator box in the top right corner reads in Chinese lettering, Text: "约定的屋顶，午夜。" | girl, in the huge top panel: full body from behind, 1.2::black hair ::, 1.2::short hair ::, 1.2::brown eyes ::, petite, messy hair, hooded jacket, open jacket, hood down, cargo pants, sneakers, fingerless gloves, holding envelope, walking, slow deliberate steps, back to the viewer, she steps out of the stairwell door onto the rooftop with the envelope in her right hand, the heavy door swinging open behind her, her left hand still on the door handle, jacket hem lifted by the wind, a bare bulb above the stairwell door, the long shadow of her legs stretching across the concrete, concrete floor, shallow puddles on the rooftop, rooftop vents along the edge, the water tower looming in the distance | girl, in the top strip: upper body from side, 1.2::white hair ::, 1.2::long hair ::, 1.2::grey eyes ::, blunt bangs, slim, school uniform, blazer, white collared shirt, neck ribbon, small earring, crossed arms, frown, half-lidded eyes, sideways glance, leaning back, she leans against the chain-link fence and turns her eyes toward the stairwell on the right, a strand of hair caught by the wind, her fingers tapping her elbow, the fence wire pressing into her blazer, city lights glowing far below, pale light along her profile, dark sky behind her, her breath faint in the night air, text, chinese text, a speech bubble in the upper right corner of the panel clear of her face with its tail pointing at her mouth, Text: "你迟到了。" | girl, in the middle strip: close-up of hands, envelope, wax seal, a gloved hand entering from the right passes the sealed envelope to a bare pale hand reaching in from the left, a round wax seal on the envelope, fingertips almost touching, slender fingers, the dark jacket cuff on the right wrist, the blazer cuff on the left wrist, worn glove fabric, a small tear at the glove knuckle, the envelope edge bent under the gloved thumb, moonlight catching the edge of the paper, a soft shadow across both wrists, the chain-link fence blurred in the background, concrete floor out of focus, depth of field, the handoff frozen mid-motion, wind tugging at the envelope corner, a faint crease across the paper, the bare hand with short trimmed nails, faint veins on the pale back of the hand, hands meeting at the center of the panel, night air around them, both hands steady, a thin shadow line where the envelope overlaps the glove | girl, in the bottom strip: upper body from the front, 1.2::white hair ::, 1.2::long hair ::, 1.2::grey eyes ::, blazer unbuttoned, loosened neck ribbon, slim shoulders, holding letter, torn envelope, surprised, wide eyes, parted lips, standing, leaning slightly forward, letter held up with both hands, in the left foreground she tears open the envelope with her right thumb, her eyes widening as she reads the first line, the broken wax seal dropping past her wrist, a strand of white hair blown across her cheek, chain-link fence behind her, city lights blurred in the distance, moonlight rimming her shoulders, a pale glow reflecting off the letter paper onto her chin, her shadow falling across the fence, the torn flap of the envelope curling in the wind, the letter paper creased from folding
+```
+
+设置：V5 Full / High / `qualityPreset: none` / `ucPreset: 3` / 负面**不传**（默认不用，用软件默认）/ `1024x1024`。
+本例走**默认彩色口径**：主串没有色彩档词、读序句不带色彩形容词、角色段写原色。要黑白就把 §6 黑白档那一列套上。
+位置表：框 1 = 大格（上 2/3），框 2 = 顶部窄横格，框 3 = 中部窄横格，框 4 = 底部窄横格。**一格一个框，没有同格两框**（同格两框会让其中一个框落到错格，实测 4 个版本全中）。人数 2 = 去重身份数，4 框，属 B 模式例外。各框有效片段 25–27（去重后），主串约 23。
+文字清单：旁白（主串，右上旁白框）「约定的屋顶，午夜。」；台词（框 2，白发，气泡）「你迟到了。」。载体 2 种。

@@ -1,3 +1,5 @@
+import '../i18n/template_feature_text.dart';
+import 'template_library_screen.dart';
 import 'ios_update_card.dart';
 import 'prompt_skill_selector.dart';
 import '../prompts/prompt_skill_selection.dart';
@@ -705,6 +707,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ]),
           _Section(title: settingsText.promptTemplatesSection, children: [
+            FilledButton.tonalIcon(key:const ValueKey('open-prompt-template-library'),
+              icon:const Icon(Icons.library_books_outlined),
+              label:Text(templateFeatureText(s.language,'library')),
+              onPressed:()=>Navigator.of(context).push<void>(MaterialPageRoute(builder:(_)=>TemplateLibraryScreen(
+                library:state.templateLibrary,language:s.language,
+                onUseImageV3:(kind)=>state.setSettings((x)=>selectPromptSkill(x,kind,'3.0.0','v5')))))),
+            Text(templateFeatureText(s.language,'hint')),
+            ExpansionTile(title:Text(templateFeatureText(s.language,'legacy')),children:[
+            if(s.reversePromptSkillVersion=='3.0.0') Text(templateFeatureText(s.language,'v3'))
+            else ...[
             Text(settingsDetailText.reverseTemplateTitle),
             PromptSkillSelector(model:promptSkillModel(s,'reverse'),edition:promptSkillEdition(s,'reverse'),language:s.language,onChanged:(model,edition)=>state.setSettings((x)=>selectPromptSkill(x,'reverse',edition,model))),
             ...ReversePromptMode.values.map((mode) => _TemplateTile(
@@ -716,7 +728,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           false,
                   onTap: () => _editTemplate(context, 'reverse', mode),
                 )),
+            ],
             const Divider(),
+            if(s.convertPromptSkillVersion=='3.0.0') Text(templateFeatureText(s.language,'v3'))
+            else ...[
             Text(settingsDetailText.convertTemplateTitle),
             PromptSkillSelector(model:promptSkillModel(s,'convert'),edition:promptSkillEdition(s,'convert'),language:s.language,onChanged:(model,edition)=>state.setSettings((x)=>selectPromptSkill(x,'convert',edition,model))),
             ...ReversePromptMode.values.map((mode) => _TemplateTile(
@@ -729,6 +744,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () => _editTemplate(context, 'convert', mode),
                 )),
             Text(settingsDetailText.restoreTemplateNote),
+            ],
+            ]),
           ]),
           _Section(title: settingsText.promptShortcutsSection, children: [
             if (s.promptShortcuts.isEmpty)

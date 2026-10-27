@@ -11,8 +11,8 @@ on:
         default: ''
         required: false
 
-# This workflow executes the current four-platform release scope and preserves bounded observations.
-# Product/native profiles remain intact; iOS is explicitly excluded from this release, not reported as passed.
+# This workflow executes all five current release targets and preserves bounded observations.
+# iOS native checks are required; unsigned packaging cannot substitute for functional evidence.
 permissions:
   contents: read
   actions: read
@@ -112,7 +112,7 @@ jobs:
           printf '%s' "$keyring_password" | timeout --signal=TERM --kill-after=5s 15s gnome-keyring-daemon --unlock --components=secrets
           unset keyring_password
           failed=0
-          for pair in desktop-native:desktop-acceptance desktop-offline-native:desktop-offline-acceptance desktop-ai-native:desktop-ai-acceptance desktop-generation-native:desktop-generation-acceptance desktop-library-native:desktop-library-acceptance desktop-system-native:desktop-system-acceptance desktop-browser-native:desktop-browser-acceptance desktop-advanced-native:desktop-advanced-acceptance desktop-tools-gallery-native:desktop-tools-gallery-acceptance; do
+          for pair in desktop-native:desktop-acceptance desktop-offline-native:desktop-offline-acceptance desktop-ai-native:desktop-ai-acceptance desktop-generation-native:desktop-generation-acceptance desktop-library-native:desktop-library-acceptance desktop-system-native:desktop-system-acceptance desktop-browser-native:desktop-browser-acceptance desktop-advanced-native:desktop-advanced-acceptance desktop-tools-gallery-native:desktop-tools-gallery-acceptance desktop-japanese-comic-native:desktop-japanese-comic-acceptance; do
             if [ "${pair%%:*}" = desktop-tools-gallery-native ]; then
                 node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" "$RUNNER_TEMP/desktop-generation-acceptance" || failed=1
               elif [ "$RUNNER_OS" = Windows ] && [ "${pair%%:*}" = desktop-system-native ]; then
@@ -125,7 +125,7 @@ jobs:
           KEYRING_SESSION
           else
             failed=0
-            for pair in desktop-native:desktop-acceptance desktop-offline-native:desktop-offline-acceptance desktop-ai-native:desktop-ai-acceptance desktop-generation-native:desktop-generation-acceptance desktop-library-native:desktop-library-acceptance desktop-system-native:desktop-system-acceptance desktop-browser-native:desktop-browser-acceptance desktop-advanced-native:desktop-advanced-acceptance desktop-tools-gallery-native:desktop-tools-gallery-acceptance; do
+            for pair in desktop-native:desktop-acceptance desktop-offline-native:desktop-offline-acceptance desktop-ai-native:desktop-ai-acceptance desktop-generation-native:desktop-generation-acceptance desktop-library-native:desktop-library-acceptance desktop-system-native:desktop-system-acceptance desktop-browser-native:desktop-browser-acceptance desktop-advanced-native:desktop-advanced-acceptance desktop-tools-gallery-native:desktop-tools-gallery-acceptance desktop-japanese-comic-native:desktop-japanese-comic-acceptance; do
               if [ "${pair%%:*}" = desktop-tools-gallery-native ]; then
                 node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" "$RUNNER_TEMP/desktop-generation-acceptance" || failed=1
               elif [ "$RUNNER_OS" = Windows ] && [ "${pair%%:*}" = desktop-system-native ]; then
@@ -141,6 +141,12 @@ jobs:
         with:
           name: native-components-${{ runner.os }}-${{ github.sha }}
           path: |
+            ${{ runner.temp }}/desktop-japanese-comic-acceptance/*-receipt.json
+            ${{ runner.temp }}/desktop-japanese-comic-acceptance/*/command-ledger.json
+            ${{ runner.temp }}/desktop-japanese-comic-acceptance/*/JAPANESE_*.json
+            ${{ runner.temp }}/desktop-japanese-comic-acceptance/*/native-japanese-templates.png
+            ${{ runner.temp }}/desktop-japanese-comic-acceptance/*/source-before/**
+            ${{ runner.temp }}/desktop-japanese-comic-acceptance/*/source-after/**
             ${{ runner.temp }}/desktop-acceptance/desktop-*-receipt.json
             ${{ runner.temp }}/desktop-acceptance/EVIDENCE_MANIFEST.json
             ${{ runner.temp }}/desktop-acceptance/*/command-ledger.json
@@ -211,7 +217,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        entry-group: [core, metadata, gallery, library, generation, text, workflows, ui, os]
+        entry-group: [core, metadata, gallery, library, generation, text, japanese, workflows, ui, os]
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -338,12 +344,12 @@ jobs:
           if-no-files-found: error
 
   ios-components:
-    # Explicit user release exclusion: no iOS native prerequisite for this four-platform release.
-    if: false
+    # Current user request includes iOS native functional acceptance.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
     strategy:
       fail-fast: false
       matrix:
-        entry-group: [core, metadata, gallery, library, generation, text, workflows, ui, os]
+        entry-group: [core, metadata, gallery, library, generation, text, japanese, workflows, ui, os]
     runs-on: macos-14
     timeout-minutes: 75
     steps:
@@ -450,7 +456,7 @@ jobs:
 
   full-client-feature-matrix:
     if: always()
-    needs: [desktop-components, android-components, windows-artist-local-proof]
+    needs: [desktop-components, android-components, ios-components, windows-artist-local-proof]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -466,8 +472,8 @@ jobs:
       - name: Install locked rejection-test dependencies (no lifecycle scripts)
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Check matrix rejection rules
-        run: node --test scripts/feature-acceptance/release-feature-scope.test.mjs scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/windows-artist-contract.test.mjs scripts/feature-acceptance/windows-artist-native.test.mjs scripts/feature-acceptance/windows-artist-matrix.test.mjs scripts/feature-acceptance/import-windows-artist-evidence.test.mjs scripts/feature-acceptance/mobile-scenario-receipt.test.mjs scripts/feature-acceptance/mobile-entry-consistency.test.mjs scripts/feature-acceptance/native-proof-stream.test.mjs scripts/feature-acceptance/native-resident-pending.test.mjs scripts/feature-acceptance/native-begin-entry-parity.test.mjs scripts/feature-acceptance/metadata-import-wrapper.test.mjs scripts/feature-acceptance/prepare-android-image.test.mjs
-      - name: Require 150 scoped cells across four release platforms (six Windows-local capability cells not-supported; iOS excluded)
+        run: node --test scripts/feature-acceptance/five-platform-release-gates.test.mjs scripts/feature-acceptance/release-feature-scope.test.mjs scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/windows-artist-contract.test.mjs scripts/feature-acceptance/windows-artist-native.test.mjs scripts/feature-acceptance/windows-artist-matrix.test.mjs scripts/feature-acceptance/import-windows-artist-evidence.test.mjs scripts/feature-acceptance/mobile-scenario-receipt.test.mjs scripts/feature-acceptance/mobile-entry-consistency.test.mjs scripts/feature-acceptance/native-proof-stream.test.mjs scripts/feature-acceptance/native-resident-pending.test.mjs scripts/feature-acceptance/native-begin-entry-parity.test.mjs scripts/feature-acceptance/metadata-import-wrapper.test.mjs scripts/feature-acceptance/prepare-android-image.test.mjs
+      - name: Require 187 scoped cells across five release platforms (eight Windows-local capability cells not-supported)
         shell: bash
         run: |
           version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json","utf8")).version')"
@@ -475,6 +481,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: four-platform-feature-evidence
+          name: five-platform-feature-evidence
           path: ${{ runner.temp }}/full-feature-matrix/
           if-no-files-found: error

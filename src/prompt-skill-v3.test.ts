@@ -1,0 +1,20 @@
+import {describe,it,expect} from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import v3 from '../shared/prompt-skill-catalog-v3.json';
+import comics from '../shared/comic-template-catalog.json';
+import {selectPromptSkillTemplate,supportsPromptSkillModel,selectComicTemplate,parsePromptSkillV3Response,renderPromptSkillTemplate} from './prompt-skill';
+import {normalizePromptSkillSettings,promptSkillRequestContext} from './prompt-skill-settings';
+const hash=(b:string|Buffer)=>crypto.createHash('sha256').update(b).digest('hex');
+describe('supplied image3 and comic originals',()=>{
+ for(const item of [...v3.templates,...comics.templates])it(item.id+' preserves exact raw/body bytes and provenance',()=>{const b=fs.readFileSync(path.join(process.cwd(),'shared',item.filename));expect(hash(b)).toBe(item.rawSha256);expect(b.toString('utf8').replace(/^\uFEFF/,'')).toBe(item.body);expect(hash(item.body)).toBe(item.sha256);});
+ for(const entry of v3.templates)it('selects one '+entry.id+' and ignores V2 overrides',()=>{expect(selectPromptSkillTemplate({edition:'3.0.0',targetModel:'v5',task:entry.task as 'reverse'|'convert',mode:entry.mode as 'tags'|'natural'|'mixed',legacyTemplate:'legacy',overrides:{tags:'V2',natural:'V2',mixed:'V2'}})).toBe(entry.body);});
+ it('uses explicitly resolved custom3 only for that slot',()=>expect(selectPromptSkillTemplate({edition:'3.0.0',targetModel:'v5',task:'convert',mode:'mixed',legacyTemplate:'legacy',librarySlot:{body:'CUSTOM3 $1 $&'}})).toBe('CUSTOM3 $1 $&'));
+ it('rejects V3/V4.5 while preserving V1 custom',()=>{expect(supportsPromptSkillModel('3.0.0','v4.5')).toBe(false);expect(()=>selectPromptSkillTemplate({edition:'3.0.0',targetModel:'v4.5',task:'convert',mode:'tags',legacyTemplate:'legacy'})).toThrow();expect(selectPromptSkillTemplate({edition:'1.0.0',targetModel:'v4.5',task:'convert',mode:'tags',legacyTemplate:'CUSTOM1'})).toBe('CUSTOM1');});
+ it('does not silently migrate old defaults or overwrite custom editions',()=>{expect(normalizePromptSkillSettings({}).convertPromptSkillVersion).toBe('2.0.0');expect(normalizePromptSkillSettings({convertPromptSkillVersion:'3.0.0',promptAssistantSkillVersion:'3.0.0'})).toMatchObject({convertPromptSkillVersion:'3.0.0',promptAssistantSkillVersion:'2.0.0'});});
+ it('includes library revision in async request identity',()=>expect(promptSkillRequestContext({templateLibraryRevision:'A'},'convert')).not.toBe(promptSkillRequestContext({templateLibraryRevision:'B'},'convert')));
+ it('keeps comic source versions4.1/1.0 and no image mode axis',()=>{expect(selectComicTemplate('jp-page').sourceVersion).toBe('4.1');expect(selectComicTemplate('single-panel').sourceVersion).toBe('1.0');});
+ it('V3 parser does not force V2 density, preserves pipe/Text/negative weights',()=>{const prompt='1girl, -1::speech bubble :: | girl, black hair, Text: "你好"';expect(parsePromptSkillV3Response(prompt).prompt).toBe(prompt);expect(renderPromptSkillTemplate('{{input}}','literal $& $1')).toBe('literal $& $1');});
+ it('V3 known-character responses require two complete strings',()=>{expect(parsePromptSkillV3Response('{"namePrompt":"1girl, character","featurePrompt":"1girl, black hair"}',true).variants?.featurePrompt).toBe('1girl, black hair');expect(()=>parsePromptSkillV3Response('{"namePrompt":"only"}',true)).toThrow();});
+});

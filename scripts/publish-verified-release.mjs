@@ -4,8 +4,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {execFileSync,spawnSync} from 'node:child_process';
 import {assertReleasePlatformContract,assertReleaseEvidenceFiles} from './release-platform-contract.mjs';
-import {assertDesktopMetadataGates,assertAndroidMetadataGate} from './image-metadata-release-contract.mjs';
-import {assertFourPlatformMobileRun,assertReleaseArtifactScope,assertUnsignedIosPackage,unsignedIosIpaInspectionPython,supplementalArtifactPolicyId,supplementalArtifactPolicySha256} from './release-artifact-scope.mjs';
+import {assertDesktopMetadataGates,assertMobileMetadataGates} from './image-metadata-release-contract.mjs';
+import {assertFivePlatformMobileRun,assertReleaseArtifactScope,assertUnsignedIosPackage,unsignedIosIpaInspectionPython,supplementalArtifactPolicyId,supplementalArtifactPolicySha256} from './release-artifact-scope.mjs';
 const call=(command,args)=>execFileSync(command,args,{encoding:'utf8',timeout:600000,maxBuffer:8*1024*1024}).trim();
 const version=JSON.parse(fs.readFileSync('package.json','utf8')).version;
 const tag='v'+version, sha=call('git',['rev-parse','HEAD']);
@@ -31,8 +31,8 @@ call('git',['diff','--exit-code',build.headSha,sha,'--','.',':!scripts/publish-v
 const mobileRun=process.env.MOBILE_RUN;
 if(!/^\d+$/.test(mobileRun??''))throw Error('A verified mobile workflow run is required');
 const mobile=JSON.parse(call('gh',['run','view',mobileRun,'--json','status,conclusion,headSha,jobs']));
-assertFourPlatformMobileRun(mobile);
-assertAndroidMetadataGate(mobile);
+assertFivePlatformMobileRun(mobile);
+assertMobileMetadataGates(mobile);
 call('git',['diff','--exit-code',mobile.headSha,sha,'--','mobile','shared/image-metadata-compat-fixtures','shared/official-image-metadata-fixtures']);
 call('gh',['run','download',mobileRun,'-n','novelai-mobile-android-apk','-D','mobile-assets/android']);
 call('gh',['run','download',mobileRun,'-n','novelai-mobile-ios-ipa-unsigned','-D','mobile-assets/ios']);
@@ -41,13 +41,14 @@ const apk='mobile-assets/android/app-release.apk',ipa='mobile-assets/ios/novelai
 const files=[...desktop,apk,ipa];
 assertReleaseArtifactScope(files.map(file=>path.basename(file)),{version});
 for(const file of files)if(!fs.existsSync(file)||fs.statSync(file).size===0)throw Error('Missing asset '+file);
-// Supplementary package-only check: no iOS functional/native certification is granted.
+// Package-only provenance is checked independently; five-platform native certification comes from featureParity.
 const iosPackageReceipt=JSON.parse(fs.readFileSync('mobile-assets/ios/ios-package-verification.json','utf8'));
 const iosPackageInspection=JSON.parse(call('python3',['-c',unsignedIosIpaInspectionPython,ipa]));
 const mobileVersion=fs.readFileSync('mobile/pubspec.yaml','utf8').match(/^version:\s*(\d+\.\d+\.\d+)\+(\d+)\s*$/m);
 if(!mobileVersion||mobileVersion[1]!==version)throw Error('Mobile source version differs from release');
 assertUnsignedIosPackage(iosPackageReceipt,{version,buildNumber:mobileVersion[2],sourceSha:mobile.headSha,bytes:fs.statSync(ipa).size,sha256:iosPackageInspection.sha256,inspection:iosPackageInspection});
 // The public APK must never point to draft/missing Agent files (HTTP 404).
+const mobileTemplateAssets={};for(const [platform,file]of [['android',apk],['ios',ipa]]){const output='release-assets/'+platform+'-template-assets-verification.json';call('python3',['scripts/verify-mobile-template-assets.py',file,'--source-sha',sha,'--output',output]);mobileTemplateAssets[platform]=JSON.parse(fs.readFileSync(output,'utf8'));}
 const androidSeed=JSON.parse(call('python3',['-c',"import zipfile,sys;z=zipfile.ZipFile(sys.argv[1]);assert not any(n.endswith('agent-rootfs.zip') for n in z.namelist());print(z.read('assets/agent/seed.json').decode())",apk]));
 if(!androidSeed.url?.startsWith('https://github.com/2786886095/novelai-image-desktop/releases/download/agent-v'))throw Error('Missing on-demand Agent URL');
 const component=JSON.parse(call('gh',['release','view','agent-v'+androidSeed.version,'--json','isDraft,assets']));
@@ -87,7 +88,7 @@ if(!current.includes(`versionName='${version}'`)||!(code(current)>code(previous)
 const existing=spawnSync('gh',['release','view',tag],{encoding:'utf8',timeout:30000});
 if(existing.status===0)throw Error('Release already exists; do not overwrite it');
 if(!/not found/i.test(existing.stderr??''))throw Error('Release existence check failed: '+existing.stderr);
-const evidence={version,sha,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
+const evidence={version,sha,mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
 fs.writeFileSync('release-assets/verification.json',JSON.stringify(evidence,null,2));
 call('gh',['release','create',tag,...files,'release-assets/verification.json','--target',sha,'--draft','--title',`Langbai NovelAI Studio ${tag}`,'--notes-file','docs/RELEASE_NOTES.md']);
 const draft=JSON.parse(call('gh',['release','view',tag,'--json','isDraft,assets']));

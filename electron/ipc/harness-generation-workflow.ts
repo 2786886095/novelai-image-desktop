@@ -8,7 +8,7 @@ export function templateGenerationArgs(args:Record<string,unknown>){
   if(args.imageAttachmentId==null&&(typeof args.text!=='string'||!args.text.trim()))throw Error('需要完整画面要求');
   if(args.mode!=null&&!['tags','natural','mixed'].includes(String(args.mode)))throw Error('提示词模式无效');
   if(args.templateVersion!=null&&!['v5','v4.5'].includes(String(args.templateVersion)))throw Error('模板版本无效');
-  if(args.skillVersion!=null&&!['1.0.0','2.0.0'].includes(String(args.skillVersion)))throw Error('技能版本无效');
+  if(args.skillVersion!=null&&!['1.0.0','2.0.0','3.0.0'].includes(String(args.skillVersion)))throw Error('技能版本无效');
   const generate=args.generate??{};
   if(!generate||typeof generate!=='object'||Array.isArray(generate))throw Error('生图参数无效');
   if(Object.keys(generate).some(k=>!['count','model','width','height','steps','cfgScale','seed','sampler','noiseSchedule'].includes(k)))throw Error('模板生图参数包含未知字段');

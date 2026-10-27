@@ -11,7 +11,7 @@ on:
         type: boolean
         default: false
       skip_ios_verification:
-        description: Historical compatibility flag; iOS functional checks remain excluded and Android validation stays enabled
+        description: Deprecated compatibility flag; formal releases never skip iOS validation
         type: boolean
         default: false
 
@@ -168,6 +168,15 @@ jobs:
               print('APK ON-DEMAND PASS: descriptor present; runtime absent')
           PY
 
+      - name: Verify actual APK template catalog bytes and all eight source bodies
+        working-directory: .
+        run: python3 scripts/verify-mobile-template-assets.py mobile/build/app/outputs/flutter-apk/app-release.apk --source-sha "${{ github.sha }}" --output mobile/android-template-assets-verification.json
+      - name: Upload APK template evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-template-assets-verification
+          path: mobile/android-template-assets-verification.json
+          if-no-files-found: error
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -185,8 +194,8 @@ jobs:
 
 
   ios:
-    # iOS functional release job stays disabled; unsigned packaging is a separate supplement.
-    if: false
+    # iOS source/metadata validation is mandatory for formal builds; package provenance remains separate.
+    if: ${{ !inputs.candidate_build_only }}
     runs-on: macos-latest
     timeout-minutes: 45
     defaults:
@@ -215,11 +224,11 @@ jobs:
         run: python3 scripts/verify-mobile-version.py
 
       - name: Validate mobile source
-        if: ${{ !inputs.candidate_build_only && !(github.event_name == 'workflow_dispatch' && inputs.skip_ios_verification == true) }}
+        if: ${{ !inputs.candidate_build_only }}
         run: flutter analyze --no-pub && flutter test --no-pub
 
       - name: Verify official image metadata
-        if: ${{ !inputs.candidate_build_only && !(github.event_name == 'workflow_dispatch' && inputs.skip_ios_verification == true) }}
+        if: ${{ !inputs.candidate_build_only }}
         run: flutter test --no-pub test/metadata_common_fixtures_test.dart test/official_image_metadata_test.dart
 
       # No Apple Developer cert in CI: build without code signing. The resulting
@@ -228,29 +237,7 @@ jobs:
       - name: Build iOS (no codesign)
         run: flutter build ios --release --no-codesign
 
-      - name: Package unsigned IPA
-        run: |
-          cd build/ios/iphoneos
-          mkdir -p Payload
-          cp -r Runner.app Payload/
-          zip -qr ../../../novelai-mobile-unsigned.ipa Payload
-          cd -
-          ls -lh novelai-mobile-unsigned.ipa
-
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: novelai-mobile-ios-ipa-unsigned
-          path: mobile/novelai-mobile-unsigned.ipa
-          if-no-files-found: error
-
-      - name: Attach to Release
-        if: startsWith(github.ref, 'refs/tags/v') && !inputs.candidate_build_only
-        uses: softprops/action-gh-release@v2
-        with:
-          draft: true
-          body_path: docs/RELEASE_NOTES.md
-          files: mobile/novelai-mobile-unsigned.ipa
+      # Final unsigned IPA and receipt are emitted only by ios-package, avoiding duplicate artifacts.
 
   ios-package:
     # User-approved unsigned package only; no iOS functional/native certification.
@@ -327,6 +314,15 @@ jobs:
           pathlib.Path('ios-package-verification.json').write_text(json.dumps(receipt, indent=2) + '\n')
           print(json.dumps(receipt, sort_keys=True))
           PY
+      - name: Verify actual IPA template catalog bytes and all eight source bodies
+        working-directory: .
+        run: python3 scripts/verify-mobile-template-assets.py mobile/novelai-mobile-unsigned.ipa --source-sha "${{ github.sha }}" --output mobile/ios-template-assets-verification.json
+      - name: Upload IPA template evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-template-assets-verification
+          path: mobile/ios-template-assets-verification.json
+          if-no-files-found: error
       - name: Upload unsigned IPA and package receipt
         uses: actions/upload-artifact@v4
         with:

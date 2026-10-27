@@ -294,7 +294,7 @@ List<AgentComposerAction> normalizeAgentComposerActions(dynamic raw) {
             : 'mixed',
         templateVersion: item['templateVersion'] == 'v4.5' ? 'v4.5' : 'v5',
         templateId: kind == 'prompt-preset' ? id as String : null,
-        skillVersion:['1.0.0','2.0.0'].contains(item['skillVersion'])?item['skillVersion'] as String:null);
+        skillVersion:['1.0.0','2.0.0','3.0.0'].contains(item['skillVersion'])?item['skillVersion'] as String:null);
     if (!output
         .any((a) => jsonEncode(a.toJson()) == jsonEncode(action.toJson()))) {
       output.add(action);
@@ -521,7 +521,7 @@ class AgentConversation {
         selectedTemplateKind: json['selectedTemplateKind']?.toString(),
         selectedTemplateMode: json['selectedTemplateMode']?.toString(),
         selectedTemplateVersion: json['selectedTemplateVersion']?.toString(),
-        selectedTemplateSkillVersion:['1.0.0','2.0.0'].contains(json['selectedTemplateSkillVersion'])?json['selectedTemplateSkillVersion'] as String:null,
+        selectedTemplateSkillVersion:['1.0.0','2.0.0','3.0.0'].contains(json['selectedTemplateSkillVersion'])?json['selectedTemplateSkillVersion'] as String:null,
         status: const {'idle', 'running', 'waiting-permission', 'error'}
                 .contains(json['status'])
             ? json['status'].toString()

@@ -306,7 +306,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                                         items:[for(final m in ['mixed','tags','natural'])DropdownMenuItem(value:m,child:Text(_t('mode_$m')))],
                                         onChanged:(v)=>change(()=>mode=v??'mixed')),
                                       const SizedBox(height:12),
-                                      PromptSkillSelector(model:version,edition:edition,language:app.settings.language,onChanged:(model,revision)=>change((){version=model;edition=revision;})),
+                                      PromptSkillSelector(allowV3:kind=='reverse'||kind=='convert',model:version,edition:edition,language:app.settings.language,onChanged:(model,revision)=>change((){version=model;edition=revision;})),
                                       const SizedBox(height:12),
                                       ExpansionTile(
                                           title: Text(_t('readTemplate')),

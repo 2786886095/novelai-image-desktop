@@ -12,23 +12,24 @@ export function releaseArtifactNames(version,{withVerification=false}={}) {
 export function assertReleaseArtifactScope(names,{version,withVerification=false}={}) {
   assert.ok(Array.isArray(names)&&names.every(name=>typeof name==='string'),'Release asset names are required');
   assert.deepEqual([...names].sort(),releaseArtifactNames(version,{withVerification}).sort(),
-    'Current four-platform release plus unsigned IPA supplement assets differ; extra/missing/duplicate assets are not allowed');
+    'Current five-platform release with unsigned IPA distribution assets differ; extra/missing/duplicate assets are not allowed');
 }
-export function assertFourPlatformMobileRun(run) {
+export function assertFivePlatformMobileRun(run) {
   assert.equal(run?.status,'completed','Mobile workflow is not completed');
   assert.equal(run?.conclusion,'success','Mobile workflow did not succeed');
   assert.ok(Array.isArray(run.jobs),'Mobile workflow jobs are required');
-  for(const name of ['android','android-agent-runtime','ios-package']) {
+  for(const name of ['android','android-agent-runtime','ios','ios-package']) {
     const matches=run.jobs.filter(job=>job.name===name);
     assert.equal(matches.length,1,'Missing or duplicate required mobile job: '+name);
     assert.equal(matches[0].conclusion,'success','Required mobile job did not succeed: '+name);
   }
-  const ios=run.jobs.filter(job=>job.name==='ios');
-  assert.ok(ios.length<=1,'Duplicate excluded iOS job');
-  if(ios.length)assert.equal(ios[0].conclusion,'skipped','Legacy iOS feature job must remain skipped; only ios-package may produce the unsigned supplement');
+  // Unsigned packaging is not a substitute for the independent iOS validation job.
 }
 
-// Package provenance/structure only. This is not an iOS feature/native acceptance gate.
+// Deprecated name retains the new strict five-platform requirements; it cannot admit old four-platform runs.
+export const assertFourPlatformMobileRun = assertFivePlatformMobileRun;
+
+// Package provenance/structure only. Independent iOS feature/native evidence is also required.
 export function assertUnsignedIosPackage(receipt,{version,buildNumber,sourceSha,bytes,sha256,inspection}={}) {
   assert.match(sourceSha??'',/^[a-f0-9]{40}$/,'Immutable iOS package build source is required');
   assert.match(sha256??'',/^[a-f0-9]{64}$/,'Actual IPA SHA-256 is required');

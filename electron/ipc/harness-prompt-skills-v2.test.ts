@@ -34,8 +34,8 @@ beforeAll(async()=>{
 afterAll(async()=>{for(const [k,v]of Object.entries(oldEnv)){if(v===undefined)delete process.env[k];else process.env[k]=v;}await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));});
 beforeEach(()=>{requests.length=0;responseFailure=false;current={kind:'convert',mode:'mixed',version:'v5',skillVersion:'2.0.0',bodySha256:'same-body-for-both-editions'};});
 describe('actual packaged Harness prompt skill plumbing',()=>{
- it('advertises a separate skill edition enum in the actual prepare tool schema',()=>expect(tools.get('langbai_prepare_image_prompt').parameters.args.properties.skillVersion.enum).toEqual(['1.0.0','2.0.0']));
- for(const edition of ['1.0.0','2.0.0'])for(const image of [false,true])it(`forwards ${edition} and selected model/mode for ${image?'reverse':'convert'} through actual HTTP`,async()=>{
+ it('advertises a separate skill edition enum in the actual prepare tool schema',()=>expect(tools.get('langbai_prepare_image_prompt').parameters.args.properties.skillVersion.enum).toEqual(['1.0.0','2.0.0','3.0.0']));
+ for(const edition of ['1.0.0','2.0.0','3.0.0'])for(const image of [false,true])it(`forwards ${edition} and selected model/mode for ${image?'reverse':'convert'} through actual HTTP`,async()=>{
   const args={text:'actual fixture input',mode:'tags',templateVersion:'v5',skillVersion:edition,...(image?{imageAttachmentId:'registered-fixture-image'}:{})};
   const result=await tools.get('langbai_prepare_image_prompt').execute({args},context('prepare'));expect(result.ok).toBe(true);expect(requests).toHaveLength(1);expect(requests[0].tool).toBe(image?'langbai_reverse_prompt':'langbai_convert_prompt');expect(requests[0].args).toMatchObject({mode:'tags',templateVersion:'v5',skillVersion:edition});
   expect(result.template.skillVersion).toBe(edition);
@@ -44,7 +44,7 @@ describe('actual packaged Harness prompt skill plumbing',()=>{
   const result=await tools.get('langbai_prepare_image_prompt').execute({args:{text:'fixture scene',mode:'natural',templateVersion:'v5',skillVersion:'1.0.0',generate:{count:1}}},context('pipeline'));
   expect(result.ok).toBe(true);expect(requests).toHaveLength(1);expect(requests[0]).toMatchObject({tool:'studio_generate_from_description',args:{mode:'natural',templateVersion:'v5',skillVersion:'1.0.0',generate:{count:1}}});
  });
- for(const args of [{text:'scene',skillVersion:'3.0.0'},{text:'scene',skillVersion:'2.0.0',templateVersion:'v4.5'}])it(`rejects invalid edition/model locally ${JSON.stringify(args)}`,async()=>{
+ for(const args of [{text:'scene',skillVersion:'4.0.0'},{text:'scene',skillVersion:'2.0.0',templateVersion:'v4.5'}])it(`rejects invalid edition/model locally ${JSON.stringify(args)}`,async()=>{
   await expect(tools.get('langbai_prepare_image_prompt').execute({args},context('invalid'))).rejects.toThrow();expect(requests).toHaveLength(0);
  });
  it('does not reuse identical-body certification across a skill edition switch',async()=>{

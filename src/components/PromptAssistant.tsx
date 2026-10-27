@@ -63,7 +63,7 @@ export function PromptAssistant({kind,currentValue,context,mode,version,edition,
   <header><h2>{title}</h2><CompactIconButton label={text.cancel} icon="close" onClick={onClose}/></header>
   <div className="prompt-assistant-body">
    {!ready?<div className="prompt-api-required"><p>{setup.missing}</p><button type="button" className="btn btn-primary" onClick={configure}>{setup.configure}</button></div>:<>
-    <PromptSkillControls model={version} edition={edition} language={language} disabled={busy||modeBusy} onChange={(model,next)=>void changeSkill(model,next)}/>
+    <PromptSkillControls allowV3={false} model={version} edition={edition} language={language} disabled={busy||modeBusy} onChange={(model,next)=>void changeSkill(model,next)}/>
     <div className="prompt-assistant-mode"><SelectMenu value={mode} options={(['tags','natural','mixed'] as const).map((value,index)=>({value,label:text.modes[index]}))} label={text.template} ariaLabel={text.template} disabled={busy||modeBusy} onChange={next=>void changeMode(next)}/><small>{version==='v4.5'?'NAI V4.5':'NAI V5'}</small></div>
    <label className="prompt-assistant-source">{text.current}<textarea readOnly value={currentValue} placeholder={text.empty}/></label>
    {kind==='custom'&&<label className="prompt-assistant-instruction">{text.instruction}<textarea maxLength={8000} value={instruction} onChange={e=>{setInstruction(e.target.value);setPreview(null);}} placeholder={text.hint} disabled={busy||modeBusy}/></label>}

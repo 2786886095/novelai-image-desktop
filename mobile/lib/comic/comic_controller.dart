@@ -20,6 +20,7 @@ import '../references/reference_presets.dart';
 import '../services/background_queue_service.dart';
 import '../state/app_state.dart';
 import 'comic_models.dart';
+import 'comic_prompt_text.dart';
 
 /// Immutable request data captured when a comic run is confirmed.  Editing
 /// project settings after this point affects the next run, not a request that
@@ -40,13 +41,16 @@ class _ComicGenerationTask {
 
 class ComicController extends ChangeNotifier {
   final AppState app;
+  final String workspace;
+  bool get japanese => workspace == 'japanese';
 
   final ComicAssetStore assets;
   bool exporting = false;
   Map<String, dynamic>? lastExport;
 
-  ComicController(this.app, {ComicAssetStore? assets})
+  ComicController(this.app, {ComicAssetStore? assets, this.workspace = 'tag'})
       : assets = assets ?? ComicAssetStore() {
+    if (!['tag', 'japanese'].contains(workspace)) throw ArgumentError('Invalid comic workspace');
     BackgroundQueueService.addCancelHandler(cancelQueue);
   }
 
@@ -102,13 +106,13 @@ class ComicController extends ChangeNotifier {
       if (revision != expected || queueRunning) {
         throw StateError('漫画工程已变化，请重新读取');
       }
-      if (backup) await app.storage.setComicBackup(before);
+      if (backup) await (japanese ? app.storage.setJapaneseComicBackup(before) : app.storage.setComicBackup(before));
       if (revision != expected || queueRunning) {
         throw StateError('备份期间漫画工程已变化，请重新读取');
       }
-      await app.storage.setComicProject(captured);
+      await (japanese ? app.storage.setJapaneseComicProject(captured) : app.storage.setComicProject(captured));
       if (revision != expected || queueRunning) {
-        await app.storage.setComicProject(project);
+        await (japanese ? app.storage.setJapaneseComicProject(project) : app.storage.setComicProject(project));
         throw StateError('保存期间漫画工程已变化，保留了软件端编辑，请重新读取');
       }
       project = captured;
@@ -134,7 +138,7 @@ class ComicController extends ChangeNotifier {
     _saveTimer?.cancel();
     if (loadError != null) return Future.error(StateError(loadError!));
     if (_editing) {
-      final next = _writes.then((_) => app.storage.setComicProject(project));
+      final next = _writes.then((_) => (japanese ? app.storage.setJapaneseComicProject(project) : app.storage.setComicProject(project)));
       _writes = next.then<void>((_) {}, onError: (Object e) {
         persistenceError = e.toString();
         notifyListeners();
@@ -144,7 +148,7 @@ class ComicController extends ChangeNotifier {
     final snapshot = ComicProject.fromJson(
         jsonDecode(jsonEncode(project.toJson())), project.globalParams,
         trustOutputs: true);
-    final next = _writes.then((_) => app.storage.setComicProject(snapshot));
+    final next = _writes.then((_) => (japanese ? app.storage.setJapaneseComicProject(snapshot) : app.storage.setComicProject(snapshot)));
     _writes = next.then<void>((_) {
       persistenceError = null;
     }, onError: (Object e) {
@@ -165,14 +169,14 @@ class ComicController extends ChangeNotifier {
   Future<void> _saveRun(String phase, {String? error}) async {
     runPhase = phase;
     runError = error;
-    await app.storage.setComicRun(
-        {...runState, 'updatedAt': DateTime.now().toIso8601String()});
+    final saved = {...runState, 'updatedAt': DateTime.now().toIso8601String()};
+    await (japanese ? app.storage.setJapaneseComicRun(saved) : app.storage.setComicRun(saved));
     notifyListeners();
   }
 
   Future<void> _loadRun() async {
     if (_journalLoaded) return;
-    final saved = await app.storage.getComicRun();
+    final saved = await (japanese ? app.storage.getJapaneseComicRun() : app.storage.getComicRun());
     if (saved != null) {
       if (saved['id'] is! String ||
           saved['total'] is! int ||
@@ -206,7 +210,7 @@ class ComicController extends ChangeNotifier {
   String _t(String key) => mobileUiTextFor(app.settings.language, key);
   String get displayTitle =>
       project.title.trim().isEmpty || project.title == defaultComicProjectTitle
-          ? _t('comic.defaultTitle')
+          ? (japanese ? japaneseComicTitle(app.settings.language) : _t('comic.defaultTitle'))
           : project.title.trim();
   String get displayStatus =>
       statusDetail.isEmpty ? _t(statusKey) : statusDetail;
@@ -219,7 +223,7 @@ class ComicController extends ChangeNotifier {
   Future<void> load() => _loading ??= () async {
         if (loaded) return;
         try {
-          project = await app.storage.getComicProject(app.params);
+          project = await (japanese ? app.storage.getJapaneseComicProject(app.params) : app.storage.getComicProject(app.params));
           await _loadRun();
         } catch (e) {
           loadError = e.toString();
@@ -394,6 +398,26 @@ class ComicController extends ChangeNotifier {
     } finally {
       _convertingPanels.remove(panel.id);if(!_disposed)notifyListeners();
     }
+  }
+
+  Future<void> importPromptPages(List<String> pages, String expectedRevision) async {
+    assertRevision(expectedRevision);
+    if (pages.isEmpty || pages.length > 30 || pages.any((p) => p.trim().isEmpty || p.contains('\n') || p.contains('\r'))) {
+      throw const FormatException('One complete prompt per page is required');
+    }
+    final next = ComicProject.fromJson(project.toJson(), project.globalParams, trustOutputs: true);
+    next.panels = pages.asMap().entries.map((entry) => ComicPanel(
+      id: comicId(), index: entry.key + 1, title: '${comicPageTerminology(_t('comic.panelFallback'), app.settings.language)} ${entry.key + 1}',
+      prompt: entry.value, params: next.globalParams.copy(),
+      imageWidth: next.sizeMode == ComicSizeMode.perPanel ? next.globalParams.width : null,
+      imageHeight: next.sizeMode == ComicSizeMode.perPanel ? next.globalParams.height : null,
+    )).toList();
+    for (final reference in next.preciseReferences) {
+      reference..scope = ComicReferenceScope.all..scopePanelIds = [];
+    }
+    await commitProject(expectedRevision, next, backup: true);
+    step = ComicStep.global;
+    changed('comic.imported');
   }
 
   Future<void> pickImportFile() async {

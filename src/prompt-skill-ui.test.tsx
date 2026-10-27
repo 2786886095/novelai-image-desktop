@@ -21,3 +21,5 @@ it.each(['zh-CN','zh-TW','en-US','ja-JP','ko-KR'])('provides model/edition names
  for(const menu of nodes.filter(n=>n.type===SelectMenu)){expect(menu.props.ariaLabel).toBeTruthy();expect(menu.props.disabled).toBe(true);}
  expect(nodes.filter(n=>n.type==='small').map(n=>n.props.children).join(' ')).toContain('V5 Full');
 });
+
+it('only offers V3 to image controls and keeps legacy/assistant controls on V1/V2',()=>{const change=vi.fn();const image=walk(PromptSkillControls({model:'v5',edition:'3.0.0',onChange:change})).filter(n=>n.type===SelectMenu)[1];expect(image.props.options.some((o:any)=>o.value==='3.0.0')).toBe(true);const legacy=walk(PromptSkillControls({model:'v5',edition:'3.0.0',allowV3:false,onChange:change})).filter(n=>n.type===SelectMenu)[1];expect(legacy.props.value).toBe('2.0.0');expect(legacy.props.options.some((o:any)=>o.value==='3.0.0')).toBe(false);legacy.props.onChange('3.0.0');expect(change).toHaveBeenLastCalledWith('v5','2.0.0');});

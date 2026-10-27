@@ -1,3 +1,4 @@
+import '../i18n/template_feature_text.dart';
 import '../ui/global_typography.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -70,6 +71,14 @@ class ToolsHubScreen extends StatelessWidget {
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(StudioSpacing.lg),
         children: [
+          _ToolTile(
+            icon:Icons.auto_awesome_mosaic_outlined,
+            title:templateFeatureText(language,'japanese'),
+            subtitle:templateFeatureText(language,'japaneseHint'),
+            onTap:()=>_openTool(context,(onBack)=>ComicScreen(
+              controller:context.read<AppState>().japaneseComic,onBack:onBack)),
+          ),
+          const SizedBox(height:StudioSpacing.md),
           _ToolTile(
             icon: Icons.auto_stories_outlined,
             title: text.comicTitle,

@@ -1595,7 +1595,11 @@ function templatePanelReadArgs({ kind, mode, version, edition }) {
 		"natural"
 	].includes(mode)) throw Error("模板模式无效");
 	if (version != null && !["v5", "v4.5"].includes(version)) throw Error("生图模型无效");
-	if (edition != null && !["1.0.0", "2.0.0"].includes(edition)) throw Error("技能版本无效");
+	if (edition != null && ![
+		"1.0.0",
+		"2.0.0",
+		"3.0.0"
+	].includes(edition)) throw Error("技能版本无效");
 	return {
 		kind,
 		...mode ? { mode } : {},
@@ -1605,8 +1609,12 @@ function templatePanelReadArgs({ kind, mode, version, edition }) {
 }
 function templatePanelSaveArgs(snapshot, body, reset = false) {
 	if (!snapshot || !snapshot.revision) throw Error("请先读取当前版本模板");
-	if (!["1.0.0", "2.0.0"].includes(snapshot.skillVersion)) throw Error("模板版本快照已过期，请重新读取");
-	if (snapshot.templateVersion === "v4.5" && snapshot.skillVersion === "2.0.0") throw Error("2.0.0 仅适用于 V5 Full");
+	if (![
+		"1.0.0",
+		"2.0.0",
+		"3.0.0"
+	].includes(snapshot.skillVersion)) throw Error("模板版本快照已过期，请重新读取");
+	if (snapshot.templateVersion === "v4.5" && snapshot.skillVersion !== "1.0.0") throw Error("2.0.0 仅适用于 V5 Full");
 	return {
 		...templatePanelReadArgs({
 			kind: snapshot.kind,
@@ -1694,7 +1702,7 @@ function TemplatePanel({ call }) {
 		}
 	}
 	const target = version ?? snapshot?.templateVersion ?? "v5", selectedEdition = target === "v4.5" ? "1.0.0" : edition ?? snapshot?.skillVersion ?? "1.0.0";
-	return h$2("section", { className: "studio-library" }, h$2("h3", null, "软件共用提示词模板"), h$2("p", { className: "studio-library-muted" }, "六套默认技能按用途与模式独立选用。1.0.0 保留旧模板；2.0.0 仅面向 NovelAI V5 Full，V4.5 使用 1.0.0。版本切换不会覆盖另一版本的自定义内容。"), h$2("div", { className: "studio-library-toolbar" }, h$2("label", null, "用途 ", h$2("select", {
+	return h$2("section", { className: "studio-library" }, h$2("h3", null, "软件共用提示词模板"), h$2("p", { className: "studio-library-muted" }, "六套默认技能按用途与模式独立选用。1.0.0 保留旧模板；2.0.0 / 3.0.0 仅面向 NovelAI V5 Full，V4.5 使用 1.0.0。版本切换不会覆盖另一版本的自定义内容。"), h$2("div", { className: "studio-library-toolbar" }, h$2("label", null, "用途 ", h$2("select", {
 		value: kind,
 		disabled: busy,
 		onChange: (e) => {
@@ -1737,11 +1745,14 @@ function TemplatePanel({ call }) {
 	}, h$2("option", { value: "1.0.0" }, "1.0.0"), h$2("option", {
 		value: "2.0.0",
 		disabled: target === "v4.5"
-	}, "2.0.0")))), snapshot ? h$2(react.default.Fragment, null, h$2("p", null, `${snapshot.templateVersion} · ${snapshot.skillVersion} · ${snapshot.source === "custom" ? "自定义模板" : "内置模板"}`), h$2("textarea", {
+	}, "2.0.0"), ...kind === "convert" || kind === "reverse" ? [h$2("option", {
+		value: "3.0.0",
+		disabled: target === "v4.5"
+	}, "3.0.0")] : []))), snapshot ? h$2(react.default.Fragment, null, selectedEdition === "3.0.0" ? h$2("p", null, "3.0.0原稿与自定义选用由设置中的统一模板库管理；此处只读。") : null, h$2("p", null, `${snapshot.templateVersion} · ${snapshot.skillVersion} · ${snapshot.source === "custom" ? "自定义模板" : "内置模板"}`), h$2("textarea", {
 		"aria-label": "共用模板内容",
 		rows: 12,
 		value: body,
-		disabled: busy,
+		disabled: busy || selectedEdition === "3.0.0",
 		onChange: (e) => setBody(e.target.value),
 		style: {
 			width: "100%",
@@ -1755,13 +1766,13 @@ function TemplatePanel({ call }) {
 		disabled: busy,
 		onChange: importFile
 	}), h$2("button", {
-		disabled: busy,
+		disabled: busy || selectedEdition === "3.0.0",
 		onClick: () => fileInput.current?.click()
 	}, "导入模板文件"), h$2("button", {
-		disabled: busy,
+		disabled: busy || selectedEdition === "3.0.0",
 		onClick: () => save()
 	}, "保存模板与选择"), h$2("button", {
-		disabled: busy,
+		disabled: busy || selectedEdition === "3.0.0",
 		onClick: () => save(true)
 	}, "恢复当前版本和模式默认模板"))) : h$2("p", null, error ? "模板读取未完成" : "读取本机软件模板…"), error ? h$2("p", { role: "alert" }, error) : null, message ? h$2("p", { role: "status" }, message) : null);
 }

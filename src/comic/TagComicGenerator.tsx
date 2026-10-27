@@ -1,3 +1,6 @@
+import {ComicPromptComposer} from './ComicPromptComposer';
+import {comicComposerText} from './comic-composer-text';
+import {JAPANESE_COMIC_DRAFT_KEY,type ComicWorkspaceScope} from './comic-scope';
 import {comicProviderText,compatibleComicConfirmation} from './comic-provider-text';
 import {useComicGenerationQueue} from './use-comic-generation';
 import type {ComicQueueTask as QueueTask} from './generation-queue';
@@ -775,16 +778,29 @@ function statusLabel(language: unknown, panel: TagComicPanel) {
   return text(language, panel.status);
 }
 
-export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
+export function TagComicGenerator({ onBack,scope='tag-comic' }: { onBack?: () => void;scope?:ComicWorkspaceScope }) {
   const currentParams = useAppStore((state) => state.params);
   const settings = useAppStore((state) => state.settings);
   const account = useAppStore((state) => state.account);
   const setToast = useAppStore((state) => state.setToast);
   const language = settings?.language;
+  const japanese=scope==='jp-comic',jpCopy=comicComposerText(language);
+  const copy=(key:CopyKey)=>{
+   if(!japanese)return text(language,key);
+   if(key==='title')return jpCopy.newToolTitle;
+   if(key==='subtitle')return jpCopy.newToolDescription;
+   const value=text(language,key);
+   if(language==='en-US')return value.replace(/Panels/g,'Pages').replace(/Panel/g,'Page').replace(/panels/g,'pages').replace(/panel/g,'page');
+   if(language==='zh-TW')return value.replace(/分鏡/g,'頁面');
+   if(language==='ja-JP')return value.replace(/コマ|カット/g,'ページ');
+   if(language==='ko-KR')return value.replace(/컷/g,'페이지');
+   return value.replace(/分镜/g,'页面');
+  };
+  const formatCopy=(key:CopyKey,values:Record<string,unknown>)=>copy(key).replace(/\{(\w+)\}/g,(_,name:string)=>String(values[name]??''));
   const compatible=settings?.imageProvider==='openai-images';
   const providerCopy=comicProviderText(language);
   const providerNotice=<div className="tag-comic-params" role="note"><strong>{providerCopy.title} · {settings?.compatibleImage?.model} · {settings?.compatibleImage?.size}</strong><p>{providerCopy.hint}</p><small>{providerCopy.fees}</small></div>;
-  const {store:comicStore,snapshot:comicSnapshot}=useComicProject();
+  const {store:comicStore,snapshot:comicSnapshot}=useComicProject(scope);
   const project=comicSnapshot.project;
   const setProject=(value:TagComicProject|((p:TagComicProject)=>TagComicProject),options:{expectedRevision?:string;backup?:boolean}={})=>{
     try{comicStore.update(p=>typeof value==='function'?value(p):value,options);projectRef.current=comicStore.getSnapshot().project;return true;}
@@ -803,7 +819,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   );
   const [preview, setPreview] = useState<string | null>(null);
   const previewItems=useMemo(()=>[...new Set(project.panels.flatMap(panel=>panel.candidates.flatMap(candidate=>candidate.outputUrl?[candidate.outputUrl]:[])))],[project.panels]);
-  const {service:comicQueue,queue} = useComicGenerationQueue();
+  const {service:comicQueue,queue} = useComicGenerationQueue(scope);
   const projectRef = useRef(project);
 
   useEffect(() => {
@@ -888,13 +904,13 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
 
   async function replacePanels(items: Array<{ title: string; prompt: string }>, expectedRevision=comicStore.read().revision) {
     if (!items.length) {
-      setToast(text(language, "noTags"));
+      setToast(copy("noTags"));
       return;
     }
     if (
       panels.length &&
       !(await confirmAction(
-        format(language, "confirmReplace", { count: panels.length }),
+        formatCopy("confirmReplace", { count: panels.length }),
       ))
     )
       return;
@@ -917,7 +933,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     setSizeText("");
     setReferenceRanges({});
     setActivePanelId("");
-    setToast(format(language, "imported", { count: items.length }));
+    setToast(formatCopy("imported", { count: items.length }));
     setStep("global");
     return true;
   }
@@ -928,7 +944,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     } catch (error) {
       setToast(
         error instanceof Error && error.message.includes("Old")
-          ? text(language, "oldProject")
+          ? copy("oldProject")
           : error instanceof Error
             ? error.message
             : String(error),
@@ -963,7 +979,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       setToast(
         error instanceof Error &&
           (error.message.includes("Old") || error.message.includes("schema"))
-          ? text(language, "oldProject")
+          ? copy("oldProject")
           : error instanceof Error
             ? error.message
             : String(error),
@@ -993,7 +1009,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
 
   async function newProject() {
     const expectedRevision=comicStore.getSnapshot().revision;
-    if (!(await confirmAction(text(language, "confirmNew")))) return;
+    if (!(await confirmAction(copy("confirmNew")))) return;
     const next = createTagComicProject(currentParams);
     if(!setProject(next,{expectedRevision,backup:true}))return;
     setBulkText("");
@@ -1047,7 +1063,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       });
       if (!result.ok || !result.asset) {
         setToast(
-          format(language, "preciseImportFailed", { message: result.message }),
+          formatCopy("preciseImportFailed", { message: result.message }),
         );
         continue;
       }
@@ -1063,7 +1079,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     _payload: ReferencePresetApplyPayload,
   ) {
     if (projectRef.current.preciseReferences.length >= 5) {
-      setToast(text(language, "preciseHint"));
+      setToast(copy("preciseHint"));
       return;
     }
     const expectedRevision=comicStore.getSnapshot().revision;
@@ -1073,7 +1089,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     });
     if (!result.ok || !result.asset) {
       setToast(
-        format(language, "preciseImportFailed", { message: result.message }),
+        formatCopy("preciseImportFailed", { message: result.message }),
       );
       return;
     }
@@ -1117,7 +1133,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     if (!(error instanceof TagComicPanelRangeError)) {
       return error instanceof Error ? error.message : String(error);
     }
-    if (error.code === "empty") return text(language, "preciseRangeEmpty");
+    if (error.code === "empty") return copy("preciseRangeEmpty");
     return format(
       language,
       error.code === "format" ? "preciseRangeFormat" : "preciseRangeOut",
@@ -1166,15 +1182,15 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
 
   async function removePreciseReference(referenceId: string) {
     const before=comicStore.read();if(before.busy)return;
-    if(!await confirmAction(text(language,"preciseRemoveConfirm")))return;
+    if(!await confirmAction(copy("preciseRemoveConfirm")))return;
     // Commit the detachment first. A write failure must never delete a still-used file.
     const saved=setProject(current=>({...current,
       preciseReferences:current.preciseReferences.filter(item=>item.id!==referenceId),
       panels:current.panels.map(panel=>({...panel,preciseReferences:panel.preciseReferences.filter(item=>item.referenceId!==referenceId)})),
     }),{expectedRevision:before.revision,backup:true});
     if(!saved)return;
-    try{const result=await window.naiDesktop.tagComicDeleteReference(before.project.id,referenceId);if(!result.ok)setToast(text(language,"preciseCleanupFailed"));}
-    catch{setToast(text(language,"preciseCleanupFailed"));}
+    try{const result=await window.naiDesktop.tagComicDeleteReference(before.project.id,referenceId);if(!result.ok)setToast(copy("preciseCleanupFailed"));}
+    catch{setToast(copy("preciseCleanupFailed"));}
   }
 
   function togglePanelReference(
@@ -1257,9 +1273,9 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     if (!(error instanceof TagComicSizeImportError)) {
       return error instanceof Error ? error.message : String(error);
     }
-    if (error.code === "empty") return text(language, "sizeEmpty");
+    if (error.code === "empty") return copy("sizeEmpty");
     if (error.code === "count") {
-      return format(language, "sizeCount", {
+      return formatCopy("sizeCount", {
         expected: error.expected ?? panels.length,
         actual: error.actual ?? 0,
       });
@@ -1269,7 +1285,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       : error.code === "format"
         ? "sizeFormat"
         : "sizeUnsupported";
-    return format(language, key, { line: error.line ?? "?" });
+    return formatCopy(key, { line: error.line ?? "?" });
   }
 
   function setSizeMode(sizeMode: TagComicProject["sizeMode"]) {
@@ -1291,7 +1307,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
 
   function createSizeTemplate() {
     if (!panels.length) {
-      setToast(text(language, "noTags"));
+      setToast(copy("noTags"));
       return;
     }
     setSizeText(
@@ -1312,7 +1328,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
           imageSize: sizes[index],
         })),
       });
-      setToast(format(language, "sizesApplied", { count: sizes.length }));
+      setToast(formatCopy("sizesApplied", { count: sizes.length }));
     } catch (error) {
       setToast(sizeImportMessage(error));
     }
@@ -1364,11 +1380,11 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
     try {
       comicQueue.launch(tasks,{
         expectedRevision:comicStore.read().revision,
-        confirm:summary=>confirmAction(summary.imageProvider==='openai-images'?compatibleComicConfirmation(language,summary):summary.quote===null?text(language,"quoteFailed"):format(language,"confirmGenerate",{count:summary.count,quote:summary.quote}),"请确认",undefined,summary.signal),
+        confirm:summary=>confirmAction(summary.imageProvider==='openai-images'?compatibleComicConfirmation(language,summary):summary.quote===null?copy("quoteFailed"):formatCopy("confirmGenerate",{count:summary.count,quote:summary.quote}),"请确认",undefined,summary.signal),
       });
       const result=await comicQueue.settled();
       if(result.error)setToast(result.error);
-      else if(result.phase==='cancelled')setToast(text(language,"queueStopped"));
+      else if(result.phase==='cancelled')setToast(copy("queueStopped"));
     } catch(error) {setToast(error instanceof Error?error.message:String(error));}
   }
 
@@ -1390,7 +1406,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   }
 
   function stopQueue() {
-    void comicQueue.stop().then(()=>setToast(text(language,"queueStopped"))).catch(error=>setToast(error instanceof Error?error.message:String(error)));
+    void comicQueue.stop().then(()=>setToast(copy("queueStopped"))).catch(error=>setToast(error instanceof Error?error.message:String(error)));
   }
 
   async function exportZip() {
@@ -1400,7 +1416,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       });
       setToast(result.message);
       if (result.ok && result.path) {
-        setToast(format(language, "exportDone", { path: result.path }));
+        setToast(formatCopy("exportDone", { path: result.path }));
       }
     } catch (error) {
       setToast(error instanceof Error ? error.message : String(error));
@@ -1415,30 +1431,30 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   ];
 
   return (
-    <main className="tag-comic" aria-label={text(language, "title")}>
+    <main className="tag-comic" aria-label={copy("title")}>
       {comicSnapshot.error&&<p role="alert">{comicPersistenceMessage(language)}: {comicSnapshot.error}</p>}
       <header className="tag-comic-header">
         <div>
-          <small>TAG COMIC WORKSPACE</small>
-          <h2>{text(language, "title")}</h2>
-          <p>{text(language, "subtitle")}</p>
+          <small>{japanese?'JAPANESE COMIC WORKSPACE':'TAG COMIC WORKSPACE'}</small>
+          <h2>{copy("title")}</h2>
+          <p>{copy("subtitle")}</p>{japanese&&<p className="japanese-comic-workspace-note">{jpCopy.workspace}</p>}
         </div>
         <div className="tag-comic-header-actions">
           {onBack && (
             <Button variant="ghost" onClick={onBack}>
-              {text(language, "back")}
+              {copy("back")}
             </Button>
           )}
           <Button variant="secondary" onClick={newProject}>
-            {text(language, "newProject")}
+            {copy("newProject")}
           </Button>
           <Button variant="secondary" onClick={exportProjectJson}>
-            {text(language, "exportJson")}
+            {copy("exportJson")}
           </Button>
         </div>
       </header>
 
-      <nav className="tag-comic-steps" aria-label={text(language, "title")}>
+      <nav className="tag-comic-steps" aria-label={copy("title")}>
         {stepItems.map(([key, label, hint], index) => (
           <button
             key={key}
@@ -1447,25 +1463,29 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
             onClick={() => setStep(key)}
           >
             <b>{index + 1}</b>
-            <span>{text(language, label)}</span>
-            <small>{text(language, hint)}</small>
+            <span>{copy(label)}</span>
+            <small>{copy(hint)}</small>
           </button>
         ))}
       </nav>
 
+      {step === "import" && japanese && <details className="japanese-comic-composer-disclosure" open={panels.length===0}><summary>{jpCopy.title}</summary><ComicPromptComposer draftKey={JAPANESE_COMIC_DRAFT_KEY} language={language} disabled={Boolean(queue)} onImport={async lines=>{
+       const expectedRevision=comicStore.read().revision;
+       return replacePanels(lines.map((prompt,index)=>({title:`Page ${index+1}`,prompt})),expectedRevision);
+      }}/></details>}
       {step === "import" && (
         <section className="tag-comic-card tag-comic-import">
           <div className="tag-comic-section-heading">
             <div>
-              <h3>{text(language, "importHeading")}</h3>
-              <p>{text(language, "importDescription")}</p>
+              <h3>{copy("importHeading")}</h3>
+              <p>{copy("importDescription")}</p>
             </div>
-            <span>{text(language, "replaceWarning")}</span>
+            <span>{copy("replaceWarning")}</span>
           </div>
           <textarea
             value={bulkText}
             onChange={(event) => setBulkText(event.target.value)}
-            placeholder={text(language, "importPlaceholder")}
+            placeholder={copy("importPlaceholder")}
             rows={12}
           />
           <div className="tag-comic-actions">
@@ -1474,11 +1494,11 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
               onClick={importText}
               disabled={!bulkText.trim()}
             >
-              {text(language, "importText")}
+              {copy("importText")}
             </Button>
             <FilePicker
               compact
-              buttonLabel={<><Icon name="folderOpen" /><span>{text(language, "chooseFile")}</span></>}
+              buttonLabel={<><Icon name="folderOpen" /><span>{copy("chooseFile")}</span></>}
               accept=".txt,.json,.csv,text/plain,application/json,text/csv"
                 onChange={(event) => {
                   void importFile(event.target.files?.[0] ?? null);
@@ -1493,16 +1513,16 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
         <section className="tag-comic-card">
           <div className="tag-comic-section-heading">
             <div>
-              <h3>{text(language, "stepGlobal")}</h3>
-              <p>{text(language, "initialCountHint")}</p>
+              <h3>{copy("stepGlobal")}</h3>
+              <p>{copy("initialCountHint")}</p>
             </div>
             <Button variant="secondary" onClick={syncParams} disabled={compatible}>
-              {text(language, "syncParams")}
+              {copy("syncParams")}
             </Button>
           </div>
           <div className="tag-comic-global-grid">
             <label>
-              <span>{text(language, "projectTitle")}</span>
+              <span>{copy("projectTitle")}</span>
               <input
                 value={project.title}
                 onChange={(event) =>
@@ -1511,7 +1531,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
               />
             </label>
               <CommittedNumberInput
-                label={text(language, "initialCount")}
+                label={copy("initialCount")}
                 value={project.initialGenerationCount}
                 min={1}
                 max={10}
@@ -1519,7 +1539,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                 onCommit={(value) => patchProject({ initialGenerationCount: value })}
               />
             <label className="wide">
-              <span>{text(language, "globalStyle")}</span>
+              <span>{copy("globalStyle")}</span>
               <textarea
                 value={project.globalStylePrompt}
                 onChange={(event) =>
@@ -1529,32 +1549,32 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
             </label>
           </div>
           <div className="tag-comic-size-settings">
-            <div className="tag-comic-size-mode" role="group" aria-label={text(language, "sizeMode")}>
-              <b>{text(language, "sizeMode")}</b>
+            <div className="tag-comic-size-mode" role="group" aria-label={copy("sizeMode")}>
+              <b>{copy("sizeMode")}</b>
               <button
                 type="button"
                 className={clsx(project.sizeMode === "uniform" && "active")}
                 onClick={() => setSizeMode("uniform")}
               >
-                {text(language, "sizeUniform")}
+                {copy("sizeUniform")}
               </button>
               <button
                 type="button"
                 className={clsx(project.sizeMode === "perPanel" && "active")}
                 onClick={() => setSizeMode("perPanel")}
               >
-                {text(language, "sizePerPanel")}
+                {copy("sizePerPanel")}
               </button>
             </div>
-            <p>{compatible?providerCopy.hint:text(language, "sizeModeHint")}</p>
+            <p>{compatible?providerCopy.hint:copy("sizeModeHint")}</p>
             {project.sizeMode === "perPanel" && (
               <>
                 <label>
-                  <span>{text(language, "sizesInput")}</span>
+                  <span>{copy("sizesInput")}</span>
                   <textarea
                     value={sizeText}
                     onChange={(event) => setSizeText(event.target.value)}
-                    placeholder={text(language, "sizesPlaceholder")}
+                    placeholder={copy("sizesPlaceholder")}
                     rows={Math.min(10, Math.max(4, panels.length))}
                   />
                 </label>
@@ -1567,14 +1587,14 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                 </div>
                 <div className="tag-comic-actions">
                   <Button variant="secondary" onClick={createSizeTemplate}>
-                    {text(language, "sizeTemplate")}
+                    {copy("sizeTemplate")}
                   </Button>
                   <Button
                     variant="primary"
                     onClick={importPanelSizes}
                     disabled={!sizeText.trim() || !panels.length}
                   >
-                    {text(language, "importSizes")}
+                    {copy("importSizes")}
                   </Button>
                 </div>
               </>
@@ -1583,8 +1603,8 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
           <div className="tag-comic-reference-settings">
             <div className="tag-comic-section-heading compact">
               <div>
-                <h3>{text(language, "preciseHeading")}</h3>
-                <p>{text(language, "preciseHint")}</p>
+                <h3>{copy("preciseHeading")}</h3>
+                <p>{copy("preciseHint")}</p>
               </div>
               <div className="tag-comic-reference-actions">
                 {!compatible && !preciseModelSupported && (
@@ -1601,7 +1621,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                       })
                     }
                   >
-                    {text(language, "switchV45")}
+                    {copy("switchV45")}
                   </Button>
                 )}
                 <Button
@@ -1613,7 +1633,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                 </Button>
             <FilePicker
               compact
-              buttonLabel={<><Icon name="folderOpen" /><span>{text(language, "preciseUpload")}</span></>}
+              buttonLabel={<><Icon name="folderOpen" /><span>{copy("preciseUpload")}</span></>}
               accept="image/png,image/jpeg,image/webp"
                     multiple
                     disabled={!preciseModelSupported || project.preciseReferences.length >= 5}
@@ -1625,7 +1645,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
               </div>
             </div>
             {!project.preciseReferences.length ? (
-              <p>{text(language, "preciseEmpty")}</p>
+              <p>{copy("preciseEmpty")}</p>
             ) : (
               <div className="tag-comic-reference-grid">
                 {project.preciseReferences.map((reference) => {
@@ -1649,22 +1669,22 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                           })
                         }
                       >
-                        <option value="character">{text(language, "preciseCharacter")}</option>
-                        <option value="style">{text(language, "preciseStyle")}</option>
-                        <option value="character&style">{text(language, "preciseBoth")}</option>
+                        <option value="character">{copy("preciseCharacter")}</option>
+                        <option value="style">{copy("preciseStyle")}</option>
+                        <option value="character&style">{copy("preciseBoth")}</option>
                       </SelectMenuCompat>
                       <label>
-                        <span>{text(language, "preciseStrength")} · {reference.strength.toFixed(2)}</span>
+                        <span>{copy("preciseStrength")} · {reference.strength.toFixed(2)}</span>
                         <RangeInput  min={0} max={1} step={0.01} value={reference.strength}
                           onChange={(event) => patchPreciseReference(reference.id, { strength: Number(event.target.value) })} />
                       </label>
                       <label>
-                        <span>{text(language, "preciseFidelity")} · {reference.fidelity.toFixed(2)}</span>
+                        <span>{copy("preciseFidelity")} · {reference.fidelity.toFixed(2)}</span>
                         <RangeInput  min={0} max={1} step={0.01} value={reference.fidelity}
                           onChange={(event) => patchPreciseReference(reference.id, { fidelity: Number(event.target.value), informationExtracted: Number(event.target.value) })} />
                       </label>
                       <div className="tag-comic-reference-scope">
-                        <span>{text(language, "preciseScope")}</span>
+                        <span>{copy("preciseScope")}</span>
                         <div role="group">
                           {(["all", "include", "exclude"] as const).map((scope) => (
                             <button
@@ -1691,12 +1711,12 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                               inputMode="text"
                               autoComplete="off"
                               spellCheck={false}
-                              aria-label={text(language, "preciseRange")}
+                              aria-label={copy("preciseRange")}
                               value={
                                 referenceRanges[reference.id] ??
                                 formatTagComicPanelRange(reference.scopePanelIds, panels)
                               }
-                              placeholder={text(language, "preciseRangePlaceholder")}
+                              placeholder={copy("preciseRangePlaceholder")}
                               onChange={(event) => {
                                 const value = event.currentTarget.value;
                                 setReferenceRanges((current) => ({
@@ -1715,19 +1735,19 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                               }}
                             />
                             <Button variant="secondary" onClick={() => applyReferenceRange(reference)}>
-                              {text(language, "preciseApplyRange")}
+                              {copy("preciseApplyRange")}
                             </Button>
                           </div>
                         )}
                         <small>
-                          {format(language, "preciseCoverage", {
+                          {formatCopy("preciseCoverage", {
                             count: coverage,
                             total: panels.length,
                           })}
                         </small>
                       </div>
                       <Button variant="ghost" onClick={() => void removePreciseReference(reference.id)}>
-                        {text(language, "preciseRemove")}
+                        {copy("preciseRemove")}
                       </Button>
                     </div>
                   </article>
@@ -1755,21 +1775,21 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
           {compatible && providerNotice}
           <div className="tag-comic-section-heading">
             <div>
-              <h3>{text(language, "panelsHeading")}</h3>
+              <h3>{copy("panelsHeading")}</h3>
               <p>
-                {format(language, "selectedCount", {
+                {formatCopy("selectedCount", {
                   selected: selectedCount,
                   total: panels.length,
                 })}
               </p>
             </div>
             <Button variant="primary" onClick={addPanel}>
-              {text(language, "addPanel")}
+              {copy("addPanel")}
             </Button>
           </div>
           {!activePanel ? (
             <div className="tag-comic-empty">
-              {text(language, "panelsEmpty")}
+              {copy("panelsEmpty")}
             </div>
           ) : (
             <div className="tag-comic-panel-workspace">
@@ -1779,7 +1799,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                     key={panel.id}
                     type="button"
                     draggable
-                    title={text(language, "dragPanel")}
+                    title={copy("dragPanel")}
                     className={clsx(
                       panel.id === activePanel.id && "active",
                       panel.id === draggedPanelId && "dragging",
@@ -1813,25 +1833,25 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                       onClick={() => movePanel(activePanel.id, -1)}
                       disabled={activePanel.index === 1}
                     >
-                      {text(language, "moveUp")}
+                      {copy("moveUp")}
                     </Button>
                     <Button
                       variant="ghost"
                       onClick={() => movePanel(activePanel.id, 1)}
                       disabled={activePanel.index === panels.length}
                     >
-                      {text(language, "moveDown")}
+                      {copy("moveDown")}
                     </Button>
                     <Button
                       variant="danger"
                       onClick={() => deletePanel(activePanel.id)}
                     >
-                      {text(language, "delete")}
+                      {copy("delete")}
                     </Button>
                   </div>
                 </header>
                 <label>
-                  <span>{text(language, "panelTitle")}</span>
+                  <span>{copy("panelTitle")}</span>
                   <input
                     value={activePanel.title}
                     onChange={(event) =>
@@ -1843,7 +1863,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                   />
                 </label>
                 <label>
-                  <span>{text(language, "panelPrompt")}</span>
+                  <span>{copy("panelPrompt")}</span>
                   <textarea
                     value={activePanel.prompt}
                     onChange={(event) =>
@@ -1860,7 +1880,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                 </label>
                 {project.sizeMode === "perPanel" && (
                   <label>
-                    <span>{text(language, "panelSize")}</span>
+                    <span>{copy("panelSize")}</span>
                     <SelectMenuCompat
                       value={
                         activePanel.imageSize
@@ -1885,7 +1905,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                         }));
                       }}
                     >
-                      <option value="">{text(language, "useProjectSize")}</option>
+                      <option value="">{copy("useProjectSize")}</option>
                       {TAG_COMIC_SIZE_PRESETS.map((size) => (
                         <option
                           key={`${size.width}x${size.height}`}
@@ -1899,8 +1919,8 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                 )}
                 {project.preciseReferences.length > 0 && (
                   <section className="tag-comic-panel-references">
-                    <h4>{text(language, "precisePanelHeading")}</h4>
-                    <p>{text(language, "precisePanelHint")}</p>
+                    <h4>{copy("precisePanelHeading")}</h4>
+                    <p>{copy("precisePanelHint")}</p>
                     {project.preciseReferences.map((asset) => {
                       const manualOverride = activePanel.preciseReferences.find(
                         (item) => item.referenceId === asset.id,
@@ -1935,7 +1955,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                             <b>
                               {asset.name}
                               {manualOverride && (
-                                <small>{text(language, "preciseManual")}</small>
+                                <small>{copy("preciseManual")}</small>
                               )}
                             </b>
                           </label>
@@ -1949,24 +1969,24 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                                   })
                                 }
                               >
-                                <option value="character">{text(language, "preciseCharacter")}</option>
-                                <option value="style">{text(language, "preciseStyle")}</option>
-                                <option value="character&style">{text(language, "preciseBoth")}</option>
+                                <option value="character">{copy("preciseCharacter")}</option>
+                                <option value="style">{copy("preciseStyle")}</option>
+                                <option value="character&style">{copy("preciseBoth")}</option>
                               </SelectMenuCompat>
                               <label>
-                                <span>{text(language, "preciseStrength")} · {selection.strength.toFixed(2)}</span>
+                                <span>{copy("preciseStrength")} · {selection.strength.toFixed(2)}</span>
                                 <RangeInput  min={0} max={1} step={0.01} value={selection.strength}
                                   onChange={(event) => patchPanelReference(activePanel.id, asset.id, { strength: Number(event.target.value) })} />
                               </label>
                               <label>
-                                <span>{text(language, "preciseFidelity")} · {selection.fidelity.toFixed(2)}</span>
+                                <span>{copy("preciseFidelity")} · {selection.fidelity.toFixed(2)}</span>
                                 <RangeInput  min={0} max={1} step={0.01} value={selection.fidelity}
                                   onChange={(event) => patchPanelReference(activePanel.id, asset.id, { fidelity: Number(event.target.value), informationExtracted: Number(event.target.value) })} />
                               </label>
                               <Button variant="ghost" onClick={() =>
                                 clearPanelReferenceOverride(activePanel.id, asset.id)
                               }>
-                                {text(language, "preciseReset")}
+                                {copy("preciseReset")}
                               </Button>
                             </div>
                           )}
@@ -1977,7 +1997,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                                 clearPanelReferenceOverride(activePanel.id, asset.id)
                               }
                             >
-                              {text(language, "preciseReset")}
+                              {copy("preciseReset")}
                             </Button>
                           )}
                         </article>
@@ -1993,8 +2013,8 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                       paramsOverride: { ...panel.paramsOverride, enabled },
                     }))
                   }
-                  label={text(language, "override")}
-                  description={text(language, "overrideHint")}
+                  label={copy("override")}
+                  description={copy("overrideHint")}
                 />}
                 {!compatible && activePanel.paramsOverride.enabled && (
                   <PanelParams
@@ -2016,11 +2036,11 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
           {compatible && providerNotice}
           <div className="tag-comic-section-heading">
             <div>
-              <h3>{text(language, "generateHeading")}</h3>
-              <p>{text(language, "exportHint")}</p>
+              <h3>{copy("generateHeading")}</h3>
+              <p>{copy("exportHint")}</p>
             </div>
             <div className="tag-comic-balance">
-              {compatible?providerCopy.fees:format(language, "balance", {
+              {compatible?providerCopy.fees:formatCopy("balance", {
                 amount: account.anlasBalance ?? "—",
               })}
             </div>
@@ -2031,7 +2051,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
               disabled={Boolean(queue) || !initialTasks().length}
               onClick={() => void startQueue(initialTasks())}
             >
-              {text(language, "generateInitial")}
+              {copy("generateInitial")}
             </Button>
             <Button
               variant="secondary"
@@ -2049,18 +2069,18 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                 )
               }
             >
-              {text(language, "addAll")}
+              {copy("addAll")}
             </Button>
             <Button
               variant="secondary"
               disabled={Boolean(queue) || selectedCount === 0}
               onClick={() => void exportZip()}
             >
-              <Icon name="download" /> {text(language, "exportZip")}
+              <Icon name="download" /> {copy("exportZip")}
             </Button>
             {queue && (
               <Button variant="danger" onClick={stopQueue}>
-                {text(language, "stop")}
+                {copy("stop")}
               </Button>
             )}
           </div>
@@ -2073,7 +2093,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                   }}
                 />
               </div>
-              <b>{format(language, "progress", queue)}</b>
+              <b>{formatCopy("progress", queue)}</b>
             </div>
           )}
           <div className="tag-comic-gallery">
@@ -2096,18 +2116,18 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                       type="button"
                       className="tag-comic-main-image"
                       onDoubleClick={() => setPreview(main.outputUrl)}
-                      title={text(language, "previewHint")}
+                      title={copy("previewHint")}
                     >
                       <img
                         src={main.outputUrl}
                         alt={panel.title}
                         loading="lazy"
                       />
-                      <span>{text(language, "currentMain")}</span>
+                      <span>{copy("currentMain")}</span>
                     </button>
                   ) : (
                     <div className="tag-comic-no-image">
-                      {text(language, "noCandidate")}
+                      {copy("noCandidate")}
                     </div>
                   )}
                   {panel.error && (
@@ -2124,8 +2144,8 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                       }
                     >
                       {panel.status === "failed"
-                        ? text(language, "retry")
-                        : text(language, "addOne")}
+                        ? copy("retry")
+                        : copy("addOne")}
                     </Button>
                     {panel.candidates.length > 1 && (
                       <Button
@@ -2141,14 +2161,14 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                         }
                       >
                         {expanded
-                          ? text(language, "hideCandidates")
-                          : text(language, "showCandidates")}
+                          ? copy("hideCandidates")
+                          : copy("showCandidates")}
                       </Button>
                     )}
                   </div>
                   <AnimatedCollapse open={expanded}>{<div className="tag-comic-candidates">
                       <h4>
-                        {format(language, "candidates", {
+                        {formatCopy("candidates", {
                           count: panel.candidates.length,
                         })}
                       </h4>
@@ -2170,7 +2190,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
                             onDoubleClick={() =>
                               setPreview(candidate.outputUrl)
                             }
-                            title={text(language, "chooseMain")}
+                            title={copy("chooseMain")}
                           >
                             <img
                               src={candidate.outputUrl}
@@ -2194,14 +2214,14 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
           className="redraw-lightbox"
           role="dialog"
           aria-modal="true"
-          aria-label={text(language, "closePreview")}
+          aria-label={copy("closePreview")}
           onClick={() => setPreview(null)}
         >
-          <PreviewImageViewer onBackgroundClick={()=>setPreview(null)} images={previewItems.map(src=>({src,alt:text(language,"closePreview")}))} index={Math.max(0,previewItems.indexOf(preview))} onIndex={index=>setPreview(previewItems[index])}/>
+          <PreviewImageViewer onBackgroundClick={()=>setPreview(null)} images={previewItems.map(src=>({src,alt:copy("closePreview")}))} index={Math.max(0,previewItems.indexOf(preview))} onIndex={index=>setPreview(previewItems[index])}/>
           <button
             type="button"
             className="redraw-lightbox-close"
-            aria-label={text(language, "closePreview")}
+            aria-label={copy("closePreview")}
             onClick={() => setPreview(null)}
           >
             <Icon name="close" />

@@ -13,6 +13,8 @@ import 'package:provider/provider.dart';
 
 import '../comic/comic_controller.dart';
 import '../comic/comic_models.dart';
+import '../comic/comic_prompt_composer.dart';
+import '../comic/comic_prompt_text.dart';
 import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../references/reference_presets.dart';
@@ -258,6 +260,14 @@ class _ImportStepState extends State<_ImportStep> {
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 100),
         children: [
+          if (controller.japanese) ...[
+            ComicPromptComposer(
+              app: controller.app,
+              draftKey: 'japanese',
+              onImport: ((expected) => (List<String> pages) => controller.importPromptPages(pages, expected))(controller.revision),
+            ),
+            const SizedBox(height: 12),
+          ],
           _SectionCard(
             title: t('comic.importHeading'),
             subtitle: t('comic.importDescription'),
@@ -1876,7 +1886,8 @@ class _EmptyState extends StatelessWidget {
 
 String Function(String) _text(BuildContext context) {
   final language = context.watch<AppState>().settings.language;
-  return (key) => mobileUiTextFor(language, key);
+  final japanese = context.read<ComicController>().japanese;
+  return (key) => japanese ? comicPageTerminology(mobileUiTextFor(language, key), language) : mobileUiTextFor(language, key);
 }
 
 Future<void> _run(BuildContext context, Future<void> Function() action) async {

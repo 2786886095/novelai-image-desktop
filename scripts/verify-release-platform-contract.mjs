@@ -8,4 +8,4 @@ const file=process.argv[2]??'release-evidence/feature-parity.json';
 const report=JSON.parse(fs.readFileSync(file,'utf8'));
 const result=assertReleasePlatformContract(report,{version,sourceSha});
 assertReleaseEvidenceFiles(report,path.dirname(file));
-console.log('SCOPED_FOUR_PLATFORM_FEATURE_CONTRACT_PASS',result);
+console.log('SCOPED_FIVE_PLATFORM_FEATURE_CONTRACT_PASS',result);

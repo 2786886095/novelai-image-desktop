@@ -18,7 +18,7 @@ describe('versioned default prompt skills', () => {
     }
   });
   it('keeps semantic edition separate from the target image model', () => {
-    expect(PROMPT_SKILL_VERSIONS).toEqual(['1.0.0','2.0.0']);
+    expect(PROMPT_SKILL_VERSIONS).toEqual(['1.0.0','2.0.0','3.0.0']);
     expect(normalizePromptSkillVersion('v5')).toBe('1.0.0');
     expect(normalizePromptSkillVersion(undefined)).toBe('1.0.0');
     expect(defaultPromptSkillVersion('v5')).toBe('2.0.0');

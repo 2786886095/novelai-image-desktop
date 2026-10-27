@@ -18,6 +18,7 @@ import '../agent/agent_models.dart';
 import '../models/nai_models.dart';
 import '../prompts/positive_prompt_presets.dart';
 import '../prompts/prompt_mode.dart';
+import '../prompts/template_library.dart';
 import '../references/reference_presets.dart';
 import 'storage.dart';
 import 'portable_projects.dart';
@@ -201,9 +202,10 @@ class DataBackupService {
   };
 
   final Storage storage;
+  final MobileTemplateLibrary? templateLibrary;
   final Random _random = Random.secure();
 
-  DataBackupService(this.storage);
+  DataBackupService(this.storage, {this.templateLibrary});
 
   String _id() =>
       '${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 30)}';
@@ -783,7 +785,20 @@ class DataBackupService {
         json['previewImages'] = previews;
         positivePrompts.add(json);
       }
+      final templateBytes = await (templateLibrary ?? MobileTemplateLibrary()).backupRaw();
+      Map<String, dynamic>? templateMetadata;
+      if (templateBytes != null) {
+        if (templateBytes.length > 16 * 1024 * 1024) {
+          throw const FormatException('Template library backup exceeds 16 MiB.');
+        }
+        // Preserve exact bytes even if the library is corrupt, so rescue backups
+        // do not silently discard the evidence needed to recover user templates.
+        archive.addFile(ArchiveFile('data/prompt-template-library.json', templateBytes.length, templateBytes));
+        templateMetadata = {'file':'data/prompt-template-library.json',
+          'bytes':templateBytes.length,'sha256':sha256.convert(templateBytes).toString()};
+      }
       final payload = {
+        if (templateMetadata != null) 'templateLibrary': templateMetadata,
         // Desktop calls the same record PromptTemplate.
         'promptTemplates': settings.promptShortcuts
             .map((template) => template.toJson())
@@ -797,8 +812,8 @@ class DataBackupService {
         category: DataBackupCategory.promptPresets,
         items: settings.promptShortcuts.length +
             styles.length +
-            positivePrompts.length,
-        bytes: bytes + assetBytes,
+            positivePrompts.length + (templateBytes == null ? 0 : 1),
+        bytes: bytes + assetBytes + (templateBytes?.length ?? 0),
       ));
     }
 
@@ -1877,6 +1892,27 @@ class DataBackupService {
         }
       }
     }
+    MobileTemplateLibrary? incomingTemplateLibrary;
+    List<int>? incomingTemplateBytes;
+    if (requested.contains(DataBackupCategory.promptPresets)) {
+      final raw = bundle.archive.findFile('data/prompt-template-library.json');
+      if (raw != null) {
+        final bytes = _entryBytes(raw);
+        if (bytes.length > 16 * 1024 * 1024) throw const FormatException('Template library backup exceeds 16 MiB.');
+        final presets = _readJson(bundle, 'data/prompt-presets.json', const {});
+        final metadata = presets is Map ? presets['templateLibrary'] : null;
+        if (metadata is! Map || metadata['bytes'] != bytes.length ||
+            metadata['sha256'] != sha256.convert(bytes).toString()) {
+          throw const FormatException('Template library backup checksum failed.');
+        }
+        final library = templateLibrary ?? MobileTemplateLibrary();
+        if (!library.loaded) await library.load();
+        library.validateBackupRaw(bytes); // Entire imported library, before any writes.
+        if (library.readOnly) throw StateError(library.error ?? 'Current template library is unavailable; original retained.');
+        incomingTemplateLibrary = library;
+        incomingTemplateBytes = bytes;
+      }
+    }
     final portable = PortableProjects.inspect(
         bundle.archive, requested.map((c) => c.id).toSet());
     // No write is permitted until a complete rescue archive reaches disk.
@@ -2019,6 +2055,9 @@ class DataBackupService {
       if (payload is Map) {
         settings = await _restorePromptPresets(
             bundle, Map<String, dynamic>.from(payload), settings, counters);
+      }
+      if (incomingTemplateLibrary != null && incomingTemplateBytes != null) {
+        counters.imported += await incomingTemplateLibrary.restoreRaw(incomingTemplateBytes);
       }
     }
 

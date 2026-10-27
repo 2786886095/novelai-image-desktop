@@ -12,7 +12,7 @@ export const PROJECT_REPOSITORY =
 
 export type ReversePromptMode = "tags" | "natural" | "mixed";
 export type ReversePromptTemplateVersion = "v4.5" | "v5";
-export type PromptSkillVersion = "1.0.0" | "2.0.0";
+export type PromptSkillVersion = "1.0.0" | "2.0.0" | "3.0.0";
 export type ReversePromptScope = "full" | "character" | "object" | "scene";
 export type TagServerType = "rest" | "http" | "sse" | "stdio";
 export type TranslateProvider = "google" | "baidu" | "ai";
@@ -1550,6 +1550,8 @@ export interface AppSettings {
   reversePromptTemplatesV45: ModePromptTemplates;
   reversePromptSkillVersion?: PromptSkillVersion;
   reversePromptTemplatesV2?: ModePromptTemplates;
+  /** Template-library revision only; bodies are stored separately. */
+  templateLibraryRevision?: string;
   /** Built-in DSH Infinite Gen 3 adapter, scoped to Tavern image, reverse, and convert only. */
   reverseConvertDshEnabled: boolean;
   reverseConvertDshMode: "focused" | "strict";
@@ -2128,6 +2130,10 @@ export interface NaiDesktopApi {
     assistant?: import("./prompt-assistant").PromptEditRequest,
     skillVersion?: PromptSkillVersion,
   ) => Promise<ConvertPromptResult>;
+  comicPrompt: (request: import("./comic/comic-prompt").ComicPromptRequest) => Promise<import("./comic/comic-prompt").ComicPromptResult>;
+  cancelComicPrompt: (requestId: string) => Promise<boolean>;
+  templateLibraryGet: () => Promise<import("../shared/template-library").TemplateLibraryState>;
+  templateLibraryMutate: (request: import("../shared/template-library").TemplateLibraryMutation) => Promise<import("../shared/template-library").TemplateLibraryResult>;
   getConvertHistory: () => Promise<TextToolHistoryItem[]>;
   addConvertHistoryItem: (
     item: TextToolHistoryItem,

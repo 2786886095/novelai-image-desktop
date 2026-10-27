@@ -9,7 +9,7 @@ const choice=(...values:(string|number)[]):Schema=>({enum:values});
 const flag:Schema={type:'boolean'};
 const id=requiredText(200);
 const refs:Schema={type:'array',maxItems:16,items:{type:'object',additionalProperties:true}};
-const template={kind:choice('convert','reverse','optimize','assistant'),mode:choice('mixed','tags','natural'),templateVersion:choice('v5','v4.5'),skillVersion:choice('1.0.0','2.0.0')};
+const template={kind:choice('convert','reverse','optimize','assistant'),mode:choice('mixed','tags','natural'),templateVersion:choice('v5','v4.5'),skillVersion:choice('1.0.0','2.0.0','3.0.0')};
 const generation={positivePrompt:requiredText(20_000),negativePrompt:text(20_000),stylePrompt:text(20_000),count:integer(1,8),model:text(120),
   width:integer(64,4096),height:integer(64,4096),steps:integer(1,50),cfgScale:number(0,20),scale:number(0,20),cfgRescale:number(0,1),
   seed:integer(0,4294967295),seedMode:choice('random','fixed'),sampler:text(100),noiseSchedule:text(100),smea:flag,smeaDyn:flag,variety:flag,

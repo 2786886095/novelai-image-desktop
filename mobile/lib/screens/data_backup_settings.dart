@@ -382,7 +382,7 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
   bool busy = false;
 
   DataBackupService get service =>
-      DataBackupService(context.read<AppState>().storage);
+      DataBackupService(context.read<AppState>().storage,templateLibrary:context.read<AppState>().templateLibrary);
 
   @override
   void initState() {
