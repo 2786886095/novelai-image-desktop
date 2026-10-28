@@ -38,7 +38,7 @@ const CATEGORY_TARGET: Record<ProxyCategory, (settings: AppSettings) => string> 
   nai: (settings) => settings.apiBaseUrl || "https://api.novelai.net",
   mcp: (settings) => settings.tagServerUrl || "https://danbooru.donmai.us",
   ai: (settings) => settings.visionApiUrl || settings.convertApiUrl || "https://api.openai.com",
-  update: () => "https://github.com/2786886095/novelai-image-desktop/releases/latest",
+  update: () => "https://github.com/OldLi1337/novelai-image-desktop/releases/latest",
   translate: () => "https://translate.googleapis.com",
 };
 

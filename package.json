@@ -1,15 +1,15 @@
 {
   "name": "langbai-novelai-studio",
-  "version": "2.6.7",
+  "version": "2.6.8",
   "private": true,
   "description": "Langbai NovelAI Studio: API-only NovelAI image generation desktop client with Chinese UI.",
   "author": "Langbai",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/2786886095/novelai-image-desktop.git"
+    "url": "git+https://github.com/OldLi1337/novelai-image-desktop.git"
   },
-  "homepage": "https://github.com/2786886095/novelai-image-desktop#readme",
+  "homepage": "https://github.com/OldLi1337/novelai-image-desktop#readme",
   "main": "dist-electron/electron/bootstrap.js",
   "scripts": {
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",

@@ -1,5 +1,6 @@
 import {normalizeCharacterPresets} from "./character-presets";
-import type { PositivePromptPreset } from "./types";
+import { appendPromptText } from "./prompt-append";
+import type { CharCaptionItem, PositivePromptPreset } from "./types";
 
 export const POSITIVE_PROMPT_PRESET_IMAGE_LIMIT = 3;
 const STORAGE_PREFIX = "positive-prompt-";
@@ -67,4 +68,48 @@ export function mergeCharacterPresets(presets: PositivePromptPreset[], legacy: u
       createdAt: item.createdAt, previewImages: []});
   }
   return next;
+}
+
+export type PositivePresetApplyMode = "replace" | "append";
+
+export type PositivePresetApplication =
+  | { kind: "prompt"; prompt: string; appended: boolean }
+  | { kind: "characters"; captions: CharCaptionItem[]; appended: boolean; row: boolean }
+  | { kind: "over-capacity" };
+
+/** Decide what applying a saved positive preset does. Plain presets replace the
+ * prompt or are appended after it; character presets replace the characters or
+ * are added after the existing ones; one saved character appended inside a
+ * character row extends that row's own prompts instead of adding a character. */
+export function resolvePositivePresetApplication(
+  preset: Pick<PositivePromptPreset, "prompt" | "captions">,
+  mode: PositivePresetApplyMode,
+  context: {
+    value: string;
+    character?: CharCaptionItem;
+    currentCaptions: readonly CharCaptionItem[];
+    maxCharacters: number;
+  },
+): PositivePresetApplication {
+  const append = mode === "append";
+  const captions = preset.captions ?? [];
+  if (append && context.character && captions.length === 1) {
+    const saved = captions[0];
+    return {
+      kind: "characters",
+      appended: true,
+      row: true,
+      captions: [{
+        ...context.character,
+        prompt: appendPromptText(context.value, saved.prompt),
+        negativePrompt: appendPromptText(context.character.negativePrompt ?? "", saved.negativePrompt ?? ""),
+      }],
+    };
+  }
+  if (captions.length) {
+    const next = append ? [...context.currentCaptions, ...captions] : captions;
+    if (next.length > context.maxCharacters) return { kind: "over-capacity" };
+    return { kind: "characters", appended: append, row: false, captions: next.map((caption) => ({ ...caption })) };
+  }
+  return { kind: "prompt", appended: append, prompt: append ? appendPromptText(context.value, preset.prompt) : preset.prompt };
 }

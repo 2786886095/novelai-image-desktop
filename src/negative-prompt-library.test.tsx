@@ -50,3 +50,22 @@ it('library entry reuses the peer icon button without a visible text label',()=>
  expect(html.replace(/<svg[\s\S]*?<\/svg>/g,'').replace(/<[^>]*>/g,'').trim()).toBe('');
  expect(applied).not.toHaveBeenCalled();
 });
+it('keeps optional tags through normalize, export/import and duplicate merges without changing untagged entries',()=>{
+ const tagged={id:'t',name:'Tagged',prompt:'blurry',tags:[' 质量 ','#质量','Hands'],createdAt:'now'};
+ const [normalized]=normalizeNegativePromptPresets([tagged]);
+ expect(normalized).toEqual({id:'t',name:'Tagged',prompt:'blurry',tags:['质量','Hands'],createdAt:'now'});
+ expect(normalizeNegativePromptPresets([{...tagged,tags:'not-a-list'}])[0].tags).toEqual(['not-a-list']);
+ expect(Object.keys(normalizeNegativePromptPresets([{...tagged,tags:[]}])[0])).not.toContain('tags');
+ expect(parseNegativeLibrary(exportNegativeLibrary([normalized]))).toEqual([normalized]);
+ const merged=mergeNegativeLibrary([{...normalized,tags:['质量']}],[{...normalized,id:'other',tags:['手部']}],()=> 'unused');
+ expect(merged).toEqual([{...normalized,tags:['质量','手部']}]);
+});
+it('bar variant shows labelled library and save-current buttons; save is disabled for an empty prompt',()=>{
+ const labels=negativeLibraryText(undefined); // SSR renders with the unloaded-settings fallback
+ const html=renderToStaticMarkup(<NegativePromptLibraryControl variant="bar" value="blurry" onApply={vi.fn()}/>);
+ expect(html).toContain('class="prompt-tool-btn negative-library-trigger"');
+ expect(html).toContain(`<span>${labels[0]}</span>`);
+ expect(html).toContain('class="prompt-tool-btn negative-library-save-current"');
+ expect(html).toContain(`<span>${labels[3]}</span>`);
+ expect(renderToStaticMarkup(<NegativePromptLibraryControl variant="bar" value="  " onApply={vi.fn()}/>)).toMatch(/negative-library-save-current"[^>]*disabled=""/);
+});

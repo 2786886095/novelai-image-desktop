@@ -48,6 +48,20 @@ describe("NovelAI custom dimensions", () => {
     expect(2048 * 1536).toBe(NAI_MAX_PIXEL_AREA);
   });
 
+  it("sizes the official Enhance 1.5x amount on the 64-pixel grid", () => {
+    // NovelAI's web client sends an 832x1216 image at 1.5x as 1280x1856.
+    expect(resolveNAIEnhanceOutputSize(832, 1216, 1.5)).toEqual({
+      width: 1280,
+      height: 1856,
+      exceedsLimit: false,
+    });
+    expect(resolveNAIEnhanceOutputSize(1024, 1536, 1.5)).toEqual({
+      width: 1536,
+      height: 2304,
+      exceedsLimit: true,
+    });
+  });
+
   it("flags an oversized Enhance 2x target instead of silently shrinking it", () => {
     expect(resolveNAIEnhanceOutputSize(832, 1216, 2)).toEqual({
       width: 1664,

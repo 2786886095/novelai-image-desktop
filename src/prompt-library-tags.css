@@ -1,0 +1,37 @@
+/* Tags shared by the positive preset library, the negative library and prompt chunks. */
+.prompt-tag-filter {display:flex;flex-wrap:wrap;gap:6px;min-width:0;}
+.prompt-tag-chip {display:inline-flex;align-items:center;gap:5px;max-width:100%;min-height:28px;padding:3px 10px;border:1px solid var(--border);border-radius:999px;background:var(--bg-input,transparent);color:var(--text-secondary);font-size:12px;line-height:1.2;cursor:pointer;}
+.prompt-tag-chip span {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.prompt-tag-chip small {color:var(--text-muted,var(--text-secondary));font-size:11px;font-variant-numeric:tabular-nums;}
+.prompt-tag-chip:hover {border-color:var(--accent);color:var(--accent);}
+.prompt-tag-chip.active {border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:700;}
+.prompt-tag-chip.active small {color:inherit;}
+.prompt-tag-chip:focus-visible,.prompt-tag-suggestions button:focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+.prompt-tag-list {display:flex;flex-wrap:wrap;gap:4px;min-width:0;}
+.prompt-tag-list span {max-width:100%;padding:1px 7px;border-radius:999px;background:var(--bg-subtle,var(--accent-soft));color:var(--text-secondary);font-size:11px;font-weight:600;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.prompt-tag-input {display:flex;flex-direction:column;gap:6px;min-width:0;}
+.prompt-tag-input > label {font-size:12px;font-weight:700;color:var(--text-secondary);}
+.prompt-tag-input > small {color:var(--text-muted,var(--text-secondary));font-size:11px;line-height:1.45;}
+.prompt-tag-suggestions {display:flex;flex-wrap:wrap;gap:5px;}
+.prompt-tag-suggestions button {min-height:26px;padding:2px 9px;border:1px dashed var(--border);border-radius:999px;background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;}
+.prompt-tag-suggestions button:hover:not(:disabled) {border-color:var(--accent);color:var(--accent);}
+@media (pointer:coarse) {.prompt-tag-chip,.prompt-tag-suggestions button {min-height:40px;}}
+
+/* Always-visible library actions under the positive / negative prompt editor. */
+.prompt-library-bar {display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;min-width:0;}
+.prompt-library-bar .prompt-tool-btn {flex:1 1 0;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:0;min-height:34px;padding:6px 10px;}
+.prompt-library-bar .prompt-tool-btn > span {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+@media (pointer:coarse) {.prompt-library-bar .prompt-tool-btn {min-height:44px;}}
+
+/* Custom prompt chunk popover. */
+.prompt-chunk-tags {flex:none;max-height:84px;overflow:auto;padding:8px 14px;border-bottom:1px solid var(--border);}
+.prompt-chunk-main .prompt-tag-list {grid-column:1 / -1;display:flex;flex-wrap:nowrap;gap:4px;overflow:hidden;}
+.prompt-chunk-main .prompt-tag-list span {flex:0 1 auto;grid-column:auto;color:var(--text-secondary);font-size:10.5px;}
+.prompt-chunk-popover.has-tags {grid-template-rows:auto auto auto minmax(0,1fr) auto;}
+
+/* Positive preset dialog: the tag row sits between the toolbar and the browser. */
+.positive-preset-modal.has-tags {grid-template-rows:auto auto auto minmax(0,1fr);}
+.positive-preset-tags {padding:10px 18px;border-bottom:1px solid var(--border);background:var(--bg-panel);max-height:92px;overflow:auto;}
+.positive-preset-list-copy .prompt-tag-list {flex-wrap:nowrap;overflow:hidden;}
+.positive-preset-detail > header .prompt-tag-list {margin-top:2px;}
+.positive-preset-detail > footer {display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;}

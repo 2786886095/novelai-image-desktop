@@ -1,7 +1,7 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 # Langbai NovelAI Studio
 
-> 現在の配布ファイルとリリース説明は [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) を参照してください。インストール方法と制限は下のダウンロード欄に記載しています。
+> 現在の配布ファイルとリリース説明は [Latest](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) を参照してください。インストール方法と制限は下のダウンロード欄に記載しています。
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
@@ -13,19 +13,13 @@
 
 ![宣伝用ファンイラスト。描かれた UI はイメージです](./docs/assets/readme/furina-workbench.png)
 
-**[最新版をダウンロード](https://github.com/2786886095/novelai-image-desktop/releases/latest)** · [初回設定ガイド（中国語）](./docs/guide/GETTING_STARTED.md) · [機能ガイド（中国語）](./docs/guide/FEATURES.md)
+**[最新版をダウンロード](https://github.com/OldLi1337/novelai-image-desktop/releases/latest)** · [初回設定ガイド（中国語）](./docs/guide/GETTING_STARTED.md) · [機能ガイド（中国語）](./docs/guide/FEATURES.md)
 
 > 自分の **NovelAI Persistent API Token** を設定してください。モデルの利用権限と生成料金は NovelAI アカウントに依存します。画像解析・プロンプト変換・酒場 AI などの追加サービスには別途設定が必要です。
 
 ## 今回の更新
 
-- **Anthropic Messages の思考強度**：画像生成エージェントで低／中／高の選択が反映されない問題を修正。対応が確認されているモデルには `thinking.type: adaptive` と選択した `output_config.effort` を送信します。`auto` は思考フィールドを指定せずサーバーの既定動作を維持し、旧型・未知のモデルに adaptive を強制しません。
-- **リクエスト互換性**：明示的な adaptive では非互換の `temperature`／`top_p` を省略。自動モードでは Claude 4.6 のサンプリング互換性を維持し、既知の常時思考モデルには未対応のサンプリング設定を送りません。出力上限を自動で増やさず、HTTP 400 で無断の機能低下や再試行を行いません。
-- **確認済み範囲と制限**：デスクトップ62件・モバイル52件の対象回帰、TypeScript 型検査、Dart 解析が通過。スクリプト化 HTTP／ループバックのテストのみで、実際の Anthropic や外部中継先は未検証です。必須150セル全体、GPU、全5環境の実機受け入れ検証を新たに完了したとは主張しません。
-- **配布の根拠**：各環境のパッケージ、署名、インストール、更新の制限は Latest の実際の添付ファイルと検証記録に従います。ソースの同期だけでは全5環境のネイティブ受け入れ検証の完了を意味しません。
-- **今回の配布範囲**：ローカル Agent コンポーネントと画風の自動反復は Windows のみを対象とし、macOS／Linux／Android では提供を約束しません。画像生成エージェントを含む残り37機能の4環境での対象範囲は変更しません。今回はメンテナーの明示的な要請により直接公開し、全機能や画像生成の受け入れ検証は追加しません。必須150セルすべての合格を認定するものではなく、Windows の画風自動反復の3つの GPU ネイティブシナリオは未完了です。対象外6セルは not-supported とし合格に数えません。iOS は自分で署名する未署名 IPA の追加配布のみで、通常の iPhone へ直接インストールできません。
-
-[更新履歴](./docs/RELEASE_NOTES.md)。
+この fork の現在の変更点は中国語の [README](./README.md) と[更新記録](./docs/RELEASE_NOTES.md)に記載しています：NovelAI 公式の 1.5× 強化、常に表示されるプロンプトライブラリ（追加・タグ対応）、タグ補完の修正、この fork のみを確認するアップデート。
 
 ## はじめ方
 
@@ -71,19 +65,19 @@ Windows のローカル酒場 Agent は確認後に検証済み互換コンポ�
 
 ## インストールと更新
 
-[Latest ページ](https://github.com/2786886095/novelai-image-desktop/releases/latest)の添付ファイルから、自分の環境に合うパッケージを選んでください。古いバージョンやタグのリンクではなく、そのページの版ごとの注意事項を確認してください。配布ファイルと導入条件はリリースにより変わる場合があります。
+[Latest ページ](https://github.com/OldLi1337/novelai-image-desktop/releases/latest)の添付ファイルから、自分の環境に合うパッケージを選んでください。古いバージョンやタグのリンクではなく、そのページの版ごとの注意事項を確認してください。配布ファイルと導入条件はリリースにより変わる場合があります。
 
 | OS | Latest ページで選ぶファイル | インストール上の制約 |
 | --- | --- | --- |
-| Windows x64 | [インストーラー EXE](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [ポータブル EXE](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 署名の状態は Latest の説明を確認してください。現在確認済みの Windows 配布は Authenticode 未署名で、セキュリティ警告が不要になるとは保証しません。バックアップ後に手動更新してください。 |
-| macOS Intel／Apple silicon | [Universal DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [Universal ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 署名・公証の状態は Latest の説明を確認してください。現在確認済みの配布では公証を確認できておらず、システムの信頼確認が出る場合があります。 |
-| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 実行権限を付けて起動し、新しいファイルへ手動で交換してください。 |
-| Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Latest のインストールと署名の説明に従ってください。手動インストールが必要で、現在確認済みの配布について実機や上書き更新の全体検証は完了していません。 |
-| iOS（追加パッケージ） | [未署名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 自分で署名する必要があり、通常の iPhone にそのままインストールすることはできません。 |
+| Windows x64 | [インストーラー EXE](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) / [ポータブル EXE](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 署名の状態は Latest の説明を確認してください。現在確認済みの Windows 配布は Authenticode 未署名で、セキュリティ警告が不要になるとは保証しません。バックアップ後に手動更新してください。 |
+| macOS Intel／Apple silicon | [Universal DMG](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) / [Universal ZIP](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 署名・公証の状態は Latest の説明を確認してください。現在確認済みの配布では公証を確認できておらず、システムの信頼確認が出る場合があります。 |
+| Linux x64 | [AppImage](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 実行権限を付けて起動し、新しいファイルへ手動で交換してください。 |
+| Android | [APK](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | Latest のインストールと署名の説明に従ってください。手動インストールが必要で、現在確認済みの配布について実機や上書き更新の全体検証は完了していません。 |
+| iOS（追加パッケージ） | [未署名 IPA](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 自分で署名する必要があり、通常の iPhone にそのままインストールすることはできません。 |
 
 **更新は手動で行ってください。** Latest の説明が対応する更新経路を明示していない限り、現在のパッケージを自分でダウンロードしてください。更新用メタデータが必ず添付されるとは限らず、内部バージョンやタグの形式によってはアプリ内更新が新しいバイナリを提示しません。交換前に設定と作品をバックアップし、更新を強制するために既存データを削除したり旧アプリをアンインストールしたりしないでください。
 
-ダウンロードする添付ファイルの検証記録とチェックサムは [Latest ページ](https://github.com/2786886095/novelai-image-desktop/releases/latest)で確認してください。検証ファイルの名前や有無はリリースにより変わる場合があります。[main のリポジトリソース](https://github.com/2786886095/novelai-image-desktop/tree/main)は現在のブランチであり、特定のバイナリの厳密なビルド元を証明するものではありません。その対応関係は配布の検証記録を参照してください。すべての機種での実機検証が完了したわけではありません。[変更履歴（中国語）](./docs/RELEASE_NOTES.md)。
+ダウンロードする添付ファイルの検証記録とチェックサムは [Latest ページ](https://github.com/OldLi1337/novelai-image-desktop/releases/latest)で確認してください。検証ファイルの名前や有無はリリースにより変わる場合があります。[main のリポジトリソース](https://github.com/OldLi1337/novelai-image-desktop/tree/main)は現在のブランチであり、特定のバイナリの厳密なビルド元を証明するものではありません。その対応関係は配布の検証記録を参照してください。すべての機種での実機検証が完了したわけではありません。[変更履歴（中国語）](./docs/RELEASE_NOTES.md)。
 
 Windows のインストーラー版とポータブル版は `%APPDATA%\novelai-image-desktop\` を共有します。ポータブル版でも**すべてのデータが実行ファイルの横に保存されるわけではありません**。交換前に設定と作品をバックアップしてください。デスクトップとモバイルの機能は同一ではなく、ローカル画風反復は Windows 専用です。[OS ごとの差異](./docs/guide/FEATURES.md#platforms)。
 
@@ -109,6 +103,6 @@ Windows のインストーラー版とポータブル版は `%APPDATA%\novelai-i
 
 [ビルド手順（中国語）](./docs/guide/DEVELOPMENT.md) · [貢献ガイド](./CONTRIBUTING.md) · [第三者に関する告知](./THIRD_PARTY_NOTICES.md) · [MIT コードライセンス](./LICENSE)
 
-[不具合報告](https://github.com/2786886095/novelai-image-desktop/issues/new) · [既存の Issue](https://github.com/2786886095/novelai-image-desktop/issues) · QQ グループ：**921985070**
+[不具合報告](https://github.com/OldLi1337/novelai-image-desktop/issues/new) · [既存の Issue](https://github.com/OldLi1337/novelai-image-desktop/issues) · QQ グループ：**921985070**
 
 マスコットは『原神』のフリーナです。宣伝画像は非公式の AI 生成ファンアートであり、HoYoverse／NovelAI による提携・公認を示しません。コードの MIT ライセンスは第三者のキャラクター・商標・素材の権利を付与しません。[画像素材の記録](./docs/assets/readme/ASSETS.md)。

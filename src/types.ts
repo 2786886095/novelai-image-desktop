@@ -1260,6 +1260,8 @@ export interface PositivePromptPreset {
   id: string;
   name: string;
   prompt: string;
+  /** Library organization only; never part of the prompt. */
+  tags?: string[];
   createdAt: string;
   previewImages?: StylePromptPreviewImage[];
 }
@@ -1271,6 +1273,8 @@ export interface PromptChunk {
   id: string;
   name: string;
   content: string;
+  /** Library organization only; never inserted into the prompt. */
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
 }

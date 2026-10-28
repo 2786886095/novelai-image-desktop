@@ -4,7 +4,7 @@ const pkg=JSON.parse(fs.readFileSync('package.json','utf8')),lock=JSON.parse(fs.
 const version=readReleaseVersion(process.cwd());assert.equal(lock.version,version);assert.equal(lock.packages[''].version,version);
 assert.ok(fs.readFileSync('electron/ipc/mcp-client.ts','utf8').includes(`version: "${version}"`));
 // Current page entries move with Latest/main; real package/build versions above remain required.
-const repo='https://github.com/2786886095/novelai-image-desktop';
+const repo='https://github.com/OldLi1337/novelai-image-desktop';
 for(const file of ['README.md','README.en.md','README.ja.md','README.ko.md','README.zh-TW.md']) {
  const readme=fs.readFileSync(file,'utf8');
  assert.ok(!readme.includes('gitee.com'),file+': unexpected release host');

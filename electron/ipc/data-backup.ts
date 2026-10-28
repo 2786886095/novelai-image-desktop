@@ -53,6 +53,7 @@ import {
 import { toLocalMediaUrl } from "./local-media-protocol";
 import { normalizeCharacterCaptions } from "../../src/character-presets";
 import { positivePromptPresetStorageId } from "../../src/positive-prompt-presets";
+import { mergePromptTags, promptTagField } from "../../src/prompt-library-tags";
 
 const FORMAT = "langbai-novelai-studio-backup";
 const FORMAT_VERSION = 1;
@@ -1152,11 +1153,14 @@ async function restorePromptPresets(
         name: name.value,
         prompt: raw.prompt,
         captions,
+        ...promptTagField(raw.tags),
         createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
         previewImages: [],
       };
       positivePrompts.push(target);
       counters.count += 1;
+    } else {
+      Object.assign(target, promptTagField(mergePromptTags(target.tags, Array.isArray(raw.tags) ? raw.tags : [])));
     }
     target.previewImages = await restoreStylePreviews(
       zip,
@@ -1173,7 +1177,9 @@ async function restorePromptPresets(
   const promptChunkIds = new Set(promptChunks.map((item) => item.id));
   for (const raw of payload.promptChunks ?? []) {
     if (!raw || typeof raw.name !== "string" || typeof raw.content !== "string" || !raw.content.trim()) continue;
-    if (promptChunks.some((item) => item.name === raw.name && item.content === raw.content)) {
+    const existingChunk = promptChunks.find((item) => item.name === raw.name && item.content === raw.content);
+    if (existingChunk) {
+      Object.assign(existingChunk, promptTagField(mergePromptTags(existingChunk.tags, Array.isArray(raw.tags) ? raw.tags : [])));
       counters.skipped += 1;
       continue;
     }
@@ -1185,6 +1191,7 @@ async function restorePromptPresets(
       id,
       name: name.value,
       content: raw.content.trim(),
+      ...promptTagField(raw.tags),
       createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
       updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : new Date().toISOString(),
     });
