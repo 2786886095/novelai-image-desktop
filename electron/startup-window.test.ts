@@ -15,7 +15,7 @@ describe("desktop startup window contract", () => {
   });
 
   it("retains the startup error dialog rather than leaving a silent process", () => {
-    expect(source).toContain('dialog.showErrorBox("启动失败 / Startup failed", String(error))');
+    expect(source).toContain('dialog.showErrorBox("启动失败", String(error))');
     expect(source).toMatch(/\.catch\(\(error: unknown\) => \{[\s\S]*?app.quit\(\)/);
   });
 });

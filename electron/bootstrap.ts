@@ -6,7 +6,7 @@ if (process.env.LANGBAI_CREDENTIAL_HELPER === "1") {
     require("./main");
   } catch (error) {
     const { app, dialog } = require("electron") as typeof import("electron");
-    dialog.showErrorBox("启动失败 / Startup failed", String(error));
+    dialog.showErrorBox("启动失败", String(error));
     app.quit();
   }
 }

@@ -48,6 +48,6 @@ it('collapse does not change selected image, filters, prompts or generation stat
   const before=useAppStore.getState();before.setWsHistoryCollapsed(true);const after=useAppStore.getState();
   for (const key of ['history','currentImage','params','selectedDate','selectedGroupId','isGenerating'] as const) expect(after[key]).toBe(before[key]);
 });
-it('five UI languages expose nonempty, distinct collapse and restore labels', () => {
+it('exposes nonempty, distinct collapse and restore labels', () => {
   const t=historyRailText('zh-CN');expect(t.show).not.toBe(t.hide);expect(t.resize).toBeTruthy();
 });

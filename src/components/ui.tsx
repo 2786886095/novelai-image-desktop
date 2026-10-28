@@ -404,7 +404,7 @@ export function SelectMenuCompat({
       : "";
     if (fieldLabel) setInferredLabel((current) => current === fieldLabel ? current : fieldLabel);
   }, [ariaLabel, children, name, title, triggerId]);
-  const resolvedLabel = ariaLabel || title || name || inferredLabel || "Select option";
+  const resolvedLabel = ariaLabel || title || name || inferredLabel || "选择选项";
 
   const commit = (nextValue: string) => {
     if (value == null) setUncontrolledValue(nextValue);
@@ -455,8 +455,8 @@ export function Toggle({
 
 export function SecretInput({
   label,
-  showLabel = "Show",
-  hideLabel = "Hide",
+  showLabel = "显示",
+  hideLabel = "隐藏",
   className,
   ...props
 }: React.InputHTMLAttributes<HTMLInputElement> & {

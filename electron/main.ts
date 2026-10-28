@@ -364,7 +364,7 @@ function createWindow() {
   wireSystemBack(mainWindow);
   mainWindow.webContents.on("did-fail-load", (_event, code, description, _url, isMainFrame) => {
     if (!isMainFrame || code === -3) return;
-      dialog.showErrorBox("启动失败 / Startup failed", `${description} (${code})`);
+      dialog.showErrorBox("启动失败", `${description} (${code})`);
     mainWindow?.show();
   });
 
@@ -1193,7 +1193,7 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   ipcMain.handle('uiFonts:read',(event,id:string)=>{assertFontSender(event);return uiFonts.read(id).toString('base64');});
   ipcMain.handle('uiFonts:import',async event=>{
     assertFontSender(event);
-    const picked=await dialog.showOpenDialog(mainWindow!,{properties:['openFile'],filters:[{name:'Fonts (TTF / OTF)',extensions:['ttf','otf']}]});
+    const picked=await dialog.showOpenDialog(mainWindow!,{properties:['openFile'],filters:[{name:'字体 (TTF / OTF)',extensions:['ttf','otf']}]});
     if(picked.canceled||!picked.filePaths[0])return null;
     assertFontSender(event);return uiFonts.importFile(picked.filePaths[0]);
   });
@@ -1402,7 +1402,7 @@ app.whenReady().then(async () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 }).catch((error: unknown) => {
-  dialog.showErrorBox("启动失败 / Startup failed", String(error));
+  dialog.showErrorBox("启动失败", String(error));
   app.quit();
 });
 

@@ -173,7 +173,7 @@ export function createTagComicProject(
   return {
     schemaVersion: 2,
     id: crypto.randomUUID(),
-    title: "Untitled comic",
+    title: "未命名漫画",
     globalStylePrompt: params.stylePrompt,
     globalNegativePrompt: params.negativePrompt,
     sizeMode: "uniform",

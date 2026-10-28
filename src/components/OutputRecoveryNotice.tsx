@@ -14,7 +14,7 @@ export function OutputRecoveryNotice() {
   if (!notice) return null;
   const text = labels[settings.language] ?? labels['zh-CN'];
   const open = (path: string) => void window.naiDesktop.openInExplorer(path).then(result => {
-    if (!result.ok) setError('Open location failed');
+    if (!result.ok) setError('打开位置失败');
   }).catch(reason => setError(String(reason)));
   return <section className="image-save-notice" role="status" aria-live="polite" aria-atomic="true">
     <div className="image-save-notice-content">

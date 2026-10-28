@@ -83,7 +83,7 @@ export async function pickArtistLabTarget(sourcePath?: string) {
   const result = sourcePath ? {canceled:false,filePaths:[sourcePath]} : await dialog.showOpenDialog({
     title: "选择目标画风图片",
     properties: ["openFile"],
-    filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
+    filters: [{ name: "图片文件", extensions: ["png", "jpg", "jpeg", "webp"] }],
   });
   if (result.canceled || !result.filePaths[0]) return null;
   const filePath = result.filePaths[0];

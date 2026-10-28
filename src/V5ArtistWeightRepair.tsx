@@ -819,7 +819,7 @@ export default function V5ArtistWeightRepair({
                   <label className="random-custom-tag-search">
                     <Icon name="search" />
                     <input type="search" value={drawTagQuery} placeholder={drawLibraryText.search} onChange={(event) => setDrawTagQuery(event.target.value)} />
-                    {drawTagQuery && <button type="button" aria-label="clear" onClick={() => setDrawTagQuery("")}><Icon name="clear" /></button>}
+                    {drawTagQuery && <button type="button" aria-label="清除搜索" onClick={() => setDrawTagQuery("")}><Icon name="clear" /></button>}
                   </label>
                   <div className="random-custom-tag-toolbar-status" aria-live="polite"><span>{`${drawLibraryItems.length} / ${Math.max(drawCatalogTotal, drawLibraryItems.length)}`}</span><small>{drawCatalogTotal > 0 ? drawLibraryText.local : drawLibraryText.offline}</small></div>
                 </div>

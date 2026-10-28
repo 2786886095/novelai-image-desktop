@@ -38,9 +38,9 @@ export function AppTitleBar() {
           : t("title.notConnected")}
       </div>
       <div className="window-controls">
-        <button aria-label="Minimize" onClick={() => window.naiDesktop.minimize()}><Icon name="minimize" /></button>
-        <button aria-label="Maximize" onClick={() => window.naiDesktop.maximize()}><Icon name="maximize" /></button>
-        <button aria-label="Close" className="close" onClick={() => window.naiDesktop.close()}>
+        <button aria-label="最小化" onClick={() => window.naiDesktop.minimize()}><Icon name="minimize" /></button>
+        <button aria-label="最大化" onClick={() => window.naiDesktop.maximize()}><Icon name="maximize" /></button>
+        <button aria-label="关闭" className="close" onClick={() => window.naiDesktop.close()}>
           <Icon name="close" />
         </button>
       </div>
