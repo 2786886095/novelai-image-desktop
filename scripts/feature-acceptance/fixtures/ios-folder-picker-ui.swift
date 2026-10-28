@@ -173,6 +173,99 @@ final class FolderPickerUITests: XCTestCase {
     guard prepared.count <= 1 else { throw fail("Multiple prepared folder naming flows") }
     return prepared.first
   }
+  private struct NamingEditorWitness {
+    // Actual accessibility elements, not an index that can later retarget.
+    let field: XCUIElement
+    let modalOwner: XCUIElement?
+    let isInline: Bool
+    let identifier: String
+    let frame: [Double]
+  }
+  private func currentNamingEditor(_ app: XCUIApplication) throws -> NamingEditorWitness? {
+    let viewFrame = app.frame
+    func bound(_ field: XCUIElement, _ owner: XCUIElement?, _ inline: Bool) -> NamingEditorWitness {
+      let frame = field.frame
+      return NamingEditorWitness(field: field, modalOwner: owner, isInline: inline,
+        identifier: field.identifier,
+        frame: [Double(frame.origin.x), Double(frame.origin.y), Double(frame.width), Double(frame.height)])
+    }
+    let exactID = NSPredicate(format: "identifier == %@", "DOC.inlineRenameField")
+    let inline = app.textViews.matching(exactID).allElementsBoundByAccessibilityElement.filter {
+      !isSearchField($0) && usable($0, viewFrame)
+    }
+    guard inline.count <= 1 else { throw fail("Ambiguous usable inline editor witnesses") }
+    // Appearance witness only: no typing is authorized, and competing modal
+    // flows are still checked by the complete validation before any action.
+    if let field = inline.first { return bound(field, nil, true) }
+    var modalEditors: [NamingEditorWitness] = []
+    for owner in app.alerts.allElementsBoundByAccessibilityElement + app.sheets.allElementsBoundByAccessibilityElement {
+      guard owner.exists && !owner.frame.isEmpty && viewFrame.intersects(owner.frame) else { continue }
+      let fields = owner.textFields.allElementsBoundByAccessibilityElement.filter {
+        !isSearchField($0) && usable($0, viewFrame) && owner.frame.contains($0.frame)
+      }
+      guard fields.count <= 1 else { throw fail("Ambiguous usable same-modal editor witnesses") }
+      if let field = fields.first { modalEditors.append(bound(field, owner, false)) }
+    }
+    guard modalEditors.count <= 1 else { throw fail("Multiple usable modal editor witnesses") }
+    return modalEditors.first
+  }
+  private func validatedWitnessFlow(_ app: XCUIApplication, _ providerLabels: [String],
+                                    _ witness: NamingEditorWitness) throws -> FolderNameControl {
+    // First validate the held objects. Never substitute a newly matching
+    // same-ID or same-kind field for the editor that earned the5s witness.
+    let viewFrame = app.frame
+    guard !isSearchField(witness.field), usable(witness.field, viewFrame) else {
+      throw fail("The held editor witness disappeared or became unusable")
+    }
+    if witness.isInline {
+      guard witness.modalOwner == nil, witness.field.identifier == "DOC.inlineRenameField" else {
+        throw fail("Held inline witness literal identity changed")
+      }
+    } else {
+      guard let owner = witness.modalOwner, owner.exists && !owner.frame.isEmpty &&
+            viewFrame.intersects(owner.frame) && owner.frame.contains(witness.field.frame) else {
+        throw fail("The held modal owner or its editor scope disappeared")
+      }
+      let fields = owner.textFields.allElementsBoundByAccessibilityElement.filter {
+        !isSearchField($0) && usable($0, viewFrame) && owner.frame.contains($0.frame)
+      }
+      guard fields.count == 1 else { throw fail("The held modal no longer has one usable editor") }
+    }
+    // This complete, one-shot check includes all competing flows, current
+    // provider identity, unique keyboard Done and same-modal commit controls.
+    // It creates no wait/deadline and its candidate field is NEVER used to type.
+    guard let complete = try currentFolderNameControl(app, providerLabels),
+          complete.isInline == witness.isInline else {
+      throw fail("Full naming safety validation failed after the editor witness")
+    }
+    if witness.isInline {
+      guard usable(witness.field, viewFrame), witness.field.identifier == "DOC.inlineRenameField" else {
+        throw fail("Held inline witness invalidated during full safety validation")
+      }
+      return FolderNameControl(field: witness.field, isInline: true, modalCommit: nil)
+    }
+    guard let owner = witness.modalOwner, owner.exists,
+          usable(witness.field, viewFrame), owner.frame.contains(witness.field.frame) else {
+      throw fail("Held modal witness invalidated during full safety validation")
+    }
+    let predicate = NSPredicate(format: "label IN %@", ["Create", "Done", "创建", "建立", "完成"])
+    let commits = owner.buttons.matching(predicate).allElementsBoundByAccessibilityElement.filter {
+      $0.exists && $0.isHittable && !$0.frame.isEmpty && viewFrame.contains($0.frame) && owner.frame.contains($0.frame)
+    }
+    guard commits.count == 1 else { throw fail("No unique commit in the same held modal owner") }
+    return FolderNameControl(field: witness.field, isInline: false, modalCommit: commits[0])
+  }
+  private func recordNamingEditorWitness(_ payload: [String: Any]) throws {
+    // Payload contains already read properties, never a new UI query that
+    // could retroactively earn pre-deadline credit.
+    let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+    let text = String(decoding: data, as: UTF8.self)
+    print("IOS_FOLDER_NAMING_EDITOR_WITNESS:" + text)
+    let attachment = XCTAttachment(string: text)
+    attachment.name = "naming-editor-witness-observation-only"
+    attachment.lifetime = .keepAlways
+    add(attachment)
+  }
   private func tap(_ element: XCUIElement, _ action: String) throws {
     guard element.exists && element.isHittable && element.isEnabled else {
       throw fail("Observed UI control unavailable: " + action)
@@ -255,26 +348,34 @@ final class FolderPickerUITests: XCTestCase {
     }
     guard let newFolder = create else { throw fail("System provider did not expose New Folder") }
     try tap(newFolder, "new-folder-via-system-picker")
-    let namingDeadline = Date().addingTimeInterval(5)
+    // Restore the original field-appearance stage: the editor itself must be
+    // usable within one absolute5s; the later complete safety RPCs are not a
+    // second appearance wait. No outer allowance or timeout is increased.
+    let namingStarted = Date()
+    let namingDeadline = namingStarted.addingTimeInterval(5)
     let providerLabels = providers.flatMap { $0.1 }
-    var naming = try currentFolderNameControl(app, providerLabels)
+    var naming = try currentNamingEditor(app)
     while naming == nil {
-      if Date() >= namingDeadline { throw fail("No unique prepared inline or modal folder naming control within original5s") }
+      if Date() >= namingDeadline { break }
       Thread.sleep(forTimeInterval: 0.15)
-      naming = try currentFolderNameControl(app, providerLabels)
+      naming = try currentNamingEditor(app)
     }
-    // Reject even a nonnil first result if capture/snapshot work exhausted5s.
-    if Date() >= namingDeadline { throw fail("Prepared naming control arrived after original5s deadline") }
-    guard let discovered = naming else { throw fail("Prepared folder naming control disappeared") }
-    // The first discovery/acceptance was inside the unchanged5s. Attachments
-    // are outside that critical window; re-read the complete live flow before
-    // typing rather than trusting an old handle after capture.
+    let witnessObservedAt = Date()
+    let withinAppearanceDeadline = witnessObservedAt < namingDeadline
+    let elapsed = witnessObservedAt.timeIntervalSince(namingStarted)
+    try recordNamingEditorWitness(["sourceSha": source, "profileSha": profile,
+      "nativePid": Int(nativePID)!, "nonce": nonce, "appId": bundle,
+      "elapsedSeconds": elapsed, "appearanceDeadlineSeconds": 5,
+      "withinAppearanceDeadline": withinAppearanceDeadline,
+      "editorFound": naming != nil, "editorKind": naming?.isInline == true ? "inline" : "modal-or-absent",
+      "editorIdentifier": naming?.identifier ?? "", "editorFrame": naming?.frame ?? [],
+      "boundToAccessibilityElement": naming != nil, "modalOwnerHeld": naming?.modalOwner != nil,
+      "witnessAloneAuthorizesActions": false])
+    guard withinAppearanceDeadline else { throw fail("Usable naming editor witness arrived after original5s appearance deadline") }
+    guard let witness = naming else { throw fail("No usable naming editor witness within original5s") }
     capture("after-new-folder-action")
-    guard let control = try currentFolderNameControl(app, providerLabels),
-          control.isInline == discovered.isInline else {
-      throw fail("Prepared naming flow changed after accepted-control capture")
-    }
-    let field = control.field
+    let control = try validatedWitnessFlow(app, providerLabels, witness)
+    let field = witness.field
     // The observed inline editor already has focus/selection. Do not collapse
     // that selection by tapping it. typeText fails if keyboard focus is absent.
     if !control.isInline { field.tap() }
@@ -285,9 +386,9 @@ final class FolderPickerUITests: XCTestCase {
     guard let exact = field.value as? String, exact == folder else {
       throw fail("Folder naming control does not contain the exact bound nonce")
     }
-    guard let current = try currentFolderNameControl(app, providerLabels),
-          current.isInline == control.isInline,
-          let confirmed = current.field.value as? String, confirmed == folder else {
+    let current = try validatedWitnessFlow(app, providerLabels, witness)
+    guard current.isInline == control.isInline,
+          let confirmed = witness.field.value as? String, confirmed == folder else {
       throw fail("Current prepared naming flow or exact nonce changed before commit")
     }
     if current.isInline {

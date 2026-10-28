@@ -138,7 +138,7 @@ test('nonce entry and picker dismissal use the same title policy; a Browse trans
  const absent=shape();absent.bars=[];assert.equal(titleContract(s,absent),null);
 });
 test('real provider taps capture a separate frame and bounded title waits preserve original deadlines and no-grant boundary',()=>{
- const s=swiftSource();assert(s.includes('Date().addingTimeInterval(5)'));assert(s.includes('let namingDeadline = Date().addingTimeInterval(5)'));
+ const s=swiftSource();assert(s.includes('Date().addingTimeInterval(5)'));assert(s.includes('let namingDeadline = namingStarted.addingTimeInterval(5)'));
  assert(s.includes('Date().addingTimeInterval(15)'));assert.equal((s.match(/Date\(\)\.addingTimeInterval\(10\)/g)||[]).length,2);
  assert(s.includes('for attempt in 0..<6'));assert(s.includes('if try waitForNavigationTitle(app, labels)'));
  const tap=s.indexOf('try tap(location, "open-observed-external-local-provider")');
@@ -218,18 +218,18 @@ test('static modal compatibility requires same visible alert or sheet field and 
 test('static typing and commit require exact nonce after input and re-resolved prepared control, never assumed selection',()=>{
  const s=swiftSource();assert(s.includes('if !control.isInline { field.tap() }'));
  const input=s.indexOf('field.typeText(folder)'),check=s.indexOf('let exact = field.value as? String, exact == folder');
- const current=s.indexOf('guard let current = try currentFolderNameControl(app, providerLabels)');
- const confirmed=s.indexOf('let confirmed = current.field.value as? String, confirmed == folder');
+ const current=s.indexOf('let current = try validatedWitnessFlow(app, providerLabels, witness)');
+ const confirmed=s.indexOf('let confirmed = witness.field.value as? String, confirmed == folder');
  const done=s.indexOf('try tap(done, "create-exact-nonce-folder")');assert(input>=0&&input<check&&check<current&&current<confirmed&&confirmed<done);
  assert(s.includes('current.isInline == control.isInline'));assert(s.includes('guard let commit = current.modalCommit'));
 });
 test('static naming5s deadline is not renewed; real new-folder and rename commit taps have separate captures',()=>{
  const s=swiftSource();const tap=s.indexOf('try tap(newFolder, "new-folder-via-system-picker")');
- const deadline=s.indexOf('let namingDeadline = Date().addingTimeInterval(5)'),cap=s.indexOf('capture("after-new-folder-action")');
+ const deadline=s.indexOf('let namingDeadline = namingStarted.addingTimeInterval(5)'),cap=s.indexOf('capture("after-new-folder-action")');
  assert(tap>=0&&tap<deadline&&deadline<cap);assert.equal((s.match(/let namingDeadline =/g)||[]).length,1);
  assert(s.includes('if Date() >= namingDeadline'));assert(s.includes('while naming == nil'));
- const accept=s.indexOf('if Date() >= namingDeadline { throw fail("Prepared naming control arrived after original5s deadline") }');
- assert(accept>s.indexOf('while naming == nil')&&accept<s.indexOf('guard let discovered = naming'));
+ const accept=s.indexOf('guard withinAppearanceDeadline else');
+ assert(accept>s.indexOf('while naming == nil')&&accept<s.indexOf('guard let witness = naming'));
  // Static acceptance contract: an immediately nonnull result arriving after
  // capture/helper consumed5s must still reject, not skip the nil-only loop.
  const acceptAt=(elapsedSeconds,hasControl)=>{if(accept>=0&&elapsedSeconds>=5)throw new Error('late naming control');return hasControl;};
@@ -258,7 +258,7 @@ test('bounded title hit/frame observation is deferred and acceptance-independent
   '"final-current-title-observation-only"'])assert(body.includes(token),token);
  assert(!/Thread.sleep|waitFor|while |\.tap\(|currentNavigationTitle|throw fail/.test(body));
  assert(s.includes('defer { capture("final-picker-state"); captureCurrentTitleObservation(app) }'));
- assert(body.includes('Only an observation encoding failure'));assert(s.includes('Prepared naming control arrived after original5s deadline'));
+ assert(body.includes('Only an observation encoding failure'));assert(s.includes('Usable naming editor witness arrived after original5s appearance deadline'));
  assert.equal((s.match(/let namingDeadline =/g)||[]).length,1);assert.equal((s.match(/Date\(\)\.addingTimeInterval\(10\)/g)||[]).length,2);
 });
 
@@ -287,12 +287,46 @@ test('constant server-side prefilters retain the original prepared selection and
  for(const name of ['currentKeyboardDone','currentFolderNameControl']){const body=s.split('private func '+name+'(')[1].split('\n  private func ')[0];assert.equal((body.match(/let viewFrame = app.frame/g)||[]).length,1);}
 });
 test('first accepted naming control stays within original5s; capture then fresh live validation precede typing and no late positive is accepted',()=>{
- const s=swiftSource();const deadline=s.indexOf('let namingDeadline = Date().addingTimeInterval(5)');
- const reject=s.indexOf('Prepared naming control arrived after original5s deadline');const accepted=s.indexOf('guard let discovered = naming');
- const capture=s.indexOf('capture("after-new-folder-action")');const fresh=s.indexOf('guard let control = try currentFolderNameControl(app, providerLabels)');
+ const s=swiftSource();const deadline=s.indexOf('let namingDeadline = namingStarted.addingTimeInterval(5)');
+ const reject=s.indexOf('guard withinAppearanceDeadline else');const accepted=s.indexOf('guard let witness = naming');
+ const capture=s.indexOf('capture("after-new-folder-action")');const fresh=s.indexOf('let control = try validatedWitnessFlow(app, providerLabels, witness)');
  const typing=s.indexOf('field.typeText(folder)');assert(deadline>=0&&deadline<reject&&reject<accepted&&accepted<capture&&capture<fresh&&fresh<typing);
- assert(s.includes('control.isInline == discovered.isInline'));assert.equal((s.match(/let namingDeadline =/g)||[]).length,1);
+ assert(s.includes('complete.isInline == witness.isInline'));assert.equal((s.match(/let namingDeadline =/g)||[]).length,1);
  const acceptAt=t=>{if(t>=5)throw Error('late');return true;};assert.throws(()=>acceptAt(5.001),/late/);assert.equal(acceptAt(4.999),true);
- assert(s.includes('let confirmed = current.field.value as? String, confirmed == folder'));
+ assert(s.includes('let confirmed = witness.field.value as? String, confirmed == folder'));
  assert.equal((s.match(/Date\(\)\.addingTimeInterval\(10\)/g)||[]).length,2);
+});
+
+// STATIC stage/binding contracts only; these do not execute XCTest or time its RPCs.
+test('appearance witness holds actual accessibility elements and the same absolute5s, not a by-index replacement or full-flow deadline',()=>{
+ const s=swiftSource();const body=s.split('private func currentNamingEditor(')[1].split('private func validatedWitnessFlow(')[0];
+ assert(body.includes('allElementsBoundByAccessibilityElement'));assert(!body.includes('allElementsBoundByIndex'));
+ assert(body.includes('if let field = inline.first { return bound(field, nil, true) }'));
+ assert(!/currentNavigationTitle|currentKeyboardDone|\.buttons/.test(body));
+ assert(body.includes('owner.textFields.allElementsBoundByAccessibilityElement'));
+ assert(s.includes('let witnessObservedAt = Date()'));assert(s.includes('witnessObservedAt < namingDeadline'));
+ assert(s.includes('witnessObservedAt.timeIntervalSince(namingStarted)'));assert(s.includes('witnessAloneAuthorizesActions'));
+ const accepted=s.indexOf('guard let witness = naming'),capture=s.indexOf('capture("after-new-folder-action")'),full=s.indexOf('let control = try validatedWitnessFlow');
+ assert(accepted<capture&&capture<full&&full<s.indexOf('field.typeText(folder)'));
+});
+test('held witness invalidation or another same-ID field/modal cannot borrow appearance credit; all competing flows and Done remain mandatory',()=>{
+ const s=swiftSource();const body=s.split('private func validatedWitnessFlow(')[1].split('private func recordNamingEditorWitness(')[0];
+ for(const token of ['usable(witness.field, viewFrame)','witness.field.identifier == "DOC.inlineRenameField"','witness.modalOwner',
+  'owner.textFields.allElementsBoundByAccessibilityElement','fields.count == 1','currentFolderNameControl(app, providerLabels)',
+  'complete.isInline == witness.isInline','field: witness.field','owner.buttons.matching(predicate)'])assert(body.includes(token),token);
+ assert(!body.includes('field: complete.field'));assert(s.includes('let field = witness.field'));assert(!/Thread.sleep|waitFor|Date\(/.test(body));
+ // Pure held-capability policy, not a mock XCUI tree or element equality API.
+ const allowed=(held,state)=>held.field.alive&&held.field.usable&&(!held.owner||held.owner.alive&&state.scopeOwner===held.owner)&&state.flows===1&&state.done===1;
+ const a={alive:true,usable:true},owner={alive:true},held={field:a,owner};const good={scopeOwner:owner,flows:1,done:1};assert(allowed(held,good));
+ for(const state of [{...good,flows:2},{...good,done:0},{...good,scopeOwner:{alive:true}}])assert(!allowed(held,state));
+ assert(!allowed({field:{alive:false,usable:true},owner},good),'same-ID replacement cannot revive heldfield');
+ assert(!allowed({field:a,owner:{alive:false}},{...good,scopeOwner:owner}),'modalB cannot revive original owner');
+});
+test('source-bound elapsed witness uses cached attributes after the timestamp, and grants no actions or reset',()=>{
+ const s=swiftSource();const body=s.split('private func recordNamingEditorWitness(')[1].split('private func tap(')[0];
+ assert(!/app\.|\.field|\.frame|waitFor|Thread.sleep/.test(body));assert(s.includes('IOS_FOLDER_NAMING_EDITOR_WITNESS:'));
+ for(const key of ['"sourceSha": source','"profileSha": profile','"nativePid": Int(nativePID)!','"nonce": nonce','"elapsedSeconds": elapsed','"withinAppearanceDeadline": withinAppearanceDeadline','"witnessAloneAuthorizesActions": false'])assert(s.includes(key),key);
+ assert.equal((s.match(/let namingDeadline =/g)||[]).length,1);assert.equal((s.match(/Date\(\)\.addingTimeInterval\(10\)/g)||[]).length,2);
+ assert(s.includes('let current = try validatedWitnessFlow(app, providerLabels, witness)'));
+ assert(s.includes('let confirmed = witness.field.value as? String, confirmed == folder'));
 });
