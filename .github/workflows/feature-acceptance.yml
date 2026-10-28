@@ -155,6 +155,10 @@ jobs:
             ${{ runner.temp }}/desktop-japanese-comic-acceptance/*/command-ledger.json
             ${{ runner.temp }}/desktop-japanese-comic-acceptance/*/JAPANESE_*.json
             ${{ runner.temp }}/desktop-japanese-comic-acceptance/*/native-japanese-templates.png
+            ${{ runner.temp }}/desktop-japanese-comic-acceptance/*/MAC_NATIVE_KEYCHAIN.json
+            ${{ runner.temp }}/desktop-japanese-comic-acceptance/*/MAC_NATIVE_STALL*
+            ${{ runner.temp }}/desktop-japanese-comic-acceptance/*/BOOTSTRAP_PHASES.jsonl
+            ${{ runner.temp }}/desktop-japanese-comic-acceptance/*/NATIVE_JAPANESE_*
             ${{ runner.temp }}/desktop-japanese-comic-acceptance/*/source-before/**
             ${{ runner.temp }}/desktop-japanese-comic-acceptance/*/source-after/**
             ${{ runner.temp }}/desktop-acceptance/desktop-*-receipt.json
@@ -484,7 +488,7 @@ jobs:
       - name: Install locked rejection-test dependencies (no lifecycle scripts)
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Check matrix rejection rules
-        run: node --test scripts/feature-acceptance/five-platform-release-gates.test.mjs scripts/feature-acceptance/release-feature-scope.test.mjs scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/windows-artist-contract.test.mjs scripts/feature-acceptance/windows-artist-native.test.mjs scripts/feature-acceptance/windows-artist-matrix.test.mjs scripts/feature-acceptance/import-windows-artist-evidence.test.mjs scripts/feature-acceptance/mobile-scenario-receipt.test.mjs scripts/feature-acceptance/mobile-entry-consistency.test.mjs scripts/feature-acceptance/ios-folder-picker-driver.test.mjs scripts/feature-acceptance/ios-simulator-locale-regression.test.mjs scripts/feature-acceptance/stop-disposable-ios-simulator.test.mjs scripts/feature-acceptance/linux-release-baseline.test.mjs scripts/feature-acceptance/native-proof-stream.test.mjs scripts/feature-acceptance/native-resident-pending.test.mjs scripts/feature-acceptance/native-begin-entry-parity.test.mjs scripts/feature-acceptance/metadata-import-wrapper.test.mjs scripts/feature-acceptance/prepare-android-image.test.mjs
+        run: node --test scripts/feature-acceptance/five-platform-release-gates.test.mjs scripts/feature-acceptance/release-feature-scope.test.mjs scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/windows-artist-contract.test.mjs scripts/feature-acceptance/windows-artist-native.test.mjs scripts/feature-acceptance/windows-artist-matrix.test.mjs scripts/feature-acceptance/import-windows-artist-evidence.test.mjs scripts/feature-acceptance/mobile-scenario-receipt.test.mjs scripts/feature-acceptance/mobile-entry-consistency.test.mjs scripts/feature-acceptance/ios-folder-picker-driver.test.mjs scripts/feature-acceptance/desktop-japanese-comic-controller.test.mjs scripts/feature-acceptance/ios-simulator-locale-regression.test.mjs scripts/feature-acceptance/stop-disposable-ios-simulator.test.mjs scripts/feature-acceptance/linux-release-baseline.test.mjs scripts/feature-acceptance/native-proof-stream.test.mjs scripts/feature-acceptance/native-resident-pending.test.mjs scripts/feature-acceptance/native-begin-entry-parity.test.mjs scripts/feature-acceptance/metadata-import-wrapper.test.mjs scripts/feature-acceptance/prepare-android-image.test.mjs
       - name: Require 187 scoped cells across five release platforms (eight Windows-local capability cells not-supported)
         shell: bash
         run: |

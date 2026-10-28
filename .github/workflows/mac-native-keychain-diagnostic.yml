@@ -8,12 +8,19 @@ on:
       - scripts/feature-acceptance/mac-native-keychain.test.mjs
       - .github/workflows/mac-native-keychain-diagnostic.yml
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Isolated Keychain lifecycle or the bounded real Japanese comic controller (diagnostic only)
+        type: choice
+        default: keychain
+        options: [keychain, japanese-comic]
 
 permissions:
   contents: read
 
 jobs:
   isolated-keychain-lifecycle:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'japanese-comic'
     runs-on: macos-14
     timeout-minutes: 10
     steps:
@@ -74,4 +81,102 @@ jobs:
             ${{ runner.temp }}/mac-keychain-diagnostic/SOURCE_BINDING.json
             ${{ runner.temp }}/mac-keychain-diagnostic/MAC_NATIVE_KEYCHAIN.json
             ${{ runner.temp }}/mac-keychain-diagnostic/RESULT.json
+          if-no-files-found: error
+
+  japanese-comic-native-diagnostic:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'japanese-comic'
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - name: Preserve exact checkout bytes
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+          cache: npm
+      - name: Install real locked native tooling and Electron
+        run: npm ci --no-audit --no-fund
+      - name: Warm the real Electron binary
+        run: npx electron --version
+      - name: Bind fresh diagnostic nonce to exact source bytes
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import crypto from 'node:crypto';
+          import {execFileSync} from 'node:child_process';
+          import {captureSourceState} from './scripts/feature-acceptance/mobile-entry-workspace.mjs';
+          const sourceSha = process.env.GITHUB_SHA;
+          const head = execFileSync('git', ['rev-parse', 'HEAD'], {encoding:'utf8'}).trim();
+          if (!/^[a-f0-9]{40}$/.test(sourceSha || '') || head !== sourceSha)
+            throw Error('Diagnostic source HEAD differs');
+          const nonce = crypto.randomUUID();
+          const output = path.join(process.env.RUNNER_TEMP, 'mac-japanese-diagnostic', nonce);
+          fs.mkdirSync(output, {recursive:true});
+          const state = captureSourceState({sourceRoot:process.cwd(), sourceSha,
+            evidenceDirectory:path.join(output, 'source-before')});
+          if (!state.clean || !state.rawMatchesHead) throw Error('Diagnostic raw source is not pristine');
+          fs.writeFileSync(path.join(output, 'SOURCE_BINDING.json'), JSON.stringify({
+            sourceSha, diagnosticNonce:nonce, workflowRun:process.env.GITHUB_RUN_ID,
+            source:process.cwd(), output, rawIndexFilesVerified:state.trackedFiles,
+            diagnosticOnly:true, eligibleForPublication:false, formalFeatureRun:false,
+            featureReceiptProduced:true, nativeAcceptanceClaimed:false}, null, 2));
+          fs.appendFileSync(process.env.GITHUB_ENV,
+            'JAPANESE_DIAGNOSTIC_OUTPUT=' + output + '\nJAPANESE_DIAGNOSTIC_NONCE=' + nonce + '\n');
+          NODE
+      - name: Check controller boundary and diagnostic-only guards
+        run: node --test scripts/feature-acceptance/desktop-japanese-comic-controller.test.mjs
+      - name: Execute the unchanged real Japanese production controller
+        shell: bash
+        run: |
+          set +e
+          node scripts/feature-acceptance/run-desktop-japanese-comic-native.mjs "$JAPANESE_DIAGNOSTIC_OUTPUT/native" "$GITHUB_SHA"
+          status=$?
+          printf '%s\n' "$status" > "$JAPANESE_DIAGNOSTIC_OUTPUT/CONTROLLER_EXIT.txt"
+          exit "$status"
+      - name: Record diagnostic outcome without release qualification
+        if: always() && env.JAPANESE_DIAGNOSTIC_OUTPUT != ''
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import crypto from 'node:crypto';
+          import {execFileSync} from 'node:child_process';
+          import {captureSourceState} from './scripts/feature-acceptance/mobile-entry-workspace.mjs';
+          const output = process.env.JAPANESE_DIAGNOSTIC_OUTPUT;
+          const binding = JSON.parse(fs.readFileSync(path.join(output, 'SOURCE_BINDING.json')));
+          const sourceSha = process.env.GITHUB_SHA;
+          if (binding.sourceSha !== sourceSha || binding.diagnosticNonce !== process.env.JAPANESE_DIAGNOSTIC_NONCE ||
+              binding.output !== output || execFileSync('git', ['rev-parse','HEAD'], {encoding:'utf8'}).trim() !== sourceSha)
+            throw Error('Diagnostic source/nonce boundary differs');
+          const after = captureSourceState({sourceRoot:process.cwd(), sourceSha,
+            evidenceDirectory:path.join(output, 'source-after')});
+          const exitFile = path.join(output, 'CONTROLLER_EXIT.txt');
+          const literalExit = fs.existsSync(exitFile) ? fs.readFileSync(exitFile,'utf8').trim() : null;
+          const controllerExit = /^\d+$/.test(literalExit || '') ? Number(literalExit) : null;
+          const file = path.join(output, 'native', 'desktop-japanese-comic-macos-receipt.json');
+          const bytes = fs.existsSync(file) ? fs.readFileSync(file) : null;
+          const receipt = bytes ? JSON.parse(bytes) : null;
+          const passed = controllerExit === 0 && receipt?.sourceSha === sourceSha && receipt?.sourceQualified === true &&
+            receipt?.exitStatus === 0 && receipt?.checks?.length === 10 && after.clean && after.rawMatchesHead;
+          const result = {sourceSha, diagnosticNonce:binding.diagnosticNonce, diagnosticOnly:true,
+            eligibleForPublication:false, formalFeatureRun:false, full195Certified:false,
+            featureReceiptProduced:Boolean(receipt), nativeAcceptanceClaimed:false,
+            controllerExit, controllerReceiptSha256:bytes ? crypto.createHash('sha256').update(bytes).digest('hex') : null,
+            observedChecks:receipt?.checks?.length || 0, sourceQualified:receipt?.sourceQualified || false,
+            rawSourceAfter:after.clean && after.rawMatchesHead, diagnosticPassed:passed,
+            boundary:'This narrow diagnostic workflow cannot replace Native Client Feature Acceptance or its 187 scoped cells.'};
+          fs.writeFileSync(path.join(output, 'RESULT.json'), JSON.stringify(result,null,2));
+          console.log(JSON.stringify(result));
+          if (!passed) process.exitCode = 1;
+          NODE
+      - name: Upload exact Japanese diagnostic streams and phases
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-japanese-diagnostic-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/mac-japanese-diagnostic/
           if-no-files-found: error

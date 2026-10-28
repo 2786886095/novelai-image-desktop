@@ -1,6 +1,7 @@
 // Actual Flutter hit-testing/gesture dispatch on the native engine, not callback
 // substitution, WidgetTester, fake platform channels or an alternate UI.
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -34,14 +35,58 @@ Future<void> nativeUiWait(bool Function() test, String reason,
 bool _nativeTargetReceivesPointer(Element element, RenderBox box) {
   final position = box.localToGlobal(box.size.center(Offset.zero));
   final result = HitTestResult();
-  GestureBinding.instance.hitTestInView(result, position, View.of(element).viewId);
+  GestureBinding.instance
+      .hitTestInView(result, position, View.of(element).viewId);
   final descendants = <RenderObject>{};
   void collect(RenderObject object) {
     descendants.add(object);
     object.visitChildren(collect);
   }
+
   collect(box);
   return result.path.any((entry) => descendants.contains(entry.target));
+}
+
+// Best-effort geometry only: never labels, account data, values or credentials.
+// At most the first blocked state and one terminal state are emitted per tap.
+void _nativePointerDiagnostic(
+    Element element, RenderBox box, int attempt, String phase) {
+  try {
+    final view = View.of(element);
+    final center = box.localToGlobal(box.size.center(Offset.zero));
+    final hit = HitTestResult();
+    GestureBinding.instance.hitTestInView(hit, center, view.viewId);
+    final route = ModalRoute.of(element);
+    final logical = view.physicalSize / view.devicePixelRatio;
+    // ignore: avoid_print
+    print('FEATURE_NATIVE_POINTER_TARGET:${jsonEncode({
+          'kind': 'diagnostic',
+          'phase': phase,
+          'attempt': attempt,
+          'widgetType': element.widget.runtimeType.toString(),
+          'viewId': view.viewId,
+          'devicePixelRatio': view.devicePixelRatio,
+          'physicalSize': [view.physicalSize.width, view.physicalSize.height],
+          'logicalViewSize': [logical.width, logical.height],
+          'boxSize': [box.size.width, box.size.height],
+          'globalCenter': [center.dx, center.dy],
+          'centerInView': center.dx >= 0 &&
+              center.dy >= 0 &&
+              center.dx < logical.width &&
+              center.dy < logical.height,
+          'routePresent': route != null,
+          'routeCurrent': route?.isCurrent ?? false,
+          'routeAnimating':
+              route?.animation?.status == AnimationStatus.forward ||
+                  route?.animation?.status == AnimationStatus.reverse,
+          'hitTargetTypes': hit.path
+              .take(16)
+              .map((entry) => entry.target.runtimeType.toString())
+              .toList(),
+        })}');
+  } catch (_) {
+    // Diagnostic failure cannot change the strict tap decision or its error.
+  }
 }
 
 Future<void> _revealNativePointerTarget(Element element) async {
@@ -53,7 +98,15 @@ Future<void> _revealNativePointerTarget(Element element) async {
     require(object is RenderBox && object.attached && object.hasSize,
         'Native target has no laid-out RenderBox');
     final box = object as RenderBox;
-    if (_nativeTargetReceivesPointer(element, box)) return;
+    if (_nativeTargetReceivesPointer(element, box)) {
+      if (attempt > 0) {
+        _nativePointerDiagnostic(element, box, attempt, 'ready-after-wait');
+      }
+      return;
+    }
+    if (attempt == 0) {
+      _nativePointerDiagnostic(element, box, attempt, 'blocked');
+    }
     final ancestors = <ScrollableState>[];
     element.visitAncestorElements((parent) {
       if (parent is StatefulElement && parent.state is ScrollableState) {
@@ -65,26 +118,38 @@ Future<void> _revealNativePointerTarget(Element element) async {
     for (final ancestor in ancestors.reversed) {
       final viewport = ancestor.context.findRenderObject();
       final position = ancestor.position;
-      if (viewport is! RenderBox || !viewport.attached || !viewport.hasSize ||
+      if (viewport is! RenderBox ||
+          !viewport.attached ||
+          !viewport.hasSize ||
           !position.hasContentDimensions) continue;
       final target = box.localToGlobal(box.size.center(Offset.zero));
       final center = viewport.localToGlobal(viewport.size.center(Offset.zero));
       final delta = position.axis == Axis.vertical
-          ? target.dy - center.dy : target.dx - center.dx;
+          ? target.dy - center.dy
+          : target.dx - center.dx;
       final next = (position.pixels + delta)
-          .clamp(position.minScrollExtent, position.maxScrollExtent).toDouble();
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble();
       if ((next - position.pixels).abs() < .5) continue;
       position.jumpTo(next);
       moved = true;
       await frame();
       break;
     }
-    if (!moved) break;
+    // A route/overlay may still be settling without any scroll movement.
+    // Re-check actual pointer readiness next frame, within the same 8 attempts.
+    if (!moved) await frame();
   }
   final object = element.findRenderObject();
-  require(object is RenderBox && object.attached && object.hasSize &&
-      _nativeTargetReceivesPointer(element, object),
-      'Native target is not on the actual pointer hit path');
+  final ready = object is RenderBox &&
+      object.attached &&
+      object.hasSize &&
+      _nativeTargetReceivesPointer(element, object);
+  if (object is RenderBox && object.attached && object.hasSize) {
+    _nativePointerDiagnostic(
+        element, object, 8, ready ? 'ready-after-wait' : 'failed');
+  }
+  require(ready, 'Native target is not on the actual pointer hit path');
 }
 
 int _pointer = 9300;
