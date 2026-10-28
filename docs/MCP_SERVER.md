@@ -2,7 +2,7 @@
 
 让外部智能体（pi、Claude Code、Codex、Gemini CLI、Cursor、VS Code Copilot、Windsurf、Cline、OpenCode、Claude Desktop 等）通过 [Model Context Protocol](https://modelcontextprotocol.io) 直接操作本软件：生成、查看结果、裁切检查、带参考图重绘，结果照常进入历史记录与界面。
 
-> 方向说明：这是**本软件作为 MCP 服务端**，供用户自己的本机智能体调用；软件内置的生图智能体仍然**不挂载**任何外部 MCP / 文件 / 命令能力（见 [PI_AGENT_REFERENCE_GAP.md](./PI_AGENT_REFERENCE_GAP.md) 的“安全边界”）。
+> 方向说明：这是**本软件作为 MCP 服务端**，供用户自己的本机智能体调用。
 
 ## 启用
 

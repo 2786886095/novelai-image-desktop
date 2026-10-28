@@ -10,7 +10,7 @@ import {profileSha256} from './full-feature-profiles.mjs';
 import {assertWindowsArtistProof, windowsArtistScenarioReceipt,
   readWindowsArtistControllerHashes, windowsArtistControllerPaths} from './windows-artist-contract.mjs';
 
-export const windowsArtistEvidenceRepository = '2786886095/novelai-image-desktop';
+export const windowsArtistEvidenceRepository = 'OldLi1337/novelai-image-desktop';
 export const windowsArtistEvidenceDirectory = 'windows-artist-evidence';
 export const windowsArtistEvidenceManifestSchema = 'windows-artist-evidence-manifest/v1';
 export const windowsArtistEvidenceProof = 'controller-proof.json';

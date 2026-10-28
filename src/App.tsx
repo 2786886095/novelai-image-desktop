@@ -145,6 +145,7 @@ import {
 import {
   APP_NAME,
   APP_VERSION,
+  PROJECT_REPOSITORY,
   DEFAULT_PARAMS,
   DIRECTOR_TOOLS,
   EMOTION_OPTIONS,
@@ -202,7 +203,6 @@ const DEFAULT_HTTP_PROXY = "http://127.0.0.1:7890";
 const DEFAULT_SOCKS_PROXY = "socks5://127.0.0.1:10808";
 const appIconUrl = "./icon.png";
 const onboardingHeroUrl = "./onboarding-hero.png";
-const projectGithubUrl = "https://github.com/2786886095/novelai-image-desktop";
 const rewardWechatUrl = "./about/wechat-reward.jpg";
 const rewardAlipayUrl = "./about/alipay-reward.jpg";
 
@@ -6160,9 +6160,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   <button
                     type="button"
                     className="about-link"
-                    onClick={() => window.naiDesktop.openExternal(projectGithubUrl)}
+                    onClick={() => window.naiDesktop.openExternal(PROJECT_REPOSITORY)}
                   >
-                    {projectGithubUrl}
+                    {PROJECT_REPOSITORY}
                   </button>
                 </div>
                 <div className="about-block">
@@ -6687,7 +6687,7 @@ function OnboardingWizard() {
                   <div><strong>{t("onboarding.tagsTitle")}</strong><span>{t("onboarding.tagsDesc")}</span></div>
                 </div>
                 <div className="row-actions">
-                  <Button onClick={() => window.naiDesktop.openExternal("https://github.com/2786886095/novelai-image-desktop")}>
+                  <Button onClick={() => window.naiDesktop.openExternal(PROJECT_REPOSITORY)}>
                     <IconText icon="↗">{t("onboarding.github")}</IconText>
                   </Button>
                 </div>

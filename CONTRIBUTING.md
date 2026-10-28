@@ -1,7 +1,7 @@
 # 贡献指南 / Contributing
 
 感谢你对 Langbai NovelAI Studio 的兴趣！本项目是一个 **API-only** 的 NovelAI
-桌面客户端（Electron + React + TypeScript），并附带一个 Flutter 移动端（`mobile/`）。
+桌面客户端（Electron + React + TypeScript），支持 Windows 与 macOS。
 
 ## 开发环境
 
@@ -21,7 +21,7 @@ npm test           # vitest 单元测试
 npm run build      # 生产构建
 ```
 
-CI 会在每次推送时对三平台（Windows / macOS / Linux）跑上述检查并打包。
+CI 会在推送到 main 或版本标签时对 Windows / macOS 跑上述检查并打包。
 
 ## 代码结构
 
@@ -37,7 +37,6 @@ CI 会在每次推送时对三平台（Windows / macOS / Linux）跑上述检查
 | `src/components/ui.tsx` | 共享 UI 基础组件 |
 | `src/prompt-data.ts` | 标签分类、灵感胶囊词条 |
 | `src/wildcards.ts` / `src/related-tags.ts` / `src/png-meta.ts` / `src/anlas.ts` / `src/text-utils.ts` | 纯逻辑模块（均有单元测试） |
-| `mobile/` | Flutter Android / iOS 客户端（Phase 1） |
 
 ## 编写测试
 
@@ -47,7 +46,7 @@ CI 会在每次推送时对三平台（Windows / macOS / Linux）跑上述检查
 ## 约定
 
 - 提交信息使用英文 + 约定式前缀（`feat:` / `fix:` / `refactor:` / `chore:`）。
-- 不要提交 `node_modules/`、`dist/`、`release/`、`mobile/build/`（已在 .gitignore）。
+- 不要提交 `node_modules/`、`dist/`、`release/`（已在 .gitignore）。
 - Token 等敏感信息只存本机 userData，请勿写入仓库或日志。
 
 ## 安全

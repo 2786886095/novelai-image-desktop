@@ -8,7 +8,7 @@ import { fitNAIImageSize } from "./nai-dimensions";
 export const APP_VERSION = packageVersion;
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY =
-  "https://github.com/2786886095/novelai-image-desktop";
+  "https://github.com/OldLi1337/novelai-image-desktop";
 
 export type ReversePromptMode = "tags" | "natural" | "mixed";
 export type ReversePromptTemplateVersion = "v4.5" | "v5";
