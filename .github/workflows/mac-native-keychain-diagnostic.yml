@@ -178,5 +178,34 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mac-japanese-diagnostic-${{ github.sha }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/mac-japanese-diagnostic/
+          # upload-artifact follows symlinks: never recurse into the compiled
+          # dependency link, isolated profile, environment or Keychain database.
+          path: |
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/SOURCE_BINDING.json
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/RESULT.json
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/CONTROLLER_EXIT.txt
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/source-before/**
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/source-after/**
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/desktop-japanese-comic-macos-receipt.json
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/command-ledger.json
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/JAPANESE_NATIVE_REPORT.json
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/JAPANESE_NATIVE_REOPEN.json
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/JAPANESE_EXPECTED.json
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/native-japanese-templates.png
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/BOOTSTRAP_PHASES.jsonl
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/NATIVE_JAPANESE_WARM.stdout
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/NATIVE_JAPANESE_WARM.stderr
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/NATIVE_JAPANESE_WARM.START.json
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/NATIVE_JAPANESE_WARM.PID_WITNESS.json
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/NATIVE_JAPANESE_WARM.BOOTSTRAP_PHASES.jsonl
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/NATIVE_JAPANESE_COLD.stdout
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/NATIVE_JAPANESE_COLD.stderr
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/NATIVE_JAPANESE_COLD.START.json
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/NATIVE_JAPANESE_COLD.PID_WITNESS.json
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/NATIVE_JAPANESE_COLD.BOOTSTRAP_PHASES.jsonl
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/MAC_NATIVE_KEYCHAIN.json
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/MAC_NATIVE_STALL_DIAGNOSTICS.json
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/MAC_NATIVE_STALL.sample.txt
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/source-before/**
+            ${{ runner.temp }}/mac-japanese-diagnostic/*/native/*/source-after/**
           if-no-files-found: error
