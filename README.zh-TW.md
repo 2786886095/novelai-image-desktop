@@ -23,7 +23,8 @@ NovelAI 圖像創作工作臺，介面支援簡體中文、繁體中文、英語
 - **明確操作**：輸入內容後要求 AI 推薦頁數或手動設定 1–30 頁；整頁每批最多 4 頁、單分鏡 8 頁，手動續批。結果可編輯、複製並確認匯入原候選／主圖流程，不自動生圖或重送收費請求。
 - **統一範本庫**：六套圖片 3.0 與兩套完整漫畫原稿；唯讀預覽、命名另存、TXT／MD／JSON 匯入、編輯、選用、復原預設、JSON 匯出與備份還原。保留舊版和自訂，不默默切換原版本。
 - **互動保護**：獨立專案及草稿、所屬請求取消、過期結果保護、保留截斷原文；修正設定右上按鈕擠成直排。範本文字不會變更全域模型、風格、負面或費用設定。
-- **平台與證據**：正式發行須同源五平台原生驗收，證據以 Latest 為準；回環合成測試不證明模型畫質或實際扣費。本機 Agent 元件與畫風自動迭代仍僅 Windows，其餘平台 8 格是不支援而非通過。iOS IPA 未簽名，須自行簽名，不能直接安裝一般 iPhone；其他簽名、升級和更新限制見 Latest。
+- **本次發行與證據**：本次 Latest 經維護者明確授權，豁免尚未完成的驗收後發行；本輪僅重新建置及上傳安裝套件，不新增功能、原生或模型驗收。同源五平台完整驗收、Windows 畫風迭代完整三個 GPU 場景尚未完成，iOS 系統目錄選擇／外部書籤／圖片儲存與歷史鏈路未通過。建置成功不等於功能已驗證。
+- **平台與安裝限制**：本機 Agent 元件與畫風自動迭代仍僅 Windows；其他平台不支援的項目不計為通過。Android 建置已設定穩定簽章金鑰，但本輪未獨立確認與舊版憑證一致；iOS IPA 未簽名，須自行簽名／側載，不能直接安裝一般 iPhone。其他簽名、公證、覆蓋升級與自動更新能力不作額外保證，實際限制見 Latest。
 
 歷史更新見[更新記錄](./docs/RELEASE_NOTES.md)。
 
@@ -80,7 +81,7 @@ Windows 本機酒館 Agent 經確認後安裝已驗證的相容元件，不直�
 | Windows x64 | [可攜 EXE](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 下載可攜套件後手動替換。 |
 | macOS Intel／Apple 晶片 | [通用 DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 目前未確認 Apple 簽署或公證已完成；依系統安全提示與安裝教學處理。 |
 | macOS Intel／Apple 晶片 | [通用 ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 選擇通用 ZIP 套件；簽署與公證狀態以 Latest 說明為準。 |
-| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 本次驗收與支援基線為 Ubuntu 24.04 LTS（x86_64），實際結果見同源 Latest 證據。Ubuntu 26.04 已觀察到影像執行環境卡住，目前不支援；其他發行版未驗收。加入執行權限後開啟，手動更新。 |
+| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 建置基線為 Ubuntu 24.04 LTS（x86_64）；本次豁免發行未完成同源完整 Linux 原生驗收，不以建置成功代替執行驗證。Ubuntu 26.04 已觀察到影像執行環境卡住，目前不支援；其他發行版未驗收。加入執行權限後開啟，手動更新。 |
 | Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 從 Latest 附件下載 APK 並手動安裝。 |
 | iOS（附加套件） | [未簽名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 需自行簽署後安裝，無法直接安裝至一般 iPhone。 |
 

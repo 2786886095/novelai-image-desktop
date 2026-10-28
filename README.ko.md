@@ -23,7 +23,8 @@
 - **명시적인 작업 흐름**: AI 페이지 수 추천을 요청하거나 1~30페이지를 직접 입력합니다. 배치당 전체 페이지 4장 또는 단일 컷 8장까지, 다음 배치는 수동 실행합니다. 결과를 수정·복사하고 확인 후 기존 후보/최종 이미지 흐름에 가져옵니다. 자동 이미지 생성이나 유료 요청 재전송은 없습니다.
 - **통합 템플릿**: 이미지v3 여섯 개와 만화 원본 두 개. 기본 원문 읽기 전용, 이름을 정한 사본, TXT/MD/JSON 가져오기, 편집·선택·기본값 복원, JSON 내보내기와 백업 복원을 지원합니다. 이전 및 사용자 콘텐츠와 기존 선택을 유지합니다.
 - **상호작용 보호**: 독립 프로젝트/초안, 요청 소유자별 취소, 오래된 응답 적용 방지, 잘린 원문 보존. 설정 오른쪽 위 버튼이 세로로 찌그러지는 문제를 수정했습니다. 템플릿은 전체 모델·스타일·네거티브·요금 설정을 바꾸지 않습니다.
-- **플랫폼과 증거**: 정식 발행에는 같은 소스의 다섯 플랫폼 네이티브 검증이 필요하며 실제 결과는Latest 첨부를 확인하세요. 루프백 테스트는 원격 모델 품질·실제 과금 증명이 아닙니다. 로컬Agent 구성 요소와 스타일 자동 반복은Windows 전용이며 다른 플랫폼의8셀은 미지원이지 통과가 아닙니다. iOS IPA는 미서명으로 개인 서명이 필요하며 일반iPhone에 바로 설치할 수 없습니다. 다른 서명·업그레이드·업데이트 제한도Latest에 명시합니다.
+- **이번 배포와 증거**: 이번 Latest는 완료되지 않은 인수 검증을 면제한다는 관리자의 명시적 승인으로 배포합니다. 이번 실행은 패키지 재빌드와 업로드만 하며 기능·네이티브·모델 검증을 추가하지 않았습니다. 동일 소스의 다섯 플랫폼 전체 검증과 Windows 스타일 반복의 완전한 GPU 시나리오 3개는 아직 완료되지 않았습니다. iOS 시스템 폴더 선택·외부 북마크·이미지 저장·기록의 종단 간 검증도 통과하지 못했습니다. 빌드 성공은 기능 검증 통과가 아닙니다.
+- **플랫폼과 설치 제한**: 로컬 Agent 구성 요소와 스타일 자동 반복은 계속 Windows 전용이며 미지원 항목을 통과로 계산하지 않습니다. Android 빌드에는 고정 서명 키를 구성했지만 이전 버전과 인증서가 같은지는 이번에 독립적으로 확인하지 않았습니다. iOS IPA는 미서명으로 사용자 서명·사이드로딩이 필요하며 일반 iPhone에 바로 설치할 수 없습니다. 기타 서명·공증·덮어쓰기 업그레이드·자동 업데이트를 추가로 보장하지 않으며 실제 제한은 Latest를 확인하세요.
 
 [업데이트 기록](./docs/RELEASE_NOTES.md).
 
@@ -80,7 +81,7 @@ Windows 로컬 Tavern Agent는 사용자 확인 후 검증된 호환 구성 요�
 | Windows x64 | [포터블 EXE](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 포터블 패키지를 받아 수동 교체하세요. |
 | macOS Intel / Apple silicon | [Universal DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 현재 Apple 서명·공증 완료는 확인되지 않았습니다. 시스템 안내와 설치 가이드를 확인하세요. |
 | macOS Intel / Apple silicon | [Universal ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 공통 ZIP 패키지를 선택하세요. 서명·공증 상태는 Latest 안내를 확인하세요. |
-| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 이번 검증·지원 기준은 Ubuntu 24.04 LTS(x86_64)이며 실제 결과는 동일 소스의 Latest 증거를 확인하세요. Ubuntu 26.04에서 이미지 런타임 멈춤이 관찰되어 현재 지원하지 않으며 다른 배포판은 미검증입니다. 실행 권한을 부여하고 수동 업데이트하세요. |
+| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 빌드 기준은 Ubuntu 24.04 LTS(x86_64)입니다. 이번 면제 배포에서는 동일 소스의 전체 Linux 네이티브 검증을 완료하지 않았으며 빌드 성공을 실행 검증으로 간주하지 않습니다. Ubuntu 26.04에서 이미지 런타임 멈춤이 관찰되어 현재 지원하지 않으며 다른 배포판은 미검증입니다. 실행 권한을 부여하고 수동 업데이트하세요. |
 | Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Latest 첨부 파일에서 APK를 받아 수동 설치하세요. |
 | iOS (추가 패키지) | [미서명 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 직접 서명해야 하며 일반 iPhone에 바로 설치할 수 없습니다. |
 

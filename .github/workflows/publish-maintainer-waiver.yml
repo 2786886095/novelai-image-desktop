@@ -1,0 +1,47 @@
+name: Publish explicit maintainer-waiver v2.6.8
+on:
+  workflow_dispatch:
+    inputs:
+      release_commit_sha:
+        description: Full main commit SHA; application bytes must equal package source76b5d3e0
+        required: true
+        type: string
+      maintainer_waiver_ack:
+        description: Type PUBLISH_v2.6.8_WITH_MAINTAINER_WAIVER; unfinished acceptance is disclosed, not passed
+        required: true
+        type: string
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: maintainer-waiver-v2.6.8
+  cancel-in-progress: false
+jobs:
+  publish-maintainer-waiver:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Preserve original source bytes
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.release_commit_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Publish pinned original packages under explicit maintainer waiver
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT_SHA: ${{ inputs.release_commit_sha }}
+          MAINTAINER_WAIVER_ACK: ${{ inputs.maintainer_waiver_ack }}
+        run: node scripts/publish-maintainer-waiver.mjs
+      - name: Retain package provenance and publication readback only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintainer-waiver-publication-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/maintainer-waiver-${{ github.run_id }}-${{ github.run_attempt }}/evidence/
+          if-no-files-found: warn
