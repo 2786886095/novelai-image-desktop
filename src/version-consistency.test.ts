@@ -36,7 +36,7 @@ describe("release version consistency", () => {
   });
 
   it("uses moving Latest and main entries in all README languages", () => {
-    const repo = "https://github.com/2786886095/novelai-image-desktop";
+    const repo = "https://github.com/OldLi1337/novelai-image-desktop";
     for (const file of ["README.md", "README.en.md", "README.ja.md", "README.ko.md", "README.zh-TW.md"]) {
       const readme = read(file);
       const releaseLinks = readme.match(/https?:\/\/[^\s)\]<>"']+\/releases(?:\/[^\s)\]<>"']*)?/g) ?? [];
@@ -59,7 +59,7 @@ describe("release version consistency", () => {
   });
 
   it("uses current-only Latest notes and preserves byte-authentic history separately", () => {
-    const repo = "https://github.com/2786886095/novelai-image-desktop";
+    const repo = "https://github.com/OldLi1337/novelai-image-desktop";
     const releaseNotes = read("docs/RELEASE_NOTES.md");
     const entries = [...releaseNotes.matchAll(/^##\s+.+$/gm)];
     expect(entries.length).toBe(1);

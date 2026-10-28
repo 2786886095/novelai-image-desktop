@@ -9,7 +9,7 @@ assert.ok(fs.readFileSync('electron/ipc/mcp-client.ts','utf8').includes(`version
 const locales=JSON.parse(fs.readFileSync('shared/agent-ux-locales.json','utf8'));
 assert.ok(JSON.stringify(locales).includes('使用酒馆'));
 // Current page entries move with Latest/main; real package/build versions above remain required.
-const repo='https://github.com/2786886095/novelai-image-desktop';
+const repo='https://github.com/OldLi1337/novelai-image-desktop';
 for(const file of ['README.md','README.en.md','README.ja.md','README.ko.md','README.zh-TW.md']) {
  const readme=fs.readFileSync(file,'utf8');
  assert.ok(!readme.includes('gitee.com'),file+': unexpected release host');

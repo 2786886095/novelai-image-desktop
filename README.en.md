@@ -1,7 +1,7 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 # Langbai NovelAI Studio
 
-> [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) provides the current release notes and actual assets. See the download section for installation limits.
+> [Latest](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) provides the current release notes and actual assets. See the download section for installation limits.
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
@@ -13,19 +13,13 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ![Promotional fan illustration; the interface shown is a visual concept](./docs/assets/readme/furina-workbench.png)
 
-**[Download the latest release](https://github.com/2786886095/novelai-image-desktop/releases/latest)** · [Getting started (Chinese)](./docs/guide/GETTING_STARTED.md) · [Feature guide (Chinese)](./docs/guide/FEATURES.md)
+**[Download the latest release](https://github.com/OldLi1337/novelai-image-desktop/releases/latest)** · [Getting started (Chinese)](./docs/guide/GETTING_STARTED.md) · [Feature guide (Chinese)](./docs/guide/FEATURES.md)
 
 > Bring your own **NovelAI Persistent API Token**. Model access and generation charges depend on your NovelAI account. Optional image analysis, prompt conversion and Tavern AI services require separate configuration.
 
 ## What changed
 
-- **Anthropic Messages thinking strength**: fixes ignored low/medium/high choices in the image agent. Known supported models send `thinking.type: adaptive` with the selected `output_config.effort`; `auto` leaves thinking fields to server defaults. Older and unknown models are not forced into adaptive thinking.
-- **Request compatibility**: explicit adaptive thinking omits incompatible `temperature`/`top_p`. Auto retains Claude 4.6 sampling compatibility; known always-on-thinking models omit unsupported sampling controls. Output limits are not raised automatically, and HTTP 400 never silently downgrades or retries.
-- **Verified scope and limits**: 62 desktop and 52 mobile targeted regressions, TypeScript checks and Dart analysis passed using scripted HTTP/loopback fixtures only, not live Anthropic or third-party gateway endpoints. No new full 150-cell, GPU or five-platform device acceptance is claimed.
-- **Delivery evidence**: platform packages, signing, installation and update limits are determined by the actual attachments and verification evidence on Latest. Source synchronization alone does not establish five-platform native acceptance.
-- **Current release scope**: local Agent components and Artist iteration are Windows-only; they are not promised on macOS/Linux/Android. The four-platform scope of the other 37 features, including the separate image agent, is unchanged. At the maintainer’s explicit request, this is a direct release without additional full-feature or image-generation acceptance; it does not certify all 150 required feature/platform cells. The three Windows Artist GPU native scenarios remain incomplete; six not-supported cells are not passes. iOS is an additional unsigned IPA requiring your own signing and cannot be installed directly on an ordinary iPhone.
-
-[Release notes](./docs/RELEASE_NOTES.md).
+This fork's current changes are described in Chinese in the [README](./README.md) and the [release notes](./docs/RELEASE_NOTES.md): NovelAI's official 1.5× Enhance amount, always-visible prompt libraries with append and tags, a tag autocomplete fix, and update checks against this fork only.
 
 ## Quick start
 
@@ -71,19 +65,19 @@ The following existing screenshot is from **2026-08-30 / v2.0.1** and illustrate
 
 ## Installation and updates
 
-Open the [Latest release page](https://github.com/2786886095/novelai-image-desktop/releases/latest) and choose the package for your platform from its assets. Use that page's version-specific notes rather than an old version or tag link. Package availability and installation requirements may change between releases.
+Open the [Latest release page](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) and choose the package for your platform from its assets. Use that page's version-specific notes rather than an old version or tag link. Package availability and installation requirements may change between releases.
 
 | Platform | Choose on the Latest page | Installation limits |
 | --- | --- | --- |
-| Windows x64 | [Setup EXE](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [portable EXE](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Check the Latest signing notes. The currently verified Windows delivery has no Authenticode signature; do not assume that security or trust warnings are suppressed. Back up data and update manually. |
-| macOS Intel / Apple silicon | [Universal DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [Universal ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Check the Latest signing and notarization notes. Notarization has not been confirmed for the currently verified delivery; system trust prompts may apply. |
-| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Grant execution permission, then run; replace the package manually. |
-| Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Follow the Latest installation and signature notes. Install manually; full physical-device and in-place-upgrade acceptance is not established for the currently verified delivery. |
-| iOS (additional package) | [Unsigned IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Requires your own signing; it cannot be installed directly on a normal iPhone. |
+| Windows x64 | [Setup EXE](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) / [portable EXE](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | Check the Latest signing notes. The currently verified Windows delivery has no Authenticode signature; do not assume that security or trust warnings are suppressed. Back up data and update manually. |
+| macOS Intel / Apple silicon | [Universal DMG](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) / [Universal ZIP](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | Check the Latest signing and notarization notes. Notarization has not been confirmed for the currently verified delivery; system trust prompts may apply. |
+| Linux x64 | [AppImage](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | Grant execution permission, then run; replace the package manually. |
+| Android | [APK](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | Follow the Latest installation and signature notes. Install manually; full physical-device and in-place-upgrade acceptance is not established for the currently verified delivery. |
+| iOS (additional package) | [Unsigned IPA](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | Requires your own signing; it cannot be installed directly on a normal iPhone. |
 
 **Manual updates:** download the current package yourself unless the Latest notes explicitly confirm a supported updater path. An updater manifest is not guaranteed, and package versions or tag naming may not trigger an in-app update; do not assume the updater will offer new bytes. Back up settings and works before replacement. Do not uninstall or delete existing data merely to force an update.
 
-Use the verification and checksum files attached to the [Latest page](https://github.com/2786886095/novelai-image-desktop/releases/latest) for the assets you download; their names and availability can change between releases. [Repository source on main](https://github.com/2786886095/novelai-image-desktop/tree/main) is the current repository branch, not proof of a particular binary's exact build source; use the release verification records for that identity. Full physical-device validation across all supported devices is not complete. [Release notes (Chinese)](./docs/RELEASE_NOTES.md).
+Use the verification and checksum files attached to the [Latest page](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) for the assets you download; their names and availability can change between releases. [Repository source on main](https://github.com/OldLi1337/novelai-image-desktop/tree/main) is the current repository branch, not proof of a particular binary's exact build source; use the release verification records for that identity. Full physical-device validation across all supported devices is not complete. [Release notes (Chinese)](./docs/RELEASE_NOTES.md).
 
 Windows installer and portable builds share `%APPDATA%\novelai-image-desktop\`. Portable does **not** mean all user data is stored beside the executable. Back up settings and images before replacing packages. Desktop and mobile features may differ; local Agent components and Artist Detective iteration are Windows-only. [Platform differences](./docs/guide/FEATURES.md#platforms).
 
@@ -109,6 +103,6 @@ Desktop: Electron + React + TypeScript. Mobile: Flutter.
 
 [Build guide (Chinese)](./docs/guide/DEVELOPMENT.md) · [Contributing](./CONTRIBUTING.md) · [Third-party notices](./THIRD_PARTY_NOTICES.md) · [MIT code license](./LICENSE)
 
-[Report an issue](https://github.com/2786886095/novelai-image-desktop/issues/new) · [Existing issues](https://github.com/2786886095/novelai-image-desktop/issues) · QQ group: **921985070**
+[Report an issue](https://github.com/OldLi1337/novelai-image-desktop/issues/new) · [Existing issues](https://github.com/OldLi1337/novelai-image-desktop/issues) · QQ group: **921985070**
 
 The mascot is Furina from Genshin Impact. Promotional art is unofficial AI-generated fan art; there is no official partnership or endorsement by HoYoverse or NovelAI. The code's MIT license does not grant rights to third-party characters, trademarks or artwork. [Visual asset notes](./docs/assets/readme/ASSETS.md).

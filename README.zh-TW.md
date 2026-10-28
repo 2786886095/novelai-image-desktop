@@ -1,7 +1,7 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 # Langbai NovelAI Studio
 
-> [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 提供目前的發行說明與實際附件；安裝方式與限制請見下方下載區。
+> [Latest](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) 提供目前的發行說明與實際附件；安裝方式與限制請見下方下載區。
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
@@ -13,19 +13,13 @@ NovelAI 圖像創作工作臺，介面支援簡體中文、繁體中文、英語
 
 ![主題宣傳插畫，軟體介面為視覺示意](./docs/assets/readme/furina-workbench.png)
 
-**[下載最新發行版](https://github.com/2786886095/novelai-image-desktop/releases/latest)** · [首次使用教學（簡體中文）](./docs/guide/GETTING_STARTED.md) · [功能指南（簡體中文）](./docs/guide/FEATURES.md)
+**[下載最新發行版](https://github.com/OldLi1337/novelai-image-desktop/releases/latest)** · [首次使用教學（簡體中文）](./docs/guide/GETTING_STARTED.md) · [功能指南（簡體中文）](./docs/guide/FEATURES.md)
 
 > 需設定自己的 **NovelAI Persistent API Token**。模型權限與生成費用依 NovelAI 帳號而定。圖片反推、提示詞轉換與酒館等選用 AI 服務需另外設定。
 
 ## 本次更新
 
-- **Anthropic Messages 思考強度**：修正生圖智慧體的低／中／高選擇未生效問題。已知支援模型傳送 `thinking.type: adaptive` 與對應的 `output_config.effort`；`auto` 不指定思考欄位，保留服務端預設。舊版與未知模型不強制啟用 adaptive。
-- **請求相容性**：明確啟用 adaptive 時省略不相容的 `temperature`／`top_p`；自動模式保留 Claude 4.6 的採樣相容行為，已知始終思考模型不傳送不支援的採樣項。輸出上限不自動增加，HTTP 400 不靜默降級或重試。
-- **已驗證與限制**：桌面端 62 項、行動端 52 項定向回歸及 TypeScript 型別檢查、Dart 分析已通過；僅使用腳本化 HTTP／本機回環夾具，未驗證真實 Anthropic 或第三方中轉端點。未新增完整 150 單元、GPU 或五端實機驗收。
-- **交付依據**：各平臺套件、簽署、安裝與更新限制以 Latest 的實際附件及驗證證據為準；原始碼同步本身不代表五端原生驗收完成。
-- **本次發行範圍**：本機 Agent 元件與畫風自動迭代僅承諾 Windows；macOS／Linux／Android 不承諾這兩項。生圖智慧體等其餘 37 項功能的四端範圍不變。本次依維護者明確要求直接發行，不新增完整功能或生圖驗收，不代表 150 個必要功能／平台單元全部通過；Windows 畫風自動迭代的三個 GPU 原生場景尚未完成，另 6 格為 not-supported、不計通過。iOS 僅附上需自行簽署的未簽名 IPA，不能直接安裝到一般 iPhone。
-
-[更新記錄](./docs/RELEASE_NOTES.md)。
+本 fork 目前的改動以簡體中文記載於 [README](./README.md) 與[更新記錄](./docs/RELEASE_NOTES.md)：NovelAI 官方 1.5× 增強、常駐顯示的提示詞庫（支援追加與標籤）、標籤聯想修正，以及只檢查本 fork 的更新。
 
 ## 快速開始
 
@@ -71,21 +65,21 @@ Windows 本機酒館 Agent 經確認後安裝已驗證的相容元件，不直�
 
 ## 下載與更新
 
-發行版本、適用平臺、簽署狀態及更新限制以 [Latest 發行頁](https://github.com/2786886095/novelai-image-desktop/releases/latest)的最新說明為準。各下載連結皆開啟附件清單，請依下表選擇套件格式。[原始碼（main）](https://github.com/2786886095/novelai-image-desktop/tree/main) · [更新紀錄（簡體中文）](./docs/RELEASE_NOTES.md)。
+發行版本、適用平臺、簽署狀態及更新限制以 [Latest 發行頁](https://github.com/OldLi1337/novelai-image-desktop/releases/latest)的最新說明為準。各下載連結皆開啟附件清單，請依下表選擇套件格式。[原始碼（main）](https://github.com/OldLi1337/novelai-image-desktop/tree/main) · [更新紀錄（簡體中文）](./docs/RELEASE_NOTES.md)。
 
 | 平臺 | 在 Latest 選擇的附件 | 說明 |
 | --- | --- | --- |
-| Windows x64 | [安裝 EXE（Setup）](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 選擇安裝版；目前未確認發布者程式碼簽署已完成。 |
-| Windows x64 | [可攜 EXE](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 下載可攜套件後手動替換。 |
-| macOS Intel／Apple 晶片 | [通用 DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 目前未確認 Apple 簽署或公證已完成；依系統安全提示與安裝教學處理。 |
-| macOS Intel／Apple 晶片 | [通用 ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 選擇通用 ZIP 套件；簽署與公證狀態以 Latest 說明為準。 |
-| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 加入執行權限後開啟。 |
-| Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 從 Latest 附件下載 APK 並手動安裝。 |
-| iOS（附加套件） | [未簽名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 需自行簽署後安裝，無法直接安裝至一般 iPhone。 |
+| Windows x64 | [安裝 EXE（Setup）](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 選擇安裝版；目前未確認發布者程式碼簽署已完成。 |
+| Windows x64 | [可攜 EXE](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 下載可攜套件後手動替換。 |
+| macOS Intel／Apple 晶片 | [通用 DMG](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 目前未確認 Apple 簽署或公證已完成；依系統安全提示與安裝教學處理。 |
+| macOS Intel／Apple 晶片 | [通用 ZIP](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 選擇通用 ZIP 套件；簽署與公證狀態以 Latest 說明為準。 |
+| Linux x64 | [AppImage](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 加入執行權限後開啟。 |
+| Android | [APK](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 從 Latest 附件下載 APK 並手動安裝。 |
+| iOS（附加套件） | [未簽名 IPA](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 需自行簽署後安裝，無法直接安裝至一般 iPhone。 |
 
 **請手動從 Latest 下載與安裝。** 不能僅靠 GitHub 的 Latest 標記推斷軟體內自動更新可用；是否提供更新清單、版本能否辨識及各平臺更新方式，請確認該次發行的說明。
 
-校驗資料、檔案雜湊及執行紀錄以 [Latest 頁](https://github.com/2786886095/novelai-image-desktop/releases/latest)提供的附件或說明為準，下載後請核對對應套件雜湊。尚未完成所有機型的完整實機驗證。
+校驗資料、檔案雜湊及執行紀錄以 [Latest 頁](https://github.com/OldLi1337/novelai-image-desktop/releases/latest)提供的附件或說明為準，下載後請核對對應套件雜湊。尚未完成所有機型的完整實機驗證。
 
 Windows 安裝版與可攜版共用 `%APPDATA%\novelai-image-desktop\`。可攜版**不表示所有資料都存在程式旁**。替換套件前請備份設定與作品。桌面與行動端功能不完全相同，本機畫風迭代僅 Windows 提供。[平臺差異](./docs/guide/FEATURES.md#platforms)。
 
@@ -111,6 +105,6 @@ Windows 安裝版與可攜版共用 `%APPDATA%\novelai-image-desktop\`。可攜�
 
 [建置教學（簡體中文）](./docs/guide/DEVELOPMENT.md) · [貢獻指南](./CONTRIBUTING.md) · [第三方聲明](./THIRD_PARTY_NOTICES.md) · [MIT 程式碼授權](./LICENSE)
 
-[回報問題](https://github.com/2786886095/novelai-image-desktop/issues/new) · [已有問題](https://github.com/2786886095/novelai-image-desktop/issues) · QQ 群：**921985070**
+[回報問題](https://github.com/OldLi1337/novelai-image-desktop/issues/new) · [已有問題](https://github.com/OldLi1337/novelai-image-desktop/issues) · QQ 群：**921985070**
 
 看板角色為《原神》芙寧娜。宣傳圖為 AI 生成的非官方同人視覺，與 HoYoverse／NovelAI 無官方合作或背書關係。程式碼 MIT 授權不授予第三方角色、商標或素材權利。[視覺素材紀錄](./docs/assets/readme/ASSETS.md)。

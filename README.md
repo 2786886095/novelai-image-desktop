@@ -4,7 +4,7 @@
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
 
-**下载入口：** [GitHub Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 提供当前发行说明与实际附件；安装方式与限制见下方下载区。
+**下载入口：** [GitHub Latest](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) 提供当前发行说明与实际附件；安装方式与限制见下方下载区。
 
 ### 从一句灵感，到一组作品。
 
@@ -12,23 +12,24 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 
 ![芙宁娜主题宣传插画，软件界面为视觉示意](./docs/assets/readme/furina-workbench.png)
 
-<a href="https://github.com/2786886095/novelai-image-desktop/releases/latest"><img src="https://img.shields.io/badge/下载最新版-GitHub-2563EB?style=for-the-badge&amp;labelColor=2563EB" width="216" alt="下载最新版 · GitHub" /></a>
+<a href="https://github.com/OldLi1337/novelai-image-desktop/releases/latest"><img src="https://img.shields.io/badge/下载最新版-GitHub-2563EB?style=for-the-badge&amp;labelColor=2563EB" width="216" alt="下载最新版 · GitHub" /></a>
 &nbsp; **[首次使用教程](./docs/guide/GETTING_STARTED.md)** · **[查看全部功能](./docs/guide/FEATURES.md)**
 
 > 需配置自己的 **NovelAI Persistent API Token**，生成费用与模型权限以 NovelAI 账号为准。[反推、转换和酒馆等可选 AI 服务需另行配置](./docs/guide/GETTING_STARTED.md#optional)。
 
-[![Release](https://img.shields.io/github/v/release/2786886095/novelai-image-desktop?color=2563eb)](https://github.com/2786886095/novelai-image-desktop/releases/latest)
-[![Build](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build.yml)
-[![Build Mobile](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/2786886095/novelai-image-desktop/actions/workflows/build-mobile.yml)
+[![Release](https://img.shields.io/github/v/release/OldLi1337/novelai-image-desktop?color=2563eb)](https://github.com/OldLi1337/novelai-image-desktop/releases/latest)
+[![Build](https://github.com/OldLi1337/novelai-image-desktop/actions/workflows/build.yml/badge.svg)](https://github.com/OldLi1337/novelai-image-desktop/actions/workflows/build.yml)
+[![Build Mobile](https://github.com/OldLi1337/novelai-image-desktop/actions/workflows/build-mobile.yml/badge.svg)](https://github.com/OldLi1337/novelai-image-desktop/actions/workflows/build-mobile.yml)
 [![License: MIT](https://img.shields.io/badge/Code-MIT-586069)](./LICENSE)
 
 ## 本次更新
 
-- **Anthropic Messages 思考强度**：修复生图智能体中低／中／高选择未生效的问题。已知支持模型发送 `thinking.type: adaptive` 与对应的 `output_config.effort`；`auto` 不指定思考字段，保留服务端默认。旧版与未知模型不强制启用 adaptive。
-- **请求兼容性**：显式 adaptive 时省略不兼容的 `temperature`／`top_p`；自动模式保留 Claude 4.6 的采样兼容行为，已知始终思考模型不发送不支持的采样项。输出上限不自动增加，HTTP 400 不静默降级或重试。
-- **已验证与限制**：桌面端 62 项、移动端 52 项定向回归及 TypeScript 类型检查、Dart 分析已通过；仅使用脚本化 HTTP／本机回环夹具，未验证真实 Anthropic 或第三方中转端点。未新增完整 150 单元、GPU 或五端实机验收。
-- **交付依据**：各平台包、签名、安装与更新限制以 Latest 的实际附件及验证证据为准；源码同步本身不代表五端原生验收完成。
-- **本次发行范围**：本地 Agent 组件与画风自动迭代仅承诺 Windows；macOS／Linux／Android 不承诺这两项。生图智能体等其余 37 项功能的四端范围不变。本次按维护者明确要求直接发布，不新增全功能或生图验收，不代表 150 个必需功能／平台单元全部通过；Windows 画风自动迭代的三个 GPU 原生场景尚未完成，另 6 格为 not-supported、不计通过。iOS 仅附带需自行签名的未签名 IPA，不能直接安装到普通 iPhone。
+- **增强改为官方倍率**：「生成 → 增强」改为官方的 1× / 1.5× / MAX；原来的 2× 对常见尺寸会超过官方像素上限，1.5× 按官方方式对齐 64 像素网格。
+- **提示词库常驻显示**：正、负面提示词框下方常驻预设库、「保存当前」和自定义提词入口，不用再进「更多」菜单。
+- **正面预设可追加**：除替换外，正面预设也能一键追加到当前提示词末尾，与负面词库一致。
+- **提示词标签**：正面预设、负面词库、自定义提词块都能设置标签，按标签筛选或搜索（`#标签` 精确筛选）。
+- **提示词联想修复**：联想列表可正常关闭，迟到的结果不再弹出；选中的标签总是替换触发联想的词，不会插到别处。
+- **更新来源**：软件内更新只检查本 fork 的发行版。
 
 历史更新见[更新记录](./docs/RELEASE_NOTES.md)。
 
@@ -85,22 +86,22 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 
 ### Latest · 当前发行文件
 
-[最新发行说明与附件](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [更新记录](./docs/RELEASE_NOTES.md) · [默认分支源码](https://github.com/2786886095/novelai-image-desktop/tree/main)
+[最新发行说明与附件](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) · [更新记录](./docs/RELEASE_NOTES.md) · [默认分支源码](https://github.com/OldLi1337/novelai-image-desktop/tree/main)
 
 | 平台 | 下载入口 | 在 Latest 附件中选择 |
 | --- | --- | --- |
-| Windows x64 · 安装版 | [安装版](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 文件名含 Setup 的 EXE；安装前备份设置与作品 |
-| Windows x64 · 便携版 | [便携版](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 不含 Setup 的便携 EXE；下载新包替换，便携版不等于零痕迹 |
-| macOS · Intel / Apple Silicon | [Universal DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 通用 DMG 或 ZIP；签名 / 公证状态以 Latest 说明为准 |
-| Linux x86_64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | AppImage，添加执行权限后运行 |
-| Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | APK，手动安装；先核对签名与升级说明，勿为更新而删除旧数据 |
-| iOS（附加包） | [未签名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 需自行签名后安装，不能直接安装到普通 iPhone |
+| Windows x64 · 安装版 | [安装版](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 文件名含 Setup 的 EXE；安装前备份设置与作品 |
+| Windows x64 · 便携版 | [便携版](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 不含 Setup 的便携 EXE；下载新包替换，便携版不等于零痕迹 |
+| macOS · Intel / Apple Silicon | [Universal DMG](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) / [ZIP](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 通用 DMG 或 ZIP；签名 / 公证状态以 Latest 说明为准 |
+| Linux x86_64 | [AppImage](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | AppImage，添加执行权限后运行 |
+| Android | [APK](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | APK，手动安装；先核对签名与升级说明，勿为更新而删除旧数据 |
+| iOS（附加包） | [未签名 IPA](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 需自行签名后安装，不能直接安装到普通 iPhone |
 
-校验清单、SHA256、签名和安装限制以 [Latest 的说明与附件](https://github.com/2786886095/novelai-image-desktop/releases/latest)为准；首页不写死发行版本、日期标签、校验文件名或带版本的安装包名。历史四端预览校验文件不用于替代当前发行清单。
+校验清单、SHA256、签名和安装限制以 [Latest 的说明与附件](https://github.com/OldLi1337/novelai-image-desktop/releases/latest)为准；首页不写死发行版本、日期标签、校验文件名或带版本的安装包名。历史四端预览校验文件不用于替代当前发行清单。
 
 **本次请手动下载安装。** 将 GitHub 发布页设为 Latest 不会自动产生新版本、更新清单或有效的自动更新标签；是否支持软件内更新应按 Latest 的真实说明核对，不能仅凭 Latest 标记保证自动升级。
 
-尚未完成所有机型的完整实机验收。Windows 签名与 macOS 签名／公证状态以 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 的实际说明为准。
+尚未完成所有机型的完整实机验收。Windows 签名与 macOS 签名／公证状态以 [Latest](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) 的实际说明为准。
 
 #68 全角逗号分隔、#70 翻译方向保存、#71 翻译状态布局位移的具体缺陷已关闭；#69 真实环境 TLS 根因仍未确认，保持开放。不声称解决所有网络故障或所有 422。
 
@@ -160,7 +161,7 @@ Windows 便携版与安装版共享本机用户数据目录 `%APPDATA%\novelai-i
 <a id="community"></a>
 ## 交流与反馈
 
-[提交问题](https://github.com/2786886095/novelai-image-desktop/issues/new) · [查看已有问题](https://github.com/2786886095/novelai-image-desktop/issues)
+[提交问题](https://github.com/OldLi1337/novelai-image-desktop/issues/new) · [查看已有问题](https://github.com/OldLi1337/novelai-image-desktop/issues)
 
 NovelAI 交流群：**921985070**。欢迎交流软件使用、提示词和创作经验。
 
