@@ -1,7 +1,7 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import {manageModalPortal} from './motion-system';
 
-// Exercise the real shared lifecycle used when the active Comfy drawer mounts.
+// Exercise the real shared lifecycle used when a modal portal or confirm dialog mounts.
 // Synthetic DOM objects are not native keyboard/layout acceptance evidence.
 afterEach(()=>vi.unstubAllGlobals());
 it('registers a mounted active drawer, makes the workbench inert, then restores focus and prior inert state',()=>{

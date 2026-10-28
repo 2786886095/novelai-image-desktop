@@ -1,7 +1,0 @@
-This application uses the unmodified standalone 7za.exe from 7-Zip Extra 26.04 (2026-10-05), Copyright (C) 1999-2026 Igor Pavlov.
-7za.exe is licensed under GNU LGPL 2.1 or later and includes BSD 3-clause / BSD 2-clause components. See the accompanying LICENSE.txt copied verbatim from the original Extra package.
-Official website and source code: https://www.7-zip.org/
-Official download page: https://www.7-zip.org/download.html
-Exact source version: https://github.com/ip7z/7zip/tree/26.04
-Exact original Extra package: https://github.com/ip7z/7zip/releases/download/26.04/7z2604-extra.7z
-The executable is unmodified. Its locally recorded SHA-256 is a pinned fingerprint, not an Authenticode signature or publisher-supplied checksum.

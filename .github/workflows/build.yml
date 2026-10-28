@@ -80,20 +80,7 @@ jobs:
 
       - name: Validate desktop source
         if: ${{ !inputs.candidate_build_only }}
-        env:
-          COMFY_TEST_EVIDENCE_ROOT: ${{ runner.temp }}/comfyui-ci/jobs
-          COMFY_LIFECYCLE_EVIDENCE_DIR: ${{ runner.temp }}/comfyui-ci/lifecycle
-          COMFY_SERVICE_EVIDENCE_DIR: ${{ runner.temp }}/comfyui-ci/service
         run: npm run typecheck && npm test
-
-      - name: Retain ComfyUI real-process fixture diagnostics
-        if: always() && !inputs.candidate_build_only
-        uses: actions/upload-artifact@v4
-        with:
-          name: comfyui-ci-${{ matrix.name }}-${{ github.sha }}
-          path: ${{ runner.temp }}/comfyui-ci/
-          if-no-files-found: warn
-          retention-days: 7
 
       - name: Verify official image metadata
         if: ${{ !inputs.candidate_build_only }}

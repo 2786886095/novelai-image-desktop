@@ -10,11 +10,11 @@ describe('SelectMenuCompat optional popover scope (actual adapter, deterministic
     expect(result.type).toBe(SelectMenu);expect(result.props.popoverClassName).toBeUndefined();expect(result.props.className).toBe('select-menu-compat');expect(result.props.options).toEqual([{value:'one',label:'One',disabled:false}]);
   });
   it('passes an explicit scope only to the popover and preserves the ordinary trigger class',()=>{
-    const result=SelectMenuCompat({value:'one',className:'consumer-trigger',popoverClassName:'comfy-studio-slot-options','aria-label':'Scoped selector',children:<option value="one">One</option>}) as ReactElement<Props>;
-    expect(result.props.popoverClassName).toBe('comfy-studio-slot-options');expect(result.props.className).toBe('select-menu-compat consumer-trigger');expect(result.props.className).not.toContain('comfy-studio-slot-options');
+    const result=SelectMenuCompat({value:'one',className:'consumer-trigger',popoverClassName:'scoped-select-options','aria-label':'Scoped selector',children:<option value="one">One</option>}) as ReactElement<Props>;
+    expect(result.props.popoverClassName).toBe('scoped-select-options');expect(result.props.className).toBe('select-menu-compat consumer-trigger');expect(result.props.className).not.toContain('scoped-select-options');
   });
   it('retains controlled option change tokens with the optional scope enabled',()=>{
-    const change=vi.fn(),result=SelectMenuCompat({value:'combo:0',popoverClassName:'comfy-studio-slot-options','aria-label':'Typed option',onChange:change,children:[<option key="a" value="combo:0">true</option>,<option key="b" value="combo:1">false</option>]}) as ReactElement<Props>;
+    const change=vi.fn(),result=SelectMenuCompat({value:'combo:0',popoverClassName:'scoped-select-options','aria-label':'Typed option',onChange:change,children:[<option key="a" value="combo:0">true</option>,<option key="b" value="combo:1">false</option>]}) as ReactElement<Props>;
     result.props.onChange('combo:1');expect(change).toHaveBeenCalledTimes(1);expect(change.mock.calls[0][0].target.value).toBe('combo:1');expect(result.props.value).toBe('combo:0');
   });
 });

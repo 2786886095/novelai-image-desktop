@@ -40,7 +40,9 @@ export function assertSafeDataDirectory(directory: string, installDirectory: str
   }
 }
 
-/** Strictly read the separate Comfy store; never touch accounts or repair files here. */
+/** Strictly read the separate Comfy store; never touch accounts or repair files here.
+ * The local ComfyUI workbench was removed, but stores written by earlier versions can still
+ * point at environments and results inside the installation directory, so they stay protected. */
 export function comfyUpdateProtectedPaths(userData: string): string[] {
   const directory = path.join(userData, 'comfyui-local');
   const paths: string[] = [];

@@ -10,7 +10,7 @@ describe('five-language feature catalog',()=>{
   expect(row[2]).not.toMatch(/[\u3400-\u9fff]/);
  });
  it('localizes own status templates, preserving parameters and raw diagnostics',()=>{
-  expect(featureText('en-US','第 2 / 5 页，共 48 项')).toBe('Page 2 / 5, 48 items');
+  expect(featureText('en-US','搜索阶段：最多 284 张，分 18 轮。')).toBe('Search: up to 284 images across 18 rounds.');
   expect(featureText('en-US','Error: 请选择目标图片。')).toBe('Error: Select a target image.');
   const raw='EPERM: symlink C:/用户/sdk -> D:/目标/sdk';expect(featureText('en-US',raw)).toBe(raw);
   for(const language of FEATURE_LANGUAGES)expect(featureText(language,'画风候选 {number}',{number:5})).toContain('5');

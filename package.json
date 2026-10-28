@@ -139,18 +139,6 @@
         "!.tmp/**",
         "!**/.env",
         "!**/.env.*"
-      ],
-      "extraResources": [
-        {
-          "from": "build/vendor/comfy-archive/win32-x64",
-          "to": "comfy-archive",
-          "filter": [
-            "7za.exe",
-            "LICENSE.txt",
-            "NOTICE.txt",
-            "provenance.json"
-          ]
-        }
       ]
     },
     "nsis": {
