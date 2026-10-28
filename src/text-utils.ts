@@ -25,13 +25,26 @@ export interface AutocompleteAnchor {
   word: string;
 }
 
+// The rest of a partly typed Latin word after the caret is replaced with the tag.
+// Chinese text there is kept: it has no spaces, so it is the next phrase.
+const WORD_TAIL_CHAR = /[\w-]/;
+// Spaces between the words of a multi-word tag; a line break ends the phrase.
+const WORD_GAP = /[^\S\r\n]/;
+
+/** Tag text compared loosely: case, repeated spaces and "_" for " " do not matter. */
+function tagKey(text: string): string {
+  return text.replace(/_/g, " ").replace(/\s+/g, " ").toLocaleLowerCase();
+}
+
 /**
  * Replace the anchored word with a chosen tag. The anchor is the position the
  * suggestions were requested for, so a caret that has since moved elsewhere
  * never decides where the tag goes. Returns null when the anchored text has
  * changed and the suggestion no longer applies. A multi-word tag that starts
- * with the words already typed in the same segment ("long ha" -> "long hair")
- * replaces that phrase instead of repeating it.
+ * with the words typed before the anchored one ("long ha" -> "long hair")
+ * replaces the longest such run instead of repeating it. The run never crosses
+ * a separator (",", "，", "、", a line break) or weight and bracket syntax such
+ * as "{{", "(" or "1.2::", which stays in front of the tag.
  */
 export function applyAutocompleteTag(
   value: string,
@@ -40,11 +53,21 @@ export function applyAutocompleteTag(
 ): { value: string; caret: number } | null {
   if (!tag || value.slice(anchor.start, anchor.cursor) !== anchor.word) return null;
   let end = anchor.cursor;
-  while (end < value.length && WORD_CHAR.test(value[end])) end++;
+  while (end < value.length && WORD_TAIL_CHAR.test(value[end])) end++;
+  const target = tagKey(tag);
   let start = anchor.start;
-  const segmentStart = Math.max(...[",", "，", "\n"].map((separator) => value.lastIndexOf(separator, start - 1))) + 1;
-  const phrase = value.slice(segmentStart, start).trimStart();
-  if (phrase && tag.toLocaleLowerCase().startsWith((phrase + anchor.word).toLocaleLowerCase())) start -= phrase.length;
+  // Walk back one whole space-separated word at a time; any other character ends the walk.
+  for (let wordEnd = anchor.start; ;) {
+    let gap = wordEnd;
+    while (gap > 0 && WORD_GAP.test(value[gap - 1])) gap--;
+    let wordStart = gap;
+    while (wordStart > 0 && WORD_CHAR.test(value[wordStart - 1])) wordStart--;
+    if (gap === wordEnd || wordStart === gap) break;
+    const phrase = tagKey(value.slice(wordStart, anchor.cursor));
+    if (phrase.length > target.length) break;
+    if (target.startsWith(phrase)) start = wordStart;
+    wordEnd = wordStart;
+  }
   const after = value.slice(end).replace(/^\s*,\s*/, "").trimStart();
   return { value: value.slice(0, start) + tag + ", " + after, caret: start + tag.length + 2 };
 }

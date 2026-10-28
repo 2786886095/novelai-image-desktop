@@ -475,7 +475,7 @@ function PromptTextarea({
   const [acTop, setAcTop] = useState<number | null>(null);
   const [activeIdx, setActiveIdx] = useState(0);
   const composingRef = useRef(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The word the suggestions belong to. Choosing a tag replaces this word even
@@ -500,8 +500,10 @@ function PromptTextarea({
 
   useEffect(() => {
     if (!open) return;
+    // Any press outside the list ends the session, including one in the prompt box
+    // itself: a click that leaves the caret where it was fires no select event.
     const outside = (event: PointerEvent) => {
-      if (!wrapRef.current?.contains(event.target as Node)) clearSuggestions();
+      if (!dropdownRef.current?.contains(event.target as Node)) clearSuggestions();
     };
     document.addEventListener("pointerdown", outside, true);
     return () => document.removeEventListener("pointerdown", outside, true);
@@ -569,7 +571,7 @@ function PromptTextarea({
   }
 
   return (
-    <div className="prompt-ac-wrap" ref={wrapRef}>
+    <div className="prompt-ac-wrap">
       <textarea readOnly={readOnly}
         ref={taRef}
         className={clsx("prompt-box", className)}
@@ -595,6 +597,7 @@ function PromptTextarea({
       />
       {suggestions.length > 0 && (
         <div
+          ref={dropdownRef}
           className={clsx("ac-dropdown", acTop != null && "ac-dropdown-caret")}
           style={acTop != null ? { top: acTop } : undefined}
         >
@@ -603,7 +606,9 @@ function PromptTextarea({
               key={s.tag}
               className={clsx("ac-item", i === activeIdx && "ac-active")}
               onMouseDown={(e) => { e.preventDefault(); applyTag(s.tag); }}
-              onMouseEnter={() => setActiveIdx(i)}
+              // Only real pointer movement picks a row: a list that opens under a
+              // resting pointer keeps the first suggestion for Enter and Tab.
+              onMouseMove={() => setActiveIdx(i)}
             >
               <span className="ac-dot" style={{ background: CAT_COLOR[s.category] ?? "#94a3b8" }} />
               <span className="ac-main">

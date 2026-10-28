@@ -3289,7 +3289,9 @@ html.motion-reduced .char-enabled-track, html.motion-reduced .char-enabled-track
   transition: background 0.09s;
 }
 .ac-item:last-child { border-bottom: none; }
-.ac-item:hover, .ac-active {
+/* Only the active row is highlighted (pointer movement makes a row active), so
+   a resting pointer never looks like the row Enter or Tab would insert. */
+.ac-active {
   background: var(--bg-hover);
 }
 .ac-dot {
@@ -3338,7 +3340,7 @@ html.motion-reduced .char-enabled-track, html.motion-reduced .char-enabled-track
   color: var(--text-primary);
   border-color: var(--border);
 }
-.theme-dark .ac-item:hover, .theme-dark .ac-active {
+.theme-dark .ac-active {
   background: var(--bg-hover);
 }
 
