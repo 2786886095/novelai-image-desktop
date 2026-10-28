@@ -52,9 +52,9 @@ test('changing proof/controller/native observation/receipt hash or removing a sc
   for (const change of changes) {const item = unit(); change(item); assert.throws(() => assertScenarioReceipt(item.receipt, {sourceSha, windowsArtistProof: item.proof})); assert.equal(matrix([item]).summary.verifiedSlots, 0);}
 });
 test('one complete UNIT schema route covers only Windows Artist, not other features or release readiness', () => {
-  const item = unit(), report = matrix([item]); assert.equal(report.summary.verifiedSlots, 1); assert.equal(report.summary.pendingSlots, 149); assert.equal(report.summary.notSupportedSlots, 6);
+  const item = unit(), report = matrix([item]); assert.equal(report.summary.verifiedSlots, 1); assert.equal(report.summary.pendingSlots, 75); assert.equal(report.summary.notSupportedSlots, 2);
   assert.equal(cell(report).status, 'verified'); assert.deepEqual(cell(report).completedScenarios, fullFeatureProfiles['artist-iteration'].scenarios);
-  for (const platform of ['macos', 'linux', 'android']) assert.equal(report.features.find(row => row.id === 'artist-iteration').platforms[platform].status, 'not-supported');
+  assert.equal(report.features.find(row => row.id === 'artist-iteration').platforms.macos.status, 'not-supported');
   assert.equal(report.releaseScopeCertified, false); assert.equal(report.releaseReady, false); assert.equal(report.full195Certified, false);
 });
 test('collector copies fixed sibling raw proof and binds exact companion SHA in matrix evidence', t => {
@@ -81,14 +81,14 @@ test('sibling proof with wrong bytes or a non-file cannot be promoted by collect
 function allRequired(root) {
   const artist = writeUnit(root), items = [artist];
   for (const platform of releasePlatforms) {
-    const receipt = {schema: 'client-feature-scenarios/v1', sourceSha, platform, profileSha256, mockedModules: false, isolated: true, sourceQualified: true, exitStatus: 0, nativeRuntime: {type: platform === 'android' ? 'flutter' : 'electron', version: 'UNIT_ONLY_SCHEMA_NOT_EXECUTED'}, checks: releaseFeatures.filter(feature => releaseFeatureApplicability(feature, platform) === 'required' && !(platform === 'windows' && feature === 'artist-iteration')).flatMap(feature => fullFeatureProfiles[feature].scenarios.map(scenario => ({feature, scenario, sourceSha, platform, kind: 'native-runtime', acceptanceLevel: 'scenario', exitStatus: 0, skipped: false, command: ['synthetic-unit-only'], stdout: 'UNIT_ONLY not actual acceptance', stderr: '', observed: {syntheticUnitOnly: true}})))};
+    const receipt = {schema: 'client-feature-scenarios/v1', sourceSha, platform, profileSha256, mockedModules: false, isolated: true, sourceQualified: true, exitStatus: 0, nativeRuntime: {type: 'electron', version: 'UNIT_ONLY_SCHEMA_NOT_EXECUTED'}, checks: releaseFeatures.filter(feature => releaseFeatureApplicability(feature, platform) === 'required' && !(platform === 'windows' && feature === 'artist-iteration')).flatMap(feature => fullFeatureProfiles[feature].scenarios.map(scenario => ({feature, scenario, sourceSha, platform, kind: 'native-runtime', acceptanceLevel: 'scenario', exitStatus: 0, skipped: false, command: ['synthetic-unit-only'], stdout: 'UNIT_ONLY not actual acceptance', stderr: '', observed: {syntheticUnitOnly: true}})))};
     const artifact = platform + '-receipt.json'; fs.writeFileSync(path.join(root, artifact), encode(receipt)); items.push({receipt, artifact, sha256: hash(encode(receipt))});
   }
   return {items, artist};
 }
 test('final file verifier must bind companion proof raw bytes, not just receipt JSON', t => {
   const root = temporary(t), {items} = allRequired(root), report = matrix(items);
-  assert.equal(report.summary.verifiedSlots, 150); assert.doesNotThrow(() => assertReleaseEvidenceFiles(report, root));
+  assert.equal(report.summary.verifiedSlots, 76); assert.doesNotThrow(() => assertReleaseEvidenceFiles(report, root));
   fs.appendFileSync(path.join(root, 'controller-proof.json'), ' ');
   assert.throws(() => assertReleaseEvidenceFiles(report, root), /proof|Proof|companion|Companion|bytes changed/);
 });

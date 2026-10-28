@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {createRequire} from 'node:module';
 import {spawnSync} from 'node:child_process';
 import {profileSha256} from './full-feature-profiles.mjs';
-import {captureSourceState} from './mobile-entry-workspace.mjs';
+import {captureSourceState} from './source-state.mjs';
 import {runBoundedNativeCommand} from './bounded-native-command.mjs';
 
 const source=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');

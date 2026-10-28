@@ -4,7 +4,6 @@ const fixture=vi.hoisted(()=>({root:''}));
 vi.mock('electron',()=>({app:{getPath:(key:string)=>key==='exe'?`${fixture.root}/app/Studio.exe`:`${fixture.root}/${key}`,getAppPath:()=>fixture.root,getVersion:()=> 'test',isPackaged:false},safeStorage:{isEncryptionAvailable:()=>false},dialog:{showMessageBox:()=>{throw Error('Native confirmation must not be used')}}}));
 import {createLibraryTools,desktopLibraryAdapter} from './agent-library-tools';
 import {LIBRARY_FIELDS,validateLibraryRequest} from '../../src/agent/library-contract';
-import {SOFTWARE_WORKFLOWS} from '../../src/agent/workflow-catalog';
 import {normalizeTavernLorebook} from '../../src/tavern/compat';
 fixture.root=fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()),'studio-library-actions-'));
 afterAll(()=>fs.rmSync(fixture.root,{recursive:true,force:true}));
@@ -32,8 +31,4 @@ it('cancel leaves data intact; protected/unknown fields never reach persistence'
 it('desktop normalization preserves canonical lorebook position and insertion order',()=>{
  const original=normalizeTavernLorebook({name:'Lore',entries:[{id:'e',content:'x',position:'before-character',insertionOrder:42}]});
  expect(original.entries[0].position).toBe('before-character');expect(original.entries[0].insertionOrder).toBe(42);expect(normalizeTavernLorebook(original)).toEqual(original);
-});
-it('shared library schemas and user workflows are identical on desktop and Android',()=>{
- const parse=(file:string)=>JSON.parse(fs.readFileSync(file,'utf8').split("r'''")[1].split("'''")[0]);
- expect(parse('mobile/lib/agent/library_fields.dart')).toEqual(LIBRARY_FIELDS);expect(parse('mobile/lib/agent/workflow_catalog.dart')).toEqual(SOFTWARE_WORKFLOWS);
 });

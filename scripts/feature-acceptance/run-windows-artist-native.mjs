@@ -6,7 +6,7 @@ import http from 'node:http';
 import net from 'node:net';
 import {createRequire} from 'node:module';
 import {fileURLToPath,pathToFileURL} from 'node:url';
-import {captureSourceState} from './mobile-entry-workspace.mjs';
+import {captureSourceState} from './source-state.mjs';
 import {runBoundedNativeCommand} from './bounded-native-command.mjs';
 import {profileSha256} from './full-feature-profiles.mjs';
 import {windowsArtistPackages,windowsArtistFullManifestSha256,windowsArtistEncoderSha256,readWindowsArtistControllerHashes,windowsArtistScenarioReceipt} from './windows-artist-contract.mjs';

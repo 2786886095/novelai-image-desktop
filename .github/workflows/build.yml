@@ -15,15 +15,11 @@ on:
         type: boolean
         default: false
       verified_build_run:
-        description: Reuse installers only if all four native build gates passed and application source is identical
-        type: string
-        required: false
-      mobile_run:
-        description: Successful Build Mobile run with the identical mobile source tree
+        description: Reuse installers only if all desktop build gates passed and application source is identical
         type: string
         required: false
       feature_run:
-        description: Same-source native feature run for the current four-platform release scope (Windows/macOS/Linux/Android)
+        description: Same-source native feature run for the current desktop release scope (Windows/macOS)
         type: string
         required: false
 
@@ -52,10 +48,6 @@ jobs:
             artifacts: |
               release/*.exe
               release/latest.yml
-          - os: ubuntu-latest
-            name: linux
-            artifacts: |
-              release/*.AppImage
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
@@ -84,17 +76,7 @@ jobs:
       # serial warm-up, parallel Vitest workers can race while creating
       # electron/dist on fresh Windows and macOS runners (directory exists).
       - name: Warm Electron binary
-        if: runner.os != 'Linux'
         run: npx electron --version
-
-      - name: Configure Linux test display and Chromium sandbox (CI only)
-        if: runner.os == 'Linux' && !inputs.candidate_build_only
-        shell: bash
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y xvfb fonts-noto-cjk
-          node -e "console.log(require('electron'))"
-          sudo chown root:root node_modules/electron/dist/chrome-sandbox
-          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
 
       - name: Validate desktop source
         if: ${{ !inputs.candidate_build_only }}
@@ -116,12 +98,7 @@ jobs:
       - name: Verify official image metadata
         if: ${{ !inputs.candidate_build_only }}
         shell: bash
-        run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run -a npm run test:metadata
-          else
-            npm run test:metadata
-          fi
+        run: npm run test:metadata
 
       - name: Install both macOS sharp architectures
         if: runner.os == 'macOS'
@@ -134,10 +111,6 @@ jobs:
         env:
           # No signing certs in CI — skip macOS code signing / notarization.
           CSC_IDENTITY_AUTO_DISCOVERY: false
-
-      - name: Install CJK fonts for Linux UI verification
-        if: runner.os == 'Linux' && !inputs.candidate_build_only
-        run: sudo apt-get update -qq && sudo apt-get install -y fonts-noto-cjk
 
       - name: Verify packaged native runtime and startup
         if: ${{ !inputs.candidate_build_only }}
@@ -260,17 +233,16 @@ jobs:
           merge-multiple: true
           run-id: ${{ inputs.verified_build_run || github.run_id }}
           github-token: ${{ github.token }}
-      - name: Download complete same-source four-platform feature evidence
+      - name: Download complete same-source desktop feature evidence
         if: inputs.feature_run != ''
         uses: actions/download-artifact@v4
         with:
-          name: four-platform-feature-evidence
+          name: desktop-feature-evidence
           path: release-evidence
           run-id: ${{ inputs.feature_run }}
           github-token: ${{ github.token }}
-      - name: Verify mobile source, versions, signatures and installer hashes; then publish
+      - name: Verify feature evidence, versions and installer hashes; then publish
         env:
           GH_TOKEN: ${{ github.token }}
-          MOBILE_RUN: ${{ inputs.mobile_run }}
           BUILD_RUN: ${{ inputs.verified_build_run || github.run_id }}
         run: node scripts/publish-verified-release.mjs

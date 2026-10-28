@@ -11,8 +11,7 @@ on:
         default: ''
         required: false
 
-# This workflow executes the current four-platform release scope and preserves bounded observations.
-# Product/native profiles remain intact; iOS is explicitly excluded from this release, not reported as passed.
+# This workflow executes the current Windows/macOS desktop release scope and preserves bounded observations.
 permissions:
   contents: read
   actions: read
@@ -22,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-14, ubuntu-latest]
+        os: [windows-latest, macos-14]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     steps:
@@ -76,16 +75,8 @@ jobs:
           console.log(JSON.stringify({ observed: 'COMMITTED_INDEX_RAW_BYTES_VERIFIED', sourceSha: head, verifiedFiles: records.length, full195Certified: false }));
           NODE
       - run: npm ci --no-audit --no-fund
-      - name: Configure Linux test display and Chromium sandbox (CI only)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y xvfb fonts-noto-cjk gnome-keyring dbus-x11 libsecret-1-0
-          node -e "console.log(require('electron'))"
-          sudo chown root:root node_modules/electron/dist/chrome-sandbox
-          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - name: Check bounded native command and fixture cleanup
-        run: node --test scripts/feature-acceptance/bounded-native-command.test.mjs scripts/feature-acceptance/mac-native-keychain.test.mjs scripts/feature-acceptance/native-fixture-tls.test.mjs scripts/feature-acceptance/native-controller-bootstrap.test.mjs scripts/feature-acceptance/generation-fixture-cleanup.test.mjs scripts/feature-acceptance/android-native-preflight.test.mjs scripts/feature-acceptance/desktop-native-diagnostics.test.mjs scripts/feature-acceptance/mobile-native-predecessor.test.mjs scripts/feature-acceptance/desktop-native-expansion.test.mjs scripts/feature-acceptance/native-begin-entry-parity.test.mjs scripts/feature-acceptance/metadata-import-wrapper.test.mjs scripts/feature-acceptance/prepare-android-image.test.mjs
+        run: node --test scripts/feature-acceptance/bounded-native-command.test.mjs scripts/feature-acceptance/mac-native-keychain.test.mjs scripts/feature-acceptance/native-fixture-tls.test.mjs scripts/feature-acceptance/native-controller-bootstrap.test.mjs scripts/feature-acceptance/generation-fixture-cleanup.test.mjs scripts/feature-acceptance/desktop-native-diagnostics.test.mjs scripts/feature-acceptance/desktop-native-expansion.test.mjs
       - name: Fetch and verify the pinned Windows-only component seed
         if: runner.os == 'Windows'
         env:
@@ -94,48 +85,17 @@ jobs:
       - name: Execute real host native production components
         shell: bash
         run: |
-          if [ "$RUNNER_OS" = Linux ]; then
-            keyring_home="$(mktemp -d "$RUNNER_TEMP/native-keyring-home.XXXXXX")"
-            chmod 700 "$keyring_home"
-            export NATIVE_KEYRING_HOME="$keyring_home"
-            timeout --signal=TERM --kill-after=10s 1800s dbus-run-session -- xvfb-run -a bash --noprofile --norc -euo pipefail <<'KEYRING_SESSION'
-          set +x
-          export HOME="$NATIVE_KEYRING_HOME"
-          export XDG_DATA_HOME="$HOME/.local/share"
-          export XDG_CONFIG_HOME="$HOME/.config"
-          export XDG_RUNTIME_DIR="$HOME/run"
-          export XDG_CURRENT_DESKTOP=GNOME
-          mkdir -p "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_RUNTIME_DIR"
-          chmod 700 "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_RUNTIME_DIR"
-          keyring_password="$(openssl rand -hex 32)"
-          printf '::add-mask::%s\n' "$keyring_password"
-          printf '%s' "$keyring_password" | timeout --signal=TERM --kill-after=5s 15s gnome-keyring-daemon --unlock --components=secrets
-          unset keyring_password
           failed=0
           for pair in desktop-native:desktop-acceptance desktop-offline-native:desktop-offline-acceptance desktop-ai-native:desktop-ai-acceptance desktop-generation-native:desktop-generation-acceptance desktop-library-native:desktop-library-acceptance desktop-system-native:desktop-system-acceptance desktop-browser-native:desktop-browser-acceptance desktop-advanced-native:desktop-advanced-acceptance desktop-tools-gallery-native:desktop-tools-gallery-acceptance; do
             if [ "${pair%%:*}" = desktop-tools-gallery-native ]; then
-                node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" "$RUNNER_TEMP/desktop-generation-acceptance" || failed=1
-              elif [ "$RUNNER_OS" = Windows ] && [ "${pair%%:*}" = desktop-system-native ]; then
-                node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" .tmp/harness-release240 || failed=1
-              else
-                node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" || failed=1
-              fi
+              node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" "$RUNNER_TEMP/desktop-generation-acceptance" || failed=1
+            elif [ "$RUNNER_OS" = Windows ] && [ "${pair%%:*}" = desktop-system-native ]; then
+              node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" .tmp/harness-release240 || failed=1
+            else
+              node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" || failed=1
+            fi
           done
           exit "$failed"
-          KEYRING_SESSION
-          else
-            failed=0
-            for pair in desktop-native:desktop-acceptance desktop-offline-native:desktop-offline-acceptance desktop-ai-native:desktop-ai-acceptance desktop-generation-native:desktop-generation-acceptance desktop-library-native:desktop-library-acceptance desktop-system-native:desktop-system-acceptance desktop-browser-native:desktop-browser-acceptance desktop-advanced-native:desktop-advanced-acceptance desktop-tools-gallery-native:desktop-tools-gallery-acceptance; do
-              if [ "${pair%%:*}" = desktop-tools-gallery-native ]; then
-                node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" "$RUNNER_TEMP/desktop-generation-acceptance" || failed=1
-              elif [ "$RUNNER_OS" = Windows ] && [ "${pair%%:*}" = desktop-system-native ]; then
-                node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" .tmp/harness-release240 || failed=1
-              else
-                node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" || failed=1
-              fi
-            done
-            exit "$failed"
-          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -207,221 +167,6 @@ jobs:
             ${{ runner.temp }}/desktop-tools-gallery-acceptance/*/source-after/**
           if-no-files-found: error
 
-  android-components:
-    strategy:
-      fail-fast: false
-      matrix:
-        entry-group: [core, metadata, gallery, library, generation, text, workflows, ui, os]
-    runs-on: ubuntu-latest
-    timeout-minutes: 75
-    steps:
-      - name: Preserve exact committed bytes before checkout
-        shell: bash
-        run: git config --global core.autocrlf false
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24.14.0'
-          cache: npm
-      - name: Verify exact checkout bytes against index and commit
-        shell: bash
-        run: |
-          node <<'NODE'
-          const fs = require('node:fs');
-          const cp = require('node:child_process');
-          const crypto = require('node:crypto');
-          function git(args, encoding) {
-            const result = cp.spawnSync('git', args, { encoding, maxBuffer: 64 * 1024 * 1024 });
-            if (result.error || result.status !== 0) {
-              throw new Error('Git command failed: ' + JSON.stringify(args) + '; exit=' + result.status + '; ' + (result.stderr || ''));
-            }
-            return result.stdout;
-          }
-          const head = git(['rev-parse', 'HEAD'], 'utf8').trim();
-          if (!/^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA || '') || head !== process.env.GITHUB_SHA) {
-            throw new Error('Checkout HEAD must equal GITHUB_SHA.');
-          }
-          // Index must still be exactly the committed tree; this alone is NOT a raw-byte proof.
-          git(['diff', '--cached', '--exit-code'], 'utf8');
-          const records = git(['ls-files', '--stage', '-z']).toString('utf8').split('\0').filter(Boolean);
-          if (!records.length) throw new Error('No tracked checkout files found.');
-          const mismatches = [];
-          for (const record of records) {
-            const match = /^([0-7]{6}) ([a-f0-9]{40}) ([0-3])\t([\s\S]+)$/.exec(record);
-            if (!match || match[3] !== '0') throw new Error('Unmerged or invalid Git index entry.');
-            const mode = match[1], oid = match[2], file = match[4];
-            let bytes;
-            if (mode === '120000') {
-              bytes = fs.readlinkSync(file, { encoding: 'buffer' });
-            } else if (mode === '100644' || mode === '100755') {
-              bytes = fs.readFileSync(file);
-            } else {
-              throw new Error('Unsupported tracked entry mode: ' + mode + ' ' + file);
-            }
-            const actual = crypto.createHash('sha1').update(Buffer.from('blob ' + bytes.length + '\0')).update(bytes).digest('hex');
-            if (actual !== oid) mismatches.push(file);
-          }
-          if (mismatches.length) throw new Error('Raw checkout byte mismatch: ' + JSON.stringify(mismatches));
-          console.log(JSON.stringify({ observed: 'COMMITTED_INDEX_RAW_BYTES_VERIFIED', sourceSha: head, verifiedFiles: records.length, full195Certified: false }));
-          NODE
-      - run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Verify pinned mobile metadata runtime without regeneration
-        run: node scripts/build-mobile-metadata-runtime.mjs --check
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.24.0'
-          channel: stable
-          cache: true
-      - run: flutter pub get
-        working-directory: mobile
-      - name: Check production navigation bootstrap regression
-        if: matrix.entry-group == 'ui'
-        working-directory: mobile
-        run: flutter test --no-pub test/native_navigation_boot_test.dart test/app_state_boot_test.dart test/native_comic_target_test.dart
-      - name: Check native failure diagnostic retention without suppressing errors
-        if: matrix.entry-group == 'workflows'
-        working-directory: mobile
-        run: flutter test --no-pub test/native_failure_diagnostics_test.dart
-      - name: Require runner-only KVM access and usable acceleration
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -c /dev/kvm || { printf '%s\n' 'KVM_DEVICE unavailable: /dev/kvm' >&2; exit 1; }
-          if ! command -v setfacl >/dev/null 2>&1; then
-            sudo apt-get update -qq
-            sudo apt-get install -y --no-install-recommends acl
-          fi
-          sudo setfacl -m "u:$(id -u):rw" /dev/kvm
-          test -r /dev/kvm && test -w /dev/kvm || { printf '%s\n' 'KVM_DEVICE access denied: /dev/kvm' >&2; exit 1; }
-          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
-          if [ -z "$sdk_root" ]; then
-            printf '%s\n' 'SDK_ROOT unavailable: ANDROID_HOME / ANDROID_SDK_ROOT' >&2
-            exit 1
-          fi
-          sdkmanager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
-          if [ ! -x "$sdkmanager" ]; then
-            printf 'SDKMANAGER unavailable: %s\n' "$sdkmanager" >&2
-            exit 1
-          fi
-          "$sdkmanager" --channel=0 --install "emulator"
-          emulator="$sdk_root/emulator/emulator"
-          if [ ! -x "$emulator" ]; then
-            printf 'EMULATOR unavailable: %s\n' "$emulator" >&2
-            exit 1
-          fi
-          "$emulator" -accel-check
-      - name: Prepare fixed Android image with bounded archive recovery
-        run: node scripts/feature-acceptance/prepare-android-image.mjs
-      - name: Fresh disposable Android Emulator journeys
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          disable-animations: true
-          disable-linux-hw-accel: false
-          emulator-options: -no-window -no-audio -no-snapshot -gpu swiftshader_indirect -no-boot-anim -accel on
-          script: |
-            node scripts/feature-acceptance/run-ci-mobile-entries.mjs android emulator-5554 "${{ matrix.entry-group }}"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: native-components-android-${{ matrix.entry-group }}-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/feature-native-android/
-            ${{ runner.temp }}/android-image-preparation-*/
-          if-no-files-found: error
-
-  ios-components:
-    # Explicit user release exclusion: no iOS native prerequisite for this four-platform release.
-    if: false
-    strategy:
-      fail-fast: false
-      matrix:
-        entry-group: [core, metadata, gallery, library, generation, text, workflows, ui, os]
-    runs-on: macos-14
-    timeout-minutes: 75
-    steps:
-      - name: Preserve exact committed bytes before checkout
-        shell: bash
-        run: git config --global core.autocrlf false
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24.14.0'
-          cache: npm
-      - name: Verify exact checkout bytes against index and commit
-        shell: bash
-        run: |
-          node <<'NODE'
-          const fs = require('node:fs');
-          const cp = require('node:child_process');
-          const crypto = require('node:crypto');
-          function git(args, encoding) {
-            const result = cp.spawnSync('git', args, { encoding, maxBuffer: 64 * 1024 * 1024 });
-            if (result.error || result.status !== 0) {
-              throw new Error('Git command failed: ' + JSON.stringify(args) + '; exit=' + result.status + '; ' + (result.stderr || ''));
-            }
-            return result.stdout;
-          }
-          const head = git(['rev-parse', 'HEAD'], 'utf8').trim();
-          if (!/^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA || '') || head !== process.env.GITHUB_SHA) {
-            throw new Error('Checkout HEAD must equal GITHUB_SHA.');
-          }
-          // Index must still be exactly the committed tree; this alone is NOT a raw-byte proof.
-          git(['diff', '--cached', '--exit-code'], 'utf8');
-          const records = git(['ls-files', '--stage', '-z']).toString('utf8').split('\0').filter(Boolean);
-          if (!records.length) throw new Error('No tracked checkout files found.');
-          const mismatches = [];
-          for (const record of records) {
-            const match = /^([0-7]{6}) ([a-f0-9]{40}) ([0-3])\t([\s\S]+)$/.exec(record);
-            if (!match || match[3] !== '0') throw new Error('Unmerged or invalid Git index entry.');
-            const mode = match[1], oid = match[2], file = match[4];
-            let bytes;
-            if (mode === '120000') {
-              bytes = fs.readlinkSync(file, { encoding: 'buffer' });
-            } else if (mode === '100644' || mode === '100755') {
-              bytes = fs.readFileSync(file);
-            } else {
-              throw new Error('Unsupported tracked entry mode: ' + mode + ' ' + file);
-            }
-            const actual = crypto.createHash('sha1').update(Buffer.from('blob ' + bytes.length + '\0')).update(bytes).digest('hex');
-            if (actual !== oid) mismatches.push(file);
-          }
-          if (mismatches.length) throw new Error('Raw checkout byte mismatch: ' + JSON.stringify(mismatches));
-          console.log(JSON.stringify({ observed: 'COMMITTED_INDEX_RAW_BYTES_VERIFIED', sourceSha: head, verifiedFiles: records.length, full195Certified: false }));
-          NODE
-      - run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Verify pinned mobile metadata runtime without regeneration
-        run: node scripts/build-mobile-metadata-runtime.mjs --check
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.24.0'
-          channel: stable
-          cache: true
-      - run: flutter pub get
-        working-directory: mobile
-      - name: Create and boot a new disposable iOS Simulator
-        shell: bash
-        run: |
-          node scripts/feature-acceptance/create-disposable-ios-simulator.mjs
-      - name: Run independently counted component and client-scenario entries
-        run: node scripts/feature-acceptance/run-ci-mobile-entries.mjs ios "$FEATURE_SIMULATOR" "${{ matrix.entry-group }}"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: native-components-ios-${{ matrix.entry-group }}-${{ github.sha }}
-          path: ${{ runner.temp }}/feature-native-ios/
-          if-no-files-found: error
-      - name: Stop only the newly created test simulator
-        if: always() && env.FEATURE_SIMULATOR != ''
-        run: xcrun simctl shutdown "$FEATURE_SIMULATOR"
-
   windows-artist-local-proof:
     # Admit genuine local hardware execution; this job does not run a GPU model.
     # Missing/failed proof leaves the unchanged Windows Artist cell unverified.
@@ -450,7 +195,7 @@ jobs:
 
   full-client-feature-matrix:
     if: always()
-    needs: [desktop-components, android-components, windows-artist-local-proof]
+    needs: [desktop-components, windows-artist-local-proof]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -466,8 +211,8 @@ jobs:
       - name: Install locked rejection-test dependencies (no lifecycle scripts)
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Check matrix rejection rules
-        run: node --test scripts/feature-acceptance/release-feature-scope.test.mjs scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/windows-artist-contract.test.mjs scripts/feature-acceptance/windows-artist-native.test.mjs scripts/feature-acceptance/windows-artist-matrix.test.mjs scripts/feature-acceptance/import-windows-artist-evidence.test.mjs scripts/feature-acceptance/mobile-scenario-receipt.test.mjs scripts/feature-acceptance/mobile-entry-consistency.test.mjs scripts/feature-acceptance/native-proof-stream.test.mjs scripts/feature-acceptance/native-resident-pending.test.mjs scripts/feature-acceptance/native-begin-entry-parity.test.mjs scripts/feature-acceptance/metadata-import-wrapper.test.mjs scripts/feature-acceptance/prepare-android-image.test.mjs
-      - name: Require 150 scoped cells across four release platforms (six Windows-local capability cells not-supported; iOS excluded)
+        run: node --test scripts/feature-acceptance/release-feature-scope.test.mjs scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/windows-artist-contract.test.mjs scripts/feature-acceptance/windows-artist-native.test.mjs scripts/feature-acceptance/windows-artist-matrix.test.mjs scripts/feature-acceptance/import-windows-artist-evidence.test.mjs
+      - name: Require 76 scoped cells across both desktop release platforms (two Windows-local capability cells not-supported)
         shell: bash
         run: |
           version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json","utf8")).version')"
@@ -475,6 +220,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: four-platform-feature-evidence
+          name: desktop-feature-evidence
           path: ${{ runner.temp }}/full-feature-matrix/
           if-no-files-found: error

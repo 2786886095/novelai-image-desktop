@@ -13,9 +13,6 @@ it('desktop no longer offers prompt lock buttons',()=>{
  const source=readFileSync('src/App.tsx','utf8');
  expect(source).not.toContain('toggleLock(');expect(source).not.toContain('className={clsx("lock-btn"');
 });
-it('mobile generation and settings no longer offer prompt lock controls',()=>{
- for(const file of ['generate_screen.dart','settings_screen.dart'])expect(readFileSync(`mobile/lib/screens/${file}`,'utf8')).not.toContain('state.setPromptLock(');
-});
 it('restart restores current prompts even with parameter persistence off and stale legacy locks',async()=>{
  api({persistGenerateParams:false,lockStylePrompt:true,lockNegativePrompt:true,savedStylePrompt:'obsolete',savedNegativePrompt:'obsolete',lastGenerationState:{params:{...DEFAULT_PARAMS,stylePrompt:'current',negativePrompt:''}} as any});
  useAppStore.setState({params:{...DEFAULT_PARAMS}});await useAppStore.getState().load();

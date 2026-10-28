@@ -1,6 +1,6 @@
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import crypto from 'node:crypto';import {spawnSync} from 'node:child_process';import {createRequire} from 'node:module';import {fileURLToPath} from 'node:url';
 import {profileSha256} from './full-feature-profiles.mjs';
-import {captureSourceState} from './mobile-entry-workspace.mjs';
+import {captureSourceState} from './source-state.mjs';
 const sourceRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),platform=({win32:'windows',darwin:'macos',linux:'linux'})[process.platform];
 if(!platform)throw Error('Actual desktop native host required');
 const outputRoot=path.resolve(process.argv[2]||fs.mkdtempSync(path.join(os.tmpdir(),'desktop-library-native-'))),sourceSha=process.argv[3]||'uncommitted',run=path.join(outputRoot,crypto.randomUUID()),deps=path.join(sourceRoot,'node_modules'),req=createRequire(path.join(sourceRoot,'package.json'));

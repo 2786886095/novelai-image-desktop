@@ -6,7 +6,6 @@ import {CONVERT_SYSTEM_PROMPTS,REVERSE_SYSTEM_PROMPTS} from './data/prompt-templ
 import {V45_CONVERT_SYSTEM_PROMPTS} from './data/prompt-templates-v45';
 import {mixedTemplateContract,auditMixedEnvelope} from './prompt-template-audit';
 import fixture from '../tests/fixtures/prompt-edit-saved-mixed.json';
-import {readFileSync} from 'node:fs';
 
 it('defaults editors independently to mixed and retains an explicit selection',()=>{
  expect(resolvePromptAssistantMode({convertMode:'tags'})).toBe('mixed');
@@ -49,9 +48,4 @@ it('a same-line mixed ratio does not discard the independent tag unit bound',()=
  const template='仅依据图片可见内容。\n有效语义单元 50–150；Tag 65–75%';
  const tags=derivePromptModeTemplate(template,'tags');
  expect(tags).toContain('有效语义单元 50–150');expect(tags).not.toContain('Tag 65–75%');
-});
-it('mobile templates and format overlays are generated from the exact desktop sources',()=>{
- const asset=JSON.parse(readFileSync('mobile/assets/prompt_templates.json','utf8'));
- expect(asset.convert).toEqual(CONVERT_SYSTEM_PROMPTS);expect(asset.reverse).toEqual(REVERSE_SYSTEM_PROMPTS);
- expect(asset.modeSuffix.tags).toBe(derivePromptModeTemplate('','tags'));expect(asset.modeSuffix.natural).toBe(derivePromptModeTemplate('','natural'));
 });

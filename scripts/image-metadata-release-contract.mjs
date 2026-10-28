@@ -8,24 +8,10 @@ function requireGate(job) {
 }
 export function assertDesktopMetadataGates(run) {
   const jobs = run?.jobs?.filter(job => job.name?.startsWith('build (')) ?? [];
-  if (jobs.length !== 3) throw new Error('Metadata evidence requires three desktop builds');
-  for (const platform of ['windows', 'macos', 'linux']) {
+  if (jobs.length !== 2) throw new Error('Metadata evidence requires two desktop builds');
+  for (const platform of ['windows', 'macos']) {
     const matches = jobs.filter(job => job.name.includes(platform));
     if (matches.length !== 1) throw new Error('Missing or duplicate metadata platform: ' + platform);
     requireGate(matches[0]);
   }
-}
-export function assertMobileMetadataGates(run) {
-  for (const platform of ['android', 'ios']) {
-    const matches = run?.jobs?.filter(job => job.name === platform) ?? [];
-    if (matches.length !== 1) throw new Error('Missing or duplicate metadata platform: ' + platform);
-    requireGate(matches[0]);
-  }
-}
-
-// Explicit current-release adapter; the default mobile check above stays dual-platform strict.
-export function assertAndroidMetadataGate(run) {
-  const matches = run?.jobs?.filter(job => job.name === 'android') ?? [];
-  if (matches.length !== 1) throw new Error('Missing or duplicate metadata platform: android');
-  requireGate(matches[0]);
 }

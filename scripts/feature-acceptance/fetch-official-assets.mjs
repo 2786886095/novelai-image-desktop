@@ -11,8 +11,8 @@ let exit=1,failure;
 const provenance=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8'});
 try{
  if(process.env.GITHUB_ACTIONS==='true'&&(provenance.status!==0||provenance.stdout.trim()!==process.env.GITHUB_SHA))throw Error('Asset receipt must bind actual CI checkout.');
- const inventory=fs.readFileSync(path.resolve('mobile/lib/images/official_metadata_assets.dart'),'utf8');
- const assets=[...inventory.matchAll(/OfficialMetadataAsset\('([^']+)','([^']+)',(\d+),'([a-f0-9]{64})','([^']+)'\)/g)];
+ const inventory=fs.readFileSync(path.resolve('shared/official-metadata-assets.ts'),'utf8');
+ const assets=[...inventory.matchAll(/\{ id: "([^"]+)", url: "([^"]+)", bytes: (\d+), sha256: "([a-f0-9]{64})", kind: "([^"]+)" \}/g)];
  if(assets.length!==10)throw Error('Expected exactly ten pinned production assets.');
  for(const [,id,url,size,sha256]of assets){
   const u=new URL(url);

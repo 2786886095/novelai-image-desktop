@@ -2,7 +2,7 @@ import {runBoundedNativeCommand} from './bounded-native-command.mjs';
 import {prepareMacNativeKeychain} from './mac-native-keychain.mjs';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import crypto from 'node:crypto';import {spawnSync} from 'node:child_process';import {createRequire} from 'node:module';import {fileURLToPath} from 'node:url';
 import {fullFeatureProfiles,profileSha256} from './full-feature-profiles.mjs';
-import {captureSourceState} from './mobile-entry-workspace.mjs';
+import {captureSourceState} from './source-state.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),deps=path.join(root,'node_modules'),req=createRequire(path.join(root,'package.json')),platform=({win32:'windows',darwin:'macos',linux:'linux'})[process.platform];if(!platform)throw Error('Actual desktop host required');
 const output=path.resolve(process.argv[2]||fs.mkdtempSync(path.join(os.tmpdir(),'advanced-native-'))),sourceSha=process.argv[3]||'uncommitted',run=path.join(output,crypto.randomUUID());fs.mkdirSync(run,{recursive:true});const ledger=[];let exitStatus=1,failure=null,checks=[],stopKeychain=async()=>{},runtime={type:'electron',version:'unknown'},before,after;
 const head=spawnSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'});const actualHead=head.status===0?head.stdout.trim():null;

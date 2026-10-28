@@ -1,8 +1,0 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Required for Flutter debugging and the isolated local Agent fixture. -->
-    <uses-permission android:name="android.permission.INTERNET"/>
-    <application>
-        <!-- Debug only; activity itself enforces the isolated .agenttest package. -->
-        <activity android:name=".agent.AgentQaActivity" android:exported="true" />
-    </application>
-</manifest>

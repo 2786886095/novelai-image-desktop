@@ -1,9 +1,0 @@
-IG5 general-rule reference adaptations for Langbai Studio
-Source: https://github.com/Minglink/dsh-infinite-gen-5
-Pinned commit: eeff0bbeb905bdc57952dc7497d5fdfc33653c0f
-Attribution: Minglink and the upstream contributors.
-License: CC BY-NC-SA 4.0 (see sibling ig5-LICENSE.txt).
-Modified: Yes. Three image-task-specific rewrites; not native upstream NovelAI prompts.
-Only general workflow/evidence/format/authorization rules are adapted. No binary reverse-engineering tools or upstream executable code are bundled by this change.
-The adaptation is distributed under the same CC BY-NC-SA 4.0 terms. Commercial-use permission has not been established; check upstream authorization before commercial distribution.
-Detailed source URLs and SHA-256 values are recorded in ig5-image-prompts.json.

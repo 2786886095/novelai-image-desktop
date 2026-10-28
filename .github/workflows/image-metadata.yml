@@ -5,7 +5,6 @@ on:
     paths:
       - 'src/**'
       - 'electron/**'
-      - 'mobile/**'
       - 'shared/**'
       - 'scripts/**'
       - 'package*.json'
@@ -15,7 +14,6 @@ on:
     paths:
       - 'src/**'
       - 'electron/**'
-      - 'mobile/**'
       - 'shared/**'
       - 'scripts/**'
       - 'package*.json'
@@ -30,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -40,38 +38,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      # A fresh Ubuntu runner needs the same sandbox preparation as Build.
-      # Keep the real browser gate sandboxed; do not bypass it with --no-sandbox.
-      - name: Configure Linux test display and Chromium sandbox (CI only)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y xvfb
-          node -e "console.log(require('electron'))"
-          sudo chown root:root node_modules/electron/dist/chrome-sandbox
-          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - name: Verify official image metadata
         shell: bash
-        run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run -a npm run test:metadata
-          else
-            npm run test:metadata
-          fi
-
-  shared-mobile-metadata:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: mobile
-    steps:
-      - uses: actions/checkout@v5
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.24.0'
-          channel: stable
-          cache: true
-      - run: flutter pub get
-      - name: Verify official image metadata
-        run: flutter test --no-pub test/metadata_common_fixtures_test.dart test/official_image_metadata_test.dart
+        run: npm run test:metadata

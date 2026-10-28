@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import re
 from pathlib import Path
@@ -12,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 GUIDANCE = ROOT / "references" / "guidance.json"
 LOCAL_FULL_CODEX = ROOT / "references" / "prompt-codex.json"
-REPO_FULL_CODEX = ROOT.parents[1] / "mobile" / "assets" / "prompt_codex.json"
+REPO_FULL_CODEX = ROOT.parents[1] / "public" / "prompt-codex.json.gz"
 FULL_CODEX = LOCAL_FULL_CODEX if LOCAL_FULL_CODEX.exists() else REPO_FULL_CODEX
 ADULT_TRIGGERS = {
     "成人", "性爱", "性交", "裸体", "裸露", "内裤", "内衣", "丝袜", "连裤袜",
@@ -81,7 +82,10 @@ def main() -> None:
             })
 
     if FULL_CODEX.exists():
-        snapshot = json.loads(FULL_CODEX.read_text(encoding="utf-8"))
+        raw = FULL_CODEX.read_bytes()
+        if FULL_CODEX.suffix == ".gz":
+            raw = gzip.decompress(raw)
+        snapshot = json.loads(raw.decode("utf-8"))
         books = {book["id"]: book["title"] for book in snapshot["books"]}
         for entry in snapshot["entries"]:
             if entry["category"] == "artist" or (entry["adult"] and not adult_relevant):

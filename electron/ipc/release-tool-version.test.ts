@@ -55,14 +55,14 @@ describe('release tools use authoritative source version without weakening misma
     const result = cli('packaged-agent-probe.cjs', [dir]);
     expect(result.status).toBe(1); expect(result.stderr).toContain('Missing expected release version');
   });
-  it('actual font asset probe checks matching source, mobile and packaged bytes at current version', () => {
+  it('actual font asset probe checks matching source and packaged bytes at current version', () => {
     const source = temp(), packaged = temp();
     for (const dir of [source, packaged]) put(dir, 'package.json', JSON.stringify({ version: current }));
     const digest = (b: Buffer) => crypto.createHash('sha256').update(b).digest('hex');
     const rows = Array.from({ length: 6 }, (_, index) => {
       const bytes = Buffer.from(`synthetic font ${index}`), license = Buffer.from('synthetic SIL Open Font License');
       const file = `${index}.woff2`, licenseFile = `${index}.txt`;
-      for (const prefix of ['public/ui-fonts', 'mobile/assets/ui-fonts']) put(source, `${prefix}/${file}`, bytes);
+      put(source, `public/ui-fonts/${file}`, bytes);
       put(packaged, `dist/ui-fonts/${file}`, bytes); put(packaged, `dist/ui-fonts/${licenseFile}`, license);
       return { id: String(index), file, licenseFile, bytes: bytes.length, sha256: digest(bytes), licenseSha256: digest(license) };
     });
@@ -74,7 +74,7 @@ describe('release tools use authoritative source version without weakening misma
     const fail = cli('packaged-font-assets-probe.cjs', [packaged, source]);
     expect(fail.status).toBe(1); expect(fail.stderr).toContain('Wrong packaged version');
   });
-  it('metadata verifier reads real current desktop/mobile versions and current-only notes', () => {
+  it('metadata verifier reads real current desktop versions and current-only notes', () => {
     const result = cli('verify-release-windows-metadata.cjs', []);
     expect(result.status, result.stderr).toBe(0);
     expect(JSON.parse(result.stdout)).toMatchObject({ version: current, pass: true });

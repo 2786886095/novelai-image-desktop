@@ -3,33 +3,31 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import ts from 'typescript';
 import {describe, it, expect} from 'vitest';
-import {assertDesktopMetadataGates, assertMobileMetadataGates, metadataGateName} from '../scripts/image-metadata-release-contract.mjs';
+import {assertDesktopMetadataGates, metadataGateName} from '../scripts/image-metadata-release-contract.mjs';
 
-const desktop = () => ({jobs: ['windows', 'macos', 'linux'].map(platform => ({name: `build (${platform})`,
+const desktop = () => ({jobs: ['windows', 'macos'].map(platform => ({name: `build (${platform})`,
   conclusion: 'success', steps: [{name: metadataGateName, conclusion: 'success'}]}))});
-const mobile = () => ({jobs: ['android', 'ios'].map(name => ({name, conclusion: 'success',
-  steps: [{name: metadataGateName, conclusion: 'success'}]}))});
 describe('metadata publication checks (synthetic CI records, not device acceptance)', () => {
-  it('requires all five named metadata gates', () => {
+  it('requires both named desktop metadata gates', () => {
     expect(() => assertDesktopMetadataGates(desktop())).not.toThrow();
-    expect(() => assertMobileMetadataGates(mobile())).not.toThrow();
   });
-  for (const kind of ['desktop', 'mobile'] as const) {
-    for (const status of ['skipped', 'failure', 'cancelled', 'neutral']) it(`${kind} rejects ${status}`, () => {
-      const report = kind === 'desktop' ? desktop() : mobile();
-      report.jobs[0].steps[0].conclusion = status;
-      expect(() => (kind === 'desktop' ? assertDesktopMetadataGates : assertMobileMetadataGates)(report)).toThrow();
-    });
-    it(`${kind} rejects a green build without the metadata step`, () => {
-      const report = kind === 'desktop' ? desktop() : mobile(); report.jobs[0].steps = [];
-      expect(() => (kind === 'desktop' ? assertDesktopMetadataGates : assertMobileMetadataGates)(report)).toThrow();
-    });
-    it(`${kind} rejects missing and duplicate platforms`, () => {
-      const check = kind === 'desktop' ? assertDesktopMetadataGates : assertMobileMetadataGates;
-      const report = kind === 'desktop' ? desktop() : mobile(); report.jobs.pop(); expect(() => check(report)).toThrow();
-      report.jobs.push(report.jobs[0]); expect(() => check(report)).toThrow();
-    });
-  }
+  for (const status of ['skipped', 'failure', 'cancelled', 'neutral']) it(`desktop rejects ${status}`, () => {
+    const report = desktop();
+    report.jobs[0].steps[0].conclusion = status;
+    expect(() => assertDesktopMetadataGates(report)).toThrow();
+  });
+  it('desktop rejects a green build without the metadata step', () => {
+    const report = desktop(); report.jobs[0].steps = [];
+    expect(() => assertDesktopMetadataGates(report)).toThrow();
+  });
+  it('desktop rejects missing and duplicate platforms', () => {
+    const report = desktop(); report.jobs.pop(); expect(() => assertDesktopMetadataGates(report)).toThrow();
+    report.jobs.push(report.jobs[0]); expect(() => assertDesktopMetadataGates(report)).toThrow();
+  });
+  it('desktop rejects an extra build for a removed platform', () => {
+    const report = desktop(); report.jobs.push({...report.jobs[0], name: 'build (linux)'});
+    expect(() => assertDesktopMetadataGates(report)).toThrow();
+  });
 });
 
 it('keeps all 24 official format fixture bytes and metadata expectations intact', () => {

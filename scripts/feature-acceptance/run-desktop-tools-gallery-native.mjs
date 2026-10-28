@@ -1,5 +1,5 @@
 import fs from 'node:fs';import path from 'node:path';import os from 'node:os';import crypto from 'node:crypto';import{spawnSync}from'node:child_process';import{createRequire}from'node:module';import{fileURLToPath}from'node:url';
-import{runBoundedNativeCommand}from'./bounded-native-command.mjs';import{profileSha256}from'./full-feature-profiles.mjs';import{captureSourceState}from'./mobile-entry-workspace.mjs';
+import{runBoundedNativeCommand}from'./bounded-native-command.mjs';import{profileSha256}from'./full-feature-profiles.mjs';import{captureSourceState}from'./source-state.mjs';
 import{createNativeFixtureTls}from'./native-fixture-tls.mjs';
 const source=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),output=path.resolve(process.argv[2]||fs.mkdtempSync(path.join(os.tmpdir(),'native-tools-gallery-'))),sourceSha=process.argv[3]||'uncommitted',run=path.join(output,crypto.randomUUID()),deps=path.join(source,'node_modules'),req=createRequire(path.join(source,'package.json')),platform={win32:'windows',linux:'linux',darwin:'macos'}[process.platform];fs.mkdirSync(run,{recursive:true});
 if(!platform)throw Error('Actual desktop native host required');const ledger=[];let vite,status=1,failure=null,checks=[],nativeRuntime={type:'electron',version:'unknown'},before;

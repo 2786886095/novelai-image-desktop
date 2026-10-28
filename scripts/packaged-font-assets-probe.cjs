@@ -9,7 +9,6 @@ for(const f of catalog){
  const bytes=read('dist/ui-fonts/'+f.file),license=read('dist/ui-fonts/'+f.licenseFile);
  assert.equal(bytes.length,f.bytes);assert.equal(sha(bytes),f.sha256);assert.equal(sha(license),f.licenseSha256);
  assert.ok(bytes.equals(fs.readFileSync(path.join(source,'public/ui-fonts',f.file))));
- assert.ok(bytes.equals(fs.readFileSync(path.join(source,'mobile/assets/ui-fonts',f.file))));
  rows.push({id:f.id,bytes:bytes.length,sha256:sha(bytes),licenseSha256:sha(license)});
 }
 console.log(JSON.stringify({event:'actual_packaged_fonts_assets',version,pass:true,fonts:rows}));

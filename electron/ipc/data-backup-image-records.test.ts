@@ -12,7 +12,7 @@ import {exportDataBackup,importDataBackup,inspectDataBackup} from './data-backup
 beforeEach(async()=>{fixture.root=await fs.mkdtemp(path.join(os.tmpdir(),'studio-portable-test-'));fixture.store={settings:{outputDir:fixture.root},history:[],historyGroups:[],reverseHistory:[],convertHistory:[]};const lib=await import('./artist-favorites');vi.mocked(lib.loadArtistFavoriteLibrary).mockResolvedValue({collections:Object.fromEntries(ARTIST_FAVORITE_COLLECTIONS.map(k=>[k,[]]))} as any);});
 afterEach(async()=>{if(path.dirname(fixture.root)!==os.tmpdir()||!path.basename(fixture.root).startsWith('studio-portable-test-'))throw Error('invalid cleanup');await fs.rm(fixture.root,{recursive:true,force:true});});
 
-const capsule=process.env.NATIVE_IMAGE_RECORDS_BACKUP ?? path.resolve('mobile/test/fixtures/native_image_records.naisbackup');
+const capsule=process.env.NATIVE_IMAGE_RECORDS_BACKUP ?? path.resolve('tests/fixtures/native_image_records.naisbackup');
 async function input(change?:(data:any)=>void){
  const zip=await JSZip.loadAsync(await fs.readFile(capsule));
  const data=JSON.parse(await zip.file('data/image-history.json')!.async('string'));

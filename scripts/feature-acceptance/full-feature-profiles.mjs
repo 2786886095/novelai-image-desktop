@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import {fullFeatureProfiles,profileSha256} from './full-feature-profile-definitions.mjs';
-import {androidAgentScenarioReceipt,androidAgentRuntimeType} from './android-agent-contract.mjs';
 import {windowsArtistRuntimeType,windowsArtistScenarioReceipt} from './windows-artist-contract.mjs';
 import {releaseFeatures,releasePlatforms,supportedPlatforms} from '../release-platform-contract.mjs';
 
@@ -11,7 +10,7 @@ assert.deepEqual(Object.keys(fullFeatureProfiles).sort(),[...releaseFeatures].so
 export {fullFeatureProfiles,profileSha256};
 export {releaseFeatures,releasePlatforms,supportedPlatforms};
 
-export function assertScenarioReceipt(receipt,{sourceSha,platform,androidAgentProof,windowsArtistProof}={}){
+export function assertScenarioReceipt(receipt,{sourceSha,platform,windowsArtistProof}={}){
   assert.equal(receipt?.schema,'client-feature-scenarios/v1');
   assert.ok(/^[a-f0-9]{40}$/i.test(receipt.sourceSha),'Scenario receipt needs committed source identity');
   if(sourceSha)assert.equal(receipt.sourceSha,sourceSha,'Scenario source differs');
@@ -29,11 +28,7 @@ export function assertScenarioReceipt(receipt,{sourceSha,platform,androidAgentPr
     assert.equal(receipt.platform,'windows','Dedicated Windows Artist proof cannot certify other platforms');
     assert.ok(windowsArtistProof,'Actual sibling Windows Artist controller proof is required');
     assert.deepEqual(receipt,windowsArtistScenarioReceipt(windowsArtistProof,{sourceSha:receipt.sourceSha,profileSha256}),'Windows Artist receipt must equal independently revalidated exact three-scenario GPU proof');
-  }else if(receipt.nativeRuntime?.type===androidAgentRuntimeType){
-    assert.equal(receipt.platform,'android','Dedicated Android proof cannot certify other platforms');
-    assert.ok(androidAgentProof,'Actual sibling Android controller proof is required');
-    assert.deepEqual(receipt,androidAgentScenarioReceipt(androidAgentProof,{sourceSha:receipt.sourceSha,profileSha256}),'Android receipt must equal independently revalidated exact three-scenario proof');
-  }else assert.ok(receipt.nativeRuntime&&['electron','flutter'].includes(receipt.nativeRuntime.type)&&typeof receipt.nativeRuntime.version==='string'&&receipt.nativeRuntime.version,'Actual target native runtime required');
+  }else assert.ok(receipt.nativeRuntime&&receipt.nativeRuntime.type==='electron'&&typeof receipt.nativeRuntime.version==='string'&&receipt.nativeRuntime.version,'Actual target native runtime required');
   assert.ok(Array.isArray(receipt.checks)&&receipt.checks.length>0);
   const seen=new Set();
   for(const check of receipt.checks){

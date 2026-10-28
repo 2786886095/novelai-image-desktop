@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import fs from "node:fs";
 import { createHash } from "node:crypto";
 import guidance from "../../shared/tavern-image-guidance.json";
 import { createSoftwareImageStarterKit } from "./builtins";
@@ -12,9 +11,7 @@ const user = (content: string): AgentMessage => ({ id: "u", role: "user", conten
 const selected = (model?: string) => activeLorebookEntries([createSoftwareImageStarterKit().lorebook], [user("修改外套")], model);
 
 describe("original technical worldbooks", () => {
-  it("ships identical offline content to Flutter with per-entry integrity hashes", () => {
-    const dart = fs.readFileSync("mobile/lib/agent/tavern_image_guidance_data.dart", "utf8");
-    expect(JSON.parse(dart.split("r'''")[1].split("'''")[0])).toEqual(guidance);
+  it("ships offline content with per-entry integrity hashes", () => {
     expect(guidance.entries).toHaveLength(30);
     expect(new Set(guidance.entries.map(e => e.id)).size).toBe(30);
     for (const e of guidance.entries) {

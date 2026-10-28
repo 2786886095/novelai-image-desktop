@@ -11,7 +11,6 @@ export const supportedPlatforms: readonly string[];
 export interface ScenarioReceiptBindings {
   sourceSha?: string;
   platform?: string;
-  androidAgentProof?: unknown;
   windowsArtistProof?: unknown;
 }
 /** Checks source/runtime/proof/scenario semantics; callers must not infer native execution from types. */

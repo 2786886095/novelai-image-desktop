@@ -28,10 +28,10 @@ it('unfinished, non-finite or extreme inputs can recover through a preset',()=>{
  }
  expect(resolutionPickerRatio(704,1408)).toBe('1:2');
 });
-it('desktop fixture records every tier/ratio for shared Android/iOS parity',()=>{
+it('desktop fixture records every tier/ratio',()=>{
  const fixture=RESOLUTION_TIERS.flatMap(tier=>RESOLUTION_RATIOS.map(ratio=>({tier,ratio,...resolutionForTier(tier,ratio),allowedInpaint:resolutionSizeAllowed(resolutionForTier(tier,ratio),1600)})));
  if(process.env.RESOLUTION_PARITY_FILE)fs.writeFileSync(process.env.RESOLUTION_PARITY_FILE,JSON.stringify(fixture,null,2)+'\n');
- const saved=new URL('../mobile/test/fixtures/resolution-picker-desktop.json',import.meta.url);
+ const saved=new URL('../tests/fixtures/resolution-picker-desktop.json',import.meta.url);
  if(fs.existsSync(saved))expect(JSON.parse(fs.readFileSync(saved,'utf8'))).toEqual(fixture);
  expect(fixture).toHaveLength(65);
 });

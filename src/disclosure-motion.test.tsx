@@ -21,9 +21,3 @@ it('animates visible menu height rather than the unconstrained long list',()=>{
  expect(css).toContain('@starting-style');
  expect(css).toContain('html.motion-reduced .disclosure-popover');
 });
-it('routes all Flutter selectors through the shared height animation',()=>{
- const dart=readFileSync(new URL('../mobile/lib/ui/studio_dropdown.dart',import.meta.url),'utf8');
- expect(dart).toMatch(/SizeTransition\(\s*sizeFactor: curved/);
- expect(dart).toContain('reverseTransitionDuration');
- expect(dart).toContain('MediaQuery.disableAnimationsOf(context)');
-});

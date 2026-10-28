@@ -11,23 +11,18 @@ describe('bundled style fonts',()=>{
   for(const f of BUILTIN_FONTS){expect(normalizeTypography({font:f.id,scale:150})).toEqual({font:f.id,scale:150});expect(isImportedFont(f.id)).toBe(false);expect(fontFamily(f.id)).toContain('Studio-'+f.id);}
   expect(builtinFont('builtin-../../private')).toBeUndefined();expect(normalizeTypography({font:'builtin-unknown'}).font).toBe('default');
  });
- it('ships identical original font bytes, full OFL notices and catalog on desktop and mobile',()=>{
+ it('ships original font bytes, full OFL notices and catalog on desktop',()=>{
   const catalog=JSON.parse(fs.readFileSync('public/ui-fonts/catalog.json','utf8'));
-  expect(fs.readFileSync('mobile/assets/ui-fonts/catalog.json','utf8')).toBe(fs.readFileSync('public/ui-fonts/catalog.json','utf8'));
   const hashes=new Set();
   for(const f of BUILTIN_FONTS){const entry=catalog.find((x:{id:string})=>x.id===f.id);expect(entry).toMatchObject({...f,license:'SIL OFL 1.1',unmodifiedUpstreamBytes:true});
-   const bytes=fs.readFileSync(path.join('public/ui-fonts',f.file));expect(fs.readFileSync(path.join('mobile/assets/ui-fonts',f.file)).equals(bytes)).toBe(true);
+   const bytes=fs.readFileSync(path.join('public/ui-fonts',f.file));
    const hash=crypto.createHash('sha256').update(bytes).digest('hex');expect(hash).toBe(entry.sha256);hashes.add(hash);
-   const license=fs.readFileSync(path.join('public/ui-fonts',entry.licenseFile));expect(license.toString()).toContain('SIL OPEN FONT LICENSE');expect(fs.readFileSync(path.join('mobile/assets/ui-fonts',entry.licenseFile)).equals(license)).toBe(true);
+   const license=fs.readFileSync(path.join('public/ui-fonts',entry.licenseFile));expect(license.toString()).toContain('SIL OPEN FONT LICENSE');
    expect(crypto.createHash('sha256').update(license).digest('hex')).toBe(entry.licenseSha256);
    expect(fs.readFileSync('THIRD_PARTY_NOTICES.md','utf8')).toContain(entry.licenseFile);
   }expect(hashes.size).toBe(6);
  });
  it('offers meaningful labels and offline/fallback guidance in five UI locales',()=>{
   for(const l of ['zh-CN','zh-TW','en-US','ja-JP','ko-KR']){expect(builtinFontHint(l).length).toBeGreaterThan(30);for(const f of BUILTIN_FONTS){const label=builtinFontLabel(f.id,l);expect(label).not.toBe(f.id);expect(label).toContain(' · ');}}
- });
- it('mobile normalization and runtime assets register the same IDs without OS font installation',()=>{
-  const dart=fs.readFileSync('mobile/lib/models/builtin_ui_fonts.dart','utf8');for(const f of BUILTIN_FONTS){expect(dart).toContain('"'+f.id+'"');expect(dart).toContain('"'+f.file+'"');}
-  expect(fs.readFileSync('mobile/pubspec.yaml','utf8')).toContain('    - assets/ui-fonts/');
  });
 });

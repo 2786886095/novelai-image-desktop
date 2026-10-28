@@ -796,13 +796,10 @@ describe("desktop UI consistency guards", () => {
     expect(panel).toContain("disabledReason={outputLimitReason}");
   });
 
-  it("pages the complete artist ranking and local preset libraries on both clients", () => {
+  it("pages the complete artist ranking and local preset libraries", () => {
     const gallery = fs.readFileSync(path.join(projectRoot, "src", "AitagGallery.tsx"), "utf8");
     const artistIpc = fs.readFileSync(path.join(projectRoot, "electron", "ipc", "artist-lab.ts"), "utf8");
     const presets = fs.readFileSync(path.join(projectRoot, "src", "ReferencePresetManager.tsx"), "utf8");
-    const mobileGallery = fs.readFileSync(path.join(projectRoot, "mobile", "lib", "screens", "online_gallery_screen.dart"), "utf8");
-    const mobileArtists = fs.readFileSync(path.join(projectRoot, "mobile", "lib", "services", "artist_tag_service.dart"), "utf8");
-    const mobilePresets = fs.readFileSync(path.join(projectRoot, "mobile", "lib", "screens", "generate_screen.dart"), "utf8");
     expect(gallery).toContain("artistLabArtistRanking(targetPage, targetPageSize, targetQuery, force)");
     expect(gallery).toContain("artistPageSize");
     expect(artistIpc).toContain("DANBOORU_TAG_PAGE_SIZE = 1000");
@@ -811,11 +808,5 @@ describe("desktop UI consistency guards", () => {
     expect(ranking).not.toContain("5000");
     expect(presets).toContain("LOCAL_PAGE_SIZE_OPTIONS");
     expect(presets).toContain("LocalPresetPageNumberInput");
-    expect(mobileGallery).toContain("artistService.rankingPage");
-    expect(mobileGallery).toContain("_chooseArtistPage");
-    expect(mobileArtists).toContain("_apiPageSize = 1000");
-    expect(mobileArtists).toContain("Future<ArtistRankingPage> rankingPage");
-    expect(mobilePresets).toContain("referencePresets.pagePosition");
-    expect(mobilePresets).not.toContain("reference-preset-load-more");
   });
 });

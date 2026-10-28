@@ -813,7 +813,7 @@ describe("resolveUpscaleOutputSize", () => {
 
 describe("NovelAI stream final image validation", () => {
   for (const fixtureName of ["novelai-stream-final-fixture.json", "novelai-stream-final-additional-fixture.json"]) {
-    const fixture = JSON.parse(fs.readFileSync(`mobile/test/accounttests/fixtures/${fixtureName}`, "utf8"));
+    const fixture = JSON.parse(fs.readFileSync(`tests/fixtures/${fixtureName}`, "utf8"));
     const allowed = fixture.allowedPreviewImages ?? fixture.cases.flatMap((row: any) => row.expectedImages);
     for (const row of fixture.cases) {
       it(`preserves bytes and only completes valid images: ${row.id}`, async () => {

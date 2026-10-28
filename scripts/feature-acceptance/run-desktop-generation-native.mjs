@@ -1,7 +1,7 @@
 import {prepareMacNativeKeychain} from './mac-native-keychain.mjs';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import crypto from 'node:crypto';import {spawnSync} from 'node:child_process';import {createRequire} from 'node:module';import {fileURLToPath} from 'node:url';
 import {fullFeatureProfiles,profileSha256} from './full-feature-profiles.mjs';
-import {captureSourceState} from './mobile-entry-workspace.mjs';
+import {captureSourceState} from './source-state.mjs';
 import {runBoundedNativeCommand} from './bounded-native-command.mjs';
 import {startMacNativeStallDiagnostics} from './desktop-native-diagnostics.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),deps=path.join(root,'node_modules'),req=createRequire(path.join(root,'package.json')),platform=({win32:'windows',darwin:'macos',linux:'linux'})[process.platform];if(!platform)throw Error('Actual desktop host required');

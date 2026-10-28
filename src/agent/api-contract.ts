@@ -1,12 +1,12 @@
 export type ApiField={key:string;title:string;type:'url'|'text'|'boolean'|'choice'|'json';values?:string[]};
 const field=(key:string,title:string,type:ApiField['type']='text',values?:string[]):ApiField=>({key,title,type,...(values?{values}:{})});
-export const API_PROFILES:Record<string,{title:string;secret:string;mobile:boolean;fields:Record<string,ApiField>}>= {
- novelai:{title:'NovelAI 生图',secret:'token',mobile:true,fields:{baseUrl:field('apiBaseUrl','账户 API 地址','url'),imageUrl:field('imageBaseUrl','图片 API 地址','url'),allowCustomEndpoint:field('allowCustomEndpoint','允许自定义服务接收凭据','boolean'),allowCustomEndpointFallback:field('allowCustomEndpointFallback','自定义失败后尝试官方收费服务','boolean')}},
- reverse:{title:'图片反推',secret:'visionApiKey',mobile:true,fields:{baseUrl:field('visionApiUrl','API 地址','url'),model:field('visionApiModel','模型')}},
- convert:{title:'提示词转换',secret:'convertApiKey',mobile:true,fields:{baseUrl:field('convertApiUrl','API 地址','url'),model:field('convertApiModel','模型')}},
- agent:{title:'酒馆对话',secret:'agentApiKey',mobile:true,fields:{baseUrl:field('agentApiBaseUrl','API 地址','url'),model:field('agentApiModel','模型'),protocol:field('agentApiProtocol','接口协议','choice',['openai-compatible','openai-responses','anthropic-messages','google-gemini']),name:field('agentProviderName','服务名称')}},
- tags:{title:'标签检索服务',secret:'tagServerApiKey',mobile:true,fields:{baseUrl:field('tagServerUrl','服务地址','url'),enabled:field('tagServerEnabled','启用','boolean'),transport:field('tagServerType','连接方式','choice',['rest','http','sse']),tool:field('tagServerTool','检索工具名称')}},
- translate:{title:'AI 翻译',secret:'translateAiApiKey',mobile:false,fields:{baseUrl:field('translateAiApiUrl','API 地址','url'),model:field('translateAiModel','模型')}}
+export const API_PROFILES:Record<string,{title:string;secret:string;fields:Record<string,ApiField>}>= {
+ novelai:{title:'NovelAI 生图',secret:'token',fields:{baseUrl:field('apiBaseUrl','账户 API 地址','url'),imageUrl:field('imageBaseUrl','图片 API 地址','url'),allowCustomEndpoint:field('allowCustomEndpoint','允许自定义服务接收凭据','boolean'),allowCustomEndpointFallback:field('allowCustomEndpointFallback','自定义失败后尝试官方收费服务','boolean')}},
+ reverse:{title:'图片反推',secret:'visionApiKey',fields:{baseUrl:field('visionApiUrl','API 地址','url'),model:field('visionApiModel','模型')}},
+ convert:{title:'提示词转换',secret:'convertApiKey',fields:{baseUrl:field('convertApiUrl','API 地址','url'),model:field('convertApiModel','模型')}},
+ agent:{title:'酒馆对话',secret:'agentApiKey',fields:{baseUrl:field('agentApiBaseUrl','API 地址','url'),model:field('agentApiModel','模型'),protocol:field('agentApiProtocol','接口协议','choice',['openai-compatible','openai-responses','anthropic-messages','google-gemini']),name:field('agentProviderName','服务名称')}},
+ tags:{title:'标签检索服务',secret:'tagServerApiKey',fields:{baseUrl:field('tagServerUrl','服务地址','url'),enabled:field('tagServerEnabled','启用','boolean'),transport:field('tagServerType','连接方式','choice',['rest','http','sse']),tool:field('tagServerTool','检索工具名称')}},
+ translate:{title:'AI 翻译',secret:'translateAiApiKey',fields:{baseUrl:field('translateAiApiUrl','API 地址','url'),model:field('translateAiModel','模型')}}
 };
 export function apiUrl(value:unknown):string {
  if(typeof value!=='string'||value.length>2048||value!==value.trim()||/[\s\\]/.test(value))throw Error('API 地址格式无效');
