@@ -52,6 +52,6 @@ export function exportVibeFile(items:VibeTransferItem[]) {
  })});
 }
 export const vibeFileLabels=(language:unknown)=>{
- const all:Record<string,string[]>={'zh-CN':['导入 Vibe 文件','导出 Vibe 文件','编码参考（无原图）','已导入 Vibe 参考','该编码没有原图，请使用以下模型和提取值：'],'zh-TW':['匯入 Vibe 檔案','匯出 Vibe 檔案','編碼參考（無原圖）','已匯入 Vibe 參考','此編碼無原圖，請使用以下模型和提取值：'],'ja-JP':['Vibe ファイルを読込','Vibe ファイルを書出し','エンコード参照（元画像なし）','Vibe を読み込みました','元画像がありません。対応モデルと抽出値：'],'ko-KR':['Vibe 파일 가져오기','Vibe 파일 내보내기','인코딩 참조 (원본 없음)','Vibe를 가져왔습니다','원본이 없습니다. 지원 모델 및 추출 값: ']};
- const [load,save,encoded,loaded,mismatch]=all[String(language??"zh-CN")]??['Import Vibe file','Export Vibe file','Encoded reference (no image)','Vibe references imported','No original image. Use this model and extraction value: '];return {load,save,encoded,loaded,mismatch};
+ const all:Record<string,string[]>={'zh-CN':['导入 Vibe 文件','导出 Vibe 文件','编码参考（无原图）','已导入 Vibe 参考','该编码没有原图，请使用以下模型和提取值：']};
+ const [load,save,encoded,loaded,mismatch]=all[String(language??"zh-CN")]??all['zh-CN'];return {load,save,encoded,loaded,mismatch};
 };

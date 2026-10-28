@@ -13,8 +13,8 @@ describe("Anlas preview billing provenance",()=>{
   expect(anlasBillingDisplay({quote,language:"zh-CN"}).primary).toContain("估算");
   expect(anlasBillingDisplay({quote:{...quote,source:"official-api"},language:"zh-CN"}).sourceLabel).toBe("NovelAI 官方生成前报价（非实际扣费）");
  });
- it.each(["zh-CN","zh-TW","en","ja","ko"])("renders separate relay/reference semantics in %s",language=>{
-  const view=anlasBillingDisplay({quote:relay(0),language});expect(view.title).toBeTruthy();expect(view.sourceLabel).toBeTruthy();expect(view.isReferenceOnly).toBe(true);expect(view.primary).not.toContain("0 Anlas");expect(view.secondary).toContain("0 Anlas");expect(view.secondary).toContain("Opus");
+ it("renders separate relay/reference semantics",()=>{
+  const view=anlasBillingDisplay({quote:relay(0),language:"zh-CN"});expect(view.title).toBeTruthy();expect(view.sourceLabel).toBeTruthy();expect(view.isReferenceOnly).toBe(true);expect(view.primary).not.toContain("0 Anlas");expect(view.secondary).toContain("0 Anlas");expect(view.secondary).toContain("Opus");
  });
  it("hides stale key and rejects late cross-identity quote before a repaint",()=>{
   const state={key:"current-key",quote:relay()};expect(visibleAnlasQuote(state,"other-key","fixture-relay")).toBeNull();expect(visibleAnlasQuote(state,"current-key","other-account")).toBeNull();expect(visibleAnlasQuote(state,"current-key","fixture-relay")).toBe(state.quote);

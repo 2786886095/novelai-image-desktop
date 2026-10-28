@@ -26,6 +26,6 @@ it("redacts common prefixed credentials in actual failure messages, including ca
   expect(result.message).toContain("https://cdn.invalid/archive?[redacted]");
   for (const value of values) expect(result.message).not.toContain(value);
 });
-it.each(["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR"])("has a diagnostic label in %s", (language) => {
-  expect(downloadDiagnosticLabel(language).length).toBeGreaterThan(5);
+it("has a diagnostic label", () => {
+  expect(downloadDiagnosticLabel("zh-CN")).toBe("实际失败原因（已隐藏凭据）");
 });

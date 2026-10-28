@@ -6,12 +6,8 @@ export const TAGS_GALLERY_CATEGORIES=['artist','character','copyright','fashion_
 export type TagsGalleryCategory=typeof TAGS_GALLERY_CATEGORIES[number];
 export function tagsGalleryLabels(language:unknown){
  const labels:Record<string,string[]>={
- 'zh-CN':['画师','角色','作品','服装风格','面容','五官','发型','配饰','构图'],
- 'zh-TW':['畫師','角色','作品','服裝風格','面容','五官','髮型','配飾','構圖'],
- 'en-US':['Artists','Characters','Series','Fashion','Faces','Facial features','Hair','Accessories','Composition'],
- 'ja-JP':['絵師','キャラ','作品','服','顔','顔パーツ','髪','小物','構図'],
- 'ko-KR':['작가','캐릭터','작품','패션','얼굴','얼굴 특징','머리','액세서리','구도']};
- return TAGS_GALLERY_CATEGORIES.map((value,i)=>({value,label:(labels[String(language)]??labels['en-US'])[i]}));
+ 'zh-CN':['画师','角色','作品','服装风格','面容','五官','发型','配饰','构图']};
+ return TAGS_GALLERY_CATEGORIES.map((value,i)=>({value,label:(labels[String(language)]??labels['zh-CN'])[i]}));
 }
 export function tagsGalleryCategory(value:unknown):TagsGalleryCategory{
  if(value==null||value==='')return 'artist';
@@ -60,10 +56,6 @@ export function parseTagsGalleryDetail(raw:string,id:string):OnlineGalleryDetail
  return {item,media:cover.displayUrl?[cover]:[],prompt:copies.at(-1)??tag,negativePrompt:'',note:'',categoryPath:[id.split('/')[0]],metadata:{sourceUrl:item.sourceUrl,model:'NAI Diffusion Anime V4.5 Full'}};
 }
 
-export function tagsGalleryUi(language:unknown){
- const [category,pending]=({
- 'zh-CN':['分类','官网尚未提供样例图'], 'zh-TW':['分類','官網尚未提供範例圖'],
- 'en-US':['Category','No sample image provided by the source'], 'ja-JP':['カテゴリ','元サイトにサンプル画像がありません'],
- 'ko-KR':['카테고리','원본 사이트에 샘플 이미지가 없습니다']
- } as Record<string,string[]>)[String(language)]??['Category','No sample image provided by the source'];return {category,pending};
+export function tagsGalleryUi(_language:unknown){
+ return {category:'分类',pending:'官网尚未提供样例图'};
 }

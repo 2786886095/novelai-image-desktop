@@ -8,12 +8,12 @@ afterEach(()=>{
  if(path.dirname(fixture.root)!==path.resolve(os.tmpdir())||!path.basename(fixture.root).startsWith('settings-commit-'))throw Error('Invalid fixture cleanup');
  fs.rmSync(fixture.root,{recursive:true,force:true});
 });
-it('a failed language save retains both disk and the last committed in-memory setting',async()=>{
+it('a failed settings save retains both disk and the last committed in-memory setting',async()=>{
  const {setSetting,getSetting}=await import('./store');
- setSetting('language','en-US');
+ setSetting('theme','dark');
  const file=path.join(fixture.root,'novelai-image-desktop.json'),before=fs.readFileSync(file);
  vi.spyOn(fs,'renameSync').mockImplementation(()=>{throw Object.assign(new Error('busy fixture'),{code:'EPERM'});});
- expect(()=>setSetting('language','ja-JP')).toThrow('busy fixture');
- expect(getSetting('language')).toBe('en-US');
+ expect(()=>setSetting('theme','light')).toThrow('busy fixture');
+ expect(getSetting('theme')).toBe('dark');
  expect(fs.readFileSync(file)).toEqual(before);
 });

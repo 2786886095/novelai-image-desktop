@@ -29,42 +29,6 @@ const COPY = {
     total: "系列总计", pending: "待下载", saved: "已保存", downloadSeries: "下载整个系列", downloadingSeries: "正在下载系列", confirmSeries: "确认下载整个系列？", confirm: "开始下载", cancel: "取消",
     seriesDone: "系列下载完成", seriesPartial: "系列下载结束，但有项目失败；再次点击可重试未完成项目。", failed: "失败", nothingPending: "该系列已全部下载。",
   },
-  "zh-TW": {
-    eyebrow: "角色資產雲端目錄", title: "線上角色精準參考庫", hint: "依遊戲系列尋找角色，下載成功後自動歸入本機預設；既有分組會直接沿用。",
-    search: "搜尋角色、形態或遊戲", game: "遊戲系列", category: "圖片分類", cardsPerRow: "每列顯示", itemsPerPage: "每頁數量", goToPage: "選擇頁數", all: "全部", inGame: "遊戲內角色圖", illustration: "角色立繪", resource: "角色資源",
-    load: "讀取線上目錄", refresh: "重新整理", loading: "讀取中…", retry: "重試", preview: "預覽", close: "關閉", download: "下載到本機", downloaded: "已下載", size: "大小", progress: "下載進度",
-    noResult: "找不到符合的角色", unavailable: "線上目錄暫時無法使用", downloadedToast: "精準參考圖已下載並加入對應分組。", assets: "份精準參考", games: "個遊戲系列", found: "目前結果", previous: "上一頁", next: "下一頁", loadingPage: "正在準備第 {page} 頁…", page: "第 {page} / {pages} 頁",
-    seriesTitle: "整系列下載", seriesHint: "一次下載該遊戲的全部精準參考圖；僅下載本機尚未儲存的項目。", selectSeries: "先選擇一個遊戲系列，即可查看總大小並整包下載。",
-    total: "系列總計", pending: "待下載", saved: "已儲存", downloadSeries: "下載整個系列", downloadingSeries: "正在下載系列", confirmSeries: "確認下載整個系列？", confirm: "開始下載", cancel: "取消",
-    seriesDone: "系列下載完成", seriesPartial: "系列下載結束，但有項目失敗；再次點擊可重試未完成項目。", failed: "失敗", nothingPending: "該系列已全部下載。",
-  },
-  "en-US": {
-    eyebrow: "Cloud character assets", title: "Online Precise Reference Library", hint: "Browse by game series. Successful downloads are filed into local presets and existing groups are reused.",
-    search: "Search character, form, or game", game: "Game series", category: "Image category", cardsPerRow: "Cards per row", itemsPerPage: "Items per page", goToPage: "Choose page", all: "All", inGame: "In-game", illustration: "Illustration", resource: "Character resources",
-    load: "Load online catalog", refresh: "Refresh catalog", loading: "Loading…", retry: "Retry", preview: "Preview", close: "Close", download: "Download locally", downloaded: "Downloaded", size: "Size", progress: "Download progress",
-    noResult: "No matching characters", unavailable: "Online catalog unavailable", downloadedToast: "Precise reference downloaded and added to its local group.", assets: "precise references", games: "game series", found: "Results", previous: "Previous", next: "Next", loadingPage: "Preparing page {page}…", page: "Page {page} / {pages}",
-    seriesTitle: "Download a full series", seriesHint: "Download every precise reference in this game; items already saved locally are skipped.", selectSeries: "Choose a game series to see its total size and download it as a set.",
-    total: "Series total", pending: "Pending", saved: "Saved", downloadSeries: "Download full series", downloadingSeries: "Downloading series", confirmSeries: "Download this full series?", confirm: "Start download", cancel: "Cancel",
-    seriesDone: "Series download complete", seriesPartial: "Series download finished with failures. Run it again to retry unfinished items.", failed: "Failed", nothingPending: "This series is already fully downloaded.",
-  },
-  "ja-JP": {
-    eyebrow: "クラウドキャラクター素材", title: "オンライン精密参照ライブラリ", hint: "ゲームシリーズ別に探せます。保存後はローカルプリセットへ自動分類し、既存グループを再利用します。",
-    search: "キャラクター・形態・ゲームを検索", game: "ゲームシリーズ", category: "画像分類", cardsPerRow: "1行の件数", itemsPerPage: "1ページの件数", goToPage: "ページを選択", all: "すべて", inGame: "ゲーム内", illustration: "立ち絵", resource: "キャラクター素材",
-    load: "オンラインカタログを読む", refresh: "カタログを更新", loading: "読込中…", retry: "再試行", preview: "プレビュー", close: "閉じる", download: "端末に保存", downloaded: "保存済み", size: "サイズ", progress: "ダウンロード",
-    noResult: "一致するキャラクターがありません", unavailable: "オンラインカタログを利用できません", downloadedToast: "精密参照を保存し、対応グループへ追加しました。", assets: "件の精密参照", games: "ゲームシリーズ", found: "検索結果", previous: "前のページ", next: "次のページ", loadingPage: "{page} ページを準備中…", page: "{page} / {pages} ページ",
-    seriesTitle: "シリーズ一括保存", seriesHint: "このゲームの精密参照をまとめて保存します。保存済みの項目はスキップします。", selectSeries: "ゲームシリーズを選択すると、合計サイズを確認して一括保存できます。",
-    total: "シリーズ合計", pending: "未保存", saved: "保存済み", downloadSeries: "シリーズを一括保存", downloadingSeries: "シリーズを保存中", confirmSeries: "シリーズ全体を保存しますか？", confirm: "保存を開始", cancel: "キャンセル",
-    seriesDone: "シリーズの保存が完了しました", seriesPartial: "一部の保存に失敗しました。もう一度実行すると未完了項目を再試行できます。", failed: "失敗", nothingPending: "このシリーズはすべて保存済みです。",
-  },
-  "ko-KR": {
-    eyebrow: "클라우드 캐릭터 에셋", title: "온라인 정밀 참조 라이브러리", hint: "게임 시리즈별로 찾고, 다운로드 후 로컬 프리셋에 자동 분류합니다. 기존 그룹은 그대로 재사용합니다.",
-    search: "캐릭터·형태·게임 검색", game: "게임 시리즈", category: "이미지 분류", cardsPerRow: "행당 카드", itemsPerPage: "페이지당 항목", goToPage: "페이지 선택", all: "전체", inGame: "게임 내", illustration: "일러스트", resource: "캐릭터 리소스",
-    load: "온라인 카탈로그 불러오기", refresh: "목록 새로고침", loading: "불러오는 중…", retry: "재시도", preview: "미리보기", close: "닫기", download: "기기에 저장", downloaded: "저장됨", size: "크기", progress: "다운로드 진행",
-    noResult: "일치하는 캐릭터가 없습니다", unavailable: "온라인 카탈로그를 사용할 수 없습니다", downloadedToast: "정밀 참조를 저장하고 해당 그룹에 추가했습니다.", assets: "개 정밀 참조", games: "개 게임 시리즈", found: "검색 결과", previous: "이전 페이지", next: "다음 페이지", loadingPage: "{page}페이지 준비 중…", page: "{page} / {pages} 페이지",
-    seriesTitle: "시리즈 전체 다운로드", seriesHint: "이 게임의 모든 정밀 참조를 한 번에 저장합니다. 이미 저장된 항목은 건너뜁니다.", selectSeries: "게임 시리즈를 선택하면 전체 크기를 확인하고 한 번에 다운로드할 수 있습니다.",
-    total: "시리즈 전체", pending: "다운로드 대기", saved: "저장됨", downloadSeries: "시리즈 전체 다운로드", downloadingSeries: "시리즈 다운로드 중", confirmSeries: "시리즈 전체를 다운로드할까요?", confirm: "다운로드 시작", cancel: "취소",
-    seriesDone: "시리즈 다운로드 완료", seriesPartial: "일부 항목이 실패했습니다. 다시 실행하면 완료되지 않은 항목을 재시도합니다.", failed: "실패", nothingPending: "이 시리즈는 모두 다운로드되었습니다.",
-  },
 } as const;
 
 function CatalogPageNumberInput({ page, pageCount, disabled, label, onChange }: { page: number; pageCount: number; disabled: boolean; label: string; onChange: (page: number) => void }) {

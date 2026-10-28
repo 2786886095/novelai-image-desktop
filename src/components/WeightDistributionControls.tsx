@@ -50,42 +50,6 @@ const COPY = {
     preview: "权重概率预览", previewHelp: "按当前众数和左右离散度精确计算，不使用随机模拟。柱越高，附近权重越容易出现。",
     xAxis: "权重", yAxis: "相对概率密度", likely: "80% 高概率区间", peak: "峰值", balanceState: "整串平衡",
   },
-  "zh-TW": {
-    novice: "新手版", advanced: "進階版", hint: "新手版沿用穩定預設分布；進階版可精確控制權重峰值與兩側擴散。",
-    mode: "眾數", modeHelp: "權重最容易出現的位置，也是分布曲線峰值，會限制在上下界內。",
-    left: "左側離散", leftHelp: "控制低於眾數一側的分散程度。0 更集中，1 更均勻。",
-    right: "右側離散", rightHelp: "控制高於眾數一側的分散程度。0 更集中，1 更均勻。",
-    balance: "軟平衡強度", balanceHelp: "整串同向平移，使平均權重靠近眾數。0 不修正，1 儘量對齊；觸及上下界時除外。",
-    preview: "權重機率預覽", previewHelp: "依目前參數精確計算，不使用隨機模擬。柱越高，附近權重越容易出現。",
-    xAxis: "權重", yAxis: "相對機率密度", likely: "80% 高機率區間", peak: "峰值", balanceState: "整串平衡",
-  },
-  "en-US": {
-    novice: "Novice", advanced: "Advanced", hint: "Novice keeps the established distribution. Advanced controls the peak and each side independently.",
-    mode: "Mode", modeHelp: "The most likely weight and the peak of the distribution. It is clamped to the selected bounds.",
-    left: "Left dispersion", leftHelp: "Spread below the mode. 0 stays near the mode; 1 spreads more evenly.",
-    right: "Right dispersion", rightHelp: "Spread above the mode. 0 stays near the mode; 1 spreads more evenly.",
-    balance: "Soft balance", balanceHelp: "Shifts the complete artist string so its mean approaches the mode. 0 disables correction; 1 fully applies it unless bounds clip a value.",
-    preview: "Probability preview", previewHelp: "Calculated exactly from the current split distribution without random simulation. Taller bars are more likely.",
-    xAxis: "Weight", yAxis: "Relative probability", likely: "80% likely range", peak: "Peak", balanceState: "String balance",
-  },
-  "ja-JP": {
-    novice: "初心者", advanced: "詳細", hint: "初心者は既定分布を使用し、詳細ではピークと左右の広がりを個別に調整します。",
-    mode: "最頻値", modeHelp: "最も出やすいウェイトです。上下限の範囲内に自動調整されます。",
-    left: "左側分散", leftHelp: "最頻値より低い側の広がり。0 は集中、1 は均等に近づきます。",
-    right: "右側分散", rightHelp: "最頻値より高い側の広がり。0 は集中、1 は均等に近づきます。",
-    balance: "ソフト均衡", balanceHelp: "文字列全体を同じ量だけ移動し、平均を最頻値へ近づけます。0 は無効、1 は最大です。",
-    preview: "確率プレビュー", previewHelp: "乱数シミュレーションを使わず、現在の分布から正確に計算します。",
-    xAxis: "ウェイト", yAxis: "相対確率", likely: "80% 高確率範囲", peak: "ピーク", balanceState: "文字列均衡",
-  },
-  "ko-KR": {
-    novice: "초보", advanced: "고급", hint: "초보는 기존 분포를 사용하고, 고급은 최빈값과 좌우 분산을 따로 조절합니다.",
-    mode: "최빈값", modeHelp: "가장 자주 나오는 가중치이며 선택한 범위 안으로 자동 제한됩니다.",
-    left: "왼쪽 분산", leftHelp: "최빈값보다 낮은 쪽의 분산입니다. 0은 집중, 1은 균등에 가깝습니다.",
-    right: "오른쪽 분산", rightHelp: "최빈값보다 높은 쪽의 분산입니다. 0은 집중, 1은 균등에 가깝습니다.",
-    balance: "소프트 균형", balanceHelp: "전체 문자열을 같은 양만큼 이동해 평균을 최빈값에 가깝게 합니다. 0은 끔, 1은 최대입니다.",
-    preview: "확률 미리보기", previewHelp: "무작위 시뮬레이션 없이 현재 분포에서 정확히 계산합니다.",
-    xAxis: "가중치", yAxis: "상대 확률", likely: "80% 확률 구간", peak: "최빈값", balanceState: "문자열 균형",
-  },
 } satisfies Record<AppLanguage, Record<string, string>>;
 
 function FieldTitle({ label, help }: { label: string; help: string }) {

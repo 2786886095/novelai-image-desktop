@@ -24,12 +24,8 @@ export function normalizeCharacterCaptions(value: unknown): CharCaption[] {
 export function characterPresetText(language: unknown) {
   const labels = {
     'zh-CN': ['角色预设', '保存当前角色', '应用', '重命名', '删除', '名称', '保存', '取消', '已保存', '预设角色数量超过当前模型上限，请先切换模型。'],
-    'zh-TW': ['角色預設', '儲存目前角色', '套用', '重新命名', '刪除', '名稱', '儲存', '取消', '已儲存', '預設角色數量超過目前模型上限，請先切換模型。'],
-    'en-US': ['Character presets', 'Save current characters', 'Apply', 'Rename', 'Delete', 'Name', 'Save', 'Cancel', 'Saved', 'Too many characters for this model. Switch models first.'],
-    'ja-JP': ['キャラクタープリセット', '現在のキャラクターを保存', '適用', '名前を変更', '削除', '名前', '保存', 'キャンセル', '保存しました', '現在のモデルの人数上限を超えています。モデルを変更してください。'],
-    'ko-KR': ['캐릭터 프리셋', '현재 캐릭터 저장', '적용', '이름 변경', '삭제', '이름', '저장', '취소', '저장됨', '현재 모델의 캐릭터 수 제한을 초과합니다. 모델을 변경하세요.'],
   };
-  const [title, create, apply, rename, remove, name, save, cancel, saved, capacity] = labels[String(language) as keyof typeof labels] ?? labels['en-US'];
+  const [title, create, apply, rename, remove, name, save, cancel, saved, capacity] = labels[String(language) as keyof typeof labels] ?? labels['zh-CN'];
   return {title, create, apply, rename, remove, name, save, cancel, saved, capacity};
 }
 

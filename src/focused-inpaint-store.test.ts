@@ -76,7 +76,7 @@ it('clears a stale ROI when switching to NovelAI without a source canvas',async(
  await useAppStore.getState().refreshSettings();expect(useAppStore.getState().inpaintRegion).toBeNull();
 });
 it('does not cap an OpenAI selection during unrelated refreshed settings',async()=>{
- const region={x:200,y:200,width:1600,height:900};useAppStore.setState({settings:{language:'zh-CN',inpaintEngine:'openai'} as any,inpaintRegion:region});
- desktop.getSettings=vi.fn().mockResolvedValue({language:'en-US',inpaintEngine:'openai'});
+ const region={x:200,y:200,width:1600,height:900};useAppStore.setState({settings:{language:'zh-CN',inpaintEngine:'openai',theme:'light'} as any,inpaintRegion:region});
+ desktop.getSettings=vi.fn().mockResolvedValue({language:'zh-CN',inpaintEngine:'openai',theme:'dark'});
  await useAppStore.getState().refreshSettings();expect(useAppStore.getState().inpaintRegion).toEqual(region);
 });

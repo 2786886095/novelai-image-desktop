@@ -31,15 +31,15 @@ describe('actual main context-menu privacy branch', () => {
   it.each(['failed', 'unsupported', 'copied'])('never falls back to copyImageAt for %s OFF results', async status => {
     expect(start).toBeGreaterThan(0); expect(end).toBeGreaterThan(start);
     const exports: Record<string, Function> = {};
-    const body = `export function execute(params:any,win:any,language:string,getSettings:any,copyImageWithMetadata:any){${branch}}`;
+    const body = `export function execute(params:any,win:any,getSettings:any,copyImageWithMetadata:any){${branch}}`;
     const code = ts.transpileModule(body, {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
     vm.runInNewContext(code, {exports});
     const copyImageAt = vi.fn(), send = vi.fn(), copy = vi.fn().mockResolvedValue({status});
-    exports.execute({srcURL:'nai-local://fixture',x:1,y:2}, {isDestroyed:()=>false,webContents:{copyImageAt,send}}, 'en-US',()=>({copyImageMetadata:false}),copy);
+    exports.execute({srcURL:'nai-local://fixture',x:1,y:2}, {isDestroyed:()=>false,webContents:{copyImageAt,send}}, ()=>({copyImageMetadata:false}),copy);
     await new Promise(resolve => setTimeout(resolve,0));
     expect(copy).toHaveBeenCalledExactlyOnceWith('nai-local://fixture',false);
     expect(copyImageAt).not.toHaveBeenCalled();
     expect(send).toHaveBeenCalledOnce();
-    expect(send.mock.calls[0][1]).toContain(status === 'copied' ? 'strongly removed' : 'no uncleaned original');
+    expect(send.mock.calls[0][1]).toContain(status === 'copied' ? '已强力清除原数据' : '未写入未经清理的原图');
   });
 });

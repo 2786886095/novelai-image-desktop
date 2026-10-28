@@ -58,7 +58,7 @@ export function useGlobalTypography(raw:unknown) {
       if(cancelled)return;cleanup();cleanup=installTypography(scale,fontFamily(font));window.dispatchEvent(new Event('resize'));
     }).catch(()=>{
       if(cancelled)return;
-      window.dispatchEvent(new CustomEvent('ui-font-missing',{detail:typographyText(document.documentElement.lang).missing}));
+      window.dispatchEvent(new CustomEvent('ui-font-missing',{detail:typographyText('zh-CN').missing}));
     });
     return ()=>{cancelled=true;cleanup();};
   },[font,scale]);

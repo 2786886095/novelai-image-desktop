@@ -69,10 +69,8 @@ describe("saved prompt tags", () => {
     expect(matchesPromptLibraryEntry({}, ["c# notes"], "#")).toBe(true);
   });
 
-  it("has complete labels for every UI language", () => {
-    for (const language of ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR"]) {
-      for (const value of Object.values(promptTagText(language))) expect(value.trim()).not.toBe("");
-    }
+  it("has complete labels", () => {
+    for (const value of Object.values(promptTagText("zh-CN"))) expect(value.trim()).not.toBe("");
     expect(promptTagText(undefined)).toEqual(promptTagText("zh-CN"));
   });
 
@@ -83,7 +81,7 @@ describe("saved prompt tags", () => {
     expect(html).toContain("#服装");
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain("未加标签");
-    const input = renderToStaticMarkup(<PromptTagInput value={outfit} onChange={() => {}} suggestions={[outfit, "夜景"]} language="en-US" />);
+    const input = renderToStaticMarkup(<PromptTagInput value={outfit} onChange={() => {}} suggestions={[outfit, "夜景"]} language="zh-CN" />);
     expect(input).toContain("+ 夜景");
     expect(input).not.toContain("+ 服装");
   });

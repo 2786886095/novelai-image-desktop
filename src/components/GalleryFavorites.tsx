@@ -35,7 +35,6 @@ export function GalleryFavoritesLibrary({onClose,embedded=false}:{onClose:()=>vo
  const pages=Math.max(1,Math.ceil(filtered.length/size)),shownPage=Math.min(page,pages);const toast=useAppStore(s=>s.setToast);
  useEffect(()=>{const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){if(embedded&&(!selected||!rootRef.current?.getClientRects().length))return;if(e.target instanceof Element&&e.target.closest('.favorite-caption form'))return;if(document.querySelector('.favorite-preview-overlay,.image-preview-dialog'))return;if(document.querySelector('.select-menu-popover[data-disclosure-open="true"]'))return;e.stopPropagation();if(selected)setSelected(null);else if(!embedded)onClose();}};window.addEventListener('keydown',key,true);return()=>window.removeEventListener('keydown',key,true);},[selected,onClose,embedded]);
  const unified=favoritesText(language);
- const promptLabel:Record<string,string>={'zh-CN':'提示词','zh-TW':'提示詞','en-US':'Prompt','ja-JP':'プロンプト','ko-KR':'프롬프트'};
  const content=<div ref={rootRef} className={embedded?"favorites-workspace":"modal-backdrop gallery-favorites-backdrop"} onClick={embedded?undefined:onClose}><section className="modal gallery-favorites-modal" role={embedded?"region":"dialog"} aria-modal={embedded?undefined:true} aria-label={unified.title} onClick={e=>e.stopPropagation()}>
  <header><h2>{unified.title}</h2>{!embedded&&<button className="btn" aria-label={text.close} onClick={onClose}>×</button>}</header>
  {embedded?<LocalFavorites/>:<>
@@ -50,7 +49,7 @@ export function GalleryFavoritesLibrary({onClose,embedded=false}:{onClose:()=>vo
  <h3 className="gallery-preview-title">{selected.source==='tags-gallery'?localizedGalleryTag(selected.title,language):selected.title}</h3>
  <PreviewImageViewer images={selected.images.map(im=>({src:im.url||'',alt:selected.title}))} index={index} onIndex={setIndex} onBackgroundClick={()=>setSelected(null)} favoriteAction={<GalleryFavoriteButton item={selected}/>} renderImage={<FavoriteImage item={selected} url={selected.images[index]?.url||''}/>}/>
  <nav className="gallery-preview-actions"><button className="btn" disabled={!selected.sourceUrl} onClick={()=>void window.naiDesktop.openExternal(selected.sourceUrl)}>{text.open}</button><button className="btn" disabled={!selected.prompt} onClick={()=>{void navigator.clipboard.writeText(selected.prompt).then(()=>toast(text.copied)).catch(()=>toast(text.failed));}}>{text.copy}</button></nav>
- {selected.prompt&&<details className="gallery-preview-prompt"><summary>{promptLabel[language]??'Prompt'}</summary><p>{selected.prompt}</p></details>}
+ {selected.prompt&&<details className="gallery-preview-prompt"><summary>提示词</summary><p>{selected.prompt}</p></details>}
  </section></div></AppPortal>}</div>;
  return embedded?content:<AppPortal>{content}</AppPortal>;
 }

@@ -53,14 +53,14 @@ export function customTagCategoryLabel(
   category: RandomCustomTagCategory,
   language: AppLanguage,
 ): string {
-  return category.labels[language] ?? category.labels["en-US"];
+  return category.labels[language] ?? category.labels["zh-CN"];
 }
 
 export function customTagMeaning(
   entry: RandomCustomTagEntry,
   language: AppLanguage,
 ): string {
-  return entry.labels[language] ?? entry.labels["en-US"];
+  return entry.labels[language] ?? entry.labels["zh-CN"];
 }
 
 export function matchesCustomTagSearch(

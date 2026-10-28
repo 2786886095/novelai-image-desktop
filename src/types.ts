@@ -1301,9 +1301,9 @@ export interface ReferencePreset {
   height: number;
   /** Stable remote catalog id, when downloaded from the online character library. */
   sourceId?: string;
-  /** Localized catalog metadata keeps downloaded preset labels language-aware offline. */
-  sourceNames?: Partial<Record<AppLanguage, string>>;
-  sourceGameNames?: Partial<Record<AppLanguage, string>>;
+  /** Catalog names keep downloaded presets labelled and searchable offline. */
+  sourceNames?: CatalogNames;
+  sourceGameNames?: CatalogNames;
   sourceGameId?: string;
   sourceCategory?: string;
 }
@@ -1327,8 +1327,8 @@ export interface ReferencePresetSaveRequest {
   width?: number;
   height?: number;
   sourceId?: string;
-  sourceNames?: Partial<Record<AppLanguage, string>>;
-  sourceGameNames?: Partial<Record<AppLanguage, string>>;
+  sourceNames?: CatalogNames;
+  sourceGameNames?: CatalogNames;
   sourceGameId?: string;
   sourceCategory?: string;
 }
@@ -1406,7 +1406,11 @@ export interface ArtistStylePreviewPage {
   items: ArtistStylePreviewResult[];
 }
 
-export type AppLanguage = "zh-CN" | "zh-TW" | "en-US" | "ja-JP" | "ko-KR";
+/** The UI is Simplified Chinese only; older settings with other values load as zh-CN. */
+export type AppLanguage = "zh-CN";
+
+/** Names from the reference catalog, keyed by every locale it publishes; the UI shows zh-CN and search uses all of them. */
+export type CatalogNames = Partial<Record<string, string>>;
 
 export interface OutputMigrationNotice {
   id: string; status: "recovered" | "failed"; sourcePaths: string[]; targetPath: string; copiedFiles: number; error?: string;

@@ -22,13 +22,12 @@ function subscribe(refresh:()=>void){
 export function ImageFavoriteButton({src,compact=false,menuItem=false}:{src:string;compact?:boolean;menuItem?:boolean}) {
  const [item,setItem]=useState<ImageFavorite|null>(null),[busy,setBusy]=useState(false),[checking,setChecking]=useState(true),[error,setError]=useState('');
  const revision=useRef(0),pending=useRef(false);
- const language=useAppStore(s=>s.settings?.language),zh=String(language??'zh-CN').startsWith('zh');
  useEffect(()=>{
   const token=++revision.current;let read=0;setItem(null);setBusy(false);pending.current=false;setError('');
   const refresh=()=>{const current=++read;setChecking(true);void status(src).then(result=>{if(token===revision.current&&current===read)setItem(result);}).catch(e=>{if(token===revision.current&&current===read)setError(String(e));}).finally(()=>{if(token===revision.current&&current===read)setChecking(false);});};
   const unsubscribe=subscribe(refresh);refresh();return()=>{revision.current++;unsubscribe();};
  },[src]);
- const saved=!!item,label=busy?(zh?'处理中…':'Updating…'):saved?(zh?'取消收藏':'Remove from favorites'):(zh?'收藏图片':'Save to favorites');
+ const saved=!!item,label=busy?'处理中…':saved?'取消收藏':'收藏图片';
  async function toggle(){
   if(pending.current||mutations.has(src)||checking)return;
   pending.current=true;mutations.add(src);setBusy(true);setError('');const token=revision.current;

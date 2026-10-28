@@ -25,9 +25,5 @@ export function removeCapsuleUnit(value:string,index:number):string {
 export function compactText(language:unknown){
  const translations:Record<string,string[]>={
   'zh-CN':['分辨率','自定义宽高','当前提示词 · 点击 × 移除','添加 Tag','输入 Tag 或词组','关闭','移除','Furry 模式'],
-  'zh-TW':['解析度','自訂寬高','目前提示詞 · 點選 × 移除','新增 Tag','輸入 Tag 或詞組','關閉','移除','Furry 模式'],
-  'en-US':['Resolution','Custom dimensions','Current prompt · × to remove','Add tag','Enter a tag or phrase','Close','Remove','Furry mode'],
-  'ja-JP':['解像度','幅・高さを指定','現在のプロンプト · × で削除','タグを追加','タグや語句を入力','閉じる','削除','Furry モード'],
-  'ko-KR':['해상도','너비·높이 직접 설정','현재 프롬프트 · ×로 삭제','태그 추가','태그 또는 구문 입력','닫기','삭제','Furry 모드'],
- };return translations[String(language)]??translations['en-US'];
+ };return translations[String(language)]??translations['zh-CN'];
 }

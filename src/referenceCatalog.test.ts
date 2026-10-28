@@ -36,18 +36,17 @@ const asset: ReferenceCatalogAsset = {
   downloadUrl: "https://example.test/amber.png",
 };
 
-describe("reference catalog localization", () => {
-  it("uses the active app language for character, game and category labels", () => {
+describe("reference catalog labels", () => {
+  it("shows the Chinese character, game and category labels", () => {
     expect(catalogName(asset, "zh-CN")).toBe("安柏");
-    expect(catalogName(asset, "ja-JP")).toBe("アンバー");
-    expect(catalogName(asset, "ko-KR")).toBe("엠버");
-    expect(catalogName(asset, "en-US")).toBe("Amber");
-    expect(catalogGameName(asset.game, "en-US", asset.gameNames)).toBe("Genshin Impact");
-    expect(catalogCategoryName(asset.category, "zh-TW")).toBe("遊戲內角色圖");
-    expect(catalogGroupName("原神 · 游戏内角色图", "ko-KR")).toBe("원신 · 인게임 캐릭터");
+    expect(catalogName(asset, undefined)).toBe("安柏");
+    expect(catalogGameName(asset.game, "zh-CN", asset.gameNames)).toBe("原神");
+    expect(catalogGameName("妮姬", undefined)).toBe("胜利女神：妮姬");
+    expect(catalogCategoryName(asset.category, "zh-CN")).toBe("游戏内角色图");
+    expect(catalogGroupName("崩坏三 · 角色立绘", "zh-CN")).toBe("崩坏3 · 角色立绘");
   });
 
-  it("searches every locale and reports transfer size", () => {
+  it("searches every catalog locale and reports transfer size", () => {
     const search = catalogSearchText(asset);
     expect(search).toContain("amber");
     expect(search).toContain("侦察骑士");

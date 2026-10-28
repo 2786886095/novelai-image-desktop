@@ -1,6 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
-import type { AppLanguage } from "./types";
 import { metadataRecoveryText } from "./metadata-recovery-i18n";
 import { OFFICIAL_METADATA_ORIGINAL } from "../shared/official-metadata-result";
 
@@ -196,18 +195,6 @@ describe("metadata recovery mode UI handlers (hook harness, not GUI)", () => {
     expect(signal.aborted).toBe(true);
   });
 
-  it("does not leave a cancelled read spinner stuck when language changes with no snapshot", async () => {
-    const pending = deferred<Record<string, string>>();
-    harness.read.mockImplementation(() => pending.promise);
-    importFile(fixtureFile("cancel-language.png")); await settle();
-    const signal = harness.read.mock.calls[0][2] as AbortSignal;
-    expect(visibleText()).toContain(metadataRecoveryText("zh-CN").reading);
-    harness.store.settings.language = "en-US"; render(); await settle();
-    expect(signal.aborted).toBe(true);
-    expect(visibleText()).not.toContain(metadataRecoveryText("en-US").reading);
-    expect(nodes().some((node) => node.props.role === "alert")).toBe(false);
-  });
-
   it("captures mode before arrayBuffer and does not launch an obsolete online read afterward", async () => {
     const buffer = deferred<ArrayBuffer>();
     const file = fixtureFile("delayed-file.png");
@@ -327,8 +314,8 @@ describe("metadata history state handlers (fixture data only, not user profile)"
   });
 });
 
-it.each(["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR"] as AppLanguage[])("has complete mode/privacy/failure copy for %s", (language) => {
-  const text = metadataRecoveryText(language);
+it("has complete mode/privacy/failure copy", () => {
+  const text = metadataRecoveryText("zh-CN");
   expect(Object.values(text).every((value) => value.trim().length > 0)).toBe(true);
   expect(text.online).not.toBe(text.offline); expect(text.onlinePrivacy).not.toBe(text.offlinePrivacy);
   expect(text.onlinePrivacy).toContain("PNG/WebP"); expect(text.onlinePrivacy).toContain("JPEG");

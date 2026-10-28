@@ -55,8 +55,6 @@ function storePath() {
 // plaintext stores are transparently migrated on the next write.
 const credentialVault = new CredentialVault(safeStorage);
 
-const SUPPORTED_LANGUAGES = new Set(["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR"]);
-
 // Settings of the removed Studio Agent, local Agent component and in-app
 // updater. Persisted values, including the agent API key, are dropped instead
 // of carried forward.
@@ -73,8 +71,10 @@ function withoutRemovedSettings(settings: AppSettings): AppSettings {
   return result as unknown as AppSettings;
 }
 
-function normalizeLanguage(value: unknown): AppSettings["language"] {
-  return typeof value === "string" && SUPPORTED_LANGUAGES.has(value) ? (value as AppSettings["language"]) : "zh-CN";
+// The UI is Simplified Chinese only. The field is kept so settings and backups
+// written by older multi-language versions still load; any stored value becomes zh-CN.
+function normalizeLanguage(_value: unknown): AppSettings["language"] {
+  return "zh-CN";
 }
 
 function encryptForDisk(data: PersistedData, replacements: ReadonlySet<string> = new Set()): PersistedData {
@@ -638,7 +638,8 @@ export function readStore(): PersistedData {
 export function credentialIssues() { return credentialVault.issues(); }
 
 export function writeStore(next: PersistedData, replaceCredentials: readonly string[] = []) {
-  next={...next,settings:withoutRemovedSettings(normalizeNovelAiSettings(next.settings))};
+  // Restored backups merge raw configuration; normalize the language here too so no older value reaches the cache.
+  next={...next,settings:{...withoutRemovedSettings(normalizeNovelAiSettings(next.settings)),language:normalizeLanguage(next.settings.language)}};
   const file = storePath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
   rotateBackupsSync(file);

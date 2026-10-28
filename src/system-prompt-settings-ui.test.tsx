@@ -23,7 +23,7 @@ const tick = () => new Promise(r => setTimeout(r, 10));
 const wait = async (condition: () => boolean) => { for (let n = 0; n < 100 && !condition(); n++) await tick(); expect(condition()).toBe(true); };
 beforeEach(() => {
   h.slots = []; h.cursor = 0; h.section = "convert-api"; h.writes.mockReset();
-  h.settings = { language: "en-US", reverseConvertPromptPresets: [createDefaultImageTaskPromptPreset("convert"), createDefaultImageTaskPromptPreset("reverse")], convertSystemPromptPresetId: "builtin-ig5-convert", reverseSystemPromptPresetId: "builtin-ig5-reverse", reverseConvertPromptPresetId: "builtin-ig5-convert", reverseConvertDshEnabled: false, visionApiUrl: "https://fixture.invalid/v1", visionApiKey: "", visionApiModel: "fixture", convertApiUrl: "https://fixture.invalid/v1", convertApiKey: "", convertApiModel: "fixture", convertPromptTemplates: { tags: "USER TEMPLATE", natural: "", mixed: "" }, reversePromptTemplates: { tags: "USER REVERSE", natural: "", mixed: "" }, reversePromptTemplatesV45: {}, convertPromptTemplatesV45: {}, aiMaxTokens: 4096 };
+  h.settings = { language: "zh-CN", reverseConvertPromptPresets: [createDefaultImageTaskPromptPreset("convert"), createDefaultImageTaskPromptPreset("reverse")], convertSystemPromptPresetId: "builtin-ig5-convert", reverseSystemPromptPresetId: "builtin-ig5-reverse", reverseConvertPromptPresetId: "builtin-ig5-convert", reverseConvertDshEnabled: false, visionApiUrl: "https://fixture.invalid/v1", visionApiKey: "", visionApiModel: "fixture", convertApiUrl: "https://fixture.invalid/v1", convertApiKey: "", convertApiModel: "fixture", convertPromptTemplates: { tags: "USER TEMPLATE", natural: "", mixed: "" }, reversePromptTemplates: { tags: "USER REVERSE", natural: "", mixed: "" }, reversePromptTemplatesV45: {}, convertPromptTemplatesV45: {}, aiMaxTokens: 4096 };
   vi.stubGlobal("localStorage", { getItem: () => null });
   vi.stubGlobal("window", { location: { search: "" }, naiDesktop: { setSetting: async (key: string, value: any) => { h.writes(key, structuredClone(value)); h.settings[key] = structuredClone(value); } } });
 });
@@ -50,7 +50,7 @@ it.each(["malformed-json", "bytes"])("rejects %s through the actual file handler
   const before = structuredClone(h.settings), read = vi.fn();
   const file = kind === "malformed-json" ? new File(["{"], "bad.json") : { name: "large.md", size: 2 * 1024 * 1024 + 1, arrayBuffer: read };
   input().props.onChange({ target: { files: [file] } });
-  await wait(() => render().some(n => n.props.role === "status" && n.props.children.includes("Import failed")));
+  await wait(() => render().some(n => n.props.role === "status" && n.props.children.includes("导入失败")));
   expect(h.writes).not.toHaveBeenCalled(); expect(read).not.toHaveBeenCalled(); expect(h.settings).toEqual(before);
 });
 it("reimporting identical bytes preserves the entire user-edited profile in the real handler", async () => {
@@ -89,7 +89,7 @@ it("a builtin provenance hash match must not deduplicate an explicitly imported 
   expect(h.settings.reverseConvertPromptPresets.find((p: any) => p.id === old.id)).toEqual(old);
 });
 it("the visible enable switch applies only the user's explicit click", async () => {
-  const toggle = render().find(n => n.props.label === "Enable system prompts (conversion / reverse)")!;
+  const toggle = render().find(n => n.props.label === "启用系统提示词（转换／反推）")!;
   expect(toggle.props.checked).toBe(false); expect(h.writes).not.toHaveBeenCalled();
   await toggle.props.onChange(true);
   expect(h.writes).toHaveBeenCalledExactlyOnceWith("reverseConvertDshEnabled", true);

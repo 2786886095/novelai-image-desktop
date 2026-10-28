@@ -4,10 +4,6 @@ import {SelectMenu} from './ui';
 
 const words={
  'zh-CN':['生图模型','技能版本','2.0.0 仅适用于 NovelAI V5 Full；选择 V4.5 将使用 1.0.0。','版本切换不会覆盖另一个版本的自定义模板。'],
- 'zh-TW':['生圖模型','技能版本','2.0.0 僅適用於 NovelAI V5 Full；選擇 V4.5 將使用 1.0.0。','版本切換不會覆蓋另一版本的自訂模板。'],
- 'en-US':['Image model','Skill version','2.0.0 targets NovelAI V5 Full only; V4.5 uses 1.0.0.','Switching versions preserves each version’s custom templates.'],
- 'ja-JP':['画像モデル','スキル版','2.0.0 は NovelAI V5 Full 専用です。V4.5 は 1.0.0 を使用します。','版を切り替えても各版のカスタム設定は保持されます。'],
- 'ko-KR':['이미지 모델','스킬 버전','2.0.0은 NovelAI V5 Full 전용입니다. V4.5는 1.0.0을 사용합니다.','버전을 바꿔도 각 버전의 사용자 템플릿은 유지됩니다.'],
 };
 export function PromptSkillControls({model,edition,language,disabled,onChange}:{model:ReversePromptTemplateVersion;edition:PromptSkillVersion;language?:unknown;disabled?:boolean;onChange:(model:ReversePromptTemplateVersion,edition:PromptSkillVersion)=>void}) {
  const text=words[language as keyof typeof words]??words['zh-CN'];

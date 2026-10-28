@@ -5,7 +5,7 @@ import {characterPresetText} from '../character-presets';
 import {uniquePositivePromptPresetName} from '../positive-prompt-presets';
 import {AppPortal, Button, SelectMenu} from './ui';
 
-const saveLabels: Record<string,string> = {'zh-CN':'保存到正面预设','zh-TW':'儲存到正面預設','en-US':'Save to prompt presets','ja-JP':'正面プリセットに保存','ko-KR':'긍정 프리셋에 저장'};
+const saveLabels: Record<string,string> = {'zh-CN':'保存到正面预设'};
 export function CharacterPresetControls() {
  const settings=useAppStore(s=>s.settings), captions=useAppStore(s=>s.charCaptions);
  const text=characterPresetText(settings?.language), labels=characterEditLabels(settings?.language);

@@ -34,9 +34,9 @@ app.whenReady().then(async () => {
     write('TEXTAREA_KEYS_UNINTERCEPTED=PASS');
     await run('document.querySelector(".zoom-frame-shell").focus()'); await key('Right');
     await until(state + '.currentImage.id==="history-2"');
-    assert.equal(await run('document.querySelector(".image-viewer-toolbar button[aria-label=Next]").disabled'), true);
+    assert.equal(await run('document.querySelector(".image-viewer-toolbar button[aria-label=下一页]").disabled'), true);
     await key('Right'); assert.equal(await run(state + '.currentImage.id'), 'history-2');
-    await run('document.querySelector(".image-viewer-toolbar button[aria-label=Previous]").click()');
+    await run('document.querySelector(".image-viewer-toolbar button[aria-label=上一页]").click()');
     await until(state + '.currentImage.id==="history-1"');
     write('WORKBENCH_FILEPATH_MAIN_ARROWS_BOUNDARIES=PASS');
     await until('document.querySelector(".zoom-image").naturalHeight===900'); await pause(100);
@@ -69,7 +69,7 @@ app.whenReady().then(async () => {
     await key('Right'); await until(state + '.currentImage.id==="history-2"');
     assert.equal(await run('window.issueUI.viewerNode===document.querySelector(".image-preview-viewer")'), true);
     assert.ok((await run('document.querySelector(".image-preview-controls").textContent')).includes('3 / 3'));
-    await run('[...document.querySelectorAll(".image-preview-controls button")].find(b=>b.textContent==="Previous").click()');
+    await run('[...document.querySelectorAll(".image-preview-controls button")].find(b=>b.textContent==="上一页").click()');
     await until(state + '.currentImage.id==="history-1"');
     await key('Left'); await until(state + '.currentImage.id==="history-0"');
     await key('Left'); assert.equal(await run(state + '.currentImage.id'), 'history-0');

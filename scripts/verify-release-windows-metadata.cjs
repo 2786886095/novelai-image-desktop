@@ -5,19 +5,17 @@ const version=readReleaseVersion(process.cwd());assert.equal(lock.version,versio
 assert.ok(fs.readFileSync('electron/ipc/mcp-client.ts','utf8').includes(`version: "${version}"`));
 // Current page entries move with Latest/main; real package/build versions above remain required.
 const repo='https://github.com/OldLi1337/novelai-image-desktop';
-for(const file of ['README.md','README.en.md','README.ja.md','README.ko.md','README.zh-TW.md']) {
- const readme=fs.readFileSync(file,'utf8');
- assert.ok(!readme.includes('gitee.com'),file+': unexpected release host');
- assert.ok(readme.includes(repo+'/releases/latest'),file+': Latest entry missing');
- assert.ok(readme.includes(repo+'/tree/main'),file+': main source entry missing');
- const links=readme.match(/https?:\/\/[^\s)\]<>"']+\/releases(?:\/[^\s)\]<>"']*)?/g)||[];
- assert.ok(links.length>0,file+': release links missing');
- for(const link of links)assert.equal(link,repo+'/releases/latest',file+': fixed release entry');
- assert.doesNotMatch(readme.split(/\r?\n/).slice(0,12).join('\n'),/\bv?\d+\.\d+\.\d+\b/i,file+': fixed current version');
- const download=readme.split(/^## /m).find(section=>/^(下载与安装|Installation and updates|インストールと更新|설치 및 업데이트|下載與更新)\r?\n/.test(section));
- assert.equal(typeof download,'string',file+': current download section missing');
- assert.doesNotMatch(download,/\bv?\d+\.\d+\.\d+\b/i,file+': fixed current download version');
-}
+const readme=fs.readFileSync('README.md','utf8');
+assert.ok(!readme.includes('gitee.com'),'README.md: unexpected release host');
+assert.ok(readme.includes(repo+'/releases/latest'),'README.md: Latest entry missing');
+assert.ok(readme.includes(repo+'/tree/main'),'README.md: main source entry missing');
+const links=readme.match(/https?:\/\/[^\s)\]<>"']+\/releases(?:\/[^\s)\]<>"']*)?/g)||[];
+assert.ok(links.length>0,'README.md: release links missing');
+for(const link of links)assert.equal(link,repo+'/releases/latest','README.md: fixed release entry');
+assert.doesNotMatch(readme.split(/\r?\n/).slice(0,12).join('\n'),/\bv?\d+\.\d+\.\d+\b/i,'README.md: fixed current version');
+const download=readme.split(/^## /m).find(section=>/^下载与安装\r?\n/.test(section));
+assert.equal(typeof download,'string','README.md: current download section missing');
+assert.doesNotMatch(download,/\bv?\d+\.\d+\.\d+\b/i,'README.md: fixed current download version');
 const notes=fs.readFileSync('docs/RELEASE_NOTES.md','utf8');
 const entries=[...notes.matchAll(/^##\s+.+$/gm)];
 assert.equal(entries.length,1,'release notes must contain only the current update');

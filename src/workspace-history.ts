@@ -17,10 +17,6 @@ export function readHistoryCollapsed() {
 export function historyRailText(language: unknown) {
   const texts: Record<string, [string, string, string]> = {
     'zh-CN': ['收起历史与素材', '展开历史与素材', '拖动调整历史与素材；拖到右侧可收起'],
-    'zh-TW': ['收起歷史與素材', '展開歷史與素材', '拖曳調整歷史與素材；拖到右側可收起'],
-    'en-US': ['Hide history and materials', 'Show history and materials', 'Resize history and materials; drag right to hide'],
-    'ja-JP': ['履歴と素材を閉じる', '履歴と素材を開く', '履歴と素材の幅を変更；右にドラッグすると閉じます'],
-    'ko-KR': ['기록 및 소재 접기', '기록 및 소재 펼치기', '기록 및 소재 너비 조절; 오른쪽으로 끌어 접기'],
   };
   const [hide, show, resize] = texts[String(language)] ?? texts['zh-CN'];
   return { hide, show, resize };

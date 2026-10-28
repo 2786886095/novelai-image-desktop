@@ -112,10 +112,6 @@ type TagText = {
 
 const TAG_TEXT: Record<string, TagText> = {
   "zh-CN": { tags: "标签", tagsHint: "用逗号分隔多个标签；标签只用于整理和筛选，不会写入提示词。", tagsPlaceholder: "例如：角色, 服装, 夜景", filter: "按标签浏览", all: "全部", untagged: "未加标签", addTag: "添加标签", searchHint: "搜索名称、内容或标签；输入 #标签 可精确筛选" },
-  "zh-TW": { tags: "標籤", tagsHint: "以逗號分隔多個標籤；標籤只用於整理和篩選，不會寫入提示詞。", tagsPlaceholder: "例如：角色, 服裝, 夜景", filter: "依標籤瀏覽", all: "全部", untagged: "未加標籤", addTag: "新增標籤", searchHint: "搜尋名稱、內容或標籤；輸入 #標籤 可精確篩選" },
-  "en-US": { tags: "Tags", tagsHint: "Separate tags with commas. Tags only organize and filter entries; they are never added to prompts.", tagsPlaceholder: "e.g. character, outfit, night", filter: "Browse by tag", all: "All", untagged: "Untagged", addTag: "Add tag", searchHint: "Search names, text or tags; type #tag to filter exactly" },
-  "ja-JP": { tags: "タグ", tagsHint: "複数のタグはカンマで区切ります。タグは整理と絞り込み専用で、プロンプトには追加されません。", tagsPlaceholder: "例：キャラ, 衣装, 夜景", filter: "タグで表示", all: "すべて", untagged: "タグなし", addTag: "タグを追加", searchHint: "名前・内容・タグを検索。#タグ で完全一致の絞り込み" },
-  "ko-KR": { tags: "태그", tagsHint: "여러 태그는 쉼표로 구분합니다. 태그는 정리와 필터 전용이며 프롬프트에 추가되지 않습니다.", tagsPlaceholder: "예: 캐릭터, 의상, 야경", filter: "태그별 보기", all: "전체", untagged: "태그 없음", addTag: "태그 추가", searchHint: "이름, 내용, 태그 검색. #태그 로 정확히 필터" },
 };
 
 export function promptTagText(language: unknown): TagText {

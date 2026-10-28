@@ -1,7 +1,5 @@
 import {manageModalPortal,motionReduced} from '../motion-system';
 let confirmationId=0;
-import {useAppStore} from '../store';
-import {featureKey,featureText} from '../feature-text';
 /** Promise-based in-app confirmation used instead of blocking browser dialogs. */
 export function confirmAction(message: string, title = "请确认", choice?:{label:string;onChange:(checked:boolean)=>void}, signal?:AbortSignal, buttonLabels?:{confirm:string;cancel:string}): Promise<boolean> {
   return new Promise((resolve) => {
@@ -22,6 +20,8 @@ export function confirmAction(message: string, title = "请确认", choice?:{lab
       </section>`;
     const heading = backdrop.querySelector("h3");
     const body = backdrop.querySelector("p");
+    if (heading) heading.textContent = title;
+    if (body) body.textContent = message;
     const option=choice?document.createElement('label'):null;
     if(option && choice){
       option.className='checkbox-line';
@@ -30,20 +30,11 @@ export function confirmAction(message: string, title = "请确认", choice?:{lab
       checkbox.addEventListener('change',()=>choice.onChange(checkbox.checked));
       option.append(checkbox,text);body?.after(option);
     }
-    const titleKey=featureKey(title),messageKey=featureKey(message);
-    const render=()=>{
-      const language=useAppStore.getState().settings?.language;
-      if (heading) heading.textContent = featureText(language,titleKey);
-      if (body) body.textContent = featureText(language,messageKey);
-      if(option && choice)option.querySelector('span')!.textContent=featureText(language,featureKey(choice.label));
-      backdrop.querySelector('[data-result="cancel"]')!.textContent=featureText(language,featureKey(buttonLabels?.cancel??'取消'));
-      backdrop.querySelector('[data-result="confirm"]')!.textContent=featureText(language,featureKey(buttonLabels?.confirm??'确认'));
-    };
-    render();const unsubscribe=useAppStore.subscribe(render);
+    backdrop.querySelector('[data-result="cancel"]')!.textContent=buttonLabels?.cancel??'取消';
+    backdrop.querySelector('[data-result="confirm"]')!.textContent=buttonLabels?.confirm??'确认';
     const finish = (value: boolean) => {
       if (settled) return;
       settled = true;
-      unsubscribe();
       signal?.removeEventListener('abort',abort);
       window.cancelAnimationFrame(enterFrame);
       // The remainder is visual-only: release hit-testing and modal locks before resolving.

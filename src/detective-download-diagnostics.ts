@@ -35,11 +35,7 @@ export function downloadFailureDiagnostic(error: unknown, stage: string, file: s
 
 const LABELS = {
   "zh-CN": "实际失败原因（已隐藏凭据）",
-  "zh-TW": "實際失敗原因（已隱藏憑證）",
-  "en-US": "Actual failure reason (credentials hidden)",
-  "ja-JP": "実際の失敗理由（認証情報は非表示）",
-  "ko-KR": "실제 실패 원인 (인증 정보 숨김)",
 } as const;
 export function downloadDiagnosticLabel(language: unknown): string {
-  return LABELS[language as keyof typeof LABELS] ?? LABELS["en-US"];
+  return LABELS[language as keyof typeof LABELS] ?? LABELS["zh-CN"];
 }

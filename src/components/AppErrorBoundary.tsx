@@ -44,7 +44,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
 
   render() {
     if (!this.state.error) return this.props.children;
-    const t = (key: string) => desktopUiText(document.documentElement.lang, key);
+    const t = (key: string) => desktopUiText("zh-CN", key);
     return (
       <section className={this.props.root ? "app-error-boundary is-root" : "app-error-boundary"} role="alert">
         <strong>{t("errorBoundary.title")}</strong>

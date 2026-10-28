@@ -11,6 +11,6 @@ it('defaults custom endpoints on but leaves official fallback off',()=>{
 it('documents the enabled default without changing the retry default',()=>{
  const source=readFileSync(resolve(root,'src/i18n.ts'),'utf8');
  const labels=[...source.matchAll(/"settings.allowCustomEndpoint":\s*"([^"\n]+)"/g)].map(m=>m[1]);
- expect(labels).toHaveLength(5);
- expect(labels.join(' ')).not.toMatch(/默认关闭|預設關閉|off by default|既定はオフ|기본 꺼짐/);
+ expect(labels).toHaveLength(1);
+ expect(labels[0]).not.toMatch(/默认关闭/);
 });

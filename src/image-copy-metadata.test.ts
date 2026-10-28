@@ -55,11 +55,11 @@ function shortcut(nativeCopy?: ReturnType<typeof vi.fn>) {
   return { dispose, copy, write };
 }
 it.each([
-  ["copied", "Original PNG copied (metadata preserved)"],
-  ["unsupported", "Image copied; metadata preservation unsupported for this source"],
-  ["failed", "Image copied; metadata preservation failed"],
+  ["copied", "已复制原始 PNG（保留元数据）"],
+  ["unsupported", "已复制图片；此来源不支持保留元数据"],
+  ["failed", "已复制图片；元数据保留失败"],
 ])("shows truthful shortcut status for %s", async (status, toast) => {
-  useAppStore.setState({ settings: { language: "en-US", copyImageMetadata: true } as AppSettings });
+  useAppStore.setState({ settings: { language: "zh-CN", copyImageMetadata: true } as AppSettings });
   const native = vi.fn().mockResolvedValue({ status }); const ui = shortcut(native);
   try {
     ui.copy(); await new Promise(resolve => setTimeout(resolve, 0));
@@ -68,19 +68,19 @@ it.each([
   } finally { ui.dispose(); }
 });
 it("uses the current global setting for each shortcut, not selection-time state", async () => {
-  useAppStore.setState({ settings: { language: "en-US", copyImageMetadata: false } as AppSettings });
+  useAppStore.setState({ settings: { language: "zh-CN", copyImageMetadata: false } as AppSettings });
   const native = vi.fn().mockResolvedValue({ status: "copied" }); const ui = shortcut(native);
   try {
     ui.copy(); await new Promise(resolve => setTimeout(resolve, 0));
-    expect(native).not.toHaveBeenCalled(); expect(useAppStore.getState().toast).toBe("Image copied");
-    useAppStore.setState({ settings: { language: "en-US", copyImageMetadata: true } as AppSettings });
+    expect(native).not.toHaveBeenCalled(); expect(useAppStore.getState().toast).toBe("已复制图片");
+    useAppStore.setState({ settings: { language: "zh-CN", copyImageMetadata: true } as AppSettings });
     ui.copy(); await new Promise(resolve => setTimeout(resolve, 0));
     expect(native).toHaveBeenCalledOnce(); expect(ui.write).toHaveBeenCalledOnce();
   } finally { ui.dispose(); }
 });
 it("shows an unsupported notice when ON but the native preload API is absent", async () => {
-  useAppStore.setState({ settings: { language: "en-US", copyImageMetadata: true } as AppSettings });
+  useAppStore.setState({ settings: { language: "zh-CN", copyImageMetadata: true } as AppSettings });
   const ui = shortcut();
-  try { ui.copy(); await new Promise(resolve => setTimeout(resolve, 0)); expect(useAppStore.getState().toast).toContain("unsupported"); }
+  try { ui.copy(); await new Promise(resolve => setTimeout(resolve, 0)); expect(useAppStore.getState().toast).toContain("不支持保留元数据"); }
   finally { ui.dispose(); }
 });

@@ -12,7 +12,7 @@ export function parseFavorites(raw:string|null):GalleryFavorite[]{
  }).map((x:GalleryFavorite)=>({...x,author:String(x.author??''),prompt:String(x.prompt??''),negativePrompt:String(x.negativePrompt??''),createdAt:String(x.createdAt??''),score:Number(x.score)||0,sourceUrl:validGalleryUrl(x.sourceUrl),images:x.images.map(i=>({url:validGalleryUrl(i.url),thumb:validGalleryUrl(i.thumb)})).filter(i=>i.url)}));
 }
 export function changeFavorite(items:GalleryFavorite[],item:GalleryFavorite):GalleryFavorite[]{return items.some(x=>favoriteKey(x)===favoriteKey(item))?items.filter(x=>favoriteKey(x)!==favoriteKey(item)):[item,...items];}
-export function orderFavorites(items:GalleryFavorite[],sort:FavoriteSort,language='en-US'){
+export function orderFavorites(items:GalleryFavorite[],sort:FavoriteSort,language='zh-CN'){
  const name=new Intl.Collator(language,{numeric:true,sensitivity:'base'});return [...items].sort((a,b)=>{
  let n=sort==='oldest'?a.savedAt-b.savedAt:sort==='name'?name.compare(a.title,b.title):sort==='name-desc'?name.compare(b.title,a.title):sort==='author'?name.compare(a.author,b.author):sort==='source'?name.compare(a.source,b.source):sort==='score'?b.score-a.score:b.savedAt-a.savedAt;
  return n||favoriteKey(a).localeCompare(favoriteKey(b));});

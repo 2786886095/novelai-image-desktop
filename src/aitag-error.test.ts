@@ -7,8 +7,8 @@ describe("AITag user-facing errors", () => {
    expect(formatAitagFailure("AITAG_HTTP_429")).toContain("429");
    expect(formatAitagFailure("AITAG_TIMEOUT")).toContain("超时");
  });
- it.each(["zh-CN","zh-TW","en-US","ja-JP","ko-KR"])("localizes 403 and never includes remote HTML in %s", language => {
-   const output = formatAitagFailure(new Error('AITAG_BLOCKED_403 <script>secret</script>'),language);
+ it("explains 403 and never includes remote HTML", () => {
+   const output = formatAitagFailure(new Error('AITAG_BLOCKED_403 <script>secret</script>'),"zh-CN");
    expect(output).toContain("403");expect(output).not.toContain("secret");expect(output).not.toContain('<script>');
  });
  it("never displays arbitrary raw error text",()=>{

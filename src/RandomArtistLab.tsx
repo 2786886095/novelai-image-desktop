@@ -186,38 +186,14 @@ const CUSTOM_TAG_TEXT = {
     selected: "已选 {count} 个", available: "本地按需载入", search: "搜索 Tag、中文含义或作品名", all: "全部画风 / 动漫游戏", clear: "清空全部",
     noResults: "没有匹配项；完整库需要先在设置中安装 Danbooru 标签数据。", styleTags: "Danbooru 画风模仿", copyright: "动漫 / 游戏 / 漫画作品", always: "每串必加", random: "随机加入", selectedTitle: "已选 Tag 与加入方式", randomRange: "每串随机抽取数量", loadMore: "载入更多", loading: "正在读取本地 Tag 库…", sourceCatalog: "完整本地数据库", sourceBilingual: "中英离线库", sourceNone: "未安装本地数据库", collapse: "折叠画风 Tag 库",
   },
-  "zh-TW": {
-    title: "手動 Tag", hint: "以逗號或換行分隔。每個 Tag 可選擇「每串必加」或「隨機抽取」，權重皆會重新抽選。", placeholder: "例如：anime coloring, watercolor (medium), official style",
-    range: "Tag 權重範圍", library: "畫風 Tag 庫", libraryHint: "只保留畫風、媒材、渲染、光色與畫質；不混入動作、背景、特效或情緒。面板預設收合。", selected: "已選 {count} 個", available: "本機按需載入", search: "搜尋 Tag、中文意思或作品名", all: "全部畫風 / 動漫遊戲", clear: "全部清除", noResults: "找不到結果；完整資料庫需先在設定安裝 Danbooru 標籤資料。", styleTags: "Danbooru 畫風模仿", copyright: "動畫／遊戲／漫畫作品", always: "每串必加", random: "隨機加入", selectedTitle: "已選 Tag 與加入方式", randomRange: "每串隨機抽取數量", loadMore: "載入更多", loading: "正在讀取本機 Tag 庫…", sourceCatalog: "完整本機資料庫", sourceBilingual: "中英離線庫", sourceNone: "未安裝本機資料庫", collapse: "收合畫風 Tag 庫",
-  },
-  "en-US": {
-    title: "Manual Tags", hint: "Separate with commas or new lines. Choose Always or Random for every Tag; weights are rerolled either way.", placeholder: "Example: anime coloring, watercolor (medium), official style",
-    range: "Tag weight range", library: "Visual-style Tag library", libraryHint: "Only visual style, medium, rendering, lighting/color, and quality are included—never action, background, effects, or emotion. Collapsed by default.", selected: "{count} selected", available: "Loaded locally on demand", search: "Search Tags, meanings, anime, or games", all: "All styles / franchises", clear: "Clear all", noResults: "No matches. Install the Danbooru tag data in Settings for the complete catalog.", styleTags: "Danbooru style parodies", copyright: "Anime / game / manga sources", always: "Always", random: "Random", selectedTitle: "Selected Tags and inclusion mode", randomRange: "Random Tags per string", loadMore: "Load more", loading: "Reading the local Tag catalog…", sourceCatalog: "Full local database", sourceBilingual: "Bilingual offline catalog", sourceNone: "Local catalog not installed", collapse: "Collapse style Tag library",
-  },
-  "ja-JP": {
-    title: "手動 Tag", hint: "カンマまたは改行で区切ります。各 Tag を「毎回追加」または「ランダム」に設定でき、ウェイトは毎回再抽選します。", placeholder: "例：anime coloring, watercolor (medium), official style",
-    range: "Tag ウェイト範囲", library: "画風 Tag ライブラリ", libraryHint: "画風・画材・レンダリング・光色・品質のみ。動作、背景、効果、感情は混在させません。初期状態は折りたたみです。", selected: "{count} 個選択", available: "ローカルから必要時に読込", search: "Tag・意味・作品名を検索", all: "全画風 / アニメ・ゲーム", clear: "すべて解除", noResults: "一致なし。完全な一覧は設定から Danbooru Tag データを導入してください。", styleTags: "Danbooru 画風模倣", copyright: "アニメ／ゲーム作品", always: "毎回追加", random: "ランダム", selectedTitle: "選択 Tag と追加方式", randomRange: "各画家列のランダム数", loadMore: "さらに読込", loading: "ローカル Tag を読込中…", sourceCatalog: "完全ローカルDB", sourceBilingual: "日中オフラインDB", sourceNone: "ローカルDB未導入", collapse: "画風 Tag を折りたたむ",
-  },
-  "ko-KR": {
-    title: "수동 Tag", hint: "쉼표나 줄바꿈으로 구분합니다. 각 Tag를 항상 추가 또는 무작위로 정하고 가중치는 매번 다시 뽑습니다.", placeholder: "예: anime coloring, watercolor (medium), official style",
-    range: "Tag 가중치 범위", library: "화풍 Tag 라이브러리", libraryHint: "화풍·매체·렌더링·빛/색·품질만 포함하며 동작, 배경, 효과, 감정은 섞지 않습니다. 기본은 접힌 상태입니다.", selected: "{count}개 선택", available: "로컬에서 필요할 때 불러오기", search: "Tag, 의미, 작품명 검색", all: "전체 화풍 / 애니·게임", clear: "모두 지우기", noResults: "검색 결과가 없습니다. 설정에서 Danbooru Tag 데이터를 설치하면 전체 목록을 사용할 수 있습니다.", styleTags: "Danbooru 화풍 모방", copyright: "애니 / 게임 작품", always: "항상", random: "무작위", selectedTitle: "선택 Tag 및 추가 방식", randomRange: "문자열당 무작위 Tag 수", loadMore: "더 불러오기", loading: "로컬 Tag 목록을 읽는 중…", sourceCatalog: "전체 로컬 DB", sourceBilingual: "중영 오프라인 DB", sourceNone: "로컬 DB 미설치", collapse: "화풍 Tag 접기",
-  },
 } satisfies Record<AppLanguage, Record<string, string>>;
 
 const STYLE_PREVIEW_TEXT = {
   "zh-CN": { title: "Danbooru 参考图", loading: "正在载入参考图…", empty: "这个画风 Tag 暂无可用参考图" },
-  "zh-TW": { title: "Danbooru 參考圖", loading: "正在載入參考圖…", empty: "這個畫風 Tag 暫無可用參考圖" },
-  "en-US": { title: "Danbooru reference", loading: "Loading a reference image…", empty: "No reference image is available for this style Tag" },
-  "ja-JP": { title: "Danbooru 参考画像", loading: "参考画像を読込中…", empty: "この画風 Tag の参考画像はありません" },
-  "ko-KR": { title: "Danbooru 참고 이미지", loading: "참고 이미지를 불러오는 중…", empty: "이 화풍 Tag에 사용할 참고 이미지가 없습니다" },
 } satisfies Record<AppLanguage, { title: string; loading: string; empty: string }>;
 
 const RANDOM_RESET_TEXT = {
   "zh-CN": { label: "恢复抽卡默认", hint: "V5 默认：画师与画风 Tag 权重 0.2～1.2；随机 Tag 每串 1～3 个。", done: "已恢复 V5 抽卡默认；提示词、收藏与生成参数未清除。" },
-  "zh-TW": { label: "恢復抽卡預設", hint: "V5 預設：畫師與畫風 Tag 權重 0.2～1.2；每串隨機 1～3 個。", done: "已恢復 V5 抽卡預設；提示詞、收藏與生成參數未清除。" },
-  "en-US": { label: "Restore draw defaults", hint: "V5 defaults: artist/style weights 0.2–1.2 and 1–3 random Tags per string.", done: "V5 draw defaults restored; prompts, favorites, and generation settings were kept." },
-  "ja-JP": { label: "抽選設定を初期化", hint: "V5 初期値：画家／画風 Tag 0.2～1.2、ランダム Tag は各列 1～3 個。", done: "V5 初期値へ戻しました。プロンプト・お気に入り・生成設定は維持されます。" },
-  "ko-KR": { label: "뽑기 기본값 복원", hint: "V5 기본값: 작가/화풍 Tag 0.2～1.2, 문자열당 무작위 Tag 1～3개.", done: "V5 기본값을 복원했습니다. 프롬프트·즐겨찾기·생성 설정은 유지됩니다." },
 } satisfies Record<AppLanguage, { label: string; hint: string; done: string }>;
 
 const RANDOM_SIZE_PRESETS = [
@@ -231,10 +207,6 @@ const RANDOM_SIZE_PRESETS = [
 
 const TEXT = {
   "zh-CN": { title: "随机画师串抽卡", subtitle: "每次抽卡重新组合画师、权重和可选风格词；内容与生成参数保持不变，Seed 可按组随机或全批固定。", back: "返回画风实验室", pool: "热门画师候选库", poolSize: "按热度载入前 N 名", load: "载入", ready: "当前候选库共 {count} 名画师", loading: "正在读取热门画师…", refresh: "刷新排行", hint: "画师 Tag 来源：Danbooru", base: "固定内容提示词", auxiliary: "固定附加词（每次都保留）", mutate: "抽卡时额外加入随机风格词", mutateHint: "开启后，每组使用同一画师串、提示词、Seed 和参数生成 A/B 两张：A 不加风格词，B 从画风、媒介/笔触、色彩与光影中抽取 2～6 个带 0.3～1.5 权重的词。", count: "本批画师串数量", range: "每串画师数量（最多 20 名）", min: "最少", max: "最多", seed: "固定 NovelAI Seed", draw: "重新抽卡", preview: "本批抽卡预览", previewHint: "开启随机风格词时，每组生成 A/B 两张对照图；重新抽卡会清除上一批未收藏的临时图片。", generate: "生成这一批", stop: "停止任务", refine: "根据喜欢项再抽卡", needPool: "画师池尚未载入。", needPrompt: "请填写固定内容提示词。", needLikes: "请先收藏至少一个喜欢项。", running: "正在生成 {done}/{total}", complete: "本批已完成；未收藏图片会在下一次抽卡时自动清理。", pending: "等待", generating: "生成中", done: "已完成", failed: "失败", like: "收藏到喜欢", saved: "已收藏", saving: "保存中…", retry: "重试", apply: "应用到生成", copy: "复制", copied: "已复制画师串。", applied: "已应用到生成页。", empty: "画师池加载后即可抽卡。", unlimited: "输入画师串组数；开启随机风格词时，实际图片数为两倍。", mutation: "本次风格/光影变异词", favorites: "喜欢的画风", favoritesHint: "A、B 可分别收藏；收藏 B 后，开启风格词的偏好抽卡也会参考其风格词与权重。", remove: "移除收藏", removed: "已移除收藏和本地图片。", categories: "艺术风格|媒介/笔触|色彩|光影", variantPlain: "A｜仅画师串", variantMutated: "B｜画师串＋随机风格词", copyArtists: "复制画师串", copyFull: "复制完整提示词", copiedArtists: "已复制画师串。", copiedFull: "已复制完整提示词。", pairSummary: "{pairs} 组 · {images} 张", artistWeight: "画师权重区间", franchise: "加入游戏 / 动漫系列风格 Tag", franchiseHint: "从当前热门的 Danbooru 作品系列标签中随机抽取；它可能影响角色或题材，不只是画风。", franchiseRange: "系列风格 Tag 数量", franchiseWeight: "系列风格 Tag 权重", seedMode: "NovelAI Seed 模式", seedRandom: "每组随机", seedFixed: "固定 Seed", randomFixedSeed: "随机一个固定 Seed", franchiseTerms: "本次游戏 / 动漫系列 Tag", allModels: "全部模型", modelGroup: "生成模型", previewImage: "双击预览大图" },
-  "zh-TW": { title: "隨機畫師串抽卡", subtitle: "每次抽卡重新組合畫師、權重與可選風格詞；內容與生成參數保持不變，Seed 可按組隨機或全批固定。", back: "返回畫風實驗室", pool: "熱門畫師候選庫", poolSize: "依熱度載入前 N 名", load: "載入", ready: "目前候選庫共 {count} 名畫師", loading: "正在讀取熱門畫師…", refresh: "更新排行", hint: "畫師 Tag 來源：Danbooru", base: "固定內容提示詞", auxiliary: "固定附加詞（每次保留）", mutate: "抽卡時額外加入隨機風格詞", mutateHint: "開啟後，每組以相同畫師串、提示詞、Seed 與參數生成 A/B 兩張：A 不加風格詞，B 抽取 2～6 個帶 0.3～1.5 權重的畫風詞。", count: "本批畫師串組數", range: "每串畫師數量（最多 20 名）", min: "最少", max: "最多", seed: "固定 NovelAI Seed", draw: "重新抽卡", preview: "本批抽卡預覽", previewHint: "開啟隨機風格詞時每組生成 A/B 兩張；重新抽卡會清除未收藏暫存圖。", generate: "生成這一批", stop: "停止任務", refine: "依喜歡項再抽卡", needPool: "畫師池尚未載入。", needPrompt: "請填寫固定內容提示詞。", needLikes: "請先收藏至少一項。", running: "正在生成 {done}/{total}", complete: "本批已完成；未收藏圖片會於下次抽卡清理。", pending: "等待", generating: "生成中", done: "已完成", failed: "失敗", like: "收藏到喜歡", saved: "已收藏", saving: "儲存中…", retry: "重試", apply: "套用到生成", copy: "複製", copied: "已複製畫師串。", applied: "已套用到生成頁。", empty: "畫師池載入後即可抽卡。", unlimited: "輸入畫師串組數；開啟隨機風格詞時實際圖片數為兩倍。", mutation: "本次風格/光影變異詞", favorites: "喜歡的畫風", favoritesHint: "A、B 可分別收藏；收藏 B 後，偏好抽卡也會參考其風格詞與權重。", remove: "移除收藏", removed: "已移除收藏與本機圖片。", categories: "藝術風格|媒介/筆觸|色彩|光影", variantPlain: "A｜僅畫師串", variantMutated: "B｜畫師串＋隨機風格詞", copyArtists: "複製畫師串", copyFull: "複製完整提示詞", copiedArtists: "已複製畫師串。", copiedFull: "已複製完整提示詞。", pairSummary: "{pairs} 組 · {images} 張", artistWeight: "畫師權重區間", franchise: "加入遊戲 / 動漫系列風格 Tag", franchiseHint: "從目前熱門的 Danbooru 作品系列標籤隨機抽取；可能影響角色或題材，不只影響畫風。", franchiseRange: "系列風格 Tag 數量", franchiseWeight: "系列風格 Tag 權重", seedMode: "NovelAI Seed 模式", seedRandom: "每組隨機", seedFixed: "固定 Seed", randomFixedSeed: "隨機一個固定 Seed", franchiseTerms: "本次遊戲 / 動漫系列 Tag", allModels: "全部模型", modelGroup: "生成模型", previewImage: "雙擊預覽大圖" },
-  "en-US": { title: "Random Artist-string Gacha", subtitle: "Every draw rerolls artists, weights, and optional style terms while content and generation settings stay fixed; the seed can be random per group or fixed for the whole batch.", back: "Back to Artist Lab", pool: "Popular artist pool", poolSize: "Load top N by popularity", load: "Load", ready: "{count} artists in the current pool", loading: "Loading popular artists…", refresh: "Refresh ranking", hint: "Artist tag source: Danbooru", base: "Fixed content prompt", auxiliary: "Fixed extra terms (always kept)", mutate: "Add random style terms during the draw", mutateHint: "When enabled, each group creates a fair A/B pair with the same artist string, prompt, seed, and settings: A has no random style terms; B adds 2–6 terms weighted 0.3–1.5.", count: "Artist-string groups in this batch", range: "Artists per string (maximum 20)", min: "Minimum", max: "Maximum", seed: "Fixed NovelAI seed", draw: "Draw again", preview: "Current draw", previewHint: "Style mode creates two A/B images per group. Starting a new draw clears unliked temporary images.", generate: "Generate this batch", stop: "Stop", refine: "Draw from favorites", needPool: "The artist pool is not ready.", needPrompt: "Enter a fixed content prompt.", needLikes: "Save at least one favorite first.", running: "Generating {done}/{total}", complete: "Batch complete. Unliked images will be cleared by the next draw.", pending: "Pending", generating: "Generating", done: "Complete", failed: "Failed", like: "Save favorite", saved: "Saved", saving: "Saving…", retry: "Retry", apply: "Apply to Generate", copy: "Copy", copied: "Artist string copied.", applied: "Applied to Generate.", empty: "Draws appear after the pool loads.", unlimited: "Enter the number of artist-string groups. Style mode generates twice as many images.", mutation: "Style / lighting terms in this draw", favorites: "Favorite styles", favoritesHint: "A and B can be saved independently. Favorite B terms and weights can guide later style-enabled draws.", remove: "Remove favorite", removed: "Favorite and local image removed.", categories: "Art style|Medium / brushwork|Color|Lighting", variantPlain: "A | Artist string only", variantMutated: "B | Artist string + random styles", copyArtists: "Copy artist string", copyFull: "Copy full prompt", copiedArtists: "Artist string copied.", copiedFull: "Full prompt copied.", pairSummary: "{pairs} groups · {images} images", artistWeight: "Artist weight range", franchise: "Add game / anime franchise style tags", franchiseHint: "Draws from current high-volume Danbooru copyright tags. These can affect characters or subject matter as well as style.", franchiseRange: "Franchise tag count", franchiseWeight: "Franchise tag weight", seedMode: "NovelAI Seed mode", seedRandom: "Random per group", seedFixed: "Fixed Seed", randomFixedSeed: "Randomize a fixed Seed", franchiseTerms: "Game / anime franchise tags in this draw", allModels: "All models", modelGroup: "Generation model", previewImage: "Double-click to preview" },
-  "ja-JP": { title: "ランダム画家タグ抽選", subtitle: "抽選ごとに画家・重み・任意の画風語を再構成し、内容と生成設定は維持します。Seed は組ごとのランダムまたはバッチ全体の固定を選べます。", back: "画風ラボへ戻る", pool: "人気画家候補", poolSize: "人気順の上位 N 名", load: "読込", ready: "現在の候補は全 {count} 名", loading: "人気画家を読込中…", refresh: "順位を更新", hint: "画家 Tag の出典：Danbooru", base: "固定内容プロンプト", auxiliary: "固定追加語（常に保持）", mutate: "抽選時に画風語を追加", mutateHint: "有効時は同じ画家列・プロンプト・Seed・設定で A/B を生成します。A は画風語なし、B は 0.3～1.5 重みの画風語を 2～6 個追加します。", count: "このバッチの画家列グループ数", range: "1組の画家数（最大20名）", min: "最小", max: "最大", seed: "固定 NovelAI Seed", draw: "再抽選", preview: "現在の抽選", previewHint: "画風語を有効にすると1組につき A/B の2枚を生成します。再抽選時に未保存画像を消去します。", generate: "このバッチを生成", stop: "停止", refine: "お気に入りから抽選", needPool: "画家候補が未準備です。", needPrompt: "固定内容を入力してください。", needLikes: "先に1件以上保存してください。", running: "生成中 {done}/{total}", complete: "完了。未保存画像は次回抽選時に消去されます。", pending: "待機", generating: "生成中", done: "完了", failed: "失敗", like: "お気に入り保存", saved: "保存済み", saving: "保存中…", retry: "再試行", apply: "生成へ適用", copy: "コピー", copied: "コピーしました。", applied: "生成へ適用しました。", empty: "候補読込後に抽選できます。", unlimited: "画家列の組数を入力します。画風語モードでは画像数が2倍になります。", mutation: "今回の画風・光変異語", favorites: "お気に入り画風", favoritesHint: "A/B は個別保存できます。B の画風語と重みは次の画風語抽選にも反映できます。", remove: "お気に入り削除", removed: "お気に入りと画像を削除しました。", categories: "画風|画材・筆致|色彩|光", variantPlain: "A｜画家列のみ", variantMutated: "B｜画家列＋ランダム画風語", copyArtists: "画家列をコピー", copyFull: "完全プロンプトをコピー", copiedArtists: "画家列をコピーしました。", copiedFull: "完全プロンプトをコピーしました。", pairSummary: "{pairs} 組 · {images} 枚", artistWeight: "画家の重み範囲", franchise: "ゲーム / アニメ作品の画風 Tag を追加", franchiseHint: "人気の Danbooru 作品タグから抽選します。画風だけでなくキャラクターや題材にも影響する場合があります。", franchiseRange: "作品 Tag 数", franchiseWeight: "作品 Tag の重み", seedMode: "NovelAI Seed モード", seedRandom: "グループごとにランダム", seedFixed: "Seed 固定", randomFixedSeed: "固定 Seed をランダム生成", franchiseTerms: "今回のゲーム / アニメ作品 Tag", allModels: "すべてのモデル", modelGroup: "生成モデル", previewImage: "ダブルクリックで拡大" },
-  "ko-KR": { title: "무작위 작가 조합 뽑기", subtitle: "매번 작가·가중치·선택적 화풍 용어를 다시 뽑고 내용과 생성 설정은 유지합니다. Seed는 그룹별 무작위 또는 전체 배치 고정을 선택할 수 있습니다.", back: "화풍 실험실로", pool: "인기 작가 후보", poolSize: "인기순 상위 N명", load: "불러오기", ready: "현재 후보 풀 총 {count}명", loading: "인기 작가 로딩 중…", refresh: "순위 새로고침", hint: "작가 Tag 출처: Danbooru", base: "고정 내용 프롬프트", auxiliary: "고정 추가 용어 (항상 유지)", mutate: "뽑을 때 무작위 화풍 용어 추가", mutateHint: "켜면 동일한 작가 문자열·프롬프트·Seed·설정으로 A/B를 생성합니다. A는 화풍 용어가 없고 B는 0.3～1.5 가중치의 용어 2～6개를 추가합니다.", count: "이번 배치 작가 문자열 그룹 수", range: "조합당 작가 수 (최대 20명)", min: "최소", max: "최대", seed: "고정 NovelAI Seed", draw: "다시 뽑기", preview: "현재 뽑기", previewHint: "화풍 용어를 켜면 그룹마다 A/B 두 장을 생성합니다. 다시 뽑으면 저장하지 않은 임시 이미지를 삭제합니다.", generate: "이 배치 생성", stop: "중지", refine: "즐겨찾기 기반 뽑기", needPool: "작가 풀이 준비되지 않았습니다.", needPrompt: "고정 프롬프트를 입력하세요.", needLikes: "먼저 하나 이상 저장하세요.", running: "생성 중 {done}/{total}", complete: "완료. 저장하지 않은 이미지는 다음 뽑기 때 삭제됩니다.", pending: "대기", generating: "생성 중", done: "완료", failed: "실패", like: "즐겨찾기 저장", saved: "저장됨", saving: "저장 중…", retry: "재시도", apply: "생성에 적용", copy: "복사", copied: "복사했습니다.", applied: "생성 화면에 적용했습니다.", empty: "풀 로드 후 뽑을 수 있습니다.", unlimited: "작가 문자열 그룹 수를 입력합니다. 화풍 용어 모드에서는 이미지 수가 두 배입니다.", mutation: "이번 화풍/조명 변이 용어", favorites: "좋아하는 화풍", favoritesHint: "A/B를 각각 저장할 수 있습니다. B의 화풍 용어와 가중치는 이후 화풍 추첨에도 반영됩니다.", remove: "즐겨찾기 제거", removed: "즐겨찾기와 로컬 이미지를 삭제했습니다.", categories: "화풍|매체/붓질|색상|조명", variantPlain: "A｜작가 문자열만", variantMutated: "B｜작가 문자열＋무작위 화풍", copyArtists: "작가 문자열 복사", copyFull: "전체 프롬프트 복사", copiedArtists: "작가 문자열을 복사했습니다.", copiedFull: "전체 프롬프트를 복사했습니다.", pairSummary: "{pairs} 그룹 · {images}장", artistWeight: "작가 가중치 범위", franchise: "게임 / 애니메이션 작품 화풍 Tag 추가", franchiseHint: "인기 Danbooru 작품 태그에서 추첨합니다. 화풍뿐 아니라 캐릭터나 소재에도 영향을 줄 수 있습니다.", franchiseRange: "작품 Tag 수", franchiseWeight: "작품 Tag 가중치", seedMode: "NovelAI Seed 모드", seedRandom: "그룹별 무작위", seedFixed: "Seed 고정", randomFixedSeed: "고정 Seed 무작위 생성", franchiseTerms: "이번 게임 / 애니메이션 작품 Tag", allModels: "모든 모델", modelGroup: "생성 모델", previewImage: "더블 클릭하여 미리보기" },
 } satisfies Record<AppLanguage, Record<string, string>>;
 
 const PARAM_TEXT = {
@@ -261,98 +233,6 @@ const PARAM_TEXT = {
     smea: "SMEA",
     smeaDyn: "SMEA Dyn",
   },
-  "zh-TW": {
-    title: "NovelAI 生成參數",
-    hint: "預設使用軟體初始參數；此處修改只用於抽卡，A/B 對照使用完全相同的參數。",
-    sync: "從生成頁同步",
-    reset: "恢復初始參數",
-    model: "模型",
-    size: "圖片尺寸",
-    sizeValues: "直式|方形|橫式|高直式|寬橫式|大方形",
-    width: "寬度",
-    height: "高度",
-    negative: "負面提示詞",
-    steps: "步數",
-    cfg: "CFG Scale",
-    rescale: "CFG Rescale",
-    sampler: "採樣器",
-    noise: "噪聲計畫",
-    uc: "負面預設",
-    ucValues: "強負面|輕負面|人物優先|無",
-    quality: "品質詞",
-    variety: "Variety+",
-    smea: "SMEA",
-    smeaDyn: "SMEA Dyn",
-  },
-  "en-US": {
-    title: "NovelAI generation settings",
-    hint: "Uses the app defaults initially. Changes affect only gacha and each A/B pair uses identical settings.",
-    sync: "Sync from Generate",
-    reset: "Restore defaults",
-    model: "Model",
-    size: "Image size",
-    sizeValues: "Portrait|Square|Landscape|Tall portrait|Wide landscape|Large square",
-    width: "Width",
-    height: "Height",
-    negative: "Negative prompt",
-    steps: "Steps",
-    cfg: "CFG Scale",
-    rescale: "CFG Rescale",
-    sampler: "Sampler",
-    noise: "Noise schedule",
-    uc: "UC preset",
-    ucValues: "Heavy|Light|Human Focus|None",
-    quality: "Quality tags",
-    variety: "Variety+",
-    smea: "SMEA",
-    smeaDyn: "SMEA Dyn",
-  },
-  "ja-JP": {
-    title: "NovelAI 生成設定",
-    hint: "初期値はアプリ既定設定です。ここでの変更は抽選だけに使われ、A/B は同じ設定で比較されます。",
-    sync: "生成画面から同期",
-    reset: "初期設定に戻す",
-    model: "モデル",
-    size: "画像サイズ",
-    sizeValues: "縦長|正方形|横長|高い縦長|広い横長|大正方形",
-    width: "幅",
-    height: "高さ",
-    negative: "ネガティブプロンプト",
-    steps: "ステップ",
-    cfg: "CFG Scale",
-    rescale: "CFG Rescale",
-    sampler: "サンプラー",
-    noise: "ノイズスケジュール",
-    uc: "UC プリセット",
-    ucValues: "強|弱|人物優先|なし",
-    quality: "品質タグ",
-    variety: "Variety+",
-    smea: "SMEA",
-    smeaDyn: "SMEA Dyn",
-  },
-  "ko-KR": {
-    title: "NovelAI 생성 설정",
-    hint: "초기값은 앱 기본 설정입니다. 여기의 변경은 뽑기에만 적용되며 A/B는 동일한 설정을 사용합니다.",
-    sync: "생성 화면에서 동기화",
-    reset: "초기값 복원",
-    model: "모델",
-    size: "이미지 크기",
-    sizeValues: "세로|정사각|가로|긴 세로|넓은 가로|큰 정사각",
-    width: "너비",
-    height: "높이",
-    negative: "네거티브 프롬프트",
-    steps: "스텝",
-    cfg: "CFG Scale",
-    rescale: "CFG Rescale",
-    sampler: "샘플러",
-    noise: "노이즈 스케줄",
-    uc: "UC 프리셋",
-    ucValues: "강함|약함|인물 우선|없음",
-    quality: "품질 태그",
-    variety: "Variety+",
-    smea: "SMEA",
-    smeaDyn: "SMEA Dyn",
-  },
 } satisfies Record<AppLanguage, Record<string, string>>;
 
 const TUNE_TEXT = {
@@ -365,46 +245,6 @@ const TUNE_TEXT = {
     generate: "生成权重微调候选",
     noArtists: "没有识别到 artist: 画师标签。",
     copied: "已复制 ✓",
-  },
-  "zh-TW": {
-    title: "既有畫師串權重微調",
-    hint: "保持畫師名單與順序不變，只在原權重上下隨機浮動。無權重標籤按 1.0 處理。",
-    input: "貼上畫師串",
-    count: "候選組數",
-    variation: "權重浮動（±%）",
-    generate: "生成權重微調候選",
-    noArtists: "未識別到 artist: 畫師標籤。",
-    copied: "已複製 ✓",
-  },
-  "en-US": {
-    title: "Fine-tune an existing artist string",
-    hint: "Keep artist names and order fixed while varying only their weights around the originals. Unweighted tags use 1.0.",
-    input: "Paste artist string",
-    count: "Candidate groups",
-    variation: "Weight variation (±%)",
-    generate: "Generate weight-tuned candidates",
-    noArtists: "No artist: tags were recognized.",
-    copied: "Copied ✓",
-  },
-  "ja-JP": {
-    title: "既存の画家列の重みを微調整",
-    hint: "画家名と順序を固定し、元の重みだけを上下に変化させます。重みなしは 1.0 とします。",
-    input: "画家列を貼り付け",
-    count: "候補グループ数",
-    variation: "重み変動（±%）",
-    generate: "重み候補を生成",
-    noArtists: "artist: 画家タグを認識できませんでした。",
-    copied: "コピー済み ✓",
-  },
-  "ko-KR": {
-    title: "기존 작가 문자열 가중치 미세 조정",
-    hint: "작가 목록과 순서는 유지하고 원래 가중치만 위아래로 변경합니다. 가중치가 없으면 1.0입니다.",
-    input: "작가 문자열 붙여넣기",
-    count: "후보 그룹 수",
-    variation: "가중치 변동 (±%)",
-    generate: "가중치 후보 생성",
-    noArtists: "artist: 작가 태그를 인식하지 못했습니다.",
-    copied: "복사됨 ✓",
   },
 } satisfies Record<AppLanguage, Record<string, string>>;
 
@@ -586,13 +426,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const resetText = RANDOM_RESET_TEXT[language];
   const ucLabels = paramText.ucValues.split("|");
   const sizeLabels = paramText.sizeValues.split("|");
-  const favoriteFolderLabel = {
-    "zh-CN": "收藏夹",
-    "zh-TW": "收藏夾",
-    "en-US": "Favorites",
-    "ja-JP": "お気に入り",
-    "ko-KR": "즐겨찾기",
-  }[language];
+  const favoriteFolderLabel = "收藏夹";
   const [session, setSession] = useState(() => restore(params));
   const [customTagQuery, setCustomTagQuery] = useState("");
   const [customTagCategory, setCustomTagCategory] = useState("all");
@@ -1236,7 +1070,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   const renderMutationTerms = (result: GeneratedArtistRecipe) => result.mutations.length > 0 && <div className="artist-mutation-block"><b>{text.mutation}</b><div>{result.mutations.map((token, index) => <span key={`${token.value}-${index}`}><small>{categoryLabels[token.category]}</small>{token.weight}::{token.value}</span>)}</div></div>;
   const renderFranchiseTerms = (result: GeneratedArtistRecipe) => (result.franchiseStyles?.length ?? 0) > 0 && <div className="artist-mutation-block artist-franchise-block"><b>{text.franchiseTerms}</b><div>{result.franchiseStyles.map((token, index) => <span key={`${token.value}-${index}`}><small>Danbooru</small>{token.weight}::{token.value}</span>)}</div></div>;
   const catalogMeaning = (entry: TagSuggestion) => {
-    if ((language.startsWith("zh") || entry.count === 0) && entry.description?.trim()) {
+    if (entry.description?.trim()) {
       return entry.description.trim();
     }
     const readable = entry.tag

@@ -15,8 +15,8 @@ it('focused mode overrides final-size presentation without destroying saved cust
  expect(html).toMatch(/disabled=""[^>]*>自定义尺寸/);
  expect(props.custom).toEqual({width:704,height:1408});
 });
-it.each(['zh-TW','en-US','ja-JP','ko-KR'])('distinguishes retained canvas and work crop in %s',language=>{
- const html=renderToStaticMarkup(<InpaintSizeControls {...(props as any)} mode="original" language={language}/>);
+it('distinguishes retained canvas and work crop for any saved language value',()=>{
+ const html=renderToStaticMarkup(<InpaintSizeControls {...(props as any)} mode="original" language="en-US"/>);expect(html).toContain('选区工作尺寸');
  expect(html).toContain('3840×2160');expect(html).toContain('1024×1024');expect(html).not.toContain('role="alert"');
 });
 it('still presents ordinary custom output dimensions when focused mode is absent',()=>{

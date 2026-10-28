@@ -1,6 +1,6 @@
 // Connection snippets for the local MCP server, one entry per mainstream agent
 // harness. Pure module (no DOM / Electron) so it can be unit-tested.
-// `label`, `title` and `note` are feature-locales keys: render them with ft().
+// `label`, `title` and `note` are Chinese captions: render them with ft().
 
 export type McpClientId =
   | "pi"

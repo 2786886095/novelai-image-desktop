@@ -5380,7 +5380,7 @@ export async function translateText(
   if (!trimmed) return { ok: false, error: "没有可翻译的内容。" };
   sourceLanguage = normalizeTranslationSource(sourceLanguage);
   const settings = getSettings();
-  target = resolveTranslationTarget(target ?? settings.translateTargetLanguage, settings.language);
+  target = resolveTranslationTarget(target ?? settings.translateTargetLanguage);
   if (settings.translateProvider === "baidu") {
     return baiduTranslate(
       trimmed,

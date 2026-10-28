@@ -24,10 +24,6 @@ const LOCAL_PAGE_SIZE_OPTIONS = [12, 24, 48, 60] as const;
 
 const MANAGER_NAV_TEXT = {
   "zh-CN": { online: "在线下载", local: "本机预设", cardsPerRow: "每排显示", itemsPerPage: "每页 {count} 个预设", choosePage: "选择页数", previous: "上一页", next: "下一页", page: "第 {page} / {pages} 页 · {start}–{end} / {total}", deleteGroup: "删除分组", deleteGroupTitle: "删除这个分组？", deleteGroupHint: "分组内的预设图片不会被删除，将统一移到“未分组”。", deleteGroupDone: "分组已删除，原有预设已移到未分组。" },
-  "zh-TW": { online: "線上下載", local: "本機預設", cardsPerRow: "每列顯示", itemsPerPage: "每頁 {count} 個預設", choosePage: "選擇頁數", previous: "上一頁", next: "下一頁", page: "第 {page} / {pages} 頁 · {start}–{end} / {total}", deleteGroup: "刪除分組", deleteGroupTitle: "刪除這個分組？", deleteGroupHint: "分組內的預設圖片不會刪除，將統一移到「未分組」。", deleteGroupDone: "分組已刪除，原有預設已移到未分組。" },
-  "en-US": { online: "Online downloads", local: "Local presets", cardsPerRow: "Cards per row", itemsPerPage: "{count} presets per page", choosePage: "Choose page", previous: "Previous", next: "Next", page: "Page {page} of {pages} · {start}–{end} / {total}", deleteGroup: "Delete group", deleteGroupTitle: "Delete this group?", deleteGroupHint: "Preset images will be kept and moved to Ungrouped.", deleteGroupDone: "Group deleted. Its presets were moved to Ungrouped." },
-  "ja-JP": { online: "オンライン", local: "ローカル", cardsPerRow: "1行の件数", itemsPerPage: "1ページ {count} 件", choosePage: "ページを選択", previous: "前のページ", next: "次のページ", page: "{page} / {pages} ページ · {start}–{end} / {total}", deleteGroup: "グループ削除", deleteGroupTitle: "このグループを削除しますか？", deleteGroupHint: "画像は削除されず、「未分類」へ移動します。", deleteGroupDone: "グループを削除し、プリセットを未分類へ移動しました。" },
-  "ko-KR": { online: "온라인 다운로드", local: "로컬 프리셋", cardsPerRow: "행당 카드", itemsPerPage: "페이지당 프리셋 {count}개", choosePage: "페이지 선택", previous: "이전", next: "다음", page: "{page} / {pages}페이지 · {start}–{end} / {total}", deleteGroup: "그룹 삭제", deleteGroupTitle: "이 그룹을 삭제할까요?", deleteGroupHint: "프리셋 이미지는 삭제되지 않고 미분류로 이동합니다.", deleteGroupDone: "그룹을 삭제하고 프리셋을 미분류로 이동했습니다." },
 } as const;
 
 function formatManagerText(template: string, values: Record<string, string | number>) {
@@ -122,22 +118,6 @@ const TEXT = {
     confirmDelete: "确认删除这个预设？删除后无法恢复。",
     createPreset: "创建参考预设",
   },
-  "zh-TW": {
-    applyFailed: "預設讀取或套用失敗；未套用的預設可重試。",
-    title: "參考圖快捷預設", subtitle: "在本機儲存氛圍轉移與精準參考圖片及參數，可隨時重用或跨裝置匯入匯出。", back: "返回工具", add: "新增預設", name: "預設名稱", group: "分組", noGroup: "未分組", kind: "預設類型", vibe: "氛圍轉移", precise: "精準參考", image: "選擇圖片", save: "儲存到本機", use: "套用到生成", remove: "刪除", import: "匯入 .nairp", exportAll: "匯出全部", exportGroup: "匯出分組", exportOne: "匯出", all: "全部", empty: "尚未儲存參考圖預設", info: "資訊提取量", strength: "參考強度", fidelity: "保真度", type: "參考類型", character: "角色", style: "風格", both: "角色與風格", chooseRequired: "請選擇圖片並填寫預設名稱。", saved: "預設已儲存到本機。", applied: "預設已加入生成頁。", imported: "預設匯入完成。", exported: "預設已匯出。", quickSave: "存入預設", open: "開啟預設庫", cancel: "取消", createTitle: "建立參考預設", createHint: "選擇圖片、參數與分組，儲存後即可在生成頁直接使用。", library: "本機預設庫", groupName: "新分組名稱", createGroup: "建立分組", currentGroup: "目前分組", saveCurrent: "儲存並加入目前分組", moveGroup: "移動到分組", moved: "預設分組已更新。", groupCreated: "分組已建立，可直接加入預設。", imageHint: "點擊選擇氛圍圖或精準參考圖", replaceImage: "更換圖片", presetCount: "個預設", groupCount: "個分組", search: "搜尋預設名稱或分組", selected: "已選擇", applySelected: "套用所選預設", clearSelection: "清空選擇", preview: "雙擊預覽大圖", confirmDelete: "確認刪除這個預設？刪除後無法復原。", createPreset: "建立參考預設",
-  },
-  "en-US": {
-    applyFailed: "Could not read or apply the preset. Unapplied presets can be retried.",
-    title: "Reference presets", subtitle: "Keep Vibe Transfer and Precise Reference images and settings locally, then reuse or move them between devices.", back: "Back to Tools", add: "New preset", name: "Preset name", group: "Group", noGroup: "Ungrouped", kind: "Preset type", vibe: "Vibe Transfer", precise: "Precise Reference", image: "Choose image", save: "Save locally", use: "Apply to Generate", remove: "Delete", import: "Import .nairp", exportAll: "Export all", exportGroup: "Export group", exportOne: "Export", all: "All", empty: "No reference presets saved yet", info: "Information extracted", strength: "Reference strength", fidelity: "Fidelity", type: "Reference type", character: "Character", style: "Style", both: "Character & style", chooseRequired: "Choose an image and enter a preset name.", saved: "Preset saved locally.", applied: "Preset added to Generate.", imported: "Preset import complete.", exported: "Preset exported.", quickSave: "Save preset", open: "Open preset library", cancel: "Cancel", createTitle: "Create reference preset", createHint: "Choose an image, settings, and group. Saved presets are ready in Generate.", library: "Local preset library", groupName: "New group name", createGroup: "Create group", currentGroup: "Current group", saveCurrent: "Save to current group", moveGroup: "Move to group", moved: "Preset group updated.", groupCreated: "Group created and ready for presets.", imageHint: "Choose a Vibe or Precise Reference image", replaceImage: "Replace image", presetCount: "presets", groupCount: "groups", search: "Search presets by name or group", selected: "selected", applySelected: "Apply selected presets", clearSelection: "Clear selection", preview: "Double-click to preview", confirmDelete: "Delete this preset? This cannot be undone.", createPreset: "Create reference preset",
-  },
-  "ja-JP": {
-    applyFailed: "プリセットの読込または適用に失敗しました。未適用のものは再試行できます。",
-    title: "参照画像プリセット", subtitle: "Vibe Transfer と Precise Reference の画像・設定を端末内に保存し、再利用や端末間移行ができます。", back: "ツールへ戻る", add: "新規プリセット", name: "プリセット名", group: "グループ", noGroup: "未分類", kind: "種類", vibe: "Vibe Transfer", precise: "Precise Reference", image: "画像を選択", save: "端末に保存", use: "生成に適用", remove: "削除", import: ".nairp を読込", exportAll: "すべて書出し", exportGroup: "グループを書出し", exportOne: "書出し", all: "すべて", empty: "保存済みプリセットはありません", info: "情報抽出量", strength: "参照強度", fidelity: "忠実度", type: "参照タイプ", character: "キャラクター", style: "スタイル", both: "キャラクターとスタイル", chooseRequired: "画像とプリセット名を指定してください。", saved: "端末に保存しました。", applied: "生成画面に追加しました。", imported: "読込が完了しました。", exported: "書出しが完了しました。", quickSave: "プリセット保存", open: "プリセットを開く", cancel: "キャンセル", createTitle: "参照プリセットを作成", createHint: "画像・設定・グループを選ぶと、生成画面ですぐ再利用できます。", library: "ローカルプリセット", groupName: "新しいグループ名", createGroup: "グループ作成", currentGroup: "現在のグループ", saveCurrent: "現在のグループに保存", moveGroup: "グループを移動", moved: "グループを更新しました。", groupCreated: "グループを作成しました。", imageHint: "Vibe または Precise Reference 画像を選択", replaceImage: "画像を変更", presetCount: "件", groupCount: "グループ", search: "名前またはグループを検索", selected: "件選択", applySelected: "選択したプリセットを適用", clearSelection: "選択解除", preview: "ダブルクリックでプレビュー", confirmDelete: "このプリセットを削除しますか？元に戻せません。", createPreset: "参照プリセットを作成",
-  },
-  "ko-KR": {
-    applyFailed: "프리셋을 읽거나 적용하지 못했습니다. 적용되지 않은 프리셋은 다시 시도할 수 있습니다.",
-    title: "참조 이미지 프리셋", subtitle: "Vibe Transfer와 Precise Reference 이미지 및 설정을 기기에 저장하고 재사용하거나 다른 기기로 옮길 수 있습니다.", back: "도구로 돌아가기", add: "새 프리셋", name: "프리셋 이름", group: "그룹", noGroup: "미분류", kind: "프리셋 종류", vibe: "Vibe Transfer", precise: "Precise Reference", image: "이미지 선택", save: "기기에 저장", use: "생성에 적용", remove: "삭제", import: ".nairp 가져오기", exportAll: "전체 내보내기", exportGroup: "그룹 내보내기", exportOne: "내보내기", all: "전체", empty: "저장된 참조 프리셋이 없습니다", info: "정보 추출량", strength: "참조 강도", fidelity: "충실도", type: "참조 유형", character: "캐릭터", style: "스타일", both: "캐릭터와 스타일", chooseRequired: "이미지를 선택하고 프리셋 이름을 입력하세요.", saved: "기기에 저장했습니다.", applied: "생성 화면에 추가했습니다.", imported: "가져오기가 완료되었습니다.", exported: "내보내기가 완료되었습니다.", quickSave: "프리셋 저장", open: "프리셋 열기", cancel: "취소", createTitle: "참조 프리셋 만들기", createHint: "이미지, 설정, 그룹을 선택하면 생성 화면에서 바로 사용할 수 있습니다.", library: "로컬 프리셋", groupName: "새 그룹 이름", createGroup: "그룹 만들기", currentGroup: "현재 그룹", saveCurrent: "현재 그룹에 저장", moveGroup: "그룹 이동", moved: "프리셋 그룹을 변경했습니다.", groupCreated: "그룹을 만들었습니다.", imageHint: "Vibe 또는 Precise Reference 이미지 선택", replaceImage: "이미지 변경", presetCount: "개 프리셋", groupCount: "개 그룹", search: "이름 또는 그룹 검색", selected: "개 선택", applySelected: "선택한 프리셋 적용", clearSelection: "선택 해제", preview: "더블 클릭하여 미리보기", confirmDelete: "이 프리셋을 삭제할까요? 삭제 후 복구할 수 없습니다.", createPreset: "참조 프리셋 만들기",
-  },
 } as const;
 
 const REFERENCE_PRESET_HELP = {
@@ -152,22 +132,6 @@ const REFERENCE_PRESET_HELP = {
     preciseStrengthHelp: "控制精准参考对结果的影响程度；越高，参考特征越明显。",
     fidelityHelp: "控制对参考图细节的忠实程度；越高，越严格保留参考特征。",
     typeHelp: "选择参考角色、画风，或同时参考两者。",
-  },
-  "zh-TW": {
-    infoLabel: "資訊提取量（Information Extracted）", strengthLabel: "參考強度（Reference Strength）", preciseStrengthLabel: "參考強度（Strength）", fidelityLabel: "保真度（Fidelity）", typeLabel: "參考類型（Reference Type）",
-    infoHelp: "調低會先減少紋理和高頻細節；調高會從參考圖提取更多視覺資訊。", vibeStrengthHelp: "越高越接近參考圖的整體氛圍與畫風，越低越服從文字提示詞。", preciseStrengthHelp: "控制精準參考對結果的影響程度；越高，參考特徵越明顯。", fidelityHelp: "控制對參考圖細節的忠實程度；越高，越嚴格保留參考特徵。", typeHelp: "選擇參考角色、畫風，或同時參考兩者。",
-  },
-  "en-US": {
-    infoLabel: "Information Extracted", strengthLabel: "Reference Strength", preciseStrengthLabel: "Strength", fidelityLabel: "Fidelity", typeLabel: "Reference Type",
-    infoHelp: "Lower values discard texture and high-frequency details first; higher values extract more visual information.", vibeStrengthHelp: "Higher values follow the reference vibe and style more strongly; lower values give the text prompt more control.", preciseStrengthHelp: "Controls how strongly the precise reference influences the result; higher values make its features more prominent.", fidelityHelp: "Controls how faithfully reference details are retained; higher values preserve them more strictly.", typeHelp: "Choose whether to reference the character, the style, or both.",
-  },
-  "ja-JP": {
-    infoLabel: "情報抽出量（Information Extracted）", strengthLabel: "参照強度（Reference Strength）", preciseStrengthLabel: "参照強度（Strength）", fidelityLabel: "忠実度（Fidelity）", typeLabel: "参照タイプ（Reference Type）",
-    infoHelp: "値を下げるとテクスチャや高周波の細部から減り、上げると参照画像からより多くの視覚情報を抽出します。", vibeStrengthHelp: "高いほど参照画像の雰囲気と画風を強く反映し、低いほど文字プロンプトを優先します。", preciseStrengthHelp: "精密参照が結果へ与える影響を調整します。高いほど参照特徴が強く現れます。", fidelityHelp: "参照画像の細部をどれだけ忠実に保つか調整します。高いほど厳密に保持します。", typeHelp: "キャラクター、画風、またはその両方を参照するか選択します。",
-  },
-  "ko-KR": {
-    infoLabel: "정보 추출량(Information Extracted)", strengthLabel: "참조 강도(Reference Strength)", preciseStrengthLabel: "참조 강도(Strength)", fidelityLabel: "충실도(Fidelity)", typeLabel: "참조 유형(Reference Type)",
-    infoHelp: "값을 낮추면 텍스처와 고주파 세부 정보부터 줄고, 높이면 참고 이미지에서 더 많은 시각 정보를 추출합니다.", vibeStrengthHelp: "높을수록 참고 이미지의 분위기와 화풍을 강하게 따르고, 낮을수록 텍스트 프롬프트를 우선합니다.", preciseStrengthHelp: "정밀 참조가 결과에 미치는 영향을 조절합니다. 높을수록 참조 특징이 더 뚜렷합니다.", fidelityHelp: "참고 이미지의 세부 특징을 얼마나 충실히 유지할지 조절합니다. 높을수록 더 엄격히 보존합니다.", typeHelp: "캐릭터, 화풍 또는 둘 다 참조할지 선택합니다.",
   },
 } as const;
 

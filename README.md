@@ -1,14 +1,11 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 # Langbai NovelAI Studio
 
-[简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
-
-
 **下载入口：** [GitHub Latest](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) 提供当前发行说明与实际附件；安装方式与限制见下方下载区。
 
 ### 从一句灵感，到一组作品。
 
-NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语、日语、韩语。语言切换只改变界面，不翻译用户提示词、文件名与对话内容。第三方诊断日志保留原文。
+NovelAI 图像创作工作台，界面为简体中文；第三方诊断日志保留原文。
 
 ![芙宁娜主题宣传插画，软件界面为视觉示意](./docs/assets/readme/furina-workbench.png)
 

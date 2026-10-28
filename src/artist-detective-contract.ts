@@ -21,10 +21,6 @@ export interface DetectiveRecovery {
 export function detectiveRecoveryLabels(language?: string) {
   const rows = {
     'zh-CN': {resume:'继续当前任务', newRun:'新建自动迭代', paused:'迭代已暂停', title:'确认重发这一张？', warning:'该次结果不明，可能已扣费，重发这一张可能再次扣费；已完成图片不会重生成。', confirm:'仅重发这一张（可能再次扣费）', cancel:'取消'},
-    'zh-TW': {resume:'繼續目前任務', newRun:'建立新自動迭代', paused:'迭代已暫停', title:'確認重送這一張？', warning:'該次結果不明，可能已扣費，重送這一張可能再次扣費；已完成圖片不會重新生成。', confirm:'僅重送這一張（可能再次扣費）', cancel:'取消'},
-    'en-US': {resume:'Resume current run', newRun:'Start a new iteration', paused:'Iteration paused', title:'Resend this one request?', warning:'Its outcome is unknown and it may already have been billed. Resending this one image may incur another charge; completed images will not be regenerated.', confirm:'Resend this one (possible extra charge)', cancel:'Cancel'},
-    'ja-JP': {resume:'現在の実行を再開', newRun:'新しい反復を開始', paused:'反復は一時停止中', title:'この1件を再送しますか？', warning:'結果は不明で、既に課金された可能性があります。この1枚の再送は再課金される場合があります。完成済み画像は再生成しません。', confirm:'この1件のみ再送（再課金の可能性）', cancel:'キャンセル'},
-    'ko-KR': {resume:'현재 작업 재개', newRun:'새 반복 시작', paused:'반복 일시 중지', title:'이 요청 하나를 다시 보낼까요?', warning:'결과를 알 수 없으며 이미 과금되었을 수 있습니다. 이 한 장을 재전송하면 추가 과금될 수 있으며 완료된 이미지는 재생성하지 않습니다.', confirm:'이 한 건만 재전송 (추가 과금 가능)', cancel:'취소'},
   };
   return rows[language as keyof typeof rows] ?? rows['zh-CN'];
 }

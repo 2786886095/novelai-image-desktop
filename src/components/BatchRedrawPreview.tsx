@@ -8,10 +8,6 @@ import {PreviewImageViewer} from './PreviewImageViewer';
 
 const labels: Record<string, readonly string[]> = {
   'zh-CN': ['设为主图', '已选为主图', '关闭预览', '生成结果', '原图'],
-  'zh-TW': ['設為主圖', '已選為主圖', '關閉預覽', '生成結果', '原圖'],
-  'en-US': ['Use as main image', 'Selected main image', 'Close preview', 'Generated outputs', 'Original images'],
-  'ja-JP': ['メイン画像に設定', '選択中のメイン画像', 'プレビューを閉じる', '生成結果', '元画像'],
-  'ko-KR': ['메인 이미지로 선택', '선택한 메인 이미지', '미리보기 닫기', '생성 결과', '원본 이미지'],
 };
 
 export function BatchRedrawPreview({items, url, onUrl, onSelect, onClose}: {
@@ -22,7 +18,7 @@ export function BatchRedrawPreview({items, url, onUrl, onSelect, onClose}: {
   onClose: () => void;
 }) {
   const language = useAppStore(s => s.settings?.language);
-  const text = labels[language ?? 'zh-CN'] ?? labels['en-US'];
+  const text = labels[language ?? 'zh-CN'] ?? labels['zh-CN'];
   const entries = batchRedrawPreviewEntries(items, url);
   const index = entries.findIndex(entry => entry.url === url);
   const shown = entries[index];

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { ONLINE_GALLERY_SOURCES, onlineGallerySourceInfo } from "./online-gallery";
 import { PROMPT_CODEX_BOOKS } from "./prompt-codex";
 import { ACTIVE_TABS } from "./app/navigation";
-import { desktopUiText, SUPPORTED_APP_LANGUAGES } from "./i18n";
+import { desktopUiText } from "./i18n";
 import labels from "../shared/quicktag-ui.json";
 
 describe("QuickTagCloud and nai4.top are identified separately", () => {
@@ -17,15 +17,12 @@ describe("QuickTagCloud and nai4.top are identified separately", () => {
     expect(PROMPT_CODEX_BOOKS).toHaveLength(3);
     expect(PROMPT_CODEX_BOOKS.every(book => new URL(book.sourceUrl).hostname === "nai4.top")).toBe(true);
   });
-  it("identifies the personal Codex source and QuickTag collections in every language", () => {
-    for (const { code } of SUPPORTED_APP_LANGUAGES) {
-      const title = desktopUiText(code, "promptCodex.enabled");
-      expect(title).toContain("nai4.top");
-      expect(title).not.toContain("QuickTagCloud");
-      expect(labels[code].hint).toContain("QuickTagCloud");
-    }
+  it("identifies the personal Codex source and QuickTag collections", () => {
+    const title = desktopUiText("zh-CN", "promptCodex.enabled");
+    expect(title).toContain("nai4.top");
+    expect(title).not.toContain("QuickTagCloud");
+    expect(labels["zh-CN"].hint).toContain("QuickTagCloud");
     expect(labels["zh-CN"].catalog).toBe("全部资料库");
-    expect(labels["en-US"].catalog).toBe("All collections");
   });
   it("uses the adapter's name without the misleading Codex suffix", () => {
     const source = fs.readFileSync(new URL("./AitagGallery.tsx", import.meta.url), "utf8");

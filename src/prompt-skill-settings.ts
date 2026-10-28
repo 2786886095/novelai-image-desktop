@@ -40,10 +40,6 @@ export function promptSkillRequestContext(settings:Partial<AppSettings>|null|und
 export function promptSkillStaleText(language:unknown) {
  const messages={
   'zh-CN':'设置或输入已变化；旧结果仅保留在任务列表，未覆盖当前提示词。',
-  'zh-TW':'設定或輸入已改變；舊結果僅保留在任務清單，未覆蓋目前提示詞。',
-  'en-US':'Settings or input changed. The old result is kept only in the task list; the current prompt was not replaced.',
-  'ja-JP':'設定または入力が変わりました。旧結果はタスク一覧にのみ保持され、現在のプロンプトは変更されません。',
-  'ko-KR':'설정 또는 입력이 바뀌었습니다. 이전 결과는 작업 목록에만 보관되며 현재 프롬프트는 바뀌지 않습니다.',
  };
  return messages[language as keyof typeof messages]??messages['zh-CN'];
 }

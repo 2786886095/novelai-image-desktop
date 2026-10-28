@@ -6,10 +6,6 @@ import { droppedImagePaths } from "./drag-drop";
 
 const labels = {
   "zh-CN": ["请先点击要添加图片的区域，再按 Ctrl+V", "正在读取剪贴板图片…", "图片已交给所选区域", "粘贴图片失败，请检查图片格式和大小", "剪贴板中没有图片", "多张图片请粘贴到支持批量导入的区域"],
-  "zh-TW": ["請先點擊要加入圖片的區域，再按 Ctrl+V", "正在讀取剪貼簿圖片…", "圖片已交給所選區域", "貼上圖片失敗，請檢查格式和大小", "剪貼簿中沒有圖片", "多張圖片請貼到支援批次匯入的區域"],
-  "en-US": ["Select an image input area, then press Ctrl+V", "Reading clipboard images…", "Image sent to the selected area", "Could not paste image; check its format and size", "No image on the clipboard", "Choose a batch image input for multiple images"],
-  "ja-JP": ["画像入力欄を選択して Ctrl+V を押してください", "クリップボード画像を読込中…", "選択した入力欄に画像を渡しました", "画像の形式とサイズを確認してください", "クリップボードに画像がありません", "複数画像は一括入力欄に貼り付けてください"],
-  "ko-KR": ["이미지 입력 영역을 선택한 뒤 Ctrl+V를 누르세요", "클립보드 이미지 읽는 중…", "선택 영역에 이미지를 전달했습니다", "이미지 형식과 크기를 확인하세요", "클립보드에 이미지가 없습니다", "여러 이미지는 일괄 입력 영역에 붙여 넣으세요"],
 };
 function notify(index: number) {
   const state = useAppStore.getState();

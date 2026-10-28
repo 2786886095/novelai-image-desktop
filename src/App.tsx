@@ -40,7 +40,6 @@ import type {PromptEditRequest} from './prompt-assistant';
 import './prompt-editor.css';
 import {CompactIconButton,FurryModeSwitch,ResolutionPicker,CapsuleEditor} from "./components/CompactPromptControls";
 import {useFeatureText} from "./feature-i18n";
-import {localizeStoreMessage} from './store-i18n';
 import {CompletionSoundSettings} from "./components/CompletionSoundSettings";
 import StyleLibrary from "./StyleLibrary";
 import {sortStyles} from "./style-library";
@@ -135,12 +134,10 @@ import {
   selectedImageTaskPromptPreset,
   type ImageTaskPromptPreset,
 } from "./tavern/image-task-preset";
-import { desktopUiFormat, desktopUiText, getGeneratePanelText, getLocalizedTabItems, getSettingsSectionText, getSettingsShellText, getTokenGuideText, localizedDesktopOptionLabel, SUPPORTED_APP_LANGUAGES } from "./i18n";
+import { desktopUiFormat, desktopUiText, getGeneratePanelText, getLocalizedTabItems, getSettingsSectionText, getSettingsShellText, getTokenGuideText, localizedDesktopOptionLabel } from "./i18n";
 import {
   CAT_COLOR,
   CAPSULE_TAXONOMY,
-  localizedCapsuleCategoryName,
-  localizedCapsuleSubgroupName,
   localizedCategoryLabel,
   localizedTagLabel,
   tagDescription,
@@ -297,27 +294,14 @@ function TagLibrarySettingsSection({ onChanged }: { onChanged?: () => void }) {
 // substring-seed approach leaked cross-category tags, e.g. cropped_jacket under
 // 构图). SEARCH queries the local Danbooru library for breadth. Browse works
 // offline; search needs the downloaded library.
-function capsuleBrowserText(language: unknown) {
-  switch (language) {
-    case "zh-TW":
-      return { needsLibrary: "搜尋需要本地標籤庫，請先到設定下載。下方分類可離線使用。", empty: "沒有匹配的標籤", loading: "載入中…" };
-    case "en-US":
-      return { needsLibrary: "Search requires the local tag library. Download it in Settings first. Categories below work offline.", empty: "No matching tags", loading: "Loading…" };
-    case "ja-JP":
-      return { needsLibrary: "検索にはローカルタグライブラリが必要です。先に設定でダウンロードしてください。下のカテゴリはオフラインで使えます。", empty: "一致するタグがありません", loading: "読み込み中…" };
-    case "ko-KR":
-      return { needsLibrary: "검색에는 로컬 태그 라이브러리가 필요합니다. 먼저 설정에서 다운로드하세요. 아래 분류는 오프라인으로 사용할 수 있습니다.", empty: "일치하는 태그 없음", loading: "불러오는 중…" };
-    default:
-      return { needsLibrary: "搜索需要本地标签库，请先到设置下载。下方分类可离线使用。", empty: "没有匹配的标签", loading: "加载中…" };
-  }
-}
+const CAPSULE_BROWSER_TEXT = { needsLibrary: "搜索需要本地标签库，请先到设置下载。下方分类可离线使用。", empty: "没有匹配的标签", loading: "加载中…" };
 
 function CapsuleBrowser({ query, onPick, language }: { query: string; onPick: (tag: string) => void; language?: unknown }) {
   const [downloaded, setDownloaded] = useState<boolean | null>(null);
   const [items, setItems] = useState<TagSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const q = query.trim();
-  const text = capsuleBrowserText(language);
+  const text = CAPSULE_BROWSER_TEXT;
 
   useEffect(() => {
     void window.naiDesktop.danbooruStatus().then((s) => {
@@ -395,7 +379,7 @@ function CapsuleTaxonomy({ onPick, language }: { onPick: (tag: string) => void; 
               setSubIdx(0);
             }}
           >
-            {localizedCapsuleCategoryName(c.name, language)}
+            {c.name}
           </button>
         ))}
       </div>
@@ -407,7 +391,7 @@ function CapsuleTaxonomy({ onPick, language }: { onPick: (tag: string) => void; 
             className={clsx("capsule-tax-sub", i === subIdx && "active")}
             onClick={() => setSubIdx(i)}
           >
-            {localizedCapsuleSubgroupName(s.name, language)}
+            {s.name}
           </button>
         ))}
       </div>
@@ -2198,7 +2182,7 @@ export function PromptAndParams({
                       <button type="button" className="style-preset-more" title={t("prompt.styleMove")} aria-label={f("prompt.styleMoveTo", { name: preset.name })} onClick={() => setStylePresetActionId((current) => current === preset.id ? "" : preset.id)}><Icon name="moreHorizontal" /></button>
                       {stylePresetActionId === preset.id && (
                         <div className="style-preset-item-popover">
-                          <button type="button" onClick={() => {setStylePresetActionId(""); setStyleNamePrompt({stylePrompt: preset.prompt, fallbackName: preset.name, presetId: preset.id});}}>{({'zh-CN':'编辑名称与评分','zh-TW':'編輯名稱與評分','en-US':'Edit name and rating','ja-JP':'名前・評価を編集','ko-KR':'이름 및 평점 편집'}[settings?.language ?? 'zh-CN'])}</button>
+                          <button type="button" onClick={() => {setStylePresetActionId(""); setStyleNamePrompt({stylePrompt: preset.prompt, fallbackName: preset.name, presetId: preset.id});}}>编辑名称与评分</button>
                           <strong>{t("prompt.styleMove")}</strong>
                           {stylePromptPresetGroups.map((group) => (
                             <button type="button" key={group} disabled={(preset.group || "Default") === group} onClick={() => void moveStylePromptPreset(preset.id, group)}>
@@ -5888,7 +5872,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     ["convert-api", settingsShellText.nav["convert-api"], "translate"],
     ["templates", settingsShellText.nav.templates, "template"],
     ["prompt", settingsShellText.nav.prompt, "wand"],
-    ["language", settingsShellText.nav.language, "globe"],
     ["sound", ft("提示音"), "volume"],
     ["appearance", settingsShellText.nav.appearance, "palette"],
     ["performance", settingsShellText.nav.performance, "speed"],
@@ -6242,21 +6225,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   </div>
                   <p className="field-hint">{settingsSectionText.appearance.workspaceHint}</p>
                 </div>
-              </div>
-            )}
-            {section === "language" && (
-              <div className="settings-form">
-                <label className="field">
-                  <span>{settingsSectionText.language.language}</span>
-                  <SelectMenuCompat value={settings.language} onChange={(e) => void update("language", e.target.value as AppSettings["language"])}>
-                    {SUPPORTED_APP_LANGUAGES.map((language) => (
-                      <option value={language.code} key={language.code}>
-                        {language.menuLabel}
-                      </option>
-                    ))}
-                  </SelectMenuCompat>
-                  <small className="settings-hint">{settingsSectionText.language.hint}</small>
-                </label>
               </div>
             )}
             {section === "backup" && (
@@ -6723,16 +6691,6 @@ function OnboardingWizard() {
                     <IconText icon="↗">{t("onboarding.github")}</IconText>
                   </Button>
                 </div>
-                <label className="field wide">
-                  <span>{t("onboarding.language")}</span>
-                  <SelectMenuCompat defaultValue={settings?.language ?? "zh-CN"} onChange={(e) => window.naiDesktop.setSetting("language", e.target.value as AppSettings["language"])}>
-                    {SUPPORTED_APP_LANGUAGES.map((language) => (
-                      <option value={language.code} key={language.code}>
-                        {language.menuLabel}
-                      </option>
-                    ))}
-                  </SelectMenuCompat>
-                </label>
               </div>
             )}
             {step === 1 && (
@@ -6916,38 +6874,6 @@ const V5_MIGRATION_NOTICE_TEXT = {
     keep: "保持当前模型",
     go: "前往模型选择",
   },
-  "zh-TW": {
-    eyebrow: "模型更新提醒",
-    title: "NovelAI V5 Full 已上線",
-    body: "為避免改變舊專案的重現結果，升級軟體不會強制覆蓋已儲存的模型。舊使用者若仍顯示 V4 / V4.5，請在生成頁的模型清單中手動選擇 NAI Diffusion V5 Full；新建預設已使用 V5 Full。",
-    risk: "V5 的訓練分佈與舊模型不同，V4 / V4.5 時期的畫師標籤或畫師串可能減弱、失效或呈現不同效果。需要重現舊結果時請保留舊模型，並在切換後重新測試畫師串。",
-    keep: "保留目前模型",
-    go: "前往模型選擇",
-  },
-  "en-US": {
-    eyebrow: "Model update",
-    title: "NovelAI V5 Full is available",
-    body: "Upgrades intentionally preserve the model saved in existing projects so their results remain reproducible. If an older installation still shows V4 or V4.5, choose NAI Diffusion V5 Full manually on Generate. New default configurations already use V5 Full.",
-    risk: "V5 has a different training distribution. Artist tags or artist strings tuned for V4/V4.5 may become weaker, stop working, or look different. Keep the legacy model for reproducibility and retest strings after switching.",
-    keep: "Keep current model",
-    go: "Open model selector",
-  },
-  "ja-JP": {
-    eyebrow: "モデル更新のお知らせ",
-    title: "NovelAI V5 Full が利用できます",
-    body: "既存プロジェクトの再現性を守るため、更新時に保存済みモデルを強制変更しません。旧環境で V4 / V4.5 のままの場合は、生成画面のモデル一覧から NAI Diffusion V5 Full を手動で選択してください。新規既定値は V5 Full です。",
-    risk: "V5 は旧モデルと学習分布が異なるため、V4 / V4.5 向けの画家タグや画家列が弱くなる、効かなくなる、または違う結果になる場合があります。再現には旧モデルを残し、切替後に再検証してください。",
-    keep: "現在のモデルを維持",
-    go: "モデル選択へ",
-  },
-  "ko-KR": {
-    eyebrow: "모델 업데이트 안내",
-    title: "NovelAI V5 Full을 사용할 수 있습니다",
-    body: "기존 프로젝트의 재현 결과를 보호하기 위해 업데이트가 저장된 모델을 강제로 변경하지 않습니다. 이전 설치에서 V4 / V4.5가 계속 표시되면 생성 화면의 모델 목록에서 NAI Diffusion V5 Full을 직접 선택하세요. 새 기본 구성은 V5 Full입니다.",
-    risk: "V5는 이전 모델과 학습 분포가 달라 V4/V4.5용 작가 태그나 작가 문자열이 약해지거나 작동하지 않거나 다른 결과를 낼 수 있습니다. 재현이 필요하면 이전 모델을 유지하고 전환 후 다시 테스트하세요.",
-    keep: "현재 모델 유지",
-    go: "모델 선택으로 이동",
-  },
 } as const;
 
 function V5MigrationNotice() {
@@ -7118,12 +7044,12 @@ function MainPage() {
   // Final render-boundary guard: even if a future IPC path forgets to sanitize
   // an upstream HTML error page, it can never expand across the application.
   const displayStatusText = useMemo(
-    () => statusText ? compactRemoteErrorText(localizeStoreMessage(language,statusText), { serviceLabel: "NovelAI API", maxLength: 240 }) : "",
-    [statusText,language],
+    () => statusText ? compactRemoteErrorText(statusText, { serviceLabel: "NovelAI API", maxLength: 240 }) : "",
+    [statusText],
   );
   const displayToast = useMemo(
-    () => toast ? compactRemoteErrorText(localizeStoreMessage(language,toast), { serviceLabel: "NovelAI API", maxLength: 360 }) : "",
-    [toast,language],
+    () => toast ? compactRemoteErrorText(toast, { serviceLabel: "NovelAI API", maxLength: 360 }) : "",
+    [toast],
   );
   const workbenchActive = activeTab === "generate"
     || activeTab === "inpaint"
@@ -7188,10 +7114,6 @@ function MainPage() {
     document.documentElement.classList.toggle("motion-reduced", settings?.reduceMotion === true);
     return () => document.documentElement.classList.remove("motion-reduced");
   }, [settings?.reduceMotion]);
-
-  useEffect(() => {
-    document.documentElement.lang = settings?.language ?? "zh-CN";
-  }, [settings?.language]);
 
   // Auto-dismiss toast
   useEffect(() => {

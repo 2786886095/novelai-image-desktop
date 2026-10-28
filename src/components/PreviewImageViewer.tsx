@@ -10,8 +10,7 @@ import {previewImageContainsPoint} from '../preview-hit';
 export type PreviewImage={src:string;alt:string};
 export function PreviewImageViewer({images,index,onIndex,renderImage,favoriteAction,navigation,showNavigation=true,onBackgroundClick}:{images:PreviewImage[];index:number;onIndex:(index:number)=>void;renderImage?:ReactNode;favoriteAction?:ReactNode;navigation?:{index:number;total:number;onPrevious?:()=>void;onNext?:()=>void};showNavigation?:boolean;onBackgroundClick:()=>void}) {
  const language=useAppStore(s=>s.settings?.language),text=historyPickerText(language);
- const zoomLabels:Record<string,string[]>={'zh-CN':['缩小','放大'],'zh-TW':['縮小','放大'],'ja-JP':['縮小','拡大'],'ko-KR':['축소','확대']};
- const zoomText=zoomLabels[String(language)]??['Zoom out','Zoom in'];
+ const zoomText=['缩小','放大'];
  const [scale,setScale]=useState(1),[pan,setPan]=useState({x:0,y:0});
  const root=useRef<HTMLDivElement>(null),stage=useRef<HTMLDivElement>(null),img=useRef<HTMLImageElement>(null),drag=useRef<{x:number;y:number;px:number;py:number}|null>(null);
  const moved=useRef(false);

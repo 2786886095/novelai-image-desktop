@@ -109,7 +109,7 @@ app.whenReady().then(async()=>{
   return{sixIndependentTemplateRequests:wires,legacyBothModels:true,incompatibleCombinationBlockedBeforeHttp:true,transport:'actual production routines and loopback HTTP; not an upstream visual-truth claim'};
  }));
  await check('reverse','inline-controls-stale-no-apply',()=>restoreSkills(async()=>{
-  store.setSetting('language','en-US');store.setSetting('reversePromptTemplateVersion','v5');store.setSetting('reversePromptSkillVersion','2.0.0');await reset();await js('window.nativeMountInpaint()');
+  store.setSetting('reversePromptTemplateVersion','v5');store.setSetting('reversePromptSkillVersion','2.0.0');await reset();await js('window.nativeMountInpaint()');
   const wait=async code=>{for(let i=0;i<200;i++){if(await js(code))return;await delay(15);}throw Error('Native inline UI wait timed out: '+code);};
   await wait('document.querySelectorAll(".prompt-skill-controls .select-menu-trigger").length===2');
   const choose=async(index,label)=>{await js(`document.querySelectorAll('.prompt-skill-controls .select-menu-trigger')[${index}].click()`);await wait('document.querySelectorAll("[role=option]").length>0');await js(`[...document.querySelectorAll('[role=option]')].find(e=>e.textContent.includes(${JSON.stringify(label)})).click()`);await delay(35);};

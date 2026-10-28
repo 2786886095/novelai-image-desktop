@@ -29,27 +29,24 @@ describe("release version consistency", () => {
     );
   });
 
-  it("uses moving Latest and main entries in all README languages", () => {
+  it("uses moving Latest and main entries in the README", () => {
     const repo = "https://github.com/OldLi1337/novelai-image-desktop";
-    for (const file of ["README.md", "README.en.md", "README.ja.md", "README.ko.md", "README.zh-TW.md"]) {
-      const readme = read(file);
-      const releaseLinks = readme.match(/https?:\/\/[^\s)\]<>"']+\/releases(?:\/[^\s)\]<>"']*)?/g) ?? [];
+    const readme = read("README.md");
+    const releaseLinks = readme.match(/https?:\/\/[^\s)\]<>"']+\/releases(?:\/[^\s)\]<>"']*)?/g) ?? [];
 
-      expect(readme, file).not.toContain("gitee.com");
-      expect(readme, file).toContain(`${repo}/releases/latest`);
-      expect(readme, file).toContain(`${repo}/tree/main`);
-      expect(releaseLinks.length, file).toBeGreaterThan(0);
-      for (const link of releaseLinks) {
-        expect(link, file).toBe(`${repo}/releases/latest`);
-      }
-      // Dated screenshots and historical facts may retain their real versions.
-      expect(readme.split(/\r?\n/).slice(0, 12).join("\n"), file)
-        .not.toMatch(/\bv?\d+\.\d+\.\d+\b/i);
-      const download = readme.split(/^## /m).find((section) =>
-        /^(下载与安装|Installation and updates|インストールと更新|설치 및 업데이트|下載與更新)\r?\n/.test(section));
-      expect(download, file).toBeDefined();
-      expect(download, file).not.toMatch(/\bv?\d+\.\d+\.\d+\b/i);
+    expect(readme).not.toContain("gitee.com");
+    expect(readme).toContain(`${repo}/releases/latest`);
+    expect(readme).toContain(`${repo}/tree/main`);
+    expect(releaseLinks.length).toBeGreaterThan(0);
+    for (const link of releaseLinks) {
+      expect(link).toBe(`${repo}/releases/latest`);
     }
+    // Dated screenshots and historical facts may retain their real versions.
+    expect(readme.split(/\r?\n/).slice(0, 12).join("\n"))
+      .not.toMatch(/\bv?\d+\.\d+\.\d+\b/i);
+    const download = readme.split(/^## /m).find((section) => /^下载与安装\r?\n/.test(section));
+    expect(download).toBeDefined();
+    expect(download).not.toMatch(/\bv?\d+\.\d+\.\d+\b/i);
   });
 
   it("uses current-only Latest notes and preserves byte-authentic history separately", () => {

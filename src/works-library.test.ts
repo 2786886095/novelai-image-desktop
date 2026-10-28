@@ -7,7 +7,7 @@ import {normalizeTabOrder} from './app/tab-order';
 import {worksText} from './works-text';
 describe('baseline works workspace',()=>{
  it('has a standalone full-width works route',()=>{expect([...ACTIVE_TABS]).toContain('works');expect([...WIDE_WORKSPACE_TABS]).toContain('works');});
- it('exposes the works entry in all five languages',()=>{for(const language of ['zh-CN','zh-TW','en-US','ja-JP','ko-KR'])expect(getLocalizedTabItems(language).some(x=>String(x.value)==='works')).toBe(true);});
+ it('exposes the works entry',()=>{expect(getLocalizedTabItems('zh-CN').some(x=>String(x.value)==='works')).toBe(true);});
 });
 
 const defaults:WorksFilter={query:'',date:'',group:'',directory:'',order:'newest'};
@@ -27,7 +27,7 @@ describe('works query and selection',()=>{
  it('supports toggling and range selection across page boundaries without mutating prior state',()=>{const ids=Array.from({length:200},(_,n)=>String(n)),old=new Set(['2']);const next=selectWorksRange(ids,old,'59','62',true);expect([...next]).toEqual(['2','59','60','61','62']);expect([...old]).toEqual(['2']);expect(selectWorksRange(ids,next,null,'2',false).has('2')).toBe(false);});
  it('falls back to toggle if the range anchor disappeared',()=>{expect([...selectWorksRange(['a','b'],new Set(),'removed','b',true)]).toEqual(['b']);});
  it('keeps the grid bounded for hundreds of records',()=>{expect(WORKS_PAGE_SIZE).toBeLessThanOrEqual(100);const items=Array.from({length:501},(_,n)=>make(n));expect(filterWorks(items,defaults).length).toBe(501);expect(Math.ceil(items.length/WORKS_PAGE_SIZE)).toBe(9);});
- it('has complete labels for all supported locales',()=>{for(const locale of ['zh-CN','zh-TW','en-US','ja-JP','ko-KR']){expect(Object.keys(worksText(locale))).toEqual(Object.keys(worksText('en-US')));expect(Object.values(worksText(locale)).every(x=>x.length>0)).toBe(true);}});
+ it('has complete labels',()=>{expect(Object.values(worksText('zh-CN')).every(x=>x.length>0)).toBe(true);});
 });
 describe('original image prompt provenance',()=>{
  it('reads authored text from the image rather than a differing workbench/history prompt',async()=>{const prompt='1girl, 1.2::white hair::, repeated, repeated';const result=await readWorksPrompt(make(1),async()=>pngSnapshot(prompt));expect(result.source).toBe('original');expect(result.positive).toBe(prompt);});

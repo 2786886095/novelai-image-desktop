@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import locales from "./feature-locales.json";
 import { MCP_TOKEN_PLACEHOLDER, mcpClientConfigs } from "./mcp-client-configs";
 
 const url = "http://127.0.0.1:39280/mcp";
@@ -50,13 +49,6 @@ describe("mcpClientConfigs", () => {
     expect(toml).toContain(`url = "${url}"`);
     expect(toml).toContain(`http_headers = { "Authorization" = "Bearer ${token}" }`);
     expect(toml).toContain("tool_timeout_sec = 600");
-  });
-
-  it("has five-language catalog rows for every translatable caption", () => {
-    const texts = configs.flatMap((config) => [config.label, config.note ?? "", ...config.snippets.map((snippet) => snippet.title)]);
-    for (const value of texts.filter((item) => /[\u4e00-\u9fff]/.test(item))) {
-      expect(locales, value).toHaveProperty([value]);
-    }
   });
 
   it("falls back to a placeholder when no token exists yet", () => {

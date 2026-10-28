@@ -20,7 +20,7 @@ window.naiDesktop = {
   startImageDrag: (src: string) => calls.push('drag:' + src),
 } as any;
 function reset() {
-  useAppStore.setState({history: [...history], currentImage: history[1], workbenchImage: {...workingImage(history[1]), filePath: 'f:\\MATERIALS\\history-1.png'}, inputPreviewAnchor: {result: history[1]}, activeTab: 'generate', comparisonBeforeImage: null, isGenerating: false, generationPreview: null, settings: {language: 'en-US', superDrop: false} as any});
+  useAppStore.setState({history: [...history], currentImage: history[1], workbenchImage: {...workingImage(history[1]), filePath: 'f:\\MATERIALS\\history-1.png'}, inputPreviewAnchor: {result: history[1]}, activeTab: 'generate', comparisonBeforeImage: null, isGenerating: false, generationPreview: null, settings: {language: 'zh-CN', superDrop: false} as any});
   calls.length = 0;
 }
 reset();

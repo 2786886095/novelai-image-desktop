@@ -22,7 +22,7 @@ describe('bundled style fonts',()=>{
    expect(fs.readFileSync('THIRD_PARTY_NOTICES.md','utf8')).toContain(entry.licenseFile);
   }expect(hashes.size).toBe(6);
  });
- it('offers meaningful labels and offline/fallback guidance in five UI locales',()=>{
-  for(const l of ['zh-CN','zh-TW','en-US','ja-JP','ko-KR']){expect(builtinFontHint(l).length).toBeGreaterThan(30);for(const f of BUILTIN_FONTS){const label=builtinFontLabel(f.id,l);expect(label).not.toBe(f.id);expect(label).toContain(' · ');}}
+ it('offers meaningful labels and offline/fallback guidance',()=>{
+  expect(builtinFontHint('zh-CN').length).toBeGreaterThan(30);for(const f of BUILTIN_FONTS)expect(builtinFontLabel(f.id,'zh-CN')).toBe(`${f.name} · ${f.style}`);
  });
 });

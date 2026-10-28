@@ -3,8 +3,8 @@ import {Button} from './ui';
 import {useAppStore} from '../store';
 import type {HistoryItem} from '../types';
 export function historyPickerText(language: unknown) {
- const labels:Record<string,string[]>={'zh-CN':['从历史记录选择','上一页','下一页','关闭'],'zh-TW':['從歷史記錄選擇','上一頁','下一頁','關閉'],'en-US':['Choose from history','Previous','Next','Close'],'ja-JP':['履歴から選択','前へ','次へ','閉じる'],'ko-KR':['기록에서 선택','이전','다음','닫기']};
- return labels[String(language)]??labels['en-US'];
+ const labels:Record<string,string[]>={'zh-CN':['从历史记录选择','上一页','下一页','关闭']};
+ return labels[String(language)]??labels['zh-CN'];
 }
 export function HistoryImagePicker({onChoose,onClose}:{onChoose:(paths:string[])=>void;onClose:()=>void}) {
  const language=useAppStore(s=>s.settings?.language),text=historyPickerText(language);

@@ -26,7 +26,7 @@ it('parameter application never changes a running generation',async()=>{
 it('missing metadata keeps parameters and explicitly explains the fallback',async()=>{
  vi.stubGlobal('window',{naiDesktop:{loadImageFromPath:vi.fn().mockResolvedValue({ok:true,image})}});
  const params=useAppStore.getState().params;await applyImageParameters(image.filePath);
- expect(useAppStore.getState().params).toBe(params);expect(useAppStore.getState().toast).toContain('no generation metadata found');
+ expect(useAppStore.getState().params).toBe(params);expect(useAppStore.getState().toast).toContain('未找到生图原数据');
 });
 it('main drop/paste opts into metadata only on generation, history thumbnail remains image-only',()=>{
  const app=fs.readFileSync(new URL('./App.tsx',import.meta.url),'utf8');

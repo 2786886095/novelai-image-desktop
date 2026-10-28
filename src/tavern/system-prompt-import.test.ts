@@ -69,7 +69,8 @@ describe("bounded image-system-prompt imports", () => {
     try { importText("fetch('https://fixture.invalid')\n<script>declarative text</script>"); expect(fetch).not.toHaveBeenCalled(); }
     finally { fetch.mockRestore(); }
   });
-  it.each(["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR"])("has localized format, switch and every bounded failure message for %s", language => {
+  it("has format, switch and every bounded failure message", () => {
+    const language = "zh-CN";
     const text = systemPromptImportText(language);
     expect(text.hint).toContain("UTF-8");
     expect(text.enabled.length).toBeGreaterThan(5);

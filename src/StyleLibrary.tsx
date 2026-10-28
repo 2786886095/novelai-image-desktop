@@ -9,7 +9,7 @@ import type {StylePromptPreset} from './types';
 import {Button,SelectMenuCompat as Select} from './components/ui';
 import {Icon} from './components/icons';
 import {PreviewImageViewer} from './components/PreviewImageViewer';
-export const styleText=(language:unknown)=>labels[language as keyof typeof labels]??labels['en-US'];
+export const styleText=(language:unknown)=>labels[language as keyof typeof labels]??labels['zh-CN'];
 export function StyleSortSelect(){const s=useAppStore(x=>x.settings),t=styleText(s?.language);return <label>{t.sort}<Select aria-label={t.sort} value={s?.stylePromptPresetSort??'default'} onChange={e=>void setStyleSort(e.target.value).catch(e=>useAppStore.getState().setToast(String(e)))}>{STYLE_SORTS.map(v=><option key={v} value={v}>{v==='name'?t.nameSort:t[v]}</option>)}</Select></label>;}
 export function GallerySaveStyleButton({name,prompt,images}:{name:string;prompt:string;images:string[]}) {
  const t=styleText(useAppStore(s=>s.settings?.language));const [busy,setBusy]=useState(false),[error,setError]=useState('');

@@ -12,13 +12,13 @@ import {InpaintPromptSource} from './components/InpaintPromptSource';
 import {workflowText} from './workflow-text';
 const walk=(value:any):ReactElement<Record<string,any>>[]=>Array.isArray(value)?value.flatMap(walk):value&&typeof value==='object'&&'props'in value?[value,...walk(value.props.children)]:[];
 const render=()=>{h.cursor=0;return walk(InpaintPromptSource());};
-const text=workflowText('en-US');
+const text=workflowText('zh-CN');
 const button=(label:string)=>render().find(n=>n.type==='button'&&n.props.children===label)!;
 const tick=()=>new Promise(resolve=>setTimeout(resolve,5));
 async function until(predicate:()=>boolean){for(let n=0;n<100&&!predicate();n++)await tick();expect(predicate()).toBe(true);}
 beforeEach(()=>{
  h.slots=[];h.cursor=0;for(const mock of [h.reverse,h.snapshot,h.writes,h.refresh,h.apply])mock.mockReset();
- h.state={settings:{language:'en-US',reversePromptTemplateVersion:'v5',reversePromptSkillVersion:'2.0.0',visionApiUrl:'https://fixture.invalid/v1',visionApiKey:'synthetic-key',visionApiModel:'synthetic-model',reversePromptTemplatesV2:{tags:'',natural:'',mixed:''}},workbenchImage:{filePath:'synthetic-original.png'},inpaintPositivePrompt:'previous prompt',refreshSettings:h.refresh,setInpaintPositivePrompt:(value:string)=>{h.apply(value);h.state.inpaintPositivePrompt=value;}};
+ h.state={settings:{language:'zh-CN',reversePromptTemplateVersion:'v5',reversePromptSkillVersion:'2.0.0',visionApiUrl:'https://fixture.invalid/v1',visionApiKey:'synthetic-key',visionApiModel:'synthetic-model',reversePromptTemplatesV2:{tags:'',natural:'',mixed:''}},workbenchImage:{filePath:'synthetic-original.png'},inpaintPositivePrompt:'previous prompt',refreshSettings:h.refresh,setInpaintPositivePrompt:(value:string)=>{h.apply(value);h.state.inpaintPositivePrompt=value;}};
  h.snapshot.mockResolvedValue({ok:true,snapshot:{base64:'synthetic-image'}});
  h.reverse.mockResolvedValue({ok:true,prompt:'1girl, visible fixture'});
  vi.stubGlobal('window',{naiDesktop:{reversePrompt:h.reverse,readMetadataSnapshotFromPath:h.snapshot,setSetting:async(key:string,value:unknown)=>{h.writes(key,value);h.state.settings={...h.state.settings,[key]:value};}}});

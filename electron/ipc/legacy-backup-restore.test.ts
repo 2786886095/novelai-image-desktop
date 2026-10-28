@@ -33,7 +33,8 @@ it('restores kept settings and workspace data while dropping removed settings, t
  const result=await importDataBackup({path:await legacyArchive(),categories:['configuration','apiCredentials','agentWorkspace','tavernAgent','workspaceData'] as any,currentWorkspaceData:{},confirmConfigurationOverwrite:true});
  expect(result.ok,result.message).toBe(true);expect(result.recoveryPaths).toEqual([]);
  const settings=getSettings() as unknown as Record<string,unknown>;
- expect(settings).toMatchObject({theme:'dark',language:'ja-JP',proxyForUpdate:false,convertApiModel:'kept-convert-model',convertApiKey:'kept-convert-key'});
+ // The archive's UI language came from an older multi-language build; the UI is Chinese-only now.
+ expect(settings).toMatchObject({theme:'dark',language:'zh-CN',proxyForUpdate:false,convertApiModel:'kept-convert-model',convertApiKey:'kept-convert-key'});
  for(const key of [...Object.keys(removedConfiguration),...Object.keys(removedApi)])expect(settings,key).not.toHaveProperty(key);
  const disk=syncFs.readFileSync(path.join(userData(),'novelai-image-desktop.json'),'utf8');
  for(const key of [...Object.keys(removedConfiguration),...Object.keys(removedApi)])expect(disk,key).not.toContain(`"${key}"`);

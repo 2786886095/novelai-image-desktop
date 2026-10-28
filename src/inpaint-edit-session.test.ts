@@ -44,11 +44,9 @@ describe("saved inpaint editor image/mask preflight", () => {
     const assertion = expect(decodeInpaintEditMask("stalled", 2, 2)).rejects.toThrow("timed out");
     await vi.advanceTimersByTimeAsync(15000); await assertion;
   });
-  it("gives the restore control an explicit label in all five supported languages", () => {
-    for (const language of ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR"]) {
-      expect(inpaintEditText(language).returnEdit).toBeTruthy();
-      expect(inpaintEditText(language).hint).toBeTruthy();
-    }
+  it("gives the restore control an explicit label", () => {
+    expect(inpaintEditText("zh-CN").hint).toBeTruthy();
     expect(inpaintEditText("zh-CN").returnEdit).toBe("返回编辑");
+    expect(inpaintEditText(undefined).returnEdit).toBe("返回编辑");
   });
 });

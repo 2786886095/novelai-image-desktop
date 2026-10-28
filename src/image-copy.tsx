@@ -79,11 +79,8 @@ export function installImageCopy(doc = document, write = (src:string) => navigat
     const state = useAppStore.getState();
     const labels: Record<string,string[]> = {
       'zh-CN':['已复制图片','复制图片失败','已复制原始 PNG（保留元数据）','已复制图片；此来源不支持保留元数据','已复制图片；元数据保留失败'],
-      'zh-TW':['已複製圖片','複製圖片失敗','已複製原始 PNG（保留中繼資料）','已複製圖片；此來源不支援保留中繼資料','已複製圖片；中繼資料保留失敗'],
-      'ja-JP':['画像をコピーしました','画像のコピーに失敗しました','元の PNG をコピーしました（メタデータを保持）','画像をコピーしました。この画像のメタデータ保持には対応していません','画像をコピーしました。メタデータの保持に失敗しました'],
-      'ko-KR':['이미지를 복사했습니다','이미지 복사 실패','원본 PNG를 복사했습니다 (메타데이터 유지)','이미지를 복사했습니다. 이 소스는 메타데이터 유지를 지원하지 않습니다','이미지를 복사했습니다. 메타데이터 유지에 실패했습니다'],
     };
-    const text = labels[state.settings?.language ?? 'zh-CN'] ?? ['Image copied','Could not copy image','Original PNG copied (metadata preserved)','Image copied; metadata preservation unsupported for this source','Image copied; metadata preservation failed'];
+    const text = labels[state.settings?.language ?? 'zh-CN'] ?? labels['zh-CN'];
     const notify = (message:string) => { if (!disposed && useAppStore.getState().activeTab === state.activeTab) state.setToast(message); };
     void Promise.resolve().then(()=>copyImageForClipboard(src, state.settings?.copyImageMetadata === true,
       typeof window === 'undefined' ? undefined : window.naiDesktop?.copyImageWithMetadata, write,

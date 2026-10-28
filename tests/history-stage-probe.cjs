@@ -20,7 +20,7 @@ const image = {filePath: 'f:\\materials\\1.png', fileUrl: 'loaded-workbench', wi
 const bounds = {left: 220, top: 30, width: 200, height: 400};
 const picture = {getBoundingClientRect: () => bounds, naturalWidth: 100, naturalHeight: 400};
 const current = history[1];
-const state = {history, currentImage: current, workbenchImage: image, inputPreviewAnchor: {result: current}, activeTab: 'generate', settings: {language: 'en-US'}, selectImage: item => {state.currentImage = item; state.inputPreviewAnchor = null; selected.push(item.id);}};
+const state = {history, currentImage: current, workbenchImage: image, inputPreviewAnchor: {result: current}, activeTab: 'generate', settings: {language: 'zh-CN'}, selectImage: item => {state.currentImage = item; state.inputPreviewAnchor = null; selected.push(item.id);}};
 let selected = [], prevented = 0;
 const values = {zoom: 1, fullscreen: true, pan: {x: 0, y: 0}, shellSize: {width: 600, height: 400}, intrinsicSize: {width: 100, height: 400}};
 const effects = [];

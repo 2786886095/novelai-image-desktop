@@ -24,22 +24,6 @@ const COPY: Record<AppLanguage, Copy> = {
     edit: "编辑", remove: "删除", empty: "还没有自定义提词。", insert: "插入",
     inserted: "已插入自定义提词。", nameRequired: "请填写名称。", contentRequired: "请填写提词内容。",
   },
-  "zh-TW": {
-    trigger: "自訂提詞", title: "自訂提詞塊", subtitle: "儲存常用詞組並隨時插入提示詞；不會取代或呼叫正面預設。",
-    search: "搜尋提詞名稱或內容", create: "新增提詞", name: "名稱", namePlaceholder: "例如：角色服裝", content: "提詞內容", contentPlaceholder: "例如：white dress, blue ribbon", save: "確認儲存", cancel: "取消", edit: "編輯", remove: "刪除", empty: "尚無自訂提詞。", insert: "插入", inserted: "已插入自訂提詞。", nameRequired: "請填寫名稱。", contentRequired: "請填寫提詞內容。",
-  },
-  "en-US": {
-    trigger: "Custom chunks", title: "Custom prompt chunks", subtitle: "Save reusable phrases and insert them into this prompt. Positive presets remain separate.",
-    search: "Search names or content", create: "New chunk", name: "Name", namePlaceholder: "For example: outfit", content: "Prompt text", contentPlaceholder: "For example: white dress, blue ribbon", save: "Save", cancel: "Cancel", edit: "Edit", remove: "Delete", empty: "No custom prompt chunks yet.", insert: "Insert", inserted: "Custom prompt chunk inserted.", nameRequired: "Enter a name.", contentRequired: "Enter prompt text.",
-  },
-  "ja-JP": {
-    trigger: "カスタム提詞", title: "カスタムプロンプトブロック", subtitle: "よく使う語句を保存して挿入します。ポジティブプリセットとは別機能です。",
-    search: "名前または内容を検索", create: "新規作成", name: "名前", namePlaceholder: "例：衣装", content: "内容", contentPlaceholder: "例：white dress, blue ribbon", save: "保存", cancel: "キャンセル", edit: "編集", remove: "削除", empty: "カスタムブロックはありません。", insert: "挿入", inserted: "挿入しました。", nameRequired: "名前を入力してください。", contentRequired: "内容を入力してください。",
-  },
-  "ko-KR": {
-    trigger: "사용자 구문", title: "사용자 프롬프트 블록", subtitle: "자주 쓰는 구문을 저장해 현재 프롬프트에 삽입합니다. 긍정 프리셋과는 별도입니다.",
-    search: "이름 또는 내용 검색", create: "새 블록", name: "이름", namePlaceholder: "예: 의상", content: "내용", contentPlaceholder: "예: white dress, blue ribbon", save: "저장", cancel: "취소", edit: "편집", remove: "삭제", empty: "저장된 사용자 구문이 없습니다.", insert: "삽입", inserted: "사용자 구문을 삽입했습니다.", nameRequired: "이름을 입력하세요.", contentRequired: "내용을 입력하세요.",
-  },
 };
 
 const EMPTY_PROMPT_CHUNKS: PromptChunk[] = [];

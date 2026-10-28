@@ -51,6 +51,8 @@ function cleanText(value: unknown, max = 120) {
   return String(value ?? "").trim().slice(0, max);
 }
 
+// Names copied from the reference catalog keep every language the catalog
+// publishes: the UI shows zh-CN, and preset search also matches the others.
 function cleanLocalizedMap(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const allowed = new Set(["zh-CN", "zh-TW", "ja-JP", "ko-KR", "en-US"]);

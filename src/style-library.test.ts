@@ -29,7 +29,7 @@ describe('saved style library',()=>{
   expect(matchStyleImages(names,rows,'none')).toEqual([[],[]]);
   expect(()=>matchStyleImages(['a.png','a.png'],rows,'order')).toThrow('Duplicate');
  });
- it('all five UI languages cover every sort choice',async()=>{const {default:labels}=await import('../shared/style-library-ui.json');for(const t of Object.values(labels)){for(const s of STYLE_SORTS)expect(t[s==='name'?'nameSort':s]).toBeTruthy();}});
+ it('labels every sort choice',async()=>{const {default:labels}=await import('../shared/style-library-ui.json');for(const t of Object.values(labels)){for(const s of STYLE_SORTS)expect(t[s==='name'?'nameSort':s]).toBeTruthy();}});
 });
 
 describe('style cover selection',()=>{

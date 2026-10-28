@@ -272,21 +272,13 @@ function attachEditContextMenu(win: BrowserWindow) {
     const { isEditable, editFlags } = params;
     const hasSelection = params.selectionText.trim().length > 0;
     if (params.mediaType === "image" && params.hasImageContents) {
-      const language = getSettings().language;
-      const labels: Record<string, string> = {"zh-CN":"复制图片", "zh-TW":"複製圖片", "ja-JP":"画像をコピー", "ko-KR":"이미지 복사"};
-      Menu.buildFromTemplate([{label: labels[language] ?? "Copy image",
+      Menu.buildFromTemplate([{label: "复制图片",
         click: () => {
           if(win.isDestroyed())return;
           if(!getSettings().copyImageMetadata){
             void copyImageWithMetadata(params.srcURL,false).then(result=>{
               if(win.isDestroyed())return;
-              const notices:Record<string,string[]>={
-                'zh-CN':['已复制图片（已强力清除原数据）','复制图片失败；未写入未经清理的原图'],
-                'zh-TW':['已複製圖片（已強力清除原資料）','複製圖片失敗；未寫入未清理的原圖'],
-                'ja-JP':['画像をコピーしました（元データを強力に除去）','画像をコピーできませんでした。未処理の元画像はコピーしていません'],
-                'ko-KR':['이미지 복사 완료 (원본 데이터 강력 제거)','이미지 복사 실패; 정리되지 않은 원본은 복사하지 않았습니다'],
-              };
-              const text=notices[language]??['Image copied (embedded data strongly removed)','Copy failed; no uncleaned original was copied'];
+              const text=['已复制图片（已强力清除原数据）','复制图片失败；未写入未经清理的原图'];
               win.webContents.send('image-copy:notice',text[result.status==='copied'?0:1]);
             });
             return;
@@ -294,13 +286,7 @@ function attachEditContextMenu(win: BrowserWindow) {
           void copyImageWithMetadata(params.srcURL).then(result=>{
             if(win.isDestroyed())return;
             if(result.status!=='copied')win.webContents.copyImageAt(params.x,params.y);
-            const notices:Record<string,string[]>={
-              'zh-CN':['已复制原始 PNG（保留原数据）','已复制图片；此来源无法保留原数据'],
-              'zh-TW':['已複製原始 PNG（保留原資料）','已複製圖片；此來源無法保留原資料'],
-              'ja-JP':['元の PNG をコピーしました（元データを保持）','画像をコピーしました。元データは保持できません'],
-              'ko-KR':['원본 PNG 복사 완료 (원본 데이터 유지)','이미지 복사 완료; 원본 데이터는 유지되지 않습니다'],
-            };
-            const text=notices[language]??['Original PNG copied (metadata preserved)','Image copied; original metadata could not be retained'];
+            const text=['已复制原始 PNG（保留原数据）','已复制图片；此来源无法保留原数据'];
             win.webContents.send('image-copy:notice',text[result.status==='copied'?0:1]);
           });
         },
@@ -630,7 +616,6 @@ function createWindow() {
       "convert-api",
       "templates",
       "prompt",
-      "language",
       "appearance",
       "performance",
       "mcp",

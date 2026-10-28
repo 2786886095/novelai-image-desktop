@@ -19,7 +19,7 @@ describe('character persistence and presets (#8 #13)', () => {
   expect(normalizeCharacterPresets(null)).toEqual([]);
  });
  it('writes edits, loads a fresh store, and persists removal of the final character',async()=>{
-  let settings:any={language:'en-US',persistGenerateParams:true};
+  let settings:any={language:'zh-CN',persistGenerateParams:true};
   const desktop={setSetting:vi.fn(async(key:string,value:unknown)=>{settings={...settings,[key]:structuredClone(value)};}),getSettings:async()=>settings,
    onGenerationPreview:()=>()=>{},accountCached:async()=>({hasToken:false}),isFirstRun:async()=>false,
    getHistoryDates:async()=>[],getHistoryGroups:async()=>[],getHistory:async()=>[]};

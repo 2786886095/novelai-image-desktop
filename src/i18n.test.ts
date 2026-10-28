@@ -9,11 +9,8 @@ import {
   getTokenGuideText,
   getToolsHubText,
   normalizeAppLanguage,
-  SUPPORTED_APP_LANGUAGES,
 } from "./i18n";
 import {
-  CAPSULE_TAXONOMY,
-  localizedCapsuleSubgroupName,
   localizedTagLabel,
   TAB_ITEMS,
 } from "./prompt-data";
@@ -24,40 +21,33 @@ function collectStrings(value: unknown): string[] {
   return Object.values(value).flatMap(collectStrings);
 }
 
-describe("desktop i18n resources", () => {
+describe("desktop UI text", () => {
   it("uses the complete NovelAI API Token label for missing generation credentials", () => {
-    for (const language of SUPPORTED_APP_LANGUAGES) {
-      expect(desktopUiText(language.code, "cost.configureToken")).toContain("NovelAI API Token");
+    expect(desktopUiText("zh-CN", "cost.configureToken")).toContain("NovelAI API Token");
+  });
+
+  it("resolves every stored or missing language value to Simplified Chinese", () => {
+    for (const value of ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "fr-FR", undefined]) {
+      expect(normalizeAppLanguage(value)).toBe("zh-CN");
+      expect(desktopUiText(value, "cost.loadImageFirst")).toBe(desktopUiText("zh-CN", "cost.loadImageFirst"));
     }
   });
 
-  it("supports the requested Simplified, Traditional, English, Japanese, and Korean locales", () => {
-    expect(SUPPORTED_APP_LANGUAGES.map((item) => item.code)).toEqual(["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR"]);
-  });
-
-  it("normalizes unknown language codes to Simplified Chinese", () => {
-    expect(normalizeAppLanguage("zh-TW")).toBe("zh-TW");
-    expect(normalizeAppLanguage("fr-FR")).toBe("zh-CN");
-    expect(normalizeAppLanguage(undefined)).toBe("zh-CN");
-  });
-
-  it("localizes every pre-run quote unavailable state", () => {
+  it("has text for every pre-run quote unavailable state", () => {
     const keys = [
       "cost.configureToken",
       "cost.loadImageFirst",
       "cost.invalidParams",
       "cost.imageTooLarge",
     ];
-    for (const language of SUPPORTED_APP_LANGUAGES) {
-      for (const key of keys) {
-        const value = desktopUiText(language.code, key);
-        expect(value.trim()).not.toBe("");
-        expect(value).not.toBe(key);
-      }
+    for (const key of keys) {
+      const value = desktopUiText("zh-CN", key);
+      expect(value.trim()).not.toBe("");
+      expect(value).not.toBe(key);
     }
   });
 
-  it("localizes every generation phase shown on the canvas", () => {
+  it("has text for every generation phase shown on the canvas", () => {
     const keys = [
       "canvas.preparingTitle",
       "canvas.preparingHint",
@@ -68,90 +58,74 @@ describe("desktop i18n resources", () => {
       "canvas.savingTitle",
       "canvas.savingHint",
     ];
-    for (const language of SUPPORTED_APP_LANGUAGES) {
-      for (const key of keys) {
-        const value = desktopUiText(language.code, key);
-        expect(value.trim()).not.toBe("");
-        expect(value).not.toBe(key);
-      }
+    for (const key of keys) {
+      const value = desktopUiText("zh-CN", key);
+      expect(value.trim()).not.toBe("");
+      expect(value).not.toBe(key);
     }
   });
 
-  it("has complete localized labels for every main tab in every locale", () => {
+  it("has complete labels for every main tab", () => {
     const baseValues = TAB_ITEMS.map((item) => item.value);
     expect(baseValues.indexOf("referencePresets")).toBe(
       baseValues.indexOf("tools") + 1,
     );
-    for (const language of SUPPORTED_APP_LANGUAGES) {
-      const localized = getLocalizedTabItems(language.code);
-      expect(localized.map((item) => item.value)).toEqual(baseValues);
-      for (const item of localized) {
-        expect(item.label.trim()).not.toBe("");
-        expect(item.title.trim()).not.toBe("");
-        expect(item.desc.trim()).not.toBe("");
-      }
+    const localized = getLocalizedTabItems("zh-CN");
+    expect(localized.map((item) => item.value)).toEqual(baseValues);
+    for (const item of localized) {
+      expect(item.label.trim()).not.toBe("");
+      expect(item.title.trim()).not.toBe("");
+      expect(item.desc.trim()).not.toBe("");
     }
   });
 
-  it("has complete localized chrome and tools-hub text for every locale", () => {
-    for (const language of SUPPORTED_APP_LANGUAGES) {
-      for (const value of Object.values(getChromeText(language.code))) {
-        expect(value.trim()).not.toBe("");
-      }
-      for (const value of Object.values(getToolsHubText(language.code))) {
-        expect(value.trim()).not.toBe("");
-      }
-      for (const value of collectStrings(getTokenGuideText(language.code))) {
-        expect(value.trim()).not.toBe("");
-      }
-      const settings = getSettingsShellText(language.code);
-      expect(settings.title.trim()).not.toBe("");
-      expect(Object.keys(settings.nav)).toEqual([
-        "api",
-        "storage",
-        "backup",
-        "ai-reverse",
-        "convert-api",
-        "templates",
-        "prompt",
-        "language",
-        "appearance",
-        "performance",
-        "about",
-      ]);
-      for (const value of Object.values(settings.nav)) {
-        expect(value.trim()).not.toBe("");
-      }
-      for (const group of Object.values(getSettingsSectionText(language.code))) {
-        for (const value of Object.values(group)) {
-          expect(value.trim()).not.toBe("");
-        }
-      }
+  it("has complete chrome, tools-hub and settings text without a language section", () => {
+    for (const value of Object.values(getChromeText("zh-CN"))) {
+      expect(value.trim()).not.toBe("");
     }
-  });
-
-  it("has complete localized generation panel text for every locale", () => {
-    for (const language of SUPPORTED_APP_LANGUAGES) {
-      const text = getGeneratePanelText(language.code);
-      expect(Object.keys(text.modeSwitch)).toEqual(["textToImage", "imageToImage"]);
-      for (const value of collectStrings(text)) {
+    for (const value of Object.values(getToolsHubText("zh-CN"))) {
+      expect(value.trim()).not.toBe("");
+    }
+    for (const value of collectStrings(getTokenGuideText("zh-CN"))) {
+      expect(value.trim()).not.toBe("");
+    }
+    const settings = getSettingsShellText("zh-CN");
+    expect(settings.title.trim()).not.toBe("");
+    expect(Object.keys(settings.nav)).toEqual([
+      "api",
+      "storage",
+      "backup",
+      "ai-reverse",
+      "convert-api",
+      "templates",
+      "prompt",
+      "appearance",
+      "performance",
+      "about",
+    ]);
+    for (const value of Object.values(settings.nav)) {
+      expect(value.trim()).not.toBe("");
+    }
+    const sections = getSettingsSectionText("zh-CN");
+    expect(Object.keys(sections)).toEqual(["appearance", "performance"]);
+    for (const group of Object.values(sections)) {
+      for (const value of Object.values(group)) {
         expect(value.trim()).not.toBe("");
       }
     }
   });
 
-  it("provides non-Chinese fallback labels for every capsule tag in non-Chinese locales", () => {
-    const capsuleTags = CAPSULE_TAXONOMY.flatMap((category) =>
-      category.subgroups.flatMap((subgroup) => subgroup.tags)
-    );
-    expect(capsuleTags.length).toBeGreaterThan(4000);
-    for (const tag of capsuleTags) {
-      expect(localizedTagLabel(tag.en, tag.zh, "en-US")).not.toMatch(/\p{Script=Han}/u);
-      if (/\p{Script=Han}/u.test(tag.zh)) {
-        expect(localizedTagLabel(tag.en, tag.zh, "ja-JP").trim()).not.toBe("");
-        expect(localizedTagLabel(tag.en, tag.zh, "ko-KR")).not.toBe(tag.zh);
-      }
+  it("has complete generation panel text", () => {
+    const text = getGeneratePanelText("zh-CN");
+    expect(Object.keys(text.modeSwitch)).toEqual(["textToImage", "imageToImage"]);
+    for (const value of collectStrings(text)) {
+      expect(value.trim()).not.toBe("");
     }
-    expect(localizedCapsuleSubgroupName("脸颊嘴部", "en-US")).not.toMatch(/\p{Script=Han}/u);
+  });
+
+  it("labels tags with the source description, then the built-in Chinese glossary, then the readable tag", () => {
+    expect(localizedTagLabel("long_hair", " 自定义说明 ")).toBe("自定义说明");
+    expect(localizedTagLabel("1girl")).toBe("一个女孩 / 单女性角色");
+    expect(localizedTagLabel("unlisted_custom-tag")).toBe("unlisted custom tag");
   });
 });

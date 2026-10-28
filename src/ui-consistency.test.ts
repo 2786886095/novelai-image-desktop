@@ -548,7 +548,7 @@ describe("desktop UI consistency guards", () => {
     expect(fs.readFileSync(path.join(projectRoot, "electron/ipc/credential-vault.ts"), "utf8")).toContain('"translateAiApiKey"');
     expect(nai).toContain('settings.translateProvider === "ai"');
     expect(nai).toContain('`${base}/chat/completions`');
-    expect(i18n.match(/"settings\.aiTranslate"/g)).toHaveLength(5);
+    expect(i18n.match(/"settings\.aiTranslate"/g)).toHaveLength(1);
   });
 
   it("uses the shared listbox selector across every desktop feature", () => {

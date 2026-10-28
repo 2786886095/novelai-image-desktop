@@ -81,10 +81,6 @@ export async function decodeInpaintEditMask(
 export function inpaintEditText(language?: string) {
   const labels: Record<string, { returnEdit: string; hint: string; restoring: string; failed: string }> = {
     "zh-CN": { returnEdit: "返回编辑", hint: "恢复本次重绘前的原图、蒙版和选区；生成结果保留在历史中", restoring: "正在恢复编辑…", failed: "恢复编辑失败" },
-    "zh-TW": { returnEdit: "返回編輯", hint: "恢復本次重繪前的原圖、遮罩和選區；生成結果保留在歷史中", restoring: "正在恢復編輯…", failed: "恢復編輯失敗" },
-    "en-US": { returnEdit: "Return to editing", hint: "Restore the image, mask and region from before this inpaint; keep the generated result in history", restoring: "Restoring editor…", failed: "Could not restore editing" },
-    "ja-JP": { returnEdit: "編集に戻る", hint: "描き直し前の画像・マスク・選択範囲を復元。生成結果は履歴に保持", restoring: "編集を復元中…", failed: "編集を復元できませんでした" },
-    "ko-KR": { returnEdit: "편집으로 돌아가기", hint: "인페인트 전 원본, 마스크, 선택 영역을 복원하고 생성 결과는 기록에 보관합니다", restoring: "편집 복원 중…", failed: "편집을 복원할 수 없습니다" },
   };
-  return labels[language ?? "zh-CN"] ?? labels["en-US"];
+  return labels[language ?? "zh-CN"] ?? labels["zh-CN"];
 }
