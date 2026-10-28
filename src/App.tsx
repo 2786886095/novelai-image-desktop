@@ -3652,7 +3652,7 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
   const setI2ISizeMode = useAppStore((state) => state.setI2ISizeMode);
   const generateI2I = useAppStore((state) => state.generateI2I);
   const [magnitude, setMagnitude] = useState(3);
-  const [enhanceScale, setEnhanceScale] = useState<1 | 2 | "max">(1);
+  const [enhanceScale, setEnhanceScale] = useState<1 | 1.5 | "max">(1);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
 
@@ -3668,7 +3668,7 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
       isMax ? 1 : enhanceScale,
       params,
     );
-    if (!isMax && enhanceScale === 2 && requestedTarget.exceedsLimit) return;
+    if (!isMax && enhanceScale === 1.5 && requestedTarget.exceedsLimit) return;
     const previous = { width: params.width, height: params.height, strength: i2iParams.strength, noise: i2iParams.noise, sizeMode: i2iSizeMode, upscaledEnhance: i2iParams.upscaledEnhance, sourceMode: i2iSourceMode };
     const target = officialMax ? inputSize : isMax ? adaptiveNAIImageSize(workbenchImage.width * 2, workbenchImage.height * 2, params) : adaptiveNAIImageSize(workbenchImage.width * (enhanceScale as number), workbenchImage.height * (enhanceScale as number), params);
     setI2ISourceMode("latest");
@@ -3695,7 +3695,7 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
   const requestedTarget = workbenchImage
     ? resolveNAIEnhanceOutputSize(workbenchImage.width, workbenchImage.height, isMax ? 1 : enhanceScale, params)
     : null;
-  const outputTooLarge = Boolean(!isMax && enhanceScale === 2 && requestedTarget?.exceedsLimit);
+  const outputTooLarge = Boolean(!isMax && enhanceScale === 1.5 && requestedTarget?.exceedsLimit);
   const target = workbenchImage && requestedTarget
     ? outputTooLarge
       ? requestedTarget
@@ -3715,7 +3715,7 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
           <span>{t("enhance.scale")}</span>
           <div className="scale-buttons">
             <Button variant={enhanceScale === 1 ? "primary" : "secondary"} onClick={() => setEnhanceScale(1)}>{t("enhance.keepResolution")}</Button>
-            <Button variant={enhanceScale === 2 ? "primary" : "secondary"} onClick={() => setEnhanceScale(2)}>{t("enhance.doubleResolution")}</Button>
+            <Button variant={enhanceScale === 1.5 ? "primary" : "secondary"} onClick={() => setEnhanceScale(1.5)}>{t("enhance.oneAndHalfResolution")}</Button>
             <Button variant={isMax ? "primary" : "secondary"} onClick={() => setEnhanceScale("max")}>MAX</Button>
           </div>
         </div>

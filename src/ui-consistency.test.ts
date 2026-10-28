@@ -782,13 +782,16 @@ describe("desktop UI consistency guards", () => {
     expect(css).toMatch(/\.inpaint-compare-after-clip\s*\{[^}]*contain:\s*paint/s);
   });
 
-  it("blocks oversized Enhance 2x targets before any generation request", () => {
+  it("offers the official 1x / 1.5x / MAX Enhance amounts and blocks oversized 1.5x targets before any request", () => {
     const source = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
     const panel = source.slice(
       source.indexOf("function EnhancePanel"),
       source.indexOf("function DirectorPanel"),
     );
-    const guard = panel.indexOf("if (!isMax && enhanceScale === 2 && requestedTarget.exceedsLimit) return;");
+    expect(panel).toContain('useState<1 | 1.5 | "max">(1)');
+    expect(panel).toContain('t("enhance.oneAndHalfResolution")');
+    expect(panel).not.toContain("setEnhanceScale(2)");
+    const guard = panel.indexOf("if (!isMax && enhanceScale === 1.5 && requestedTarget.exceedsLimit) return;");
     const request = panel.indexOf("await generateI2I()");
     expect(guard).toBeGreaterThan(-1);
     expect(request).toBeGreaterThan(guard);

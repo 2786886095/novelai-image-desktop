@@ -6653,16 +6653,16 @@ const DESKTOP_FIX_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "inpaint.sourceLatest": "使用最新结果",
     "i2i.sourceHint": "生成后自动打开原图/结果对比；选择原图可连续尝试而无需重复加载。",
     "inpaint.sourceHint": "默认保留最初加载的图片连续重绘；切换来源时会清空旧蒙版，完成后自动打开前后对比。",
-    "upscale.explain": "超分只负责扩大输出并补足清晰度，不进行第二次创意扩散；画面变化通常小于“增强”。2×/4×会直接改变分辨率。",
+    "upscale.explain": "超分只负责扩大输出并补足清晰度，不进行第二次创意扩散；画面变化通常小于“增强”。2×/4×会直接改变分辨率。NovelAI 官方超分每次固定放大 2×（4× 与 MAX 由多次 2× 组成）；需要官方的 1.5× 放大请使用「生成 → 增强 → 1.5×」。",
     "upscale.outputLimit": "超分后尺寸将达到 {output}，超过允许的最大尺寸 {limit}。请选择 2× 或换用更小的原图。",
     "enhance.magnitude": "增强幅度 {value}",
     "enhance.explain": "增强会使用当前正面、风格与负面提示词。默认采用保守强度以保留姿势和构图；提高幅度仍可能改变局部结构。",
     "enhance.scale": "输出倍率",
     "enhance.keepResolution": "1× 保持分辨率",
-    "enhance.doubleResolution": "2× 同时放大",
+    "enhance.oneAndHalfResolution": "1.5× 同时放大",
     "enhance.outputSize": "输出尺寸",
     "enhance.outputHint": "1×只做二次扩散增强；2×会改变分辨率。尺寸会按 NovelAI 支持范围自动对齐。",
-    "enhance.outputLimit": "增强并放大后的目标尺寸 {size}（{pixels} 像素）超过 NovelAI 允许的 {limit} 像素上限。请选择 1× 或换用更小的原图；未发送请求。",
+    "enhance.outputLimit": "增强并放大后的目标尺寸 {size}（{pixels} 像素）超过 NovelAI 允许的 {limit} 像素上限。请选择 1×、MAX 或换用更小的原图；未发送请求。",
     "enhance.run": "增强图像 {scale}×",
     "postprocess.tools": "后期工具",
     "postprocess.upscale": "超分",
@@ -6678,29 +6678,29 @@ const DESKTOP_FIX_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
   "zh-TW": {
     "inpaint.nextSource": "生成後下次重繪使用", "inpaint.nextSourceLabel": "下次局部重繪來源", "inpaint.sourceOriginal": "始終使用原圖", "inpaint.sourceLatest": "使用最新結果",
     "i2i.sourceHint": "生成後自動開啟原圖/結果對比；選擇原圖可連續嘗試而無需重複載入。", "inpaint.sourceHint": "預設保留最初載入的圖片連續重繪；切換來源時會清除舊蒙版，完成後自動開啟前後對比。",
-    "upscale.explain": "超分只負責放大輸出並補足清晰度，不進行第二次創意擴散；畫面變化通常小於「增強」。2×/4× 會直接改變解析度。", "upscale.outputLimit": "超分後尺寸將達到 {output}，超過允許的最大尺寸 {limit}。請選擇 2× 或使用較小的原圖。",
-    "enhance.magnitude": "增強幅度 {value}", "enhance.explain": "增強會使用目前正面、風格與負面提示詞。預設採用保守強度以保留姿勢和構圖；提高幅度仍可能改變局部結構。", "enhance.scale": "輸出倍率", "enhance.keepResolution": "1× 保持解析度", "enhance.doubleResolution": "2× 同時放大", "enhance.outputSize": "輸出尺寸", "enhance.outputHint": "1× 只做二次擴散增強；2× 會改變解析度。尺寸會依 NovelAI 支援範圍自動對齊。", "enhance.outputLimit": "增強並放大後的目標尺寸 {size}（{pixels} 像素）超過 NovelAI 允許的 {limit} 像素上限。請選擇 1× 或使用較小的原圖；未送出請求。", "enhance.run": "增強圖像 {scale}×",
+    "upscale.explain": "超分只負責放大輸出並補足清晰度，不進行第二次創意擴散；畫面變化通常小於「增強」。2×/4× 會直接改變解析度。NovelAI 官方超分每次固定放大 2×（4× 與 MAX 由多次 2× 組成）；需要官方的 1.5× 放大請使用「生成 → 增強 → 1.5×」。", "upscale.outputLimit": "超分後尺寸將達到 {output}，超過允許的最大尺寸 {limit}。請選擇 2× 或使用較小的原圖。",
+    "enhance.magnitude": "增強幅度 {value}", "enhance.explain": "增強會使用目前正面、風格與負面提示詞。預設採用保守強度以保留姿勢和構圖；提高幅度仍可能改變局部結構。", "enhance.scale": "輸出倍率", "enhance.keepResolution": "1× 保持解析度", "enhance.oneAndHalfResolution": "1.5× 同時放大", "enhance.outputSize": "輸出尺寸", "enhance.outputHint": "1× 只做二次擴散增強；2× 會改變解析度。尺寸會依 NovelAI 支援範圍自動對齊。", "enhance.outputLimit": "增強並放大後的目標尺寸 {size}（{pixels} 像素）超過 NovelAI 允許的 {limit} 像素上限。請選擇 1×、MAX 或使用較小的原圖；未送出請求。", "enhance.run": "增強圖像 {scale}×",
     "postprocess.tools": "後期工具", "postprocess.upscale": "超分", "postprocess.director": "導演工具", "postprocess.enhance": "增強",
     "errorBoundary.title": "這個介面暫時發生問題", "errorBoundary.root": "應用程式外殼仍保留，請重試或重新載入。", "errorBoundary.tab": "其他頁籤仍可使用；切換頁籤或按重試即可恢復。", "errorBoundary.retry": "重試", "errorBoundary.copy": "複製錯誤", "errorBoundary.reload": "重新載入"
   },
   "en-US": {
     "inpaint.nextSource": "Use for the next redraw", "inpaint.nextSourceLabel": "Next redraw source", "inpaint.sourceOriginal": "Always use original", "inpaint.sourceLatest": "Use latest result",
     "i2i.sourceHint": "The before/after comparison opens automatically. Keep the original selected to try again without reloading.", "inpaint.sourceHint": "The initially loaded image is kept by default. Changing the source clears the old mask, and comparison opens after completion.",
-    "upscale.explain": "Upscaling enlarges the output and restores detail without a second creative diffusion pass. Changes are usually smaller than Enhance; 2×/4× directly change resolution.", "upscale.outputLimit": "The upscaled size would be {output}, exceeding the maximum {limit}. Choose 2× or use a smaller source image.",
-    "enhance.magnitude": "Enhance strength {value}", "enhance.explain": "Enhance uses the current positive, style, and negative prompts. Conservative defaults preserve pose and composition; higher strength can still alter local structure.", "enhance.scale": "Output scale", "enhance.keepResolution": "1× Keep resolution", "enhance.doubleResolution": "2× Enlarge", "enhance.outputSize": "Output size", "enhance.outputHint": "1× performs a second diffusion pass only; 2× also changes resolution. The size is aligned to NovelAI-supported values.", "enhance.outputLimit": "The enhanced target {size} ({pixels} pixels) exceeds NovelAI's {limit}-pixel limit. Choose 1× or use a smaller source image; no request was sent.", "enhance.run": "Enhance image {scale}×",
+    "upscale.explain": "Upscaling enlarges the output and restores detail without a second creative diffusion pass. Changes are usually smaller than Enhance; 2×/4× directly change resolution. NovelAI's official upscaler always enlarges 2× per pass (4× and MAX chain several 2× passes); for the official 1.5× enlargement use Generate → Enhance → 1.5×.", "upscale.outputLimit": "The upscaled size would be {output}, exceeding the maximum {limit}. Choose 2× or use a smaller source image.",
+    "enhance.magnitude": "Enhance strength {value}", "enhance.explain": "Enhance uses the current positive, style, and negative prompts. Conservative defaults preserve pose and composition; higher strength can still alter local structure.", "enhance.scale": "Output scale", "enhance.keepResolution": "1× Keep resolution", "enhance.oneAndHalfResolution": "1.5× Enlarge", "enhance.outputSize": "Output size", "enhance.outputHint": "1× performs a second diffusion pass only; 2× also changes resolution. The size is aligned to NovelAI-supported values.", "enhance.outputLimit": "The enhanced target {size} ({pixels} pixels) exceeds NovelAI's {limit}-pixel limit. Choose 1×, MAX or a smaller source image; no request was sent.", "enhance.run": "Enhance image {scale}×",
     "postprocess.tools": "Post-processing tools", "postprocess.upscale": "Upscale", "postprocess.director": "Director tools", "postprocess.enhance": "Enhance",
     "errorBoundary.title": "This view encountered a problem", "errorBoundary.root": "The app shell is still available. Retry or reload.", "errorBoundary.tab": "Other tabs remain available. Switch tabs or retry to recover.", "errorBoundary.retry": "Retry", "errorBoundary.copy": "Copy error", "errorBoundary.reload": "Reload"
   },
   "ja-JP": {
     "inpaint.nextSource": "次回の再描画に使用", "inpaint.nextSourceLabel": "次回の再描画元", "inpaint.sourceOriginal": "常に元画像を使用", "inpaint.sourceLatest": "最新結果を使用", "i2i.sourceHint": "生成後に元画像と結果の比較を自動表示します。元画像を選ぶと再読み込みせず続けて試せます。", "inpaint.sourceHint": "最初の画像を既定で保持します。元画像を切り替えると古いマスクを消去し、完了後に比較を表示します。",
-    "upscale.explain": "アップスケールは出力を拡大して鮮明さを補い、追加の創造的拡散は行いません。変化は通常「強化」より小さく、2×/4× は解像度を直接変更します。", "upscale.outputLimit": "出力サイズ {output} は最大 {limit} を超えます。2× を選ぶか、より小さい元画像を使用してください。",
-    "enhance.magnitude": "強化の強さ {value}", "enhance.explain": "現在のポジティブ、スタイル、ネガティブプロンプトを使用します。控えめな既定値でポーズと構図を保ちますが、強さを上げると部分構造が変わる場合があります。", "enhance.scale": "出力倍率", "enhance.keepResolution": "1× 解像度を維持", "enhance.doubleResolution": "2× 同時に拡大", "enhance.outputSize": "出力サイズ", "enhance.outputHint": "1× は再拡散強化のみ、2× は解像度も変更します。NovelAI 対応値に自動調整されます。", "enhance.outputLimit": "目標サイズ {size}（{pixels} ピクセル）は NovelAI の上限 {limit} を超えます。1× または小さい元画像を選んでください。リクエストは送信されません。", "enhance.run": "画像を強化 {scale}×",
+    "upscale.explain": "アップスケールは出力を拡大して鮮明さを補い、追加の創造的拡散は行いません。変化は通常「強化」より小さく、2×/4× は解像度を直接変更します。NovelAI 公式のアップスケールは 1 回ごとに 2× 固定です（4× と MAX は 2× を複数回実行）。公式の 1.5× 拡大は「生成 → 強化 → 1.5×」を使ってください。", "upscale.outputLimit": "出力サイズ {output} は最大 {limit} を超えます。2× を選ぶか、より小さい元画像を使用してください。",
+    "enhance.magnitude": "強化の強さ {value}", "enhance.explain": "現在のポジティブ、スタイル、ネガティブプロンプトを使用します。控えめな既定値でポーズと構図を保ちますが、強さを上げると部分構造が変わる場合があります。", "enhance.scale": "出力倍率", "enhance.keepResolution": "1× 解像度を維持", "enhance.oneAndHalfResolution": "1.5× 同時に拡大", "enhance.outputSize": "出力サイズ", "enhance.outputHint": "1× は再拡散強化のみ、2× は解像度も変更します。NovelAI 対応値に自動調整されます。", "enhance.outputLimit": "目標サイズ {size}（{pixels} ピクセル）は NovelAI の上限 {limit} を超えます。1×、MAX または小さい元画像を選んでください。リクエストは送信されません。", "enhance.run": "画像を強化 {scale}×",
     "postprocess.tools": "後処理ツール", "postprocess.upscale": "アップスケール", "postprocess.director": "ディレクターツール", "postprocess.enhance": "強化", "errorBoundary.title": "この画面で問題が発生しました", "errorBoundary.root": "アプリ本体は維持されています。再試行または再読み込みしてください。", "errorBoundary.tab": "他のタブは利用できます。タブ切替または再試行で復旧できます。", "errorBoundary.retry": "再試行", "errorBoundary.copy": "エラーをコピー", "errorBoundary.reload": "再読み込み"
   },
   "ko-KR": {
     "inpaint.nextSource": "다음 다시 그리기에 사용", "inpaint.nextSourceLabel": "다음 다시 그리기 원본", "inpaint.sourceOriginal": "항상 원본 사용", "inpaint.sourceLatest": "최신 결과 사용", "i2i.sourceHint": "생성 후 원본/결과 비교가 자동으로 열립니다. 원본을 선택하면 다시 불러오지 않고 계속 시도할 수 있습니다.", "inpaint.sourceHint": "처음 불러온 이미지를 기본으로 유지합니다. 원본을 바꾸면 이전 마스크를 지우고 완료 후 비교를 엽니다.",
-    "upscale.explain": "업스케일은 출력을 키우고 선명도를 보완하며 추가 창작 확산을 하지 않습니다. 변화는 보통 강화보다 작고 2×/4×는 해상도를 직접 바꿉니다.", "upscale.outputLimit": "업스케일 크기 {output}은 최대 {limit}을 초과합니다. 2×를 선택하거나 더 작은 원본을 사용하세요.",
-    "enhance.magnitude": "강화 강도 {value}", "enhance.explain": "현재 긍정, 스타일, 부정 프롬프트를 사용합니다. 보수적인 기본값으로 자세와 구도를 유지하지만 강도를 높이면 일부 구조가 바뀔 수 있습니다.", "enhance.scale": "출력 배율", "enhance.keepResolution": "1× 해상도 유지", "enhance.doubleResolution": "2× 함께 확대", "enhance.outputSize": "출력 크기", "enhance.outputHint": "1×는 두 번째 확산 강화만 수행하고 2×는 해상도도 바꿉니다. NovelAI 지원 크기에 자동 정렬됩니다.", "enhance.outputLimit": "목표 크기 {size}({pixels}픽셀)는 NovelAI 제한 {limit}픽셀을 초과합니다. 1× 또는 더 작은 원본을 선택하세요. 요청은 전송되지 않았습니다.", "enhance.run": "이미지 강화 {scale}×",
+    "upscale.explain": "업스케일은 출력을 키우고 선명도를 보완하며 추가 창작 확산을 하지 않습니다. 변화는 보통 강화보다 작고 2×/4×는 해상도를 직접 바꿉니다. NovelAI 공식 업스케일은 한 번에 2×로 고정됩니다(4×와 MAX는 2×를 여러 번 실행). 공식 1.5× 확대는 「생성 → 강화 → 1.5×」를 사용하세요.", "upscale.outputLimit": "업스케일 크기 {output}은 최대 {limit}을 초과합니다. 2×를 선택하거나 더 작은 원본을 사용하세요.",
+    "enhance.magnitude": "강화 강도 {value}", "enhance.explain": "현재 긍정, 스타일, 부정 프롬프트를 사용합니다. 보수적인 기본값으로 자세와 구도를 유지하지만 강도를 높이면 일부 구조가 바뀔 수 있습니다.", "enhance.scale": "출력 배율", "enhance.keepResolution": "1× 해상도 유지", "enhance.oneAndHalfResolution": "1.5× 함께 확대", "enhance.outputSize": "출력 크기", "enhance.outputHint": "1×는 두 번째 확산 강화만 수행하고 2×는 해상도도 바꿉니다. NovelAI 지원 크기에 자동 정렬됩니다.", "enhance.outputLimit": "목표 크기 {size}({pixels}픽셀)는 NovelAI 제한 {limit}픽셀을 초과합니다. 1×, MAX 또는 더 작은 원본을 선택하세요. 요청은 전송되지 않았습니다.", "enhance.run": "이미지 강화 {scale}×",
     "postprocess.tools": "후처리 도구", "postprocess.upscale": "업스케일", "postprocess.director": "디렉터 도구", "postprocess.enhance": "강화", "errorBoundary.title": "이 화면에 문제가 발생했습니다", "errorBoundary.root": "앱 셸은 유지됩니다. 다시 시도하거나 새로고침하세요.", "errorBoundary.tab": "다른 탭은 사용할 수 있습니다. 탭을 전환하거나 다시 시도하세요.", "errorBoundary.retry": "다시 시도", "errorBoundary.copy": "오류 복사", "errorBoundary.reload": "새로고침"
   }
 };

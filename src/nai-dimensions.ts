@@ -89,7 +89,7 @@ export function adaptiveNAIImageSize(
 
 /**
  * Resolve the requested Enhance output without silently shrinking it. This is
- * used by the 2x Enhance path so an oversized request can be stopped locally.
+ * used by the 1.5x Enhance path so an oversized request can be stopped locally.
  */
 export function resolveNAIEnhanceOutputSize(
   width: unknown,
