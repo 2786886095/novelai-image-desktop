@@ -19,9 +19,11 @@ test('OS PID witness requires one running exact bundle service, never a request 
 test('deterministic system locale is confined to the actual fresh Simulator and configured before boot',()=>{
  const data='/Users/runner/Library/Developer/CoreSimulator/Devices/'+context.device+'/data';
  assert.equal(iosSimulatorLocalePaths(data,context.device).locale,'en_US');
+ assert.deepEqual(iosSimulatorLocalePaths(data,context.device).languages,['en-US']);
  for(const p of ['/Users/runner/Library/Preferences',data+'/../data',data.replace(context.device,'12345678-1234-1234-1234-123456789abc'),data+'/Library'])assert.throws(()=>iosSimulatorLocalePaths(p,context.device));
- const creator=fs.readFileSync(new URL('./create-disposable-ios-simulator.mjs',import.meta.url),'utf8');assert(creator.indexOf("'AppleLanguages','-array','en'")<creator.indexOf("'boot',device"));assert(creator.includes("'AppleLocale','raw','-o','-'"));
+ const creator=fs.readFileSync(new URL('./create-disposable-ios-simulator.mjs',import.meta.url),'utf8');const write=creator.indexOf("'AppleLanguages','-array',...locale.languages"),boot=creator.indexOf("'boot',device");assert(write>=0&&write<boot);assert(creator.includes("'AppleLocale','raw','-o','-'"));assert(creator.includes('assertIosSimulatorLocaleReadback(languages,region)'));
  const driver=fs.readFileSync(new URL('./ios-folder-picker-driver.mjs',import.meta.url),'utf8');assert(driver.includes("'-testLanguage','en','-testRegion','US'"));assert(driver.includes('observedPidBefore=observePid()'));assert(driver.includes('observedPidAfter=observePid()'));
+ assert(driver.includes('assertIosSimulatorLocaleReadback(actualLanguages,actualLocale)'));
 });
 test('one overall REQUEST budget includes both real PID queries and bounded UI termination below Dart180 seconds',()=>{
  const driver=fs.readFileSync(new URL('./ios-folder-picker-driver.mjs',import.meta.url),'utf8');assert(driver.includes('requestDeadline=Date.now()+160000'));assert(driver.includes('Math.min(5000,remaining())'));assert(driver.includes('Math.min(140000,remaining()-10000)'));assert(driver.includes('runBoundedNativeCommand(argv,{cwd,env,timeout,killGrace:1000,drainGrace:1000'));assert(driver.includes('!r.cleanupComplete||r.signal!==null'));assert(driver.includes('remaining();fs.writeFileSync'));assert(driver.includes("'-default-test-execution-time-allowance','120'"));

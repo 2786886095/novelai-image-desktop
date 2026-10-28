@@ -7,10 +7,16 @@ const versionNumber=value=>{
  if(p.some(x=>!Number.isInteger(x)||x<0||x>255))throw Error('Invalid runtime version');
  return (p[0]*65536)+(p[1]||0)*256+(p[2]||0);
 };
+export function assertIosSimulatorLocaleReadback(languages,region){
+ // macOS canonicalized the old write('en') into ['en-US'] on the actual
+ // runner. Request that exact locale explicitly; do not accept any language.
+ if(JSON.stringify(languages)!=='["en-US"]'||region!=='en_US')throw Error('Actual Simulator locale readback differs');
+ return{languages:['en-US'],locale:'en_US'};
+}
 export function iosSimulatorLocalePaths(dataPath,device){
  if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(device||'')||typeof dataPath!=='string'||!path.posix.isAbsolute(dataPath)||dataPath.includes('\\'))throw Error('Actual newly created Simulator data path/UUID required');
  const clean=path.posix.normalize(dataPath);if(clean!==dataPath||!clean.toLowerCase().endsWith('/library/developer/coresimulator/devices/'+device.toLowerCase()+'/data'))throw Error('Locale writes must be confined to the freshly created Simulator');
- const domain=clean+'/Library/Preferences/.GlobalPreferences';return{dataPath:clean,domain,file:domain+'.plist',languages:['en'],locale:'en_US',testLanguage:'en',testRegion:'US'};
+ const domain=clean+'/Library/Preferences/.GlobalPreferences';return{dataPath:clean,domain,file:domain+'.plist',languages:['en-US'],locale:'en_US',testLanguage:'en',testRegion:'US'};
 }
 export function chooseIOSSimulatorTarget(runtimes,deviceTypes,devices={}){
  const available=runtimes.filter(r=>r.isAvailable&&/^iOS(?: |$)/.test(r.name)).sort((a,b)=>versionNumber(b.version)-versionNumber(a.version));
@@ -48,9 +54,9 @@ if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.ur
   fs.mkdirSync(path.dirname(locale.file),{recursive:true});
   for(let p=path.dirname(locale.file);;p=path.dirname(p)){if(fs.lstatSync(p).isSymbolicLink())throw Error('Aliased Simulator preferences refused');if(p===path.parse(p).root)break;}
   if(fs.existsSync(locale.file)&&(!fs.lstatSync(locale.file).isFile()||fs.lstatSync(locale.file).isSymbolicLink()))throw Error('Nonregular Simulator preference file refused');
-  run(['/usr/bin/defaults','write',locale.domain,'AppleLanguages','-array','en']);run(['/usr/bin/defaults','write',locale.domain,'AppleLocale','-string','en_US']);
+  run(['/usr/bin/defaults','write',locale.domain,'AppleLanguages','-array',...locale.languages]);run(['/usr/bin/defaults','write',locale.domain,'AppleLocale','-string',locale.locale]);
   const languages=JSON.parse(run(['/usr/bin/plutil','-extract','AppleLanguages','json','-o','-',locale.file]));const region=run(['/usr/bin/plutil','-extract','AppleLocale','raw','-o','-',locale.file]).trim();
-  if(JSON.stringify(languages)!=='["en"]'||region!=='en_US')throw Error('Actual Simulator locale readback differs');
+  assertIosSimulatorLocaleReadback(languages,region);
   run(['xcrun','simctl','boot',device]);run(['xcrun','simctl','bootstatus',device,'-b']);exitStatus=0;
  }catch(error){failure=String(error.stack||error);process.stderr.write(failure+'\n');}
  finally{fs.writeFileSync(path.join(output,'SIMULATOR_CREATION.json'),JSON.stringify({sourceSha:process.env.GITHUB_SHA,selection,device,locale,commands,exitStatus,failure:failure??null,paidCalls:0,full195Certified:false},null,2)+'\n');process.exitCode=exitStatus;}

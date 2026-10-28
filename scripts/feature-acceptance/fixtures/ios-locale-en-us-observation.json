@@ -1,0 +1,78 @@
+{
+  "schema": "ios-locale-historical-observation/v1",
+  "sourceSha": "4c2af6e8d119e85e721b83610439c31f9e72ac26",
+  "workflowRun": 40614278234,
+  "jobId": 122572999586,
+  "creationReceiptSha256": "dbc861b558c48be62a3a1efd08d3243e3de63695f6ba7d8f5219fb56bef983c0",
+  "device": "21C17801-5456-45F5-A2E7-80B87D9562E3",
+  "dataPath": "/Users/runner/Library/Developer/CoreSimulator/Devices/21C17801-5456-45F5-A2E7-80B87D9562E3/data",
+  "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-18-2",
+  "deviceType": "com.apple.CoreSimulator.SimDeviceType.iPhone-16",
+  "originalExpectedLanguages": [
+    "en"
+  ],
+  "actualCommands": [
+    {
+      "command": [
+        "/usr/bin/defaults",
+        "write",
+        "/Users/runner/Library/Developer/CoreSimulator/Devices/21C17801-5456-45F5-A2E7-80B87D9562E3/data/Library/Preferences/.GlobalPreferences",
+        "AppleLanguages",
+        "-array",
+        "en"
+      ],
+      "stdout": "",
+      "stderr": "",
+      "exitStatus": 0,
+      "error": null
+    },
+    {
+      "command": [
+        "/usr/bin/defaults",
+        "write",
+        "/Users/runner/Library/Developer/CoreSimulator/Devices/21C17801-5456-45F5-A2E7-80B87D9562E3/data/Library/Preferences/.GlobalPreferences",
+        "AppleLocale",
+        "-string",
+        "en_US"
+      ],
+      "stdout": "",
+      "stderr": "",
+      "exitStatus": 0,
+      "error": null
+    },
+    {
+      "command": [
+        "/usr/bin/plutil",
+        "-extract",
+        "AppleLanguages",
+        "json",
+        "-o",
+        "-",
+        "/Users/runner/Library/Developer/CoreSimulator/Devices/21C17801-5456-45F5-A2E7-80B87D9562E3/data/Library/Preferences/.GlobalPreferences.plist"
+      ],
+      "stdout": "[\"en-US\"]",
+      "stderr": "",
+      "exitStatus": 0,
+      "error": null
+    },
+    {
+      "command": [
+        "/usr/bin/plutil",
+        "-extract",
+        "AppleLocale",
+        "raw",
+        "-o",
+        "-",
+        "/Users/runner/Library/Developer/CoreSimulator/Devices/21C17801-5456-45F5-A2E7-80B87D9562E3/data/Library/Preferences/.GlobalPreferences.plist"
+      ],
+      "stdout": "en_US\n",
+      "stderr": "",
+      "exitStatus": 0,
+      "error": null
+    }
+  ],
+  "originalExitStatus": 1,
+  "originalFailure": "Error: Actual Simulator locale readback differs\n    at file:///Users/runner/work/novelai-image-desktop/novelai-image-desktop/scripts/feature-acceptance/create-disposable-ios-simulator.mjs:53:67\n    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)",
+  "functionalCertificationGranted": false,
+  "meaning": "Historical real macOS command outputs, not proof that the new source boots or passes native scenarios."
+}

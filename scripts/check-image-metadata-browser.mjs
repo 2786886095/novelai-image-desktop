@@ -5,7 +5,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {spawn} from 'node:child_process';
-import {createServer} from 'vite';
+import {startMetadataBrowserServer} from './metadata-browser-server.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-metadata-regression-'));
@@ -15,22 +15,8 @@ try {
   if (process.platform === 'linux' && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) {
     throw new Error('Browser metadata gate requires a display; use xvfb-run -a npm run test:metadata. No skipped acceptance.');
   }
-  for (let attempt = 0; attempt < 30; attempt++) {
-    server = await createServer({root, configFile: false, logLevel: 'error', cacheDir: path.join(temp, 'vite-cache'),
-      optimizeDeps: {entries: [], noDiscovery: true, include: ['pako']},
-      server: {host: '127.0.0.1', port: 40000 + Math.floor(Math.random() * 20000), strictPort: true,
-        watch: {ignored: ['**/*']}},
-      plugins: [{name: 'metadata-regression-shell', configureServer(vite) {
-        vite.middlewares.use((req, res, next) => {
-          if (req.url !== '/__metadata_regression__') return next();
-          res.setHeader('Content-Type', 'text/html'); res.end('<!doctype html><title>Metadata regression</title>');
-        });
-      }}]});
-    try { await server.listen(); break; }
-    catch (error) { await server.close(); server = undefined; if (error.code !== 'EADDRINUSE' || attempt === 29) throw error; }
-  }
-  if (!server) throw new Error('No free local test port');
-  const port = server.httpServer.address().port;
+  server = await startMetadataBrowserServer({root, cacheDir: path.join(temp, 'vite-cache')});
+  const port = server.port;
   const env = {...process.env}; delete env.ELECTRON_RUN_AS_NODE; delete env.VITE_DEV_SERVER_URL;
   const electron = createRequire(import.meta.url)('electron');
   // Use an isolated byte-identical probe; no profile files are written to the source.

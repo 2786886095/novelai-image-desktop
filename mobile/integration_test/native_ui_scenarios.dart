@@ -18,8 +18,6 @@ import 'package:novelai_mobile/screens/random_artist_lab_screen.dart';
 import 'package:novelai_mobile/screens/tools_hub_screen.dart';
 import 'package:novelai_mobile/screens/comic_screen.dart';
 import 'package:novelai_mobile/screens/batch_redraw_screen.dart';
-import 'package:novelai_mobile/screens/v5_artist_weight_repair_screen.dart';
-import 'package:novelai_mobile/screens/prompt_codex_screen.dart';
 import 'package:novelai_mobile/services/artist_tag_service.dart';
 import 'package:novelai_mobile/services/novelai_accounts.dart';
 import 'package:novelai_mobile/services/novelai_account_api.dart';
@@ -30,6 +28,7 @@ import 'native_scenario_support.dart';
 import 'native_ui_actions.dart';
 import 'native_account_wait_diagnostic.dart';
 import 'native_ui_tls_fixture.dart';
+import 'native_tools_scenarios.dart' show nativeToolCardMatchers;
 
 final suite = NativeScenarios(9);
 Future<void> main() => suite.run(_run);
@@ -698,23 +697,20 @@ Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
           (w) => w is ListTile && w.onTap != null && w.title is Text)
       .map((e) => ((e.widget as ListTile).title as Text).data!)
       .toList();
-  require(toolTitles.length == 6, 'Uncovered new nested tool route');
+  final destinations = nativeToolCardMatchers(app);
+  require(
+      destinations.length == 7 &&
+          toolTitles.length == destinations.length &&
+          toolTitles.toSet().length == destinations.length &&
+          toolTitles.every(destinations.containsKey),
+      'Uncovered or ambiguous nested tool route');
   final nested = <String>[];
-  for (var index = 0; index < toolTitles.length; index++) {
-    await nativeUiTextTap(toolTitles[index]);
-    final bool Function(Widget) expected = switch (index) {
-      0 => (w) => w is ComicScreen,
-      1 => (w) => w is BatchRedrawScreen,
-      2 => (w) => w is RandomArtistLabScreen,
-      3 => (w) =>
-          w is V5ArtistWeightRepairScreen && w.mode == V5ArtistToolMode.repair,
-      4 => (w) =>
-          w is V5ArtistWeightRepairScreen && w.mode == V5ArtistToolMode.draw,
-      _ => (w) => w is PromptCodexScreen
-    };
+  for (final title in toolTitles) {
+    await nativeUiTextTap(title);
+    final expected = destinations[title]!;
     await nativeUiWait(() => nativeUiElements(expected).isNotEmpty,
-        'actual nested route ${toolTitles[index]}');
-    nested.add(toolTitles[index]);
+        'actual nested route $title');
+    nested.add(title);
     await _nativeBack();
     await nativeUiWait(
         () => nativeUiElements((w) => w is ToolsHubScreen).isNotEmpty,

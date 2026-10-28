@@ -2,7 +2,7 @@ const fs = require('node:fs'), path = require('node:path');
 const {app, BrowserWindow} = require('electron');
 // Pass a numeric port: Electron can consume URL-shaped CLI arguments itself.
 const [port, root, reportFile] = process.argv.slice(2);
-if (!/^\d{5}$/.test(port) || Number(port) < 40000 || Number(port) >= 60000) throw new Error('Invalid local test port');
+if (!/^[1-9]\d{0,4}$/.test(port) || Number(port) > 65535) throw new Error('Invalid local test port');
 const origin = 'http://127.0.0.1:' + port;
 const profile = path.join(path.dirname(reportFile), 'profile');
 fs.mkdirSync(profile, {recursive: true});

@@ -422,21 +422,23 @@ jobs:
           cache: true
       - run: flutter pub get
         working-directory: mobile
+      - name: Check strict Simulator locale and own-device cleanup
+        run: node --test scripts/feature-acceptance/ios-simulator-locale-regression.test.mjs scripts/feature-acceptance/stop-disposable-ios-simulator.test.mjs
       - name: Create and boot a new disposable iOS Simulator
         shell: bash
         run: |
           node scripts/feature-acceptance/create-disposable-ios-simulator.mjs
       - name: Run independently counted component and client-scenario entries
         run: node scripts/feature-acceptance/run-ci-mobile-entries.mjs ios "$FEATURE_SIMULATOR" "${{ matrix.entry-group }}"
+      - name: Stop only the newly created test simulator
+        if: always() && env.FEATURE_SIMULATOR != ''
+        run: node scripts/feature-acceptance/stop-disposable-ios-simulator.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: native-components-ios-${{ matrix.entry-group }}-${{ github.sha }}
           path: ${{ runner.temp }}/feature-native-ios/
           if-no-files-found: error
-      - name: Stop only the newly created test simulator
-        if: always() && env.FEATURE_SIMULATOR != ''
-        run: xcrun simctl shutdown "$FEATURE_SIMULATOR"
 
   windows-artist-local-proof:
     # Admit genuine local hardware execution; this job does not run a GPU model.
@@ -482,7 +484,7 @@ jobs:
       - name: Install locked rejection-test dependencies (no lifecycle scripts)
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Check matrix rejection rules
-        run: node --test scripts/feature-acceptance/five-platform-release-gates.test.mjs scripts/feature-acceptance/release-feature-scope.test.mjs scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/windows-artist-contract.test.mjs scripts/feature-acceptance/windows-artist-native.test.mjs scripts/feature-acceptance/windows-artist-matrix.test.mjs scripts/feature-acceptance/import-windows-artist-evidence.test.mjs scripts/feature-acceptance/mobile-scenario-receipt.test.mjs scripts/feature-acceptance/mobile-entry-consistency.test.mjs scripts/feature-acceptance/ios-folder-picker-driver.test.mjs scripts/feature-acceptance/linux-release-baseline.test.mjs scripts/feature-acceptance/native-proof-stream.test.mjs scripts/feature-acceptance/native-resident-pending.test.mjs scripts/feature-acceptance/native-begin-entry-parity.test.mjs scripts/feature-acceptance/metadata-import-wrapper.test.mjs scripts/feature-acceptance/prepare-android-image.test.mjs
+        run: node --test scripts/feature-acceptance/five-platform-release-gates.test.mjs scripts/feature-acceptance/release-feature-scope.test.mjs scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/windows-artist-contract.test.mjs scripts/feature-acceptance/windows-artist-native.test.mjs scripts/feature-acceptance/windows-artist-matrix.test.mjs scripts/feature-acceptance/import-windows-artist-evidence.test.mjs scripts/feature-acceptance/mobile-scenario-receipt.test.mjs scripts/feature-acceptance/mobile-entry-consistency.test.mjs scripts/feature-acceptance/ios-folder-picker-driver.test.mjs scripts/feature-acceptance/ios-simulator-locale-regression.test.mjs scripts/feature-acceptance/stop-disposable-ios-simulator.test.mjs scripts/feature-acceptance/linux-release-baseline.test.mjs scripts/feature-acceptance/native-proof-stream.test.mjs scripts/feature-acceptance/native-resident-pending.test.mjs scripts/feature-acceptance/native-begin-entry-parity.test.mjs scripts/feature-acceptance/metadata-import-wrapper.test.mjs scripts/feature-acceptance/prepare-android-image.test.mjs
       - name: Require 187 scoped cells across five release platforms (eight Windows-local capability cells not-supported)
         shell: bash
         run: |

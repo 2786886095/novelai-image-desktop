@@ -5,7 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {runBoundedNativeCommand} from './bounded-native-command.mjs';
 import {fileURLToPath} from 'node:url';
-import {iosSimulatorLocalePaths} from './create-disposable-ios-simulator.mjs';
+import {iosSimulatorLocalePaths,assertIosSimulatorLocaleReadback} from './create-disposable-ios-simulator.mjs';
 
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 const fixture=fileURLToPath(new URL('./fixtures/ios-folder-picker-ui.swift',import.meta.url));
@@ -66,7 +66,7 @@ export async function prepareIosFolderPickerDriver(options){
  const devices=JSON.parse(run(['xcrun','simctl','list','devices','booted','--json']));const actual=Object.values(devices.devices??{}).flat().filter(d=>d.udid===device&&d.isAvailable===true&&d.state==='Booted');if(actual.length!==1)throw Error('Actual disposable booted Simulator not found');
  const locale=iosSimulatorLocalePaths(actual[0].dataPath,device);
  const actualLanguages=JSON.parse(run(['/usr/bin/plutil','-extract','AppleLanguages','json','-o','-',locale.file]));const actualLocale=run(['/usr/bin/plutil','-extract','AppleLocale','raw','-o','-',locale.file]).trim();
- if(JSON.stringify(actualLanguages)!=='["en"]'||actualLocale!=='en_US')throw Error('Actual disposable system locale was not explicitly configured/read back');
+ assertIosSimulatorLocaleReadback(actualLanguages,actualLocale);
  const root=path.join(out,'ios-picker-host');fs.mkdirSync(root);const project=path.join(root,'FolderPicker.xcodeproj');fs.mkdirSync(path.join(project,'xcshareddata','xcschemes'),{recursive:true});
  fs.writeFileSync(path.join(project,'project.pbxproj'),iosPickerProject());fs.writeFileSync(path.join(project,'xcshareddata','xcschemes','FolderPickerUITests.xcscheme'),iosPickerScheme);fs.copyFileSync(fixture,path.join(root,'FolderPickerUITests.swift'));
  run(['xcodebuild','build-for-testing','-project',project,'-scheme','FolderPickerUITests','-configuration','Debug','-sdk','iphonesimulator','-destination','id='+device,'-derivedDataPath',path.join(root,'DerivedData'),'CODE_SIGNING_ALLOWED=NO'],300000);
