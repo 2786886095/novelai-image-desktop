@@ -194,8 +194,7 @@ Future<void> _run() async {
     await _text('Download current image', fromTop: true);
     await tls.heldArrived.future.timeout(const Duration(seconds: 10));
     final context = nativeUiElements((w) => w is Scaffold).last;
-    Navigator.of(context).pop();
-    await frame();
+    await nativePopGalleryDetailAndWaitForDisposal(context);
     await tls.releaseHeld();
     await frame();
     require(_files(c.root).length == 2, 'Disposed download wrote stale file');
@@ -238,6 +237,30 @@ Future<void> _run() async {
     await tls.close();
     await c.close();
   }
+}
+
+// A popped route remains mounted during its reverse transition. The held
+// response must not be released until this exact detail owner is disposed.
+// advanceFrame is injected only by controlled host authoring regressions.
+Future<void> nativePopGalleryDetailAndWaitForDisposal(
+  Element detailScaffold, {
+  Future<void> Function()? advanceFrame,
+}) async {
+  final capturedDetail = detailScaffold.findAncestorStateOfType<State>();
+  require(
+      capturedDetail != null &&
+          capturedDetail.mounted &&
+          capturedDetail.widget.runtimeType.toString() ==
+              '_OnlineGalleryDetailScreen' &&
+          identical(ModalRoute.of(capturedDetail.context),
+              ModalRoute.of(detailScaffold)),
+      'Exact current gallery detail owner is required');
+  Navigator.of(detailScaffold).pop();
+  for (var attempt = 0; attempt < 60 && capturedDetail!.mounted; attempt++) {
+    await (advanceFrame ?? frame)();
+  }
+  require(!capturedDetail!.mounted,
+      'Captured gallery detail owner did not dispose before response release');
 }
 
 extension on State {

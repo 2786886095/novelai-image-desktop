@@ -107,7 +107,8 @@ try {
     if(typeof info.frameworkVersion!=='string'||!info.frameworkVersion)throw Error('Missing actual Flutter version.');
     nativeRuntime={type:'flutter',version:info.frameworkVersion,frameworkRevision:info.frameworkRevision??null};
   }
-  let nativeStdout = '', nativeStderr = '';
+  let nativeStdout = '', nativeStderr = '', nativeRawEmitted = false;
+  const emitNativeRaw=()=>{fs.writeFileSync(path.join(outputRoot,'native-app.stdout.txt'),nativeStdout);fs.writeFileSync(path.join(outputRoot,'native-app.stderr.txt'),nativeStderr);if(!nativeRawEmitted){process.stdout.write(nativeStdout);process.stderr.write(nativeStderr);nativeRawEmitted=true;}};
   let nativeCommand;
   let completion;
   let resident;
@@ -186,13 +187,12 @@ try {
     if (!resident.passed) command(['xcrun', 'simctl', 'terminate', input.device, input.appId]);
     command(['xcrun', 'simctl', 'io', input.device, 'screenshot', path.join(outputRoot, 'native-screen.png')]);
     if(picker){
-      fs.writeFileSync(path.join(outputRoot,'native-app.stdout.txt'),nativeStdout);fs.writeFileSync(path.join(outputRoot,'native-app.stderr.txt'),nativeStderr);
-      folderHostSupport=await picker.finish();ledger.push(...folderHostSupport.commands);
+      emitNativeRaw();
+      try{folderHostSupport=await picker.finish();ledger.push(...folderHostSupport.commands);}
+      catch(error){throw new AggregateError([...(resident?.errors||[]).map(e=>Error(e)),error],'Native iOS picker/observer failed; original resident diagnostics: '+(resident?.errors||[]).join('; ')+'; '+String(error?.stack||error));}
     }
   }
-  fs.writeFileSync(path.join(outputRoot, 'native-app.stdout.txt'), nativeStdout);
-  fs.writeFileSync(path.join(outputRoot, 'native-app.stderr.txt'), nativeStderr);
-  process.stdout.write(nativeStdout); process.stderr.write(nativeStderr);
+  emitNativeRaw();
   const proof = createNativeProof({ sourceSha, platform: input.platform, expectedChecks: input.expectedChecks,
     testEntry: input.entry, profileSha: isMobileScenarioEntry(input.entry) ? profileSha256 : undefined, requireNativeBegin });
   for (const line of (nativeStdout + '\n' + nativeStderr).split(/\r?\n/)) proof.line(line);

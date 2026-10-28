@@ -1,5 +1,6 @@
 // Host fixture/transport tests only. These never emit mobile feature CHECKs.
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/services/apk_update.dart';
@@ -78,4 +79,33 @@ void main() {
       expect(await root.list().toList(),isEmpty);
     }finally{client.close();await fixture.close();await _removeHostFixture(root);}
   });
+  test('both real TLS platform contracts carry independent own assets, including iOS IPA', () async {
+    final fixture=await NativeOsTlsFixture.open();fixture.trustInDisposableProcess();
+    final settings=AppSettings(proxyMode:'custom',proxyUrl:fixture.proxyUrl,proxyForUpdate:true);
+    final client=createProxyHttpClient(settings,scope:ProxyScope.update);
+    try {
+      final android=await checkAppUpdateWithClient(client,isAndroid:true,isIOS:false);
+      expect(android.error,isNull);expect(android.hasUpdate,true);
+      expect(android.currentVersion,appVersion);expect(android.latestVersion,'99.0.0');
+      expect(android.apkSha256,fixture.artifactDigest);expect(android.apkSize,fixture.artifact.length);
+      expect(android.ipaUrl,isNull);expect(android.ipaSha256,isNull);
+      final ios=await checkAppUpdateWithClient(client,isAndroid:false,isIOS:true);
+      expect(ios.error,isNull,reason:'iOS must not be rejected for an Android-only fixture release');
+      expect(ios.hasUpdate,true);expect(ios.currentVersion,appVersion);expect(ios.latestVersion,'99.0.0');
+      expect(ios.releaseUrl,NativeOsTlsFixture.release);
+      expect(ios.ipaUrl,'https://github.com/2786886095/novelai-image-desktop/releases/download/v99.0.0/novelai-mobile-unsigned.ipa');
+      expect(ios.apkSha256,isNull);expect(ios.apkSize,isNull);
+      final response=await client.get(Uri.parse(ios.ipaUrl!));
+      expect(response.statusCode,200);expect(response.bodyBytes.take(4),[0x50,0x4b,3,4]);
+      expect(ios.ipaSize,response.bodyBytes.length);expect(ios.ipaSha256,sha256.convert(response.bodyBytes).toString());
+      expect(ios.ipaSha256,isNot(android.apkSha256));expect(ios.ipaSize,isNot(android.apkSize));
+      expect(fixture.requests,everyElement(containsPair('authorizationPresent',false)));
+      expect(fixture.requests,everyElement(containsPair('requestBodyBytes',0)));
+      expect(fixture.connections,everyElement(isIn(NativeOsTlsFixture.hosts)));expect(fixture.errors,isEmpty);
+      fixture.mode='http-error';
+      final failed=await checkAppUpdateWithClient(client,isAndroid:false,isIOS:true);
+      expect(failed.error,'network');expect(failed.hasUpdate,false);
+    }finally{client.close();await fixture.close();}
+  });
+
 }

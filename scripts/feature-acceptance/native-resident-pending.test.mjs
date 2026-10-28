@@ -36,3 +36,75 @@ test('failed synchronous or asynchronous OS observers cannot be hidden by succes
 test('an unfinished OS observer cannot hang beyond the independent native journey bound',{timeout:10000},async()=>{
  const start=Date.now();const r=await collect('valid',pending,{journeyTimeoutMs:100,onNativeLine:text=>text.includes('FEATURE_ACCEPTANCE_PENDING:')?new Promise(()=>{}):undefined});assert.equal(r.passed,false);assert.match(r.errors.join('; '),/observer exceeded bounded journey deadline/);assert(Date.now()-start<5000);
 });
+
+// Real owned POSIX process lifecycle fixtures only; no Flutter/device evidence.
+// Explicit signal/pipe ordering makes the formerly intermittent race causal.
+const signalChild=String.raw`
+const fs=require('node:fs');
+const [mode,p,c,d,b]=process.argv.slice(1).map((v,i)=>i?JSON.parse(v):v);
+const frame=v=>JSON.stringify([v])+'\n';
+const log=v=>frame({event:'app.log',params:{appId:'unit-app',log:v}});
+let closing=false;
+const closeInput=()=>{process.stdin.pause();try{fs.closeSync(0);process.stdout.write('UNIT_FD0_CLOSED:'+process.pid+'\n')}catch(error){process.stdout.write('UNIT_CLOSE_ERROR:'+error.code+'\n')}};
+process.stdin.on('error',()=>{});process.stdin.resume();
+process.on('SIGTERM',()=>{
+ if(mode==='repeat-errors')return;
+ if(closing)return;closing=true;
+ if(mode==='observer-first')closeInput();
+ if(mode==='stdin-first')process.stdout.write(log('UNIT_SECONDARY_OBSERVER_FAILURE'));
+ setTimeout(()=>process.exit(0),200);
+});
+setTimeout(()=>process.exit(99),5000);setInterval(()=>{},1000);
+if(mode==='stdin-first')closeInput();
+let output='UNIT_CHILD_PID:'+process.pid+'\n'+frame({event:'app.start',params:{appId:'unit-app',deviceId:'unit-device'}})+log('FEATURE_ACCEPTANCE_BEGIN:'+JSON.stringify(b));
+if(mode==='repeat-errors'){
+ process.stdout.write(output+log('UNIT_REPEATED_OBSERVER_FAILURE')+log('UNIT_REPEATED_OBSERVER_FAILURE'));
+ setInterval(()=>process.stdout.write(log('UNIT_REPEATED_OBSERVER_FAILURE')),25);
+ setTimeout(()=>process.exit(0),500);
+}else{
+ if(mode==='observer-first')output+=log('FEATURE_ACCEPTANCE_PENDING:'+JSON.stringify(p));
+ process.stdout.write(output+frame({event:'app.started',params:{appId:'unit-app'}})+log('FEATURE_ACCEPTANCE_CHECK:'+JSON.stringify(c))+log('FEATURE_ACCEPTANCE_DONE:'+JSON.stringify(d)));
+}
+`;
+function assertOwnedChildGone(result){
+ assert(Number.isSafeInteger(result.childPid)&&result.childPid>0);
+ assert.throws(()=>process.kill(result.childPid,0),error=>error.code==='ESRCH','owned fixture child is still alive');
+}
+function collectSignal(mode,onNativeLine,extra={}){
+ return collect('valid',pending,{command:[process.execPath,'-e',signalChild,mode,JSON.stringify(pending),JSON.stringify(check),JSON.stringify(done),JSON.stringify(begin)],onNativeLine,...extra});
+}
+test('observer failure is terminal before DONE/ready can queue app.stop against closed real stdin',{skip:process.platform==='win32',timeout:10000},async()=>{
+ for(const asynchronous of [false,true]){
+  const r=await collectSignal('observer-first',text=>{
+   if(!text.includes('FEATURE_ACCEPTANCE_PENDING:'))return;
+   if(asynchronous)return Promise.reject(Error('primary observer failure'));
+   throw Error('primary observer failure');
+  });
+  assertOwnedChildGone(r);assert.equal(r.passed,false);assert.equal(r.terminationReason,'native-observer-failed');
+  assert.match(r.errors.join('; '),/Native OS observer failed.*primary observer failure/);
+  assert.equal(r.stdinCommands.length,0,'failure queued a later successful app.stop phase');
+  assert.equal(r.stopDeadline,null,'failure re-armed a stop deadline');
+  // A rejected Promise settles after the same output chunk may start a valid
+  // journey. Only the synchronous throw necessarily precedes ready/CHECK.
+  if(!asynchronous)assert.equal(r.journeyStarted,false,'trailing ready/CHECK re-armed a journey deadline');
+  assert.match(r.stdout,/UNIT_FD0_CLOSED:/);
+ }
+});
+test('actual stdin-stop error remains the first failure when a later OS observer also fails',{skip:process.platform==='win32',timeout:10000},async()=>{
+ for(const asynchronous of [false,true]){
+  const r=await collectSignal('stdin-first',text=>{
+   if(!text.includes('UNIT_SECONDARY_OBSERVER_FAILURE'))return;
+   if(asynchronous)return Promise.reject(Error('secondary observer failure'));
+   throw Error('secondary observer failure');
+  });
+  assertOwnedChildGone(r);assert.equal(r.passed,false);assert.equal(r.terminationReason,'stdin-stop-error');
+  assert.equal(r.stdinCommands.length,1);assert.match(r.errors.join('; '),/EPIPE/);
+  assert.match(r.errors.join('; '),/Native OS observer failed.*secondary observer failure/);
+ }
+});
+test('repeated observer errors cannot extend the original bounded SIGKILL grace',{skip:process.platform==='win32',timeout:10000},async()=>{
+ const r=await collectSignal('repeat-errors',text=>{if(text.includes('UNIT_REPEATED_OBSERVER_FAILURE'))throw Error('repeated observer failure')},{stopGraceMs:100});
+ assertOwnedChildGone(r);assert.equal(r.passed,false);assert.equal(r.terminationReason,'native-observer-failed');
+ assert.equal(r.actualCloseSignal,'SIGKILL');assert.equal(r.stdinCommands.length,0);
+ assert(r.errors.filter(error=>error.includes('Native OS observer failed:')).length>=2,'secondary observer errors were discarded');
+});

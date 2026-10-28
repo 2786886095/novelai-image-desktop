@@ -84,26 +84,28 @@ export async function collectResidentFlutter({ command, cwd, env, sourceSha, pla
   const child = spawn(command[0], command.slice(1), { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
   const childPid = child.pid ?? null;
   child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
-  let deadline, tailTimer, killTimer;
+  let deadline, tailTimer, killTimer, failureReason = null;
   function forceStop(reason) {
-    terminationReason = reason;
-    clearTimeout(killTimer);
-    if(childClosed)return;
+    // Terminal failure is write-once. Cleanup failures remain errors, but must
+    // not replace the primary cause or re-arm an already bounded kill grace.
+    if(failureReason === null){failureReason = reason;terminationReason = reason;}
+    clearTimeout(deadline); clearTimeout(tailTimer); tailTimer = null;
+    if(childClosed || killTimer)return;
     child.kill('SIGTERM');
     killTimer = setTimeout(() => child.kill('SIGKILL'), stopGraceMs);
   }
   function armDeadline(ms, reason) { clearTimeout(deadline); deadline = setTimeout(() => { timedOut = true; forceStop(reason); }, ms); }
   armDeadline(timeoutMs, 'build-or-launch-timeout');
   function startJourneyDeadline() {
-    if (!journeyStarted && !proof.completion && !stopRequested) { journeyStarted = true; armDeadline(journeyTimeoutMs, 'native-journey-timeout'); }
+    if (!journeyStarted && !proof.completion && !stopRequested && !failureReason && !childClosed) { journeyStarted = true; armDeadline(journeyTimeoutMs, 'native-journey-timeout'); }
   }
   function scheduleStopAfterReady() {
-    if (!proof.completion || !appStarted || tailTimer || stopRequested || timedOut || observerPending) return;
+    if (!proof.completion || !appStarted || tailTimer || stopRequested || timedOut || observerPending || failureReason || childClosed) return;
     // DONE can precede Flutter's devFS/service initialization. It is only a
     // completion candidate; app.stop is safe only after this app.started.
     tailTimer = setTimeout(() => {
       tailTimer = null;
-      if (timedOut) return;
+      if (timedOut || failureReason || childClosed) return;
       if(observerPending)return;
       if (!appId || !appStarted) { protocolErrors.push('Missing ready current Flutter app identity.'); forceStop('missing-app-identity'); return; }
       stopRequested = true; terminationReason = 'machine-app-stop-after-done';

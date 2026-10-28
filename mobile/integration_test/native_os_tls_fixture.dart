@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
+import 'package:archive/archive.dart';
 import 'native_os_tls_credentials.dart';
 import 'native_tls_context.dart';
 
@@ -18,9 +19,14 @@ class NativeOsTlsFixture {
   String mode = 'normal';
   final Uint8List artifact = Uint8List.fromList(utf8.encode(
       'Isolated integrity download fixture; NOT an APK and never executed.\n'));
+  // Separate unsigned, non-installable iOS envelope: APK bytes are never IPA metadata.
+  final Uint8List ipaArtifact = Uint8List.fromList(ZipEncoder().encode(Archive()
+    ..addFile(ArchiveFile('Payload/Runner.app/Info.plist', 25,
+        utf8.encode('TEST-ONLY; NOT INSTALLABLE')))));
   NativeOsTlsFixture._(this.tls, this.proxy);
   String get proxyUrl => 'http://127.0.0.1:${proxy.port}';
   String get artifactDigest => sha256.convert(artifact).toString();
+  String get ipaArtifactDigest => sha256.convert(ipaArtifact).toString();
   String get certificateDigest =>
       sha256.convert(base64Decode(nativeOsFixtureCertificateBase64)).toString();
   static const version = '99.0.0';
@@ -28,6 +34,8 @@ class NativeOsTlsFixture {
       'https://github.com/2786886095/novelai-image-desktop/releases/latest';
   static const apkUrl =
       'https://github.com/2786886095/novelai-image-desktop/releases/download/v99.0.0/app-release.apk';
+  static const ipaUrl =
+      'https://github.com/2786886095/novelai-image-desktop/releases/download/v99.0.0/novelai-mobile-unsigned.ipa';
   static const hosts = {
     'github.com:443',
     'api.github.com:443',
@@ -125,6 +133,12 @@ class NativeOsTlsFixture {
               'browser_download_url': apkUrl,
               'digest': 'sha256:$artifactDigest',
               'size': artifact.length
+            },
+            {
+              'name': 'novelai-mobile-unsigned.ipa',
+              'browser_download_url': ipaUrl,
+              'digest': 'sha256:$ipaArtifactDigest',
+              'size': ipaArtifact.length
             }
           ]
         }));
@@ -140,6 +154,9 @@ class NativeOsTlsFixture {
             : mode == 'oversize'
                 ? [...artifact, 1]
                 : artifact);
+      } else if (request.uri.path == Uri.parse(ipaUrl).path) {
+        request.response.headers.contentType = ContentType.binary;
+        request.response.add(ipaArtifact);
       } else {
         throw StateError(
             'Unexpected production request path: ${request.uri.path}');

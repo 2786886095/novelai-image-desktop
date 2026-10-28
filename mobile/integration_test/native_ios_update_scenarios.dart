@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show debugPrintSynchronously;
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
@@ -11,6 +12,7 @@ import 'package:novelai_mobile/services/ios_update.dart';
 import 'package:novelai_mobile/services/storage.dart';
 import 'package:novelai_mobile/services/update_service.dart';
 import 'native_ios_update_tls_fixture.dart';
+import 'native_ios_bundle_snapshot.dart';
 import 'native_scenario_support.dart';
 import 'native_ui_actions.dart';
 
@@ -53,6 +55,7 @@ Future<void> _run() async {
     });
     await c.storage.setSettings(c.app.settings);
     final nativeBefore = await coordinator.nativeStatus();
+    debugPrintSynchronously('NATIVE_IOS_UPDATE_BUNDLE_SNAPSHOT:${jsonEncode({'boundary':'before','value':nativeBefore})}');
     require(
         nativeBefore['documentsVisible'] == true &&
             nativeBefore['openDocumentsInPlace'] == true &&
@@ -202,7 +205,8 @@ Future<void> _run() async {
     require(jsonEncode(await _snapshot(source)) == jsonEncode(before),
         'iOS download/cancel changed native vault/preferences/history/output');
     final nativeAfter = await coordinator.nativeStatus();
-    require(jsonEncode(nativeAfter) == jsonEncode(nativeBefore),
+    debugPrintSynchronously('NATIVE_IOS_UPDATE_BUNDLE_SNAPSHOT:${jsonEncode({'boundary':'after','value':nativeAfter})}');
+    require(nativeIosBundleSnapshotsEqual(nativeBefore, nativeAfter),
         'Native installed Bundle version/identity changed at download-only boundary');
     require(
         fixture.errors.isEmpty &&

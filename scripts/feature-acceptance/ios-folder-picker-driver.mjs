@@ -71,22 +71,43 @@ export async function prepareIosFolderPickerDriver(options){
  fs.writeFileSync(path.join(project,'project.pbxproj'),iosPickerProject());fs.writeFileSync(path.join(project,'xcshareddata','xcschemes','FolderPickerUITests.xcscheme'),iosPickerScheme);fs.copyFileSync(fixture,path.join(root,'FolderPickerUITests.swift'));
  run(['xcodebuild','build-for-testing','-project',project,'-scheme','FolderPickerUITests','-configuration','Debug','-sdk','iphonesimulator','-destination','id='+device,'-derivedDataPath',path.join(root,'DerivedData'),'CODE_SIGNING_ALLOWED=NO'],300000);
  const products=path.join(root,'DerivedData','Build','Products');const tests=fs.readdirSync(products).filter(n=>n.endsWith('.xctestrun'));if(tests.length!==1)throw Error('Exactly one freshly built XCTest configuration required');
- let begin=null,request=null,promise=null,result=null;const observations=[];let observedPidBefore=null,observedPidAfter=null,requestDeadline=null;
- const remaining=()=>{const value=requestDeadline-Date.now();if(value<=0)throw Error('Overall iOS system-picker deadline exceeded');return value;};
- const observePid=()=>iosSimulatorAppPid(run(['xcrun','simctl','spawn',device,'launchctl','list'],Math.min(5000,remaining())),appId);
+ return createIosFolderPickerObserver({...options,root,products,testRun:tests[0],locale,actualLanguages,actualLocale});
+}
+
+// Keep draining Flutter machine events while real OS commands run. The factory
+// is exported for host process regressions, not as device acceptance evidence.
+export function createIosFolderPickerObserver(options,{execute=asyncCommand,now=Date.now}={}){
+ const {sourceSha,profileSha,appId,device,environment=process.env,root,products,testRun,locale,actualLanguages,actualLocale}=options;
+ let begin=null,request=null,promise=null,result=null,firstError=null;
+ const observations=[];let observedPidBefore=null,observedPidAfter=null,requestDeadline=null;
+ const remaining=()=>{if(firstError)throw firstError;const value=requestDeadline-now();if(value<=0)throw Error('Overall iOS system-picker deadline exceeded');return value;};
+ const checked=async(argv,timeout,file,env=environment)=>{
+  const r=await execute(argv,{cwd:root,env,timeout});observations.push(r);
+  fs.writeFileSync(path.join(root,file),JSON.stringify(r,null,2));
+  if(r.exitStatus!==0||r.error||!r.cleanupComplete||r.signal!==null||r.timedOut||r.outputOverflow)throw Error('Actual iOS picker command failed: '+JSON.stringify(argv)+'; '+(r.error||r.signal||r.exitStatus));
+  return r;
+ };
+ const observePid=async phase=>{const r=await checked(['xcrun','simctl','spawn',device,'launchctl','list'],Math.min(5000,remaining()),'PID_COMMAND_'+phase+'.json');return iosSimulatorAppPid(r.stdout,appId);};
  function onLine(text){
   const bm=/FEATURE_ACCEPTANCE_BEGIN:(\{[^\r\n]*\})/.exec(text);if(bm){if(begin)throw Error('Duplicate native BEGIN for iOS picker');begin=JSON.parse(bm[1]);}
   const rm=/NATIVE_FOLDER_PICKER_REQUEST:(\{[^\r\n]*\})/.exec(text);if(!rm)return;
-  const packet=JSON.parse(rm[1]);if(request)throw Error('Repeated iOS picker request');request=packet;requestDeadline=Date.now()+160000;
-  validateIosFolderRequest({...options,sourceSha,profileSha,begin,nativePid:begin?.nativePid,request});
-  observedPidBefore=observePid();if(observedPidBefore!==begin.nativePid)throw Error('Actual Simulator application PID differs from native BEGIN before picker actions');
-  const env={...environment};for(const k of Object.keys(env))if(/API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i.test(k))delete env[k];
-  const values={STUDIO_SOURCE_SHA:sourceSha,STUDIO_PROFILE_SHA:profileSha,STUDIO_NATIVE_PID:String(begin.nativePid),STUDIO_NONCE:request.nonce,STUDIO_FOLDER_NAME:request.requiredFolderName,STUDIO_APP_ID:appId};for(const[k,v]of Object.entries(values))env['TEST_RUNNER_'+k]=v;
-  const argv=['xcodebuild','test-without-building','-xctestrun',path.join(products,tests[0]),'-destination','id='+device,'-resultBundlePath',path.join(root,'selection.xcresult'),'-testLanguage','en','-testRegion','US','-test-timeouts-enabled','YES','-default-test-execution-time-allowance','120','-maximum-test-execution-time-allowance','150','-parallel-testing-enabled','NO'];
-  const uiTimeout=Math.min(140000,remaining()-10000);if(uiTimeout<=0)throw Error('Insufficient remaining real picker UI budget');
-  promise=asyncCommand(argv,{cwd:root,env,timeout:uiTimeout}).then(r=>{observations.push(r);fs.writeFileSync(path.join(root,'UI_COMMAND.json'),JSON.stringify(r,null,2));if(r.exitStatus!==0||r.error||!r.cleanupComplete||r.signal!==null||r.timedOut||r.outputOverflow)throw Error('Actual iOS XCTest folder selection failed; inspect UI_COMMAND.json/selection.xcresult');result=assertIosPickerUiResult(r.stdout+'\n'+r.stderr,{sourceSha,profileSha,nativePid:begin.nativePid,request,appId});observedPidAfter=observePid();if(observedPidAfter!==begin.nativePid||observedPidAfter!==observedPidBefore)throw Error('Actual Simulator app process changed during system directory selection');remaining();fs.writeFileSync(path.join(root,'UI_RESULT.json'),JSON.stringify({supportOnly:true,functionalCertificationGranted:false,observedPidBefore,observedPidAfter,result},null,2));});
+  if(request)throw Error('Repeated iOS picker request');request=JSON.parse(rm[1]);requestDeadline=now()+160000;
+  // Establish the only task before validation/PID I/O so failure is never
+  // relabelled as an absent request by finish(). No retry or PID/UI bypass.
+  promise=Promise.resolve().then(async()=>{
+   validateIosFolderRequest({...options,sourceSha,profileSha,begin,nativePid:begin?.nativePid,request});
+   observedPidBefore=await observePid('BEFORE');if(observedPidBefore!==begin.nativePid)throw Error('Actual Simulator application PID differs from native BEGIN before picker actions');
+   const env={...environment};for(const k of Object.keys(env))if(/API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i.test(k))delete env[k];
+   const values={STUDIO_SOURCE_SHA:sourceSha,STUDIO_PROFILE_SHA:profileSha,STUDIO_NATIVE_PID:String(begin.nativePid),STUDIO_NONCE:request.nonce,STUDIO_FOLDER_NAME:request.requiredFolderName,STUDIO_APP_ID:appId};for(const[k,v]of Object.entries(values))env['TEST_RUNNER_'+k]=v;
+   const argv=['xcodebuild','test-without-building','-xctestrun',path.join(products,testRun),'-destination','id='+device,'-resultBundlePath',path.join(root,'selection.xcresult'),'-testLanguage','en','-testRegion','US','-test-timeouts-enabled','YES','-default-test-execution-time-allowance','120','-maximum-test-execution-time-allowance','150','-parallel-testing-enabled','NO'];
+   const uiTimeout=Math.min(140000,remaining()-10000);if(uiTimeout<=0)throw Error('Insufficient remaining real picker UI budget');
+   const r=await checked(argv,uiTimeout,'UI_COMMAND.json',env);
+   result=assertIosPickerUiResult(r.stdout+'\n'+r.stderr,{sourceSha,profileSha,nativePid:begin.nativePid,request,appId});
+   observedPidAfter=await observePid('AFTER');if(observedPidAfter!==begin.nativePid||observedPidAfter!==observedPidBefore)throw Error('Actual Simulator app process changed during system directory selection');
+   remaining();fs.writeFileSync(path.join(root,'UI_RESULT.json'),JSON.stringify({supportOnly:true,functionalCertificationGranted:false,observedPidBefore,observedPidAfter,result},null,2));
+  }).catch(error=>{firstError||=error;fs.writeFileSync(path.join(root,'OBSERVER_FAILURE.json'),JSON.stringify({requestObserved:true,request,begin,error:String(firstError?.stack||firstError)},null,2));throw firstError;});
   return promise;
  }
- async function finish(){if(!request||!promise)throw Error('Actual native iOS picker request was never observed');await promise;if(!result||observedPidBefore!==begin.nativePid||observedPidAfter!==begin.nativePid)throw Error('Missing validated actual UI/PID result');return{supportOnly:true,functionalCertificationGranted:false,request,result,observedPidBefore,observedPidAfter,locale,actualLanguages,actualLocale,commands:observations,fixtureSha256:sha(fs.readFileSync(fixture)),xcresult:path.join(root,'selection.xcresult')};}
+ async function finish(){if(firstError)throw firstError;if(!request||!promise)throw Error('Actual native iOS picker request was never observed');await promise;if(!result||observedPidBefore!==begin.nativePid||observedPidAfter!==begin.nativePid)throw Error('Missing validated actual UI/PID result');return{supportOnly:true,functionalCertificationGranted:false,request,result,observedPidBefore,observedPidAfter,locale,actualLanguages,actualLocale,commands:observations,fixtureSha256:sha(fs.readFileSync(fixture)),xcresult:path.join(root,'selection.xcresult')};}
  return{onLine,finish,root};
 }
