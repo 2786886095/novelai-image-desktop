@@ -45,7 +45,7 @@ final class FolderPickerUITests: XCTestCase {
       let barFrame = bar.frame
       guard !barFrame.isEmpty && viewFrame.intersects(barFrame) else { continue }
       let directTitles = bar.children(matching: .staticText).allElementsBoundByIndex.filter { title in
-        guard title.exists && title.isHittable else { return false }
+        guard title.exists else { return false }
         let titleFrame = title.frame
         return !titleFrame.isEmpty &&
           barFrame.contains(titleFrame) && viewFrame.contains(titleFrame)
@@ -59,6 +59,42 @@ final class FolderPickerUITests: XCTestCase {
       throw fail("Ambiguous current visible navigation bars")
     }
     return visibleTitles.first?.label
+  }
+  // Identity text is observed, not tapped. Record hit state independently on
+  // exit, with no waits/retries and bounded records; never affects acceptance.
+  private func captureCurrentTitleObservation(_ app: XCUIApplication) {
+    func rect(_ r: CGRect) -> [Double] { [Double(r.origin.x), Double(r.origin.y), Double(r.width), Double(r.height)] }
+    let bars = app.navigationBars.allElementsBoundByIndex
+    var observations: [[String: Any]] = []
+    for bar in bars.prefix(3) {
+      guard bar.exists else { continue }
+      let titles = bar.children(matching: .staticText).allElementsBoundByIndex
+      var directTitles: [[String: Any]] = []
+      for title in titles.prefix(3) {
+        guard title.exists else { continue }
+        directTitles.append(["label": title.label, "exists": true,
+          "isHittable": title.isHittable, "isEnabled": title.isEnabled,
+          "frame": rect(title.frame)])
+      }
+      observations.append(["frame": rect(bar.frame), "directTitles": directTitles,
+        "directTitleCount": titles.count, "titlesTruncated": titles.count > 3])
+    }
+    let payload: [String: Any] = ["observationOnly": true, "acceptanceDependent": false,
+      "phase": "final-defer", "appFrame": rect(app.frame), "rawBarCount": bars.count,
+      "barsTruncated": bars.count > 3, "bars": observations]
+    let text: String
+    do {
+      text = String(decoding: try JSONSerialization.data(withJSONObject: payload,
+        options: [.sortedKeys]), as: UTF8.self)
+    } catch {
+      // Only an observation encoding failure is recorded here. The original
+      // test error/success remains unchanged; no acceptance exception is caught.
+      text = "Title observation JSON encoding failed: " + String(describing: error)
+    }
+    let attachment = XCTAttachment(string: text)
+    attachment.name = "final-current-title-observation-only"
+    attachment.lifetime = .keepAlways
+    add(attachment)
   }
   private func waitForNavigationTitle(_ app: XCUIApplication, _ labels: [String]) throws -> Bool {
     // A bounded transition wait, not an extension of the outer UI140/Dart180.
@@ -159,7 +195,7 @@ final class FolderPickerUITests: XCTestCase {
     }
     let app = XCUIApplication(bundleIdentifier: bundle)
     target = app
-    defer { capture("final-picker-state") }
+    defer { capture("final-picker-state"); captureCurrentTitleObservation(app) }
     guard app.state == .runningForeground || app.state == .runningBackground else {
       throw fail("The current Flutter process must already be running")
     }

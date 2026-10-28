@@ -88,7 +88,7 @@ function titleContract(source,shape){
  const found=[];
  for(const bar of shape.bars){
   if(!bar.exists||!intersect(shape.view,bar.frame))continue;
-  const titles=bar.directStaticTexts.filter(t=>t.exists&&t.hittable&&contains(bar.frame,t.frame)&&contains(shape.view,t.frame));
+  const titles=bar.directStaticTexts.filter(t=>t.exists&&contains(bar.frame,t.frame)&&contains(shape.view,t.frame));
   assert(titles.length<=1,'Ambiguous visible direct navigation titles');found.push(...titles);
  }
  assert(found.length<=1,'Ambiguous current visible navigation bars');return found[0]?.label??null;
@@ -101,7 +101,7 @@ test('static Swift title policy binds one current visible direct StaticText, not
  const s=swiftSource();assert(s.includes('private func currentNavigationTitle('));
  const body=s.split('private func currentNavigationTitle(')[1].split('private func waitForNavigationTitle(')[0];
  for(const value of ['app.navigationBars.allElementsBoundByIndex','bar.children(matching: .staticText).allElementsBoundByIndex',
-  'title.exists && title.isHittable','barFrame.contains(titleFrame)','viewFrame.contains(titleFrame)',
+  'guard title.exists else { return false }','barFrame.contains(titleFrame)','viewFrame.contains(titleFrame)',
   'directTitles.count <= 1','visibleTitles.count <= 1','return visibleTitles.first?.label'])assert(body.includes(value),value);
  assert(!body.includes('.staticTexts'));assert(!body.includes('descendants('));assert(!body.includes('app.cells'));
  assert(!body.includes('DOC.browsingRoot'));assert(!s.includes('app.navigationBars[$0]'));assert(!s.includes('app.navigationBars[folder]'));
@@ -121,7 +121,7 @@ test('synthetic generic-bar provider and exact nonce-folder titles are recognize
 });
 test('static sidebar, descendant back-button, hidden/offscreen, wrong-current and ambiguous title controls fail closed',()=>{
  const s=swiftSource();assert.equal(titleContract(s,shape('Different Folder')),'Different Folder');
- for(const mutate of [x=>x.bars[0].directStaticTexts=[],x=>x.bars[0].directStaticTexts[0].hittable=false,
+ for(const mutate of [x=>x.bars[0].directStaticTexts=[],x=>x.bars[0].directStaticTexts[0].frame=[100,86,0,0],
   x=>x.bars[0].directStaticTexts[0].exists=false,x=>x.bars[0].directStaticTexts[0].frame=[100,900,190,21],
   x=>x.bars[0].frame=[393,69,393,108],x=>x.bars=[]]){
   const fixture=shape();mutate(fixture);assert.equal(titleContract(s,fixture),null);
@@ -236,4 +236,27 @@ test('static naming5s deadline is not renewed; real new-folder and rename commit
  const create=s.indexOf('let createDeadline = Date().addingTimeInterval(10)'),capture=s.indexOf('capture("after-folder-name-commit")');assert(create>=0&&create<capture);
  assert.equal((s.match(/Date\(\)\.addingTimeInterval\(10\)/g)||[]).length,2);
  assert(!/UserDefaults|bookmarkData|MethodChannel|\.launch\s*\(|\.terminate\s*\(|coordinate\(/.test(s));
+});
+
+// Static source/geometry contract only. Actual b56 attempt2 did not record the
+// title isHittable value; the trace stopping before Keyboard is not that value.
+test('read-only current direct title identity need not be tappable; every actual tap still must be',()=>{
+ const s=swiftSource();const body=s.split('private func currentNavigationTitle(')[1].split('private func captureCurrentTitleObservation(')[0];
+ assert(!body.includes('isHittable'));assert(body.includes('guard title.exists else { return false }'));
+ const x=shape('On My iPhone');x.bars[0].directStaticTexts[0].hittable=false;
+ assert.equal(titleContract(s,x),'On My iPhone','SYNTHETIC nonclickable label is readable identity, not proof of actual Mac hit state');
+ const field=s.split('private func usable(')[1].split('private func isSearchField(')[0];
+ const tap=s.split('private func tap(')[1].split('@MainActor')[0];
+ for(const body of [field,tap])assert(body.includes('element.exists && element.isHittable && element.isEnabled'));
+ assert(s.includes('usable(field, app)'));assert(s.includes('usable(button, app)'));
+});
+test('bounded title hit/frame observation is deferred and acceptance-independent, with no new waits or suppressed test error',()=>{
+ const s=swiftSource();const body=s.split('private func captureCurrentTitleObservation(')[1].split('private func waitForNavigationTitle(')[0];
+ for(const token of ['bars.prefix(3)','titles.prefix(3)','bar.children(matching: .staticText)',
+  '"isHittable": title.isHittable','"frame": rect(title.frame)','"observationOnly": true','"acceptanceDependent": false',
+  '"final-current-title-observation-only"'])assert(body.includes(token),token);
+ assert(!/Thread.sleep|waitFor|while |\.tap\(|currentNavigationTitle|throw fail/.test(body));
+ assert(s.includes('defer { capture("final-picker-state"); captureCurrentTitleObservation(app) }'));
+ assert(body.includes('Only an observation encoding failure'));assert(s.includes('Prepared naming control arrived after original5s deadline'));
+ assert.equal((s.match(/let namingDeadline =/g)||[]).length,1);assert.equal((s.match(/Date\(\)\.addingTimeInterval\(10\)/g)||[]).length,2);
 });
