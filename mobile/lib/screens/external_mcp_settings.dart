@@ -15,6 +15,11 @@ class _ExternalMcpSettingsCardState extends State<ExternalMcpSettingsCard> {
     final runtime=app.externalMcp;
     return ListenableBuilder(listenable:runtime,builder:(context,_) {
     final current=runtime.server,changing=runtime.changing;
+    void decideCurrent(Map<String,dynamic> request,bool approved) {
+      if(current==null || runtime.changing || !identical(runtime.server,current))return;
+      if(!current.approvals.any((live)=>live['session']==request['session'] && live['id']==request['id']))return;
+      current.decide(request['session'],request['id'],approved);
+    }
     return Card(child:Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       Text(t('mcp'),style:Theme.of(context).textTheme.titleMedium),Text(t('mcpHint')),
       const SizedBox(height:8),TextField(key:const ValueKey('mcp-budget'),enabled:current==null && !changing,
@@ -22,14 +27,19 @@ class _ExternalMcpSettingsCardState extends State<ExternalMcpSettingsCard> {
         onChanged:(v)=>runtime.setBudget(int.tryParse(v)??0)),
       const SizedBox(height:8),Wrap(spacing:8,runSpacing:8,children:[
         FilledButton(key:const ValueKey('external-mcp-enable'),onPressed:changing?null:() async {final messenger=ScaffoldMessenger.of(context);try{await runtime.toggle();}catch(_){if(mounted)messenger.showSnackBar(SnackBar(content:Text(t('mcpUnavailable'))));}},child:Text(current==null?t('enable'):t('disable'))),
-        if(current!=null)OutlinedButton(onPressed:()=>Clipboard.setData(ClipboardData(text:jsonEncode({'mcpServers':{'langbai':{'type':'http','url':current.url,'headers':{'Authorization':'Bearer ${current.token}'}}}}))),child:Text(t('copy')))
+        if(current!=null && !changing)OutlinedButton(onPressed:(){
+          // A previous ready frame can still dispatch while stop/restart awaits.
+          // Re-read ownership synchronously before accessing its bound endpoint.
+          if(runtime.changing || !identical(runtime.server,current))return;
+          Clipboard.setData(ClipboardData(text:jsonEncode({'mcpServers':{'langbai':{'type':'http','url':current.url,'headers':{'Authorization':'Bearer ${current.token}'}}}})));
+        },child:Text(t('copy')))
       ]),
-      if(current!=null) ...[
+      if(current!=null && !changing) ...[
         SelectableText(current.url),
         ...current.approvals.map((request)=>Card(child:Padding(padding:const EdgeInsets.all(8),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Text(request['title'] as String),ConstrainedBox(constraints:const BoxConstraints(maxHeight:180),child:SingleChildScrollView(child:SelectableText(const JsonEncoder.withIndent('  ').convert(request['parameters'])))),
-          Wrap(spacing:8,children:[TextButton(onPressed:()=>current.decide(request['session'],request['id'],false),child:Text(t('cancel'))),
-            FilledButton(onPressed:()=>current.decide(request['session'],request['id'],true),child:Text(t('approve')))])
+          Wrap(spacing:8,children:[TextButton(onPressed:()=>decideCurrent(request,false),child:Text(t('cancel'))),
+            FilledButton(onPressed:()=>decideCurrent(request,true),child:Text(t('approve')))])
         ]))))
       ]
     ])));

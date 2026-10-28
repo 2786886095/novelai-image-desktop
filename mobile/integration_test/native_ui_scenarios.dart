@@ -4,12 +4,14 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:novelai_mobile/main.dart' show HomeShell;
 import 'package:novelai_mobile/i18n/runtime_text.dart';
 import 'package:novelai_mobile/i18n/app_locales.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
+import 'package:novelai_mobile/images/coordinated_file_image.dart';
 import 'package:novelai_mobile/artist/artist_recipe.dart';
 import 'package:novelai_mobile/artist/custom_artist_pool.dart';
 import 'package:novelai_mobile/inpaint/inpaint_mask.dart';
@@ -93,6 +95,14 @@ Future<void> loadNativeNavigation(AppState app, Storage storage) async {
       app.settings.proxyForMcp,
       'Production navigation boot did not restore its isolated settings');
 }
+
+// The isolated selector fixture must honor the same safe area as HomeShell.
+// Kept public in this native-fixture library for strict host pointer regression.
+Future<void> mountNativeAccountSelector(AppState app) => nativeUiMount(
+    app,
+    const Scaffold(
+        body: SafeArea(
+            bottom: false, child: NovelAiAccountSelector(showManage: false))));
 
 Future<void> _switchInSelector(AppState app, String label, String id) async {
   await nativeUiWait(() => !app.naiAccountLocked, 'account selector idle');
@@ -187,8 +197,7 @@ Future<void> _accounts(NativeContext c, NativeUiTlsFixture tls) async {
         !plain.contains(NativeUiTlsFixture.tokenA) &&
             !plain.contains(NativeUiTlsFixture.tokenB),
         'Token leaked to native plaintext preferences');
-    await nativeUiMount(
-        app, const Scaffold(body: NovelAiAccountSelector(showManage: false)));
+    await mountNativeAccountSelector(app);
     await _switchInSelector(app, 'Native B', b);
     await _switchInSelector(app, 'Native A', a);
     suite.check('accounts', 'secure-crud-switch', {
@@ -321,6 +330,178 @@ Future<void> _revealArtist(bool Function(Widget) predicate) async {
     await frame();
   }
   throw StateError('Actual artist control did not become visible');
+}
+
+// Pointer IDs use a disjoint range from native_ui_actions.dart (9300).
+int _artistPreviewPointer = 1 << 20;
+
+Future<void> _doubleTapArtistPreview(Element element) async {
+  await Scrollable.ensureVisible(element,
+      alignment: .5, duration: Duration.zero);
+  await frame();
+  Offset? position;
+  for (var attempt = 0; attempt < 8; attempt++) {
+    final object = element.findRenderObject();
+    require(object is RenderBox && object.attached && object.hasSize,
+        'Artist preview target has no laid-out RenderBox');
+    final box = object as RenderBox;
+    final center = box.localToGlobal(box.size.center(Offset.zero));
+    final hit = HitTestResult();
+    GestureBinding.instance.hitTestInView(hit, center, View.of(element).viewId);
+    final descendants = <RenderObject>{};
+    void collect(RenderObject child) {
+      descendants.add(child);
+      child.visitChildren(collect);
+    }
+    collect(box);
+    if (hit.path.any((entry) => descendants.contains(entry.target))) {
+      position = center;
+      break;
+    }
+    final ancestors = <ScrollableState>[];
+    element.visitAncestorElements((parent) {
+      if (parent is StatefulElement && parent.state is ScrollableState) {
+        ancestors.add(parent.state as ScrollableState);
+      }
+      return true;
+    });
+    for (final ancestor in ancestors.reversed) {
+      final viewport = ancestor.context.findRenderObject();
+      final scroll = ancestor.position;
+      if (viewport is! RenderBox || !viewport.attached || !viewport.hasSize ||
+          !scroll.hasContentDimensions) continue;
+      final viewportCenter = viewport.localToGlobal(viewport.size.center(Offset.zero));
+      final delta = scroll.axis == Axis.vertical
+          ? center.dy - viewportCenter.dy : center.dx - viewportCenter.dx;
+      final next = (scroll.pixels + delta)
+          .clamp(scroll.minScrollExtent, scroll.maxScrollExtent).toDouble();
+      if ((next - scroll.pixels).abs() < .5) continue;
+      scroll.jumpTo(next);
+      break;
+    }
+    await frame();
+  }
+  require(position != null,
+      'Artist preview target is not on the actual pointer hit path');
+  final viewId = View.of(element).viewId;
+  // No frame/ensureVisible waits between these two physical taps. Keep the
+  // recognizer's original 40ms minimum/300ms maximum window unchanged.
+  for (var tap = 0; tap < 2; tap++) {
+    final pointer = ++_artistPreviewPointer;
+    GestureBinding.instance.handlePointerEvent(PointerDownEvent(
+        viewId: viewId, pointer: pointer, position: position!,
+        kind: PointerDeviceKind.touch));
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    GestureBinding.instance.handlePointerEvent(PointerUpEvent(
+        viewId: viewId, pointer: pointer, position: position,
+        kind: PointerDeviceKind.touch));
+    if (tap == 0) {
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+    }
+  }
+  await frame();
+  await frame();
+}
+
+Future<Map<String, Object?>> verifyNativeArtistFavoriteReopened(
+    HistoryItem saved) async {
+  await _revealArtist((w) => w is SegmentedButton<bool>);
+  final controls = nativeUiElements((w) => w is SegmentedButton<bool>);
+  require(controls.length == 1,
+      'Exactly one current artist result selector required');
+  final control = controls.single.widget as SegmentedButton<bool>;
+  final favorite = control.segments.singleWhere((segment) => segment.value);
+  require(
+      favorite.label is Text &&
+          ((favorite.label as Text).data?.endsWith(' (1)') ?? false),
+      'Reopened artist Favorite segment did not restore exactly one image');
+  final labels = <Element>[];
+  void findLabel(Element element) {
+    if (identical(element.widget, favorite.label)) labels.add(element);
+    element.visitChildren(findLabel);
+  }
+
+  controls.single.visitChildren(findLabel);
+  require(labels.length == 1, 'Exact restored Favorite segment label missing');
+  await nativeUiTap(labels.single);
+  await nativeUiWait(
+      () =>
+          nativeUiElements((w) =>
+              w is SegmentedButton<bool> &&
+              w.selected.length == 1 &&
+              w.selected.contains(true)).length ==
+          1,
+      'actual restored Favorite segment selected by pointer');
+  final key = ValueKey('favorite:${saved.id}:0');
+  await _revealArtist((w) => w is RepaintBoundary && w.key == key);
+  final cards = nativeUiElements((w) => w is RepaintBoundary && w.key == key);
+  require(cards.length == 1, 'Exact saved Favorite card did not reopen');
+  final gestures = <Element>[];
+  void findPreview(Element element) {
+    if (element.widget is GestureDetector &&
+        (element.widget as GestureDetector).onDoubleTap != null) {
+      gestures.add(element);
+    }
+    element.visitChildren(findPreview);
+  }
+
+  cards.single.visitChildren(findPreview);
+  require(gestures.length == 1, 'Saved Favorite image preview gesture missing');
+  // Two actual pointer taps; never invoke onDoubleTap/onSelectionChanged.
+  await _doubleTapArtistPreview(gestures.single);
+  await nativeUiWait(
+      () =>
+          nativeUiElements(
+                  (w) => w.runtimeType.toString() == '_FullscreenImageViewer')
+              .length ==
+          1,
+      'saved Favorite image opened in actual fullscreen viewer');
+  final viewer = nativeUiElements(
+      (w) => w.runtimeType.toString() == '_FullscreenImageViewer').single;
+  final images = <Image>[];
+  final decoded = <RawImage>[];
+  void inspect(Element element) {
+    final widget = element.widget;
+    if (widget is Image) images.add(widget);
+    if (widget is RawImage && widget.image != null) decoded.add(widget);
+    element.visitChildren(inspect);
+  }
+
+  bool originalImage(Image image) {
+    ImageProvider provider = image.image;
+    while (provider is ResizeImage) {
+      provider = provider.imageProvider;
+    }
+    return provider is FileImage && provider.file.path == saved.filePath ||
+        provider is CoordinatedImageProvider && provider.path == saved.filePath;
+  }
+
+  await nativeUiWait(() {
+    images.clear();
+    decoded.clear();
+    viewer.visitChildren(inspect);
+    return images.any(originalImage) &&
+        decoded.any((image) =>
+            image.image!.width == saved.width &&
+            image.image!.height == saved.height);
+  }, 'actual saved Favorite original image decoded in viewer');
+  final close = nativeUiElements((w) =>
+      w is IconButton &&
+      w.onPressed != null &&
+      w.icon is Icon &&
+      (w.icon as Icon).icon == Icons.close);
+  require(close.length == 1, 'Actual Favorite preview close control missing');
+  await nativeUiTap(close.single);
+  await nativeUiWait(
+      () => nativeUiElements(
+          (w) => w.runtimeType.toString() == '_FullscreenImageViewer').isEmpty,
+      'actual Favorite preview closed by pointer');
+  return {
+    'restoredFavoriteCount': 1,
+    'actualFavoriteSegmentPointerTap': true,
+    'actualSavedImagePreviewDoublePointerTap': true,
+    'actualSavedOriginalPathAndDecodedDimensionsVerified': true
+  };
 }
 
 Future<void> _random(NativeContext c, NativeUiTlsFixture tls) async {
@@ -464,15 +645,14 @@ Future<void> _random(NativeContext c, NativeUiTlsFixture tls) async {
       'Artist saved native library group did not reopen');
   await nativeUiMount(app, const SizedBox.shrink());
   await nativeUiMount(app, RandomArtistLabScreen(onBack: () {}));
-  await nativeUiWait(
-      () => nativeUiElements((w) => w is SegmentedButton<bool>).isNotEmpty,
-      'artist favorite UI reopened');
+  final reopenedFavorite = await verifyNativeArtistFavoriteReopened(saved);
   suite.check('random-artists', 'saved-library-groups', {
     'realNativeTemporaryFileFavoriteButtonHitTest': true,
     'savedImageHashMatchesOriginal': true,
     'temporaryRemovedOnlyAfterSave': true,
     'historyAndDedicatedGroupReopened': true,
-    'screenRemountedWithNativeSavedSession': true
+    'screenRemountedWithNativeSavedSession': true,
+    ...reopenedFavorite
   });
 
   final before = prefs.getString('artist_lab_popular_pool_v2'),

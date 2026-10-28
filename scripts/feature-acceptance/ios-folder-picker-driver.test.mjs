@@ -1,6 +1,6 @@
 // Host policy/source-shape tests only: no Simulator/XCTest success is claimed.
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
-import {validateIosFolderRequest,assertIosPickerUiResult,iosPickerProject,iosPickerScheme,prepareIosFolderPickerDriver,iosSimulatorAppPid} from './ios-folder-picker-driver.mjs';
+import {validateIosFolderRequest,assertIosPickerUiResult,iosPickerProject,iosPickerScheme,prepareIosFolderPickerDriver,iosSimulatorAppPid,bindIosSimulatorProcess,iosHostProcessIdentity} from './ios-folder-picker-driver.mjs';
 import {iosSimulatorLocalePaths}from './create-disposable-ios-simulator.mjs';
 import {fullFeatureProfiles}from './full-feature-profiles.mjs';import{mobileScenarioInventories}from './mobile-scenario-inventory.mjs';import{mobileNativeEntries,selectMobileNativeEntries}from './mobile-entry-specs.mjs';
 const sourceSha='a'.repeat(40),profileSha='b'.repeat(64),nativePid=5317,nonce='5317-1793240012345678';
@@ -33,3 +33,25 @@ test('all 126 non-Windows-local scenarios have exactly one fixed native entry pe
 test('separate XCTest UI target is generated externally, never an app host or modified Runner project',()=>{const p=iosPickerProject();assert(p.includes('com.apple.product-type.bundle.ui-testing'));assert(p.includes('TEST_TARGET_NAME=""'));assert(!p.includes('com.apple.product-type.application'));assert(!p.includes('Runner.xcodeproj'));assert(iosPickerScheme.includes('FolderPickerUITests'));const ids=[...p.matchAll(/^(A[0-9A-F]+)=/gm)].map(m=>m[1]);assert.equal(ids.length,new Set(ids).size);assert(ids.every(v=>v.length===24));});
 test('Swift fixture uses actual system hierarchy and nonce naming; it never launches the client or writes a grant',()=>{const s=fs.readFileSync(new URL('./fixtures/ios-folder-picker-ui.swift',import.meta.url),'utf8');for(const text of ['XCUIApplication(bundleIdentifier: bundle)','New Folder','On My iPhone','On My iPad','field.typeText(folder)','XCUIScreen.main.screenshot()','app.debugDescription','IOS_FOLDER_PICKER_UI_RESULT:'])assert(s.includes(text));assert(!/\.launch\s*\(|\.terminate\s*\(|UserDefaults|bookmarkData|MethodChannel|coordinate\(/.test(s));const runner=fs.readFileSync(new URL('./run-mobile-native.mjs',import.meta.url),'utf8');assert(runner.indexOf('await prepareIosFolderPickerDriver')<runner.indexOf("nativeCommand = [input.flutter, 'run', '--machine'"));assert(runner.includes('onNativeLine:picker?.onLine'));assert(runner.includes('await picker.finish()'));});
 test('system driver refuses non-macOS or non-CI environments instead of promoting host fixtures',async()=>{await assert.rejects(()=>prepareIosFolderPickerDriver({...context,environment:{GITHUB_ACTIONS:'false'}}),/Real isolated macOS CI/);});
+
+test('host libproc identity binds exact PID/start time/executable to the fixed Simulator bundle, with no alias fallback',()=>{
+ const data='/Users/runner/Library/Developer/CoreSimulator/Devices/'+context.device+'/data';
+ const app=data+'/Containers/Bundle/Application/11111111-1111-1111-1111-111111111111/Runner.app';
+ const identity={schemaVersion:1,observer:'darwin-libproc',pid:nativePid,executablePath:app+'/Runner',startSeconds:'1793164064',startMicroseconds:990729};
+ const args={processStdout:'IOS_PROCESS_IDENTITY:'+JSON.stringify(identity),containerStdout:app+'\n',bundleInfo:{CFBundleIdentifier:context.appId,CFBundleExecutable:'Runner'},device:context.device,appId:context.appId,nativePid,simulatorDataPath:data};
+ const bound=bindIosSimulatorProcess(args,value=>value);assert.equal(bound.pid,nativePid);assert.equal(bound.executablePath,app+'/Runner');assert.equal(bound.startSeconds,'1793164064');
+ for(const change of [{pid:nativePid+1},{observer:'echo'},{startSeconds:'0'},{startMicroseconds:1000000},{executablePath:app+'/Runner-extra'},{executablePath:app.replace(context.device,'12345678-1234-1234-1234-123456789abc')+'/Runner'}])assert.throws(()=>bindIosSimulatorProcess({...args,processStdout:'IOS_PROCESS_IDENTITY:'+JSON.stringify({...identity,...change})},value=>value));
+ for(const change of [{containerStdout:app+'/../Runner.app'},{containerStdout:app.replace(context.device,'12345678-1234-1234-1234-123456789abc')},{bundleInfo:{CFBundleIdentifier:context.appId+'.extra',CFBundleExecutable:'Runner'}},{bundleInfo:{CFBundleIdentifier:context.appId,CFBundleExecutable:'../Runner'}}])assert.throws(()=>bindIosSimulatorProcess({...args,...change},value=>value));
+ assert.throws(()=>bindIosSimulatorProcess(args,value=>value===data?data+'-foreign':value),/Aliased/);
+ assert.throws(()=>iosHostProcessIdentity(JSON.stringify(request),nativePid));assert.throws(()=>iosHostProcessIdentity(args.processStdout+'\n'+args.processStdout,nativePid));
+});
+test('macOS host observer uses read-only libproc and is built before the request; no launchctl query survives',()=>{
+ const driver=fs.readFileSync(new URL('./ios-folder-picker-driver.mjs',import.meta.url),'utf8');
+ assert(!driver.includes("['xcrun','simctl','spawn'"));assert(driver.includes("'--sdk','macosx','clang'"));assert(driver.includes("'get_app_container',device,appId,'app'"));assert(driver.includes('JSON.stringify(processIdentityAfter)!==JSON.stringify(processIdentityBefore)'));assert(driver.includes("phaseDeadline=now()+Math.min(5000,remaining())"));assert(driver.includes('Math.min(phaseDeadline-now(),remaining())'));
+ const c=fs.readFileSync(new URL('./fixtures/ios-process-identity.c',import.meta.url),'utf8');
+ for(const text of ['proc_pidinfo(pid, PROC_PIDTBSDINFO','proc_pidpath(pid, first','proc_pidpath(pid, second','before.pbi_start_tvsec != after.pbi_start_tvsec','before.pbi_start_tvusec != after.pbi_start_tvusec'])assert(c.includes(text));
+ assert(!c.includes('<sys/proc.h>')&&!c.includes('SZOMB')&&!c.includes('PROC_FLAG_INEXIT'));
+ assert(!/\bkill\s*\(|\bexec\w*\s*\(|getenv\s*\(|launchctl/.test(c.replace(/\/\/[^\r\n]*/g,'')));
+});
+
+test('process birth brackets both executable reads and plist leaf resolves before any read',()=>{const c=fs.readFileSync(new URL('./fixtures/ios-process-identity.c',import.meta.url),'utf8');assert(c.indexOf('read_info(pid, &before)')<c.indexOf('proc_pidpath(pid, first'));assert(c.indexOf('proc_pidpath(pid, second')<c.indexOf('read_info(pid, &after)'));const driver=fs.readFileSync(new URL('./ios-folder-picker-driver.mjs',import.meta.url),'utf8');assert(driver.indexOf('canonicalize(infoPath)!==infoPath')<driver.indexOf("const info=await checked(['/usr/bin/plutil'"));});

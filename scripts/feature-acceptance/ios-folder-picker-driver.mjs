@@ -9,11 +9,42 @@ import {iosSimulatorLocalePaths,assertIosSimulatorLocaleReadback} from './create
 
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 const fixture=fileURLToPath(new URL('./fixtures/ios-folder-picker-ui.swift',import.meta.url));
+const processFixture=fileURLToPath(new URL('./fixtures/ios-process-identity.c',import.meta.url));
 export function iosSimulatorAppPid(stdout,appId){
  if(typeof stdout!=='string'||!/^[a-zA-Z]\w*(?:\.[a-zA-Z]\w*)+$/.test(appId||''))throw Error('Actual launchctl output and fixed bundle ID required');
  const escaped=appId.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');const label=new RegExp('^UIKitApplication:'+escaped+'\\[[^\\s]+$');
  const matches=stdout.trim().split(/\r?\n/).map(line=>line.trim().split(/\s+/)).filter(parts=>parts.length===3&&label.test(parts[2]));
  if(matches.length!==1||!/^\d+$/.test(matches[0][0])||!Number.isSafeInteger(Number(matches[0][0]))||Number(matches[0][0])<1)throw Error('Exactly one running actual Simulator application PID required');return Number(matches[0][0]);
+}
+export function iosHostProcessIdentity(stdout,nativePid){
+ const text=String(stdout).trim();
+ if(!/^IOS_PROCESS_IDENTITY:\{[^\r\n]*\}$/.test(text))throw Error('Exactly one actual host libproc observation required');
+ const actual=JSON.parse(text.slice('IOS_PROCESS_IDENTITY:'.length));
+ if(actual.schemaVersion!==1||actual.observer!=='darwin-libproc'||actual.pid!==nativePid)throw Error('Actual Simulator application PID differs from native BEGIN');
+ if(!/^[1-9][0-9]{0,11}$/.test(actual.startSeconds||'')||!Number.isSafeInteger(actual.startMicroseconds)||actual.startMicroseconds<0||actual.startMicroseconds>=1000000)throw Error('Actual process creation identity required');
+ return actual;
+}
+export function iosSimulatorBundleContainer(stdout,simulatorDataPath,device,canonicalize=fs.realpathSync){
+ const locale=iosSimulatorLocalePaths(simulatorDataPath,device);
+ const raw=typeof stdout==='string'?stdout.trim():'';
+ const root=path.posix.join(locale.dataPath,'Containers/Bundle/Application');
+ if(!raw||raw.includes('\\')||/[\r\n\0]/.test(raw)||path.posix.normalize(raw)!==raw||!path.posix.isAbsolute(raw))throw Error('Actual Simulator app container path required');
+ const relative=path.posix.relative(root,raw).split('/');
+ if(relative.length!==2||!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(relative[0])||!/^.+\.app$/.test(relative[1]))throw Error('App container is outside the exact Simulator bundle directory');
+ const realData=canonicalize(locale.dataPath),realRoot=canonicalize(root),container=canonicalize(raw);
+ if(realData!==locale.dataPath||realRoot!==root||container!==raw)throw Error('Aliased or foreign Simulator data/container refused');
+ if(path.posix.relative(realRoot,container).split('/').join('/')!==relative.join('/'))throw Error('Aliased or foreign Simulator bundle container refused');
+ return container;
+}
+// Validate two independent host/Simulator identity sources, never a PID echo.
+export function bindIosSimulatorProcess({processStdout,containerStdout,bundleInfo,device,appId,nativePid,simulatorDataPath},canonicalize=fs.realpathSync){
+ if(!Number.isSafeInteger(nativePid)||nativePid<1||nativePid>2147483647||!/^[a-zA-Z]\w*(?:\.[a-zA-Z]\w*)+$/.test(appId||''))throw Error('Fixed actual process/package required');
+ const actual=iosHostProcessIdentity(processStdout,nativePid);
+ const container=iosSimulatorBundleContainer(containerStdout,simulatorDataPath,device,canonicalize);
+ if(!bundleInfo||bundleInfo.CFBundleIdentifier!==appId||typeof bundleInfo.CFBundleExecutable!=='string'||!bundleInfo.CFBundleExecutable||/[\/\\\r\n\0]/.test(bundleInfo.CFBundleExecutable)||['.','..'].includes(bundleInfo.CFBundleExecutable))throw Error('Actual bundle identifier/executable differs');
+ const expected=path.posix.join(container,bundleInfo.CFBundleExecutable);
+ if(typeof actual.executablePath!=='string'||!path.posix.isAbsolute(actual.executablePath)||/[\r\n\0\\]/.test(actual.executablePath)||path.posix.normalize(actual.executablePath)!==actual.executablePath||canonicalize(expected)!==expected||canonicalize(actual.executablePath)!==expected)throw Error('Actual host process executable differs from the installed Simulator app');
+ return{pid:actual.pid,executablePath:expected,startSeconds:actual.startSeconds,startMicroseconds:actual.startMicroseconds,device,appId,appContainer:container};
 }
 export function validateIosFolderRequest({request:r,begin:b,sourceSha,profileSha,nativePid,device,appId,isolated,entry}){
  if(isolated!==true||entry!=='ios_folder1'||!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(device||'')||!/^[a-zA-Z]\w*(?:\.[a-zA-Z]\w*)+$/.test(appId||''))throw Error('Explicit isolated iOS folder entry/Simulator/package required');
@@ -69,17 +100,20 @@ export async function prepareIosFolderPickerDriver(options){
  assertIosSimulatorLocaleReadback(actualLanguages,actualLocale);
  const root=path.join(out,'ios-picker-host');fs.mkdirSync(root);const project=path.join(root,'FolderPicker.xcodeproj');fs.mkdirSync(path.join(project,'xcshareddata','xcschemes'),{recursive:true});
  fs.writeFileSync(path.join(project,'project.pbxproj'),iosPickerProject());fs.writeFileSync(path.join(project,'xcshareddata','xcschemes','FolderPickerUITests.xcscheme'),iosPickerScheme);fs.copyFileSync(fixture,path.join(root,'FolderPickerUITests.swift'));
+ const processSource=path.join(root,'ios-process-identity.c'),processObserver=path.join(root,'ios-process-identity');fs.copyFileSync(processFixture,processSource);
+ run(['xcrun','--sdk','macosx','clang','-std=c11','-Wall','-Wextra','-Werror','-O2',processSource,'-lproc','-o',processObserver],30000);
+ if(!fs.statSync(processObserver).isFile()||fs.statSync(processObserver).size<=0)throw Error('Fresh host process observer binary missing');
  run(['xcodebuild','build-for-testing','-project',project,'-scheme','FolderPickerUITests','-configuration','Debug','-sdk','iphonesimulator','-destination','id='+device,'-derivedDataPath',path.join(root,'DerivedData'),'CODE_SIGNING_ALLOWED=NO'],300000);
  const products=path.join(root,'DerivedData','Build','Products');const tests=fs.readdirSync(products).filter(n=>n.endsWith('.xctestrun'));if(tests.length!==1)throw Error('Exactly one freshly built XCTest configuration required');
- return createIosFolderPickerObserver({...options,root,products,testRun:tests[0],locale,actualLanguages,actualLocale});
+ return createIosFolderPickerObserver({...options,root,products,testRun:tests[0],locale,actualLanguages,actualLocale,processObserver});
 }
 
 // Keep draining Flutter machine events while real OS commands run. The factory
 // is exported for host process regressions, not as device acceptance evidence.
-export function createIosFolderPickerObserver(options,{execute=asyncCommand,now=Date.now}={}){
- const {sourceSha,profileSha,appId,device,environment=process.env,root,products,testRun,locale,actualLanguages,actualLocale}=options;
+export function createIosFolderPickerObserver(options,{execute=asyncCommand,now=Date.now,canonicalize=fs.realpathSync}={}){
+ const {sourceSha,profileSha,appId,device,environment=process.env,root,products,testRun,locale,actualLanguages,actualLocale,processObserver}=options;
  let begin=null,request=null,promise=null,result=null,firstError=null;
- const observations=[];let observedPidBefore=null,observedPidAfter=null,requestDeadline=null;
+ const observations=[];let observedPidBefore=null,observedPidAfter=null,processIdentityBefore=null,processIdentityAfter=null,requestDeadline=null;
  const remaining=()=>{if(firstError)throw firstError;const value=requestDeadline-now();if(value<=0)throw Error('Overall iOS system-picker deadline exceeded');return value;};
  const checked=async(argv,timeout,file,env=environment)=>{
   const r=await execute(argv,{cwd:root,env,timeout});observations.push(r);
@@ -87,7 +121,26 @@ export function createIosFolderPickerObserver(options,{execute=asyncCommand,now=
   if(r.exitStatus!==0||r.error||!r.cleanupComplete||r.signal!==null||r.timedOut||r.outputOverflow)throw Error('Actual iOS picker command failed: '+JSON.stringify(argv)+'; '+(r.error||r.signal||r.exitStatus));
   return r;
  };
- const observePid=async phase=>{const r=await checked(['xcrun','simctl','spawn',device,'launchctl','list'],Math.min(5000,remaining()),'PID_COMMAND_'+phase+'.json');return iosSimulatorAppPid(r.stdout,appId);};
+ const observePid=async phase=>{
+  // All three real queries SHARE the previous5s phase budget, not5s each.
+  const phaseDeadline=now()+Math.min(5000,remaining());
+  const budget=()=>{const value=Math.min(phaseDeadline-now(),remaining());if(value<=0)throw Error('iOS process observation phase exceeded5000ms');return value;};
+  if(typeof processObserver!=='string'||!path.isAbsolute(processObserver)||path.dirname(processObserver)!==root)throw Error('Prepared external host process observer required');
+  const proc=await checked([processObserver,String(begin.nativePid)],budget(),'PID_COMMAND_'+phase+'.json');
+  iosHostProcessIdentity(proc.stdout,begin.nativePid);
+  const container=await checked(['xcrun','simctl','get_app_container',device,appId,'app'],budget(),'APP_CONTAINER_'+phase+'.json');
+  // Resolve/verify the exact device-owned bundle BEFORE reading its plist.
+  const data=iosSimulatorLocalePaths(locale?.dataPath,device).dataPath;
+  const appPath=iosSimulatorBundleContainer(container.stdout,data,device,canonicalize);
+  const infoPath=path.posix.join(appPath,'Info.plist');
+  if(canonicalize(infoPath)!==infoPath)throw Error('Aliased bundle Info.plist leaf refused');
+  const info=await checked(['/usr/bin/plutil','-convert','json','-o','-',infoPath],budget(),'APP_INFO_'+phase+'.json');
+  const identity=bindIosSimulatorProcess({processStdout:proc.stdout,containerStdout:container.stdout,bundleInfo:JSON.parse(info.stdout),device,appId,nativePid:begin.nativePid,simulatorDataPath:data},canonicalize);
+  budget();
+  if(phase==='BEFORE')processIdentityBefore=identity;else processIdentityAfter=identity;
+  return identity.pid;
+ };
+
  function onLine(text){
   const bm=/FEATURE_ACCEPTANCE_BEGIN:(\{[^\r\n]*\})/.exec(text);if(bm){if(begin)throw Error('Duplicate native BEGIN for iOS picker');begin=JSON.parse(bm[1]);}
   const rm=/NATIVE_FOLDER_PICKER_REQUEST:(\{[^\r\n]*\})/.exec(text);if(!rm)return;
@@ -103,11 +156,11 @@ export function createIosFolderPickerObserver(options,{execute=asyncCommand,now=
    const uiTimeout=Math.min(140000,remaining()-10000);if(uiTimeout<=0)throw Error('Insufficient remaining real picker UI budget');
    const r=await checked(argv,uiTimeout,'UI_COMMAND.json',env);
    result=assertIosPickerUiResult(r.stdout+'\n'+r.stderr,{sourceSha,profileSha,nativePid:begin.nativePid,request,appId});
-   observedPidAfter=await observePid('AFTER');if(observedPidAfter!==begin.nativePid||observedPidAfter!==observedPidBefore)throw Error('Actual Simulator app process changed during system directory selection');
-   remaining();fs.writeFileSync(path.join(root,'UI_RESULT.json'),JSON.stringify({supportOnly:true,functionalCertificationGranted:false,observedPidBefore,observedPidAfter,result},null,2));
+   observedPidAfter=await observePid('AFTER');if(observedPidAfter!==begin.nativePid||observedPidAfter!==observedPidBefore||JSON.stringify(processIdentityAfter)!==JSON.stringify(processIdentityBefore))throw Error('Actual Simulator app process changed during system directory selection');
+   remaining();fs.writeFileSync(path.join(root,'UI_RESULT.json'),JSON.stringify({supportOnly:true,functionalCertificationGranted:false,observedPidBefore,observedPidAfter,processIdentityBefore,processIdentityAfter,result},null,2));
   }).catch(error=>{firstError||=error;fs.writeFileSync(path.join(root,'OBSERVER_FAILURE.json'),JSON.stringify({requestObserved:true,request,begin,error:String(firstError?.stack||firstError)},null,2));throw firstError;});
   return promise;
  }
- async function finish(){if(firstError)throw firstError;if(!request||!promise)throw Error('Actual native iOS picker request was never observed');await promise;if(!result||observedPidBefore!==begin.nativePid||observedPidAfter!==begin.nativePid)throw Error('Missing validated actual UI/PID result');return{supportOnly:true,functionalCertificationGranted:false,request,result,observedPidBefore,observedPidAfter,locale,actualLanguages,actualLocale,commands:observations,fixtureSha256:sha(fs.readFileSync(fixture)),xcresult:path.join(root,'selection.xcresult')};}
+ async function finish(){if(firstError)throw firstError;if(!request||!promise)throw Error('Actual native iOS picker request was never observed');await promise;if(!result||observedPidBefore!==begin.nativePid||observedPidAfter!==begin.nativePid)throw Error('Missing validated actual UI/PID result');return{supportOnly:true,functionalCertificationGranted:false,request,result,observedPidBefore,observedPidAfter,processIdentityBefore,processIdentityAfter,processObserverSourceSha256:sha(fs.readFileSync(processFixture)),locale,actualLanguages,actualLocale,commands:observations,fixtureSha256:sha(fs.readFileSync(fixture)),xcresult:path.join(root,'selection.xcresult')};}
  return{onLine,finish,root};
 }
