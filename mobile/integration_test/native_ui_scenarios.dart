@@ -17,7 +17,6 @@ import 'package:novelai_mobile/screens/novelai_accounts_screen.dart';
 import 'package:novelai_mobile/screens/random_artist_lab_screen.dart';
 import 'package:novelai_mobile/screens/tools_hub_screen.dart';
 import 'package:novelai_mobile/screens/comic_screen.dart';
-import 'package:novelai_mobile/screens/batch_redraw_screen.dart';
 import 'package:novelai_mobile/services/artist_tag_service.dart';
 import 'package:novelai_mobile/services/novelai_accounts.dart';
 import 'package:novelai_mobile/services/novelai_account_api.dart';
@@ -558,103 +557,137 @@ Future<void> _nativeBack() async {
   await nativeUiTap(back.first);
 }
 
-// A ListView retains its scroll offset and lazily disposes off-screen tiles.
-// Its first currently mounted ListTile is not the first business tool. Reveal
-// the production hub's real scroll position, then bind the unique Comic label.
-Future<void> openNativeComicFromTools(AppState app) async {
+// ListView children are lazy and may retain a nonzero scroll offset. Bind the
+// current hub subtree, never unrelated/offstage routes or a fixed mounted count.
+(Element, ScrollPosition) _nativeToolsHubScroll() {
   final hubs = nativeUiElements((widget) => widget is ToolsHubScreen);
   require(hubs.length == 1, 'Expected one current production tools hub');
   final hub = hubs.single;
-  final comicTitle = mobileToolsHubTextFor(app.settings.language).comicTitle;
-  require(comicTitle.trim().isNotEmpty, 'Production Comic tool label is empty');
-  List<Element> descendants(bool Function(Element) predicate) {
-    final result = <Element>[];
-    void visit(Element element) {
-      if (!nativeUiVisible(element)) return;
-      if (predicate(element)) result.add(element);
-      element.visitChildren(visit);
-    }
-
-    require(hub.mounted && nativeUiVisible(hub),
-        'Production tools hub is no longer current');
-    hub.visitChildren(visit);
-    return result;
-  }
-
-  final scrollables = descendants((element) =>
-          element is StatefulElement && element.state is ScrollableState)
+  final scrollables = _nativeToolDescendants(
+          hub,
+          (element) =>
+              element is StatefulElement && element.state is ScrollableState)
       .map((element) => (element as StatefulElement).state as ScrollableState)
       .where((state) => state.position.axis == Axis.vertical)
       .toList();
   require(scrollables.length == 1,
       'Expected one production tools hub vertical scroll position');
   final position = scrollables.single.position;
-  await nativeUiWait(() => position.hasContentDimensions,
-      'production tools hub scroll layout');
   require(
-      position.minScrollExtent.isFinite && position.maxScrollExtent.isFinite,
+      position.hasContentDimensions &&
+          position.hasViewportDimension &&
+          position.minScrollExtent.isFinite &&
+          position.maxScrollExtent.isFinite &&
+          position.viewportDimension.isFinite &&
+          position.viewportDimension > 0,
       'Production tools hub scroll bounds are invalid');
-  String? targetTitle;
-  String diagnostic() => jsonEncode({
-        'kind': 'diagnostic',
-        'expectedTitle': comicTitle,
-        'targetTitle': targetTitle,
-        'scrollOffset': position.hasPixels ? position.pixels : null,
-        'minScrollExtent': position.minScrollExtent,
-        'maxScrollExtent': position.maxScrollExtent,
-        'mountedTitles': hub.mounted && nativeUiVisible(hub)
-            ? descendants((element) => element.widget is ListTile)
-                .map((element) => (element.widget as ListTile).title)
-                .whereType<Text>()
-                .map((text) => text.data)
-                .toList()
-            : <String>[],
-        'currentRoutes': {
-          'toolsHub':
-              nativeUiElements((widget) => widget is ToolsHubScreen).length,
-          'comic': nativeUiElements((widget) => widget is ComicScreen).length,
-          'batch':
-              nativeUiElements((widget) => widget is BatchRedrawScreen).length,
-        },
-      });
-  try {
-    position.jumpTo(position.minScrollExtent);
-    await frame();
-
-    List<Element> comicTiles() => descendants((element) {
-          final widget = element.widget;
-          return widget is ListTile &&
-              widget.onTap != null &&
-              widget.title is Text &&
-              (widget.title as Text).data == comicTitle;
-        });
-    await nativeUiWait(() => comicTiles().isNotEmpty,
-        'uniquely identified production Comic tool');
-    final targets = comicTiles();
-    require(targets.length == 1, 'Production Comic tool identity is ambiguous');
-    targetTitle = ((targets.single.widget as ListTile).title as Text).data;
-    require(targetTitle == comicTitle, 'Production Comic tool title changed');
-    final labels = <Element>[];
-    void findLabel(Element element) {
-      if (element.widget is Text && (element.widget as Text).data == comicTitle) {
-        labels.add(element);
-      }
-      element.visitChildren(findLabel);
-    }
-
-    targets.single.visitChildren(findLabel);
-    require(labels.length == 1, 'Production Comic tool title is ambiguous');
-    // These are bounded public-UI diagnostics, never acceptance/proof markers.
-    // ignore: avoid_print
-    print('FEATURE_NATIVE_COMIC_TARGET:before-pointer:${diagnostic()}');
-    // Keep the native hit-test path. Never invoke ListTile.onTap directly.
-    await nativeUiTap(labels.single);
-    // ignore: avoid_print
-    print('FEATURE_NATIVE_COMIC_TARGET:after-pointer:${diagnostic()}');
-  } catch (error) {
-    throw StateError('$error; Comic target: ${diagnostic()}');
-  }
+  return (hub, position);
 }
+
+List<Element> _nativeToolDescendants(
+    Element hub, bool Function(Element) predicate) {
+  require(hub.mounted && nativeUiVisible(hub),
+      'Production tools hub is no longer current');
+  final result = <Element>[];
+  void visit(Element element) {
+    if (!nativeUiVisible(element)) return;
+    if (predicate(element)) result.add(element);
+    element.visitChildren(visit);
+  }
+
+  hub.visitChildren(visit);
+  return result;
+}
+
+List<Element> _nativeToolTiles(Element hub) => _nativeToolDescendants(
+    hub,
+    (element) =>
+        element.widget is ListTile &&
+        (element.widget as ListTile).onTap != null &&
+        (element.widget as ListTile).title is Text);
+
+Future<List<String>> collectNativeToolTitles(AppState app,
+    {Future<void> Function()? advanceFrame}) async {
+  final tick = advanceFrame ?? frame;
+  final (hub, position) = _nativeToolsHubScroll();
+  final observed = <String>{};
+  var reachedEnd = false;
+  position.jumpTo(position.minScrollExtent);
+  await tick();
+  try {
+    for (var attempt = 0; attempt < 64; attempt++) {
+      final mounted = _nativeToolTiles(hub)
+          .map(
+              (element) => (((element.widget as ListTile).title) as Text).data!)
+          .toList();
+      require(
+          mounted.toSet().length == mounted.length &&
+              mounted.every((title) => title.trim().isNotEmpty),
+          'Ambiguous mounted production tool labels');
+      observed.addAll(mounted);
+      if (position.pixels >= position.maxScrollExtent - .5) {
+        reachedEnd = true;
+        break;
+      }
+      final next = (position.pixels + position.viewportDimension * .5)
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble();
+      require(next > position.pixels,
+          'Production tools inventory made no progress');
+      position.jumpTo(next);
+      await tick();
+    }
+    require(reachedEnd, 'Production tools inventory exceeded bounded scroll');
+  } finally {
+    position.jumpTo(position.minScrollExtent);
+    await tick();
+  }
+  return observed.toList();
+}
+
+Future<void> openNativeToolFromTools(AppState app, String title,
+    {Future<void> Function()? advanceFrame,
+    Future<void> Function(Element)? pointerTap}) async {
+  final tick = advanceFrame ?? frame;
+  final tap = pointerTap ?? nativeUiTap;
+  require(title.trim().isNotEmpty, 'Production tool label is empty');
+  final (hub, position) = _nativeToolsHubScroll();
+  position.jumpTo(position.minScrollExtent);
+  await tick();
+  List<Element> targets() => _nativeToolTiles(hub)
+      .where((element) =>
+          (((element.widget as ListTile).title) as Text).data == title)
+      .toList();
+  for (var attempt = 0; targets().isEmpty && attempt < 64; attempt++) {
+    if (position.pixels >= position.maxScrollExtent - .5) break;
+    final next = (position.pixels + position.viewportDimension * .5)
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    require(next > position.pixels, 'Production tool reveal made no progress');
+    position.jumpTo(next);
+    await tick();
+  }
+  final matches = targets();
+  require(matches.length == 1,
+      'Production tool label missing or ambiguous: $title');
+  final labels = <Element>[];
+  void visit(Element element) {
+    if (element.widget is Text && (element.widget as Text).data == title) {
+      labels.add(element);
+    }
+    element.visitChildren(visit);
+  }
+
+  matches.single.visitChildren(visit);
+  require(
+      labels.length == 1, 'Production tool title target is ambiguous: $title');
+  // Native execution uses the real gesture/hit-test primitive. Optional hooks
+  // only allow host authoring tests to advance fake-async frames/real tester taps.
+  await tap(labels.single);
+}
+
+Future<void> openNativeComicFromTools(AppState app) => openNativeToolFromTools(
+    app, mobileToolsHubTextFor(app.settings.language).comicTitle);
 
 Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
   final app = c.app;
@@ -693,10 +726,7 @@ Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
     visited.add(index);
   }
   await _navigateTo(6);
-  final toolTitles = nativeUiElements(
-          (w) => w is ListTile && w.onTap != null && w.title is Text)
-      .map((e) => ((e.widget as ListTile).title as Text).data!)
-      .toList();
+  final toolTitles = await collectNativeToolTitles(app);
   final destinations = nativeToolCardMatchers(app);
   require(
       destinations.length == 7 &&
@@ -706,7 +736,7 @@ Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
       'Uncovered or ambiguous nested tool route');
   final nested = <String>[];
   for (final title in toolTitles) {
-    await nativeUiTextTap(title);
+    await openNativeToolFromTools(app, title);
     final expected = destinations[title]!;
     await nativeUiWait(() => nativeUiElements(expected).isNotEmpty,
         'actual nested route $title');
