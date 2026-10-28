@@ -53,6 +53,18 @@ it("scrolls the keyboard-highlighted suggestion into view", () => {
   const app = fs.readFileSync("src/App.tsx", "utf8");
   const editor = app.slice(app.indexOf("function PromptTextarea("), app.indexOf("// ── Shared UI primitives"));
   // Eight suggestions do not fit the list, so arrowing past the visible rows must scroll it.
-  expect(editor).toContain('const next = e.key === "ArrowDown" ? Math.min(activeIdx + 1, suggestions.length - 1) : Math.max(activeIdx - 1, 0);');
+  expect(editor).toContain('const next = e.key === "ArrowDown" ? Math.min(current + 1, suggestions.length - 1) : Math.max(current - 1, 0);');
   expect(editor).toContain('dropdownRef.current?.children[next]?.scrollIntoView({ block: "nearest" });');
+});
+
+it("starts every new or refined list at its first row and never picks past its end", () => {
+  const app = fs.readFileSync("src/App.tsx", "utf8");
+  const editor = app.slice(app.indexOf("function PromptTextarea("), app.indexOf("// ── Shared UI primitives"));
+  // Typing resets the highlight and the list scroll together; a new list does the same.
+  expect(editor).toContain("setActiveIdx(0);\n    if (dropdownRef.current) dropdownRef.current.scrollTop = 0;");
+  expect(editor).toContain("setSuggestions(res.slice(0, 8));\n        // Arrow keys pressed on the previous list must not point past this one.\n        setActiveIdx(0);");
+  expect(editor).toContain("list.scrollTop = 0;");
+  expect(editor).toContain("const current = Math.min(activeIdx, suggestions.length - 1);");
+  expect(editor).toContain("const pick = suggestions[Math.min(activeIdx, suggestions.length - 1)];");
+  expect(editor).not.toContain("applyTag(suggestions[activeIdx].tag)");
 });

@@ -510,6 +510,8 @@ function PromptTextarea({
     const list = dropdownRef.current;
     const wrap = list?.parentElement;
     if (!list || !wrap || !acLine) return;
+    // A new list starts at its first row, like the highlight.
+    list.scrollTop = 0;
     const place = () => {
       const top = wrap.getBoundingClientRect().top + wrap.clientTop;
       const height = list.scrollHeight + list.offsetHeight - list.clientHeight;
@@ -539,7 +541,9 @@ function PromptTextarea({
     const text = e.target.value;
     const cursor = e.target.selectionStart ?? text.length;
     onChange(text);
+    // Typing resets the highlight to the first row; show that row too.
     setActiveIdx(0);
+    if (dropdownRef.current) dropdownRef.current.scrollTop = 0;
     if (!enabled || composingRef.current) {
       clearSuggestions();
       return;
@@ -563,6 +567,8 @@ function PromptTextarea({
         if (request !== requestRef.current || !ta || document.activeElement !== ta
           || ta.selectionStart !== cursor || ta.selectionEnd !== cursor) return;
         setSuggestions(res.slice(0, 8));
+        // Arrow keys pressed on the previous list must not point past this one.
+        setActiveIdx(0);
         if (res.length > 0) {
           const c = caretCoordinates(ta, cursor);
           // Anchor to the caret line (vertical only); full-width horizontally.
@@ -590,12 +596,17 @@ function PromptTextarea({
     if (!suggestions.length) return;
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
-      const next = e.key === "ArrowDown" ? Math.min(activeIdx + 1, suggestions.length - 1) : Math.max(activeIdx - 1, 0);
+      const current = Math.min(activeIdx, suggestions.length - 1);
+      const next = e.key === "ArrowDown" ? Math.min(current + 1, suggestions.length - 1) : Math.max(current - 1, 0);
       setActiveIdx(next);
       // The list scrolls past about five rows; keep the highlighted one in view so Enter never inserts a hidden tag.
       dropdownRef.current?.children[next]?.scrollIntoView({ block: "nearest" });
     }
-    else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); applyTag(suggestions[activeIdx].tag); }
+    else if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault();
+      const pick = suggestions[Math.min(activeIdx, suggestions.length - 1)];
+      if (pick) applyTag(pick.tag);
+    }
     // Close only the list; the surrounding dialog or popover stays open.
     else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); clearSuggestions(); }
   }
