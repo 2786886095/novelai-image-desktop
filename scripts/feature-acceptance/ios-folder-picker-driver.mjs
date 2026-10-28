@@ -36,14 +36,25 @@ export function iosSimulatorBundleContainer(stdout,simulatorDataPath,device,cano
  if(path.posix.relative(realRoot,container).split('/').join('/')!==relative.join('/'))throw Error('Aliased or foreign Simulator bundle container refused');
  return container;
 }
-// Validate two independent host/Simulator identity sources, never a PID echo.
-export function bindIosSimulatorProcess({processStdout,containerStdout,bundleInfo,device,appId,nativePid,simulatorDataPath},canonicalize=fs.realpathSync){
+// Kernel PID/path/birth + booted-device inventory-rooted filesystem metadata.
+// This is NOT an independent CoreSimulator installation-registration witness,
+// nor source attestation. Fresh build/qualified BEGIN and real native UI/bytes
+// proofs remain independently required.
+export function iosSimulatorContainerFromProcess(actual,simulatorDataPath,device,canonicalize=fs.realpathSync){
+ const file=actual?.executablePath;
+ if(typeof file!=='string'||!path.posix.isAbsolute(file)||/[\r\n\0\\]/.test(file)||path.posix.normalize(file)!==file)throw Error('Actual kernel executable path required');
+ const container=iosSimulatorBundleContainer(path.posix.dirname(file),simulatorDataPath,device,canonicalize);
+ if(!path.posix.basename(file)||canonicalize(file)!==file)throw Error('Aliased kernel executable leaf refused');
+ return container;
+}
+// Bind the actual process to exact filesystem bundle ID/executable, never a PID echo.
+export function bindIosSimulatorProcess({processStdout,bundleInfo,device,appId,nativePid,simulatorDataPath},canonicalize=fs.realpathSync){
  if(!Number.isSafeInteger(nativePid)||nativePid<1||nativePid>2147483647||!/^[a-zA-Z]\w*(?:\.[a-zA-Z]\w*)+$/.test(appId||''))throw Error('Fixed actual process/package required');
  const actual=iosHostProcessIdentity(processStdout,nativePid);
- const container=iosSimulatorBundleContainer(containerStdout,simulatorDataPath,device,canonicalize);
+ const container=iosSimulatorContainerFromProcess(actual,simulatorDataPath,device,canonicalize);
  if(!bundleInfo||bundleInfo.CFBundleIdentifier!==appId||typeof bundleInfo.CFBundleExecutable!=='string'||!bundleInfo.CFBundleExecutable||/[\/\\\r\n\0]/.test(bundleInfo.CFBundleExecutable)||['.','..'].includes(bundleInfo.CFBundleExecutable))throw Error('Actual bundle identifier/executable differs');
  const expected=path.posix.join(container,bundleInfo.CFBundleExecutable);
- if(typeof actual.executablePath!=='string'||!path.posix.isAbsolute(actual.executablePath)||/[\r\n\0\\]/.test(actual.executablePath)||path.posix.normalize(actual.executablePath)!==actual.executablePath||canonicalize(expected)!==expected||canonicalize(actual.executablePath)!==expected)throw Error('Actual host process executable differs from the installed Simulator app');
+ if(typeof actual.executablePath!=='string'||!path.posix.isAbsolute(actual.executablePath)||/[\r\n\0\\]/.test(actual.executablePath)||path.posix.normalize(actual.executablePath)!==actual.executablePath||canonicalize(expected)!==expected||canonicalize(actual.executablePath)!==expected)throw Error('Actual host process executable differs from executing Simulator bundle metadata');
  return{pid:actual.pid,executablePath:expected,startSeconds:actual.startSeconds,startMicroseconds:actual.startMicroseconds,device,appId,appContainer:container};
 }
 export function validateIosFolderRequest({request:r,begin:b,sourceSha,profileSha,nativePid,device,appId,isolated,entry}){
@@ -128,14 +139,19 @@ export function createIosFolderPickerObserver(options,{execute=asyncCommand,now=
   if(typeof processObserver!=='string'||!path.isAbsolute(processObserver)||path.dirname(processObserver)!==root)throw Error('Prepared external host process observer required');
   const proc=await checked([processObserver,String(begin.nativePid)],budget(),'PID_COMMAND_'+phase+'.json');
   iosHostProcessIdentity(proc.stdout,begin.nativePid);
-  const container=await checked(['xcrun','simctl','get_app_container',device,appId,'app'],budget(),'APP_CONTAINER_'+phase+'.json');
-  // Resolve/verify the exact device-owned bundle BEFORE reading its plist.
+  // Never ask CoreSimulator RPC while the resident app presents its picker.
+  // Derive anew from the actual kernel path in THIS observation, not a cache.
   const data=iosSimulatorLocalePaths(locale?.dataPath,device).dataPath;
-  const appPath=iosSimulatorBundleContainer(container.stdout,data,device,canonicalize);
+  const appPath=iosSimulatorContainerFromProcess(iosHostProcessIdentity(proc.stdout,begin.nativePid),data,device,canonicalize);
   const infoPath=path.posix.join(appPath,'Info.plist');
   if(canonicalize(infoPath)!==infoPath)throw Error('Aliased bundle Info.plist leaf refused');
   const info=await checked(['/usr/bin/plutil','-convert','json','-o','-',infoPath],budget(),'APP_INFO_'+phase+'.json');
-  const identity=bindIosSimulatorProcess({processStdout:proc.stdout,containerStdout:container.stdout,bundleInfo:JSON.parse(info.stdout),device,appId,nativePid:begin.nativePid,simulatorDataPath:data},canonicalize);
+  const bundleInfo=JSON.parse(info.stdout);
+  const identity=bindIosSimulatorProcess({processStdout:proc.stdout,bundleInfo,device,appId,nativePid:begin.nativePid,simulatorDataPath:data},canonicalize);
+  // Close the metadata interval with another real read by the unchanged C tool.
+  const confirm=await checked([processObserver,String(begin.nativePid)],budget(),'PID_CONFIRM_'+phase+'.json');
+  const confirmed=bindIosSimulatorProcess({processStdout:confirm.stdout,bundleInfo,device,appId,nativePid:begin.nativePid,simulatorDataPath:data},canonicalize);
+  if(JSON.stringify(confirmed)!==JSON.stringify(identity))throw Error('Actual Simulator process changed during bundle identity observation');
   budget();
   if(phase==='BEFORE')processIdentityBefore=identity;else processIdentityAfter=identity;
   return identity.pid;

@@ -21,12 +21,13 @@ function fixture(t,{mode='ok',now=Date.now,afterProcess=()=>{}}={}){
   calls.push({argv,timeout:opts.timeout,env:opts.env});let code;
   if(argv[0]===context.processObserver){
    pids++;assert(opts.timeout>0&&opts.timeout<=5000);
-   const pid=mode==='wrong-before'&&pids===1||mode==='wrong-after'&&pids===2?nativePid+1:nativePid;
-   const identity={schemaVersion:1,observer:'darwin-libproc',pid,executablePath:app+(mode==='foreign-exe'?'/Runner-extra':'/Runner'),startSeconds:mode==='reused-after'&&pids===2?'1793164065':'1793164064',startMicroseconds:990729};
+   const pid=mode==='wrong-before'&&pids===1||mode==='wrong-after'&&pids===3?nativePid+1:nativePid;
+   const processApp=mode==='foreign-container'?app.replace(context.device,'12345678-1234-1234-1234-123456789abc'):app;
+   const identity={schemaVersion:1,observer:'darwin-libproc',pid,executablePath:processApp+(mode==='foreign-exe'?'/Runner-extra':'/Runner'),startSeconds:mode==='reused-after'&&pids>=3||mode==='reused-between'&&pids===2?'1793164065':'1793164064',startMicroseconds:990729};
    code=mode==='timeout'?'setInterval(()=>{},1000)':`console.log(${JSON.stringify('IOS_PROCESS_IDENTITY:'+JSON.stringify(identity))})`;
    if(mode==='liveness'&&pids===1){const gate=path.join(root,'parent-loop-gate');setTimeout(()=>fs.writeFileSync(gate,'parent loop remained live'),30);code=`const fs=require('node:fs');const tick=setInterval(()=>{if(fs.existsSync(${JSON.stringify(gate)})){clearInterval(tick);${code}}},5);`;}
   }else if(argv[0]==='xcrun'){
-   assert.deepEqual(argv,['xcrun','simctl','get_app_container',context.device,context.appId,'app']);assert(opts.timeout>0&&opts.timeout<=5000);code=`console.log(${JSON.stringify(mode==='foreign-container'?app.replace(context.device,'12345678-1234-1234-1234-123456789abc'):app)})`;
+   throw Error('No CoreSimulator RPC is allowed during the actual picker request');
   }else if(argv[0]==='/usr/bin/plutil'){
    assert.deepEqual(argv,['/usr/bin/plutil','-convert','json','-o','-',app+'/Info.plist']);assert(opts.timeout>0&&opts.timeout<=5000);code=`console.log(${JSON.stringify(JSON.stringify({CFBundleIdentifier:mode==='wrong-bundle'?context.appId+'.extra':context.appId,CFBundleExecutable:'Runner'}))})`;
   }else{
@@ -79,4 +80,8 @@ test('same PID and executable with different actual process start time is reject
 test('the host process/container/plist observation shares one5s phase deadline',async t=>{
  let clock=0;const {observer,calls}=fixture(t,{now:()=>clock,afterProcess:()=>{clock=5001;}});
  await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),/observation phase exceeded5000ms/);assert.equal(calls.length,1);assert.equal(calls[0].timeout,5000);await assert.rejects(observer.finish(),/observation phase exceeded5000ms/);
+});
+
+test('metadata interval is closed by a fresh second kernel observation before UI',async t=>{
+ const {observer,calls,root}=fixture(t,{mode:'reused-between'});await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),/process changed during bundle identity/);await assert.rejects(observer.finish(),/process changed during bundle identity/);assert.equal(calls.length,3);assert(!calls.some(c=>c.argv[0]==='xcodebuild'));assert(!fs.existsSync(path.join(root,'UI_RESULT.json')));
 });

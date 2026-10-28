@@ -1,0 +1,258 @@
+name: iOS folder native diagnostic only
+
+on:
+  push:
+    branches: ['codex/release-2.6.8-comic-parity-ba4304ed']
+    paths:
+      - .github/workflows/ios-folder-native-diagnostic.yml
+      - scripts/feature-acceptance/ios-folder-native-diagnostic.test.mjs
+      - scripts/feature-acceptance/ios-folder-picker-driver.mjs
+      - scripts/feature-acceptance/ios-folder-picker-driver.test.mjs
+      - scripts/feature-acceptance/ios-folder-picker-observer.test.mjs
+      - scripts/feature-acceptance/fixtures/ios-process-identity.c
+      - scripts/feature-acceptance/fixtures/ios-folder-picker-ui.swift
+  workflow_dispatch:
+
+# Deliberately not the formal Native Client Feature Acceptance workflow.
+# This single real scenario cannot replace its 187 scoped release cells.
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  ios-folder1-diagnostic-only:
+    runs-on: macos-14
+    timeout-minutes: 75
+    steps:
+      - name: Preserve exact committed bytes before checkout
+        shell: bash
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+          cache: npm
+      - name: Verify exact checkout bytes against index and commit
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const cp = require('node:child_process');
+          const crypto = require('node:crypto');
+          function git(args, encoding) {
+            const result = cp.spawnSync('git', args, { encoding, maxBuffer: 64 * 1024 * 1024 });
+            if (result.error || result.status !== 0) {
+              throw new Error('Git command failed: ' + JSON.stringify(args) + '; exit=' + result.status + '; ' + (result.stderr || ''));
+            }
+            return result.stdout;
+          }
+          const head = git(['rev-parse', 'HEAD'], 'utf8').trim();
+          if (!/^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA || '') || head !== process.env.GITHUB_SHA) {
+            throw new Error('Checkout HEAD must equal GITHUB_SHA.');
+          }
+          // Index must still be exactly the committed tree; this alone is NOT a raw-byte proof.
+          git(['diff', '--cached', '--exit-code'], 'utf8');
+          const records = git(['ls-files', '--stage', '-z']).toString('utf8').split('\0').filter(Boolean);
+          if (!records.length) throw new Error('No tracked checkout files found.');
+          const mismatches = [];
+          for (const record of records) {
+            const match = /^([0-7]{6}) ([a-f0-9]{40}) ([0-3])\t([\s\S]+)$/.exec(record);
+            if (!match || match[3] !== '0') throw new Error('Unmerged or invalid Git index entry.');
+            const mode = match[1], oid = match[2], file = match[4];
+            let bytes;
+            if (mode === '120000') {
+              bytes = fs.readlinkSync(file, { encoding: 'buffer' });
+            } else if (mode === '100644' || mode === '100755') {
+              bytes = fs.readFileSync(file);
+            } else {
+              throw new Error('Unsupported tracked entry mode: ' + mode + ' ' + file);
+            }
+            const actual = crypto.createHash('sha1').update(Buffer.from('blob ' + bytes.length + '\0')).update(bytes).digest('hex');
+            if (actual !== oid) mismatches.push(file);
+          }
+          if (mismatches.length) throw new Error('Raw checkout byte mismatch: ' + JSON.stringify(mismatches));
+          console.log(JSON.stringify({ observed: 'COMMITTED_INDEX_RAW_BYTES_VERIFIED', sourceSha: head, verifiedFiles: records.length, full195Certified: false }));
+          NODE
+
+      - name: Bind a fresh diagnostic nonce to immutable raw source
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import crypto from 'node:crypto';
+          import {captureSourceState} from './scripts/feature-acceptance/mobile-entry-workspace.mjs';
+          const sourceSha=process.env.GITHUB_SHA;
+          const nonce=crypto.randomUUID();
+          const output=path.join(process.env.RUNNER_TEMP,'ios-folder-native-diagnostic',nonce);
+          fs.mkdirSync(output,{recursive:true});
+          const before=captureSourceState({sourceRoot:process.cwd(),sourceSha,
+            evidenceDirectory:path.join(output,'source-before'),requirePristine:true});
+          const binding={sourceSha,diagnosticNonce:nonce,workflowRun:process.env.GITHUB_RUN_ID,
+            workflowAttempt:process.env.GITHUB_RUN_ATTEMPT,source:process.cwd(),output,
+            rawIndexFilesVerified:before.trackedFiles,entry:'ios_folder1',expectedChecks:1,
+            diagnosticOnly:true,eligibleForPublication:false,formalFeatureRun:false,
+            full195Certified:false,featureReceiptProduced:false};
+          fs.writeFileSync(path.join(output,'SOURCE_BINDING.json'),JSON.stringify(binding,null,2)+'\n',{flag:'wx'});
+          fs.appendFileSync(process.env.GITHUB_ENV,'IOS_FOLDER_DIAGNOSTIC_OUTPUT='+output+'\nIOS_FOLDER_DIAGNOSTIC_NONCE='+nonce+'\n');
+          NODE
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify pinned mobile metadata runtime without regeneration
+        run: node scripts/build-mobile-metadata-runtime.mjs --check
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+        working-directory: mobile
+      - name: Check strict real driver, locale, own-device cleanup and diagnostic policy
+        run: node --test scripts/feature-acceptance/ios-folder-native-diagnostic.test.mjs scripts/feature-acceptance/ios-folder-picker-driver.test.mjs scripts/feature-acceptance/ios-folder-picker-observer.test.mjs scripts/feature-acceptance/ios-simulator-locale-regression.test.mjs scripts/feature-acceptance/stop-disposable-ios-simulator.test.mjs scripts/feature-acceptance/native-resident-pending.test.mjs
+      - name: Create and boot a new disposable iOS Simulator
+        run: node scripts/feature-acceptance/create-disposable-ios-simulator.mjs
+      - name: Execute only the unchanged real ios_folder1 native entry
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import {spawnSync} from 'node:child_process';
+          import {mobileNativeEntries} from './scripts/feature-acceptance/mobile-entry-specs.mjs';
+          import {createEntryWorkspace,captureSourceState} from './scripts/feature-acceptance/mobile-entry-workspace.mjs';
+          import {buildMobileScenarioReceipt} from './scripts/feature-acceptance/mobile-scenario-receipt.mjs';
+          const sourceSha=process.env.GITHUB_SHA,device=process.env.FEATURE_SIMULATOR;
+          const output=process.env.IOS_FOLDER_DIAGNOSTIC_OUTPUT;
+          const binding=JSON.parse(fs.readFileSync(path.join(output,'SOURCE_BINDING.json'),'utf8'));
+          if(process.platform!=='darwin'||process.env.GITHUB_ACTIONS!=='true'||
+              binding.sourceSha!==sourceSha||binding.diagnosticNonce!==process.env.IOS_FOLDER_DIAGNOSTIC_NONCE||
+              binding.output!==output||binding.entry!=='ios_folder1'||binding.expectedChecks!==1)
+            throw Error('Narrow diagnostic source/nonce/platform binding differs');
+          const entry='ios_folder1',spec=mobileNativeEntries[entry];
+          if(spec.expectedChecks!==1||spec.scenarioChecks!==1||spec.predecessor||
+              JSON.stringify(spec.platforms)!=='["ios"]')throw Error('Independent ios_folder1 registry differs');
+          const root=path.join(process.env.RUNNER_TEMP,'feature-native-ios');
+          const entryRoot=path.join(root,entry),commands=[];
+          let workspace,sourceAfter,receipt=null,scenario=null,failure=null,diagnosticPassed=false;
+          const run=(cwd,args,timeout=2100000)=>{
+            const argv=[process.execPath,...args];
+            const r=spawnSync(argv[0],argv.slice(1),{cwd,encoding:'utf8',timeout,
+              maxBuffer:100*1024*1024,env:{...process.env,STUDIO_NODE_BINARY:process.execPath}});
+            const row={command:argv,cwd,stdout:r.stdout??'',stderr:r.stderr??'',
+              exitStatus:r.status,signal:r.signal,error:r.error?.message??null};
+            commands.push(row);
+            fs.writeFileSync(path.join(output,'command-ledger.json'),JSON.stringify(commands,null,2)+'\n');
+            process.stdout.write(row.stdout);process.stderr.write(row.stderr);
+            if(row.exitStatus!==0||row.error||row.signal)throw Error('Actual narrow native command failed: '+JSON.stringify(argv)+'; '+JSON.stringify({exit:row.exitStatus,signal:row.signal,error:row.error}));
+          };
+          try{
+            workspace=createEntryWorkspace({repositoryRoot:process.cwd(),sourceSha,entry,platform:'ios',
+              runnerTemp:process.env.RUNNER_TEMP,evidenceRoot:root});
+            const nodeDirectory=path.dirname(process.execPath);
+            const npmCandidates=[path.join(nodeDirectory,'node_modules','npm','bin','npm-cli.js'),
+              path.resolve(nodeDirectory,'..','lib','node_modules','npm','bin','npm-cli.js')];
+            const npmCli=npmCandidates.find(file=>fs.existsSync(file))??npmCandidates[0];
+            run(workspace.sourceRoot,[npmCli,'ci','--ignore-scripts','--no-audit','--no-fund'],600000);
+            captureSourceState({sourceRoot:workspace.sourceRoot,sourceSha,
+              evidenceDirectory:path.join(workspace.evidenceDirectory,'after-node-dependencies'),requirePristine:true});
+            run(workspace.sourceRoot,['scripts/feature-acceptance/write-ci-input.mjs','ios',device,entry,
+              path.join(entryRoot,'official-assets'),'1'],120000);
+            const input=path.join(entryRoot,'native-input.json');
+            run(workspace.sourceRoot,['scripts/feature-acceptance/run-mobile-native.mjs',input]);
+            receipt=JSON.parse(fs.readFileSync(path.join(entryRoot,'native-mobile-receipt.json'),'utf8'));
+          }catch(error){failure=String(error.stack||error);process.stderr.write(failure+'\n');}
+          finally{
+            if(workspace)try{
+              sourceAfter=captureSourceState({sourceRoot:workspace.sourceRoot,sourceSha,
+                evidenceDirectory:path.join(workspace.evidenceDirectory,'after')});
+              if(!sourceAfter.clean||!sourceAfter.rawMatchesHead)throw Error('Narrow native compilation source differs from immutable HEAD');
+              if(!failure){
+                if(receipt?.sourceSha!==sourceSha||receipt.platform!=='ios'||receipt.entry!==entry||
+                    receipt.device!==device||receipt.exitStatus!==0||receipt.expectedChecks!==1||
+                    receipt.checks?.length!==1)throw Error('Narrow native receipt identity/count/exit differs');
+                scenario=buildMobileScenarioReceipt({nativeReceipt:receipt,sourceQualified:true,nativeRuntime:receipt.nativeRuntime});
+                if(scenario.checks.length!==1||scenario.sourceQualified!==true)throw Error('Narrow scenario readback differs');
+                const file=path.join(entryRoot,'native-mobile-scenarios-receipt.json');
+                fs.writeFileSync(file,JSON.stringify(scenario,null,2)+'\n',{flag:'wx'});
+                const reopened=JSON.parse(fs.readFileSync(file,'utf8'));
+                if(reopened.checks.length!==1||reopened.sourceSha!==sourceSha||reopened.sourceQualified!==true)
+                  throw Error('Narrow scenario reopened identity/count differs');
+                diagnosticPassed=true;
+              }
+            }catch(error){failure=[failure,String(error.stack||error)].filter(Boolean).join('\n');diagnosticPassed=false;process.stderr.write(String(error.stack||error)+'\n');}
+            fs.writeFileSync(path.join(output,'ENTRY_RESULT.json'),JSON.stringify({sourceSha,
+              diagnosticNonce:binding.diagnosticNonce,entry,expectedChecks:1,device,
+              diagnosticOnly:true,eligibleForPublication:false,formalFeatureRun:false,full195Certified:false,
+              diagnosticPassed,sourceQualified:Boolean(sourceAfter?.clean&&sourceAfter?.rawMatchesHead),
+              observedChecks:receipt?.checks?.length??0,featureReceiptProduced:Boolean(receipt),failure,
+              boundary:'One actual iOS folder scenario only; not the formal five-platform feature workflow.'},null,2)+'\n');
+            process.exitCode=diagnosticPassed?0:1;
+          }
+          NODE
+      - name: Stop only the newly created test simulator
+        if: always() && env.FEATURE_SIMULATOR != ''
+        run: node scripts/feature-acceptance/stop-disposable-ios-simulator.mjs
+      - name: Record diagnostic outcome including strict own-Simulator cleanup
+        if: always() && env.IOS_FOLDER_DIAGNOSTIC_OUTPUT != ''
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import {captureSourceState} from './scripts/feature-acceptance/mobile-entry-workspace.mjs';
+          const sourceSha=process.env.GITHUB_SHA,output=process.env.IOS_FOLDER_DIAGNOSTIC_OUTPUT;
+          const binding=JSON.parse(fs.readFileSync(path.join(output,'SOURCE_BINDING.json'),'utf8'));
+          if(binding.sourceSha!==sourceSha||binding.output!==output||
+              binding.diagnosticNonce!==process.env.IOS_FOLDER_DIAGNOSTIC_NONCE)throw Error('Diagnostic final binding differs');
+          let after=null,entry=null,creation=null,cleanup=null,failure=null;
+          try{
+            after=captureSourceState({sourceRoot:process.cwd(),sourceSha,
+              evidenceDirectory:path.join(output,'source-after'),requirePristine:true});
+            entry=JSON.parse(fs.readFileSync(path.join(output,'ENTRY_RESULT.json'),'utf8'));
+            const simulator=path.join(process.env.RUNNER_TEMP,'feature-native-ios','simulator');
+            creation=JSON.parse(fs.readFileSync(path.join(simulator,'SIMULATOR_CREATION.json'),'utf8'));
+            cleanup=JSON.parse(fs.readFileSync(path.join(simulator,'SIMULATOR_CLEANUP.json'),'utf8'));
+            if(entry.sourceSha!==sourceSha||entry.diagnosticNonce!==binding.diagnosticNonce||
+                entry.entry!=='ios_folder1'||entry.expectedChecks!==1||entry.diagnosticPassed!==true||
+                entry.sourceQualified!==true||entry.observedChecks!==1||
+                creation.sourceSha!==sourceSha||creation.exitStatus!==0||
+                cleanup.sourceSha!==sourceSha||cleanup.exitStatus!==0||cleanup.failure!==null||
+                cleanup.device!==process.env.FEATURE_SIMULATOR||cleanup.device!==entry.device||
+                cleanup.device!==creation.device||cleanup.result?.finalState!=='Shutdown')
+              throw Error('One-scenario native execution/source/created-device cleanup did not all pass');
+          }catch(error){failure=String(error.stack||error);process.stderr.write(failure+'\n');}
+          const result={sourceSha,diagnosticNonce:binding.diagnosticNonce,entry:'ios_folder1',expectedChecks:1,
+            observedChecks:entry?.observedChecks??0,diagnosticOnly:true,eligibleForPublication:false,
+            formalFeatureRun:false,full195Certified:false,nativeAcceptanceClaimed:false,
+            featureReceiptProduced:entry?.featureReceiptProduced??false,
+            diagnosticPassed:failure===null,rawSourceAfter:Boolean(after?.clean&&after?.rawMatchesHead),
+            ownSimulatorShutdown:cleanup?.exitStatus===0&&cleanup?.result?.finalState==='Shutdown',failure,
+            boundary:'This diagnostic artifact cannot replace Native Client Feature Acceptance or its 187 scoped release cells.'};
+          fs.writeFileSync(path.join(output,'RESULT.json'),JSON.stringify(result,null,2)+'\n',{flag:'wx'});
+          console.log(JSON.stringify(result));if(!result.diagnosticPassed)process.exitCode=1;
+          NODE
+      - name: Upload only the fresh folder diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-folder1-diagnostic-only-${{ github.sha }}-${{ github.run_attempt }}
+          # Never upload the worktree, node_modules, Pods, DerivedData or whole device.
+          path: |
+            ${{ runner.temp }}/ios-folder-native-diagnostic/*/SOURCE_BINDING.json
+            ${{ runner.temp }}/ios-folder-native-diagnostic/*/ENTRY_RESULT.json
+            ${{ runner.temp }}/ios-folder-native-diagnostic/*/RESULT.json
+            ${{ runner.temp }}/ios-folder-native-diagnostic/*/command-ledger.json
+            ${{ runner.temp }}/ios-folder-native-diagnostic/*/source-before/**
+            ${{ runner.temp }}/ios-folder-native-diagnostic/*/source-after/**
+            ${{ runner.temp }}/feature-native-ios/simulator/SIMULATOR_CREATION.json
+            ${{ runner.temp }}/feature-native-ios/simulator/SIMULATOR_CLEANUP.json
+            ${{ runner.temp }}/feature-native-ios/ios_folder1/native-input.json
+            ${{ runner.temp }}/feature-native-ios/ios_folder1/native-source-inputs.json
+            ${{ runner.temp }}/feature-native-ios/ios_folder1/native-mobile-receipt.json
+            ${{ runner.temp }}/feature-native-ios/ios_folder1/native-mobile-scenarios-receipt.json
+            ${{ runner.temp }}/feature-native-ios/ios_folder1/native-app.stdout.txt
+            ${{ runner.temp }}/feature-native-ios/ios_folder1/native-app.stderr.txt
+            ${{ runner.temp }}/feature-native-ios/ios_folder1/native-screen.png
+            ${{ runner.temp }}/feature-native-ios/ios_folder1/source-provenance/**
+            ${{ runner.temp }}/feature-native-ios/ios_folder1/ios-picker-host/*.json
+            ${{ runner.temp }}/feature-native-ios/ios_folder1/ios-picker-host/selection.xcresult/**
+          if-no-files-found: error
