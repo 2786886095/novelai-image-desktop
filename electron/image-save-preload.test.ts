@@ -4,7 +4,6 @@ vi.mock("electron", () => ({ contextBridge: { exposeInMainWorld: (name: string, 
 beforeEach(async () => { vi.resetModules(); mock.invoke.mockReset(); await import("./preload"); });
 
 it.each([
-  ["exportAgentAttachment", ["conversation", "message", "image"], "agent:exportAttachment"],
   ["downloadOnlineGalleryImages", [{ source: "aitag", itemId: "1", images: [{ id: "a", url: "https://example.test/a.webp" }] }], "online-gallery:download-images"],
   ["exportHistoryGroup", ["group"], "storage:exportGroup"],
   ["exportFiles", [[{ filePath: "a.png" }], "images"], "storage:exportFiles"],

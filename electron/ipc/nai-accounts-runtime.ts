@@ -14,14 +14,9 @@ let managed=false;
 export function legacyNaiBindingAllowed(){const context=contexts.getStore();return context?!!context.legacy:!managed;}
 let operations=0;
 const revisionKey=randomBytes(32);
-const proposals=new Map<string,string>();
 export function naiAccountRevision() {
   const selected=currentNaiAccount(); const legacy=boundLegacyNaiAccount() ?? (legacyNaiBindingAllowed()?legacyProvider?.():undefined);
   return createHmac('sha256',revisionKey).update(JSON.stringify(selected ? [selected.id,selected.token,selected.apiBaseUrl,selected.imageBaseUrl] : [legacy?'legacy':'signed-out',legacy])).digest('hex');
-}
-export function rememberNaiProposal(conversationId:string,messageId:string) { proposals.set(JSON.stringify([conversationId,messageId]),naiAccountRevision()); }
-export function assertNaiProposalAccount(conversationId:string,messageId:string) {
-  if(proposals.get(JSON.stringify([conversationId,messageId]))!==naiAccountRevision()) throw Error('生成方案所属账户未确认或已切换；未提交，请重新生成方案。');
 }
 export function currentNaiAccount() { const context=contexts.getStore(); return context ? context.snapshot : active; }
 export function naiAccountsBusy() { return operations > 0; }

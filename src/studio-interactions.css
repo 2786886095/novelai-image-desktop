@@ -19,7 +19,7 @@ html .image-preview-viewer .image-preview-controls {translate:0 0;}
 html .image-preview-controls button {transition:background-color 140ms var(--interaction-enter),color 140ms var(--interaction-enter),border-color 140ms var(--interaction-enter);}
 /* Retained menus already own their close lifecycle. Do not scale text or delay hits. */
 html .disclosure-popover {--disclosure-open:160ms;--disclosure-close:120ms;--disclosure-enter-ease:var(--interaction-enter);--disclosure-exit-ease:var(--interaction-exit);}
-html :is(.select-menu-chevron,.switch-thumb,.toggle-thumb,.toggle>span,.compact-switch-track>span,.tavern-toggle>span),html .toggle-switch::after {transition:transform 180ms var(--interaction-enter),background-color 140ms var(--interaction-enter);}
+html :is(.select-menu-chevron,.switch-thumb,.toggle-thumb,.toggle>span,.compact-switch-track>span),html .toggle-switch::after {transition:transform 180ms var(--interaction-enter),background-color 140ms var(--interaction-enter);}
 html :is(.toggle,.toggle-switch,.compact-switch-track,[role=switch]) {transition:background-color 180ms var(--interaction-enter),border-color 140ms var(--interaction-enter);}
 html .toggle span::after {transition:left 180ms var(--interaction-enter),background-color 140ms var(--interaction-enter);}
 html .stream-preview-state i {transition:transform 180ms var(--interaction-enter),background-color 140ms var(--interaction-enter);}
@@ -28,7 +28,7 @@ html .animated-collapse.is-open {transition:grid-template-rows 220ms var(--inter
 /* A transition alone has no effect: specify both closed and open values. */
 html details:not(.pi-context)::details-content {block-size:0;opacity:0;overflow:clip;interpolate-size:allow-keywords;transition:block-size 180ms var(--interaction-exit),opacity 140ms var(--interaction-exit),content-visibility 180ms allow-discrete;}
 html details:not(.pi-context)[open]::details-content {block-size:auto;opacity:1;transition-duration:220ms;transition-timing-function:var(--interaction-enter);}
-html :is(.context-menu,.tavern-composer-popover,.style-preset-item-popover) {animation:studio-menu-arrive 160ms var(--interaction-enter);}
+html :is(.context-menu,.style-preset-item-popover) {animation:studio-menu-arrive 160ms var(--interaction-enter);}
 html .context-menu:empty {animation:none;}
 /* CSS covers non-portalled overlays; AppPortal also manages cancellable JS entry/exit. */
 html :is(.modal-backdrop,.reference-ui-mask,.toast,.error-banner,[role=alert]) {animation:studio-soft-arrive 200ms var(--interaction-enter);}
@@ -44,4 +44,4 @@ html .image-preview-dialog-backdrop[data-closing=true] .image-preview-dialog {an
 @keyframes studio-menu-arrive {from{opacity:0;clip-path:inset(0 0 12% 0)}to{opacity:1;clip-path:inset(0)}}
 html body :is(canvas,.inpaint-base-img,.inpaint-cursor,.inpaint-region-overlay,.inpaint-mask-canvas,.ws-resizer,.image-preview-stage>img,.image-preview-transform,.char-position-marker) {transition:none!important;}
 html.motion-reduced *,html.motion-reduced *::before,html.motion-reduced *::after,html.motion-reduced details::details-content {animation:none!important;transition:none!important;scroll-behavior:auto!important;}
-html.motion-reduced :is(.spinner,.tavern-spinner,.ui-icon-spin) {animation:spin 800ms linear infinite!important;}
+html.motion-reduced :is(.spinner,.ui-icon-spin) {animation:spin 800ms linear infinite!important;}

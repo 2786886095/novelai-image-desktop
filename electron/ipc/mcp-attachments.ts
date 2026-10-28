@@ -1,6 +1,6 @@
 // Image attachments for the local MCP server.
 //
-// The in-app Agent only accepts conversation/history/reference-preset IDs.
+// The shared tool executor otherwise accepts only history image IDs.
 // External MCP clients additionally need to bring arbitrary local images
 // (character sheets, masks they generated, ...). Every imported file is copied
 // into <userData>/mcp-attachments so later edits/deletions of the source can

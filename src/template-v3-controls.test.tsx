@@ -21,7 +21,7 @@ describe('v3 template and manual comic contract',()=>{
  });
  it('registers both independently editable assistant templates',()=>{
   for(const key of ['promptOptimizeTemplate','promptAssistantTemplate']) {
-   for(const file of ['src/App.tsx','src/types.ts','electron/ipc/store.ts','src/studio-agent-contract.ts','src/prompt-assistant.ts'])expect(read(file)).toContain(key);
+   for(const file of ['src/App.tsx','src/types.ts','electron/ipc/store.ts','src/prompt-assistant.ts'])expect(read(file)).toContain(key);
   }
   expect(read('electron/ipc/nai.ts')).toContain('preparePromptAssistance(chineseText,assistant,settings)');
  });

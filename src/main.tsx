@@ -15,9 +15,7 @@ import "./studio-controls.css";
 import "./typography.css";
 import {FavoritesNoticeSupport} from "./components/LocalFavorites";
 import {McpEventSupport} from "./components/McpServerSettings";
-import {installStudioAgent} from './studio-agent';
 
-installStudioAgent();
 installStudioMotion();
 document.addEventListener("pointerdown", unlockCompletionSound, {once:true});
 document.addEventListener("keydown", unlockCompletionSound, {once:true});

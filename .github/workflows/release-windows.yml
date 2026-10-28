@@ -36,8 +36,6 @@ jobs:
         run: npm run build && npx electron-builder --win portable nsis --x64 --publish never
       - name: Verify packaged native runtime and startup
         run: node scripts/verify-packaged-runtime.mjs
-      - name: Verify packaged Tavern label and preserved defaults
-        run: node scripts/run-packaged-tavern-probe.cjs
       - name: Verify packaged automatic iteration network transport
         run: node scripts/verify-packaged-detective-network.cjs
       - name: Verify packaged font assets and actual Chinese glyphs
@@ -54,8 +52,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/verify-windows-upgrade.ps1
-      - name: Verify real on-demand Agent download, startup and offline reuse
-        run: node scripts/verify-agent-on-demand.cjs release/agent-smoke
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -65,7 +61,6 @@ jobs:
             release/installer-smoke/*.json
             release/upgrade-smoke/*.json
             release/upgrade-smoke/*.jsonl
-            release/agent-smoke/verification.json
       - uses: actions/upload-artifact@v4
         with:
           name: windows-formal-assets

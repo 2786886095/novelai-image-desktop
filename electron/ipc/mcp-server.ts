@@ -93,7 +93,7 @@ function runAgentTool(tool: string, args: Json, signal?: AbortSignal, imageProvi
     // explicit fields are used as given (no Studio prompt locks re-applied).
     promptLocks: {},
   };
-  return executeAgentTool(request, () => undefined);
+  return executeAgentTool(request);
 }
 
 function agentRequest(args: Json): AgentToolBridgeRequest {

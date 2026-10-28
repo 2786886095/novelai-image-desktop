@@ -9,13 +9,11 @@ import {parseNaiAccountSummary} from './nai-account-summary';
 import {validateNaiAccountReadOnly,requireNaiAccountValidation} from './nai-accounts-validation';
 import { currentNaiAccount, getNaiAccountSummary } from './nai-accounts-runtime';
 import {preparePromptAssistance,isSparsePromptEditSource,type PromptEditRequest} from "../../src/prompt-assistant.js";
-import {authorizeAgentBatchRequest} from './batch-run-authorization';
 import {currentBatchImageBinding,assertBatchImageBinding,prepareBatchImageService} from './batch-image-service';
 import {compatibleComicInput} from '../../src/comic/compatible-comic';
 import {currentComicImageBinding,assertComicImageBinding} from './comic-image-service';
 import {generateConfiguredImages} from './compatible-generation';
 import {bindAgentImageProvider} from './agent-image-provider';
-import {authorizeAgentComicRequest} from './comic-run-authorization';
 import {readComicImage,readComicReferences,buildComicSelectedZip,writeComicZip} from './comic-assets';
 import {reverseTemplateProtocol} from "../../src/reverse-template";
 import {normalizePromptSkillVersion,selectPromptSkillTemplate,supportsPromptSkillModel,renderPromptSkillTemplate} from '../../src/prompt-skill';
@@ -4046,7 +4044,6 @@ async function generateTagComicCandidateRequest(
   try { preciseReferences = await readComicReferences(request, tagComicReferenceRoot(request.projectId)); }
   catch(error) { return {ok:false,items:[],message:error instanceof Error?error.message:String(error)}; }
   signal.throwIfAborted();
-  const beforeSubmit=await authorizeAgentComicRequest(request);signal.throwIfAborted();
   const historyGroup = ensureHistoryGroup(
     request.projectTitle,
     request.historyGroupId,
@@ -4059,8 +4056,6 @@ async function generateTagComicCandidateRequest(
     params,
     { vibeImages: [], charCaptions: [], preciseReferences },
     { groupOverride,signal,beforeSubmit:async()=>{
-      if(request.imageServiceBinding)assertComicImageBinding(request.imageServiceBinding);
-      await beforeSubmit?.();
       if(request.imageServiceBinding)assertComicImageBinding(request.imageServiceBinding);
     } },
   );
@@ -4083,12 +4078,11 @@ async function generateCompatibleComicCandidate(request:TagComicGenerateRequest,
   const binding=request.imageServiceBinding??currentComicImageBinding();
   assertComicImageBinding(binding);
   const input=compatibleComicInput(settings,request);signal.throwIfAborted();
-  const guard=await authorizeAgentComicRequest(request);signal.throwIfAborted();
   assertComicImageBinding(binding);
   const group=ensureHistoryGroup(request.projectTitle,request.historyGroupId);
   const result=await generateConfiguredImages({prompt:input.prompt,n:1,historyGroupId:group.id,fileNamePrefix:request.params.fileNamePrefix||`comic-${request.panelIndex}`},{
     signal,size:input.size,expectedProvider:bindAgentImageProvider(settings),
-    beforeSubmit:async()=>{signal.throwIfAborted();assertComicImageBinding(binding);await guard?.();signal.throwIfAborted();assertComicImageBinding(binding);},
+    beforeSubmit:async()=>{signal.throwIfAborted();assertComicImageBinding(binding);},
   });
   annotateComicImages(result,request,group.id);return result;
 }
@@ -4773,8 +4767,7 @@ async function redrawImageRequest(
     job.controller.signal.throwIfAborted();
     prepareBatchImageService([request]);
     const binding=request.imageServiceBinding??currentBatchImageBinding();assertBatchImageBinding(binding);
-    const guard=await authorizeAgentBatchRequest(request);
-    const beforeSubmit=async()=>{job.controller.signal.throwIfAborted();assertBatchImageBinding(binding);await guard?.();assertBatchImageBinding(binding);job.controller.signal.throwIfAborted();};
+    const beforeSubmit=async()=>{job.controller.signal.throwIfAborted();assertBatchImageBinding(binding);};
     const srcBuffer = Buffer.from(
       stripBase64Prefix(request.imageBase64),
       "base64",

@@ -51,16 +51,6 @@ import type {
 } from "../src/types";
 import type { AitagSearchRequest } from "../src/aitag";
 import type { PromptCodexSnapshot } from "../src/prompt-codex";
-import type {
-  AgentEvent,
-  AgentMemory,
-  AgentProviderProbe,
-  AgentSendRequest,
-  AgentSkill,
-  AgentWorkspaceData,
-  TavernCardExportRequest,
-  TavernImageRequest,
-} from "../src/agent/types";
 
 const imageSaves = createImageSaveTracker();
 
@@ -99,26 +89,6 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     const listener=(_event:Electron.IpcRendererEvent,notice:{message:string})=>callback(notice);
     ipcRenderer.on('favorites:changed',listener);return ()=>ipcRenderer.removeListener('favorites:changed',listener);
   },
-  onStudioAgentRequest: (callback:(request:import('../src/studio-agent-contract').StudioAgentRequest)=>void) => {
-    const listener=(_event:Electron.IpcRendererEvent,request:import('../src/studio-agent-contract').StudioAgentRequest)=>callback(request);
-    ipcRenderer.on('studio-agent:request',listener);
-    return ()=>ipcRenderer.removeListener('studio-agent:request',listener);
-  },
-  replyStudioAgent: (id:string,reply:import('../src/studio-agent-contract').StudioAgentReply) => ipcRenderer.invoke('studio-agent:reply',id,reply),
-  commitStudioSetting: (id:string,key:SettingKey,expected:AppSettings[SettingKey],value:AppSettings[SettingKey]) => ipcRenderer.invoke('studio-agent:commit',id,key,expected,value),
-  harnessSetAutoPluginUpdates: (enabled:boolean) => ipcRenderer.invoke('harness:setAutoPluginUpdates',enabled),
-  harnessCheckPluginUpdates: () => ipcRenderer.invoke('harness:checkPluginUpdates'),
-  harnessSnapshot: () => ipcRenderer.invoke("harness:snapshot"),
-  harnessStart: () => ipcRenderer.invoke("harness:start"),
-  harnessStop: () => ipcRenderer.invoke("harness:stop"),
-  harnessPlanDownload: (kind: 'component' | 'official', reinstall = false) => ipcRenderer.invoke("harness:planDownload", kind, reinstall),
-  harnessUninstall: (confirmed: boolean) => ipcRenderer.invoke("harness:uninstall", confirmed),
-  harnessPrepareUpdate: (kind: 'component' | 'official', token: string, disablePlugins: string[] = []) => ipcRenderer.invoke("harness:prepareUpdate", kind, token, disablePlugins),
-  harnessApplyPreparedUpdate: (token: string) => ipcRenderer.invoke("harness:applyPreparedUpdate", token),
-  harnessCheckUpdates: () => ipcRenderer.invoke("harness:checkUpdates"),
-  harnessUpdate: () => ipcRenderer.invoke("harness:update"),
-  harnessOpenBackups: () => ipcRenderer.invoke("harness:openBackups"),
-  harnessRestoreBackup: () => ipcRenderer.invoke("harness:restoreBackup"),
   onImageSaveFeedback: (callback: (notices: ImageSaveNotice[]) => void) => imageSaves.subscribe(callback),
   dismissImageSaveFeedback: (id: number) => imageSaves.dismiss(id),
   platform: process.platform,
@@ -142,9 +112,9 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     return () => ipcRenderer.removeListener("resource-database:progress", listener);
   },
   listPortableRecoveries: () => ipcRenderer.invoke("dataBackup:listRecoveries"),
-  openPortableRecovery: (kind: "agent" | "detective", id: string): Promise<void> =>
+  openPortableRecovery: (kind: "detective", id: string): Promise<void> =>
     ipcRenderer.invoke("dataBackup:openRecovery", kind, id),
-  activatePortableRecovery: (kind: "agent" | "detective", id: string): Promise<{preserved:string}> =>
+  activatePortableRecovery: (kind: "detective", id: string): Promise<{preserved:string}> =>
     ipcRenderer.invoke("dataBackup:activateRecovery", kind, id),
   exportDataBackup: (request: DataBackupExportRequest): Promise<DataBackupOperationResult> =>
     ipcRenderer.invoke("dataBackup:export", request),
@@ -160,44 +130,6 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("dataBackup:selectDirectory"),
   openBackupDirectory: (): Promise<{ ok: boolean; message?: string }> =>
     ipcRenderer.invoke("dataBackup:openDirectory"),
-  getAgentWorkspace: () => ipcRenderer.invoke("agent:getWorkspace"),
-  saveTavernWorkspace: (workspace: AgentWorkspaceData) => ipcRenderer.invoke("agent:saveWorkspace", workspace),
-  createAgentConversation: (title?: string) => ipcRenderer.invoke("agent:createConversation", title),
-  selectAgentConversation: (conversationId: string) => ipcRenderer.invoke("agent:selectConversation", conversationId),
-  renameAgentConversation: (conversationId: string, title: string) => ipcRenderer.invoke("agent:renameConversation", conversationId, title),
-  setAgentConversationArchived: (conversationId: string, archived: boolean) => ipcRenderer.invoke("agent:setConversationArchived", conversationId, archived),
-  setStudioConversationOptions: (conversationId:string,patch:Partial<import('../src/agent/workspace-controls').StudioConversationOptions>)=>ipcRenderer.invoke('agent:setStudioOptions',conversationId,patch),
-  deleteAgentConversation: (conversationId: string) => ipcRenderer.invoke("agent:deleteConversation", conversationId),
-  importAgentFileData: (conversationId:string, files:Array<{name:string;bytes:Uint8Array}>) => ipcRenderer.invoke("agent:importFileData",conversationId,files),
-  importAgentFiles: (conversationId: string, sourcePaths?: string[]) => ipcRenderer.invoke("agent:importFiles", conversationId, sourcePaths),
-  importStudioResources: (kind:'presets'|'worldbooks'|'characters') => ipcRenderer.invoke('agent:importStudioResources',kind),
-  deleteAgentAttachment: (conversationId: string, attachmentId: string) => ipcRenderer.invoke("agent:deleteAttachment", conversationId, attachmentId),
-  exportAgentAttachment: (conversationId: string, messageId: string, attachmentId: string) => imageSaves.run(`agent:${conversationId}:${messageId}:${attachmentId}`, "image", () => ipcRenderer.invoke("agent:exportAttachment", conversationId, messageId, attachmentId), 1),
-  sendAgentMessage: (request: AgentSendRequest) => ipcRenderer.invoke("agent:send", request),
-  generateTavernImage: (request: TavernImageRequest) => ipcRenderer.invoke("agent:generateImage", request),
-  importTavernCards: (sourcePaths?: string[]) => ipcRenderer.invoke("agent:importCards", sourcePaths),
-  exportTavernCard: (request: TavernCardExportRequest) => ipcRenderer.invoke("agent:exportCard", request),
-  importTavernVisualAsset: (kind: "avatar" | "background", sourcePath?: string) => ipcRenderer.invoke("agent:importVisual", kind, sourcePath),
-  abortAgentMessage: (conversationId: string) => ipcRenderer.invoke("agent:abort", conversationId),
-  compactAgentConversation: (conversationId: string) => ipcRenderer.invoke("agent:compact", conversationId),
-  getAgentPendingQuestions:()=>ipcRenderer.invoke("agent:pendingQuestions"),
-  respondAgentQuestion:(response:import("../src/agent/types").AgentQuestionResponse)=>ipcRenderer.invoke("agent:respondQuestion",response),
-  respondAgentPermission: (permissionId: string, response: "once" | "always" | "reject") => ipcRenderer.invoke("agent:respondPermission", permissionId, response),
-  upsertAgentSkill: (skill: Partial<AgentSkill> & Pick<AgentSkill, "name" | "instructions">) => ipcRenderer.invoke("agent:upsertSkill", skill),
-  deleteAgentSkill: (skillId: string) => ipcRenderer.invoke("agent:deleteSkill", skillId),
-  upsertAgentMemory: (memory: Partial<AgentMemory> & Pick<AgentMemory, "title" | "content" | "scope">) => ipcRenderer.invoke("agent:upsertMemory", memory),
-  deleteAgentMemory: (memoryId: string) => ipcRenderer.invoke("agent:deleteMemory", memoryId),
-  getAgentRuntimeStatus: () => ipcRenderer.invoke("agent:runtimeStatus"),
-  getAgentPendingPermissions: () => ipcRenderer.invoke("agent:pendingPermissions"),
-  restartAgentRuntime: () => ipcRenderer.invoke("agent:restartRuntime"),
-  discoverAgentModels: (probe: AgentProviderProbe) => ipcRenderer.invoke("agent:discoverModels", probe),
-  getAgentWorkspaceLocation: () => ipcRenderer.invoke("agent:workspaceLocation"),
-  openAgentWorkspaceDirectory: () => ipcRenderer.invoke("agent:openWorkspace"),
-  onAgentEvent: (callback: (event: AgentEvent) => void) => {
-    const listener = (_event: unknown, payload: AgentEvent) => callback(payload);
-    ipcRenderer.on("agent:event", listener);
-    return () => ipcRenderer.removeListener("agent:event", listener);
-  },
   promptCodexCache: (): Promise<PromptCodexSnapshot | null> =>
     ipcRenderer.invoke("promptCodex:cache"),
   promptCodexBundled: (): Promise<PromptCodexSnapshot> =>
@@ -478,7 +410,6 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   ) as Promise<ArtistStyleCatalogResult>,
   translate: (text: string, target?: string, sourceLanguage?: string) =>
     ipcRenderer.invoke("nai:translate", text, target, sourceLanguage),
-  readAgentClipboardFiles: () => ipcRenderer.invoke("agent:readClipboardFiles"),
   readClipboardImageFiles: () => ipcRenderer.invoke("imageInput:readClipboard"),
   savePastedImageFiles: (images: Array<{name:string;bytes:Uint8Array}>) => ipcRenderer.invoke("imageInput:save", images),
   loadImage: () => ipcRenderer.invoke("nai:loadImage"),

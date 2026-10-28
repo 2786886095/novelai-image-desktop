@@ -23,11 +23,9 @@ const nai={
 const mocks=new Map([
  ['electron/ipc/store.ts',store],['electron/ipc/nai.ts',nai],['electron/ipc/agent-image-provider.ts',provider],['electron/ipc/mcp-attachments.ts',attachments],
  ['electron/ipc/nai-accounts-runtime.ts',{withNaiAccountOperation:async fn=>fn()}],
- ['electron/ipc/harness-prompt-templates.ts',{createPromptTemplateTools:()=>({}),templateSelection:()=>{throw Error('not exercised');}}],
- ['electron/ipc/agent-template-tools.ts',{createTemplateWorkflow:()=>({})}],
- ...['electron/ipc/agent-web-search.ts','electron/ipc/danbooru-tags.ts','electron/ipc/online-gallery.ts','electron/ipc/reference-presets.ts','electron/ipc/agent-store.ts','electron/image-metadata.ts','src/png-meta.ts'].map(f=>[f,{}]),
+ ...['electron/ipc/danbooru-tags.ts','electron/image-metadata.ts','src/png-meta.ts'].map(f=>[f,{}]),
 ].map(([f,v])=>[resolve(f),v]));
-const allowed=new Set(['src/types.ts','src/metadata-replay.ts','src/nai-dimensions.ts','src/upscale-plan.ts','src/anlas.ts','src/retained-prompts.ts','src/agent/image-outcome.ts','src/agent/generation-input.ts','electron/ipc/agent-tools.ts','electron/ipc/mcp-server.ts'].map(resolve));
+const allowed=new Set(['src/types.ts','src/metadata-replay.ts','src/nai-dimensions.ts','src/upscale-plan.ts','src/anlas.ts','src/retained-prompts.ts','src/agent/generation-input.ts','electron/ipc/agent-tools.ts','electron/ipc/mcp-server.ts'].map(resolve));
 function load(file){
  file=path.resolve(file);if(mocks.has(file))return mocks.get(file);if(cache.has(file))return cache.get(file).exports;
  if(file.endsWith('package.json'))return JSON.parse(fs.readFileSync(file,'utf8'));
@@ -55,7 +53,7 @@ function reset(model='nai-diffusion-4-5-full'){
 const chars=n=>Array.from({length:n},(_,i)=>({prompt:'character '+(i+1),negativePrompt:'bad face '+(i+1),useCoords:false,x:.5,y:.5}));
 const precise=[{attachmentId:'mcp-fixture:ref',type:'character',strength:1,fidelity:1}];
 const request=(tool,args)=>({tool,args,sessionId:'',callId:'audit-only',promptLocks:{}});
-const runAgent=(args)=>agent.executeAgentTool(request('langbai_inpaint_image',{attachmentId:'mcp-fixture:image',maskAttachmentId:'mcp-fixture:mask',...args}),()=>{});
+const runAgent=(args)=>agent.executeAgentTool(request('langbai_inpaint_image',{attachmentId:'mcp-fixture:image',maskAttachmentId:'mcp-fixture:mask',...args}));
 const tools=mcp.__auditCreateTools({window:()=>null});
 const runMcp=(name,args)=>tools.find(x=>x.name===name).run(args,{signal:new AbortController().signal,progress:()=>{}});
 const resultText=r=>r?.content?.[0]?.text;

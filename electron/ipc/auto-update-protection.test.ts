@@ -92,7 +92,7 @@ it.skipIf(process.platform!=='win32')('rejects an installer changed after succes
  await vi.advanceTimersByTimeAsync(900);expect(state.spawn).not.toHaveBeenCalled();expect(state.quit).not.toHaveBeenCalled();
  await vi.waitFor(()=>expect(state.send).toHaveBeenLastCalledWith('app:updateEvent',expect.objectContaining({kind:'error',message:expect.stringContaining('发生变化')})));
 });
-it.skipIf(process.platform!=='win32')('pins the Agent plan and keeps UI update out until acknowledged handoff',async()=>{
+it.skipIf(process.platform!=='win32')('pins the adapter plan and keeps UI update out until acknowledged handoff',async()=>{
  vi.useFakeTimers();const api=await updater(),adapter=api.desktopAppUpdateAdapter(()=>{}),signal=new AbortController().signal;
  const plan=await adapter.plan(signal);expect(plan?.version).toBe('2.2.6');expect(state.get).toHaveBeenCalledTimes(1);
  adapter.reserve();expect((await api.downloadUpdate()).ok).toBe(false);await expect(api.installUpdate()).rejects.toThrow('独占');
@@ -125,38 +125,4 @@ it.skipIf(process.platform!=='win32')('a receipt failure after spawn never allow
 it.skipIf(process.platform!=='win32')('mismatched release manifests stop before downloading an executable',async()=>{
  const api=await updater();state.get.mockResolvedValueOnce({data:`version: 2.2.7\npath: other.exe\nsha512: ${createHash('sha512').update('test').digest('base64')}`});
  await expect(api.planAppUpdate()).rejects.toThrow('不一致');expect(state.get).toHaveBeenCalledTimes(1);expect(state.spawn).not.toHaveBeenCalled();
-});
-it.skipIf(process.platform!=='win32')('actual HTTP approval hands the pinned update to the real downloader before bridge shutdown',async()=>{
- const api=await updater();
- const {createAppUpdateActions}=await import('./agent-app-update');
- const {createImageApprovals}=await import('./harness-image-approval');
- const {startHarnessBridge}=await import('./harness-bridge');
- let approvalsCount=0,started!:()=>void,approvalQueued!:()=>void;
- const ready=new Promise<void>(resolve=>approvalQueued=resolve),done=new Promise<void>(resolve=>started=resolve),approvals=createImageApprovals(15000);
- let installing:Promise<any>|undefined;
- const actions=createAppUpdateActions(path.join(root,'operations'),api.desktopAppUpdateAdapter(message=>{if(message.startsWith('安装程序已启动'))started();}),request=>{approvalsCount++;const pending=approvals.wait(request);approvalQueued();return pending;});
- const journal=path.join(root,'journal');
- const bridge=await startHarnessBridge({journal,tools:['langbai_software_action','studio_image_approval','studio_resolve_image_approval'],execute:request=>request.tool==='langbai_software_action'?actions.execute(request):Promise.resolve(approvals.execute(request)),afterResponse:actions.afterResponse});
- const call=async(tool:string,args:Record<string,unknown>,callId:string)=>{
-  const reply=await fetch(bridge.env.STUDIO_BRIDGE_URL+'/v1/tool',{method:'POST',headers:{Authorization:`Bearer ${bridge.env.STUDIO_BRIDGE_TOKEN}`},body:JSON.stringify({tool,args,callId,sessionId:'s'})});return reply.json();
- };
- try{
-  api.wireAutoUpdater(()=>null,async()=>{
-   const receipts=fs.readdirSync(journal).filter(n=>n.endsWith('.json')).map(n=>JSON.parse(fs.readFileSync(path.join(journal,n),'utf8')));
-   expect(receipts.some(r=>r.state==='complete'&&r.result?.data?.queued)).toBe(true);
-   await bridge.close();
-  });
-  state.spawn.mockImplementation(()=>{const emitter=Object.assign(new EventEmitter(),{unref:vi.fn()});queueMicrotask(()=>emitter.emit('spawn'));return emitter;});
-  const checked=await call('langbai_software_action',{action:'app.update.check'},'check');
-  installing=call('langbai_software_action',{action:'app.update.install',expectedRevision:checked.data.revision},'install');
-  // Wait for the real approval queue insertion, not a 1s wall-clock polling budget.
-  await Promise.race([ready,installing.then(value=>{throw Error('Update ended before approval: '+JSON.stringify(value));})]);
-  const pending=(await call('studio_image_approval',{},'read-queued')).data;expect(pending).not.toBeNull();
-  expect(pending.parameters.version).toBe('2.2.6');expect(pending.parameters.downloadBytes).toBe(4);
-  await call('studio_resolve_image_approval',{id:pending.id,approved:true},'approve');
-  expect((await installing).data.queued).toBe(true);await done;await actions.settled();
-  expect(approvalsCount).toBe(1);expect(actions.operation?.state).toBe('installer_started');expect(state.get).toHaveBeenCalledTimes(2);expect(state.spawn).toHaveBeenCalledTimes(1);
-  expect(fs.readFileSync(path.join(state.temp,'langbai-novelai-update','2.2.6','Langbai-NovelAI-Studio-Setup-2.2.6.exe'),'utf8')).toBe('test');
-  await vi.waitFor(()=>expect(state.quit).toHaveBeenCalledTimes(1));
- }finally{approvals.close();await bridge.close();await actions.cancel().catch(()=>{});await installing?.catch(()=>{});}
 });

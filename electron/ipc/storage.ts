@@ -4,7 +4,6 @@ import path from "path";
 import JSZip from "jszip";
 import type { BatchExportFile, HistoryItem } from "../../src/types";
 import { toLocalMediaUrl } from "./local-media-protocol";
-import { invalidateAgentHistoryImage } from "./agent-store";
 import {
   createHistoryGroup,
   deleteHistoryGroup,
@@ -250,7 +249,6 @@ async function renameHistoryItemUnlocked(id: string, rawName: string): Promise<{
       }
     }
   }
-  invalidateAgentHistoryImage(id);
   return { ok: true, item: updated };
 }
 
@@ -299,10 +297,7 @@ export async function deleteHistoryItems(rawIds: string[]) {
       }
       if (failure) failed.push({ id, message: failure }); else deletedIds.push(id);
     }
-    if (deletedIds.length) {
-      removeHistoryItems(deletedIds);
-      invalidateAgentHistoryImage(deletedIds);
-    }
+    if (deletedIds.length) removeHistoryItems(deletedIds);
     return { ok: failed.length === 0, deletedIds, failed };
   } finally { for (const id of owned) renamingHistoryIds.delete(id); }
 }
@@ -331,7 +326,6 @@ async function deleteHistoryItemUnlocked(id: string) {
     }
   }
   removeHistory(id);
-  invalidateAgentHistoryImage(id);
   return { ok: true };
 }
 

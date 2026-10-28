@@ -5,7 +5,6 @@ import { describe, it, expect } from 'vitest';
 import {DEFAULT_PARAMS,normalizeGenerateParams,effectiveNAIEffortParams,isNAIMediumEffort} from './types';
 import {calculateImageGenerationAnlas,estimateOpusImages} from './anlas';
 import {buildAgentGenerationInput} from './agent/generation-input';
-import {resolveTavernImageProposalParameters} from './tavern/prompt';
 
 const paid={hasToken:true,tierLevel:1,hasActiveSubscription:true,anlasBalance:1000};
 describe('NovelAI Effort / immutable batch contract',()=>{
@@ -47,14 +46,10 @@ describe('NovelAI Effort / immutable batch contract',()=>{
     expect(calculateImageGenerationAnlas({params:DEFAULT_PARAMS,account:opus}).amount).toBeGreaterThan(0);
     expect(estimateOpusImages(DEFAULT_PARAMS,0)).toBe(0);
   });
-  it('accepts Agent explicit Effort and retains authoritative count',()=>{
+  it('accepts MCP explicit Effort',()=>{
     const input=buildAgentGenerationInput({effort:'medium',positivePrompt:'1girl'},{params:DEFAULT_PARAMS});
     expect(input.params.effort).toBe('medium');
     expect(effectiveNAIEffortParams(input.params).steps).toBe(14);
-    const defaults={model:'nai-diffusion-5-full',effort:'high' as const,count:4,steps:30};
-    const proposal=resolveTavernImageProposalParameters({effort:'medium',count:8,explicitParameters:['effort']},defaults);
-    expect(proposal).toMatchObject({effort:'medium',count:4,steps:30});
-    expect(resolveTavernImageProposalParameters({effort:'high',explicitParameters:[]},{...defaults,effort:'medium'}).effort).toBe('medium');
   });
   it('restores actual Medium wire models from image metadata',()=>{
     expect(normalizeGenerateParams({...DEFAULT_PARAMS,model:'nai-diffusion-5-full-medium' as never})).toMatchObject({model:'nai-diffusion-5-full',effort:'medium'});

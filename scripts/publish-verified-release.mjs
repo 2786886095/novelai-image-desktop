@@ -19,13 +19,12 @@ assertDesktopMetadataGates(build);
 const desktopJobs=build.jobs.filter(job=>job.name.startsWith('build ('));
 if(desktopJobs.length!==2||desktopJobs.some(job=>job.conclusion!=='success')||!build.jobs.some(job=>job.name==='mac-intel-smoke'&&job.conclusion==='success'))throw Error('All desktop builds and native Intel verification must pass');
 const windows=desktopJobs.find(job=>job.name.includes('windows'));
-for(const name of ['Decode final Windows installers with the actual NSIS decoder','Verify Windows clean installation and upgrade from 2.4.0','Verify real on-demand Agent download, startup and offline reuse']){
+for(const name of ['Decode final Windows installers with the actual NSIS decoder','Verify Windows clean installation and upgrade from 2.4.0']){
  if(!windows?.steps?.some(step=>step.name===name&&step.conclusion==='success'))throw Error('Required installation gate did not pass: '+name);
 }
 call('gh',['run','download',buildRun,'-n','packaged-smoke-windows','-D','windows-install-evidence']);
 const installation=JSON.parse(fs.readFileSync('windows-install-evidence/upgrade-smoke/verification.json','utf8'));
-const agent=JSON.parse(fs.readFileSync('windows-install-evidence/agent-smoke/verification.json','utf8'));
-if(!installation.pass||installation.version!==version||!installation.userDataPreserved||!installation.legacyRuntimePreserved||!agent.pass)throw Error('Actual installation or Agent startup evidence missing');
+if(!installation.pass||installation.version!==version||!installation.userDataPreserved||!installation.legacyRuntimePreserved)throw Error('Actual installation evidence missing');
 // Retry only the publication tooling: installers must match every application file.
 call('git',['diff','--exit-code',build.headSha,sha,'--','.',':!scripts/publish-verified-release.mjs',':!.github/workflows/build.yml']);
 const files=[`Langbai-NovelAI-Studio-Setup-${version}.exe`,`Langbai-NovelAI-Studio-${version}.exe`,`Langbai-NovelAI-Studio-${version}-universal.dmg`,`Langbai-NovelAI-Studio-${version}.zip`,'latest.yml'].map(name=>path.join('release-assets',name));

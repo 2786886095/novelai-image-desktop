@@ -43,9 +43,9 @@ try {
   const electronCommand=process.platform==='linux'?[req('electron'),'--password-store=gnome-libsecret',target]:[req('electron'),target];
   const actual=process.platform==='linux'?command(electronCommand,120000):command(electronCommand);
   const report=JSON.parse(fs.readFileSync(path.join(run,'NATIVE_CORE_REPORT.json'),'utf8'));
-  if(actual.exitStatus!==0||report.platform!==process.platform||report.passed!==17||report.total!==17||report.mockedModules!==false) throw new Error('Native desktop journey incomplete or wrong runtime.');
+  if(actual.exitStatus!==0||report.platform!==process.platform||report.passed!==16||report.total!==16||report.mockedModules!==false) throw new Error('Native desktop journey incomplete or wrong runtime.');
   for(const item of report.cases){
-    const feature=item.name.startsWith('favorites.')?'favorites':item.name.includes('convert')?'convert':item.name.includes('reverse')?'reverse':item.name.includes('studio')?'image-agent':'settings';
+    const feature=item.name.startsWith('favorites.')?'favorites':item.name.includes('convert')?'convert':item.name.includes('reverse')?'reverse':'settings';
     checks.push({sourceSha,feature,platform,kind:'integration',journey:item.name,observed:item.observed,
       command:actual.command,stdout:actual.stdout,stderr:actual.stderr,exitStatus:actual.exitStatus,skipped:false,
       acceptanceLevel:'component-only',scope:'Real native Electron production modules and filesystem/loopback; no complete feature certification.'});

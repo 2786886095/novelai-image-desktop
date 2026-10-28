@@ -77,20 +77,13 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Check bounded native command and fixture cleanup
         run: node --test scripts/feature-acceptance/bounded-native-command.test.mjs scripts/feature-acceptance/mac-native-keychain.test.mjs scripts/feature-acceptance/native-fixture-tls.test.mjs scripts/feature-acceptance/native-controller-bootstrap.test.mjs scripts/feature-acceptance/generation-fixture-cleanup.test.mjs scripts/feature-acceptance/desktop-native-diagnostics.test.mjs scripts/feature-acceptance/desktop-native-expansion.test.mjs
-      - name: Fetch and verify the pinned Windows-only component seed
-        if: runner.os == 'Windows'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: node scripts/fetch-harness-seed.mjs
       - name: Execute real host native production components
         shell: bash
         run: |
           failed=0
-          for pair in desktop-native:desktop-acceptance desktop-offline-native:desktop-offline-acceptance desktop-ai-native:desktop-ai-acceptance desktop-generation-native:desktop-generation-acceptance desktop-library-native:desktop-library-acceptance desktop-system-native:desktop-system-acceptance desktop-browser-native:desktop-browser-acceptance desktop-advanced-native:desktop-advanced-acceptance desktop-tools-gallery-native:desktop-tools-gallery-acceptance; do
+          for pair in desktop-native:desktop-acceptance desktop-offline-native:desktop-offline-acceptance desktop-ai-native:desktop-ai-acceptance desktop-generation-native:desktop-generation-acceptance desktop-library-native:desktop-library-acceptance desktop-system-native:desktop-system-acceptance desktop-browser-native:desktop-browser-acceptance desktop-tools-gallery-native:desktop-tools-gallery-acceptance; do
             if [ "${pair%%:*}" = desktop-tools-gallery-native ]; then
               node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" "$RUNNER_TEMP/desktop-generation-acceptance" || failed=1
-            elif [ "$RUNNER_OS" = Windows ] && [ "${pair%%:*}" = desktop-system-native ]; then
-              node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" .tmp/harness-release240 || failed=1
             else
               node "scripts/feature-acceptance/run-${pair%%:*}.mjs" "$RUNNER_TEMP/${pair#*:}" "$GITHUB_SHA" || failed=1
             fi
@@ -154,12 +147,6 @@ jobs:
             ${{ runner.temp }}/desktop-browser-acceptance/*/source-after/**
             ${{ runner.temp }}/desktop-browser-acceptance/*/official-assets/PUBLIC_ASSET_GETS.json
             ${{ runner.temp }}/desktop-browser-acceptance/*/BROWSER_REOPEN.json
-            ${{ runner.temp }}/desktop-advanced-acceptance/*-receipt.json
-            ${{ runner.temp }}/desktop-advanced-acceptance/*/command-ledger.json
-            ${{ runner.temp }}/desktop-advanced-acceptance/*/MAC_NATIVE_KEYCHAIN.json
-            ${{ runner.temp }}/desktop-advanced-acceptance/*/*REPORT.json
-            ${{ runner.temp }}/desktop-advanced-acceptance/*/source-before/**
-            ${{ runner.temp }}/desktop-advanced-acceptance/*/source-after/**
             ${{ runner.temp }}/desktop-tools-gallery-acceptance/*-receipt.json
             ${{ runner.temp }}/desktop-tools-gallery-acceptance/*/command-ledger.json
             ${{ runner.temp }}/desktop-tools-gallery-acceptance/*/*REPORT.json
@@ -212,7 +199,7 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Check matrix rejection rules
         run: node --test scripts/feature-acceptance/release-feature-scope.test.mjs scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/windows-artist-contract.test.mjs scripts/feature-acceptance/windows-artist-native.test.mjs scripts/feature-acceptance/windows-artist-matrix.test.mjs scripts/feature-acceptance/import-windows-artist-evidence.test.mjs
-      - name: Require 76 scoped cells across both desktop release platforms (two Windows-local capability cells not-supported)
+      - name: Require 73 scoped cells across both desktop release platforms (one Windows-local capability cell not-supported)
         shell: bash
         run: |
           version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json","utf8")).version')"

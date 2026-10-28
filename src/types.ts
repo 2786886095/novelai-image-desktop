@@ -1080,11 +1080,9 @@ export interface MetadataSnapshotResult {
 }
 
 export type DataBackupCategory =
-  | "tavernAgent"
   | "styleLab"
   | "configuration"
   | "apiCredentials"
-  | "agentWorkspace"
   | "artistLibrary"
   | "textHistory"
   | "referencePresets"
@@ -1129,7 +1127,7 @@ export interface DataBackupImportRequest {
 }
 
 export interface DataBackupRecovery {
-  kind: "agent" | "detective";
+  kind: "detective";
   id: string;
   path: string;
   status: "restored" | "staged" | "available";
@@ -1429,7 +1427,7 @@ export interface OpenAIInpaintRequest {
 }
 
 export interface CompatibleGenerationRequest {
-  /** Renderer snapshot binding; trusted Agent callers use their separate provider binding. */
+  /** Renderer snapshot binding; trusted native callers use their separate provider binding. */
   expectedImageServiceRevision?: string;
   prompt: string;
   n: number;
@@ -1472,7 +1470,6 @@ export interface AppSettings {
   // Allow sending the NovelAI Bearer token to the configured relay endpoint.
   // Default true for new settings; preserve explicitly saved false values.
   // When false, non-official endpoints are replaced with official URLs.
-  harnessAutoUpdatePlugins?: boolean;
   allowCustomEndpoint: boolean;
   // Opt-in to retrying a failed (401/403) custom image endpoint against the
   // official one. Default false: without this, a custom-endpoint failure just
@@ -1550,7 +1547,7 @@ export interface AppSettings {
   reversePromptTemplatesV45: ModePromptTemplates;
   reversePromptSkillVersion?: PromptSkillVersion;
   reversePromptTemplatesV2?: ModePromptTemplates;
-  /** Built-in DSH Infinite Gen 3 adapter, scoped to Tavern image, reverse, and convert only. */
+  /** Built-in DSH Infinite Gen 3 adapter, scoped to reverse and convert only. */
   reverseConvertDshEnabled: boolean;
   reverseConvertDshMode: "focused" | "strict";
   /** User-manageable SillyTavern JSON presets shared by AI reverse and prompt conversion. */
@@ -1577,24 +1574,7 @@ export interface AppSettings {
   convertApiKey: string;
   convertApiModel: string;
   convertSystemPrompt: string;
-  // Character Tavern model provider. Desktop and mobile both connect directly
-  // to the selected provider using the protocol below.
-  agentApiProtocol: import("./agent/types").AgentProviderProtocol;
-  agentApiBaseUrl: string;
-  agentApiKey: string;
-  agentApiModel: string;
-  savedAgentModels?: import("./agent/model-selections").SavedAgentModel[];
-  agentReasoningEffort?: import("./agent/types").AgentReasoningEffort;
-  agentProviderName: string;
-  agentContextWindow: number;
-  agentMaxOutputTokens: number;
-  agentUiPreferences?: import("./agent/preferences").AgentUiPreferences;
-  agentAutoCompact: boolean;
-  agentAutoCompactThreshold: number;
-  agentVisionEnabled: boolean;
   // Convert output type + per-mode conversion system templates.
-  /** Agent defaults to mixed independently of the workbench tab selection. */
-  agentPromptTemplateMode?: ReversePromptMode;
   convertMode: ReversePromptMode;
   convertPromptTemplateVersion: ReversePromptTemplateVersion;
   convertPromptTemplates: ModePromptTemplates;
@@ -1753,22 +1733,6 @@ export interface NaiDesktopApi {
   mcpRegenerateToken: () => Promise<McpServerStatus>;
   onMcpEvent: (callback:(event:{kind:'history';date?:string;count:number})=>void) => ()=>void;
   onFavoritesChanged: (callback:(notice:{message:string})=>void) => ()=>void;
-  onStudioAgentRequest?: (callback:(request:import('./studio-agent-contract').StudioAgentRequest)=>void) => ()=>void;
-  replyStudioAgent: (id:string,reply:import('./studio-agent-contract').StudioAgentReply) => Promise<void>;
-  commitStudioSetting: (id:string,key:SettingKey,expected:AppSettings[SettingKey],value:AppSettings[SettingKey]) => Promise<void>;
-  harnessSetAutoPluginUpdates: (enabled:boolean) => Promise<import("./harness-types").HarnessPluginAutoState>;
-  harnessCheckPluginUpdates: () => Promise<import("./harness-types").HarnessPluginAutoState>;
-  harnessSnapshot: () => Promise<import("./harness-types").HarnessSnapshot>;
-  harnessStart: () => Promise<import("./harness-types").HarnessSnapshot>;
-  harnessStop: () => Promise<import("./harness-types").HarnessSnapshot>;
-  harnessPlanDownload: (kind: 'component' | 'official', reinstall?: boolean) => Promise<{token:string;version:string;bytes:number;official?:boolean;pluginUpdates?:import("./harness-types").HarnessPluginChoice[];current?:boolean;blocked?:boolean;message?:string}>;
-  harnessUninstall: (confirmed: boolean) => Promise<import("./harness-types").HarnessSnapshot>;
-  harnessPrepareUpdate: (kind: 'component' | 'official', token: string, disablePlugins?: string[]) => Promise<import("./harness-types").HarnessUpdateProposal>;
-  harnessApplyPreparedUpdate: (token: string) => Promise<import("./harness-types").HarnessSnapshot>;
-  harnessCheckUpdates: () => Promise<import("./harness-types").HarnessSnapshot>;
-  harnessUpdate: () => Promise<import("./harness-types").HarnessSnapshot>;
-  harnessOpenBackups: () => Promise<void>;
-  harnessRestoreBackup: () => Promise<import("./harness-types").HarnessSnapshot>;
   platform: NodeJS.Platform;
   getResourceDatabaseOverview: () => Promise<ResourceDatabaseOverview>;
   downloadResourceDatabase: (id: ResourceDatabaseId, confirmReplace?: boolean) => Promise<ResourceDatabaseDownloadResult>;
@@ -1779,8 +1743,8 @@ export interface NaiDesktopApi {
   relatedResourceTags: (tags: string[], limit?: number) => Promise<TagSuggestion[]>;
   onResourceDatabaseProgress: (callback: (event: ResourceDatabaseProgressEvent) => void) => () => void;
   listPortableRecoveries: () => Promise<DataBackupRecovery[]>;
-  openPortableRecovery: (kind: "agent" | "detective", id: string) => Promise<void>;
-  activatePortableRecovery: (kind: "agent" | "detective", id: string) => Promise<{preserved: string}>;
+  openPortableRecovery: (kind: "detective", id: string) => Promise<void>;
+  activatePortableRecovery: (kind: "detective", id: string) => Promise<{preserved: string}>;
   exportDataBackup: (request: DataBackupExportRequest) => Promise<DataBackupOperationResult>;
   inspectDataBackup: () => Promise<DataBackupInspectResult>;
   importDataBackup: (request: DataBackupImportRequest) => Promise<DataBackupImportResult>;
@@ -1788,45 +1752,8 @@ export interface NaiDesktopApi {
   runAutomaticBackup: (workspaceData?: Record<string, string>) => Promise<DataBackupOperationResult>;
   selectBackupDirectory: () => Promise<string | null>;
   openBackupDirectory: () => Promise<{ ok: boolean; message?: string }>;
-  getAgentWorkspace: () => Promise<import("./agent/types").AgentWorkspaceData>;
-  saveTavernWorkspace: (workspace: import("./agent/types").AgentWorkspaceData) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
-  setStudioConversationOptions: (conversationId:string,patch:Partial<import('./agent/workspace-controls').StudioConversationOptions>)=>Promise<import('./agent/types').AgentWorkspaceMutationResult>;
-  importStudioResources: (kind:'presets'|'worldbooks'|'characters')=>Promise<import('./agent/types').AgentWorkspaceMutationResult & {cancelled?:boolean}>;
-  createAgentConversation: (title?: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
-  selectAgentConversation: (conversationId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
-  renameAgentConversation: (conversationId: string, title: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
-  setAgentConversationArchived: (conversationId: string, archived: boolean) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
-  deleteAgentConversation: (conversationId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
-  importAgentFileData: (conversationId:string, files:Array<{name:string;bytes:Uint8Array}>) => Promise<import("./agent/types").AgentImportFilesResult>;
-  importAgentFiles: (conversationId: string, sourcePaths?: string[]) => Promise<import("./agent/types").AgentImportFilesResult>;
-  deleteAgentAttachment: (conversationId: string, attachmentId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
   onImageSaveFeedback: (callback: (notices: import("./image-save-feedback").ImageSaveNotice[]) => void) => () => void;
   dismissImageSaveFeedback: (id: number) => void;
-  exportAgentAttachment: (conversationId: string, messageId: string, attachmentId: string) => Promise<{ ok: boolean; cancelled?: boolean; message: string; filePath?: string }>;
-  sendAgentMessage: (request: import("./agent/types").AgentSendRequest) => Promise<{ ok: boolean; message?: string }>;
-  generateTavernImage: (request: import("./agent/types").TavernImageRequest) => Promise<{ ok: boolean; message?: string }>;
-  importTavernCards: (sourcePaths?: string[]) => Promise<import("./agent/types").TavernCardImportResult>;
-  exportTavernCard: (request: import("./agent/types").TavernCardExportRequest) => Promise<{ ok: boolean; cancelled?: boolean; message: string; filePath?: string }>;
-  importTavernVisualAsset: (kind: "avatar" | "background", sourcePath?: string) => Promise<{ ok: boolean; cancelled?: boolean; message?: string; dataUrl?: string; fileName?: string }>;
-  abortAgentMessage: (conversationId: string) => Promise<{ ok: boolean; message?: string }>;
-  compactAgentConversation: (conversationId: string) => Promise<{ ok: boolean; message?: string }>;
-  getAgentPendingQuestions?:()=>Promise<import("./agent/types").AgentQuestionRequest[]>;
-  respondAgentQuestion?:(response:import("./agent/types").AgentQuestionResponse)=>Promise<{ok:boolean;message?:string}>;
-  respondAgentPermission: (
-    permissionId: string,
-    response: "once" | "always" | "reject",
-  ) => Promise<{ ok: boolean; message?: string }>;
-  upsertAgentSkill: (skill: Partial<import("./agent/types").AgentSkill> & Pick<import("./agent/types").AgentSkill, "name" | "instructions">) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
-  deleteAgentSkill: (skillId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
-  upsertAgentMemory: (memory: Partial<import("./agent/types").AgentMemory> & Pick<import("./agent/types").AgentMemory, "title" | "content" | "scope">) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
-  deleteAgentMemory: (memoryId: string) => Promise<import("./agent/types").AgentWorkspaceMutationResult>;
-  getAgentRuntimeStatus: () => Promise<import("./agent/types").AgentRuntimeStatus>;
-  getAgentPendingPermissions: () => Promise<import("./agent/types").AgentPermissionRequest[]>;
-  restartAgentRuntime: () => Promise<import("./agent/types").AgentRuntimeStatus>;
-  discoverAgentModels: (probe: import("./agent/types").AgentProviderProbe) => Promise<import("./agent/types").AgentModelDiscoveryResult>;
-  getAgentWorkspaceLocation: () => Promise<import("./agent/types").AgentWorkspaceLocation>;
-  openAgentWorkspaceDirectory: () => Promise<{ ok: boolean; message?: string }>;
-  onAgentEvent: (callback: (event: import("./agent/types").AgentEvent) => void) => () => void;
   promptCodexCache: () => Promise<
     import("./prompt-codex").PromptCodexSnapshot | null
   >;
@@ -2059,7 +1986,6 @@ export interface NaiDesktopApi {
     options: AugmentOptions,
   ) => Promise<GenerateResult>;
   cancel: () => Promise<{ ok: boolean }>;
-  readAgentClipboardFiles: () => Promise<Array<{name:string;bytes:Uint8Array}>>;
   readClipboardImageFiles: () => Promise<Array<{name:string;bytes:Uint8Array}>>;
   /** ON-only desktop copy. Non-copied results require ordinary copy + notice. */
   copyImageWithMetadata?: (srcURL: string) => Promise<CopyImageMetadataResult>;

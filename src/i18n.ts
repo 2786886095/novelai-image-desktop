@@ -108,11 +108,6 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       title: "在线画廊",
       desc: "浏览公开作品并提取提示词与原参数",
     },
-    agent: {
-      label: "生图智能体",
-      title: "生图智能体",
-      desc: "聊天、参考图、提示词与 NovelAI 生图",
-    },
     records: {
       label: "记录",
       title: "AI 调用记录",
@@ -163,11 +158,6 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       label: "線上畫廊",
       title: "線上畫廊",
       desc: "瀏覽公開作品並擷取提示詞與原始參數",
-    },
-    agent: {
-      label: "生圖智能體",
-      title: "生圖智能體",
-      desc: "對話、參考圖、提示詞與 NovelAI 生圖",
     },
     records: {
       label: "記錄",
@@ -224,11 +214,6 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       title: "Online Gallery",
       desc: "Browse public works and reuse prompts and original parameters",
     },
-    agent: {
-      label: "Image Agent",
-      title: "Image Agent",
-      desc: "Conversational prompting, tag search, style analysis, and NovelAI image generation",
-    },
     records: {
       label: "Logs",
       title: "AI Call Logs",
@@ -284,11 +269,6 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       title: "オンラインギャラリー",
       desc: "公開作品を閲覧し、プロンプトと元パラメータを利用",
     },
-    agent: {
-      label: "画像エージェント",
-      title: "画像エージェント",
-      desc: "会話でプロンプト整理、Tag 検索、画風分析、NovelAI 画像生成",
-    },
     records: {
       label: "履歴",
       title: "AI 呼び出し履歴",
@@ -343,11 +323,6 @@ const MAIN_TAB_LOCALES: Record<AppLanguage, MainTabLocale> = {
       label: "갤러리",
       title: "온라인 갤러리",
       desc: "공개 작품을 탐색하고 프롬프트와 원본 설정을 활용",
-    },
-    agent: {
-      label: "이미지 에이전트",
-      title: "이미지 에이전트",
-      desc: "대화형 프롬프트 정리, Tag 검색, 화풍 분석과 NovelAI 이미지 생성",
     },
     records: {
       label: "기록",

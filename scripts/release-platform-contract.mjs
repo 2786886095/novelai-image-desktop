@@ -13,23 +13,22 @@ export const releasePlatforms = Object.freeze(['windows','macos']);
 export const releaseExcludedPlatforms = Object.freeze([]);
 export const releaseFeatures = Object.freeze([
   'generation','image-to-image','enhance','inpaint','postprocess','reverse','convert',
-  'metadata-import','tools','reference-presets','online-gallery','image-agent',
+  'metadata-import','tools','reference-presets','online-gallery',
   'ai-records','works','styles','favorites','accounts','settings','typography',
   'translation','negative-prompts','characters','vibe-transfer','precise-reference',
   'effort','batch','comic','artist-iteration','random-artists','openai-inpaint',
   'external-mcp-server','backup','clipboard','navigation','output-management',
-  'agent-components','updates','works-batch-edit','missing-file-reconciliation',
+  'updates','works-batch-edit','missing-file-reconciliation',
 ]);
 
-// The user approved Windows-only local Agent components and Artist iteration.
+// The user approved Windows-only local Artist iteration.
 // All other features remain required on every current release target.
-export const releaseScopeId = 'desktop-windows-local-capabilities/v3';
+export const releaseScopeId = 'desktop-windows-local-capabilities/v4';
 export const artistIterationScenarios = Object.freeze(['model-runtime-lifecycle','search-score-selected-generation','install-resume-error']);
-export const agentComponentScenarios = Object.freeze(['install-verify-activate','stop-restore-recovery','missing-config-actual-process']);
 export function releaseFeatureApplicability(feature, platform) {
   assert.ok(releaseFeatures.includes(feature),'Unrecognized feature: '+feature);
   assert.ok(releasePlatforms.includes(platform),'Unrecognized platform: '+platform);
-  return (feature==='artist-iteration' || feature==='agent-components') && platform!=='windows' ? 'not-supported' : 'required';
+  return feature==='artist-iteration' && platform!=='windows' ? 'not-supported' : 'required';
 }
 const releaseScope = Object.freeze({
   id:releaseScopeId,
@@ -37,7 +36,7 @@ const releaseScope = Object.freeze({
   applicability:Object.freeze(releaseFeatures.map(feature=>Object.freeze({feature,platforms:Object.freeze(Object.fromEntries(releasePlatforms.map(platform=>[platform,releaseFeatureApplicability(feature,platform)])))}))),
 });
 export const releaseScopeSha256 = crypto.createHash('sha256').update(JSON.stringify(releaseScope)).digest('hex');
-export const releaseScopeCounts = Object.freeze({declaredSlots:78,requiredSlots:76,notSupportedSlots:2});
+export const releaseScopeCounts = Object.freeze({declaredSlots:74,requiredSlots:73,notSupportedSlots:1});
 
 export function assertReleasePlatformContract(report, {version, sourceSha}) {
   assert.ok(/^\d+\.\d+\.\d+$/.test(version),'Invalid release version');
@@ -72,7 +71,7 @@ export function assertReleasePlatformContract(report, {version, sourceSha}) {
         const fields=new Set(['applicability','status','reasonCode','declaredScenarios','requiredScenarios','completedScenarios','missingScenarios','excludedObservedScenarios','unqualifiedObservedScenarios','componentObservations','evidence']);
         assert.ok(Object.keys(result).every(field=>fields.has(field)),'Not-supported cells cannot carry pass/execution claims');
         assert.equal(result.reasonCode,releaseScopeId,'Not-supported reason differs');
-        assert.deepEqual(result.declaredScenarios,[...(feature.id==='artist-iteration'?artistIterationScenarios:agentComponentScenarios)],'Excluded scenario declarations differ');
+        assert.deepEqual(result.declaredScenarios,[...artistIterationScenarios],'Excluded scenario declarations differ');
         for(const field of ['requiredScenarios','completedScenarios','missingScenarios','evidence'])
           assert.deepEqual(result[field],[],`Not-supported ${field} must be explicitly empty`);
         continue;

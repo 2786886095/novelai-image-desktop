@@ -10,7 +10,7 @@ describe('five-language feature catalog',()=>{
   expect(row[2]).not.toMatch(/[\u3400-\u9fff]/);
  });
  it('localizes own status templates, preserving parameters and raw diagnostics',()=>{
-  expect(featureText('en-US','校验 Agent 0.1.2（Harness 0.1.7-rc.2）…')).toBe('Verifying Agent 0.1.2 (Harness 0.1.7-rc.2)…');
+  expect(featureText('en-US','第 2 / 5 页，共 48 项')).toBe('Page 2 / 5, 48 items');
   expect(featureText('en-US','Error: 请选择目标图片。')).toBe('Error: Select a target image.');
   const raw='EPERM: symlink C:/用户/sdk -> D:/目标/sdk';expect(featureText('en-US',raw)).toBe(raw);
   for(const language of FEATURE_LANGUAGES)expect(featureText(language,'画风候选 {number}',{number:5})).toContain('5');

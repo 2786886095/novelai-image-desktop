@@ -1,11 +1,10 @@
-import { registerComfyIpc, comfyHasActiveJobs, cancelComfyJobs, comfyNeedsQuitCleanup, shutdownOwnedComfy, shutdownOwnedComfySync, resetComfyAfterUpdateFailure } from "./ipc/comfyui-ipc";
+import { registerComfyIpc, comfyNeedsQuitCleanup, shutdownOwnedComfy, shutdownOwnedComfySync, resetComfyAfterUpdateFailure } from "./ipc/comfyui-ipc";
 import {UiFontRepository} from "./ipc/ui-fonts";
 import { fetchOfficialMetadataAsset, cancelOfficialMetadataAssetDownloads } from "./ipc/official-metadata-assets";
 import crypto from "node:crypto";
 import {startMcpServer, type McpServerHandle} from "./ipc/mcp-server";
-import {readAgentClipboardFiles} from './ipc/agent-clipboard';
 import { registerNaiAccountsIpc, ensureNaiAccountsLoaded } from './ipc/nai-accounts';
-import { withNaiAccountOperation, rememberNaiProposal, assertNaiProposalAccount } from './ipc/nai-accounts-runtime';
+import { withNaiAccountOperation } from './ipc/nai-accounts-runtime';
 import {prepareBatchImageService} from './ipc/batch-image-service';
 import {cancelBatchRedraw} from './ipc/nai';
 import {prepareComicImageService} from './ipc/comic-image-service';
@@ -14,7 +13,6 @@ import { registerCompatibleImageIpc } from "./ipc/compatible-settings-ipc";
 import { openAIInpaintWorkbench } from "./ipc/openai-image-edit-workbench";
 import {registerImageFavoritesIpc,favoriteContextMenuItem,imageParametersContextMenuItem} from "./ipc/image-favorites-ipc";
 import {portableRecoveryPath, activatePortableRecovery, listPortableRecoveries} from './ipc/portable-projects';
-import {registerHarnessLauncher, harnessNeedsExitConfirmation, confirmHarnessExit, stopHarnessForUpdate,resetHarnessExitAfterUpdateFailure} from "./ipc/harness-launcher";
 import { detectiveStatus, detectiveConfigure, detectiveStart, detectiveResume, detectiveStop, detectiveOpenResults, detectiveClearResults, detectiveVerifyRuntime, detectiveSelectModel } from "./ipc/artist-detective";
 import { detectiveDownloadStatus, detectiveDownloadStart, detectiveDownloadCancel, detectiveDownloadDirectory, detectiveDownloadVariant } from "./ipc/detective-download";
 import { recoverLegacyCredentials } from "./ipc/credential-recovery";
@@ -248,52 +246,6 @@ import {
   openLogDir,
   readRecentLog,
 } from "./ipc/logger";
-import {
-  createAgentConversation,
-  setAgentConversationArchived,
-  setStudioConversationOptions,
-  deleteAgentAttachment,
-  deleteAgentConversation,
-  deleteAgentMemory,
-  deleteAgentSkill,
-  importAgentFiles,
-  importAgentFileData,
-  importStudioPresetFiles,
-  exportAgentAttachment,
-  readAgentWorkspace,
-  renameAgentConversation,
-  saveTavernWorkspace,
-  selectAgentConversation,
-  upsertAgentMemory,
-  upsertAgentSkill,
-} from "./ipc/agent-store";
-import {
-  abortAgentMessage,
-  compactAgentConversation,
-  getAgentPendingQuestions,
-  respondAgentQuestion,
-  getAgentPendingPermissions,
-  getAgentRuntimeStatus,
-  hasActiveAgentRequests,
-  respondAgentPermission,
-  restartAgentRuntime,
-  sendAgentMessage,
-  setAgentEventSink,
-  stopAgentRuntime,
-  generateTavernImage,
-} from "./ipc/agent-runtime";
-import { discoverAgentModels } from "./ipc/agent-model-discovery";
-import { getAgentWorkspaceLocation, openAgentWorkspaceDirectory } from "./ipc/agent-workspace-location";
-import { exportTavernCard, importTavernCards, importTavernVisualAsset } from "./ipc/tavern-card";
-import type {
-  AgentMemory,
-  AgentProviderProbe,
-  AgentSendRequest,
-  AgentSkill,
-  AgentWorkspaceData,
-  TavernCardExportRequest,
-  TavernImageRequest,
-} from "../src/agent/types";
 
 // Launching the app while it's already running should focus the existing
 // window, not spawn a second process fighting over the same userData store.
@@ -514,26 +466,6 @@ function createWindow() {
             await revealRandomParameters();
             await new Promise((resolve) => setTimeout(resolve, 250));
           }
-          if (normalizedUiCapturePath.includes("agent-reasoning")) {
-            await mainWindow?.webContents.executeJavaScript(`(() => {
-              const chips = [...document.querySelectorAll('.tavern-tool-chip')];
-              const trigger = chips.find((button) =>
-                (button.textContent || '').includes('推理强度')) || chips.find((button) =>
-                !button.classList.contains('is-command') && !button.classList.contains('is-secondary') &&
-                (button.textContent || '').includes('自动'));
-              window.__agentReasoningCapture = {
-                chipCount: chips.length,
-                found: Boolean(trigger),
-                disabled: Boolean(trigger?.disabled),
-                text: String(trigger?.textContent || '').trim(),
-              };
-              if (!trigger || trigger.disabled) return false;
-              trigger.focus();
-              trigger.click();
-              return true;
-            })()`);
-            await new Promise((resolve) => setTimeout(resolve, 500));
-          }
           const audit = await mainWindow?.webContents.executeJavaScript(`(() => {
             const visible = (element) => {
               const style = getComputedStyle(element);
@@ -641,36 +573,7 @@ function createWindow() {
                   ? { hasImage: true, complete: image.complete, naturalWidth: image.naturalWidth, src: image.currentSrc || image.src }
                   : { hasImage: false, text: String(element.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 80) };
               });
-            const composerPopovers = [...document.querySelectorAll('.tavern-composer-popover')]
-              .filter(visible)
-              .map((element) => {
-                const rect = element.getBoundingClientRect();
-                const centerX = rect.left + rect.width / 2;
-                const centerY = rect.top + rect.height / 2;
-                const style = getComputedStyle(element);
-                const ancestors = [];
-                let parent = element.parentElement;
-                while (parent && ancestors.length < 8) {
-                  const parentStyle = getComputedStyle(parent);
-                  ancestors.push({
-                    ...describe(parent),
-                    overflow: parentStyle.overflow,
-                    overflowX: parentStyle.overflowX,
-                    overflowY: parentStyle.overflowY,
-                    position: parentStyle.position,
-                    zIndex: parentStyle.zIndex,
-                  });
-                  parent = parent.parentElement;
-                }
-                return {
-                  ...describe(element),
-                  rect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height },
-                  style: { display: style.display, visibility: style.visibility, opacity: style.opacity, position: style.position, zIndex: style.zIndex, backgroundColor: style.backgroundColor },
-                  topAtCenter: document.elementsFromPoint(centerX, centerY).slice(0, 8).map(describe),
-                  ancestors,
-                };
-              });
-            return { viewport: { width: innerWidth, height: innerHeight }, viewportOverflow, contentOverflow, iconOverflow, iconMisalignment, textMisalignment, duplicateArrowRisk, openSelectMenus, randomArtistDetails, settingsScroll, galleryImageStates, composerPopovers, agentReasoningCapture: window.__agentReasoningCapture ?? null };
+            return { viewport: { width: innerWidth, height: innerHeight }, viewportOverflow, contentOverflow, iconOverflow, iconMisalignment, textMisalignment, duplicateArrowRisk, openSelectMenus, randomArtistDetails, settingsScroll, galleryImageStates };
           })()`);
           const image = await mainWindow?.webContents.capturePage();
           if (image) {
@@ -685,12 +588,6 @@ function createWindow() {
       }, 5000);
     });
   }
-
-  mainWindow.on("close", (event) => {
-    if (!harnessNeedsExitConfirmation()) return;
-    event.preventDefault();
-    void confirmHarnessExit(mainWindow).then(confirmed => { if (confirmed) mainWindow?.close(); });
-  });
 
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -714,7 +611,6 @@ function createWindow() {
       ["08-tools", "tools"],
       ["09-reference-presets", "referencePresets"],
       ["10-online-gallery", "onlineGallery"],
-      ["11-agent", "agent"],
       ["12-records", "records"],
       ["11-records", "records"],
       ["09-records", "records"],
@@ -776,16 +672,7 @@ function createWindow() {
 function accountBoundHandle(channel: string, listener: Parameters<typeof ipcMain.handle>[1]) {
   ipcMain.handle(channel, (event, ...args) => {
     ensureNaiAccountsLoaded();
-    if (channel !== 'nai:clearToken' && /^(nai:|agent:|tagComic:|comic:|batch)/.test(channel)) return withNaiAccountOperation(async () => {
-      if(channel==='agent:generateImage') assertNaiProposalAccount(args[0]?.conversationId,args[0]?.messageId);
-      const priorMessageIds=channel==='agent:send' ? new Set(readAgentWorkspace().conversations.find(c=>c.id===args[0]?.conversationId)?.messages.map(m=>m.id) ?? []) : undefined;
-      const result=await listener(event,...args);
-      if(channel==='agent:send') {
-        const conversation=readAgentWorkspace().conversations.find(c=>c.id===args[0]?.conversationId);
-        for(const message of conversation?.messages ?? []) if(message.imageProposal?.status==='pending' && !priorMessageIds?.has(message.id)) rememberNaiProposal(conversation!.id,message.id);
-      }
-      return result;
-    });
+    if (channel !== 'nai:clearToken' && /^(nai:|tagComic:|comic:|batch)/.test(channel)) return withNaiAccountOperation(() => listener(event, ...args));
     return listener(event, ...args);
   });
 }
@@ -798,50 +685,6 @@ function registerIpc() {
   registerComfyIpc(() => mainWindow, () => getSettings().outputDir);
   // OpenAI Images edits: billed by the provider, independent of the NovelAI account binding.
   ipcMain.handle("openai:inpaint", (_event, request: import("../src/types").OpenAIInpaintRequest) => openAIInpaintWorkbench(request));
-  accountBoundHandle("agent:getWorkspace", () => readAgentWorkspace());
-  accountBoundHandle("agent:saveWorkspace", (_event, workspace: AgentWorkspaceData) => saveTavernWorkspace(workspace));
-  accountBoundHandle('agent:setStudioOptions',(_event,id:string,patch:Partial<import('../src/agent/workspace-controls').StudioConversationOptions>)=>{
-    if(hasActiveAgentRequests())return {ok:false,message:'请先停止智能体任务再修改对话选项。',workspace:readAgentWorkspace()};
-    return setStudioConversationOptions(id,patch);
-  });
-  accountBoundHandle('agent:importStudioResources',(_event,kind:'presets'|'worldbooks'|'characters')=>{
-    if(hasActiveAgentRequests())return {ok:false,message:'请先停止智能体任务再导入资源。',workspace:readAgentWorkspace()};
-    if(kind==='presets')return importStudioPresetFiles();
-    if(kind==='worldbooks'||kind==='characters')return importTavernCards();
-    return {ok:false,message:'无效的资源类别。',workspace:readAgentWorkspace()};
-  });
-  accountBoundHandle("agent:createConversation", (_event, title?: string) => createAgentConversation(title));
-  accountBoundHandle("agent:selectConversation", (_event, conversationId: string) => selectAgentConversation(conversationId));
-  accountBoundHandle("agent:renameConversation", (_event, conversationId: string, title: string) => renameAgentConversation(conversationId, title));
-  accountBoundHandle("agent:setConversationArchived", (_event, conversationId: string, archived: boolean) => {
-    if (hasActiveAgentRequests()) return { ok: false, message: "请等待智能体任务结束后再归档或恢复。", workspace: readAgentWorkspace() };
-    return setAgentConversationArchived(conversationId, archived);
-  });
-  accountBoundHandle("agent:deleteConversation", (_event, conversationId: string) => deleteAgentConversation(conversationId));
-  accountBoundHandle("agent:importFileData", (_event, conversationId:string,files:unknown) => importAgentFileData(conversationId,files));
-  accountBoundHandle("agent:importFiles", (_event, conversationId: string, sourcePaths?: string[]) => importAgentFiles(conversationId, sourcePaths));
-  accountBoundHandle("agent:deleteAttachment", (_event, conversationId: string, attachmentId: string) => deleteAgentAttachment(conversationId, attachmentId));
-  accountBoundHandle("agent:exportAttachment", (_event, conversationId: string, messageId: string, attachmentId: string) => exportAgentAttachment(conversationId, messageId, attachmentId));
-  accountBoundHandle("agent:send", (_event, request: AgentSendRequest) => sendAgentMessage(request));
-  accountBoundHandle("agent:generateImage", (_event, request: TavernImageRequest) => generateTavernImage(request));
-  accountBoundHandle("agent:importCards", (_event, sourcePaths?: string[]) => importTavernCards(sourcePaths));
-  accountBoundHandle("agent:exportCard", (_event, request: TavernCardExportRequest) => exportTavernCard(request));
-  accountBoundHandle("agent:importVisual", (_event, kind: "avatar" | "background", sourcePath?: string) => importTavernVisualAsset(kind, sourcePath));
-  accountBoundHandle("agent:abort", (_event, conversationId: string) => abortAgentMessage(conversationId));
-  accountBoundHandle("agent:compact", (_event, conversationId: string) => compactAgentConversation(conversationId));
-  ipcMain.handle("agent:pendingQuestions",()=>getAgentPendingQuestions());
-  ipcMain.handle("agent:respondQuestion",(_event,response:import("../src/agent/types").AgentQuestionResponse)=>respondAgentQuestion(response));
-  accountBoundHandle("agent:respondPermission", (_event, permissionId: string, response: "once" | "always" | "reject") => respondAgentPermission(permissionId, response));
-  accountBoundHandle("agent:upsertSkill", (_event, skill: Partial<AgentSkill> & Pick<AgentSkill, "name" | "instructions">) => upsertAgentSkill(skill));
-  accountBoundHandle("agent:deleteSkill", (_event, skillId: string) => deleteAgentSkill(skillId));
-  accountBoundHandle("agent:upsertMemory", (_event, memory: Partial<AgentMemory> & Pick<AgentMemory, "title" | "content" | "scope">) => upsertAgentMemory(memory));
-  accountBoundHandle("agent:deleteMemory", (_event, memoryId: string) => deleteAgentMemory(memoryId));
-  accountBoundHandle("agent:runtimeStatus", () => getAgentRuntimeStatus());
-  accountBoundHandle("agent:pendingPermissions", () => getAgentPendingPermissions());
-  accountBoundHandle("agent:restartRuntime", () => restartAgentRuntime());
-  accountBoundHandle("agent:discoverModels", (_event, probe: AgentProviderProbe) => discoverAgentModels(probe));
-  accountBoundHandle("agent:workspaceLocation", () => getAgentWorkspaceLocation());
-  accountBoundHandle("agent:openWorkspace", () => openAgentWorkspaceDirectory());
   ipcMain.handle("promptCodex:cache", () => loadPromptCodexCache());
   ipcMain.handle("promptCodex:bundled", () => loadBundledPromptCodex());
   ipcMain.handle("promptCodex:update", () => updatePromptCodex());
@@ -1061,7 +904,6 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
     (_event, tool: DirectorTool, options: AugmentOptions) =>
       augmentImg(tool, options),
   );
-  accountBoundHandle("agent:readClipboardFiles", () => readAgentClipboardFiles());
   ipcMain.handle("imageInput:readClipboard", () => readClipboardImageFiles());
   ipcMain.handle('image:copyMetadata',(_event,srcURL:string)=>getSettings().copyImageMetadata===true?copyImageWithMetadata(srcURL):{status:'unsupported'});
   ipcMain.handle('image:prepareClipboardPng',(_event,bytes:unknown)=>preparePngForClipboard(bytes));
@@ -1252,11 +1094,9 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
     "storage:setHistoryGroup",
     (_event, id: string | string[], groupId?: string) => assignHistoryGroup(id, groupId),
   );
-  ipcMain.handle("storage:delete", async (_event, id: string | string[]) => {
-    const result = Array.isArray(id) ? await deleteHistoryItems(id) : await deleteHistoryItem(id);
-    if (!mainWindow?.isDestroyed()) mainWindow?.webContents.send("agent:event", { kind: "workspace", workspace: readAgentWorkspace() });
-    return result;
-  });
+  ipcMain.handle("storage:delete", (_event, id: string | string[]) =>
+    Array.isArray(id) ? deleteHistoryItems(id) : deleteHistoryItem(id),
+  );
   ipcMain.handle("storage:pruneMissing", (_event, id: string) =>
     pruneMissingHistoryItem(id),
   );
@@ -1361,7 +1201,6 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
     ].includes(String(key))) {
       await refreshSystemProxy();
     }
-    if (String(key).startsWith("agent")) await stopAgentRuntime();
     if (String(key).startsWith("mcpServer")) await syncMcpServer();
     return saved;
   });
@@ -1578,27 +1417,17 @@ app.whenReady().then(async () => {
     catch { console.warn("[credentials] Recovery incomplete; original encrypted credentials preserved."); }
   }
   readStore();
-  // Materialize/repair the built-in Character Tavern workspace before the
-  // renderer opens. This prevents an unreleased broken workspace from
-  // lingering until the user happens to visit the Tavern page.
-  readAgentWorkspace();
   installGlobalLogging();
   configureSystemProxyResolver((url) => session.defaultSession.resolveProxy(url));
   void refreshSystemProxy().catch(error => console.warn("[startup] proxy refresh failed", error));
-  setAgentEventSink((event) => {
-    if (!mainWindow?.isDestroyed()) mainWindow?.webContents.send("agent:event", event);
-  });
   const proxyRefreshTimer = setInterval(() => {
     void refreshSystemProxy();
   }, 30_000);
   proxyRefreshTimer.unref();
   registerIpc();
-  registerHarnessLauncher(() => mainWindow,{isBusy:() => hasActiveAgentRequests() || comfyHasActiveJobs(),stop:async () => { await cancelComfyJobs(); await stopAgentRuntime(); }});
   wireAutoUpdater(() => mainWindow, async () => {
     await shutdownOwnedComfy("update");
-    await stopHarnessForUpdate();
-    await stopAgentRuntime();
-  },() => { resetHarnessExitAfterUpdateFailure(); resetComfyAfterUpdateFailure(); });
+  },() => { resetComfyAfterUpdateFailure(); });
   createWindow();
   void syncMcpServer();
 
@@ -1617,11 +1446,6 @@ app.on("window-all-closed", () => {
 let comfyQuitCleanupStarted = false;
 let comfyQuitCleanupFinished = false;
 app.on("before-quit", (event) => {
-  if (harnessNeedsExitConfirmation()) {
-    event.preventDefault();
-    void confirmHarnessExit(mainWindow).then(confirmed => { if (confirmed) app.quit(); });
-    return;
-  }
   if (!comfyQuitCleanupFinished && comfyNeedsQuitCleanup()) {
     event.preventDefault();
     if (!comfyQuitCleanupStarted) {
@@ -1633,7 +1457,6 @@ app.on("before-quit", (event) => {
     }
     return;
   }
-  void stopAgentRuntime();
   void mcpServer?.close();
 });
 

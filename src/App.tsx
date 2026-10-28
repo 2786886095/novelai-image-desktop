@@ -74,13 +74,9 @@ import { format } from "date-fns";
 const loadToolsHub = () => import("./ToolsHub");
 const ToolsHub = lazy(loadToolsHub);
 const loadOnlineGalleryPage = () => import("./features/online-gallery/OnlineGalleryPage");
-// The Agent surface is platform-neutral; the old Harness/Tavern data is retained
-// for migration but no longer owns this tab.
-const loadAgentPage = () => import("./PiAgentPage");
 const loadInpaintCanvas = () => import("./InpaintCanvas").then((m) => ({ default: m.InpaintCanvas }));
 const loadMetadataInspector = () => import("./MetadataInspector");
 const OnlineGalleryPage = lazy(loadOnlineGalleryPage);
-const AgentPage = lazy(loadAgentPage);
 const InpaintCanvas = lazy(loadInpaintCanvas);
 const MetadataInspector = lazy(loadMetadataInspector);
 import { useAppStore } from "./store";
@@ -7032,35 +7028,6 @@ function V5MigrationNotice() {
   );
 }
 
-function WorkspaceMigrationNotice() {
-  const language = useAppStore((s) => s.settings?.language);
-  const [location, setLocation] = useState<Awaited<ReturnType<typeof window.naiDesktop.getAgentWorkspaceLocation>> | null>(null);
-  useEffect(() => {
-    let alive = true;
-    void window.naiDesktop.getAgentWorkspaceLocation().then((result) => {
-      if (alive && result.migrationId && localStorage.getItem(`workspace-migration:${result.migrationId}`) !== "seen") setLocation(result);
-    }).catch((error) => { if (alive) useAppStore.getState().setToast(error instanceof Error ? error.message : String(error)); });
-    return () => { alive = false; };
-  }, []);
-  if (!location) return null;
-  const copy = language === "en-US"
-    ? ["Tavern data migrated and verified. Conversations and attachments are preserved; an original backup is retained.", "Open data folder", "Got it"]
-    : language === "ja-JP"
-    ? ["酒場データの移行と検証が完了しました。会話・添付ファイルと元のバックアップを保持しています。", "保存先を開く", "確認"]
-    : language === "ko-KR"
-    ? ["대화와 첨부 파일의 이전 및 검증을 완료했습니다. 원본 백업도 보관됩니다.", "저장 폴더 열기", "확인"]
-    : language === "zh-TW"
-    ? ["酒館資料已遷移並校驗，對話與附件已保留，原始備份仍在。", "開啟資料目錄", "知道了"]
-    : ["酒馆数据已迁移并校验，对话与附件已保留，原始备份仍在。", "打开数据目录", "知道了"];
-  return <div className="update-banner" role="status">
-    <span>{copy[0]}</span>
-    <div className="update-banner-actions">
-      <Button onClick={() => { void window.naiDesktop.openAgentWorkspaceDirectory().then((r) => { if (!r.ok) useAppStore.getState().setToast(r.message ?? "打开目录失败"); }).catch((e) => useAppStore.getState().setToast(String(e))); }}>{copy[1]}</Button>
-      <Button onClick={() => { localStorage.setItem(`workspace-migration:${location.migrationId}`, "seen"); setLocation(null); }}>{copy[2]}</Button>
-    </div>
-  </div>;
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 // Draggable splitter between workspace rails. Drag = resize; double-click = reset.
 // Width changes apply live (store) and persist to localStorage on release.
@@ -7274,7 +7241,6 @@ function MainPage() {
       <AppTitleBar />
       <div className="app-notice-slot">
         <UpdateBanner />
-        <WorkspaceMigrationNotice />
       </div>
       <V5MigrationNotice />
       <AppMenuBar openSettings={() => setShowSettings(true)}>
@@ -7329,11 +7295,6 @@ function MainPage() {
             <OnlineGalleryPage />
           </Suspense>
         </PersistentTabView>
-        <PersistentTabView active={activeTab === "agent"} scope="tab:agent">
-          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
-            <AgentPage active={activeTab === "agent"} />
-          </Suspense>
-        </PersistentTabView>
         <PersistentTabView active={activeTab === "referencePresets"} scope="tab:referencePresets">
           <ReferencePresetManager onBack={() => useAppStore.getState().setActiveTab("tools")} />
         </PersistentTabView>
@@ -7384,7 +7345,6 @@ export default function App() {
       const [tools] = await Promise.allSettled([
         loadToolsHub(),
         loadOnlineGalleryPage(),
-        loadAgentPage(),
         loadMetadataInspector(),
       ]);
       if (!cancelled && tools.status === "fulfilled") tools.value.preloadToolScreens();

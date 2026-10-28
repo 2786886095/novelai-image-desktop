@@ -66,7 +66,7 @@ export function retainPortalExit(host:HTMLElement|null){
  // Menus and preview dialogs with their own retained closing phase must not exit twice.
  if(host.querySelector('[data-disclosure-open],[data-closing="true"]'))return;
  const surface=host.firstElementChild;
- if(!(surface instanceof HTMLElement)||!surface.matches('.modal-backdrop,[role="dialog"],[role="alertdialog"],.reference-ui-mask,.style-image-lightbox,.gallery-favorite-lightbox,.toast,.context-menu,.menu-pop,.tavern-composer-popover'))return;
+ if(!(surface instanceof HTMLElement)||!surface.matches('.modal-backdrop,[role="dialog"],[role="alertdialog"],.reference-ui-mask,.style-image-lightbox,.gallery-favorite-lightbox,.toast,.context-menu,.menu-pop'))return;
  if(!surface.getClientRects().length||getComputedStyle(surface).visibility==='hidden')return;
  const clone=surface.cloneNode(true) as HTMLElement;
  clone.classList.add('studio-motion-ghost');clone.inert=true;clone.setAttribute('aria-hidden','true');clone.removeAttribute('role');clone.removeAttribute('id');

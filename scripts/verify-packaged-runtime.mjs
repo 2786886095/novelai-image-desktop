@@ -35,8 +35,8 @@ console.log('IG5_PACKAGED_BYTES_VERIFIED',ig5.version,ig5.files.length);
 if(process.platform==='darwin'){
  for(const arch of [process.arch === 'arm64' ? 'arm64' : 'x86_64'])run('/usr/bin/arch',['-'+arch,binary,probe,appRoot],{ELECTRON_RUN_AS_NODE:'1'},'runtime-'+arch);
 }else run(binary,[probe,appRoot],{ELECTRON_RUN_AS_NODE:'1'},'runtime');
-run(binary,[path.resolve('scripts/packaged-agent-probe.cjs'),appRoot,expectedVersion],{ELECTRON_RUN_AS_NODE:'1'},'pi-accounts-runtime');
-for(const tab of ['01-generate','08-tools','09-reference-presets','11-agent']){
+run(binary,[path.resolve('scripts/packaged-accounts-probe.cjs'),appRoot,expectedVersion],{ELECTRON_RUN_AS_NODE:'1'},'accounts-runtime');
+for(const tab of ['01-generate','08-tools','09-reference-presets']){
  const image=path.join(output,tab+'.png');
  const userData=path.join(output,'profile');fs.mkdirSync(userData,{recursive:true});
  const env={ELECTRON_RUN_AS_NODE:null,NAI_UI_CAPTURE_PATH:image,NAI_UI_CAPTURE_USER_DATA:userData};

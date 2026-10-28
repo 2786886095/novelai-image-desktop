@@ -15,12 +15,11 @@ test('system controller preserves the native deadline, inventory and failed time
   assert.match(system, /report\.passed!==expected\.length/);
   assert.match(system, /'accounts','secure-crud-switch'/);
   assert.match(system, /'updates','profile-preserved-update-boundary'/);
-  assert.match(system, /'agent-components','missing-config-actual-process'/);
 });
 
 test('the actual system command adapter records literal streams and force-cleans a real timed-out child', async () => {
   const run = fs.mkdtempSync(path.join(os.tmpdir(), 'system-controller-test-')), ledger = [];
-  const declaration = system.slice(system.indexOf('async function command('), system.indexOf('\nconst harnessSeed'));
+  const declaration = system.slice(system.indexOf('async function command('), system.indexOf('\nconst expected'));
   const command = new Function('fs', 'path', 'run', 'ledger', 'tlsCa', 'runBoundedNativeCommand', 'req', 'startMacNativeStallDiagnostics',
     declaration + ';return command;')(fs, path, run, ledger, path.join(run, 'absent-cert'), runBoundedNativeCommand, () => 'not-electron', () => async () => {});
   const ok = await command([process.execPath, '-e', 'process.stdout.write("SYSTEM_OUT\\n");process.stderr.write("SYSTEM_ERR\\n")']);

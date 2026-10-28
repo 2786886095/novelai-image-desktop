@@ -33,15 +33,13 @@
  * URL-safe base64 first 64 chars. hash-wasm@4.12.0, independent noble fixed vectors.
  * Reference implementation is third-party, not an official login-support guarantee.
  * Selected account token+hosts are bound by root getToken/getSettings and async IPC scope.
- * Selection refuses in-flight native/agent/stream operations; batch binding stops stale
+ * Selection refuses in-flight native/stream operations; batch binding stops stale
  * between-call submissions. Legacy endpoints/token are also snapshotted per operation.
  * Relay raw paths: /ai/generate-image, /ai/upscale, /ai/augment-image. Disable relay stream
  * preview until capability is verified. Selected-account paid requests never auto-retry.
  * No fallback official host and no redirects when selected. dashboard -> origin only via
  * explicit relay helper: API prefix remains manual. SunAPI login UI alone proves no API.
  * Root settings expose runtime-only naiAccountId and keyed naiAccountRevision (no token).
- * Native agent IPC records new pending proposal account revisions; a saved proposal on
- * another account or an unknown pre-restart proposal is refused, requiring regeneration.
  * Shared asynchronous in-app confirmation releases inert/hit-testing before resolving.
  * Fixed official login/account-data URL honors proxyConfigForUrl(nai, actual URL, settings).
  * Windows safeStorage synthetic round-trip was observed (no real user store).

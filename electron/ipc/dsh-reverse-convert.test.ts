@@ -6,6 +6,7 @@ import {
   injectDshImageAiSystemPrompt,
 } from "./dsh-reverse-convert";
 import { LYRA_PRESET_SYSTEM_PROMPT } from "../../src/tavern/lyra-preset-data";
+import { createDefaultImageTaskPromptPreset } from "../../src/tavern/image-task-preset";
 
 describe("built-in DSH image AI adapter", () => {
   it("injects the real built-in provenance and preserves the existing schema", () => {
@@ -22,12 +23,6 @@ describe("built-in DSH image AI adapter", () => {
       .toContain("silently check that no explicit visual constraint was dropped");
   });
 
-  it("supports only the built-in tavern image role through its dedicated task", () => {
-    const value = buildDshImageAiSystemAddon("tavern-image");
-    expect(value).toContain("NovelAI image proposal");
-    expect(value).toContain("<langbai-image>");
-  });
-
   it("leaves the prompt byte-for-byte unchanged when disabled", () => {
     expect(injectDshImageAiSystemPrompt({ task: "convert", systemPrompt: "BASE", enabled: false }))
       .toBe("BASE");
@@ -38,7 +33,7 @@ describe("built-in DSH image AI adapter", () => {
   });
 
   it("uses scoped IG5 defaults while retaining Lyra attribution for saved choices", () => {
-    for (const task of ["tavern-image", "reverse", "convert"] as const) {
+    for (const task of ["reverse", "convert"] as const) {
       const value = buildDshImageAiSystemAddon(task);
       expect(value).toContain("IG5 task-scoped rule adapter");
       expect(value).not.toContain(LYRA_PRESET_SYSTEM_PROMPT);
@@ -48,10 +43,11 @@ describe("built-in DSH image AI adapter", () => {
       .toBe("09D89AE4F64E05C06962786BB19A8C7364898E863DCC3FCDE99F661E841EF6A9");
   });
 
-  it("does not duplicate the shared preset when Tavern already assembled it", () => {
-    const value = injectDshImageAiSystemPrompt({ task: "tavern-image", systemPrompt: LYRA_PRESET_SYSTEM_PROMPT });
-    expect(value.split(LYRA_PRESET_SYSTEM_PROMPT)).toHaveLength(2);
-    expect(value).toContain("NovelAI image proposal");
+  it("does not duplicate the shared preset when the caller already assembled it", () => {
+    const preset = createDefaultImageTaskPromptPreset("convert").systemPrompt;
+    const value = injectDshImageAiSystemPrompt({ task: "convert", systemPrompt: preset });
+    expect(value.split(preset)).toHaveLength(2);
+    expect(value).toContain("Convert the supplied description directly");
   });
 
   it("uses the selected shared preset for reverse and conversion", () => {

@@ -45,30 +45,8 @@ export async function writeComicZip(filePath:string,bytes:Buffer,overwrite=false
  const target=path.resolve(filePath),temp=target+'.'+randomUUID()+'.tmp';
  await fs.mkdir(path.dirname(target),{recursive:true});
  try{await fs.writeFile(temp,bytes,{flag:'wx'});const read=await fs.readFile(temp);if(!read.equals(bytes))throw Error('ZIP文件读回不一致');
-  // Hard-link commit is exclusive for Agent exports; the native save dialog can authorize replacement.
+  // Hard-link commit never replaces an existing file; the native save dialog can authorize replacement.
   if(overwrite)await fs.rename(temp,target);else{await fs.link(temp,target);await fs.unlink(temp);}
  }catch(e){await fs.unlink(temp).catch(()=>{});throw e;}
  return {filePath:target,bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
-}
-
-export function desktopComicAssets(){
- return {
-  outputRoot:()=>{throw Error('Supply current output root from host');},
-  async importReference(projectId:string,source:string,sourceId:string,request:import('../../src/agent/types').AgentToolBridgeRequest){
-   let sourcePath:string|undefined,preset:import('../../src/types').ReferencePreset|undefined;
-   if(source==='preset'){
-    preset=(await(await import('./reference-presets.js')).listReferencePresets()).presets.find(p=>p.id===sourceId);sourcePath=preset?.filePath;
-   }else if(source==='history'){
-    sourcePath=(await import('./store.js')).getHistoryReferenceItems().find(i=>i.id===sourceId)?.filePath;
-   }else if(source==='attachment'){
-    const conversation=(await import('./agent-store.js')).conversationForRuntimeSession(request.sessionId??'');
-    const attachments=[...(conversation?.draftAttachments??[]),...(conversation?.messages??[]).flatMap(m=>[...m.attachments,...m.tools.flatMap(t=>t.generatedImages??[])])];
-    const item=attachments.find(a=>a.id===sourceId&&!a.unavailable&&a.kind==='image');sourcePath=item?.filePath;
-   }
-   if(!sourcePath)throw Error('找不到已登记的参考来源；请先上传附件、读取参考预设或历史图片ID');
-   request.signal?.throwIfAborted();const result=await(await import('./nai.js')).importTagComicReference({projectId,sourcePath});
-   if(!result.ok||!result.asset)throw Error(result.message);
-   return preset?{...result.asset,name:preset.name,type:preset.preciseType,strength:preset.strength,fidelity:preset.fidelity}:result.asset;
-  },
- };
 }

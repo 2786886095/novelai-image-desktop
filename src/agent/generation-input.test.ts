@@ -3,6 +3,7 @@ import { DEFAULT_PARAMS, type GenerateExtras } from "../types";
 import {
   applyAgentPromptLocks,
   buildAgentGenerationInput,
+  buildAgentInpaintInput,
   defaultAgentInpaintModel,
   resolveAgentPromptLocks,
 } from "./generation-input";
@@ -117,5 +118,18 @@ describe("agent generation input", () => {
     expect(defaultAgentInpaintModel("nai-diffusion-5-full")).toBe("nai-diffusion-5-full-inpainting");
     expect(defaultAgentInpaintModel("nai-diffusion-4-full")).toBe("nai-diffusion-4-full-inpainting");
     expect(defaultAgentInpaintModel("nai-diffusion-3")).toBe("nai-diffusion-3-inpainting");
+  });
+
+  it("keeps an explicit inpaint model and the unchanged workbench fallback", () => {
+    const defaults = { params: { ...DEFAULT_PARAMS, model: "nai-diffusion-5-full" as const } };
+    const base = { attachmentId: "fixture-source", maskAttachmentId: "fixture-mask", positivePrompt: "fixture only" };
+    const explicit = buildAgentInpaintInput({ ...base, inpaintModel: "nai-diffusion-4-5-curated-inpainting" }, defaults);
+    expect(explicit.inpaintModel).toBe("nai-diffusion-4-5-curated-inpainting");
+    expect(explicit.params.model).toBe("nai-diffusion-4-5-curated");
+    const inherited = buildAgentInpaintInput({ ...base, model: "nai-diffusion-4-5-curated" }, defaults);
+    expect(inherited.inpaintModel).toBe(defaultAgentInpaintModel("nai-diffusion-4-5-curated"));
+    expect(inherited.inpaintModel).toBe("nai-diffusion-4-5-full-inpainting");
+    expect(buildAgentInpaintInput(base, defaults).inpaintModel).toBe(defaultAgentInpaintModel(defaults.params.model));
+    expect(() => buildAgentInpaintInput({ ...base, inpaintModel: "fixture-not-a-model" }, defaults)).toThrow();
   });
 });

@@ -18,7 +18,16 @@ import {
   compareVersions,
   type RemoteReleaseAsset,
 } from "./update";
-import type {AppUpdateAdapter,AppUpdatePlan} from './agent-app-update';
+
+interface AppUpdatePlan {version:string;bytes:number;sha512:string;sourceUrl:string}
+interface AppUpdateAdapter {
+ currentVersion():string;supported():boolean;busy():boolean;
+ plan(signal:AbortSignal):Promise<AppUpdatePlan|null>;
+ reserve():void;release():void;
+ download(plan:AppUpdatePlan,signal:AbortSignal,progress:(percent:number)=>void):Promise<void>;
+ install(plan:AppUpdatePlan,signal:AbortSignal,onStarted:()=>Promise<void>):Promise<void>;
+ log(message:string):void;
+}
 
 
 let getMainWindow: (() => BrowserWindow | null) | undefined;
@@ -285,7 +294,8 @@ export async function installUpdate(lease?:symbol,signal?:AbortSignal,onStarted?
   }
 }
 
-/** Uses exactly the immutable plan shown in Agent approval; never fetches a new latest release. */
+/** Programmatic adapter (used by the update acceptance runner): downloads and installs exactly the
+ * immutable plan it was given; never fetches a new latest release. */
 export function desktopAppUpdateAdapter(log:(message:string)=>void):AppUpdateAdapter {
  let lease:symbol|undefined;
  return {currentVersion:()=>app.getVersion(),supported:()=>process.platform==='win32',busy:appUpdateBusy,

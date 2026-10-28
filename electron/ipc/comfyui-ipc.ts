@@ -151,9 +151,7 @@ export function registerComfyIpc(getWindow: () => BrowserWindow | null, outputDi
   disposeSetup = bindComfySetupIpc(ipcMain, getWindow, setupController);
   dispose = bindComfyIpc(ipcMain, getWindow, service);
 }
-export function comfyHasActiveJobs(): boolean { return setupController?.busy() || service?.hasActiveJobs() || false; }
 export function comfyNeedsQuitCleanup(): boolean { return setupController?.busy() || service?.needsQuitCleanup() || false; }
-export async function cancelComfyJobs(): Promise<void> { await setupController?.cancel(); await service?.cancelActive(); }
 export async function shutdownOwnedComfy(_reason: "quit" | "update" = "quit"): Promise<void> { await Promise.all([setupController?.shutdown(), service?.shutdown()]); }
 export function resetComfyAfterUpdateFailure(): void { setupController?.resume(); service?.resumeAfterUpdateFailure(); }
 export function shutdownOwnedComfySync(): void { setupController?.abortSync(); service?.shutdownSync(); disposeSetup?.(); disposeSetup = null; dispose?.(); dispose = null; }

@@ -2,7 +2,6 @@ import { it, expect, vi } from 'vitest';
 import fs from 'node:fs'; import path from 'node:path'; import os from 'node:os'; import JSZip from 'jszip';
 const fixture=vi.hoisted(()=>({root:'',handlers:new Map<string,Function>()}));
 vi.mock('electron',()=>({app:{isPackaged:false,getVersion:()=> 'fixture',getPath:(name:string)=>name==='exe'?path.join(fixture.root,'app','desktop.exe'):name==='pictures'?path.join(fixture.root,'pictures'):fixture.root,getAppPath:()=>path.join(fixture.root,'app')},dialog:{},ipcMain:{handle:(name:string,fn:Function)=>fixture.handlers.set(name,fn)},safeStorage:{isEncryptionAvailable:()=>true,encryptString:(s:string)=>Buffer.from(s).map(x=>x^73),decryptString:(b:Buffer)=>Buffer.from(b).map(x=>x^73).toString()}}));
-vi.mock('./agent-store',()=>({readAgentWorkspace:()=>({conversations:[],characters:[],personas:[],lorebooks:[],samplerPresets:[]}),agentAttachmentsDirectory:()=>path.join(fixture.root,'attachments'),mergeImportedAgentWorkspace:vi.fn(()=>({imported:0,skipped:0,renamed:0}))}));
 vi.mock('./artist-favorites',()=>({ARTIST_FAVORITE_COLLECTIONS:['random','v5-repair','artist-string-draw'],loadArtistFavoriteLibrary:async()=>({collections:{random:[],'v5-repair':[],'artist-string-draw':[]}})}));
 vi.mock('./reference-presets',()=>({listReferencePresets:async()=>({groups:[],presets:[]})}));
 it('API category actual export/fresh restore retains saved inactive accounts and selected binding',async()=>{

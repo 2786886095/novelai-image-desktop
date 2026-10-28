@@ -96,7 +96,7 @@ test('system controller awaits the async API and trusts only the issuer CA while
   const source = fs.readFileSync(new URL('./run-desktop-system-native.mjs', import.meta.url), 'utf8');
   assert.match(source, /await createNativeFixtureTlsAsync\(/);
   assert.match(source, /if\(tlsCa&&fs\.existsSync\(tlsCa\)\)env\.NODE_EXTRA_CA_CERTS=tlsCa/);
-  assert.match(source, /source:root,tlsKey,tlsCert,tlsCa,harnessSeed/);
+  assert.match(source, /source:root,tlsKey,tlsCert,tlsCa,nodeExecutable/);
   assert.doesNotMatch(source, /'-addext'|NODE_EXTRA_CA_CERTS=tlsCert|rejectUnauthorized:false|ignore-certificate-errors/);
   const journeys = fs.readFileSync(new URL('./desktop-system-journeys.cjs', import.meta.url), 'utf8');
   assert.match(journeys, /key:fs\.readFileSync\(config\.tlsKey\),cert:fs\.readFileSync\(config\.tlsCert\)/);

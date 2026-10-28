@@ -7,7 +7,7 @@ import {
 import type { ImageTaskPromptPreset } from "../../src/tavern/image-task-preset";
 
 export type DshImageAiMode = "focused" | "strict";
-export type DshImageAiTask = "tavern-image" | "reverse" | "convert";
+export type DshImageAiTask = "reverse" | "convert";
 
 export const DSH_IMAGE_AI_PROVENANCE = Object.freeze({
   id: "dsh-infinite-gen-5",
@@ -36,16 +36,10 @@ export function buildDshImageAiSystemAddon(
   includeSharedPreset = true,
   sharedPreset?: ImageTaskPromptPreset | null,
 ): string {
-  const effectivePreset = sharedPreset === undefined
-    ? task === 'tavern-image'
-      ? {name:'无限五代 · 生图适配',systemPrompt:ig5.prompts.studio,jailbreakPrompt:''}
-      : createDefaultImageTaskPromptPreset(task)
-    : sharedPreset;
-  const taskRule = task === "tavern-image"
-    ? "Turn the current visual request and any attached references into a concrete NovelAI image proposal. Preserve every explicit subject, identity, pose, framing, camera, background, lighting, palette, material, and style constraint, and obey the existing <langbai-image> proposal contract."
-    : task === "reverse"
-      ? "Inspect the supplied image directly and reconstruct observable subject, identity, pose, framing, camera, background, lighting, palette, materials, and style as generation-ready prompt tokens. Do not replace visible details with generic prose."
-      : "Convert the supplied description directly into generation-ready prompt tokens. Preserve every explicit subject, identity, pose, framing, camera, background, lighting, palette, material, and style constraint.";
+  const effectivePreset = sharedPreset === undefined ? createDefaultImageTaskPromptPreset(task) : sharedPreset;
+  const taskRule = task === "reverse"
+    ? "Inspect the supplied image directly and reconstruct observable subject, identity, pose, framing, camera, background, lighting, palette, materials, and style as generation-ready prompt tokens. Do not replace visible details with generic prose."
+    : "Convert the supplied description directly into generation-ready prompt tokens. Preserve every explicit subject, identity, pose, framing, camera, background, lighting, palette, material, and style constraint.";
   const strictRule = mode === "strict"
     ? "Before answering, silently check that no explicit visual constraint was dropped and that ambiguous prose was converted into concrete visual attributes."
     : "Prefer concise visual fidelity over commentary.";
@@ -76,7 +70,7 @@ export function injectDshImageAiSystemPrompt(options: {
 }): string {
   if (options.enabled === false) return options.systemPrompt;
   const effectiveSystemPrompt = options.sharedPreset === undefined
-    ? options.task==='tavern-image' ? ig5.prompts.studio : createDefaultImageTaskPromptPreset(options.task).systemPrompt
+    ? createDefaultImageTaskPromptPreset(options.task).systemPrompt
     : options.sharedPreset?.systemPrompt ?? "";
   const sharedPresetAlreadyPresent = Boolean(
     effectiveSystemPrompt && options.systemPrompt.includes(effectiveSystemPrompt),

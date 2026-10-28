@@ -16,9 +16,9 @@ const locked = prefix + Buffer.from("legacy:secret").toString("base64");
 describe("credential encryption context", () => {
   it("does not expose locked ciphertext as a configured key", () => {
     const {vault} = create();
-    expect(vault.decode("agentApiKey", locked)).toBe("");
-    expect(vault.issues()).toEqual(["agentApiKey"]);
-    expect(vault.encode("agentApiKey", "")).toBe(locked);
+    expect(vault.decode("convertApiKey", locked)).toBe("");
+    expect(vault.issues()).toEqual(["convertApiKey"]);
+    expect(vault.encode("convertApiKey", "")).toBe(locked);
   });
   it("preserves unresolved originals during unrelated saves and explicit reset is separate", () => {
     const {vault} = create(); vault.decode("token", locked);

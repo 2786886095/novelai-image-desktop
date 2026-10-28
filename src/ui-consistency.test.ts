@@ -331,7 +331,6 @@ describe("desktop UI consistency guards", () => {
       "PositivePromptPresets.tsx",
       "ReferencePresetManager.tsx",
       "comic/TagComicGenerator.tsx",
-      "AgentPage.tsx",
     ];
     for (const file of sourceFiles) {
       const source = fs.readFileSync(path.join(projectRoot, "src", file), "utf8");
@@ -457,8 +456,6 @@ describe("desktop UI consistency guards", () => {
     const injected = new Set([
       "--ws-left",
       "--ws-right",
-      "--tavern-background",
-      "--tavern-popover-pointer",
       "--reference-catalog-columns",
       "--reference-preset-columns",
     ]);
@@ -526,7 +523,7 @@ describe("desktop UI consistency guards", () => {
     expect(app).toContain('typeof idleWindow.requestIdleCallback === "function"');
     const criticalStart = app.indexOf("const warmCriticalScreen");
     const minimumStart = app.indexOf("const minimumSplash", criticalStart);
-    expect(app.slice(criticalStart, minimumStart)).not.toMatch(/load(?:ToolsHub|OnlineGalleryPage|AgentPage|MetadataInspector)\(/);
+    expect(app.slice(criticalStart, minimumStart)).not.toMatch(/load(?:ToolsHub|OnlineGalleryPage|MetadataInspector)\(/);
   });
 
   it("keeps the saved NovelAI token revealable and provides an AI translation provider", () => {
@@ -555,7 +552,6 @@ describe("desktop UI consistency guards", () => {
   it("uses the shared listbox selector across every desktop feature", () => {
     const files = [
       "src/App.tsx",
-      "src/AgentPage.tsx",
       "src/AitagGallery.tsx",
       "src/ArtistLab.tsx",
       "src/ComicGenerator.tsx",
@@ -617,10 +613,8 @@ describe("desktop UI consistency guards", () => {
 
   it("uses non-blocking dialogs and virtualizes large history grids", () => {
     const app = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
-    const agent = fs.readFileSync(path.join(projectRoot, "src", "AgentPage.tsx"), "utf8");
     const ui = fs.readFileSync(path.join(projectRoot, "src", "components", "ui.tsx"), "utf8");
-    expect(`${app}\n${agent}`).not.toMatch(/window\.(?:alert|prompt)\s*\(/);
-    expect(agent).toContain("stylePresetDialog");
+    expect(app).not.toMatch(/window\.(?:alert|prompt)\s*\(/);
     expect(app).toContain("useVirtualizer({");
     expect(app).toContain("virtualizeHistory = history.length >= 80");
     expect(app).toContain("const MemoizedHistoryPanel = memo(HistoryPanel)");
@@ -659,7 +653,6 @@ describe("desktop UI consistency guards", () => {
     const app = fs.readFileSync(path.join(projectRoot, "src", "App.tsx"), "utf8");
     const boundary = fs.readFileSync(path.join(projectRoot, "src", "components", "AppErrorBoundary.tsx"), "utf8");
     const comic = fs.readFileSync(path.join(projectRoot, "src", "comic", "TagComicGenerator.tsx"), "utf8");
-    const tavern = fs.readFileSync(path.join(projectRoot, "src", "AgentPage.tsx"), "utf8");
     const store = fs.readFileSync(path.join(projectRoot, "src", "store.ts"), "utf8");
     const updater = fs.readFileSync(path.join(projectRoot, "electron", "ipc", "auto-update.ts"), "utf8");
     const nai = fs.readFileSync(path.join(projectRoot, "electron", "ipc", "nai.ts"), "utf8");
@@ -671,24 +664,10 @@ describe("desktop UI consistency guards", () => {
     expect(comic).toContain('useComicGenerationQueue()');
     expect(comicQueue).toContain('result=await deps.generate(request)');
     expect(comicQueue).toMatch(/finally\s*\{[\s\S]*deps\.store\.setBusy\(false\)/);
-    expect(tavern).toMatch(/catch \(error\) \{\s*if \(sceneRequest === undefined\) setComposer\(text\)/);
     expect(store).toMatch(/catch \(error\) \{[\s\S]*status: "failed"/);
     expect(updater).toContain("mainWindow.webContents.isDestroyed()");
     expect(nai).toContain('signal?.removeEventListener("abort", onAbort)');
     expect(app).toContain("Number.isFinite(days) ? days : 30");
-  });
-
-  it("uses a fluid custom model picker after detection", () => {
-    const source = fs.readFileSync(path.join(projectRoot, "src", "AgentPage.tsx"), "utf8");
-    const css = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
-    expect(source).not.toContain('list="tavern-models"');
-    expect(source).not.toContain('<datalist id="tavern-models"');
-    expect(source).toContain('role="combobox"');
-    expect(source).toContain('role="listbox"');
-    expect(source).toContain("discoverAndOpen");
-    expect(source).toContain("closeOnOutside");
-    expect(css).toMatch(/\.tavern-model-results\s*\{[^}]*position:\s*absolute/s);
-    expect(css).toContain("animation: tavern-model-list-in");
   });
 
   it("keeps the retired novel-shorts module out of active product code", () => {
@@ -746,13 +725,13 @@ describe("desktop UI consistency guards", () => {
     const breakpoints = new Set(
       [...css.matchAll(/@media\s*\([^)]*max-width:\s*(\d+)px/g)].map((match) => Number(match[1])),
     );
-    expect([...breakpoints].sort((a, b) => a - b)).toEqual([480, 640, 768, 960, 1200, 1440]);
+    expect([...breakpoints].sort((a, b) => a - b)).toEqual([480, 640, 768, 960, 1200]);
   });
 
-  it("keeps compact prompt and tavern controls easy to hit without changing layout", () => {
+  it("keeps compact prompt controls easy to hit without changing layout", () => {
     const css = fs.readFileSync(path.join(projectRoot, "src", "styles.css"), "utf8");
-    expect(css).toMatch(/\.lock-btn,\s*button\.prompt-chip-head,\s*\.tavern-image-status > button\s*\{\s*position:\s*relative;/s);
-    expect(css).toMatch(/\.lock-btn::after,\s*button\.prompt-chip-head::after,\s*\.tavern-image-status > button::after\s*\{[^}]*content:\s*"";[^}]*position:\s*absolute;[^}]*inset:\s*-4px 0;/s);
+    expect(css).toMatch(/\.lock-btn,\s*button\.prompt-chip-head\s*\{\s*position:\s*relative;/s);
+    expect(css).toMatch(/\.lock-btn::after,\s*button\.prompt-chip-head::after\s*\{[^}]*content:\s*"";[^}]*position:\s*absolute;[^}]*inset:\s*-4px 0;/s);
   });
 
   it("names high stacking layers by height instead of misleading dialog semantics", () => {

@@ -3,8 +3,6 @@ const {readReleaseVersion}=require('./release-version.cjs');
 const pkg=JSON.parse(fs.readFileSync('package.json','utf8')),lock=JSON.parse(fs.readFileSync('package-lock.json','utf8'));
 const version=readReleaseVersion(process.cwd());assert.equal(lock.version,version);assert.equal(lock.packages[''].version,version);
 assert.ok(fs.readFileSync('electron/ipc/mcp-client.ts','utf8').includes(`version: "${version}"`));
-const locales=JSON.parse(fs.readFileSync('shared/agent-ux-locales.json','utf8'));
-assert.ok(JSON.stringify(locales).includes('使用酒馆'));
 // Current page entries move with Latest/main; real package/build versions above remain required.
 const repo='https://github.com/2786886095/novelai-image-desktop';
 for(const file of ['README.md','README.en.md','README.ja.md','README.ko.md','README.zh-TW.md']) {
@@ -29,4 +27,4 @@ assert.ok(first.includes(repo+'/releases/latest'));
 assert.ok(first.includes(repo+'/tree/main'));
 assert.doesNotMatch(first,/\bv?\d+\.\d+\.\d+\b|\/releases\/(?:tag|download)\/|\/(?:tree|blob|commit)\/[a-f0-9]{7,40}\b/i);
 assert.match(fs.readFileSync('docs/history/RELEASE_NOTES-through-2.5.8.md','utf8'),/\bv?\d+\.\d+\.\d+\b/);
-console.log(JSON.stringify({version,scope:'Windows x64 binaries',label:'使用酒馆',pass:true}));
+console.log(JSON.stringify({version,scope:'Windows x64 binaries',pass:true}));

@@ -75,8 +75,7 @@ html :is(.btn,.select-menu-trigger) {min-height:var(--studio-control-height);}
 html :is(.artist-lab,.v5-artist-repair,.prompt-codex,.tag-comic,.redraw-wizard) {background:var(--bg-window);}
 html :is(.artist-lab-panel,.v5-artist-repair-card,.tag-comic-card,.redraw-card,.prompt-codex-filters,.prompt-codex-entry,.random-generation-settings) {background:var(--bg-panel);border-color:var(--border);border-radius:var(--radius-md);box-shadow:none;backdrop-filter:none;}
 html :is(.artist-lab-panel,.v5-artist-repair-card,.tag-comic-card,.redraw-card)>h3 {font-size:var(--studio-section-title);}
-html :is(.tavern-message.is-entering,.tavern-composer-popover,.tavern-copy-feedback,.image-save-notice) {animation:studio-view-in 160ms var(--studio-enter);}
-html .tavern-page {--tavern-motion-ease:var(--studio-enter);--tavern-motion-base:160ms;}
+html :is(.image-save-notice) {animation:studio-view-in 160ms var(--studio-enter);}
 html.theme-dark {--accent-text:#171122;}
 html .btn.btn-primary {background:var(--accent);color:var(--accent-text);border-color:var(--accent);box-shadow:none;}
 html .btn.btn-primary:hover:not(:disabled) {background:var(--accent-hover);border-color:var(--accent-hover);}
@@ -140,7 +139,7 @@ html :is(canvas,.inpaint-base-img,.inpaint-cursor,.inpaint-region-overlay,.inpai
 html.motion-reduced *,html.motion-reduced *::before,html.motion-reduced *::after,html.motion-reduced details::details-content {animation:none!important;transition:none!important;scroll-behavior:auto!important;}
 /* Loading remains perceivable without decorative movement. */
 
-html.motion-reduced :is(.spinner,.tavern-spinner,.ui-icon-spin) {animation:spin 800ms linear infinite!important;}
+html.motion-reduced :is(.spinner,.ui-icon-spin) {animation:spin 800ms linear infinite!important;}
 
 /* Interaction repair: one right-anchored action rail, root popovers, image-first previews. */
 html .prompt-editor .prompt-toolbar-dock {min-height:36px;margin:2px 6px 4px;align-items:center;}

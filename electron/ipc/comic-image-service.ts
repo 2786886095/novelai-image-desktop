@@ -1,8 +1,22 @@
-import type {ComicImageService,TagComicGenerateRequest} from '../../src/types';
+import {createHmac,randomBytes} from 'node:crypto';
+import type {AppSettings,ComicImageService,TagComicGenerateRequest} from '../../src/types';
 import {compatibleComicInput} from '../../src/comic/compatible-comic';
+import {imageGenerationEndpoint,buildCompatibleImageRequest} from '../../src/image-provider-contract';
+import {bindAgentImageProvider} from './agent-image-provider';
 import {getSettings,getToken} from './store';
-import {comicSourceBinding} from './agent-comic-run';
 
+const sourceKey=randomBytes(32);
+export function comicSourceBinding(settings:AppSettings,token:string){
+ if(settings.imageProvider==='openai-images'){
+  const config=settings.compatibleImage;
+  if(!config||!settings.imageApiKey?.trim()||/[\r\n]/.test(settings.imageApiKey))throw Error('请先保存兼容图片服务配置与独立 API Key；未自动切换服务');
+  imageGenerationEndpoint(config.baseUrl);
+  buildCompatibleImageRequest(config,{prompt:'configuration validation',size:config.size,n:1,extensions:config.extensions});
+  return bindAgentImageProvider(settings).revision;
+ }
+ if(!token)throw Error('请先配置 NovelAI Token');
+ return createHmac('sha256',sourceKey).update(JSON.stringify([token,settings.imageProvider,settings.apiBaseUrl,settings.imageBaseUrl,settings.allowCustomEndpoint,settings.outputDir,settings.proxyMode,settings.proxyUrl,settings.proxyForAi])).digest('hex');
+}
 /** Secrets never cross IPC; the HMAC is process-local and expires on any source change. */
 export function currentComicImageBinding(){
  const settings=getSettings();

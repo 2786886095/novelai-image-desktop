@@ -2,13 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ generate: vi.fn() }));
 vi.mock('./nai', () => ({ generateImage: mocks.generate }));
 vi.mock('./store', () => ({ getSettings: () => ({}) }));
-vi.mock('./agent-store', () => ({}));
 vi.mock('./danbooru-tags', () => ({}));
 vi.mock('./online-gallery', () => ({}));
 vi.mock('./reference-presets', () => ({}));
 import { executeAgentTool } from './agent-tools';
 const item = { id: 'first-image', filePath: 'fixture.png', fileUrl: 'fixture://first', width: 2, height: 3, createdAt: '2026-09-14' };
-const run = () => executeAgentTool({ tool: 'langbai_generate_image', args: { positivePrompt: 'forest', count: 3 } }, () => {});
+const run = () => executeAgentTool({ tool: 'langbai_generate_image', args: { positivePrompt: 'forest', count: 3 } });
 beforeEach(() => mocks.generate.mockReset());
 describe('batch generation retains completed results on failure', () => {
   it.each(['response', 'exception'])('keeps the first image after a second-request %s and stops', async (kind) => {

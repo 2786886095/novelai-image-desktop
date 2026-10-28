@@ -1,7 +1,8 @@
 import {useId,useLayoutEffect,useRef,useState} from 'react';
 import {AppPortal,Button} from './ui';
 import {Icon} from './icons';
-import {historyPathText} from '../agent/preferences';
+/** Display the recorded path, not an invented URL-to-path conversion. */
+function historyPathText(raw:unknown){return typeof raw==='string'&&(/^[a-z]:[\\/]/i.test(raw)||raw.startsWith('\\\\')||raw.startsWith('/'))&&!/[\u0000-\u001f]/.test(raw)?raw:'';}
 export function FilePathDialog({path,title,copyLabel,copiedLabel,closeLabel,unavailable,onClose}:{path:string;title:string;copyLabel:string;copiedLabel:string;closeLabel:string;unavailable:string;onClose:()=>void}){
  const id=useId(),ref=useRef<HTMLElement>(null),[copied,setCopied]=useState(false),[error,setError]=useState(''),value=historyPathText(path);
  useLayoutEffect(()=>{ref.current?.querySelector<HTMLButtonElement>('button')?.focus({preventScroll:true});},[]);

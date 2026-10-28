@@ -6,7 +6,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {prepareMacNativeKeychain} from './mac-native-keychain.mjs';
-import {runBoundedNativeCommand} from './bounded-native-command.mjs';
 
 const ciMissingDefault = {status: 1, stdout: '', stderr: 'security: SecKeychainCopyDomainDefault user: A default keychain could not be found.\n'};
 
@@ -453,18 +452,4 @@ test('reconciled unset still cannot turn an earlier failed setup into success', 
   assert.equal(f.report().restorationFailure, null);
   assert.equal(f.report().failure, 'Dedicated native Keychain was not selected');
   assert.equal(f.report().prepared, false); assert.equal(f.report().restored, true); assert.equal(f.report().deleted, true); f.assertPrivate();
-});
-
-test('the actual advanced controller adapter bounds a real stalled child and retains literal streams', async t => {
-  const f = fixture(t), ledger = [], source = fs.readFileSync(new URL('./run-desktop-advanced-native.mjs', import.meta.url), 'utf8');
-  const declaration = source.slice(source.indexOf('async function command('), source.indexOf('\nconst expected'));
-  const command = new Function('fs', 'path', 'run', 'ledger', 'runBoundedNativeCommand', declaration + ';return command;')
-    (fs, path, f.run, ledger, runBoundedNativeCommand);
-  const success = await command([process.execPath, '-e', 'process.stdout.write("ADVANCED_OUT\\n");process.stderr.write("ADVANCED_ERR\\n")']);
-  assert.equal(success.stdout, 'ADVANCED_OUT\n'); assert.equal(success.stderr, 'ADVANCED_ERR\n'); assert.equal(success.exitStatus, 0);
-  const stalled = await command([process.execPath, '-e', 'process.on("SIGTERM",()=>{});setInterval(()=>{},1000)'], 300);
-  assert.equal(stalled.exitStatus, 124); assert.equal(stalled.timedOut, true); assert.equal(stalled.cleanupComplete, true);
-  assert.ok(stalled.elapsedMs < 6500); assert.equal(ledger.length, 2);
-  assert.match(source, /All artist-iteration scenarios remain pending/);
-  assert.match(source, /actual=await command\(argv,180000\)/);
 });

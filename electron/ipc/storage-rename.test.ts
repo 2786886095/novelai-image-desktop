@@ -4,7 +4,6 @@ import os from 'node:os';
 import path from 'node:path';
 const fixture = vi.hoisted(() => ({ items: [] as any[] }));
 vi.mock('electron', () => ({ dialog: {}, shell: {} }));
-vi.mock('./agent-store', () => ({ invalidateAgentHistoryImage: vi.fn() }));
 vi.mock('./store', () => ({
   getHistory: () => fixture.items,
   updateHistoryItem: (id: string, changes: any) => Object.assign(fixture.items.find(i => i.id === id), changes),

@@ -3,7 +3,6 @@ import syncFs from 'node:fs';
 import fs from 'node:fs/promises';import os from 'node:os';import path from 'node:path';import JSZip from 'jszip';
 const fixture=vi.hoisted(()=>({root:''}));
 vi.mock('electron',()=>({app:{getPath:(name:string)=>path.join(fixture.root,name),isPackaged:false,getVersion:()=> 'fixture'},dialog:{},safeStorage:{isEncryptionAvailable:()=>true,encryptString:(s:string)=>Buffer.from(s).map(x=>x^73),decryptString:(b:Buffer)=>Buffer.from(b).map(x=>x^73).toString()}}));
-vi.mock('./agent-store',()=>({readAgentWorkspace:()=>({conversations:[],characters:[],personas:[],lorebooks:[],samplerPresets:[]}),agentAttachmentsDirectory:()=>path.join(fixture.root,'attachments'),mergeImportedAgentWorkspace:vi.fn(()=>({imported:0,skipped:0,renamed:0}))}));
 vi.mock('./artist-favorites',()=>({ARTIST_FAVORITE_COLLECTIONS:['random','v5-repair','artist-string-draw'],loadArtistFavoriteLibrary:async()=>({collections:{random:[],'v5-repair':[],'artist-string-draw':[]}})}));
 vi.mock('./reference-presets',()=>({listReferencePresets:async()=>({groups:[],presets:[]})}));
 import {defaultSettings,writeStore,readStore,getSettings,setCompatibleImageSettings,setSetting,setToken,getToken,clearToken} from './store';
