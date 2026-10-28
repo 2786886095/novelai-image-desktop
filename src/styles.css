@@ -3261,6 +3261,12 @@ html.motion-reduced .char-enabled-track, html.motion-reduced .char-enabled-track
 .ac-dropdown.ac-dropdown-caret {
   top: auto; /* overridden by the inline `top` */
 }
+/* Above the caret line when the visible part of the panel has more room there:
+   anchored by the inline `bottom`, with the gap on the caret side. */
+.ac-dropdown.ac-dropdown-above {
+  margin-top: 0;
+  margin-bottom: 6px;
+}
 .ac-dropdown {
   background: var(--bg-dialog);
   border: 1px solid var(--border);

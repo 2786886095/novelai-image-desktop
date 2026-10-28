@@ -68,6 +68,8 @@ export function applyAutocompleteTag(
     if (target.startsWith(phrase)) start = wordStart;
     wordEnd = wordStart;
   }
-  const after = value.slice(end).replace(/^\s*,\s*/, "").trimStart();
+  // Spaces and one comma left on the caret's line give way to the inserted ", ";
+  // line breaks after the caret stay.
+  const after = value.slice(end).replace(/^[^\S\r\n]*(?:,[^\S\r\n]*)?/, "");
   return { value: value.slice(0, start) + tag + ", " + after, caret: start + tag.length + 2 };
 }

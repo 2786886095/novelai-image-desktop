@@ -44,6 +44,24 @@ describe("applyAutocompleteTag", () => {
     expect(applyAutocompleteTag("1girl, blusmile", anchorFor("1girl, blusmile", 10), "blue hair")?.value).toBe("1girl, blue hair, ");
   });
 
+  it("keeps line breaks after the caret", () => {
+    const value = "1girl, blu\nsmile";
+    const next = applyAutocompleteTag(value, anchorFor(value, 10), "blue hair");
+    expect(next).toEqual({ value: "1girl, blue hair, \nsmile", caret: 18 });
+    // The caret stays on the first line, right after the inserted ", ".
+    expect(next!.value.slice(0, next!.caret)).toBe("1girl, blue hair, ");
+    const blank = "1girl, blu\n\nsmile, red eyes";
+    expect(applyAutocompleteTag(blank, anchorFor(blank, 10), "blue hair"))
+      .toEqual({ value: "1girl, blue hair, \n\nsmile, red eyes", caret: 18 });
+    // Only spaces, tabs and one comma on the caret's line give way.
+    const spaced = "1girl, blu ,\t\n  smile";
+    expect(applyAutocompleteTag(spaced, anchorFor(spaced, 10), "blue hair")?.value).toBe("1girl, blue hair, \n  smile");
+    const windows = "1girl, blu \r\nsmile";
+    expect(applyAutocompleteTag(windows, anchorFor(windows, 10), "blue hair")?.value).toBe("1girl, blue hair, \r\nsmile");
+    const nextLineComma = "1girl, blu\n, smile";
+    expect(applyAutocompleteTag(nextLineComma, anchorFor(nextLineComma, 10), "blue hair")?.value).toBe("1girl, blue hair, \n, smile");
+  });
+
   it("keeps Chinese text right after the caret", () => {
     expect(applyAutocompleteTag("蓝眼", anchorFor("蓝眼", 1), "blue eyes")).toEqual({ value: "blue eyes, 眼", caret: 11 });
     expect(applyAutocompleteTag("1girl, 蓝眼微笑", anchorFor("1girl, 蓝眼微笑", 9), "blue eyes"))

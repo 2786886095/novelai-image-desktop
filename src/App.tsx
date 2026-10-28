@@ -63,7 +63,7 @@ import { normalizeAppLanguage } from "./i18n";
 import { MetadataApplyPanel } from "./MetadataApplyPanel";
 import { ImageSaveFeedback } from "./components/ImageSaveFeedback";
 import { imagePasteProps } from "./image-paste";
-import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import clsx from "clsx";
 import { format } from "date-fns";
@@ -81,6 +81,7 @@ const MetadataInspector = lazy(loadMetadataInspector);
 import { useAppStore } from "./store";
 import { relatedTags } from "./related-tags";
 import { applyAutocompleteTag, fmtCount, wordAtCursor, type AutocompleteAnchor } from "./text-utils";
+import { fitAutocompleteList, visibleVerticalRange, type AutocompleteListFit, type VerticalRange } from "./components/autocomplete-placement";
 import { inspectImageMetadata, parseImageMetaAsync } from "./png-meta";
 import { INPAINT_BRUSH_SLIDER_MAX, INPAINT_BRUSH_SLIDER_MIN } from "./inpaint-brush";
 import { droppedImagePath, droppedImagePaths, hasDraggedFiles } from "./drag-drop";
@@ -451,6 +452,9 @@ function caretCoordinates(el: HTMLTextAreaElement, position: number): { top: num
 }
 
 // ── PromptTextarea: textarea with Danbooru tag autocomplete ───────────────────
+// The suggestion list keeps 8px from the caret line: a 2px offset plus its 6px margin.
+const AC_LINE_GAP = 8;
+
 function PromptTextarea({
   value,
   onChange,
@@ -470,9 +474,11 @@ function PromptTextarea({
 }) {
   const language = useAppStore((state) => state.settings?.language);
   const [suggestions, setSuggestions] = useState<TagSuggestion[]>([]);
-  // Only the vertical caret position — the dropdown stays full-width so long tag
-  // text never overflows/clips horizontally.
-  const [acTop, setAcTop] = useState<number | null>(null);
+  // Only the vertical caret line position, relative to the box — the dropdown stays
+  // full-width so long tag text never overflows/clips horizontally.
+  const [acLine, setAcLine] = useState<VerticalRange | null>(null);
+  // Below the caret line, or above it when the panel shows more of the list there.
+  const [acFit, setAcFit] = useState<AutocompleteListFit>({ above: false });
   const [activeIdx, setActiveIdx] = useState(0);
   const composingRef = useRef(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -495,8 +501,26 @@ function PromptTextarea({
     anchorRef.current = null;
     if (timerRef.current) clearTimeout(timerRef.current);
     setSuggestions([]);
-    setAcTop(null);
+    setAcLine(null);
   }
+
+  // Measured after the list renders and before it paints: a scrolling panel or dialog
+  // body must not cut it off.
+  useLayoutEffect(() => {
+    const list = dropdownRef.current;
+    const wrap = list?.parentElement;
+    if (!list || !wrap || !acLine) return;
+    const place = () => {
+      const top = wrap.getBoundingClientRect().top + wrap.clientTop;
+      const height = list.scrollHeight + list.offsetHeight - list.clientHeight;
+      const line = { top: top + acLine.top, bottom: top + acLine.bottom };
+      const next = fitAutocompleteList(line, visibleVerticalRange(list), height, AC_LINE_GAP);
+      setAcFit((current) => current.above === next.above && current.maxHeight === next.maxHeight ? current : next);
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [suggestions, acLine]);
 
   useEffect(() => {
     if (!open) return;
@@ -541,8 +565,9 @@ function PromptTextarea({
         setSuggestions(res.slice(0, 8));
         if (res.length > 0) {
           const c = caretCoordinates(ta, cursor);
-          // Anchor just below the caret line (vertical only); full-width horizontally.
-          setAcTop(c.top - ta.scrollTop + c.height + 2);
+          // Anchor to the caret line (vertical only); full-width horizontally.
+          const top = c.top - ta.scrollTop;
+          setAcLine({ top, bottom: top + c.height });
         }
       } catch {
         if (request === requestRef.current) setSuggestions([]);
@@ -598,8 +623,12 @@ function PromptTextarea({
       {suggestions.length > 0 && (
         <div
           ref={dropdownRef}
-          className={clsx("ac-dropdown", acTop != null && "ac-dropdown-caret")}
-          style={acTop != null ? { top: acTop } : undefined}
+          className={clsx("ac-dropdown", acLine && "ac-dropdown-caret", acLine && acFit.above && "ac-dropdown-above")}
+          // Above the line it is bottom-anchored, so it grows upward from the caret.
+          style={acLine ? {
+            ...(acFit.above ? { bottom: `calc(100% - ${acLine.top - 2}px)` } : { top: acLine.bottom + 2 }),
+            maxHeight: acFit.maxHeight,
+          } : undefined}
         >
           {suggestions.map((s, i) => (
             <button
