@@ -28,6 +28,19 @@ describe("compactRemoteErrorText", () => {
     expect(message).not.toContain("<");
   });
 
+  it("drops Electron's English wrapper from a rejected IPC call", () => {
+    // What ipcRenderer.invoke rejects with when a main-process handler throws.
+    const rejected = new Error("Error invoking remote method 'settings:set': Error: 请选择图片保存目录，保存位置不可留空。");
+    expect(compactRemoteErrorText(rejected)).toBe("请选择图片保存目录，保存位置不可留空。");
+    expect(compactRemoteErrorText(String(rejected))).toBe("请选择图片保存目录，保存位置不可留空。");
+    expect(compactRemoteErrorText(rejected.message)).toBe("请选择图片保存目录，保存位置不可留空。");
+    expect(compactRemoteErrorText(new Error("Error invoking remote method 'log:selectDir': TypeError: fetch failed")))
+      .toBe("TypeError: fetch failed");
+    expect(compactRemoteErrorText(new Error("Error invoking remote method 'x': Error: "), { fallback: "操作失败。" })).toBe("操作失败。");
+    // Only a leading wrapper is removed.
+    expect(compactRemoteErrorText("导出失败：Error invoking remote method 'x': Error: y")).toBe("导出失败：Error invoking remote method 'x': Error: y");
+  });
+
   it("keeps useful plain-text validation errors and caps their length", () => {
     const message = compactRemoteErrorText({ message: `Invalid prompt: ${"x".repeat(600)}` }, { maxLength: 120 });
     expect(message).toMatch(/^Invalid prompt:/);

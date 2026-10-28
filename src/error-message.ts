@@ -6,6 +6,9 @@ export interface CompactRemoteErrorOptions {
 }
 
 const ERROR_TEXT_KEYS = ["message", "detail", "error", "title"] as const;
+// A rejected ipcRenderer.invoke reads "Error invoking remote method '<channel>': Error: <message>";
+// String(error) puts one more "Error: " in front.
+const ELECTRON_IPC_ERROR_PREFIX = /^(?:Error: )?Error invoking remote method '[^']*': (?:Error: )?/;
 
 function objectStatus(value: unknown): number | undefined {
   if (!value || typeof value !== "object") return undefined;
@@ -111,7 +114,7 @@ export function compactRemoteErrorText(
   const fallback = options.fallback?.trim() || "请求失败，请稍后重试。";
   const service = options.serviceLabel?.trim() || "上游服务";
   const maxLength = Math.max(80, Math.min(2_000, options.maxLength ?? 420));
-  const raw = errorValueText(value).trim();
+  const raw = errorValueText(value).trimStart().replace(ELECTRON_IPC_ERROR_PREFIX, "").trim();
   if (!raw) return fallback;
 
   const status = options.status ?? objectStatus(value) ?? detectedHttpStatus(raw);
