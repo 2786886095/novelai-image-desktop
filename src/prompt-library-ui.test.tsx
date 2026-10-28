@@ -213,6 +213,70 @@ describe("saved-prompt libraries reset a tag filter whose chip disappears (hook 
   });
 });
 
+describe("new entries skip a tag filter that went stale while the library was closed (hook harness, not GUI)", () => {
+  const labelled = (label: string) => tree.find((node) => node.props["aria-label"] === label);
+  const draftTags = () => tree.find((node) => node.type === PromptTagInput)?.props.value;
+
+  it("positive presets: the bar's 保存当前 keeps a tag that exists and drops one that was removed", () => {
+    const night = { id: "p1", name: "蓝发少女", prompt: "1girl", tags: ["夜景"], captions: [], createdAt: created, previewImages: [] };
+    const role = { id: "p2", name: "雨夜城市", prompt: "city", tags: ["角色"], captions: [], createdAt: created, previewImages: [] };
+    storeSettings({ positivePromptPresets: [night, role] });
+    const library = () => PositivePromptPresetControl({ variant: "bar", value: "1girl, smile", onApply: vi.fn() });
+    render(library);
+    click(byClass("positive-preset-bar-trigger"));
+    render(library);
+    click(chip("#角色"));
+    render(library);
+    click(labelled("关闭"));
+    render(library);
+    click(byClass("positive-preset-save-current"));
+    render(library);
+    expect(draftTags()).toBe("角色");
+    click(button("取消"));
+    render(library);
+    click(labelled("关闭"));
+    render(library);
+    // Another library instance (each character row has one) or a restore removes the tag.
+    storeSettings({ positivePromptPresets: [night, { ...role, tags: undefined }] });
+    render(library);
+    click(byClass("positive-preset-save-current"));
+    render(library);
+    expect(draftTags()).toBe("");
+    // The filter is reset at the same time, so the list is complete as soon as the editor closes.
+    click(button("取消"));
+    render(library, 1);
+    expect(chips()[0]).toBe("全部2*");
+    expect(names(byClass("positive-preset-list"))).toEqual(["蓝发少女", "雨夜城市"]);
+  });
+
+  it("negative library: the bar's 保存当前 keeps a tag that exists and drops one that was removed", () => {
+    const general = { id: "n1", name: "通用", prompt: "lowres, bad anatomy", tags: ["通用"], createdAt: created };
+    const blur = { id: "n2", name: "模糊", prompt: "blurry", tags: ["画质"], createdAt: created };
+    storeSettings({ negativePromptPresets: [general, blur] });
+    const library = () => NegativePromptLibraryControl({ variant: "bar", value: "lowres", onApply: vi.fn() });
+    render(library);
+    click(byClass("negative-library-trigger"));
+    render(library);
+    click(chip("#画质"));
+    render(library);
+    click(labelled("关闭"));
+    render(library);
+    click(byClass("negative-library-save-current"));
+    render(library, 1);
+    expect(draftTags()).toBe("画质");
+    click(button("取消"));
+    render(library);
+    click(labelled("关闭"));
+    render(library);
+    storeSettings({ negativePromptPresets: [general, { ...blur, tags: undefined }] });
+    render(library);
+    click(byClass("negative-library-save-current"));
+    render(library, 1);
+    expect(draftTags()).toBe("");
+    expect(chips()[0]).toBe("全部2*");
+  });
+});
+
 describe("character presets on the inpaint tab (hook harness, not GUI)", () => {
   const role = (id: string) => ({ id, enabled: true, prompt: id, negativePrompt: "", useCoords: false, x: 0.5, y: 0.5 });
   const preset = (count: number) => ({

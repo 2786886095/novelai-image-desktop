@@ -28,6 +28,7 @@ import { useAppStore } from "./store";
 import {
   collectPromptTags,
   formatPromptTagInput,
+  isStalePromptTagFilter,
   matchesPromptLibraryEntry,
   promptTagField,
   promptTagText,
@@ -254,10 +255,14 @@ export function PositivePromptPresetControl({
   }, [editingId, lightbox, open]);
 
   function startCreate(useCurrent: boolean) {
+    // The bar's 保存当前 opens the editor directly, without the chips that reset a
+    // filter whose tag was removed while the library was closed.
+    const staleTag = isStalePromptTagFilter(presets, tagFilter);
+    if (staleTag) setTagFilter("");
     setEditingId("");
     setDraftCaptions(useCurrent && character ? normalizeCharacterCaptions([{...character,prompt:value}]).map(({id:_,...c})=>c) : []);
     setDraftPrompt(useCurrent ? value : "");
-    setDraftTags(tagFilter && tagFilter !== UNTAGGED_PROMPT_FILTER ? tagFilter : "");
+    setDraftTags(!staleTag && tagFilter && tagFilter !== UNTAGGED_PROMPT_FILTER ? tagFilter : "");
     setDraftName(useCurrent && value.trim()
       ? defaultPositivePromptPresetName(value, presets.length + 1)
       : "");

@@ -5,7 +5,7 @@ import { AppPortal } from "./components/ui";
 import { Icon } from "./components/icons";
 import { useAppStore } from "./store";
 import type { AppLanguage, PromptChunk } from "./types";
-import { collectPromptTags, formatPromptTagInput, matchesPromptLibraryEntry, promptTagField, promptTagText, UNTAGGED_PROMPT_FILTER } from "./prompt-library-tags";
+import { collectPromptTags, formatPromptTagInput, isStalePromptTagFilter, matchesPromptLibraryEntry, promptTagField, promptTagText, UNTAGGED_PROMPT_FILTER } from "./prompt-library-tags";
 import { PromptTagFilter, PromptTagInput, PromptTagList } from "./components/PromptTagControls";
 
 type Copy = {
@@ -163,7 +163,7 @@ export function PromptChunkControl({
     };
   }, [open, place]);
 
-  const beginCreate = () => { setEditingId(""); setDraftName(""); setDraftContent(""); setDraftTags(tagFilter && tagFilter !== UNTAGGED_PROMPT_FILTER ? tagFilter : ""); setDraftErrors({ name: false, content: false }); };
+  const beginCreate = () => { const staleTag = isStalePromptTagFilter(chunks, tagFilter); if (staleTag) setTagFilter(""); setEditingId(""); setDraftName(""); setDraftContent(""); setDraftTags(!staleTag && tagFilter && tagFilter !== UNTAGGED_PROMPT_FILTER ? tagFilter : ""); setDraftErrors({ name: false, content: false }); };
   const beginEdit = (chunk: PromptChunk) => { setEditingId(chunk.id); setDraftName(chunk.name); setDraftContent(chunk.content); setDraftTags(formatPromptTagInput(chunk.tags)); setDraftErrors({ name: false, content: false }); };
 
   async function saveDraft() {

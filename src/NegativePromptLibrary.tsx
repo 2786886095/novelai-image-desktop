@@ -7,7 +7,7 @@ import {CompactIconButton} from './components/CompactPromptControls';
 import {Icon} from './components/icons';
 import {confirmAction} from './components/confirm';
 import {applyNegativePreset,exportNegativeLibrary,mergeNegativeLibrary,negativeLibraryText,normalizeNegativePromptPresets,parseNegativeLibrary,type NegativePromptPreset} from './negative-prompt-library';
-import {collectPromptTags,formatPromptTagInput,matchesPromptLibraryEntry,promptTagField,promptTagText,UNTAGGED_PROMPT_FILTER} from './prompt-library-tags';
+import {collectPromptTags,formatPromptTagInput,isStalePromptTagFilter,matchesPromptLibraryEntry,promptTagField,promptTagText,UNTAGGED_PROMPT_FILTER} from './prompt-library-tags';
 import {PromptTagFilter,PromptTagInput,PromptTagList} from './components/PromptTagControls';
 
 let pending:Promise<unknown>=Promise.resolve();
@@ -30,7 +30,7 @@ export function NegativePromptLibraryControl({value,onApply,variant='icon'}:{val
  const tagSuggestions=collectPromptTags(presets).map(t=>t.tag);
  useEffect(()=>{if(!open)return;const key=(e:KeyboardEvent)=>{if(e.key!=='Escape'||e.defaultPrevented)return;e.preventDefault();e.stopPropagation();if(draft)setDraft(null);else if(!busy)setOpen(false);};document.addEventListener('keydown',key);return()=>document.removeEventListener('keydown',key);},[open,draft,busy]);
  async function run(action:()=>Promise<unknown>){setBusy(true);setError('');try{await action();}catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}}
- function create(current:boolean){setDraft({id:crypto.randomUUID(),name:'',prompt:current?value:'',createdAt:new Date().toISOString()});setDraftTags(tagFilter&&tagFilter!==UNTAGGED_PROMPT_FILTER?tagFilter:'');setError('');}
+ function create(current:boolean){const staleTag=isStalePromptTagFilter(presets,tagFilter);if(staleTag)setTagFilter('');setDraft({id:crypto.randomUUID(),name:'',prompt:current?value:'',createdAt:new Date().toISOString()});setDraftTags(!staleTag&&tagFilter&&tagFilter!==UNTAGGED_PROMPT_FILTER?tagFilter:'');setError('');}
  function edit(preset:NegativePromptPreset){setDraft({...preset});setDraftTags(formatPromptTagInput(preset.tags));}
  async function save(){if(!draft||!draft.name.trim()||!draft.prompt.trim()||draft.name.length>100||draft.prompt.length>100000)return;const {tags:_previous,...rest}=draft,entry={...rest,name:draft.name.trim(),...promptTagField(draftTags)};await mutateNegativePresets(current=>{const index=current.findIndex(p=>p.id===entry.id);return index<0?mergeNegativeLibrary(current,[entry],()=>crypto.randomUUID()):current.map(p=>p.id===entry.id?entry:p);});setSelectedId(entry.id);setDraft(null);}
  async function remove(){if(!selected||!await confirmAction(text[19],text[6],undefined,undefined,{confirm:text[6],cancel:text[13]}))return;const id=selected.id;await mutateNegativePresets(current=>current.filter(p=>p.id!==id));setSelectedId('');}
