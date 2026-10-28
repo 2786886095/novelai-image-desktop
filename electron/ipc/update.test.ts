@@ -1,4 +1,5 @@
 import {beforeEach,expect,it,vi} from 'vitest';
+import fs from 'node:fs';
 const {get}=vi.hoisted(()=>({get:vi.fn()}));
 vi.mock('electron',()=>({app:{getVersion:()=> '2.3.0'}}));
 vi.mock('axios',()=>({default:{get}}));vi.mock('./proxy',()=>({proxyConfig:()=>({})}));
@@ -29,4 +30,14 @@ it('keeps an up-to-date response without unnecessary requests',async()=>{
 it('retains download metadata for installer verification',async()=>{
  get.mockResolvedValueOnce({data:{tag_name:'v2.3.1',assets:[{name:'setup.exe',browser_download_url:'https://github.com/example/setup.exe',size:123}]}});
  expect((await latestGithubRelease()).assets).toEqual([{name:'setup.exe',url:'https://github.com/example/setup.exe',size:123}]);
+});
+it('checks only this fork for app updates, never the original upstream repository',async()=>{
+ get.mockRejectedValueOnce(Error('blocked')).mockResolvedValueOnce({data:{tag_name:'v2.3.1'}});
+ expect(await checkUpdate()).toMatchObject({hasUpdate:true,latestVersion:'2.3.1'});
+ expect(get.mock.calls.map(([url])=>url)).toEqual([
+  'https://github.com/OldLi1337/novelai-image-desktop/releases/latest/download/latest.yml',
+  'https://api.github.com/repos/OldLi1337/novelai-image-desktop/releases/latest',
+ ]);
+ const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
+ expect(pkg.build.publish).toEqual([{provider:'github',owner:'OldLi1337',repo:'novelai-image-desktop'}]);
 });

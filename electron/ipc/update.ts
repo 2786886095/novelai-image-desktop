@@ -6,7 +6,8 @@ import { proxyConfig } from "./proxy";
 export type UpdateSource = "github";
 
 export function updateSourceOrder(_legacySource: string = "github"): UpdateSource[] { return ["github"]; }
-const REPO = "2786886095/novelai-image-desktop";
+// Releases of this fork. The original upstream releases are never offered as updates.
+const REPO = "OldLi1337/novelai-image-desktop";
 export const GITHUB_RELEASE_URL = `https://github.com/${REPO}/releases/latest`;
 export const GITHUB_LATEST_YAML_URL = `${GITHUB_RELEASE_URL}/download/latest.yml`;
 export const GITHUB_RELEASE_API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
