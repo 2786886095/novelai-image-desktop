@@ -44,7 +44,7 @@ export async function prepareNaiAccountsBackupRestore(value:unknown){
   const summaries=new Map();
   // Reject the whole credential transaction if even the final account fails.
   for(const input of portable.accounts){
-    const validation=await validateNaiAccountReadOnly(input);if(!validation.ok)throw Error(backupAccountValidationError(input.label,validation));
+    const validation=await validateNaiAccountReadOnly(input);if(!validation.ok)throw backupAccountValidationError(input.label,validation);
     summaries.set(input.id,validation.account??{});
   }
   const prepared=v.prepareBackupRestore(portable,expected,summaries);

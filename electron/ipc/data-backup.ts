@@ -5,6 +5,7 @@ import {SENSITIVE_SETTING_KEYS} from "./credential-vault";
 import {imageSettingsStamp} from "./image-settings-events";
 import crypto, { randomUUID } from "node:crypto";
 import {exportNaiAccountsBackup,prepareNaiAccountsBackupRestore} from './nai-accounts';
+import {BackupAccountValidationError} from './nai-accounts-validation';
 import fs from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
@@ -1233,7 +1234,9 @@ export async function importDataBackup(
       if(payload.novelAiAccounts!==undefined)accountRestore=await prepareNaiAccountsBackupRestore(payload.novelAiAccounts);
     }
   } catch (error: any) {
-    return { ok: false, message: `无法读取备份：${error?.message ?? String(error)}`, imported: 0, skipped: 0, renamed: 0 };
+    // The archive itself was readable when only an account's live re-validation failed.
+    const message = error instanceof BackupAccountValidationError ? error.message : `无法读取备份：${error?.message ?? String(error)}`;
+    return { ok: false, message, imported: 0, skipped: 0, renamed: 0 };
   }
 
   // Import is never allowed to be the first destructive operation. A complete

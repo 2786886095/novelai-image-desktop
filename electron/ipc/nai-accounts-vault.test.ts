@@ -26,3 +26,13 @@ it('uses Chinese messages on the paths backup import and export show verbatim',(
  for(const message of Object.values(ACCOUNT_VAULT_ERRORS))expect(message).toMatch(/[\u4e00-\u9fff]/);
  expect(()=>parsePortableNaiAccounts({version:2})).toThrow(ACCOUNT_VAULT_ERRORS.invalidBackup);
 });
+it('reports unreadable archive addresses and undecryptable saved accounts in Chinese',()=>{
+ const archive=(apiBaseUrl:string,imageBaseUrl:string)=>({version:1,selectedId:null,accounts:[{id:'a',label:'x',method:'relay',token:'synthetic',apiBaseUrl,imageBaseUrl}]});
+ expect(()=>parsePortableNaiAccounts(archive('https://relay.example.invalid/raw',''))).toThrow(ACCOUNT_VAULT_ERRORS.invalidBackup);
+ expect(()=>parsePortableNaiAccounts(archive('https://relay.example.invalid/%E0%A4%A','https://relay.example.invalid/raw'))).toThrow(ACCOUNT_VAULT_ERRORS.invalidBackup);
+ // safeStorage cannot read ciphertext written on another machine or OS account.
+ const cipher={isEncryptionAvailable:()=>true,encryptString:(s:string)=>Buffer.from(s),decryptString:()=>{throw Error('Error while decrypting the ciphertext provided to safeStorage.decryptString.');}};
+ const vault=new NaiAccountsVault({version:1,accounts:[{id:'old',label:input.label,method:input.method,apiBaseUrl:input.apiBaseUrl,imageBaseUrl:input.imageBaseUrl,encryptedToken:'AAAA'}]},cipher,()=>{});
+ expect(()=>vault.bind('old')).toThrow(ACCOUNT_VAULT_ERRORS.decryptFailed);
+ expect(()=>vault.exportBackup()).toThrow(ACCOUNT_VAULT_ERRORS.decryptFailed);
+});

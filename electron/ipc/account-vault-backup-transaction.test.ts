@@ -51,7 +51,7 @@ it('a failed second authentication leaves all old accounts, selected runtime and
  const old=await c.call('naiAccounts:add',{...rows[2],label:'existing'});c.call('naiAccounts:select',old.id);
  const before=digest(fs.readFileSync(path.join(c.root,'nai-accounts-v1.json'),'utf8')),revision=(await import('./nai-accounts-runtime')).naiAccountRevision(),settings=digest(c.store.getSettings());
  c.get.mockImplementationOnce(async()=>({status:200,data:{subscription:{tier:0,trainingStepsLeft:42}}})).mockImplementationOnce(async()=>({status:401,data:null}));
- const result=await c.restore(await c.archive(portable(),{visionApiKey:'fixture-incoming-other-key'}));expect(result.ok).toBe(false);expect(result.message).toContain('验证未通过：API Token 无效或已失效（HTTP 401）；未导入任何数据。');expect(result.message).not.toContain('NAI_ACCOUNT_VALIDATION');
+ const result=await c.restore(await c.archive(portable(),{visionApiKey:'fixture-incoming-other-key'}));expect(result.ok).toBe(false);expect(result.message).toMatch(/^备份中的 NovelAI 账户「saved (official|login)」验证未通过：API Token 无效或已失效（HTTP 401）；未导入任何数据。$/);expect(result.message).not.toContain('NAI_ACCOUNT_VALIDATION');
  expect(digest(fs.readFileSync(path.join(c.root,'nai-accounts-v1.json'),'utf8'))).toBe(before);expect((await import('./nai-accounts-runtime')).naiAccountRevision()).toBe(revision);expect(digest(c.store.getSettings())).toBe(settings);
 }));
 it('invalid schema, IDs, selected binding, secret metadata and official/relay cross routing reject before GET',()=>owned(async c=>{

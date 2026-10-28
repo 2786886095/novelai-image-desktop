@@ -6,13 +6,14 @@ export function accountCipherAvailable(cipher: Cipher): boolean {
   try { return cipher.isEncryptionAvailable() && cipher.getSelectedStorageBackend?.() !== 'basic_text'; }
   catch { return false; }
 }
-/** Shown verbatim by backup import/export and the account manager, so they stay Chinese. */
+/** Backup import and export show these verbatim (the account manager shows its own text), so they stay Chinese. */
 export const ACCOUNT_VAULT_ERRORS = {
   invalidBackup: '备份中的 NovelAI 账户数据无效。',
   changedDuringImport: '导入期间账户数据发生了变化，已停止导入，请稍后重试。',
   encryptionUnavailable: '系统凭据加密不可用，无法读取或保存 NovelAI 账户。',
   tooManyAccounts: '导入后的 NovelAI 账户超过 128 个上限。',
   unsupportedVault: '账户库文件版本不受支持。',
+  decryptFailed: '无法解密已保存的 NovelAI 账户（凭据可能来自其他电脑或系统账户），请在账户管理中重新添加。',
 } as const;
 export interface AccountVaultDocument { version: 1; selectedId?: string; legacyMigrated?:boolean; managed?:boolean; accounts: Array<NaiAccountProfile & { encryptedToken: string; accountSummary?: NaiAccountSummary }> }
 
@@ -46,9 +47,9 @@ export function parsePortableNaiAccounts(value: unknown,allowLegacyForExport=fal
           (u.protocol!=='https:'&&!(u.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(u.hostname))))return fail();}
       }else validateAccountProfile(normalized);
     }catch{return fail();}
-    for(const base of [raw.apiBaseUrl,raw.imageBaseUrl]){
-      if(base.length>4096||base.includes('\\')||new URL(base).pathname.split('/').some(p=>['.','..'].includes(decodeURIComponent(p))))return fail();
-    }
+    // An unparsable address or path segment is an invalid archive, not a raw URL error.
+    const unsafeBase=(base:string)=>{try{return base.length>4096||base.includes('\\')||new URL(base).pathname.split('/').some(p=>['.','..'].includes(decodeURIComponent(p)));}catch{return true;}};
+    if([raw.apiBaseUrl,raw.imageBaseUrl].some(unsafeBase))return fail();
     const summary=raw.accountSummary;
     if(summary!==undefined&&(!obj(summary)||Object.keys(summary).some(k=>!['tierName','tierLevel','anlasBalance','expiresAt','hasActiveSubscription'].includes(k))||
       (summary.tierName!==undefined&&(typeof summary.tierName!=='string'||summary.tierName.length>32))||
@@ -98,7 +99,7 @@ export class NaiAccountsVault {
     const endpoint=(value:string)=>new URL(value.trim()).href.replace(/\/+$/,'');
     for(const incoming of portable.accounts){
       const duplicate=accounts.find(a=>endpoint(a.apiBaseUrl)===endpoint(incoming.apiBaseUrl)&&
-        this.cipher.decryptString(Buffer.from(a.encryptedToken,'base64')).trim()===incoming.token);
+        this.decryptToken(a).trim()===incoming.token);
       const id=duplicate?.id??(accounts.some(a=>a.id===incoming.id)?crypto.randomUUID():incoming.id);
       mapping.set(incoming.id,id);
       const fresh=verified.get(incoming.id)??{},cached=duplicate?.accountSummary??incoming.accountSummary;
@@ -114,13 +115,18 @@ export class NaiAccountsVault {
     const selected=next.accounts.find(a=>a.id===next.selectedId);
     const snapshot=selected?{id:selected.id,label:selected.label,method:selected.method,apiBaseUrl:selected.apiBaseUrl,imageBaseUrl:selected.imageBaseUrl,
       ...(selected.legacyConfiguration?{legacyConfiguration:selected.legacyConfiguration}:{}),
-      token:this.cipher.decryptString(Buffer.from(selected.encryptedToken,'base64'))}:undefined;
+      token:this.decryptToken(selected)}:undefined;
     return {snapshot,commit:()=>{
       if(this.revision()!==expected||this.leases)throw Error(ACCOUNT_VAULT_ERRORS.changedDuringImport);
       // Preserve an empty/logged-out archive without clearing saved credentials.
       if(!portable.accounts.length)return;
       this.persist(next);this.document=next;
     }};
+  }
+  /** Ciphertext from another machine or OS account cannot be read; say so in Chinese instead of safeStorage's English. */
+  private decryptToken(account:{encryptedToken:string}):string{
+    try{return this.cipher.decryptString(Buffer.from(account.encryptedToken,'base64'));}
+    catch{throw Error(ACCOUNT_VAULT_ERRORS.decryptFailed);}
   }
   legacyMigrated(){return this.document.legacyMigrated===true;}
   managed(){return this.document.managed===true||this.document.legacyMigrated===true||this.document.accounts.length>0;}
@@ -190,7 +196,7 @@ export class NaiAccountsVault {
     const account = this.document.accounts.find(a => a.id === id);
     if (!account) throw new Error('Unknown account');
     if (!accountCipherAvailable(this.cipher)) throw new Error(ACCOUNT_VAULT_ERRORS.encryptionUnavailable);
-    const token = this.cipher.decryptString(Buffer.from(account.encryptedToken, 'base64'));
+    const token = this.decryptToken(account);
     if(!account.legacyConfiguration)validateAccountProfile({ ...account, token });
     else {if(!token.trim()||/[\r\n]/.test(token))throw Error('Invalid legacy token');for(const raw of [account.apiBaseUrl,account.imageBaseUrl]){const url=new URL(raw);if((url.protocol!=='https:'&&!(url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname)))||url.username||url.password||url.search||url.hash)throw Error('Invalid legacy endpoint');}}
     this.leases++; let ended = false;
