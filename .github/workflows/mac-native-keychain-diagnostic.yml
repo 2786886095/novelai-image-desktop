@@ -1,12 +1,6 @@
 name: Mac native Keychain diagnostics
 
 on:
-  push:
-    branches: [codex/comfy-five-platform-release]
-    paths:
-      - scripts/feature-acceptance/mac-native-keychain.mjs
-      - scripts/feature-acceptance/mac-native-keychain.test.mjs
-      - .github/workflows/mac-native-keychain-diagnostic.yml
   workflow_dispatch:
 
 permissions:
