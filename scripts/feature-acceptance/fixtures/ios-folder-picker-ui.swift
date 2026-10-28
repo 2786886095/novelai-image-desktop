@@ -69,6 +69,67 @@ final class FolderPickerUITests: XCTestCase {
       Thread.sleep(forTimeInterval: 0.15)
     } while true
   }
+  private struct FolderNameControl {
+    let field: XCUIElement
+    let isInline: Bool
+    let modalCommit: XCUIElement?
+  }
+  private func usable(_ element: XCUIElement, _ app: XCUIApplication) -> Bool {
+    guard element.exists && element.isHittable && element.isEnabled else { return false }
+    let frame = element.frame
+    return !frame.isEmpty && app.frame.contains(frame)
+  }
+  private func isSearchField(_ element: XCUIElement) -> Bool {
+    let search = ["search", "搜索", "搜尋"]
+    return search.contains(element.identifier.lowercased()) || search.contains(element.label.lowercased())
+  }
+  private func currentKeyboardDone(_ app: XCUIApplication) throws -> XCUIElement? {
+    let keyboards = app.keyboards.allElementsBoundByIndex.filter { keyboard in
+      guard keyboard.exists else { return false }
+      return !keyboard.frame.isEmpty && app.frame.intersects(keyboard.frame)
+    }
+    guard keyboards.count <= 1 else { throw fail("Ambiguous current system keyboards") }
+    guard let keyboard = keyboards.first else { return nil }
+    let done = keyboard.buttons.allElementsBoundByIndex.filter { button in
+      return button.identifier == "Done" && ["done", "Done", "完成"].contains(button.label) &&
+        usable(button, app) && keyboard.frame.contains(button.frame)
+    }
+    guard done.count <= 1 else { throw fail("Ambiguous prepared keyboard Done controls") }
+    return done.first
+  }
+  private func currentFolderNameControl(_ app: XCUIApplication, _ providerLabels: [String]) throws -> FolderNameControl? {
+    var prepared: [FolderNameControl] = []
+    let inline = app.textViews.allElementsBoundByIndex.filter { field in
+      field.identifier == "DOC.inlineRenameField" && !isSearchField(field) && usable(field, app)
+    }
+    guard inline.count <= 1 else { throw fail("Ambiguous visible inline folder naming controls") }
+    if let field = inline.first, let title = try currentNavigationTitle(app),
+       providerLabels.contains(title), try currentKeyboardDone(app) != nil {
+      prepared.append(FolderNameControl(field: field, isInline: true, modalCommit: nil))
+    }
+    // Preserve the actual modal TextField/Create flow, but only within the
+    // same visible alert/sheet. Never search arbitrary app text fields or a
+    // global Done/Create button behind the picker.
+    for modal in app.alerts.allElementsBoundByIndex + app.sheets.allElementsBoundByIndex {
+      guard modal.exists && !modal.frame.isEmpty && app.frame.intersects(modal.frame) else { continue }
+      let fields = modal.textFields.allElementsBoundByIndex.filter { field in
+        !isSearchField(field) && usable(field, app) && modal.frame.contains(field.frame)
+      }
+      let commits = modal.buttons.allElementsBoundByIndex.filter { button in
+        // A modal Create can be disabled before a name is typed. Bind the
+        // same visible control now; tap() still requires enabled at commit.
+        ["Create", "Done", "创建", "建立", "完成"].contains(button.label) &&
+          button.exists && button.isHittable && !button.frame.isEmpty &&
+          app.frame.contains(button.frame) && modal.frame.contains(button.frame)
+      }
+      guard fields.count <= 1 && commits.count <= 1 else { throw fail("Ambiguous modal folder naming controls") }
+      if let field = fields.first, let commit = commits.first {
+        prepared.append(FolderNameControl(field: field, isInline: false, modalCommit: commit))
+      }
+    }
+    guard prepared.count <= 1 else { throw fail("Multiple prepared folder naming flows") }
+    return prepared.first
+  }
   private func tap(_ element: XCUIElement, _ action: String) throws {
     guard element.exists && element.isHittable && element.isEnabled else {
       throw fail("Observed UI control unavailable: " + action)
@@ -151,20 +212,43 @@ final class FolderPickerUITests: XCTestCase {
     }
     guard let newFolder = create else { throw fail("System provider did not expose New Folder") }
     try tap(newFolder, "new-folder-via-system-picker")
-    let field = app.textFields.firstMatch
-    guard field.waitForExistence(timeout: 5), field.isHittable else {
-      throw fail("Real New Folder naming field did not appear")
+    let namingDeadline = Date().addingTimeInterval(5)
+    capture("after-new-folder-action")
+    let providerLabels = providers.flatMap { $0.1 }
+    var naming = try currentFolderNameControl(app, providerLabels)
+    while naming == nil {
+      if Date() >= namingDeadline { throw fail("No unique prepared inline or modal folder naming control within original5s") }
+      Thread.sleep(forTimeInterval: 0.15)
+      naming = try currentFolderNameControl(app, providerLabels)
     }
-    field.tap()
+    // Reject even a nonnil first result if capture/snapshot work exhausted5s.
+    if Date() >= namingDeadline { throw fail("Prepared naming control arrived after original5s deadline") }
+    guard let control = naming else { throw fail("Prepared folder naming control disappeared") }
+    let field = control.field
+    // The observed inline editor already has focus/selection. Do not collapse
+    // that selection by tapping it. typeText fails if keyboard focus is absent.
+    if !control.isInline { field.tap() }
     if let value = field.value as? String, !value.isEmpty {
       field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count))
     }
     field.typeText(folder)
-    guard let commit = find(app, ["Create", "Done", "创建", "建立", "完成"]) else {
-      throw fail("Real New Folder confirmation was unavailable")
+    guard let exact = field.value as? String, exact == folder else {
+      throw fail("Folder naming control does not contain the exact bound nonce")
     }
-    try tap(commit, "create-exact-nonce-folder")
+    guard let current = try currentFolderNameControl(app, providerLabels),
+          current.isInline == control.isInline,
+          let confirmed = current.field.value as? String, confirmed == folder else {
+      throw fail("Current prepared naming flow or exact nonce changed before commit")
+    }
+    if current.isInline {
+      guard let done = try currentKeyboardDone(app) else { throw fail("Unique prepared system keyboard Done disappeared") }
+      try tap(done, "create-exact-nonce-folder")
+    } else {
+      guard let commit = current.modalCommit else { throw fail("Prepared modal Create disappeared") }
+      try tap(commit, "create-exact-nonce-folder")
+    }
     let createDeadline = Date().addingTimeInterval(10)
+    capture("after-folder-name-commit")
     while try currentNavigationTitle(app) != folder {
       if let item = find(app, [folder]) {
         try tap(item, "open-created-exact-nonce-folder")
