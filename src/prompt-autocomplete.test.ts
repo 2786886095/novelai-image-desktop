@@ -48,3 +48,11 @@ it("measures the suggestion list so the panel around it never cuts it off", () =
   expect(editor).toContain("bottom: `calc(100% - ${acLine.top - 2}px)`");
   expect(editor).toContain("top: acLine.bottom + 2");
 });
+
+it("scrolls the keyboard-highlighted suggestion into view", () => {
+  const app = fs.readFileSync("src/App.tsx", "utf8");
+  const editor = app.slice(app.indexOf("function PromptTextarea("), app.indexOf("// ── Shared UI primitives"));
+  // Eight suggestions do not fit the list, so arrowing past the visible rows must scroll it.
+  expect(editor).toContain('const next = e.key === "ArrowDown" ? Math.min(activeIdx + 1, suggestions.length - 1) : Math.max(activeIdx - 1, 0);');
+  expect(editor).toContain('dropdownRef.current?.children[next]?.scrollIntoView({ block: "nearest" });');
+});

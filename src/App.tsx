@@ -588,8 +588,13 @@ function PromptTextarea({
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.nativeEvent.isComposing || composingRef.current) return;
     if (!suggestions.length) return;
-    if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, suggestions.length - 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const next = e.key === "ArrowDown" ? Math.min(activeIdx + 1, suggestions.length - 1) : Math.max(activeIdx - 1, 0);
+      setActiveIdx(next);
+      // The list scrolls past about five rows; keep the highlighted one in view so Enter never inserts a hidden tag.
+      dropdownRef.current?.children[next]?.scrollIntoView({ block: "nearest" });
+    }
     else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); applyTag(suggestions[activeIdx].tag); }
     // Close only the list; the surrounding dialog or popover stays open.
     else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); clearSuggestions(); }
