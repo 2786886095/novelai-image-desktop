@@ -85,7 +85,7 @@ const InpaintCanvas = lazy(loadInpaintCanvas);
 const MetadataInspector = lazy(loadMetadataInspector);
 import { useAppStore } from "./store";
 import { relatedTags } from "./related-tags";
-import { fmtCount, wordAtCursor } from "./text-utils";
+import { applyAutocompleteTag, fmtCount, wordAtCursor, type AutocompleteAnchor } from "./text-utils";
 import { inspectImageMetadata, parseImageMetaAsync } from "./png-meta";
 import { INPAINT_BRUSH_SLIDER_MAX, INPAINT_BRUSH_SLIDER_MIN } from "./inpaint-brush";
 import { droppedImagePath, droppedImagePaths, hasDraggedFiles } from "./drag-drop";
@@ -495,8 +495,14 @@ function PromptTextarea({
   const [acTop, setAcTop] = useState<number | null>(null);
   const [activeIdx, setActiveIdx] = useState(0);
   const composingRef = useRef(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The word the suggestions belong to. Choosing a tag replaces this word even
+  // if the caret moved; a newer request makes older responses stale.
+  const anchorRef = useRef<AutocompleteAnchor | null>(null);
+  const requestRef = useRef(0);
+  const open = suggestions.length > 0;
 
   useEffect(() => {
     return () => {
@@ -504,7 +510,24 @@ function PromptTextarea({
     };
   }, []);
 
-  function clearSuggestions() { setSuggestions([]); setAcTop(null); }
+  function clearSuggestions() {
+    requestRef.current += 1;
+    anchorRef.current = null;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setSuggestions([]);
+    setAcTop(null);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: PointerEvent) => {
+      if (!wrapRef.current?.contains(event.target as Node)) clearSuggestions();
+    };
+    document.addEventListener("pointerdown", outside, true);
+    return () => document.removeEventListener("pointerdown", outside, true);
+  }, [open]);
+
+  useEffect(() => { if (!enabled) clearSuggestions(); }, [enabled]);
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const text = e.target.value;
@@ -513,49 +536,46 @@ function PromptTextarea({
     setActiveIdx(0);
     if (!enabled || composingRef.current) {
       clearSuggestions();
-      if (timerRef.current) clearTimeout(timerRef.current);
       return;
     }
 
-    const { word } = wordAtCursor(text, cursor);
+    const { word, start } = wordAtCursor(text, cursor);
     if (word.length < 1) {
       clearSuggestions();
-      if (timerRef.current) clearTimeout(timerRef.current);
       return;
     }
 
     if (timerRef.current) clearTimeout(timerRef.current);
+    const request = ++requestRef.current;
+    anchorRef.current = { start, cursor, word };
     timerRef.current = setTimeout(async () => {
       try {
         const res = await window.naiDesktop.suggestTags(model, word);
-        setSuggestions(res.slice(0, 8));
         const ta = taRef.current;
-        if (ta && res.length > 0) {
+        // A response that arrives after more typing, a caret move or blur
+        // belongs to a word the user has left; showing it would strand the list.
+        if (request !== requestRef.current || !ta || document.activeElement !== ta
+          || ta.selectionStart !== cursor || ta.selectionEnd !== cursor) return;
+        setSuggestions(res.slice(0, 8));
+        if (res.length > 0) {
           const c = caretCoordinates(ta, cursor);
           // Anchor just below the caret line (vertical only); full-width horizontally.
           setAcTop(c.top - ta.scrollTop + c.height + 2);
         }
       } catch {
-        setSuggestions([]);
+        if (request === requestRef.current) setSuggestions([]);
       }
     }, 160);
   }
 
   function applyTag(tag: string) {
     const ta = taRef.current;
-    if (!ta) return;
-    const cursor = ta.selectionStart ?? value.length;
-    const { start } = wordAtCursor(value, cursor);
-    // Extend forward to cover the rest of any partial word
-    let end = cursor;
-    while (end < value.length && /[\w-]/.test(value[end])) end++;
-    const after = value.slice(end).replace(/^\s*,\s*/, "").trimStart();
-    const before = value.slice(0, start);
-    const newVal = before + tag + ", " + after;
-    onChange(newVal);
+    const anchor = anchorRef.current;
+    const next = ta && anchor ? applyAutocompleteTag(value, anchor, tag) : null;
     clearSuggestions();
-    const pos = start + tag.length + 2;
-    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(pos, pos); });
+    if (!ta || !next) return;
+    onChange(next.value);
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(next.caret, next.caret); });
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -564,11 +584,12 @@ function PromptTextarea({
     if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, suggestions.length - 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); }
     else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); applyTag(suggestions[activeIdx].tag); }
-    else if (e.key === "Escape") { clearSuggestions(); }
+    // Close only the list; the surrounding dialog or popover stays open.
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); clearSuggestions(); }
   }
 
   return (
-    <div className="prompt-ac-wrap">
+    <div className="prompt-ac-wrap" ref={wrapRef}>
       <textarea readOnly={readOnly}
         ref={taRef}
         className={clsx("prompt-box", className)}
@@ -576,16 +597,21 @@ function PromptTextarea({
         placeholder={placeholder}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
+        onSelect={(event) => {
+          // Clicking or arrowing elsewhere ends the session; typing moves the anchor with it.
+          const anchor = anchorRef.current;
+          const { selectionStart, selectionEnd } = event.currentTarget;
+          if (anchor && (selectionStart !== anchor.cursor || selectionEnd !== anchor.cursor)) clearSuggestions();
+        }}
         onCompositionStart={() => {
           composingRef.current = true;
           clearSuggestions();
-          if (timerRef.current) clearTimeout(timerRef.current);
         }}
         onCompositionEnd={(event) => {
           composingRef.current = false;
           handleChange(event as unknown as React.ChangeEvent<HTMLTextAreaElement>);
         }}
-        onBlur={() => { if (timerRef.current) clearTimeout(timerRef.current); setTimeout(clearSuggestions, 180); }}
+        onBlur={clearSuggestions}
       />
       {suggestions.length > 0 && (
         <div
