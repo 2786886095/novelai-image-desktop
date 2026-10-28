@@ -1,5 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import crypto from 'node:crypto';
 import {collectResidentFlutter} from './native-proof-stream.mjs';
 // Transport protocol unit fixtures only. No Flutter device or feature is claimed.
 const sourceSha='a'.repeat(40), profileSha='b'.repeat(64), platform='ios',device='unit-device',testEntry='library33';
@@ -41,12 +45,25 @@ test('an unfinished OS observer cannot hang beyond the independent native journe
 // Explicit signal/pipe ordering makes the formerly intermittent race causal.
 const signalChild=String.raw`
 const fs=require('node:fs');
-const [mode,p,c,d,b]=process.argv.slice(1).map((v,i)=>i?JSON.parse(v):v);
+const [mode,p,c,d,b,ackPath,nonce]=process.argv.slice(1).map((v,i)=>i?JSON.parse(v):v);
 const frame=v=>JSON.stringify([v])+'\n';
 const log=v=>frame({event:'app.log',params:{appId:'unit-app',log:v}});
 let closing=false;
-const closeInput=()=>{process.stdin.pause();try{fs.closeSync(0);process.stdout.write('UNIT_FD0_CLOSED:'+process.pid+'\n')}catch(error){process.stdout.write('UNIT_CLOSE_ERROR:'+error.code+'\n')}};
-process.stdin.on('error',()=>{});process.stdin.resume();
+// Do not acquire or register a libuv input read handle before raw fd0 closes.
+const closeInput=()=>{
+ try{fs.closeSync(0)}catch(error){process.stdout.write('UNIT_CLOSE_ERROR:'+error.code+'\n');process.exit(96)}
+ let closed=false;try{fs.fstatSync(0)}catch(error){closed=error.code==='EBADF'}
+ if(!closed){process.stdout.write('UNIT_CLOSE_ERROR:not-EBADF\n');process.exit(97)}
+ process.stdout.write('UNIT_FD0_CLOSED:'+JSON.stringify({pid:process.pid,nonce,mode,actualFstatError:'EBADF'})+'\n');
+};
+const afterParentAck=next=>{
+ const timer=setInterval(()=>{
+  if(!fs.existsSync(ackPath))return;
+  const actual=JSON.parse(fs.readFileSync(ackPath,'utf8'));
+  if(actual.pid!==process.pid||actual.nonce!==nonce||actual.mode!==mode){process.exit(98);return}
+  clearInterval(timer);process.stdout.write('UNIT_PARENT_ACK:'+JSON.stringify(actual)+'\n');next();
+ },5);
+};
 process.on('SIGTERM',()=>{
  if(mode==='repeat-errors')return;
  if(closing)return;closing=true;
@@ -55,23 +72,55 @@ process.on('SIGTERM',()=>{
  setTimeout(()=>process.exit(0),200);
 });
 setTimeout(()=>process.exit(99),5000);setInterval(()=>{},1000);
-if(mode==='stdin-first')closeInput();
-let output='UNIT_CHILD_PID:'+process.pid+'\n'+frame({event:'app.start',params:{appId:'unit-app',deviceId:'unit-device'}})+log('FEATURE_ACCEPTANCE_BEGIN:'+JSON.stringify(b));
+const output='UNIT_CHILD_PID:'+process.pid+'\n'+frame({event:'app.start',params:{appId:'unit-app',deviceId:'unit-device'}})+log('FEATURE_ACCEPTANCE_BEGIN:'+JSON.stringify(b));
+const ready=()=>process.stdout.write(frame({event:'app.started',params:{appId:'unit-app'}})+log('FEATURE_ACCEPTANCE_CHECK:'+JSON.stringify(c))+log('FEATURE_ACCEPTANCE_DONE:'+JSON.stringify(d)));
 if(mode==='repeat-errors'){
  process.stdout.write(output+log('UNIT_REPEATED_OBSERVER_FAILURE')+log('UNIT_REPEATED_OBSERVER_FAILURE'));
  setInterval(()=>process.stdout.write(log('UNIT_REPEATED_OBSERVER_FAILURE')),25);
  setTimeout(()=>process.exit(0),500);
 }else{
- if(mode==='observer-first')output+=log('FEATURE_ACCEPTANCE_PENDING:'+JSON.stringify(p));
- process.stdout.write(output+frame({event:'app.started',params:{appId:'unit-app'}})+log('FEATURE_ACCEPTANCE_CHECK:'+JSON.stringify(c))+log('FEATURE_ACCEPTANCE_DONE:'+JSON.stringify(d)));
+ process.stdout.write(output);
+ if(mode==='stdin-first'){closeInput();afterParentAck(ready)}
+ else{process.stdout.write(log('FEATURE_ACCEPTANCE_PENDING:'+JSON.stringify(p)));ready()}
 }
 `;
 function assertOwnedChildGone(result){
  assert(Number.isSafeInteger(result.childPid)&&result.childPid>0);
  assert.throws(()=>process.kill(result.childPid,0),error=>error.code==='ESRCH','owned fixture child is still alive');
 }
-function collectSignal(mode,onNativeLine,extra={}){
- return collect('valid',pending,{command:[process.execPath,'-e',signalChild,mode,JSON.stringify(pending),JSON.stringify(check),JSON.stringify(done),JSON.stringify(begin)],onNativeLine,...extra});
+async function collectSignal(mode,onNativeLine,extra={}){
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'resident-fd0-owned-'));
+ const ack=path.join(root,'parent-ack.json'),witness=path.join(root,'child-witness.json'),nonce=crypto.randomUUID();
+ let fd0=null,result;
+ // Count actual lazy-handle acquisitions in the real child, without throwing
+ // or simulating EPIPE. Baseline fixtures activate it; this fixture must not.
+ const instrument=String.raw`const __fs=require('node:fs');let __reads=0;const __stdin=Object.getOwnPropertyDescriptor(process,'stdin');Object.defineProperty(process,'stdin',{configurable:true,enumerable:__stdin.enumerable,get(){__reads++;return __stdin.get.call(process)}});process.on('exit',()=>__fs.writeFileSync(JSON.parse(process.argv.at(-1)),JSON.stringify({pid:process.pid,stdinHandleReads:__reads})));`;
+ try{
+  result=await collect('valid',pending,{command:[process.execPath,'-e',instrument+'\n'+signalChild,mode,JSON.stringify(pending),JSON.stringify(check),JSON.stringify(done),JSON.stringify(begin),JSON.stringify(ack),JSON.stringify(nonce),JSON.stringify(witness)],onNativeLine:text=>{
+   if(text.startsWith('UNIT_FD0_CLOSED:')){
+    const literal=text.slice('UNIT_FD0_CLOSED:'.length);
+    // The historical fixture has a plain PID rather than a handshake packet.
+    // Retain that observable absence instead of making it an observer throw.
+    const packet=JSON.parse(literal);
+    if(packet&&typeof packet==='object'){
+     assert.equal(packet.nonce,nonce);assert.equal(packet.mode,mode);assert.equal(packet.actualFstatError,'EBADF');
+     assert(Number.isSafeInteger(packet.pid)&&packet.pid>0);fd0=packet;
+     fs.writeFileSync(ack,JSON.stringify({pid:packet.pid,nonce,mode}),{flag:'wx'});
+    }
+   }
+   return onNativeLine?.(text);
+  },...extra});
+  assertOwnedChildGone(result);
+  result.fixtureInputWitness=fs.existsSync(witness)?JSON.parse(fs.readFileSync(witness,'utf8')):null;
+  result.fixtureFd0Observation=fd0;
+  const consumed=/UNIT_PARENT_ACK:(\{[^\r\n]*\})/.exec(result.stdout);
+  result.fixtureParentAck=consumed?JSON.parse(consumed[1]):null;
+  return result;
+ }finally{
+  // Only remove these two exact files after the owned child is known gone.
+  // Never recurse, mask cleanup errors or touch a foreign process/directory.
+  if(result){assertOwnedChildGone(result);for(const file of [ack,witness])if(fs.existsSync(file))fs.unlinkSync(file);fs.rmdirSync(root);}
+ }
 }
 test('observer failure is terminal before DONE/ready can queue app.stop against closed real stdin',{skip:process.platform==='win32',timeout:10000},async()=>{
  for(const asynchronous of [false,true]){
@@ -97,7 +146,14 @@ test('actual stdin-stop error remains the first failure when a later OS observer
    if(asynchronous)return Promise.reject(Error('secondary observer failure'));
    throw Error('secondary observer failure');
   });
-  assertOwnedChildGone(r);assert.equal(r.passed,false);assert.equal(r.terminationReason,'stdin-stop-error');
+  assertOwnedChildGone(r);assert.equal(r.passed,false);assert.equal(r.terminationReason,'stdin-stop-error',JSON.stringify(r));
+  assert.equal(r.fixtureInputWitness?.pid,r.childPid,JSON.stringify(r));
+  assert.equal(r.fixtureInputWitness?.stdinHandleReads,0,'The real child acquired an input read handle before raw fd0 closure: '+JSON.stringify(r));
+  assert.equal(r.fixtureFd0Observation?.pid,r.childPid,JSON.stringify(r));
+  assert.equal(r.fixtureFd0Observation?.actualFstatError,'EBADF',JSON.stringify(r));
+  assert.equal(r.fixtureParentAck?.pid,r.childPid,JSON.stringify(r));
+  assert.equal(r.fixtureParentAck?.nonce,r.fixtureFd0Observation?.nonce,JSON.stringify(r));
+  assert(r.stdout.indexOf('UNIT_FD0_CLOSED:')<r.stdout.indexOf('UNIT_PARENT_ACK:'),'child ran ahead of the real parent acknowledgement');
   assert.equal(r.stdinCommands.length,1);assert.match(r.errors.join('; '),/EPIPE/);
   assert.match(r.errors.join('; '),/Native OS observer failed.*secondary observer failure/);
  }

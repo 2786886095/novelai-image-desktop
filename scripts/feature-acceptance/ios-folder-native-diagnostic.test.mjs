@@ -12,6 +12,8 @@ const expectedPaths=[
  'scripts/feature-acceptance/ios-folder-picker-driver.mjs',
  'scripts/feature-acceptance/ios-folder-picker-driver.test.mjs',
  'scripts/feature-acceptance/ios-folder-picker-observer.test.mjs',
+ 'scripts/feature-acceptance/native-resident-pending.test.mjs',
+ 'scripts/feature-acceptance/native-proof-stream.mjs',
  'scripts/feature-acceptance/fixtures/ios-process-identity.c',
  'scripts/feature-acceptance/fixtures/ios-folder-picker-ui.swift'];
 function policy(w){
