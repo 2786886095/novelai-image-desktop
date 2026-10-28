@@ -449,6 +449,8 @@ const DESKTOP_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
   "zh-CN": {
     "common.cancel": "取消",
     "common.close": "关闭",
+    "common.delete": "删除",
+    "common.save": "保存",
     "common.unknown": "未知",
     "common.loading": "加载中…",
     "inpaint.dropToLoad": "松开以加载图片",
@@ -1460,7 +1462,7 @@ const DESKTOP_FIX_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "enhance.keepResolution": "1× 保持分辨率",
     "enhance.oneAndHalfResolution": "1.5× 同时放大",
     "enhance.outputSize": "输出尺寸",
-    "enhance.outputHint": "1×只做二次扩散增强；2×会改变分辨率。尺寸会按 NovelAI 支持范围自动对齐。",
+    "enhance.outputHint": "1× 只做二次扩散增强；1.5× 与 MAX 会同时提高分辨率。尺寸会按 NovelAI 支持范围自动对齐。",
     "enhance.outputLimit": "增强并放大后的目标尺寸 {size}（{pixels} 像素）超过 NovelAI 允许的 {limit} 像素上限。请选择 1×、MAX 或换用更小的原图；未发送请求。",
     "enhance.run": "增强图像 {scale}×",
     "postprocess.tools": "后期工具",

@@ -78,7 +78,8 @@ export const REFERENCE_CATALOG_URLS = [
   import.meta.env.VITE_REFERENCE_CATALOG_URL,
   "https://2786886095.github.io/novelai-image-desktop/reference-catalog/index.json",
   "https://raw.githubusercontent.com/2786886095/novelai-reference-assets/main/catalog/index.json",
-  "/reference-catalog/index.json",
+  // Bundled copy, relative to the page: dist/ in the packaged app (file://) or the dev server.
+  "reference-catalog/index.json",
 ].filter((value): value is string => Boolean(value));
 
 /** Ignore retired mirrors even when reading an older cached catalog. */
@@ -154,7 +155,9 @@ let cachedReferenceCatalog: ReferenceCatalogManifest | null = null;
 export async function loadReferenceCatalog(signal?: AbortSignal, refresh = false): Promise<ReferenceCatalogManifest> {
   if (!refresh && cachedReferenceCatalog) return cachedReferenceCatalog;
   let lastError: unknown;
-  for (const url of REFERENCE_CATALOG_URLS) {
+  for (const entry of REFERENCE_CATALOG_URLS) {
+    // Absolute, so the fetch and the asset and chunk URLs resolved against it work under file:// too.
+    const url = new URL(entry, document.baseURI).href;
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 15000);
     const forwardAbort = () => controller.abort();

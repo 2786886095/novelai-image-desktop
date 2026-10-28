@@ -2,7 +2,7 @@ import {SelectMenu} from '../components/ui';
 import {countTabsThatFit} from './tab-overflow';
 import {promptSetupText} from '../prompt-ui-settings';
 import './tab-overflow.css';
-import { memo, startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { memo, startTransition, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import clsx from "clsx";
 import { Icon } from "../components/icons";
 import { getLocalizedTabItems } from "../i18n";
@@ -19,7 +19,6 @@ function AppTabBar() {
   const measureRef=useRef<HTMLDivElement>(null);
   const [visibleCount,setVisibleCount]=useState(0);
   const [order,setOrder]=useState(loadTabOrder);
-  useEffect(()=>{const reload=()=>setOrder(loadTabOrder());window.addEventListener('studio:collections-changed',reload);return()=>window.removeEventListener('studio:collections-changed',reload);},[]);
   const [editing,setEditing]=useState(false);
   const [dragging,setDragging]=useState<ActiveTab|null>(null);
   const [over,setOver]=useState<ActiveTab|null>(null);

@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { localizedStoreText } from "./store-i18n";
 import {
   desktopUiText,
   getChromeText,
@@ -113,6 +116,35 @@ describe("desktop UI text", () => {
         expect(value.trim()).not.toBe("");
       }
     }
+  });
+
+  it("has text for every literal key the screens pass to the translation helpers", () => {
+    // t()/f() are desktopUiText/desktopUiFormat wrappers; storeText()/storeFormat() read the store catalog.
+    const call = (names: string) => new RegExp(`\\b(?:${names})\\([^,()]*(?:\\([^()]*\\))?[^,()]*,\\s*["']([^"']+)["']`, "g");
+    const missing: string[] = [];
+    const files = fs.readdirSync("src", { recursive: true, encoding: "utf8" })
+      .filter((file) => /\.tsx?$/.test(file) && !/\.test\.tsx?$/.test(file));
+    for (const file of files) {
+      const source = fs.readFileSync(path.join("src", file), "utf8");
+      const desktop = [...source.matchAll(call("desktopUiText|desktopUiFormat"))];
+      if (/\b[tf]\s*[:=]\s*(?:useCallback\()?\(key: string/.test(source)) desktop.push(...source.matchAll(/(?<![\w.$])[tf]\(\s*["']([^"']+)["']/g));
+      for (const [, key] of desktop) if (desktopUiText("zh-CN", key) === key) missing.push(`${file}: ${key}`);
+      for (const [, key] of source.matchAll(call("storeText|storeFormat|localizedStoreText"))) {
+        if (localizedStoreText("zh-CN", key) === key) missing.push(`${file}: ${key}`);
+      }
+    }
+    expect(files.length).toBeGreaterThan(100);
+    expect(missing).toEqual([]);
+    expect(desktopUiText("zh-CN", "common.delete")).toBe("删除");
+    expect(desktopUiText("zh-CN", "common.save")).toBe("保存");
+    expect(localizedStoreText("zh-CN", "inspect.run")).toBe("AI 反推提示词");
+  });
+
+  it("describes the official 1× / 1.5× / MAX Enhance amounts under the output size", () => {
+    const hint = desktopUiText("zh-CN", "enhance.outputHint");
+    expect(hint).toContain("1.5×");
+    expect(hint).toContain("MAX");
+    expect(hint).not.toContain("2×");
   });
 
   it("has complete generation panel text", () => {

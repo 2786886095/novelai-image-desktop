@@ -60,7 +60,7 @@ export function AppPortal({ children, container }: { children: ReactNode; contai
   return createPortal(<div ref={portal} data-studio-portal style={{display:"contents"}}>{children}</div>, container ?? document.body);
 }
 
-export type SelectMenuOption = { value: string; label: string; icon?: ReactNode; disabled?: boolean };
+export type SelectMenuOption = { value: string; label: string; disabled?: boolean };
 
 export function findTypeaheadOptionIndex(
   options: SelectMenuOption[],
@@ -309,7 +309,6 @@ export function SelectMenu({
         }}
       >
         {label != null && <span className="select-menu-label">{label}</span>}
-        {selected?.icon && <span className="select-menu-option-icon" aria-hidden="true">{selected.icon}</span>}
         <strong className="select-menu-value">{selected?.label ?? ""}</strong>
         <Icon name="chevronDown" className={clsx("select-menu-chevron", open && "open")} />
       </button>
@@ -358,7 +357,7 @@ export function SelectMenu({
           onFocus={() => setActiveIndex(index)}
           onClick={() => choose(option)}
         >
-          <span className="select-menu-option-content">{option.icon && <span className="select-menu-option-icon" aria-hidden="true">{option.icon}</span>}<span>{option.label}</span></span>
+          <span className="select-menu-option-content"><span>{option.label}</span></span>
           {option.value === value && <Icon name="check" />}
         </button>)}</div>
       </div></AppPortal>}

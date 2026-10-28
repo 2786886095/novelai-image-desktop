@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   catalogCategoryName,
   catalogGameName,
@@ -7,6 +7,7 @@ import {
   catalogSearchText,
   catalogSeriesMetrics,
   formatCatalogBytes,
+  loadReferenceCatalog,
   type ReferenceCatalogAsset,
 } from "./referenceCatalog";
 
@@ -73,5 +74,34 @@ describe('retired thumbnail mirrors', () => {
     const asset = {thumbnailMirrors: {github: 'https://raw.githubusercontent.com/a/b/main/thumb.png'}, downloadMirrors: {github: 'https://example.com/full.png'}, thumbnailUrl: 'https://GITEE.com/old.png', downloadUrl: 'https://sub.gitee.com/old.png'} as Parameters<typeof catalogThumbnailUrls>[0];
     expect(catalogThumbnailUrls(asset)).toEqual(['https://raw.githubusercontent.com/a/b/main/thumb.png', 'https://example.com/full.png']);
     expect(catalogThumbnailUrls({...asset, thumbnailMirrors: {}, downloadMirrors: {}})).toEqual([]);
+  });
+});
+
+describe("bundled catalog fallback", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each([
+    ["packaged app", "file:///C:/Program%20Files/Langbai/resources/app.asar/dist/index.html", "file:///C:/Program%20Files/Langbai/resources/app.asar/dist/"],
+    ["dev server", "http://127.0.0.1:5173/", "http://127.0.0.1:5173/"],
+  ])("loads the copy next to the page (%s) when the hosted catalogs fail", async (_label, baseURI, root) => {
+    const bundled = `${root}reference-catalog/index.json`;
+    const requested: string[] = [];
+    vi.stubGlobal("window", { setTimeout, clearTimeout });
+    vi.stubGlobal("document", { baseURI });
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      requested.push(String(input));
+      if (String(input) !== bundled) throw new TypeError("Failed to fetch");
+      return new Response(JSON.stringify({
+        schema: "langbai-reference-catalog/v1",
+        generatedAt: "2026-10-01T00:00:00.000Z",
+        provider: "bundled",
+        assets: [{ ...asset, downloadUrl: "assets/amber.png", thumbnailUrl: "https://example.test/amber-thumb.png" }],
+      }));
+    }));
+    const catalog = await loadReferenceCatalog(undefined, true);
+    expect(requested.at(-1)).toBe(bundled);
+    expect(requested.slice(0, -1).length).toBeGreaterThan(0);
+    expect(catalog.assets[0].downloadUrl).toBe(`${root}reference-catalog/assets/amber.png`);
+    expect(catalog.assets[0].thumbnailUrl).toBe("https://example.test/amber-thumb.png");
   });
 });

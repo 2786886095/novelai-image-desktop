@@ -51,7 +51,6 @@ export function LocalFavorites(){
  const resetBrowse=()=>{setPage(1);setVisibleLimit(FAVORITES_STREAM_BATCH);const root=favoritesScrollRoot(gridRef.current);if(root)root.scrollTop=0;};
  const [viewPersistenceFailed,setViewPersistenceFailed]=useState(false);
  const sortByRef=useRef(view.sortBy);sortByRef.current=view.sortBy;
- useEffect(()=>{const changed=(e:Event)=>{if((e as CustomEvent).detail==='favorites.view'){const next=loadFavoritesView();sortByRef.current=next.sortBy;setView(next);resetBrowse();setViewPersistenceFailed(false);}};window.addEventListener('studio:collections-changed',changed);return()=>window.removeEventListener('studio:collections-changed',changed);},[]);
  const updateView=(next:FavoritesView)=>{const normalized=normalizeFavoritesView(next);sortByRef.current=normalized.sortBy;setView(normalized);resetBrowse();try{saveFavoritesView(normalized);setViewPersistenceFailed(false);}catch{setViewPersistenceFailed(true);}};
  const previewTrigger=useRef<HTMLButtonElement|null>(null);
  const reloadRevision=useRef(0);

@@ -13113,6 +13113,9 @@ button:has(> .ui-icon):not(.select-menu-trigger) {
 .select-menu-option:focus-visible { outline: 0; background: var(--bg-hover); }
 .select-menu-option.selected { background: var(--bg-selected); color: var(--accent); font-weight: 700; }
 .select-menu-option .ui-icon { width: 16px; height: 16px; }
+.select-menu-option-content { display: flex; align-items: center; gap: 9px; min-width: 0; }
+/* Long names without spaces wrap instead of pushing past the row or the check. */
+.select-menu-option-content > span { min-width: 0; overflow-wrap: anywhere; }
 .theme-dark .select-menu-popover { box-shadow: 0 22px 60px rgba(0, 0, 0, .5); }
 
 .field select {

@@ -75,6 +75,7 @@
     "action.inpaint": "局部重绘",
     "action.upscale": "云端超分 {scale}x",
     "action.postprocess": "后期处理",
+    "inspect.run": "AI 反推提示词",
     "generate.batchQuoteStatus": "批量生成 1/{total}，生成前报价 {amount} Anlas...",
     "generate.quoteStatus": "正在生成，生成前报价 {amount} Anlas...",
     "generate.cancelled": "已取消生成，队列已清空{spent}。",

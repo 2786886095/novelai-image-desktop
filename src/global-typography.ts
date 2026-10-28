@@ -39,7 +39,7 @@ export function installTypography(scale:number,family:string):()=>void {
   let frame=0;
   const rebuild=()=>{
     const css=scale===100?'':Array.from(document.styleSheets).filter(s=>s.ownerNode!==style&&!s.disabled).map(s=>{try{return scaledFontRules(s.cssRules);}catch{return '';}}).join('\n');
-    const global=family?'html, body, body * {font-family:var(--ui-font-family) !important;} .btn-icon, .select-menu-option-icon {font-family:"Segoe UI Symbol",system-ui,sans-serif !important;}':'';
+    const global=family?'html, body, body * {font-family:var(--ui-font-family) !important;} .btn-icon {font-family:"Segoe UI Symbol",system-ui,sans-serif !important;}':'';
     const next=css+'\n'+global;if(style.textContent!==next)style.textContent=next;
   };
   document.head.append(style);rebuild();
