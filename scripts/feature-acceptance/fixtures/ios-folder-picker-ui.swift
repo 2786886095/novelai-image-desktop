@@ -34,6 +34,41 @@ final class FolderPickerUITests: XCTestCase {
     }
     return nil
   }
+  // DocumentManager's bar has a generic identifier; the directory name is
+  // a direct StaticText child. Never accept a cached browsingRoot, sidebar,
+  // or a descendant text inside a back button as the current title.
+  private func currentNavigationTitle(_ app: XCUIApplication) throws -> String? {
+    let viewFrame = app.frame
+    var visibleTitles: [XCUIElement] = []
+    for bar in app.navigationBars.allElementsBoundByIndex {
+      guard bar.exists else { continue }
+      let barFrame = bar.frame
+      guard !barFrame.isEmpty && viewFrame.intersects(barFrame) else { continue }
+      let directTitles = bar.children(matching: .staticText).allElementsBoundByIndex.filter { title in
+        guard title.exists && title.isHittable else { return false }
+        let titleFrame = title.frame
+        return !titleFrame.isEmpty &&
+          barFrame.contains(titleFrame) && viewFrame.contains(titleFrame)
+      }
+      guard directTitles.count <= 1 else {
+        throw fail("Ambiguous visible direct navigation titles")
+      }
+      visibleTitles.append(contentsOf: directTitles)
+    }
+    guard visibleTitles.count <= 1 else {
+      throw fail("Ambiguous current visible navigation bars")
+    }
+    return visibleTitles.first?.label
+  }
+  private func waitForNavigationTitle(_ app: XCUIApplication, _ labels: [String]) throws -> Bool {
+    // A bounded transition wait, not an extension of the outer UI140/Dart180.
+    let deadline = Date().addingTimeInterval(5)
+    repeat {
+      if let title = try currentNavigationTitle(app), labels.contains(title) { return true }
+      if Date() >= deadline { return false }
+      Thread.sleep(forTimeInterval: 0.15)
+    } while true
+  }
   private func tap(_ element: XCUIElement, _ action: String) throws {
     guard element.exists && element.isHittable && element.isEnabled else {
       throw fail("Observed UI control unavailable: " + action)
@@ -82,16 +117,17 @@ final class FolderPickerUITests: XCTestCase {
       ("On My iPad", ["On My iPad", "我的 iPad", "在我的 iPad 上"])
     ]
     var localProvider: String?
-    for _ in 0..<6 {
+    for attempt in 0..<6 {
       for (canonical, labels) in providers {
-        if labels.contains(where: { app.navigationBars[$0].exists }) {
+        if let title = try currentNavigationTitle(app), labels.contains(title) {
           localProvider = canonical
           break
         }
         if let location = find(app, labels) {
           try tap(location, "open-observed-external-local-provider")
           Thread.sleep(forTimeInterval: 0.25)
-          if labels.contains(where: { app.navigationBars[$0].exists }) {
+          capture("provider-tap-\(attempt)-\(canonical)")
+          if try waitForNavigationTitle(app, labels) {
             localProvider = canonical
             break
           }
@@ -103,7 +139,7 @@ final class FolderPickerUITests: XCTestCase {
       } else { Thread.sleep(forTimeInterval: 0.3) }
     }
     guard let provider = localProvider else {
-      throw fail("No real external On My iPhone/iPad provider; app Documents is forbidden")
+      throw fail("External provider navigation title was not verified; availability is undetermined and app Documents is forbidden")
     }
     capture("observed-external-local-provider")
     let newFolderLabels = ["New Folder", "New folder", "Create Folder", "新建文件夹", "新增檔案夾"]
@@ -129,7 +165,7 @@ final class FolderPickerUITests: XCTestCase {
     }
     try tap(commit, "create-exact-nonce-folder")
     let createDeadline = Date().addingTimeInterval(10)
-    while !app.navigationBars[folder].exists {
+    while try currentNavigationTitle(app) != folder {
       if let item = find(app, [folder]) {
         try tap(item, "open-created-exact-nonce-folder")
       }
@@ -142,7 +178,8 @@ final class FolderPickerUITests: XCTestCase {
     }
     try tap(confirm, "confirm-system-directory-selection")
     let closeDeadline = Date().addingTimeInterval(10)
-    while app.navigationBars[folder].exists {
+    while try currentNavigationTitle(app) != nil ||
+          find(app, cancelLabels) != nil || find(app, openLabels) != nil {
       if Date() >= closeDeadline { throw fail("System picker did not dismiss after selection") }
       Thread.sleep(forTimeInterval: 0.15)
     }

@@ -65,3 +65,86 @@ test('kernel bundle derivation rejects extra nesting, foreign roots, extensions 
  for(const file of [base+'/Nested.app/Runner',base+'/PlugIns/Example.appex/Runner',base+'/sub/Runner',base+'/../Runner',base.replace('11111111-1111-1111-1111-111111111111','not-uuid')+'/Runner',base.replace(context.device,'12345678-1234-1234-1234-123456789abc')+'/Runner','/foreign/Runner.app/Runner'])assert.throws(()=>bind(file),file);
  assert.throws(()=>bind(base+'/Runner',value=>value===base+'/Runner'?'/foreign/Runner':value),/Aliased/);
 });
+
+// STATIC / observed-tree contracts below, not XCTest execution. Actual failure
+// 50fff569 / run40656320486 / job122708103189 was0CHECK. The captured Browse
+// labels/frames are real; isHittable was not in debugDescription and is varied
+// explicitly as a synthetic assumption, never promoted to a device observation.
+const observedBrowseTitleShape=Object.freeze({
+ sourceSha:'50fff569be1df2a26b7c339d24fa45d1de768e84',runId:40656320486,artifactId:12803020104,
+ treeSha256:'17e9c1535a1564bd55818a4167735d8afa5ba6da6ed7b8892d597a747594d48c',wholeArtifactDigestVerified:false,
+ treeMemberPayloadRef:'0~ai_2OVTW4-e80JMQqrQWrJUiHsPLOVu37C0K2hVwB0iMzgDLm5e6GAnl6SIpljISpJMFj9el3HIZmpOWYjf6mw==',
+ wholeZipNotCertified:true,observedCurrentTitle:'Browse',genericNavigationBarId:'FullDocumentManagerViewControllerNavigationBar',
+ view:[0,0,393,852],bar:[0,69,393,108],title:[167,86.7,59,20.3],
+ cachedRoot:'DOC.browsingRoot Source: com.apple.FileProvider.LocalStorage, Title: On My iPhone',
+ sidebar:'DOC.sidebar.item.On My iPhone',isHittableWasCaptured:false});
+const swiftSource=()=>fs.readFileSync(new URL('./fixtures/ios-folder-picker-ui.swift',import.meta.url),'utf8');
+// A source-selected static policy model, deliberately NOT an XCUI implementation
+// or mock supplied to the native runner. Source-shape guards bind its branches.
+function titleContract(source,shape){
+ const contains=(a,b)=>b[2]>0&&b[3]>0&&b[0]>=a[0]&&b[1]>=a[1]&&b[0]+b[2]<=a[0]+a[2]&&b[1]+b[3]<=a[1]+a[3];
+ const intersect=(a,b)=>Math.min(a[0]+a[2],b[0]+b[2])>Math.max(a[0],b[0])&&Math.min(a[1]+a[3],b[1]+b[3])>Math.max(a[1],b[1]);
+ if(!source.includes('private func currentNavigationTitle('))return shape.legacyQuery??null;
+ const found=[];
+ for(const bar of shape.bars){
+  if(!bar.exists||!intersect(shape.view,bar.frame))continue;
+  const titles=bar.directStaticTexts.filter(t=>t.exists&&t.hittable&&contains(bar.frame,t.frame)&&contains(shape.view,t.frame));
+  assert(titles.length<=1,'Ambiguous visible direct navigation titles');found.push(...titles);
+ }
+ assert(found.length<=1,'Ambiguous current visible navigation bars');return found[0]?.label??null;
+}
+const shape=(label='On My iPhone')=>({view:[0,0,393,852],legacyQuery:null,
+ bars:[{exists:true,identifier:'FullDocumentManagerViewControllerNavigationBar',frame:[0,69,393,108],
+ directStaticTexts:[{exists:true,hittable:true,label,frame:[100,86,190,21]}],
+ descendantBackButtonTexts:['On My iPhone']}],sidebar:['On My iPhone'],cachedRoot:observedBrowseTitleShape.cachedRoot});
+test('static Swift title policy binds one current visible direct StaticText, not recursive back-button descendants',()=>{
+ const s=swiftSource();assert(s.includes('private func currentNavigationTitle('));
+ const body=s.split('private func currentNavigationTitle(')[1].split('private func waitForNavigationTitle(')[0];
+ for(const value of ['app.navigationBars.allElementsBoundByIndex','bar.children(matching: .staticText).allElementsBoundByIndex',
+  'title.exists && title.isHittable','barFrame.contains(titleFrame)','viewFrame.contains(titleFrame)',
+  'directTitles.count <= 1','visibleTitles.count <= 1','return visibleTitles.first?.label'])assert(body.includes(value),value);
+ assert(!body.includes('.staticTexts'));assert(!body.includes('descendants('));assert(!body.includes('app.cells'));
+ assert(!body.includes('DOC.browsingRoot'));assert(!s.includes('app.navigationBars[$0]'));assert(!s.includes('app.navigationBars[folder]'));
+});
+test('observed real Browse title stays a provider-negative despite cached LocalStorage title and sidebar label',()=>{
+ assert.equal(observedBrowseTitleShape.isHittableWasCaptured,false);assert.equal(observedBrowseTitleShape.wholeArtifactDigestVerified,false);
+ for(const assumedHittable of [false,true]){
+  const fixture=shape('Browse');fixture.bars[0].directStaticTexts[0].hittable=assumedHittable;
+  fixture.bars[0].frame=observedBrowseTitleShape.bar;fixture.bars[0].directStaticTexts[0].frame=observedBrowseTitleShape.title;
+  assert(!['On My iPhone','On My iPad'].includes(titleContract(swiftSource(),fixture)));
+ }
+});
+test('synthetic generic-bar provider and exact nonce-folder titles are recognized without naming the navigation bar',()=>{
+ for(const title of ['On My iPhone','On My iPad',request.requiredFolderName])assert.equal(titleContract(swiftSource(),shape(title)),title);
+ // These are synthetic positive controls. The actual provider-open frame was
+ // not captured on the failed run, so they carry zero device acceptance credit.
+});
+test('static sidebar, descendant back-button, hidden/offscreen, wrong-current and ambiguous title controls fail closed',()=>{
+ const s=swiftSource();assert.equal(titleContract(s,shape('Different Folder')),'Different Folder');
+ for(const mutate of [x=>x.bars[0].directStaticTexts=[],x=>x.bars[0].directStaticTexts[0].hittable=false,
+  x=>x.bars[0].directStaticTexts[0].exists=false,x=>x.bars[0].directStaticTexts[0].frame=[100,900,190,21],
+  x=>x.bars[0].frame=[393,69,393,108],x=>x.bars=[]]){
+  const fixture=shape();mutate(fixture);assert.equal(titleContract(s,fixture),null);
+ }
+ const double=shape();double.bars.push(structuredClone(double.bars[0]));assert.throws(()=>titleContract(s,double),/Ambiguous/);
+ const duplicateTitle=shape();duplicateTitle.bars[0].directStaticTexts.push(structuredClone(duplicateTitle.bars[0].directStaticTexts[0]));assert.throws(()=>titleContract(s,duplicateTitle),/Ambiguous/);
+});
+test('nonce entry and picker dismissal use the same title policy; a Browse transition is not successful dismissal',()=>{
+ const s=swiftSource();assert(s.includes('while try currentNavigationTitle(app) != folder'));
+ assert(s.includes('while try currentNavigationTitle(app) != nil ||'));
+ assert(s.includes('find(app, cancelLabels) != nil || find(app, openLabels) != nil'));
+ assert.equal(titleContract(s,shape(request.requiredFolderName)),request.requiredFolderName);
+ assert.notEqual(titleContract(s,shape('Browse')),null,'still-open Browse cannot masquerade as dismissal');
+ const absent=shape();absent.bars=[];assert.equal(titleContract(s,absent),null);
+});
+test('real provider taps capture a separate frame and bounded title waits preserve original deadlines and no-grant boundary',()=>{
+ const s=swiftSource();assert(s.includes('Date().addingTimeInterval(5)'));assert(s.includes('field.waitForExistence(timeout: 5)'));
+ assert(s.includes('Date().addingTimeInterval(15)'));assert.equal((s.match(/Date\(\)\.addingTimeInterval\(10\)/g)||[]).length,2);
+ assert(s.includes('for attempt in 0..<6'));assert(s.includes('if try waitForNavigationTitle(app, labels)'));
+ const tap=s.indexOf('try tap(location, "open-observed-external-local-provider")');
+ const capture=s.indexOf('capture("provider-tap-\\(attempt)-\\(canonical)")');
+ const wait=s.indexOf('if try waitForNavigationTitle(app, labels)');assert(tap>=0&&tap<capture&&capture<wait);
+ assert(s.includes('availability is undetermined and app Documents is forbidden'));
+ assert(!s.includes('No real external On My iPhone/iPad provider'));
+ assert(!/\.launch\s*\(|\.terminate\s*\(|UserDefaults|bookmarkData|MethodChannel|coordinate\(/.test(s));
+});
