@@ -132,9 +132,9 @@ export function InpaintCanvas() {
     if (editRestore) {
       if (hydratedRestoreRef.current === editRestore.revision) return;
       try {
-        if (!ctx) throw new Error("Canvas context unavailable.");
+        if (!ctx) throw new Error("画布不可用。");
         if (editRestore.sourceFilePath !== workbenchImage.filePath || editRestore.width !== workbenchImage.width || editRestore.height !== workbenchImage.height) {
-          throw new Error("The editing source changed during restoration.");
+          throw new Error("恢复期间编辑原图发生了变化。");
         }
         // Prepare the entire restored raster before resizing/clearing the visible canvas.
         let restored: ImageData | null = null;
@@ -164,7 +164,7 @@ export function InpaintCanvas() {
         if (!editRestore.rollback) setCompareEnabled(false);
         acknowledgeEditRestore(editRestore.revision, true);
       } catch (error) {
-        acknowledgeEditRestore(editRestore.revision, false, String(error));
+        acknowledgeEditRestore(editRestore.revision, false, error instanceof Error ? error.message : String(error));
       }
       return;
     }

@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { relayDashboardOrigin, nextNaiAccountLabel, NAI_ACCOUNT_METHODS, naiAccountTabKey, type NaiAccountsBridge, type NaiAccountMethod, type NaiAccountProfile, type NaiAccountValidationResult } from '../nai-accounts';
 import { naiAccountText, type NaiAccountTextKey } from '../nai-accounts-locales';
 import { useAppStore } from '../store';
+import { withAppLanguage } from '../i18n';
 import { SelectMenuCompat } from './ui';
 import { LuKeyRound, LuMail, LuGlobe, LuPlus, LuX, LuUserRound, LuEye, LuEyeOff, LuCopy, LuCircleCheck, LuCircleAlert, LuLoaderCircle, LuInfo, LuChevronDown } from 'react-icons/lu';
 import {confirmAction} from './confirm';
@@ -75,7 +76,7 @@ export function NaiAccountManager({variant='toolbar',onSelectionChange}:{variant
   }finally{deleteAbort.current=null;setConfirming(false);}
  }
  useEffect(()=>{secretRequest.current++;setRevealed(undefined);},[selected,accounts.map(a=>a.id).join('|')]);
- async function syncActiveAccount(){const [settings,account]=await Promise.all([window.naiDesktop.getSettings(),window.naiDesktop.accountCached()]);if(naiAccountSummaryMatches(account,settings.naiAccountId)){const previous=useAppStore.getState();const changed=(previous.account.accountId??previous.settings?.naiAccountId)!==(account.accountId??settings.naiAccountId);useAppStore.setState({settings,account,...(changed?{currentAnlasSpent:null,lastAnlasSpent:null}:{})});}}
+ async function syncActiveAccount(){const [settings,account]=await Promise.all([window.naiDesktop.getSettings(),window.naiDesktop.accountCached()]);if(naiAccountSummaryMatches(account,settings.naiAccountId)){const previous=useAppStore.getState();const changed=(previous.account.accountId??previous.settings?.naiAccountId)!==(account.accountId??settings.naiAccountId);useAppStore.setState({settings:withAppLanguage(settings),account,...(changed?{currentAnlasSpent:null,lastAnlasSpent:null}:{})});}}
  async function keyAction(id:string,copy=false){
   if(!copy&&revealed?.id===id){secretRequest.current++;setRevealed(undefined);return;}
   const request=++secretRequest.current;setBusy(true);

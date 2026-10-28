@@ -8,28 +8,30 @@ const modelKey=(value:string)=>Object.entries(aliases).find(([,model])=>model===
 const object=(v:unknown):Record<string,any>=>v && typeof v==='object' && !Array.isArray(v)?v as Record<string,any>:{};
 function unit(v:unknown,fallback:number) {
  if(v===undefined)return fallback;
- if(typeof v!=='number'||!Number.isFinite(v)||v<0||v>1)throw Error('Invalid Vibe parameter (0–1).');
+ if(typeof v!=='number'||!Number.isFinite(v)||v<0||v>1)throw Error('Vibe 参数无效，应在 0–1 之间。');
  return v;
 }
 function base64(v:unknown) {
- if(typeof v!=='string'||!v.length||v.length>70_000_000||v.length%4!==0||!/^[A-Za-z0-9+/]+={0,2}$/.test(v))throw Error('Invalid Vibe data.');
+ if(typeof v!=='string'||!v.length||v.length>70_000_000||v.length%4!==0||!/^[A-Za-z0-9+/]+={0,2}$/.test(v))throw Error('Vibe 数据无效。');
  return v;
 }
 export function matchingVibeEncoding(vibe:VibeTransferItem,model:string):string|undefined {
  return vibe.encodings?.find(e=>e.model===model && Math.abs(e.infoExtracted-vibe.infoExtracted)<1e-8)?.encoding;
 }
 export function validateVibeModel(vibe:VibeTransferItem,model:string) {
- if(!matchingVibeEncoding(vibe,model)&&!vibe.base64)throw Error(`Vibe encoding has no original image. Select its model and extraction value: ${vibe.encodings?.map(e=>`${e.model} (${e.infoExtracted})`).join(', ')??'unknown'}`);
+ if(!matchingVibeEncoding(vibe,model)&&!vibe.base64)throw Error(`该 Vibe 编码没有原图，请使用以下模型和提取值：${vibe.encodings?.map(e=>`${e.model} (${e.infoExtracted})`).join(', ')??'未知'}`);
 }
 export function parseVibeFile(text:string):ImportedVibe[] {
- if(text.length>70_000_000)throw Error('Vibe file exceeds 50 MB.');
- const root=object(JSON.parse(text.replace(/^\uFEFF/,'')));
- if(root.version!==1)throw Error('Unsupported Vibe file version.');
+ if(text.length>70_000_000)throw Error('Vibe 文件超过 50 MB。');
+ let parsed:unknown;
+ try{parsed=JSON.parse(text.replace(/^\uFEFF/,''));}catch{throw Error('Vibe 文件不是有效的 JSON。');}
+ const root=object(parsed);
+ if(root.version!==1)throw Error('不支持的 Vibe 文件版本。');
  const list=root.identifier==='novelai-vibe-transfer-bundle'?root.vibes:root.identifier==='novelai-vibe-transfer'?[root]:null;
- if(!Array.isArray(list)||!list.length||list.length>16)throw Error('Expected a Vibe file with 1–16 references.');
+ if(!Array.isArray(list)||!list.length||list.length>16)throw Error('Vibe 文件应包含 1–16 个参考。');
  return list.map((value,index)=>{
   const v=object(value),info=object(v.importInfo);
-  if(v.identifier!=='novelai-vibe-transfer'||v.version!==1||!['image','encoding'].includes(v.type))throw Error('Unsupported Vibe entry.');
+  if(v.identifier!=='novelai-vibe-transfer'||v.version!==1||!['image','encoding'].includes(v.type))throw Error('不支持的 Vibe 条目。');
   const encodings:VibeEncoding[]=[];
   for(const [key,variants] of Object.entries(object(v.encodings)))for(const raw of Object.values(object(variants))){
    const e=object(raw);const extracted=object(e.params).information_extracted ?? (modelName(key)===modelName(String(info.model))?info.information_extracted:undefined);
@@ -37,10 +39,10 @@ export function parseVibeFile(text:string):ImportedVibe[] {
    encodings.push({model:modelName(key),infoExtracted:unit(extracted,1),encoding:base64(e.encoding)});
   }
   const image=v.type==='image'&&v.image?base64(v.image):'';
-  if(image&&!/^(iVBOR|\/9j\/|UklGR)/.test(image))throw Error('Unsupported Vibe image format.');
-  if(!image&&!encodings.length)throw Error('No usable image or Vibe encoding.');
+  if(image&&!/^(iVBOR|\/9j\/|UklGR)/.test(image))throw Error('不支持的 Vibe 图片格式。');
+  if(!image&&!encodings.length)throw Error('没有可用的图片或 Vibe 编码。');
   const infoExtracted=unit(info.information_extracted,encodings[0]?.infoExtracted??1);
-  if(!image&&!encodings.some(e=>Math.abs(e.infoExtracted-infoExtracted)<1e-8))throw Error('Vibe extraction value has no matching encoding.');
+  if(!image&&!encodings.some(e=>Math.abs(e.infoExtracted-infoExtracted)<1e-8))throw Error('Vibe 提取值没有对应的编码。');
   return {base64:image,encodings,infoExtracted,strength:unit(info.strength,1),name:typeof v.name==='string'?v.name.slice(0,160):`Vibe ${index+1}`,previewUrl:image?`data:image/${image.startsWith('/9j/')?'jpeg':image.startsWith('UklGR')?'webp':'png'};base64,${image}`:''};
  });
 }

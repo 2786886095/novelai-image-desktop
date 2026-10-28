@@ -169,7 +169,7 @@ export async function loadReferenceCatalog(signal?: AbortSignal, refresh = false
           if (!chunkResponse.ok) throw new Error(`HTTP ${chunkResponse.status}`);
           const chunkManifest = await unpackCatalogPayload(await chunkResponse.json());
           if (chunkManifest.schema !== "langbai-reference-catalog/v1" || !Array.isArray(chunkManifest.assets)) {
-            throw new Error("Invalid reference catalog chunk");
+            throw new Error("在线目录分片格式无效。");
           }
           return chunkManifest;
         }));
@@ -182,7 +182,7 @@ export async function loadReferenceCatalog(signal?: AbortSignal, refresh = false
         };
       }
       if (parsed.schema !== "langbai-reference-catalog/v1" || !Array.isArray(parsed.assets)) {
-        throw new Error("Invalid reference catalog");
+        throw new Error("在线目录格式无效。");
       }
       const assets = (parsed.assets as ReferenceCatalogAsset[]).map((asset) => ({
         ...asset,
@@ -203,7 +203,7 @@ export async function loadReferenceCatalog(signal?: AbortSignal, refresh = false
       signal?.removeEventListener("abort", forwardAbort);
     }
   }
-  throw lastError instanceof Error ? lastError : new Error("Online reference catalog is unavailable");
+  throw lastError instanceof Error ? lastError : new Error("在线目录暂不可用。");
 }
 
 export async function fetchReferenceAsset(
@@ -219,7 +219,7 @@ export async function fetchReferenceAsset(
     });
     try {
       const result = await window.naiDesktop.downloadReferenceCatalogAsset({ id: requestId, urls: sources });
-      if (!result.ok || !result.base64) throw new Error(result.message || "Reference asset is unavailable");
+      if (!result.ok || !result.base64) throw new Error(result.message || "精准参考图暂不可用。");
       const binary = atob(result.base64);
       const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
       onProgress(bytes.byteLength, result.bytes || asset.bytes || bytes.byteLength);
@@ -241,7 +241,7 @@ export async function fetchReferenceAsset(
       if (signal?.aborted) throw error;
     }
   }
-  if (!response) throw lastError instanceof Error ? lastError : new Error("Reference asset is unavailable");
+  if (!response) throw lastError instanceof Error ? lastError : new Error("精准参考图暂不可用。");
   const total = Number(response.headers.get("content-length")) || asset.bytes || 0;
   if (!response.body) {
     const bytes = new Uint8Array(await response.arrayBuffer());

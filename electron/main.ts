@@ -1291,7 +1291,7 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
           lastError = error;
         }
       }
-      return { ok: false, message: lastError instanceof Error ? lastError.message : "Reference asset unavailable" };
+      return { ok: false, message: lastError instanceof Error ? lastError.message : "精准参考图暂不可用。" };
     },
   );
   ipcMain.handle("settings:getReverseDefaults", () =>
@@ -1365,7 +1365,7 @@ function syncMcpServer() {
     const port = Math.trunc(Number(settings.mcpServerPort) || 39280);
     if (settings.mcpServerEnabled !== true) { mcpStatus = { running: false, port, url: "", error: "" }; return; }
     try {
-      if (settings.credentialIssues?.includes("mcpServerToken")) throw new Error("MCP token is locked; recover local credential encryption or explicitly regenerate the token.");
+      if (settings.credentialIssues?.includes("mcpServerToken")) throw new Error("MCP 令牌已锁定：请恢复本机凭据加密，或重新生成令牌。");
       let token = settings.mcpServerToken ?? "";
       if (!token) { token = crypto.randomBytes(24).toString("hex"); setSetting("mcpServerToken", token); }
       mcpServer = await startMcpServer({ port, token, window: () => mainWindow });

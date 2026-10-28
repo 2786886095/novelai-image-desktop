@@ -48,7 +48,7 @@ import type {
   WorkingImage,
 } from "./types";
 import { createDefaultBatchRedraw, DEFAULT_AUGMENT_OPTIONS, DEFAULT_I2I_PARAMS, DEFAULT_PARAMS, DIRECTOR_TOOLS, EMOTION_OPTIONS, isNAIV5Model, maxNAICharacterPrompts, NAI_INPAINT_MODELS, normalizeGenerateParams, normalizeNAIBaseModel, seedForBatch } from "./types";
-import { normalizeAppLanguage } from "./i18n";
+import { normalizeAppLanguage, withAppLanguage } from "./i18n";
 import { expandWildcards } from "./wildcards";
 import { adaptiveNAIImageSize } from "./nai-dimensions";
 import { normalizeInpaintBrushSize } from "./inpaint-brush";
@@ -576,10 +576,10 @@ function submittedInpaintEdit(state: AppState, source: WorkingImage, engine: Inp
 function validateSavedInpaintRegion(session: InpaintEditSession) {
   const r = session.region;
   if (!r) return;
-  if (![r.x, r.y, r.width, r.height].every(Number.isInteger) || r.x < 0 || r.y < 0 || r.width < 8 || r.height < 8 || r.x + r.width > session.source.width || r.y + r.height > session.source.height) throw Error("The saved editing region is outside its original image.");
+  if (![r.x, r.y, r.width, r.height].every(Number.isInteger) || r.x < 0 || r.y < 0 || r.width < 8 || r.height < 8 || r.x + r.width > session.source.width || r.y + r.height > session.source.height) throw Error("保存的编辑选区超出了原图范围。");
   if (session.engine === "novelai") {
     const clamped = clampFocusedInpaintRegion(r, session.source.width, session.source.height);
-    if (Object.keys(r).some(k => r[k as keyof InpaintRegion] !== clamped[k as keyof InpaintRegion])) throw Error("The saved editing region no longer meets the inpaint limits.");
+    if (Object.keys(r).some(k => r[k as keyof InpaintRegion] !== clamped[k as keyof InpaintRegion])) throw Error("保存的编辑选区已不符合重绘限制。");
   }
 }
 
@@ -1019,7 +1019,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const removeImageServiceChanged = window.naiDesktop.onImageServiceChanged?.(() => {
         void window.naiDesktop.getSettings().then((incoming) => {
           if ((listenerHost[storeIpcListenerRegistryKey] as StoreIpcListenerRegistry | undefined)?.owner !== storeIpcListenerOwner) return;
-          set((state) => ({ settings: mergeImageSettings(state.settings, incoming) }));
+          set((state) => ({ settings: mergeImageSettings(state.settings, withAppLanguage(incoming)) }));
         }).catch(() => { /* A failed refresh leaves drafts intact; host CAS still rejects stale writes. */ });
       });
       listenerHost[storeIpcListenerRegistryKey] = {
@@ -1034,7 +1034,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // retriable error instead of the other reads' fire-and-forget defaults.
     let settings: AppSettings;
     try {
-      settings = await window.naiDesktop.getSettings();
+      settings = withAppLanguage(await window.naiDesktop.getSettings());
     } catch (error: any) {
       set({ bootError: error?.message || "读取设置失败，请重试。" });
       return;
@@ -1359,7 +1359,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   async refreshSettings() {
-    const settings = await window.naiDesktop.getSettings();
+    const settings = withAppLanguage(await window.naiDesktop.getSettings());
     set((state) => {
       const nextSettings = mergeFullSettings(state.settings, settings);
       let inpaintRegion = state.inpaintRegion;
@@ -1541,16 +1541,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!session || state.isGenerating || state.isRestoringInpaintEditSession) return false;
     const failure = (message: string) => `${inpaintEditText(get().settings?.language).failed}: ${message}`;
     const engine = state.settings?.inpaintEngine === "openai" ? "openai" : "novelai";
-    if (engine !== session.engine) { set({ toast: failure("Switch back to the engine used for this inpaint first.") }); return false; }
+    if (engine !== session.engine) { set({ toast: failure("请先切换回这次重绘使用的引擎。") }); return false; }
     const previous = inpaintEditorState(state), revision = ++inpaintEditRestoreRevision;
     const loadRevision = ++workbenchLoadRevision, settlement = generationSettlementRevision;
     let loadedMainSource = false, committed = false;
     set({ isRestoringInpaintEditSession: true });
     try {
       const result = await window.naiDesktop.loadImageFromPath(session.source.filePath);
-      if (!result.ok || !result.image) throw Error(result.message || "The original image could not be loaded.");
+      if (!result.ok || !result.image) throw Error(result.message || "无法载入原图。");
       loadedMainSource = true;
-      if (result.image.width !== session.source.width || result.image.height !== session.source.height) throw Error("The original image dimensions have changed since inpainting.");
+      if (result.image.width !== session.source.width || result.image.height !== session.source.height) throw Error("原图尺寸在重绘后已改变。");
       await validateInpaintEditSource(result.image);
       const maskRgba = await decodeInpaintEditMask(session.maskBase64, result.image.width, result.image.height);
       validateSavedInpaintRegion(session);
@@ -1592,7 +1592,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ inpaintEditRestore: null, isRestoringInpaintEditSession: false });
       return;
     }
-    const failed = `${inpaintEditText(state.settings?.language).failed}: ${message || "Canvas hydration failed."}`;
+    const failed = `${inpaintEditText(state.settings?.language).failed}: ${message || "画布恢复失败。"}`;
     if (payload.rollback) {
       pendingInpaintEditRestore = null;
       set({ inpaintEditRestore: null, isRestoringInpaintEditSession: false, toast: failed, statusText: failed });
@@ -1606,7 +1606,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const maskRgba = source ? await decodeInpaintEditMask(previous.inpaintMask, source.width, source.height) : null;
         if (source) {
           const reloaded = await window.naiDesktop.loadImageFromPath(source.filePath);
-          if (!reloaded.ok || !reloaded.image || reloaded.image.width !== source.width || reloaded.image.height !== source.height) throw Error("The previous editing image could not be reloaded.");
+          if (!reloaded.ok || !reloaded.image || reloaded.image.width !== source.width || reloaded.image.height !== source.height) throw Error("无法重新载入之前的编辑图片。");
           await validateInpaintEditSource(reloaded.image);
         }
         if (pendingInpaintEditRestore?.revision !== rollbackRevision || get().inpaintEditRestore?.revision !== revision) return;

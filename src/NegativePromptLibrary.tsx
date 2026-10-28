@@ -29,12 +29,12 @@ export function NegativePromptLibraryControl({value,onApply,variant='icon'}:{val
  const selected=filtered.find(p=>p.id===selectedId)??filtered[0];
  const tagSuggestions=collectPromptTags(presets).map(t=>t.tag);
  useEffect(()=>{if(!open)return;const key=(e:KeyboardEvent)=>{if(e.key!=='Escape'||e.defaultPrevented)return;e.preventDefault();e.stopPropagation();if(draft)setDraft(null);else if(!busy)setOpen(false);};document.addEventListener('keydown',key);return()=>document.removeEventListener('keydown',key);},[open,draft,busy]);
- async function run(action:()=>Promise<unknown>){setBusy(true);setError('');try{await action();}catch(e){setError(String(e));}finally{setBusy(false);}}
+ async function run(action:()=>Promise<unknown>){setBusy(true);setError('');try{await action();}catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}}
  function create(current:boolean){setDraft({id:crypto.randomUUID(),name:'',prompt:current?value:'',createdAt:new Date().toISOString()});setDraftTags(tagFilter&&tagFilter!==UNTAGGED_PROMPT_FILTER?tagFilter:'');setError('');}
  function edit(preset:NegativePromptPreset){setDraft({...preset});setDraftTags(formatPromptTagInput(preset.tags));}
  async function save(){if(!draft||!draft.name.trim()||!draft.prompt.trim()||draft.name.length>100||draft.prompt.length>100000)return;const {tags:_previous,...rest}=draft,entry={...rest,name:draft.name.trim(),...promptTagField(draftTags)};await mutateNegativePresets(current=>{const index=current.findIndex(p=>p.id===entry.id);return index<0?mergeNegativeLibrary(current,[entry],()=>crypto.randomUUID()):current.map(p=>p.id===entry.id?entry:p);});setSelectedId(entry.id);setDraft(null);}
  async function remove(){if(!selected||!await confirmAction(text[19],text[6],undefined,undefined,{confirm:text[6],cancel:text[13]}))return;const id=selected.id;await mutateNegativePresets(current=>current.filter(p=>p.id!==id));setSelectedId('');}
- async function importFile(input:File){if(input.size>5000000)throw Error('Library file exceeds 5 MB');const imported=parseNegativeLibrary(await input.text());await mutateNegativePresets(current=>mergeNegativeLibrary(current,imported,()=>crypto.randomUUID()));}
+ async function importFile(input:File){if(input.size>5000000)throw Error('词库文件超过 5 MB。');const imported=parseNegativeLibrary(await input.text());await mutateNegativePresets(current=>mergeNegativeLibrary(current,imported,()=>crypto.randomUUID()));}
  function exportFile(){const blob=new Blob([exportNegativeLibrary(presets)],{type:'application/json;charset=utf-8'}),url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='negative-prompt-library.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
  function apply(mode:'replace'|'append'){if(!selected)return;onApply(applyNegativePreset(value,selected.prompt,mode));setOpen(false);useAppStore.getState().setToast(text[18]);}
  return <>

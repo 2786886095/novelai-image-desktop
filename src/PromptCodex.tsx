@@ -186,7 +186,7 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
         </div>
         <div className="prompt-codex-header-actions">
           <small>
-            {text.date} · {new Date(snapshot.generatedAt).toLocaleDateString()}
+            {text.date} · {new Date(snapshot.generatedAt).toLocaleDateString("zh-CN")}
           </small>
           <Button
             variant="ghost"

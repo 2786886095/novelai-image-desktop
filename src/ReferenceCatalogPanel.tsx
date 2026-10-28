@@ -338,7 +338,7 @@ export default function ReferenceCatalogPanel({ library, onDownloaded }: { libra
         width: asset.width,
         height: asset.height,
       });
-      if (!result.ok) throw new Error(result.message || "Download failed");
+      if (!result.ok) throw new Error(result.message || "下载失败。");
       setProgress((current) => ({ ...current, [asset.id]: 100 }));
       if (options.notify !== false) {
         setToast(text.downloadedToast);

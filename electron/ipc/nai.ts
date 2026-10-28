@@ -946,7 +946,7 @@ export async function prepareExtras(
   }
   // Validate the entire bundle before image decoding or any paid encoding call.
   if (extras.vibeImages?.length) {
-    if (!supportsNAIVibeTransfer(params.model)) throw new Error("Vibe Transfer requires V4/V4.5 or V3, not V5.");
+    if (!supportsNAIVibeTransfer(params.model)) throw new Error("氛围迁移（Vibe Transfer）仅支持 V4 / V4.5 或 V3，不支持 V5。");
     for (const ref of extras.vibeImages) validateVibeModel(ref, params.model);
     extras = {...extras, vibeImages: await Promise.all(extras.vibeImages.map(async ref => matchingVibeEncoding(ref, params.model) ? ref : ({...ref, base64:(await processableImage(Buffer.from(stripBase64Prefix(ref.base64), "base64"))).toString("base64")})))};
   }
@@ -4117,7 +4117,7 @@ export async function importTagComicReference(
     if(!(await fs.readFile(filePath)).equals(buffer))throw Error('参考图写入读回不一致');
     return {
       ok: true,
-      message: "Reference imported.",
+      message: "参考图已导入。",
       asset: {
         id,
         name: path.basename(sourcePath),

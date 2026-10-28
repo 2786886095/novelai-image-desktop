@@ -917,10 +917,10 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
 
   async function importVibeFile(file: File) {
     try {
-      if (file.size > 50 * 1024 * 1024) throw new Error("Vibe file exceeds 50 MB.");
+      if (file.size > 50 * 1024 * 1024) throw new Error("Vibe 文件超过 50 MB。");
       const refs = parseVibeFile(await file.text());
       const state = useAppStore.getState();
-      if (state.vibeImages.length + refs.length > 16) throw new Error("Vibe: maximum 16 references.");
+      if (state.vibeImages.length + refs.length > 16) throw new Error("Vibe 参考最多 16 个。");
       useAppStore.setState({vibeImages:[...state.vibeImages,...refs.map(ref=>({...ref,id:crypto.randomUUID()}))]});
       setToast(`${vf.loaded} · ${refs.length}`);
     } catch(error) { setToast(String(error instanceof Error ? error.message : error)); }
@@ -3710,7 +3710,7 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
       : officialMax ? maxNAIEnhanceSize(inputSize.width, inputSize.height) : adaptiveNAIImageSize(workbenchImage.width * (isMax ? 2 : enhanceScale), workbenchImage.height * (isMax ? 2 : enhanceScale), params)
     : null;
   const outputLimitReason = outputTooLarge && target
-    ? f("enhance.outputLimit", { size: `${target.width}×${target.height}`, pixels: (target.width * target.height).toLocaleString(), limit: NAI_MAX_PIXEL_AREA.toLocaleString() })
+    ? f("enhance.outputLimit", { size: `${target.width}×${target.height}`, pixels: (target.width * target.height).toLocaleString("zh-CN"), limit: NAI_MAX_PIXEL_AREA.toLocaleString("zh-CN") })
     : "";
   return (
     <>

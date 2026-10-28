@@ -468,7 +468,7 @@ function ArtistRankingGallery({
           <p>{text.artistSubtitle}</p>
         </div>
         <div className="aitag-header-actions">
-          <span className="artist-ranking-updated">{text.updated}: {updatedAt ? new Date(updatedAt).toLocaleString() : text.neverUpdated}</span>
+          <span className="artist-ranking-updated">{text.updated}: {updatedAt ? new Date(updatedAt).toLocaleString("zh-CN") : text.neverUpdated}</span>
           <button type="button" className="btn secondary" disabled={loading} onClick={() => void load(true, page, pageSize, query)}>{text.manualUpdate}</button>
           <button type="button" className="btn secondary" onClick={() => void window.naiDesktop.openExternal("https://danbooru.donmai.us/artists")}>{text.openDanbooru}</button>
         </div>
@@ -476,7 +476,7 @@ function ArtistRankingGallery({
       <section className="artist-ranking-toolbar">
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text.artistSearch} />
         <SelectMenu className="gallery-page-size-picker" value={String(pageSize)} ariaLabel={text.itemsPerPage} label={text.itemsPerPage} options={GALLERY_PAGE_SIZE_OPTIONS.map((item) => ({ value: String(item), label: formatText(text.artistPageSize, { count: item }) }))} onChange={(next) => { const size = Number(next); setPageSize(size); void load(false, 1, size, query); }} />
-        <span>{formatText(text.artistCount, { count: artistTotal.toLocaleString() })}</span>
+        <span>{formatText(text.artistCount, { count: artistTotal.toLocaleString("zh-CN") })}</span>
       </section>
       {loading && artists.length === 0 ? <div className="aitag-state">{text.loadingArtists}</div> : null}
       {error ? <div className="aitag-state error"><span>{error}</span><button type="button" className="btn secondary" onClick={() => void load(false, page, pageSize, query)}>{text.retry}</button></div> : null}
@@ -497,7 +497,7 @@ function ArtistRankingGallery({
                   {preview ? <OnlineCachedImage source="danbooru" text={text} src={preview.imageUrl} alt="" loading="lazy" /> : <i>{previewResolved ? text.noPreviews : "…"}</i>}
                 </span>
                 <span className="artist-ranking-copy"><strong>{artist.name.replaceAll("_", " ")}</strong><code>artist:{artist.name}</code></span>
-                <em>{artist.postCount.toLocaleString()} {text.works}</em>
+                <em>{artist.postCount.toLocaleString("zh-CN")} {text.works}</em>
               </button>
               <div className="artist-ranking-actions"><GalleryFavoriteButton item={{source:'artist-ranking',id:String(artist.id),title:artist.name,author:artist.name,sourceUrl:`https://danbooru.donmai.us/posts?tags=${encodeURIComponent(artist.name)}`,prompt:`artist:${artist.name}`,negativePrompt:'',createdAt:'',score:artist.postCount,savedAt:Date.now(),images:preview?[{url:preview.imageUrl,thumb:preview.imageUrl}]:[]}}/>
                 <button type="button" title={text.copyArtistTag} onClick={() => void navigator.clipboard.writeText(`artist:${artist.name}`)}>{text.copyTag}</button>

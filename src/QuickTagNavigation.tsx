@@ -33,7 +33,7 @@ export function QuickTagNavigation({navigation, collectionId, searchAll, loading
   }, [visibleKeys]);
   const presented = all.filter(c => visibleKeys.has(JSON.stringify(c.path)) || retainedKeys.has(JSON.stringify(c.path)));
   const groupName = (id: string) => (text as Record<string,string>)[id] ?? id;
-  const fill = (value: string, fields: Record<string, number>) => Object.entries(fields).reduce((s,[k,v]) => s.replace(`{${k}}`, v.toLocaleString()),value);
+  const fill = (value: string, fields: Record<string, number>) => Object.entries(fields).reduce((s,[k,v]) => s.replace(`{${k}}`, v.toLocaleString("zh-CN")),value);
   return <div className="quicktag-navigation">
     <nav className="quicktag-groups" aria-label={text.sections}>
       <button type="button" className="btn secondary" aria-pressed={!type} disabled={loading} onClick={()=>onGroup?.("")}>{text.sections}</button>
@@ -41,7 +41,7 @@ export function QuickTagNavigation({navigation, collectionId, searchAll, loading
     </nav>
     {navigation?.catalogTotal != null && <small>{fill(text.inventory,{books:navigation.catalogTotal,entries:navigation.catalogEntries ?? 0})} · {text.version}: {navigation.release}</small>}
     {!!navigation?.hiddenCollections && <p className="quicktag-filter-notice" role="status">{fill(text.hidden,{count:navigation.hiddenCollections})}</p>}
-    <SelectMenu ariaLabel={text.catalog} label={collectionId ? text.catalog : undefined} value={collectionId} disabled={loading} options={[{value:"",label:text.catalog},...collections.map(c=>({value:c.id,label:`${c.title} (${c.count.toLocaleString()})`}))]} onChange={id=>onSelect(id,[])} />
+    <SelectMenu ariaLabel={text.catalog} label={collectionId ? text.catalog : undefined} value={collectionId} disabled={loading} options={[{value:"",label:text.catalog},...collections.map(c=>({value:c.id,label:`${c.title} (${c.count.toLocaleString("zh-CN")})`}))]} onChange={id=>onSelect(id,[])} />
     {collectionId && <section className="quicktag-directory" aria-label={text.category}>
       <nav className="quicktag-breadcrumbs" aria-label={text.category}>
         <button type="button" className="btn secondary" disabled={loading} onClick={()=>onSelect(collectionId,[])}>{text.all}</button>
@@ -54,7 +54,7 @@ export function QuickTagNavigation({navigation, collectionId, searchAll, loading
           const key=JSON.stringify(c.path), hasChildren=all.some(n=>n.path.length===c.path.length+1&&prefix(c.path,n.path));
           return <AnimatedCollapse key={key} open={visibleKeys.has(key)} className="quicktag-row-presence"><div className="quicktag-directory-row" style={{paddingInlineStart: Math.min(c.path.length-1,8)*14}}>
             {hasChildren ? <button type="button" className="quicktag-tree-toggle" aria-label={c.path.join(" › ")} aria-expanded={isOpen(c.path)||!!query} onClick={()=>setExpanded(old=>{const next=new Set(old);next.has(key)?next.delete(key):next.add(key);return next;})}><Icon name="chevronDown" /></button> : <span className="quicktag-tree-leaf" />}
-            <button type="button" className="quicktag-category" disabled={loading} aria-current={key===JSON.stringify(active)?"page":undefined} title={c.path.join(" › ")} onClick={()=>onSelect(collectionId,c.path)}><span>{c.path.at(-1)}</span><small>{c.count.toLocaleString()}</small></button>
+            <button type="button" className="quicktag-category" disabled={loading} aria-current={key===JSON.stringify(active)?"page":undefined} title={c.path.join(" › ")} onClick={()=>onSelect(collectionId,c.path)}><span>{c.path.at(-1)}</span><small>{c.count.toLocaleString("zh-CN")}</small></button>
           </div></AnimatedCollapse>;
         })}
         {!visible.length && <small>{text.emptyCategory}</small>}

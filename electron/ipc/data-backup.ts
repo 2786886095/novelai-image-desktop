@@ -521,7 +521,7 @@ async function buildArchive(
     const mobileStatePath = path.join(app.getPath("userData"), "backup-mobile-state.json");
     try {
       const stat = await fs.stat(mobileStatePath);
-      if (stat.size > MAX_JSON_BYTES) throw new Error("Mobile workspace is too large");
+      if (stat.size > MAX_JSON_BYTES) throw new Error("保留的移动端数据过大，无法写入备份。");
       const mobileState = JSON.parse(await fs.readFile(mobileStatePath, "utf8"));
       if (mobileState && typeof mobileState === "object" && !Array.isArray(mobileState)) {
         zip.file("data/mobile-state.json", JSON.stringify(mobileState));

@@ -271,7 +271,7 @@ export function DataPortabilitySettings({
       </div>
       {archive?.ok && (
         <div className="data-import-preview">
-          <div className="data-import-file"><Icon name="archive" /><span><strong>{text.archive}</strong><small>{archive.createdAt ? new Date(archive.createdAt).toLocaleString() : ""} · {archive.sourcePlatform} · v{archive.appVersion}</small></span></div>
+          <div className="data-import-file"><Icon name="archive" /><span><strong>{text.archive}</strong><small>{archive.createdAt ? new Date(archive.createdAt).toLocaleString("zh-CN") : ""} · {archive.sourcePlatform} · v{archive.appVersion}</small></span></div>
           <CategoryChecklist available={availableImport} selected={importSelection} setSelected={setImportSelection} language={language} summaries={archive.categories} />
           <Button variant="primary" disabled={Boolean(busy) || !importSelection.size} onClick={() => setConfirmStage(1)}>
             <IconText icon={busy === "import" ? <Icon name="loader" /> : <Icon name="restore" />}>{busy === "import" ? text.importing : text.importSelected}</IconText>
@@ -373,7 +373,7 @@ export function BackupRestoreSettings({
       </div>
       <div className="backup-status-card">
         <Icon name="history" />
-        <div><strong>{text.latest}</strong><span>{status?.latestCreatedAt ? new Date(status.latestCreatedAt).toLocaleString() : text.none}</span><small>{text.count.replace("{count}", String(status?.backupCount ?? 0)).replace("{size}", formatBytes(status?.totalBytes ?? 0))}</small></div>
+        <div><strong>{text.latest}</strong><span>{status?.latestCreatedAt ? new Date(status.latestCreatedAt).toLocaleString("zh-CN") : text.none}</span><small>{text.count.replace("{count}", String(status?.backupCount ?? 0)).replace("{size}", formatBytes(status?.totalBytes ?? 0))}</small></div>
         <Button variant="ghost" onClick={() => void refresh()}><IconText icon={<Icon name="refresh" />}>{text.refresh}</IconText></Button>
       </div>
       {message && <div className="status-box">{message}</div>}

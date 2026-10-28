@@ -844,7 +844,7 @@ export default function V5ArtistWeightRepair({
                             className={`${selected ? "selected" : ""}${canPreview ? " has-preview" : ""}`}
                             onPointerEnter={canPreview ? (event) => showDrawStylePreview(entry, meaning, event) : undefined}
                             onPointerLeave={canPreview ? hideDrawStylePreview : undefined}
-                          ><button type="button" className="random-custom-tag-select" aria-pressed={selected} onClick={() => toggleDrawStyleTag(entry.tag)}><span className="random-custom-tag-check"><Icon name={selected ? "check" : "plus"} /></span><span><b>{entry.tag}</b><small>{meaning}</small></span><em>{canPreview ? <Icon name="image" /> : entry.count > 0 ? entry.count.toLocaleString() : ""}</em></button></article>;
+                          ><button type="button" className="random-custom-tag-select" aria-pressed={selected} onClick={() => toggleDrawStyleTag(entry.tag)}><span className="random-custom-tag-check"><Icon name={selected ? "check" : "plus"} /></span><span><b>{entry.tag}</b><small>{meaning}</small></span><em>{canPreview ? <Icon name="image" /> : entry.count > 0 ? entry.count.toLocaleString("zh-CN") : ""}</em></button></article>;
                         })}
                       </div>{drawCatalogItems.length < drawCatalogTotal && <div className="random-custom-tag-load-more"><Button type="button" variant="ghost" disabled={drawCatalogLoadingMore} onClick={() => void loadMoreDrawCatalog()}>{drawCatalogLoadingMore && <span className="spinner" />}{drawLibraryText.more}</Button></div>}</section>}
                 </div>

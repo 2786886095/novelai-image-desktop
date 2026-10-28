@@ -36,7 +36,7 @@ const rpc=(method,params={})=>({jsonrpc:'2.0',id:1,method,params});
  const vault=load(path.join(root,'electron/ipc/credential-vault.ts'));assert(vault.SENSITIVE_SETTING_KEYS.includes('mcpServerToken'));assert(vault.SENSITIVE_SETTING_KEYS.includes('openaiImageEditApiKey'));
  let available=true;const v=new vault.CredentialVault({isEncryptionAvailable:()=>available,encryptString:s=>Buffer.from('fixture:'+s),decryptString:b=>b.toString().slice(8)});
  const enc=v.encode('mcpServerToken','fake-token');available=false;assert.equal(v.decode('mcpServerToken',enc),'');assert.equal(v.encode('mcpServerToken',''),enc);check('MCP defaults/settings validation; MCP and OpenAI keys both encrypted; locked ciphertext preserved');
- settings.credentialIssues=['mcpServerToken'];settings.mcpServerEnabled=true;await lifecycle.syncMcpServer();assert.equal(starts,0);assert.equal(settings.mcpServerToken,'');assert(lifecycle.status().error.includes('locked'));settings.credentialIssues=[];check('locked token: startup refused without replacement');
+ settings.credentialIssues=['mcpServerToken'];settings.mcpServerEnabled=true;await lifecycle.syncMcpServer();assert.equal(starts,0);assert.equal(settings.mcpServerToken,'');assert(lifecycle.status().error.includes('令牌已锁定'));settings.credentialIssues=[];check('locked token: startup refused without replacement');
  settings.mcpServerEnabled=true;await lifecycle.syncMcpServer();h=lifecycle.handle();assert(lifecycle.status().running);assert.equal(settings.mcpServerToken.length,48);check('enable: loopback listener and generated token');
  assert.equal((await send(rpc('ping'),{Authorization:'Bearer wrong'})).status,401);
  assert.equal((await send(rpc('ping'),{Origin:'https://untrusted.example'})).status,403);

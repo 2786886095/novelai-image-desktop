@@ -1,8 +1,9 @@
 import {useAppStore} from './store';
+import {withAppLanguage} from './i18n';
 import type {AppSettings,StylePromptPreset} from './types';
 let pending:Promise<unknown>=Promise.resolve();
 export function changeStyles(update:(items:StylePromptPreset[])=>StylePromptPreset[]) {
- const next=pending.catch(()=>{}).then(async()=>{const s=await window.naiDesktop.getSettings();const saved=await window.naiDesktop.setSetting('stylePromptPresets',update(s.stylePromptPresets));useAppStore.setState(state=>({settings:{...(state.settings??s),stylePromptPresets:saved}}));});pending=next;return next;
+ const next=pending.catch(()=>{}).then(async()=>{const s=await window.naiDesktop.getSettings();const saved=await window.naiDesktop.setSetting('stylePromptPresets',update(s.stylePromptPresets));useAppStore.setState(state=>({settings:{...(state.settings??withAppLanguage(s)),stylePromptPresets:saved}}));});pending=next;return next;
 }
 export async function countStyleUse(id:string){await changeStyles(items=>items.map(p=>p.id===id?{...p,usageCount:(p.usageCount||0)+1}:p));}
 export async function setStyleSort(value:string){await window.naiDesktop.setSetting('stylePromptPresetSort',value as AppSettings['stylePromptPresetSort']);await useAppStore.getState().refreshSettings();}

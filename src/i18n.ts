@@ -1,9 +1,14 @@
-import type { AppLanguage } from "./types";
+import type { AppLanguage, AppSettings } from "./types";
 import { TAB_ITEMS } from "./prompt-data";
 
 /** The UI is Simplified Chinese only; stored or missing language values all resolve to zh-CN. */
 export function normalizeAppLanguage(_value: unknown): AppLanguage {
   return "zh-CN";
+}
+
+/** Settings entering the renderer always use zh-CN, so language-indexed text tables never miss. */
+export function withAppLanguage(settings: AppSettings): AppSettings {
+  return settings.language === "zh-CN" ? settings : { ...settings, language: normalizeAppLanguage(settings.language) };
 }
 
 type MainTabValue = (typeof TAB_ITEMS)[number]["value"];

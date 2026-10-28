@@ -25,23 +25,23 @@ describe("saved inpaint editor image/mask preflight", () => {
   });
   it("rejects corrupt image data before accessing the edit canvas", async () => {
     fail = true;
-    await expect(decodeInpaintEditMask("corrupt-png", 2, 2)).rejects.toThrow("could not be decoded");
+    await expect(decodeInpaintEditMask("corrupt-png", 2, 2)).rejects.toThrow("无法解码");
     expect(draw).not.toHaveBeenCalled();
   });
   it("rejects a mask from different dimensions, instead of stretching it", async () => {
-    await expect(decodeInpaintEditMask("different-png", 3, 2)).rejects.toThrow("do not match");
+    await expect(decodeInpaintEditMask("different-png", 3, 2)).rejects.toThrow("蒙版尺寸与原图不一致");
     expect(draw).not.toHaveBeenCalled();
   });
   it("validates the original image itself", async () => {
     await expect(validateInpaintEditSource({ filePath: "original.png", fileUrl: "fixture://original", width: 2, height: 2 })).resolves.toBeUndefined();
-    await expect(validateInpaintEditSource({ filePath: "original.png", fileUrl: "fixture://changed", width: 3, height: 2 })).rejects.toThrow("dimensions have changed");
+    await expect(validateInpaintEditSource({ filePath: "original.png", fileUrl: "fixture://changed", width: 3, height: 2 })).rejects.toThrow("原图尺寸在重绘后已改变");
   });
   it.each([0, -1, 1.5, Number.NaN])("rejects invalid source dimensions %s", async (bad) => {
-    await expect(decodeInpaintEditMask(null, bad, 2)).rejects.toThrow("Invalid saved editing dimensions");
+    await expect(decodeInpaintEditMask(null, bad, 2)).rejects.toThrow("保存的编辑尺寸无效");
   });
   it("bounds an image decode that never completes", async () => {
     vi.useFakeTimers(); wait = true;
-    const assertion = expect(decodeInpaintEditMask("stalled", 2, 2)).rejects.toThrow("timed out");
+    const assertion = expect(decodeInpaintEditMask("stalled", 2, 2)).rejects.toThrow("图片解码超时");
     await vi.advanceTimersByTimeAsync(15000); await assertion;
   });
   it("gives the restore control an explicit label", () => {

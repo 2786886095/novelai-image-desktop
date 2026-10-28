@@ -31,7 +31,7 @@ export interface InpaintEditRestorePayload {
 function decodeImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
-    const timer = setTimeout(() => finish(new Error("Image decoding timed out.")), 15000);
+    const timer = setTimeout(() => finish(new Error("图片解码超时。")), 15000);
     const finish = (error?: Error) => {
       clearTimeout(timer);
       image.onload = null;
@@ -39,14 +39,14 @@ function decodeImage(url: string): Promise<HTMLImageElement> {
       if (error) reject(error); else resolve(image);
     };
     image.onload = () => finish();
-    image.onerror = () => finish(new Error("The saved editing image or mask could not be decoded."));
+    image.onerror = () => finish(new Error("无法解码保存的编辑图片或蒙版。"));
     image.src = url;
   });
 }
 
 function checkSize(width: number, height: number) {
   if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width <= 0 || height <= 0) {
-    throw new Error("Invalid saved editing dimensions.");
+    throw new Error("保存的编辑尺寸无效。");
   }
 }
 
@@ -54,7 +54,7 @@ export async function validateInpaintEditSource(source: WorkingImage): Promise<v
   checkSize(source.width, source.height);
   const image = await decodeImage(source.fileUrl);
   if (image.naturalWidth !== source.width || image.naturalHeight !== source.height) {
-    throw new Error("The original image dimensions have changed since inpainting.");
+    throw new Error("原图尺寸在重绘后已改变。");
   }
 }
 
@@ -67,13 +67,13 @@ export async function decodeInpaintEditMask(
   if (maskBase64 === null) return null;
   const image = await decodeImage(`data:image/png;base64,${maskBase64}`);
   if (image.naturalWidth !== width || image.naturalHeight !== height) {
-    throw new Error("The saved mask dimensions do not match the original image.");
+    throw new Error("保存的蒙版尺寸与原图不一致。");
   }
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("The saved editing mask cannot be prepared on this device.");
+  if (!ctx) throw new Error("无法在此设备上准备保存的编辑蒙版。");
   ctx.drawImage(image, 0, 0);
   return ctx.getImageData(0, 0, width, height).data;
 }

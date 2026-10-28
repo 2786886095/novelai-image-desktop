@@ -1240,7 +1240,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
                       <button type="button" className="random-custom-tag-select" aria-pressed={selected} aria-label={`${entry.tag}: ${meaning}`} onClick={() => toggleLibraryTag(entry.tag)}>
                         <span className="random-custom-tag-check"><Icon name={selected ? "check" : "plus"} /></span>
                         <span><b>{entry.tag}</b><small>{meaning}</small></span>
-                        <em>{canPreview ? <Icon name="image" /> : entry.count > 0 ? entry.count.toLocaleString() : ""}</em>
+                        <em>{canPreview ? <Icon name="image" /> : entry.count > 0 ? entry.count.toLocaleString("zh-CN") : ""}</em>
                       </button>
                       {selected && <span className="random-custom-tag-card-modes">
                         <button type="button" className={mode === "always" ? "active" : ""} onClick={() => setCustomTagMode(entry.tag, "always")}>{customTagText.always}</button>

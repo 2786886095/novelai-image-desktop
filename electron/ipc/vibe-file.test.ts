@@ -13,7 +13,7 @@ it('uses imported encodings verbatim, without image decoding or paid encode requ
   expect(payload.parameters.reference_image_multiple).toEqual(['AQIDBA==']);
   expect(payload.parameters.reference_strength_multiple).toEqual([.31]);
   expect(spy).not.toHaveBeenCalled();
-  await expect(prepareExtras({...DEFAULT_PARAMS,model:'nai-diffusion-4-5-curated'},extras)).rejects.toThrow('no original image');
+  await expect(prepareExtras({...DEFAULT_PARAMS,model:'nai-diffusion-4-5-curated'},extras)).rejects.toThrow('没有原图');
   await expect(prepareExtras({...DEFAULT_PARAMS,model:'nai-diffusion-5-full'},extras)).rejects.toThrow('Vibe');
   expect(spy).not.toHaveBeenCalled();
  } finally {spy.mockRestore();}

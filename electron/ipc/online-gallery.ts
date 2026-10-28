@@ -755,7 +755,7 @@ export async function downloadOnlineGalleryImages(raw: unknown): Promise<OnlineG
   if (!downloadRoot) {
     downloadRoot = await selectOnlineGalleryDownloadDir() ?? "";
     if (!downloadRoot) {
-      return { ok: false, cancelled: true, savedPaths: [], failed: 0, outputDir: "", message: "Download cancelled" };
+      return { ok: false, cancelled: true, savedPaths: [], failed: 0, outputDir: "", message: "已取消下载。" };
     }
     settings = getSettings();
   }
@@ -788,7 +788,7 @@ export async function downloadOnlineGalleryImages(raw: unknown): Promise<OnlineG
     failed,
     failures,
     outputDir,
-    message: `${savedPaths.length} saved, ${failed} failed`,
+    message: `已保存 ${savedPaths.length} 张，失败 ${failed} 张。`,
   };
 }
 

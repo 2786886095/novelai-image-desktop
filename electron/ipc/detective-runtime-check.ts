@@ -58,13 +58,13 @@ app.once?.('will-quit',()=>controller?.abort());
 export const detectiveRuntimeChecking=()=>!!pending;
 export const cancelDetectiveRuntimeCheck=()=>controller?.abort();
 function fingerprint(c:Paths) {
-  if(!c.python||!c.assets)throw Error('Python/model paths are missing');
+  if(!c.python||!c.assets)throw Error('缺少 Python 或模型目录路径。');
   const root=fs.realpathSync(c.assets), manifest=path.join(root,'manifest.json');
   const files=JSON.parse(fs.readFileSync(manifest,'utf8')).files;
-  if(!files||!Object.keys(files).length)throw Error('Model manifest has no files');
+  if(!files||!Object.keys(files).length)throw Error('模型清单中没有文件。');
   const paths=[c.python,manifest,...Object.keys(files).map(name=>{
     const file=path.resolve(root,name),relative=path.relative(root,file);
-    if(relative.startsWith('..')||path.isAbsolute(relative))throw Error('Invalid model manifest path');
+    if(relative.startsWith('..')||path.isAbsolute(relative))throw Error('模型清单包含无效路径。');
     return file;
   })];
   const libraries=['artist_detective/desktop/assets.py','artist_detective/evaluation/encoder.py','torch/version.py'];
@@ -82,7 +82,7 @@ export function detectiveRuntimeValidation(c:Paths):DetectiveRuntimeValidation {
 export function validateDetectiveRuntime(c:Paths,force=false):Promise<DetectiveRuntimeValidation> {
   let key:string;
   try{key=fingerprint(c);}catch(e){return Promise.resolve({state:'failed',message:checkError(e,c)});}
-  if(pending)return key===pendingKey?pending:Promise.resolve({state:'failed',message:'Another model is being verified; retry after it completes'});
+  if(pending)return key===pendingKey?pending:Promise.resolve({state:'failed',message:'另一个模型正在校验，请在完成后重试。'});
   const remembered=previous(key);
   if(!force&&remembered?.state==='passed')return Promise.resolve(remembered);
   // Revoke old success before a forced check, including interrupted checks.
@@ -96,12 +96,12 @@ export function validateDetectiveRuntime(c:Paths,force=false):Promise<DetectiveR
     try{
       const {stdout}=await promisify(execFile)(c.python!,['-B','-I',script,c.assets!],{windowsHide:true,timeout:600_000,signal:controller!.signal,maxBuffer:2*1024*1024,env:{...process.env,PYTHONUTF8:'1',HF_HUB_OFFLINE:'1',TRANSFORMERS_OFFLINE:'1'}});
       const line=stdout.split(/\r?\n/).find(s=>s.startsWith('DETECTIVE_CHECK_OK:'));
-      if(!line)throw Error('Runtime check did not return success');
+      if(!line)throw Error('运行环境校验没有返回成功结果。');
       const details=JSON.parse(line.slice('DETECTIVE_CHECK_OK:'.length));
-      if(!details.gpu||!details.architecture||!Number.isFinite(details.selfScore)||details.selfScore<0.99)throw Error('Invalid runtime check result');
+      if(!details.gpu||!details.architecture||!Number.isFinite(details.selfScore)||details.selfScore<0.99)throw Error('运行环境校验结果无效。');
       const expected=c.variant==='full'?'PE-Spatial-G14-448':c.variant==='light'?'PE-Spatial-L14-448':undefined;
-      if(expected && details.architecture!==expected)throw Error(`Model variant mismatch: expected ${expected}, received ${details.architecture}`);
-      if(key!==fingerprint(c))throw Error('Model or runtime changed during validation; retry');
+      if(expected && details.architecture!==expected)throw Error(`模型版本不匹配：应为 ${expected}，实际为 ${details.architecture}。`);
+      if(key!==fingerprint(c))throw Error('校验期间模型或运行环境发生变化，请重试。');
       const value:DetectiveRuntimeValidation={state:'passed',checkedAt:new Date().toISOString(),details};
       cache.set(key,value);remember(key,value);
     }catch(e){cache.set(key,{state:'failed',message:checkError(e,c).slice(-2000)});}

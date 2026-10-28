@@ -13,7 +13,7 @@ describe('NovelAI Vibe file compatibility',()=>{
   expect(parseVibeFile(exportVibeFile(refs)).map(v=>({...v,name:''}))).toEqual(refs.map(v=>({...v,name:''})));
  });
  it('rejects encoding-only model or extraction mismatch but allows real image re-encoding',()=>{
-  const [ref]=parseVibeFile(JSON.stringify(entry()));expect(()=>validateVibeModel(ref,'nai-diffusion-4-5-curated')).toThrow('no original image');expect(()=>validateVibeModel({...ref,infoExtracted:.4},model)).toThrow();expect(()=>validateVibeModel({...ref,base64:'iVBORw0KGgo='},'nai-diffusion-4-full')).not.toThrow();
+  const [ref]=parseVibeFile(JSON.stringify(entry()));expect(()=>validateVibeModel(ref,'nai-diffusion-4-5-curated')).toThrow('没有原图');expect(()=>validateVibeModel({...ref,infoExtracted:.4},model)).toThrow();expect(()=>validateVibeModel({...ref,base64:'iVBORw0KGgo='},'nai-diffusion-4-full')).not.toThrow();
  });
  it.each([{}, {...entry(),version:2},{...entry(),importInfo:{model,information_extracted:2}}, {...entry(),encodings:{}},{...entry(),type:'image',image:'https://example.com/x'}])('rejects invalid input atomically',v=>expect(()=>parseVibeFile(JSON.stringify(v))).toThrow());
  it('rejects oversized or empty bundles',()=>{for(const vibes of [[],Array(17).fill(entry())])expect(()=>parseVibeFile(JSON.stringify({identifier:'novelai-vibe-transfer-bundle',version:1,vibes}))).toThrow();});

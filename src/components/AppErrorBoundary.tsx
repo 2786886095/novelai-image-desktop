@@ -36,7 +36,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   private retry = () => this.setState({ error: null });
 
   private copyDetails = () => {
-    const details = this.state.error?.stack || this.state.error?.message || "Unknown render error";
+    const details = this.state.error?.stack || this.state.error?.message || "未知渲染错误";
     void navigator.clipboard?.writeText(details).catch((error) => {
       console.error(`[render:${this.props.scope}:copy]`, error);
     });

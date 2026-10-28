@@ -23,7 +23,7 @@ function createSnapshot(
   bytes: Buffer,
 ): MetadataSnapshotResult {
   if (!bytes.length || bytes.length > MAX_SNAPSHOT_BYTES) {
-    return { ok: false, message: "Metadata snapshot image is empty or too large." };
+    return { ok: false, message: "图片为空或超过 100 MB，无法读取原数据。" };
   }
   const snapshot: MetadataSnapshotPayload = {
     name: path.basename(meta.name || "metadata-image.png"),
@@ -54,7 +54,7 @@ function retainSnapshot(
 async function snapshotFromPath(sourcePath: string): Promise<MetadataSnapshotResult> {
   const resolved = path.resolve(sourcePath);
   const stat = await fs.promises.stat(resolved);
-  if (!stat.isFile()) return { ok: false, message: "Image path is not a file." };
+  if (!stat.isFile()) return { ok: false, message: "图片路径不是文件。" };
   const bytes = await fs.promises.readFile(resolved);
   return createSnapshot({
     name: path.basename(resolved),
