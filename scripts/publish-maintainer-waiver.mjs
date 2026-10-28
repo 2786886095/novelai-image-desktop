@@ -11,6 +11,7 @@ import {assertReleaseArtifactScope,assertUnsignedIosPackage,unsignedIosIpaInspec
 const REPO='2786886095/novelai-image-desktop',VERSION='2.6.8',BUILD='188',TAG='v2.6.8';
 const PACKAGE_SHA='76b5d3e08f7171681d0c9ed4d9747e721d9c7c71';
 const ACK='PUBLISH_v2.6.8_WITH_MAINTAINER_WAIVER';
+const RECOVER_DRAFT_ID=426780428,RECOVER_SOURCE_SHA='ead8a07cbf90fb3cf598673f8c6711334ae1bdb7',RECOVER_CREATED_AT='2026-10-28T14:32:53Z';
 const AUTH_SHA='7504698d952adeb8d922397080e24a3c7b481cc958cac2f5c4a71f54ec3516ef';
 const SELF='scripts/publish-maintainer-waiver.mjs',WORKFLOW='.github/workflows/publish-maintainer-waiver.yml';
 const DOCS=['README.md','README.en.md','README.ja.md','README.ko.md','README.zh-TW.md','docs/RELEASE_NOTES.md'];
@@ -39,6 +40,25 @@ async function api(route,{method='GET',body,allow404=false}={}){
 }
 async function all(route){let rows=[];for(let page=1;page<=20;page++){const x=await api(`${route}${route.includes('?')?'&':'?'}per_page=100&page=${page}`);assert(Array.isArray(x));rows.push(...x);if(x.length<100)return rows;}throw Error('Pagination bound exceeded');}
 async function peelTag(required){let ref=await api(`git/ref/tags/${TAG}`,{allow404:!required});if(!ref)return null;let o=ref.object;for(let i=0;i<5&&o.type==='tag';i++)o=(await api(`git/tags/${o.sha}`)).object;assert.equal(o.type,'commit');return o.sha;}
+async function readOwnedEmptyDraft(){
+ const matches=(await all('releases')).filter(r=>r.tag_name===TAG);
+ assert.equal(matches.length,1,'Only the exact empty draft created by failed run40706838413 may be recovered');
+ assert.equal(matches[0].id,RECOVER_DRAFT_ID);
+ const draft=await api(`releases/${RECOVER_DRAFT_ID}`);
+ assert(draft.draft&&!draft.prerelease&&draft.published_at===null);
+ assert.equal(draft.tag_name,TAG);assert.equal(draft.target_commitish,RECOVER_SOURCE_SHA);assert.equal(draft.created_at,RECOVER_CREATED_AT);
+ assert.equal(draft.name,`Langbai NovelAI Studio ${TAG}`);assert.equal(draft.body,fs.readFileSync('docs/RELEASE_NOTES.md','utf8'));
+ assert.equal((await all(`releases/${RECOVER_DRAFT_ID}/assets`)).length,0,'Never overwrite an asset or recover a nonempty/foreign draft');
+ return draft;
+}
+async function uploadOwnedAsset(id,file){
+ assert.equal(id,RECOVER_DRAFT_ID);
+ const url=`https://uploads.github.com/repos/${REPO}/releases/${id}/assets?name=${encodeURIComponent(file.name)}`;
+ const response=await fetch(url,{method:'POST',redirect:'error',headers:{Authorization:`Bearer ${process.env.GH_TOKEN}`,Accept:'application/vnd.github+json','Content-Type':'application/octet-stream','Content-Length':String(file.size)},body:fs.createReadStream(file.file),duplex:'half',signal:AbortSignal.timeout(1200000)});
+ if(response.status!==201)throw Error(`Asset upload ${file.name} returned ${response.status}`);
+ const asset=await response.json();assert.equal(asset.name,file.name);assert.equal(asset.state,'uploaded');assert.equal(asset.size,file.size);assert.equal(asset.digest,'sha256:'+file.sha256);
+ write(path.join(evidence,'uploaded-'+file.name+'.json'),{id:asset.id,name:asset.name,size:asset.size,digest:asset.digest,state:asset.state});
+}
 const EXTRACT=String.raw`import sys,json,zipfile,stat,os,shutil
 from pathlib import Path,PurePosixPath
 archive,out,wanted=sys.argv[1:];wanted=json.loads(wanted);out=Path(out)
@@ -141,6 +161,7 @@ async function main(){
  const base=fs.realpathSync(process.env.RUNNER_TEMP);root=path.join(base,`maintainer-waiver-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`);fs.mkdirSync(root);for(const x of ['archives','extracted','assets','evidence'])fs.mkdirSync(path.join(root,x));evidence=path.join(root,'evidence');
  const source=await sourceBinding(releaseSha);write(path.join(evidence,'source-binding.json'),source);
  assert.equal(await api(`releases/tags/${TAG}`,{allow404:true}),null,'Release already exists; never overwrite');assert.equal(await peelTag(false),null,'Tag already exists; never retarget');
+ await readOwnedEmptyDraft();
  const runs=[];for(const [id,wf]of [[40692112503,296765887],[40692117395,296938219]]){const r=await api(`actions/runs/${id}`);assert.equal(r.status,'completed');assert.equal(r.conclusion,'success');assert.equal(r.head_sha,PACKAGE_SHA);assert.equal(r.workflow_id,wf);runs.push({id,headSha:r.head_sha,status:r.status,conclusion:r.conclusion,url:r.html_url});}
  const artifacts=[];for(const spec of INPUTS)artifacts.push(await downloadArtifact(spec));write(path.join(evidence,'artifact-provenance.json'),{source,runs,artifacts});
  const assetsDir=path.join(root,'assets');for(const name of Object.values(N)){const candidates=artifacts.map(a=>path.join(a.extracted,name)).filter(fs.existsSync);assert.equal(candidates.length,1,'Missing/duplicate original public asset '+name);fs.copyFileSync(candidates[0],path.join(assetsDir,name),fs.constants.COPYFILE_EXCL);}
@@ -171,11 +192,14 @@ async function main(){
  write(f('verification.json'),receipt);files.push({name:'verification.json',file:f('verification.json'),size:fs.statSync(f('verification.json')).size,sha256:await hashFile(f('verification.json'))});assertReleaseArtifactScope(files.map(x=>x.name),{version:VERSION,withVerification:true});write(path.join(evidence,'pre-publication-checks.json'),{source,files:files.map(({file,...a})=>a),fullFunctionalAcceptancePassed:false});
  // Re-read mutable refs immediately before the first write. Never overwrite a tag/release.
  await sourceBinding(releaseSha);assert.equal(await api(`releases/tags/${TAG}`,{allow404:true}),null);assert.equal(await peelTag(false),null);
- call('gh',['release','create',TAG,'--repo',REPO,'--target',releaseSha,'--draft','--title',`Langbai NovelAI Studio ${TAG}`,'--notes-file','docs/RELEASE_NOTES.md']);
- const draft=await api(`releases/tags/${TAG}`);assert(draft.draft&&!draft.prerelease&&draft.target_commitish===releaseSha);ownedDraftId=draft.id;write(path.join(evidence,'owned-draft.json'),{id:ownedDraftId,tag:TAG,target:releaseSha,createdByThisRun:true});const draftTag=await peelTag(false);if(draftTag!==null)assert.equal(draftTag,releaseSha);
- call('gh',['release','upload',TAG,'--repo',REPO,...files.map(x=>x.file)]);const uploaded=await releaseAssets(ownedDraftId,files);write(path.join(evidence,'draft-upload-readback.json'),{id:ownedDraftId,assets:uploaded});
+ const priorDraft=await readOwnedEmptyDraft();ownedDraftId=priorDraft.id;write(path.join(evidence,'prior-owned-empty-draft.json'),priorDraft);
+ const draft=await api(`releases/${ownedDraftId}`,{method:'PATCH',body:{target_commitish:releaseSha,draft:true,prerelease:false}});
+ assert(draft.draft&&!draft.prerelease&&draft.target_commitish===releaseSha);write(path.join(evidence,'owned-draft.json'),{id:ownedDraftId,tag:TAG,target:releaseSha,recoveredFromRun:40706838413,priorTarget:RECOVER_SOURCE_SHA,createdByThisRun:false,emptyDraftOwnershipChecked:true});
+ const draftTag=await peelTag(false);if(draftTag!==null)assert.equal(draftTag,releaseSha);
+ for(const file of files)await uploadOwnedAsset(ownedDraftId,file);
+ const uploaded=await releaseAssets(ownedDraftId,files);write(path.join(evidence,'draft-upload-readback.json'),{id:ownedDraftId,assets:uploaded});
  assert.equal((await api('git/ref/heads/main')).object.sha,releaseSha);const tagBefore=await peelTag(false);if(tagBefore!==null)assert.equal(tagBefore,releaseSha);const stillDraft=await api(`releases/${ownedDraftId}`);assert(stillDraft.draft&&!stillDraft.prerelease&&stillDraft.target_commitish===releaseSha);
- call('gh',['release','edit',TAG,'--repo',REPO,'--draft=false','--latest']);
+ await api(`releases/${ownedDraftId}`,{method:'PATCH',body:{draft:false,prerelease:false,make_latest:'true'}});
  const published=await api(`releases/${ownedDraftId}`),latestRelease=await api('releases/latest');assert(!published.draft&&!published.prerelease&&published.tag_name===TAG&&published.target_commitish===releaseSha);assert.equal(latestRelease.id,ownedDraftId);assert.equal(latestRelease.tag_name,TAG);assert.equal(await peelTag(true),releaseSha);assert.equal((await api('git/ref/heads/main')).object.sha,releaseSha);const finalAssets=await releaseAssets(ownedDraftId,files);
  write(path.join(evidence,'published-readback.json'),{published:true,releaseId:ownedDraftId,url:published.html_url,tag:TAG,isLatest:true,packageSourceSha:PACKAGE_SHA,releaseCommitSha:releaseSha,assets:finalAssets,fullFunctionalAcceptancePassed:false,maintainerWaiver:true});console.log('MAINTAINER_WAIVER_RELEASE_PUBLISHED '+published.html_url);
 }
