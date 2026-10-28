@@ -2,7 +2,7 @@ import { app, ipcMain, safeStorage } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { NaiAccountsVault, accountCipherAvailable, type AccountVaultDocument, parsePortableNaiAccounts, ACCOUNT_VAULT_ERRORS } from './nai-accounts-vault';
+import { NaiAccountsVault, accountCipherAvailable, type AccountVaultDocument, parsePortableNaiAccounts, ACCOUNT_VAULT_ERRORS, AccountVaultError } from './nai-accounts-vault';
 import type { NaiAccountInput } from '../../src/nai-accounts';
 import { officialNovelAiLogin, type OfficialLoginInput } from './nai-accounts-login';
 import { activateNaiAccount, restoreNaiAccount, naiAccountsBusy, configureNaiAccountSummaries, rememberNaiAccountSummary, forgetNaiAccountSummary } from './nai-accounts-runtime';
@@ -11,8 +11,10 @@ import {migrateLegacyNaiAccount} from './nai-accounts-migration';
 import {validateNaiAccountReadOnly,requireNaiAccountValidation,backupAccountValidationError} from './nai-accounts-validation';
 let vault: NaiAccountsVault | undefined;
 let migrationIssue:string|undefined;
-/** The selected account could not be read at startup and was deselected. */
-let selectionUnreadable=false;
+/** The selected account whose token this machine could not decrypt at startup; it was deselected. */
+let unreadableSelectionId:string|undefined;
+/** True when this machine's own encryption works, so an undecryptable token was made elsewhere. */
+function cipherRoundTrips(){try{return safeStorage.decryptString(safeStorage.encryptString('probe'))==='probe';}catch{return false;}}
 function getVault() {
   if (vault) return vault;
   const file = path.join(app.getPath('userData'), 'nai-accounts-v1.json');
@@ -31,10 +33,16 @@ function getVault() {
   const selectedId=candidate.selectedId();
   let snapshot:ReturnType<NaiAccountsVault['bind']>['snapshot']|undefined;
   if(selectedId){
-    // A selected account this machine cannot read (settings copied from another PC or OS account,
-    // a reset keychain) must not keep the app from starting: deselect it and tell the account manager.
     try{const lease=candidate.bind(selectedId);try{snapshot=lease.snapshot;}finally{lease.release();}}
-    catch{candidate.select(undefined);selectionUnreadable=true;}
+    catch(error){
+      // Only a token this machine cannot decrypt while its own encryption works (settings copied from
+      // another PC or OS account) is deselected so the app can start. A locked, denied or unavailable
+      // keychain keeps the selection and stops here as before.
+      if(!(error instanceof AccountVaultError))throw error;
+      if(!cipherRoundTrips())throw Error(ACCOUNT_VAULT_ERRORS.encryptionUnavailable);
+      try{candidate.select(undefined);}catch{throw error;}
+      unreadableSelectionId=selectedId;
+    }
   }
   restoreNaiAccount(snapshot,candidate.managed());
   vault=candidate;
@@ -72,7 +80,12 @@ export function ensureNaiAccountsLoaded() { getVault(); }
 export function registerNaiAccountsIpc() {
   // Lazy initialization: no real credentials are accessed by unit tests.
   ipcMain.handle('naiAccounts:list', () => getVault().list());
-  ipcMain.handle('naiAccounts:state',()=>{const selectedId=getVault().selectedId();return {selectedId,busy:naiAccountsBusy(),migrationIssue,selectionUnreadable:selectionUnreadable&&!selectedId};});
+  ipcMain.handle('naiAccounts:state',()=>{
+    const v=getVault(),selectedId=v.selectedId();
+    // Only while nothing is selected and the unreadable account is still listed.
+    const selectionUnreadable=!selectedId&&!!unreadableSelectionId&&v.list().some(account=>account.id===unreadableSelectionId);
+    return {selectedId,busy:naiAccountsBusy(),migrationIssue,selectionUnreadable};
+  });
   ipcMain.handle('naiAccounts:select',(_event,id?:string)=>{
     if(!id)throw Error('请选择已保存账户。');
     const v=getVault(); const lease=id?v.bind(id):undefined;
@@ -115,7 +128,10 @@ export function registerNaiAccountsIpc() {
     forgetNaiAccountSummary(id);
     if(v.selectedId()!==id){if(v.selectedId())v.remove(id);else activateNaiAccount(undefined,()=>v.remove(id));return;}
     const next=v.list().find(account=>account.id!==id);
-    const lease=next?v.bind(next.id):undefined;
+    let lease:ReturnType<NaiAccountsVault['bind']>|undefined;
+    // When the next account cannot be decrypted on this machine, nothing stays selected.
+    try{lease=next?v.bind(next.id):undefined;}
+    catch(error){if(!(error instanceof AccountVaultError))throw error;activateNaiAccount(undefined,()=>v.remove(id,true));return;}
     try{const snapshot=lease?.snapshot;lease?.release();activateNaiAccount(snapshot,()=>v.remove(id));}
     finally{lease?.release();}
   });

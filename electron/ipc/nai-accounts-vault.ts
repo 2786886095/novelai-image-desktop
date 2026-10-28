@@ -180,11 +180,11 @@ export class NaiAccountsVault {
     this.persist(next); this.document = next;
     return { ...profile, id };
   }
-  remove(id: string): void {
+  remove(id: string, selectNone=false): void {
     if (this.leases) throw new Error('Account operation in flight');
     if(!this.document.accounts.some(a=>a.id===id))throw Error('Unknown account');
     const accounts=this.document.accounts.filter(a=>a.id!==id);
-    const selectedId=this.document.selectedId===id?accounts[0]?.id:this.document.selectedId;
+    const selectedId=this.document.selectedId===id?(selectNone?undefined:accounts[0]?.id):this.document.selectedId;
     // A durable tombstone prevents deleted credentials from being reimported on restart.
     const next: AccountVaultDocument = { ...this.document, managed:true, legacyMigrated:true, selectedId, accounts };
     this.persist(next); this.document = next;

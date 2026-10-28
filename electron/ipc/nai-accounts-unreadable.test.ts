@@ -6,16 +6,20 @@ import crypto from 'node:crypto';
 import JSZip from 'jszip';
 
 // Settings copied from another PC or OS account: safeStorage only decrypts what this machine encrypted.
-const fixture = vi.hoisted(() => ({ root: '', handlers: new Map<string, Function>(), machine: 1 }));
+// keychain: 'unavailable' = isEncryptionAvailable() false; 'denied' = the OS refuses every encrypt/decrypt.
+const fixture = vi.hoisted(() => ({ root: '', handlers: new Map<string, Function>(), machine: 1, keychain: 'ok' as 'ok' | 'unavailable' | 'denied' }));
 vi.mock('electron', () => ({
   app: { isPackaged: false, getVersion: () => 'fixture', getPath: (n: string) => n === 'exe' ? path.join(fixture.root, 'app', 'desktop.exe') : n === 'pictures' ? path.join(fixture.root, 'pictures') : fixture.root, getAppPath: () => path.join(fixture.root, 'app') },
   dialog: {},
   ipcMain: { handle: (name: string, handler: Function) => fixture.handlers.set(name, handler) },
   safeStorage: {
-    isEncryptionAvailable: () => true,
-    encryptString: (s: string) => Buffer.concat([Buffer.from([fixture.machine]), Buffer.from(s).map((x) => x ^ 73)]),
+    isEncryptionAvailable: () => fixture.keychain !== 'unavailable',
+    encryptString: (s: string) => {
+      if (fixture.keychain === 'denied') throw Error('Error while encrypting the text provided to safeStorage.encryptString.');
+      return Buffer.concat([Buffer.from([fixture.machine]), Buffer.from(s).map((x) => x ^ 73)]);
+    },
     decryptString: (b: Buffer) => {
-      if (b[0] !== fixture.machine) throw Error('Error while decrypting the ciphertext provided to safeStorage.decryptString.');
+      if (fixture.keychain === 'denied' || b[0] !== fixture.machine) throw Error('Error while decrypting the ciphertext provided to safeStorage.decryptString.');
       return Buffer.from(b.subarray(1)).map((x) => x ^ 73).toString();
     },
   },
@@ -48,6 +52,7 @@ async function boot() {
 async function owned(work: () => Promise<void>) {
   fixture.root = fs.mkdtempSync(path.join(os.tmpdir(), 'nai-accounts-unreadable-'));
   fixture.machine = 1;
+  fixture.keychain = 'ok';
   try { await work(); }
   finally { vi.restoreAllMocks(); fs.rmSync(fixture.root, { recursive: true, force: true }); }
 }
@@ -83,7 +88,61 @@ it('starts with an unreadable selected account deselected, and the account can b
   expect((await c.call('naiAccounts:select', (again as any).value.id)).ok).toBe(true);
   expect(await c.call('naiAccounts:state')).toMatchObject({ value: { selectionUnreadable: false } });
   expect((await c.call('naiAccounts:remove', id)).ok).toBe(true);
+  // With the unreadable account gone the notice stays off, even when nothing is selected again.
+  expect((await c.call('naiAccounts:remove', (again as any).value.id)).ok).toBe(true);
+  expect(await c.call('naiAccounts:state')).toMatchObject({ value: { selectedId: undefined, selectionUnreadable: false } });
   expectNoTokens(state, list, again);
+}));
+
+it('keeps the selection and stops at startup when the keychain is unavailable or denied', () => owned(async () => {
+  let c = await boot();
+  seedStore(c.store);
+  const account = await c.call('naiAccounts:add', official('fixture-token-works', 'works'));
+  expect(account.ok).toBe(true);
+  const id = (account as any).value.id;
+  expect((await c.call('naiAccounts:select', id)).ok).toBe(true);
+  const vaultFile = path.join(fixture.root, 'nai-accounts-v1.json');
+  const before = fs.readFileSync(vaultFile, 'utf8');
+  for (const keychain of ['unavailable', 'denied'] as const) {
+    fixture.keychain = keychain;
+    c = await boot();
+    const state = await c.call('naiAccounts:state');
+    expect(state, keychain).toMatchObject({ ok: false, error: c.vault.ACCOUNT_VAULT_ERRORS.encryptionUnavailable });
+    expect(fs.readFileSync(vaultFile, 'utf8'), keychain).toBe(before);
+  }
+  // The keychain works again on the next launch: the same account is still selected.
+  fixture.keychain = 'ok';
+  c = await boot();
+  expect(await c.call('naiAccounts:state')).toMatchObject({ ok: true, value: { selectedId: id, selectionUnreadable: false } });
+}));
+
+it('leaves nothing selected when the selected account is removed and the next one cannot be decrypted', () => owned(async () => {
+  let c = await boot();
+  seedStore(c.store);
+  const copied = await c.call('naiAccounts:add', official('fixture-token-copied', 'copied'));
+  expect(copied.ok).toBe(true);
+  fixture.machine = 2;
+  c = await boot();
+  const works = await c.call('naiAccounts:add', official('fixture-token-works', 'works'));
+  expect(works.ok).toBe(true);
+  expect((await c.call('naiAccounts:select', (works as any).value.id)).ok).toBe(true);
+  const removed = await c.call('naiAccounts:remove', (works as any).value.id);
+  expect(removed.ok, removed.ok ? '' : removed.error).toBe(true);
+  expect(await c.call('naiAccounts:state')).toMatchObject({ ok: true, value: { selectedId: undefined } });
+  expect((await c.call('naiAccounts:list') as any).value.map((a: any) => a.id)).toEqual([(copied as any).value.id]);
+}));
+
+it('shows the Chinese decrypt message, not a file-system error, when the deselection cannot be saved', () => owned(async () => {
+  let c = await boot();
+  seedStore(c.store);
+  const copied = await c.call('naiAccounts:add', official('fixture-token-copied', 'copied'));
+  expect((await c.call('naiAccounts:select', (copied as any).value.id)).ok).toBe(true);
+  fixture.machine = 2;
+  c = await boot();
+  const rename = vi.spyOn(fs, 'renameSync').mockImplementation(() => { throw Object.assign(Error("EPERM: operation not permitted, rename '/somewhere/nai-accounts-v1.json'"), { code: 'EPERM' }); });
+  const state = await c.call('naiAccounts:state');
+  rename.mockRestore();
+  expect(state).toMatchObject({ ok: false, error: c.vault.ACCOUNT_VAULT_ERRORS.decryptFailed });
 }));
 
 it('reports an unreadable saved account in Chinese on backup export and restore, without the read-error prefix', () => owned(async () => {
