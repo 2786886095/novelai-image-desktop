@@ -20,20 +20,20 @@ NovelAI 图像创作工作台，界面为简体中文；第三方诊断日志保
 
 ## 本次更新
 
+- **精简为中文桌面版**：只保留 Windows 与 macOS 客户端和简体中文界面；删除 Android / iOS / Linux 客户端、生图智能体标签页、本地 Agent 组件、本地 ComfyUI 与软件内更新。本地 MCP 服务、提示词翻译和中文标签转换保留。
+- **软件内更新已移除**：新版本请从 Latest 手动下载安装；覆盖安装后设置、历史与作品直接沿用。
 - **增强改为官方倍率**：「生成 → 增强」改为官方的 1× / 1.5× / MAX；原来的 2× 对常见尺寸会超过官方像素上限，1.5× 按官方方式对齐 64 像素网格。
-- **提示词库常驻显示**：正、负面提示词框下方常驻预设库、「保存当前」和自定义提词入口，不用再进「更多」菜单。
-- **正面预设可追加**：除替换外，正面预设也能一键追加到当前提示词末尾，与负面词库一致。
+- **提示词库常驻显示、正面预设可追加**：正面提示词框下方常驻正面预设、「保存当前」和自定义提词，负面提示词框下方常驻负面词库和「保存当前」；正面预设也能一键追加到当前提示词末尾。
 - **提示词标签**：正面预设、负面词库、自定义提词块都能设置标签，按标签筛选或搜索（`#标签` 精确筛选）。
-- **提示词联想修复**：联想列表可正常关闭，迟到的结果不再弹出；选中的标签总是替换触发联想的词，不会插到别处。
-- **软件内更新已移除**：软件不再检查、下载或安装更新，新版本请从 Latest 手动下载。
+- **提示词联想修复**：在输入框任意位置点击即可关闭联想列表，列表不会被面板遮挡；选中的标签总是替换触发联想的词，回车不会误选静止鼠标下的项目。
 
-历史更新见[更新记录](./docs/RELEASE_NOTES.md)。
+完整说明见[更新记录](./docs/RELEASE_NOTES.md)，更早的版本见 [docs/history](./docs/history/)。
 
 <a id="quick-start"></a>
 ## 先完成你的第一张图
 
 1. **下载客户端**：从[下载区](#download)选择适合系统的安装包。普通使用者不需要安装 Node.js，也不需要运行源码命令。
-2. **连接账号**：打开「设置 → API 配置」，按软件内图文教程获取并填写 Token，点击「验证 Token / 刷新积分」。
+2. **连接账号**：打开「设置 → API 配置」，按软件内图文教程获取并填写 Token，点击「保存账号」完成验证，再用「刷新积分」确认余额。
 3. **开始创作**：进入「生成」，选择账号可用模型，输入提示词，检查尺寸、张数与预计费用，然后生成。结果会保存到输出目录并进入历史与素材。
 
 第一次使用可以从一段简单的英文提示词开始，其余参数先保留默认值：
@@ -88,13 +88,11 @@ NovelAI 图像创作工作台，界面为简体中文；第三方诊断日志保
 | Windows x64 · 便携版 | [便携版](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 不含 Setup 的便携 EXE；下载新包替换，便携版不等于零痕迹 |
 | macOS · Intel / Apple Silicon | [Universal DMG](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) / [ZIP](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) | 通用 DMG 或 ZIP；签名 / 公证状态以 Latest 说明为准 |
 
-校验清单、SHA256、签名和安装限制以 [Latest 的说明与附件](https://github.com/OldLi1337/novelai-image-desktop/releases/latest)为准；首页不写死发行版本、日期标签、校验文件名或带版本的安装包名。
+附件的 SHA256 以 [Latest](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) 发行页各附件显示的摘要为准，签名和安装限制见 Latest 的说明；首页不写死发行版本、日期标签、校验文件名或带版本的安装包名。
 
 **请手动下载安装。** 软件内不提供更新检查或自动更新；新版本请从 Latest 下载对应平台的安装包。
 
-尚未完成所有机型的完整实机验收。Windows 签名与 macOS 签名／公证状态以 [Latest](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) 的实际说明为准。
-
-#68 全角逗号分隔、#70 翻译方向保存、#71 翻译状态布局位移的具体缺陷已关闭；#69 真实环境 TLS 根因仍未确认，保持开放。不声称解决所有网络故障或所有 422。
+安装包未在 Windows / Mac 真机上做安装验收；Windows 包未做代码签名，macOS 包未签名、未公证，详见 [Latest](https://github.com/OldLi1337/novelai-image-desktop/releases/latest) 的说明。
 
 Windows 便携版与安装版共享本机用户数据目录 `%APPDATA%\novelai-image-desktop\`。**便携版不等于零痕迹，也不是所有数据都写在程序旁边。** 更换包前建议备份设置和作品。
 
