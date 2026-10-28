@@ -1,15 +1,18 @@
 import clsx from "clsx";
-import { useId } from "react";
+import { useEffect, useId } from "react";
 import {
   addPromptTagToInput,
   collectPromptTags,
+  isStalePromptTagFilter,
   normalizePromptTags,
   promptTagText,
   UNTAGGED_PROMPT_FILTER,
 } from "../prompt-library-tags";
 import "../prompt-library-tags.css";
 
-/** Single-select tag chips for a saved-prompt library. Hidden until an entry has a tag. */
+/** Single-select tag chips for a saved-prompt library. Hidden until an entry has a tag.
+ * A selected chip that disappears (its last entry was deleted or untagged) resets the
+ * filter, so a hidden filter never makes the library look empty. */
 export function PromptTagFilter({ items, value, onChange, language, className }: {
   items: ReadonlyArray<{ tags?: readonly string[] }>;
   value: string;
@@ -18,6 +21,8 @@ export function PromptTagFilter({ items, value, onChange, language, className }:
   className?: string;
 }) {
   const text = promptTagText(language);
+  const stale = isStalePromptTagFilter(items, value);
+  useEffect(() => { if (stale) onChange(""); }, [stale, onChange]);
   const tags = collectPromptTags(items);
   if (!tags.length) return null;
   const untagged = items.filter((item) => !normalizePromptTags(item.tags).length).length;

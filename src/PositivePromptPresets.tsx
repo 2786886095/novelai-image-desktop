@@ -420,7 +420,7 @@ export function PositivePromptPresetControl({
       value,
       character,
       currentCaptions: state.charCaptions,
-      maxCharacters: maxNAICharacterPrompts(state.params.model),
+      maxCharacters: maxNAICharacterPrompts(state.activeTab === "inpaint" ? state.inpaintModel : state.params.model),
     });
     if (application.kind === "over-capacity") {
       setStatus(characterPresetText(language).capacity);return;

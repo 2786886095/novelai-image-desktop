@@ -69,8 +69,18 @@ export function collectPromptTags(items: ReadonlyArray<{ tags?: readonly string[
   return [...counts.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 }
 
+/** True when the selected filter chip no longer exists: no entry carries that
+ * tag any more, or it is the untagged filter and every entry now has a tag. */
+export function isStalePromptTagFilter(items: ReadonlyArray<{ tags?: readonly string[] }>, value: string): boolean {
+  if (!value) return false;
+  if (value === UNTAGGED_PROMPT_FILTER) return items.every((item) => normalizePromptTags(item.tags).length > 0);
+  const key = value.toLocaleLowerCase();
+  return !items.some((item) => normalizePromptTags(item.tags).some((tag) => tag.toLocaleLowerCase() === key));
+}
+
 /**
- * Library search: `#tag` tokens must match one of the entry's tags (exact, case-insensitive);
+ * Library search: `#tag` tokens must match one of the entry's tags (exact, case-insensitive;
+ * a tag with spaces takes the following words, as in `#night sky`);
  * the remaining text is matched as one phrase against the given fields and the tags.
  * `activeTag` is the selected filter chip, or UNTAGGED_PROMPT_FILTER.
  */
@@ -87,9 +97,19 @@ export function matchesPromptLibraryEntry(
     return false;
   }
   const words: string[] = [];
-  for (const word of query.trim().split(/\s+/).filter(Boolean)) {
+  const tokens = query.trim().split(/\s+/).filter(Boolean);
+  for (let index = 0; index < tokens.length; index++) {
+    const word = tokens[index];
     if (word.length > 1 && word.startsWith("#")) {
-      if (!tags.includes(cleanTag(word).toLocaleLowerCase())) return false;
+      // The longest run of words that names one of the entry's tags.
+      let candidate = cleanTag(word).toLocaleLowerCase();
+      let last = tags.includes(candidate) ? index : -1;
+      for (let next = index + 1; next < tokens.length && tags.some((tag) => tag.startsWith(candidate + " ")); next++) {
+        candidate += " " + tokens[next].toLocaleLowerCase();
+        if (tags.includes(candidate)) last = next;
+      }
+      if (last < 0) return false;
+      index = last;
     } else {
       words.push(word);
     }
