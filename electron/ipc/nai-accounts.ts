@@ -2,13 +2,13 @@ import { app, ipcMain, safeStorage } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { NaiAccountsVault, accountCipherAvailable, type AccountVaultDocument, parsePortableNaiAccounts } from './nai-accounts-vault';
+import { NaiAccountsVault, accountCipherAvailable, type AccountVaultDocument, parsePortableNaiAccounts, ACCOUNT_VAULT_ERRORS } from './nai-accounts-vault';
 import type { NaiAccountInput } from '../../src/nai-accounts';
 import { officialNovelAiLogin, type OfficialLoginInput } from './nai-accounts-login';
 import { activateNaiAccount, restoreNaiAccount, naiAccountsBusy, configureNaiAccountSummaries, rememberNaiAccountSummary, forgetNaiAccountSummary } from './nai-accounts-runtime';
 import { readStore } from './store';
 import {migrateLegacyNaiAccount} from './nai-accounts-migration';
-import {validateNaiAccountReadOnly,requireNaiAccountValidation} from './nai-accounts-validation';
+import {validateNaiAccountReadOnly,requireNaiAccountValidation,backupAccountValidationError} from './nai-accounts-validation';
 let vault: NaiAccountsVault | undefined;
 let migrationIssue:string|undefined;
 function getVault() {
@@ -17,7 +17,7 @@ function getVault() {
   let document: AccountVaultDocument = { version: 1, accounts: [] };
   if (fs.existsSync(file)) {
     document = JSON.parse(fs.readFileSync(file, 'utf8'));
-    if (document.version !== 1 || !Array.isArray(document.accounts)) throw new Error('Unsupported account vault');
+    if (document.version !== 1 || !Array.isArray(document.accounts)) throw new Error(ACCOUNT_VAULT_ERRORS.unsupportedVault);
   }
   const candidate = new NaiAccountsVault(document, safeStorage, next => {
     const temporary = file + '.' + crypto.randomUUID() + '.tmp';
@@ -44,12 +44,12 @@ export async function prepareNaiAccountsBackupRestore(value:unknown){
   const summaries=new Map();
   // Reject the whole credential transaction if even the final account fails.
   for(const input of portable.accounts){
-    const validation=await validateNaiAccountReadOnly(input);requireNaiAccountValidation(validation);
+    const validation=await validateNaiAccountReadOnly(input);if(!validation.ok)throw Error(backupAccountValidationError(input.label,validation));
     summaries.set(input.id,validation.account??{});
   }
   const prepared=v.prepareBackupRestore(portable,expected,summaries);
   return (write:()=>void,undo:()=>void)=>{
-    if(naiAccountsBusy()||v.revision()!==expected)throw Error('Account vault changed during backup import');
+    if(naiAccountsBusy()||v.revision()!==expected)throw Error(ACCOUNT_VAULT_ERRORS.changedDuringImport);
     if(!portable.accounts.length){write();return;}
     // The two desktop files cannot share one filesystem rename. Compensate the
     // legacy settings write if the atomic vault persistence fails.
@@ -74,7 +74,7 @@ export function registerNaiAccountsIpc() {
   ipcMain.handle('naiAccounts:login',async(_event,input:OfficialLoginInput)=>{
     if(naiAccountsBusy())throw Error('账户操作正在执行');
     if(!input?.label?.trim() || input.label.length>120) return {ok:false,code:'auth',message:'请填写账户名称。'};
-    if(!accountCipherAvailable(safeStorage)) throw Error('OS credential encryption unavailable');
+    if(!accountCipherAvailable(safeStorage)) throw Error(ACCOUNT_VAULT_ERRORS.encryptionUnavailable);
     let result: Awaited<ReturnType<typeof officialNovelAiLogin>>;
     try {result=await officialNovelAiLogin(input);} finally {input.password='';input.otp=undefined;}
     if(!result.ok) return result;
@@ -91,7 +91,7 @@ export function registerNaiAccountsIpc() {
   ipcMain.handle('naiAccounts:migrate',()=>{const v=getVault();const result=migrateLegacyNaiAccount(v,readStore());const id=v.selectedId();if(id){const lease=v.bind(id);try{activateNaiAccount(lease.snapshot,()=>{});}finally{lease.release();}}return {migrated:result.migrated,message:'旧配置已自动迁移至账户列表；原存储保留。'};});
   ipcMain.handle('naiAccounts:add', async (_event, input: NaiAccountInput) => {
     if(naiAccountsBusy())throw Error('账户操作正在执行');
-    if(!accountCipherAvailable(safeStorage))throw Error('OS credential encryption unavailable');
+    if(!accountCipherAvailable(safeStorage))throw Error(ACCOUNT_VAULT_ERRORS.encryptionUnavailable);
     const candidate={...input};
     getVault().assertUnique(candidate);
     const validation=await validateNaiAccountReadOnly(candidate);requireNaiAccountValidation(validation);

@@ -68,3 +68,13 @@ export async function validateNaiAccountReadOnly(input:NaiAccountInput,preserveL
 export function requireNaiAccountValidation(result:NaiAccountValidationResult){
  if(!result.ok)throw Error(`NAI_ACCOUNT_VALIDATION:${result.code}:${result.status}`);
 }
+
+const BACKUP_VALIDATION_TEXT:Record<NaiAccountValidationResult['code'],string>={
+ passed:'验证通过',auth:'API Token 无效或已失效',network:'验证请求失败或超时，请检查网络或代理后重试',unsupported:'接口没有兼容的只读鉴权接口',
+ 'invalid-input':'账户信息或接口地址无效','invalid-response':'接口返回的不是兼容的账户数据',http:'接口验证未通过',
+};
+/** Backup restore shows this directly. Same bounds as above: the label and status only, never credentials or response bodies. */
+export function backupAccountValidationError(label:string,result:NaiAccountValidationResult):string{
+ const name=label.trim()?`「${label.trim().slice(0,64)}」`:'';
+ return `备份中的 NovelAI 账户${name}验证未通过：${BACKUP_VALIDATION_TEXT[result.code]??BACKUP_VALIDATION_TEXT.http}${result.status?`（HTTP ${result.status}）`:''}；未导入任何数据。`;
+}
