@@ -219,7 +219,7 @@ test('static typing and commit require exact nonce after input and re-resolved p
  const s=swiftSource();assert(s.includes('if !control.isInline { field.tap() }'));
  const input=s.indexOf('field.typeText(folder)'),check=s.indexOf('let exact = field.value as? String, exact == folder');
  const current=s.indexOf('let current = try validatedWitnessFlow(app, providerLabels, witness)');
- const confirmed=s.indexOf('let confirmed = witness.field.value as? String, confirmed == folder');
+ const confirmed=s.indexOf('let confirmed = witness.field.value as? String, confirmed == folder',current);
  const done=s.indexOf('try tap(done, "create-exact-nonce-folder")');assert(input>=0&&input<check&&check<current&&current<confirmed&&confirmed<done);
  assert(s.includes('current.isInline == control.isInline'));assert(s.includes('guard let commit = current.modalCommit'));
 });
@@ -234,7 +234,7 @@ test('static naming5s deadline is not renewed; real new-folder and rename commit
  // capture/helper consumed5s must still reject, not skip the nil-only loop.
  const acceptAt=(elapsedSeconds,hasControl)=>{if(accept>=0&&elapsedSeconds>=5)throw new Error('late naming control');return hasControl;};
  assert.throws(()=>acceptAt(5.1,true),/late naming control/);assert.equal(acceptAt(4.9,true),true);
- const create=s.indexOf('let createDeadline = Date().addingTimeInterval(10)'),capture=s.indexOf('capture("after-folder-name-commit")');assert(create>=0&&create<capture);
+ const create=s.indexOf('let createDeadline = Date().addingTimeInterval(10)'),capture=s.indexOf('capture("exact-nonce-folder-open-in-system-picker")');assert(create>=0&&create<capture);
  assert.equal((s.match(/Date\(\)\.addingTimeInterval\(10\)/g)||[]).length,2);
  assert(!/UserDefaults|bookmarkData|MethodChannel|\.launch\s*\(|\.terminate\s*\(|coordinate\(/.test(s));
 });
@@ -323,10 +323,42 @@ test('held witness invalidation or another same-ID field/modal cannot borrow app
  assert(!allowed({field:a,owner:{alive:false}},{...good,scopeOwner:owner}),'modalB cannot revive original owner');
 });
 test('source-bound elapsed witness uses cached attributes after the timestamp, and grants no actions or reset',()=>{
- const s=swiftSource();const body=s.split('private func recordNamingEditorWitness(')[1].split('private func tap(')[0];
+ const s=swiftSource();const body=s.split('private func recordNamingEditorWitness(')[1].split('private func finishInlineNameViaOwnedIcon(')[0];
  assert(!/app\.|\.field|\.frame|waitFor|Thread.sleep/.test(body));assert(s.includes('IOS_FOLDER_NAMING_EDITOR_WITNESS:'));
  for(const key of ['"sourceSha": source','"profileSha": profile','"nativePid": Int(nativePID)!','"nonce": nonce','"elapsedSeconds": elapsed','"withinAppearanceDeadline": withinAppearanceDeadline','"witnessAloneAuthorizesActions": false'])assert(s.includes(key),key);
  assert.equal((s.match(/let namingDeadline =/g)||[]).length,1);assert.equal((s.match(/Date\(\)\.addingTimeInterval\(10\)/g)||[]).length,2);
  assert(s.includes('let current = try validatedWitnessFlow(app, providerLabels, witness)'));
  assert(s.includes('let confirmed = witness.field.value as? String, confirmed == folder'));
+});
+
+// STATIC ownership/dispatch policy only, not an actual cell click or UI result.
+test('one owned-folder icon action is restricted to the live exact-nonce held editor AX subtree, never a global icon or frame-only owner',()=>{
+ const s=swiftSource();const body=s.split('private func finishInlineNameViaOwnedIcon(')[1].split('private func tap(')[0];
+ for(const token of ['witness.field.exists','usable(witness.field, viewFrame)','value == folder','providerLabels.contains(title)',
+  'let fieldPredicate = NSPredicate(format: "identifier == %@", "DOC.inlineRenameField")','global.count == 1',
+  'app.cells.matching(cellPredicate).containing(fieldPredicate).allElementsBoundByAccessibilityElement','cells.count == 1',
+  'cell.textViews.matching(fieldPredicate)','scoped.count == 1','scopedValue == folder',
+  'let iconPredicate = NSPredicate(format: "identifier == %@", "Folder84pt")','cell.images.matching(iconPredicate)',
+  'icons.count == 1','cellFrame.contains(icon.frame)','finish-inline-name-via-owned-folder-icon'])assert(body.includes(token),token);
+ const carrier=body.split('let cells =')[1].split('guard cells.count')[0];
+ assert(carrier.includes('cell.exists'));assert(carrier.includes('!frame.isEmpty && viewFrame.intersects(frame)'));
+ assert(!/isHittable|isEnabled|usable\(/.test(carrier),'read-only carrier identity is not an action target');
+ assert(!body.includes('app.images'));assert(!body.includes('matching(identifier:'));assert(!body.includes('cellFrame.contains(witness.field.frame)'));
+ assert(!/coordinate\(|FileManager|renameItem|typeText|currentKeyboardDone|Thread.sleep/.test(body));
+ const allowed=x=>x.heldAlive&&x.usable&&x.exactNonce&&x.sameProvider&&x.globalEditors===1&&x.ownedCells===1&&x.cellContainsLiteralEditor&&x.scopedEditors===1&&x.exactIcon&&x.scopedIcons===1&&x.iconUsable&&x.iconInsideCellAndApp&&!x.late;
+ const good={carrierHittable:false,carrierEnabled:false,heldAlive:true,usable:true,exactNonce:true,sameProvider:true,globalEditors:1,ownedCells:1,cellContainsLiteralEditor:true,scopedEditors:1,exactIcon:true,scopedIcons:1,iconUsable:true,iconInsideCellAndApp:true,late:false};assert(allowed(good));
+ for(const change of [{heldAlive:false},{exactNonce:false},{sameProvider:false},{globalEditors:2},{ownedCells:2},{cellContainsLiteralEditor:false},{scopedEditors:2},{exactIcon:false},{scopedIcons:2},{iconUsable:false},{iconInsideCellAndApp:false},{late:true}])assert(!allowed({...good,...change}),JSON.stringify(change));
+});
+test('owned icon is at most one later attempt under original10s; no diagnostic capture or deadline reset can authorize it as success',()=>{
+ const s=swiftSource();const start=s.indexOf('let createDeadline = Date().addingTimeInterval(10)'),end=s.indexOf('capture("exact-nonce-folder-open-in-system-picker")');
+ const window=s.slice(start,end);assert.equal((window.match(/ownedIconAttempted = false/g)||[]).length,1);assert.equal((window.match(/ownedIconAttempted = true/g)||[]).length,1);
+ assert(window.includes('witness.isInline && !ownedIconAttempted'));assert(window.includes('folder, createDeadline,'));assert(window.includes('continue // Re-read'));
+ assert(!window.includes('capture('));assert(!window.includes('addingTimeInterval',window.indexOf('\n')+1));
+ assert(!s.includes('capture("after-folder-name-commit")'));assert(s.includes('try tap(icon, "finish-inline-name-via-owned-folder-icon", before: deadline)'));
+ const dispatch=s.split('private func tap(')[1].split('@MainActor')[0];assert(dispatch.indexOf('Date() >= deadline')<dispatch.indexOf('element.tap()'));
+ assert(dispatch.includes('element.exists && element.isHittable && element.isEnabled'));
+ for(const original of ['new-folder-via-system-picker','create-exact-nonce-folder','confirm-system-directory-selection'])assert(s.includes(original));
+ assert(s.includes('while try currentNavigationTitle(app) != folder'));assert(s.includes('navigationOrCommitGuaranteed": false'));
+ assert.equal((s.match(/Date\(\)\.addingTimeInterval\(10\)/g)||[]).length,2);assert.equal((s.match(/let namingDeadline =/g)||[]).length,1);
+ let attempts=0;let performed=0;let used=false;for(let i=0;i<3;i++){if(!used){used=true;attempts++;performed++;}}assert.equal(attempts,1);assert.equal(performed,1);
 });

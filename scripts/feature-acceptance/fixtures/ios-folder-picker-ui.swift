@@ -266,12 +266,77 @@ final class FolderPickerUITests: XCTestCase {
     attachment.lifetime = .keepAlways
     add(attachment)
   }
-  private func tap(_ element: XCUIElement, _ action: String) throws {
+  private func finishInlineNameViaOwnedIcon(_ app: XCUIApplication, _ witness: NamingEditorWitness,
+                                           _ providerLabels: [String], _ folder: String,
+                                           _ deadline: Date, _ bindings: [String: String]) throws {
+    // Only one caller attempt, in the already running10s open window. An editor
+    // that has disappeared needs no fallback; never act on a replacement.
+    guard witness.isInline && witness.field.exists else { return }
+    guard Date() < deadline else { throw fail("Owned-icon action exceeded original10s window") }
+    let viewFrame = app.frame
+    guard usable(witness.field, viewFrame) else { return }
+    guard witness.field.identifier == "DOC.inlineRenameField",
+          let value = witness.field.value as? String, value == folder else {
+      throw fail("Held inline editor lost the exact nonce before owned-icon action")
+    }
+    let title = try currentNavigationTitle(app)
+    if title == folder { return }
+    guard let title = title, providerLabels.contains(title) else {
+      throw fail("Owned-icon action is not in the verified current provider")
+    }
+    let fieldPredicate = NSPredicate(format: "identifier == %@", "DOC.inlineRenameField")
+    let global = app.textViews.matching(fieldPredicate).allElementsBoundByAccessibilityElement.filter {
+      !isSearchField($0) && usable($0, viewFrame)
+    }
+    guard global.count == 1 else { throw fail("Owned-icon action lacks one global usable literal editor") }
+    let cellPredicate = NSPredicate(format: "identifier == %@", "Folder")
+    let cells = app.cells.matching(cellPredicate).containing(fieldPredicate).allElementsBoundByAccessibilityElement.filter { cell in
+      // The carrier is read-only identity, not the interaction target.
+      guard cell.exists else { return false }
+      let frame = cell.frame
+      return !frame.isEmpty && viewFrame.intersects(frame)
+    }
+    guard cells.count == 1 else { throw fail("Held editor has no unique actual Folder carrier cell") }
+    let cell = cells[0]
+    let scoped = cell.textViews.matching(fieldPredicate).allElementsBoundByAccessibilityElement.filter {
+      !isSearchField($0) && usable($0, viewFrame)
+    }
+    guard scoped.count == 1, let scopedValue = scoped[0].value as? String, scopedValue == folder else {
+      throw fail("Folder carrier does not contain one usable exact-nonce editor")
+    }
+    // Inline text can overflow its cell: ownership is the actual AX subtree,
+    // not cell-frame containment of the editor. Only the image must fit both.
+    let cellFrame = cell.frame
+    let iconPredicate = NSPredicate(format: "identifier == %@", "Folder84pt")
+    let icons = cell.images.matching(iconPredicate).allElementsBoundByAccessibilityElement.filter {
+      usable($0, viewFrame) && cellFrame.contains($0.frame)
+    }
+    guard icons.count == 1 else { throw fail("No unique usable literal Folder84pt icon in the held carrier") }
+    let icon = icons[0]
+    guard cell.exists, usable(witness.field, viewFrame),
+          witness.field.identifier == "DOC.inlineRenameField",
+          let confirmed = witness.field.value as? String, confirmed == folder,
+          usable(icon, viewFrame), cellFrame.contains(icon.frame) else {
+      throw fail("Held editor/carrier/icon invalidated before the one owned action")
+    }
+    // This is an observed UI action, NOT a guarantee of commit or navigation.
+    // The original exact nonce title, Open selection and native bookmark/bytes
+    // checks still decide success. No second Done, newline or filesystem edit.
+    try tap(icon, "finish-inline-name-via-owned-folder-icon", before: deadline)
+    print("IOS_FOLDER_OWNED_ICON_ACTION:" + String(decoding:
+      try JSONSerialization.data(withJSONObject: ["bindings": bindings,
+        "requiredFolderName": folder, "literalCellId": "Folder", "literalIconId": "Folder84pt",
+        "oneAttempt": true, "navigationOrCommitGuaranteed": false], options: [.sortedKeys]), as: UTF8.self))
+  }
+  private func tap(_ element: XCUIElement, _ action: String, before deadline: Date? = nil) throws {
     guard element.exists && element.isHittable && element.isEnabled else {
       throw fail("Observed UI control unavailable: " + action)
     }
-    actions.append(["action": action, "label": element.label,
-                    "identifier": element.identifier])
+    let observedAction = ["action": action, "label": element.label,
+                          "identifier": element.identifier]
+    // Read real control properties before checking the command-dispatch bound.
+    if let deadline = deadline, Date() >= deadline { throw fail("Actual action dispatch exceeded its original deadline") }
+    actions.append(observedAction)
     element.tap()
   }
 
@@ -399,8 +464,18 @@ final class FolderPickerUITests: XCTestCase {
       try tap(commit, "create-exact-nonce-folder")
     }
     let createDeadline = Date().addingTimeInterval(10)
-    capture("after-folder-name-commit")
+    var ownedIconAttempted = false
+    // Full tree/screenshot capture is after exact navigation below, not inside
+    // this original10s commit/open window.
     while try currentNavigationTitle(app) != folder {
+      if Date() >= createDeadline { throw fail("The new nonce directory was not opened") }
+      if witness.isInline && !ownedIconAttempted {
+        ownedIconAttempted = true
+        try finishInlineNameViaOwnedIcon(app, witness, providerLabels, folder, createDeadline,
+          ["sourceSha": source, "profileSha": profile, "nativePid": nativePID, "nonce": nonce])
+        if Date() >= createDeadline { throw fail("The new nonce directory was not opened") }
+        continue // Re-read the actual navigation title; do not tap an old page.
+      }
       if let item = find(app, [folder]) {
         try tap(item, "open-created-exact-nonce-folder")
       }
