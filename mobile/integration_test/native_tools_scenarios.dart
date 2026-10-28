@@ -11,6 +11,8 @@ import 'package:novelai_mobile/artist/curated_artists.dart';
 import 'package:novelai_mobile/batch/batch_redraw_models.dart';
 import 'package:novelai_mobile/comic/comic_asset_store.dart';
 import 'package:novelai_mobile/comic/comic_models.dart';
+import 'package:novelai_mobile/i18n/app_locales.dart';
+import 'package:novelai_mobile/i18n/template_feature_text.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/prompts/prompt_templates.dart';
 import 'package:novelai_mobile/prompts/v5_artist_weight_repair.dart';
@@ -22,12 +24,35 @@ import 'package:novelai_mobile/screens/tools_hub_screen.dart';
 import 'package:novelai_mobile/screens/v5_artist_weight_repair_screen.dart';
 import 'package:novelai_mobile/services/prompt_codex_service.dart';
 import 'package:novelai_mobile/services/storage.dart';
+import 'package:novelai_mobile/state/app_state.dart';
 import 'native_scenario_support.dart';
 
 final suite = NativeScenarios(3);
 const converted =
     'A girl stands beside a wooden table. She wears a blue coat. She holds a book in her right hand. The table is in front of a window. The window is open. Sunlight falls onto the table. A green tree stands outside the window. She looks down at the book. Her left hand rests on the table. A red mug sits near the book. Her hair reaches her shoulders. A curtain hangs on the left side of the window.';
 Future<void> main() => suite.run(_run);
+// Bind exact user-facing labels to their production destinations. New cards
+// cannot shift the original six tool assertions by changing an index.
+Map<String, bool Function(Widget)> nativeToolCardMatchers(AppState app) {
+  require(app.settings.language == 'en-US',
+      'Native tools fixture language changed');
+  final text = mobileToolsHubTextFor(app.settings.language);
+  return {
+    templateFeatureText(app.settings.language, 'japanese'): (w) =>
+        w is ComicScreen &&
+        (w.controller?.japanese ?? false) &&
+        identical(w.controller, app.japaneseComic),
+    text.comicTitle: (w) => w is ComicScreen && w.controller == null,
+    text.batchTitle: (w) => w is BatchRedrawScreen,
+    text.artistLabTitle: (w) => w is RandomArtistLabScreen,
+    'V4.5 Artist-string Repair': (w) =>
+        w is V5ArtistWeightRepairScreen && w.mode == V5ArtistToolMode.repair,
+    'Artist-string Weight Draw': (w) =>
+        w is V5ArtistWeightRepairScreen && w.mode == V5ArtistToolMode.draw,
+    'NovelAI Personal Codex': (w) => w is PromptCodexScreen,
+  };
+}
+
 Future<T> bounded<T>(Future<T> future) =>
     future.timeout(const Duration(seconds: 45));
 Future<void> waitUntil(bool Function() ready, String message) async {
@@ -155,32 +180,25 @@ Future<void> _run() async {
               .clamp(0.0, scroll.position.maxScrollExtent));
       await frame();
     }
+    final destinations = nativeToolCardMatchers(app);
     require(
-        labels.length == 6, 'Tools hub user-facing inventory changed: $labels');
-    for (var index = 0; index < labels.length; index++) {
+        destinations.length == 7 &&
+            labels.length == destinations.length &&
+            labels.every(destinations.containsKey),
+        'Tools hub user-facing inventory changed: $labels');
+    for (final label in labels) {
       final scroll = (elements((w) => w is Scrollable).first as StatefulElement)
           .state as ScrollableState;
       scroll.position.jumpTo(0);
       await frame();
       await reveal((w) =>
-          w is ListTile &&
-          w.title is Text &&
-          (w.title as Text).data == labels[index]);
+          w is ListTile && w.title is Text && (w.title as Text).data == label);
       final tile = elements((w) =>
           w is ListTile &&
           w.title is Text &&
-          (w.title as Text).data == labels[index]).single.widget as ListTile;
+          (w.title as Text).data == label).single.widget as ListTile;
       tile.onTap!();
-      bool screen(Widget w) => switch (index) {
-            0 => w is ComicScreen,
-            1 => w is BatchRedrawScreen,
-            2 => w is RandomArtistLabScreen,
-            3 => w is V5ArtistWeightRepairScreen &&
-                w.mode == V5ArtistToolMode.repair,
-            4 => w is V5ArtistWeightRepairScreen &&
-                w.mode == V5ArtistToolMode.draw,
-            _ => w is PromptCodexScreen
-          };
+      final screen = destinations[label]!;
       await waitUntil(() => elements(screen).isNotEmpty,
           'Tool card did not open its real production screen');
       await frame();
@@ -277,7 +295,9 @@ Future<void> _run() async {
         'Tools comic conversion did not reach generation');
     suite.check('tools', 'all-user-exposed-tools', {
       'actualHubCards': labels,
-      'nativeRoutesOpenedAndReturned': 6,
+      'nativeRoutesOpenedAndReturned': labels.length,
+      'originalSixToolDestinationsRetained': true,
+      'japaneseUsesIndependentController': true,
       'randomRepairDrawRealImageFiles': artistFiles.length,
       'artistOutputsSavedToHistory': 3,
       'realBatchImg2ImgCompleted': true,

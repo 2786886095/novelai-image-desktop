@@ -169,6 +169,17 @@ Future<void> _run() async {
       'originalTagProjectHashPreserved': originalHash
     });
 
+    // mount() deliberately retains the MaterialApp/Navigator identity. Close
+    // the actual pushed tool route before replacing the root conversion page.
+    Navigator.of(elements(
+                (w) => w is ComicScreen && identical(w.controller, japanese))
+            .single)
+        .pop();
+    await _wait(
+        () => elements(
+                (w) => w is ComicScreen && identical(w.controller, japanese))
+            .isEmpty,
+        'Japanese tool route returned to hub');
     app.convertInput = 'Keep original image conversion input';
     app.convertResult = 'Keep original image result';
     await mount(app, const InspectScreen(kind: InspectPageKind.convert));

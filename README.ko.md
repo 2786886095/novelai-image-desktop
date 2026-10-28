@@ -80,7 +80,7 @@ Windows 로컬 Tavern Agent는 사용자 확인 후 검증된 호환 구성 요�
 | Windows x64 | [포터블 EXE](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 포터블 패키지를 받아 수동 교체하세요. |
 | macOS Intel / Apple silicon | [Universal DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 현재 Apple 서명·공증 완료는 확인되지 않았습니다. 시스템 안내와 설치 가이드를 확인하세요. |
 | macOS Intel / Apple silicon | [Universal ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 공통 ZIP 패키지를 선택하세요. 서명·공증 상태는 Latest 안내를 확인하세요. |
-| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 실행 권한을 부여한 뒤 실행하세요. |
+| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 이번 검증·지원 기준은 Ubuntu 24.04 LTS(x86_64)이며 실제 결과는 동일 소스의 Latest 증거를 확인하세요. Ubuntu 26.04에서 이미지 런타임 멈춤이 관찰되어 현재 지원하지 않으며 다른 배포판은 미검증입니다. 실행 권한을 부여하고 수동 업데이트하세요. |
 | Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Latest 첨부 파일에서 APK를 받아 수동 설치하세요. |
 | iOS (추가 패키지) | [미서명 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 직접 서명해야 하며 일반 iPhone에 바로 설치할 수 없습니다. |
 

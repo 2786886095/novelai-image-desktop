@@ -70,10 +70,12 @@ export function createNativeProof({ sourceSha, platform, expectedChecks, profile
   return { line, finish, get completion() { return completion; }, get checksCount() { return checks.length; }, get errorsCount() { return errors.length; } };
 }
 
-export async function collectResidentFlutter({ command, cwd, env, sourceSha, platform, device, expectedChecks, profileSha, testEntry, requireNativeBegin=false, timeoutMs = 1500000, journeyTimeoutMs = 300000, completionTailMs = 750, stopGraceMs = 15000 }) {
+export async function collectResidentFlutter({ command, cwd, env, sourceSha, platform, device, expectedChecks, profileSha, testEntry, requireNativeBegin=false, onNativeLine, timeoutMs = 1500000, journeyTimeoutMs = 300000, completionTailMs = 750, stopGraceMs = 15000 }) {
+  if(onNativeLine!==undefined&&typeof onNativeLine!=='function')throw Error('Native observer must be a function');
+  let observerPending=0;const observerJobs=[],observerErrors=[];
   const proof = createNativeProof({ sourceSha, platform, expectedChecks, profileSha, testEntry, requireNativeBegin });
   let stdout = '', stderr = '', nativeStdout = '', nativeStderr = '', appId = null;
-  let actualCloseCode = null, actualCloseSignal = null, timedOut = false, terminationReason = 'unexpected-process-close', processError = null;
+  let actualCloseCode = null, actualCloseSignal = null, timedOut = false, terminationReason = 'unexpected-process-close', processError = null, childClosed=false;
   let journeyStarted = false;
   let appStarted = false, stopDeadline = null;
   let stopRequested = false, stopReply = null, stopEventObserved = false;
@@ -86,6 +88,7 @@ export async function collectResidentFlutter({ command, cwd, env, sourceSha, pla
   function forceStop(reason) {
     terminationReason = reason;
     clearTimeout(killTimer);
+    if(childClosed)return;
     child.kill('SIGTERM');
     killTimer = setTimeout(() => child.kill('SIGKILL'), stopGraceMs);
   }
@@ -95,12 +98,13 @@ export async function collectResidentFlutter({ command, cwd, env, sourceSha, pla
     if (!journeyStarted && !proof.completion && !stopRequested) { journeyStarted = true; armDeadline(journeyTimeoutMs, 'native-journey-timeout'); }
   }
   function scheduleStopAfterReady() {
-    if (!proof.completion || !appStarted || tailTimer || stopRequested || timedOut) return;
+    if (!proof.completion || !appStarted || tailTimer || stopRequested || timedOut || observerPending) return;
     // DONE can precede Flutter's devFS/service initialization. It is only a
     // completion candidate; app.stop is safe only after this app.started.
     tailTimer = setTimeout(() => {
       tailTimer = null;
       if (timedOut) return;
+      if(observerPending)return;
       if (!appId || !appStarted) { protocolErrors.push('Missing ready current Flutter app identity.'); forceStop('missing-app-identity'); return; }
       stopRequested = true; terminationReason = 'machine-app-stop-after-done';
       const request = { id: 'native-proof-stop', method: 'app.stop', params: { appId } };
@@ -118,6 +122,18 @@ export async function collectResidentFlutter({ command, cwd, env, sourceSha, pla
     if (channel === 'stderr') nativeStderr += text + '\n'; else nativeStdout += text + '\n';
     const beforeChecks = proof.checksCount, beforeErrors = proof.errorsCount;
     proof.line(text);
+    if(onNativeLine&&appId){
+      try{
+        const result=onNativeLine(text,{channel,currentAppId:appId});
+        if(result&&typeof result.then==='function'){
+          observerPending++;
+          let observerTimer;
+          const bounded=Promise.race([Promise.resolve(result),new Promise((_,reject)=>{observerTimer=setTimeout(()=>reject(Error('Native OS observer exceeded bounded journey deadline')),Math.min(journeyTimeoutMs,180000));})]);
+          const observed=bounded.catch(error=>{observerErrors.push('Native OS observer failed: '+String(error?.stack||error));forceStop('native-observer-failed');}).finally(()=>{clearTimeout(observerTimer);observerPending--;scheduleStopAfterReady();});
+          observerJobs.push(observed);
+        }
+      }catch(error){observerErrors.push('Native OS observer failed: '+String(error?.stack||error));forceStop('native-observer-failed');}
+    }
     if (appId && proof.errorsCount === beforeErrors && proof.checksCount > beforeChecks) startJourneyDeadline();
     scheduleStopAfterReady(); // Keep draining trailing native async errors.
   }
@@ -162,11 +178,12 @@ export async function collectResidentFlutter({ command, cwd, env, sourceSha, pla
   await new Promise(resolve => {
     child.on('error', error => { processError = error.stack || error.message; });
     // close, unlike exit, follows the final UTF-8 stdout/stderr data events.
-    child.on('close', (code, signal) => { actualCloseCode = code; actualCloseSignal = signal; resolve(); });
+    child.on('close', (code, signal) => { childClosed=true;actualCloseCode = code; actualCloseSignal = signal; resolve(); });
   });
   clearTimeout(deadline); clearTimeout(tailTimer); clearTimeout(killTimer);
   for (const channel of ['stdout', 'stderr']) if (buffers[channel]) transportLine(buffers[channel], channel);
-  const parsed = proof.finish(), errors = [...parsed.errors, ...protocolErrors];
+  await Promise.all(observerJobs);
+  const parsed = proof.finish(), errors = [...parsed.errors, ...protocolErrors, ...observerErrors];
   if (actualCloseCode !== 0 || actualCloseSignal !== null || timedOut || processError) errors.push('Resident Flutter process did not close successfully: ' + JSON.stringify({ actualCloseCode, actualCloseSignal, timedOut, processError }));
   if (!stopRequested || !stopEventObserved || stopReply?.result !== true || terminationReason !== 'machine-app-stop-after-done') errors.push('Current resident Flutter process lacks successful app.stop protocol/close evidence.');
   return { ...parsed, passed: errors.length === 0, errors, stdout, stderr, nativeStdout, nativeStderr, command, cwd, childPid,

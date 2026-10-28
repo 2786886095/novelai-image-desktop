@@ -80,7 +80,7 @@ Windows 本機酒館 Agent 經確認後安裝已驗證的相容元件，不直�
 | Windows x64 | [可攜 EXE](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 下載可攜套件後手動替換。 |
 | macOS Intel／Apple 晶片 | [通用 DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 目前未確認 Apple 簽署或公證已完成；依系統安全提示與安裝教學處理。 |
 | macOS Intel／Apple 晶片 | [通用 ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 選擇通用 ZIP 套件；簽署與公證狀態以 Latest 說明為準。 |
-| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 加入執行權限後開啟。 |
+| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 本次驗收與支援基線為 Ubuntu 24.04 LTS（x86_64），實際結果見同源 Latest 證據。Ubuntu 26.04 已觀察到影像執行環境卡住，目前不支援；其他發行版未驗收。加入執行權限後開啟，手動更新。 |
 | Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 從 Latest 附件下載 APK 並手動安裝。 |
 | iOS（附加套件） | [未簽名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 需自行簽署後安裝，無法直接安裝至一般 iPhone。 |
 

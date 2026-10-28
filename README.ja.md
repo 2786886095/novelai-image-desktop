@@ -78,7 +78,7 @@ Windows のローカル酒場 Agent は確認後に検証済み互換コンポ�
 | --- | --- | --- |
 | Windows x64 | [インストーラー EXE](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [ポータブル EXE](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 署名の状態は Latest の説明を確認してください。現在確認済みの Windows 配布は Authenticode 未署名で、セキュリティ警告が不要になるとは保証しません。バックアップ後に手動更新してください。 |
 | macOS Intel／Apple silicon | [Universal DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [Universal ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 署名・公証の状態は Latest の説明を確認してください。現在確認済みの配布では公証を確認できておらず、システムの信頼確認が出る場合があります。 |
-| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 実行権限を付けて起動し、新しいファイルへ手動で交換してください。 |
+| Linux x64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 今回の検証・サポート基準は Ubuntu 24.04 LTS（x86_64）です。実際の結果は同一ソースの Latest 証拠を参照してください。Ubuntu 26.04 では画像ランタイムの停止を確認しており現時点では非対応、他のディストリビューションは未検証です。実行権限を付け、手動更新してください。 |
 | Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | Latest のインストールと署名の説明に従ってください。手動インストールが必要で、現在確認済みの配布について実機や上書き更新の全体検証は完了していません。 |
 | iOS（追加パッケージ） | [未署名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 自分で署名する必要があり、通常の iPhone にそのままインストールすることはできません。 |
 

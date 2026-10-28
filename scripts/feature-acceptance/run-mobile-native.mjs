@@ -9,6 +9,7 @@ import {fullFeatureProfiles,profileSha256} from './full-feature-profiles.mjs';
 import {prepareAndroidNative,inspectAndroidForeground} from './android-native-preflight.mjs';
 import {observeAndroidRuntimeHealth} from './android-runtime-health.mjs';
 import {verifyMobilePredecessor,verifyColdNativeRestart} from './mobile-native-predecessor.mjs';
+import {prepareIosFolderPickerDriver} from './ios-folder-picker-driver.mjs';
 
 // A recording runner, not a publisher or a replacement for the release gate.
 // Its one JSON input is also used for executable-harness B/M/R/P verification.
@@ -42,7 +43,7 @@ let exitStatus = 1;
 let checks = [];
 let failure;
 let nativeCompletion=null, nativeRuntime=null, nativePending=[], nativeBegin=null;
-let predecessorProof=null,coldRestart=null,coldStop=null,observedAndroidPid=null;
+let predecessorProof=null,coldRestart=null,coldStop=null,observedAndroidPid=null,folderHostSupport=null;
 const preflight=[];
 function androidPhase(event){const record={...event,device:input.device,at:new Date().toISOString()};preflight.push(record);fs.writeFileSync(path.join(outputRoot,'android-native-preflight.json'),JSON.stringify(preflight,null,2)+'\n');console.log('ANDROID_NATIVE_PREFLIGHT '+JSON.stringify(record));}
 try {
@@ -164,11 +165,15 @@ try {
     const screenshot = command([input.adb, '-s', input.device, 'shell', 'screencap', '-p', '/data/local/tmp/acceptance-native.png']);
     if (screenshot.exitStatus === 0) command([input.adb, '-s', input.device, 'pull', '/data/local/tmp/acceptance-native.png', path.join(outputRoot, 'native-screen.png')]);
   } else {
+    // Compile the independent host UI-test runner before the real app starts
+    // its 180-second picker deadline. It never patches the production project.
+    const picker=input.entry==='ios_folder1'?await prepareIosFolderPickerDriver({...input,sourceRoot:input.sourceRoot,sourceSha,profileSha:profileSha256,outputRoot,command}):null;
     nativeCommand = [input.flutter, 'run', '--machine', '-t', input.testFile || 'integration_test/native_feature_journeys.dart',
       '-d', input.device, '--no-pub', '--dart-define=FEATURE_ISOLATED_DEVICE=true', `--dart-define=FEATURE_SOURCE_SHA=${sourceSha}`, ...extraDartDefines];
     resident = await collectResidentFlutter({ command: nativeCommand, cwd: input.projectRoot, env: process.env,
       sourceSha, platform: input.platform, device: input.device, expectedChecks: input.expectedChecks,
       testEntry: input.entry, profileSha: isMobileScenarioEntry(input.entry) ? profileSha256 : undefined,
+      onNativeLine:picker?.onLine,
       requireNativeBegin,
       timeoutMs: input.timeoutMs || 1500000, journeyTimeoutMs: input.journeyTimeoutMs || 300000,
       completionTailMs: input.completionTailMs || 750, stopGraceMs: input.stopGraceMs || 15000 });
@@ -180,6 +185,10 @@ try {
     }
     if (!resident.passed) command(['xcrun', 'simctl', 'terminate', input.device, input.appId]);
     command(['xcrun', 'simctl', 'io', input.device, 'screenshot', path.join(outputRoot, 'native-screen.png')]);
+    if(picker){
+      fs.writeFileSync(path.join(outputRoot,'native-app.stdout.txt'),nativeStdout);fs.writeFileSync(path.join(outputRoot,'native-app.stderr.txt'),nativeStderr);
+      folderHostSupport=await picker.finish();ledger.push(...folderHostSupport.commands);
+    }
   }
   fs.writeFileSync(path.join(outputRoot, 'native-app.stdout.txt'), nativeStdout);
   fs.writeFileSync(path.join(outputRoot, 'native-app.stderr.txt'), nativeStderr);
@@ -212,7 +221,7 @@ try {
     sourceSnapshotSha256: input.sourceSnapshotSha256 || null,
     platform: input.platform, device: input.device, appId: input.appId, isolated: input.isolated,
     completeFeatureRowsCertified: 0, full195Certified: false,
-    entry:input.entry??null, nativeRuntime,nativeCompletion,nativePending,nativeBegin,preflight,predecessorProof,coldStop,coldRestart,
+    entry:input.entry??null, nativeRuntime,nativeCompletion,nativePending,nativeBegin,preflight,predecessorProof,coldStop,coldRestart,folderHostSupport,
     expectedChecks: input.expectedChecks ?? null, checks, ledger, exitStatus, failure: failure || null,
     boundary: 'Real target native component journeys. No paid/public generation call, human profile, publishing, or whole-feature certification.' };
   const target = path.join(outputRoot, 'native-mobile-receipt.json');

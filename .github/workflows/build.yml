@@ -52,7 +52,7 @@ jobs:
             artifacts: |
               release/*.exe
               release/latest.yml
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             name: linux
             artifacts: |
               release/*.AppImage
@@ -77,8 +77,24 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Record and require actual Ubuntu 24.04 x64 desktop host
+        if: runner.os == 'Linux'
+        run: node scripts/feature-acceptance/linux-release-baseline.mjs --source-sha "${{ github.sha }}" --phase desktop-build --output "${{ runner.temp }}/linux-baseline/desktop-build.json"
+
+      - name: Upload Linux baseline identity and raw host commands
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-baseline-desktop-build-${{ github.sha }}
+          path: ${{ runner.temp }}/linux-baseline/desktop-build.json
+          if-no-files-found: error
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify Linux baseline identity policy
+        if: ${{ !inputs.candidate_build_only }}
+        run: node --test scripts/feature-acceptance/linux-release-baseline.test.mjs
 
       # Electron 42 may download its binary lazily even after npm ci. Without a
       # serial warm-up, parallel Vitest workers can race while creating

@@ -19,9 +19,20 @@ if(mode!=='before-start')log(marker);
 frame({event:'app.started',params:{appId:'unit-app'}});
 log('FEATURE_ACCEPTANCE_CHECK:'+JSON.stringify(c));
 log('FEATURE_ACCEPTANCE_DONE:'+JSON.stringify(d));
-let buffer='';process.stdin.on('data',chunk=>{buffer+=chunk;let i;while((i=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,i);buffer=buffer.slice(i+1);const [request]=JSON.parse(line);if(request.method==='app.stop'&&request.params.appId==='unit-app'){frame({id:request.id,result:true});frame({event:'app.stop',params:{appId:'unit-app'}});process.exitCode=0;process.stdin.destroy();}}});
+let buffer='';process.stdin.on('data',chunk=>{buffer+=chunk;let i;while((i=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,i);buffer=buffer.slice(i+1);const [request]=JSON.parse(line);if(request.method==='app.stop'&&request.params.appId==='unit-app'){process.stdout.write('UNIT_STOP_AT:'+Date.now()+'\n');frame({id:request.id,result:true});frame({event:'app.stop',params:{appId:'unit-app'}});process.exitCode=0;process.stdin.destroy();}}});
 `;
-async function collect(mode,value=pending){return collectResidentFlutter({command:[process.execPath,'-e',child,mode,JSON.stringify(value),JSON.stringify(check),JSON.stringify(done),JSON.stringify(begin)],cwd:process.cwd(),env:process.env,sourceSha,profileSha,platform,testEntry,device,expectedChecks:1,timeoutMs:5000,journeyTimeoutMs:3000,completionTailMs:10,stopGraceMs:1000});}
+async function collect(mode,value=pending,extra={}){return collectResidentFlutter({command:[process.execPath,'-e',child,mode,JSON.stringify(value),JSON.stringify(check),JSON.stringify(done),JSON.stringify(begin)],cwd:process.cwd(),env:process.env,sourceSha,profileSha,platform,testEntry,device,expectedChecks:1,timeoutMs:5000,journeyTimeoutMs:3000,completionTailMs:10,stopGraceMs:1000,...extra});}
 test('resident current-app PENDING is kept separate through successful stop/close',{timeout:10000},async()=>{const r=await collect('valid');assert.equal(r.passed,true,r.errors.join('; '));assert.equal(r.actualCloseCode,0);assert.equal(r.stopReply.result,true);assert.equal(r.pending.length,1);assert.equal(r.checks.length,1);});
 test('resident rejects PENDING before matching current app.start',{timeout:10000},async()=>{const r=await collect('before-start');assert.equal(r.passed,false);assert.match(r.errors.join('; '),/before matching current app.start/);});
 test('resident cannot lose external profile binding for PENDING',{timeout:10000},async()=>{const r=await collect('valid',{...pending,profileSha:'c'.repeat(64)});assert.equal(r.passed,false);assert.equal(r.pending.length,0);assert.match(r.errors.join('; '),/PENDING.*identity mismatch/);});
+
+test('an asynchronous real-OS observer completes before app.stop; DONE cannot terminate its target early',{timeout:10000},async()=>{
+ let observed=0,finishedAt=0;const r=await collect('valid',pending,{onNativeLine:text=>{if(!text.includes('FEATURE_ACCEPTANCE_PENDING:'))return;observed++;return new Promise(resolve=>setTimeout(()=>{finishedAt=Date.now();resolve()},120));}});
+ assert.equal(r.passed,true,r.errors.join('; '));assert.equal(observed,1);const stop=Number(/UNIT_STOP_AT:(\d+)/.exec(r.stdout)?.[1]);assert(Number.isFinite(stop)&&stop>=finishedAt,'app.stop preceded external OS-driver completion');
+});
+test('failed synchronous or asynchronous OS observers cannot be hidden by successful native DONE',{timeout:10000},async()=>{
+ for(const asynchronous of [false,true]){const r=await collect('valid',pending,{onNativeLine:text=>{if(!text.includes('FEATURE_ACCEPTANCE_PENDING:'))return;if(asynchronous)return Promise.reject(Error('unit observer rejection'));throw Error('unit observer rejection');}});assert.equal(r.passed,false);assert.match(r.errors.join('; '),/Native OS observer failed.*unit observer rejection/);assert.equal(r.terminationReason,'native-observer-failed');}
+});
+test('an unfinished OS observer cannot hang beyond the independent native journey bound',{timeout:10000},async()=>{
+ const start=Date.now();const r=await collect('valid',pending,{journeyTimeoutMs:100,onNativeLine:text=>text.includes('FEATURE_ACCEPTANCE_PENDING:')?new Promise(()=>{}):undefined});assert.equal(r.passed,false);assert.match(r.errors.join('; '),/observer exceeded bounded journey deadline/);assert(Date.now()-start<5000);
+});

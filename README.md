@@ -93,7 +93,7 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 | Windows x64 · 安装版 | [安装版](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 文件名含 Setup 的 EXE；安装前备份设置与作品 |
 | Windows x64 · 便携版 | [便携版](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 不含 Setup 的便携 EXE；下载新包替换，便携版不等于零痕迹 |
 | macOS · Intel / Apple Silicon | [Universal DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 通用 DMG 或 ZIP；签名 / 公证状态以 Latest 说明为准 |
-| Linux x86_64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | AppImage，添加执行权限后运行 |
+| Linux x86_64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 本次验收与支持基线为 Ubuntu 24.04 LTS（x86_64），实际通过情况见同源 Latest 证据。Ubuntu 26.04 已观察到图像运行时卡住，目前不支持；其他发行版未验收。添加执行权限后运行，手动更新。 |
 | Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | APK，手动安装；先核对签名与升级说明，勿为更新而删除旧数据 |
 | iOS（附加包） | [未签名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 需自行签名后安装，不能直接安装到普通 iPhone |
 
