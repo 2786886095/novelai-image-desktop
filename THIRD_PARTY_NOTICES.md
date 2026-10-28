@@ -4,8 +4,6 @@
 
 - `hash-wasm` 4.12.0, https://github.com/Daninet/hash-wasm, MIT (Dani Biro).
   Used for local BLAKE2b-128 and Argon2id access-key derivation on desktop.
-- Flutter `cryptography` 2.9.0, https://pub.dev/packages/cryptography,
-  Apache-2.0. Used for equivalent local access-key derivation on Android/iOS.
 - Authentication algorithm and wire format were checked against the reference
   implementation https://github.com/Aedial/novelai-api (utils.py, _high_level.py,
   _low_level.py). This is not an official NovelAI support guarantee.
@@ -38,7 +36,7 @@ These projects are not affiliated with or endorsed by Langbai NovelAI Studio.
 
 ## Bundled Chinese UI style fonts
 
-These original, unmodified fonts are distributed under SIL Open Font License 1.1, separately from the application MIT license. Copyright notices and full licenses are bundled alongside fonts in `dist/ui-fonts/` and `mobile/assets/ui-fonts/`. `catalog.json` records pinned source URLs, versions and SHA-256 hashes. They are not installed into the operating system.
+These original, unmodified fonts are distributed under SIL Open Font License 1.1, separately from the application MIT license. Copyright notices and full licenses are bundled alongside fonts in `dist/ui-fonts/`. `catalog.json` records pinned source URLs, versions and SHA-256 hashes. They are not installed into the operating system.
 
 - **霞鹜文楷 轻便版 / LXGW WenKai Lite** v1.522: https://github.com/lxgw/LxgwWenKai-Lite; license `builtin-wenkai.OFL.txt`.
 - **小赖字体 / Xiaolai** v3.126: https://github.com/lxgw/kose-font; license `builtin-xiaolai.OFL.txt`.
@@ -62,6 +60,3 @@ These original, unmodified fonts are distributed under SIL Open Font License 1.1
   relicense unrelated application code, existing presets or other dependencies.
   Commercial-use authorization has not been established. The fixed source URLs,
   byte sizes, hashes and adaptation statement are in `shared/ig5-image-prompts.json`.
-- Platform boundary: packaging the desktop adaptations does not assert Android
-  or iOS default-prompt parity. Their separate Flutter implementation and declared
-  assets determine what is actually enabled on those platforms.

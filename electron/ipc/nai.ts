@@ -4012,8 +4012,7 @@ export async function generateComicPanel(
   return result;
 }
 
-const comicRuns=new Map<string,{controller:AbortController;done:Promise<void>}>();
-export async function waitTagComicGeneration(runId:string){await comicRuns.get(runId)?.done;}
+const comicRuns=new Map<string,{controller:AbortController}>();
 export function cancelTagComicGeneration(runId:string){
   const owned=comicRuns.get(runId);owned?.controller.abort(Error('漫画任务已停止'));
   return {ok:true,requested:Boolean(owned)};
@@ -4021,10 +4020,10 @@ export function cancelTagComicGeneration(runId:string){
 export async function generateTagComicCandidate(request:TagComicGenerateRequest):Promise<GenerateResult>{
   const runId=request.runId??crypto.randomUUID();
   if(typeof runId!=='string'||!/^[a-zA-Z0-9_-]{1,160}$/.test(runId)||comicRuns.has(runId))return {ok:false,items:[],message:'漫画任务标识无效或该任务已有请求进行中'};
-  const controller=new AbortController();let settled!:()=>void;const done=new Promise<void>(resolve=>settled=resolve);comicRuns.set(runId,{controller,done});
+  const controller=new AbortController();comicRuns.set(runId,{controller});
   try{return await generateTagComicCandidateRequest(request,controller.signal);}
   catch(error){return {ok:false,items:[],message:error instanceof Error?error.message:String(error)};}
-  finally{if(comicRuns.get(runId)?.controller===controller)comicRuns.delete(runId);settled();}
+  finally{if(comicRuns.get(runId)?.controller===controller)comicRuns.delete(runId);}
 }
 async function generateTagComicCandidateRequest(
   request: TagComicGenerateRequest, signal:AbortSignal,
@@ -4731,13 +4730,12 @@ export async function generateI2I(
 // Batch redraw = img2img on an EXPLICIT source image (not the workbench image),
 // saved into a named history group (created if missing) on disk + in history.
 // Driven serially by the 图片批量重绘 tool, one call per image.
-const batchRuns=new Map<string,{controller:AbortController;done:Promise<void>}>();
-export async function waitBatchRedraw(runId:string){await batchRuns.get(runId)?.done;}
+const batchRuns=new Map<string,{controller:AbortController}>();
 export function cancelBatchRedraw(runId:string){const owned=batchRuns.get(runId);owned?.controller.abort(Error('批量重绘已停止'));return {ok:true,requested:Boolean(owned)};}
 export async function redrawImage(request:BatchRedrawRequest):Promise<GenerateResult>{
  const id=request.runId??crypto.randomUUID();if(typeof id!=='string'||!/^[a-zA-Z0-9_-]{1,160}$/.test(id)||batchRuns.has(id))return {ok:false,items:[],message:'批量重绘运行标识无效或正在提交'};
- const controller=new AbortController();let release!:()=>void;const done=new Promise<void>(r=>release=r);batchRuns.set(id,{controller,done});
- try{prepareBatchImageService([request]);return await redrawImageRequest(request,controller.signal);}catch(error){return handleGenerateError(error,"批量重绘失败");}finally{if(batchRuns.get(id)?.controller===controller)batchRuns.delete(id);release();}
+ const controller=new AbortController();batchRuns.set(id,{controller});
+ try{prepareBatchImageService([request]);return await redrawImageRequest(request,controller.signal);}catch(error){return handleGenerateError(error,"批量重绘失败");}finally{if(batchRuns.get(id)?.controller===controller)batchRuns.delete(id);}
 }
 
 async function redrawImageRequest(

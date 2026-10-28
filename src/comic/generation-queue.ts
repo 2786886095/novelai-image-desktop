@@ -24,11 +24,6 @@ export function prepareComicTasks(project:TagComicProject,tasks:ComicQueueTask[]
   return {...task,request:structuredClone(request)};
  });
 }
-export function selectComicTasks(project:TagComicProject,mode:string,panelIds:string[]):ComicQueueTask[]{
- if(!['initial','regenerate','additional'].includes(mode)||!Array.isArray(panelIds)||new Set(panelIds).size!==panelIds.length||panelIds.some(id=>!project.panels.some(p=>p.id===id)))throw Error('生成模式或分镜选择无效');
- const panels=[...project.panels].sort((a,b)=>a.index-b.index).filter(p=>!panelIds.length||panelIds.includes(p.id));
- return panels.flatMap(panel=>Array.from({length:mode==='additional'?1:mode==='initial'?Math.max(0,project.initialGenerationCount-panel.candidates.length):project.initialGenerationCount},(_,ordinal)=>({panelId:panel.id,ordinal})));
-}
 export type ComicQueueDependencies={
  store:ComicProjectStore;storage:Pick<Storage,'getItem'|'setItem'>;
  hasToken:()=>Promise<boolean>;

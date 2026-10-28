@@ -1,5 +1,5 @@
 import {expect,it,vi} from 'vitest';
-import {createComicGenerationQueue,COMIC_RUN_KEY,prepareComicTasks,selectComicTasks} from './generation-queue';
+import {createComicGenerationQueue,COMIC_RUN_KEY,prepareComicTasks} from './generation-queue';
 import {createComicProjectStore} from './project-store';
 import {createTagComicPanel,TAG_COMIC_STORAGE_KEY} from './tag-comic';
 import {DEFAULT_PARAMS,type GenerateResult,type TagComicGenerateRequest} from '../types';
@@ -35,11 +35,6 @@ it('invalid quote and absent token stop before approval or generation',async()=>
 it('denial does not spend and preserves the project candidates',async()=>{const f=fixture();f.launch(vi.fn(async()=>false));await f.queue.settled();expect(f.queue.getSnapshot().phase).toBe('cancelled');expect(f.deps.generate).not.toHaveBeenCalled();expect(f.store.read().busy).toBe(false);});
 it('stale run cancellation cannot stop a newer queue',async()=>{const f=fixture(),gate=deferred<boolean>();const receipt=f.launch(vi.fn(()=>gate.promise));await expect(f.queue.stop('old-run')).rejects.toThrow('runId');expect(f.queue.active).toBe(true);await f.queue.stop(receipt.id);await f.queue.settled();expect(f.queue.getSnapshot().phase).toBe('cancelled');expect(f.deps.cancel).not.toHaveBeenCalled();});
 
-it('Agent planning selects all or explicit panels and preserves the three existing UI generation modes',async()=>{
- const f=fixture();await f.launch();await f.queue.settled();const p=f.store.read().project;p.initialGenerationCount=2;
- expect(selectComicTasks(p,'initial',[])).toHaveLength(2);expect(selectComicTasks(p,'regenerate',[])).toHaveLength(4);expect(selectComicTasks(p,'additional',[p.panels[1].id])).toEqual([{panelId:p.panels[1].id,ordinal:0}]);
- expect(()=>selectComicTasks(p,'unknown',[])).toThrow();expect(()=>selectComicTasks(p,'initial',['missing'])).toThrow();expect(()=>selectComicTasks(p,'initial',[p.panels[0].id,p.panels[0].id])).toThrow();
-});
 it('preview cannot charge, accepts unknown cost and rejects estimate-time revision drift',async()=>{
  const f=fixture();f.deps.quote.mockResolvedValueOnce(null);expect(await f.queue.preview(f.tasks,f.store.read().revision)).toEqual({count:2,quote:null});expect(f.deps.generate).not.toHaveBeenCalled();
  f.deps.quote.mockImplementationOnce(async()=>{f.store.update(p=>({...p,title:'changed'}));return 4;});await expect(f.queue.preview(f.tasks,f.store.read().revision)).rejects.toThrow('已变化');

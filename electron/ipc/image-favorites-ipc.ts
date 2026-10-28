@@ -8,7 +8,6 @@ import {favoritesText} from '../../src/favorites-text';
 import type {ImageFavorite} from '../../src/favorites-types';
 let service:ReturnType<typeof createImageFavorites>|undefined;
 const api=()=>service??=createImageFavorites({indexPath:path.join(app.getPath('userData'),'image-favorites.v1.json'),defaultDirectory:path.join(app.getPath('pictures'),'Langbai NovelAI Favorites'),resolveGeneratedAt:createFavoriteHistoryTimeResolver({references:getFavoriteHistoryReferences})});
-export const imageFavoritesService=api;
 const expose=(item:ImageFavorite)=>({...item,fileUrl:item.missing?'':toLocalMediaUrl(item.filePath,item.id+item.name)});
 async function add(src:string){const file=localMediaUrlToPath(src);if(!file)throw Error('请收藏已加载的原始图片。');const result=await api().add(file);return {...result,item:expose(result.item)};}
 export function favoriteContextMenuItem(src:string,win:BrowserWindow):MenuItemConstructorOptions {

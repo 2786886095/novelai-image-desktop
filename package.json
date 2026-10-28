@@ -18,7 +18,7 @@
     "build": "npm run build:renderer && npm run build:electron",
     "build:prompt-codex": "node scripts/build-prompt-codex.mjs",
     "build:renderer": "vite build",
-    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:electron": "node -e \"require('node:fs').rmSync('dist-electron',{recursive:true,force:true})\" && tsc -p tsconfig.electron.json",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -197,7 +197,8 @@
       "node_modules/@img/**",
       "node_modules/onnxruntime-node/**"
     ],
-    "beforePack": "scripts/configure-windows-archive.cjs"
+    "beforePack": "scripts/configure-windows-archive.cjs",
+    "afterPack": "scripts/verify-runtime-dependencies.cjs"
   },
   "allowScripts": {
     "electron@42.11.0": true,

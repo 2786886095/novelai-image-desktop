@@ -21,6 +21,14 @@ describe("image decoding is a declared cross-platform production dependency", ()
   });
 });
 
+it('verifies the packaged runtime dependency closure after every platform pack',async()=>{
+ // Losing this hook would ship packages without the closure gate; no build step calls it otherwise.
+ expect(manifest.build.afterPack).toBe('scripts/verify-runtime-dependencies.cjs');
+ const hook=(await import('../../scripts/verify-runtime-dependencies.cjs')).default;
+ expect(typeof hook).toBe('function');
+ await expect(hook({electronPlatformName:'linux-unsupported'})).rejects.toThrow('Unsupported packaging target platform');
+});
+
 it.each(['win','mac'])('includes actual scoring runtime for %s instead of advertising an excluded feature',platform=>{
  for(const excluded of ['!node_modules/@huggingface/transformers/**','!node_modules/onnxruntime-node/**'])expect(manifest.build[platform].files??[]).not.toContain(excluded);
  for(const architecture of ['darwin','win32'])expect(manifest.build.files).not.toContain(`!node_modules/onnxruntime-node/bin/napi-v3/${architecture}/**`);

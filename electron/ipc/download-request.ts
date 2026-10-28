@@ -3,12 +3,6 @@ import {Readable} from 'node:stream';
 import {getSettings} from './store';
 import {proxyConfigForUrl, type ProxyCategory} from './proxy';
 
-function transportError(error:unknown):unknown {
-  const code=error && typeof error==='object' && 'code' in error ? String(error.code):'';
-  return ['ECONNRESET','ETIMEDOUT','ECONNABORTED','EPIPE','ENOTFOUND','EAI_AGAIN'].includes(code)
-    ? new TypeError('Agent 下载连接中断，请检查软件更新代理后重试。',{cause:error}) : error;
-}
-
 /** Public asset GETs use the app's category policy, including every PAC/CDN hop.
  * Automatic redirects are disabled so a different host never inherits its
  * predecessor's proxy decision. Credentials are intentionally not accepted. */
@@ -34,23 +28,4 @@ export async function downloadRequest(category:ProxyCategory, url:string, option
     return response;
   }
   throw Error('Too many download redirects');
-}
-
-/** Fetch-shaped streaming adapter; preserves the component integrity/resume path. */
-export async function updateFetch(url:string, options:{signal?:AbortSignal;headers?:Record<string,string>}={}) {
-  try {
-    const response=await downloadRequest('update',url,options);
-    const headers=new Headers();
-    for(const [name,value] of Object.entries(response.headers))if(value!=null)headers.set(name,String(value));
-    async function* chunks() {
-      try {for await(const chunk of response.data)yield chunk;}
-      catch(error){options.signal?.throwIfAborted();throw transportError(error);}
-      finally{response.data.destroy();}
-    }
-    return new Response(Readable.toWeb(Readable.from(chunks())) as ReadableStream<Uint8Array>,{status:response.status,headers});
-  } catch(error) {
-    options.signal?.throwIfAborted();
-    // Only transport failures participate in component range retry.
-    throw transportError(error);
-  }
 }
