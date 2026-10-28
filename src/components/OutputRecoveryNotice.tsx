@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { errorText } from '../error-message';
 import { useAppStore } from '../store';
 import { FolderOpenIcon, CloseIcon } from '../tavern/MaterialIcons';
 
@@ -15,7 +16,7 @@ export function OutputRecoveryNotice() {
   const text = labels[settings.language] ?? labels['zh-CN'];
   const open = (path: string) => void window.naiDesktop.openInExplorer(path).then(result => {
     if (!result.ok) setError('打开位置失败');
-  }).catch(reason => setError(String(reason)));
+  }).catch(reason => setError(errorText(reason)));
   return <section className="image-save-notice" role="status" aria-live="polite" aria-atomic="true">
     <div className="image-save-notice-content">
       <strong>{text[notice.status === 'recovered' ? 0 : 1]}</strong>
@@ -27,7 +28,7 @@ export function OutputRecoveryNotice() {
       {error && <p role="alert">{error}</p>}
     </div>
     <button type="button" className="image-save-dismiss" aria-label={text[6]} onClick={() => {
-      void window.naiDesktop.setSetting('outputMigrationNotice', null).then(() => useAppStore.getState().refreshSettings()).catch(reason => setError(String(reason)));
+      void window.naiDesktop.setSetting('outputMigrationNotice', null).then(() => useAppStore.getState().refreshSettings()).catch(reason => setError(errorText(reason)));
     }}><CloseIcon /></button>
   </section>;
 }

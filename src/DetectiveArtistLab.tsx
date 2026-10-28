@@ -1,4 +1,5 @@
 import {PreviewImageViewer, type PreviewImage} from "./components/PreviewImageViewer";
+import {errorText} from "./error-message";
 import {useFeatureText} from "./feature-i18n";
 import { useEffect, useRef, useState } from "react";
 import "./detective-download.css";
@@ -55,7 +56,7 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
   },[active]);
   const patch = (value: Partial<Draft>) => setDraft(s => ({ ...s, ...value }));
   const patchParameters = (value: Partial<DetectiveParameters>) => {
-    try { patch({ parameters: detectiveParameters({...draft.parameters, ...value}) }); } catch(e) { setError(String(e)); }
+    try { patch({ parameters: detectiveParameters({...draft.parameters, ...value}) }); } catch(e) { setError(errorText(e)); }
   };
   useEffect(() => {
     const timer = setTimeout(() => localStorage.setItem(KEY, JSON.stringify(draft)), 300);
@@ -74,7 +75,7 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
             prompt: current.prompt || next.fixedPrompt?.content_tags || "", style: current.style || next.fixedPrompt?.style_tags || "" });
         }
       }
-      catch (e) { if (!disposed) setError(String(e)); }
+      catch (e) { if (!disposed) setError(errorText(e)); }
       if (!disposed) timer = setTimeout(poll, 2000);
     };
     void poll();
@@ -85,7 +86,7 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
   const action = async (fn: () => Promise<unknown>) => {
     setBusy(true); setError("");
     try { await fn(); setSnapshot(await window.naiDesktop.artistDetectiveStatus()); }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    catch (e) { setError(errorText(e)); }
     finally { setBusy(false); }
   };
   const choose = (file?: string) => action(async () => {
@@ -158,7 +159,7 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
             {download?.busy ? <Button onClick={() => void action(async () => setDownload(await window.naiDesktop.artistDetectiveDownloadCancel()))}>{ft("取消下载")}</Button>
               : <Button disabled={active} variant="primary" onClick={() => void action(async () => setDownload(await window.naiDesktop.artistDetectiveDownloadStart()))}>{ft("下载并安装 / 继续下载")}</Button>}
           </div>
-          <p><a href="https://huggingface.co/langbai666/novelai-studio-artist-detective" target="_blank" rel="noreferrer" onClick={event => { event.preventDefault(); void window.naiDesktop.openExternal(event.currentTarget.href).catch(e => setError(e instanceof Error ? e.message : String(e))); }}>{ft("前往 Hugging Face 模型仓库 ↗")}</a></p>
+          <p><a href="https://huggingface.co/langbai666/novelai-studio-artist-detective" target="_blank" rel="noreferrer" onClick={event => { event.preventDefault(); void window.naiDesktop.openExternal(event.currentTarget.href).catch(e => setError(errorText(e))); }}>{ft("前往 Hugging Face 模型仓库 ↗")}</a></p>
           <details><summary>{ft("使用说明")}</summary><ol><li>{ft("先选择模型版本和磁盘位置，建议预留至少 35GB（完整版）或 20GB（轻量版）。两种模型与索引成套下载，不可混用。")}</li><li>{ft("下载完成后自动校验、解压并检查 CUDA。未通过检查时保留原配置。")}</li><li>{ft("安装 NVIDIA 驱动；无需另装完整 CUDA Toolkit。完整版至少 8GB；轻量版尚未逐一验证各款低显存显卡。")}</li><li>{ft("配置 NovelAI API，选择参考图，反推或填写固定内容提示词，再选择图片预算开始迭代。")}</li><li>{ft("NAI 负责云端出图，本地 GPU 负责画风评分，CPU 负责画师检索与候选预测。不同模型的分数不能直接比较。")}</li><li>{ft("网络中断保留下载片段，重试可断点续传；取消或失败不替换现有配置和历史图片。")}</li></ol></details>
         </details>}
         <label><span>{ft("固定内容提示词")}</span><textarea disabled={active} value={draft.prompt} onChange={e => patch({ prompt: e.target.value })} /></label>
@@ -176,8 +177,8 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
         </section>
         <label><span>{ft("固定辅助画风词（可选）")}</span><textarea disabled={active} value={draft.style} onChange={e => patch({ style: e.target.value })} /></label>
         <div className="artist-run-options">
-          <CommittedNumberInput label={ft("迭代轮数")} value={detectiveRounds(draft.budget)} min={1} disabled={active} normalize={v => Math.max(1, Math.floor(v))} onCommit={rounds => { try { patch({ budget: detectiveRoundBudget(rounds) }); } catch (e) { setError(String(e)); } }} />
-          <CommittedNumberInput label={ft("最多生成图片数（含最终复测）")} value={draft.budget} min={24} step={2} disabled={active} normalize={v => Math.max(24, Math.floor(v / 2) * 2)} onCommit={budget => { try { detectiveRounds(budget); patch({ budget }); } catch (e) { setError(String(e)); } }} />
+          <CommittedNumberInput label={ft("迭代轮数")} value={detectiveRounds(draft.budget)} min={1} disabled={active} normalize={v => Math.max(1, Math.floor(v))} onCommit={rounds => { try { patch({ budget: detectiveRoundBudget(rounds) }); } catch (e) { setError(errorText(e)); } }} />
+          <CommittedNumberInput label={ft("最多生成图片数（含最终复测）")} value={draft.budget} min={24} step={2} disabled={active} normalize={v => Math.max(24, Math.floor(v / 2) * 2)} onCommit={budget => { try { detectiveRounds(budget); patch({ budget }); } catch (e) { setError(errorText(e)); } }} />
         </div>
         <details className="detective-budget-help" aria-label={ft("轮数与图片上限说明")}>
           <summary>{ft("本次最多生成 {budget} 张图片",{budget:draft.budget})} · {ft("轮数与图片上限说明")}</summary>

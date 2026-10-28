@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { errorText } from "../../error-message";
 import { Button, IconText } from "../../components/ui";
 import { Icon } from "../../components/icons";
 import type {
@@ -39,7 +40,7 @@ export default function ResourceDatabaseSettings({ language }: { language: AppLa
   };
 
   useEffect(() => {
-    void refresh().catch((error) => setMessage(error instanceof Error ? error.message : String(error)));
+    void refresh().catch((error) => setMessage(errorText(error)));
     return window.naiDesktop.onResourceDatabaseProgress((event) => {
       setProgress((current) => ({ ...current, [event.id]: event }));
       if (event.phase === "complete" || event.phase === "error" || event.phase === "paused") {
@@ -66,7 +67,7 @@ export default function ResourceDatabaseSettings({ language }: { language: AppLa
         : await window.naiDesktop.restorePreviousResourceDatabase(request.id, true);
       setMessage(result.message);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
+      setMessage(errorText(error));
     } finally {
       setBusy("");
       await refresh().catch(() => undefined);

@@ -1,4 +1,5 @@
 import {PreviewImageViewer} from './components/PreviewImageViewer';
+import {errorText} from './error-message';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { animateStudioEntry, motionReduced } from "./motion-system";
 import { AppPortal, SelectMenu } from "./components/ui";
@@ -148,7 +149,7 @@ export default function ReferenceCatalogPanel({ library, onDownloaded }: { libra
     try {
       setCatalog(await loadReferenceCatalog(undefined, refresh));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : text.unavailable);
+      setError(errorText(reason, text.unavailable));
     } finally {
       setLoading(false);
     }
@@ -346,7 +347,7 @@ export default function ReferenceCatalogPanel({ library, onDownloaded }: { libra
       }
       return { ok: true, bytes: bytes.byteLength };
     } catch (reason) {
-      if (options.notify !== false) setToast(reason instanceof Error ? reason.message : text.unavailable);
+      if (options.notify !== false) setToast(errorText(reason, text.unavailable));
       return { ok: false, bytes: 0 };
     } finally {
       inFlightRef.current.delete(asset.id);

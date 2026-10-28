@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import {errorText} from '../error-message';
 import {useAppStore} from '../store';
 import {normalizePromptSkillVersion} from '../prompt-skill';
 import type {AppSettings, PromptSkillVersion, ReversePromptMode, ReversePromptTemplateVersion} from '../types';
@@ -33,7 +34,7 @@ export function InlineReversePromptSkillControls({disabled=false}:{disabled?:boo
       await window.naiDesktop.setSetting('reversePromptTemplateVersion',model);
       await window.naiDesktop.setSetting('reversePromptSkillVersion',edition);
       await useAppStore.getState().refreshSettings();
-    } catch(e) {setError(e instanceof Error?e.message:String(e));}
+    } catch(e) {setError(errorText(e));}
     finally {setSaving(false);}
   }
   return <><PromptSkillControls model={selection.model} edition={normalizePromptSkillVersion(selection.edition)}

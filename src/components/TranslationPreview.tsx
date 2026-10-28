@@ -1,4 +1,5 @@
 import {useEffect,useRef,useState,useSyncExternalStore} from 'react';
+import {errorText} from '../error-message';
 import {useAppStore} from '../store';
 import {AppPortal,SelectMenu} from './ui';
 import {CompactIconButton} from './CompactPromptControls';
@@ -33,13 +34,13 @@ export function TranslationPreview({currentValue,context,language,onApply,onClos
  async function persistLanguages(from:string,to:string){
   setSaving(true);setLocalError('');setNotice('');
   try{await window.naiDesktop.setSetting('translateSourceLanguage',from);await window.naiDesktop.setSetting('translateTargetLanguage',to);await useAppStore.getState().refreshSettings();}
-  catch(e){if(!closed.current){session.setLanguages(sourcePreference,target);setLocalError(e instanceof Error?e.message:text.failed);}}
+  catch(e){if(!closed.current){session.setLanguages(sourcePreference,target);setLocalError(errorText(e,text.failed));}}
   finally{if(!closed.current)setSaving(false);}
  }
  async function changeLive(live:boolean){
   setSaving(true);setLocalError('');setNotice('');
   try{await session.persistLive(live,async value=>{await window.naiDesktop.setSetting('translateRealtime',value);await useAppStore.getState().refreshSettings();});}
-  catch(e){if(!closed.current)setLocalError(e instanceof Error?e.message:text.failed);}
+  catch(e){if(!closed.current)setLocalError(errorText(e,text.failed));}
   finally{if(!closed.current)setSaving(false);}
  }
  async function applyTranslation(){
@@ -57,7 +58,7 @@ export function TranslationPreview({currentValue,context,language,onApply,onClos
    onClose();
   }catch(e){
    try{await window.naiDesktop.setSetting('translateSourceLanguage',previousFrom);await window.naiDesktop.setSetting('translateTargetLanguage',previousTo);await useAppStore.getState().refreshSettings();}catch{/* Surface the original failed save; never write the parent prompt. */}
-   if(!closed.current)setLocalError(e instanceof Error?e.message:text.failed);
+   if(!closed.current)setLocalError(errorText(e,text.failed));
   }finally{if(!closed.current){session.setComposing(false,false);setSaving(false);}}
  }
  async function copy(){

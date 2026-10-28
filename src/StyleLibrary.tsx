@@ -1,4 +1,5 @@
 import {confirmAction} from './components/confirm';
+import {errorText} from './error-message';
 import {FilePicker} from './components/FilePicker';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import labels from '../shared/style-library-ui.json';
@@ -10,10 +11,10 @@ import {Button,SelectMenuCompat as Select} from './components/ui';
 import {Icon} from './components/icons';
 import {PreviewImageViewer} from './components/PreviewImageViewer';
 export const styleText=(language:unknown)=>labels[language as keyof typeof labels]??labels['zh-CN'];
-export function StyleSortSelect(){const s=useAppStore(x=>x.settings),t=styleText(s?.language);return <label>{t.sort}<Select aria-label={t.sort} value={s?.stylePromptPresetSort??'default'} onChange={e=>void setStyleSort(e.target.value).catch(e=>useAppStore.getState().setToast(String(e)))}>{STYLE_SORTS.map(v=><option key={v} value={v}>{v==='name'?t.nameSort:t[v]}</option>)}</Select></label>;}
+export function StyleSortSelect(){const s=useAppStore(x=>x.settings),t=styleText(s?.language);return <label>{t.sort}<Select aria-label={t.sort} value={s?.stylePromptPresetSort??'default'} onChange={e=>void setStyleSort(e.target.value).catch(e=>useAppStore.getState().setToast(errorText(e)))}>{STYLE_SORTS.map(v=><option key={v} value={v}>{v==='name'?t.nameSort:t[v]}</option>)}</Select></label>;}
 export function GallerySaveStyleButton({name,prompt,images}:{name:string;prompt:string;images:string[]}) {
  const t=styleText(useAppStore(s=>s.settings?.language));const [busy,setBusy]=useState(false),[error,setError]=useState('');
- return <><Button disabled={busy||!prompt.trim()} onClick={async()=>{setBusy(true);setError('');try{await saveGalleryStyle(name,prompt,images);useAppStore.getState().setToast(t.saved);}catch(e){setError(String(e));}finally{setBusy(false);}}}>{busy?'…':t.saveStyle}</Button>{error&&<span role="alert">{error}</span>}</>;
+ return <><Button disabled={busy||!prompt.trim()} onClick={async()=>{setBusy(true);setError('');try{await saveGalleryStyle(name,prompt,images);useAppStore.getState().setToast(t.saved);}catch(e){setError(errorText(e));}finally{setBusy(false);}}}>{busy?'…':t.saveStyle}</Button>{error&&<span role="alert">{error}</span>}</>;
 }
 export default function StyleLibrary(){
  const settings=useAppStore(s=>s.settings),t=styleText(settings?.language),items=settings?.stylePromptPresets??[];
@@ -29,7 +30,7 @@ export default function StyleLibrary(){
  useLayoutEffect(()=>{if(draft&&libraryRef.current)libraryRef.current.scrollTop=0;},[draft?.id]);
  const groups=[...new Set(['Default',...(settings?.stylePromptPresetGroups??[]),...items.map(p=>p.group)])];
  const visible=sortStyles(items,settings?.stylePromptPresetSort).filter(p=>(!group||p.group===group)&&`${p.name}\n${p.prompt}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
- async function run(work:()=>Promise<unknown>){setBusy(true);setError('');try{await work();}catch(e){setError(String(e));}finally{setBusy(false);}}
+ async function run(work:()=>Promise<unknown>){setBusy(true);setError('');try{await work();}catch(e){setError(errorText(e));}finally{setBusy(false);}}
  const fresh=(name='',prompt=''):StylePromptPreset=>({id:crypto.randomUUID(),name,prompt,group:group||'Default',createdAt:new Date().toISOString(),rating:0,usageCount:0,previewImages:[]});
  async function cancel(){if(draft){const original=items.find(p=>p.id===draft.id);for(const im of draft.previewImages??[])if(!original?.previewImages?.some(x=>x.id===im.id))await window.naiDesktop.deleteStylePromptPresetImage(draft.id,im.id);}setDraft(null);setBatch(false);}
  async function apply(p:StylePromptPreset){await countStyleUse(p.id);useAppStore.getState().setParam('stylePrompt',p.prompt);useAppStore.getState().setActiveTab('generate');}

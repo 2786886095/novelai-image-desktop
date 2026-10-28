@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { errorText } from '../error-message';
 import { useAppStore } from '../store';
 
 /** Never persist a half-typed path. A rejected location remains editable with an inline error. */
@@ -11,7 +12,7 @@ export function StorageDirectoryInput({ settingKey, value, placeholder, disabled
     if (busy || disabled || draft === value) return;
     setBusy(true); setError('');
     try { await window.naiDesktop.setSetting(settingKey, draft); await useAppStore.getState().refreshSettings(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    catch (reason) { setError(errorText(reason)); }
     finally { setBusy(false); }
   };
   return <div className="storage-directory-input"><input disabled={disabled} placeholder={placeholder} value={draft} readOnly={busy} aria-invalid={!!error}

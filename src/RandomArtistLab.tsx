@@ -1,4 +1,5 @@
 import { confirmAction } from "./components/confirm";
+import { errorText } from "./error-message";
 import {PreviewImageViewer} from './components/PreviewImageViewer';
 import {FavoriteStyleExport} from './components/FavoriteStyleExport';
 import {parseCustomArtistPool, customArtistPoolText} from './custom-artist-pool';
@@ -890,7 +891,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       if (!generated.ok || !image) throw new Error(generated.message);
       setSession((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, image, status: "done", error: undefined, generationModel: image.model || requestParams.model } : item) }));
     } catch (error: any) {
-      setSession((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, status: "failed", error: error?.message ?? String(error) } : item) }));
+      setSession((current) => ({ ...current, results: current.results.map((item) => item.id === id ? { ...item, status: "failed", error: errorText(error) } : item) }));
     }
   };
 
@@ -1012,7 +1013,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
       await refreshHistory();
     } catch (error: any) {
       setSession((current) => ({ ...current, results: current.results.map((item) => item.id === result.id ? { ...item, saving: false } : item) }));
-      setMessage(error?.message ?? String(error));
+      setMessage(errorText(error));
     }
   };
 

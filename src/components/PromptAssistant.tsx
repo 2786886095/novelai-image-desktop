@@ -1,4 +1,5 @@
 import {useAppStore} from '../store';
+import {errorText} from '../error-message';
 import {isPromptApiConfigured,requestPromptApiSettings,promptSetupText} from '../prompt-ui-settings';
 import {useEffect,useRef,useState} from 'react';
 import {AppPortal,SelectMenu} from './ui';
@@ -25,13 +26,13 @@ export function PromptAssistant({kind,currentValue,context,mode,version,edition,
   setModeBusy(true);
   sequence.current++;setPreview(null);setError('');
   try{await window.naiDesktop.setSetting('promptAssistantMode',next as ReversePromptMode);await useAppStore.getState().refreshSettings();}
-  catch(e){setError(e instanceof Error?e.message:text.failed);}
+  catch(e){setError(errorText(e,text.failed));}
   finally{setModeBusy(false);}
  }
  async function changeSkill(model:ReversePromptTemplateVersion,next:PromptSkillVersion){
   if(busy||modeBusy)return;setModeBusy(true);sequence.current++;setPreview(null);setError('');
   try{await window.naiDesktop.setSetting('promptAssistantTemplateVersion',model);await window.naiDesktop.setSetting('promptAssistantSkillVersion',next);await useAppStore.getState().refreshSettings();}
-  catch(e){setError(e instanceof Error?e.message:text.failed);}
+  catch(e){setError(errorText(e,text.failed));}
   finally{setModeBusy(false);}
  }
  useEffect(()=>{
@@ -56,7 +57,7 @@ export function PromptAssistant({kind,currentValue,context,mode,version,edition,
    if(id!==sequence.current)return;
    if(!reply.ok||!reply.result?.trim()){setError(reply.message||text.failed);return;}
    setPreview({value:reply.result,source,context:requestContext,warnings:reply.warnings ? [...reply.warnings] : [],stats:reply.validation?`${reply.validation.total} ${text.units} · Tag ${reply.validation.tags} (${reply.validation.tagPercent}%) · ${text.natural} ${reply.validation.natural}`:undefined});
-  }catch(e){if(id===sequence.current)setError(e instanceof Error?e.message:text.failed);}
+  }catch(e){if(id===sequence.current)setError(errorText(e,text.failed));}
   finally{if(id===sequence.current)setBusy(false);}
  }
  return <AppPortal><div className="modal-backdrop prompt-assistant-backdrop"><section ref={dialog} className="prompt-assistant-dialog" data-kind={kind} data-ready={ready} role="dialog" aria-modal="true" aria-label={title}>

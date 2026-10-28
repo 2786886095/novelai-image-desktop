@@ -1,4 +1,5 @@
 import {PreviewImageViewer} from './PreviewImageViewer';
+import {errorText} from '../error-message';
 import {useEffect,useState} from 'react';
 import {useAppStore} from '../store';
 import {AppPortal,Button} from './ui';
@@ -25,7 +26,7 @@ export function FavoriteStyleExport({items}:{items:FavoriteStyleSource[]}) {
    await useAppStore.getState().refreshSettings();useAppStore.getState().setToast(`${t[5]} · ${created.length}`);setPreview(null);setOpen(false);
   }catch(e){
    if(!committed)await Promise.allSettled(created.map(p=>window.naiDesktop.deleteStylePromptPresetImages(p.id)));
-   setError(String(e));
+   setError(errorText(e));
   }finally{setBusy(false);}
  }
  return <><Button disabled={!items.length} onClick={()=>{setSelected(items.map(i=>i.id));setNames(Object.fromEntries(items.map(i=>[i.id,i.prompt.slice(0,60)])));setError('');setPreview(null);setOpen(true);}}>{t[0]}</Button>

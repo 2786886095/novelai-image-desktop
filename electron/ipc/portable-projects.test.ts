@@ -1,6 +1,6 @@
 import {afterEach,beforeEach,expect,it} from 'vitest';
 import fs from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import crypto from 'node:crypto';import JSZip from 'jszip';
-import {exportPortableProjects,inspectPortableProjects,restorePortableProjects,validateCapsule,registerPortableBusy,assertPortableIdle,withPortableLock,listPortableRecoveries,portableSummaries,activatePortableRecovery,portableRecoveryPath} from './portable-projects';
+import {PORTABLE_ERRORS,exportPortableProjects,inspectPortableProjects,restorePortableProjects,validateCapsule,registerPortableBusy,assertPortableIdle,withPortableLock,listPortableRecoveries,portableSummaries,activatePortableRecovery,portableRecoveryPath} from './portable-projects';
 let root:string;
 const all=new Set(['styleLab']);
 const sha=(bytes:Buffer)=>crypto.createHash('sha256').update(bytes).digest('hex');
@@ -52,15 +52,15 @@ it.each(['run/../escape.png','/run/absolute.png','C:/run/absolute.png','run/CON.
 });
 it('accepts a valid detective capsule but rejects unexpected files and removed Agent component capsules',async()=>{
  await expect(validateCapsule(await capsule('detective',{'run/ok.png':'x'}))).resolves.toMatchObject({manifest:{kind:'detective'}});
- await expect(validateCapsule(await capsule('detective',{'profiles/custom.yml':'x'}))).rejects.toThrow('Unexpected detective file');
- await expect(validateCapsule(await capsule('agent',{'profiles/custom.yml':'x'}))).rejects.toThrow('Unsupported');
+ await expect(validateCapsule(await capsule('detective',{'profiles/custom.yml':'x'}))).rejects.toThrow(PORTABLE_ERRORS.unexpectedFile);
+ await expect(validateCapsule(await capsule('agent',{'profiles/custom.yml':'x'}))).rejects.toThrow(PORTABLE_ERRORS.unsupported);
 });
 it('rejects tampering before creating destination files',async()=>{
  await detectiveRun('.');const zip=new JSZip();await exportPortableProjects(root,zip,all);const [entry]=Object.keys(zip.files).filter(n=>n.endsWith('.zip'));zip.file(entry,Buffer.from('bad'));await expect(inspectPortableProjects(zip,all)).rejects.toThrow();
 });
 it('blocks concurrent startup, running workspaces, and releases locks after errors',async()=>{
- registerPortableBusy(()=>true);await expect(withPortableLock(async()=>{})).rejects.toThrow('Stop');registerPortableBusy(()=>false);
- await withPortableLock(async()=>expect(()=>assertPortableIdle()).toThrow());expect(()=>assertPortableIdle()).not.toThrow();
+ registerPortableBusy(()=>true);await expect(withPortableLock(async()=>{})).rejects.toThrow(PORTABLE_ERRORS.detectiveRunning);registerPortableBusy(()=>false);
+ await withPortableLock(async()=>expect(()=>assertPortableIdle()).toThrow(PORTABLE_ERRORS.busy));expect(()=>assertPortableIdle()).not.toThrow();
  await expect(withPortableLock(async()=>{throw Error('synthetic');})).rejects.toThrow('synthetic');expect(()=>assertPortableIdle()).not.toThrow();
 });
 
@@ -79,10 +79,10 @@ it('activation refuses busy runs, forged identifiers, removed kinds and tampered
  await detectiveRun('target','CURRENT');const before=await fs.readFile(path.join(target,'artist-detective-runtime.json'),'utf8');
  const [r]=await restorePortableProjects(target,capsules);expect(r.status).toBe('staged');
  registerPortableBusy(()=>true);
- await expect(activatePortableRecovery(target,'detective',r.id)).rejects.toThrow('Stop');
+ await expect(activatePortableRecovery(target,'detective',r.id)).rejects.toThrow(PORTABLE_ERRORS.detectiveRunning);
  registerPortableBusy(()=>false);
- await expect(portableRecoveryPath(target,'detective','../escape')).rejects.toThrow('identity');
- await expect(portableRecoveryPath(target,'agent' as any,r.id)).rejects.toThrow('identity');
+ await expect(portableRecoveryPath(target,'detective','../escape')).rejects.toThrow(PORTABLE_ERRORS.invalidRecoveryIdentity);
+ await expect(portableRecoveryPath(target,'agent' as any,r.id)).rejects.toThrow(PORTABLE_ERRORS.invalidRecoveryIdentity);
  await fs.writeFile(path.join(target,'portable-project-capsules',capsules[0].name),'tampered');
  await expect(activatePortableRecovery(target,'detective',r.id)).rejects.toThrow();
  expect(await fs.readFile(path.join(target,'artist-detective-runtime.json'),'utf8')).toBe(before);
@@ -101,7 +101,7 @@ it('style activation retains previous binding and rejects edited recovery images
  expect(after.python).toBe('LOCAL');expect(after.directory).toBe(path.join(r.path,'run'));
  expect(JSON.parse(await fs.readFile(path.join(result.preserved,'artist-detective-runtime.json'),'utf8')).directory).toBe(path.dirname(current));
  await fs.writeFile(path.join(r.path,'run/output.png'),'EDITED');
- await expect(activatePortableRecovery(target,'detective',r.id)).rejects.toThrow('changed');
+ await expect(activatePortableRecovery(target,'detective',r.id)).rejects.toThrow(PORTABLE_ERRORS.recoveryResultChanged);
 });
 
 it('ordinary data-only exports are not blocked by a running Artist Detective',async()=>{
@@ -126,4 +126,11 @@ it('legacy Agent component capsules from older archives are ignored, never resto
  expect(await listPortableRecoveries(root)).toEqual([]);
  const zip=new JSZip();await exportPortableProjects(root,zip,new Set(['styleLab','tavernAgent']));expect(capsuleNames(zip)).toEqual([]);
  await expect(fs.stat(path.join(root,'TavernAgent'))).rejects.toMatchObject({code:'ENOENT'});
+});
+it('reports every failure in Chinese from one table',async()=>{
+ // data-backup and the Artist Detective IPC show these after their own Chinese context.
+ const source=await fs.readFile(path.join('electron','ipc','portable-projects.ts'),'utf8');
+ expect(source.match(/Error\((?!PORTABLE_ERRORS\.)[^)]*\)/g)).toBeNull();
+ for(const message of Object.values(PORTABLE_ERRORS))expect(message).toMatch(/[\u4e00-\u9fff]/);
+ await expect(validateCapsule(await capsule('detective',{'run/../x.png':'x'}))).rejects.toThrow(PORTABLE_ERRORS.invalidPath);
 });

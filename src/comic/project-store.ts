@@ -1,4 +1,5 @@
 import type {GenerateParams,TagComicProject} from '../types';
+import { errorText } from '../error-message';
 import {createTagComicProject,normalizeTagComicProject,TAG_COMIC_STORAGE_KEY} from './tag-comic';
 export const COMIC_BACKUP_KEY=TAG_COMIC_STORAGE_KEY+'.before-agent-change';
 export type ComicSnapshot={project:TagComicProject;revision:string;busy:boolean;error:string|null};
@@ -13,7 +14,7 @@ export function createComicProjectStore(deps:{storage:Pick<Storage,'getItem'|'se
    if(raw===null&&lastRaw!==undefined&&lastRaw!==null){publish({project:createTagComicProject(deps.params()),error:null});}
    else if(raw!==lastRaw||blocked)publish({project,error:null});
    lastRaw=raw;blocked=false;
-  }catch(e){blocked=true;const error=e instanceof Error?e.message:String(e);if(state.error!==error)publish({error});}
+  }catch(e){blocked=true;const error=errorText(e);if(state.error!==error)publish({error});}
  }
  refresh();
  function read(){refresh();if(blocked)throw Error('漫画项目读取失败，原始资料保留：'+state.error);return state;}
@@ -24,7 +25,7 @@ export function createComicProjectStore(deps:{storage:Pick<Storage,'getItem'|'se
    if(options.backup)deps.storage.setItem(COMIC_BACKUP_KEY,JSON.stringify(state.project));
    deps.storage.setItem(TAG_COMIC_STORAGE_KEY,raw);
    lastRaw=raw;publish({project:next,error:null});return next;
-  }catch(e){publish({error:e instanceof Error?e.message:String(e)});throw e;}
+  }catch(e){publish({error:errorText(e)});throw e;}
  }
  return {read,refresh,update,getSnapshot:()=>state,subscribe:(fn:()=>void)=>{listeners.add(fn);return()=>{listeners.delete(fn);};},setBusy:(busy:boolean)=>{if(state.busy!==busy)publish({busy});}};
 }

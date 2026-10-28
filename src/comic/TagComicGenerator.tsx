@@ -1,4 +1,5 @@
 import {comicProviderText,compatibleComicConfirmation} from './comic-provider-text';
+import {errorText} from '../error-message';
 import {useComicGenerationQueue} from './use-comic-generation';
 import type {ComicQueueTask as QueueTask} from './generation-queue';
 import {useComicProject,comicPersistenceMessage} from './use-comic-project';
@@ -229,7 +230,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   const project=comicSnapshot.project;
   const setProject=(value:TagComicProject|((p:TagComicProject)=>TagComicProject),options:{expectedRevision?:string;backup?:boolean}={})=>{
     try{comicStore.update(p=>typeof value==='function'?value(p):value,options);projectRef.current=comicStore.getSnapshot().project;return true;}
-    catch(error){projectRef.current=comicStore.getSnapshot().project;setToast(error instanceof Error?error.message:String(error));return false;}
+    catch(error){projectRef.current=comicStore.getSnapshot().project;setToast(errorText(error));return false;}
   };
   const [step, setStep] = useState<Step>("import");
   const [bulkText, setBulkText] = useState("");
@@ -370,9 +371,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       setToast(
         error instanceof Error && error.message.includes("Old")
           ? text(language, "oldProject")
-          : error instanceof Error
-            ? error.message
-            : String(error),
+          : errorText(error),
       );
     }
   }
@@ -405,9 +404,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
         error instanceof Error &&
           (error.message.includes("Old") || error.message.includes("schema"))
           ? text(language, "oldProject")
-          : error instanceof Error
-            ? error.message
-            : String(error),
+          : errorText(error),
       );
     }
   }
@@ -556,7 +553,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
 
   function referenceRangeMessage(error: unknown) {
     if (!(error instanceof TagComicPanelRangeError)) {
-      return error instanceof Error ? error.message : String(error);
+      return errorText(error);
     }
     if (error.code === "empty") return text(language, "preciseRangeEmpty");
     return format(
@@ -696,7 +693,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
 
   function sizeImportMessage(error: unknown) {
     if (!(error instanceof TagComicSizeImportError)) {
-      return error instanceof Error ? error.message : String(error);
+      return errorText(error);
     }
     if (error.code === "empty") return text(language, "sizeEmpty");
     if (error.code === "count") {
@@ -810,7 +807,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
       const result=await comicQueue.settled();
       if(result.error)setToast(result.error);
       else if(result.phase==='cancelled')setToast(text(language,"queueStopped"));
-    } catch(error) {setToast(error instanceof Error?error.message:String(error));}
+    } catch(error) {setToast(errorText(error));}
   }
 
   function initialTasks() {
@@ -831,7 +828,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
   }
 
   function stopQueue() {
-    void comicQueue.stop().then(()=>setToast(text(language,"queueStopped"))).catch(error=>setToast(error instanceof Error?error.message:String(error)));
+    void comicQueue.stop().then(()=>setToast(text(language,"queueStopped"))).catch(error=>setToast(errorText(error)));
   }
 
   async function exportZip() {
@@ -844,7 +841,7 @@ export function TagComicGenerator({ onBack }: { onBack?: () => void }) {
         setToast(format(language, "exportDone", { path: result.path }));
       }
     } catch (error) {
-      setToast(error instanceof Error ? error.message : String(error));
+      setToast(errorText(error));
     }
   }
 

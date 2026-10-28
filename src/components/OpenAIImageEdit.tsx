@@ -1,5 +1,6 @@
 // OpenAI Images edits: inpaint-panel controls and the settings card.
 import { useEffect, useState } from "react";
+import { errorText } from "../error-message";
 import type { AppSettings } from "../types";
 import { useAppStore } from "../store";
 import { useFeatureText } from "../feature-i18n";
@@ -130,7 +131,7 @@ export function OpenAIImageEditSettingsCard({ settings }: { settings: AppSetting
       await useAppStore.getState().refreshSettings();
       setMessage(ft("已保存；尚未发送任何请求。"));
     } catch (error) {
-      const text = error instanceof Error ? error.message : "";
+      const text = error instanceof Error ? errorText(error, "") : "";
       setMessage(/[\u4e00-\u9fff]/.test(text) ? ft(text) : text || ft("保存失败，请检查接口地址（须为 HTTPS）、模型和密钥。"));
     } finally {
       setSaving(false);

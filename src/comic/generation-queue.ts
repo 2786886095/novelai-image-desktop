@@ -1,4 +1,5 @@
 import type {ComicImageService,GenerateResult,TagComicGenerateRequest,TagComicProject} from '../types';
+import { errorText } from '../error-message';
 import {supportsNAIPreciseReference} from '../types';
 import type {ComicProjectStore} from './project-store';
 import {buildTagComicGenerateRequest} from './tag-comic';
@@ -46,7 +47,7 @@ export function createComicGenerationQueue(deps:ComicQueueDependencies){
    state={id:saved.id,projectId:saved.projectId,phase:saved.phase,total:saved.total,done:saved.done,inFlightPanelId:typeof saved.inFlightPanelId==='string'?saved.inFlightPanelId:null,error:typeof saved.error==='string'?saved.error:null,updatedAt:String(saved.updatedAt??'')};
    if(active(state.phase))publish({phase:'interrupted',inFlightPanelId:null,error:'上次漫画任务未核实完成；已保存图片保留，未自动重试。'});
   }
- }catch(e){readError=e instanceof Error?e.message:String(e);emit({...state,phase:'failed',error:readError});}
+ }catch(e){readError=errorText(e);emit({...state,phase:'failed',error:readError});}
  function cancellable<T>(pending:Promise<T>):Promise<T>{
   const signal=stopSignal.signal;
   return new Promise((resolve,reject)=>{const abort=()=>reject(signal.reason);signal.addEventListener('abort',abort,{once:true});pending.then(resolve,reject).finally(()=>signal.removeEventListener('abort',abort));if(signal.aborted)abort();});
@@ -68,7 +69,7 @@ export function createComicGenerationQueue(deps:ComicQueueDependencies){
     publish({inFlightPanelId:request.panelId});inFlight=true;
     let result:GenerateResult;
     try{result=await deps.generate(request);}
-    catch(e){result={ok:false,items:[],message:e instanceof Error?e.message:String(e)};}
+    catch(e){result={ok:false,items:[],message:errorText(e)};}
     finally{inFlight=false;}
     // Backend images are retained in native history even if project persistence fails.
     const group=commitComicCandidateResult(deps.store,request.projectId,request.panelId,result,cancelled);historyGroupId=group??historyGroupId;
@@ -78,7 +79,7 @@ export function createComicGenerationQueue(deps:ComicQueueDependencies){
   }catch(e){
    if(e!==stopSignal.signal.reason||!cancelled){
     const panelId=state.inFlightPanelId;
-    if(panelId){try{commitComicCandidateResult(deps.store,state.projectId!,panelId,{ok:false,items:[],message:e instanceof Error?e.message:String(e)},cancelled);}catch{/* Original error remains; saved outputs still belong to native history. */}}
+    if(panelId){try{commitComicCandidateResult(deps.store,state.projectId!,panelId,{ok:false,items:[],message:errorText(e)},cancelled);}catch{/* Original error remains; saved outputs still belong to native history. */}}
     publishFailure(e);
    }
    return;
@@ -90,7 +91,7 @@ export function createComicGenerationQueue(deps:ComicQueueDependencies){
    deps.store.setBusy(false);
   }
  }
- function publishFailure(e:unknown){const error=e instanceof Error?e.message:String(e);try{publish({phase:'failed',inFlightPanelId:null,error});}catch{emit({...state,phase:'failed',inFlightPanelId:null,error});}}
+ function publishFailure(e:unknown){const error=errorText(e);try{publish({phase:'failed',inFlightPanelId:null,error});}catch{emit({...state,phase:'failed',inFlightPanelId:null,error});}}
  return {
   getSnapshot:()=>state,subscribe:(fn:()=>void)=>{listeners.add(fn);return()=>{listeners.delete(fn);};},
   get active(){return active(state.phase);},

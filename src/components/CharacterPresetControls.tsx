@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import {errorText} from '../error-message';
 import {characterEditLabels} from './CharacterEditing';
 import {useAppStore} from '../store';
 import {characterPresetText} from '../character-presets';
@@ -19,7 +20,7 @@ export function CharacterPresetControls() {
    const current=useAppStore.getState().settings?.positivePromptPresets ?? [];
    await window.naiDesktop.setSetting('positivePromptPresets',[...current,{id:crypto.randomUUID(),name:uniquePositivePromptPresetName(current,name).value,prompt:chosen.map(c=>c.prompt).join('\n'),captions:chosen,createdAt:new Date().toISOString(),previewImages:[]}]);
    await useAppStore.getState().refreshSettings();setOpen(false);useAppStore.getState().setToast(text.saved);
-  }catch(e){setError(String(e));}finally{setBusy(false);}
+  }catch(e){setError(errorText(e));}finally{setBusy(false);}
  };
  return <section className="character-preset-controls">
   <Button disabled={!captions.length} onClick={()=>{setTarget('all');setName('');setError('');setOpen(true);}}>{title}</Button>

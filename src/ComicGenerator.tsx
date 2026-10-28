@@ -1,4 +1,5 @@
 import {selectBatchTasks} from './batch/generation-queue';
+import {errorText} from './error-message';
 import {BatchSizeImportError,parseBatchSizeImport} from './batch/size-import';
 import {getBatchGenerationQueue,getBatchProjectStore} from './batch/use-batch-generation';
 import {RangeInput} from './components/RangeInput';
@@ -831,7 +832,7 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
   }
   function formatSizeImportError(error: unknown) {
     if (!(error instanceof BatchSizeImportError)) {
-      return error instanceof Error ? error.message : String(error);
+      return errorText(error);
     }
     if (error.code === "count") {
       return f("batch.sizeMode.perImageCount", {
@@ -1025,7 +1026,7 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
     } catch (error) {
       setToast(
         f("batch.toast.aiFailed", {
-          message: error instanceof Error ? error.message : String(error),
+          message: errorText(error),
         }),
       );
     } finally {
@@ -1079,10 +1080,10 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
       const receipt=queue.launch(selectBatchTasks(current.project,'all',ids),{expectedRevision:current.revision});
       const result=await queue.wait(receipt.id);
       setToast(result.phase==='cancelled'?f("batch.toast.stopped",{done:result.images}):result.phase==='failed'?f("batch.toast.failed",{done:result.images,failed:Math.max(1,result.total-result.done),message:result.error??''}):f("batch.toast.allDone",{done:result.images,name:runGroupName}));
-    }catch(error){setToast(error instanceof Error?error.message:String(error));}
+    }catch(error){setToast(errorText(error));}
   }
 
-  function stop() {useAppStore.getState().requestBatchCancel();void getBatchGenerationQueue().stop().catch(error=>setToast(String(error)));}
+  function stop() {useAppStore.getState().requestBatchCancel();void getBatchGenerationQueue().stop().catch(error=>setToast(errorText(error)));}
 
   async function clearGeneratedResults() {
     if (running) return;
@@ -1191,7 +1192,7 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
     } catch (error) {
       setToast(
         f("batch.toast.importFailed", {
-          message: error instanceof Error ? error.message : String(error),
+          message: errorText(error),
         }),
       );
     }

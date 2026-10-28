@@ -1,4 +1,5 @@
 import {normalizeTranslationSource} from './translation';
+import {errorText} from './error-message';
 
 export interface TranslationReply {ok:boolean;text?:string;error?:string;sourceLanguage?:string}
 export interface TranslationDraftState {
@@ -69,7 +70,7 @@ export class TranslationSession {
    if(!reply.ok||!reply.text?.trim()){this.patch({valid:false,error:reply.error||'TRANSLATION_FAILED'});return;}
    const detected=normalizeTranslationSource(reply.sourceLanguage);
    this.patch({result:reply.text.trim(),valid:true,detectedSource:detected==='auto'?'':detected});
-  }catch(error){if(!this.disposed&&id===this.revision)this.patch({valid:false,error:error instanceof Error?error.message:'TRANSLATION_FAILED'});}
+  }catch(error){if(!this.disposed&&id===this.revision)this.patch({valid:false,error:error instanceof Error?errorText(error,'TRANSLATION_FAILED'):'TRANSLATION_FAILED'});}
   finally{if(!this.disposed){this.patch({busy:false});if(this.queued)void this.drain();}}
  }
  dispose(){this.disposed=true;this.revision++;this.cancelTimer();this.listeners.clear();}

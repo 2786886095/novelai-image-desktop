@@ -1,5 +1,6 @@
 // Settings panel + renderer bridge for the local MCP server.
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { errorText } from "../error-message";
 import type { AppSettings, McpServerStatus } from "../types";
 import { useAppStore } from "../store";
 import { featureText, useFeatureText } from "../feature-i18n";
@@ -54,7 +55,7 @@ export function McpServerSettings({ settings, update }: {
   const run = async (operation: () => Promise<unknown>) => {
     setBusy(true);
     try { await operation(); await refreshSettings(); await reload(); }
-    catch (error) { useAppStore.getState().setToast(error instanceof Error ? error.message : String(error)); }
+    catch (error) { useAppStore.getState().setToast(errorText(error)); }
     finally { setBusy(false); }
   };
 

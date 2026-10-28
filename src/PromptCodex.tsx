@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { errorText } from "./error-message";
 import { Button, SelectMenuCompat } from "./components/ui";
 import { Icon } from "./components/icons";
 import { useAppStore } from "./store";
@@ -116,7 +117,7 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
         const next = cached ?? await window.naiDesktop.promptCodexBundled();
         if (active) setSnapshot(next);
       } catch (error) {
-        if (active) setMessage(error instanceof Error ? error.message : String(error));
+        if (active) setMessage(errorText(error));
       }
     })();
     return () => { active = false; };
@@ -163,7 +164,7 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
       setSnapshot(updated);
       setMessage(`${text.updated} · ${updated.entries.length}`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
+      setMessage(errorText(error));
     } finally {
       setUpdating(false);
     }

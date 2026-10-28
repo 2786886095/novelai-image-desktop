@@ -1,4 +1,5 @@
 import {DATA_BACKUP_CATEGORIES} from "../../data-backup-contract";
+import {errorText} from "../../error-message";
 import { useEffect, useMemo, useState } from "react";
 import { Button, CommittedNumberInput, IconText, Toggle } from "../../components/ui";
 import { Icon } from "../../components/icons";
@@ -162,7 +163,7 @@ export function DataPortabilitySettings({
   useEffect(()=>{
     let cancelled=false;
     window.naiDesktop.listPortableRecoveries().then(items=>{if(!cancelled)setRecoveries(items);})
-      .catch(error=>{if(!cancelled)setMessage(String(error));});
+      .catch(error=>{if(!cancelled)setMessage(errorText(error));});
     return()=>{cancelled=true;};
   },[]);
   const performActivation = async () => {
@@ -174,7 +175,7 @@ export function DataPortabilitySettings({
       setMessage(text.preserved+" "+result.preserved);
       window.dispatchEvent(new Event("langbai:workspace-imported"));
       setActivate(null);
-    } catch(error) {setMessage(String(error));} finally {setBusy("");}
+    } catch(error) {setMessage(errorText(error));} finally {setBusy("");}
   };
   const availableImport = useMemo(
     () => archive?.categories.map((item) => item.category) ?? [],
@@ -192,7 +193,7 @@ export function DataPortabilitySettings({
         workspaceData: collectPortableWorkspaceData(),
       });
       setMessage(result.ok ? text.exportDone+" "+(result.path ?? "") : result.message);
-    } catch(error) { setMessage(String(error)); } finally {
+    } catch(error) { setMessage(errorText(error)); } finally {
       setBusy("");
     }
   };
@@ -200,7 +201,7 @@ export function DataPortabilitySettings({
   const chooseImport = async () => {
     setMessage("");
     let result: DataBackupInspectResult;
-    try { result = await window.naiDesktop.inspectDataBackup(); } catch(error) { setMessage(String(error)); return; }
+    try { result = await window.naiDesktop.inspectDataBackup(); } catch(error) { setMessage(errorText(error)); return; }
     if (!result.ok) {
       if (!result.cancelled) setMessage(result.message ?? "");
       return;
@@ -238,7 +239,7 @@ export function DataPortabilitySettings({
         window.dispatchEvent(new Event("langbai:reference-presets-changed"));
         window.dispatchEvent(new Event("langbai:workspace-imported"));
       }
-    } catch(error) { setMessage(String(error)); } finally {
+    } catch(error) { setMessage(errorText(error)); } finally {
       setBusy("");
     }
   };
@@ -297,7 +298,7 @@ export function DataPortabilitySettings({
           <strong>{text.styleLab}</strong>
           <p>{text[item.status]}</p><p style={{overflowWrap:"anywhere"}}>{item.path}</p>
           <div className="row-actions">
-            <Button disabled={!!busy} onClick={()=>void window.naiDesktop.openPortableRecovery(item.kind,item.id).catch(e=>setMessage(String(e)))}>{text.openRecovery}</Button>
+            <Button disabled={!!busy} onClick={()=>void window.naiDesktop.openPortableRecovery(item.kind,item.id).catch(e=>setMessage(errorText(e)))}>{text.openRecovery}</Button>
             {item.status!=="restored" && <Button disabled={!!busy} onClick={()=>setActivate(item)}>{text.activateRecovery}</Button>}
           </div>
         </div>)}
@@ -330,7 +331,7 @@ export function BackupRestoreSettings({
       const selected = await window.naiDesktop.selectBackupDirectory();
       if (!selected) return;
       await update("backupDir", selected); await refresh(); setMessage("");
-    } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
+    } catch (error) { setMessage(errorText(error)); }
   };
 
   const backupNow = async () => {
@@ -344,7 +345,7 @@ export function BackupRestoreSettings({
       });
       setMessage(result.ok ? text.exportDone+" "+(result.path ?? "") : result.message);
       await refresh();
-    } catch(error) {setMessage(String(error));} finally {
+    } catch(error) {setMessage(errorText(error));} finally {
       setBusy(false);
     }
   };
@@ -367,7 +368,7 @@ export function BackupRestoreSettings({
         <label className="field"><span>{text.directory}</span><input readOnly value={status?.directory ?? settings.backupDir ?? ""} /></label>
         <div className="row-actions">
           <Button onClick={() => void chooseDirectory()}><IconText icon={<Icon name="folderOpen" />}>{text.chooseDirectory}</IconText></Button>
-          <Button onClick={() => void window.naiDesktop.openBackupDirectory().catch(error=>setMessage(String(error)))}><IconText icon={<Icon name="externalLink" />}>{text.openDirectory}</IconText></Button>
+          <Button onClick={() => void window.naiDesktop.openBackupDirectory().catch(error=>setMessage(errorText(error)))}><IconText icon={<Icon name="externalLink" />}>{text.openDirectory}</IconText></Button>
           <Button variant="primary" disabled={busy} onClick={() => void backupNow()}><IconText icon={busy ? <Icon name="loader" /> : <Icon name="archive" />}>{text.backupNow}</IconText></Button>
         </div>
       </div>

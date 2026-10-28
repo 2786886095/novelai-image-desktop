@@ -52,7 +52,7 @@ import { normalizeAppLanguage, withAppLanguage } from "./i18n";
 import { expandWildcards } from "./wildcards";
 import { adaptiveNAIImageSize } from "./nai-dimensions";
 import { normalizeInpaintBrushSize } from "./inpaint-brush";
-import { compactRemoteErrorText } from "./error-message";
+import { compactRemoteErrorText, errorText } from "./error-message";
 import type { ActiveTab } from "./app/navigation";
 
 type PromptTab = "positive" | "negative";
@@ -1036,7 +1036,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       settings = withAppLanguage(await window.naiDesktop.getSettings());
     } catch (error: any) {
-      set({ bootError: error?.message || "读取设置失败，请重试。" });
+      set({ bootError: errorText(error, "读取设置失败，请重试。") });
       return;
     }
     set({ bootError: null });
@@ -1340,7 +1340,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         set((state) => ({
           history: state.history.map((item) => item.id === id ? previous : item),
           currentImage: state.currentImage?.id === id ? previous : state.currentImage,
-          toast: error?.message ?? String(error),
+          toast: errorText(error),
         }));
       }
     }
@@ -1569,7 +1569,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       committed = true;
       return true;
     } catch (error) {
-      if (revision === inpaintEditRestoreRevision) { const message = failure((error as Error).message); set({ toast: message, statusText: message }); }
+      if (revision === inpaintEditRestoreRevision) { const message = failure(errorText(error)); set({ toast: message, statusText: message }); }
       return false;
     } finally {
       if (!committed) {
@@ -1621,7 +1621,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (pendingInpaintEditRestore?.revision !== rollbackRevision) return;
         pendingInpaintEditRestore = null;
         set({ ...previous, maskRevision: get().maskRevision + 1, inpaintEditRestore: null,
-          isRestoringInpaintEditSession: false, toast: `${failed} ${(error as Error).message}`, statusText: failed });
+          isRestoringInpaintEditSession: false, toast: `${failed} ${errorText(error)}`, statusText: failed });
       }
     })();
   },
@@ -2200,7 +2200,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         lastError: "",
       }));
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorText(error);
       set((current) => {
         const stillQueued = current.generationQueue.some((job) => job.id === jobId);
         return {

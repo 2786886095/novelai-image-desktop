@@ -1,4 +1,5 @@
 import {workflowText} from '../workflow-text';
+import {errorText} from '../error-message';
 import {requestSettingsSection} from '../prompt-ui-settings';
 import {useEffect,useRef,useState} from 'react';
 import {useAppStore} from '../store';
@@ -19,7 +20,7 @@ export function InpaintPromptSource(){
    else{if(context!==reversePromptSelectionIdentity(useAppStore.getState().settings))throw Error('反推版本或模型已改变，请重新反推。');const response=await callSelectedInlineReverse(result.snapshot.base64,'tags');if(!response.ok||!response.prompt)throw Error(response.message||'反推失败。');text=response.prompt;}
    if(context&&context!==reversePromptSelectionIdentity(useAppStore.getState().settings))throw Error('反推版本或模型已改变，旧结果未应用。');
    if(id===revision.current)setPreview({text,original,path,context});
-  }catch(e){if(id===revision.current)setError(e instanceof Error?e.message:String(e));}finally{if(id===revision.current){pending.current=false;setBusy(false);}}
+  }catch(e){if(id===revision.current)setError(errorText(e));}finally{if(id===revision.current){pending.current=false;setBusy(false);}}
  }
  function apply(){if(!preview)return;const state=useAppStore.getState();if(state.workbenchImage?.filePath!==preview.path||state.inpaintPositivePrompt!==preview.original||(preview.context&&preview.context!==reversePromptSelectionIdentity(state.settings))){setError('图片、提示词或反推版本已改变，请重新读取。');return;}state.setInpaintPositivePrompt(preview.text);setPreview(null);}
  return <div className="inpaint-prompt-source"><InlineReversePromptSkillControls disabled={busy}/><div className="inpaint-prompt-source-actions"><button className="btn" disabled={!image||busy} onClick={()=>void read('metadata')}>{text.read}</button><button className="btn" disabled={!image||busy} onClick={()=>void read('reverse')}>{text.reverse}</button></div>{busy&&<p role="status">{text.busy}</p>}{error&&<p role="alert">{error}{(!settings?.visionApiKey.trim()||!settings.visionApiUrl.trim())&&<button className="btn" onClick={()=>{requestSettingsSection('ai-reverse');useAppStore.getState().setShowSettings(true);}}>{text.configure}</button>}</p>}{preview&&<div className="inpaint-prompt-preview"><textarea aria-label={text.prompt} readOnly value={preview.text}/><button className="btn" disabled={value!==preview.original||(!!preview.context&&preview.context!==reversePromptSelectionIdentity(settings))} onClick={apply}>{text.apply}</button><button className="btn" onClick={()=>setPreview(null)}>{text.cancel}</button></div>}</div>;

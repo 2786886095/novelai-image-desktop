@@ -1,4 +1,5 @@
 import {GallerySaveStyleButton} from "./StyleLibrary";
+import {errorText} from "./error-message";
 import { useGalleryReturn } from "./use-gallery-return";
 import {GalleryFavoriteButton,GalleryFavoritesButton} from './components/GalleryFavorites';
 import {favoriteFromGallery,type GalleryFavorite} from './gallery-favorites';
@@ -343,7 +344,7 @@ function ArtistRankingGallery({
       setUpdatedAt(snapshot.savedAt);
     } catch (reason) {
       if (request !== rankingRequest.current) return;
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(errorText(reason));
     } finally {
       if (request === rankingRequest.current) setLoading(false);
     }

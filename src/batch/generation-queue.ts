@@ -1,4 +1,5 @@
 import type {BatchRedrawProject,BatchRedrawRequest,GenerateResult,ComicImageService} from '../types';
+import { errorText } from '../error-message';
 import {buildBatchRedrawRequest,normalizeBatchRedrawCandidateCount,appendBatchRedrawCandidates,batchRedrawCandidates} from '../batch-redraw-queue';
 import {parseBatchSizeImport} from './size-import';
 import type {BatchProjectStore} from './project-store';
@@ -24,9 +25,9 @@ export function createBatchGenerationQueue(deps:{store:BatchProjectStore;storage
  let state:BatchRunState={id:null,phase:'idle',total:0,done:0,images:0,inFlightItemId:null,error:null},work=Promise.resolve(),cancelled=false,inFlight=false,readError:string|null=null;
  let stopSignal=new AbortController();
  function publish(patch:Partial<BatchRunState>){const next={...state,...patch};deps.storage.setItem(BATCH_RUN_KEY,JSON.stringify(next));state=next;deps.changed?.(state);}
- function failure(e:unknown){const error=e instanceof Error?e.message:String(e);try{publish({phase:'failed',error,inFlightItemId:null});}catch{state={...state,phase:'failed',error,inFlightItemId:null};deps.changed?.(state);}}
+ function failure(e:unknown){const error=errorText(e);try{publish({phase:'failed',error,inFlightItemId:null});}catch{state={...state,phase:'failed',error,inFlightItemId:null};deps.changed?.(state);}}
  try{const raw=deps.storage.getItem(BATCH_RUN_KEY);if(raw){const s=JSON.parse(raw);if(!s||typeof s.id!=='string'||!['preparing','running','stopping','completed','cancelled','failed','interrupted'].includes(s.phase)||!Number.isSafeInteger(s.total)||s.total<1||!Number.isSafeInteger(s.done)||s.done<0||s.done>s.total||!Number.isSafeInteger(s.images)||s.images<0)throw Error('批量任务记录损坏，原记录已保留');state=s;if(active(state.phase))publish({phase:'interrupted',inFlightItemId:null,error:'上次批量重绘未核实完成；图片保留在历史中，未自动重试。'});}}
- catch(e){readError=String(e);state={...state,phase:'failed',error:readError};}
+ catch(e){readError=errorText(e);state={...state,phase:'failed',error:readError};}
  function cancellable<T>(pending:Promise<T>):Promise<T>{const signal=stopSignal.signal;return new Promise((resolve,reject)=>{const abort=()=>reject(signal.reason);signal.addEventListener('abort',abort,{once:true});pending.then(resolve,reject).finally(()=>signal.removeEventListener('abort',abort));if(signal.aborted)abort();});}
  async function execute(tasks:ReturnType<typeof prepareBatchTasks>,revision:string){
   try{
@@ -38,7 +39,7 @@ export function createBatchGenerationQueue(deps:{store:BatchProjectStore;storage
     const request={...task.request,runId:state.id!,imageServiceBinding:service.binding};
     deps.store.update(p=>{if(!p.items.some(x=>x.id===task.itemId))throw Error('重绘图片已移除，未继续提交');return {...p,items:p.items.map(x=>x.id===task.itemId?{...x,status:'generating',error:undefined}:x)};});
     publish({inFlightItemId:task.itemId});inFlight=true;let result:GenerateResult;
-    try{result=await deps.generate(request);}catch(e){result={ok:false,items:[],message:e instanceof Error?e.message:String(e)};}finally{inFlight=false;}
+    try{result=await deps.generate(request);}catch(e){result={ok:false,items:[],message:errorText(e)};}finally{inFlight=false;}
     if(result.failureKind==='cancelled')cancelled=true;
     // Attach every durable output before interpreting cancellation or partial failure.
     deps.store.update(p=>{if(!p.items.some(x=>x.id===task.itemId))throw Error('工程已变化，图片仍保留在历史记录');return {...p,items:p.items.map(item=>{

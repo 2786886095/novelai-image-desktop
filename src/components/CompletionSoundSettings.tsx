@@ -1,4 +1,5 @@
 import {FilePicker} from './FilePicker';
+import {errorText} from '../error-message';
 import {RangeInput} from './RangeInput';
 import {useFeatureText} from "../feature-i18n";
 import {useState} from 'react';
@@ -9,7 +10,7 @@ export function CompletionSoundSettings(){
   const ft=useFeatureText();
   const settings=useAppStore(s=>s.settings);const sound=normalizeCompletionSound(settings?.completionSound);
   const [message,setMessage]=useState('');const [busy,setBusy]=useState(false);
-  const save=async(patch:Partial<CompletionSound>)=>{setBusy(true);try{await window.naiDesktop.setSetting('completionSound',normalizeCompletionSound({...sound,...patch}));await useAppStore.getState().refreshSettings();setMessage('已保存');}catch(e){setMessage(String(e));}finally{setBusy(false);}};
+  const save=async(patch:Partial<CompletionSound>)=>{setBusy(true);try{await window.naiDesktop.setSetting('completionSound',normalizeCompletionSound({...sound,...patch}));await useAppStore.getState().refreshSettings();setMessage('已保存');}catch(e){setMessage(errorText(e));}finally{setBusy(false);}};
   return <section aria-label={ft("生成完成提示音")} style={{display:'grid',gap:10}}>
     <h3>{ft("生成完成提示音")}</h3>
     <Toggle checked={sound.enabled} onChange={enabled=>{if(!busy)void save({enabled});}} label={ft("启用提示音")} description={ft("生成页单张或整批任务完成且至少保存一张图片时播放一次；全部失败或取消不播放。")} />

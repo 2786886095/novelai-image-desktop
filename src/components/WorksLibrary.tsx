@@ -1,4 +1,5 @@
 import {SelectMenuCompat} from './ui';
+import {errorText} from '../error-message';
 import {workflowText} from '../workflow-text';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useAppStore} from '../store';
@@ -39,7 +40,7 @@ export function WorksLibrary({active = true}: {active?: boolean}) {
       if(removed.length)useAppStore.getState().forgetHistoryItems(removed);
       setItems(all); setGroups(collections);
       setSelection(old=>new Set([...old].filter(id=>all.some(item=>item.id===id))));
-    } catch(e) { if (token===revision.current) setError(e instanceof Error ? e.message : t.error); }
+    } catch(e) { if (token===revision.current) setError(errorText(e, t.error)); }
     finally { if (token===revision.current) setLoading(false); }
   },[t]);
   useEffect(()=>{
@@ -127,7 +128,7 @@ export function WorksLibrary({active = true}: {active?: boolean}) {
         if(!result.ok)setError(`${batch.failed}: ${result.failed?.length??ids.length}. ${result.failed?.[0]?.message??result.message??t.error}`);
       }
       await useAppStore.getState().refreshHistory();await refresh(true);
-    } catch(e) {setError(e instanceof Error?e.message:t.error);await refresh();}
+    } catch(e) {setError(errorText(e,t.error));await refresh();}
     finally {busyRef.current=false;setBusy(false);}
   }
   return <section className="works-library" aria-label={t.title}>

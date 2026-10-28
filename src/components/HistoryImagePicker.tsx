@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react';
+import {errorText} from '../error-message';
 import {Button} from './ui';
 import {useAppStore} from '../store';
 import type {HistoryItem} from '../types';
@@ -9,7 +10,7 @@ export function historyPickerText(language: unknown) {
 export function HistoryImagePicker({onChoose,onClose}:{onChoose:(paths:string[])=>void;onClose:()=>void}) {
  const language=useAppStore(s=>s.settings?.language),text=historyPickerText(language);
  const [items,setItems]=useState<HistoryItem[]>([]),[page,setPage]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState('');
- useEffect(()=>{let active=true;window.naiDesktop.getHistory().then(items=>{if(active)setItems(items);},e=>{if(active)setError(String(e));}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[]);
+ useEffect(()=>{let active=true;window.naiDesktop.getHistory().then(items=>{if(active)setItems(items);},e=>{if(active)setError(errorText(e));}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[]);
  const total=Math.max(1,Math.ceil(items.length/24));
  return <section aria-label={text[0]} aria-busy={loading}>
  <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><strong>{text[0]} · {items.length}</strong><Button onClick={onClose}>{text[3]}</Button></div>

@@ -1,4 +1,5 @@
 import {PreviewImageViewer} from './components/PreviewImageViewer';
+import {errorText} from './error-message';
 import {
   useEffect,
   useMemo,
@@ -619,7 +620,7 @@ export default function V5ArtistWeightRepair({
       if (!generated.ok || !image) throw new Error(generated.message);
       setResults((current) => current.map((item) => item.id === candidate.id ? { ...item, image, status: "done", generationModel: image.model || generationParams.model } : item));
     } catch (error: any) {
-      setResults((current) => current.map((item) => item.id === candidate.id ? { ...item, status: "failed", error: error?.message ?? String(error) } : item));
+      setResults((current) => current.map((item) => item.id === candidate.id ? { ...item, status: "failed", error: errorText(error) } : item));
     }
   };
 
@@ -657,7 +658,7 @@ export default function V5ArtistWeightRepair({
       await refreshHistory();
     } catch (error: any) {
       setResults((current) => current.map((item) => item.id === candidate.id ? { ...item, saving: false } : item));
-      setMessage(error?.message ?? String(error));
+      setMessage(errorText(error));
     }
   };
 

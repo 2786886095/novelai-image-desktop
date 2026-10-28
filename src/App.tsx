@@ -85,7 +85,7 @@ import { fitAutocompleteList, visibleVerticalRange, type AutocompleteListFit, ty
 import { inspectImageMetadata, parseImageMetaAsync } from "./png-meta";
 import { INPAINT_BRUSH_SLIDER_MAX, INPAINT_BRUSH_SLIDER_MIN } from "./inpaint-brush";
 import { droppedImagePath, droppedImagePaths, hasDraggedFiles } from "./drag-drop";
-import { compactRemoteErrorText } from "./error-message";
+import { compactRemoteErrorText, errorText } from "./error-message";
 import { flushArtistFavoritePersistence, hydrateArtistFavoriteLibrary } from "./artist-favorite-library";
 import { BackupRestoreSettings, DataPortabilitySettings } from "./features/settings/DataBackupSettings";
 import ResourceDatabaseSettings from "./features/settings/ResourceDatabaseSettings";
@@ -257,7 +257,7 @@ function TagLibrarySettingsSection({ onChanged }: { onChanged?: () => void }) {
         onChanged?.();
       }
     } catch (error) {
-      setToast(f("tagLibrary.downloadFailed", { message: error instanceof Error ? error.message : String(error) }));
+      setToast(f("tagLibrary.downloadFailed", { message: errorText(error) }));
     } finally {
       setBusy(false);
     }
@@ -957,7 +957,7 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
       if (state.vibeImages.length + refs.length > 16) throw new Error("Vibe 参考最多 16 个。");
       useAppStore.setState({vibeImages:[...state.vibeImages,...refs.map(ref=>({...ref,id:crypto.randomUUID()}))]});
       setToast(`${vf.loaded} · ${refs.length}`);
-    } catch(error) { setToast(String(error instanceof Error ? error.message : error)); }
+    } catch(error) { setToast(errorText(error)); }
   }
   function exportVibes() {
     const url=URL.createObjectURL(new Blob([exportVibeFile(vibeImages)],{type:"application/json"}));
@@ -1859,7 +1859,7 @@ export function PromptAndParams({
         await refreshSettings();
         setStyleNamePrompt(null);
         setToast(f("prompt.stylePresetSaved", { name }));
-      } catch (error) { setToast(String(error)); }
+      } catch (error) { setToast(errorText(error)); }
       return;
     }
     const preset: StylePromptPreset = {
@@ -2114,7 +2114,7 @@ export function PromptAndParams({
     <>
       {includeModel && (
         <div className="field">
-          <div className="compact-model-label"><span>{generateText.prompt.model}</span><FurryModeSwitch checked={modelMode === "furry"} label={generateText.prompt.furryMode} onChange={checked=>switchModelMode(checked?"furry":"anime").catch(error=>setToast(String(error)))}/></div>
+          <div className="compact-model-label"><span>{generateText.prompt.model}</span><FurryModeSwitch checked={modelMode === "furry"} label={generateText.prompt.furryMode} onChange={checked=>switchModelMode(checked?"furry":"anime").catch(error=>setToast(errorText(error)))}/></div>
           <SelectMenuCompat value={params.model} onChange={(e) => setParam("model", e.target.value as GenerateParams["model"])}>
             {NAI_MODELS.filter((m) => supportsNAIModelMode(m.value, modelMode)).map((m) => (
               <option value={m.value} key={m.value}>{localizedDesktopOptionLabel(settings?.language, m.value, m.label)}</option>
@@ -2254,7 +2254,7 @@ export function PromptAndParams({
           label={generateText.prompt.stylePresetNamePrompt}
           initial={styleNamePrompt.fallbackName}
           initialRating={stylePromptPresets.find(p => p.id === styleNamePrompt.presetId)?.rating ?? 0}
-          onConfirm={(value, rating) => void confirmSaveStylePromptPreset(value, rating).catch(error => setToast(String(error)))}
+          onConfirm={(value, rating) => void confirmSaveStylePromptPreset(value, rating).catch(error => setToast(errorText(error)))}
           onClose={() => setStyleNamePrompt(null)}
         />
       )}
@@ -3095,11 +3095,11 @@ function LogSettingsSection({
 
   const setDir = async (dir: string) => {
     try { await window.naiDesktop.setSetting("logDir", dir); await refreshSettings(); return true; }
-    catch (error) { setToast(error instanceof Error ? error.message : String(error)); return false; }
+    catch (error) { setToast(errorText(error)); return false; }
   };
   const choose = async () => {
     try { const dir = await window.naiDesktop.selectLogDir(); if (dir && await setDir(dir)) setToast(t("log.updatedPath")); }
-    catch (error) { setToast(error instanceof Error ? error.message : String(error)); }
+    catch (error) { setToast(errorText(error)); }
   };
   const openFile = async () => {
     const r = await window.naiDesktop.openLogFile();
@@ -4160,7 +4160,7 @@ function ReversePanel() {
 
         {hasImage && metadataReport && <MetadataApplyPanel report={metadataReport} language={normalizeAppLanguage(language)} />}
 
-        <PromptSkillControls model={reverseTemplateVersion} edition={skillVersionForModel(settings?.reversePromptSkillVersion,reverseTemplateVersion)} language={language} disabled={reverseBusy} onChange={(model,edition)=>void setReverseTemplateVersion(model,edition).catch(error=>setToast(String(error)))}/>
+        <PromptSkillControls model={reverseTemplateVersion} edition={skillVersionForModel(settings?.reversePromptSkillVersion,reverseTemplateVersion)} language={language} disabled={reverseBusy} onChange={(model,edition)=>void setReverseTemplateVersion(model,edition).catch(error=>setToast(errorText(error)))}/>
 
         <div className="mode-selector">
           {modes.map(([val, label, tip]) => (
@@ -4433,7 +4433,7 @@ function PromptConverterPanel() {
           />
         </label>
 
-        <PromptSkillControls model={convertTemplateVersion} edition={skillVersionForModel(settings?.convertPromptSkillVersion,convertTemplateVersion)} language={language} disabled={convertBusy} onChange={(model,edition)=>void setConvertTemplateVersion(model,edition).catch(error=>setToast(String(error)))}/>
+        <PromptSkillControls model={convertTemplateVersion} edition={skillVersionForModel(settings?.convertPromptSkillVersion,convertTemplateVersion)} language={language} disabled={convertBusy} onChange={(model,edition)=>void setConvertTemplateVersion(model,edition).catch(error=>setToast(errorText(error)))}/>
 
         <div className="mode-selector">
           {([
@@ -5835,11 +5835,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   };
   const selectDir = async () => {
     try { await window.naiDesktop.selectOutputDir(); await refreshSettings(); }
-    catch (error) { useAppStore.getState().setToast(error instanceof Error ? error.message : String(error)); }
+    catch (error) { useAppStore.getState().setToast(errorText(error)); }
   };
   const selectGalleryDir = async () => {
     try { await window.naiDesktop.selectOnlineGalleryDownloadDir(); await refreshSettings(); }
-    catch (error) { useAppStore.getState().setToast(error instanceof Error ? error.message : String(error)); }
+    catch (error) { useAppStore.getState().setToast(errorText(error)); }
   };
   const clearAitagCache = async () => {
     setAitagCacheBusy(true);
@@ -6815,7 +6815,7 @@ function OnboardingWizard() {
                     try {
                       const selected = await window.naiDesktop.selectOutputDir();
                       if (selected) { await refreshSettings(); setShowOnboarding(true); }
-                    } catch (error) { useAppStore.getState().setToast(error instanceof Error ? error.message : String(error)); }
+                    } catch (error) { useAppStore.getState().setToast(errorText(error)); }
                   }}
                 >
                   <IconText icon={<Icon name="folder" />}>{t("settings.browse")}</IconText>

@@ -137,3 +137,13 @@ export function compactRemoteErrorText(
   if (!plain) return fallback;
   return plain.length > maxLength ? `${plain.slice(0, maxLength - 1).trimEnd()}…` : plain;
 }
+
+/**
+ * The text a catch block shows: the error's own message, without the English
+ * "Error invoking remote method '<channel>': Error: " that a rejected IPC call
+ * puts in front of the handler's message, or `fallback` when nothing is left.
+ */
+export function errorText(error: unknown, fallback = "操作失败。"): string {
+  const raw = error instanceof Error ? error.message : errorValueText(error);
+  return raw.trimStart().replace(ELECTRON_IPC_ERROR_PREFIX, "").trim() || fallback;
+}

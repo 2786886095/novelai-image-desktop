@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import {errorText} from '../error-message';
 import {useAppStore} from '../store';
 import {comparisonText,normalizeAutomaticComparison,automaticComparisonAllowed,type ComparisonSurface} from '../automatic-comparison';
 // Serialize whole-map writes across mounted surfaces so rapid changes never overwrite each other.
@@ -13,7 +14,7 @@ export function AutomaticComparisonControl({surface}:{surface:ComparisonSurface}
    const saved=normalizeAutomaticComparison(await window.naiDesktop.setSetting('automaticComparison',next));
    useAppStore.setState(s=>({settings:s.settings?{...s.settings,automaticComparison:saved}:s.settings}));
   });pending=operation;
-  void operation.catch(e=>useAppStore.getState().setToast(String(e))).finally(()=>setSaving(false));
+  void operation.catch(e=>useAppStore.getState().setToast(errorText(e))).finally(()=>setSaving(false));
  }
  if(!automaticComparisonAllowed(surface))return null;
  return <label className="automatic-comparison-control" data-auto-compare={surface}>
