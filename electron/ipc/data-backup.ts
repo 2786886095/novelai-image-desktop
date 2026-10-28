@@ -6,6 +6,7 @@ import {imageSettingsStamp} from "./image-settings-events";
 import crypto, { randomUUID } from "node:crypto";
 import {exportNaiAccountsBackup,prepareNaiAccountsBackupRestore} from './nai-accounts';
 import {BackupAccountValidationError} from './nai-accounts-validation';
+import {AccountVaultError} from './nai-accounts-vault';
 import fs from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
@@ -1234,8 +1235,8 @@ export async function importDataBackup(
       if(payload.novelAiAccounts!==undefined)accountRestore=await prepareNaiAccountsBackupRestore(payload.novelAiAccounts);
     }
   } catch (error: any) {
-    // The archive itself was readable when only an account's live re-validation failed.
-    const message = error instanceof BackupAccountValidationError ? error.message : `无法读取备份：${error?.message ?? String(error)}`;
+    // The archive itself was readable when an account failed live re-validation or this machine's saved accounts cannot be decrypted.
+    const message = error instanceof BackupAccountValidationError || error instanceof AccountVaultError ? error.message : `无法读取备份：${error?.message ?? String(error)}`;
     return { ok: false, message, imported: 0, skipped: 0, renamed: 0 };
   }
 

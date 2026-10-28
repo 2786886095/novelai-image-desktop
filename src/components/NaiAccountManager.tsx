@@ -47,7 +47,7 @@ export function NaiAccountManager({variant='toolbar',onSelectionChange}:{variant
  const close=useCallback(()=>{deleteAbort.current?.abort();clearSecrets();setClosing(true);closeTimer.current=window.setTimeout(()=>{setOpen(false);setClosing(false);trigger.current?.focus();},motionReduced()?0:160);},[clearSecrets]);
  useEffect(()=>()=>{deleteAbort.current?.abort();secretRequest.current++;window.clearTimeout(closeTimer.current);},[]);
  const generating=useAppStore(s=>s.isGenerating);
- const refresh=async()=>{const [list,state]=await Promise.all([bridge()!.list(),bridge()!.state()]);setAccounts(list);setSelected(state.selectedId);setHostBusy(state.busy);if(state.migrationIssue)setMessage('migrationFailed');onSelectionChange?.(state.selectedId);};
+ const refresh=async()=>{const [list,state]=await Promise.all([bridge()!.list(),bridge()!.state()]);setAccounts(list);setSelected(state.selectedId);setHostBusy(state.busy);if(state.migrationIssue)setMessage('migrationFailed');else if(state.selectionUnreadable)setMessage(current=>current||'selectionUnreadable');onSelectionChange?.(state.selectedId);};
  useEffect(()=>{if(!bridge())return;const changed=()=>void refresh().catch(()=>setMessage('unavailable'));window.addEventListener('studio:nai-accounts-changed',changed);void refresh().catch(()=>setMessage('unavailable'));const id=setInterval(()=>void bridge()!.state().then(s=>{setSelected(s.selectedId);setHostBusy(s.busy);onSelectionChange?.(s.selectedId);}).catch(()=>{}),1500);return()=>{clearInterval(id);window.removeEventListener('studio:nai-accounts-changed',changed);};},[]);
  useEffect(()=>{
   if(!open||variant==='settings')return;panel.current?.focus();

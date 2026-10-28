@@ -6,15 +6,17 @@ export function accountCipherAvailable(cipher: Cipher): boolean {
   try { return cipher.isEncryptionAvailable() && cipher.getSelectedStorageBackend?.() !== 'basic_text'; }
   catch { return false; }
 }
-/** Backup import and export show these verbatim (the account manager shows its own text), so they stay Chinese. */
+/** Backup import/export and the startup screen show these verbatim (the account manager shows its own text), so they stay Chinese. */
 export const ACCOUNT_VAULT_ERRORS = {
   invalidBackup: '备份中的 NovelAI 账户数据无效。',
   changedDuringImport: '导入期间账户数据发生了变化，已停止导入，请稍后重试。',
   encryptionUnavailable: '系统凭据加密不可用，无法读取或保存 NovelAI 账户。',
   tooManyAccounts: '导入后的 NovelAI 账户超过 128 个上限。',
   unsupportedVault: '账户库文件版本不受支持。',
-  decryptFailed: '无法解密已保存的 NovelAI 账户（凭据可能来自其他电脑或系统账户），请在账户管理中重新添加。',
+  decryptFailed: '无法解密已保存的 NovelAI 账户（凭据可能来自其他电脑或系统账户），请在账户管理中删除该账户后重新添加。',
 } as const;
+/** A problem with this machine's saved accounts, not with a backup archive; shown as is. */
+export class AccountVaultError extends Error {}
 export interface AccountVaultDocument { version: 1; selectedId?: string; legacyMigrated?:boolean; managed?:boolean; accounts: Array<NaiAccountProfile & { encryptedToken: string; accountSummary?: NaiAccountSummary }> }
 
 /** Portable sensitive archive only. Never returned by account IPC list/state. */
@@ -126,7 +128,7 @@ export class NaiAccountsVault {
   /** Ciphertext from another machine or OS account cannot be read; say so in Chinese instead of safeStorage's English. */
   private decryptToken(account:{encryptedToken:string}):string{
     try{return this.cipher.decryptString(Buffer.from(account.encryptedToken,'base64'));}
-    catch{throw Error(ACCOUNT_VAULT_ERRORS.decryptFailed);}
+    catch{throw new AccountVaultError(ACCOUNT_VAULT_ERRORS.decryptFailed);}
   }
   legacyMigrated(){return this.document.legacyMigrated===true;}
   managed(){return this.document.managed===true||this.document.legacyMigrated===true||this.document.accounts.length>0;}
@@ -141,8 +143,9 @@ export class NaiAccountsVault {
     for(const account of this.document.accounts){
       if(endpoint(account.apiBaseUrl)!==address)continue;
       let storedKey:string;
-      try{storedKey=this.cipher.decryptString(Buffer.from(account.encryptedToken,'base64')).trim();}
-      catch{throw Error('Stored account key unavailable');}
+      // An entry this machine cannot decrypt is unusable; it must not block adding the account again.
+      try{storedKey=this.decryptToken(account).trim();}
+      catch{continue;}
       if(storedKey===key)throw Error('NAI_ACCOUNT_DUPLICATE');
     }
   }

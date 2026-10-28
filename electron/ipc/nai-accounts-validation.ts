@@ -77,8 +77,9 @@ const BACKUP_VALIDATION_TEXT:Record<NaiAccountValidationResult['code'],string>={
 export class BackupAccountValidationError extends Error {}
 /** Same bounds as above: the label and status only, never credentials or response bodies. */
 export function backupAccountValidationError(label:string,result:NaiAccountValidationResult):BackupAccountValidationError{
- // The label comes from the archive: drop control and bidi characters and cut by code point, not UTF-16 unit.
- const clean=Array.from(label.replace(/[\p{Cc}\p{Cf}]/gu,' ').replace(/\s+/g,' ').trim()).slice(0,64).join('').trim();
+ // The label comes from the archive: drop control and bidi-override characters (keeping joiners such as
+ // U+200D in emoji) and cut by code point, not UTF-16 unit.
+ const clean=Array.from(label.replace(/[\p{Cc}\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu,' ').replace(/\s+/g,' ').trim()).slice(0,64).join('').trim();
  const name=clean?`「${clean}」`:'';
  return new BackupAccountValidationError(`备份中的 NovelAI 账户${name}验证未通过：${BACKUP_VALIDATION_TEXT[result.code]??BACKUP_VALIDATION_TEXT.http}${result.status?`（HTTP ${result.status}）`:''}；未导入任何数据。`);
 }

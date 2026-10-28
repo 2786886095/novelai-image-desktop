@@ -11,6 +11,8 @@ import {migrateLegacyNaiAccount} from './nai-accounts-migration';
 import {validateNaiAccountReadOnly,requireNaiAccountValidation,backupAccountValidationError} from './nai-accounts-validation';
 let vault: NaiAccountsVault | undefined;
 let migrationIssue:string|undefined;
+/** The selected account could not be read at startup and was deselected. */
+let selectionUnreadable=false;
 function getVault() {
   if (vault) return vault;
   const file = path.join(app.getPath('userData'), 'nai-accounts-v1.json');
@@ -27,8 +29,14 @@ function getVault() {
   try{migrateLegacyNaiAccount(candidate,readStore());}catch{migrationIssue='旧账户自动迁移未完成；原凭据和接口配置未删除。请从账户管理重新保存。';}
   configureNaiAccountSummaries({read:id=>candidate.accountSummary(id),write:(id,value)=>candidate.rememberAccountSummary(id,value)});
   const selectedId=candidate.selectedId();
-  if(selectedId) { const lease=candidate.bind(selectedId); try{restoreNaiAccount(lease.snapshot,candidate.managed());}finally{lease.release();} }
-  else restoreNaiAccount(undefined,candidate.managed());
+  let snapshot:ReturnType<NaiAccountsVault['bind']>['snapshot']|undefined;
+  if(selectedId){
+    // A selected account this machine cannot read (settings copied from another PC or OS account,
+    // a reset keychain) must not keep the app from starting: deselect it and tell the account manager.
+    try{const lease=candidate.bind(selectedId);try{snapshot=lease.snapshot;}finally{lease.release();}}
+    catch{candidate.select(undefined);selectionUnreadable=true;}
+  }
+  restoreNaiAccount(snapshot,candidate.managed());
   vault=candidate;
   return vault;
 }
@@ -64,7 +72,7 @@ export function ensureNaiAccountsLoaded() { getVault(); }
 export function registerNaiAccountsIpc() {
   // Lazy initialization: no real credentials are accessed by unit tests.
   ipcMain.handle('naiAccounts:list', () => getVault().list());
-  ipcMain.handle('naiAccounts:state',()=>({selectedId:getVault().selectedId(),busy:naiAccountsBusy(),migrationIssue}));
+  ipcMain.handle('naiAccounts:state',()=>{const selectedId=getVault().selectedId();return {selectedId,busy:naiAccountsBusy(),migrationIssue,selectionUnreadable:selectionUnreadable&&!selectedId};});
   ipcMain.handle('naiAccounts:select',(_event,id?:string)=>{
     if(!id)throw Error('请选择已保存账户。');
     const v=getVault(); const lease=id?v.bind(id):undefined;

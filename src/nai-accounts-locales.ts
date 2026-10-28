@@ -24,6 +24,7 @@ export const NAI_ACCOUNT_TEXT = {
  loginMethod:"登录方式",
  noAccount:'未添加账户',
  migrationFailed:'旧账户自动迁移未完成；原凭据和接口未删除，请在账户管理重新保存。',
+ selectionUnreadable:'上次使用的账户在这台电脑上无法解密（凭据可能来自其他电脑或系统账户），已取消选择。请删除该账户后重新添加，或改用其他账户。',
  addAccount:'添加账户',
  useAccount:'使用此账户',
  current:'当前使用',

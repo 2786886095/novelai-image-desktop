@@ -58,7 +58,8 @@ it("scrolls the keyboard-highlighted suggestion into view", () => {
 });
 
 it("starts every new or refined list at its first row and never picks past its end", () => {
-  const app = fs.readFileSync("src/App.tsx", "utf8");
+  // These checks span lines; a Windows checkout may have CRLF endings.
+  const app = fs.readFileSync("src/App.tsx", "utf8").replace(/\r\n/g, "\n");
   const editor = app.slice(app.indexOf("function PromptTextarea("), app.indexOf("// ── Shared UI primitives"));
   // Typing resets the highlight and the list scroll together; a new list does the same.
   expect(editor).toContain("setActiveIdx(0);\n    if (dropdownRef.current) dropdownRef.current.scrollTop = 0;");

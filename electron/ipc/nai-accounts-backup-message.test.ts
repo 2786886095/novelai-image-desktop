@@ -24,4 +24,7 @@ it('cleans the archive label: no bidi or control characters, cut by code point, 
   expect(long).toContain(`「${'a'.repeat(63)}😀」`);
   expect(long).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
   expect(backupAccountValidationError('   ', failed('auth', 401)).message).toMatch(/^备份中的 NovelAI 账户验证未通过/);
+  // Joiners are part of the text: emoji sequences and Persian words stay intact.
+  expect(backupAccountValidationError('👩\u200D💻工作号', failed('auth', 401)).message).toContain('「👩\u200D💻工作号」');
+  expect(backupAccountValidationError('می\u200Cخواهم', failed('auth', 401)).message).toContain('「می\u200Cخواهم」');
 });
