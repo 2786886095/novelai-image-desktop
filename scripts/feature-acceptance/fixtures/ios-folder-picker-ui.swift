@@ -110,33 +110,38 @@ final class FolderPickerUITests: XCTestCase {
     let isInline: Bool
     let modalCommit: XCUIElement?
   }
-  private func usable(_ element: XCUIElement, _ app: XCUIApplication) -> Bool {
+  private func usable(_ element: XCUIElement, _ viewFrame: CGRect) -> Bool {
     guard element.exists && element.isHittable && element.isEnabled else { return false }
     let frame = element.frame
-    return !frame.isEmpty && app.frame.contains(frame)
+    return !frame.isEmpty && viewFrame.contains(frame)
   }
   private func isSearchField(_ element: XCUIElement) -> Bool {
     let search = ["search", "搜索", "搜尋"]
     return search.contains(element.identifier.lowercased()) || search.contains(element.label.lowercased())
   }
   private func currentKeyboardDone(_ app: XCUIApplication) throws -> XCUIElement? {
+    let viewFrame = app.frame
     let keyboards = app.keyboards.allElementsBoundByIndex.filter { keyboard in
       guard keyboard.exists else { return false }
-      return !keyboard.frame.isEmpty && app.frame.intersects(keyboard.frame)
+      let frame = keyboard.frame
+      return !frame.isEmpty && viewFrame.intersects(frame)
     }
     guard keyboards.count <= 1 else { throw fail("Ambiguous current system keyboards") }
     guard let keyboard = keyboards.first else { return nil }
-    let done = keyboard.buttons.allElementsBoundByIndex.filter { button in
-      return button.identifier == "Done" && ["done", "Done", "完成"].contains(button.label) &&
-        usable(button, app) && keyboard.frame.contains(button.frame)
+    let keyboardFrame = keyboard.frame
+    let donePredicate = NSPredicate(format: "identifier == %@ AND label IN %@", "Done", ["done", "Done", "完成"])
+    let done = keyboard.buttons.matching(donePredicate).allElementsBoundByIndex.filter { button in
+      usable(button, viewFrame) && keyboardFrame.contains(button.frame)
     }
     guard done.count <= 1 else { throw fail("Ambiguous prepared keyboard Done controls") }
     return done.first
   }
   private func currentFolderNameControl(_ app: XCUIApplication, _ providerLabels: [String]) throws -> FolderNameControl? {
+    let viewFrame = app.frame
     var prepared: [FolderNameControl] = []
-    let inline = app.textViews.allElementsBoundByIndex.filter { field in
-      field.identifier == "DOC.inlineRenameField" && !isSearchField(field) && usable(field, app)
+    let inlinePredicate = NSPredicate(format: "identifier == %@", "DOC.inlineRenameField")
+    let inline = app.textViews.matching(inlinePredicate).allElementsBoundByIndex.filter { field in
+      !isSearchField(field) && usable(field, viewFrame)
     }
     guard inline.count <= 1 else { throw fail("Ambiguous visible inline folder naming controls") }
     if let field = inline.first, let title = try currentNavigationTitle(app),
@@ -147,18 +152,20 @@ final class FolderPickerUITests: XCTestCase {
     // same visible alert/sheet. Never search arbitrary app text fields or a
     // global Done/Create button behind the picker.
     for modal in app.alerts.allElementsBoundByIndex + app.sheets.allElementsBoundByIndex {
-      guard modal.exists && !modal.frame.isEmpty && app.frame.intersects(modal.frame) else { continue }
+      guard modal.exists && !modal.frame.isEmpty && viewFrame.intersects(modal.frame) else { continue }
       let fields = modal.textFields.allElementsBoundByIndex.filter { field in
-        !isSearchField(field) && usable(field, app) && modal.frame.contains(field.frame)
+        !isSearchField(field) && usable(field, viewFrame) && modal.frame.contains(field.frame)
       }
-      let commits = modal.buttons.allElementsBoundByIndex.filter { button in
+      guard fields.count <= 1 else { throw fail("Ambiguous modal folder naming controls") }
+      if fields.isEmpty { continue }
+      let commitPredicate = NSPredicate(format: "label IN %@", ["Create", "Done", "创建", "建立", "完成"])
+      let commits = modal.buttons.matching(commitPredicate).allElementsBoundByIndex.filter { button in
         // A modal Create can be disabled before a name is typed. Bind the
         // same visible control now; tap() still requires enabled at commit.
-        ["Create", "Done", "创建", "建立", "完成"].contains(button.label) &&
-          button.exists && button.isHittable && !button.frame.isEmpty &&
-          app.frame.contains(button.frame) && modal.frame.contains(button.frame)
+        button.exists && button.isHittable && !button.frame.isEmpty &&
+          viewFrame.contains(button.frame) && modal.frame.contains(button.frame)
       }
-      guard fields.count <= 1 && commits.count <= 1 else { throw fail("Ambiguous modal folder naming controls") }
+      guard commits.count <= 1 else { throw fail("Ambiguous modal folder naming controls") }
       if let field = fields.first, let commit = commits.first {
         prepared.append(FolderNameControl(field: field, isInline: false, modalCommit: commit))
       }
@@ -249,7 +256,6 @@ final class FolderPickerUITests: XCTestCase {
     guard let newFolder = create else { throw fail("System provider did not expose New Folder") }
     try tap(newFolder, "new-folder-via-system-picker")
     let namingDeadline = Date().addingTimeInterval(5)
-    capture("after-new-folder-action")
     let providerLabels = providers.flatMap { $0.1 }
     var naming = try currentFolderNameControl(app, providerLabels)
     while naming == nil {
@@ -259,7 +265,15 @@ final class FolderPickerUITests: XCTestCase {
     }
     // Reject even a nonnil first result if capture/snapshot work exhausted5s.
     if Date() >= namingDeadline { throw fail("Prepared naming control arrived after original5s deadline") }
-    guard let control = naming else { throw fail("Prepared folder naming control disappeared") }
+    guard let discovered = naming else { throw fail("Prepared folder naming control disappeared") }
+    // The first discovery/acceptance was inside the unchanged5s. Attachments
+    // are outside that critical window; re-read the complete live flow before
+    // typing rather than trusting an old handle after capture.
+    capture("after-new-folder-action")
+    guard let control = try currentFolderNameControl(app, providerLabels),
+          control.isInline == discovered.isInline else {
+      throw fail("Prepared naming flow changed after accepted-control capture")
+    }
     let field = control.field
     // The observed inline editor already has focus/selection. Do not collapse
     // that selection by tapping it. typeText fails if keyboard focus is absent.

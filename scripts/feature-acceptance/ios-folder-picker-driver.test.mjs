@@ -169,15 +169,16 @@ function namingContract(s,state){
  const prepared=[];if(inline.length&&state.provider&&done.length)prepared.push({kind:'inline',field:inline[0]});
  for(const modal of state.modals.filter(m=>m.visible&&['alert','sheet'].includes(m.kind))){
   const fields=modal.fields.filter(f=>f.type==='TextField'&&!f.search&&usable(f)&&f.inModal);
+  if(!fields.length)continue;
   const commits=modal.commits.filter(b=>['Create','Done','创建','建立','完成'].includes(b.label)&&b.exists&&b.hittable&&b.inView!==false&&b.inModal);
   assert(fields.length<=1&&commits.length<=1,'Ambiguous modal');if(fields.length&&commits.length)prepared.push({kind:'modal',field:fields[0]});
  }
  assert(prepared.length<=1,'Multiple prepared naming flows');return prepared[0]??null;
 }
 test('static naming source recognizes exact inline TextView in the current provider, not arbitrary text views or firstMatch',()=>{
- const s=swiftSource();for(const v of ['private func currentFolderNameControl(','app.textViews.allElementsBoundByIndex',
-  'field.identifier == "DOC.inlineRenameField"','inline.count <= 1','providerLabels.contains(title)',
-  'usable(field, app)','prepared.count <= 1'])assert(s.includes(v),v);
+ const s=swiftSource();for(const v of ['private func currentFolderNameControl(','app.textViews.matching(inlinePredicate).allElementsBoundByIndex',
+  'NSPredicate(format: "identifier == %@", "DOC.inlineRenameField")','inline.count <= 1','providerLabels.contains(title)',
+  'usable(field, viewFrame)','prepared.count <= 1'])assert(s.includes(v),v);
  assert(!s.includes('app.textFields.firstMatch'));assert(!s.includes('guard let commit = find(app,'));
  assert.equal(observedInlineNameShape.type,'TextView');assert.equal(observedInlineNameShape.runtimeHittableAndEnabledWereCaptured,false);
  assert.equal(namingContract(s,readyName())?.kind,'inline');
@@ -192,8 +193,8 @@ test('static inline naming rejects Search, foreign ID, disabled/hidden, wrong-cu
 });
 test('static Done commit is unique and scoped to the actual current keyboard, never a global button',()=>{
  const s=swiftSource();const body=s.split('private func currentKeyboardDone(')[1]?.split('private func currentFolderNameControl(')[0]??'';
- for(const v of ['app.keyboards.allElementsBoundByIndex','keyboard.buttons.allElementsBoundByIndex','button.identifier == "Done"',
-  'keyboards.count <= 1','done.count <= 1','keyboard.frame.contains(button.frame)'])assert(body.includes(v),v);
+ for(const v of ['app.keyboards.allElementsBoundByIndex','keyboard.buttons.matching(donePredicate).allElementsBoundByIndex','identifier == %@ AND label IN %@',
+  'keyboards.count <= 1','done.count <= 1','keyboardFrame.contains(button.frame)'])assert(body.includes(v),v);
  assert(!body.includes('find(app'));assert(!body.includes('app.buttons'));
  for(const mutate of [x=>x.keyboards=[],x=>x.keyboards[0].buttons[0].identifier='OtherDone',x=>x.keyboards[0].buttons[0].label='Open',
   x=>x.keyboards[0].buttons[0].inKeyboard=false,x=>x.keyboards[0].buttons[0].hittable=false,x=>x.keyboards[0].buttons[0].enabled=false]){
@@ -203,8 +204,8 @@ test('static Done commit is unique and scoped to the actual current keyboard, ne
 });
 test('static modal compatibility requires same visible alert or sheet field and Create commit, not global Search/Create',()=>{
  const s=swiftSource();for(const v of ['app.alerts.allElementsBoundByIndex + app.sheets.allElementsBoundByIndex',
-  'modal.textFields.allElementsBoundByIndex','modal.buttons.allElementsBoundByIndex','modal.frame.contains(field.frame)',
-  'modal.frame.contains(button.frame)','fields.count <= 1 && commits.count <= 1'])assert(s.includes(v),v);
+  'modal.textFields.allElementsBoundByIndex','modal.buttons.matching(commitPredicate).allElementsBoundByIndex','modal.frame.contains(field.frame)',
+  'modal.frame.contains(button.frame)','fields.count <= 1','commits.count <= 1','if fields.isEmpty { continue }'])assert(s.includes(v),v);
  for(const kind of ['alert','sheet']){
   const modal={visible:true,kind,fields:[{type:'TextField',search:false,exists:true,hittable:true,enabled:true,inModal:true}],
    commits:[{label:'Create',exists:true,hittable:true,enabled:true,inModal:true}]};
@@ -228,7 +229,7 @@ test('static naming5s deadline is not renewed; real new-folder and rename commit
  assert(tap>=0&&tap<deadline&&deadline<cap);assert.equal((s.match(/let namingDeadline =/g)||[]).length,1);
  assert(s.includes('if Date() >= namingDeadline'));assert(s.includes('while naming == nil'));
  const accept=s.indexOf('if Date() >= namingDeadline { throw fail("Prepared naming control arrived after original5s deadline") }');
- assert(accept>s.indexOf('while naming == nil')&&accept<s.indexOf('guard let control = naming'));
+ assert(accept>s.indexOf('while naming == nil')&&accept<s.indexOf('guard let discovered = naming'));
  // Static acceptance contract: an immediately nonnull result arriving after
  // capture/helper consumed5s must still reject, not skip the nil-only loop.
  const acceptAt=(elapsedSeconds,hasControl)=>{if(accept>=0&&elapsedSeconds>=5)throw new Error('late naming control');return hasControl;};
@@ -248,7 +249,7 @@ test('read-only current direct title identity need not be tappable; every actual
  const field=s.split('private func usable(')[1].split('private func isSearchField(')[0];
  const tap=s.split('private func tap(')[1].split('@MainActor')[0];
  for(const body of [field,tap])assert(body.includes('element.exists && element.isHittable && element.isEnabled'));
- assert(s.includes('usable(field, app)'));assert(s.includes('usable(button, app)'));
+ assert(s.includes('usable(field, viewFrame)'));assert(s.includes('usable(button, viewFrame)'));
 });
 test('bounded title hit/frame observation is deferred and acceptance-independent, with no new waits or suppressed test error',()=>{
  const s=swiftSource();const body=s.split('private func captureCurrentTitleObservation(')[1].split('private func waitForNavigationTitle(')[0];
@@ -259,4 +260,39 @@ test('bounded title hit/frame observation is deferred and acceptance-independent
  assert(s.includes('defer { capture("final-picker-state"); captureCurrentTitleObservation(app) }'));
  assert(body.includes('Only an observation encoding failure'));assert(s.includes('Prepared naming control arrived after original5s deadline'));
  assert.equal((s.match(/let namingDeadline =/g)||[]).length,1);assert.equal((s.match(/Date\(\)\.addingTimeInterval\(10\)/g)||[]).length,2);
+});
+
+// STATIC selection equivalence and source shape, never an XCUI timing model.
+test('constant server-side prefilters retain the original prepared selection and ambiguity, without unrelated per-key property loops',()=>{
+ const s=swiftSource();for(const token of ['app.textViews.matching(inlinePredicate).allElementsBoundByIndex',
+  'keyboard.buttons.matching(donePredicate).allElementsBoundByIndex','identifier == %@ AND label IN %@',
+  'modal.buttons.matching(commitPredicate).allElementsBoundByIndex','let commitPredicate = NSPredicate(format: "label IN %@"',
+  'if fields.isEmpty { continue }'])assert(s.includes(token),token);
+ for(const token of ['keyboard.buttons.allElementsBoundByIndex','app.textViews.allElementsBoundByIndex','modal.buttons.allElementsBoundByIndex'])assert(!s.includes(token),token);
+ const inlineBody=s.split('private func currentFolderNameControl(')[1].split('private func tap(')[0];
+ assert(inlineBody.includes('let inlinePredicate = NSPredicate(format: "identifier == %@", "DOC.inlineRenameField")'));
+ assert(!inlineBody.includes('matching(identifier:'));
+ const doc='DOC.inlineRenameField';const fields=[{identifier:doc,label:'rename',value:'untitled folder'},
+  {identifier:'wrong-id',label:doc,value:doc},{identifier:'Search',label:doc,value:'other'}];
+ const exactIdentifier=fields.filter(x=>x.identifier===doc);assert.deepEqual(exactIdentifier,[fields[0]]);
+ assert(!exactIdentifier.includes(fields[1])&&!exactIdentifier.includes(fields[2]),'same label/value never substitutes for literal identifier');
+ const usable=x=>x.exists&&x.hit&&x.enabled&&x.inFrame;
+ const rows=Array.from({length:50},(_,i)=>({identifier:'Key'+i,label:'k'+i,exists:true,hit:true,enabled:true,inFrame:true}));
+ rows.push({identifier:'Done',label:'done',exists:true,hit:true,enabled:true,inFrame:true});
+ for(const mutate of [x=>x,x=>{x.at(-1).enabled=false;return x;},x=>{x.push({...x.at(-1)});return x;}]){
+  const x=mutate(structuredClone(rows));const predicate=b=>b.identifier==='Done'&&['done','Done','完成'].includes(b.label);
+  assert.deepEqual(x.filter(b=>predicate(b)&&usable(b)),x.filter(predicate).filter(usable));
+ }
+ const modal=s.indexOf('let fields = modal.textFields');assert(modal>=0&&modal<s.indexOf('if fields.isEmpty { continue }')&&s.indexOf('if fields.isEmpty { continue }')<s.indexOf('let commits = modal.buttons.matching'));
+ for(const name of ['currentKeyboardDone','currentFolderNameControl']){const body=s.split('private func '+name+'(')[1].split('\n  private func ')[0];assert.equal((body.match(/let viewFrame = app.frame/g)||[]).length,1);}
+});
+test('first accepted naming control stays within original5s; capture then fresh live validation precede typing and no late positive is accepted',()=>{
+ const s=swiftSource();const deadline=s.indexOf('let namingDeadline = Date().addingTimeInterval(5)');
+ const reject=s.indexOf('Prepared naming control arrived after original5s deadline');const accepted=s.indexOf('guard let discovered = naming');
+ const capture=s.indexOf('capture("after-new-folder-action")');const fresh=s.indexOf('guard let control = try currentFolderNameControl(app, providerLabels)');
+ const typing=s.indexOf('field.typeText(folder)');assert(deadline>=0&&deadline<reject&&reject<accepted&&accepted<capture&&capture<fresh&&fresh<typing);
+ assert(s.includes('control.isInline == discovered.isInline'));assert.equal((s.match(/let namingDeadline =/g)||[]).length,1);
+ const acceptAt=t=>{if(t>=5)throw Error('late');return true;};assert.throws(()=>acceptAt(5.001),/late/);assert.equal(acceptAt(4.999),true);
+ assert(s.includes('let confirmed = current.field.value as? String, confirmed == folder'));
+ assert.equal((s.match(/Date\(\)\.addingTimeInterval\(10\)/g)||[]).length,2);
 });
