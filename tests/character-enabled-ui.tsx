@@ -7,7 +7,7 @@ import '../src/styles.css';
 
 let settings:any=JSON.parse(localStorage.getItem('character-switch-test-settings')||'null')??{language:'zh-CN',autoComplete:false,persistGenerateParams:true,positivePromptPresets:[]};
 const api:any={getSettings:async()=>settings,setSetting:async(k:string,v:any)=>{settings={...settings,[k]:structuredClone(v)};localStorage.setItem('character-switch-test-settings',JSON.stringify(settings));return settings;},
- onGenerationPreview:()=>()=>{},onUpdateEvent:()=>()=>{},accountCached:async()=>({hasToken:false}),isFirstRun:async()=>false,getHistoryDates:async()=>[],getHistoryGroups:async()=>[],isPortable:async()=>false,getHistory:async()=>[]};
+ onGenerationPreview:()=>()=>{},accountCached:async()=>({hasToken:false}),isFirstRun:async()=>false,getHistoryDates:async()=>[],getHistoryGroups:async()=>[],getHistory:async()=>[]};
 window.naiDesktop=api;
 await useAppStore.getState().load();
 if(!settings.lastGenerationState)useAppStore.getState().setCharCaptions([{id:'alice',prompt:'blue coat',negativePrompt:'red coat',useCoords:true,x:.2,y:.3},{id:'bob',prompt:'green coat',negativePrompt:'hat',useCoords:true,x:.8,y:.7}]);

@@ -69,7 +69,7 @@ html[data-ui-text-scale]:not([data-ui-text-scale="100"]) h3 {font-size:calc(16px
 html[data-ui-text-scale]:not([data-ui-text-scale="100"]) h4 {font-size:calc(14px * var(--ui-title-scale));}
 html[data-ui-text-scale]:not([data-ui-text-scale="100"]) .field-hint {font-size:calc(12px * var(--ui-secondary-scale));line-height:1.5;}
 
-html[data-ui-text-scale]:not([data-ui-text-scale="100"]) .app-shell {grid-template-rows:auto auto auto auto minmax(0,1fr) auto;}
+html[data-ui-text-scale]:not([data-ui-text-scale="100"]) .app-shell {grid-template-rows:auto auto auto minmax(0,1fr) auto;}
 html[data-ui-text-scale]:not([data-ui-text-scale="100"]) .title-bar {height:auto;min-height:32px;}
 
 html[data-ui-text-scale]:not([data-ui-text-scale="100"]) .history-panel {grid-template-columns:minmax(0,1fr);}

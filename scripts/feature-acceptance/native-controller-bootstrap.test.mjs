@@ -14,7 +14,8 @@ test('system controller preserves the native deadline, inventory and failed time
   assert.match(system, /actual\.timedOut\|\|actual\.outputOverflow\|\|actual\.error/);
   assert.match(system, /report\.passed!==expected\.length/);
   assert.match(system, /'accounts','secure-crud-switch'/);
-  assert.match(system, /'updates','profile-preserved-update-boundary'/);
+  assert.match(system, /'accounts','invalid-credential-errors-no-leak'/);
+  assert.doesNotMatch(system, /'updates'/);
 });
 
 test('the actual system command adapter records literal streams and force-cleans a real timed-out child', async () => {

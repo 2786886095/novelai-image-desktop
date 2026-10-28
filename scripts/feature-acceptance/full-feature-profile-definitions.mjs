@@ -36,7 +36,6 @@ const definitions = {
   clipboard:['native-unicode-text','png-metadata-copy-paste','invalid-input-no-file-leak'],
   navigation:['all-platform-routes','return-edit-no-lost-state','ordering-persist-narrow-window'],
   'output-management':['managed-write-no-clobber','folder-choice-history-link','invalid-outside-paths-no-delete'],
-  updates:['version-check-platform-links','download-verify-failure','profile-preserved-update-boundary'],
   'works-batch-edit':['move-multiple-dedupe','delete-selected-shared-files','invalid-stale-partial-error'],
   'missing-file-reconciliation':['delete-confirmed-missing','move-rebind-content','offline-root-keeps-record'],
 };

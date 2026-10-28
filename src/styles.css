@@ -238,8 +238,8 @@ button { user-select: none; }
 /* ── App shell ───────────────────────────────────────────────────────────────── */
 .app-shell {
   display: grid;
-  /* Rows: title · update-banner (auto, collapses to 0 when hidden) · menu · tabs · workspace · status */
-  grid-template-rows: 32px auto 36px 38px 1fr 22px;
+  /* Rows: title · menu · tabs · workspace · status */
+  grid-template-rows: 32px 36px 38px 1fr 22px;
   width: 100%;
   height: 100%;
   background: var(--bg-window);
@@ -3588,10 +3588,9 @@ html, body, #root {
 .app-shell {
   position: relative;
   isolation: isolate;
-  /* Rows: title · update-banner (auto, 0 when hidden) · menu · tabs · workspace · status.
-     Must keep the banner row or a new-version banner shifts every row and the
-     workspace collapses. This rule overrides the base one above, so it needs it too. */
-  grid-template-rows: 38px auto 44px 54px 1fr 26px;
+  /* Rows: title · menu · tabs · workspace · status. This rule overrides the
+     base one above, so both must keep the same row structure. */
+  grid-template-rows: 38px 44px 54px 1fr 26px;
   background:
     linear-gradient(135deg, rgba(255,255,255,0.42), rgba(255,255,255,0.05)),
     transparent;
@@ -4031,47 +4030,6 @@ html, body, #root {
     radial-gradient(circle at 88% 18%, rgba(245, 158, 11, 0.10), transparent 30%),
     linear-gradient(145deg, rgba(23, 20, 42, 0.86), rgba(13, 16, 34, 0.62));
 }
-
-/* ── Update banner ─────────────────────────────────────────────────────────── */
-.update-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 16px;
-  font-size: 13px;
-  background: linear-gradient(90deg, rgba(124, 92, 250, 0.16), rgba(167, 139, 250, 0.12));
-  border-bottom: 1px solid var(--border);
-}
-.update-banner-actions { display: flex; gap: 8px; flex-shrink: 0; }
-.update-banner .btn { padding: 4px 12px; font-size: 12px; }
-.update-install-overlay {
-  position: fixed;
-  z-index: var(--z-overlay-top);
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: color-mix(in srgb, var(--bg-window) 84%, transparent);
-  backdrop-filter: blur(18px);
-  animation: modalIn .32s var(--ease-out) both;
-}
-.update-install-panel {
-  display: grid;
-  justify-items: center;
-  width: min(460px, calc(100vw - 48px));
-  padding: 34px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  background: var(--bg-dialog);
-  box-shadow: var(--shadow-xl);
-  text-align: center;
-}
-.update-install-panel h2 { margin: 16px 0 8px; color: var(--text-primary); }
-.update-install-panel p { margin: 0; color: var(--text-secondary); }
-.update-install-spinner { width: 42px; height: 42px; border: 4px solid color-mix(in srgb, var(--accent) 18%, transparent); border-top-color: var(--accent); border-radius: var(--radius-pill); animation: spin .85s linear infinite; }
-.update-install-progress { width: 100%; height: 8px; margin-top: 22px; overflow: hidden; border-radius: var(--radius-pill); background: var(--bg-hover); }
-.update-install-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent-2, var(--accent))); transition: width .24s var(--ease-out); }
 
 /* ── Anlas cost row ────────────────────────────────────────────────────────── */
 .cost-row {

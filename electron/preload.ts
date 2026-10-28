@@ -35,7 +35,6 @@ import type {
   SettingKey,
   TextToolHistoryItem,
   UpscaleScale,
-  UpdateProgressEvent,
   StylePromptPreviewImage,
   ReferencePresetExportRequest,
   ReferencePresetLibrary,
@@ -547,16 +546,6 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   isFirstRun: () => ipcRenderer.invoke("settings:isFirstRun"),
   completeSetup: () => ipcRenderer.invoke("settings:completeSetup"),
 
-  checkUpdate: () => ipcRenderer.invoke("app:checkUpdate"),
-  isPortable: () => ipcRenderer.invoke("app:isPortable"),
-  downloadUpdate: () => ipcRenderer.invoke("app:downloadUpdate"),
-  installUpdate: () => ipcRenderer.invoke("app:installUpdate"),
-  onUpdateEvent: (callback: (event: UpdateProgressEvent) => void) => {
-    const listener = (_event: unknown, payload: UpdateProgressEvent) =>
-      callback(payload);
-    ipcRenderer.on("app:updateEvent", listener);
-    return () => ipcRenderer.removeListener("app:updateEvent", listener);
-  },
   minimize: () => ipcRenderer.invoke("window:minimize"),
   maximize: () => ipcRenderer.invoke("window:maximize"),
   close: () => ipcRenderer.invoke("window:close"),

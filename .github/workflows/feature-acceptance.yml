@@ -199,7 +199,7 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Check matrix rejection rules
         run: node --test scripts/feature-acceptance/release-feature-scope.test.mjs scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/windows-artist-contract.test.mjs scripts/feature-acceptance/windows-artist-native.test.mjs scripts/feature-acceptance/windows-artist-matrix.test.mjs scripts/feature-acceptance/import-windows-artist-evidence.test.mjs
-      - name: Require 73 scoped cells across both desktop release platforms (one Windows-local capability cell not-supported)
+      - name: Require 71 scoped cells across both desktop release platforms (one Windows-local capability cell not-supported)
         shell: bash
         run: |
           version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json","utf8")).version')"

@@ -52,7 +52,7 @@ test('changing proof/controller/native observation/receipt hash or removing a sc
   for (const change of changes) {const item = unit(); change(item); assert.throws(() => assertScenarioReceipt(item.receipt, {sourceSha, windowsArtistProof: item.proof})); assert.equal(matrix([item]).summary.verifiedSlots, 0);}
 });
 test('one complete UNIT schema route covers only Windows Artist, not other features or release readiness', () => {
-  const item = unit(), report = matrix([item]); assert.equal(report.summary.verifiedSlots, 1); assert.equal(report.summary.pendingSlots, 72); assert.equal(report.summary.notSupportedSlots, 1);
+  const item = unit(), report = matrix([item]); assert.equal(report.summary.verifiedSlots, 1); assert.equal(report.summary.pendingSlots, 70); assert.equal(report.summary.notSupportedSlots, 1);
   assert.equal(cell(report).status, 'verified'); assert.deepEqual(cell(report).completedScenarios, fullFeatureProfiles['artist-iteration'].scenarios);
   assert.equal(report.features.find(row => row.id === 'artist-iteration').platforms.macos.status, 'not-supported');
   assert.equal(report.releaseScopeCertified, false); assert.equal(report.releaseReady, false); assert.equal(report.full195Certified, false);
@@ -88,7 +88,7 @@ function allRequired(root) {
 }
 test('final file verifier must bind companion proof raw bytes, not just receipt JSON', t => {
   const root = temporary(t), {items} = allRequired(root), report = matrix(items);
-  assert.equal(report.summary.verifiedSlots, 73); assert.doesNotThrow(() => assertReleaseEvidenceFiles(report, root));
+  assert.equal(report.summary.verifiedSlots, 71); assert.doesNotThrow(() => assertReleaseEvidenceFiles(report, root));
   fs.appendFileSync(path.join(root, 'controller-proof.json'), ' ');
   assert.throws(() => assertReleaseEvidenceFiles(report, root), /proof|Proof|companion|Companion|bytes changed/);
 });

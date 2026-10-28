@@ -27,10 +27,10 @@ function fixture() {
   const api = {
     getSettings: vi.fn().mockResolvedValue(settings(1)),
     onImageServiceChanged: vi.fn((callback: () => void) => { listener = callback; return vi.fn(); }),
-    onGenerationPreview: vi.fn(() => vi.fn()), onUpdateEvent: vi.fn(() => vi.fn()),
+    onGenerationPreview: vi.fn(() => vi.fn()),
     accountCached: vi.fn().mockResolvedValue({ hasToken: false }), isFirstRun: vi.fn().mockResolvedValue(false),
     getHistoryDates: vi.fn().mockResolvedValue([]), getHistoryGroups: vi.fn().mockResolvedValue([]),
-    isPortable: vi.fn().mockResolvedValue(false), getHistory: vi.fn().mockResolvedValue([]),
+    getHistory: vi.fn().mockResolvedValue([]),
   };
   vi.stubGlobal('window', { naiDesktop: api });
   useAppStore.setState(useAppStore.getInitialState(), true);

@@ -21,8 +21,8 @@ describe('character persistence and presets (#8 #13)', () => {
  it('writes edits, loads a fresh store, and persists removal of the final character',async()=>{
   let settings:any={language:'en-US',persistGenerateParams:true};
   const desktop={setSetting:vi.fn(async(key:string,value:unknown)=>{settings={...settings,[key]:structuredClone(value)};}),getSettings:async()=>settings,
-   onGenerationPreview:()=>()=>{},onUpdateEvent:()=>()=>{},accountCached:async()=>({hasToken:false}),isFirstRun:async()=>false,
-   getHistoryDates:async()=>[],getHistoryGroups:async()=>[],isPortable:async()=>false,getHistory:async()=>[]};
+   onGenerationPreview:()=>()=>{},accountCached:async()=>({hasToken:false}),isFirstRun:async()=>false,
+   getHistoryDates:async()=>[],getHistoryGroups:async()=>[],getHistory:async()=>[]};
   vi.stubGlobal('window',{naiDesktop:desktop});
   await useAppStore.getState().load();useAppStore.getState().setCharCaptions(captions);
   useAppStore.getState().updateCharCaption('alice',{prompt:'green coat',x:0});

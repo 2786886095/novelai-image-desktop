@@ -6,31 +6,31 @@ const COPY = {
   "zh-CN": {
     network: "Danbooru 实时排行", cache: "本地缓存", unavailable: "实时排行暂不可用", loading: "正在获取 Danbooru 实时画师排行…",
     timeout: "在线请求超时", failed: "在线候选加载失败", invalid: "在线接口返回异常数据", empty: "在线候选返回为空或不完整", repeated: "在线接口重复返回同一页",
-    retry: "请检查网络及设置中的更新代理，然后点击刷新。", offline: "未取得实时候选，抽卡与批量生图暂不可用。",
+    retry: "请检查网络及设置中的资源下载代理，然后点击刷新。", offline: "未取得实时候选，抽卡与批量生图暂不可用。",
     ipc: "候选库服务异常，请重启软件后重试。",
   },
   "zh-TW": {
     network: "Danbooru 即時排行", cache: "本機快取", unavailable: "即時排行暫不可用", loading: "正在取得 Danbooru 即時畫師排行…",
     timeout: "線上請求逾時", failed: "線上候選載入失敗", invalid: "線上介面傳回異常資料", empty: "線上候選為空或不完整", repeated: "線上介面重複傳回同一頁",
-    retry: "請檢查網路及設定中的更新代理，然後點擊重新整理。", offline: "尚未取得即時候選，抽卡與批次生圖暫不可用。",
+    retry: "請檢查網路及設定中的資源下載代理，然後點擊重新整理。", offline: "尚未取得即時候選，抽卡與批次生圖暫不可用。",
     ipc: "候選庫服務異常，請重新啟動軟體後重試。",
   },
   "en-US": {
     network: "Live Danbooru ranking", cache: "Local cache", unavailable: "Live ranking unavailable", loading: "Fetching the live Danbooru artist ranking…",
     timeout: "Online request timed out", failed: "Online candidates could not be loaded", invalid: "Invalid online response", empty: "Empty or incomplete online result", repeated: "The server returned the same page repeatedly",
-    retry: "Check your connection and update proxy settings, then refresh.", offline: "Live candidates are required for random draws and batch generation.",
+    retry: "Check your connection and the resource download proxy setting, then refresh.", offline: "Live candidates are required for random draws and batch generation.",
     ipc: "Candidate service error. Restart the app and retry.",
   },
   "ja-JP": {
     network: "Danbooru 最新ランキング", cache: "ローカルキャッシュ", unavailable: "最新ランキングを取得できません", loading: "Danbooru の最新絵師ランキングを取得中…",
     timeout: "通信がタイムアウトしました", failed: "候補の取得に失敗しました", invalid: "サーバーの応答形式が不正です", empty: "候補が空または不完全です", repeated: "同じページが繰り返し返されました",
-    retry: "接続と更新用プロキシ設定を確認してから再読み込みしてください。", offline: "候補の取得後に抽選と一括生成を利用できます。",
+    retry: "接続とリソースダウンロード用プロキシ設定を確認してから再読み込みしてください。", offline: "候補の取得後に抽選と一括生成を利用できます。",
     ipc: "候補サービスでエラーが発生しました。アプリを再起動してください。",
   },
   "ko-KR": {
     network: "Danbooru 실시간 순위", cache: "로컬 캐시", unavailable: "실시간 순위를 불러올 수 없습니다", loading: "Danbooru 실시간 작가 순위 로딩 중…",
     timeout: "온라인 요청 시간 초과", failed: "온라인 후보 로드 실패", invalid: "잘못된 서버 응답", empty: "온라인 후보가 비어 있거나 불완전합니다", repeated: "서버가 같은 페이지를 반복 반환했습니다",
-    retry: "네트워크 및 업데이트 프록시 설정을 확인한 후 새로고침하세요.", offline: "무작위 추첨 및 일괄 생성에는 실시간 후보가 필요합니다.",
+    retry: "네트워크 및 리소스 다운로드 프록시 설정을 확인한 후 새로고침하세요.", offline: "무작위 추첨 및 일괄 생성에는 실시간 후보가 필요합니다.",
     ipc: "후보 서비스 오류입니다. 앱을 다시 시작하세요.",
   },
 } satisfies Record<AppLanguage, Record<string, string>>;

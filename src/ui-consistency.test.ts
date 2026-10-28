@@ -654,7 +654,6 @@ describe("desktop UI consistency guards", () => {
     const boundary = fs.readFileSync(path.join(projectRoot, "src", "components", "AppErrorBoundary.tsx"), "utf8");
     const comic = fs.readFileSync(path.join(projectRoot, "src", "comic", "TagComicGenerator.tsx"), "utf8");
     const store = fs.readFileSync(path.join(projectRoot, "src", "store.ts"), "utf8");
-    const updater = fs.readFileSync(path.join(projectRoot, "electron", "ipc", "auto-update.ts"), "utf8");
     const nai = fs.readFileSync(path.join(projectRoot, "electron", "ipc", "nai.ts"), "utf8");
     expect(main).toContain('window.addEventListener("unhandledrejection"');
     expect(main).toContain('<AppErrorBoundary scope="app" root>');
@@ -665,7 +664,6 @@ describe("desktop UI consistency guards", () => {
     expect(comicQueue).toContain('result=await deps.generate(request)');
     expect(comicQueue).toMatch(/finally\s*\{[\s\S]*deps\.store\.setBusy\(false\)/);
     expect(store).toMatch(/catch \(error\) \{[\s\S]*status: "failed"/);
-    expect(updater).toContain("mainWindow.webContents.isDestroyed()");
     expect(nai).toContain('signal?.removeEventListener("abort", onAbort)');
     expect(app).toContain("Number.isFinite(days) ? days : 30");
   });

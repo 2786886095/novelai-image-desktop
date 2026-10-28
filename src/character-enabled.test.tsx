@@ -17,7 +17,7 @@ it('keeps pause state, content, identity and coordinates in storage, reorder and
 it('persists independent switches through a fresh store and restores without erasing fields',async()=>{
  let settings:any={language:'en-US',persistGenerateParams:true};
  vi.stubGlobal('window',{naiDesktop:{setSetting:async(key:string,value:any)=>{settings={...settings,[key]:structuredClone(value)};},getSettings:async()=>settings,
- onGenerationPreview:()=>()=>{},onUpdateEvent:()=>()=>{},accountCached:async()=>({hasToken:false}),isFirstRun:async()=>false,getHistoryDates:async()=>[],getHistoryGroups:async()=>[],isPortable:async()=>false,getHistory:async()=>[]}});
+ onGenerationPreview:()=>()=>{},accountCached:async()=>({hasToken:false}),isFirstRun:async()=>false,getHistoryDates:async()=>[],getHistoryGroups:async()=>[],getHistory:async()=>[]}});
  await useAppStore.getState().load();useAppStore.getState().setCharCaptions(cast);
  useAppStore.getState().updateCharCaption('b',{enabled:false});
  useAppStore.setState(useAppStore.getInitialState(),true);await useAppStore.getState().load();

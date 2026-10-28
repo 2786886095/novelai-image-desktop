@@ -68,7 +68,6 @@ import {
   MdTranslate,
   MdUndo,
   MdUpload,
-  MdUpgrade,
   MdVolumeUp,
   MdVisibility,
   MdVisibilityOff,
@@ -95,7 +94,6 @@ export type IconName =
   | "key"
   | "mapPin"
   | "trash"
-  | "upgrade"
   | "download"
   | "copy"
   | "warning"
@@ -171,7 +169,6 @@ const MATERIAL_ICONS: Partial<Record<IconName, IconType>> = {
   key: MdKey,
   mapPin: MdLocationOn,
   trash: MdDeleteOutline,
-  upgrade: MdUpgrade,
   download: MdDownload,
   copy: MdContentCopy,
   warning: MdWarningAmber,
@@ -334,13 +331,6 @@ const PATHS: Partial<Record<IconName, ReactNode>> = {
       <path d="M9 7V5.2a1.2 1.2 0 0 1 1.2-1.2h3.6A1.2 1.2 0 0 1 15 5.2V7" />
       <path d="M6.2 7l.9 12.6a1.2 1.2 0 0 0 1.2 1.1h7.4a1.2 1.2 0 0 0 1.2-1.1L18 7" />
       <path d="M10 11v6M14 11v6" />
-    </>
-  ),
-  upgrade: (
-    <>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 16.5V8" />
-      <path d="M8.5 11.5 12 8l3.5 3.5" />
     </>
   ),
   download: (

@@ -66,40 +66,4 @@ jobs:
           name: windows-formal-assets
           path: |
             release/*.exe
-            release/latest.yml
           if-no-files-found: error
-  publish:
-    needs: [windows]
-    if: false
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: write
-      actions: read
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-      - uses: actions/download-artifact@v4
-        with:
-          name: windows-formal-assets
-          path: release-assets
-      - uses: actions/download-artifact@v4
-        with:
-          name: windows-formal-evidence
-          path: release-evidence
-      - name: Publish only the verified Windows bytes
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_RUN: ${{ github.run_id }}
-        run: node scripts/publish-verified-windows-release.mjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: windows-publication-evidence
-          path: |
-            release-assets/verification.json
-            release-evidence/published-readback.json

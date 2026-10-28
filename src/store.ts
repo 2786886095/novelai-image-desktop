@@ -42,8 +42,6 @@ import type {
   ReversePromptScope,
   TextToolHistoryItem,
   TextToolJob,
-  UpdateInfo,
-  UpdateProgressEvent,
   UpscaleScale,
   VibeTransferImage,
   PreciseReferenceImage,
@@ -87,7 +85,6 @@ const storeIpcListenerRegistryKey = "__langbaiNovelAiStoreIpcListeners";
 type StoreIpcListenerRegistry = {
   owner: object;
   removeGenerationPreview?: () => void;
-  removeUpdateEvent?: () => void;
   removeImageServiceChanged?: () => void;
 };
 
@@ -284,9 +281,6 @@ interface AppState {
   statusText: string;
   lastError: string;
   toast: string;
-  updateInfo: UpdateInfo | null;
-  isPortable: boolean;
-  updateProgress: UpdateProgressEvent | null;
 
   load: () => Promise<void>;
   setShowOnboarding: (value: boolean) => void;
@@ -307,10 +301,6 @@ interface AppState {
     captions: CharCaptionItem[],
     options?: MetadataRestoreOptions,
   ) => void;
-  checkUpdate: () => Promise<void>;
-  dismissUpdate: () => void;
-  downloadUpdate: () => Promise<void>;
-  installUpdate: () => void;
   setSelectedDate: (date: string) => Promise<void>;
   setSelectedGroupId: (groupId: string) => Promise<void>;
   setGenerationGroupId: (groupId: string) => Promise<void>;
@@ -1007,16 +997,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   statusText: storeText(null, "status.ready"),
   lastError: "",
   toast: "",
-  updateInfo: null,
-  isPortable: false,
-  updateProgress: null,
 
   async load() {
     const listenerHost = window as typeof window & Record<string, unknown>;
     const listenerRegistry = listenerHost[storeIpcListenerRegistryKey] as StoreIpcListenerRegistry | undefined;
     if (listenerRegistry?.owner !== storeIpcListenerOwner) {
       listenerRegistry?.removeGenerationPreview?.();
-      listenerRegistry?.removeUpdateEvent?.();
       listenerRegistry?.removeImageServiceChanged?.();
       const removeGenerationPreview = window.naiDesktop.onGenerationPreview((event) => {
         const state = get();
@@ -1030,7 +1016,6 @@ export const useAppStore = create<AppState>((set, get) => ({
           });
         }
       });
-      const removeUpdateEvent = window.naiDesktop.onUpdateEvent((event) => set({ updateProgress: event }));
       const removeImageServiceChanged = window.naiDesktop.onImageServiceChanged?.(() => {
         void window.naiDesktop.getSettings().then((incoming) => {
           if ((listenerHost[storeIpcListenerRegistryKey] as StoreIpcListenerRegistry | undefined)?.owner !== storeIpcListenerOwner) return;
@@ -1041,7 +1026,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         owner: storeIpcListenerOwner,
         removeImageServiceChanged: typeof removeImageServiceChanged === "function" ? removeImageServiceChanged : undefined,
         removeGenerationPreview: typeof removeGenerationPreview === "function" ? removeGenerationPreview : undefined,
-        removeUpdateEvent: typeof removeUpdateEvent === "function" ? removeUpdateEvent : undefined,
       } satisfies StoreIpcListenerRegistry;
     }
 
@@ -1061,19 +1045,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     // network drive) without blocking boot — a single Promise.all would let
     // any one rejection permanently strand the splash screen with bootDone
     // never set. Each gets a safe default instead.
-    const [accountResult, firstRunResult, datesResult, groupsResult, portableResult] = await Promise.allSettled([
+    const [accountResult, firstRunResult, datesResult, groupsResult] = await Promise.allSettled([
       window.naiDesktop.accountCached(),
       window.naiDesktop.isFirstRun(),
       window.naiDesktop.getHistoryDates(),
       window.naiDesktop.getHistoryGroups(),
-      window.naiDesktop.isPortable(),
     ]);
     const account: AccountSummary = accountResult.status === "fulfilled" ? accountResult.value : { hasToken: false };
     const firstRun = firstRunResult.status === "fulfilled" ? firstRunResult.value : false;
     const dates = datesResult.status === "fulfilled" ? datesResult.value : [];
     const groups = groupsResult.status === "fulfilled" ? groupsResult.value : [];
-    const isPortable = portableResult.status === "fulfilled" ? portableResult.value : false;
-    set({ isPortable });
 
     const selectedDate = dates[0] ?? "";
     const selectedGroupId = settings.activeHistoryGroupId ?? "";
@@ -1264,29 +1245,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
     if (options?.modelMode) void window.naiDesktop.setSetting("modelMode", options.modelMode).catch(() => undefined);
     persistGenerationState(get);
-  },
-
-  async checkUpdate() {
-    try {
-      const info = await window.naiDesktop.checkUpdate();
-      set({ updateInfo: info });
-    } catch {
-      // silent — update check is best-effort
-    }
-  },
-
-  dismissUpdate() {
-    set({ updateInfo: null });
-  },
-
-  async downloadUpdate() {
-    set({ updateProgress: { kind: "checking" } });
-    const result = await window.naiDesktop.downloadUpdate();
-    if (!result.ok) set({ updateProgress: { kind: "error", message: result.message }, toast: result.message });
-  },
-
-  installUpdate() {
-    void window.naiDesktop.installUpdate();
   },
 
   async setSelectedDate(date) {

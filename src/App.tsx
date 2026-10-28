@@ -6141,7 +6141,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     <span>{f("settings.aboutVersion", { version: APP_VERSION })}</span>
                   </div>
                 </div>
-                <div className="field"><span>{t("settings.updateSource")}</span><strong>GitHub</strong></div>
                 <div className="about-block">
                   <div>
                     <strong>{t("settings.aboutProjectTitle")}</strong>
@@ -6843,69 +6842,6 @@ function OnboardingWizard() {
   );
 }
 
-// ── Update banner ─────────────────────────────────────────────────────────────
-function UpdateBanner() {
-  const updateInfo = useAppStore((state) => state.updateInfo);
-  const dismissUpdate = useAppStore((state) => state.dismissUpdate);
-  const updateProgress = useAppStore((state) => state.updateProgress);
-  const downloadUpdate = useAppStore((state) => state.downloadUpdate);
-  const language = useAppStore((state) => state.settings?.language);
-  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
-  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
-  // Always render an element so .app-shell keeps a stable 6-row grid; the empty
-  // slot collapses to 0 height when there's no update.
-  if (!updateInfo?.hasUpdate) return <div className="update-banner-slot" />;
-
-  // Windows downloads a verified Setup.exe from Gitee (GitHub fallback), so
-  // both installed and portable builds share the same update experience.
-  const manualOnly = window.naiDesktop.platform !== "win32";
-  const busy = updateProgress?.kind === "checking" || updateProgress?.kind === "progress";
-  const downloaded = updateProgress?.kind === "downloaded";
-  const failed = updateProgress?.kind === "error";
-
-  return <>
-    <div className="update-banner">
-      <span>
-        <Icon name="upgrade" /> {f("update.newVersion", { latest: updateInfo.latestVersion, current: updateInfo.currentVersion })}
-        {failed && <> · {updateProgress.message}</>}
-      </span>
-      <div className="update-banner-actions">
-        {manualOnly ? (
-          <button
-            className="btn btn-primary"
-            onClick={() => updateInfo.releaseUrl && void window.naiDesktop.openExternal(updateInfo.releaseUrl)}
-          >
-            {t("update.download")}
-          </button>
-        ) : downloaded ? (
-          <button className="btn btn-primary" disabled>
-            {t("update.autoRestarting")}
-          </button>
-        ) : (
-          <button className="btn btn-primary" disabled={busy} onClick={() => void downloadUpdate()}>
-            {updateProgress?.kind === "progress"
-              ? f("update.downloading", { percent: updateProgress.percent })
-              : busy
-                ? t("update.checking")
-                : t("update.downloadInApp")}
-          </button>
-        )}
-        {!busy && !downloaded ? <button className="btn btn-ghost" onClick={dismissUpdate}>{t("update.later")}</button> : null}
-      </div>
-    </div>
-    {(busy || downloaded) ? <AppPortal>
-      <div className="update-install-overlay" role="status" aria-live="polite">
-        <section className="update-install-panel">
-          <span className="update-install-spinner" aria-hidden="true" />
-          <h2>{downloaded ? t("update.autoRestarting") : updateProgress?.kind === "progress" ? f("update.downloading", { percent: updateProgress.percent }) : t("update.checking")}</h2>
-          <p>{f("update.newVersion", { latest: updateInfo.latestVersion, current: updateInfo.currentVersion })}</p>
-          <div className="update-install-progress"><i style={{ width: `${updateProgress?.kind === "progress" ? Math.max(2, Math.min(100, updateProgress.percent)) : downloaded ? 100 : 12}%` }} /></div>
-        </section>
-      </div>
-    </AppPortal> : null}
-  </>;
-}
-
 function VersionedModeTemplateEditor({
   title,
   values,
@@ -7239,9 +7175,6 @@ function MainPage() {
   return (
     <div className="app-shell">
       <AppTitleBar />
-      <div className="app-notice-slot">
-        <UpdateBanner />
-      </div>
       <V5MigrationNotice />
       <AppMenuBar openSettings={() => setShowSettings(true)}>
         <NaiAccountManager />
@@ -7326,7 +7259,6 @@ export default function App() {
   const [splash, setSplash] = useState(true);
   const bootDone = useAppStore((state) => state.bootDone);
   const load = useAppStore((state) => state.load);
-  const checkUpdate = useAppStore((state) => state.checkUpdate);
 
   useEffect(() => {
     let cancelled = false;
@@ -7364,7 +7296,6 @@ export default function App() {
       deferredWarmTimer = window.setTimeout(() => void warmDeferredScreens(), 600);
     }
     void load();
-    void checkUpdate();
     // Favorites are mirrored to a filesystem sidecar and random-gacha history.
     // Merge every available source at boot before a profile rename can make a
     // still-existing collection appear empty.
@@ -7401,11 +7332,6 @@ export default function App() {
     window.addEventListener("keydown", markInteraction);
     window.addEventListener("wheel", markInteraction, { passive: true });
     automaticBackupTimer = window.setTimeout(attemptAutomaticBackup, 60_000);
-    // A release may appear while the app is already open, and a transient
-    // network/proxy failure at boot should not suppress updates for the whole
-    // session. Retry once shortly after launch, then poll at a low frequency.
-    const updateRetryTimer = window.setTimeout(() => void checkUpdate(), 30_000);
-    const updatePollTimer = window.setInterval(() => void checkUpdate(), 30 * 60_000);
     return () => {
       cancelled = true;
       if (deferredWarmTimer !== undefined) window.clearTimeout(deferredWarmTimer);
@@ -7414,10 +7340,8 @@ export default function App() {
       window.removeEventListener("pointerdown", markInteraction);
       window.removeEventListener("keydown", markInteraction);
       window.removeEventListener("wheel", markInteraction);
-      window.clearTimeout(updateRetryTimer);
-      window.clearInterval(updatePollTimer);
     };
-  }, [load, checkUpdate]);
+  }, [load]);
 
   const shouldShowSplash = useMemo(() => splash || !bootDone, [splash, bootDone]);
   return shouldShowSplash ? <SplashPage /> : <MainPage />;

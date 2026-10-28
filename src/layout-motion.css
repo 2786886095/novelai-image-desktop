@@ -9,7 +9,7 @@ html .prompt-editor .prompt-toolbar-row.compact-prompt-toolbar {background:var(-
 html .prompt-editor .prompt-toolbar-dock .prompt-toolbar-toggle {background:var(--bg-input);backdrop-filter:none;border:1px solid var(--border);box-shadow:none;}
 @container(max-width:320px){html .prompt-editor .prompt-toolbar-dock{min-height:72px;}}
 /* reorder: all destinations remain reachable, and the workspace starts below. */
-html .app-shell {grid-template-rows:38px auto 44px auto minmax(0,1fr) 26px;}
+html .app-shell {grid-template-rows:38px 44px auto minmax(0,1fr) 26px;}
 html .responsive-tab-navigation {min-height:54px;max-height:42dvh;overflow-y:auto;background:var(--bg-panel);}
 html .responsive-tab-navigation .tab-navigation-row {min-height:54px;}
 html .responsive-tab-navigation[data-editing=true] .tab-navigation-row {align-items:flex-start;}

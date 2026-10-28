@@ -27,14 +27,9 @@ const installation=JSON.parse(fs.readFileSync('windows-install-evidence/upgrade-
 if(!installation.pass||installation.version!==version||!installation.userDataPreserved||!installation.legacyRuntimePreserved)throw Error('Actual installation evidence missing');
 // Retry only the publication tooling: installers must match every application file.
 call('git',['diff','--exit-code',build.headSha,sha,'--','.',':!scripts/publish-verified-release.mjs',':!.github/workflows/build.yml']);
-const files=[`Langbai-NovelAI-Studio-Setup-${version}.exe`,`Langbai-NovelAI-Studio-${version}.exe`,`Langbai-NovelAI-Studio-${version}-universal.dmg`,`Langbai-NovelAI-Studio-${version}.zip`,'latest.yml'].map(name=>path.join('release-assets',name));
+const files=[`Langbai-NovelAI-Studio-Setup-${version}.exe`,`Langbai-NovelAI-Studio-${version}.exe`,`Langbai-NovelAI-Studio-${version}-universal.dmg`,`Langbai-NovelAI-Studio-${version}.zip`].map(name=>path.join('release-assets',name));
 assertReleaseArtifactScope(files.map(file=>path.basename(file)),{version});
 for(const file of files)if(!fs.existsSync(file)||fs.statSync(file).size===0)throw Error('Missing asset '+file);
-const updater=fs.readFileSync('release-assets/latest.yml','utf8');
-const field=name=>updater.match(new RegExp('^'+name+':\\s*(.+)$','m'))?.[1].trim().replace(/^['"]|['"]$/g,'');
-if(field('version')!==version||field('path')!==path.basename(files[0]))throw Error('Updater version/path mismatch');
-const hash=crypto.createHash('sha512').update(fs.readFileSync(files[0])).digest('base64');
-if(field('sha512')!==hash)throw Error('Updater installer hash mismatch');
 if(installation.installerSha256.toLowerCase()!==crypto.createHash('sha256').update(fs.readFileSync(files[0])).digest('hex'))throw Error('Published installer is not the one tested through a real upgrade');
 const existing=spawnSync('gh',['release','view',tag],{encoding:'utf8',timeout:30000});
 if(existing.status===0)throw Error('Release already exists; do not overwrite it');

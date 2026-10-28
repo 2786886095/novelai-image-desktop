@@ -47,7 +47,6 @@ jobs:
             name: windows
             artifacts: |
               release/*.exe
-              release/latest.yml
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45

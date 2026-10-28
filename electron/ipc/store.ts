@@ -56,13 +56,14 @@ const credentialVault = new CredentialVault(safeStorage);
 
 const SUPPORTED_LANGUAGES = new Set(["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR"]);
 
-// Settings of the removed Studio Agent and local Agent component. Persisted
-// values, including the agent API key, are dropped instead of carried forward.
+// Settings of the removed Studio Agent, local Agent component and in-app
+// updater. Persisted values, including the agent API key, are dropped instead
+// of carried forward.
 const REMOVED_SETTING_KEYS = [
   "agentApiProtocol", "agentApiBaseUrl", "agentApiKey", "agentApiModel", "savedAgentModels",
   "agentReasoningEffort", "agentProviderName", "agentContextWindow", "agentMaxOutputTokens",
   "agentUiPreferences", "agentAutoCompact", "agentAutoCompactThreshold", "agentVisionEnabled",
-  "agentPromptTemplateMode", "harnessAutoUpdatePlugins",
+  "agentPromptTemplateMode", "harnessAutoUpdatePlugins", "updateSource",
 ];
 
 function withoutRemovedSettings(settings: AppSettings): AppSettings {
@@ -138,7 +139,7 @@ function isLegacyScopedReverseTemplates(value: unknown): boolean {
 }
 
 // Generated images are user data, not application files. Keeping them beside an
-// installed EXE lets NSIS/electron-updater remove them while replacing the old
+// installed EXE lets the NSIS installer remove them while replacing the old
 // application directory. Always use the OS Pictures folder for every build.
 function defaultOutputDir(): string {
   return path.join(app.getPath("pictures"), "Langbai NovelAI Studio");
@@ -199,7 +200,6 @@ export function defaultSettings(): AppSettings {
     proxyForAi: true,
     proxyForUpdate: true,
     proxyForTranslate: true,
-    updateSource: "github",
     uiTypography: {...DEFAULT_TYPOGRAPHY},
     automaticComparison: normalizeAutomaticComparison(null),
     theme: "light",
@@ -332,7 +332,6 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
     ? String(rawSettings.reverseConvertPromptPresetId)
     : settings.reverseConvertPromptPresets[0]?.id ?? "";
   Object.assign(settings, imageTaskPresetIds(rawSettings, settings.reverseConvertPromptPresets));
-  settings.updateSource = "github";
   settings.stylePromptPresetGroups = Array.from(
     new Set(
       (Array.isArray(settings.stylePromptPresetGroups)

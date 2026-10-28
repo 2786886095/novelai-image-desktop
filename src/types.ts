@@ -4,7 +4,7 @@ import { fitNAIImageSize } from "./nai-dimensions";
 
 // package.json is the single desktop release-version source. Keeping this
 // derived prevents the title bar/about page from showing an old hard-coded
-// value after the installer and updater have already moved to a new version.
+// value after the installer has already moved to a new version.
 export const APP_VERSION = packageVersion;
 export const APP_NAME = "Langbai NovelAI Studio";
 export const PROJECT_REPOSITORY =
@@ -1486,8 +1486,6 @@ export interface AppSettings {
   proxyForAi: boolean;
   proxyForUpdate: boolean;
   proxyForTranslate: boolean;
-  /** Preferred app update/download mirror. The other source remains fallback. */
-  updateSource: "github";
   completionSound?: { enabled: boolean; volume: number; dataUrl: string; name: string };
   uiTypography?: import("./typography").UiTypography;
   automaticComparison?: import("./automatic-comparison").AutomaticComparison;
@@ -1653,29 +1651,6 @@ export interface AppSettings {
 }
 
 export type SettingKey = keyof AppSettings;
-
-export interface UpdateInfo {
-  /** true when a newer release is available on Gitee or GitHub */
-  hasUpdate: boolean;
-  currentVersion: string;
-  latestVersion?: string;
-  releaseUrl?: string;
-  /** populated when the check itself failed (network / rate limit) */
-  error?: string;
-}
-
-/**
- * Windows downloads a verified NSIS installer from the user's preferred source
- * and automatically retries the other mirror. Other desktop platforms use
- * UpdateInfo.releaseUrl manually.
- */
-export type UpdateProgressEvent =
-  | { kind: "checking" }
-  | { kind: "available"; version: string }
-  | { kind: "not-available" }
-  | { kind: "progress"; percent: number }
-  | { kind: "downloaded"; version: string }
-  | { kind: "error"; message: string };
 
 export interface AiModelListResult {
   ok: boolean;
@@ -2145,11 +2120,6 @@ export interface NaiDesktopApi {
     target?: string,
     sourceLanguage?: string,
   ) => Promise<{ ok: boolean; text?: string; error?: string; sourceLanguage?: string }>;
-  checkUpdate: () => Promise<UpdateInfo>;
-  isPortable: () => Promise<boolean>;
-  downloadUpdate: () => Promise<{ ok: boolean; message: string }>;
-  installUpdate: () => Promise<void>;
-  onUpdateEvent: (callback: (event: UpdateProgressEvent) => void) => () => void;
   onNavigateBack?: (callback: () => void) => () => void;
   minimize: () => Promise<void>;
   maximize: () => Promise<void>;

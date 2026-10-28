@@ -111,14 +111,4 @@ describe("online gallery pagination, masonry cards and adaptive previews", () =>
     expect(preload).toContain('ipcRenderer.invoke("online-gallery:select-download-dir"');
     expect(app).toContain('t("settings.galleryDownloadDirFirstUse")');
   });
-
-  it("shows a blocking progress surface while desktop updates download and install", () => {
-    const app = read("src/App.tsx");
-    const styles = read("src/styles.css");
-
-    expect(app).toContain('className="update-install-overlay"');
-    expect(app).toContain("const SPLASH_MIN_VISIBLE_MS = 700");
-    expect(styles).toContain(".update-install-overlay {");
-    expect(styles).toMatch(/\.update-install-progress i[^}]*transition:\s*width/);
-  });
 });

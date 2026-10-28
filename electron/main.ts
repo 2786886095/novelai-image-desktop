@@ -226,13 +226,6 @@ import {
   renameHistoryItem,
   selectOutputDir,
 } from "./ipc/storage";
-import { checkUpdate } from "./ipc/update";
-import {
-  downloadUpdate,
-  installUpdate,
-  wireAutoUpdater,
-} from "./ipc/auto-update";
-import { isPortableBuild } from "./ipc/app-mode";
 import {
   configureSystemProxyResolver,
   refreshSystemProxy,
@@ -1372,10 +1365,6 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
     void shell.openExternal(parsed.toString());
     return { ok: true };
   });
-  ipcMain.handle("app:checkUpdate", () => checkUpdate(getSettings().updateSource));
-  ipcMain.handle("app:isPortable", () => isPortableBuild());
-  ipcMain.handle("app:downloadUpdate", () => downloadUpdate(getSettings().updateSource));
-  ipcMain.handle("app:installUpdate", () => installUpdate());
 }
 
 // ── Local MCP server ─────────────────────────────────────────────────────────
@@ -1421,7 +1410,6 @@ app.whenReady().then(async () => {
   }, 30_000);
   proxyRefreshTimer.unref();
   registerIpc();
-  wireAutoUpdater(() => mainWindow);
   createWindow();
   void syncMcpServer();
 

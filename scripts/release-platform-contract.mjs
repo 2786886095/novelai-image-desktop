@@ -18,12 +18,12 @@ export const releaseFeatures = Object.freeze([
   'translation','negative-prompts','characters','vibe-transfer','precise-reference',
   'effort','batch','comic','artist-iteration','random-artists','openai-inpaint',
   'external-mcp-server','backup','clipboard','navigation','output-management',
-  'updates','works-batch-edit','missing-file-reconciliation',
+  'works-batch-edit','missing-file-reconciliation',
 ]);
 
 // The user approved Windows-only local Artist iteration.
 // All other features remain required on every current release target.
-export const releaseScopeId = 'desktop-windows-local-capabilities/v4';
+export const releaseScopeId = 'desktop-windows-local-capabilities/v5';
 export const artistIterationScenarios = Object.freeze(['model-runtime-lifecycle','search-score-selected-generation','install-resume-error']);
 export function releaseFeatureApplicability(feature, platform) {
   assert.ok(releaseFeatures.includes(feature),'Unrecognized feature: '+feature);
@@ -36,7 +36,7 @@ const releaseScope = Object.freeze({
   applicability:Object.freeze(releaseFeatures.map(feature=>Object.freeze({feature,platforms:Object.freeze(Object.fromEntries(releasePlatforms.map(platform=>[platform,releaseFeatureApplicability(feature,platform)])))}))),
 });
 export const releaseScopeSha256 = crypto.createHash('sha256').update(JSON.stringify(releaseScope)).digest('hex');
-export const releaseScopeCounts = Object.freeze({declaredSlots:74,requiredSlots:73,notSupportedSlots:1});
+export const releaseScopeCounts = Object.freeze({declaredSlots:72,requiredSlots:71,notSupportedSlots:1});
 
 export function assertReleasePlatformContract(report, {version, sourceSha}) {
   assert.ok(/^\d+\.\d+\.\d+$/.test(version),'Invalid release version');

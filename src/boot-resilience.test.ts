@@ -4,7 +4,6 @@ import { useAppStore } from "./store";
 function baseNaiDesktop() {
   return {
     onGenerationPreview: vi.fn(() => vi.fn()),
-    onUpdateEvent: vi.fn(() => vi.fn()),
     getSettings: vi.fn().mockResolvedValue({
       language: "zh-CN",
       persistGenerateParams: true,
@@ -17,7 +16,6 @@ function baseNaiDesktop() {
     isFirstRun: vi.fn().mockResolvedValue(false),
     getHistoryDates: vi.fn().mockResolvedValue([]),
     getHistoryGroups: vi.fn().mockResolvedValue([]),
-    isPortable: vi.fn().mockResolvedValue(false),
     getHistory: vi.fn().mockResolvedValue([]),
   };
 }
@@ -82,7 +80,6 @@ describe("boot resilience (P1-07)", () => {
     expect(useAppStore.getState().bootDone).toBe(true);
     expect(useAppStore.getState().bootError).toBeNull();
     expect(naiDesktop.onGenerationPreview).toHaveBeenCalledTimes(1);
-    expect(naiDesktop.onUpdateEvent).toHaveBeenCalledTimes(1);
   });
 
   it("releases managed inspect object URLs when replacing or clearing them", () => {
