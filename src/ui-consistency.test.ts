@@ -316,7 +316,9 @@ describe("desktop UI consistency guards", () => {
     expect(appSource).toContain("<PositivePromptPresetControl");
     expect(repairSource.match(/<PositivePromptPresetControl/g)).toHaveLength(2);
     expect(randomArtistSource).toContain("<PositivePromptPresetControl");
-    expect(presetSource).toContain("onApply(preset.prompt)");
+    expect(presetSource).toContain("onApply(application.prompt)");
+    const presetLogic = fs.readFileSync(path.join(projectRoot, "src", "positive-prompt-presets.ts"), "utf8");
+    expect(presetLogic).toContain("append ? appendPromptText(context.value, preset.prompt) : preset.prompt");
     expect(presetSource).toContain("POSITIVE_PROMPT_PRESET_IMAGE_LIMIT");
     expect(presetSource).toContain('"positive-preset-large-preview"');
     expect(backupSource).toContain("positivePromptPresets: positivePrompts");

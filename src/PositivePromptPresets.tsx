@@ -19,10 +19,21 @@ import {
   defaultPositivePromptPresetName,
   POSITIVE_PROMPT_PRESET_IMAGE_LIMIT,
   positivePromptPresetStorageId,
+  resolvePositivePresetApplication,
   samePositivePromptPreset,
   uniquePositivePromptPresetName,
+  type PositivePresetApplyMode,
 } from "./positive-prompt-presets";
 import { useAppStore } from "./store";
+import {
+  collectPromptTags,
+  formatPromptTagInput,
+  matchesPromptLibraryEntry,
+  promptTagField,
+  promptTagText,
+  UNTAGGED_PROMPT_FILTER,
+} from "./prompt-library-tags";
+import { PromptTagFilter, PromptTagInput, PromptTagList } from "./components/PromptTagControls";
 import type {
   AppLanguage,
   PositivePromptPreset,
@@ -49,6 +60,8 @@ type PresetText = {
   cancel: string;
   close: string;
   apply: string;
+  append: string;
+  appendCharacters: string;
   images: string;
   imageCount: string;
   imageHint: string;
@@ -65,13 +78,15 @@ type PresetText = {
   deleted: string;
   deleteConfirm: string;
   applyNotice: string;
+  appendNotice: string;
+  appendCharactersNotice: string;
 };
 
 const TEXT: Record<AppLanguage, PresetText> = {
   "zh-CN": {
     trigger: "正面预设",
     title: "正面提示词预设",
-    subtitle: "选择预设替换当前正面提示词。",
+    subtitle: "选择预设后可替换或追加到当前正面提示词。",
     saveCurrent: "保存当前",
     createBlank: "手动新建",
     search: "搜索名称或提示词",
@@ -88,6 +103,8 @@ const TEXT: Record<AppLanguage, PresetText> = {
     cancel: "取消",
     close: "关闭",
     apply: "替换当前正面提示词",
+    append: "追加到当前提示词",
+    appendCharacters: "追加这些角色",
     images: "参考查看图",
     imageCount: "{count}/3 张",
     imageHint: "预设预览图，仅供查看。",
@@ -104,22 +121,24 @@ const TEXT: Record<AppLanguage, PresetText> = {
     deleted: "正面提示词预设已删除。",
     deleteConfirm: "确定删除“{name}”吗？参考图也会一并移除。",
     applyNotice: "已替换当前正面提示词。",
+    appendNotice: "已追加到当前正面提示词末尾。",
+    appendCharactersNotice: "已在现有角色后追加预设角色。",
   },
   "zh-TW": {
-    trigger: "正面預設", title: "正面提示詞預設", subtitle: "選擇後直接取代目前正面提示詞；參考圖只供查看，不會參與生成。",
-    saveCurrent: "儲存目前內容", createBlank: "手動新增", search: "搜尋名稱或提示詞", empty: "尚無正面提示詞預設", emptyHint: "可儲存目前正面提示詞，也可手動輸入後儲存。", unnamed: "未命名預設", prompt: "正面提示詞", name: "預設名稱", nameHint: "留空時自動使用提示詞開頭命名", promptHint: "只儲存正面提示詞內容", edit: "編輯", remove: "刪除", save: "儲存", cancel: "取消", close: "關閉", apply: "取代目前正面提示詞", images: "參考查看圖", imageCount: "{count}/3 張", imageHint: "只用於辨認和對照，不會自動加入任何生成參數。", imageEmpty: "尚未加入參考圖", addImages: "加入圖片", dropImages: "也可將圖片拖到這裡", imageLimit: "每個預設最多儲存 3 張參考圖。", removeImage: "移除圖片", viewLarge: "查看大圖", saveBeforeImages: "先儲存預設，之後即可加入最多 3 張參考圖。", promptRequired: "請填寫正面提示詞。", duplicate: "相同預設已存在，未重複儲存。", saved: "正面提示詞預設已儲存。", deleted: "正面提示詞預設已刪除。", deleteConfirm: "確定刪除「{name}」嗎？參考圖也會一併移除。", applyNotice: "已取代目前正面提示詞。",
+    trigger: "正面預設", title: "正面提示詞預設", subtitle: "選擇後可取代或追加到目前正面提示詞；參考圖只供查看，不會參與生成。",
+    saveCurrent: "儲存目前內容", createBlank: "手動新增", search: "搜尋名稱或提示詞", empty: "尚無正面提示詞預設", emptyHint: "可儲存目前正面提示詞，也可手動輸入後儲存。", unnamed: "未命名預設", prompt: "正面提示詞", name: "預設名稱", nameHint: "留空時自動使用提示詞開頭命名", promptHint: "只儲存正面提示詞內容", edit: "編輯", remove: "刪除", save: "儲存", cancel: "取消", close: "關閉", apply: "取代目前正面提示詞", append: "追加到目前提示詞", appendCharacters: "追加這些角色", images: "參考查看圖", imageCount: "{count}/3 張", imageHint: "只用於辨認和對照，不會自動加入任何生成參數。", imageEmpty: "尚未加入參考圖", addImages: "加入圖片", dropImages: "也可將圖片拖到這裡", imageLimit: "每個預設最多儲存 3 張參考圖。", removeImage: "移除圖片", viewLarge: "查看大圖", saveBeforeImages: "先儲存預設，之後即可加入最多 3 張參考圖。", promptRequired: "請填寫正面提示詞。", duplicate: "相同預設已存在，未重複儲存。", saved: "正面提示詞預設已儲存。", deleted: "正面提示詞預設已刪除。", deleteConfirm: "確定刪除「{name}」嗎？參考圖也會一併移除。", applyNotice: "已取代目前正面提示詞。", appendNotice: "已追加到目前正面提示詞末尾。", appendCharactersNotice: "已在現有角色後追加預設角色。",
   },
   "en-US": {
-    trigger: "Prompt presets", title: "Positive prompt presets", subtitle: "Applying a preset replaces the current positive prompt. Reference images are view-only and never enter generation.",
-    saveCurrent: "Save current", createBlank: "Create manually", search: "Search names or prompts", empty: "No positive prompt presets yet", emptyHint: "Save the current positive prompt or enter one manually.", unnamed: "Untitled preset", prompt: "Positive prompt", name: "Preset name", nameHint: "Leave blank to name it from the beginning of the prompt", promptHint: "Only positive-prompt text is saved", edit: "Edit", remove: "Delete", save: "Save", cancel: "Cancel", close: "Close", apply: "Replace current positive prompt", images: "Reference images", imageCount: "{count}/3 images", imageHint: "Preset preview images, for viewing only.", imageEmpty: "No reference images", addImages: "Add images", dropImages: "You can also drop images here", imageLimit: "Each preset supports up to 3 reference images.", removeImage: "Remove image", viewLarge: "View full image", saveBeforeImages: "Save the preset first, then add up to 3 reference images.", promptRequired: "Enter a positive prompt.", duplicate: "An identical preset already exists and was not duplicated.", saved: "Positive prompt preset saved.", deleted: "Positive prompt preset deleted.", deleteConfirm: "Delete “{name}” and its reference images?", applyNotice: "Current positive prompt replaced.",
+    trigger: "Prompt presets", title: "Positive prompt presets", subtitle: "Replace the current positive prompt with a preset, or append it to the end. Reference images are view-only and never enter generation.",
+    saveCurrent: "Save current", createBlank: "Create manually", search: "Search names or prompts", empty: "No positive prompt presets yet", emptyHint: "Save the current positive prompt or enter one manually.", unnamed: "Untitled preset", prompt: "Positive prompt", name: "Preset name", nameHint: "Leave blank to name it from the beginning of the prompt", promptHint: "Only positive-prompt text is saved", edit: "Edit", remove: "Delete", save: "Save", cancel: "Cancel", close: "Close", apply: "Replace current positive prompt", append: "Append to current prompt", appendCharacters: "Append these characters", images: "Reference images", imageCount: "{count}/3 images", imageHint: "Preset preview images, for viewing only.", imageEmpty: "No reference images", addImages: "Add images", dropImages: "You can also drop images here", imageLimit: "Each preset supports up to 3 reference images.", removeImage: "Remove image", viewLarge: "View full image", saveBeforeImages: "Save the preset first, then add up to 3 reference images.", promptRequired: "Enter a positive prompt.", duplicate: "An identical preset already exists and was not duplicated.", saved: "Positive prompt preset saved.", deleted: "Positive prompt preset deleted.", deleteConfirm: "Delete “{name}” and its reference images?", applyNotice: "Current positive prompt replaced.", appendNotice: "Appended to the end of the current positive prompt.", appendCharactersNotice: "Preset characters appended after the existing ones.",
   },
   "ja-JP": {
-    trigger: "正面プリセット", title: "ポジティブプロンプトプリセット", subtitle: "適用すると現在のポジティブプロンプトを置換します。参照画像は閲覧専用で生成には使われません。",
-    saveCurrent: "現在を保存", createBlank: "手動で新規作成", search: "名前またはプロンプトを検索", empty: "プリセットはまだありません", emptyHint: "現在の内容を保存するか、手動で入力して保存できます。", unnamed: "名称未設定", prompt: "ポジティブプロンプト", name: "プリセット名", nameHint: "空欄の場合はプロンプト冒頭から自動命名", promptHint: "ポジティブプロンプトのみ保存します", edit: "編集", remove: "削除", save: "保存", cancel: "キャンセル", close: "閉じる", apply: "現在の正面プロンプトを置換", images: "参照画像", imageCount: "{count}/3 枚", imageHint: "プリセット確認用の画像です。", imageEmpty: "参照画像なし", addImages: "画像を追加", dropImages: "ここに画像をドロップできます", imageLimit: "各プリセットは最大3枚です。", removeImage: "画像を削除", viewLarge: "大きく表示", saveBeforeImages: "先にプリセットを保存すると、最大3枚の画像を追加できます。", promptRequired: "ポジティブプロンプトを入力してください。", duplicate: "同じプリセットが既にあるため重複保存しませんでした。", saved: "プリセットを保存しました。", deleted: "プリセットを削除しました。", deleteConfirm: "「{name}」と参照画像を削除しますか？", applyNotice: "現在のポジティブプロンプトを置換しました。",
+    trigger: "正面プリセット", title: "ポジティブプロンプトプリセット", subtitle: "現在のポジティブプロンプトを置換するか、末尾に追加できます。参照画像は閲覧専用で生成には使われません。",
+    saveCurrent: "現在を保存", createBlank: "手動で新規作成", search: "名前またはプロンプトを検索", empty: "プリセットはまだありません", emptyHint: "現在の内容を保存するか、手動で入力して保存できます。", unnamed: "名称未設定", prompt: "ポジティブプロンプト", name: "プリセット名", nameHint: "空欄の場合はプロンプト冒頭から自動命名", promptHint: "ポジティブプロンプトのみ保存します", edit: "編集", remove: "削除", save: "保存", cancel: "キャンセル", close: "閉じる", apply: "現在の正面プロンプトを置換", append: "現在のプロンプトに追加", appendCharacters: "これらのキャラクターを追加", images: "参照画像", imageCount: "{count}/3 枚", imageHint: "プリセット確認用の画像です。", imageEmpty: "参照画像なし", addImages: "画像を追加", dropImages: "ここに画像をドロップできます", imageLimit: "各プリセットは最大3枚です。", removeImage: "画像を削除", viewLarge: "大きく表示", saveBeforeImages: "先にプリセットを保存すると、最大3枚の画像を追加できます。", promptRequired: "ポジティブプロンプトを入力してください。", duplicate: "同じプリセットが既にあるため重複保存しませんでした。", saved: "プリセットを保存しました。", deleted: "プリセットを削除しました。", deleteConfirm: "「{name}」と参照画像を削除しますか？", applyNotice: "現在のポジティブプロンプトを置換しました。", appendNotice: "現在のポジティブプロンプトの末尾に追加しました。", appendCharactersNotice: "既存のキャラクターの後にプリセットのキャラクターを追加しました。",
   },
   "ko-KR": {
-    trigger: "긍정 프리셋", title: "긍정 프롬프트 프리셋", subtitle: "적용하면 현재 긍정 프롬프트를 교체합니다. 참고 이미지는 보기 전용이며 생성에 사용되지 않습니다.",
-    saveCurrent: "현재 내용 저장", createBlank: "직접 만들기", search: "이름 또는 프롬프트 검색", empty: "저장된 긍정 프롬프트가 없습니다", emptyHint: "현재 내용을 저장하거나 직접 입력해 저장할 수 있습니다.", unnamed: "이름 없는 프리셋", prompt: "긍정 프롬프트", name: "프리셋 이름", nameHint: "비워 두면 프롬프트 앞부분으로 자동 이름 지정", promptHint: "긍정 프롬프트만 저장합니다", edit: "편집", remove: "삭제", save: "저장", cancel: "취소", close: "닫기", apply: "현재 긍정 프롬프트 교체", images: "참고 이미지", imageCount: "{count}/3장", imageHint: "프리셋 확인용 이미지입니다.", imageEmpty: "참고 이미지 없음", addImages: "이미지 추가", dropImages: "이미지를 여기에 놓을 수도 있습니다", imageLimit: "프리셋당 최대 3장까지 저장할 수 있습니다.", removeImage: "이미지 제거", viewLarge: "큰 이미지 보기", saveBeforeImages: "먼저 프리셋을 저장한 뒤 최대 3장의 참고 이미지를 추가하세요.", promptRequired: "긍정 프롬프트를 입력하세요.", duplicate: "동일한 프리셋이 이미 있어 중복 저장하지 않았습니다.", saved: "긍정 프롬프트 프리셋을 저장했습니다.", deleted: "긍정 프롬프트 프리셋을 삭제했습니다.", deleteConfirm: "‘{name}’과 참고 이미지를 삭제할까요?", applyNotice: "현재 긍정 프롬프트를 교체했습니다.",
+    trigger: "긍정 프리셋", title: "긍정 프롬프트 프리셋", subtitle: "현재 긍정 프롬프트를 교체하거나 끝에 추가할 수 있습니다. 참고 이미지는 보기 전용이며 생성에 사용되지 않습니다.",
+    saveCurrent: "현재 내용 저장", createBlank: "직접 만들기", search: "이름 또는 프롬프트 검색", empty: "저장된 긍정 프롬프트가 없습니다", emptyHint: "현재 내용을 저장하거나 직접 입력해 저장할 수 있습니다.", unnamed: "이름 없는 프리셋", prompt: "긍정 프롬프트", name: "프리셋 이름", nameHint: "비워 두면 프롬프트 앞부분으로 자동 이름 지정", promptHint: "긍정 프롬프트만 저장합니다", edit: "편집", remove: "삭제", save: "저장", cancel: "취소", close: "닫기", apply: "현재 긍정 프롬프트 교체", append: "현재 프롬프트에 추가", appendCharacters: "이 캐릭터 추가", images: "참고 이미지", imageCount: "{count}/3장", imageHint: "프리셋 확인용 이미지입니다.", imageEmpty: "참고 이미지 없음", addImages: "이미지 추가", dropImages: "이미지를 여기에 놓을 수도 있습니다", imageLimit: "프리셋당 최대 3장까지 저장할 수 있습니다.", removeImage: "이미지 제거", viewLarge: "큰 이미지 보기", saveBeforeImages: "먼저 프리셋을 저장한 뒤 최대 3장의 참고 이미지를 추가하세요.", promptRequired: "긍정 프롬프트를 입력하세요.", duplicate: "동일한 프리셋이 이미 있어 중복 저장하지 않았습니다.", saved: "긍정 프롬프트 프리셋을 저장했습니다.", deleted: "긍정 프롬프트 프리셋을 삭제했습니다.", deleteConfirm: "‘{name}’과 참고 이미지를 삭제할까요?", applyNotice: "현재 긍정 프롬프트를 교체했습니다.", appendNotice: "현재 긍정 프롬프트 끝에 추가했습니다.", appendCharactersNotice: "기존 캐릭터 뒤에 프리셋 캐릭터를 추가했습니다.",
   },
 };
 
@@ -145,7 +164,8 @@ export function PositivePromptPresetControl({
 }: {
   value: string;
   onApply: (prompt: string) => void;
-  variant?: "toolbar" | "field";
+  /** `bar`: labelled library + save-current buttons that stay visible under the prompt editor. */
+  variant?: "toolbar" | "field" | "bar";
   compact?: boolean;
   character?: CharCaptionItem;
   onApplyCharacters?: (captions: CharCaptionItem[]) => void;
@@ -155,14 +175,17 @@ export function PositivePromptPresetControl({
   const refreshSettings = useAppStore((state) => state.refreshSettings);
   const setToast = useAppStore((state) => state.setToast);
   const text = TEXT[language];
+  const tagText = promptTagText(language);
   const presets = settings?.positivePromptPresets ?? [];
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftPrompt, setDraftPrompt] = useState("");
   const [draftCaptions,setDraftCaptions] = useState<CharCaptionItem[]>([]);
+  const [draftTags, setDraftTags] = useState("");
   const roleLabel=(index:number)=>desktopUiText(language,"character.label").replace("{index}",String(index+1));
   const [status, setStatus] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -177,13 +200,13 @@ export function PositivePromptPresetControl({
   const [busy, setBusy] = useState(false);
 
   const selected = presets.find((preset) => preset.id === selectedId) ?? null;
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase();
-    if (!needle) return presets;
-    return presets.filter((preset) =>
-      preset.name.toLocaleLowerCase().includes(needle)
-      || preset.prompt.toLocaleLowerCase().includes(needle));
-  }, [presets, query]);
+  const filtered = useMemo(() => presets.filter((preset) => matchesPromptLibraryEntry(
+    preset,
+    [preset.name, preset.prompt, ...(preset.captions ?? []).map((caption) => caption.prompt)],
+    query,
+    tagFilter,
+  )), [presets, query, tagFilter]);
+  const tagSuggestions = useMemo(() => collectPromptTags(presets).map((item) => item.tag), [presets]);
   const selectedImages = selected?.previewImages ?? [];
   const previewImages = lightbox && !selectedImages.some(image => image.id === lightbox.id)
     ? [...selectedImages, lightbox] : selectedImages;
@@ -209,11 +232,11 @@ export function PositivePromptPresetControl({
   }, [refreshSettings]);
 
   useEffect(() => {
-    if (!open) return;
-    if (!selectedId || !presets.some((preset) => preset.id === selectedId)) {
-      setSelectedId(presets[0]?.id ?? "");
+    if (!open || editingId !== null) return;
+    if (!selectedId || !filtered.some((preset) => preset.id === selectedId)) {
+      setSelectedId(filtered[0]?.id ?? "");
     }
-  }, [open, presets, selectedId]);
+  }, [editingId, filtered, open, selectedId]);
 
   useEffect(() => {
     setActiveImageId(selectedImages[0]?.id ?? "");
@@ -250,6 +273,7 @@ export function PositivePromptPresetControl({
     setEditingId("");
     setDraftCaptions(useCurrent && character ? normalizeCharacterCaptions([{...character,prompt:value}]).map(({id:_,...c})=>c) : []);
     setDraftPrompt(useCurrent ? value : "");
+    setDraftTags(tagFilter && tagFilter !== UNTAGGED_PROMPT_FILTER ? tagFilter : "");
     setDraftName(useCurrent && value.trim()
       ? defaultPositivePromptPresetName(value, presets.length + 1)
       : "");
@@ -261,6 +285,7 @@ export function PositivePromptPresetControl({
     setDraftName(preset.name);
     setDraftPrompt(preset.prompt);
     setDraftCaptions((preset.captions ?? []).map(c=>({...c})));
+    setDraftTags(formatPromptTagInput(preset.tags));
     setStatus("");
   }
 
@@ -290,16 +315,20 @@ export function PositivePromptPresetControl({
       ).value;
       let next: PositivePromptPreset[];
       let id = editingId || randomId();
+      const tags = promptTagField(draftTags);
       if (editingId) {
-        next = presets.map((preset) => preset.id === editingId
-          ? { ...preset, name, prompt, captions: draftCaptions }
-          : preset);
+        next = presets.map((preset) => {
+          if (preset.id !== editingId) return preset;
+          const { tags: _previous, ...rest } = preset;
+          return { ...rest, name, prompt, captions: draftCaptions, ...tags };
+        });
       } else {
         next = [{
           id,
           name,
           prompt,
           captions: draftCaptions,
+          ...tags,
           createdAt: new Date().toISOString(),
           previewImages: [],
         }, ...presets];
@@ -398,16 +427,37 @@ export function PositivePromptPresetControl({
     if (paths.length) void importImages(preset, paths);
   }
 
-  function applyPreset(preset: PositivePromptPreset) {
-    if (preset.captions?.length) {
-      if (preset.captions.length > maxNAICharacterPrompts(useAppStore.getState().params.model)) {
-        setStatus(characterPresetText(language).capacity);return;
-      }
-      if(onApplyCharacters) onApplyCharacters(preset.captions.map(c=>({...c})));
-      else useAppStore.getState().setCharCaptions(normalizeCharacterCaptions(preset.captions));
-    } else onApply(preset.prompt);
-    setToast(preset.captions?.length ? characterPresetText(language).apply : text.applyNotice);
+  /** One saved character appended inside a character row extends that row's prompts. */
+  const appendsToCharacterRow = (preset: PositivePromptPreset) => Boolean(character && preset.captions?.length === 1);
+
+  function applyPreset(preset: PositivePromptPreset, mode: PositivePresetApplyMode = "replace") {
+    const state = useAppStore.getState();
+    const application = resolvePositivePresetApplication(preset, mode, {
+      value,
+      character,
+      currentCaptions: state.charCaptions,
+      maxCharacters: maxNAICharacterPrompts(state.params.model),
+    });
+    if (application.kind === "over-capacity") {
+      setStatus(characterPresetText(language).capacity);return;
+    }
+    if (application.kind === "prompt") {
+      onApply(application.prompt);
+      setToast(application.appended ? text.appendNotice : text.applyNotice);
+    } else {
+      if (onApplyCharacters) onApplyCharacters(application.captions);
+      else if (application.row) onApply(application.captions[0].prompt);
+      else state.setCharCaptions(normalizeCharacterCaptions(application.captions));
+      setToast(application.row ? text.appendNotice : application.appended ? text.appendCharactersNotice : characterPresetText(language).apply);
+    }
     setOpen(false);
+  }
+
+  function openLibrary() {
+    setOpen(true);
+    setEditingId(null);
+    setHoverPreview(null);
+    setStatus("");
   }
 
   function rememberImageAspect(imageId: string, image: HTMLImageElement) {
@@ -515,22 +565,24 @@ export function PositivePromptPresetControl({
   ) : null;
 
   return <>
-    <button
+    {variant === "bar" ? <>
+      <button type="button" className="prompt-tool-btn positive-preset-bar-trigger" title={text.title} aria-haspopup="dialog" onClick={openLibrary}>
+        <Icon name="template" /><span>{text.trigger}</span>
+      </button>
+      <button type="button" className="prompt-tool-btn positive-preset-save-current" title={text.saveCurrent} aria-haspopup="dialog" disabled={!value.trim()} onClick={() => { openLibrary(); startCreate(true); }}>
+        <Icon name="pin" /><span>{text.saveCurrent}</span>
+      </button>
+    </> : <button
       type="button"
       className={`${compact ? "compact-icon-button " : ""}${variant === "toolbar" ? "prompt-tool-btn" : "btn btn-secondary positive-preset-field-trigger"}`}
       title={text.trigger} aria-label={text.trigger} data-tooltip={text.trigger}
       aria-haspopup="dialog"
-      onClick={() => {
-        setOpen(true);
-        setEditingId(null);
-        setHoverPreview(null);
-        setStatus("");
-      }}
-    ><Icon name="template" />{!compact&&<span>{text.trigger}</span>}</button>
+      onClick={openLibrary}
+    ><Icon name="template" />{!compact&&<span>{text.trigger}</span>}</button>}
     {open && <AppPortal>
       <div className="modal-backdrop positive-preset-backdrop" onMouseDown={() => setOpen(false)}>
         <section
-          className="positive-preset-modal"
+          className={clsx("positive-preset-modal", editingId === null && tagSuggestions.length > 0 && "has-tags")}
           role="dialog"
           aria-modal="true"
           aria-labelledby="positive-preset-title"
@@ -548,6 +600,7 @@ export function PositivePromptPresetControl({
             <div className="positive-preset-editor-fields">
               <label><span>{text.name}</span><input value={draftName} placeholder={text.nameHint} onChange={(event) => setDraftName(event.target.value)} /></label>
               {draftCaptions.length ? draftCaptions.map((caption,index)=><fieldset key={index}><legend>{roleLabel(index)}</legend><label><span>{text.prompt}</span><textarea value={caption.prompt} onChange={e=>setDraftCaptions(old=>old.map((c,i)=>i===index?{...c,prompt:e.target.value}:c))}/></label><label><span>{desktopUiText(language,"character.negative")}</span><textarea value={caption.negativePrompt ?? ''} onChange={e=>setDraftCaptions(old=>old.map((c,i)=>i===index?{...c,negativePrompt:e.target.value}:c))}/></label></fieldset>) : <label><span>{text.prompt}</span><textarea value={draftPrompt} placeholder={text.promptHint} onChange={(event) => setDraftPrompt(event.target.value)} /></label>}
+              <PromptTagInput value={draftTags} onChange={setDraftTags} suggestions={tagSuggestions} language={language} disabled={busy} />
             </div>
             {editingId && selected?.id === editingId ? imagePanel : <div className="positive-preset-save-first"><Icon name="images" /><span>{text.saveBeforeImages}</span></div>}
             {status && <p className="positive-preset-status" role="status">{status}</p>}
@@ -557,12 +610,13 @@ export function PositivePromptPresetControl({
             </footer>
           </div> : <>
             <div className="positive-preset-toolbar">
-              <label><Icon name="search" /><input value={query} placeholder={text.search} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" aria-label={text.remove} onClick={() => setQuery("")}><Icon name="clear" /></button>}</label>
+              <label title={tagText.searchHint}><Icon name="search" /><input value={query} aria-label={text.search} placeholder={tagSuggestions.length ? tagText.searchHint : text.search} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" aria-label={text.remove} onClick={() => setQuery("")}><Icon name="clear" /></button>}</label>
               <div>
                 <Button type="button" variant="secondary" onClick={() => startCreate(false)}><Icon name="plus" />{text.createBlank}</Button>
                 <Button type="button" variant="primary" disabled={!value.trim()} onClick={() => startCreate(true)}><Icon name="pin" />{text.saveCurrent}</Button>
               </div>
             </div>
+            <PromptTagFilter className="positive-preset-tags" items={presets} value={tagFilter} onChange={setTagFilter} language={language} />
             <div className="positive-preset-browser">
               <nav
                 className="positive-preset-list"
@@ -586,7 +640,7 @@ export function PositivePromptPresetControl({
                      }}
                   >
                     <span className="positive-preset-list-image">{firstImage ? <img src={firstImage.fileUrl} alt="" loading="lazy" /> : <Icon name="template" />}</span>
-                    <span className="positive-preset-list-copy"><strong>{preset.name || text.unnamed}</strong><small>{preset.prompt}</small></span>
+                    <span className="positive-preset-list-copy"><strong>{preset.name || text.unnamed}</strong><small>{preset.prompt}</small><PromptTagList tags={preset.tags} /></span>
                     <span className="positive-preset-list-count"><Icon name="images" />{preset.previewImages?.length ?? 0}</span>
                   </button>;
                 })}
@@ -594,7 +648,7 @@ export function PositivePromptPresetControl({
               <article className="positive-preset-detail">
                 {selected ? <>
                   <header>
-                    <div><h3>{selected.name}</h3><small>{new Date(selected.createdAt).toLocaleDateString(language)}</small></div>
+                    <div><h3>{selected.name}</h3><small>{new Date(selected.createdAt).toLocaleDateString(language)}</small><PromptTagList tags={selected.tags} /></div>
                     <div>
                       <Button type="button" variant="secondary" disabled={busy} onClick={() => startEdit(selected)}><Icon name="draw" />{text.edit}</Button>
                       <Button type="button" variant="ghost" disabled={busy} onClick={() => void deletePreset(selected)}><Icon name="trash" />{text.remove}</Button>
@@ -603,7 +657,7 @@ export function PositivePromptPresetControl({
                   <section className="positive-preset-prompt-preview"><strong>{text.prompt}</strong><p>{selected.captions?.length ? selected.captions.map((c,i)=>`${roleLabel(i)}: ${c.prompt}`).join("\n") : selected.prompt}</p></section>
                   {imagePanel}
                   {status && <p className="positive-preset-status" role="status">{status}</p>}
-                  <footer><Button type="button" variant="primary" onClick={() => applyPreset(selected)}><Icon name="swap" />{selected.captions?.length ? `${characterPresetText(language).apply} · ${selected.captions.length}` : text.apply}</Button></footer>
+                  <footer><Button type="button" variant="secondary" onClick={() => applyPreset(selected, "append")}><Icon name="plus" />{selected.captions?.length && !appendsToCharacterRow(selected) ? text.appendCharacters : text.append}</Button><Button type="button" variant="primary" onClick={() => applyPreset(selected)}><Icon name="swap" />{selected.captions?.length ? `${characterPresetText(language).apply} · ${selected.captions.length}` : text.apply}</Button></footer>
                 </> : <div className="positive-preset-detail-empty"><Icon name="template" /><strong>{text.empty}</strong><span>{text.emptyHint}</span></div>}
               </article>
             </div>

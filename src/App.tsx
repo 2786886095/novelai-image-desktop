@@ -2291,17 +2291,19 @@ export function PromptAndParams({
         <CompactIconButton label={`${generateText.prompt.weightAdjust} (${weightTags.length})`} icon="sliders" aria-expanded={showWeights} aria-haspopup="dialog" onClick={()=>setShowWeights(v=>!v)} disabled={weightTags.length===0}/>
         <CompactIconButton label={generateText.prompt.capsuleTitle} icon="dice" aria-haspopup="dialog" aria-expanded={chipOpen} onClick={()=>setChipOpen(true)}/>
         <PromptToolsPopover label={editorText.more} open={showPromptMore} onOpenChange={setShowPromptMore}>
-          {promptTab==='positive'
-            ? <PositivePromptPresetControl compact value={effectivePositivePrompt} onApply={value=>setPromptField("positivePrompt",value)}/>
-            : <NegativePromptLibraryControl value={params.negativePrompt} onApply={value=>setPromptField("negativePrompt",value)}/>}
           <CompactIconButton label={generateText.prompt.normalize} icon="sparkles" onClick={()=>setShowNormalize(true)} disabled={!promptValue.trim()}/>
           <CompactIconButton label={(settings?.autoComplete??true)?generateText.prompt.autocompleteOn:generateText.prompt.autocompleteOff} icon="bulb" role="switch" aria-checked={settings?.autoComplete??true} onClick={()=>void toggleAutoComplete()}/>
-          {promptTab==="positive"&&<PromptChunkControl compact value={effectivePositivePrompt} onApply={value=>setPromptField("positivePrompt",value)} placement="top-right"/>}
           {translateBackup[promptKey]!=null&&<CompactIconButton label={generateText.prompt.restore} icon="undo" onClick={restoreTranslate}/>}
         </PromptToolsPopover>
       </div>
       </SlidingPromptToolbar>
       <PromptResizeHandle language={settings?.language}/>
+      </div>
+      {/* Saved-prompt libraries stay visible under the editor instead of inside the collapsed toolbar. */}
+      <div className="prompt-library-bar" role="toolbar" aria-label={promptTab==="positive"?generateText.prompt.positivePrompt:generateText.prompt.negativePrompt}>
+        {promptTab==="positive"
+          ? <><PositivePromptPresetControl variant="bar" value={effectivePositivePrompt} onApply={value=>setPromptField("positivePrompt",value)}/><PromptChunkControl value={effectivePositivePrompt} onApply={value=>setPromptField("positivePrompt",value)} placement="top-right"/></>
+          : <NegativePromptLibraryControl variant="bar" value={params.negativePrompt} onApply={value=>setPromptField("negativePrompt",value)}/>}
       </div>
       {showTranslation&&<TranslationPreview currentValue={promptValue} context={JSON.stringify([promptKey,!!promptOverride])} language={settings?.language} onClose={()=>setShowTranslation(false)} onApply={(next,expected,expectedContext)=>{
         if(expectedContext!==JSON.stringify([promptKey,!!promptOverride])||latestPromptValues.current[promptKey]!==expected){setToast(editorText.stale);return false;}

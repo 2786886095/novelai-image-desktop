@@ -12,6 +12,7 @@ import {normalizePromptSkillSettings} from "../../src/prompt-skill-settings";
 import { refreshShippedTemplates } from "../../src/data/prompt-template-migration";
 import {STYLE_SORTS,styleMetadata} from "../../src/style-library";
 import {mergeCharacterPresets} from "../../src/positive-prompt-presets";
+import {promptTagField} from "../../src/prompt-library-tags";
 import {normalizeCharacterCaptions} from "../../src/character-presets";
 import { CredentialVault, SENSITIVE_SETTING_KEYS } from "./credential-vault";
 import { assertSafeDataDirectory, PROTECTED_DIRECTORY_KEYS } from "./update-output-protection";
@@ -458,6 +459,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
             name: typeof preset.name === "string" ? preset.name.trim() : "",
             prompt: typeof preset.prompt === "string" ? preset.prompt : "",
             captions: normalizeCharacterCaptions(preset.captions).map(({id: _, ...c}) => c),
+            ...promptTagField(preset.tags),
             createdAt:
               typeof preset.createdAt === "string"
                 ? preset.createdAt
@@ -476,6 +478,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
           id: typeof chunk.id === "string" ? chunk.id : "",
           name: typeof chunk.name === "string" ? chunk.name.trim() : "",
           content: typeof chunk.content === "string" ? chunk.content.trim() : "",
+          ...promptTagField(chunk.tags),
           createdAt: typeof chunk.createdAt === "string" ? chunk.createdAt : new Date(0).toISOString(),
           updatedAt: typeof chunk.updatedAt === "string" ? chunk.updatedAt : new Date(0).toISOString(),
         }))

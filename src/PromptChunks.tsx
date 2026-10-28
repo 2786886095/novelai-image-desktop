@@ -5,6 +5,8 @@ import { AppPortal } from "./components/ui";
 import { Icon } from "./components/icons";
 import { useAppStore } from "./store";
 import type { AppLanguage, PromptChunk } from "./types";
+import { collectPromptTags, formatPromptTagInput, matchesPromptLibraryEntry, promptTagField, promptTagText, UNTAGGED_PROMPT_FILTER } from "./prompt-library-tags";
+import { PromptTagFilter, PromptTagInput, PromptTagList } from "./components/PromptTagControls";
 
 type Copy = {
   trigger: string; title: string; subtitle: string; search: string; create: string;
@@ -91,23 +93,27 @@ export function PromptChunkControl({
   const refreshSettings = useAppStore((state) => state.refreshSettings);
   const setToast = useAppStore((state) => state.setToast);
   const text = COPY[language];
+  const tagText = promptTagText(language);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const present = useDisclosurePresence(open, panelRef);
   const [query, setQuery] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftContent, setDraftContent] = useState("");
+  const [draftTags, setDraftTags] = useState("");
   const [draftErrors, setDraftErrors] = useState({ name: false, content: false });
   const [saving, setSaving] = useState(false);
   const [position, setPosition] = useState({ left: 16, top: 16, width: 460, maxHeight: 420, placement: "top-end" as ResolvedPromptChunkPlacement });
 
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase();
-    if (!needle) return chunks;
-    return chunks.filter((chunk) => chunk.name.toLocaleLowerCase().includes(needle) || chunk.content.toLocaleLowerCase().includes(needle));
-  }, [chunks, query]);
+  const filtered = useMemo(
+    () => chunks.filter((chunk) => matchesPromptLibraryEntry(chunk, [chunk.name, chunk.content], query, tagFilter)),
+    [chunks, query, tagFilter],
+  );
+  const tagSuggestions = useMemo(() => collectPromptTags(chunks).map((item) => item.tag), [chunks]);
+  const hasTags = tagSuggestions.length > 0;
 
   const persist = useCallback(async (next: PromptChunk[]) => {
     await window.naiDesktop.setSetting("promptChunks", next);
@@ -121,7 +127,7 @@ export function PromptChunkControl({
     const gap = 8;
     const width = Math.min(460, window.innerWidth - 24);
     const contentRows = Math.min(Math.max(filtered.length, 1), 6);
-    const estimatedHeight = Math.min(480, Math.max(panelRef.current?.scrollHeight ?? 0, 154 + contentRows * 58 + (editingId !== null ? 214 : 0)));
+    const estimatedHeight = Math.min(480, Math.max(panelRef.current?.scrollHeight ?? 0, 154 + contentRows * 58 + (hasTags ? 40 : 0) + (editingId !== null ? 300 : 0)));
     const above = Math.max(0, anchor.top - margin - gap);
     const below = Math.max(0, window.innerHeight - anchor.bottom - margin - gap);
     const resolvedPlacement = placement === "top-right"
@@ -146,7 +152,7 @@ export function PromptChunkControl({
       gap,
     );
     setPosition({ left, top, width, maxHeight, placement: resolvedPlacement });
-  }, [editingId, filtered.length, placement]);
+  }, [editingId, filtered.length, hasTags, placement]);
 
   useLayoutEffect(() => {
     if (open) place();
@@ -173,8 +179,8 @@ export function PromptChunkControl({
     };
   }, [open, place]);
 
-  const beginCreate = () => { setEditingId(""); setDraftName(""); setDraftContent(""); setDraftErrors({ name: false, content: false }); };
-  const beginEdit = (chunk: PromptChunk) => { setEditingId(chunk.id); setDraftName(chunk.name); setDraftContent(chunk.content); setDraftErrors({ name: false, content: false }); };
+  const beginCreate = () => { setEditingId(""); setDraftName(""); setDraftContent(""); setDraftTags(tagFilter && tagFilter !== UNTAGGED_PROMPT_FILTER ? tagFilter : ""); setDraftErrors({ name: false, content: false }); };
+  const beginEdit = (chunk: PromptChunk) => { setEditingId(chunk.id); setDraftName(chunk.name); setDraftContent(chunk.content); setDraftTags(formatPromptTagInput(chunk.tags)); setDraftErrors({ name: false, content: false }); };
 
   async function saveDraft() {
     const name = draftName.trim();
@@ -188,10 +194,15 @@ export function PromptChunkControl({
     const now = new Date().toISOString();
     setSaving(true);
     try {
+      const tags = promptTagField(draftTags);
       if (editingId) {
-        await persist(chunks.map((chunk) => chunk.id === editingId ? { ...chunk, name, content, updatedAt: now } : chunk));
+        await persist(chunks.map((chunk) => {
+          if (chunk.id !== editingId) return chunk;
+          const { tags: _previous, ...rest } = chunk;
+          return { ...rest, name, content, ...tags, updatedAt: now };
+        }));
       } else {
-        await persist([{ id: randomId(), name, content, createdAt: now, updatedAt: now }, ...chunks]);
+        await persist([{ id: randomId(), name, content, ...tags, createdAt: now, updatedAt: now }, ...chunks]);
       }
       setQuery("");
       setEditingId(null);
@@ -216,15 +227,16 @@ export function PromptChunkControl({
       <Icon name="plus" />{!compact&&<span>{text.trigger}</span>}
     </button>
     {present && <AppPortal>
-      <div ref={panelRef} className="prompt-chunk-popover disclosure-popover" {...disclosureAttributes(open)} role="dialog" aria-label={text.title} data-placement={position.placement} style={{ left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight }}>
+      <div ref={panelRef} className={clsx("prompt-chunk-popover", "disclosure-popover", hasTags && "has-tags")} {...disclosureAttributes(open)} role="dialog" aria-label={text.title} data-placement={position.placement} style={{ left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight }}>
         <header className="prompt-chunk-head">
           <div><strong>{text.title}</strong><small>{text.subtitle}</small></div>
           <button type="button" aria-label={text.cancel} onClick={() => setOpen(false)}><Icon name="close" /></button>
         </header>
         <div className="prompt-chunk-search-row">
-          <label className="prompt-chunk-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text.search} /></label>
+          <label className="prompt-chunk-search" title={tagText.searchHint}><Icon name="search" /><input value={query} aria-label={text.search} onChange={(event) => setQuery(event.target.value)} placeholder={hasTags ? tagText.searchHint : text.search} /></label>
           <button type="button" className="prompt-chunk-new" onClick={beginCreate}><Icon name="plus" /> {text.create}</button>
         </div>
+        <PromptTagFilter className="prompt-chunk-tags" items={chunks} value={tagFilter} onChange={setTagFilter} language={language} />
         <div className="prompt-chunk-content">
           {editingId !== null && <div className="prompt-chunk-editor">
             <label>
@@ -237,11 +249,12 @@ export function PromptChunkControl({
               <textarea value={draftContent} aria-invalid={draftErrors.content} onChange={(event) => { setDraftContent(event.target.value); setDraftErrors((current) => ({ ...current, content: false })); }} placeholder={text.contentPlaceholder} />
               {draftErrors.content && <small className="prompt-chunk-validation" role="alert">{text.contentRequired}</small>}
             </label>
+            <PromptTagInput value={draftTags} onChange={setDraftTags} suggestions={tagSuggestions} language={language} disabled={saving} />
           </div>}
           <div className="prompt-chunk-list">
             {filtered.length === 0 && <div className="prompt-chunk-empty">{text.empty}</div>}
             {filtered.map((chunk) => <article className="prompt-chunk-item" key={chunk.id}>
-              <button type="button" className="prompt-chunk-main" onClick={() => insertChunk(chunk.content)}><strong>{chunk.name}</strong><span>{chunk.content}</span><em>{text.insert}</em></button>
+              <button type="button" className="prompt-chunk-main" onClick={() => insertChunk(chunk.content)}><strong>{chunk.name}</strong><span>{chunk.content}</span><PromptTagList tags={chunk.tags} className="prompt-chunk-item-tags" /><em>{text.insert}</em></button>
               <div className="prompt-chunk-actions"><button type="button" title={text.edit} aria-label={text.edit} onClick={() => beginEdit(chunk)}><Icon name="brush" /></button><button type="button" title={text.remove} aria-label={text.remove} onClick={() => void removeChunk(chunk.id)}><Icon name="trash" /></button></div>
             </article>)}
           </div>

@@ -23,3 +23,17 @@ it('same source ID, name and base prompt with different characters remain distin
 it('legacy presets without characters and reordered caption fields do not duplicate',async()=>{await restore([{...preset(),captions:undefined},preset()]);expect(fixture.store.settings.positivePromptPresets).toHaveLength(2);await restore([{...preset(),captions:[]},preset([Object.fromEntries(Object.entries(caption()).reverse())])]);expect(fixture.store.settings.positivePromptPresets).toHaveLength(2);});
 it('normalizes untrusted backup captions without importing transient IDs',async()=>{await restore([preset([{...caption(),id:'transient',x:-3,y:4},null,3])]);expect(fixture.store.settings.positivePromptPresets[0].captions).toEqual([{...caption(),x:0,y:1}]);});
 it('absent source IDs still re-import idempotently after a name collision',async()=>{const rows=[{...preset(),id:undefined},{...preset([caption('green coat')]),id:undefined}];await restore(rows);await restore(rows);expect(fixture.store.settings.positivePromptPresets).toHaveLength(2);});
+it('restores saved-prompt tags and merges them into matching existing entries',async()=>{
+ const payload=(tags:string[])=>({positivePromptPresets:[{...preset([]),tags}],promptChunks:[{id:'chunk',name:'Outfit',content:'white dress',tags,createdAt:'x',updatedAt:'y'}]});
+ async function restorePayload(data:unknown){const zip=new JSZip();zip.file('manifest.json',JSON.stringify({format:'langbai-novelai-studio-backup',version:1,categories:[{category:'promptPresets',items:2,bytes:0}]}));zip.file('data/prompt-presets.json',JSON.stringify(data));const target=path.join(fixture.root,'tags.naisbackup');await fs.writeFile(target,await zip.generateAsync({type:'nodebuffer'}));const report=await importDataBackup({path:target,categories:['promptPresets'],confirmConfigurationOverwrite:false});expect(report.ok,report.message).toBe(true);}
+ await restorePayload(payload([' 夜景 ','#夜景']));
+ expect(fixture.store.settings.positivePromptPresets.map((v:any)=>v.tags)).toEqual([['夜景']]);
+ expect(fixture.store.settings.promptChunks.map((v:any)=>v.tags)).toEqual([['夜景']]);
+ await restorePayload(payload(['城市']));
+ expect(fixture.store.settings.positivePromptPresets).toHaveLength(1);
+ expect(fixture.store.settings.positivePromptPresets[0].tags).toEqual(['夜景','城市']);
+ expect(fixture.store.settings.promptChunks).toHaveLength(1);
+ expect(fixture.store.settings.promptChunks[0].tags).toEqual(['夜景','城市']);
+ await restorePayload({positivePromptPresets:[{...preset([]),id:'untagged',name:'Untagged',prompt:'plain'}]});
+ expect(Object.keys(fixture.store.settings.positivePromptPresets[1])).not.toContain('tags');
+});
