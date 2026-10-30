@@ -133,7 +133,8 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final host = GlobalKey<_HostState>();
-    await tester.pumpWidget(_Host(key: host, mounts: <int, int>{}));
+    final mounts = <int, int>{};
+    await tester.pumpWidget(_Host(key: host, mounts: mounts));
     // Metadata (5) is the last Gallery member; select it the way the
     // all-features catalog or a deep link does, without touching the strip.
     host.currentState!.setIndex(5);
