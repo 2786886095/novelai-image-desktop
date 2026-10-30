@@ -106,7 +106,10 @@ void main() {
           value: app, child: const MaterialApp(home: GenerateScreen())));
       await t.pumpAndSettle();
       for (var i = 0; i < 3; i++) {
-        final button = find.text('Load image');
+        final androidDock = find.byKey(const ValueKey('android-create-operation-dock'));
+        final button = androidDock.evaluate().isNotEmpty
+            ? find.descendant(of: androidDock, matching: find.byIcon(Icons.add_photo_alternate_outlined))
+            : find.text('Load image');
         await t.ensureVisible(button);
         await t.runAsync(() async {
           await t.tap(button);

@@ -10,6 +10,10 @@ on:
         description: Build private delivery candidates only; skip additional tests and forbid release publication
         type: boolean
         default: false
+      android_only_candidate:
+        description: Android-only signed candidate artifact; forces candidate isolation, never a Release
+        type: boolean
+        default: false
       skip_ios_verification:
         description: Deprecated compatibility flag; formal releases never skip iOS validation
         type: boolean
@@ -21,6 +25,8 @@ permissions:
 
 jobs:
   android-agent-runtime:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 35
     steps:
@@ -39,7 +45,7 @@ jobs:
       - name: Install adapter build dependencies (no desktop binaries)
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Check Android publication and file policy
-        if: ${{ !inputs.candidate_build_only }}
+        if: ${{ !inputs.candidate_build_only && !inputs.android_only_candidate }}
         run: |
           node --test harness/android/tests/*.test.mjs
           mkdir -p /tmp/studio-agent-tests
@@ -53,8 +59,11 @@ jobs:
       - name: Reuse immutable published runtime when component source is unchanged
         id: published
         run: node harness/android/resolve-published-runtime.mjs
+      - name: Require source-identical published runtime for Android-only candidate
+        if: ${{ inputs.android_only_candidate }}
+        run: test "${{ steps.published.outputs.reused }}" = true
       - name: Build pinned ARM64 Agent runtime
-        if: steps.published.outputs.reused != 'true'
+        if: ${{ steps.published.outputs.reused != 'true' && !(inputs.android_only_candidate) }}
         run: bash harness/android/build-rootfs.sh
       - name: Upload Android runtime (not a release)
         uses: actions/upload-artifact@v4
@@ -65,7 +74,7 @@ jobs:
   android:
     needs: android-agent-runtime
     # These hotfixes are desktop-only; future releases are unaffected.
-    if: "github.ref_name != 'v2.2.7' && github.ref_name != 'v2.2.8' && !contains(github.event.head_commit.message, 'release: v2.2.7') && !contains(github.event.head_commit.message, 'release: v2.2.8')"
+    if: "github.ref_name != 'v2.2.7' && github.ref_name != 'v2.2.8' && !contains(github.event.head_commit.message, 'release: v2.2.7') && !contains(github.event.head_commit.message, 'release: v2.2.8') && !(inputs.android_only_candidate)"
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -124,11 +133,11 @@ jobs:
         run: python3 scripts/verify-mobile-version.py
 
       - name: Validate mobile source
-        if: ${{ !inputs.candidate_build_only }}
+        if: ${{ !inputs.candidate_build_only && !inputs.android_only_candidate }}
         run: flutter analyze --no-pub && flutter test --no-pub
 
       - name: Verify official image metadata
-        if: ${{ !inputs.candidate_build_only }}
+        if: ${{ !inputs.candidate_build_only && !inputs.android_only_candidate }}
         run: flutter test --no-pub test/metadata_common_fixtures_test.dart test/official_image_metadata_test.dart
 
       # Sign the release APK with a STABLE key (from repo secrets) so every
@@ -185,7 +194,7 @@ jobs:
           if-no-files-found: error
 
       - name: Attach to Release
-        if: startsWith(github.ref, 'refs/tags/v') && !inputs.candidate_build_only
+        if: startsWith(github.ref, 'refs/tags/v') && !inputs.candidate_build_only && !inputs.android_only_candidate
         uses: softprops/action-gh-release@v2
         with:
           draft: true
@@ -193,9 +202,180 @@ jobs:
           files: mobile/build/app/outputs/flutter-apk/app-release.apk
 
 
+  android-candidate-only:
+    needs: android-agent-runtime
+    # These hotfixes are desktop-only; future releases are unaffected.
+    if: ${{ inputs.android_only_candidate }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Preserve exact source bytes before checkout
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+      - name: Prepare verified Android native executables
+        working-directory: .
+        run: node harness/android/prepare-native.mjs
+      - name: Install Agent presentation build dependencies
+        working-directory: .
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Fetch same-build runtime for separate component publication
+        uses: actions/download-artifact@v4
+        with:
+          name: android-agent-runtime
+          path: artifacts/android-runtime
+      - name: Stage verified download descriptor only (no runtime in APK)
+        working-directory: .
+        run: node harness/android/stage-download.mjs artifacts/android-runtime mobile/android/app/src/main/assets/agent
+      - name: Upload download descriptor for component release
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-agent-download-descriptor
+          path: artifacts/android-runtime/android-agent.json
+          if-no-files-found: error
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify mobile build and displayed version identity
+        working-directory: .
+        run: python3 scripts/verify-mobile-version.py
+
+      - name: Validate mobile source
+        if: ${{ !inputs.candidate_build_only && !inputs.android_only_candidate }}
+        run: flutter analyze --no-pub && flutter test --no-pub
+
+      - name: Verify official image metadata
+        if: ${{ !inputs.candidate_build_only && !inputs.android_only_candidate }}
+        run: flutter test --no-pub test/metadata_common_fixtures_test.dart test/official_image_metadata_test.dart
+
+      # Sign the release APK with a STABLE key (from repo secrets) so every
+      # published version installs over the previous one. If the secrets aren't
+      # set, this no-ops and the build falls back to the debug key (build.gradle).
+      - name: Configure Android signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::error::Stable Android signing key is required for release verification."
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          cat > android/key.properties <<EOF
+          storeFile=release.keystore
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+          echo "Release signing configured with a stable key."
+
+      - name: Build APK (release)
+        run: flutter build apk --release
+
+      - name: Reject embedded runtime in final APK
+        run: |
+          python3 - <<'PY'
+          import zipfile, json
+          with zipfile.ZipFile('build/app/outputs/flutter-apk/app-release.apk') as apk:
+              assert not any(n.endswith('agent-rootfs.zip') for n in apk.namelist())
+              meta=json.loads(apk.read('assets/agent/seed.json'))
+              assert 'asset' not in meta and meta['url'].startswith('https://github.com/2786886095/novelai-image-desktop/releases/download/')
+              print('APK ON-DEMAND PASS: descriptor present; runtime absent')
+          PY
+
+      - name: Verify actual APK template catalog bytes and all eight source bodies
+        working-directory: .
+        run: python3 scripts/verify-mobile-template-assets.py mobile/build/app/outputs/flutter-apk/app-release.apk --source-sha "${{ github.sha }}" --output mobile/android-template-assets-verification.json
+      - name: Upload APK template evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-template-assets-verification
+          path: mobile/android-template-assets-verification.json
+          if-no-files-found: error
+      - name: Verify signed Android candidate identity and emit truthful package receipt
+        env:
+          CANDIDATE_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,re,subprocess
+          apk=pathlib.Path('build/app/outputs/flutter-apk/app-release.apk')
+          source=os.environ['CANDIDATE_SOURCE_SHA']
+          assert re.fullmatch('[a-f0-9]{40}',source)
+          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==source
+          version=json.loads(pathlib.Path('../package.json').read_text())['version']
+          mobile=re.search(r'^version:\s*([^\s+]+)\+(\d+)\s*$',pathlib.Path('pubspec.yaml').read_text(),re.M)
+          assert mobile and mobile[1]==version
+          sdk=pathlib.Path(os.environ.get('ANDROID_HOME')or os.environ['ANDROID_SDK_ROOT'])
+          tools=[sdk/'build-tools/35.0.0']+sorted((sdk/'build-tools').iterdir(),reverse=True)
+          tool=next(p for p in tools if(p/'aapt').is_file()and(p/'apksigner').is_file())
+          def command(name,args):
+              result=subprocess.run(args,capture_output=True,text=True,timeout=180)
+              pathlib.Path('android-candidate-'+name+'.stdout').write_text(result.stdout)
+              pathlib.Path('android-candidate-'+name+'.stderr').write_text(result.stderr)
+              assert result.returncode==0,(name,result.returncode,result.stderr)
+              return {'command':args,'exitStatus':result.returncode}
+          signing=command('apksigner',[str(tool/'apksigner'),'verify','--print-certs',str(apk)])
+          display=pathlib.Path('android-candidate-apksigner.stdout').read_text()+'\n'+pathlib.Path('android-candidate-apksigner.stderr').read_text()
+          certs={value.lower()for value in re.findall(r'^(?:Signer #\d+|V[1-4] Signer):?\s+certificate SHA-256 digest:\s*([a-fA-F0-9]{64})\s*$',display,re.M)}
+          expected='203efd7295ce5cf69f1482bbbbd0cb69211e85c427e9e9625111435a41a12fbb'
+          assert certs=={expected},'Candidate must retain the bound published stable signing certificate'
+          badging=command('aapt',[str(tool/'aapt'),'dump','badging',str(apk)])
+          package=re.search(r"^package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'",pathlib.Path('android-candidate-aapt.stdout').read_text(),re.M)
+          assert package and package[1]=='com.codex.novelai.novelai_mobile'and package[2]==mobile[2]and package[3]==version
+          digest=hashlib.sha256()
+          with apk.open('rb')as stream:
+              for block in iter(lambda:stream.read(1024*1024),b''):digest.update(block)
+          receipt={'schema':'android-candidate-package/v1','sourceSha':source,'candidateOnly':True,'version':version,'buildNumber':mobile[2],'applicationId':package[1],'asset':'app-release.apk','bytes':apk.stat().st_size,'sha256':digest.hexdigest(),'apkCryptographicVerificationExit':0,'apkCertificateSha256':expected,'certificateMatchesBoundPublished268':True,'nativeInstallOrUpgradeAcceptancePerformed':False,'uiFunctionalCertificationPerformedByThisWorkflow':False,'fullFunctionalAcceptancePassed':False,'runtimeWasReusedFromPublishedComponent':True,'publicationPerformed':False,'mainOrLatestUpdated':False,'signingCommand':signing['command'],'badgingCommand':badging['command']}
+          pathlib.Path('android-candidate-package-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
+          pathlib.Path('android-candidate-sha256.txt').write_text(digest.hexdigest()+'  app-release.apk\n')
+          print(json.dumps(receipt,sort_keys=True))
+          PY
+
+      - name: Upload signed Android candidate and evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: novelai-mobile-android-candidate-${{ github.sha }}
+          path: |
+            mobile/build/app/outputs/flutter-apk/app-release.apk
+            mobile/android-candidate-package-receipt.json
+            mobile/android-candidate-sha256.txt
+            mobile/android-candidate-apksigner.stdout
+            mobile/android-candidate-apksigner.stderr
+            mobile/android-candidate-aapt.stdout
+            mobile/android-candidate-aapt.stderr
+            mobile/android-template-assets-verification.json
+          if-no-files-found: error
+
   ios:
     # iOS source/metadata validation is mandatory for formal builds; package provenance remains separate.
-    if: ${{ !inputs.candidate_build_only }}
+    if: ${{ !inputs.candidate_build_only && !inputs.android_only_candidate }}
     runs-on: macos-latest
     timeout-minutes: 45
     defaults:
@@ -224,11 +404,11 @@ jobs:
         run: python3 scripts/verify-mobile-version.py
 
       - name: Validate mobile source
-        if: ${{ !inputs.candidate_build_only }}
+        if: ${{ !inputs.candidate_build_only && !inputs.android_only_candidate }}
         run: flutter analyze --no-pub && flutter test --no-pub
 
       - name: Verify official image metadata
-        if: ${{ !inputs.candidate_build_only }}
+        if: ${{ !inputs.candidate_build_only && !inputs.android_only_candidate }}
         run: flutter test --no-pub test/metadata_common_fixtures_test.dart test/official_image_metadata_test.dart
 
       # No Apple Developer cert in CI: build without code signing. The resulting
@@ -240,6 +420,7 @@ jobs:
       # Final unsigned IPA and receipt are emitted only by ios-package, avoiding duplicate artifacts.
 
   ios-package:
+    if: ${{ !(inputs.android_only_candidate) }}
     # User-approved unsigned package only; no iOS functional/native certification.
     runs-on: macos-latest
     timeout-minutes: 45

@@ -32,7 +32,14 @@ void main() {
     final negative = find.byKey(const ValueKey('character-negative-field-0'));
     await tester.ensureVisible(negative);
     await tester.pumpAndSettle();
-    await tester.enterText(negative, 'red coat');
+    if (find.byKey(const ValueKey('android-create-workspace')).evaluate().isNotEmpty) {
+      await tester.tap(negative);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('android-fullscreen-prompt-text')), 'red coat');
+      await tester.tap(find.text('完成'));
+    } else {
+      await tester.enterText(negative, 'red coat');
+    }
     await tester.pumpAndSettle();
     expect((await Storage().getCharacterPrompts()).single.negativePrompt,
         'red coat');

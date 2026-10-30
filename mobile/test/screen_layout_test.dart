@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/main.dart';
@@ -14,6 +15,7 @@ import 'package:novelai_mobile/screens/v5_artist_weight_repair_screen.dart';
 import 'package:novelai_mobile/services/update_service.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 import 'package:novelai_mobile/ui/studio_theme.dart';
+import 'package:novelai_mobile/ui/android/android_gate.dart';
 import 'package:provider/provider.dart';
 
 const _screens = <({String name, Widget screen})>[
@@ -56,6 +58,67 @@ Future<void> _pumpScreen(
   expect(tester.takeException(), isNull, reason: reason);
 }
 
+// Exercise the new Android contract and retain the same classic/iOS assertions.
+// Reset before the test binding verifies foundation invariants, not in tearDown.
+void _platformTestWidgets(
+  String description,
+  Future<void> Function(WidgetTester) body,
+) {
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    testWidgets('$description [${platform.name}]', (tester) async {
+      final previous = debugDefaultTargetPlatformOverride;
+      debugDefaultTargetPlatformOverride = platform;
+      try {
+        await body(tester);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        debugDefaultTargetPlatformOverride = previous;
+      }
+    });
+  }
+}
+
+bool _android(WidgetTester tester) =>
+    isAndroidRedesign(tester.element(find.byType(MaterialApp)));
+
+Finder _generateSingle(WidgetTester tester) =>
+    find.byKey(ValueKey(_android(tester)
+        ? 'android-create-single-layout'
+        : 'generate-single-layout'));
+
+void _expectGenerateSplit(WidgetTester tester) {
+  expect(
+      find.byKey(ValueKey(_android(tester)
+          ? 'android-create-control-list'
+          : 'generate-split-layout')),
+      findsOneWidget);
+  expect(_generateSingle(tester), findsNothing);
+  if (_android(tester)) {
+    expect(find.byKey(const ValueKey('android-create-operation-dock')),
+        findsOneWidget);
+  }
+}
+
+Future<void> _openSettingsUpdates(WidgetTester tester) async {
+  if (!_android(tester)) return;
+  final category =
+      find.byKey(const ValueKey('android-settings-category-updates'));
+  await tester.scrollUntilVisible(category, 300,
+      scrollable: find.byType(Scrollable).first);
+  await tester.ensureVisible(category);
+  await tester.tap(category);
+  await tester.pumpAndSettle();
+}
+
+Finder _settingsScroll(WidgetTester tester) => _android(tester)
+    ? find
+        .descendant(
+            of: find.byKey(const ValueKey('android-settings-detail-scroll')),
+            matching: find.byType(Scrollable))
+        .first
+    : find.byType(Scrollable).first;
+
 void main() {
   for (final target in <(String, Size)>[
     ('tiny phone', const Size(320, 640)),
@@ -65,7 +128,7 @@ void main() {
     ('portrait tablet', const Size(800, 1280)),
     ('landscape tablet', const Size(1280, 800)),
   ]) {
-    testWidgets('all primary screens fit the ${target.$1} viewport',
+    _platformTestWidgets('all primary screens fit the ${target.$1} viewport',
         (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = target.$2;
@@ -84,7 +147,8 @@ void main() {
     });
   }
 
-  testWidgets('V5 artist repair weight draw fits a tiny phone', (tester) async {
+  _platformTestWidgets('V5 artist repair weight draw fits a tiny phone',
+      (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(320, 640);
     addTearDown(tester.view.reset);
@@ -105,7 +169,8 @@ void main() {
     expect(find.textContaining('0.2'), findsWidgets);
   });
 
-  testWidgets('positive prompt keeps user and external edits after rebuilds',
+  _platformTestWidgets(
+      'positive prompt keeps user and external edits after rebuilds',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     // Tall viewport so the lazily-built ListView renders the positive field
@@ -121,10 +186,17 @@ void main() {
       const GenerateScreen(),
       'prompt editor initial layout',
     );
-    final positiveField = find.byWidgetPredicate(
-      (widget) =>
-          widget is TextField && widget.decoration?.labelText == '正面提示词',
-    );
+    if (_android(tester)) {
+      final summary = find.byWidgetPredicate(
+          (widget) => widget is PromptEditor && widget.label == '正面提示词');
+      await tester.ensureVisible(summary);
+      await tester.tap(summary);
+      await tester.pumpAndSettle();
+    }
+    final positiveField = _android(tester)
+        ? find.byKey(const ValueKey('android-fullscreen-prompt-text'))
+        : find.byWidgetPredicate((widget) =>
+            widget is TextField && widget.decoration?.labelText == '正面提示词');
     expect(positiveField, findsOneWidget);
 
     await tester.enterText(positiveField, '1girl, smile');
@@ -135,11 +207,13 @@ void main() {
       (params) => params.positivePrompt = '1girl, smile, blue eyes',
     );
     await tester.pump();
+    await tester.pump();
     final field = tester.widget<TextField>(positiveField);
     expect(field.controller?.text, '1girl, smile, blue eyes');
   });
 
-  testWidgets('character positions switch to custom mode and drag directly',
+  _platformTestWidgets(
+      'character positions switch to custom mode and drag directly',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(430, 2600);
@@ -158,7 +232,7 @@ void main() {
     expect(
         find.byKey(const ValueKey('character-position-canvas')), findsNothing);
 
-    final generatePage = find.byKey(const ValueKey('generate-single-layout'));
+    final generatePage = _generateSingle(tester);
     final generateScroll = find
         .descendant(of: generatePage, matching: find.byType(Scrollable))
         .first;
@@ -204,7 +278,7 @@ void main() {
     expect(scrollable.position.pixels, closeTo(scrollBefore, 0.01));
   });
 
-  testWidgets(
+  _platformTestWidgets(
       'character prompt cards collapse independently and start expanded',
       (tester) async {
     tester.view.devicePixelRatio = 1;
@@ -256,7 +330,8 @@ void main() {
         find.byKey(const ValueKey('character-prompt-field-0')), findsOneWidget);
   });
 
-  testWidgets('generate screen uses split content on roomy phone landscape',
+  _platformTestWidgets(
+      'generate screen uses split content on roomy phone landscape',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(800, 360);
@@ -271,12 +346,12 @@ void main() {
       'generate landscape phone split layout',
     );
 
-    expect(find.byKey(const ValueKey('generate-split-layout')), findsOneWidget);
-    expect(find.byKey(const ValueKey('generate-single-layout')), findsNothing);
+    _expectGenerateSplit(tester);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('reference preset library opens without compact-phone overflow',
+  _platformTestWidgets(
+      'reference preset library opens without compact-phone overflow',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(320, 640);
@@ -291,18 +366,27 @@ void main() {
       'reference preset compact phone',
     );
     final scrollable = find.byType(Scrollable).first;
+    if (_android(tester)) {
+      await tester.scrollUntilVisible(find.text('参考'), 260,
+          scrollable: scrollable);
+      await tester.ensureVisible(find.text('参考'));
+      await tester.tap(find.text('参考'));
+      await tester.pumpAndSettle();
+    }
     await tester.scrollUntilVisible(
       find.text('参考图'),
       260,
       scrollable: scrollable,
     );
-    final title=find.text('参考图');
+    final title = find.text('参考图');
     await tester.pumpAndSettle();
-    for(var attempt=0;title.hitTestable().evaluate().isEmpty&&attempt<6;attempt++){
-      await tester.drag(scrollable,const Offset(0,-120));
+    for (var attempt = 0;
+        title.hitTestable().evaluate().isEmpty && attempt < 6;
+        attempt++) {
+      await tester.drag(scrollable, const Offset(0, -120));
       await tester.pumpAndSettle();
     }
-    expect(title.hitTestable(),findsOneWidget);
+    expect(title.hitTestable(), findsOneWidget);
     await tester.tap(title);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
@@ -321,7 +405,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('standalone reference preset page fits a compact phone',
+  _platformTestWidgets('standalone reference preset page fits a compact phone',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(320, 640);
@@ -353,7 +437,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
+  _platformTestWidgets(
       'large reference preset library is paged with a fixed apply action',
       (tester) async {
     tester.view.devicePixelRatio = 1;
@@ -400,7 +484,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('settings hides raw update socket errors on compact phones',
+  _platformTestWidgets(
+      'settings hides raw update socket errors on compact phones',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(320, 640);
@@ -420,15 +505,16 @@ void main() {
       'compact update check error',
     );
 
+    await _openSettingsUpdates(tester);
     await tester.scrollUntilVisible(find.text('检查失败'), 200,
-        scrollable: find.byType(Scrollable).first);
+        scrollable: _settingsScroll(tester));
     await tester.pumpAndSettle();
     expect(find.text('检查失败'), findsOneWidget);
     expect(find.textContaining('SocketConnection'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
+  _platformTestWidgets(
       'generate screen keeps a compact bar when the queue runs in landscape',
       (tester) async {
     tester.view.devicePixelRatio = 1;
@@ -446,7 +532,7 @@ void main() {
       'generate landscape phone queue running',
     );
 
-    expect(find.byKey(const ValueKey('generate-split-layout')), findsOneWidget);
+    _expectGenerateSplit(tester);
     expect(tester.takeException(), isNull);
     // The tall stacked queue panel must not be docked as a bottomNavigationBar
     // in landscape — it doesn't fit a short viewport and gets clipped behind
@@ -455,7 +541,8 @@ void main() {
     expect(find.byIcon(Icons.stop), findsOneWidget);
   });
 
-  testWidgets('home shell phone landscape keeps compact nav and split content',
+  _platformTestWidgets(
+      'home shell phone landscape keeps compact nav and split content',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(800, 360);
@@ -478,20 +565,36 @@ void main() {
     );
     await tester.pump();
 
-    expect(
-        find.byKey(const ValueKey('studio-phone-navigation')), findsOneWidget);
-    expect(
-        find.byKey(const ValueKey('studio-tablet-navigation')), findsNothing);
-    expect(find.byKey(const ValueKey('generate-split-layout')), findsOneWidget);
-    expect(find.byType(NavigationBar), findsOneWidget);
-    final nav = tester.widget<NavigationBar>(find.byType(NavigationBar));
-    expect(nav.height, 66);
-    expect(
-        nav.labelBehavior, NavigationDestinationLabelBehavior.onlyShowSelected);
+    if (_android(tester)) {
+      expect(
+          find.byKey(const ValueKey('android-studio-shell')), findsOneWidget);
+      expect(find.byKey(const ValueKey('android-member-selector')),
+          findsOneWidget);
+      // Landscape uses the compact 88dp five-group rail, not a bottom bar.
+      for (var group = 0; group < 5; group++) {
+        expect(
+            find.byKey(ValueKey('android-rail-group-$group')), findsOneWidget);
+      }
+      expect(find.byType(NavigationBar), findsNothing);
+      _expectGenerateSplit(tester);
+    } else {
+      expect(find.byKey(const ValueKey('studio-phone-navigation')),
+          findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('studio-tablet-navigation')), findsNothing);
+      expect(
+          find.byKey(const ValueKey('generate-split-layout')), findsOneWidget);
+      expect(find.byType(NavigationBar), findsOneWidget);
+      final nav = tester.widget<NavigationBar>(find.byType(NavigationBar));
+      expect(nav.height, 66);
+      expect(nav.labelBehavior,
+          NavigationDestinationLabelBehavior.onlyShowSelected);
+    }
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('home shell exposes reference presets in the phone bottom bar',
+  _platformTestWidgets(
+      'home shell keeps reference presets accessible from phone navigation',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 844);
@@ -509,8 +612,14 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('预设'), findsOneWidget);
-    await tester.tap(find.text('预设'));
+    if (_android(tester)) {
+      await tester.tap(find.byKey(const ValueKey('android-group-3')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('android-member-7')));
+    } else {
+      expect(find.text('预设'), findsOneWidget);
+      await tester.tap(find.text('预设'));
+    }
     await tester.pumpAndSettle();
 
     expect(find.text('参考图预设'), findsOneWidget);
@@ -521,7 +630,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('tablet places reference presets immediately after tools',
+  _platformTestWidgets(
+      'tablet preserves tool and reference destinations in its navigation',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1280, 800);
@@ -539,11 +649,32 @@ void main() {
     );
     await tester.pump();
 
-    final rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
-    final labels = rail.destinations
-        .map((destination) => (destination.label as Text).data)
-        .toList();
-    expect(labels.indexOf('预设'), labels.indexOf('工具') + 1);
+    if (_android(tester)) {
+      final presets = find.byKey(const ValueKey('android-wide-member-7'));
+      await tester.scrollUntilVisible(presets, 320,
+          scrollable: find.byType(Scrollable).first);
+      await tester.ensureVisible(presets);
+      await tester.pumpAndSettle();
+      final tools = find.byKey(const ValueKey('android-wide-member-6'));
+      final styles = find.byKey(const ValueKey('android-wide-member-13'));
+      expect(tools, findsOneWidget);
+      expect(styles, findsOneWidget);
+      expect(presets, findsOneWidget);
+      // All three are in the same Tools group, in the approved member order.
+      expect(
+          tester.getTopLeft(tools).dy, lessThan(tester.getTopLeft(styles).dy));
+      expect(tester.getTopLeft(styles).dy,
+          lessThan(tester.getTopLeft(presets).dy));
+      await tester.tap(presets);
+      await tester.pumpAndSettle();
+      expect(find.text('参考图预设'), findsOneWidget);
+    } else {
+      final rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
+      final labels = rail.destinations
+          .map((destination) => (destination.label as Text).data)
+          .toList();
+      expect(labels.indexOf('预设'), labels.indexOf('工具') + 1);
+    }
     expect(tester.takeException(), isNull);
   });
 
@@ -551,7 +682,7 @@ void main() {
     ('compact phone', const Size(360, 800)),
     ('landscape tablet', const Size(1280, 800)),
   ]) {
-    testWidgets(
+    _platformTestWidgets(
         'settings about section expands without layout issues on ${target.$1}',
         (tester) async {
       tester.view.devicePixelRatio = 1;
@@ -567,8 +698,9 @@ void main() {
         'settings about initial ${target.$1}',
       );
 
+      await _openSettingsUpdates(tester);
       final aboutTile = find.text('About');
-      final scrollable = find.byType(Scrollable).first;
+      final scrollable = _settingsScroll(tester);
       await tester.scrollUntilVisible(
         aboutTile,
         360,
@@ -605,7 +737,8 @@ void main() {
     });
   }
 
-  testWidgets('expanded generation queue fits a compact phone viewport',
+  _platformTestWidgets(
+      'expanded generation queue fits a compact phone viewport',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(360, 800);
@@ -633,11 +766,19 @@ void main() {
       const GenerateScreen(),
       'expanded phone generation queue',
     );
+    if (_android(tester)) {
+      expect(find.textContaining('队列 · 1 运行'), findsNothing);
+      await tester.tap(find.byIcon(Icons.playlist_play));
+      // Busy generation keeps an indeterminate preview spinner alive.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+    }
     expect(find.textContaining('队列 · 1 运行'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('first launch shows the onboarding walkthrough', (tester) async {
+  _platformTestWidgets('first launch shows the onboarding walkthrough',
+      (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 844);
     addTearDown(tester.view.reset);

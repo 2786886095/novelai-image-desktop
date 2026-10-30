@@ -5,6 +5,9 @@ import '../ui/global_typography.dart';
 import '../ui/image_actions_menu.dart';
 import '../ui/studio_theme.dart';
 import '../ui/studio_dropdown.dart';
+import '../ui/android/android_gate.dart';
+import '../ui/android/android_tokens.dart';
+import 'gallery/android_gallery_viewer.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -39,8 +42,9 @@ Future<void> stageHistoryImageForMetadata(
 
 class GalleryScreen extends StatefulWidget {
   final VoidCallback? onOpenMetadata;
+  final VoidCallback? onOpenCreate;
 
-  const GalleryScreen({super.key, this.onOpenMetadata});
+  const GalleryScreen({super.key, this.onOpenMetadata, this.onOpenCreate});
 
   @override
   State<GalleryScreen> createState() => _GalleryScreenState();
@@ -112,6 +116,9 @@ class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserv
                     : item.groupId == group)) &&
             (date.isEmpty || item.date == date))
         .toList();
+    if (_usesAndroidGallery(context)) {
+      return _buildAndroidGallery(context, state, history, dates);
+    }
     return Scaffold(
       appBar: AppBar(title: studioAppBarTitle(context, Text(t('gallery.title'))),actions:[
         IconButton(tooltip:feature('refresh'),onPressed:operating?null:_refreshFiles,icon:const Icon(Icons.refresh)),
@@ -276,6 +283,220 @@ class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserv
     );
   }
 
+  // Existing embedders without the new shell callback retain the classic view.
+  // This also leaves iOS and the explicit classic build entirely unchanged.
+  bool _usesAndroidGallery(BuildContext context) =>
+      widget.onOpenCreate != null && isAndroidRedesign(context);
+
+  Widget _buildAndroidGallery(BuildContext context, AppState state,
+      List<HistoryItem> history, List<String> dates) {
+    final language = state.settings.language;
+    String t(String key) => mobileUiTextFor(language, key);
+    String feature(String key) => platformFeatureText(language, key);
+    final tokens = LangbaiAndroidTokens.of(context);
+    final days = history.map((item) => item.date).toSet().toList()
+      ..sort((a, b) => b.compareTo(a));
+    return Scaffold(
+      key: const ValueKey('android-gallery-grid'),
+      backgroundColor: tokens.canvas,
+      appBar: AppBar(
+        title: studioAppBarTitle(context, Row(mainAxisSize: MainAxisSize.min, children: [
+          Flexible(child: Text(androidGalleryText(language, 'works'), overflow: TextOverflow.ellipsis)),
+          const SizedBox(width: 8),
+          Semantics(
+            label: mobileUiFormatFor(language, 'gallery.imageCount', {'count': history.length}),
+            excludeSemantics: true,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+              decoration: BoxDecoration(color: tokens.inset, borderRadius: BorderRadius.circular(24)),
+              child: Text('${history.length}', style: Theme.of(context).textTheme.labelLarge),
+            ),
+          ),
+        ])),
+        actions: [
+          IconButton(tooltip: feature('refresh'), onPressed: operating ? null : _refreshFiles, icon: const Icon(Icons.refresh)),
+          PopupMenuButton<String>(
+            key: const ValueKey('android-gallery-menu'),
+            tooltip: androidGalleryText(language, 'more'),
+            enabled: !operating,
+            popUpAnimationStyle: MediaQuery.disableAnimationsOf(context) ? AnimationStyle.noAnimation : AppMotion.disclosureStyle,
+            onSelected: (action) {
+              switch (action) {
+                case 'select': setState(() { editing = !editing; selected.clear(); });
+                case 'export': _export(context, history);
+                case 'create': _createGroup(context);
+                case 'rename': _renameSelectedGroup(context);
+                case 'delete': _deleteSelectedGroup(context);
+              }
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem(value: 'select', child: Text(editing ? t('common.close') : feature('batchEdit'))),
+              PopupMenuItem(value: 'export', enabled: history.isNotEmpty, child: Text(t('gallery.exportZip'))),
+              PopupMenuItem(value: 'create', child: Text(t('gallery.createGroup'))),
+              PopupMenuItem(value: 'rename', enabled: group.isNotEmpty && group != _ungroupedFilter, child: Text(t('gallery.renameGroup'))),
+              PopupMenuItem(value: 'delete', enabled: group.isNotEmpty && group != _ungroupedFilter, child: Text(t('gallery.deleteGroup'))),
+            ],
+          ),
+        ],
+      ),
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(children: [
+            Expanded(
+              child: StudioDropdownButtonFormField<String>(
+                key: const ValueKey('android-gallery-group-filter'),
+                value: group,
+                isExpanded: true,
+                decoration: InputDecoration(labelText: t('gallery.group'), prefixIcon: const Icon(Icons.folder_outlined)),
+                items: [
+                  DropdownMenuItem(value: '', child: Text(t('gallery.allGroups'))),
+                  DropdownMenuItem(value: _ungroupedFilter, child: Text(t('gallery.ungrouped'))),
+                  ...state.groups.map((item) => DropdownMenuItem(value: item.id, child: Text(item.name, overflow: TextOverflow.ellipsis))),
+                  if (group.isNotEmpty && group != _ungroupedFilter && !state.groups.any((item) => item.id == group))
+                    DropdownMenuItem(value: group, child: Text(group, overflow: TextOverflow.ellipsis)),
+                ],
+                onChanged: (value) {
+                  final next = value ?? '';
+                  setState(() => group = next);
+                  unawaited(state.setActiveHistoryGroup(next == _ungroupedFilter ? '' : next));
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: StudioDropdownButtonFormField<String>(
+                key: const ValueKey('android-gallery-date-filter'),
+                value: date,
+                isExpanded: true,
+                decoration: InputDecoration(labelText: t('gallery.date'), prefixIcon: const Icon(Icons.calendar_today_outlined)),
+                items: [
+                  DropdownMenuItem(value: '', child: Text(t('gallery.allDates'))),
+                  ...dates.map((value) => DropdownMenuItem(value: value, child: Text(value))),
+                  if (date.isNotEmpty && !dates.contains(date)) DropdownMenuItem(value: date, child: Text(date)),
+                ],
+                onChanged: (value) => setState(() => date = value ?? ''),
+              ),
+            ),
+          ]),
+        ),
+        if (editing)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              Text('${androidGalleryText(language, 'selected')} ${selected.length}'),
+              TextButton(onPressed: operating ? null : () => setState(() => selected.addAll(history.map((item) => item.id))), child: Text(feature('selectAll'))),
+              TextButton(onPressed: operating ? null : () => setState(selected.clear), child: Text(feature('clearSelection'))),
+              IconButton(key: const ValueKey('works-batch-edit'), tooltip: t('common.close'), onPressed: operating ? null : () => setState(() { editing = false; selected.clear(); }), icon: const Icon(Icons.close)),
+            ]),
+          ),
+        Expanded(
+          child: history.isEmpty
+              ? Center(child: SingleChildScrollView(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.photo_library_outlined, size: 48, color: tokens.textSecondary),
+                  const SizedBox(height: 16),
+                  Text(t('gallery.empty'), style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  Text(androidGalleryText(language, 'emptyHint'), textAlign: TextAlign.center),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(onPressed: widget.onOpenCreate, icon: const Icon(Icons.draw_outlined), label: Text(androidGalleryText(language, 'goCreate'))),
+                ])))
+              : LayoutBuilder(builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final columns = width < 400 ? 2 : width < 600 ? 3 : width < 1000 ? 4 : 6;
+                  final cell = (width - 32 - (columns - 1) * 12) / columns;
+                  final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.3;
+                  return CustomScrollView(
+                    key: const PageStorageKey('android-gallery-dated-grid'),
+                    slivers: [
+                      for (final day in days) ...[
+                        SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 10), child: Text(day, style: Theme.of(context).textTheme.titleSmall))),
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          sliver: SliverGrid.builder(
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: columns, mainAxisExtent: cell * 1.1 + (largeText ? 80 : 52), mainAxisSpacing: 12, crossAxisSpacing: 12),
+                            itemCount: history.where((item) => item.date == day).length,
+                            itemBuilder: (context, index) {
+                              final item = history.where((item) => item.date == day).elementAt(index);
+                              return _HistoryTile(item, (context, item) => _openDetail(context, item, history),
+                                  androidStyle: true,
+                                  selecting: editing,
+                                  selected: selected.contains(item.id),
+                                  onSelect: operating ? null : () => setState(() { if (!selected.remove(item.id)) selected.add(item.id); }),
+                                  onLongPress: () { if (!operating) setState(() { editing = true; selected.add(item.id); }); });
+                            },
+                          ),
+                        ),
+                      ],
+                      const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                    ],
+                  );
+                }),
+        ),
+        if (editing)
+          Material(
+            color: tokens.dock,
+            child: SafeArea(top: false, child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Wrap(spacing: 10, runSpacing: 8, children: [
+              OutlinedButton.icon(onPressed: operating || selected.isEmpty ? null : _batchMove, icon: const Icon(Icons.drive_file_move_outline), label: Text(feature('move'))),
+              OutlinedButton.icon(onPressed: operating || selected.isEmpty ? null : () => _export(context, history.where((item) => selected.contains(item.id)).toList()), icon: const Icon(Icons.archive_outlined), label: Text(t('gallery.exportZip'))),
+              FilledButton.icon(onPressed: operating || selected.isEmpty ? null : _batchDelete, icon: const Icon(Icons.delete_outline), label: Text(feature('delete'))),
+            ]))),
+          ),
+      ]),
+    );
+  }
+
+  Future<void> _openAndroidDetail(BuildContext context, HistoryItem item, List<HistoryItem> navigation) async {
+    final state = context.read<AppState>();
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => ChangeNotifierProvider<AppState>.value(
+        value: state,
+        child: AndroidGalleryViewer(
+          initialId: item.id,
+          navigationIds: navigation.map((entry) => entry.id).toList(),
+          onOpenCreate: widget.onOpenCreate,
+          onReuse: (entry) => _reuseParams(context, entry),
+          onWorkbench: (viewer, entry) async {
+            await state.setWorkbenchFromHistory(entry);
+            if (!viewer.mounted) return;
+            Navigator.of(viewer).pop();
+            widget.onOpenCreate?.call();
+          },
+          onMetadata: (viewer, entry) async {
+            await stageHistoryImageForMetadata(state, entry);
+            if (!viewer.mounted) return;
+            Navigator.of(viewer).pop();
+            widget.onOpenMetadata?.call();
+          },
+          onShare: (viewer, entry) async {
+            ScaffoldMessenger.of(viewer).showSnackBar(SnackBar(content: Text(androidGalleryText(state.settings.language, 'exportHint'))));
+            await shareImageFile(viewer, entry.filePath, text: entry.prompt);
+          },
+          onRename: _renameImage,
+          onMove: _moveImage,
+          onFilePath: (viewer, entry) => _showFilePath(viewer, entry, state.settings.language),
+          onFavorite: (viewer, entry) async {
+            await MobileLocalFavorites.instance.add(entry);
+            if (viewer.mounted) ScaffoldMessenger.of(viewer).showSnackBar(SnackBar(content: Text(localFavoritesText(state.settings.language, 'added'))));
+          },
+          onDelete: (viewer, entry) async {
+            String t(String key) => mobileUiTextFor(state.settings.language, key);
+            final confirmed = await showDialog<bool>(context: viewer, builder: (dialog) => AlertDialog(
+              title: Text(t('common.delete')),
+              content: Text(_fileName(entry.filePath)),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(dialog, false), child: Text(t('common.cancel'))),
+                FilledButton(onPressed: () => Navigator.pop(dialog, true), child: Text(t('common.delete'))),
+              ],
+            ));
+            if (confirmed == true && viewer.mounted) await state.deleteHistory(entry.id);
+          },
+        ),
+      ),
+    ));
+  }
+
   Future<void> _createGroup(BuildContext context) async {
     final language = context.read<AppState>().settings.language;
     String t(String key) => mobileUiTextFor(language, key);
@@ -372,6 +593,10 @@ class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserv
   }
 
   void _openDetail(BuildContext context, HistoryItem item, List<HistoryItem> navigation) {
+    if (_usesAndroidGallery(context)) {
+      unawaited(_openAndroidDetail(context, item, navigation));
+      return;
+    }
     final language = context.read<AppState>().settings.language;
     String t(String key) => mobileUiTextFor(language, key);
     showModalBottomSheet<void>(
@@ -750,7 +975,9 @@ class _HistoryTile extends StatelessWidget {
   final void Function(BuildContext context, HistoryItem item) onTap;
 
   final bool selecting,selected;final VoidCallback? onSelect;
-  const _HistoryTile(this.item, this.onTap,{this.selecting=false,this.selected=false,this.onSelect});
+  final bool androidStyle;
+  final VoidCallback? onLongPress;
+  const _HistoryTile(this.item, this.onTap,{this.selecting=false,this.selected=false,this.onSelect,this.androidStyle=false,this.onLongPress});
 
   @override
   Widget build(BuildContext context) {
@@ -764,12 +991,12 @@ class _HistoryTile extends StatelessWidget {
       return const SizedBox.shrink();
     }
     return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(8),
+      color: androidStyle ? LangbaiAndroidTokens.of(context).card : Theme.of(context).colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(androidStyle ? 16 : 8),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: selecting?onSelect:() => onTap(context, item),
-        onLongPress: selecting?null:() => showLocalImageActions(context, item.filePath),
+        onLongPress: selecting?null:onLongPress ?? () => showLocalImageActions(context, item.filePath),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -791,6 +1018,7 @@ class _HistoryTile extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
+            if (androidStyle) Padding(padding: const EdgeInsets.fromLTRB(8, 0, 8, 8), child: Text('${item.width} × ${item.height}', style: Theme.of(context).textTheme.labelSmall)),
           ],
         ),
       ),

@@ -10,16 +10,17 @@ import '../prompts/negative_prompt_library.dart';
 
 class NegativePromptLibraryButton extends StatelessWidget {
  final String value;final void Function(String prompt,String mode) onApply;
- const NegativePromptLibraryButton({super.key,required this.value,required this.onApply});
+ final Widget Function(BuildContext,Widget)? routeWrapper;
+ const NegativePromptLibraryButton({super.key,required this.value,required this.onApply,this.routeWrapper});
  @override Widget build(BuildContext context){final text=negativeLibraryLabels(context.watch<AppState>().settings.language);
   return IconButton(icon:const Icon(Icons.library_books_outlined),tooltip:text[0],onPressed:()async{
-   final result=await showDialog<(String,String)>(context:context,builder:(_)=>_LibraryDialog(current:value));
+   final result=await showDialog<(String,String)>(context:context,builder:(dialog){final child=_LibraryDialog(current:value,routeWrapper:routeWrapper);return routeWrapper?.call(dialog,child)??child;});
    if(context.mounted&&result!=null)onApply(result.$1,result.$2);
   });
  }
 }
 class _LibraryDialog extends StatefulWidget {
- final String current;const _LibraryDialog({required this.current});
+ final String current;final Widget Function(BuildContext,Widget)? routeWrapper;const _LibraryDialog({required this.current,this.routeWrapper});
  @override State<_LibraryDialog> createState()=>_LibraryDialogState();
 }
 class _LibraryDialogState extends State<_LibraryDialog> {
@@ -46,7 +47,7 @@ class _LibraryDialogState extends State<_LibraryDialog> {
   await Share.shareXFiles([XFile(file.path,mimeType:'application/json')],sharePositionOrigin:origin);
  }
  Future<void> remove(Map<String,String> entry,List<String> t)async{
-  final confirmed=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:Text(t[6]),content:Text(t[19]),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:Text(t[13])),FilledButton(onPressed:()=>Navigator.pop(c,true),child:Text(t[6]))]));
+  final confirmed=await showDialog<bool>(context:context,builder:(c){final child=AlertDialog(title:Text(t[6]),content:Text(t[19]),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:Text(t[13])),FilledButton(onPressed:()=>Navigator.pop(c,true),child:Text(t[6]))]);return widget.routeWrapper?.call(c,child)??child;});
   if(confirmed!=true||!mounted)return;await context.read<AppState>().mutateNegativePresets((old)=>old.where((p)=>p['id']!=entry['id']).toList());
  }
  @override Widget build(BuildContext context){final state=context.watch<AppState>(),t=negativeLibraryLabels(state.settings.language),entries=state.settings.negativePromptPresets;

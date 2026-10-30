@@ -1,3 +1,8 @@
+import '../ui/android/android_gate.dart';
+import '../ui/android/android_tokens.dart';
+import 'settings/android_settings_hub.dart';
+import 'settings/settings_search_index.dart';
+import 'ai_log_screen.dart';
 import '../i18n/template_feature_text.dart';
 import 'template_library_screen.dart';
 import 'ios_update_card.dart';
@@ -179,13 +184,18 @@ String _formatBytes(int bytes) => bytes < 1024 * 1024
 }
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final VoidCallback? onOpenDiagnostics;
+  final ValueChanged<bool>? onAndroidDetailChanged;
+  final bool androidActive;
+  const SettingsScreen({super.key, this.onOpenDiagnostics, this.onAndroidDetailChanged, this.androidActive = true});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  AndroidSettingsCategory? _androidCategory;
+  bool _androidSearchActive = false;
   final visionKeyCtrl = TextEditingController();
   final convertKeyCtrl = TextEditingController();
   final tagKeyCtrl = TextEditingController();
@@ -417,17 +427,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final cacheText = _cacheText(s.language);
     final streamPreviewText = _streamPreviewSettingText(s.language);
     final account = state.account;
-    return Scaffold(
-      appBar: AppBar(title: studioAppBarTitle(context, Text(settingsText.title))),
-      body: StudioContent(
-          child: ListView(
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        // Add the keyboard inset to the bottom so the lower fields/buttons can
-        // always scroll clear of the on-screen keyboard (nested Scaffold + bottom
-        // nav can otherwise leave them covered).
-        padding: EdgeInsets.fromLTRB(
-            16, 16, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
-        children: [
+    final settingsChildren = <Widget>[
           const NovelAiAccountSelector(),
           const SizedBox(height: 12),
           const CompatibleImageSettingsCard(),
@@ -1010,9 +1010,126 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             _RewardGrid(text: aboutText),
           ]),
-        ],
+    ];
+    if (isAndroidRedesign(context)) {
+      final sectionIds = <String, String>{
+        settingsText.updateSourceTitle: 'update-source',
+        languageText.sectionTitle: 'language',
+        settingsText.networkSection: 'network',
+        settingsText.reverseSection: 'reverse',
+        settingsText.convertSection: 'convert',
+        settingsText.tagSection: 'tags',
+        settingsText.translateSection: 'translate',
+        settingsText.promptTemplatesSection: 'templates',
+        settingsText.promptShortcutsSection: 'shortcuts',
+        settingsText.storageSection: 'storage',
+        persistText.sectionTitle: 'persistence',
+        appearanceText.sectionTitle: 'appearance',
+        aboutText.sectionTitle: 'about',
+      };
+      return AndroidSettingsHub(
+        active: widget.androidActive,
+        language: s.language,
+        entries: _androidEntries(settingsChildren, sectionIds, s.language),
+        category: _androidCategory,
+        onCategoryChanged: (category) {
+          setState(() => _androidCategory = category);
+          widget.onAndroidDetailChanged?.call(category != null || _androidSearchActive);
+        },
+        onSearchChanged: (active) {
+          _androidSearchActive = active;
+          widget.onAndroidDetailChanged?.call(active || _androidCategory != null);
+        },
+        accountConfigured: account.hasToken,
+        balance: account.anlasBalance,
+        providerConfigured: (s.compatibleImage['credentialId']?.toString().isNotEmpty ?? false),
+        onRefreshAccount: state.refreshAnlas,
+        reduceMotion: s.reduceMotion,
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(title: studioAppBarTitle(context, Text(settingsText.title))),
+      body: StudioContent(
+          child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        // Add the keyboard inset to the bottom so the lower fields/buttons can
+        // always scroll clear of the on-screen keyboard (nested Scaffold + bottom
+        // nav can otherwise leave them covered).
+        padding: EdgeInsets.fromLTRB(
+            16, 16, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
+        children: settingsChildren,
       )),
     );
+  }
+
+  List<AndroidSettingsEntry> _androidEntries(List<Widget> children,
+      Map<String, String> sectionIds, String language) {
+    var cardIndex = 0;
+    final entries = <AndroidSettingsEntry>[];
+    for (var index = 0; index < children.length; index++) {
+      final child = children[index];
+      if (child is SizedBox) continue;
+      final String id;
+      if (child is NovelAiAccountSelector) {
+        id = 'accounts';
+      } else if (child is CompatibleImageSettingsCard) {
+        id = 'provider';
+      } else if (child is OpenAIEditSettingsCard) {
+        id = 'openai-edit';
+      } else if (child is ExternalMcpSettingsCard) {
+        id = 'external-mcp';
+      } else if (child is IosUpdateCard) {
+        id = 'update';
+      } else if (child is ResourceDatabaseSettingsPanel) {
+        id = 'resources';
+      } else if (child is DataBackupSettingsPanel) {
+        id = 'backup';
+      } else if (child is CompletionSoundSettings) {
+        id = 'sound';
+      } else if (child is _Section) {
+        id = sectionIds[child.title] ?? 'additional-section-$index';
+      } else if (child is Card) {
+        final position = cardIndex++;
+        id = position == 0 ? 'balance' : position == 1 ? 'update' : 'additional-card-$position';
+      } else if (child is OutlinedButton) {
+        id = 'token-guide';
+      } else {
+        // New legacy sections remain reachable rather than silently vanishing.
+        id = 'additional-section-$index';
+      }
+      entries.add(AndroidSettingsEntry(
+        id: id,
+        title: child is _Section ? child.title : androidSettingsEntryTitle(language, id),
+        categories: androidSettingsEntryCategories(id),
+        child: child,
+      ));
+    }
+    entries.add(AndroidSettingsEntry(
+      id: 'navigation',
+      title: androidSettingsEntryTitle(language, 'navigation'),
+      categories: androidSettingsEntryCategories('navigation'),
+      child: AndroidSectionCard(
+        title: androidSettingsEntryTitle(language, 'navigation'),
+        icon: Icons.dashboard_outlined,
+        child: Text(androidSettingsCopy(language, 'navigationHint')),
+      ),
+    ));
+    entries.add(AndroidSettingsEntry(
+      id: 'diagnostics',
+      title: androidSettingsEntryTitle(language, 'diagnostics'),
+      categories: androidSettingsEntryCategories('diagnostics'),
+      child: AndroidSectionCard(
+        title: androidSettingsEntryTitle(language, 'diagnostics'),
+        icon: Icons.receipt_long_outlined,
+        child: OutlinedButton.icon(
+          icon: const Icon(Icons.open_in_new),
+          label: Text(androidSettingsEntryTitle(language, 'diagnostics')),
+          onPressed: widget.onOpenDiagnostics ??
+            () => Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => const AiLogScreen())),
+        ),
+      ),
+    ));
+    return entries;
   }
 
   Future<void> _detect(BuildContext context, String kind) async {

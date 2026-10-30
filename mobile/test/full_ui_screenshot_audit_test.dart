@@ -36,6 +36,7 @@ import 'package:novelai_mobile/services/artist_tag_service.dart';
 import 'package:novelai_mobile/services/prompt_codex_service.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 import 'package:novelai_mobile/ui/studio_theme.dart';
+import 'package:novelai_mobile/ui/android/android_tokens.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -56,6 +57,11 @@ const _fontKo = 'AuditKo';
 const _fontMaterialIcons = 'MaterialIcons';
 
 typedef _SurfaceBuilder = Widget Function(AppState state);
+
+class _AuditJourneyState extends AppState {
+  @override
+  Future<void> reconcileMissingHistory() async {}
+}
 
 class _FakePromptCodexService extends PromptCodexService {
   final PromptCodexSnapshot snapshot = PromptCodexSnapshot(
@@ -385,7 +391,7 @@ List<({String name, _SurfaceBuilder build})> _surfaces() => [
               ),
             ),
       ),
-      (name: 'gallery', build: (_) => const GalleryScreen()),
+      (name: 'gallery', build: (_) => GalleryScreen(onOpenCreate: () {})),
       (name: 'ai-log', build: (_) => const AiLogScreen()),
       (name: 'settings', build: (_) => const SettingsScreen()),
       (name: 'backup-modules', build: (_) => const Scaffold(body:SafeArea(child:SingleChildScrollView(child:DataBackupSettingsPanel(initiallyExpanded:true))))),
@@ -438,6 +444,95 @@ void main() {
   });
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+
+  // Real HomeShell journeys: navigator overlays, group navigation and seeded
+  // non-account local artwork. All files stay in the opt-in audit profile.
+  if (_auditTargetPlatform == TargetPlatform.android) {
+    for (final journey in ['create', 'editor', 'gallery', 'viewer', 'settings', 'access']) {
+      testWidgets('android journey $journey', (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(390, 844);
+        addTearDown(tester.view.reset);
+        final fixturePath = '${_auditOutputRoot()}/profile/layout-fixture.png';
+        await tester.runAsync(() async {
+          final recorder = ui.PictureRecorder();
+          final canvas = Canvas(recorder);
+          canvas.drawRect(const Rect.fromLTWH(0, 0, 512, 640),
+              Paint()..color = const Color(0xffd7d9f2));
+          canvas.drawCircle(const Offset(340, 175), 90,
+              Paint()..color = const Color(0xffffe7ae));
+          final mountain = Path()..moveTo(0, 520)..lineTo(150, 240)
+              ..lineTo(330, 520)..lineTo(440, 370)..lineTo(512, 550)
+              ..lineTo(512, 640)..lineTo(0, 640)..close();
+          canvas.drawPath(mountain, Paint()..color = const Color(0xff8075b9));
+          final picture = recorder.endRecording();
+          final image = await picture.toImage(512, 640);
+          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+          await File(fixturePath).writeAsBytes(bytes!.buffer.asUint8List());
+          image.dispose(); picture.dispose();
+        });
+        final state = _AuditJourneyState()
+          ..booted = true
+          ..needsNetworkOnboarding = false;
+        state.settings.language = 'zh-CN';
+        state.settings.autoComplete = false;
+        state.params.positivePrompt = 'a quiet mountain lake, golden sunset, purple mountains, soft light, peaceful landscape';
+        state.params.negativePrompt = 'blurry, low quality, watermark';
+        state.history = [for (var i = 0; i < 6; i++) HistoryItem(
+          id: 'layout-$i', filePath: fixturePath, date: '2026-10-31',
+          createdAt: '2026-10-31T10:00:00', seed: 12345+i,
+          model: state.params.model, width: 512, height: 640,
+          prompt: state.params.positivePrompt, params: state.params.toJson())];
+        final boundaryKey = GlobalKey();
+        final theme = androidStudioTheme(StudioTheme.light());
+        await tester.pumpWidget(ChangeNotifierProvider<AppState>.value(
+          value: state, child: RepaintBoundary(key: boundaryKey,
+            child: MaterialApp(debugShowCheckedModeBanner: false, theme: theme.copyWith(
+              textTheme: theme.textTheme.apply(fontFamily: _fontZh),
+              primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: _fontZh)),
+              home: const HomeShell()))));
+        await tester.pumpAndSettle();
+        await tester.runAsync(() async {
+          final context = tester.element(find.byType(HomeShell));
+          await precacheImage(FileImage(File(fixturePath)), context).timeout(const Duration(seconds: 10));
+          for (final width in [360, 144]) {
+            await precacheImage(ResizeImage(FileImage(File(fixturePath)), width: width), context)
+                .timeout(const Duration(seconds: 10));
+          }
+        });
+        await tester.pump();
+        if (journey == 'editor') {
+          final prompt = find.byType(PromptEditor).at(1);
+          await tester.ensureVisible(prompt); await tester.tap(prompt);
+          await tester.pumpAndSettle();
+        }
+        if (journey == 'gallery' || journey == 'viewer') {
+          await tester.tap(find.byKey(const ValueKey('android-group-1')));
+          await tester.pumpAndSettle();
+          if (journey == 'viewer') {
+            await tester.tap(find.text('layout-fixture.png').first);
+            await tester.pumpAndSettle();
+          }
+        }
+        if (journey == 'settings' || journey == 'access') {
+          await tester.tap(find.byKey(const ValueKey('android-group-4')));
+          await tester.pumpAndSettle();
+          if (journey == 'access') {
+            await tester.tap(find.byKey(const ValueKey('android-settings-category-access')));
+            await tester.pumpAndSettle();
+          }
+        }
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 250)));
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+        await tester.runAsync(() => _savePng(boundaryKey,
+            '${_auditOutputRoot()}/journeys/$journey.png'));
+        await tester.pumpWidget(const SizedBox.shrink());
+        state.dispose();
+      }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+    }
+  }
+
   final primaryViewports = <(String, Size)>[
     ('phone-portrait', const Size(390, 844)),
     ('tablet-landscape', const Size(1280, 800)),
@@ -470,6 +565,8 @@ void main() {
             final boundaryKey = GlobalKey();
             final baseTheme =
                 themeName == 'dark' ? StudioTheme.dark() : StudioTheme.light();
+            final surfaceTheme = _auditTargetPlatform == TargetPlatform.android
+                ? androidStudioTheme(baseTheme) : baseTheme;
             final fontFamily = _fontFamilyFor(locale);
             await tester.pumpWidget(
               ChangeNotifierProvider.value(
@@ -483,12 +580,12 @@ void main() {
                     GlobalWidgetsLocalizations.delegate,
                     GlobalCupertinoLocalizations.delegate,
                   ],
-                  theme: baseTheme.copyWith(
-                    textTheme: baseTheme.textTheme.apply(
+                  theme: surfaceTheme.copyWith(
+                    textTheme: surfaceTheme.textTheme.apply(
                       fontFamily: fontFamily,
                       fontFamilyFallback: const [_fontZh],
                     ),
-                    primaryTextTheme: baseTheme.primaryTextTheme.apply(
+                    primaryTextTheme: surfaceTheme.primaryTextTheme.apply(
                       fontFamily: fontFamily,
                       fontFamilyFallback: const [_fontZh],
                     ),
@@ -536,7 +633,8 @@ void main() {
           _seedReferencePresetAuditData(state);
         }
         final boundaryKey = GlobalKey();
-        final theme = StudioTheme.light();
+        final theme = _auditTargetPlatform == TargetPlatform.android
+            ? androidStudioTheme(StudioTheme.light()) : StudioTheme.light();
         await tester.pumpWidget(
           ChangeNotifierProvider.value(
             value: state,
@@ -605,6 +703,8 @@ void main() {
           final boundaryKey = GlobalKey();
           final baseTheme =
               themeName == 'dark' ? StudioTheme.dark() : StudioTheme.light();
+            final surfaceTheme = _auditTargetPlatform == TargetPlatform.android
+                ? androidStudioTheme(baseTheme) : baseTheme;
           final fontFamily = _fontFamilyFor(locale);
           await tester.pumpWidget(
             ChangeNotifierProvider.value(
@@ -618,12 +718,12 @@ void main() {
                   GlobalWidgetsLocalizations.delegate,
                   GlobalCupertinoLocalizations.delegate,
                 ],
-                theme: baseTheme.copyWith(
-                  textTheme: baseTheme.textTheme.apply(
+                theme: surfaceTheme.copyWith(
+                  textTheme: surfaceTheme.textTheme.apply(
                     fontFamily: fontFamily,
                     fontFamilyFallback: const [_fontZh],
                   ),
-                  primaryTextTheme: baseTheme.primaryTextTheme.apply(
+                  primaryTextTheme: surfaceTheme.primaryTextTheme.apply(
                     fontFamily: fontFamily,
                     fontFamilyFallback: const [_fontZh],
                   ),
@@ -720,6 +820,8 @@ void main() {
                 hasToken: true, tierName: 'Opus', anlasBalance: 9049);
           final baseTheme =
               themeName == 'dark' ? StudioTheme.dark() : StudioTheme.light();
+            final surfaceTheme = _auditTargetPlatform == TargetPlatform.android
+                ? androidStudioTheme(baseTheme) : baseTheme;
           final fontFamily = _fontFamilyFor(locale);
           await tester.pumpWidget(
             ChangeNotifierProvider.value(
@@ -733,12 +835,12 @@ void main() {
                   GlobalWidgetsLocalizations.delegate,
                   GlobalCupertinoLocalizations.delegate,
                 ],
-                theme: baseTheme.copyWith(
-                  textTheme: baseTheme.textTheme.apply(
+                theme: surfaceTheme.copyWith(
+                  textTheme: surfaceTheme.textTheme.apply(
                     fontFamily: fontFamily,
                     fontFamilyFallback: const [_fontZh],
                   ),
-                  primaryTextTheme: baseTheme.primaryTextTheme.apply(
+                  primaryTextTheme: surfaceTheme.primaryTextTheme.apply(
                     fontFamily: fontFamily,
                     fontFamilyFallback: const [_fontZh],
                   ),

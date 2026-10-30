@@ -45,6 +45,10 @@ import '../ui/quality_preset_control.dart';
 import '../ui/automatic_comparison_control.dart';
 import '../ui/studio_shell.dart';
 import '../ui/studio_theme.dart';
+import '../ui/android/android_gate.dart';
+import '../ui/android/android_tokens.dart';
+import 'prompt/android_prompt_editor_page.dart';
+import 'prompt/android_prompt_text.dart';
 import '../ui/zoomable_image.dart';
 import '../widgets/generation_image_transfers.dart';
 import 'reference_catalog_panel.dart';
@@ -335,8 +339,18 @@ class GenerateScreen extends StatelessWidget {
                     : text.notConfigured;
 
     final preview = GenerationImageTransfers(
-        child: _PreviewCard(onPick: () => _pickImage(context)));
+        child: _PreviewCard(onPick: () => _pickImage(context),
+          aspectRatio: isAndroidRedesign(context)
+              ? (wide ? size.width * 5 / 11 - 64 : size.width - 64) /
+                  (size.height * .28).clamp(140.0, 280.0)
+              : 1));
     if(state.settings.imageProvider=='openai-images' && state.workbenchImage==null) return Scaffold(body:CompatibleGenerateScreen(preview:preview));
+    if (isAndroidRedesign(context)) {
+      return _AndroidGenerateLayout(preview: preview,
+        onPick: () => _pickImage(context),
+        onAccount: showV5Allowance ? () => _showOpusUsageDialog(context) : state.refreshAnlas,
+        accountLabel: accountLabel);
+    }
     final controls = <Widget>[
       _TagSearchBox(
         onInsert: (tag, negative) => state.setParam((params) {
@@ -529,6 +543,201 @@ class GenerateScreen extends StatelessWidget {
   }
 }
 
+class _AndroidGenerateLayout extends StatelessWidget {
+  final Widget preview;
+  final VoidCallback onPick;
+  final VoidCallback onAccount;
+  final String accountLabel;
+  const _AndroidGenerateLayout({required this.preview, required this.onPick,
+    required this.onAccount, required this.accountLabel});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final p = state.params;
+    final language = state.settings.language;
+    String t(String key) => androidPromptText(language, key);
+    final text = generateScreenTextFor(language);
+    final colors = LangbaiAndroidTokens.of(context);
+    final size = MediaQuery.sizeOf(context);
+    final split = StudioBreakpoints.classify(size) != StudioWindowClass.phone ||
+      (size.width >= 720 && size.width > size.height);
+    final hasPreview = state.current != null || state.workbenchImage != null ||
+      state.generationPreview != null || state.busy;
+    final promptCard = AndroidSectionCard(
+      key: const ValueKey('android-create-prompt-card'),
+      title: t('prompts'), icon: Icons.notes,
+      trailing: IconButton(tooltip: t('search'), icon: const Icon(Icons.search),
+        onPressed: () => _androidCreateSheet(context, t('search'), _TagSearchBox(
+          onInsert: (tag, negative) => state.setParam((params) {
+            if (negative) { params.negativePrompt = GenerateScreen._appendTag(params.negativePrompt, tag); }
+            else { params.positivePrompt = GenerateScreen._appendTag(params.positivePrompt, tag); }
+          })))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        PromptEditor(label: text.stylePrompt, value: p.stylePrompt, lockKind: 'style',
+          onChanged: (value) => state.setParam((x) => x.stylePrompt = value)),
+        const SizedBox(height: 10),
+        PromptEditor(label: text.positivePrompt, value: p.positivePrompt,
+          maxLines: 5, showRelatedTags: true, showTextTools: true,
+          onChanged: (value) => state.setParam((x) => x.positivePrompt = value)),
+        if (!p.isMediumEffort) ...[
+          const SizedBox(height: 10),
+          PromptEditor(label: text.negativePrompt, value: p.negativePrompt,
+            lockKind: 'negative', maxLines: 3,
+            onChanged: (value) => state.setParam((x) => x.negativePrompt = value)),
+        ],
+        const SizedBox(height: 8),
+        Align(alignment: AlignmentDirectional.centerEnd,
+          child: PositivePromptPresetButton(currentPrompt: p.positivePrompt, compact: true,
+            onApply: (value) => state.setParam((x) => x.positivePrompt = value))),
+        _AndroidCreateDisclosure(title: t('styleLibrary'), child: const _StylePresetControls()),
+        if (state.settings.promptShortcuts.isNotEmpty)
+          _AndroidCreateDisclosure(title: t('shortcuts'), child: _PromptShortcutBar()),
+      ]),
+    );
+    final result = hasPreview ? AndroidSectionCard(title: t('result'),
+      icon: Icons.image_outlined, child: preview) : GenerationImageTransfers(child: Card(
+      key: const ValueKey('android-create-empty-result'),
+      child: ConstrainedBox(constraints: const BoxConstraints(minHeight: 72),
+        child: ListTile(leading: const Icon(Icons.image_outlined),
+          title: Text(t('emptyResult')), trailing: IconButton(tooltip: t('import'),
+            onPressed: onPick, icon: const Icon(Icons.add_photo_alternate_outlined))))));
+    final controls = <Widget>[
+      promptCard,
+      _AndroidCreateDisclosure(title: t('charactersTitle'), icon: Icons.people_outline,
+        initiallyExpanded: state.extras.charCaptions.isNotEmpty, child: _CharacterPrompts()),
+      _AndroidCreateDisclosure(title: t('references'), icon: Icons.auto_awesome_mosaic_outlined,
+        child: _ReferenceControls()),
+      _AndroidCreateDisclosure(title: t('imageInput'), icon: Icons.add_photo_alternate_outlined,
+        initiallyExpanded: state.workbenchImage != null,
+        child: state.workbenchImage == null ? OutlinedButton.icon(onPressed: onPick,
+          icon: const Icon(Icons.add_photo_alternate_outlined), label: Text(t('import'))) : _I2IControls()),
+      _AndroidCreateDisclosure(title: t('output'), icon: Icons.output_outlined,
+        child: Column(children: [const AutomaticComparisonControl(surface: 'generate:t2i'), _OutputControls()])),
+    ];
+    Widget controlList({bool includePreview = false}) => ListView(
+      key: ValueKey(includePreview ? 'android-create-single-layout' : 'android-create-control-list'),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: androidPagePadding(context, bottom: 20),
+      children: [if (includePreview) ...[result, const SizedBox(height: 12)],
+        for (var i = 0; i < controls.length; i++) ...[
+          controls[i], if (i != controls.length - 1) const SizedBox(height: 12),
+        ]],
+    );
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final dock = _AndroidCreateDock(onPick: onPick);
+    return Scaffold(
+      key: const ValueKey('android-create-workspace'),
+      backgroundColor: colors.canvas,
+      appBar: AppBar(title: studioAppBarTitle(context, Text(state.workbenchImage == null ? text.titleTextToImage : text.titleImageLoaded,
+        maxLines: 1, overflow: TextOverflow.ellipsis)),
+        actions: [IconButton(tooltip: accountLabel, onPressed: onAccount,
+          icon: Icon(state.account.stale ? Icons.sync_problem_outlined : Icons.account_balance_wallet_outlined))]),
+      body: split ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Expanded(flex: 5, child: SingleChildScrollView(padding: androidPagePadding(context), child: result)),
+        Expanded(flex: 6, child: Column(children: [Expanded(child: controlList()), if (!keyboard) dock])),
+      ]) : controlList(includePreview: true),
+      bottomNavigationBar: !split && !keyboard ? dock : null,
+    );
+  }
+}
+
+class _AndroidCreateDisclosure extends StatelessWidget {
+  final String title;
+  final IconData? icon;
+  final Widget child;
+  final bool initiallyExpanded;
+  const _AndroidCreateDisclosure({required this.title, required this.child,
+    this.icon, this.initiallyExpanded = false});
+  @override
+  Widget build(BuildContext context) => Card(clipBehavior: Clip.antiAlias,
+    child: ExpansionTile(title: Text(title, style: Theme.of(context).textTheme.titleMedium),
+      leading: icon == null ? null : Icon(icon), initiallyExpanded: initiallyExpanded,
+      shape: const Border(), collapsedShape: const Border(),
+      childrenPadding: const EdgeInsets.fromLTRB(16, 4, 16, 16), children: [child]));
+}
+
+Future<void> _androidCreateSheet(BuildContext context, String title, Widget child) {
+  FocusManager.instance.primaryFocus?.unfocus();
+  return showModalBottomSheet<void>(context: context, isScrollControlled: true,
+    useSafeArea: true, showDragHandle: true, builder: (sheetContext) => SizedBox(
+      height: MediaQuery.sizeOf(sheetContext).height * .84,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(padding: const EdgeInsets.fromLTRB(16, 0, 8, 8), child: Row(children: [
+          Expanded(child: Text(title, style: Theme.of(sheetContext).textTheme.titleLarge)),
+          IconButton(tooltip: androidPromptText(context.read<AppState>().settings.language, 'close'),
+            onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close)),
+        ])),
+        Expanded(child: SingleChildScrollView(keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 24 + MediaQuery.viewInsetsOf(sheetContext).bottom),
+          child: child)),
+      ])));
+}
+
+class _AndroidCreateDock extends StatelessWidget {
+  final VoidCallback onPick;
+  const _AndroidCreateDock({required this.onPick});
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final p = state.params;
+    final language = state.settings.language;
+    String t(String key) => androidPromptText(language, key);
+    final text = generateScreenTextFor(language);
+    final colors = LangbaiAndroidTokens.of(context);
+    final largeText = MediaQuery.textScalerOf(context).scale(14) >= 22.4;
+    final amount = state.generationQuote?.referenceOnly == true ? '?' : state.generationQuote?.amount?.toString() ?? '?';
+    final queueCount = state.generationQueue.length;
+    final running = state.generationQueueRunning;
+    final compact = MediaQuery.sizeOf(context).height < 500;
+    return Material(color: colors.dock, child: SafeArea(top: false,
+      child: Container(key: const ValueKey('android-create-operation-dock'),
+        decoration: BoxDecoration(border: Border(top: BorderSide(color: colors.outline))),
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (!compact) SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+            TextButton.icon(onPressed: () => _androidCreateSheet(context, t('parameters'), _ParamControls()),
+              icon: const Icon(Icons.tune, size: 18), label: Text(largeText ? t('parameters') : '${p.width} × ${p.height}')),
+            if (!largeText) TextButton(onPressed: () => _androidCreateSheet(context, t('model'), _ParamControls()),
+              child: Text('${p.steps} · ${t('advanced')}')),
+            TextButton(onPressed: () => _androidCreateSheet(context, t('cost'), Consumer<AppState>(
+              builder: (_, live, __) => _AnlasQuoteBar(state: live))),
+              child: Text('$amount Anlas')),
+          ])),
+          SizedBox(height: 56, child: Row(children: [
+            IconButton(tooltip: t('import'), onPressed: state.busy ? null : onPick,
+              icon: const Icon(Icons.add_photo_alternate_outlined)),
+            IconButton(tooltip: '${t('queue')} · $queueCount',
+              onPressed: () => _androidCreateSheet(context, t('queue'),
+                Consumer<AppState>(builder: (_, live, __) =>
+                  live.generationQueueRunning || live.queueProgress != null || live.generationQueue.isNotEmpty
+                    ? _GenerationQueuePanel(state: live) : Text('${t('queue')} · 0'))),
+              icon: Badge(isLabelVisible: queueCount > 0, label: Text('$queueCount'),
+                child: const Icon(Icons.playlist_play))),
+            if (compact) IconButton(tooltip: t('parameters'),
+              onPressed: () => _androidCreateSheet(context, t('parameters'), _ParamControls()),
+              icon: const Icon(Icons.tune)),
+            if (compact) IconButton(tooltip: t('cost'),
+              onPressed: () => _androidCreateSheet(context, t('cost'), Consumer<AppState>(
+                builder: (_, live, __) => _AnlasQuoteBar(state: live))),
+              icon: const Icon(Icons.toll_outlined)),
+            const SizedBox(width: 4),
+            Expanded(child: running ? FilledButton.icon(
+              onPressed: state.workbenchImage != null || state.queueAdding ? null : state.enqueueGeneration,
+              icon: const Icon(Icons.add_to_photos_outlined),
+              label: Text(text.addToQueue, maxLines: 1, overflow: TextOverflow.ellipsis)) : _PrimaryRunButton(state: state)),
+            if (running) ...[
+              IconButton(tooltip: state.queuePaused ? text.resume : text.pause,
+                onPressed: state.toggleQueuePause, icon: Icon(state.queuePaused ? Icons.play_arrow : Icons.pause)),
+              IconButton(tooltip: text.cancelAndClear, onPressed: state.cancelGeneration, icon: const Icon(Icons.stop)),
+            ],
+          ])),
+          if (!compact) Text(state.displayStatus, maxLines: 2, overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.textSecondary)),
+        ]))));
+  }
+}
+
 class PromptEditor extends StatefulWidget {
   final String label;
   final String value;
@@ -566,6 +775,104 @@ class PromptEditorState extends State<PromptEditor> {
   Timer? suggestionTimer;
   int suggestionRequest = 0;
   List<TagSuggestion> suggestions = const [];
+  final _androidRevision = ValueNotifier<int>(0);
+  bool _fullscreenOpen = false;
+  bool _editorOwnerAlive = true;
+  String? _lastFullscreenWrite;
+  PromptEditorRouteScope? _fullscreenRoutes;
+
+  Widget _registerPromptTool(BuildContext context, Widget child,
+      {PromptEditorRouteScope? routes}) =>
+      (routes ?? _fullscreenRoutes)?.registerTool(context, child) ?? child;
+
+  Future<T?> _waitPromptTool<T>(Future<T?> result,
+      {PromptEditorRouteScope? routes}) =>
+      (routes ?? _fullscreenRoutes)?.wait(result) ?? result;
+
+  void _setEditorState(VoidCallback change) {
+    setState(change);
+    _androidRevision.value++;
+  }
+
+  Future<void> openFullscreen() async {
+    if (!mounted || _fullscreenOpen) return;
+    _fullscreenOpen = true;
+    _lastFullscreenWrite = controller.text;
+    final snapshot = controller.text;
+    final language = context.read<AppState>().settings.language;
+    final routes = _fullscreenRoutes = PromptEditorRouteScope();
+    try {
+      final route = MaterialPageRoute<void>(
+        // The owner can disappear between push and this route's first build.
+        // Never subscribe to its already-disposed shared controller in that gap.
+        builder: (_) => !_editorOwnerAlive ? const SizedBox.shrink() : AndroidPromptEditorPage(
+          controller: controller, label: widget.label,
+          language: language,
+          snapshot: snapshot, revision: _androidRevision, routeScope: routes,
+          ownerAlive: () => _editorOwnerAlive,
+          onChanged: (value) {
+            if (!mounted) return;
+            _lastFullscreenWrite = value;
+            widget.onChanged(value);
+            _scheduleSuggestions(value);
+          },
+          onRevert: (value) {
+            if (!mounted || controller.text != _lastFullscreenWrite) return false;
+            _apply(value);
+            return true;
+          },
+          tools: _androidTools,
+          extraTools: () => widget.lockKind == 'negative' || widget.negativeLibrary
+            ? NegativePromptLibraryButton(value: controller.text, routeWrapper: routes.registerTool,
+                onApply: (prompt, mode) => _apply(applyNegativePreset(controller.text, prompt, mode)))
+            : const SizedBox.shrink(),
+          suggestions: () => Row(mainAxisSize: MainAxisSize.min, children: [
+            if (context.read<AppState>().settings.autoComplete)
+              for (final suggestion in suggestions) Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ActionChip(label: Text('${suggestion.tag} · ${localizedTagLabel(
+                  context.read<AppState>().settings.language, suggestion.tag,
+                  sourceLabel: suggestion.description)}'),
+                  onPressed: () => _applySuggestion(suggestion))),
+          ]),
+        ),
+      );
+      routes.registerEditor(route);
+      await routes.wait(Navigator.of(context).push<void>(route));
+    } finally {
+      _fullscreenOpen = false;
+      if (identical(_fullscreenRoutes, routes)) _fullscreenRoutes = null;
+      if (!mounted) _androidRevision.dispose();
+    }
+  }
+
+  List<PromptToolAction> _androidTools() {
+    final language = context.read<AppState>().settings.language;
+    final text = generateScreenTextFor(language);
+    return [
+      if (widget.showTextTools) ...[
+        PromptToolAction(label: promptAssistantLabels(language)['optimize']!,
+          icon: Icons.auto_awesome, onPressed: () => _openAssistant('optimize')),
+        PromptToolAction(label: promptAssistantLabels(language)['custom']!,
+          icon: Icons.edit_note, onPressed: () => _openAssistant('custom')),
+        PromptToolAction(label: translating ? text.translateBusy : text.translate,
+          icon: Icons.translate, onPressed: translating ? null : _translate),
+        if (translationBackup != null) PromptToolAction(label: text.undoTranslation,
+          icon: Icons.undo, onPressed: () {
+            final backup = translationBackup;
+            if (backup == null) return;
+            _setEditorState(() => translationBackup = null);
+            _apply(backup);
+          }),
+        PromptToolAction(label: text.normalize, icon: Icons.auto_fix_high, onPressed: _openNormalize),
+        PromptToolAction(label: text.weight, icon: Icons.tune, onPressed: _editWeights),
+      ],
+      if (hasPromptWildcards(controller.text)) PromptToolAction(label: text.randomPreview,
+        icon: Icons.casino_outlined, onPressed: _previewWildcard),
+      if (widget.showRelatedTags) PromptToolAction(label: text.relatedTag,
+        icon: Icons.hub_outlined, onPressed: _pickRelatedTag),
+    ];
+  }
 
   @override
   void initState() {
@@ -577,6 +884,15 @@ class PromptEditorState extends State<PromptEditor> {
   void didUpdateWidget(covariant PromptEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (controller.text == widget.value) return;
+    if (_fullscreenOpen && isAndroidRedesign(context)) {
+      final expected = widget.value;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || widget.value != expected || controller.text == expected) return;
+        controller.value = TextEditingValue(text: expected,
+          selection: TextSelection.collapsed(offset: expected.length));
+      });
+      return;
+    }
     controller.value = TextEditingValue(
       text: widget.value,
       selection: TextSelection.collapsed(offset: widget.value.length),
@@ -585,12 +901,17 @@ class PromptEditorState extends State<PromptEditor> {
 
   @override
   void dispose() {
+    _editorOwnerAlive = false;
+    _fullscreenRoutes?.close();
+    _androidRevision.value++;
     suggestionTimer?.cancel();
     controller.dispose();
+    if (!_fullscreenOpen) _androidRevision.dispose();
     super.dispose();
   }
 
   void _apply(String value) {
+    if (_fullscreenOpen) _lastFullscreenWrite = value;
     controller.value = TextEditingValue(
       text: value,
       selection: TextSelection.collapsed(offset: value.length),
@@ -601,9 +922,10 @@ class PromptEditorState extends State<PromptEditor> {
 
     Future<void> _openAssistant(String kind) async {
       final source = controller.text;
-      final result = await showDialog<String>(context: context,
-        builder: (_) => PromptAssistantDialog(kind: kind, source: source,
-          isCurrent: (expected) => mounted && controller.text == expected && widget.value == expected));
+      final result = await _waitPromptTool(showDialog<String>(context: context,
+        builder: (toolContext) => _registerPromptTool(toolContext,
+          PromptAssistantDialog(kind: kind, source: source,
+          isCurrent: (expected) => mounted && controller.text == expected && widget.value == expected))));
       if (!mounted || result == null) return;
       if (controller.text != source || widget.value != source) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -617,19 +939,19 @@ class PromptEditorState extends State<PromptEditor> {
     suggestionTimer?.cancel();
     final state = context.read<AppState>();
     if (!state.settings.autoComplete) {
-      if (suggestions.isNotEmpty && mounted) setState(() => suggestions = []);
+      if (suggestions.isNotEmpty && mounted) _setEditorState(() => suggestions = []);
       return;
     }
     final token = _lastPromptToken(value);
     if (token.length < 2) {
-      if (suggestions.isNotEmpty && mounted) setState(() => suggestions = []);
+      if (suggestions.isNotEmpty && mounted) _setEditorState(() => suggestions = []);
       return;
     }
     final request = ++suggestionRequest;
     suggestionTimer = Timer(const Duration(milliseconds: 320), () async {
       final result = await state.suggestTags(token);
       if (!mounted || request != suggestionRequest) return;
-      setState(() => suggestions = result.take(8).toList());
+      _setEditorState(() => suggestions = result.take(8).toList());
     });
   }
 
@@ -647,20 +969,20 @@ class PromptEditorState extends State<PromptEditor> {
     final prefix = split < 0 ? '' : value.substring(0, split + 1);
     final spacing = prefix.isEmpty || prefix.endsWith('\n') ? '' : ' ';
     _apply('$prefix$spacing${suggestion.tag}, ');
-    setState(() => suggestions = []);
+    _setEditorState(() => suggestions = []);
   }
 
   Future<void> _translate() async {
     final source=controller.text;
     if(translating||source.trim().isEmpty)return;
-    setState(()=>translating=true);
+    _setEditorState(()=>translating=true);
     try {
-      final result=await showDialog<String>(context:context,builder:(_)=>TranslationPreviewDialog(source:source,isCurrent:(expected)=>mounted&&controller.text==expected&&widget.value==expected));
+      final result=await _waitPromptTool(showDialog<String>(context:context,builder:(toolContext)=>_registerPromptTool(toolContext,TranslationPreviewDialog(source:source,isCurrent:(expected)=>mounted&&controller.text==expected&&widget.value==expected))));
       if(!mounted||result==null)return;
       if(controller.text!=source||widget.value!=source){ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(translationText(context.read<AppState>().settings.language)['stale']!)));return;}
       translationBackup=source;
       _apply(result);
-    }finally{if(mounted)setState(()=>translating=false);}
+    }finally{if(mounted)_setEditorState(()=>translating=false);}
   }
 
   Future<void> _editWeights() async {
@@ -668,11 +990,11 @@ class PromptEditorState extends State<PromptEditor> {
     final language = context.read<AppState>().settings.language;
     String t(String key) => mobileUiTextFor(language, key);
     var working = controller.text;
-    final result = await showModalBottomSheet<String>(
+    final result = await _waitPromptTool(showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) => StatefulBuilder(
+      builder: (context) => _registerPromptTool(context, StatefulBuilder(
         builder: (context, setSheetState) {
           final tags = splitPromptTags(working);
           return SafeArea(
@@ -745,9 +1067,9 @@ class PromptEditorState extends State<PromptEditor> {
             ),
           );
         },
-      ),
-    );
-    if (result != null) _apply(result);
+      )),
+    ));
+    if (mounted && result != null) _apply(result);
   }
 
   Future<void> _openNormalize() async {
@@ -755,11 +1077,11 @@ class PromptEditorState extends State<PromptEditor> {
     final language = context.read<AppState>().settings.language;
     String t(String key) => mobileUiTextFor(language, key);
     var options = const PromptNormalizeOptions();
-    final result = await showModalBottomSheet<String>(
+    final result = await _waitPromptTool(showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (sheetContext) => StatefulBuilder(
+      builder: (sheetContext) => _registerPromptTool(sheetContext, StatefulBuilder(
         builder: (context, setSheetState) {
           final preview = normalizePrompt(
             controller.text,
@@ -872,29 +1194,30 @@ class PromptEditorState extends State<PromptEditor> {
             ),
           );
         },
-      ),
-    );
-    if (result != null) _apply(result);
+      )),
+    ));
+    if (mounted && result != null) _apply(result);
   }
 
   Future<void> _pickRelatedTag() async {
+    final routes = _fullscreenRoutes;
     FocusManager.instance.primaryFocus?.unfocus();
     final language = context.read<AppState>().settings.language;
     String t(String key) => mobileUiTextFor(language, key);
     final tags = await context
         .read<AppState>()
         .suggestRelatedPromptTags(controller.text);
-    if (!mounted) return;
+    if (!mounted || routes?.isClosed == true) return;
     if (tags.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(t('generate.relatedTagUnavailable'))),
       );
       return;
     }
-    final selected = await showModalBottomSheet<RelatedPromptTag>(
+    final selected = await _waitPromptTool(showModalBottomSheet<RelatedPromptTag>(
       context: context,
       showDragHandle: true,
-      builder: (context) => SafeArea(
+      builder: (context) => _registerPromptTool(context, SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
           child: Column(
@@ -917,9 +1240,9 @@ class PromptEditorState extends State<PromptEditor> {
             ],
           ),
         ),
-      ),
-    );
-    if (selected == null) return;
+      ), routes: routes),
+    ), routes: routes);
+    if (!mounted || routes?.isClosed == true || selected == null) return;
     final base = controller.text.trim();
     _apply(base.isEmpty ? selected.tag : '$base, ${selected.tag}');
   }
@@ -928,9 +1251,9 @@ class PromptEditorState extends State<PromptEditor> {
     final language = context.read<AppState>().settings.language;
     String t(String key) => mobileUiTextFor(language, key);
     final preview = expandPromptWildcards(controller.text);
-    await showDialog<void>(
+    await _waitPromptTool(showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => _registerPromptTool(dialogContext, AlertDialog(
         title: Text(t('generate.randomPreviewTitle')),
         content: SelectableText(preview),
         actions: [
@@ -946,8 +1269,8 @@ class PromptEditorState extends State<PromptEditor> {
             child: Text(t('generate.applyResult')),
           ),
         ],
-      ),
-    );
+      )),
+    ));
   }
 
   @override
@@ -955,6 +1278,30 @@ class PromptEditorState extends State<PromptEditor> {
     final state = context.watch<AppState>();
     final text = generateScreenTextFor(state.settings.language);
     final language = state.settings.language;
+    if (isAndroidRedesign(context)) {
+      final tokens = LangbaiAndroidTokens.of(context);
+      return Material(color: tokens.inset, borderRadius: BorderRadius.circular(14),
+        child: InkWell(onTap: openFullscreen, borderRadius: BorderRadius.circular(14),
+          child: Padding(padding: const EdgeInsets.all(12), child: Row(children: [
+            Icon(widget.lockKind == 'negative' ? Icons.do_not_disturb_alt_outlined :
+              widget.lockKind == 'style' ? Icons.palette_outlined : Icons.notes,
+              size: 21, color: widget.lockKind == 'negative' ? Theme.of(context).colorScheme.error : null),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(widget.label, style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: 4),
+              Text(controller.text.trim().isEmpty ? androidPromptText(language, 'empty') : controller.text,
+                maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: tokens.textSecondary)),
+            ])),
+            const SizedBox(width: 8),
+            Column(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.open_in_full, size: 18),
+              const SizedBox(height: 4),
+              Text('${controller.text.runes.length}', style: Theme.of(context).textTheme.labelSmall),
+            ]),
+          ]))));
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1021,7 +1368,7 @@ class PromptEditorState extends State<PromptEditor> {
                   onPressed: () {
                     final backup = translationBackup;
                     if (backup == null) return;
-                    setState(() => translationBackup = null);
+                    _setEditorState(() => translationBackup = null);
                     _apply(backup);
                   },
                   icon: const Icon(Icons.undo),
@@ -2012,7 +2359,8 @@ class _PromptShortcutBar extends StatelessWidget {
 
 class _PreviewCard extends StatelessWidget {
   final VoidCallback onPick;
-  const _PreviewCard({required this.onPick});
+  final double aspectRatio;
+  const _PreviewCard({required this.onPick, this.aspectRatio = 1});
 
   @override
   Widget build(BuildContext context) {
@@ -2028,7 +2376,7 @@ class _PreviewCard extends StatelessWidget {
     final paths = historyIndex < 0 ? <String>[if (path != null) path] :
         history.map((item) => item.filePath).toList();
     return AspectRatio(
-      aspectRatio: 1,
+      aspectRatio: aspectRatio,
       child: Card(
         clipBehavior: Clip.antiAlias,
         child: Stack(

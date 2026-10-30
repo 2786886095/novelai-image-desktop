@@ -130,6 +130,15 @@ class StudioAdaptiveShell extends StatelessWidget {
 /// it is hidden. A regular IndexedStack eagerly mounted all thirteen screens;
 /// as gallery/tag/tool pages became richer this kept avoidable image caches,
 /// controllers and tickers alive from the first frame.
+/// Public adapter; both presentation shells retain the exact same lazy stack.
+class StudioLazyIndexedStack extends StatelessWidget {
+  final int index;
+  final List<Widget> children;
+  const StudioLazyIndexedStack({super.key, required this.index, required this.children});
+  @override
+  Widget build(BuildContext context) => _LazyIndexedStack(index: index, children: children);
+}
+
 class _LazyIndexedStack extends StatefulWidget {
   final int index;
   final List<Widget> children;

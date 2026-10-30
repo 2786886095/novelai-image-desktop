@@ -30,6 +30,9 @@ import 'services/background_queue_service.dart';
 import 'ui/onboarding.dart';
 import 'ui/studio_shell.dart';
 import 'ui/studio_theme.dart';
+import 'ui/android/android_gate.dart';
+import 'ui/android/android_tokens.dart';
+import 'ui/android/android_studio_shell.dart';
 import 'ui/global_typography.dart';
 import 'services/ui_fonts.dart';
 import 'models/ui_typography.dart';
@@ -76,8 +79,8 @@ class NovelAIApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
       ],
-      theme: withUiFont(StudioTheme.light(),family),
-      darkTheme: withUiFont(StudioTheme.dark(),family),
+      theme: withUiFont(isAndroidRedesign(context) ? androidStudioTheme(StudioTheme.light()) : StudioTheme.light(),family),
+      darkTheme: withUiFont(isAndroidRedesign(context) ? androidStudioTheme(StudioTheme.dark()) : StudioTheme.dark(),family),
       themeMode: switch (theme) {
         'light' => ThemeMode.light,
         'dark' => ThemeMode.dark,
@@ -121,6 +124,7 @@ class _HomeShellState extends State<HomeShell> {
   static const _incomingBackupPending = '__incoming_backup_pending__';
 
   int _index = 0;
+  bool _androidSettingsDetailOpen = false;
   List<int>? _navigationOrder;
   bool _onboardingScheduled = false;
   bool _v5NoticeScheduled = false;
@@ -184,12 +188,15 @@ class _HomeShellState extends State<HomeShell> {
       const OnlineGalleryScreen(),
       const StudioAgentScreen(),
       GalleryScreen(
+        onOpenCreate: () {
+          if (mounted) setState(() => _index = 0);
+        },
         onOpenMetadata: () {
           if (mounted) setState(() => _index = 5);
         },
       ),
       const AiLogScreen(),
-      const SettingsScreen(),
+      _settingsPage(),
       StyleLibraryScreen(onApply: () {
         if (mounted) setState(() => _index = 0);
       }),
@@ -197,6 +204,18 @@ class _HomeShellState extends State<HomeShell> {
     ];
     _initializeIncomingBackupChannel();
   }
+
+  SettingsScreen _settingsPage({bool active = true}) => SettingsScreen(
+        androidActive: active,
+        onOpenDiagnostics: () {
+          if (mounted) setState(() => _index = 11);
+        },
+        onAndroidDetailChanged: (open) {
+          if (mounted && _androidSettingsDetailOpen != open) {
+            setState(() => _androidSettingsDetailOpen = open);
+          }
+        },
+      );
 
   Future<void> _loadNavigationOrder() async {
     try {
@@ -370,6 +389,25 @@ class _HomeShellState extends State<HomeShell> {
       _v5NoticeScheduled = true;
       WidgetsBinding.instance
           .addPostFrameCallback((_) => _showV5MigrationNotice());
+    }
+    if (isAndroidRedesign(context)) {
+      return AndroidStudioShell(
+        selectedIndex: _index,
+        onDestinationSelected: (index) {
+          FocusManager.instance.primaryFocus?.unfocus();
+          setState(() => _index = index);
+        },
+        destinations: destinations,
+        pages: [
+          ..._pages.take(12),
+          _settingsPage(active: _index == 12),
+          ..._pages.skip(13),
+        ],
+        language: language,
+        nestedDetailActive: _index == 12 && _androidSettingsDetailOpen,
+        destinationOrder: _navigationOrder,
+        onDestinationOrderChanged: _saveNavigationOrder,
+      );
     }
     return StudioAdaptiveShell(
       selectedIndex: _index,

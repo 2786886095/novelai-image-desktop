@@ -12,6 +12,9 @@ import 'package:novelai_mobile/services/storage.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 import 'package:novelai_mobile/tags/offline_tag_store.dart';
 import 'package:novelai_mobile/ui/studio_shell.dart';
+import 'package:novelai_mobile/ui/android/android_studio_shell.dart';
+import 'package:novelai_mobile/ui/android/android_gate.dart';
+import 'package:novelai_mobile/ui/android/android_destination_groups.dart';
 import 'package:provider/provider.dart';
 import '../integration_test/native_ui_scenarios.dart' show loadNativeNavigation;
 
@@ -156,10 +159,24 @@ void main() {
     app.params.positivePrompt = 'NATIVE_NAV_PROMPT';
     app.convertInput = 'NATIVE_NAV_CONVERT';
     await tester.pump();
-    expect(find.byType(StudioAdaptiveShell), findsOneWidget);
-    final shell =
-        tester.widget<StudioAdaptiveShell>(find.byType(StudioAdaptiveShell));
-    expect(shell.destinations.length, 15);
+    final android = isAndroidRedesign(tester.element(find.byType(HomeShell)));
+    if (android) {
+      expect(find.byType(StudioAdaptiveShell), findsNothing);
+      expect(find.byType(AndroidStudioShell), findsOneWidget);
+      final shell =
+          tester.widget<AndroidStudioShell>(find.byType(AndroidStudioShell));
+      expect(shell.destinations.length, 15);
+      expect(androidDestinationGroups.expand((members) => members).toSet(),
+          Set.of(List.generate(15, (i) => i)));
+      expect(find.byKey(const ValueKey('android-main-navigation')),
+          findsOneWidget);
+    } else {
+      expect(find.byType(AndroidStudioShell), findsNothing);
+      expect(find.byType(StudioAdaptiveShell), findsOneWidget);
+      final shell =
+          tester.widget<StudioAdaptiveShell>(find.byType(StudioAdaptiveShell));
+      expect(shell.destinations.length, 15);
+    }
     expect(app.params.positivePrompt, 'NATIVE_NAV_PROMPT');
     expect(app.convertInput, 'NATIVE_NAV_CONVERT');
     expect(app.settings.proxyUrl, 'http://127.0.0.1:1');
@@ -174,7 +191,9 @@ void main() {
     for (var i = 0; i < 100 && app.updateChecking; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
-  });
+  },
+      variant:
+          const TargetPlatformVariant({TargetPlatform.android, TargetPlatform.iOS}));
 
   for (final settings in [
     _closedSettings()..proxyMode = 'direct',

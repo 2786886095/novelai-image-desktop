@@ -77,6 +77,14 @@ void main() {
             // no private export or evaluator bridge is present in TARGET.
             await tester.pumpWidget(ChangeNotifierProvider.value(value: app, child: MaterialApp(theme: StudioTheme.light(), home: const GenerateScreen())));
             await tester.pumpAndSettle();
+            if (find.byKey(const ValueKey('android-create-workspace')).evaluate().isNotEmpty) {
+              final outer = find.text('参考');
+              await tester.scrollUntilVisible(outer, 300,
+                  scrollable: find.descendant(of: find.byType(GenerateScreen), matching: find.byType(Scrollable)).first);
+              await tester.ensureVisible(outer);
+              await tester.tap(outer);
+              await tester.pumpAndSettle();
+            }
             final section = find.text('参考图');
             final list = find.descendant(of: find.byType(GenerateScreen), matching: find.byType(ListView)).first;
             final scrollable = find.descendant(of: list, matching: find.byType(Scrollable)).first;

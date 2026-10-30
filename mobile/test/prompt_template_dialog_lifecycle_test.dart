@@ -39,9 +39,30 @@ void main() {
         final section = find.text('提示词模板');
         // ListView lazily builds distant settings sections. Scrolling is a real
         // user action; ensureVisible alone cannot materialize an absent element.
-        final settingsList = find.descendant(of: find.byType(SettingsScreen), matching: find.byType(ListView)).first;
-        final scrollable = find.descendant(of: settingsList, matching: find.byType(Scrollable)).first;
-        await tester.scrollUntilVisible(section, 400, scrollable: scrollable, maxScrolls: 30);
+        if (find
+            .byKey(const ValueKey('android-settings-hub'))
+            .evaluate()
+            .isNotEmpty) {
+          final category = find
+              .byKey(const ValueKey('android-settings-category-preferences'));
+          await tester.ensureVisible(category);
+          await tester.pumpAndSettle();
+          expect(category.hitTestable(), findsOneWidget);
+          await tester.tap(category);
+          await tester.pumpAndSettle();
+          await tester.ensureVisible(section);
+        } else {
+          final settingsList = find
+              .descendant(
+                  of: find.byType(SettingsScreen),
+                  matching: find.byType(ListView))
+              .first;
+          final scrollable = find
+              .descendant(of: settingsList, matching: find.byType(Scrollable))
+              .first;
+          await tester.scrollUntilVisible(section, 400,
+              scrollable: scrollable, maxScrolls: 30);
+        }
         expect(section, findsOneWidget);
         await tester.ensureVisible(section);
         await tester.pumpAndSettle();
@@ -49,7 +70,10 @@ void main() {
         await tester.pumpAndSettle();
         // The original editors remain under the explicit legacy disclosure.
         // Follow that production navigation before checking their focused dialogs.
-        final legacy = find.byWidgetPredicate((w) => w is ExpansionTile && w.title is Text && (w.title as Text).data == '旧版模板与提示词助手');
+        final legacy = find.byWidgetPredicate((w) =>
+            w is ExpansionTile &&
+            w.title is Text &&
+            (w.title as Text).data == '旧版模板与提示词助手');
         expect(legacy, findsOneWidget);
         await tester.ensureVisible(legacy);
         await tester.pumpAndSettle();
@@ -77,7 +101,8 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 50));
         expect(tester.takeException(), isNull,
-            reason: 'A focused TextField controller must outlive route animation');
+            reason:
+                'A focused TextField controller must outlive route animation');
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         expect(find.byType(AlertDialog), findsNothing);
@@ -88,7 +113,9 @@ void main() {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-      });
+      },
+          variant: const TargetPlatformVariant(
+              {TargetPlatform.android, TargetPlatform.iOS}));
     }
   }
 }
