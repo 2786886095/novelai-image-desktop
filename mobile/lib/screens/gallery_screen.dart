@@ -340,45 +340,46 @@ class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserv
         ],
       ),
       body: Column(children: [
+        // Content-sized filter pills wrap as whole units. Two equal dropdown
+        // fields left ~42dp for the value at 320dp and split words mid-line.
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: Row(children: [
-            Expanded(
-              child: StudioDropdownButtonFormField<String>(
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Wrap(spacing: 8, runSpacing: 8, children: [
+              _AndroidFilterPill<String>(
                 key: const ValueKey('android-gallery-group-filter'),
+                label: t('gallery.group'),
+                icon: Icons.folder_outlined,
                 value: group,
-                isExpanded: true,
-                decoration: InputDecoration(labelText: t('gallery.group'), prefixIcon: const Icon(Icons.folder_outlined)),
-                items: [
-                  DropdownMenuItem(value: '', child: Text(t('gallery.allGroups'))),
-                  DropdownMenuItem(value: _ungroupedFilter, child: Text(t('gallery.ungrouped'))),
-                  ...state.groups.map((item) => DropdownMenuItem(value: item.id, child: Text(item.name, overflow: TextOverflow.ellipsis))),
+                defaultValue: '',
+                options: [
+                  ('', t('gallery.allGroups')),
+                  (_ungroupedFilter, t('gallery.ungrouped')),
+                  ...state.groups.map((item) => (item.id, item.name)),
                   if (group.isNotEmpty && group != _ungroupedFilter && !state.groups.any((item) => item.id == group))
-                    DropdownMenuItem(value: group, child: Text(group, overflow: TextOverflow.ellipsis)),
+                    (group, group),
                 ],
-                onChanged: (value) {
-                  final next = value ?? '';
+                onSelected: (next) {
                   setState(() => group = next);
                   unawaited(state.setActiveHistoryGroup(next == _ungroupedFilter ? '' : next));
                 },
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: StudioDropdownButtonFormField<String>(
+              _AndroidFilterPill<String>(
                 key: const ValueKey('android-gallery-date-filter'),
+                label: t('gallery.date'),
+                icon: Icons.calendar_today_outlined,
                 value: date,
-                isExpanded: true,
-                decoration: InputDecoration(labelText: t('gallery.date'), prefixIcon: const Icon(Icons.calendar_today_outlined)),
-                items: [
-                  DropdownMenuItem(value: '', child: Text(t('gallery.allDates'))),
-                  ...dates.map((value) => DropdownMenuItem(value: value, child: Text(value))),
-                  if (date.isNotEmpty && !dates.contains(date)) DropdownMenuItem(value: date, child: Text(date)),
+                defaultValue: '',
+                options: [
+                  ('', t('gallery.allDates')),
+                  ...dates.map((value) => (value, value)),
+                  if (date.isNotEmpty && !dates.contains(date)) (date, date),
                 ],
-                onChanged: (value) => setState(() => date = value ?? ''),
+                onSelected: (next) => setState(() => date = next),
               ),
-            ),
-          ]),
+            ]),
+          ),
         ),
         if (editing)
           Padding(
@@ -1053,6 +1054,64 @@ String _fileStem(String path) {
   final name = _fileName(path);
   final dot = name.lastIndexOf('.');
   return dot > 0 ? name.substring(0, dot) : name;
+}
+
+/// Single-line Android filter chip with a menu. The current value never wraps;
+/// a long user group name ellipsizes within the row and the menu shows it in
+/// full. A non-default selection uses the tonal container to read as active.
+class _AndroidFilterPill<T> extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final T value;
+  final T defaultValue;
+  final List<(T, String)> options;
+  final ValueChanged<T> onSelected;
+  const _AndroidFilterPill({super.key, required this.label, required this.icon,
+    required this.value, required this.defaultValue, required this.options,
+    required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = LangbaiAndroidTokens.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final active = value != defaultValue;
+    final current = options.where((option) => option.$1 == value).firstOrNull?.$2 ?? '$value';
+    final foreground = active ? scheme.onPrimaryContainer : tokens.textPrimary;
+    return Material(
+      color: active ? scheme.primaryContainer : tokens.card,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: active ? scheme.primaryContainer : tokens.outline)),
+      clipBehavior: Clip.antiAlias,
+      child: PopupMenuButton<T>(
+        tooltip: label,
+        initialValue: value,
+        popUpAnimationStyle: MediaQuery.disableAnimationsOf(context) ? AnimationStyle.noAnimation : AppMotion.disclosureStyle,
+        onSelected: onSelected,
+        itemBuilder: (_) => [
+          for (final option in options)
+            PopupMenuItem<T>(value: option.$1,
+              child: Text(option.$2, maxLines: 2, overflow: TextOverflow.ellipsis)),
+        ],
+        child: Semantics(
+          label: label,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(12, 6, 6, 6),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(icon, size: 18, color: foreground),
+                const SizedBox(width: 8),
+                Flexible(child: Text(current, maxLines: 1, softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(color: foreground))),
+                Icon(Icons.arrow_drop_down, color: foreground),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 extension _FirstOrNull<T> on Iterable<T> {

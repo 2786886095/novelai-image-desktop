@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/prompts/negative_prompt_library.dart';
 import 'package:novelai_mobile/screens/generate_screen.dart';
@@ -286,6 +287,50 @@ void main() {
     await tester.pump();
     expect(controller.text, 'external update');
     expect(find.text('内容已被其他操作更新，无法整体还原。'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  for (final scale in [1.0, 1.3]) {
+    testWidgets('320dp title sits below toolbar actions unclipped at x$scale',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final controller = TextEditingController(text: 'cat');
+      final revision = ValueNotifier<int>(0);
+      addTearDown(controller.dispose);
+      addTearDown(revision.dispose);
+      await openEditor(tester, controller, revision, scale: scale);
+      final title = find.byKey(const ValueKey('android-prompt-editor-title'));
+      expect(find.descendant(of: find.byType(AppBar), matching: title),
+          findsNothing);
+      expect(tester.renderObject<RenderParagraph>(title).didExceedMaxLines,
+          isFalse);
+      // Title starts below the toolbar row that holds back/undo/Done/more.
+      expect(tester.getRect(title).top,
+          greaterThanOrEqualTo(tester.getRect(find.byType(AppBar)).bottom));
+      expect(tester.getRect(title).right, lessThanOrEqualTo(320));
+      expect(find.text('完成'), findsOneWidget);
+      expect(find.byIcon(Icons.undo), findsOneWidget);
+      expect(
+          tester.getSemantics(title),
+          matchesSemantics(isHeader: true, label: '正面提示词'));
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets('keyboard keeps a one-line title and hides the counter',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final controller = TextEditingController(text: 'cat');
+    final revision = ValueNotifier<int>(0);
+    addTearDown(controller.dispose);
+    addTearDown(revision.dispose);
+    await openEditor(tester, controller, revision, keyboard: 300);
+    final title = tester
+        .widget<Text>(find.byKey(const ValueKey('android-prompt-editor-title')));
+    expect(title.maxLines, 1);
+    expect(find.textContaining('修改实时保存'), findsNothing);
     expect(tester.takeException(), isNull);
   });
   for (final scale in [1.0, 2.0]) {

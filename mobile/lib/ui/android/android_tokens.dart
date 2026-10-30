@@ -153,7 +153,9 @@ class AndroidSectionCard extends StatelessWidget {
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  // The trailing action keeps its intrinsic 48dp size at the
+                  // end edge; a Flexible here took half the row and centred it.
+                  Row(children: [
                     if (icon != null) ...[
                       Icon(icon, size: 22),
                       const SizedBox(width: 10)
@@ -176,7 +178,7 @@ class AndroidSectionCard extends StatelessWidget {
                                         .bodySmall
                                         ?.copyWith(color: t.textSecondary))),
                         ])),
-                    if (trailing != null) Flexible(child: trailing!),
+                    if (trailing != null) trailing!,
                   ]),
                   const SizedBox(height: 12),
                   child,

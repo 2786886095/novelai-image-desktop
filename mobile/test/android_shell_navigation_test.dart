@@ -125,6 +125,58 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
   }
+
+  testWidgets('320dp member strip reveals a member selected off-screen',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final host = GlobalKey<_HostState>();
+    await tester.pumpWidget(_Host(key: host, mounts: <int, int>{}));
+    // Metadata (5) is the last Gallery member; select it the way the
+    // all-features catalog or a deep link does, without touching the strip.
+    host.currentState!.setIndex(5);
+    await tester.pumpAndSettle();
+    final chip = tester.getRect(find.byKey(const ValueKey('android-member-5')));
+    final apps =
+        tester.getRect(find.byKey(const ValueKey('android-all-features')));
+    expect(chip.left, greaterThanOrEqualTo(0));
+    expect(chip.right, lessThanOrEqualTo(apps.left));
+    host.currentState!.setIndex(10);
+    await tester.pumpAndSettle();
+    expect(
+        tester.getRect(find.byKey(const ValueKey('android-member-10'))).left,
+        greaterThanOrEqualTo(0));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('section card keeps trailing action at the end edge',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+        theme: androidStudioTheme(StudioTheme.light()),
+        home: Scaffold(
+            body: AndroidSectionCard(
+                key: const ValueKey('card'),
+                title: 'Prompts',
+                icon: Icons.notes,
+                trailing: IconButton(
+                    key: const ValueKey('trailing'),
+                    onPressed: () {},
+                    icon: const Icon(Icons.search)),
+                child: const SizedBox(height: 20)))));
+    final card = tester.getRect(find.byKey(const ValueKey('card')));
+    final action = tester.getRect(find.byKey(const ValueKey('trailing')));
+    final title = tester.getRect(find.text('Prompts'));
+    expect(card.right - action.right, 16);
+    expect((action.center.dy - title.center.dy).abs(), lessThan(1));
+    expect(action.size, const Size(48, 48));
+  });
 }
 
 class _Host extends StatefulWidget {

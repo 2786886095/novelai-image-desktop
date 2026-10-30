@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import '../../ui/android/android_tokens.dart';
-import '../../ui/global_typography.dart';
 import 'android_prompt_text.dart';
 import 'prompt_chip_tokenizer.dart';
 
@@ -319,9 +318,10 @@ class _AndroidPromptEditorPageState extends State<AndroidPromptEditorPage> {
       key: const ValueKey('android-prompt-editor-page'),
       backgroundColor: tokens.canvas,
       resizeToAvoidBottomInset: true,
+      // The toolbar row holds only navigation and actions; the full field name
+      // sits below it (medium top app bar pattern). At 320dp the four toolbar
+      // controls left ~128dp and cut "Positive prompt" to "Posit…".
       appBar: AppBar(
-          title: studioAppBarTitle(context,
-              Text(widget.label, maxLines: 1, overflow: TextOverflow.ellipsis)),
           actions: [
             IconButton(
                 tooltip: t('undo'),
@@ -345,18 +345,31 @@ class _AndroidPromptEditorPageState extends State<AndroidPromptEditorPage> {
           top: false,
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            if (!keyboard)
-              Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                  child: Row(children: [
-                    Expanded(
-                        child: Text(
-                            '${widget.controller.text.runes.length} ${t('characters')} · ${t('saved')}',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: tokens.textSecondary))),
-                  ])),
+            Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, keyboard ? 4 : 8),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Semantics(
+                          header: true,
+                          child: Text(widget.label,
+                              key: const ValueKey('android-prompt-editor-title'),
+                              maxLines: keyboard ? 1 : 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: (keyboard
+                                      ? Theme.of(context).textTheme.titleMedium
+                                      : Theme.of(context).textTheme.titleLarge)
+                                  ?.copyWith(fontWeight: FontWeight.w700))),
+                      if (!keyboard)
+                        Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                                '${widget.controller.text.runes.length} ${t('characters')} · ${t('saved')}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(color: tokens.textSecondary))),
+                    ])),
             if (!keyboard)
               Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),

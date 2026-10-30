@@ -49,18 +49,37 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
     Icons.person
   ];
 
+  final _memberKeys = <int, GlobalKey>{};
+
   int get _group => androidGroupForDestination(widget.selectedIndex);
 
   @override
   void initState() {
     super.initState();
     _lastVisited[_group] = widget.selectedIndex;
+    _revealSelectedMember();
   }
 
   @override
   void didUpdateWidget(covariant AndroidStudioShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     _lastVisited[_group] = widget.selectedIndex;
+    if (oldWidget.selectedIndex != widget.selectedIndex) _revealSelectedMember();
+  }
+
+  /// Members reached from the catalog, Back or a deep link may sit past the
+  /// strip's edge at 320dp; scroll the selected chip into view after layout.
+  void _revealSelectedMember() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final chip = _memberKeys[widget.selectedIndex]?.currentContext;
+      if (!mounted || chip == null) return;
+      Scrollable.ensureVisible(chip,
+          alignment: .5,
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic);
+    });
   }
 
   void _select(int index) {
@@ -197,6 +216,8 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
                                 padding:
                                     const EdgeInsetsDirectional.only(end: 8),
                                 child: ConstrainedBox(
+                                  key: _memberKeys.putIfAbsent(
+                                      index, () => GlobalKey()),
                                   constraints:
                                       const BoxConstraints(minHeight: 48),
                                   child: ChoiceChip(

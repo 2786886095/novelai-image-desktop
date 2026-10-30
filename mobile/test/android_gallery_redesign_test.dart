@@ -3,12 +3,14 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/screens/gallery_screen.dart';
 import 'package:novelai_mobile/ui/android/android_tokens.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _GalleryState extends AppState {
   int generated = 0;
@@ -277,6 +279,84 @@ void main() {
                 find.byKey(const ValueKey('gallery-full-file-path')))
             .data,
         fixture.files[2].absolute.path);
+    expect(fixture.state.generated, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final scale in [1.0, 1.3, 2.0]) {
+    _galleryTest('320dp filters keep values on one line at x$scale',
+        (tester) async {
+      final fixture = await _pumpGallery(tester,
+          size: const Size(320, 640), textScale: scale);
+      fixture.state.settings.language = 'en-US';
+      fixture.state.notifyListeners();
+      await tester.pumpAndSettle();
+      for (final value in ['All groups', 'All dates']) {
+        final paragraph = tester.renderObject<RenderParagraph>(find.descendant(
+            of: find.byType(Wrap), matching: find.text(value)));
+        final style = tester.widget<Text>(find.descendant(
+            of: find.byType(Wrap), matching: find.text(value)));
+        expect(style.maxLines, 1);
+        expect(style.softWrap, isFalse);
+        // One line tall: never wrapped mid-word as the 42dp field did.
+        final lineHeight = paragraph.getFullHeightForCaret(
+            const TextPosition(offset: 0));
+        expect(paragraph.size.height, lessThan(lineHeight * 1.5));
+        // The host test font is ~2x wider than Roboto; at x2.0 a pill may
+        // ellipsize but must still never wrap or split the word.
+        if (scale < 2) {
+          expect(paragraph.didExceedMaxLines, isFalse,
+              reason: '$value must remain fully readable at x$scale');
+        }
+      }
+      for (final key in [
+        'android-gallery-group-filter',
+        'android-gallery-date-filter'
+      ]) {
+        final rect = tester.getRect(find.byKey(ValueKey(key)));
+        expect(rect.height, greaterThanOrEqualTo(48));
+        expect(rect.left, greaterThanOrEqualTo(0));
+        expect(rect.right, lessThanOrEqualTo(320));
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  _galleryTest('filter pill selects group and date through the existing state',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final fixture = await _pumpGallery(tester);
+    fixture.state
+      ..groups = const [
+        HistoryGroup(id: 'g1', name: 'Fixture group', createdAt: '2026-10-31')
+      ]
+      ..history = [
+        HistoryItem.fromJson(
+            {...fixture.state.history.first.toJson(), 'groupId': 'g1'}),
+        fixture.state.history.last,
+      ];
+    fixture.state.notifyListeners();
+    await tester.pumpAndSettle();
+    expect(find.text('first.png'), findsOneWidget);
+    expect(find.text('second.png'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('android-gallery-group-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Fixture group').last);
+    await tester.pumpAndSettle();
+    expect(fixture.state.selectedGroupId, 'g1');
+    expect(find.text('first.png'), findsOneWidget);
+    expect(find.text('second.png'), findsNothing);
+    // Active filter reads as selected and names the chosen group.
+    expect(
+        find.descendant(
+            of: find.byKey(const ValueKey('android-gallery-group-filter')),
+            matching: find.text('Fixture group')),
+        findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('android-gallery-date-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2026-10-30').last);
+    await tester.pumpAndSettle();
+    expect(find.text('first.png'), findsNothing);
     expect(fixture.state.generated, 0);
     expect(tester.takeException(), isNull);
   });
