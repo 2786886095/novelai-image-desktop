@@ -24,12 +24,11 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 
 ## 本次更新
 
-- **五平台漫画与模板**：桌面、Android、iOS 提供「日式漫画生成器」和图片／漫画提示词切换。漫画可选日式整页、单分镜；统一按页数，一行一页，单格图一张也算一页。图片仍保留三种模式，漫画不混用图片模式。
-- **明确的生成流程**：输入内容后显式请求 AI 推荐页数，或手动设置 1–30 页；整页每批最多 4 页、单分镜 8 页，下一批须手动点击。结果可编辑、复制并确认导入原漫画候选／主图流程；不自动生图或重新提交收费请求。
-- **统一模板库**：六套图片 3.0 模板与两套完整漫画原稿，支持只读预览、命名另存、TXT／MD／JSON 导入、自定义编辑、选择、恢复默认及 JSON 导出；模板库纳入备份恢复。旧版与已有自定义保留，升级不会静默切换原选用版本。
-- **交互与安全边界**：独立项目与草稿、请求归属取消、陈旧结果保护、截断原文保留。修复设置模板库右上按钮被关闭按钮样式挤成竖排的问题。模板正文不会改变全局模型、风格、负面或收费设置。
-- **本次发布与证据**：本次 Latest 经维护者明确授权，豁免尚未完成的验收后发布；本轮仅重建并上传安装包，不新增功能、原生或模型验收。同源五平台完整验收、Windows 画风迭代完整三个 GPU 场景尚未完成，iOS 系统目录选择／外部书签／图片保存与历史链路未通过。构建成功不等于功能已验证。
-- **平台与安装限制**：本地 Agent 组件和画风自动迭代仍仅 Windows；其他平台不支持的项目不计为通过。Android 构建已配置稳定签名密钥，但本轮未独立确认与旧版证书一致性；iOS IPA 未签名，须自行签名／侧载，不能直接安装普通 iPhone。其他签名、公证、覆盖升级和自动更新能力不作额外保证，实际限制见 Latest。
+- **Android 新导航与创作界面**：底部主导航、“全部功能”目录和成员条保留原有 15 个目的地与 7 个工具，导航身份和数据键不变；iOS 与桌面界面保持原样。
+- **Android 窄屏修正**：320dp 下图库筛选改为按内容宽度的单行药丸（不低于 48dp，放不下时整颗换行、不拆词）；全屏提示词编辑器完整显示字段名；卡片右上操作贴齐末端；从“全部功能”或深链选中的成员自动滚入可见区域。
+- **业务边界不变**：生成、确认、收费、不重放、账户与备份逻辑未改变；系统和应用字体倍率照常生效。
+- **发布与证据**：正式发行须通过同源五平台原生验收（187 个必需单元）、Windows 画风迭代本机 GPU 证明、安装升级与 Android 签名连续性等发布门；结果以 Latest 附件中的 verification.json 为准，不沿用旧版豁免。回环合成服务验收不代表远端模型画质或实际扣费。
+- **平台与安装限制**：本地 Agent 组件和画风自动迭代仍仅 Windows，其他平台不支持的项目不计为通过。iOS IPA 未签名，须自行签名／侧载，不能直接安装到普通 iPhone；Windows 无 Authenticode 签名、macOS 未公证，实际限制见 Latest。
 
 历史更新见[更新记录](./docs/RELEASE_NOTES.md)。
 
@@ -94,7 +93,7 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 | Windows x64 · 安装版 | [安装版](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 文件名含 Setup 的 EXE；安装前备份设置与作品 |
 | Windows x64 · 便携版 | [便携版](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 不含 Setup 的便携 EXE；下载新包替换，便携版不等于零痕迹 |
 | macOS · Intel / Apple Silicon | [Universal DMG](https://github.com/2786886095/novelai-image-desktop/releases/latest) / [ZIP](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 通用 DMG 或 ZIP；签名 / 公证状态以 Latest 说明为准 |
-| Linux x86_64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 构建基线为 Ubuntu 24.04 LTS（x86_64）；本次豁免发行未完成同源完整 Linux 原生验收，不以构建成功代替运行验证。Ubuntu 26.04 已观察到图像运行时卡住，目前不支持；其他发行版未验收。添加执行权限后运行，手动更新。 |
+| Linux x86_64 | [AppImage](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 本次验收与支持基线为 Ubuntu 24.04 LTS（x86_64），实际通过情况见同源 Latest 证据。Ubuntu 26.04 已观察到图像运行时卡住，目前不支持；其他发行版未验收。添加执行权限后运行，手动更新。 |
 | Android | [APK](https://github.com/2786886095/novelai-image-desktop/releases/latest) | APK，手动安装；先核对签名与升级说明，勿为更新而删除旧数据 |
 | iOS（附加包） | [未签名 IPA](https://github.com/2786886095/novelai-image-desktop/releases/latest) | 需自行签名后安装，不能直接安装到普通 iPhone |
 
