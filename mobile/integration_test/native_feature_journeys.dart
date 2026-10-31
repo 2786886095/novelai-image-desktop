@@ -25,6 +25,7 @@ import 'package:novelai_mobile/services/nai_api.dart';
 import 'package:novelai_mobile/services/storage.dart';
 import 'package:novelai_mobile/services/unified_storage.dart';
 import 'package:novelai_mobile/state/app_state.dart';
+import 'native_ui_actions.dart' show nativeUiElements, nativeUiTap, nativeUiWait;
 
 const _sourceSha = String.fromEnvironment('FEATURE_SOURCE_SHA', defaultValue: 'uncommitted');
 const _syntheticToken = 'acceptance-synthetic-not-a-real-token';
@@ -254,9 +255,34 @@ Future<void> _run() async {
     var screens=0,editable=0;
     void visit(Element e){if(e.widget is GenerateScreen)screens++;if(e.widget is EditableText)editable++;e.visitChildren(visit);}
     visit(WidgetsBinding.instance.rootElement!);
-    expect(screens, 1);expect(editable>0,true);expect(uiErrors.isEmpty,true);
+    expect(screens, 1);expect(uiErrors.isEmpty,true);
+    // The Android redesign shows prompts as cards that open the production
+    // full-screen editor; inline fields remain on iOS and classic builds.
+    final androidCards = Platform.isAndroid && !const bool.fromEnvironment('LANGBAI_ANDROID_CLASSIC');
+    var editorEditable = 0;
+    if (androidCards) {
+      expect(editable, 0, reason: 'Android redesign unexpectedly rendered inline prompt fields');
+      final prompt = app.params.positivePrompt;
+      expect(prompt.trim().isNotEmpty, true, reason: 'Positive prompt fixture is empty');
+      final preview = nativeUiElements((w) => w is Text && w.data == prompt);
+      expect(preview.length, 1, reason: 'Positive prompt card preview missing or ambiguous');
+      await nativeUiTap(preview.single);
+      await nativeUiWait(() => nativeUiElements((w) => w.key == const ValueKey('android-prompt-editor-page')).isNotEmpty, 'production prompt editor route');
+      editorEditable = nativeUiElements((w) => w is EditableText && w.controller.text == prompt).length;
+      expect(editorEditable, 1, reason: 'Prompt editor did not expose the current prompt as editable text');
+      final back = nativeUiElements((w) => w is BackButton);
+      expect(back.length, 1, reason: 'Prompt editor Back control missing');
+      await nativeUiTap(back.single);
+      await nativeUiWait(() => nativeUiElements((w) => w.key == const ValueKey('android-prompt-editor-page')).isEmpty, 'prompt editor closed');
+      expect(app.params.positivePrompt, prompt, reason: 'Opening/closing the editor changed the prompt');
+      editable = 0; screens = 0; visit(WidgetsBinding.instance.rootElement!);
+      expect(screens, 1);
+    } else {
+      expect(editable>0,true);
+    }
+    expect(uiErrors.isEmpty,true);
     expect(_asyncErrors, _empty);
-    _checked('generation', 'actual production GenerateScreen mounted on target native engine', {'editableControls': editable, 'screenInteractionCoverage': 'mount only; no claim of full navigation'});
+    _checked('generation', 'actual production GenerateScreen mounted on target native engine', {'editableControls': androidCards ? editorEditable : editable, 'androidPromptCardOpenedProductionEditor': androidCards, 'screenInteractionCoverage': androidCards ? 'mount plus one real prompt-card tap into the production editor and Back; no claim of full navigation' : 'mount only; no claim of full navigation'});
     } finally {for(final dispose in cleanup.reversed){await dispose();}}
 }
 

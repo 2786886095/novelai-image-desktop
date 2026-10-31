@@ -25,6 +25,8 @@ import 'package:novelai_mobile/services/novelai_account_api.dart';
 import 'package:novelai_mobile/services/storage.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 import 'package:novelai_mobile/ui/studio_shell.dart';
+import 'package:novelai_mobile/ui/android/android_destination_groups.dart';
+import 'package:novelai_mobile/ui/android/android_studio_shell.dart';
 import 'native_scenario_support.dart';
 import 'native_ui_actions.dart';
 import 'native_account_wait_diagnostic.dart';
@@ -693,7 +695,59 @@ Future<void> _random(NativeContext c, NativeUiTlsFixture tls) async {
   });
 }
 
-Future<void> _navigateTo(int target) async {
+// Android uses its redesigned production shell; iOS keeps StudioAdaptiveShell.
+final _androidShell =
+    Platform.isAndroid && !const bool.fromEnvironment('LANGBAI_ANDROID_CLASSIC');
+
+AndroidStudioShell _androidShellWidget() =>
+    nativeUiElements((w) => w is AndroidStudioShell).single.widget
+        as AndroidStudioShell;
+
+Future<void> _tapKey(Key key, String reason) async {
+  final found = nativeUiElements((w) => w.key == key);
+  require(found.length == 1, reason);
+  await nativeUiTap(found.single);
+}
+
+// Real hit-tested taps on the bottom group bar and member strip, or on the
+// All features catalog; the destination index remains the route identity.
+Future<void> _androidNavigateTo(int target, {bool viaCatalog = false}) async {
+  final group = androidGroupForDestination(target);
+  require(group >= 0, 'Destination $target has no Android group');
+  if (viaCatalog) {
+    await _tapKey(const ValueKey('android-all-features'),
+        'Android All features control missing');
+    await nativeUiWait(
+        () => nativeUiElements((w) => w.key == ValueKey('android-catalog-$target'))
+            .isNotEmpty,
+        'Android catalog entry $target');
+    await _tapKey(ValueKey('android-catalog-$target'),
+        'Android catalog entry $target ambiguous');
+  } else {
+    if (androidGroupForDestination(_androidShellWidget().selectedIndex) !=
+        group) {
+      await _tapKey(ValueKey('android-group-$group'),
+          'Android primary group $group missing');
+      await nativeUiWait(
+          () =>
+              androidGroupForDestination(_androidShellWidget().selectedIndex) ==
+              group,
+          'Android group $group selected');
+    }
+    if (_androidShellWidget().selectedIndex != target) {
+      await _tapKey(ValueKey('android-member-$target'),
+          'Android member $target missing');
+    }
+  }
+  await nativeUiWait(() => _androidShellWidget().selectedIndex == target,
+      'real route $target selected');
+}
+
+Future<void> _navigateTo(int target, {bool viaCatalog = false}) async {
+  if (_androidShell) {
+    await _androidNavigateTo(target, viaCatalog: viaCatalog);
+    return;
+  }
   final shell = nativeUiElements((w) => w is StudioAdaptiveShell).single.widget
       as StudioAdaptiveShell;
   final primary = StudioAdaptiveShell.normalizeDestinationOrder(
@@ -892,20 +946,29 @@ Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
   final imageHash = digest(await file.readAsBytes());
   await nativeUiMount(app, const HomeShell(),
       shellKey: const ValueKey('native-navigation-a'));
-  await nativeUiWait(
-      () => nativeUiElements((w) => w is StudioAdaptiveShell).isNotEmpty,
+  bool isPlatformShell(Widget w) =>
+      _androidShell ? w is AndroidStudioShell : w is StudioAdaptiveShell;
+  await nativeUiWait(() => nativeUiElements(isPlatformShell).isNotEmpty,
       'actual HomeShell initialized');
-  final count = (nativeUiElements((w) => w is StudioAdaptiveShell).single.widget
-          as StudioAdaptiveShell)
-      .destinations
-      .length;
+  require(
+      nativeUiElements((w) =>
+              _androidShell ? w is StudioAdaptiveShell : w is AndroidStudioShell)
+          .isEmpty,
+      'HomeShell rendered the other platform shell');
+  final count = _androidShell
+      ? _androidShellWidget().destinations.length
+      : (nativeUiElements((w) => w is StudioAdaptiveShell).single.widget
+              as StudioAdaptiveShell)
+          .destinations
+          .length;
   require(count == 15, 'Uncovered new mobile navigation destination');
   final visited = <int>[];
   for (var index = 0; index < count; index++) {
     await _navigateTo(index);
     visited.add(index);
   }
-  await _navigateTo(6);
+  // Android also reaches a destination through its All features catalog.
+  await _navigateTo(6, viaCatalog: _androidShell);
   final toolTitles = await collectNativeToolTitles(app);
   final destinations = nativeToolCardMatchers(app);
   require(
@@ -929,6 +992,7 @@ Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
   suite.check('navigation', 'all-platform-routes', {
     'allProductionHomeShellDestinationsHitTestClicked': visited,
     'destinationCount': count,
+    'androidGroupBarMemberStripAndCatalogUsed': _androidShell,
     'nestedToolRoutesAndBackControlsHitTestClicked': nested,
     'actualNativeEngineNarrowPhoneLayout': true,
     'noReplacementPageImplementations': true,
@@ -964,6 +1028,10 @@ Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
     'sourceImageHashUnchanged': true
   });
 
+  if (_androidShell) {
+    _recordOrdering(await _androidOrdering(app, count));
+    return;
+  }
   final shell = nativeUiElements((w) => w is StudioAdaptiveShell).single.widget
       as StudioAdaptiveShell;
   final order = StudioAdaptiveShell.normalizeDestinationOrder(
@@ -1023,7 +1091,7 @@ Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
           nativeUiElements((w) => w is NavigationBar).length == 1,
       'Actual 360dp layout is not accessible phone navigation');
   await _navigateTo(int.parse(saved.first));
-  suite.check('navigation', 'ordering-persist-narrow-window', {
+  _recordOrdering({
     'actualReorderHandleGestureAndSave': true,
     'nativePreferenceOrderReopened': true,
     'everyDestinationExactlyOnce': true,
@@ -1032,6 +1100,113 @@ Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
     'savedOrder': saved
   });
 }
+
+// The Android catalog persists each real reorder drag immediately; there is no
+// separate Save action. Reopen proves the stored order drives the member strip.
+Future<Map<String, Object?>> _androidOrdering(AppState app, int count) async {
+  final order = StudioAdaptiveShell.normalizeDestinationOrder(
+          _androidShellWidget().destinationOrder, count),
+      first = order[0],
+      third = order[2];
+  await _tapKey(const ValueKey('android-all-features'),
+      'Android All features control missing');
+  bool isIconButton(Widget w, IconData icon) =>
+      w is IconButton && w.icon is Icon && (w.icon as Icon).icon == icon;
+  await nativeUiWait(
+      () => nativeUiElements((w) => isIconButton(w, Icons.swap_vert)).isNotEmpty,
+      'actual Android reorder control');
+  await nativeUiTap(
+      nativeUiElements((w) => isIconButton(w, Icons.swap_vert)).single);
+  await nativeUiWait(
+      () => nativeUiElements((w) => w.key == ValueKey('android-order-$first'))
+          .isNotEmpty,
+      'actual Android reorder list');
+  final firstRow =
+          nativeUiElements((w) => w.key == ValueKey('android-order-$first'))
+              .single,
+      thirdRow =
+          nativeUiElements((w) => w.key == ValueKey('android-order-$third'))
+              .single;
+  Element? handle;
+  void find(Element e) {
+    if (e.widget is ReorderableDragStartListener) handle = e;
+    e.visitChildren(find);
+  }
+
+  firstRow.visitChildren(find);
+  require(handle != null, 'Actual production drag handle missing');
+  await nativeUiDrag(handle!, thirdRow);
+  final prefs = await SharedPreferences.getInstance();
+  await nativeUiWait(
+      () =>
+          (prefs.getStringList('mobile_navigation_order_v1')?.join(',') ??
+              order.join(',')) !=
+          order.join(','),
+      'native order commit');
+  final saved = prefs.getStringList('mobile_navigation_order_v1')!;
+  require(saved.length == count && saved.toSet().length == count,
+      'Actual native reorder drag did not persist every destination once');
+  await nativeUiTap(nativeUiElements((w) => isIconButton(w, Icons.close)).last);
+  await nativeUiWait(
+      () => nativeUiElements((w) => w.key == ValueKey('android-order-$first'))
+          .isEmpty,
+      'Android catalog closed');
+  await nativeUiMount(app, const SizedBox.shrink());
+  await nativeUiMount(app, const HomeShell(),
+      shellKey: const ValueKey('native-navigation-b'));
+  await nativeUiWait(
+      () => nativeUiElements(
+              (w) => w is AndroidStudioShell && w.destinationOrder != null)
+          .isNotEmpty,
+      'native saved navigation cold widget rebuild');
+  require(
+      _androidShellWidget().destinationOrder!.map((n) => '$n').join(',') ==
+          saved.join(','),
+      'Native destination order did not reopen');
+  require(
+      nativeUiElements((w) => w.key == const ValueKey('android-studio-shell'))
+              .isNotEmpty &&
+          nativeUiElements(
+                  (w) => w.key == const ValueKey('android-main-navigation'))
+              .length ==
+              1,
+      'Actual 360dp layout is not accessible phone navigation');
+  final reopened = int.parse(saved.first);
+  await _navigateTo(reopened);
+  final group = androidGroupForDestination(reopened);
+  final chips = <int>[];
+  void collect(Element e) {
+    final key = e.widget.key;
+    if (e.widget is ChoiceChip &&
+        key is ValueKey<String> &&
+        key.value.startsWith('android-member-')) {
+      chips.add(int.parse(key.value.substring('android-member-'.length)));
+    }
+    e.visitChildren(collect);
+  }
+
+  for (final shell in nativeUiElements((w) => w is AndroidStudioShell)) {
+    collect(shell);
+  }
+  require(
+      chips.join(',') ==
+          androidOrderedGroupMembers(group, saved.map(int.parse).toList())
+              .join(','),
+      'Reopened Android member strip does not follow the saved order');
+  return {
+    'actualReorderHandleGestureAndSave': true,
+    'androidCatalogReorderPersistsImmediately': true,
+    'nativePreferenceOrderReopened': true,
+    'androidMemberStripFollowsSavedOrder': chips,
+    'everyDestinationExactlyOnce': true,
+    'logicalViewportWidth': 360,
+    'productionPhoneNavigationReachable': true,
+    'savedOrder': saved
+  };
+}
+
+void _recordOrdering(Map<String, Object?> observed) =>
+    suite.check('navigation', 'ordering-persist-narrow-window', observed);
 
 // Diagnostic only: gaps remain explicit but never occupy the reserved Agent
 // capability namespace, create CHECKs, or contribute acceptance coverage.

@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        entry-group: [ui, workflows]
+        entry-group: [core, os, ui]
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:

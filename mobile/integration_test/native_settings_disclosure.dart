@@ -10,15 +10,31 @@ Future<Element?> nativeSettingsControl({
   required Key targetKey,
   Future<void> Function()? waitFrame,
   Future<void> Function(Element)? tapDisclosure,
+  // The Android settings hub mounts a section only inside its category detail;
+  // open that real category tile once before seeking the section disclosure.
+  String? androidCategory,
 }) async {
   final nextFrame = waitFrame ?? frame;
   final tap = tapDisclosure ?? nativeUiTap;
   List<Element> targets() => nativeUiElements((w) => w.key == targetKey);
+  var categoryOpened = false;
   for (var i = 0; i < 100; i++) {
     final found = targets();
     require(found.length <= 1, 'Multiple native settings targets');
     if (found.isNotEmpty) {
       return found.single;
+    }
+    if (androidCategory != null && !categoryOpened &&
+        nativeUiElements((w) => w.key == const ValueKey('android-settings-hub')).isNotEmpty) {
+      final tiles = nativeUiElements((w) =>
+          w.key == ValueKey('android-settings-category-$androidCategory'));
+      require(tiles.length <= 1, 'Multiple native settings categories');
+      if (tiles.isNotEmpty) {
+        await tap(tiles.single);
+        categoryOpened = true;
+        await nextFrame();
+        continue;
+      }
     }
     final headings = nativeUiElements((w) => w is ExpansionTile &&
         w.title is Text && (w.title as Text).data == sectionTitle);

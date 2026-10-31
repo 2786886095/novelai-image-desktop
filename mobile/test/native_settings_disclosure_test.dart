@@ -1,6 +1,7 @@
 // Host UI/source-wiring contracts only. Windows does not have the Android
 // chooser; no fake platform, FilePicker response, MethodChannel or OS driver.
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -43,6 +44,7 @@ void main() {
             .readAsStringSync();
     expect(entry, contains("import 'native_settings_disclosure.dart';"));
     expect(entry, contains('await nativeSettingsControl('));
+    expect(entry, contains("androidCategory: 'storage'"));
     expect(
         entry,
         contains(
@@ -114,6 +116,48 @@ void main() {
     expect(result, isNotNull);
     expect(result!.widget.key, childKey);
     expect(taps, 1);
+    expect(find.byKey(childKey), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  },
+      variant:
+          const TargetPlatformVariant({TargetPlatform.android, TargetPlatform.iOS}));
+  testWidgets(
+      'native helper itself opens the Android settings category before the disclosure',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 800);
+    final app = AppState();
+    app.settings.language = 'en-US';
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      app.dispose();
+      tester.view.reset();
+    });
+    await tester.pumpWidget(ChangeNotifierProvider.value(
+        value: app, child: const MaterialApp(home: SettingsScreen())));
+    await tester.pump();
+    final hub = find
+        .byKey(const ValueKey('android-settings-hub'))
+        .evaluate()
+        .isNotEmpty;
+    expect(hub, defaultTargetPlatform == TargetPlatform.android);
+    final tapped = <Key?>[];
+    final result = await nativeSettingsControl(
+        sectionTitle: 'Storage & History',
+        targetKey: childKey,
+        androidCategory: 'storage',
+        waitFrame: () => tester.pump(const Duration(milliseconds: 50)),
+        tapDisclosure: (e) async {
+          tapped.add(e.widget.key);
+          await hostTap(tester, e);
+        });
+    expect(result, isNotNull);
+    expect(result!.widget.key, childKey);
+    expect(tapped.length, hub ? 2 : 1);
+    if (hub) {
+      expect(tapped.first,
+          const ValueKey('android-settings-category-storage'));
+    }
     expect(find.byKey(childKey), findsOneWidget);
     expect(tester.takeException(), isNull);
   },

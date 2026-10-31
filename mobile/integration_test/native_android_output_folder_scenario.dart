@@ -35,6 +35,7 @@ Future<void> _run() async {
     final choose = await nativeSettingsControl(
       sectionTitle: settingsScreenTextFor(c.app.settings.language).storageSection,
       targetKey: const ValueKey('image-output-choose'),
+      androidCategory: 'storage',
     );
     require(choose != null, 'Actual generated-output chooser was not exposed');
     print('NATIVE_FOLDER_PICKER_REQUEST:${jsonEncode({
