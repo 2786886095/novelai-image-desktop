@@ -517,6 +517,10 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   deleteHistory: (id: string | string[]) => ipcRenderer.invoke("storage:delete", id),
   pruneMissingHistoryItem: (id: string) =>
     ipcRenderer.invoke("storage:pruneMissing", id),
+  recoverMissingHistoryItem: (id: string) =>
+    ipcRenderer.invoke("storage:recoverMissing", id),
+  restoreConvertedWebpHistory: () =>
+    ipcRenderer.invoke("storage:restoreConvertedWebp"),
   renameHistoryItem: (id: string, name: string) =>
     ipcRenderer.invoke("storage:renameItem", id, name),
   openInExplorer: (targetPath: string) =>

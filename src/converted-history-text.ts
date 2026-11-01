@@ -1,0 +1,11 @@
+const copy = {
+  'zh-CN': ['恢复转换图片索引','正在恢复…','仅从最近两份可用自动备份恢复：原文件已缺失，同目录只有一张同名且尺寸匹配的 WebP。不回退设置或账号、不修改图片，不是扫描导入全部 WebP。备份中已无记录时不能重建。是否继续？','已恢复 {count} 条记录，可清除日期或分组筛选查看。','没有可确认恢复的记录。原图仍在、改名、移目录或无备份时不会猜测关联。','部分备份或文件不可安全读取，或已达处理上限；不确定的记录未导入。','恢复未完成，当前记录与图片保留。'],
+  'zh-TW': ['恢復轉換圖片索引','正在恢復…','僅從最近兩份可用自動備份恢復：原檔已缺失，同目錄只有一張同名且尺寸相符的 WebP。不回退設定或帳號、不修改圖片，也不是掃描匯入全部 WebP。備份已無記錄時不能重建。是否繼續？','已恢復 {count} 筆記錄，可清除日期或群組篩選查看。','沒有可確認恢復的記錄。原圖仍在、改名、移動或無備份時不會猜測關聯。','部分備份或檔案無法安全讀取，或已達處理上限；不確定的記錄未匯入。','恢復未完成，目前記錄與圖片保留。'],
+  'en-US': ['Recover converted-image records','Recovering…','Merge only confirmed history from the two recent available backups: the original is missing, with one same-name WebP of matching dimensions in the same folder. Settings, accounts and images are not changed. This does not import all WebP files. Records absent from backups cannot be reconstructed. Continue?','Recovered {count} records. Clear date/group filters to find them.','No confirmed records. Existing originals, renamed/moved files or absent backups are not guessed.','Some backups/files are inaccessible, or a processing limit was reached. Uncertain records were not imported.','Recovery did not complete. Current records and images are retained.'],
+  'ja-JP': ['変換画像の履歴を復元','復元中…','直近2件の利用可能なバックアップから、元ファイルがなく、同じフォルダーに同名・同サイズの WebP が1件だけある履歴を復元します。設定・アカウント・画像は変更せず、すべての WebP を取り込む機能ではありません。バックアップにない履歴は再構築できません。続けますか？','履歴を {count} 件復元しました。日付・グループの絞り込みを解除して確認できます。','確認できる復元対象はありません。元画像が残る場合や名前・場所が変わった場合、バックアップに履歴がない場合は推測しません。','一部を安全に読み取れないか、処理上限に達しました。不確実な履歴は取り込んでいません。','復元が完了しませんでした。現在の履歴と画像は保持されています。'],
+  'ko-KR': ['변환 이미지 기록 복구','복구 중…','최근 사용 가능한 자동 백업 두 개에서 원본이 없고 같은 폴더에 이름과 크기가 같은 WebP가 하나뿐인 기록만 복구합니다. 설정·계정·이미지를 변경하거나 모든 WebP를 가져오지 않습니다. 백업에 없는 기록은 재구성할 수 없습니다. 계속할까요?','기록 {count}개를 복구했습니다. 날짜·그룹 필터를 해제해 확인하세요.','확인된 복구 대상이 없습니다. 원본이 남아 있거나 이름·위치가 다르거나 백업이 없으면 추측하지 않습니다.','일부를 안전하게 읽지 못했거나 처리 한도에 도달했습니다. 불확실한 기록은 가져오지 않았습니다.','복구를 완료하지 못했습니다. 현재 기록과 이미지는 유지됩니다.'],
+} as const;
+export function convertedHistoryText(language: unknown) {
+  const row=copy[typeof language==='string'&&language in copy?language as keyof typeof copy:'zh-CN'];
+  return {restore:row[0],busy:row[1],confirm:row[2],restored:row[3],none:row[4],partial:row[5],error:row[6]};
+}

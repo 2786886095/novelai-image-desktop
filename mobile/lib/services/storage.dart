@@ -22,6 +22,7 @@ import '../agent/agent_models.dart';
 import '../batch/batch_redraw_models.dart';
 import '../comic/comic_models.dart';
 import '../history/history_archive.dart';
+import '../history/converted_history.dart';
 import '../i18n/runtime_text.dart';
 import '../images/png_metadata.dart';
 import '../images/webp_output.dart';
@@ -86,10 +87,12 @@ class Storage {
       '${now.microsecondsSinceEpoch}-$_imageProcessNonce-${++_imageIdentitySequence}';
   final ImageFileReader _imageReader;
   final WorksBatchFileAccess? _worksFileAccess;
+  final NativeConvertedHistoryLookup? _convertedWebpLookup;
   final Map<String,WorksRenameCopy> _renameCopies={};
-  Storage({DateTime Function()? imageClock, ImageFileReader? imageReader, WorksBatchFileAccess? fileAccess})
+  Storage({DateTime Function()? imageClock, ImageFileReader? imageReader, WorksBatchFileAccess? fileAccess, NativeConvertedHistoryLookup? convertedWebpLookup})
       : _imageClock = imageClock ?? DateTime.now,
         _imageReader = imageReader ?? ImageFiles.reader,
+        _convertedWebpLookup = convertedWebpLookup,
         _worksFileAccess = fileAccess ?? (Platform.isIOS ? IosWorksBatchFileAccess() : null);
   Future<Uint8List> readImage(String path, {int maxBytes = 64 * 1024 * 1024}) =>
       _imageReader.read(path, maxBytes: maxBytes);
@@ -121,10 +124,39 @@ class Storage {
     final rows=await getHistory();final result=await (await worksFiles()).delete(rows,ids);
     await writeHistory(rows.where((h)=>!result.removedIds.contains(h.id)).toList());return result;
   });
+  List<String>? _historyReconcileCycle;
+  int _historyReconcileOffset = 0;
+  bool get historyReconcilePending => _historyReconcileCycle != null;
   Future<Set<String>> reconcileMissingHistory() => historyTransaction(() async {
-    final files=_imageReader.coordinated?null:await worksFiles(),rows=await getHistory(),ids=<String>{};
-    for(final h in rows){if(_imageReader.coordinated ? await _imageReader.probe(h.filePath)==ImageAvailability.missing : await files!.conclusivelyMissing(h.filePath))ids.add(h.id);}
-    if(ids.isNotEmpty)await writeHistory(rows.where((h)=>!ids.contains(h.id)).toList());return ids;
+    final policy = await worksFiles(), rows = await getHistory(), removed = <String>{};
+    final byId = {for (final row in rows) row.id: row};
+    final cycle = _historyReconcileCycle ??= rows.map((row) => row.id).toList();
+    final scan = ConvertedHistoryScan(), replacements = <String, HistoryItem>{};
+    while (_historyReconcileOffset < cycle.length && scan.canInspect) {
+      final item = byId[cycle[_historyReconcileOffset]];
+      if (item == null) { _historyReconcileOffset++; continue; } // never revive a deleted row
+      if (!scan.canLookup(_imageReader.coordinated)) break;
+      _historyReconcileOffset++; scan.rows++;
+      final availability = _imageReader.coordinated
+          ? await _imageReader.probe(item.filePath)
+          : await policy.conclusivelyMissing(item.filePath, directoryAvailable: scan.directoryAvailable)
+              ? ImageAvailability.missing : ImageAvailability.available;
+      if (availability == ImageAvailability.available) continue;
+      final converted = await findConvertedHistoryWebp(item,
+          roots: policy.roots, coordinated: _imageReader.coordinated,
+          nativeLookup: _convertedWebpLookup, scan: scan);
+      if (converted.state == ConvertedHistoryState.recovered) {
+        replacements[item.id] = HistoryItem.fromJson({...item.toJson(), 'filePath': converted.path!});
+      } else if ((converted.state == ConvertedHistoryState.missing || converted.state == ConvertedHistoryState.notApplicable) && availability == ImageAvailability.missing) {
+        removed.add(item.id);
+      }
+      // Unavailable, invalid, ambiguous or budget-deferred rows remain intact.
+    }
+    if (replacements.isNotEmpty || removed.isNotEmpty) {
+      await writeHistory([for (final row in rows) if (!removed.contains(row.id)) replacements[row.id] ?? row]);
+    }
+    if (_historyReconcileOffset >= cycle.length) { _historyReconcileCycle = null; _historyReconcileOffset = 0; }
+    return removed;
   });
 
   static Future<void>? _settingsTail;

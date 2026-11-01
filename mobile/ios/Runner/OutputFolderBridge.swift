@@ -31,6 +31,7 @@ final class OutputFolderBridge: NSObject, UIDocumentPickerDelegate, UIAdaptivePr
       case "write": self.write(call.arguments, result)
       case "read": self.read(call.arguments, result)
       case "probe": self.read(call.arguments, result, probeOnly: true)
+      case "findConvertedWebp": self.findConvertedWebp(call.arguments, result)
       case "describe", "copyForRename", "deleteFile": self.mutate(call.method, call.arguments, result)
       default: result(FlutterMethodNotImplemented)
       }
@@ -284,6 +285,112 @@ final class OutputFolderBridge: NSObject, UIDocumentPickerDelegate, UIAdaptivePr
       }
     }
   }
+  // Read-only counterpart recovery. A parent-directory coordinator proves the
+  // bounded candidate list; a separate exact-item coordinator pins its bytes.
+  // No path argument creates a new grant and no uncoordinated fallback is used.
+  private func findConvertedWebp(_ arguments: Any?, _ result: @escaping FlutterResult) {
+    guard let args = arguments as? [String: Any], let raw = args["path"] as? String else {
+      result(FlutterError(code:"output_folder_invalid", message:"Invalid source image path", details:nil)); return
+    }
+    let maxBytes = args["maxBytes"] as? Int ?? 64 * 1024 * 1024
+    guard maxBytes > 0, maxBytes <= 64 * 1024 * 1024 else {
+      result(FlutterError(code:"output_folder_invalid", message:"Invalid converted image limit", details:nil)); return
+    }
+    let context: MutationContext
+    do { context = try mutationContext(raw, []) }
+    catch { result(FlutterError(code:"output_folder_permission", message:"Image provider unavailable; history retained", details:nil)); return }
+    let source = URL(fileURLWithPath:raw).standardizedFileURL
+    let parent = source.deletingLastPathComponent(), stem = source.deletingPathExtension().lastPathComponent
+    guard !stem.isEmpty, component(source.lastPathComponent),
+          ["png", "jpg", "jpeg"].contains(source.pathExtension.lowercased()) else {
+      result(FlutterError(code:"output_folder_invalid", message:"Invalid source image name", details:nil)); return
+    }
+    worker.async {
+      do {
+        func entries(_ directory: URL) throws -> [URL] {
+          let values = try directory.resourceValues(forKeys:[.isDirectoryKey,.isSymbolicLinkKey])
+          guard values.isDirectory == true, values.isSymbolicLink != true else { throw self.problem("Parent is not a regular authorized directory") }
+          var failed = false
+          guard let listing = FileManager.default.enumerator(at:directory,
+              includingPropertiesForKeys:[.isRegularFileKey,.isSymbolicLinkKey,.fileSizeKey],
+              options:[.skipsSubdirectoryDescendants,.skipsPackageDescendants],
+              errorHandler:{ _,_ in failed = true; return false }) else { throw self.problem("Parent cannot be enumerated") }
+          var rows: [URL] = []
+          for case let item as URL in listing {
+            guard rows.count < 10000 else { throw self.problem("Directory exceeds recovery bound") }
+            rows.append(item)
+          }
+          if failed { throw self.problem("Parent enumeration was inconclusive") }
+          return rows
+        }
+        func originalExists(_ physicalParent: URL, _ listing: [URL]) throws -> Bool {
+          if listing.contains(where:{ $0.lastPathComponent == source.lastPathComponent }) { return true }
+          var info = stat()
+          if Darwin.lstat(physicalParent.appendingPathComponent(source.lastPathComponent).path, &info) == 0 { return true }
+          guard errno == ENOENT else { throw NSError(domain:NSPOSIXErrorDomain,code:Int(errno),userInfo:nil) }
+          return false
+        }
+        func candidates(_ listing: [URL]) -> [URL] {
+          listing.filter { $0.pathExtension.lowercased() == "webp" && $0.deletingPathExtension().lastPathComponent == stem }
+        }
+        var coordinationError: NSError?, operationError: Error?, output: [String: Any]?, candidate: URL?
+        NSFileCoordinator().coordinate(readingItemAt:parent, options:[], error:&coordinationError) { actualParent in
+          do {
+            if parent.standardizedFileURL.path == context.base.standardizedFileURL.path {
+              guard actualParent.resolvingSymlinksInPath().path == context.base.resolvingSymlinksInPath().path else { throw self.problem("Parent left authorized root") }
+            } else { try self.checkedMutationURL(parent, actualParent, context) }
+            let rows = try entries(actualParent)
+            if try originalExists(actualParent, rows) {
+              output = ["sourcePath":raw,"state":"original","available":true,"coordinated":true]; return
+            }
+            let matches = candidates(rows)
+            if matches.isEmpty {
+              output = ["sourcePath":raw,"state":context.external ? "blocked" : "missing",
+                        "sourceMissing":true,"available":true,"coordinated":true]; return
+            }
+            guard matches.count == 1 else {
+              output = ["sourcePath":raw,"state":"blocked","available":true,"coordinated":true]; return
+            }
+            let logical = parent.appendingPathComponent(matches[0].lastPathComponent)
+            try self.checkedMutationURL(logical, matches[0], context)
+            let (_, info) = try self.mutationIdentity(matches[0])
+            guard self.regularMutationFile(info), info.st_size <= Int64(maxBytes) else { throw self.problem("Counterpart is not a regular bounded image") }
+            candidate = logical
+          } catch { operationError = error }
+        }
+        if let error = coordinationError { throw error }
+        if let error = operationError { throw error }
+        if let logical = candidate {
+          NSFileCoordinator().coordinate(readingItemAt:logical, options:[], error:&coordinationError) { actual in
+            do {
+              try self.checkedMutationURL(logical, actual, context)
+              let rows = try entries(actual.deletingLastPathComponent())
+              guard try !originalExists(actual.deletingLastPathComponent(), rows),
+                    candidates(rows).count == 1,
+                    candidates(rows)[0].lastPathComponent == logical.lastPathComponent else {
+                throw self.problem("Counterpart changed during recovery")
+              }
+              let (identity, info) = try self.mutationIdentity(actual)
+              guard self.regularMutationFile(info), info.st_size <= Int64(maxBytes) else { throw self.problem("Counterpart is not a regular bounded image") }
+              let bytes = try self.readMutationBytes(actual, identity, maxBytes:maxBytes)
+              // Dart verifies RIFF structure, complete WebP decoding and exact
+              // history dimensions before changing only the stored filePath.
+              output = ["sourcePath":raw,"path":logical.path,"state":"candidate",
+                        "sourceMissing":true,"available":true,"coordinated":true,
+                        "bytes":FlutterStandardTypedData(bytes:bytes)]
+            } catch { operationError = error }
+          }
+          if let error = coordinationError { throw error }
+          if let error = operationError { throw error }
+        }
+        guard let value = output else { throw self.problem("No coordinated recovery result") }
+        DispatchQueue.main.async { result(value) }
+      } catch {
+        DispatchQueue.main.async { result(FlutterError(code:"output_folder_read", message:"Converted image lookup was inconclusive; original history retained", details:nil)) }
+      }
+    }
+  }
+
   // Receipts are bounded, process-local identities, not persisted permissions or
   // proof that every remembered grant is a current managed output directory.
   private struct MutationContext {
@@ -366,21 +473,21 @@ final class OutputFolderBridge: NSObject, UIDocumentPickerDelegate, UIAdaptivePr
     }
     return value
   }
-  private func readMutationBytes(_ file: URL, _ expected: String) throws -> Data {
+  private func readMutationBytes(_ file: URL, _ expected: String, maxBytes: Int = 64 * 1024 * 1024) throws -> Data {
     let fd = Darwin.open(file.path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
     guard fd >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code:Int(errno), userInfo:nil) }
     defer { _ = Darwin.close(fd) }
     var before = stat()
-    guard Darwin.fstat(fd, &before) == 0, regularMutationFile(before), mutationIdentityValue(before) == expected, try mutationIdentity(file).0 == expected else { throw problem("Image identity changed before copy") }
+    guard maxBytes > 0, maxBytes <= 64 * 1024 * 1024, Darwin.fstat(fd, &before) == 0, regularMutationFile(before), before.st_size <= Int64(maxBytes), mutationIdentityValue(before) == expected, try mutationIdentity(file).0 == expected else { throw problem("Image identity changed before copy") }
     var data = Data(), buffer = [UInt8](repeating:0, count:64 * 1024)
-    while data.count <= 64 * 1024 * 1024 {
-      let requested = min(buffer.count, 64 * 1024 * 1024 + 1 - data.count)
+    while data.count <= maxBytes {
+      let requested = min(buffer.count, maxBytes + 1 - data.count)
       let count = buffer.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress!, requested) }
       if count < 0 { if errno == EINTR { continue }; throw NSError(domain:NSPOSIXErrorDomain, code:Int(errno), userInfo:nil) }
       if count == 0 { break }
       data.append(contentsOf:buffer.prefix(count))
     }
-    guard data.count == Int(before.st_size), try mutationIdentity(file).0 == expected else { throw problem("Image identity changed during copy") }
+    guard data.count <= maxBytes, data.count == Int(before.st_size), try mutationIdentity(file).0 == expected else { throw problem("Image identity changed during copy") }
     return data
   }
   private func mutate(_ method: String, _ arguments: Any?, _ result: @escaping FlutterResult) {

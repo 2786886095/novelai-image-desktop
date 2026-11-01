@@ -4077,11 +4077,34 @@ class AppState extends ChangeNotifier {
       _forgetHistoryImages(result.removedIds,previous);notifyListeners();return result;}
     finally {_historyFileOperations.removeAll(ids);}
   }
+  void _rebindConvertedHistoryPaths(List<HistoryItem> previous) {
+    final live = {for (final item in history) item.id: item};
+    final changed = <String, String>{};
+    for (final item in previous) {
+      final next = live[item.id];
+      if (next != null && next.filePath != item.filePath) changed[item.filePath] = next.filePath;
+    }
+    if (changed.isEmpty) return;
+    for (final oldPath in changed.keys) { unawaited(imageFileProvider(File(oldPath)).evict()); }
+    final selected = current;
+    if (selected != null && live.containsKey(selected.id)) current = live[selected.id];
+    WorkingImage? rebind(WorkingImage? image) {
+      final path = image == null ? null : changed[image.filePath];
+      return path == null ? image : WorkingImage(filePath: path, width: image!.width, height: image.height);
+    }
+    if (workbenchImage != null && changed.containsKey(workbenchImage!.filePath)) _workbenchLoadRevision++;
+    workbenchImage = rebind(workbenchImage);
+    i2iOriginalImage = rebind(i2iOriginalImage);
+    comparisonBefore = rebind(comparisonBefore);
+    comparisonAfter = rebind(comparisonAfter);
+  }
+  bool get hasPendingHistoryReconciliation => storage.historyReconcilePending;
   bool _reconcilingHistory=false;
   Future<void> reconcileMissingHistory() async {
     if(!booted || _reconcilingHistory || busy || _historyFileOperations.isNotEmpty)return;
     _reconcilingHistory=true;final previous=List<HistoryItem>.of(history);
     try {final ids=await storage.reconcileMissingHistory();history=await storage.getHistory();
+      _rebindConvertedHistoryPaths(previous);
       _forgetHistoryImages(ids,previous);notifyListeners();}finally {_reconcilingHistory=false;}
   }
 

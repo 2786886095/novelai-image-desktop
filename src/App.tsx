@@ -1,5 +1,6 @@
 import {TemplateLibraryPanel, templateLibraryCopy} from './features/settings/TemplateLibraryPanel';
 import {ComicPromptComposer} from './comic/ComicPromptComposer';
+import {ConvertedHistoryRestoreButton} from './components/ConvertedHistoryRestoreButton';
 import { anlasBillingDisplay, visibleAnlasQuote, type ScopedAnlasQuote } from "./anlas-billing";
 import { McpServerSettings } from "./components/McpServerSettings";
 import { estimateOpusImages, estimateOpusUsagePercent } from "./anlas";
@@ -5549,6 +5550,7 @@ function HistoryPanel() {
           <strong>{t("history.title")}</strong>
           <small>{history.length > 0 ? f("history.count", { count: history.length }) : t("history.emptySubtitle")}</small>
         </div>
+        <ConvertedHistoryRestoreButton disabled={isGenerating} />
       </div>
       <div className="history-filters">
         <SelectMenu

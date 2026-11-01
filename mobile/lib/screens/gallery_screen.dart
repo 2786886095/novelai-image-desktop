@@ -52,13 +52,27 @@ class GalleryScreen extends StatefulWidget {
 
 class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserver {
   final Set<String> selected={};bool editing=false,operating=false;
-  Timer? _reconcileTimer;bool _visible=false;
+  Timer? _reconcileTimer, _reconcileContinuation;bool _visible=false, _refreshingFiles=false;
   @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);
     _reconcileTimer=Timer.periodic(const Duration(seconds:10),(_){if(mounted && _visible && WidgetsBinding.instance.lifecycleState!=AppLifecycleState.paused) _refreshFiles();});}
   @override void didChangeDependencies(){super.didChangeDependencies();final enabled=TickerMode.of(context);
-    if(enabled && !_visible)WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)_refreshFiles();});_visible=enabled;}
+    if(enabled && !_visible)WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)_refreshFiles();});_visible=enabled;
+    if(!enabled){_reconcileContinuation?.cancel();_reconcileContinuation=null;}}
   @override void didChangeAppLifecycleState(AppLifecycleState state){if(state==AppLifecycleState.resumed && _visible)_refreshFiles();}
-  Future<void> _refreshFiles() async {try {await context.read<AppState>().reconcileMissingHistory();} catch (_) {/* Inconclusive storage never prunes rows. */}}
+  Future<void> _refreshFiles() async {
+    if(!mounted || !_visible || _refreshingFiles || WidgetsBinding.instance.lifecycleState==AppLifecycleState.paused)return;
+    final app=context.read<AppState>();if(app.busy)return;
+    _refreshingFiles=true;var completed=false;
+    try {await app.reconcileMissingHistory();completed=true;}
+    catch (_) {/* Inconclusive storage never prunes rows. */}
+    finally {_refreshingFiles=false;}
+    // Continue only the finite pending sweep after releasing historyTransaction.
+    // A completed no-change sweep stops here; corrupt prefixes cannot spin.
+    if(completed && mounted && _visible && !app.busy && app.hasPendingHistoryReconciliation) {
+      _reconcileContinuation?.cancel();
+      _reconcileContinuation=Timer(const Duration(milliseconds:100),(){_reconcileContinuation=null;if(mounted && _visible)_refreshFiles();});
+    }
+  }
   Future<void> _batchMove() async {
     final app=context.read<AppState>();String t(String k)=>platformFeatureText(app.settings.language,k);
     final group=await showDialog<String>(context:context,builder:(ctx)=>SimpleDialog(title:Text(t('move')),children:[
@@ -89,7 +103,7 @@ class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserv
 
   @override
   void dispose() {
-    _reconcileTimer?.cancel();WidgetsBinding.instance.removeObserver(this);
+    _reconcileTimer?.cancel();_reconcileContinuation?.cancel();WidgetsBinding.instance.removeObserver(this);
     groupCtrl.dispose();
     super.dispose();
   }
@@ -983,14 +997,10 @@ class _HistoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final file = File(item.filePath);
-    if (!ImageFiles.keepVisible(file.path)) {
-      // File deleted/moved on disk → drop it from the library instead of showing
-      // a broken tile. Scheduled post-frame so we never mutate state mid-build.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted) context.read<AppState>().dropMissingImage(item.id);
-      });
-      return const SizedBox.shrink();
-    }
+    // The screen's bounded refresh owns reconciliation. Keep the indexed tile
+    // until it can find a converted counterpart or confirm removal; never queue
+    // another deletion from every rebuild/error frame.
+    final available = ImageFiles.keepVisible(file.path);
     return Material(
       color: androidStyle ? LangbaiAndroidTokens.of(context).card : Theme.of(context).colorScheme.surfaceContainerLow,
       borderRadius: BorderRadius.circular(androidStyle ? 16 : 8),
@@ -1003,12 +1013,14 @@ class _HistoryTile extends StatelessWidget {
           children: [
             if(selecting)SizedBox(height:28,child:Checkbox(value:selected,onChanged:onSelect==null?null:(_)=>onSelect!())),
             Expanded(
-              child: imageFile(
+              child: available ? imageFile(
                 file,
                 fit: BoxFit.cover,
                 cacheWidth: 360,
                 filterQuality: FilterQuality.low,
-              ),
+                errorBuilder: (context, error, stack) => imageAccessErrorWidget(context, error, stack),
+              ) : imageAccessErrorWidget(context,
+                  const FileSystemException('Indexed image is temporarily unavailable'), null),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),

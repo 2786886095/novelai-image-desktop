@@ -85,6 +85,14 @@ class IosOutputFolder {
     }
     return bytes;
   }
+  /// Read-only counterpart lookup under an already saved native access grant.
+  /// This cannot grant permission or fall back to a Dart File scan.
+  static Future<Map<String, dynamic>?> findConvertedWebp(String sourcePath, {int maxBytes = 64 * 1024 * 1024}) async {
+    if (!Platform.isIOS) throw UnsupportedError('iOS folder bridge required');
+    if (!isFolderPath(sourcePath) || maxBytes <= 0 || maxBytes > 64 * 1024 * 1024) throw const FormatException('Invalid converted image input');
+    return _channel.invokeMapMethod<String, dynamic>('findConvertedWebp', {'path': sourcePath, 'maxBytes': maxBytes});
+  }
+
   // Called only by Storage's iOS mutation adapter. There is no File fallback.
   static Future<Map<String, dynamic>?> mutate(String method,
       Map<String, dynamic> arguments) async {

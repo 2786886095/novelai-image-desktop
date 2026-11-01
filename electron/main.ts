@@ -210,6 +210,8 @@ import {
   getToken,
   getTextToolHistory,
   pruneMissingHistoryItem,
+  recoverMissingHistoryItem,
+  restoreConvertedWebpHistory,
   pruneMissingReverseHistoryItem,
   readStore,
   removeTextToolHistoryItem,
@@ -1267,6 +1269,12 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   ipcMain.handle("storage:pruneMissing", (_event, id: string) =>
     pruneMissingHistoryItem(id),
   );
+  ipcMain.handle("storage:recoverMissing", (_event, id: string) =>
+    typeof id === "string" && id.length <= 256
+      ? recoverMissingHistoryItem(id)
+      : { status: "unavailable" },
+  );
+  ipcMain.handle("storage:restoreConvertedWebp", () => restoreConvertedWebpHistory());
   ipcMain.handle("storage:renameItem", (_event, id: string, name: string) =>
     renameHistoryItem(id, name),
   );

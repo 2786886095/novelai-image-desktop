@@ -80,6 +80,7 @@ let generationSettlementRevision = 0;
 // History refreshes and explicit filters share a revision: a late IPC reply
 // must not erase dates or rows already shown by a newer read/selection.
 let historyReadRevision = 0;
+const missingHistoryRequests = new Map<string, Promise<boolean>>();
 let inpaintEditRequestRevision = 0;
 let inpaintEditRestoreRevision = 0;
 type InpaintEditorState = Pick<AppState, "workbenchImage" | "i2iOriginalImage" | "inpaintSourceMode" | "inpaintMask" | "inpaintRegion" | "inpaintSizeMode" | "inpaintCustomSize" | "comparisonBeforeImage" | "comparisonSurface" | "comparisonAutoOpenRequest">;
@@ -420,7 +421,7 @@ interface AppState {
   deleteHistory: (id: string) => Promise<boolean>;
   /** Apply only identities confirmed removed by native storage/reconciliation. */
   forgetHistoryItems: (ids: readonly string[]) => void;
-  dropMissingImage: (id: string) => Promise<void>;
+  dropMissingImage: (id: string, expectedFilePath?: string) => Promise<boolean>;
   renameHistoryItem: (id: string, name: string) => Promise<void>;
   clearToast: () => void;
 }
@@ -444,7 +445,43 @@ const completedImageBridges = new Map<string, CompletedImageBridge>();
 
 function withCompletedImageBridge(item: HistoryItem): HistoryItem {
   const bridge = completedImageBridges.get(item.id);
+  // A recovered container has a new durable URL. A pending preload of the
+  // old PNG must not later restore its deleted path into the visible state.
+  if (bridge && bridge.sourceUrl !== item.fileUrl) {
+    completedImageBridges.delete(item.id);
+    return item;
+  }
   return bridge ? { ...item, fileUrl: bridge.previewUrl } : item;
+}
+
+/** Rebind file references, never editor parameters, masks or generation origin. */
+function rebindHistoryImageReferences(state: AppState, rows: readonly HistoryItem[], expectedPaths?: ReadonlyMap<string,string>): Partial<AppState> {
+  const byId = new Map(rows.map(item => [item.id,item]));
+  const replacements = new Map<string,HistoryItem>(), ambiguous = new Set<string>();
+  const eligible = (old: HistoryItem, next: HistoryItem) => !expectedPaths || expectedPaths.get(old.id) === old.filePath;
+  for (const old of [...state.history,state.currentImage,state.inputPreviewAnchor?.result]) {
+    if (!old) continue;
+    const next=byId.get(old.id);
+    if (!next || !eligible(old,next) || old.filePath===next.filePath) continue;
+    const previous=replacements.get(old.filePath);
+    if (previous && previous.filePath!==next.filePath) {ambiguous.add(old.filePath);replacements.delete(old.filePath);}
+    else if (!ambiguous.has(old.filePath)) replacements.set(old.filePath,next);
+  }
+  const record = (old: HistoryItem|null) => {
+    const next=old && byId.get(old.id);
+    return old && next && eligible(old,next) && (old.filePath!==next.filePath || old.fileUrl!==next.fileUrl) ? next : old;
+  };
+  const working = (old: WorkingImage|null) => {
+    const next=old && replacements.get(old.filePath);
+    return old && next ? {...old,filePath:next.filePath,fileUrl:next.fileUrl} : old;
+  };
+  const anchor=state.inputPreviewAnchor, anchorResult=anchor && record(anchor.result);
+  return {
+    currentImage:record(state.currentImage),
+    inputPreviewAnchor:anchor && anchorResult!==anchor.result ? {...anchor,result:anchorResult} : anchor,
+    workbenchImage:working(state.workbenchImage),i2iOriginalImage:working(state.i2iOriginalImage),
+    comparisonBeforeImage:working(state.comparisonBeforeImage),
+  };
 }
 
 function preloadCompletedImage(sourceUrl: string): Promise<void> {
@@ -1398,6 +1435,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async refreshHistory(date) {
     const revision = ++historyReadRevision;
+    const inputRevision = workbenchLoadRevision;
     const [dates, groups] = await Promise.all([
       window.naiDesktop.getHistoryDates(),
       window.naiDesktop.getHistoryGroups(),
@@ -1408,7 +1446,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     const rows = await window.naiDesktop.getHistory(selectedDate || undefined, selectedGroupId || undefined);
     if (revision !== historyReadRevision) return;
     const history = rows.map(withCompletedImageBridge);
-    set({ historyDates: dates, historyGroups: groups, selectedDate, history });
+    let inputRebound = false;
+    set(state => {
+      const rebound=rebindHistoryImageReferences(state,history);
+      inputRebound=rebound.workbenchImage!==state.workbenchImage || rebound.i2iOriginalImage!==state.i2iOriginalImage;
+      return {historyDates:dates,historyGroups:groups,selectedDate,history,...rebound};
+    });
+    if (inputRebound && workbenchLoadRevision===inputRevision) workbenchLoadRevision+=1;
   },
 
   async refreshSettings() {
@@ -1462,11 +1506,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async loadWorkbenchFromPath(filePath, options) {
     const loadRevision = ++workbenchLoadRevision;
+    const before = get();
+    const source = before.currentImage?.filePath === filePath ? before.currentImage
+      : before.history.find(item => item.filePath === filePath);
+    const sourceStillCanonical = () => {
+      if (!source) return true;
+      const state = get();
+      const canonical = state.history.find(item => item.id === source.id)
+        ?? (state.currentImage?.id === source.id ? state.currentImage : undefined);
+      return !canonical || canonical.filePath === filePath;
+    };
     let result;
     try {
       result = await window.naiDesktop.loadImageFromPath(filePath);
     } catch (error: any) {
-      if (loadRevision !== workbenchLoadRevision) return;
+      if (loadRevision !== workbenchLoadRevision || !sourceStillCanonical()) return;
       const message = compactStoreError(
         get().settings,
         error?.message,
@@ -1475,7 +1529,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ toast: message, statusText: message });
       return;
     }
-    if (loadRevision !== workbenchLoadRevision) return;
+    // A first/changed selection may still be awaiting its file when history
+    // relinks it. No installed input exists to rebind in that case. Reject the
+    // stale result without cancelling a newer unrelated user selection.
+    if (loadRevision !== workbenchLoadRevision || !sourceStillCanonical()) return;
     if (result.ok && result.image) {
       // History metadata may update prompts. Never let a delayed selection do
       // that after generation has begun; the paid request already owns a fixed
@@ -3287,13 +3344,60 @@ export const useAppStore = create<AppState>((set, get) => ({
       ...(currentRemoved || beforeRemoved ? {comparisonBeforeImage:null,comparisonAutoOpenRequest:null,comparisonSurface:null} : {}) });
   },
 
-  async dropMissingImage(id) {
+  async dropMissingImage(id, expectedFilePath) {
+    if (window.naiDesktop.recoverMissingHistoryItem) {
+      const before = get();
+      const original = (before.currentImage?.id === id ? before.currentImage : undefined)
+        ?? before.history.find(item => item.id === id);
+      const inputRevision = workbenchLoadRevision;
+      const originalPath = expectedFilePath ?? original?.filePath;
+      const requestKey = `${id}\0${originalPath ?? ""}`;
+      const pending = missingHistoryRequests.get(requestKey);
+      if (pending) return pending;
+      const request = (async () => {
+        const result = await window.naiDesktop.recoverMissingHistoryItem!(id);
+        if (result.status === "relinked" || result.status === "present") {
+          const item = result.item;
+          // A present but undecodable file is not a deletion, and refreshing
+          // its identical URL on every onError would create a render loop.
+          if (!item || item.id !== id) return false;
+          if (!originalPath) return result.status === "relinked";
+          if (item.filePath === originalPath) return false;
+          completedImageBridges.delete(id);
+          historyReadRevision += 1; // reject a pre-relink history read arriving late
+          let inputRebound=false;
+          set(state => {
+            const matches = (row: HistoryItem | null | undefined) => row?.id === id && row.filePath === originalPath;
+            const rebound=rebindHistoryImageReferences(state,[item],new Map([[id,originalPath]]));
+            inputRebound=rebound.workbenchImage!==state.workbenchImage || rebound.i2iOriginalImage!==state.i2iOriginalImage;
+            return {
+              history: state.history.map(row => matches(row) ? item : row),
+              ...rebound,
+            };
+          });
+          if(inputRebound && workbenchLoadRevision===inputRevision)workbenchLoadRevision+=1;
+          return true;
+        }
+        if (result.status !== "removed") return false;
+        const now = get();
+        const currentRow = now.history.find(item => item.id === id)
+          ?? (now.currentImage?.id === id ? now.currentImage : undefined);
+        if (currentRow && (!originalPath || currentRow.filePath !== originalPath)) return false;
+        get().forgetHistoryItems([id]);
+        await get().refreshHistory();
+        return true;
+      })();
+      missingHistoryRequests.set(requestKey, request);
+      try { return await request; }
+      finally { if (missingHistoryRequests.get(requestKey) === request) missingHistoryRequests.delete(requestKey); }
+    }
     const removed = await window.naiDesktop.pruneMissingHistoryItem(id);
-    if (!removed) return;
+    if (!removed) return false;
     get().forgetHistoryItems([id]);
     await get().refreshHistory();
     const current = get().currentImage;
     if (current?.id === id) set({ currentImage: get().history[0] ?? null, comparisonBeforeImage: null });
+    return true;
   },
 
   async renameHistoryItem(id, name) {

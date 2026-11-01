@@ -2098,6 +2098,14 @@ export interface NaiDesktopApi {
   setHistoryGroup: (id: string | string[], groupId?: string) => Promise<{ ok: boolean; message?: string }>;
   deleteHistory: (id: string | string[]) => Promise<{ ok: boolean; message?: string; deletedIds?: string[]; failed?: Array<{id:string; message:string}> }>;
   pruneMissingHistoryItem: (id: string) => Promise<boolean>;
+  recoverMissingHistoryItem?: (id: string) => Promise<{
+    status: "present" | "relinked" | "removed" | "unavailable";
+    item?: HistoryItem;
+  }>;
+  restoreConvertedWebpHistory?: () => Promise<{
+    restored: number; skipped: number; unavailable: number; backupsRead: number;
+    backupErrors: number; checked: number; limited: boolean; items: HistoryItem[];
+  }>;
   renameHistoryItem: (
     id: string,
     name: string,

@@ -22,6 +22,7 @@ import { imageSettingsStamp, commitImageSettings } from "./image-settings-events
 import fs from "fs";
 import path from "path";
 import { toLocalMediaUrl } from "./local-media-protocol";
+import { findConvertedWebpCounterpart, type ConvertedWebpDirectoryCache } from "./history-converted-webp";
 import type { AccountSummary, AppSettings, HistoryGroup, HistoryItem, SettingKey, TextToolHistoryItem } from "../../src/types";
 import { SCOPED_REVERSE_SYSTEM_PROMPTS } from "../../src/data/prompt-templates";
 import { installedAppDir } from "./app-mode";
@@ -1009,6 +1010,39 @@ export function findMovedHistoryFile(
 let lastHistoryReconcileAt = 0;
 const HISTORY_RECONCILE_INTERVAL_MS = 10_000;
 
+export type MissingHistoryRecoveryResult = {
+  status: "present" | "relinked" | "removed" | "unavailable";
+  item?: HistoryItem;
+};
+
+function resolveMissingHistoryFile(
+  item: HistoryItem,
+  data: PersistedData,
+  indexCache: Map<string, FileNameIndex>,
+  convertedCache: ConvertedWebpDirectoryCache,
+): MissingHistoryRecoveryResult {
+  // A local conversion is stronger evidence than a same-basename image in an
+  // unrelated group. Bad/ambiguous local evidence must not trigger that guess.
+  const converted = findConvertedWebpCounterpart(item, convertedCache);
+  if (converted.status === "match") {
+    // This is only a container/extension change in the original folder. A
+    // deliberate metadata-only group assignment must not be inferred away.
+    return { status: "relinked", item: { ...item, filePath: converted.path, fileUrl: toLocalMediaUrl(converted.path, item.id) } };
+  }
+  if (converted.status === "unavailable") return { status: "unavailable", item };
+  // No local counterpart: retain the established full-basename move behavior.
+  const moved = findMovedHistoryFile(item, data, indexCache);
+  if (moved.path) {
+    return { status: "relinked", item: {
+      ...item, filePath: moved.path, fileUrl: toLocalMediaUrl(moved.path, item.id),
+      groupId: inferGroupIdFromPath(moved.path, data),
+    } };
+  }
+  return moved.inconclusive
+    ? { status: "unavailable", item }
+    : { status: "removed" };
+}
+
 function reconcileHistoryFiles(force = false): void {
   const now = Date.now();
   // Renderer refreshes dates, groups and rows together. Without coalescing,
@@ -1024,6 +1058,7 @@ function reconcileHistoryFiles(force = false): void {
   const outputDir = data.settings.outputDir?.trim();
   if (outputDir && !fileExists(outputDir)) return;
   const indexCache = new Map<string, FileNameIndex>();
+  const convertedCache: ConvertedWebpDirectoryCache = new Map();
   const directoryCache: DirectoryEntryCache = new Map();
   let changed = false;
   const next: HistoryItem[] = [];
@@ -1043,9 +1078,9 @@ function reconcileHistoryFiles(force = false): void {
       continue;
     }
 
-    const moved = findMovedHistoryFile(item, data, indexCache);
-    if (!moved.path) {
-      if (moved.inconclusive) {
+    const recovered = resolveMissingHistoryFile(item, data, indexCache, convertedCache);
+    if (recovered.status !== "relinked") {
+      if (recovered.status === "unavailable") {
         next.push(item); // keep it — the search wasn't conclusive
       } else {
         changed = true; // genuinely not found anywhere reachable
@@ -1053,18 +1088,12 @@ function reconcileHistoryFiles(force = false): void {
       continue;
     }
 
-    next.push({
-      ...item,
-      filePath: moved.path,
-      fileUrl: toLocalMediaUrl(moved.path, item.id),
-      groupId: inferGroupIdFromPath(moved.path, data),
-    });
+    next.push(recovered.item!);
     changed = true;
   }
 
   if (changed) {
-    data.history = next;
-    writeStore(data);
+    writeStore({ ...data, history: next });
   }
 }
 
@@ -1077,25 +1106,98 @@ export function pruneMissingHistoryItem(id: string): boolean {
   const data = readStore();
   const item = data.history.find((h) => h.id === id);
   if (!item || !item.filePath) return false;
-  if (fileExists(item.filePath)) return false;
-  const moved = findMovedHistoryFile(item, data, new Map());
-  if (moved.path) {
-    const updated = {
-      ...item,
-      filePath: moved.path,
-      fileUrl: toLocalMediaUrl(moved.path, item.id),
-      groupId: inferGroupIdFromPath(moved.path, data),
-    };
-    data.history = data.history.map((h) => (h.id === id ? updated : h));
-    writeStore(data);
-    return false;
+  return recoverMissingHistoryItem(id).status === "removed";
+}
+
+/** Detailed lazy-load recovery; a renderer can update only a changed URL. */
+export function recoverMissingHistoryItem(id: string): MissingHistoryRecoveryResult {
+  const data = readStore(), item = data.history.find(row => row.id === id);
+  if (!item) return { status: "removed" };
+  if (!item.filePath) return { status: "unavailable", item };
+  if (fileExists(item.filePath)) return { status: "present", item: { ...item, fileUrl: toLocalMediaUrl(item.filePath, item.id) } };
+  const result = resolveMissingHistoryFile(item, data, new Map(), new Map());
+  if (result.status === "relinked") writeStore({ ...data, history: data.history.map(row => row.id === id ? result.item! : row) });
+  else if (result.status === "removed") writeStore({ ...data, history: data.history.filter(row => row.id !== id) });
+  return result;
+}
+
+export interface ConvertedWebpHistoryRestoreResult {
+  restored: number;
+  skipped: number;
+  unavailable: number;
+  backupsRead: number;
+  backupErrors: number;
+  checked: number;
+  limited: boolean;
+  items: HistoryItem[];
+}
+
+/**
+ * Explicit index-only rescue from retained own-store snapshots. Never called
+ * from startup/ordinary refresh: it must not resurrect intentionally removed
+ * records without a user's recovery action. Settings/credentials and image
+ * files are never restored from these snapshots.
+ */
+export function restoreConvertedWebpHistory(): ConvertedWebpHistoryRestoreResult {
+  const result: ConvertedWebpHistoryRestoreResult = { restored: 0, skipped: 0, unavailable: 0, backupsRead: 0, backupErrors: 0, checked: 0, limited: false, items: [] };
+  const data = readStore(), snapshots: unknown[][] = [];
+  const maxBackupBytes = 64 * 1024 * 1024, maxRows = 20_000, maxRestore = 1_000;
+  // Collect both arrays before a single write can rotate .bak or .bak2.
+  for (const suffix of [".bak", ".bak2"]) {
+    const file = storePath() + suffix;
+    let fd: number | undefined;
+    try {
+      const stat = fs.lstatSync(file);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > maxBackupBytes) { result.backupErrors++; continue; }
+      // Keep the size bound effective even if a file grows while being read.
+      // Reject a replaced/symlinked/changing snapshot instead of merging it.
+      const signature = (value: fs.Stats) => [value.dev, value.ino, value.size, value.mtimeMs, value.ctimeMs].join(":");
+      const original = signature(stat);
+      fd = fs.openSync(file, "r");
+      if (signature(fs.fstatSync(fd)) !== original) throw new Error("History backup changed before read");
+      const bytes = Buffer.alloc(stat.size);
+      for (let offset = 0; offset < bytes.length;) {
+        const read = fs.readSync(fd, bytes, offset, bytes.length - offset, offset);
+        if (!read) throw new Error("History backup ended during read");
+        offset += read;
+      }
+      const after = fs.lstatSync(file);
+      if (!after.isFile() || after.isSymbolicLink() || signature(after) !== original || signature(fs.fstatSync(fd)) !== original) throw new Error("History backup changed during read");
+      const raw = JSON.parse(bytes.toString("utf8")) as { history?: unknown };
+      if (!raw || !Array.isArray(raw.history)) { result.backupErrors++; continue; }
+      snapshots.push(raw.history); result.backupsRead++;
+    } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") result.backupErrors++; }
+    finally { if (fd !== undefined) { try { fs.closeSync(fd); } catch { /* only a read-only snapshot */ } } }
   }
-  // An inconclusive search (unreachable root, or a scan too large to finish)
-  // is not proof the file is gone — never drop the record on that basis.
-  if (moved.inconclusive) return false;
-  data.history = data.history.filter((h) => h.id !== id);
-  writeStore(data);
-  return true;
+  const ids = new Set(data.history.map(row => row.id));
+  const key = (file: string) => process.platform === "win32" ? path.resolve(file).toLowerCase() : path.resolve(file);
+  const paths = new Set(data.history.filter(row => typeof row.filePath === "string" && row.filePath).map(row => key(row.filePath)));
+  const seen = new Set<string>(), convertedCache: ConvertedWebpDirectoryCache = new Map();
+  outer: for (const rows of snapshots) for (const raw of rows) {
+    if (result.checked >= maxRows || result.items.length >= maxRestore) { result.limited = true; break outer; }
+    result.checked++;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) { result.skipped++; continue; }
+    const row = raw as HistoryItem;
+    if (typeof row.id !== "string" || !row.id || row.id.length > 256 || typeof row.filePath !== "string" || !path.isAbsolute(row.filePath) ||
+        ![".png", ".jpg", ".jpeg"].includes(path.extname(row.filePath).toLowerCase()) || typeof row.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(row.date) ||
+      typeof row.createdAt !== "string" || !Number.isFinite(Date.parse(row.createdAt)) || typeof row.model !== "string" ||
+      !row.params || typeof row.params !== "object" || Array.isArray(row.params)) { result.skipped++; continue; }
+    if (ids.has(row.id) || seen.has(row.id) || paths.has(key(row.filePath))) { result.skipped++; continue; }
+    // Newer snapshot wins even if its counterpart is not currently usable.
+    seen.add(row.id);
+    if (fileExists(row.filePath)) { result.skipped++; continue; }
+    const converted = findConvertedWebpCounterpart(row, convertedCache);
+    if (converted.status === "unavailable") { result.unavailable++; continue; }
+    if (converted.status !== "match" || paths.has(key(converted.path))) { result.skipped++; continue; }
+    const item = { ...row, filePath: converted.path, fileUrl: toLocalMediaUrl(converted.path, row.id) };
+    result.items.push(item); ids.add(row.id); paths.add(key(row.filePath)); paths.add(key(converted.path));
+  }
+  if (result.items.length) {
+    writeStore({ ...data, history: [...data.history, ...result.items] });
+    result.restored = result.items.length;
+    lastHistoryReconcileAt = 0;
+  }
+  return result;
 }
 
 export function getHistory(date?: string, groupId?: string, forceReconcile = false): HistoryItem[] {

@@ -8,8 +8,15 @@ import {worksText} from '../works-text';
 import {ImagePreviewDialog} from './ImagePreviewDialog';
 import {ImageFavoriteButton} from './ImageFavoriteButton';
 import {confirmAction} from './confirm';
+import {ConvertedHistoryRestoreButton} from './ConvertedHistoryRestoreButton';
 import {worksBatchText} from '../works-text';
 import '../works-library.css';
+
+export function WorksThumbnailImage({src,onMissing}: {src:string;onMissing:()=>void|Promise<void>}) {
+  return <img key={src} src={src} alt="" loading="lazy" decoding="async"
+    onError={e=>{e.currentTarget.style.visibility='hidden';e.currentTarget.parentElement?.classList.add('has-missing-image');void onMissing();}}
+    onLoad={e=>{e.currentTarget.style.visibility='';e.currentTarget.parentElement?.classList.remove('has-missing-image');}}/>;
+}
 
 export function WorksLibrary({active = true}: {active?: boolean}) {
   const language = useAppStore(s=>s.settings?.language), t = worksText(language),workflow=workflowText(language),batch=worksBatchText(language);
@@ -106,7 +113,7 @@ export function WorksLibrary({active = true}: {active?: boolean}) {
   async function missing(item:HistoryItem) {
     if (pruning.current.has(item.id)) return;
     pruning.current.add(item.id);
-    try { await useAppStore.getState().dropMissingImage(item.id); await refresh(); }
+    try { if(await useAppStore.getState().dropMissingImage(item.id,item.filePath))await refresh(); }
     catch { /* A decoding or offline-drive error is not proof of deletion. */ }
     finally { pruning.current.delete(item.id); }
   }
@@ -136,7 +143,7 @@ export function WorksLibrary({active = true}: {active?: boolean}) {
       <input type="search" aria-label={t.search} placeholder={t.search} value={query} onChange={e=>setQuery(e.target.value)}/>
       <SelectMenuCompat aria-label={t.dates} value={date} onChange={e=>setDate(e.target.value)}><option value="">{t.dates}</option>{dates.map(d=><option key={d}>{d}</option>)}</SelectMenuCompat>
       <SelectMenuCompat aria-label={t.newest} value={order} onChange={e=>setOrder(e.target.value as typeof order)}><option value="newest">{t.newest}</option><option value="oldest">{t.oldest}</option></SelectMenuCompat>
-      <button onClick={reset}>{t.reset}</button><span className="works-count">{filtered.length} {t.count}</span>
+      <button onClick={reset}>{t.reset}</button><ConvertedHistoryRestoreButton disabled={busy||loading} onRestored={()=>{reset();return refresh(true);}}/><span className="works-count">{filtered.length} {t.count}</span>
     </div>
     {error&&<div className="works-error" role="alert">{error} <button onClick={()=>void refresh()}>{t.retry}</button></div>}
     <div className="works-layout">
@@ -155,7 +162,7 @@ export function WorksLibrary({active = true}: {active?: boolean}) {
         {!filtered.length?<div className="works-empty">{loading?t.loading:items.length?t.noMatch:t.empty}</div>:<div className="works-grid">
           {visible.map(item=><article key={item.id} className={`works-tile${focused===item.id?' is-focused':''}${selection.has(item.id)?' is-selected':''}`}>
             <ImageFavoriteButton src={item.fileUrl} compact/><button className="works-thumbnail" onDoubleClick={()=>{focus(item);setPreviewOpen(true);}} aria-label={worksName(item.filePath)} aria-pressed={focused===item.id} onClick={e=>{if(e.ctrlKey||e.metaKey||e.shiftKey)toggle(item,e.shiftKey);else{focus(item);anchor.current=item.id;}}} onKeyDown={e=>{const delta=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(delta){e.preventDefault();goTo((selectedIndex>=0?selectedIndex:filtered.indexOf(item))+delta);}}}>
-              <img src={item.fileUrl} alt="" loading="lazy" decoding="async" onError={e=>{e.currentTarget.style.visibility='hidden';e.currentTarget.parentElement?.classList.add('has-missing-image');void missing(item);}}/><span className="works-missing">{t.missing}</span>
+              <WorksThumbnailImage src={item.fileUrl} onMissing={()=>missing(item)}/><span className="works-missing">{t.missing}</span>
             </button>
             <label className="works-tile-caption"><input type="checkbox" disabled={busy} checked={selection.has(item.id)} aria-label={`${t.selected}: ${worksName(item.filePath)}`} onChange={()=>toggle(item)}/><span title={item.filePath}>{worksName(item.filePath)}</span></label>
             <small>{item.width} × {item.height} · {item.date}</small>

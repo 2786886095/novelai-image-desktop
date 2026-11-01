@@ -30,7 +30,11 @@ class WorksBatchFiles {
     }
     return false;
   }
-  Future<bool> conclusivelyMissing(String path) async {
+  Future<bool> conclusivelyMissing(String path, {Future<bool> Function(Directory)? directoryAvailable}) async {
+    Future<void> listable(Directory directory) async {
+      if (directoryAvailable == null) { await directory.list(followLinks:false).toList(); }
+      else if (!await directoryAvailable(directory)) { throw const FileSystemException('Directory listing unavailable'); }
+    }
     if(path.isEmpty)return false;
     if(fileAccess!=null) {
       try {return (await fileAccess!.describe(path,managedRoots)).missing;}
@@ -43,12 +47,12 @@ class WorksBatchFiles {
         if(!p.isWithin(p.normalize(p.absolute(root.path)),absolute))continue;
         if(await FileSystemEntity.type(root.path,followLinks:false)!=FileSystemEntityType.directory)continue;
         // Listing the root and its existing descendants distinguishes deletion from unavailable storage.
-        await root.list(followLinks:false).toList();
+        await listable(root);
         var parent=File(path).parent;
         while(p.isWithin(p.absolute(root.path),p.absolute(parent.path))) {
           final type=await FileSystemEntity.type(parent.path,followLinks:false);
           if(type==FileSystemEntityType.link)return false;
-          if(type==FileSystemEntityType.directory) {await parent.list(followLinks:false).toList();break;}
+          if(type==FileSystemEntityType.directory) {await listable(parent);break;}
           if(type!=FileSystemEntityType.notFound)return false;
           parent=parent.parent;
         }
@@ -57,7 +61,7 @@ class WorksBatchFiles {
       // For an external imported image only an accessible, listable immediate parent proves deletion.
       final parent=File(path).parent;
       if(await FileSystemEntity.type(parent.path,followLinks:false)!=FileSystemEntityType.directory)return false;
-      await parent.list(followLinks:false).toList();
+      await listable(parent);
       return await FileSystemEntity.type(path,followLinks:false)==FileSystemEntityType.notFound;
     } catch (_) {return false;}
   }
