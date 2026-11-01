@@ -26,13 +26,19 @@ import { Icon, iconNameForLegacyGlyph, isIconName } from "./icons";
 export function Button({
   children,
   variant = "secondary",
+  size = "md",
+  loading = false,
+  disabled = false,
   className,
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "danger";
+  size?: "md" | "sm";
+  loading?: boolean;
 }) {
   return (
-    <button className={clsx("btn", `btn-${variant}`, className)} {...props}>
+    <button className={clsx("btn", `btn-${variant}`, size === "sm" && "btn-sm", loading && "is-loading", className)}
+      {...props} disabled={disabled || loading} aria-busy={loading ? true : props["aria-busy"]}>
       {children}
     </button>
   );
@@ -473,7 +479,6 @@ export function SecretInput({
         <button
           type="button"
           className="secret-field-toggle"
-          tabIndex={-1}
           aria-label={visible ? hideLabel : showLabel}
           onClick={() => setVisible((value) => !value)}
         >

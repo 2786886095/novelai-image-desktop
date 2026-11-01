@@ -1,7 +1,90 @@
-/* Standard actions share metrics; navigation cards and icon-only controls keep
-   their own size variants. Never force all labels to an arbitrary fixed width. */
-:root { --studio-action-height: 36px; --studio-action-gap: 8px; }
-.btn { box-sizing: border-box; min-height: var(--studio-action-height); }
+/* Desktop control contract: one final authority after legacy/page styles.
+   Shared controls and named action rows opt in. Never reset global buttons,
+   navigation cards, image surfaces, canvas tools or modal/portal lifecycles. */
+:root {
+  --studio-space-1: 4px; --studio-space-2: 8px; --studio-space-3: 12px;
+  --studio-space-4: 16px; --studio-space-6: 24px;
+  --studio-action-height: 36px; --studio-action-height-compact: 28px;
+  --studio-toolbar-action-height: 34px;
+  --studio-action-gap: var(--studio-space-2);
+  --studio-control-radius: var(--radius-sm);
+  --studio-control-padding-x: var(--studio-space-3);
+  --studio-control-padding-y: 6px;
+  --studio-dialog-padding-x: 22px; --studio-dialog-padding-y: var(--studio-space-4);
+  --studio-dialog-radius: var(--radius-lg);
+  --studio-danger-fill: color-mix(in srgb, var(--danger) 78%, black);
+  --studio-danger-hover: color-mix(in srgb, var(--studio-danger-fill) 84%, black);
+}
+html body .btn {
+  box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;
+  gap: var(--studio-action-gap); min-height: var(--studio-action-height); height: auto;
+  padding: var(--studio-control-padding-y) var(--studio-control-padding-x);
+  border: 1px solid var(--border); border-radius: var(--studio-control-radius);
+  background: var(--bg-input); color: var(--text-primary); line-height: 1.4;
+  box-shadow: none; transform: none;
+  transition: background-color var(--interaction-fast) var(--interaction-enter),
+    border-color var(--interaction-fast) var(--interaction-enter),
+    color var(--interaction-fast) var(--interaction-enter),
+    box-shadow var(--interaction-fast) var(--interaction-enter);
+}
+html body .btn:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-hover); }
+html body .btn:active:not(:disabled) { transform: none; filter: brightness(.97); }
+html body .btn-primary { border-color: var(--accent); background: var(--accent); color: var(--accent-text); }
+html body .btn-primary:hover:not(:disabled) { border-color: var(--accent-hover); background: var(--accent-hover); }
+html body .btn-ghost { border-color: transparent; background: transparent; }
+html body .btn-ghost:hover:not(:disabled) { border-color: transparent; background: var(--bg-hover); }
+/* This explicit compatibility boundary wins over legacy important gradients. */
+html body .btn-danger { border-color: var(--studio-danger-fill) !important; background: var(--studio-danger-fill) !important; color: #fff !important; }
+html body .btn-danger:hover:not(:disabled) { border-color: var(--studio-danger-hover) !important; background: var(--studio-danger-hover) !important; }
+html body .btn:disabled {
+  border-color: var(--border); background: var(--bg-subtle); color: var(--text-muted);
+  opacity: 1; cursor: not-allowed; box-shadow: none; filter: none;
+}
+html body .btn-danger:disabled { border-color: var(--border) !important; background: var(--bg-subtle) !important; color: var(--text-muted) !important; }
+html body .btn[aria-busy="true"] { cursor: progress; }
+html body .btn.is-loading { color: transparent !important; }
+html body .btn.is-loading::after { border-color: var(--border-strong); border-top-color: var(--accent); }
+html body .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: var(--focus-ring); }
+html body .btn:is(.btn-sm, .btn-mini) { min-height: var(--studio-action-height-compact); padding: 3px 8px; line-height: 1.4; }
+html body :is(.image-viewer-toolbar, .image-preview-controls, .canvas-toolbar) .btn { min-height: var(--studio-toolbar-action-height); }
+
+/* Fields opt in; checkbox/radio/range/file/color and canvas inputs keep their
+   own geometry. Auto height preserves the user's text scaling settings. */
+html body .field { gap: var(--studio-space-2); }
+html body .field :is(input, select):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
+html body .field .select-menu-trigger {
+  box-sizing: border-box; min-height: var(--studio-action-height); height: auto;
+  padding: var(--studio-control-padding-y) var(--studio-control-padding-x);
+  border: 1px solid var(--border); border-radius: var(--studio-control-radius);
+  background: var(--bg-input); color: var(--text-primary); line-height: 1.4;
+}
+html body .field textarea { padding: 8px var(--studio-control-padding-x); border-radius: var(--studio-control-radius); background: var(--bg-input); color: var(--text-primary); }
+html body .field :is(input, select, textarea, .select-menu-trigger):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-color: var(--accent); box-shadow: var(--focus-ring); }
+html body .field :is(input, select, textarea, .select-menu-trigger):disabled { background: var(--bg-subtle); color: var(--text-muted); cursor: not-allowed; opacity: 1; }
+html body .field :is(input, textarea)[readonly] { background: var(--bg-panel); }
+html body .field :is(input, select, textarea, .select-menu-trigger)[aria-invalid="true"] { border-color: var(--danger); box-shadow: 0 0 0 2px var(--danger-soft); }
+html body .field .secret-field input { padding-inline-end: calc(var(--studio-action-height) + 8px); }
+html body .secret-field-toggle { width: var(--studio-action-height); border-radius: var(--studio-control-radius); }
+
+/* Dialog surface/chrome only: focus, scrolling, drawing, exit animations and
+   native top-layer ownership remain with existing tested implementations. */
+html body :is(.modal, .app-confirm-dialog, .pi-modal, .prompt-assistant-dialog,
+  .translation-preview-dialog, .prompt-weight-dialog, .negative-library-dialog,
+  .reference-ui-dialog, .data-confirm-card, .nai-account-panel, .positive-preset-modal) {
+  border-color: var(--border); border-radius: var(--studio-dialog-radius);
+  background: var(--bg-dialog); color: var(--text-primary); box-shadow: var(--shadow-lg);
+}
+html body :is(.modal > header, .modal > footer, .nai-account-dialog-header, .positive-preset-modal-header) { gap: var(--studio-action-gap); padding: var(--studio-dialog-padding-y) var(--studio-dialog-padding-x); }
+html body :is(.modal > header, .nai-account-dialog-header, .positive-preset-modal-header) > button:not(.btn) { width: var(--studio-action-height); height: var(--studio-action-height); border-radius: var(--studio-control-radius); }
+html body :is(.app-confirm-actions, .modal > footer) { gap: var(--studio-action-gap); flex-wrap: wrap; }
+/* Legacy reference confirmations use their own DOM, not their own button
+   language. Only the action row is adapted; alert semantics/events stay intact. */
+html body .reference-ui-dialog-actions { gap: var(--studio-action-gap); justify-content: flex-end; flex-wrap: wrap; padding: var(--studio-dialog-padding-y) var(--studio-dialog-padding-x); }
+html body .reference-ui-dialog-button { flex: 0 1 auto; min-height: var(--studio-action-height); padding: var(--studio-control-padding-y) var(--studio-control-padding-x); border: 1px solid var(--border); border-radius: var(--studio-control-radius); background: var(--bg-input); color: var(--text-primary); font-weight: 500; line-height: 1.4; cursor: pointer; }
+html body .reference-ui-dialog-button:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-strong); }
+html body .reference-ui-dialog-button-primary { border-color: var(--accent); background: var(--accent); color: var(--accent-text); }
+html body .reference-ui-dialog-button-primary:hover:not(:disabled) { border-color: var(--accent-hover); background: var(--accent-hover); }
+html body .reference-ui-dialog-button:disabled { border-color: var(--border); background: var(--bg-subtle); color: var(--text-muted); opacity: 1; cursor: not-allowed; }
 .file-picker.file-picker-compact {
   display: inline-flex; flex: 0 0 auto; width: auto; max-width: 100%;
   padding: 0; border: 0; border-radius: 0; background: transparent; gap: 0;
@@ -11,18 +94,11 @@
   .tag-comic-reference-actions, .tag-comic-generate-toolbar, .tag-comic-result-actions) {
   align-items: center; gap: var(--studio-action-gap); flex-wrap: wrap;
 }
-.tag-comic .btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  height: var(--studio-action-height); min-height: var(--studio-action-height);
-  padding: 0 12px; line-height: 20px; white-space: nowrap; flex-shrink: 0;
-  border-radius: 6px;
-}
-.tag-comic :is(.tag-comic-header-actions, .tag-comic-actions, .tag-comic-reference-actions) .btn {
-  min-width: 96px;
-}
 .tag-comic .tag-comic-global-grid > label { align-content: start; }
-.tag-comic .tag-comic-global-grid input:not([type="checkbox"]):not([type="range"]):not([type="file"]) {
-  box-sizing: border-box; height: 42px; min-height: 42px; padding: 0 12px; margin: 0;
+.tag-comic .tag-comic-global-grid input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]) {
+  box-sizing: border-box; height: auto; min-height: var(--studio-action-height);
+  padding: var(--studio-control-padding-y) var(--studio-control-padding-x); margin: 0;
+  border-radius: var(--studio-control-radius);
 }
 .tag-comic .tag-comic-section-heading { flex-wrap: wrap; }
 @media (max-width: 720px) {

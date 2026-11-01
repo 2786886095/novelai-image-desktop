@@ -1,7 +1,7 @@
 .works-library { --works-ease: cubic-bezier(.2,.8,.2,1); color:var(--text-primary); background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:16px; width:100%; min-width:0; box-sizing:border-box; }
 .works-library * { box-sizing:border-box; }
-.works-library button,.works-library input,.works-library select,.works-library textarea { font:inherit; color:inherit; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-input); }
-.works-library button { min-height:34px; padding:6px 10px; cursor:pointer; transition:background-color 180ms var(--works-ease),border-color 180ms var(--works-ease),color 180ms var(--works-ease); }
+.works-library button,.works-library input,.works-library select,.works-library textarea { font:inherit; color:inherit; border:1px solid var(--border); border-radius:var(--studio-control-radius,var(--radius-sm)); background:var(--bg-input); }
+.works-library button { min-height:var(--studio-action-height,36px); padding:var(--studio-control-padding-y,6px) var(--studio-control-padding-x,12px); cursor:pointer; transition:background-color 180ms var(--works-ease),border-color 180ms var(--works-ease),color 180ms var(--works-ease); }
 .works-library button:hover:not(:disabled) { background:var(--bg-hover); border-color:var(--accent); }
 .works-library button:disabled { color:var(--text-muted); cursor:default; }
 .works-library button:focus-visible,.works-library input:focus-visible,.works-library select:focus-visible,.works-library textarea:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }

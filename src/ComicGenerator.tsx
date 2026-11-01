@@ -1,3 +1,4 @@
+import {FilePicker} from './components/FilePicker';
 import {selectBatchTasks} from './batch/generation-queue';
 import {BatchSizeImportError,parseBatchSizeImport} from './batch/size-import';
 import {getBatchGenerationQueue,getBatchProjectStore} from './batch/use-batch-generation';
@@ -557,19 +558,14 @@ function BatchPrecisePicker({
         <span>{t("batch.ref.preciseTitle")}</span>
         <div className="batch-ref-head-actions">
           <Button variant="secondary" onClick={onOpenPresets}>{presetText.open}</Button>
-          <label className="btn btn-secondary btn-sm">
-            {t("batch.ref.add")}
-            <input
-              type="file"
-              hidden
-              multiple
-              accept="image/*"
-              onChange={(e) => {
+          <FilePicker compact buttonLabel={t("batch.ref.add")}
+            multiple
+            accept="image/*"
+            onChange={(e) => {
                 void add(e.target.files);
                 e.target.value = "";
               }}
-            />
-          </label>
+          />
         </div>
       </div>
       {refs.length === 0 ? (
@@ -648,19 +644,14 @@ function BatchVibePicker({
         <span>{t("batch.ref.vibeTitle")}</span>
         <div className="batch-ref-head-actions">
           <Button variant="secondary" onClick={onOpenPresets}>{presetText.open}</Button>
-          <label className="btn btn-secondary btn-sm">
-            {t("batch.ref.add")}
-            <input
-              type="file"
-              hidden
-              multiple
-              accept="image/*"
-              onChange={(e) => {
+          <FilePicker compact buttonLabel={t("batch.ref.add")}
+            multiple
+            accept="image/*"
+            onChange={(e) => {
                 void add(e.target.files);
                 e.target.value = "";
               }}
-            />
-          </label>
+          />
         </div>
       </div>
       {vibes.length === 0 ? (
@@ -1264,18 +1255,13 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
         >
           {t("batch.import.exportProject")}
         </Button>
-        <label className="btn btn-secondary redraw-file-btn">
-          {t("batch.import.importProject")}
-          <input
-            type="file"
-            hidden
-            accept=".json,application/json"
-            onChange={(e) => {
+        <FilePicker compact className="redraw-file-btn" buttonLabel={t("batch.import.importProject")}
+          accept=".json,application/json"
+          onChange={(e) => {
               void importProject(e.target.files?.[0] ?? null);
               e.target.value = "";
             }}
-          />
-        </label>
+        />
         <Button
           variant="ghost"
           onClick={clearProject}
@@ -1322,18 +1308,13 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
                 >
                   {t("batch.import.exportProject")}
                 </Button>
-                <label className="btn btn-secondary redraw-file-btn">
-                  {t("batch.import.importProject")}
-                  <input
-                    type="file"
-                    hidden
-                    accept=".json,application/json"
-                    onChange={(e) => {
+                <FilePicker compact className="redraw-file-btn" buttonLabel={t("batch.import.importProject")}
+                  accept=".json,application/json"
+                  onChange={(e) => {
                       void importProject(e.target.files?.[0] ?? null);
                       e.target.value = "";
                     }}
-                  />
-                </label>
+                />
                 <Button
                   variant="ghost"
                   onClick={clearProject}
@@ -1580,18 +1561,13 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
             >
               {t("batch.prompts.importText")}
             </Button>
-            <label className="btn btn-secondary redraw-file-btn">
-              {t("batch.prompts.importTxt")}
-              <input
-                type="file"
-                hidden
-                accept=".txt,text/plain"
-                onChange={(e) => {
+            <FilePicker compact className="redraw-file-btn" buttonLabel={t("batch.prompts.importTxt")}
+              accept=".txt,text/plain"
+              onChange={(e) => {
                   void importPromptsFile(e.target.files?.[0] ?? null);
                   e.target.value = "";
                 }}
-              />
-            </label>
+            />
             <InlineReversePromptSkillControls disabled={aiFilling||running}/>
             <span className="redraw-ai-mode">
               {t("batch.prompts.reverseMode")}

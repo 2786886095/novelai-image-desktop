@@ -39,8 +39,8 @@ export function ImageFailureDialog({ failure, language, onClose, onOpen }: {
         <p id={bodyId}>{failure.message}</p>
         <p>{text.retained}</p>
         <div className="app-confirm-actions">
-          <button type="button" data-result="cancel" onClick={onClose}>{text.close}</button>
-          <button type="button" className="primary" onClick={onOpen}>{text.open}</button>
+          <button type="button" className="btn btn-secondary" data-result="cancel" onClick={onClose}>{text.close}</button>
+          <button type="button" className="btn btn-primary primary" onClick={onOpen}>{text.open}</button>
         </div>
       </section>
     </div>, document.body,

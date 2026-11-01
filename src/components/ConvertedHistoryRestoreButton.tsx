@@ -2,6 +2,7 @@ import {useRef,useState} from 'react';
 import {useAppStore} from '../store';
 import {convertedHistoryText} from '../converted-history-text';
 import {confirmAction} from './confirm';
+import {Button} from './ui';
 
 /** Explicit history-only merge; never runs during startup or normal refresh. */
 export function ConvertedHistoryRestoreButton({disabled=false,onRestored}: {disabled?:boolean;onRestored?:()=>void|Promise<void>}) {
@@ -22,5 +23,5 @@ export function ConvertedHistoryRestoreButton({disabled=false,onRestored}: {disa
     } catch {useAppStore.getState().setToast(text.error);}
     finally {pending.current=false;setBusy(false);}
   }
-  return <button type="button" disabled={disabled||busy} aria-busy={busy} title={text.confirm} onClick={()=>void restore()}>{busy?text.busy:text.restore}</button>;
+  return <Button type="button" disabled={disabled} loading={busy} aria-busy={busy} title={text.confirm} onClick={()=>void restore()}>{busy?text.busy:text.restore}</Button>;
 }

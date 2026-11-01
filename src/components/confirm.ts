@@ -16,8 +16,8 @@ export function confirmAction(message: string, title = "请确认", choice?:{lab
         <h3 id="${titleId}"></h3>
         <p></p>
         <div class="app-confirm-actions">
-          <button type="button" data-result="cancel"></button>
-          <button type="button" class="primary" data-result="confirm"></button>
+          <button type="button" class="btn btn-secondary" data-result="cancel"></button>
+          <button type="button" class="btn btn-primary primary" data-result="confirm"></button>
         </div>
       </section>`;
     const heading = backdrop.querySelector("h3");

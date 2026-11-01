@@ -1,3 +1,4 @@
+import {FilePicker} from './components/FilePicker';
 import {TemplateLibraryPanel, templateLibraryCopy} from './features/settings/TemplateLibraryPanel';
 import {ComicPromptComposer} from './comic/ComicPromptComposer';
 import {ConvertedHistoryRestoreButton} from './components/ConvertedHistoryRestoreButton';
@@ -1089,34 +1090,24 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
           ))}
 
           <div className="vibe-add-row">
-            <label className="btn btn-secondary vibe-add-btn">{vf.load}<input type="file" hidden accept=".json,.naiv4vibe,.naiv4vibebundle" onChange={e=>{const file=e.target.files?.[0];e.target.value="";if(file)void importVibeFile(file);}} /></label>
+            <FilePicker compact className="vibe-add-btn" buttonLabel={vf.load} accept=".json,.naiv4vibe,.naiv4vibebundle" onChange={e=>{const file=e.target.files?.[0];e.target.value="";if(file)void importVibeFile(file);}} />
             <Button disabled={!vibeImages.length} onClick={exportVibes}>{vf.save}</Button>
-            <label className={clsx("btn btn-secondary vibe-add-btn", !vibeSupported && "disabled")} aria-disabled={!vibeSupported}>
-              <IconText icon="+">{t("reference.addVibe")}</IconText>
-              <input
-                type="file"
-                hidden
-                accept="image/png,image/jpeg,image/webp"
-                disabled={!vibeSupported}
-                onChange={(e) => {
+            <FilePicker compact className="vibe-add-btn" buttonLabel={<IconText icon="+">{t("reference.addVibe")}</IconText>}
+              accept="image/png,image/jpeg,image/webp"
+              disabled={!vibeSupported}
+              onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) { handleVibeFile(f, 1, 1); e.target.value = ""; }
                 }}
-              />
-            </label>
-            <label className={clsx("btn btn-secondary vibe-add-btn", !preciseSupported && "disabled")} aria-disabled={!preciseSupported}>
-              <IconText icon="+">{t("reference.addPrecise")}</IconText>
-              <input
-                type="file"
-                hidden
-                accept="image/png,image/jpeg,image/webp"
-                disabled={!preciseSupported}
-                onChange={(e) => {
+            />
+            <FilePicker compact className="vibe-add-btn" buttonLabel={<IconText icon="+">{t("reference.addPrecise")}</IconText>}
+              accept="image/png,image/jpeg,image/webp"
+              disabled={!preciseSupported}
+              onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) { handlePreciseFile(f); e.target.value = ""; }
                 }}
-              />
-            </label>
+            />
           </div>
         </div>
         <footer>
@@ -4105,18 +4096,13 @@ function ReversePanel() {
           ) : (
             <span style={{ fontSize: "calc(12px * var(--ui-text-scale, 1))" }}>{t("inspect.dropHint")}</span>
           )}
-          <label className="btn btn-secondary" style={{ cursor: "pointer", fontSize: "calc(12px * var(--ui-control-scale, 1))" }}>
-            <IconText icon={<Icon name="folderOpen" />}>{t("inspect.openFile")}</IconText>
-            <input
-              type="file"
-              hidden
-              accept="image/png,image/jpeg,image/webp"
-              onChange={(e) => {
+          <FilePicker compact buttonLabel={<IconText icon={<Icon name="folderOpen" />}>{t("inspect.openFile")}</IconText>}
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) { handleFile(f); e.target.value = ""; }
               }}
-            />
-          </label>
+          />
         </div>
 
         {hasImage && metadataReport && <MetadataApplyPanel report={metadataReport} language={normalizeAppLanguage(language)} />}
