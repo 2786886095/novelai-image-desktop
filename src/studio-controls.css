@@ -74,7 +74,10 @@ html body :is(.modal, .app-confirm-dialog, .pi-modal, .prompt-assistant-dialog,
   border-color: var(--border); border-radius: var(--studio-dialog-radius);
   background: var(--bg-dialog); color: var(--text-primary); box-shadow: var(--shadow-lg);
 }
-html body :is(.modal > header, .modal > footer, .nai-account-dialog-header, .positive-preset-modal-header) { gap: var(--studio-action-gap); padding: var(--studio-dialog-padding-y) var(--studio-dialog-padding-x); }
+html body :is(.modal > header, .modal > footer, .positive-preset-modal-header) { gap: var(--studio-action-gap); padding: var(--studio-dialog-padding-y) var(--studio-dialog-padding-x); }
+/* Account panels already own their outer content inset; do not indent the
+   heading a second time relative to the fields. */
+html body .nai-account-dialog-header { gap: var(--studio-action-gap); padding: 0; }
 html body :is(.modal > header, .nai-account-dialog-header, .positive-preset-modal-header) > button:not(.btn) { width: var(--studio-action-height); height: var(--studio-action-height); border-radius: var(--studio-control-radius); }
 html body :is(.app-confirm-actions, .modal > footer) { gap: var(--studio-action-gap); flex-wrap: wrap; }
 /* Legacy reference confirmations use their own DOM, not their own button
