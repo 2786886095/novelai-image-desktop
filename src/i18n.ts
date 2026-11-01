@@ -5777,7 +5777,12 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.openOutputDir": "打开输出目录",
     "settings.keepMetadata": "保留图片元数据（提示词 / 种子 / 参数）",
     "settings.keepMetadataDesc":
-      "开启：保留 PNG 生成信息。关闭：清除文本、EXIF 等元数据及像素隐写载体后，整图重新编码为 PNG；保留尺寸和透明通道，像素可能有轻微变化，不是像素无损。仅影响之后保存的图片，不追溯历史图片或备份。",
+      "开启：保留生成信息（PNG 文本与透明通道隐写；WebP 另写入 NovelAI 格式 EXIF）。关闭：清除文本、EXIF 等元数据及像素隐写载体后重新编码；保留尺寸和透明通道，像素可能有轻微变化，不是像素无损。保存格式由下方“图片保存格式”决定，本开关不改变格式。仅影响之后保存的图片，不追溯历史图片或备份。",
+    "settings.imageOutputFormat": "图片保存格式",
+    "settings.imageOutputFormat.png": "PNG（默认）",
+    "settings.imageOutputFormat.webp": "WebP（无损）",
+    "settings.imageOutputFormatDesc":
+      "用于之后保存的 NovelAI 生成、图生图、局部重绘、批量重绘、导演工具与超分结果。WebP 对处理后的 8 位像素无损编码；关闭元数据时会先清理像素载荷。高位深 PNG 保留为 PNG 以免降低精度。体积取决于图片内容，扩展名与实际格式一致。已保存的图片不会转换。复制到剪贴板时如需保留元数据，仍仅支持 PNG。",
     "settings.onboarding": "重新查看新手引导",
     "settings.imageNameTemplate": "图片命名模板",
     "settings.imageNameHint":
@@ -5958,7 +5963,12 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.openOutputDir": "開啟輸出目錄",
     "settings.keepMetadata": "保留圖片中繼資料（提示詞 / 種子 / 參數）",
     "settings.keepMetadataDesc":
-      "開啟：保留 PNG 生成資訊。關閉：清除文字、EXIF 等中繼資料及像素隱寫載體後，整圖重新編碼為 PNG；保留尺寸與透明通道，像素可能有輕微變化，並非像素無損。僅影響之後儲存的圖片，不追溯歷史圖片或備份。",
+      "開啟：保留生成資訊（PNG 文字與透明通道隱寫；WebP 另寫入 NovelAI 格式 EXIF）。關閉：清除文字、EXIF 等中繼資料及像素隱寫載體後重新編碼；保留尺寸與透明通道，像素可能有輕微變化，並非像素無損。儲存格式由下方「圖片儲存格式」決定，本開關不改變格式。僅影響之後儲存的圖片，不追溯歷史圖片或備份。",
+    "settings.imageOutputFormat": "圖片儲存格式",
+    "settings.imageOutputFormat.png": "PNG（預設）",
+    "settings.imageOutputFormat.webp": "WebP（無損）",
+    "settings.imageOutputFormatDesc":
+      "用於之後儲存的 NovelAI 生成、圖生圖、局部重繪、批次重繪、導演工具與超解析度結果。WebP 對處理後的 8 位元像素無損編碼；關閉中繼資料時會先清理像素載荷。高位元深度 PNG 保留為 PNG，以免降低精度。大小取決於圖片內容，副檔名與實際格式一致。已儲存的圖片不會轉換。複製到剪貼簿時如需保留中繼資料，仍僅支援 PNG。",
     "settings.onboarding": "重新查看新手引導",
     "settings.imageNameTemplate": "圖片命名範本",
     "settings.imageNameHint":
@@ -6140,7 +6150,12 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.openOutputDir": "Open output folder",
     "settings.keepMetadata": "Keep image metadata (prompt / seed / parameters)",
     "settings.keepMetadataDesc":
-      "On: retain PNG generation information. Off: remove text, EXIF and other metadata, sanitize pixel steganography carriers, then re-encode the entire PNG. Dimensions and transparency are retained; pixels may change slightly, so this is not pixel-lossless. Only affects future saves, not existing images or backups.",
+      "On: retain generation information (PNG text and alpha-channel data; WebP additionally gets NovelAI-style EXIF). Off: remove text, EXIF and other metadata, sanitize pixel steganography carriers, then re-encode. Dimensions and transparency are retained; pixels may change slightly, so this is not pixel-lossless. The file format is chosen by “Image file format” below; this switch does not change it. Only affects future saves, not existing images or backups.",
+    "settings.imageOutputFormat": "Image file format",
+    "settings.imageOutputFormat.png": "PNG (default)",
+    "settings.imageOutputFormat.webp": "WebP (lossless)",
+    "settings.imageOutputFormatDesc":
+      "Applies to future NovelAI generation, img2img, inpaint, batch redraw, Director tool and upscale saves. WebP losslessly encodes prepared 8-bit pixels; removing metadata first sanitizes pixel carriers. Higher-bit-depth PNGs stay PNG to preserve precision. File size depends on image content; the extension matches the actual format. Existing images are not converted. Copying to the clipboard with metadata still requires PNG.",
     "settings.onboarding": "Show onboarding again",
     "settings.imageNameTemplate": "Image naming template",
     "settings.imageNameHint":
@@ -6326,7 +6341,12 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.keepMetadata":
       "画像メタデータを保持（プロンプト / シード / パラメータ）",
     "settings.keepMetadataDesc":
-      "オン：PNG の生成情報を保持します。オフ：テキスト・EXIF などのメタデータと画素のステガノグラフィ用領域を消去し、画像全体を PNG に再エンコードします。サイズと透明度は保持しますが、画素がわずかに変化するため画素単位での無損失ではありません。今後の保存のみが対象で、過去の画像やバックアップは変更しません。",
+      "オン：生成情報を保持します（PNG のテキストと透明チャンネル内データ。WebP では NovelAI 形式の EXIF も書き込みます）。オフ：テキスト・EXIF などのメタデータと画素のステガノグラフィ用領域を消去して再エンコードします。サイズと透明度は保持しますが、画素がわずかに変化するため画素単位での無損失ではありません。保存形式は下の「画像の保存形式」で決まり、このスイッチでは変わりません。今後の保存のみが対象で、過去の画像やバックアップは変更しません。",
+    "settings.imageOutputFormat": "画像の保存形式",
+    "settings.imageOutputFormat.png": "PNG（既定）",
+    "settings.imageOutputFormat.webp": "WebP（可逆）",
+    "settings.imageOutputFormatDesc":
+      "今後保存する NovelAI の生成・img2img・インペイント・一括再描画・ディレクターツール・アップスケール結果に適用されます。WebP は処理後の 8 ビット画素を可逆圧縮します。メタデータを削除する場合は画素内のデータも先に除去します。高ビット深度の PNG は精度を保つため PNG のまま保存します。容量は画像の内容によって異なり、拡張子は実際の形式と一致します。保存済みの画像は変換しません。メタデータ付きでクリップボードへコピーするには引き続き PNG が必要です。",
     "settings.onboarding": "オンボーディングを再表示",
     "settings.imageNameTemplate": "画像名テンプレート",
     "settings.imageNameHint":
@@ -6512,7 +6532,12 @@ const DESKTOP_SETTINGS_UI_TEXT: Record<AppLanguage, Record<string, string>> = {
     "settings.keepMetadata":
       "이미지 메타데이터 보존(프롬프트 / 시드 / 매개변수)",
     "settings.keepMetadataDesc":
-      "켬: PNG 생성 정보를 유지합니다. 끔: 텍스트·EXIF 등의 메타데이터와 픽셀 스테가노그래피 영역을 지운 뒤 전체 PNG를 다시 인코딩합니다. 크기와 투명도는 유지하지만 픽셀이 미세하게 변하므로 픽셀 무손실은 아닙니다. 이후 저장에만 적용되며 기존 이미지나 백업은 변경하지 않습니다.",
+      "켬: 생성 정보를 유지합니다(PNG 텍스트와 투명 채널 내 데이터, WebP는 NovelAI 형식 EXIF도 기록). 끔: 텍스트·EXIF 등의 메타데이터와 픽셀 스테가노그래피 영역을 지운 뒤 다시 인코딩합니다. 크기와 투명도는 유지하지만 픽셀이 미세하게 변하므로 픽셀 무손실은 아닙니다. 저장 형식은 아래 ‘이미지 저장 형식’에서 정하며 이 스위치로 바뀌지 않습니다. 이후 저장에만 적용되며 기존 이미지나 백업은 변경하지 않습니다.",
+    "settings.imageOutputFormat": "이미지 저장 형식",
+    "settings.imageOutputFormat.png": "PNG(기본값)",
+    "settings.imageOutputFormat.webp": "WebP(무손실)",
+    "settings.imageOutputFormatDesc":
+      "이후 저장되는 NovelAI 생성, img2img, 인페인트, 일괄 다시 그리기, 디렉터 도구, 업스케일 결과에 적용됩니다. WebP는 처리된 8비트 픽셀을 무손실로 인코딩합니다. 메타데이터를 끄면 픽셀에 숨긴 데이터도 먼저 정리합니다. 높은 비트 심도의 PNG는 정밀도를 유지하도록 PNG로 저장합니다. 파일 크기는 이미지 내용에 따라 달라지며 확장자는 실제 형식과 일치합니다. 이미 저장된 이미지는 변환하지 않습니다. 메타데이터를 유지한 채 클립보드로 복사하려면 여전히 PNG가 필요합니다.",
     "settings.onboarding": "온보딩 다시 보기",
     "settings.imageNameTemplate": "이미지 이름 템플릿",
     "settings.imageNameHint":

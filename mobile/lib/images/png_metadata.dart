@@ -26,6 +26,8 @@ class ImportedGenerateParams {
   final bool? qualityToggle;
   final bool? transparentBackground;
   final bool? variety;
+  /// Same narrow shape as desktop `metadataReplay`; see normalizeMetadataReplay.
+  final Map<String, dynamic>? metadataReplay;
 
   const ImportedGenerateParams({
     this.model,
@@ -47,7 +49,11 @@ class ImportedGenerateParams {
     this.qualityToggle,
     this.transparentBackground,
     this.variety,
+    this.metadataReplay,
   });
+
+  num? get skipCfgBelowSigma =>
+      (metadataReplay?['parameters'] as Map?)?['skip_cfg_below_sigma'] as num?;
 
   bool get isEmpty =>
       model == null &&
@@ -67,7 +73,8 @@ class ImportedGenerateParams {
       ucPreset == null &&
       qualityToggle == null &&
       transparentBackground == null &&
-      variety == null;
+      variety == null &&
+      metadataReplay == null;
 
   void applyTo(GenerateParams target) {
     if (model case final value?) target.model = value;
@@ -99,6 +106,7 @@ class ImportedGenerateParams {
       target.transparentBackground = value;
     }
     if (variety case final value?) target.variety = value;
+    if (metadataReplay case final value?) target.metadataReplay = value;
   }
 
   Map<String, Object> get compatibleValues => {
@@ -122,6 +130,8 @@ class ImportedGenerateParams {
         if (transparentBackground != null)
           'Transparent background': transparentBackground!,
         if (variety != null) 'Variety+': variety!,
+        if (skipCfgBelowSigma != null)
+          'Skip CFG below sigma': skipCfgBelowSigma!,
       };
 
   Map<String, Object> get compatibleValuesByKey => {
@@ -145,6 +155,7 @@ class ImportedGenerateParams {
         if (transparentBackground != null)
           'transparentBackground': transparentBackground!,
         if (variety != null) 'variety': variety!,
+        if (skipCfgBelowSigma != null) 'skipCfgBelowSigma': skipCfgBelowSigma!,
       };
 
   ImportedGenerateParams selecting(Set<String> keys) => ImportedGenerateParams(
@@ -169,6 +180,7 @@ class ImportedGenerateParams {
             ? transparentBackground
             : null,
         variety: keys.contains('variety') ? variety : null,
+        metadataReplay: keys.contains('skipCfgBelowSigma') ? metadataReplay : null,
       );
 }
 
@@ -916,6 +928,10 @@ ImportedGenerateParams parseImportedGenerateParams(
             ? true
             : null,
     variety: isNovelAi ? comment['skip_cfg_above_sigma'] == 58 : null,
+    metadataReplay: isNovelAi && _naiModel(modelCandidate) != null
+        ? normalizeMetadataReplay(
+            {'model': _naiModel(modelCandidate), 'parameters': comment})
+        : null,
   );
 }
 
@@ -1482,13 +1498,36 @@ String _metadataValue(Object? value) {
   return value.toString();
 }
 
+/// A NovelAI-signed image with a structured generation Comment. A coexisting
+/// A1111-style `parameters` summary has no character prompts or exact flags,
+/// so it must not outrank the structured NovelAI data.
+bool _hasNovelAiGenerationComment(Map<String, String> metadata) {
+  final signature =
+      '${metadata['Software'] ?? metadata['software'] ?? ''} ${metadata['Source'] ?? metadata['source'] ?? ''}';
+  Map? comment;
+  try {
+    final decoded = jsonDecode(metadata['Comment'] ?? metadata['comment'] ?? '');
+    if (decoded is Map) comment = decoded;
+  } catch (_) {
+    return false;
+  }
+  if (comment == null) return false;
+  final hasPrompt = comment['prompt'] is String || comment['v4_prompt'] is Map;
+  final hasGeneration = ['steps', 'seed', 'sampler'].any(comment.containsKey);
+  return hasPrompt &&
+      hasGeneration &&
+      (signature.toLowerCase().contains('novelai') || comment['v4_prompt'] is Map);
+}
+
 ImageMetadataReport inspectImageMetadata(Map<String, String> metadata) {
   final lower = <String, String>{
     for (final entry in metadata.entries) entry.key.toLowerCase(): entry.value,
   };
   final software = metadata['Software'] ?? metadata['software'] ?? '';
   final parameters = lower['parameters'];
-  if (parameters != null &&
+  final novelAiComment = _hasNovelAiGenerationComment(metadata);
+  if (!novelAiComment &&
+      parameters != null &&
       RegExp(r'(^|\n)Steps:\s*\d+', multiLine: true).hasMatch(parameters)) {
     final sd = _parseStableDiffusionParameters(parameters);
     final imported = _importedFromStableDiffusion(sd);
@@ -1533,7 +1572,8 @@ ImageMetadataReport inspectImageMetadata(Map<String, String> metadata) {
     );
   }
 
-  if (lower.containsKey('prompt') || lower.containsKey('workflow')) {
+  if (!novelAiComment &&
+      (lower.containsKey('prompt') || lower.containsKey('workflow'))) {
     final comfy = _inspectComfy({
       ...metadata,
       'prompt': lower['prompt'] ?? '',
@@ -1596,6 +1636,9 @@ ImageMetadataReport inspectImageMetadata(Map<String, String> metadata) {
                           ? 'image'
                           : 'generation',
             )),
+        // Keep a coexisting SD-style summary visible instead of discarding it.
+        if (novelAiComment && parameters != null)
+          ImageMetadataEntry(key: 'parameters', value: parameters, group: 'raw'),
       ],
       rawMetadata: metadata,
       rawText: _rawMetadataText(metadata),

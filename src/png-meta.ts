@@ -796,13 +796,29 @@ function rawTextFor(meta: Record<string, string>) {
     .join("\n\n");
 }
 
+/**
+ * A NovelAI-signed image with a structured generation Comment. Such files may
+ * also carry an A1111-style `parameters` text chunk (added by NovelAI or a
+ * later tool); that summary has no character prompts or exact flags, so it
+ * must not outrank the structured NovelAI data.
+ */
+function hasNovelAIGenerationComment(meta: Record<string, string>): boolean {
+  const signature = `${meta.Software ?? meta.software ?? ""} ${meta.Source ?? meta.source ?? ""}`;
+  const comment = parseJsonObject(meta.Comment ?? meta.comment);
+  if (!comment) return false;
+  const hasPrompt = typeof comment.prompt === "string" || Boolean(objectValue(comment.v4_prompt));
+  const hasGeneration = ["steps", "seed", "sampler"].some((key) => comment[key] !== undefined);
+  return hasPrompt && hasGeneration && (/novelai/i.test(signature) || Boolean(objectValue(comment.v4_prompt)));
+}
+
 /** Detect the generator, list every available field, and build a safe NAI patch. */
 export function inspectImageMetadata(meta: Record<string, string>): ImageMetadataReport {
   const lower = Object.fromEntries(Object.entries(meta).map(([key, value]) => [key.toLowerCase(), value]));
   const software = meta.Software ?? meta.software ?? "";
   const warnings: string[] = [];
+  const novelAiComment = hasNovelAIGenerationComment(meta);
 
-  if (lower.parameters && /(?:^|\n)Steps:\s*\d+/m.test(lower.parameters)) {
+  if (!novelAiComment && lower.parameters && /(?:^|\n)Steps:\s*\d+/m.test(lower.parameters)) {
     const sd = parseStableDiffusionParameters(lower.parameters);
     const entries: ImageMetadataEntry[] = [
       sd.prompt ? { key: "Positive prompt", value: sd.prompt, group: "generation" } : null,
@@ -836,7 +852,7 @@ export function inspectImageMetadata(meta: Record<string, string>): ImageMetadat
     };
   }
 
-  if (lower.prompt || lower.workflow) {
+  if (!novelAiComment && (lower.prompt || lower.workflow)) {
     const comfy = inspectComfy({
       ...meta,
       prompt: lower.prompt ?? "",
@@ -883,6 +899,10 @@ export function inspectImageMetadata(meta: Record<string, string>): ImageMetadat
             ? ("image" as const)
             : ("generation" as const),
       })),
+      // Keep a coexisting SD-style summary visible instead of discarding it.
+      novelAiComment && lower.parameters
+        ? { key: "parameters", value: lower.parameters, group: "raw" as const }
+        : null,
     ].filter(Boolean) as ImageMetadataEntry[];
     return {
       kind: "novelai",

@@ -25,7 +25,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.6.9';
+const appVersion = '2.6.10';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -152,6 +152,9 @@ class GenerateParams {
   bool smeaDyn;
   bool variety;
   String fileNamePrefix;
+  /// Version-bound hidden sampling values read from an original NovelAI image
+  /// (same shape as desktop `metadataReplay`). Never arbitrary Comment JSON.
+  Map<String, dynamic>? metadataReplay;
 
   GenerateParams({
     this.model = 'nai-diffusion-5-full',
@@ -176,6 +179,7 @@ class GenerateParams {
     this.smeaDyn = false,
     this.variety = false,
     this.fileNamePrefix = '',
+    this.metadataReplay,
   });
 
   bool get supportsMediumEffort => model.replaceFirst(RegExp(r'-inpainting$'), '').replaceFirst(RegExp(r'-medium$'), '') == 'nai-diffusion-5-full';
@@ -231,6 +235,7 @@ class GenerateParams {
         'smeaDyn': smeaDyn,
         'variety': variety,
         'fileNamePrefix': fileNamePrefix,
+        if (metadataReplay != null) 'metadataReplay': metadataReplay,
       };
 
   factory GenerateParams.fromJson(Map<String, dynamic> j) => GenerateParams(
@@ -263,6 +268,7 @@ class GenerateParams {
         smeaDyn: _boolValue(j['smeaDyn'], false),
         variety: _boolValue(j['variety'], false),
         fileNamePrefix: _stringValue(j['fileNamePrefix'], ''),
+        metadataReplay: normalizeMetadataReplay(j['metadataReplay']),
       ).normalized();
 
   /// Repairs values restored from older releases, imported metadata, or saved
@@ -318,10 +324,42 @@ class GenerateParams {
       smeaDyn: smea && smeaDyn,
       variety: variety,
       fileNamePrefix: fileNamePrefix,
+      metadataReplay: normalizeMetadataReplay(metadataReplay),
     );
   }
 
   GenerateParams copy() => GenerateParams.fromJson(toJson());
+
+  /// Hidden values replayed only for the exact original model at full effort.
+  Map<String, dynamic> get replayParameters {
+    final replay = normalizeMetadataReplay(metadataReplay);
+    if (replay == null || isMediumEffort || replay['model'] != model) return const {};
+    return Map<String, dynamic>.from(replay['parameters'] as Map);
+  }
+}
+
+/// Narrow, version-bound replay of NovelAI hidden sampling values. Mobile
+/// replays only `skip_cfg_below_sigma` (0 is a real value and is kept); values
+/// outside the desktop-validated range are dropped instead of being clamped.
+const _metadataReplayNumberFields = <String, (double, double)>{
+  'skip_cfg_below_sigma': (0, 1000),
+};
+
+Map<String, dynamic>? normalizeMetadataReplay(Object? value) {
+  if (value is! Map) return null;
+  final model = value['model'];
+  if (model is! String || !RegExp(r'^nai-diffusion-[a-z0-9-]{1,40}$').hasMatch(model)) return null;
+  final source = value['parameters'];
+  final parameters = <String, num>{};
+  if (source is Map) {
+    for (final entry in _metadataReplayNumberFields.entries) {
+      final raw = source[entry.key];
+      if (raw is num && raw.isFinite && raw >= entry.value.$1 && raw <= entry.value.$2) {
+        parameters[entry.key] = raw;
+      }
+    }
+  }
+  return {'model': model, 'parameters': parameters};
 }
 
 String _stringValue(Object? value, String fallback) =>
@@ -971,6 +1009,8 @@ class AppSettings {
   int historyRetentionDays;
   int aitagCacheRetentionDays;
   bool keepImageMetadata;
+  /// Saved NovelAI generation container: 'png' (default) or lossless 'webp'.
+  String imageOutputFormat;
   bool copyImageMetadata;
   bool saveToGallery;
   bool streamPreviewEnabled;
@@ -1115,6 +1155,7 @@ class AppSettings {
     this.historyRetentionDays = 365,
     this.aitagCacheRetentionDays = 30,
     this.keepImageMetadata = true,
+    this.imageOutputFormat = 'png',
     this.copyImageMetadata = false,
     this.saveToGallery = true,
     this.streamPreviewEnabled = true,
@@ -1274,6 +1315,7 @@ class AppSettings {
         'historyRetentionDays': historyRetentionDays,
         'aitagCacheRetentionDays': aitagCacheRetentionDays,
         'keepImageMetadata': keepImageMetadata,
+        'imageOutputFormat': imageOutputFormat,
         'copyImageMetadata': copyImageMetadata,
         'saveToGallery': saveToGallery,
         'streamPreviewEnabled': streamPreviewEnabled,
@@ -1426,6 +1468,7 @@ class AppSettings {
         historyRetentionDays: j['historyRetentionDays'] ?? 365,
         aitagCacheRetentionDays: j['aitagCacheRetentionDays'] ?? 30,
         keepImageMetadata: j['keepImageMetadata'] ?? true,
+        imageOutputFormat: j['imageOutputFormat'] == 'webp' ? 'webp' : 'png',
         copyImageMetadata: j['copyImageMetadata'] == true,
         saveToGallery: j['saveToGallery'] ?? true,
         streamPreviewEnabled: j['streamPreviewEnabled'] ?? true,

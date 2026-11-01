@@ -279,6 +279,7 @@ const _importedEnglish = <String, String>{
   'height': 'Height',
   'smea': 'SMEA',
   'smeaDyn': 'SMEA Dyn',
+  'skipCfgBelowSigma': 'Skip CFG below sigma',
 };
 
 const _parameterEnglish = <String, String>{
@@ -293,6 +294,8 @@ const _parameterEnglish = <String, String>{
   'scale': 'CFG scale',
   'cfg rescale': 'CFG rescale',
   'cfg_rescale': 'CFG rescale',
+  'skip cfg below sigma': 'Skip CFG below sigma',
+  'skip_cfg_below_sigma': 'Skip CFG below sigma',
   'sampler': 'Sampler',
   'scheduler': 'Scheduler',
   'schedule type': 'Schedule type',
@@ -376,6 +379,7 @@ const _zhCnParameters = <String, String>{
   'Style prompt': '风格提示词',
   'UC preset': '负面预设',
   'Variety+': '多样化',
+  'Skip CFG below sigma': '低 Sigma 跳过 CFG',
   'Parameters version': '参数版本',
   'Hires steps': '高清修复步数',
   'Hires upscale': '高清放大倍数',
@@ -441,6 +445,7 @@ Map<String, String> _parameterTranslations(String code) => switch (code) {
           'Style prompt': 'スタイルプロンプト',
           'UC preset': 'ネガティブプリセット',
           'Variety+': '多様化',
+          'Skip CFG below sigma': '低シグマで CFG をスキップ',
           'Parameters version': 'パラメータ版',
           'Hires steps': '高解像度ステップ',
           'Hires upscale': '高解像度倍率',
@@ -488,6 +493,7 @@ Map<String, String> _parameterTranslations(String code) => switch (code) {
           'Style prompt': '스타일 프롬프트',
           'UC preset': '네거티브 프리셋',
           'Variety+': '다양화',
+          'Skip CFG below sigma': '낮은 시그마에서 CFG 건너뛰기',
           'Parameters version': '매개변수 버전',
           'Hires steps': '고해상도 단계',
           'Hires upscale': '고해상도 배율',

@@ -4082,8 +4082,8 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
         imageNameTemplate: '圖片命名範本',
         imageNameVars:
             '可用變數：{date} {time} {seq} {seed} {model} {type} {name} {ts}',
-        keepMetadataTitle: '保留 PNG 元資料',
-        keepMetadataSubtitle: '開啟：保留 PNG 生成資訊。關閉：清除文字、EXIF 等中繼資料及像素隱寫載體後，整圖重新編碼為 PNG；保留尺寸與透明通道，像素可能有輕微變化，並非像素無損。僅影響之後儲存的圖片，不追溯歷史圖片或備份。',
+        keepMetadataTitle: '保留圖片中繼資料',
+        keepMetadataSubtitle: '開啟：保留生成資訊（PNG 文字與透明通道隱寫；WebP 另寫入 NovelAI 格式 EXIF）。關閉：清除文字、EXIF 等中繼資料及像素隱寫載體後重新編碼；保留尺寸與透明通道，像素可能有輕微變化，並非像素無損。儲存格式由「圖片儲存格式」決定，本開關不改變格式。僅影響之後儲存的圖片，不追溯歷史圖片或備份。',
         saveToGalleryTitle: '自動保存到系統相簿',
         saveToGallerySubtitle: '應用內仍保存一份原圖；關閉後可從圖庫手動分享或匯出。',
         customized: '已自訂',
@@ -4186,9 +4186,9 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
         imageNameTemplate: 'Image naming template',
         imageNameVars:
             'Available variables: {date} {time} {seq} {seed} {model} {type} {name} {ts}',
-        keepMetadataTitle: 'Keep PNG metadata',
+        keepMetadataTitle: 'Keep image metadata',
         keepMetadataSubtitle:
-            'On: retain PNG generation information. Off: remove text, EXIF and other metadata, sanitize pixel steganography carriers, then re-encode the entire PNG. Dimensions and transparency are retained; pixels may change slightly, so this is not pixel-lossless. Only affects future saves, not existing images or backups.',
+            'On: retain generation information (PNG text and alpha-channel data; WebP additionally gets NovelAI-style EXIF). Off: remove text, EXIF and other metadata, sanitize pixel steganography carriers, then re-encode. Dimensions and transparency are retained; pixels may change slightly, so this is not pixel-lossless. The file format is chosen by Image file format; this switch does not change it. Only affects future saves, not existing images or backups.',
         saveToGalleryTitle: 'Auto-save to system gallery',
         saveToGallerySubtitle:
             'The app still keeps the original internally; when off, share or export manually from Gallery.',
@@ -4288,8 +4288,8 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
         imageNameTemplate: '画像名テンプレート',
         imageNameVars:
             '使用可能な変数：{date} {time} {seq} {seed} {model} {type} {name} {ts}',
-        keepMetadataTitle: 'PNG メタデータを保持',
-        keepMetadataSubtitle: 'オン：PNG の生成情報を保持します。オフ：テキスト・EXIF などのメタデータと画素のステガノグラフィ用領域を消去し、画像全体を PNG に再エンコードします。サイズと透明度は保持しますが、画素がわずかに変化するため画素単位での無損失ではありません。今後の保存のみが対象で、過去の画像やバックアップは変更しません。',
+        keepMetadataTitle: '画像メタデータを保持',
+        keepMetadataSubtitle: 'オン：生成情報を保持します（PNG のテキストと透明チャンネル内データ。WebP では NovelAI 形式の EXIF も書き込みます）。オフ：テキスト・EXIF などのメタデータと画素のステガノグラフィ用領域を消去して再エンコードします。サイズと透明度は保持しますが、画素がわずかに変化するため画素単位での無損失ではありません。保存形式は「画像の保存形式」で決まり、このスイッチでは変わりません。今後の保存のみが対象で、過去の画像やバックアップは変更しません。',
         saveToGalleryTitle: 'システム写真へ自動保存',
         saveToGallerySubtitle: 'アプリ内には元画像を保持します。無効時はギャラリーから手動で共有/書き出しできます。',
         customized: 'カスタマイズ済み',
@@ -4390,8 +4390,8 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
         imageNameTemplate: '이미지 이름 템플릿',
         imageNameVars:
             '사용 가능한 변수: {date} {time} {seq} {seed} {model} {type} {name} {ts}',
-        keepMetadataTitle: 'PNG 메타데이터 유지',
-        keepMetadataSubtitle: '켬: PNG 생성 정보를 유지합니다. 끔: 텍스트·EXIF 등의 메타데이터와 픽셀 스테가노그래피 영역을 지운 뒤 전체 PNG를 다시 인코딩합니다. 크기와 투명도는 유지하지만 픽셀이 미세하게 변하므로 픽셀 무손실은 아닙니다. 이후 저장에만 적용되며 기존 이미지나 백업은 변경하지 않습니다.',
+        keepMetadataTitle: '이미지 메타데이터 유지',
+        keepMetadataSubtitle: '켬: 생성 정보를 유지합니다(PNG 텍스트와 투명 채널 내 데이터, WebP는 NovelAI 형식 EXIF도 기록). 끔: 텍스트·EXIF 등의 메타데이터와 픽셀 스테가노그래피 영역을 지운 뒤 다시 인코딩합니다. 크기와 투명도는 유지하지만 픽셀이 미세하게 변하므로 픽셀 무손실은 아닙니다. 저장 형식은 이미지 저장 형식에서 정하며 이 스위치로 바뀌지 않습니다. 이후 저장에만 적용되며 기존 이미지나 백업은 변경하지 않습니다.',
         saveToGalleryTitle: '시스템 갤러리에 자동 저장',
         saveToGallerySubtitle:
             '앱 내부에는 원본이 계속 저장됩니다. 끄면 갤러리에서 수동으로 공유하거나 내보낼 수 있습니다.',
@@ -4489,8 +4489,8 @@ SettingsDetailText settingsDetailTextFor(Object? value) {
         imageNameTemplate: '图片命名模板',
         imageNameVars:
             '可用变量：{date} {time} {seq} {seed} {model} {type} {name} {ts}',
-        keepMetadataTitle: '保留 PNG 元数据',
-        keepMetadataSubtitle: '开启：保留 PNG 生成信息。关闭：清除文本、EXIF 等元数据及像素隐写载体后，整图重新编码为 PNG；保留尺寸和透明通道，像素可能有轻微变化，不是像素无损。仅影响之后保存的图片，不追溯历史图片或备份。',
+        keepMetadataTitle: '保留图片元数据',
+        keepMetadataSubtitle: '开启：保留生成信息（PNG 文本与透明通道隐写；WebP 另写入 NovelAI 格式 EXIF）。关闭：清除文本、EXIF 等元数据及像素隐写载体后重新编码；保留尺寸和透明通道，像素可能有轻微变化，不是像素无损。保存格式由“图片保存格式”决定，本开关不改变格式。仅影响之后保存的图片，不追溯历史图片或备份。',
         saveToGalleryTitle: '自动保存到系统相册',
         saveToGallerySubtitle: '应用内仍保存一份原图；关闭后可从图库手动分享或导出。',
         customized: '已自定义',

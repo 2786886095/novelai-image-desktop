@@ -950,6 +950,9 @@ class NaiApi {
       parameters['sm'] = params.smea;
       parameters['sm_dyn'] = params.smea && params.smeaDyn;
     }
+    // Original-image hidden values (desktop metadataReplay parity): only for
+    // the exact imported model at full effort; 0 is replayed, absence is not.
+    parameters.addAll(params.replayParameters);
 
     // V5 does not support Vibe Transfer. The explicit guard above prevents a
     // silent reference-less generation when legacy/stored references remain.

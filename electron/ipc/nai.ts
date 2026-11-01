@@ -58,6 +58,7 @@ import {
   type AppSettings,
   type AccountSummary,
   type AnlasQuoteRequest,
+  type ImageOutputFormat,
   type AnlasQuoteResult,
   type AiCallLogEntry,
   type AugmentOptions,
@@ -92,7 +93,7 @@ import {
   type UpscaleScale,
   type WorkingImage,
 } from "../../src/types";
-import { inspectImageMetadata, parseImageMeta } from "../../src/png-meta";
+import { inspectImageMetadata, parseImageMeta, parsePngMeta } from "../../src/png-meta";
 import { calculateFeatureAnlasQuote } from "../../src/anlas";
 import { compactRemoteErrorText } from "../../src/error-message";
 import { buildComicLocalPrompt, isComicPromptRefusal } from "../../src/comic/prompt-fallback";
@@ -2032,6 +2033,108 @@ export function prepareImageBufferForSave(
   return keepImageMetadata ? buffer : stripPngMetadata(buffer);
 }
 
+/**
+ * NovelAI's WebP EXIF layout (Title, ImageDescription, Software=Source,
+ * Artist=Software, ExifIFD UserComment). UserComment carries every PNG text
+ * field as one JSON object so unknown chunks survive the format change.
+ */
+export function novelAiWebpExif(meta: Record<string, string>): Buffer | undefined {
+  if (!Object.keys(meta).length) return undefined;
+  const text = (value: string) => Buffer.concat([Buffer.from(value, "utf8"), Buffer.from([0])]);
+  const ifd0: [number, number, Buffer][] = [];
+  if (meta.Title) ifd0.push([0x010d, 2, text(meta.Title)]);
+  if (meta.Description) ifd0.push([0x010e, 2, text(meta.Description)]);
+  if (meta.Source) ifd0.push([0x0131, 2, text(meta.Source)]);
+  if (meta.Software) ifd0.push([0x013b, 2, text(meta.Software)]);
+  const userComment = Buffer.concat([Buffer.from("ASCII\0\0\0", "latin1"), Buffer.from(JSON.stringify(meta), "utf8")]);
+  const ifd0Size = 2 + (ifd0.length + 1) * 12 + 4;
+  const exifIfdSize = 2 + 12 + 4;
+  const chunks: Buffer[] = [];
+  let dataOffset = 8 + ifd0Size + exifIfdSize;
+  const entry = (tag: number, type: number, value: Buffer) => {
+    const out = Buffer.alloc(12);
+    out.writeUInt16LE(tag, 0); out.writeUInt16LE(type, 2); out.writeUInt32LE(value.length, 4);
+    if (value.length <= 4) value.copy(out, 8);
+    else {
+      out.writeUInt32LE(dataOffset, 8);
+      chunks.push(value.length % 2 ? Buffer.concat([value, Buffer.from([0])]) : value);
+      dataOffset += value.length + (value.length % 2);
+    }
+    return out;
+  };
+  const header = Buffer.from([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00]);
+  const ifd0Count = Buffer.alloc(2); ifd0Count.writeUInt16LE(ifd0.length + 1);
+  const ifd0Entries = ifd0.map(([tag, type, value]) => entry(tag, type, value));
+  const exifPointer = Buffer.alloc(12);
+  exifPointer.writeUInt16LE(0x8769, 0); exifPointer.writeUInt16LE(4, 2); exifPointer.writeUInt32LE(1, 4);
+  exifPointer.writeUInt32LE(8 + ifd0Size, 8);
+  const exifCount = Buffer.from([1, 0]);
+  const commentEntry = entry(0x9286, 7, userComment);
+  return Buffer.concat([header, ifd0Count, ...ifd0Entries, exifPointer, Buffer.alloc(4),
+    exifCount, commentEntry, Buffer.alloc(4), ...chunks]);
+}
+
+/** Wrap a simple or extended WebP into VP8X form carrying an EXIF chunk. */
+export function withWebpExif(webp: Buffer, exif: Buffer): Buffer {
+  const chunks: { type: string; data: Buffer }[] = [];
+  for (let offset = 12; offset + 8 <= webp.length;) {
+    const type = webp.toString("latin1", offset, offset + 4), size = webp.readUInt32LE(offset + 4);
+    if (offset + 8 + size > webp.length) throw new Error("Invalid WebP chunk");
+    chunks.push({ type, data: webp.subarray(offset + 8, offset + 8 + size) });
+    offset += 8 + size + (size % 2);
+  }
+  const image = chunks.find((chunk) => chunk.type === "VP8L" || chunk.type === "VP8 ");
+  if (!image) throw new Error("WebP image data is missing");
+  let vp8x = chunks.find((chunk) => chunk.type === "VP8X")?.data;
+  if (!vp8x) {
+    const { width, height } = readImageDimensions(webp);
+    const alpha = chunks.some((chunk) => chunk.type === "ALPH") ||
+      (image.type === "VP8L" && ((image.data.readUInt32LE(1) >>> 28) & 1) === 1);
+    vp8x = Buffer.alloc(10);
+    vp8x[0] = alpha ? 0x10 : 0;
+    vp8x.writeUIntLE(width - 1, 4, 3); vp8x.writeUIntLE(height - 1, 7, 3);
+  } else vp8x = Buffer.from(vp8x);
+  vp8x[0] |= 0x08;
+  const body = [{ type: "VP8X", data: vp8x }, ...chunks.filter((chunk) => chunk.type !== "VP8X" && chunk.type !== "EXIF"), { type: "EXIF", data: exif }]
+    .map(({ type, data }) => {
+      const head = Buffer.alloc(8); head.write(type, 0, "latin1"); head.writeUInt32LE(data.length, 4);
+      return Buffer.concat([head, data, data.length % 2 ? Buffer.from([0]) : Buffer.alloc(0)]);
+    });
+  const riff = Buffer.alloc(12); riff.write("RIFF", 0, "latin1"); riff.write("WEBP", 8, "latin1");
+  const total = Buffer.concat([riff, ...body]);
+  total.writeUInt32LE(total.length - 8, 4);
+  return total;
+}
+
+/**
+ * Apply the metadata preference, then the chosen container. WebP is lossless
+ * and exact (pixels and alpha LSBs unchanged). A failed optional conversion
+ * keeps the PNG: a paid result must never be lost to a format preference.
+ */
+export async function encodeImageForSave(
+  buffer: Buffer,
+  keepImageMetadata: boolean,
+  format: ImageOutputFormat | undefined,
+): Promise<Buffer> {
+  const prepared = prepareImageBufferForSave(buffer, keepImageMetadata);
+  if (format !== "webp" || !prepared.subarray(0, 8).equals(PNG_SIGNATURE)) return prepared;
+  // WebP only stores 8-bit samples. Do not silently reduce a deep-bit PNG
+  // merely because the user selected a different saved-image container.
+  if (buffer.length >= 25 && buffer.subarray(0, 8).equals(PNG_SIGNATURE) && buffer[24] > 8) {
+    logError("[save] WebP supports 8-bit samples; kept PNG to avoid bit-depth reduction", "png-high-bit-depth");
+    return prepared;
+  }
+  try {
+    const webp = await sharp(prepared, { limitInputPixels: MAX_IMAGE_PIXELS, pages: 1 })
+      .webp({ lossless: true, exact: true, effort: 4 }).toBuffer();
+    const exif = keepImageMetadata ? novelAiWebpExif(parsePngMeta(Uint8Array.from(prepared).buffer)) : undefined;
+    return exif ? withWebpExif(webp, exif) : webp;
+  } catch (error: any) {
+    logError("[save] WebP conversion failed; saved PNG instead", String(error?.message ?? error));
+    return prepared;
+  }
+}
+
 /** A paid response may already have durable files even though the batch failed. */
 class ImageSaveError extends Error {
   constructor(
@@ -2080,7 +2183,6 @@ async function saveBuffers(
     await fs.mkdir(dir, { recursive: true });
     for (let index = 0; index < buffers.length; index += 1) {
       const id = crypto.randomUUID();
-      const ext = detectExt(buffers[index]);
       const safeModel = (modelOverride ?? params.model).replace(/[^\w.-]+/g, "-");
       const base = buildImageFileName(settings.imageNameTemplate, {
         date,
@@ -2091,11 +2193,14 @@ async function saveBuffers(
         prefix,
         name: params.fileNamePrefix,
       });
-      // Optionally strip embedded generation metadata before writing to disk.
-      const outBuffer = prepareImageBufferForSave(
+      // Optionally strip embedded generation metadata, then apply the chosen
+      // container. Temporary analysis images keep the PNG their readers expect.
+      const outBuffer = await encodeImageForSave(
         buffers[index],
         settings.keepImageMetadata !== false,
+        saveOptions?.temporary ? "png" : settings.imageOutputFormat,
       );
+      const ext = detectExt(outBuffer);
       const actualSize = saveOptions?.actualImageSize ? readImageDimensions(outBuffer) : params;
       const filePath = await writeUniqueImageFile(dir, base, ext, outBuffer);
       items.push({
@@ -5116,13 +5221,13 @@ export async function upscaleImg(
     const baseName = path
       .basename(workbenchImagePath, path.extname(workbenchImagePath))
       .replace(/[^\w.-]+/g, "-");
+    // Upscale has its own save path, so apply the same metadata and format
+    // preferences used by generation, img2img, inpaint, batch redraw, and Director tools.
+    const savedBuffer = await encodeImageForSave(outBuffer, settings.keepImageMetadata !== false, settings.imageOutputFormat);
     const filePath = path.join(
       dir,
-      `${now.getTime()}-upscale${scale}x-${baseName}.png`,
+      `${now.getTime()}-upscale${scale}x-${baseName}.${detectExt(savedBuffer)}`,
     );
-    // Upscale has its own save path, so apply the same metadata preference used
-    // by generation, img2img, inpaint, batch redraw, and Director tools.
-    const savedBuffer = prepareImageBufferForSave(outBuffer, settings.keepImageMetadata !== false);
     await fs.writeFile(filePath, savedBuffer);
     const outDims = readImageDimensions(outBuffer);
     const outWidth = outDims.width || plan.width;

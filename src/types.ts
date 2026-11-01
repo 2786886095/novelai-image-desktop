@@ -31,6 +31,8 @@ export const EMPTY_MODE_TEMPLATES: ModePromptTemplates = {
 };
 
 export type ModelMode = "anime" | "furry";
+/** Saved NovelAI generation file format; WebP is always lossless. */
+export type ImageOutputFormat = "png" | "webp";
 
 export const NAI_MODELS = [
   {
@@ -1522,6 +1524,10 @@ export interface AppSettings {
    * PNG) on disk. Default on. Turn off to save clean images with the embedded
    * info stripped — useful before sharing. */
   keepImageMetadata: boolean;
+  /** File format for saved NovelAI generations. "webp" is lossless (pixel-exact,
+   * alpha kept); with metadata on it carries NovelAI's WebP EXIF layout. Older
+   * settings without this field keep saving PNG. */
+  imageOutputFormat?: ImageOutputFormat;
   /** Preserve original PNG bytes on desktop image copy. Explicit opt-in;
    * omitted in older settings/clients means OFF, independent of disk saving. */
   copyImageMetadata?: boolean;

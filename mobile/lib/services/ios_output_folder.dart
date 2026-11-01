@@ -51,10 +51,11 @@ class IosOutputFolder {
       {required String root,
       required List<String> folders,
       required String stem,
-      required Uint8List bytes}) async {
+      required Uint8List bytes,
+      String extension = 'png'}) async {
     if (!Platform.isIOS) throw UnsupportedError('iOS folder bridge required');
     final value = await _channel.invokeMapMethod<String, dynamic>('write',
-        {'root': root, 'folders': folders, 'stem': stem, 'bytes': bytes});
+        {'root': root, 'folders': folders, 'stem': stem, 'bytes': bytes, 'extension': extension});
     final file = value?['path'];
     if (value?['root'] != root ||
         value?['coordinated'] != true ||

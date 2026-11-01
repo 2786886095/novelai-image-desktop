@@ -77,6 +77,9 @@ let workbenchLoadRevision = 0;
 // Invalidates a slow post-generation balance refresh as soon as a newer run or
 // cancellation starts, so stale bookkeeping can never overwrite newer UI.
 let generationSettlementRevision = 0;
+// History refreshes and explicit filters share a revision: a late IPC reply
+// must not erase dates or rows already shown by a newer read/selection.
+let historyReadRevision = 0;
 let inpaintEditRequestRevision = 0;
 let inpaintEditRestoreRevision = 0;
 type InpaintEditorState = Pick<AppState, "workbenchImage" | "i2iOriginalImage" | "inpaintSourceMode" | "inpaintMask" | "inpaintRegion" | "inpaintSizeMode" | "inpaintCustomSize" | "comparisonBeforeImage" | "comparisonSurface" | "comparisonAutoOpenRequest">;
@@ -1290,14 +1293,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   async setSelectedDate(date) {
+    const revision = ++historyReadRevision;
     const history = await window.naiDesktop.getHistory(date || undefined, get().selectedGroupId || undefined);
+    if (revision !== historyReadRevision) return;
     set({ selectedDate: date, history, currentImage: history[0] ?? get().currentImage });
   },
 
   async setSelectedGroupId(groupId) {
+    const revision = ++historyReadRevision;
     const selectedDate = get().selectedDate;
     await window.naiDesktop.setSetting("activeHistoryGroupId", groupId);
+    if (revision !== historyReadRevision) return;
     const history = await window.naiDesktop.getHistory(selectedDate || undefined, groupId || undefined);
+    if (revision !== historyReadRevision) return;
     set({ selectedGroupId: groupId, history, currentImage: history[0] ?? get().currentImage });
   },
 
@@ -1389,14 +1397,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   async refreshHistory(date) {
+    const revision = ++historyReadRevision;
     const [dates, groups] = await Promise.all([
       window.naiDesktop.getHistoryDates(),
       window.naiDesktop.getHistoryGroups(),
     ]);
+    if (revision !== historyReadRevision) return;
     const selectedDate = date ?? get().selectedDate ?? dates[0] ?? "";
     const selectedGroupId = get().selectedGroupId;
-    const history = (await window.naiDesktop.getHistory(selectedDate || undefined, selectedGroupId || undefined))
-      .map(withCompletedImageBridge);
+    const rows = await window.naiDesktop.getHistory(selectedDate || undefined, selectedGroupId || undefined);
+    if (revision !== historyReadRevision) return;
+    const history = rows.map(withCompletedImageBridge);
     set({ historyDates: dates, historyGroups: groups, selectedDate, history });
   },
 

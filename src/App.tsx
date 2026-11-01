@@ -6028,6 +6028,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   label={t("settings.keepMetadata")}
                   description={t("settings.keepMetadataDesc")}
                 />
+                <label className="field">
+                  <span>{t("settings.imageOutputFormat")}</span>
+                  <SelectMenuCompat
+                    aria-label={t("settings.imageOutputFormat")}
+                    value={settings.imageOutputFormat === "webp" ? "webp" : "png"}
+                    onChange={(event) => void update("imageOutputFormat", event.target.value === "webp" ? "webp" : "png")}
+                  >
+                    <option value="png">{t("settings.imageOutputFormat.png")}</option>
+                    <option value="webp">{t("settings.imageOutputFormat.webp")}</option>
+                  </SelectMenuCompat>
+                  <small className="muted">{t("settings.imageOutputFormatDesc")}</small>
+                </label>
                 <div className="info-card">
                   <strong>{t("settings.aitagCacheTitle")}</strong>
                   <span>{t("settings.aitagCacheDesc")}</span>

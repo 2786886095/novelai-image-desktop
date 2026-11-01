@@ -33,6 +33,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../i18n/app_locales.dart';
 import '../agent/tavern_preset_import.dart';
 import '../i18n/system_prompt_import_text.dart';
+import '../i18n/image_format_text.dart';
 import '../agent/tavern_models.dart';
 import '../prompts/ig5_image_prompts.dart';
 import '../models/nai_models.dart';
@@ -790,6 +791,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: s.keepImageMetadata,
               onChanged: (value) =>
                   state.setSettings((x) => x.keepImageMetadata = value),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(imageFormatText(s.language, 'title')),
+              subtitle: Text(imageFormatText(s.language, 'subtitle')),
+            ),
+            SegmentedButton<String>(
+              key: const ValueKey('image-output-format-setting'),
+              segments: [
+                ButtonSegment(value: 'png', label: Text(imageFormatText(s.language, 'png'))),
+                ButtonSegment(value: 'webp', label: Text(imageFormatText(s.language, 'webp'))),
+              ],
+              selected: {s.imageOutputFormat == 'webp' ? 'webp' : 'png'},
+              onSelectionChanged: (value) => state.setSettings(
+                  (x) => x.imageOutputFormat = value.first == 'webp' ? 'webp' : 'png'),
             ),
             SwitchListTile(
               key: const ValueKey('copy-original-metadata-setting'),

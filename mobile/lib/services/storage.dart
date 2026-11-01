@@ -24,6 +24,7 @@ import '../comic/comic_models.dart';
 import '../history/history_archive.dart';
 import '../i18n/runtime_text.dart';
 import '../images/png_metadata.dart';
+import '../images/webp_output.dart';
 import '../models/nai_models.dart';
 import '../prompts/prompt_mode.dart';
 import '../references/reference_presets.dart';
@@ -71,6 +72,9 @@ Future<File> writeUniqueImageFile(Directory directory, String baseName,
     rethrow;
   }
 }
+
+Uint8List _encodeWebpForSave((Uint8List, bool) input) =>
+    encodeSavedImage(input.$1, format: 'webp', keepMetadata: input.$2);
 
 class Storage {
   // A coarse/frozen clock is a supported test input, never image identity.
@@ -1183,6 +1187,8 @@ class Storage {
 
   Future<File> _writeSavedImage(AppSettings settings, String date,
       String? groupId, String name, Uint8List bytes) async {
+    // The extension always follows the real encoded bytes.
+    final extension = savedImageExtension(bytes);
     final root = settings.imageOutputDir.trim();
     if (Platform.isIOS && root.isNotEmpty) {
       final folders = <String>[date];
@@ -1192,10 +1198,10 @@ class Storage {
       }
       // A stale/revoked external grant fails explicitly. Do not call an app-
       // managed fallback the selected output, or persist a misleading history path.
-      return IosOutputFolder.write(root: root, folders: folders, stem: name, bytes: bytes);
+      return IosOutputFolder.write(root: root, folders: folders, stem: name, bytes: bytes, extension: extension);
     }
     final directory = await _imageSaveDir(settings, date, groupId);
-    return writeUniqueImageFile(directory, name, 'png', bytes);
+    return writeUniqueImageFile(directory, name, extension, bytes);
   }
 
   Future<HistoryItem> saveImage(
@@ -1225,7 +1231,8 @@ class Storage {
     );
     // Verify privacy removal before any durable image/gallery/history write.
     // Keep mode intentionally preserves the caller's exact bytes.
-    final output = settings.keepImageMetadata ? bytes : stripPngMetadata(bytes);
+    final stripped = settings.keepImageMetadata ? bytes : stripPngMetadata(bytes);
+    final output = await _encodeForSave(stripped, settings);
     // Save into <base>/<date>/<group>/ (custom path or app documents).
     final file = await _writeSavedImage(settings, date, groupId, baseName, output);
     final filePath = file.path;
@@ -1263,6 +1270,18 @@ class Storage {
       throw SavedImageHistoryException(item);
     }
     return item;
+  }
+
+  /// Lossless WebP when chosen. A failed optional conversion keeps the PNG: a
+  /// paid result must never be lost to a format preference.
+  Future<Uint8List> _encodeForSave(Uint8List png, AppSettings settings) async {
+    if (settings.imageOutputFormat != 'webp') return png;
+    final keep = settings.keepImageMetadata;
+    try {
+      return await compute(_encodeWebpForSave, (png, keep));
+    } catch (_) {
+      return png;
+    }
   }
 
   Future<HistoryItem> saveCompatibleImage(

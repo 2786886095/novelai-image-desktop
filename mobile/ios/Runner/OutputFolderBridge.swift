@@ -156,10 +156,15 @@ final class OutputFolderBridge: NSObject, UIDocumentPickerDelegate, UIAdaptivePr
           let stem = args["stem"] as? String, component(stem) else {
       result(FlutterError(code: "output_folder_invalid", message: "Invalid output subfolder or image name", details: nil)); return
     }
+    // Older callers omit the extension: PNG only, as before. WebP must carry a
+    // real RIFF/WEBP header; the name always follows the verified container.
+    let fileExtension = (args["extension"] as? String) ?? "png"
+    let head = Array((args["bytes"] as? FlutterStandardTypedData)?.data.prefix(12) ?? Data())
     guard let typed = args["bytes"] as? FlutterStandardTypedData,
-          typed.data.count >= 8, typed.data.count <= 64 * 1024 * 1024,
-          Array(typed.data.prefix(8)) == [137, 80, 78, 71, 13, 10, 26, 10] else {
-      result(FlutterError(code: "output_folder_invalid", message: "Output requires a bounded PNG", details: nil)); return
+          head.count == 12, typed.data.count <= 64 * 1024 * 1024,
+          (fileExtension == "png" && Array(head[0..<8]) == [137, 80, 78, 71, 13, 10, 26, 10]) ||
+          (fileExtension == "webp" && Array(head[0..<4]) == [82, 73, 70, 70] && Array(head[8..<12]) == [87, 69, 66, 80]) else {
+      result(FlutterError(code: "output_folder_invalid", message: "Output requires a bounded PNG or WebP", details: nil)); return
     }
     let bytes = typed.data
     worker.async {
@@ -175,7 +180,7 @@ final class OutputFolderBridge: NSObject, UIDocumentPickerDelegate, UIAdaptivePr
               try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
             }
             for index in 0..<10000 {
-              let name = stem + (index == 0 ? "" : "-\(index)") + ".png"
+              let name = stem + (index == 0 ? "" : "-\(index)") + "." + fileExtension
               let file = directory.appendingPathComponent(name)
               guard self.beneath(file, coordinated) else { throw self.problem("Output left selected folder") }
               do { try bytes.write(to: file, options: .withoutOverwriting); saved = file; break }
