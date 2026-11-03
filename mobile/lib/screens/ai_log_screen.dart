@@ -1,3 +1,4 @@
+import '../ui/compact_workbench.dart';
 import '../ui/global_typography.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -18,7 +19,7 @@ class AiLogScreen extends StatelessWidget {
     final language = state.settings.language;
     String t(String key) => mobileUiTextFor(language, key);
     return Scaffold(
-      appBar: AppBar(
+      appBar: workbenchAppBar(context, AppBar(
         title: studioAppBarTitle(context, Text(
             mobileUiFormatFor(language, 'aiLog.title', {'count': logs.length}))),
         actions: [
@@ -33,7 +34,7 @@ class AiLogScreen extends StatelessWidget {
             icon: const Icon(Icons.delete_sweep_outlined),
           ),
         ],
-      ),
+      )),
       body: StudioContent(
         maxWidth: 980,
         child: logs.isEmpty

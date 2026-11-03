@@ -1,3 +1,4 @@
+import '../ui/compact_workbench.dart';
 import '../images/coordinated_file_image.dart';
 import '../ui/global_typography.dart';
 import '../ui/studio_theme.dart';
@@ -1916,7 +1917,7 @@ class _V5ArtistWeightRepairScreenState
         .length;
     if (widget.mode == V5ArtistToolMode.draw) {
       return Scaffold(
-        appBar: AppBar(
+        appBar: workbenchAppBar(context, AppBar(
           leading: IconButton(
             onPressed: widget.onBack,
             icon: const Icon(Icons.arrow_back),
@@ -1929,7 +1930,7 @@ class _V5ArtistWeightRepairScreenState
               label: Text(text['reset']!),
             ),
           ],
-        ),
+        )),
         body: ListView(
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 36),
@@ -1944,13 +1945,13 @@ class _V5ArtistWeightRepairScreenState
       );
     }
     return Scaffold(
-      appBar: AppBar(
+      appBar: workbenchAppBar(context, AppBar(
         leading: IconButton(
           onPressed: widget.onBack,
           icon: const Icon(Icons.arrow_back),
         ),
         title: studioAppBarTitle(context, Text(text['title']!)),
-      ),
+      )),
       body: ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 36),

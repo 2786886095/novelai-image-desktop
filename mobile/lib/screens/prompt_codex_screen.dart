@@ -1,3 +1,4 @@
+import '../ui/compact_workbench.dart';
 import '../ui/global_typography.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:async';
@@ -286,10 +287,10 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
     final snapshot = _snapshot;
     if (snapshot == null) {
       return Scaffold(
-        appBar: AppBar(
+        appBar: workbenchAppBar(context, AppBar(
           leading: BackButton(onPressed: widget.onBack),
           title: studioAppBarTitle(context, Text(text['title']!)),
-        ),
+        )),
         body: Center(
           child: _message.isEmpty
               ? const CircularProgressIndicator()
@@ -312,7 +313,7 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
     final visible = filtered.take(_limit).toList(growable: false);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: workbenchAppBar(context, AppBar(
         leading: BackButton(onPressed: widget.onBack),
         title: studioAppBarTitle(context, Text(text['title']!)),
         actions: [
@@ -331,7 +332,7 @@ class _PromptCodexScreenState extends State<PromptCodexScreen> {
                 : const Icon(Icons.refresh),
           ),
         ],
-      ),
+      )),
       body: Scrollbar(
         controller: _scrollController,
         thumbVisibility: true,

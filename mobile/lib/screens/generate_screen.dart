@@ -1,3 +1,4 @@
+import '../ui/compact_workbench.dart';
 import '../images/image_file_access.dart';
 import '../images/coordinated_file_image.dart';
 import '../ui/global_typography.dart';
@@ -428,7 +429,7 @@ class GenerateScreen extends StatelessWidget {
     final runButtonWidth = size.width < 760 ? 136.0 : 150.0;
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: workbenchAppBar(context, AppBar(
         toolbarHeight: windowClass == StudioWindowClass.phone
             ? _singleLineGenerateToolbarHeight(context, title, accountLabel)
             : null,
@@ -492,7 +493,7 @@ class GenerateScreen extends StatelessWidget {
               ),
             ),
         ],
-      ),
+      )),
       // Tablet/desktop-ish width and roomy phone landscape: preview pinned on
       // the left, controls scroll on the right. Keep the outer shell classified
       // as phone so landscape phones still use compact bottom navigation rather
@@ -629,10 +630,10 @@ class _AndroidGenerateLayout extends StatelessWidget {
     return Scaffold(
       key: const ValueKey('android-create-workspace'),
       backgroundColor: colors.canvas,
-      appBar: AppBar(title: studioAppBarTitle(context, Text(state.workbenchImage == null ? text.titleTextToImage : text.titleImageLoaded,
+      appBar: workbenchAppBar(context, AppBar(title: studioAppBarTitle(context, Text(state.workbenchImage == null ? text.titleTextToImage : text.titleImageLoaded,
         maxLines: 1, overflow: TextOverflow.ellipsis)),
         actions: [IconButton(tooltip: accountLabel, onPressed: onAccount,
-          icon: Icon(state.account.stale ? Icons.sync_problem_outlined : Icons.account_balance_wallet_outlined))]),
+          icon: Icon(state.account.stale ? Icons.sync_problem_outlined : Icons.account_balance_wallet_outlined))])),
       body: split ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Expanded(flex: 5, child: SingleChildScrollView(padding: androidPagePadding(context), child: result)),
         Expanded(flex: 6, child: Column(children: [Expanded(child: controlList()), if (!keyboard) dock])),
@@ -689,7 +690,7 @@ class _AndroidCreateDock extends StatelessWidget {
     final amount = state.generationQuote?.referenceOnly == true ? '?' : state.generationQuote?.amount?.toString() ?? '?';
     final queueCount = state.generationQueue.length;
     final running = state.generationQueueRunning;
-    final compact = MediaQuery.sizeOf(context).height < 500;
+    final compact = CompactWorkbenchScope.maybeOf(context) != null || MediaQuery.sizeOf(context).height < 500;
     return Material(color: colors.dock, child: SafeArea(top: false,
       child: Container(key: const ValueKey('android-create-operation-dock'),
         decoration: BoxDecoration(border: Border(top: BorderSide(color: colors.outline))),

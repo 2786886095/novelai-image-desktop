@@ -1,3 +1,4 @@
+import '../ui/compact_workbench.dart';
 import '../images/image_file_access.dart';
 import '../images/coordinated_file_image.dart';
 import 'openai_edit_settings.dart';
@@ -54,10 +55,10 @@ class ToolsScreen extends StatelessWidget {
     final state = context.watch<AppState>();
     final language = state.settings.language;
     return Scaffold(
-      appBar: AppBar(title: studioAppBarTitle(context, Text(titleFor(language))), actions: [
+      appBar: workbenchAppBar(context, AppBar(title: studioAppBarTitle(context, Text(titleFor(language))), actions: [
         IconButton(
             onPressed: () => _pick(context), icon: const Icon(Icons.image)),
-      ]),
+      ])),
       body: StudioContent(
         child: ListView(
           key: const ValueKey('tools-page-scroll'),

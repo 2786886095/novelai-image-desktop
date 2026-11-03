@@ -1,3 +1,4 @@
+import '../ui/compact_workbench.dart';
 import '../images/image_file_access.dart';
 import '../images/coordinated_file_image.dart';
 import '../i18n/platform_feature_text.dart';
@@ -134,9 +135,9 @@ class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserv
       return _buildAndroidGallery(context, state, history, dates);
     }
     return Scaffold(
-      appBar: AppBar(title: studioAppBarTitle(context, Text(t('gallery.title'))),actions:[
+      appBar: workbenchAppBar(context, AppBar(title: studioAppBarTitle(context, Text(t('gallery.title'))),actions:[
         IconButton(tooltip:feature('refresh'),onPressed:operating?null:_refreshFiles,icon:const Icon(Icons.refresh)),
-        IconButton(key:const ValueKey('works-batch-edit'),tooltip:feature('batchEdit'),onPressed:operating?null:()=>setState((){editing=!editing;selected.clear();}),icon:Icon(editing?Icons.done:Icons.checklist))]),
+        IconButton(key:const ValueKey('works-batch-edit'),tooltip:feature('batchEdit'),onPressed:operating?null:()=>setState((){editing=!editing;selected.clear();}),icon:Icon(editing?Icons.done:Icons.checklist))])),
       body: Column(
         children: [
           Padding(
@@ -313,7 +314,7 @@ class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserv
     return Scaffold(
       key: const ValueKey('android-gallery-grid'),
       backgroundColor: tokens.canvas,
-      appBar: AppBar(
+      appBar: workbenchAppBar(context, AppBar(
         title: studioAppBarTitle(context, Row(mainAxisSize: MainAxisSize.min, children: [
           Flexible(child: Text(androidGalleryText(language, 'works'), overflow: TextOverflow.ellipsis)),
           const SizedBox(width: 8),
@@ -352,7 +353,7 @@ class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserv
             ],
           ),
         ],
-      ),
+      )),
       body: Column(children: [
         // Content-sized filter pills wrap as whole units. Two equal dropdown
         // fields left ~42dp for the value at 320dp and split words mid-line.

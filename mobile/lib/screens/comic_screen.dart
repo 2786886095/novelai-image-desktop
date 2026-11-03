@@ -1,3 +1,4 @@
+import '../ui/compact_workbench.dart';
 import '../images/image_file_access.dart';
 import '../images/coordinated_file_image.dart';
 import '../ui/global_typography.dart';
@@ -58,7 +59,7 @@ class _ComicBody extends StatelessWidget {
       return Scaffold(body: Center(child: Text(controller.loadError!)));
     }
     return Scaffold(
-      appBar: AppBar(
+      appBar: workbenchAppBar(context, AppBar(
         leading: onBack == null
             ? null
             : IconButton(
@@ -97,7 +98,7 @@ class _ComicBody extends StatelessWidget {
             ],
           ),
         ],
-      ),
+      ), title: controller.displayTitle),
       body: SafeArea(
         top: false,
         child: Column(
@@ -135,6 +136,7 @@ class _StepBar extends StatelessWidget {
     return Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
       child: LayoutBuilder(builder: (context, constraints) {
         final compact = constraints.maxWidth < 620;
+        final inline = CompactWorkbenchScope.maybeOf(context) != null;
         return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           for (var index = 0; index < ComicStep.values.length; index++) ...[
             if (index > 0) const SizedBox(width: 6),
@@ -149,12 +151,12 @@ class _StepBar extends StatelessWidget {
                 child: Material(color: Colors.transparent, child: InkWell(
                   borderRadius: BorderRadius.circular(14),
                   onTap: () => controller.setStep(ComicStep.values[index]),
-                  child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                    child: compact ? Column(mainAxisSize: MainAxisSize.min, children: [
+                  child: Padding(padding: EdgeInsets.symmetric(horizontal: 4, vertical: inline ? 12 : 8),
+                    child: compact && !inline ? Column(mainAxisSize: MainAxisSize.min, children: [
                       Text('${index+1}', style: Theme.of(context).textTheme.labelLarge),
                       const SizedBox(height: 4),
                       Text(labels[index], textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelMedium),
-                    ]) : Row(mainAxisAlignment: MainAxisAlignment.center, children: [Text('${index+1}'), const SizedBox(width: 8), Flexible(child: Text(labels[index]))]))))))),
+                    ]) : Row(mainAxisAlignment: MainAxisAlignment.center, children: [Text('${index+1}'), const SizedBox(width: 8), Flexible(child: Text(labels[index], maxLines: 1, overflow: TextOverflow.ellipsis))]))))))),
           ],
         ]);
       }));

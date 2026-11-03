@@ -1,3 +1,4 @@
+import '../ui/compact_workbench.dart';
 import '../i18n/template_feature_text.dart';
 import '../comic/comic_prompt_composer.dart';
 import '../images/image_file_access.dart';
@@ -85,9 +86,9 @@ class _ReversePanelState extends State<_ReversePanel> {
     final path = s.workbenchImage?.filePath;
     _syncController(_resultCtrl, s.reverseResult);
     return Scaffold(
-      appBar: AppBar(title: studioAppBarTitle(context, Text(t('inspect.reverseTitle'))), actions: [
+      appBar: workbenchAppBar(context, AppBar(title: studioAppBarTitle(context, Text(t('inspect.reverseTitle'))), actions: [
         IconButton(onPressed: widget.onPick, icon: const Icon(Icons.image))
-      ]),
+      ])),
       body: ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(16),
@@ -265,7 +266,7 @@ class _ConvertPanelState extends State<_ConvertPanel> {
     _syncController(_inputCtrl, s.convertInput);
     _syncController(_resultCtrl, s.convertResult);
     return Scaffold(
-      appBar: AppBar(title: studioAppBarTitle(context, Text(t('inspect.convertTitle')))),
+      appBar: workbenchAppBar(context, AppBar(title: studioAppBarTitle(context, Text(t('inspect.convertTitle'))))),
       body: ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(16),

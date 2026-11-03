@@ -24,10 +24,18 @@ const novelAiRelayRecommendationUrl = 'https://nai.langbai.cc';
 
 class NovelAiRelayRecommendation extends StatelessWidget {
   final bool compact;
-  const NovelAiRelayRecommendation({super.key, this.compact = false});
+  final bool iconOnly;
+  const NovelAiRelayRecommendation({super.key, this.compact = false, this.iconOnly = false});
 
   @override
-  Widget build(BuildContext context) => Semantics(
+  Widget build(BuildContext context) => iconOnly ? IconButton(
+    key: const ValueKey('novelai-relay-recommendation'),
+    tooltip: _accountText(context, 'accountRelayRecommendation'),
+    constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+    onPressed: () => _openRelayRecommendation(context),
+    icon: Image.asset('assets/relay-brand/logo.png', width: 24, height: 24,
+      key: const ValueKey('novelai-relay-logo'), excludeFromSemantics: true),
+  ) : Semantics(
     link: true,
     child: Card(
       key: const ValueKey('novelai-relay-recommendation'),
@@ -41,21 +49,19 @@ class NovelAiRelayRecommendation extends StatelessWidget {
         title: Text(_accountText(context, 'accountRelayRecommendation'), maxLines: compact ? 1 : 2, overflow: TextOverflow.ellipsis),
         subtitle: Text(compact ? 'nai.langbai.cc' : 'nai.langbai.cc · ${_accountText(context, 'accountRelayBrowserHint')}', maxLines: compact ? 1 : 3, overflow: TextOverflow.ellipsis),
         trailing: const Icon(Icons.open_in_new, size: 18),
-        onTap: () async {
-          try {
-            final opened = await launchUrl(Uri.parse(novelAiRelayRecommendationUrl),
-                mode: LaunchMode.externalApplication);
-            if (!opened) throw StateError('browser unavailable');
-          } catch (_) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(_accountText(context, 'accountRelayOpenFailed'))));
-            }
-          }
-        },
+        onTap: () => _openRelayRecommendation(context),
       ),
     ),
   );
+}
+
+Future<void> _openRelayRecommendation(BuildContext context) async {
+  try {
+    final opened = await launchUrl(Uri.parse(novelAiRelayRecommendationUrl), mode: LaunchMode.externalApplication);
+    if (!opened) throw StateError('browser unavailable');
+  } catch (_) {
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_accountText(context, 'accountRelayOpenFailed'))));
+  }
 }
 
 class NovelAiAccountSelector extends StatelessWidget {

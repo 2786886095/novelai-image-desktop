@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../studio_shell.dart';
+import '../compact_workbench.dart';
 import 'android_destination_groups.dart';
 import 'android_tokens.dart';
 
@@ -15,6 +16,8 @@ class AndroidStudioShell extends StatefulWidget {
   final List<int>? destinationOrder;
   final ValueChanged<List<int>>? onDestinationOrderChanged;
   final bool nestedDetailActive;
+  final Widget? recommendation;
+  final Widget? accountControls;
 
   const AndroidStudioShell(
       {super.key,
@@ -25,7 +28,9 @@ class AndroidStudioShell extends StatefulWidget {
       required this.language,
       this.destinationOrder,
       this.onDestinationOrderChanged,
-      this.nestedDetailActive = false})
+      this.nestedDetailActive = false,
+      this.recommendation,
+      this.accountControls})
       : assert(destinations.length == 15 && pages.length == 15);
 
   @override
@@ -49,7 +54,11 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
     Icons.person
   ];
 
-  final _memberKeys = <int, GlobalKey>{};
+  late final _chrome = List.generate(15, (_) => WorkbenchChromeController());
+  bool _searchOpen = false;
+
+  @override
+  void dispose() { for (final controller in _chrome) { controller.dispose(); } super.dispose(); }
 
   int get _group => androidGroupForDestination(widget.selectedIndex);
 
@@ -57,29 +66,13 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
   void initState() {
     super.initState();
     _lastVisited[_group] = widget.selectedIndex;
-    _revealSelectedMember();
   }
 
   @override
   void didUpdateWidget(covariant AndroidStudioShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     _lastVisited[_group] = widget.selectedIndex;
-    if (oldWidget.selectedIndex != widget.selectedIndex) _revealSelectedMember();
-  }
-
-  /// Members reached from the catalog, Back or a deep link may sit past the
-  /// strip's edge at 320dp; scroll the selected chip into view after layout.
-  void _revealSelectedMember() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final chip = _memberKeys[widget.selectedIndex]?.currentContext;
-      if (!mounted || chip == null) return;
-      Scrollable.ensureVisible(chip,
-          alignment: .5,
-          duration: MediaQuery.disableAnimationsOf(context)
-              ? Duration.zero
-              : const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic);
-    });
+    if (oldWidget.selectedIndex != widget.selectedIndex) _searchOpen = false;
   }
 
   void _select(int index) {
@@ -103,10 +96,15 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
     final labels = androidGroupLabelsFor(widget.language);
     final body = Column(children: [
-      _memberBar(context, compact: side && size.shortestSide < 600),
+      ValueListenableBuilder<WorkbenchChrome?>(
+        valueListenable: _chrome[widget.selectedIndex],
+        builder: (context, chrome, _) => _compactBar(context, chrome)),
       Expanded(
           child: StudioLazyIndexedStack(
-              index: widget.selectedIndex, children: widget.pages)),
+              index: widget.selectedIndex, children: [
+                for (var i = 0; i < widget.pages.length; i++)
+                  CompactWorkbenchScope(controller: _chrome[i], child: widget.pages[i]),
+              ])),
     ]);
     return PopScope(
       canPop: widget.selectedIndex == 0,
@@ -136,7 +134,7 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
                 ? _largeTextNavigation(context, labels)
                 : NavigationBar(
                 key: const ValueKey('android-main-navigation'),
-                height: 72,
+                height: 64,
                 selectedIndex: _group,
                 onDestinationSelected: _selectGroup,
                 labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
@@ -152,6 +150,59 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
       ),
     );
   }
+
+  Widget _compactBar(BuildContext context, WorkbenchChrome? chrome) {
+    final members = androidOrderedGroupMembers(_group, widget.destinationOrder);
+    final search = _searchOpen ? chrome?.search : null;
+    return Material(
+      key: const ValueKey('compact-workbench-bar'),
+      color: LangbaiAndroidTokens.of(context).canvas,
+      child: SizedBox(height: 56, child: Row(children: [
+        if (search != null)
+          IconButton(key: const ValueKey('compact-workbench-close-search'),
+            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+            onPressed: () { chrome?.closeSearch?.call(); FocusManager.instance.primaryFocus?.unfocus(); setState(() => _searchOpen = false); },
+            icon: const Icon(Icons.arrow_back))
+        else if (chrome?.bar.leading != null) chrome!.bar.leading!,
+        Expanded(child: search ?? Padding(padding: const EdgeInsets.only(left: 12, right: 4),
+          child: DropdownButtonHideUnderline(child: DropdownButton<int>(
+            key: const ValueKey('android-member-selector'),
+            value: widget.selectedIndex, isExpanded: true, menuMaxHeight: 360,
+            items: [for (final index in members) DropdownMenuItem(value: index,
+              child: Text(widget.destinations[index].label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall))],
+            onChanged: (index) { if (index != null) _select(index); },
+          )))),
+        if (search == null) ...[
+          if (widget.recommendation != null) widget.recommendation!,
+          IconButton(key: const ValueKey('compact-workbench-search'),
+            tooltip: MaterialLocalizations.of(context).searchFieldLabel,
+            onPressed: chrome?.search != null
+              ? () => setState(() => _searchOpen = true)
+              : () => _showAllFeatures(search: true),
+            icon: const Icon(Icons.search)),
+        ],
+        IconButton(key: const ValueKey('android-all-features'),
+          tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
+          onPressed: () => _showPageActions(chrome), icon: const Icon(Icons.more_horiz)),
+      ])),
+    );
+  }
+
+  Future<void> _showPageActions(WorkbenchChrome? chrome) => showModalBottomSheet<void>(
+    context: context, showDragHandle: true, useSafeArea: true,
+    isScrollControlled: true,
+    builder: (sheetContext) => ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(sheetContext).height * .8),
+      child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+          if (chrome?.bar.title != null) DefaultTextStyle(style: Theme.of(context).textTheme.titleMedium!, child: chrome!.bar.title!),
+          if (chrome?.bar.actions?.isNotEmpty == true)
+            Wrap(spacing: 8, runSpacing: 8, children: chrome!.bar.actions!),
+          if (widget.accountControls != null) ...[const Divider(), widget.accountControls!],
+          ListTile(leading: const Icon(Icons.apps_outlined), title: Text(androidShellText(widget.language, 'all')),
+            onTap: () { Navigator.pop(sheetContext); _showAllFeatures(); }),
+        ]))));
 
   Widget _largeTextNavigation(BuildContext context, List<String> labels) {
     final t = LangbaiAndroidTokens.of(context);
@@ -174,70 +225,6 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
                         style: Theme.of(context).textTheme.labelMedium),
                     ]))))),
         ]))));
-  }
-
-  Widget _memberBar(BuildContext context, {required bool compact}) {
-    final t = LangbaiAndroidTokens.of(context);
-    final members = androidOrderedGroupMembers(_group, widget.destinationOrder);
-    return Material(
-        color: t.canvas,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 56),
-          child: Row(children: [
-            Expanded(
-                child: compact
-                    ? Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: DropdownButtonHideUnderline(
-                            child: DropdownButton<int>(
-                          key: const ValueKey('android-member-selector'),
-                          value: widget.selectedIndex,
-                          isExpanded: true,
-                          menuMaxHeight: 360,
-                          items: [
-                            for (final index in members)
-                              DropdownMenuItem(
-                                  value: index,
-                                  child: Text(widget.destinations[index].label,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis))
-                          ],
-                          onChanged: (index) {
-                            if (index != null) _select(index);
-                          },
-                        )))
-                    : SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        child: Row(children: [
-                          for (final index in members)
-                            Padding(
-                                padding:
-                                    const EdgeInsetsDirectional.only(end: 8),
-                                child: ConstrainedBox(
-                                  key: _memberKeys.putIfAbsent(
-                                      index, () => GlobalKey()),
-                                  constraints:
-                                      const BoxConstraints(minHeight: 48),
-                                  child: ChoiceChip(
-                                      key: ValueKey('android-member-$index'),
-                                      showCheckmark: false,
-                                      selected: widget.selectedIndex == index,
-                                      label: Text(
-                                          widget.destinations[index].label),
-                                      onSelected: (_) => _select(index)),
-                                )),
-                        ]))),
-            IconButton(
-                key: const ValueKey('android-all-features'),
-                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-                tooltip: androidShellText(widget.language, 'all'),
-                onPressed: _showAllFeatures,
-                icon: const Icon(Icons.apps_outlined)),
-            const SizedBox(width: 4),
-          ]),
-        ));
   }
 
   /// A scrollable, 64dp rail remains usable on short landscape phones. No
@@ -341,11 +328,12 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
             )));
   }
 
-  Future<void> _showAllFeatures() async {
+  Future<void> _showAllFeatures({bool search = false}) async {
     var order = StudioAdaptiveShell.normalizeDestinationOrder(
             widget.destinationOrder, widget.destinations.length)
         .toList();
     var editing = false;
+    var query = '';
     final labels = androidGroupLabelsFor(widget.language);
     await showModalBottomSheet<void>(
       context: context,
@@ -378,6 +366,11 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
                       onPressed: () => Navigator.pop(sheetContext),
                       icon: const Icon(Icons.close)),
                 ])),
+            if (search && !editing) Padding(padding: const EdgeInsets.all(12),
+              child: TextField(autofocus: true, key: const ValueKey('workbench-feature-search'),
+                decoration: InputDecoration(prefixIcon: const Icon(Icons.search),
+                  hintText: MaterialLocalizations.of(context).searchFieldLabel),
+                onChanged: (value) => setSheetState(() => query = value.trim().toLowerCase()))),
             if (editing) ...[
               Padding(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -422,9 +415,9 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
                       })
                   : ListView.builder(
                       controller: controller,
-                      itemCount: order.length,
+                      itemCount: order.where((i) => widget.destinations[i].label.toLowerCase().contains(query)).length,
                       itemBuilder: (context, position) {
-                        final index = order[position];
+                        final index = order.where((i) => widget.destinations[i].label.toLowerCase().contains(query)).elementAt(position);
                         return ListTile(
                             key: ValueKey('android-catalog-$index'),
                             leading: Icon(widget.destinations[index].icon),

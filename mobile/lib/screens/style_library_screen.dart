@@ -1,3 +1,4 @@
+import '../ui/compact_workbench.dart';
 import '../images/coordinated_file_image.dart';
 import '../ui/global_typography.dart';
 import 'dart:io';
@@ -202,7 +203,7 @@ class _StyleLibraryScreenState extends State<StyleLibraryScreen> {
                 .contains(query.toLowerCase()))
         .toList();
     return Scaffold(
-        appBar: AppBar(title: studioAppBarTitle(context, Text(t['title']!)), actions: [
+        appBar: workbenchAppBar(context, AppBar(title: studioAppBarTitle(context, Text(t['title']!)), actions: [
           IconButton(
               tooltip: t['new'],
               onPressed: busy ? null : () => edit(state),
@@ -217,7 +218,7 @@ class _StyleLibraryScreenState extends State<StyleLibraryScreen> {
                           builder: (_) => _StyleBatch(
                               group: group.isEmpty ? 'Default' : group))),
               icon: const Icon(Icons.playlist_add))
-        ]),
+        ])),
         body: SafeArea(
             child: Column(children: [
           Padding(
@@ -484,7 +485,7 @@ class _StyleEditorState extends State<_StyleEditor> {
     return PopScope(
         canPop: !busy,
         child: Scaffold(
-            appBar: AppBar(title: studioAppBarTitle(context, Text(t['edit']!))),
+            appBar: workbenchAppBar(context, AppBar(title: studioAppBarTitle(context, Text(t['edit']!)))),
             body: ListView(padding: const EdgeInsets.all(16), children: [
               TextField(
                   controller: name,
@@ -688,7 +689,7 @@ class _StyleBatchState extends State<_StyleBatch> {
     final state = context.watch<AppState>(),
         t = styleLibraryText(state.settings.language);
     return Scaffold(
-        appBar: AppBar(title: studioAppBarTitle(context, Text(t['batch']!))),
+        appBar: workbenchAppBar(context, AppBar(title: studioAppBarTitle(context, Text(t['batch']!)))),
         body: ListView(padding: const EdgeInsets.all(16), children: [
           Text(t['lines']!),
           TextField(controller: lines, minLines: 6, maxLines: 12),

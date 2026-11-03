@@ -1,3 +1,4 @@
+import '../ui/compact_workbench.dart';
 import '../images/image_file_access.dart';
 import '../images/coordinated_file_image.dart';
 import '../ui/global_typography.dart';
@@ -2559,13 +2560,13 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     final visibleResults =
         _results.take(_visibleResults).toList(growable: false);
     return Scaffold(
-      appBar: AppBar(
+      appBar: workbenchAppBar(context, AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: widget.onBack,
         ),
         title: studioAppBarTitle(context, Text(text['title']!)),
-      ),
+      )),
       body: ListView(
         controller: _scrollController,
         key: const PageStorageKey<String>('random-artist-lab-scroll'),

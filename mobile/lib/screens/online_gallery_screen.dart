@@ -1,3 +1,4 @@
+import '../ui/compact_workbench.dart';
 import '../ui/global_typography.dart';
 import '../services/aitag_service.dart';
 import 'style_library_screen.dart';
@@ -742,7 +743,7 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
         context.select<AppState, String>((state) => state.settings.language);
     final text = _galleryText(language);
     return Scaffold(
-      appBar: AppBar(
+      appBar: workbenchAppBar(context, AppBar(
         title: studioAppBarTitle(context, Text(text.title)),
         actions: [
           const GalleryFavoritesButton(),
@@ -758,7 +759,7 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
             icon: const Icon(Icons.open_in_new),
           ),
         ],
-      ),
+      )),
       body: Column(
         children: [
           _sourceToolbar(context, text, language),
@@ -1703,7 +1704,7 @@ class _OnlineGalleryDetailScreenState
         context.select<AppState, String>((state) => state.settings.language);
     final text = _galleryText(language);
     return Scaffold(
-      appBar: AppBar(
+      appBar: workbenchAppBar(context, AppBar(
         title: studioAppBarTitle(
             context,
             Text(
@@ -1731,7 +1732,7 @@ class _OnlineGalleryDetailScreenState
             icon: const Icon(Icons.open_in_new),
           ),
         ],
-      ),
+      )),
       body: FutureBuilder<OnlineGalleryDetail>(
         future: detail,
         builder: (context, snapshot) {

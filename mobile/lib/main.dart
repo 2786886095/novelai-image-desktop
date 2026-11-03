@@ -1,3 +1,4 @@
+import 'ui/compact_workbench.dart';
 import 'ui/startup_update_prompt.dart';
 import 'screens/novelai_accounts_screen.dart';
 import 'screens/style_library_screen.dart';
@@ -165,7 +166,7 @@ class _HomeShellState extends State<HomeShell> {
     super.initState();
     _loadNavigationOrder();
     _pages = [
-      const SafeArea(bottom: false, child: Column(children: [NovelAiAccountSelector(), Expanded(child: GenerateScreen())])),
+      Builder(builder: (context) => SafeArea(bottom: false, child: Column(children: [if (CompactWorkbenchScope.maybeOf(context) == null) const NovelAiAccountSelector(), const Expanded(child: GenerateScreen())]))),
       const ToolsScreen(kind: ToolPageKind.inpaint),
       const ToolsScreen(kind: ToolPageKind.postprocess),
       const InspectScreen(kind: InspectPageKind.reverse),
@@ -397,6 +398,8 @@ class _HomeShellState extends State<HomeShell> {
     if (isAndroidRedesign(context)) {
       return StartupUpdatePrompt(ready: !handlingIncomingBackup && !needsOnboarding && (currentModelIsV5 || _v5NoticeCompleted), child: AndroidStudioShell(
         selectedIndex: _index,
+        recommendation: const NovelAiRelayRecommendation(iconOnly: true),
+        accountControls: const NovelAiAccountSelector(),
         onDestinationSelected: (index) {
           FocusManager.instance.primaryFocus?.unfocus();
           setState(() => _index = index);

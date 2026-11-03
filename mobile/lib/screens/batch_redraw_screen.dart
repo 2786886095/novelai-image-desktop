@@ -1,3 +1,4 @@
+import '../ui/compact_workbench.dart';
 import '../images/image_file_access.dart';
 import '../images/coordinated_file_image.dart';
 import 'prompt_skill_selector.dart';
@@ -92,7 +93,7 @@ class _BatchBody extends StatelessWidget {
       return Scaffold(body: Center(child: Text(controller.loadError!)));
     }
     return Scaffold(
-      appBar: AppBar(
+      appBar: workbenchAppBar(context, AppBar(
         leading: onBack == null
             ? null
             : IconButton(
@@ -101,7 +102,7 @@ class _BatchBody extends StatelessWidget {
                 icon: const Icon(Icons.arrow_back),
               ),
         title: studioAppBarTitle(context, Text(t('batch.title'))),
-      ),
+      )),
       body: Column(
         children: [
           _BatchStepBar(controller: controller),

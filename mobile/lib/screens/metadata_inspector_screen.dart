@@ -1,3 +1,4 @@
+import '../ui/compact_workbench.dart';
 import '../images/image_file_access.dart';
 import '../images/coordinated_file_image.dart';
 import '../ui/global_typography.dart';
@@ -818,14 +819,14 @@ class _MetadataInspectorScreenState extends State<MetadataInspectorScreen> with 
     }).toList(growable: false);
     final visibleHistory = history.take(_historyDisplayLimit).toList();
     return Scaffold(
-      appBar: AppBar(
+      appBar: workbenchAppBar(context, AppBar(
         leading: IconButton(
           tooltip: MaterialLocalizations.of(context).backButtonTooltip,
           onPressed: widget.onBack,
           icon: const Icon(Icons.arrow_back),
         ),
         title: studioAppBarTitle(context, Text(text.title)),
-      ),
+      )),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 980),

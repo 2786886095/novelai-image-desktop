@@ -1,3 +1,4 @@
+import '../ui/compact_workbench.dart';
 import '../images/coordinated_file_image.dart';
 import 'prompt_skill_selector.dart';
 import '../prompts/prompt_skill_selection.dart';
@@ -60,6 +61,7 @@ class StudioAgentScreen extends StatefulWidget {
 }
 
 class _StudioAgentScreenState extends State<StudioAgentScreen> {
+  final _workbenchScaffold = GlobalKey<ScaffoldState>();
   AgentController? _agent;
   final _input = TextEditingController();
   final _composerRegion = GlobalKey();
@@ -1208,7 +1210,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                   builder: (ctx) => IconButton(
                       tooltip: _t('expandResources'),
                       icon: const Icon(Icons.menu_book_outlined),
-                      onPressed: () => Scaffold.of(ctx).openEndDrawer()))),
+                      onPressed: () => _workbenchScaffold.currentState?.openEndDrawer()))),
         if (archived)
           Material(
               color: color.surfaceContainerLow,
@@ -1647,6 +1649,7 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
       ]);
     });
     return Scaffold(
+        key: _workbenchScaffold,
         endDrawer:
             Drawer(child: StudioResources(agent: agent, language: _language)),
         drawer: wide
@@ -1658,13 +1661,13 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                             close: () => Navigator.pop(drawerContext))))),
         appBar: wide
             ? null
-            : AppBar(
+            : workbenchAppBar(context, AppBar(
                 toolbarHeight: 44,
                 leading: Builder(
                     builder: (barContext) => IconButton(
                         tooltip: _t('chats'),
                         icon: const Icon(Icons.chat_bubble_outline, size: 20),
-                        onPressed: () => Scaffold.of(barContext).openDrawer())),
+                        onPressed: () => _workbenchScaffold.currentState?.openDrawer())),
                 title: studioAppBarTitle(context, Text(chat.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1676,8 +1679,8 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                             tooltip: _t('expandResources'),
                             icon:
                                 const Icon(Icons.menu_book_outlined, size: 20),
-                            onPressed: () => Scaffold.of(ctx).openEndDrawer()))
-                  ]),
+                            onPressed: () => _workbenchScaffold.currentState?.openEndDrawer()))
+                  ])),
         body: wide
             ? Row(children: [
                 SizedBox(width: 228, child: _chatList()),

@@ -8,6 +8,14 @@ import 'package:novelai_mobile/ui/android/android_tokens.dart';
 import 'package:novelai_mobile/ui/studio_shell.dart';
 import 'package:novelai_mobile/ui/studio_theme.dart';
 
+Future<void> chooseMember(WidgetTester tester, int index) async {
+  final finder = find.byKey(const ValueKey('android-member-selector'));
+  final menu = tester.widget<DropdownButton<int>>(finder);
+  final label = (menu.items!.firstWhere((item) => item.value == index).child as Text).data!;
+  await tester.tap(finder); await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last); await tester.pumpAndSettle();
+}
+
 void main() {
   tearDown(() => debugDefaultTargetPlatformOverride = null);
 
@@ -64,9 +72,7 @@ void main() {
       await tester.tap(find.byKey(ValueKey('android-group-$group')));
       await tester.pump(const Duration(milliseconds: 240));
       for (final index in androidDestinationGroups[group]) {
-        final chip = find.byKey(ValueKey('android-member-$index'));
-        await tester.ensureVisible(chip);
-        await tester.tap(chip);
+        await chooseMember(tester, index);
         await tester.pump(const Duration(milliseconds: 240));
         expect(host.currentState!.index, index);
       }
@@ -75,9 +81,7 @@ void main() {
     expect(mounted.values.every((count) => count == 1), isTrue);
     await tester.tap(find.byKey(const ValueKey('android-group-0')));
     await tester.pump(const Duration(milliseconds: 240));
-    final chip = find.byKey(const ValueKey('android-member-0'));
-    await tester.ensureVisible(chip);
-    await tester.tap(chip);
+    await chooseMember(tester, 0);
     await tester.pump(const Duration(milliseconds: 240));
     final field =
         tester.widget<TextField>(find.byKey(const ValueKey('input-0')));
@@ -126,7 +130,7 @@ void main() {
     });
   }
 
-  testWidgets('320dp member strip reveals a member selected off-screen',
+  testWidgets('320dp compact selector shows externally selected route without horizontal scrolling',
       (tester) async {
     tester.view.physicalSize = const Size(320, 640);
     tester.view.devicePixelRatio = 1;
@@ -139,16 +143,13 @@ void main() {
     // all-features catalog or a deep link does, without touching the strip.
     host.currentState!.setIndex(5);
     await tester.pumpAndSettle();
-    final chip = tester.getRect(find.byKey(const ValueKey('android-member-5')));
-    final apps =
-        tester.getRect(find.byKey(const ValueKey('android-all-features')));
-    expect(chip.left, greaterThanOrEqualTo(0));
-    expect(chip.right, lessThanOrEqualTo(apps.left));
-    host.currentState!.setIndex(10);
-    await tester.pumpAndSettle();
-    expect(
-        tester.getRect(find.byKey(const ValueKey('android-member-10'))).left,
-        greaterThanOrEqualTo(0));
+    final selector = find.byKey(const ValueKey('android-member-selector'));
+    final rect = tester.getRect(selector);
+    expect(rect.left, greaterThanOrEqualTo(0));
+    expect(rect.right, lessThanOrEqualTo(tester.getRect(find.byKey(const ValueKey('android-all-features'))).left));
+    expect(tester.widget<DropdownButton<int>>(selector).value, 5);
+    host.currentState!.setIndex(10); await tester.pumpAndSettle();
+    expect(tester.widget<DropdownButton<int>>(selector).value, 10);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

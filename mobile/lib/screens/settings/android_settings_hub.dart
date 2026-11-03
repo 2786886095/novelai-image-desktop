@@ -1,3 +1,4 @@
+import '../../ui/compact_workbench.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../ui/android/android_tokens.dart';
@@ -291,7 +292,7 @@ class _AndroidSettingsHubState extends State<AndroidSettingsHub> {
         child: Scaffold(
             key: const ValueKey('android-settings-hub'),
             backgroundColor: tokens.canvas,
-            appBar: AppBar(
+            appBar: workbenchAppBar(context, AppBar(
                 leading: _hasDetail
                     ? IconButton(
                         tooltip: androidSettingsCopy(widget.language, 'back'),
@@ -302,13 +303,28 @@ class _AndroidSettingsHubState extends State<AndroidSettingsHub> {
                     ? androidSettingsCopy(widget.language, 'title')
                     : androidSettingsCategoryTitle(
                         widget.language, widget.category!)))),
+                search: TextField(
+                      key: const ValueKey('android-settings-search'),
+                      controller: _search,
+                      onChanged: _searchChanged,
+                      decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          hintText:
+                              androidSettingsCopy(widget.language, 'search'),
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _query.isEmpty
+                              ? null
+                              : IconButton(
+                                  tooltip: MaterialLocalizations.of(context)
+                                      .closeButtonTooltip,
+                                  onPressed: _clearSearch,
+                                  icon: const Icon(Icons.close)))), closeSearch: _clearSearch),
             body: SafeArea(top: false, bottom: false, child: Column(children: [
-              if (widget.topBanner != null)
-                Padding(padding: androidPagePadding(context, bottom: 12),
-                    child: widget.topBanner!),
-              Padding(
-                  padding: androidPagePadding(context, bottom: 12),
-                  child: TextField(
+              if (CompactWorkbenchScope.maybeOf(context) == null) ...[
+                if (widget.topBanner != null)
+                  Padding(padding: androidPagePadding(context, bottom: 12), child: widget.topBanner!),
+                Padding(padding: androidPagePadding(context, bottom: 12), child: TextField(
                       key: const ValueKey('android-settings-search'),
                       controller: _search,
                       onChanged: _searchChanged,
@@ -323,6 +339,7 @@ class _AndroidSettingsHubState extends State<AndroidSettingsHub> {
                                       .closeButtonTooltip,
                                   onPressed: _clearSearch,
                                   icon: const Icon(Icons.close))))),
+              ],
               Expanded(child: LayoutBuilder(builder: (context, constraints) {
                 final wide = constraints.maxWidth >= 840;
                 final home = SingleChildScrollView(

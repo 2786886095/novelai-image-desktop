@@ -1,3 +1,4 @@
+import '../ui/compact_workbench.dart';
 import '../images/image_file_access.dart';
 import '../images/coordinated_file_image.dart';
 import '../ui/global_typography.dart';
@@ -193,7 +194,7 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
         ? filtered
         : filtered.skip((shownPage - 1) * pageSize).take(pageSize).toList();
     return Scaffold(
-      appBar: AppBar(title: studioAppBarTitle(context, Text(t('title'))), actions: [
+      appBar: workbenchAppBar(context, AppBar(title: studioAppBarTitle(context, Text(t('title'))), actions: [
         IconButton(
             tooltip: t('online'),
             icon: const Icon(Icons.public),
@@ -201,7 +202,7 @@ class _LocalFavoritesScreenState extends State<LocalFavoritesScreen> {
                 context,
                 MaterialPageRoute<void>(
                     builder: (_) => const GalleryFavoritesScreen()))),
-      ]),
+      ])),
       body: Column(children: [
         if (current != null)
           Padding(

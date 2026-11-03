@@ -1,3 +1,6 @@
+import '../ui/compact_workbench.dart';
+import '../ui/android/android_gate.dart';
+import 'novelai_accounts_screen.dart';
 import '../i18n/template_feature_text.dart';
 import '../ui/global_typography.dart';
 import 'package:flutter/material.dart';
@@ -52,9 +55,12 @@ class ToolsHubScreen extends StatelessWidget {
   ) {
     return Navigator.of(context).push<void>(
       _StudioToolRoute<void>(
-        builder: (routeContext) => buildTool(
-          () => Navigator.of(routeContext).pop(),
-        ),
+        builder: (routeContext) {
+          final page = buildTool(() => Navigator.of(routeContext).pop());
+          return isAndroidRedesign(routeContext)
+            ? CompactToolFrame(recommendation: const NovelAiRelayRecommendation(iconOnly: true), child: page)
+            : page;
+        },
       ),
     );
   }
@@ -66,7 +72,7 @@ class ToolsHubScreen extends StatelessWidget {
     final text = mobileToolsHubTextFor(language);
     final promptCodexText = _promptCodexTileText(language);
     return Scaffold(
-      appBar: AppBar(title: studioAppBarTitle(context, Text(text.title))),
+      appBar: workbenchAppBar(context, AppBar(title: studioAppBarTitle(context, Text(text.title)))),
       body: ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(StudioSpacing.lg),
