@@ -103,7 +103,7 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
         builder: (context, chrome, _) => _compactBar(context, chrome)),
       Expanded(
           child: StudioLazyIndexedStack(
-              index: widget.selectedIndex, children: [
+              index: widget.selectedIndex, animateNavigation: true, children: [
                 for (var i = 0; i < widget.pages.length; i++)
                   CompactWorkbenchScope(controller: _chrome[i], child: widget.pages[i]),
               ])),

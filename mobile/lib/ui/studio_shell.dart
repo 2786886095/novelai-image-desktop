@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'studio_page_motion.dart';
 
 import 'studio_theme.dart';
 
@@ -134,16 +135,18 @@ class StudioAdaptiveShell extends StatelessWidget {
 class StudioLazyIndexedStack extends StatelessWidget {
   final int index;
   final List<Widget> children;
-  const StudioLazyIndexedStack({super.key, required this.index, required this.children});
+  final bool animateNavigation;
+  const StudioLazyIndexedStack({super.key, required this.index, required this.children, this.animateNavigation = false});
   @override
-  Widget build(BuildContext context) => _LazyIndexedStack(index: index, children: children);
+  Widget build(BuildContext context) => _LazyIndexedStack(index: index, animateNavigation: animateNavigation, children: children);
 }
 
 class _LazyIndexedStack extends StatefulWidget {
   final int index;
   final List<Widget> children;
 
-  const _LazyIndexedStack({required this.index, required this.children});
+  final bool animateNavigation;
+  const _LazyIndexedStack({required this.index, required this.children, this.animateNavigation = false});
 
   @override
   State<_LazyIndexedStack> createState() => _LazyIndexedStackState();
@@ -151,6 +154,7 @@ class _LazyIndexedStack extends StatefulWidget {
 
 class _LazyIndexedStackState extends State<_LazyIndexedStack> {
   final Set<int> _mountedIndexes = <int>{};
+  double _direction = 1;
 
   @override
   void initState() {
@@ -161,6 +165,7 @@ class _LazyIndexedStackState extends State<_LazyIndexedStack> {
   @override
   void didUpdateWidget(covariant _LazyIndexedStack oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.index != widget.index) _direction = widget.index > oldWidget.index ? 1 : -1;
     _mountedIndexes.removeWhere((index) => index >= widget.children.length);
     _mountedIndexes.add(widget.index);
   }
@@ -168,14 +173,17 @@ class _LazyIndexedStackState extends State<_LazyIndexedStack> {
   @override
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    return Stack(
+    return ClipRect(child: Stack(
       fit: StackFit.expand,
       children: List<Widget>.generate(widget.children.length, (index) {
         final mounted = _mountedIndexes.contains(index);
         final active = index == widget.index;
         return Positioned.fill(
           key: ValueKey('studio-page-layer-$index'),
-          child: IgnorePointer(
+          child: widget.animateNavigation ? StudioRetainedPageMotion(
+            active: active, enterOffset: Offset(.10 * _direction, 0),
+            child: mounted ? widget.children[index] : const SizedBox.shrink(),
+          ) : IgnorePointer(
             ignoring: !active,
             child: ExcludeSemantics(
               excluding: !active,
@@ -194,7 +202,7 @@ class _LazyIndexedStackState extends State<_LazyIndexedStack> {
           ),
         );
       }, growable: false),
-    );
+    ));
   }
 }
 

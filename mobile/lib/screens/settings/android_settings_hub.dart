@@ -1,4 +1,5 @@
 import '../../ui/compact_workbench.dart';
+import '../../ui/studio_page_motion.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../ui/android/android_tokens.dart';
@@ -48,6 +49,14 @@ class AndroidSettingsHub extends StatefulWidget {
 }
 
 class _AndroidSettingsHubState extends State<AndroidSettingsHub> {
+  AndroidSettingsCategory? _lastCategory;
+  @override
+  void initState() { super.initState(); _lastCategory = widget.category; }
+  @override
+  void didUpdateWidget(covariant AndroidSettingsHub oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.category != null) _lastCategory = widget.category;
+  }
   final _search = TextEditingController();
   final _detailScroll = ScrollController();
   final _visited = <String>{};
@@ -104,7 +113,7 @@ class _AndroidSettingsHubState extends State<AndroidSettingsHub> {
       if (target != null) {
         await Scrollable.ensureVisible(target,
             alignment: .05,
-            duration: widget.reduceMotion
+            duration: (widget.reduceMotion || MediaQuery.disableAnimationsOf(context))
                 ? Duration.zero
                 : const Duration(milliseconds: 220));
       }
@@ -136,8 +145,8 @@ class _AndroidSettingsHubState extends State<AndroidSettingsHub> {
     final providerLabel = androidSettingsCopy(language, 'provider');
     final providerStatus = androidSettingsCopy(
         language, widget.providerConfigured ? 'configured' : 'unconfigured');
-    return Card(
-        child: InkWell(
+    return Card(clipBehavior: Clip.antiAlias,
+        child: StudioPressFeedback(reduceMotion: widget.reduceMotion, child: InkWell(
             borderRadius: BorderRadius.circular(20),
             onTap: () => _category(AndroidSettingsCategory.access),
             child: Padding(
@@ -169,7 +178,7 @@ class _AndroidSettingsHubState extends State<AndroidSettingsHub> {
                           .refreshIndicatorSemanticLabel,
                       onPressed: widget.onRefreshAccount,
                       icon: const Icon(Icons.refresh)),
-                ]))));
+                ])))));
   }
 
   Widget _categories() {
@@ -179,12 +188,12 @@ class _AndroidSettingsHubState extends State<AndroidSettingsHub> {
       Text(androidSettingsCopy(widget.language, 'summary'),
           style: Theme.of(context).textTheme.bodyMedium),
       const SizedBox(height: 16),
-      Card(
+      Card(clipBehavior: Clip.antiAlias,
           child: Column(children: [
         for (final category in AndroidSettingsCategory.values)
           ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 64),
-              child: ListTile(
+              child: StudioPressFeedback(reduceMotion: widget.reduceMotion, child: ListTile(
                   key: ValueKey('android-settings-category-${category.name}'),
                   leading: Icon(_icon(category)),
                   title: Text(
@@ -199,7 +208,7 @@ class _AndroidSettingsHubState extends State<AndroidSettingsHub> {
                       overflow: TextOverflow.ellipsis),
                   selected: widget.category == category,
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _category(category))),
+                  onTap: () => _category(category)))),
       ])),
     ]);
   }
@@ -220,19 +229,19 @@ class _AndroidSettingsHubState extends State<AndroidSettingsHub> {
     }
     return ListView(padding: androidPagePadding(context), children: [
       for (final entry in matches)
-        Card(
-            child: ListTile(
+        Card(clipBehavior: Clip.antiAlias,
+            child: StudioPressFeedback(reduceMotion: widget.reduceMotion, child: ListTile(
                 key: ValueKey('android-settings-search-${entry.id}'),
                 title: Text(entry.title),
                 subtitle: Text(androidSettingsCategoryTitle(
                     widget.language, entry.categories.first)),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => _open(entry))),
+                onTap: () => _open(entry)))),
     ]);
   }
 
-  Widget _detail() {
-    final category = widget.category;
+  Widget _detail({bool retainOutgoing = false}) {
+    final category = widget.category ?? (retainOutgoing ? _lastCategory : null);
     if (category != null) {
       _visited.addAll(widget.entries
           .where((entry) => entry.categories.contains(category))
@@ -259,7 +268,7 @@ class _AndroidSettingsHubState extends State<AndroidSettingsHub> {
                           key:
                               _anchors.putIfAbsent(entry.id, () => GlobalKey()),
                           child: AnimatedContainer(
-                              duration: widget.reduceMotion
+                              duration: (widget.reduceMotion || MediaQuery.disableAnimationsOf(context))
                                   ? Duration.zero
                                   : const Duration(milliseconds: 160),
                               padding: const EdgeInsets.all(2),
@@ -344,7 +353,7 @@ class _AndroidSettingsHubState extends State<AndroidSettingsHub> {
                 final wide = constraints.maxWidth >= 840;
                 final home = SingleChildScrollView(
                     padding: androidPagePadding(context), child: _categories());
-                final detail = _detail();
+                final detail = _detail(retainOutgoing: !wide);
                 return Stack(children: [
                   Offstage(
                       offstage: _query.isNotEmpty,
@@ -353,14 +362,23 @@ class _AndroidSettingsHubState extends State<AndroidSettingsHub> {
                               SizedBox(width: 320, child: home),
                               Expanded(child: detail)
                             ])
-                          : Stack(children: [
-                              Offstage(
-                                  offstage: widget.category != null,
-                                  child: home),
-                              Offstage(
-                                  offstage: widget.category == null,
-                                  child: detail)
-                            ])),
+                          : ClipRect(child: Stack(fit: StackFit.expand, children: [
+                              StudioRetainedPageMotion(
+                                  key: const ValueKey('settings-home-motion'),
+                                  active: widget.category == null,
+                                  reduceMotion: widget.reduceMotion,
+                                  fade: false,
+                                  enterOffset: const Offset(-.20, 0),
+                                  child: ColoredBox(color: tokens.canvas, child: home)),
+                              StudioRetainedPageMotion(
+                                  key: const ValueKey('settings-detail-motion'),
+                                  active: widget.category != null,
+                                  reduceMotion: widget.reduceMotion,
+                                  fade: false,
+                                  enterOffset: const Offset(1, 0),
+                                  transitionId: widget.category,
+                                  child: ColoredBox(color: tokens.canvas, child: detail))
+                            ]))),
                   if (_query.isNotEmpty) _results(),
                 ]);
               })),
