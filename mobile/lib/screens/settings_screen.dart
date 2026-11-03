@@ -1044,6 +1044,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         aboutText.sectionTitle: 'about',
       };
       return AndroidSettingsHub(
+        topBanner: const NovelAiRelayRecommendation(),
         active: widget.androidActive,
         language: s.language,
         entries: _androidEntries(settingsChildren, sectionIds, s.language),
@@ -1073,7 +1074,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         // nav can otherwise leave them covered).
         padding: EdgeInsets.fromLTRB(
             16, 16, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
-        children: settingsChildren,
+        children: const <Widget>[NovelAiRelayRecommendation(), SizedBox(height: 12)] + settingsChildren,
       )),
     );
   }

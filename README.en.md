@@ -20,7 +20,7 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 ## This update
 
 - **Android numeric-input fix**: keep a live parameter-sheet context when the keyboard opens, covering seed and batch-count input. Physical Redmi K70 verification is still pending.
-- **Relay recommendation**: beside account management on desktop, at the top of mobile account management, with the bundled homepage LN logo. Opens only https://nai.langbai.cc in the external browser; no account/key transfer or API configuration changes.
+- **Relay recommendation**: beside account management on desktop, at the top of mobile settings and account management, with the bundled homepage LN logo. Opens only https://nai.langbai.cc in the external browser; no account/key transfer or API configuration changes.
 - **Evidence and limits**: 88 related desktop tests,13 mobile tests and targeted type/analysis checks passed. All five platform packages are rebuilt; see Latest and verification.json for actual artifacts. This is not full-suite, physical-device, GPU, real-account or paid-generation acceptance.
 - **Installation limits**: unsigned iOS IPA requires user signing; local Agent and style iteration remain Windows-only.
 

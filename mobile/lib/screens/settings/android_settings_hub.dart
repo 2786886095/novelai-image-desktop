@@ -28,6 +28,7 @@ class AndroidSettingsHub extends StatefulWidget {
   final VoidCallback onRefreshAccount;
   final bool reduceMotion;
   final bool active;
+  final Widget? topBanner;
   const AndroidSettingsHub(
       {super.key,
       required this.language,
@@ -40,7 +41,7 @@ class AndroidSettingsHub extends StatefulWidget {
       required this.providerConfigured,
       required this.onRefreshAccount,
       this.reduceMotion = false,
-      this.active = true});
+      this.active = true, this.topBanner});
   @override
   State<AndroidSettingsHub> createState() => _AndroidSettingsHubState();
 }
@@ -302,6 +303,9 @@ class _AndroidSettingsHubState extends State<AndroidSettingsHub> {
                     : androidSettingsCategoryTitle(
                         widget.language, widget.category!)))),
             body: Column(children: [
+              if (widget.topBanner != null)
+                Padding(padding: androidPagePadding(context, bottom: 12),
+                    child: widget.topBanner!),
               Padding(
                   padding: androidPagePadding(context, bottom: 12),
                   child: TextField(

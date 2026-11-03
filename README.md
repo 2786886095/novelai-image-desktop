@@ -25,11 +25,13 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 ## 本次更新
 
 - **手机数字输入修复**：修正 Android 参数弹层在键盘出现时访问已卸载上下文的问题，覆盖种子与批量数量输入。红米 K70 真机仍需用户复核。
-- **中转站推荐入口**：桌面位于账户管理右侧，手机位于账户管理页顶部；使用随软件内置的网站首页 LN Logo。点击仅在外部浏览器打开 https://nai.langbai.cc，不传递账号或密钥，不改 API 配置。
+- **中转站推荐入口**：桌面位于账户管理右侧，手机位于设置页和账户管理页顶部；使用随软件内置的网站首页 LN Logo。点击仅在外部浏览器打开 https://nai.langbai.cc，不传递账号或密钥，不改 API 配置。
 - **验证边界**：已完成相关桌面88项、手机13项测试及定向类型／分析检查；五平台重新构建，发行制品状态见 Latest 与 verification.json。未宣称完成全量、真机、GPU、真实账号或付费生图验收。
 - **安装限制**：未签名 iOS IPA 需自行签名；本地 Agent 与画风迭代仍仅 Windows。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
+
+<a id="quick-start"></a>
 
 ## 先完成你的第一张图
 
