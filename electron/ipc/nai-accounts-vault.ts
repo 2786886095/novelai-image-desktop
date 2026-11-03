@@ -1,6 +1,7 @@
 import { validateAccountProfile, normalizeNaiAccountInput, type NaiAccountInput, type NaiAccountProfile } from '../../src/nai-accounts';
 import {stableNaiAccountSummary,type NaiAccountSummary} from './nai-account-summary';
 import crypto from 'node:crypto';
+import {rememberRelaySecret} from '../relay-import-redaction';
 interface Cipher { isEncryptionAvailable(): boolean; getSelectedStorageBackend?(): string; encryptString(value: string): Buffer; decryptString(value: Buffer): string }
 export function accountCipherAvailable(cipher: Cipher): boolean {
   try { return cipher.isEncryptionAvailable() && cipher.getSelectedStorageBackend?.() !== 'basic_text'; }
@@ -67,6 +68,7 @@ export class NaiAccountsVault {
     this.persist(next);this.document=next;
   }
 
+  hasActiveLeases(){return this.leases>0;}
   revision(){return JSON.stringify(this.document);}
   exportBackup():PortableNaiAccounts {
     const accounts=this.document.accounts.map(a=>{
@@ -193,6 +195,7 @@ export class NaiAccountsVault {
     if (!account) throw new Error('Unknown account');
     if (!accountCipherAvailable(this.cipher)) throw new Error('OS credential encryption unavailable');
     const token = this.cipher.decryptString(Buffer.from(account.encryptedToken, 'base64'));
+    rememberRelaySecret(token);
     if(!account.legacyConfiguration)validateAccountProfile({ ...account, token });
     else {if(!token.trim()||/[\r\n]/.test(token))throw Error('Invalid legacy token');for(const raw of [account.apiBaseUrl,account.imageBaseUrl]){const url=new URL(raw);if((url.protocol!=='https:'&&!(url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname)))||url.username||url.password||url.search||url.hash)throw Error('Invalid legacy endpoint');}}
     this.leases++; let ended = false;

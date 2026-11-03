@@ -46,10 +46,10 @@ export async function saveRelayAccount(vault:NaiAccountsVault,input:NaiAccountIn
   const names=new Set(vault.list().map(a=>a.label));let label=RELAY_ACCOUNT_NAME,n=0;while(names.has(label))label=RELAY_ACCOUNT_NAME+(++n);
   const existing=vault.findByEndpointAndToken(input);
   const account=existing??vault.add(randomUUID(),{...input,label});
-  if(naiAccountsBusy()||extraBusy())return {id:randomUUID(),status:'saved-busy',selected:false,reused:!!existing};
+  if(vault.hasActiveLeases()||naiAccountsBusy()||extraBusy())return {id:randomUUID(),status:'saved-busy',selected:false,reused:!!existing};
   const lease=vault.bind(account.id);const snapshot=lease.snapshot;lease.release();
   // No await between the final main-process busy check and the durable select.
-  if(naiAccountsBusy()||extraBusy())return {id:randomUUID(),status:'saved-busy',selected:false,reused:!!existing};
+  if(vault.hasActiveLeases()||naiAccountsBusy()||extraBusy())return {id:randomUUID(),status:'saved-busy',selected:false,reused:!!existing};
   activateNaiAccount(snapshot,()=>vault.select(account.id));
   let balanceRefreshed=false;
   try {await withNaiAccountOperation(async()=>{const summary=await refresh() as {stale?:boolean};balanceRefreshed=summary?.stale!==true;});}catch{/* Saved and selected; balance unavailable is not an import failure. */}
