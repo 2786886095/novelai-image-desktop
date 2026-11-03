@@ -615,7 +615,9 @@ void main() {
     if (_android(tester)) {
       await tester.tap(find.byKey(const ValueKey('android-group-3')));
       await tester.pumpAndSettle();
-      tester.widget<DropdownButton<int>>(find.byKey(const ValueKey('android-member-selector'))).onChanged!(7);
+      await tester.tap(find.byKey(const ValueKey('android-member-selector')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('android-member-option-7')));
     } else {
       expect(find.text('预设'), findsOneWidget);
       await tester.tap(find.text('预设'));

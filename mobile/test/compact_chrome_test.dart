@@ -23,7 +23,9 @@ Future<void> capture(WidgetTester t,String name) async {
 Future<void> select(WidgetTester t,int i) async {
  final selector=find.byKey(const ValueKey('android-member-selector'));
  if(selector.evaluate().isNotEmpty){
-  final drop=t.widget<DropdownButton<int>>(selector);drop.onChanged!(i);
+  await t.tap(selector);await t.pumpAndSettle();
+  final choice=find.byKey(ValueKey('android-member-option-$i'));
+  await t.ensureVisible(choice);await t.tap(choice);
  }else{final chip=find.byKey(ValueKey('android-member-$i'));await t.ensureVisible(chip);await t.tap(chip);}
  await t.pumpAndSettle();
 }

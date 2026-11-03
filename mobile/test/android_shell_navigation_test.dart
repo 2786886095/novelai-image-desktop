@@ -10,10 +10,9 @@ import 'package:novelai_mobile/ui/studio_theme.dart';
 
 Future<void> chooseMember(WidgetTester tester, int index) async {
   final finder = find.byKey(const ValueKey('android-member-selector'));
-  final menu = tester.widget<DropdownButton<int>>(finder);
-  final label = (menu.items!.firstWhere((item) => item.value == index).child as Text).data!;
   await tester.tap(finder); await tester.pumpAndSettle();
-  await tester.tap(find.text(label).last); await tester.pumpAndSettle();
+  final option = find.byKey(ValueKey('android-member-option-$index'));
+  await tester.ensureVisible(option); await tester.tap(option); await tester.pumpAndSettle();
 }
 
 void main() {
@@ -147,9 +146,9 @@ void main() {
     final rect = tester.getRect(selector);
     expect(rect.left, greaterThanOrEqualTo(0));
     expect(rect.right, lessThanOrEqualTo(tester.getRect(find.byKey(const ValueKey('android-all-features'))).left));
-    expect(tester.widget<DropdownButton<int>>(selector).value, 5);
+    expect(find.descendant(of: selector, matching: find.text('Feature 5')), findsOneWidget);
     host.currentState!.setIndex(10); await tester.pumpAndSettle();
-    expect(tester.widget<DropdownButton<int>>(selector).value, 10);
+    expect(find.descendant(of: selector, matching: find.text('Feature 10')), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

@@ -154,6 +154,9 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
   Widget _compactBar(BuildContext context, WorkbenchChrome? chrome) {
     final members = androidOrderedGroupMembers(_group, widget.destinationOrder);
     final search = _searchOpen ? chrome?.search : null;
+    final media = MediaQuery.of(context);
+    final menuHeight = (media.size.height - media.padding.top - 56 -
+        media.padding.bottom - media.viewInsets.bottom - 16).clamp(48.0, 360.0);
     return Material(
       key: const ValueKey('compact-workbench-bar'),
       color: LangbaiAndroidTokens.of(context).canvas,
@@ -165,14 +168,33 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
             icon: const Icon(Icons.arrow_back))
         else if (chrome?.bar.leading != null) chrome!.bar.leading!,
         Expanded(child: search ?? Padding(padding: const EdgeInsets.only(left: 12, right: 4),
-          child: DropdownButtonHideUnderline(child: DropdownButton<int>(
+          child: PopupMenuButton<int>(
             key: const ValueKey('android-member-selector'),
-            value: widget.selectedIndex, isExpanded: true, menuMaxHeight: 360,
-            items: [for (final index in members) DropdownMenuItem(value: index,
-              child: Text(widget.destinations[index].label, maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleSmall))],
-            onChanged: (index) { if (index != null) _select(index); },
-          )))),
+            tooltip: widget.destinations[widget.selectedIndex].label,
+            position: PopupMenuPosition.under,
+            offset: const Offset(0, 4),
+            // Do not set initialValue: centering the selected third row over
+            // the trigger is what pulled the old dropdown across the toolbar.
+            constraints: BoxConstraints(minWidth: 180, maxWidth: 280, maxHeight: menuHeight),
+            menuPadding: const EdgeInsets.symmetric(vertical: 6),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            clipBehavior: Clip.antiAlias,
+            popUpAnimationStyle: MediaQuery.disableAnimationsOf(context) ? AnimationStyle.noAnimation : null,
+            onOpened: () => FocusManager.instance.primaryFocus?.unfocus(),
+            onSelected: _select,
+            itemBuilder: (_) => [for (final index in members) PopupMenuItem<int>(
+              key: ValueKey('android-member-option-$index'), value: index,
+              child: Semantics(selected: index == widget.selectedIndex, child: Row(children: [
+                SizedBox(width: 28, child: index == widget.selectedIndex
+                    ? Icon(Icons.check, size: 20, color: Theme.of(context).colorScheme.primary) : null),
+                Expanded(child: Text(widget.destinations[index].label, maxLines: 2, overflow: TextOverflow.ellipsis)),
+              ])))],
+            child: SizedBox(height: 48, child: Row(children: [
+              Expanded(child: Text(widget.destinations[widget.selectedIndex].label,
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall)),
+              const Icon(Icons.keyboard_arrow_down, size: 20),
+            ])),
+          ))),
         if (search == null) ...[
           if (widget.recommendation != null) widget.recommendation!,
           IconButton(key: const ValueKey('compact-workbench-search'),
