@@ -10,6 +10,7 @@ import fsp from "fs/promises";
 import path from "path";
 import { app, dialog, shell } from "electron";
 import { getSettings } from "./store";
+import {redactRelayImportSecrets} from '../relay-import-redaction';
 
 const LOG_FILE = "app.log";
 const MAX_READ_BYTES = 256 * 1024; // tail size for in-app viewing
@@ -41,7 +42,7 @@ export function appendLog(level: string, message: string): void {
     if (getSettings().loggingEnabled === false) return; // logging turned off
     const dir = logDir();
     ensureDirSync(dir);
-    fs.appendFileSync(path.join(dir, LOG_FILE), format(level, message));
+    fs.appendFileSync(path.join(dir, LOG_FILE), format(level, redactRelayImportSecrets(message)));
   } catch {
     /* never throw from logging */
   }
@@ -71,11 +72,11 @@ export function installGlobalLogging(): void {
   const origWarn = console.warn.bind(console);
   console.error = (...args: unknown[]) => {
     appendLog("ERROR", args.map(stringifyArg).join(" "));
-    origError(...args);
+    origError(...args.map(arg=>redactRelayImportSecrets(stringifyArg(arg))));
   };
   console.warn = (...args: unknown[]) => {
     appendLog("WARN", args.map(stringifyArg).join(" "));
-    origWarn(...args);
+    origWarn(...args.map(arg=>redactRelayImportSecrets(stringifyArg(arg))));
   };
 
   appendLog("INFO", `=== app started v${app.getVersion?.() ?? "?"} ===`);

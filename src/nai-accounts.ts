@@ -59,6 +59,8 @@ export function novelAiRelayModelsUrl(base:string):string {
   return prefix+(prefix.endsWith('/v1')?'/models':'/v1/models');
 }
 export interface NaiAccountsBridge {
+  relayImportStatus?:()=>Promise<import('../electron/ipc/relay-account-import').RelayImportNotice|undefined>;
+  onRelayImportNotice?:(callback:(notice:import('../electron/ipc/relay-account-import').RelayImportNotice)=>void)=>()=>void;
   list(): Promise<NaiAccountProfile[]>;
   add(input: NaiAccountInput): Promise<NaiAccountProfile>;
   remove(id: string): Promise<void>;

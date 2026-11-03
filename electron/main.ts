@@ -6,7 +6,11 @@ import { fetchOfficialMetadataAsset, cancelOfficialMetadataAssetDownloads } from
 import crypto from "node:crypto";
 import {startMcpServer, type McpServerHandle} from "./ipc/mcp-server";
 import {readAgentClipboardFiles} from './ipc/agent-clipboard';
-import { registerNaiAccountsIpc, ensureNaiAccountsLoaded } from './ipc/nai-accounts';
+import { registerNaiAccountsIpc, ensureNaiAccountsLoaded, importRelayAccount } from './ipc/nai-accounts';
+import {createRelayLinkInbox,relayCodeJournal,wireRelayLinkEvents} from './relay-link-inbox';
+import {registerRelayProtocol} from './relay-protocol-registration';
+import type {RelayImportNotice} from './ipc/relay-account-import';
+import os from 'node:os';
 import { withNaiAccountOperation, rememberNaiProposal, assertNaiProposalAccount } from './ipc/nai-accounts-runtime';
 import {prepareBatchImageService} from './ipc/batch-image-service';
 import {cancelBatchRedraw} from './ipc/nai';
@@ -315,11 +319,14 @@ let mainWindow: BrowserWindow | null = null;
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 
-app.on("second-instance", () => {
-  if (!mainWindow) return;
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
+let relayImportNotice:RelayImportNotice|undefined;
+const relayLinks=createRelayLinkInbox({
+  markSeen:digest=>relayCodeJournal(path.join(app.getPath('userData'),'relay-import-seen-v1.json'))(digest),
+  save:input=>importRelayAccount(input,()=>hasActiveAgentRequests()||comfyHasActiveJobs()||harnessNeedsExitConfirmation()||detectiveStatus().running,refreshStoredAccount),
+  notify:notice=>{relayImportNotice=notice;if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('naiAccounts:relayImportNotice',notice);},
+});
+wireRelayLinkEvents(app,process.argv,url=>relayLinks.receive(url),()=>{
+  if(!mainWindow)return;if(mainWindow.isMinimized())mainWindow.restore();mainWindow.show();mainWindow.focus();
 });
 
 /**
@@ -797,6 +804,7 @@ function registerIpc() {
   ipcMain.handle("metadata:officialAsset", (_event, assetId: unknown) => fetchOfficialMetadataAsset(assetId));
   ipcMain.handle("metadata:cancelOfficialAssets", () => cancelOfficialMetadataAssetDownloads());
   registerNaiAccountsIpc();
+  ipcMain.handle('naiAccounts:relayImportStatus',()=>relayImportNotice);
   registerImageFavoritesIpc();
   registerCompatibleImageIpc(() => mainWindow);
   registerComfyIpc(() => mainWindow, () => getSettings().outputDir);
@@ -1615,6 +1623,8 @@ app.whenReady().then(async () => {
     await stopAgentRuntime();
   },() => { resetHarnessExitAfterUpdateFailure(); resetComfyAfterUpdateFailure(); });
   createWindow();
+  if(!uiCapturePath&&!uiCaptureUserData){try{registerRelayProtocol(app,process.platform,process.execPath,process.env.PORTABLE_EXECUTABLE_FILE??process.env.APPIMAGE,os.tmpdir());}catch{/* Registration failure is handled by OS setup instructions; never log a launch URL. */}}
+  relayLinks.ready();
   void syncMcpServer();
 
   app.on("activate", () => {

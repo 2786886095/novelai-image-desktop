@@ -298,7 +298,15 @@
       "node_modules/onnxruntime-node/**"
     ],
     "beforePack": "scripts/configure-windows-archive.cjs",
-    "afterPack": "scripts/verify-harness-bundle.cjs"
+    "afterPack": "scripts/verify-harness-bundle.cjs",
+    "protocols": [
+      {
+        "name": "Langbai NovelAI account import",
+        "schemes": [
+          "langbai-novelai"
+        ]
+      }
+    ]
   },
   "allowScripts": {
     "electron@42.11.0": true,

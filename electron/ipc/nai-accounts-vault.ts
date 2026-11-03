@@ -114,6 +114,16 @@ export class NaiAccountsVault {
       this.persist(next);this.document=next;
     }};
   }
+  findByEndpointAndToken(input: NaiAccountInput): NaiAccountProfile | undefined {
+    const normalized=normalizeNaiAccountInput(input);validateAccountProfile(normalized);
+    if(!accountCipherAvailable(this.cipher))throw Error('OS credential encryption unavailable');
+    const address=new URL(normalized.apiBaseUrl).href.replace(/\/+$/,'');
+    for(const account of this.list()){
+      if(new URL(account.apiBaseUrl).href.replace(/\/+$/,'')!==address)continue;
+      const lease=this.bind(account.id);try{if(lease.snapshot.token.trim()===normalized.token.trim())return account;}finally{lease.release();}
+    }
+    return undefined;
+  }
   legacyMigrated(){return this.document.legacyMigrated===true;}
   managed(){return this.document.managed===true||this.document.legacyMigrated===true||this.document.accounts.length>0;}
   /** Identity is the main API endpoint + key, not a display label, login method or ciphertext. */

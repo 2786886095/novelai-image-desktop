@@ -23,11 +23,11 @@ void main() {
    await tester.pumpWidget(ChangeNotifierProvider.value(value:state,child:MaterialApp(theme:androidStudioTheme(StudioTheme.light()),home:const SettingsScreen())));await tester.pumpAndSettle();
    final link=find.byKey(const ValueKey('novelai-relay-recommendation'));expect(link,findsOneWidget);
    expect(tester.getTopLeft(link).dy,lessThan(130));
-   if(platform==TargetPlatform.android)expect(tester.getBottomLeft(link).dy,lessThanOrEqualTo(tester.getTopLeft(find.byKey(const ValueKey('android-settings-search'))).dy));
-   else expect(tester.getTopLeft(link).dy,lessThan(tester.getTopLeft(find.byType(NovelAiAccountSelector)).dy));
+   if(platform==TargetPlatform.android){expect(tester.getBottomLeft(link).dy,lessThanOrEqualTo(tester.getTopLeft(find.byKey(const ValueKey('android-settings-search'))).dy));}
+   else {expect(tester.getTopLeft(link).dy,lessThan(tester.getTopLeft(find.byType(NovelAiAccountSelector)).dy));}
    expect(find.byKey(const ValueKey('novelai-relay-logo')),findsOneWidget);
    await tester.tap(link);await tester.pumpAndSettle();expect(calls,hasLength(1));expect(calls.single.method,'launch');expect((calls.single.arguments as Map)['url'],'https://nai.langbai.cc');expect((calls.single.arguments as Map)['useWebView'],false);expect(jsonEncode(state.settings.toJson()),before);expect(tester.takeException(),isNull);
-   await tester.pumpWidget(const SizedBox());await tester.pump();
+   await tester.pumpWidget(const SizedBox());await tester.pump();debugDefaultTargetPlatformOverride=previous;
   });
  }
 }

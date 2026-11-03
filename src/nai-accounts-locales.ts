@@ -1,5 +1,10 @@
 import type { AppLanguage } from './types';
 export const NAI_ACCOUNT_LOCALES = {
+ relayImported:['中转账号已导入并选中，已尝试刷新积分；余额不可用时不影响保存。','中轉帳戶已匯入並選取，已嘗試更新點數；無餘額資料不影響儲存。','Relay account imported and selected; balance refresh attempted. Unavailable balance does not undo saving.','中継アカウントを読み込み選択しました。残高更新を試行し、残高取得失敗でも保存は維持します。','중계 계정을 가져와 선택하고 잔액 새로고침을 시도했습니다. 잔액 조회 실패는 저장에 영향을 주지 않습니다.'],
+ relaySavedBusy:['已添加，任务结束后可切换','已新增，任務結束後可切換','Added; switch accounts after the task finishes.','追加しました。タスク完了後に切り替えられます。','추가되었습니다. 작업 종료 후 전환할 수 있습니다.'],
+ relayInvalidLink:['导入链接无效，请回网站重新点击一键导入。','匯入連結無效，請回網站重新點擊。','Invalid import link. Return to the website and click Import again.','リンクが無効です。サイトで再度インポートしてください。','가져오기 링크가 잘못되었습니다. 웹사이트에서 다시 클릭하세요.'],
+ relayUnavailable:['网站导入接口尚未就绪或返回格式不兼容，未保存账号；请回网站重新点击。','網站匯入介面尚未就緒或格式不相容，未儲存帳戶；請回網站重試。','Website import endpoint is unavailable or incompatible; no account saved. Return to the website for a new code.','サイトの取込APIが未提供か非互換です。保存せず、サイトで新しいコードを取得してください。','웹사이트 가져오기 API가 준비되지 않았거나 호환되지 않습니다. 저장하지 않았습니다. 새 코드를 받으세요.'],
+ relayImportFailed:['账号导入未完成，请回网站重新点击一键导入；不会重试该导入码。','帳戶匯入未完成，請回網站重新點擊；不會重試此代碼。','Import did not complete. Return to the website and click Import again; this code will not be retried.','取込が完了しませんでした。サイトで再操作してください。このコードは再試行しません。','가져오기를 완료하지 못했습니다. 웹사이트에서 다시 클릭하세요. 이 코드는 재시도하지 않습니다.'],
  relayRecommendation:['NovelAI 中转站推荐','NovelAI 中轉站推薦','Recommended NovelAI relay','NovelAI 中継サイトの紹介','NovelAI 중계 사이트 추천'],
  relayBrowserHint:['在系统浏览器打开第三方站点 nai.langbai.cc；不会更改 API 配置。','在系統瀏覽器開啟第三方網站 nai.langbai.cc；不會變更 API 設定。','Open third-party site nai.langbai.cc in your browser; API settings stay unchanged.','第三者サイト nai.langbai.cc をブラウザーで開きます。API設定は変更しません。','브라우저에서 외부 사이트 nai.langbai.cc를 엽니다. API 설정은 바뀌지 않습니다.'],
  relayOpenFailed:['无法打开系统浏览器，请手动访问 nai.langbai.cc。','無法開啟系統瀏覽器，請手動造訪 nai.langbai.cc。','Could not open your browser. Visit nai.langbai.cc manually.','ブラウザーを開けませんでした。nai.langbai.cc を直接開いてください。','브라우저를 열 수 없습니다. nai.langbai.cc에 직접 접속하세요.'],

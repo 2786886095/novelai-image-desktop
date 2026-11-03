@@ -20,7 +20,7 @@ function validationText(code:NaiAccountValidationResult['code']):NaiAccountTextK
 export function NaiAccountFeedback({message,httpStatus,nt}:{message:NaiAccountTextKey|'';httpStatus?:number;nt:(key:NaiAccountTextKey)=>string}) {
  if(!message)return null;
  const passed=message==='validationPassed'||message==='saved';
- const failed=(message.startsWith('validation')&&!passed)||['authFailed','networkFailed','otpUnsupported','loginChallenge','loginRateLimited','loginInvalidResponse','relayOpenFailed'].includes(message);
+ const failed=(message.startsWith('validation')&&!passed)||['authFailed','networkFailed','otpUnsupported','loginChallenge','loginRateLimited','loginInvalidResponse','relayOpenFailed','relayInvalidLink','relayUnavailable','relayImportFailed'].includes(message);
  const pending=message==='validating';
  const kind=passed?'success':failed?'error':pending?'pending':'info';
  const title=passed?nt(message==='saved'?'validationSaved':'validationSuccess'):failed?nt('validationFailure'):nt(message);
@@ -52,6 +52,14 @@ export function NaiAccountManager({variant='toolbar',onSelectionChange}:{variant
  const clearSecrets=useCallback(()=>{secretRequest.current++;setRevealed(undefined);setShowToken(false);setToken('');setPassword('');},[]);
  const close=useCallback(()=>{deleteAbort.current?.abort();clearSecrets();setClosing(true);closeTimer.current=window.setTimeout(()=>{setOpen(false);setClosing(false);trigger.current?.focus();},motionReduced()?0:160);},[clearSecrets]);
  useEffect(()=>()=>{deleteAbort.current?.abort();secretRequest.current++;window.clearTimeout(closeTimer.current);},[]);
+ const importNoticeId=useRef('');
+ useEffect(()=>{const api=bridge();if(!api)return;const notice=(value:import('../../electron/ipc/relay-account-import').RelayImportNotice|undefined)=>{
+  if(!value||value.id===importNoticeId.current)return;importNoticeId.current=value.id;
+  const keys={imported:'relayImported','saved-busy':'relaySavedBusy','invalid-link':'relayInvalidLink',unavailable:'relayUnavailable',failed:'relayImportFailed'} as const;
+  if(!(value.status in keys))return;setMessage(keys[value.status]);setClosing(false);if(variant==='toolbar')setOpen(true);
+  if(value.selected)void syncActiveAccount().catch(()=>{});
+  window.dispatchEvent(new Event('studio:nai-accounts-changed'));
+ };const off=api.onRelayImportNotice?.(notice);void api.relayImportStatus?.().then(notice).catch(()=>{});return()=>off?.();},[]);
  const generating=useAppStore(s=>s.isGenerating);
  const refresh=async()=>{const [list,state]=await Promise.all([bridge()!.list(),bridge()!.state()]);setAccounts(list);setSelected(state.selectedId);setHostBusy(state.busy);if(state.migrationIssue)setMessage('migrationFailed');onSelectionChange?.(state.selectedId);};
  useEffect(()=>{if(!bridge())return;const changed=()=>void refresh().catch(()=>setMessage('unavailable'));window.addEventListener('studio:nai-accounts-changed',changed);void refresh().catch(()=>setMessage('unavailable'));const id=setInterval(()=>void bridge()!.state().then(s=>{setSelected(s.selectedId);setHostBusy(s.busy);onSelectionChange?.(s.selectedId);}).catch(()=>{}),1500);return()=>{clearInterval(id);window.removeEventListener('studio:nai-accounts-changed',changed);};},[]);

@@ -9,6 +9,8 @@ import { activateNaiAccount, restoreNaiAccount, naiAccountsBusy, configureNaiAcc
 import { readStore } from './store';
 import {migrateLegacyNaiAccount} from './nai-accounts-migration';
 import {validateNaiAccountReadOnly,requireNaiAccountValidation} from './nai-accounts-validation';
+import {saveRelayAccount} from './relay-account-import';
+export function importRelayAccount(input:NaiAccountInput,extraBusy:()=>boolean,refresh:()=>Promise<unknown>){return saveRelayAccount(getVault(),input,extraBusy,refresh);}
 let vault: NaiAccountsVault | undefined;
 let migrationIssue:string|undefined;
 function getVault() {
