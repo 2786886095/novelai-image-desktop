@@ -22,7 +22,7 @@ void main(){
  setUpAll(()async{final zh=FontLoader('MenuZh')..addFont(rootBundle.load('assets/ui-fonts/LXGWMarkerGothic-Regular.ttf'));await zh.load();final icons=FontLoader('MaterialIcons')..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));await icons.load();});
  for(final size in [const Size(390,844),const Size(320,640),const Size(800,360)]){
   for(final scale in [1.0,2.0]){
-   testWidgets('third selected member popup stays below fixed toolbar $size scale=$scale',(t)async{
+   testWidgets('third selected member popup is centered below toolbar with icons $size scale=$scale',(t)async{
     t.view.physicalSize=size;t.view.devicePixelRatio=1;final host=GlobalKey<_HostState>();
     final previousShadows=debugDisableShadows;debugDisableShadows=false;
     try{
@@ -39,10 +39,11 @@ void main(){
      // The selected third item used to align to the button and move the whole
      // dropdown upwards. The popup surface, not just its first text, must clear it.
      // ignore: avoid_print
-     print('MENU_METRICS ${jsonEncode({'toolbarBottom':before.bottom,'menuTop':menu.top,'triggerLeft':triggerRect.left,'menuLeft':menu.left,'overlapsToolbar':menu.top<before.bottom})}');
+     print('MENU_METRICS ${jsonEncode({'toolbarBottom':before.bottom,'menuTop':menu.top,'triggerLeft':triggerRect.left,'menuLeft':menu.left,'overlapsToolbar':menu.top<before.bottom,'menuCenter':menu.center.dx,'barCenter':before.center.dx,'destinationIcons':find.descendant(of:option(8),matching:find.byKey(const ValueKey('android-member-icon-8'))).evaluate().isNotEmpty})}');
      await capture(t,'popup-${size.width.toInt()}-${size.height.toInt()}-scale$scale');
      expect(menu.top,greaterThanOrEqualTo(before.bottom),reason:'Popup must open below the fixed toolbar, not align the selected row over it.');
-     expect((menu.left-triggerRect.left).abs(),lessThanOrEqualTo(8));
+     expect((menu.center.dx-before.center.dx).abs(),lessThanOrEqualTo(1),reason:'The menu must be centered in the workbench, not aligned to the left edge.');
+     expect(find.descendant(of:option(8),matching:find.byKey(const ValueKey('android-member-icon-8'))),findsOneWidget);
      expect(menu.left,greaterThanOrEqualTo(8));expect(menu.right,lessThanOrEqualTo(size.width-8));
      expect(menu.bottom,lessThanOrEqualTo(size.height-8));
      expect(t.getRect(bar),before);
@@ -67,7 +68,7 @@ class _HostState extends State<_Host>{
    builder:(c,child)=>MediaQuery(data:MediaQuery.of(c).copyWith(textScaler:TextScaler.linear(widget.scale),padding:const EdgeInsets.only(top:24,bottom:16),disableAnimations:true),child:child!),
    home:AndroidStudioShell(selectedIndex:index,onDestinationSelected:(i)=>setState(()=>index=i),language:'zh-CN',
     recommendation:const IconButton(onPressed:null,icon:Icon(Icons.public)),
-    destinations:[for(final label in labels)StudioDestination(label:label,icon:Icons.apps,selectedIcon:Icons.apps)],
+    destinations:[for(final label in labels)StudioDestination(label:label,icon:label=='在线画廊'?Icons.public:label=='图库'?Icons.photo_library_outlined:label=='收藏夹'?Icons.star_outline:Icons.data_object,selectedIcon:label=='在线画廊'?Icons.public:Icons.apps)],
     pages:[for(var i=0;i<15;i++)ListView(children:[for(var j=0;j<30;j++)ListTile(title:Text('内容 $i / $j'))])])));
  }
 }

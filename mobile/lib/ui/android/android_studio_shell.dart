@@ -56,6 +56,8 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
 
   late final _chrome = List.generate(15, (_) => WorkbenchChromeController());
   bool _searchOpen = false;
+  final _memberBarAnchor = GlobalKey(debugLabel: 'member-bar-anchor');
+  bool _memberMenuOpen = false;
 
   @override
   void dispose() { for (final controller in _chrome) { controller.dispose(); } super.dispose(); }
@@ -151,13 +153,55 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
     );
   }
 
+  Future<void> _showMemberMenu(List<int> members) async {
+    if (_memberMenuOpen) return;
+    final bar = _memberBarAnchor.currentContext?.findRenderObject() as RenderBox?;
+    final overlay = Navigator.of(context).overlay?.context.findRenderObject() as RenderBox?;
+    if (bar == null || overlay == null) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    final rect = bar.localToGlobal(Offset.zero, ancestor: overlay) & bar.size;
+    final media = MediaQuery.of(context);
+    final width = (rect.width - 24).clamp(180.0, 280.0);
+    final top = rect.bottom + 4;
+    final left = rect.center.dx - width / 2;
+    final height = (overlay.size.height - top - media.padding.bottom -
+        media.viewInsets.bottom - 8).clamp(48.0, 360.0);
+    _memberMenuOpen = true;
+    try {
+      final selected = await showMenu<int>(
+        context: context,
+        // Center the surface in the workbench and grow down from the toolbar.
+        // Never set initialValue: it would align the selected row over the trigger.
+        position: RelativeRect.fromLTRB(left, top, overlay.size.width - left - width, overlay.size.height - top),
+        constraints: BoxConstraints(minWidth: width, maxWidth: width, maxHeight: height),
+        menuPadding: const EdgeInsets.symmetric(vertical: 6),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        clipBehavior: Clip.antiAlias,
+        popUpAnimationStyle: media.disableAnimations ? AnimationStyle.noAnimation : null,
+        items: [for (final index in members) PopupMenuItem<int>(
+          key: ValueKey('android-member-option-$index'), value: index,
+          child: Semantics(selected: index == widget.selectedIndex, child: Row(children: [
+            Icon(index == widget.selectedIndex ? widget.destinations[index].selectedIcon : widget.destinations[index].icon,
+              key: ValueKey('android-member-icon-$index'), size: 20,
+              color: index == widget.selectedIndex ? Theme.of(context).colorScheme.primary : null),
+            const SizedBox(width: 12),
+            Expanded(child: Text(widget.destinations[index].label, maxLines: 2, overflow: TextOverflow.ellipsis)),
+            if (index == widget.selectedIndex) ...[
+              const SizedBox(width: 8),
+              Icon(Icons.check, size: 20, color: Theme.of(context).colorScheme.primary),
+            ],
+          ])))],
+      );
+      if (mounted && selected != null) _select(selected);
+    } finally {
+      _memberMenuOpen = false;
+    }
+  }
+
   Widget _compactBar(BuildContext context, WorkbenchChrome? chrome) {
     final members = androidOrderedGroupMembers(_group, widget.destinationOrder);
     final search = _searchOpen ? chrome?.search : null;
-    final media = MediaQuery.of(context);
-    final menuHeight = (media.size.height - media.padding.top - 56 -
-        media.padding.bottom - media.viewInsets.bottom - 16).clamp(48.0, 360.0);
-    return Material(
+    return SizedBox(key: _memberBarAnchor, child: Material(
       key: const ValueKey('compact-workbench-bar'),
       color: LangbaiAndroidTokens.of(context).canvas,
       child: SizedBox(height: 56, child: Row(children: [
@@ -168,33 +212,17 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
             icon: const Icon(Icons.arrow_back))
         else if (chrome?.bar.leading != null) chrome!.bar.leading!,
         Expanded(child: search ?? Padding(padding: const EdgeInsets.only(left: 12, right: 4),
-          child: PopupMenuButton<int>(
-            key: const ValueKey('android-member-selector'),
-            tooltip: widget.destinations[widget.selectedIndex].label,
-            position: PopupMenuPosition.under,
-            offset: const Offset(0, 4),
-            // Do not set initialValue: centering the selected third row over
-            // the trigger is what pulled the old dropdown across the toolbar.
-            constraints: BoxConstraints(minWidth: 180, maxWidth: 280, maxHeight: menuHeight),
-            menuPadding: const EdgeInsets.symmetric(vertical: 6),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            clipBehavior: Clip.antiAlias,
-            popUpAnimationStyle: MediaQuery.disableAnimationsOf(context) ? AnimationStyle.noAnimation : null,
-            onOpened: () => FocusManager.instance.primaryFocus?.unfocus(),
-            onSelected: _select,
-            itemBuilder: (_) => [for (final index in members) PopupMenuItem<int>(
-              key: ValueKey('android-member-option-$index'), value: index,
-              child: Semantics(selected: index == widget.selectedIndex, child: Row(children: [
-                SizedBox(width: 28, child: index == widget.selectedIndex
-                    ? Icon(Icons.check, size: 20, color: Theme.of(context).colorScheme.primary) : null),
-                Expanded(child: Text(widget.destinations[index].label, maxLines: 2, overflow: TextOverflow.ellipsis)),
-              ])))],
-            child: SizedBox(height: 48, child: Row(children: [
-              Expanded(child: Text(widget.destinations[widget.selectedIndex].label,
-                  maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall)),
-              const Icon(Icons.keyboard_arrow_down, size: 20),
-            ])),
-          ))),
+          child: Tooltip(message: widget.destinations[widget.selectedIndex].label,
+            child: InkWell(
+              key: const ValueKey('android-member-selector'),
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _showMemberMenu(members),
+              child: SizedBox(height: 48, child: Row(children: [
+                Expanded(child: Text(widget.destinations[widget.selectedIndex].label,
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall)),
+                const Icon(Icons.keyboard_arrow_down, size: 20),
+              ])),
+            )))),
         if (search == null) ...[
           if (widget.recommendation != null) widget.recommendation!,
           IconButton(key: const ValueKey('compact-workbench-search'),
@@ -208,7 +236,7 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
           tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
           onPressed: () => _showPageActions(chrome), icon: const Icon(Icons.more_horiz)),
       ])),
-    );
+    ));
   }
 
   Future<void> _showPageActions(WorkbenchChrome? chrome) => showModalBottomSheet<void>(
