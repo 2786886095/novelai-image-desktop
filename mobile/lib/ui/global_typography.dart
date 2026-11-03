@@ -23,7 +23,7 @@ ThemeData withUiFont(ThemeData theme,String? family)=>family==null?theme:theme.c
 /// AppBar clamps its inherited MediaQuery. Capture the app scaler outside it so
 /// global sizing also reaches titles, without scaling Material icon glyphs.
 Widget studioAppBarTitle(BuildContext context,Widget child)=>MediaQuery(
-  data:MediaQuery.of(context),child:DefaultTextStyle.merge(maxLines:2,overflow:TextOverflow.ellipsis,child:child));
+  data:MediaQuery.of(context),child:DefaultTextStyle.merge(maxLines:1,overflow:TextOverflow.ellipsis,child:child));
 double studioRoleFactor(double factor,double growth)=>1+(factor-1)*growth;
 ThemeData withUiTextLayout(ThemeData theme,TextScaler scaler){
   final factor=scaler is StudioTextScaler?scaler.factor:1.0;
@@ -45,4 +45,13 @@ ThemeData withUiTextLayout(ThemeData theme,TextScaler scaler){
     textButtonTheme:TextButtonThemeData(style:(theme.textButtonTheme.style??const ButtonStyle()).copyWith(textStyle:WidgetStatePropertyAll(text.labelLarge))),
     navigationBarTheme:theme.navigationBarTheme.copyWith(labelTextStyle:WidgetStatePropertyAll(text.labelMedium)),
     navigationRailTheme:theme.navigationRailTheme.copyWith(selectedLabelTextStyle:text.labelLarge,unselectedLabelTextStyle:text.labelLarge));
+}
+
+/// Fixed chrome grows with the user's text size, never behind the status bar.
+double studioToolbarHeight(BuildContext context, {bool subtitle = false}) {
+  final scaler = MediaQuery.textScalerOf(context);
+  final theme = Theme.of(context);
+  final title = scaler.scale(theme.appBarTheme.titleTextStyle?.fontSize ?? theme.textTheme.titleLarge?.fontSize ?? 22) * 1.3;
+  final small = subtitle ? scaler.scale(theme.textTheme.labelSmall?.fontSize ?? 11) * 1.4 + 4 : 0;
+  return (title + small + 16).clamp(56.0, 160.0);
 }

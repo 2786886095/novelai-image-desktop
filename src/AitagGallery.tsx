@@ -1355,6 +1355,23 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
   const [result, setResult] = useState(() => gallerySession.result);
   const [loading, setLoading] = useState(!gallerySession.loaded);
   const [error, setError] = useState<Error | null>(null);
+  const [configError, setConfigError] = useState(false);
+  const [configLoading, setConfigLoading] = useState(false);
+  const reloadConfig = useCallback(async () => {
+    setConfigLoading(true);
+    try {
+      const next = normalizeAitagConfig(await window.naiDesktop.aitagConfig());
+      if (!next.availableMonths.length) throw new Error("AITAG_CONFIG_UNAVAILABLE");
+      setConfig(next);
+      gallerySession.config = next;
+      setConfigError(false);
+    } catch {
+      // Never masquerade a failed/blocked config request as 'only older works'.
+      // Retain the last valid month list and let the user explicitly retry.
+      setConfigError(true);
+    } finally { setConfigLoading(false); }
+  }, []);
+
   const [selected, setSelected] = useState<AitagWorkDetail | null>(gallerySession.selected);
   const [selectedImage, setSelectedImage] = useState(gallerySession.selectedImage);
   const [detailPreviewOpen, setDetailPreviewOpen] = useState(false);
@@ -1432,7 +1449,9 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
   }, [config, loadDetail, page, pageSize, prompt, query, result.items.length, sort, timeRange]);
 
   useEffect(() => {
-    if (gallerySource !== "aitag" || gallerySession.loaded) return;
+    if (gallerySource !== "aitag") return;
+    // A mounted/retained list does not mean optional configuration ever loaded.
+    if (gallerySession.loaded) { void reloadConfig(); return; }
     let active = true;
     void (async () => {
       const snapshot = await window.naiDesktop.aitagSnapshot().catch(() => null);
@@ -1450,12 +1469,7 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
       }
       try {
         // CDN/filter config is optional. Preserve a ready list even when it is slow.
-        void window.naiDesktop.aitagConfig().then(rawConfig => {
-          if (!active) return;
-          const nextConfig = normalizeAitagConfig(rawConfig);
-          setConfig(nextConfig);
-          gallerySession.config = nextConfig;
-        }).catch(() => undefined);
+        void reloadConfig();
         const rawResult = await window.naiDesktop.aitagSearchFresh({ page: 1, pageSize, query: "", prompt: "", sort: "new", timeRange: "all" });
         if (!active) return;
         const nextResult = normalizeAitagSearch(rawResult);
@@ -1480,14 +1494,9 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
     await window.naiDesktop.aitagClearDataCache();
     setSelected(null);
     setSelectedImage(0);
-    try {
-      const raw = await window.naiDesktop.aitagConfig();
-      setConfig(normalizeAitagConfig(raw));
-    } catch {
-      // Searching still works with the last known CDN/config values.
-    }
+    await reloadConfig();
     await search(page);
-  }, [page, search]);
+  }, [page, search, reloadConfig]);
 
   const openWork = async (work: AitagWorkSummary) => {
     rememberList();
@@ -1740,7 +1749,7 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
         </div>
         <div className="aitag-sort-tabs">
           <button type="button" className={sort === "new" ? "active" : ""} onClick={() => { setSort("new"); setTimeRange("all"); void search(1, { sort: "new", timeRange: "all" }); }}>{text.newest}</button>
-          <button type="button" className={sort === "monthly" ? "active" : ""} onClick={() => { setSort("monthly"); setTimeRange("current"); void search(1, { sort: "monthly", timeRange: "current" }); }}>{text.monthly}</button>
+          <button type="button" className={sort === "monthly" ? "active" : ""} onClick={() => { setSort("monthly"); setTimeRange("current"); void reloadConfig(); void search(1, { sort: "monthly", timeRange: "current" }); }}>{text.monthly}</button>
           <label className="aitag-time-filter">
             <span>{text.timeRange}</span>
             <SelectMenuCompat value={timeRange} onChange={(event) => { const value = event.target.value; setTimeRange(value); void search(1, { timeRange: value }); }}>
@@ -1752,6 +1761,10 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
         </div>
       </section>
 
+      {sort === "monthly" && configError ? <div className="aitag-state error" role="status">
+        <span>{({"zh-CN":"月份列表加载失败；保留已有月份，请重试。", "zh-TW":"月份清單載入失敗；保留已有月份，請重試。", "en-US":"Month list could not load. Existing months are retained; retry.", "ja-JP":"月一覧を読み込めません。既存の月は保持されています。再試行してください。", "ko-KR":"월 목록을 불러오지 못했습니다. 기존 목록은 유지됩니다. 다시 시도하세요."})[language]}</span>
+        <button type="button" className="btn secondary" disabled={configLoading} onClick={() => void reloadConfig()}>{configLoading ? text.loading : text.retry}</button>
+      </div> : null}
       {(loading && result.items.length === 0) || detailLoading ? <div className="aitag-state">{text.loading}</div> : null}
       {error ? <div className="aitag-state error"><span role="alert">{formatAitagFailure(error, language)}</span><button type="button" className="btn secondary" onClick={() => void refresh()}>{text.retry}</button></div> : null}
       {!loading && !error && result.items.length === 0 ? <div className="aitag-state">{text.empty}</div> : null}

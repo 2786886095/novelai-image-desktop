@@ -302,7 +302,7 @@ class _AndroidSettingsHubState extends State<AndroidSettingsHub> {
                     ? androidSettingsCopy(widget.language, 'title')
                     : androidSettingsCategoryTitle(
                         widget.language, widget.category!)))),
-            body: Column(children: [
+            body: SafeArea(top: false, bottom: false, child: Column(children: [
               if (widget.topBanner != null)
                 Padding(padding: androidPagePadding(context, bottom: 12),
                     child: widget.topBanner!),
@@ -347,6 +347,6 @@ class _AndroidSettingsHubState extends State<AndroidSettingsHub> {
                   if (_query.isNotEmpty) _results(),
                 ]);
               })),
-            ])));
+            ]))));
   }
 }

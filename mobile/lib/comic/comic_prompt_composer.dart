@@ -201,7 +201,7 @@ class _ComicPromptComposerViewState extends State<ComicPromptComposerView> {
                   Text(t('description'),
                       style: Theme.of(context).textTheme.bodySmall),
                   const SizedBox(height: 12),
-                  if (!c.loaded) const LinearProgressIndicator(),
+                  if (!c.loaded) const Padding(padding: EdgeInsets.only(bottom: 16), child: LinearProgressIndicator()),
                   if (c.draftError != null)
                     Padding(
                         padding: const EdgeInsets.symmetric(vertical: 10),

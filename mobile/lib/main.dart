@@ -1,3 +1,4 @@
+import 'ui/startup_update_prompt.dart';
 import 'screens/novelai_accounts_screen.dart';
 import 'screens/style_library_screen.dart';
 import 'i18n/style_library_text.dart';
@@ -128,6 +129,7 @@ class _HomeShellState extends State<HomeShell> {
   List<int>? _navigationOrder;
   bool _onboardingScheduled = false;
   bool _v5NoticeScheduled = false;
+  bool _v5NoticeCompleted = false;
   bool _incomingBackupInitialChecked = !Platform.isAndroid && !Platform.isIOS;
   bool _incomingBackupRouteScheduled = false;
   final List<String> _pendingIncomingBackups = [];
@@ -387,11 +389,13 @@ class _HomeShellState extends State<HomeShell> {
         !currentModelIsV5 &&
         !_v5NoticeScheduled) {
       _v5NoticeScheduled = true;
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _showV5MigrationNotice());
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        try { await _showV5MigrationNotice(); }
+        finally { if (mounted) setState(() => _v5NoticeCompleted = true); }
+      });
     }
     if (isAndroidRedesign(context)) {
-      return AndroidStudioShell(
+      return StartupUpdatePrompt(ready: !handlingIncomingBackup && !needsOnboarding && (currentModelIsV5 || _v5NoticeCompleted), child: AndroidStudioShell(
         selectedIndex: _index,
         onDestinationSelected: (index) {
           FocusManager.instance.primaryFocus?.unfocus();
@@ -407,9 +411,9 @@ class _HomeShellState extends State<HomeShell> {
         nestedDetailActive: _index == 12 && _androidSettingsDetailOpen,
         destinationOrder: _navigationOrder,
         onDestinationOrderChanged: _saveNavigationOrder,
-      );
+      ));
     }
-    return StudioAdaptiveShell(
+    return StartupUpdatePrompt(ready: !handlingIncomingBackup && !needsOnboarding && (currentModelIsV5 || _v5NoticeCompleted), child: StudioAdaptiveShell(
       selectedIndex: _index,
       onDestinationSelected: (index) {
         FocusManager.instance.primaryFocus?.unfocus();
@@ -421,7 +425,7 @@ class _HomeShellState extends State<HomeShell> {
       allFeaturesLabel: shellText.allFeatures,
       destinationOrder: _navigationOrder,
       onDestinationOrderChanged: _saveNavigationOrder,
-    );
+    ));
   }
 
   Future<void> _showNetworkOnboarding() async {

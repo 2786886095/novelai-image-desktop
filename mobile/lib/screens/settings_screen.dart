@@ -1044,7 +1044,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         aboutText.sectionTitle: 'about',
       };
       return AndroidSettingsHub(
-        topBanner: const NovelAiRelayRecommendation(),
+        topBanner: const NovelAiRelayRecommendation(compact: true),
         active: widget.androidActive,
         language: s.language,
         entries: _androidEntries(settingsChildren, sectionIds, s.language),
@@ -1066,7 +1066,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     return Scaffold(
       appBar: AppBar(title: studioAppBarTitle(context, Text(settingsText.title))),
-      body: StudioContent(
+      body: SafeArea(top: false, child: Column(children: [
+        const Padding(padding: EdgeInsets.fromLTRB(16, 8, 16, 8), child: NovelAiRelayRecommendation(compact: true)),
+        Expanded(child: StudioContent(
           child: ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         // Add the keyboard inset to the bottom so the lower fields/buttons can
@@ -1074,8 +1076,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         // nav can otherwise leave them covered).
         padding: EdgeInsets.fromLTRB(
             16, 16, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
-        children: const <Widget>[NovelAiRelayRecommendation(), SizedBox(height: 12)] + settingsChildren,
-      )),
+        children: settingsChildren,
+      ))),
+      ])),
     );
   }
 

@@ -94,6 +94,9 @@ ThemeData androidStudioTheme(ThemeData base) {
       t
     ],
     colorScheme: scheme,
+    splashFactory: InkRipple.splashFactory,
+    splashColor: scheme.primary.withOpacity(.14),
+    highlightColor: scheme.primary.withOpacity(.08),
     scaffoldBackgroundColor: t.canvas,
     cardColor: t.card,
     appBarTheme: base.appBarTheme.copyWith(

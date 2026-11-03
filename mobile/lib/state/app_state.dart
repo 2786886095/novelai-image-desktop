@@ -115,6 +115,9 @@ class AppState extends ChangeNotifier {
   bool get naiAccountLocked => _naiChanging || _naiOperationCount > 0 || busy ||
       generationQueueRunning || queueAdding || naiAccounts.locked ||
       (api is NovelAiAccountApi && (api as NovelAiAccountApi).inFlight);
+  bool get updateTaskBusy => naiAccountLocked || postprocessRunning ||
+      (_comic?.queueRunning ?? false) || (_japaneseComic?.queueRunning ?? false) ||
+      (_batchRedraw?.queueRunning ?? false);
   void _applyNaiAccount() {
     final active = naiAccounts.active;
     if (active == null) return;
@@ -3668,6 +3671,13 @@ class AppState extends ChangeNotifier {
 
   Future<void> installAppUpdate() async {
     if(updateInstalling||updateInfo?.hasUpdate!=true)return;
+    if(updateTaskBusy) { status = switch(settings.language) {
+      'en-US' => 'A task is running. Update after it finishes.',
+      'zh-TW' => '任務執行中，請結束後更新。',
+      'ja-JP' => 'タスクの終了後に更新してください。',
+      'ko-KR' => '작업이 끝난 후 업데이트하세요.',
+      _ => '任务执行中，请结束后更新。',
+    }; notifyListeners(); return; }
     updateInstalling=true;updateProgress=0;notifyListeners();
     try {
       final stage=await ApkUpdate.install(settings,updateInfo!, (value){updateProgress=value;notifyListeners();});

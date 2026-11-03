@@ -2366,6 +2366,14 @@ class _PreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final text = generateScreenTextFor(state.settings.language);
+    final unavailable = switch(state.settings.language) {
+      'en-US' => 'Image unavailable. Reselect the image or its output folder; history is retained.',
+      'zh-TW' => '圖片暫時無法讀取，請重新選取圖片或輸出目錄；歷史記錄已保留。',
+      'ja-JP' => '画像を読み込めません。画像または出力先を再選択してください。履歴は保持されています。',
+      'ko-KR' => '이미지를 읽을 수 없습니다. 이미지 또는 출력 폴더를 다시 선택하세요. 기록은 유지됩니다.',
+      _ => '图片暂时无法读取，请重新选择图片或输出目录；历史记录已保留。',
+    };
+    Widget failure(BuildContext c,Object e,StackTrace? stack)=>Center(child:Padding(padding:const EdgeInsets.all(16),child:Text(unavailable,textAlign:TextAlign.center)));
     final streamText = _streamPreviewText(state.settings.language);
     final current = state.current;
     final work = state.workbenchImage;
@@ -2375,7 +2383,8 @@ class _PreviewCard extends StatelessWidget {
     final historyIndex = history.indexWhere((item) => item.filePath == path);
     final paths = historyIndex < 0 ? <String>[if (path != null) path] :
         history.map((item) => item.filePath).toList();
-    return AspectRatio(
+    return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    AspectRatio(
       aspectRatio: aspectRatio,
       child: Card(
         clipBehavior: Clip.antiAlias,
@@ -2391,15 +2400,16 @@ class _PreviewCard extends StatelessWidget {
               )
             else if (path != null && ImageFiles.keepVisible(path))
               ZoomableImage(
-                image: imageFile(File(path), fit: BoxFit.contain),
-                gallery: paths.map((p) => imageFile(File(p), fit: BoxFit.contain)).toList(),
+                key: const ValueKey("generate-preview-viewport"),
+                image: imageFile(File(path), fit: BoxFit.contain, errorBuilder: failure),
+                gallery: paths.map((p) => imageFile(File(p), fit: BoxFit.contain, errorBuilder: failure)).toList(),
                 imagePaths: paths,
                 initialIndex: historyIndex < 0 ? 0 : historyIndex,
                 onIndexChanged: historyIndex < 0 ? null :
                     (index) => state.setWorkbenchFromHistory(history[index]),
               )
             else
-              Center(child: Text(text.previewEmpty)),
+              Center(child: Padding(padding:const EdgeInsets.all(16),child:Text(path == null ? text.previewEmpty : unavailable,textAlign:TextAlign.center))),
             if (state.busy && livePreview == null)
               Container(
                   color: Colors.black38,
@@ -2450,29 +2460,18 @@ class _PreviewCard extends StatelessWidget {
                   ),
                 ),
               ),
-            if (!state.busy)
-              PositionedDirectional(
-                end: 8,
-                bottom: 8,
-                child: Wrap(
-                  spacing: 8,
-                  children: [
-                    FilledButton.tonalIcon(
-                        onPressed: onPick,
-                        icon: const Icon(Icons.image),
-                        label: Text(text.loadImage)),
-                    if (work != null)
-                      FilledButton.tonalIcon(
-                          onPressed: state.clearWorkbench,
-                          icon: const Icon(Icons.close),
-                          label: Text(text.switchToTextToImage)),
-                  ],
-                ),
-              ),
+
           ],
         ),
       ),
-    );
+    ),
+    if (!state.busy) Padding(padding: const EdgeInsets.only(top: 8),
+      child: Wrap(alignment: WrapAlignment.end, spacing: 8, runSpacing: 8, children: [
+        FilledButton.tonalIcon(onPressed: onPick, icon: const Icon(Icons.image), label: Text(text.loadImage)),
+        if (work != null) FilledButton.tonalIcon(onPressed: state.clearWorkbench,
+          icon: const Icon(Icons.close), label: Text(text.switchToTextToImage)),
+      ])),
+    ]);
   }
 }
 

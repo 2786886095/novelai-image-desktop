@@ -1,3 +1,4 @@
+import 'package:novelai_mobile/screens/prompt/android_prompt_text.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -61,6 +62,7 @@ typedef _SurfaceBuilder = Widget Function(AppState state);
 class _AuditJourneyState extends AppState {
   @override
   Future<void> reconcileMissingHistory() async {}
+  void showCurrentFixture() { current=history.first; notifyListeners(); }
 }
 
 class _FakePromptCodexService extends PromptCodexService {
@@ -224,6 +226,15 @@ Future<void> _loadAuditFonts() async {
   ]);
 }
 
+Future<void> _revealStyleDisclosure(WidgetTester tester, String locale) async {
+  final finder = find.widgetWithText(ExpansionTile, androidPromptText(locale, 'styleLibrary'));
+  if (finder.evaluate().isNotEmpty) {
+    await tester.ensureVisible(finder);
+    await tester.tap(finder);
+    await tester.pumpAndSettle();
+  }
+}
+
 Future<void> _savePng(GlobalKey boundaryKey, String path) async {
   final boundary =
       boundaryKey.currentContext!.findRenderObject()! as RenderRepaintBoundary;
@@ -330,6 +341,8 @@ void _seedReferencePresetAuditData(AppState state) {
 }
 
 List<({String name, _SurfaceBuilder build})> _surfaces() => [
+      (name: 'japanese-comic', build: (state) { final c=state.japaneseComic;
+        c.loaded=true;c.project=ComicProject.empty(state.params);return ComicScreen(controller:c,onBack:(){}); }),
       (name: 'home', build: (_) => const HomeShell()),
       (name: 'generate', build: (_) => const GenerateScreen()),
       (
@@ -500,10 +513,12 @@ void main() {
                 .timeout(const Duration(seconds: 10));
           }
         });
+        state.showCurrentFixture();
+        await tester.pumpAndSettle();
         await tester.pump();
         if (journey == 'editor') {
           final prompt = find.byType(PromptEditor).at(1);
-          await tester.ensureVisible(prompt); await tester.tap(prompt);
+          await tester.ensureVisible(prompt); await tester.pumpAndSettle(); await tester.tap(prompt);
           await tester.pumpAndSettle();
         }
         if (journey == 'gallery' || journey == 'viewer') {
@@ -737,6 +752,7 @@ void main() {
             ),
           );
           await tester.pumpAndSettle(const Duration(milliseconds: 120));
+          await _revealStyleDisclosure(tester, locale);
           final imageButton = find.byIcon(Icons.photo_library_outlined);
           if (imageButton.evaluate().isEmpty) {
             final generateList = find.byKey(
@@ -754,6 +770,8 @@ void main() {
           }
           expect(imageButton, findsWidgets);
           // Target the actual image-manager control, not the obsolete 3-image limit.
+          await tester.ensureVisible(imageButton.last);
+          await tester.pumpAndSettle();
           await tester.tap(imageButton.last);
           await tester.pump(const Duration(milliseconds: 420));
           await tester.runAsync(
@@ -850,6 +868,7 @@ void main() {
             ),
           );
           await tester.pumpAndSettle(const Duration(milliseconds: 120));
+          await _revealStyleDisclosure(tester, locale);
           final trigger =
               find.byKey(const ValueKey('style-preset-library-trigger'));
           if (trigger.evaluate().isEmpty) {

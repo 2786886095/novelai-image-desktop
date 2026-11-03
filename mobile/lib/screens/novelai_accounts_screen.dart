@@ -23,20 +23,23 @@ String _accountMethod(BuildContext context, NovelAiAccount p) => _accountText(
 const novelAiRelayRecommendationUrl = 'https://nai.langbai.cc';
 
 class NovelAiRelayRecommendation extends StatelessWidget {
-  const NovelAiRelayRecommendation({super.key});
+  final bool compact;
+  const NovelAiRelayRecommendation({super.key, this.compact = false});
 
   @override
   Widget build(BuildContext context) => Semantics(
     link: true,
     child: Card(
       key: const ValueKey('novelai-relay-recommendation'),
+      clipBehavior: Clip.antiAlias,
       child: ListTile(
+        dense: compact,
         leading: Image.asset('assets/relay-brand/logo.png',
             key: const ValueKey('novelai-relay-logo'),
             width: 24, height: 24, fit: BoxFit.contain,
             excludeFromSemantics: true),
-        title: Text(_accountText(context, 'accountRelayRecommendation')),
-        subtitle: Text('nai.langbai.cc · ${_accountText(context, 'accountRelayBrowserHint')}'),
+        title: Text(_accountText(context, 'accountRelayRecommendation'), maxLines: compact ? 1 : 2, overflow: TextOverflow.ellipsis),
+        subtitle: Text(compact ? 'nai.langbai.cc' : 'nai.langbai.cc · ${_accountText(context, 'accountRelayBrowserHint')}', maxLines: compact ? 1 : 3, overflow: TextOverflow.ellipsis),
         trailing: const Icon(Icons.open_in_new, size: 18),
         onTap: () async {
           try {

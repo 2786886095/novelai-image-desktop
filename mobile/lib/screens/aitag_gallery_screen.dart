@@ -415,11 +415,12 @@ String _f(String value, String key, Object replacement) =>
 class AitagGalleryScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final AitagService? service;
+  final ValueNotifier<int>? refreshSignal;
   final bool showAppBar;
   const AitagGalleryScreen({
     super.key,
     this.onBack,
-    this.service,
+    this.service, this.refreshSignal,
     this.showAppBar = true,
   });
 
@@ -439,18 +440,29 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
   bool loading = true;
   bool failed = false;
   Object? loadError;
+  bool configFailed = false;
+  bool configLoading = false;
 
   @override
   void initState() {
     super.initState();
-    service.loadConfig().then((_) {
-      if (mounted) setState(() {});
-    }).catchError((_) {});
+    widget.refreshSignal?.addListener(_externalRefresh);
+    _loadConfig();
     _search(1);
   }
 
+  void _externalRefresh() => unawaited(_refresh());
+  @override
+  void didUpdateWidget(covariant AitagGalleryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshSignal != widget.refreshSignal) {
+      oldWidget.refreshSignal?.removeListener(_externalRefresh);
+      widget.refreshSignal?.addListener(_externalRefresh);
+    }
+  }
   @override
   void dispose() {
+    widget.refreshSignal?.removeListener(_externalRefresh);
     query.dispose();
     prompt.dispose();
     scrollController.dispose();
@@ -484,12 +496,20 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
     }
   }
 
+  Future<void> _loadConfig() async {
+    if (configLoading) return;
+    setState(() => configLoading = true);
+    try {
+      await service.loadConfig();
+      if (mounted) setState(() => configFailed = service.availableMonths.isEmpty);
+    } catch (_) { if (mounted) setState(() => configFailed = true); }
+    finally { if (mounted) setState(() => configLoading = false); }
+  }
+
   Future<void> _refresh() async {
     service.clearDetailCache();
     // Optional CDN/filter configuration must not block a fresh result list.
-    unawaited(service.loadConfig().then((_) {
-      if (mounted) setState(() {});
-    }).catchError((_) {}));
+    unawaited(_loadConfig());
     await _search(result.page);
   }
 
@@ -588,6 +608,17 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          if (sort == 'monthly' && configFailed) ListTile(
+                            key: const ValueKey('aitag-months-load-error'),
+                            leading: const Icon(Icons.warning_amber_outlined),
+                            title: Text(switch (language) {
+                              'en-US' => 'Month list unavailable. Retry to restore filters.',
+                              'zh-TW' => '月份清單載入失敗，請重試。',
+                              'ja-JP' => '月一覧を読み込めません。再試行してください。',
+                              'ko-KR' => '월 목록을 불러오지 못했습니다. 다시 시도하세요.',
+                              _ => '月份列表加载失败，请重试恢复筛选。',
+                            }),
+                            trailing: IconButton(tooltip: text.retry, onPressed: configLoading ? null : _loadConfig, icon: const Icon(Icons.refresh))),
                           Text(text.subtitle,
                               style: Theme.of(context).textTheme.bodyMedium),
                           const SizedBox(height: 12),
@@ -629,6 +660,7 @@ class _AitagGalleryScreenState extends State<AitagGalleryScreen> {
                                         ? null
                                         : (value) {
                                             final nextSort = value.first;
+                                            if (nextSort == 'monthly') unawaited(_loadConfig());
                                             final nextTimeRange =
                                                 nextSort == 'monthly'
                                                     ? 'current'

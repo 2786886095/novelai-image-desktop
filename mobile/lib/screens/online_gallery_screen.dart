@@ -1,4 +1,5 @@
 import '../ui/global_typography.dart';
+import '../services/aitag_service.dart';
 import 'style_library_screen.dart';
 import 'gallery_favorites_screen.dart';
 import '../services/gallery_favorites.dart';
@@ -451,11 +452,13 @@ String _replaceArtistText(String value, Map<String, Object> fields) =>
 
 class OnlineGalleryScreen extends StatefulWidget {
   final OnlineGalleryService? service;
+  final AitagService? aitagService;
   final http.Client Function()? downloadClientFactory;
   final OnlineGallerySource? initialSource;
   const OnlineGalleryScreen(
       {super.key,
       this.service,
+      this.aitagService,
       this.downloadClientFactory,
       this.initialSource});
 
@@ -484,7 +487,7 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
   bool searchAll = false;
   int quickPageSize = 12;
   int searchRevision = 0;
-  int aitagEpoch = 0;
+  final aitagRefresh = ValueNotifier<int>(0);
   List<ArtistTagRecord> artistRanking = const [];
   DateTime? artistRankingUpdatedAt;
   int artistRankingPage = 1;
@@ -521,6 +524,7 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
     query.dispose();
     scrollController.dispose();
     service.close();
+    aitagRefresh.dispose();
     artistSearchDebounce?.cancel();
     super.dispose();
   }
@@ -618,7 +622,7 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
       return;
     }
     if (source == OnlineGallerySource.aitag) {
-      setState(() => aitagEpoch++);
+      aitagRefresh.value++;
       return;
     }
     final sequence = ++searchRevision;
@@ -761,7 +765,9 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
           Expanded(
             child: source == OnlineGallerySource.aitag
                 ? AitagGalleryScreen(
-                    key: ValueKey('aitag-gallery-$aitagEpoch'),
+                    key: const ValueKey('aitag-gallery'),
+                    service: widget.aitagService,
+                    refreshSignal: aitagRefresh,
                     showAppBar: false,
                   )
                 : source == OnlineGallerySource.artistRanking

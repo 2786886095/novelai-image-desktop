@@ -194,16 +194,19 @@ class AitagService {
 
   Future<void> loadConfig() async {
     final data = await _get(Uri.parse('$aitagSiteUrl/api/config'));
+    if (!(data['available_months'] is List || data['availableMonths'] is List)) {
+      throw const AitagFailure('INVALID_RESPONSE');
+    }
     final base = _string(data['asset_base_url'] ?? data['assetBaseUrl']).trim();
     if (base.isNotEmpty) assetBaseUrl = base;
-    availableYears = (data['available_years'] is List
-            ? data['available_years'] as List
+    availableYears = ((data['available_years'] ?? data['availableYears']) is List
+            ? (data['available_years'] ?? data['availableYears']) as List
             : const [])
         .map(_integer)
         .where((year) => year >= 2000 && year <= 2200)
         .toList();
-    availableMonths = (data['available_months'] is List
-            ? data['available_months'] as List
+    availableMonths = ((data['available_months'] ?? data['availableMonths']) is List
+            ? (data['available_months'] ?? data['availableMonths']) as List
             : const [])
         .map(_string)
         .where((month) => RegExp(r'^\d{4}-(?:0[1-9]|1[0-2])$').hasMatch(month))

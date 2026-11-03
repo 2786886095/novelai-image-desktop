@@ -112,8 +112,14 @@ function normalizeWork(value: unknown): AitagWorkSummary {
 export function normalizeAitagConfig(value: unknown): AitagConfig {
   const source = record(value);
   const base = text(source.asset_base_url ?? source.assetBaseUrl).trim();
-  const years = Array.isArray(source.available_years) ? source.available_years : [];
-  const months = Array.isArray(source.available_months) ? source.available_months : [];
+  // Accept both wire data and our normalized in-memory/cache representation.
+  const yearValue = source.available_years ?? source.availableYears;
+  const monthValue = source.available_months ?? source.availableMonths;
+  if (Object.keys(source).length && !('asset_base_url' in source || 'assetBaseUrl' in source || yearValue !== undefined || monthValue !== undefined)) {
+    throw new Error("AITAG_CONFIG_UNAVAILABLE");
+  }
+  const years = Array.isArray(yearValue) ? yearValue : [];
+  const months = Array.isArray(monthValue) ? monthValue : [];
   return {
     assetBaseUrl: base || "https://ai-img.10118899.xyz/",
     availableYears: years.map(number).filter((year) => year >= 2000 && year <= 2200),

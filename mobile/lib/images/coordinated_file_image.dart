@@ -61,7 +61,7 @@ Widget imageFile(File file, {Key? key, double scale = 1, double? width, double? 
   if (!Platform.isIOS) {
     return Image.file(file, key: key, scale: scale, width: width, height: height, fit: fit,
       cacheWidth: cacheWidth, cacheHeight: cacheHeight, filterQuality: filterQuality,
-      gaplessPlayback: gaplessPlayback, errorBuilder: errorBuilder);
+      gaplessPlayback: gaplessPlayback, errorBuilder: errorBuilder ?? (c,e,s) => imageAccessErrorWidget(c,e,s));
   }
   return CoordinatedFileImage(file.path, key: key, scale: scale,
     width: width, height: height, fit: fit, cacheWidth: cacheWidth, cacheHeight: cacheHeight,

@@ -66,34 +66,35 @@ class _ComicBody extends StatelessWidget {
                 onPressed: onBack,
                 icon: const Icon(Icons.arrow_back),
               ),
+        toolbarHeight: studioToolbarHeight(context, subtitle: true),
         title: studioAppBarTitle(context, Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(controller.displayTitle, overflow: TextOverflow.ellipsis),
+            Tooltip(message: controller.displayTitle, child: Text(controller.displayTitle, maxLines: 1, overflow: TextOverflow.ellipsis)),
             Text(
               t('comic.subtitle'),
+              maxLines: 1,
               style: Theme.of(context).textTheme.labelSmall,
               overflow: TextOverflow.ellipsis,
             ),
           ],
         )),
         actions: [
-          IconButton(
-            tooltip: t('comic.newProject'),
-            onPressed: controller.createNewProject,
-            icon: const Icon(Icons.note_add_outlined),
-          ),
-          IconButton(
-            tooltip: t('comic.saveProjectJson'),
-            onPressed: controller.exporting
-                ? null
-                : () => _run(context, controller.exportProjectJson),
-            icon: const Icon(Icons.save_alt),
-          ),
-          IconButton(
-            tooltip: t('comic.importProjectJson'),
-            onPressed: () => _run(context, controller.importProjectJson),
-            icon: const Icon(Icons.file_open_outlined),
+          PopupMenuButton<String>(
+            tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
+            onSelected: (action) {
+              switch (action) {
+                case 'new': controller.createNewProject();
+                case 'save': _run(context, controller.exportProjectJson);
+                case 'import': _run(context, controller.importProjectJson);
+              }
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem(value: 'new', child: Text(t('comic.newProject'))),
+              PopupMenuItem(value: 'save', enabled: !controller.exporting, child: Text(t('comic.saveProjectJson'))),
+              PopupMenuItem(value: 'import', child: Text(t('comic.importProjectJson'))),
+            ],
           ),
         ],
       ),
@@ -131,71 +132,32 @@ class _StepBar extends StatelessWidget {
       t('comic.step.panels'),
       t('comic.step.generate'),
     ];
-    return LayoutBuilder(builder: (context, constraints) {
-      final compact = constraints.maxWidth < 620;
-      return SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-        child: Row(
-          children: List.generate(ComicStep.values.length, (index) {
-            final selected = controller.step.index == index;
-            return Padding(
-              padding: EdgeInsets.only(right: index == 3 ? 0 : 8),
-              child: SizedBox(
-                width: compact ? 132 : (constraints.maxWidth - 48) / 4,
-                height: 56,
-                child: Material(
-                  color: selected
-                      ? Theme.of(context).colorScheme.primaryContainer
-                      : Theme.of(context).colorScheme.surfaceContainer,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    side: BorderSide(
-                      color: selected
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).dividerColor,
-                    ),
-                  ),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(14),
-                    onTap: () => controller.setStep(ComicStep.values[index]),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 14,
-                            backgroundColor: selected
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest,
-                            foregroundColor: selected
-                                ? Theme.of(context).colorScheme.onPrimary
-                                : null,
-                            child: Text('${index + 1}'),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              labels[index],
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }),
-        ),
-      );
-    });
+    return Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final compact = constraints.maxWidth < 620;
+        return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          for (var index = 0; index < ComicStep.values.length; index++) ...[
+            if (index > 0) const SizedBox(width: 6),
+            Expanded(child: Semantics(selected: controller.step.index == index, button: true,
+              child: AnimatedContainer(
+                key: ValueKey('comic-step-$index'),
+                duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 180),
+                decoration: BoxDecoration(
+                  color: controller.step.index == index ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.surfaceContainer,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: controller.step.index == index ? Theme.of(context).colorScheme.primary : Theme.of(context).dividerColor)),
+                child: Material(color: Colors.transparent, child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => controller.setStep(ComicStep.values[index]),
+                  child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                    child: compact ? Column(mainAxisSize: MainAxisSize.min, children: [
+                      Text('${index+1}', style: Theme.of(context).textTheme.labelLarge),
+                      const SizedBox(height: 4),
+                      Text(labels[index], textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelMedium),
+                    ]) : Row(mainAxisAlignment: MainAxisAlignment.center, children: [Text('${index+1}'), const SizedBox(width: 8), Flexible(child: Text(labels[index]))]))))))),
+          ],
+        ]);
+      }));
   }
 }
 
