@@ -14,7 +14,7 @@ export function NaiRelayRecommendation({language,onError}:{language?:Parameters<
  return <Button type="button" title={naiAccountText(language,'relayBrowserHint')} onClick={async()=>{
   try { await window.naiDesktop.openExternal(novelAiRelayRecommendationUrl); }
   catch { onError?.(); }
- }}><LuGlobe aria-hidden/>{naiAccountText(language,'relayRecommendation')}</Button>;
+ }}><img src={`${import.meta.env.BASE_URL}relay-brand/brand-mark.svg`} width={18} height={18} alt="" aria-hidden="true" style={{objectFit:'contain',flexShrink:0}}/>{naiAccountText(language,'relayRecommendation')}</Button>;
 }
 function validationText(code:NaiAccountValidationResult['code']):NaiAccountTextKey {return code==='passed'?'validationPassed':code==='auth'?'validationAuth':code==='unsupported'?'validationUnsupported':code==='network'?'validationNetwork':code==='invalid-input'?'validationInput':code==='invalid-response'?'validationResponse':'validationHttp';}
 export function NaiAccountFeedback({message,httpStatus,nt}:{message:NaiAccountTextKey|'';httpStatus?:number;nt:(key:NaiAccountTextKey)=>string}) {

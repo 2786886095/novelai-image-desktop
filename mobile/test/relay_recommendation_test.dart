@@ -26,6 +26,12 @@ void main() {
       await tester.pump();
       final link=find.byKey(const ValueKey('novelai-relay-recommendation'));
       expect(link,findsOneWidget);
+      final logo = find.byKey(const ValueKey('novelai-relay-logo'));
+      expect(logo,findsOneWidget);
+      final image = tester.widget<Image>(logo);
+      expect((image.image as AssetImage).assetName,'assets/relay-brand/logo.png');
+      expect(image.width,24);
+      expect(image.height,24);
       expect(tester.getTopLeft(link).dy,lessThan(170));
       await tester.tap(link);await tester.pumpAndSettle();
       expect(calls,hasLength(1));expect(calls.single.method,'launch');

@@ -12,6 +12,8 @@ describe('relay recommendation external-browser entry',()=>{
   expect(html).toContain('NovelAI 中转站推荐');
   expect(html.indexOf('账户管理')).toBeLessThan(html.indexOf('NovelAI 中转站推荐'));
   expect(html).toContain('nai.langbai.cc');
+  expect(html).toContain('relay-brand/brand-mark.svg');
+  expect(html).toMatch(/<img[^>]+width="18"[^>]+height="18"/);
  });
  it('its actual handler opens only the fixed URL and never transfers credentials/config',async()=>{
   expect(typeof api.NaiRelayRecommendation).toBe('function');

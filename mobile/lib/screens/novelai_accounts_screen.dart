@@ -31,7 +31,10 @@ class NovelAiRelayRecommendation extends StatelessWidget {
     child: Card(
       key: const ValueKey('novelai-relay-recommendation'),
       child: ListTile(
-        leading: const Icon(Icons.public_outlined),
+        leading: Image.asset('assets/relay-brand/logo.png',
+            key: const ValueKey('novelai-relay-logo'),
+            width: 24, height: 24, fit: BoxFit.contain,
+            excludeFromSemantics: true),
         title: Text(_accountText(context, 'accountRelayRecommendation')),
         subtitle: Text('nai.langbai.cc · ${_accountText(context, 'accountRelayBrowserHint')}'),
         trailing: const Icon(Icons.open_in_new, size: 18),
