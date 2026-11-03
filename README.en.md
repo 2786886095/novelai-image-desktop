@@ -19,10 +19,10 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-- **Desktop web account import**: one-time code exchange, endpoint/key deduplication, numbered names and idle-only selection/balance refresh. The main process saves without switching during generation, background work or credential leases. Codes are not retried; logging redaction also covers reopened encrypted vaults.
-- **Website integration remains unverified**: synthetic requests received403 origin rejection and a separate origin diagnostic hitCloudflare1010. No real code completed an end-to-end import. Client implementation does not mean the website is ready; the website owner must complete issuer/button/exchange integration and review blocking rules.
-- **Mobile links and input fix**: bundled LN recommendation links at the top of Settings and account management; Android seed/batch-sheet context fix. Mobile links open the site only, not the desktop deep-link import flow.
-- **Evidence and limits**: reuse120 related desktop tests,15 mobile regressions and targeted type/analysis checks; freshly rebuild all five platforms. This maintainer-authorized scoped direct release is not full-suite, physical-device, GPU, real-account or paid-generation acceptance. Actual assets are defined byLatest andverification.json. UnsignedIPA requires user signing; localAgent and style iteration remainWindows-only.
+- **Online gallery**: recover historical month lists from wire/cached configuration, expose configuration failures with retry, and preserve mobile month/query/page filters on refresh instead of remounting the page.
+- **Mobile UI**: pinned navigation and Settings recommendation/search, comic title/step layout fixes, unobstructed preview controls, visible missing-image feedback without deleting history, and restored touch feedback respecting reduced motion.
+- **Update prompt**: explicit Update / Browser download / Cancel, persisted once per remote version; serialize migration notices and defer installation while generation/queues are active.
+- **Evidence and limits**: reuse89 mobile regressions,3 supplemental render checks,26 desktop gallery checks and targeted type/analysis checks. Gemini 4 broad audit and follow-up are scoped review opinions, not physical-device certification. All five platforms are rebuilt; full-suite/native/GPU/local-model/real-account/paid-generation acceptance remains incomplete. Earlier website403/Cloudflare import findings have not been replaced by a real-code end-to-end campaign. UnsignedIPA needs user signing; localAgent/style iteration remainWindows-only.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
