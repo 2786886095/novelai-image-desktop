@@ -17,17 +17,14 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 > Bring your own **NovelAI Persistent API Token**. Model access and generation charges depend on your NovelAI account. Optional image analysis, prompt conversion and Tavern AI services require separate configuration.
 
-## What changed
+## This update
 
-- **Consistent desktop controls**: align shared buttons, inputs, selectors, dialogs and spacing with the existing theme and sizing. Cover keyboard focus, loading, disabled and reduced-motion states while retaining specialized image-viewer toolbars and layouts.
-- **History and account UI**: the converted-image index recovery action now uses the shared button in History and Works. Remove the account-dialog heading’s double inset and align ordinary account actions and inputs, retaining room for wrapping sign-in method cards. Recovery, authentication and account-operation logic are unchanged.
-- **Keyboard-accessible file selection**: migrate nine entry points across the main workbench and comic tools to the existing shared file picker. Enter/Space activation retains accepted types, multiple selection, disabled/reset behavior and original callbacks; import formats are unchanged.
-- **Five-platform scope**: these UI changes apply to Windows, macOS and Linux desktop apps. Android and iOS receive version/build metadata alignment only, not this desktop UI redesign. Release packages must be freshly built from this release source, never renamed old binaries.
-- **Scoped publication with disclosed limits**: all same-source CI build and runtime jobs for Windows, macOS, Linux, Android and iOS completed successfully. Reuse the previously completed 112 targeted desktop tests and 6 isolated-browser checks; this release’s version binding and source-copy rollback/replay passed. These are not full-suite, native-device, GPU, real-account or paid-generation acceptance; actual upload and formal publication status remain defined by the observed records.
-- **Assets and installation limits**: actual new build, upload, signing and update status belong to Latest and verification.json, not prefilled success. Unsigned iOS IPAs still require user signing/sideloading. Local Agent components and style iteration remain Windows-only.
+- **Android numeric-input fix**: keep a live parameter-sheet context when the keyboard opens, covering seed and batch-count input. Physical Redmi K70 verification is still pending.
+- **Relay recommendation**: beside account management on desktop, at the top of mobile account management, with the bundled homepage LN logo. Opens only https://nai.langbai.cc in the external browser; no account/key transfer or API configuration changes.
+- **Evidence and limits**: 88 related desktop tests,13 mobile tests and targeted type/analysis checks passed. All five platform packages are rebuilt; see Latest and verification.json for actual artifacts. This is not full-suite, physical-device, GPU, real-account or paid-generation acceptance.
+- **Installation limits**: unsigned iOS IPA requires user signing; local Agent and style iteration remain Windows-only.
 
-See [release history](./docs/RELEASE_NOTES.md).
-
+[Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
 ## Quick start
 
