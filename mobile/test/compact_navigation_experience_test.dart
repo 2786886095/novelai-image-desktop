@@ -1,5 +1,3 @@
-import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -27,7 +25,7 @@ Future<void> mount(WidgetTester t, AppState app, {double scale=1,bool dark=false
 }
 void main(){
  setUp(()=>SharedPreferences.setMockInitialValues({'langbai.notice.v5-model-migration.seen':true}));
- setUpAll(()async{await PromptTemplateLibrary.load();final f=FontLoader('MaterialIcons')..addFont(Future.value(ByteData.sublistView(File('F:/flutter/bin/cache/artifacts/material_fonts/materialicons-regular.otf').readAsBytesSync())));await f.load();final zh=FontLoader('AuditZh')..addFont(Future.value(ByteData.sublistView(File('C:/Windows/Fonts/msyh.ttc').readAsBytesSync())));await zh.load();});
+ setUpAll(()async{await PromptTemplateLibrary.load();final f=FontLoader('MaterialIcons')..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));await f.load();final zh=FontLoader('AuditZh')..addFont(rootBundle.load('assets/ui-fonts/LXGWMarkerGothic-Regular.ttf'));await zh.load();});
  for(final size in [const Size(320,640),const Size(390,844),const Size(800,360),const Size(800,1280)]){
   for(final scale in [1.0,2.0]){
    testWidgets('real shell compact height, scrolling and search $size scale=$scale',(t)async{
@@ -72,6 +70,7 @@ void main(){
    await t.tap(find.byKey(const ValueKey('android-group-3')));await t.pumpAndSettle();
    await t.tap(find.text('日式漫画生成器'));await t.pump(const Duration(milliseconds:400));
    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds:200)));await t.pump(const Duration(milliseconds:400));
+   // ignore: avoid_print
    print('TOOL_DIAGNOSTIC loaded=${app.japaneseComic.loaded} circular=${find.byType(CircularProgressIndicator).evaluate().length} linear=${find.byType(LinearProgressIndicator).evaluate().length} focus=${FocusManager.instance.primaryFocus?.debugLabel} scheduled=${t.binding.hasScheduledFrame}');
    expect(find.byType(ComicScreen),findsOneWidget);
    expect(find.byType(AppBar),findsNothing);

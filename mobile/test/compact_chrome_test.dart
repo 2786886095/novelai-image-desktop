@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -15,7 +14,7 @@ import 'package:novelai_mobile/ui/studio_theme.dart';
 import 'package:novelai_mobile/ui/android/android_tokens.dart';
 
 Future<void> capture(WidgetTester t,String name) async {
- final dir=const String.fromEnvironment('COMPACT_CAPTURE_DIR');
+ const dir=String.fromEnvironment('COMPACT_CAPTURE_DIR');
  if(dir.isEmpty)return;
  await t.pump();
  final boundary=t.renderObject<RenderRepaintBoundary>(find.byKey(const ValueKey('capture')));
@@ -29,17 +28,18 @@ Future<void> select(WidgetTester t,int i) async {
  await t.pumpAndSettle();
 }
 void main(){
+ TestWidgetsFlutterBinding.ensureInitialized();
+ setUpAll(() async {
+  final fonts=FontLoader('AuditZh')..addFont(rootBundle.load('assets/ui-fonts/LXGWMarkerGothic-Regular.ttf'));await fonts.load();
+  final icons=FontLoader('MaterialIcons')..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));await icons.load();
+ });
  setUp(()=>SharedPreferences.setMockInitialValues({'langbai.notice.v5-model-migration.seen':true}));
  testWidgets('real HomeShell keeps only compact fixed chrome above scrolling settings and creation',(t)async{
   debugDefaultTargetPlatformOverride=TargetPlatform.android;
   t.view.physicalSize=const Size(390,844);t.view.devicePixelRatio=1;
   final app=AppState()..booted=true;app.settings.language='zh-CN';app.settings.autoComplete=false;
-  final fonts=FontLoader('AuditZh')..addFont(Future.value(ByteData.sublistView(File('C:/Windows/Fonts/msyh.ttc').readAsBytesSync())));
-  await fonts.load();
-  final icons=FontLoader('MaterialIcons')..addFont(Future.value(ByteData.sublistView(File('F:/flutter/bin/cache/artifacts/material_fonts/materialicons-regular.otf').readAsBytesSync())));
-  await icons.load();
   try{
-   await t.pumpWidget(ChangeNotifierProvider.value(value:app,child:MaterialApp(theme:androidStudioTheme(StudioTheme.light()).copyWith(textTheme:StudioTheme.light().textTheme.apply(fontFamily:'AuditZh')),home:RepaintBoundary(key:const ValueKey('capture'),child:const HomeShell()))));await t.pumpAndSettle();
+   await t.pumpWidget(ChangeNotifierProvider.value(value:app,child:MaterialApp(theme:androidStudioTheme(StudioTheme.light()).copyWith(textTheme:StudioTheme.light().textTheme.apply(fontFamily:'AuditZh')),home:const RepaintBoundary(key:ValueKey('capture'),child:HomeShell()))));await t.pumpAndSettle();
    await t.runAsync(() => precacheImage(const AssetImage('assets/relay-brand/logo.png'),t.element(find.byType(HomeShell))));await t.pumpAndSettle();
    await t.tap(find.byKey(const ValueKey('android-group-4')));await t.pumpAndSettle();
    await capture(t,'settings-before-scroll');
@@ -52,7 +52,8 @@ void main(){
    await capture(t,'settings-after-scroll');
    final pinned=headerRect!=null && t.getRect(header)==headerRect;
    final bottom=t.getRect(find.byKey(const ValueKey('android-main-navigation')));
-   print('COMPACT_METRICS '+jsonEncode({'settingsContentTop':top,'headerHeight':headerRect?.height,'headerPinned':pinned,'bottomNavigationTop':bottom.top}));
+   // ignore: avoid_print
+   print('COMPACT_METRICS ${jsonEncode({'settingsContentTop':top,'headerHeight':headerRect?.height,'headerPinned':pinned,'bottomNavigationTop':bottom.top})}');
    expect(top,lessThanOrEqualTo(64),reason:'The real shell must not stack page tabs + My title + recommendation card + search field.');
    expect(pinned,isTrue);
    expect(headerRect!.height,lessThanOrEqualTo(56));

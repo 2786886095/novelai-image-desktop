@@ -35,8 +35,52 @@ PreferredSizeWidget? workbenchAppBar(BuildContext context, AppBar bar,
     {Widget? search, VoidCallback? closeSearch, String? title}) {
   final scope = CompactWorkbenchScope.maybeOf(context);
   if (scope == null) return bar;
-  scope.controller.publish(WorkbenchChrome(bar, search: search, closeSearch: closeSearch, title: title));
+  scope.controller.publish(WorkbenchChrome(bar, search: search, closeSearch: closeSearch, title: title ?? _titleText(bar.title)));
   return null;
+}
+
+String? _titleText(Widget? widget) {
+  if (widget is Text) return widget.data;
+  if (widget is Tooltip) return widget.message ?? _titleText(widget.child);
+  if (widget is MediaQuery) return _titleText(widget.child);
+  if (widget is DefaultTextStyle) return _titleText(widget.child);
+  if (widget is Padding) return _titleText(widget.child);
+  if (widget is Column && widget.children.isNotEmpty) return _titleText(widget.children.first);
+  return null;
+}
+
+/// Relocated toolbar actions must dismiss their containing sheet before a
+/// drawer/dialog is opened on the original page. Keep callbacks and disabled
+/// states; resolving Builder also preserves the page's explicit scaffold key.
+List<Widget> workbenchSheetActions(BuildContext context, List<Widget> actions) {
+  VoidCallback? dismissThen(VoidCallback? callback) => callback == null ? null : () {
+    Navigator.of(context).pop();
+    WidgetsBinding.instance.addPostFrameCallback((_) => callback());
+  };
+  Widget adapt(Widget action) {
+    if (action is Builder) return adapt(action.builder(context));
+    if (action is IconButton) {
+      return IconButton(key: action.key,
+      icon: action.icon, tooltip: action.tooltip, style: action.style,
+      onPressed: dismissThen(action.onPressed), iconSize: action.iconSize,
+      constraints: action.constraints, padding: action.padding,
+      color: action.color, disabledColor: action.disabledColor);
+    }
+    if (action is TextButton) {
+      return TextButton(key: action.key, style: action.style,
+        onPressed: dismissThen(action.onPressed), child: action.child!);
+    }
+    if (action is FilledButton) {
+      return FilledButton(key: action.key, style: action.style,
+        onPressed: dismissThen(action.onPressed), child: action.child!);
+    }
+    if (action is OutlinedButton) {
+      return OutlinedButton(key: action.key, style: action.style,
+        onPressed: dismissThen(action.onPressed), child: action.child!);
+    }
+    return action;
+  }
+  return actions.map(adapt).toList();
 }
 
 /// Navigator tools have their own route, so they cannot inherit the home
@@ -60,14 +104,14 @@ class _CompactToolFrameState extends State<CompactToolFrame> {
           key: const ValueKey('compact-tool-bar'), height: 56,
           child: Row(children: [
             chrome?.bar.leading ?? BackButton(onPressed: () => Navigator.maybePop(context)),
-            Expanded(child: Text(chrome?.title ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleSmall)),
+            Expanded(child: Tooltip(message: chrome?.title ?? '', child: Text(chrome?.title ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall))),
             widget.recommendation,
             if (chrome?.bar.actions?.isNotEmpty == true) IconButton(
               tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
               onPressed: () => showModalBottomSheet<void>(context: context, showDragHandle: true, useSafeArea: true,
-                builder: (_) => SafeArea(top: false, child: SingleChildScrollView(padding: const EdgeInsets.all(16),
-                  child: Wrap(spacing: 8, runSpacing: 8, children: chrome!.bar.actions!)))),
+                builder: (sheetContext) => SafeArea(top: false, child: SingleChildScrollView(padding: const EdgeInsets.all(16),
+                  child: Wrap(spacing: 8, runSpacing: 8, children: workbenchSheetActions(sheetContext, chrome!.bar.actions!))))),
               icon: const Icon(Icons.more_horiz)),
           ])))),
       Expanded(child: CompactWorkbenchScope(controller: _chrome, child: widget.child)),

@@ -198,7 +198,7 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
           if (chrome?.bar.title != null) DefaultTextStyle(style: Theme.of(context).textTheme.titleMedium!, child: chrome!.bar.title!),
           if (chrome?.bar.actions?.isNotEmpty == true)
-            Wrap(spacing: 8, runSpacing: 8, children: chrome!.bar.actions!),
+            Wrap(spacing: 8, runSpacing: 8, children: workbenchSheetActions(sheetContext, chrome!.bar.actions!)),
           if (widget.accountControls != null) ...[const Divider(), widget.accountControls!],
           ListTile(leading: const Icon(Icons.apps_outlined), title: Text(androidShellText(widget.language, 'all')),
             onTap: () { Navigator.pop(sheetContext); _showAllFeatures(); }),
