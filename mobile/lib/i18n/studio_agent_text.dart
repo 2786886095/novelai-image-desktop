@@ -2,6 +2,9 @@ import 'studio_agent_shared.dart';
 import 'app_locales.dart';
 
 const _rows = <String, List<String>>{
+  'accountRelayRecommendation': ['NovelAI 中转站推荐','NovelAI 中轉站推薦','Recommended NovelAI relay','NovelAI 中継サイトの紹介','NovelAI 중계 사이트 추천'],
+  'accountRelayBrowserHint': ['第三方站点 · 在浏览器打开','第三方網站 · 在瀏覽器開啟','Third-party site · Open in browser','第三者サイト · ブラウザーで開く','외부 사이트 · 브라우저에서 열기'],
+  'accountRelayOpenFailed': ['无法打开系统浏览器，请手动访问 nai.langbai.cc。','無法開啟系統瀏覽器，請手動造訪 nai.langbai.cc。','Could not open your browser. Visit nai.langbai.cc manually.','ブラウザーを開けませんでした。nai.langbai.cc を直接開いてください。','브라우저를 열 수 없습니다. nai.langbai.cc에 직접 접속하세요.'],
   "accountLoginRejected": ["官方登录未成功；已有凭据保留。", "官方登入未成功；已有憑據保留。", "Official login unsuccessful; existing credentials preserved.", "公式ログイン失敗。既存認証情報は保持。", "공식 로그인 실패. 기존 인증 정보는 유지됩니다."],
   "accountLoginNetwork": ["官方登录请求失败；未重试或转发至中转。", "官方登入請求失敗；未重試或轉發至中轉。", "Official login request failed; no retry or relay forwarding.", "公式ログイン通信失敗。再試行・中継転送はしません。", "공식 로그인 요청 실패. 재시도 또는 중계 전송은 없습니다."],
   "accountLoginOtp": ["OTP 协议未确认；未发送验证码，也未覆盖原凭据。请使用官方 API Token。", "OTP 協議未確認；未傳送驗證碼，也未覆寫原憑據。請使用官方 API Token。", "OTP protocol unverified; no code sent or credentials overwritten. Use an official API Token.", "OTP 仕様未確認。コード送信・認証情報上書きなし。公式API Tokenを使用してください。", "OTP 프로토콜 미확인. 코드 전송이나 인증 정보 덮어쓰기는 없습니다. 공식 API Token을 사용하세요."],

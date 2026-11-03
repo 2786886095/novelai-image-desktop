@@ -1,4 +1,5 @@
 /* Shared account surface: same controls in settings and toolbar. */
+.nai-account-manager{flex-wrap:wrap;max-width:100%}
 .nai-account-manager,.nai-account-selector{display:flex;align-items:center;gap:8px;min-width:0;color:var(--text)}
 .nai-account-manager{position:relative;padding:0;flex:0 0 auto}.nai-account-selector>svg{width:16px;height:16px;color:var(--muted);flex-shrink:0}.nai-account-selector-label{color:var(--muted);white-space:nowrap;font-size:12px}.nai-account-selector .select-menu-trigger{width:220px;min-height:var(--studio-action-height,36px);max-width:100%;border-radius:var(--studio-control-radius,var(--radius-sm))}.nai-account-selector .select-menu-value{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nai-account-manager button,.nai-account-surface button,.nai-account-panel>header button{display:inline-flex;align-items:center;justify-content:center;gap:var(--studio-action-gap,8px);min-height:var(--studio-action-height,36px);border-radius:var(--studio-control-radius,var(--radius-sm));padding:var(--studio-control-padding-y,6px) var(--studio-control-padding-x,12px);font:inherit;background:var(--panel-2,var(--bg-panel));color:var(--text);border:1px solid var(--border);cursor:pointer;transition:background-color 160ms,border-color 160ms,transform 160ms,opacity 160ms}
@@ -49,3 +50,7 @@ html.motion-reduced .nai-account-feedback--pending .nai-account-feedback-heading
 /* Ordinary account actions consume the shared state contract; method cards keep their selection geometry. */
 .nai-account-manager button:disabled:not([role="tab"]),.nai-account-surface button:disabled:not([role="tab"]){background:var(--bg-subtle);color:var(--text-muted);border-color:var(--border);opacity:1;cursor:not-allowed;filter:none}
 .nai-account-surface input:focus-visible{outline:2px solid var(--accent);outline-offset:2px;box-shadow:var(--focus-ring)}
+
+/* Allow the account actions to wrap instead of clipping the recommendation. */
+.nai-account-manager{flex:0 1 auto}
+

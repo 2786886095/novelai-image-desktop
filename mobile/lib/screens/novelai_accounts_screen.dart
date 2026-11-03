@@ -1,6 +1,7 @@
 import '../ui/global_typography.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../services/novelai_accounts.dart';
@@ -18,6 +19,38 @@ String _accountMethod(BuildContext context, NovelAiAccount p) => _accountText(
         : p.method == 'official-login'
             ? 'accountMethodEmail'
             : 'accountMethodKey');
+
+const novelAiRelayRecommendationUrl = 'https://nai.langbai.cc';
+
+class NovelAiRelayRecommendation extends StatelessWidget {
+  const NovelAiRelayRecommendation({super.key});
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    link: true,
+    child: Card(
+      key: const ValueKey('novelai-relay-recommendation'),
+      child: ListTile(
+        leading: const Icon(Icons.public_outlined),
+        title: Text(_accountText(context, 'accountRelayRecommendation')),
+        subtitle: Text('nai.langbai.cc · ${_accountText(context, 'accountRelayBrowserHint')}'),
+        trailing: const Icon(Icons.open_in_new, size: 18),
+        onTap: () async {
+          try {
+            final opened = await launchUrl(Uri.parse(novelAiRelayRecommendationUrl),
+                mode: LaunchMode.externalApplication);
+            if (!opened) throw StateError('browser unavailable');
+          } catch (_) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(_accountText(context, 'accountRelayOpenFailed'))));
+            }
+          }
+        },
+      ),
+    ),
+  );
+}
 
 class NovelAiAccountSelector extends StatelessWidget {
   const NovelAiAccountSelector({super.key, this.showManage = true});
@@ -390,6 +423,8 @@ class _NovelAiAccountsScreenState extends State<NovelAiAccountsScreen> {
     return Scaffold(
         appBar: AppBar(title: studioAppBarTitle(context, Text(t('accountManager')))),
         body: ListView(padding: const EdgeInsets.all(16), children: [
+          const NovelAiRelayRecommendation(),
+          const SizedBox(height: 12),
           const NovelAiAccountSelector(showManage: false),
           const SizedBox(height: 12),
           Text(t('accountSecurityHint')),

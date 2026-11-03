@@ -1,5 +1,8 @@
 import type { AppLanguage } from './types';
 export const NAI_ACCOUNT_LOCALES = {
+ relayRecommendation:['NovelAI 中转站推荐','NovelAI 中轉站推薦','Recommended NovelAI relay','NovelAI 中継サイトの紹介','NovelAI 중계 사이트 추천'],
+ relayBrowserHint:['在系统浏览器打开第三方站点 nai.langbai.cc；不会更改 API 配置。','在系統瀏覽器開啟第三方網站 nai.langbai.cc；不會變更 API 設定。','Open third-party site nai.langbai.cc in your browser; API settings stay unchanged.','第三者サイト nai.langbai.cc をブラウザーで開きます。API設定は変更しません。','브라우저에서 외부 사이트 nai.langbai.cc를 엽니다. API 설정은 바뀌지 않습니다.'],
+ relayOpenFailed:['无法打开系统浏览器，请手动访问 nai.langbai.cc。','無法開啟系統瀏覽器，請手動造訪 nai.langbai.cc。','Could not open your browser. Visit nai.langbai.cc manually.','ブラウザーを開けませんでした。nai.langbai.cc を直接開いてください。','브라우저를 열 수 없습니다. nai.langbai.cc에 직접 접속하세요.'],
  duplicateAccount:["该接口的 API Token 已存在，未重复添加。", "該介面的 API Token 已存在，未重複新增。", "This endpoint's API Token already exists. No duplicate added.", "この接続先の API Token は登録済みです。重複追加していません。", "이 주소의 API Token가 이미 있습니다. 중복 추가하지 않았습니다."],
  validationSuccess:["API Token 验证成功。", "API Token 驗證成功。", "API Token verified.", "API Token の検証成功。", "API Token 검증 성공."],
  validationSaved:["验证成功，账号已保存。", "驗證成功，帳戶已儲存。", "Verified; account saved.", "検証成功・保存済み。", "검증 성공, 계정 저장됨."],

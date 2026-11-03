@@ -4,16 +4,23 @@ import { createPortal } from 'react-dom';
 import { relayDashboardOrigin, nextNaiAccountLabel, NAI_ACCOUNT_METHODS, naiAccountTabKey, type NaiAccountsBridge, type NaiAccountMethod, type NaiAccountProfile, type NaiAccountValidationResult } from '../nai-accounts';
 import { naiAccountText, type NaiAccountTextKey } from '../nai-accounts-locales';
 import { useAppStore } from '../store';
-import { SelectMenuCompat } from './ui';
+import { Button, SelectMenuCompat } from './ui';
 import { LuKeyRound, LuMail, LuGlobe, LuPlus, LuX, LuUserRound, LuEye, LuEyeOff, LuCopy, LuCircleCheck, LuCircleAlert, LuLoaderCircle, LuInfo, LuChevronDown } from 'react-icons/lu';
 import {confirmAction} from './confirm';
 import { motionReduced } from '../motion-system';
 import './NaiAccountManager.css';
+export const novelAiRelayRecommendationUrl = 'https://nai.langbai.cc';
+export function NaiRelayRecommendation({language,onError}:{language?:Parameters<typeof naiAccountText>[0];onError?:()=>void}) {
+ return <Button type="button" title={naiAccountText(language,'relayBrowserHint')} onClick={async()=>{
+  try { await window.naiDesktop.openExternal(novelAiRelayRecommendationUrl); }
+  catch { onError?.(); }
+ }}><LuGlobe aria-hidden/>{naiAccountText(language,'relayRecommendation')}</Button>;
+}
 function validationText(code:NaiAccountValidationResult['code']):NaiAccountTextKey {return code==='passed'?'validationPassed':code==='auth'?'validationAuth':code==='unsupported'?'validationUnsupported':code==='network'?'validationNetwork':code==='invalid-input'?'validationInput':code==='invalid-response'?'validationResponse':'validationHttp';}
 export function NaiAccountFeedback({message,httpStatus,nt}:{message:NaiAccountTextKey|'';httpStatus?:number;nt:(key:NaiAccountTextKey)=>string}) {
  if(!message)return null;
  const passed=message==='validationPassed'||message==='saved';
- const failed=(message.startsWith('validation')&&!passed)||['authFailed','networkFailed','otpUnsupported','loginChallenge','loginRateLimited','loginInvalidResponse'].includes(message);
+ const failed=(message.startsWith('validation')&&!passed)||['authFailed','networkFailed','otpUnsupported','loginChallenge','loginRateLimited','loginInvalidResponse','relayOpenFailed'].includes(message);
  const pending=message==='validating';
  const kind=passed?'success':failed?'error':pending?'pending':'info';
  const title=passed?nt(message==='saved'?'validationSaved':'validationSuccess'):failed?nt('validationFailure'):nt(message);
@@ -104,6 +111,6 @@ export function NaiAccountManager({variant='toolbar',onSelectionChange}:{variant
  <NaiAccountFeedback message={message} httpStatus={httpStatus} nt={nt}/>
  </div>;
  if(variant==='settings')return <section className="nai-account-settings" aria-label={nt('title')}><header><div><h3>{nt('title')}</h3><p className="nai-account-note">{nt('settingsHint')}</p></div></header>{selector}{content}</section>;
- return <section className="nai-account-manager">{selector}<button ref={trigger} type="button" aria-haspopup="dialog" aria-expanded={open} onClick={()=>{setClosing(false);setOpen(true)}}><LuPlus aria-hidden/>{nt('manage')}</button>
+ return <section className="nai-account-manager">{selector}<button ref={trigger} type="button" aria-haspopup="dialog" aria-expanded={open} onClick={()=>{setClosing(false);setOpen(true)}}><LuPlus aria-hidden/>{nt('manage')}</button><NaiRelayRecommendation language={language} onError={()=>{setMessage('relayOpenFailed');setClosing(false);setOpen(true)}}/>
  {open&&createPortal(<NaiAccountDialogFrame title={nt('title')} closeLabel={nt('close')} titleId={`${uid}-title`} panelRef={panel} onClose={close} closing={closing}>{selector}{content}</NaiAccountDialogFrame>,document.body)}</section>;
 }
