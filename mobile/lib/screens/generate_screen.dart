@@ -665,7 +665,7 @@ Future<void> _androidCreateSheet(BuildContext context, String title, Widget chil
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Padding(padding: const EdgeInsets.fromLTRB(16, 0, 8, 8), child: Row(children: [
           Expanded(child: Text(title, style: Theme.of(sheetContext).textTheme.titleLarge)),
-          IconButton(tooltip: androidPromptText(context.read<AppState>().settings.language, 'close'),
+          IconButton(tooltip: androidPromptText(sheetContext.read<AppState>().settings.language, 'close'),
             onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close)),
         ])),
         Expanded(child: SingleChildScrollView(keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
