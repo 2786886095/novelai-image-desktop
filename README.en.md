@@ -19,10 +19,9 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-- **Online gallery**: recover historical month lists from wire/cached configuration, expose configuration failures with retry, and preserve mobile month/query/page filters on refresh instead of remounting the page.
-- **Mobile UI**: pinned navigation and Settings recommendation/search, comic title/step layout fixes, unobstructed preview controls, visible missing-image feedback without deleting history, and restored touch feedback respecting reduced motion.
-- **Update prompt**: explicit Update / Browser download / Cancel, persisted once per remote version; serialize migration notices and defer installation while generation/queues are active.
-- **Evidence and limits**: reuse89 mobile regressions,3 supplemental render checks,26 desktop gallery checks and targeted type/analysis checks. Gemini 4 broad audit and follow-up are scoped review opinions, not physical-device certification. All five platforms are rebuilt; full-suite/native/GPU/local-model/real-account/paid-generation acceptance remains incomplete. Earlier website403/Cloudflare import findings have not been replaced by a real-code end-to-end campaign. UnsignedIPA needs user signing; localAgent/style iteration remainWindows-only.
+- **Compact Android navigation**: a fixed single-row toolbar leaves room for content; the icon page menu opens downward, centered below the toolbar, with a current-page check.
+- **Interaction motion**: immediate Settings press feedback, right-to-left detail entry and reverse return, plus transitions on first destination visits. Drafts and scroll state survive, fixed chrome stays still, and reduced motion is respected.
+- **Scope and limits**: reuse85 relevant regressions and scoped Dart analysis; all five platforms are freshly rebuilt from one source. This UI work targets Android; other platforms synchronize versions. A candidate was installed/launched in an emulator, not physical-device/full/GPU/real-account/paid-generation/upgrade certification for these release packages. UnsignedIPA requires user signing. No new Gemini audit or real-code website-import campaign was completed.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
