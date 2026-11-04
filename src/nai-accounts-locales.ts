@@ -1,5 +1,9 @@
 import type { AppLanguage } from './types';
 export const NAI_ACCOUNT_LOCALES = {
+ relayIntro:["第三方 NovelAI 生图 API 中转站点，非 NovelAI 官方网站。可前往了解服务与接入方式；打开网页不会更改当前账号或 API 配置。", "第三方 NovelAI 生圖 API 中轉網站，非 NovelAI 官方網站。可前往了解服務與接入方式；開啟網頁不會變更目前帳戶或 API 設定。", "A third-party NovelAI image API relay, not the official NovelAI website. Visit to learn about its services and connection options. Opening the site does not change your current account or API settings.", "NovelAI画像APIの第三者中継サイトであり、NovelAI公式サイトではありません。サービスや接続方法をサイトで確認できます。開いても現在のアカウントやAPI設定は変更されません。", "NovelAI 이미지 API의 외부 중계 사이트이며 NovelAI 공식 웹사이트가 아닙니다. 서비스와 연결 방법을 사이트에서 확인할 수 있습니다. 열어도 현재 계정이나 API 설정은 바뀌지 않습니다."],
+ relayVisit:["进入网站", "進入網站", "Visit website", "サイトへ進む", "웹사이트 방문"],
+ relayBack:["返回", "返回", "Back", "戻る", "돌아가기"],
+
  relayImported:['中转账号已导入并选中，已尝试刷新积分；余额不可用时不影响保存。','中轉帳戶已匯入並選取，已嘗試更新點數；無餘額資料不影響儲存。','Relay account imported and selected; balance refresh attempted. Unavailable balance does not undo saving.','中継アカウントを読み込み選択しました。残高更新を試行し、残高取得失敗でも保存は維持します。','중계 계정을 가져와 선택하고 잔액 새로고침을 시도했습니다. 잔액 조회 실패는 저장에 영향을 주지 않습니다.'],
  relaySavedBusy:['已添加，任务结束后可切换','已新增，任務結束後可切換','Added; switch accounts after the task finishes.','追加しました。タスク完了後に切り替えられます。','추가되었습니다. 작업 종료 후 전환할 수 있습니다.'],
  relayInvalidLink:['导入链接无效，请回网站重新点击一键导入。','匯入連結無效，請回網站重新點擊。','Invalid import link. Return to the website and click Import again.','リンクが無効です。サイトで再度インポートしてください。','가져오기 링크가 잘못되었습니다. 웹사이트에서 다시 클릭하세요.'],

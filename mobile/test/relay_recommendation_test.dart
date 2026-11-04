@@ -34,6 +34,8 @@ void main() {
       expect(image.height,24);
       expect(tester.getTopLeft(link).dy,lessThan(170));
       await tester.tap(link);await tester.pumpAndSettle();
+      expect(calls,isEmpty);expect(find.byKey(const ValueKey('relay-intro-dialog')),findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('relay-intro-visit')));await tester.pumpAndSettle();
       expect(calls,hasLength(1));expect(calls.single.method,'launch');
       final args=calls.single.arguments as Map;
       expect(args['url'],'https://nai.langbai.cc');expect(args['useWebView'],false);expect(args['useSafariVC'],false);

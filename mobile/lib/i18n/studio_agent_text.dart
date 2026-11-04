@@ -2,6 +2,10 @@ import 'studio_agent_shared.dart';
 import 'app_locales.dart';
 
 const _rows = <String, List<String>>{
+  'accountRelayIntro': ["第三方 NovelAI 生图 API 中转站点，非 NovelAI 官方网站。可前往了解服务与接入方式；打开网页不会更改当前账号或 API 配置。", "第三方 NovelAI 生圖 API 中轉網站，非 NovelAI 官方網站。可前往了解服務與接入方式；開啟網頁不會變更目前帳戶或 API 設定。", "A third-party NovelAI image API relay, not the official NovelAI website. Visit to learn about its services and connection options. Opening the site does not change your current account or API settings.", "NovelAI画像APIの第三者中継サイトであり、NovelAI公式サイトではありません。サービスや接続方法をサイトで確認できます。開いても現在のアカウントやAPI設定は変更されません。", "NovelAI 이미지 API의 외부 중계 사이트이며 NovelAI 공식 웹사이트가 아닙니다. 서비스와 연결 방법을 사이트에서 확인할 수 있습니다. 열어도 현재 계정이나 API 설정은 바뀌지 않습니다."],
+  'accountRelayVisit': ["进入网站", "進入網站", "Visit website", "サイトへ進む", "웹사이트 방문"],
+  'accountRelayBack': ["返回", "返回", "Back", "戻る", "돌아가기"],
+
   'accountRelayRecommendation': ['NovelAI 中转站推荐','NovelAI 中轉站推薦','Recommended NovelAI relay','NovelAI 中継サイトの紹介','NovelAI 중계 사이트 추천'],
   'accountRelayBrowserHint': ['第三方站点 · 在浏览器打开','第三方網站 · 在瀏覽器開啟','Third-party site · Open in browser','第三者サイト · ブラウザーで開く','외부 사이트 · 브라우저에서 열기'],
   'accountRelayOpenFailed': ['无法打开系统浏览器，请手动访问 nai.langbai.cc。','無法開啟系統瀏覽器，請手動造訪 nai.langbai.cc。','Could not open your browser. Visit nai.langbai.cc manually.','ブラウザーを開けませんでした。nai.langbai.cc を直接開いてください。','브라우저를 열 수 없습니다. nai.langbai.cc에 직접 접속하세요.'],

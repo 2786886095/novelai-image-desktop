@@ -36,7 +36,7 @@ class NovelAiRelayRecommendation extends StatelessWidget {
     icon: Image.asset('assets/relay-brand/logo.png', width: 24, height: 24,
       key: const ValueKey('novelai-relay-logo'), excludeFromSemantics: true),
   ) : Semantics(
-    link: true,
+    button: true,
     child: Card(
       key: const ValueKey('novelai-relay-recommendation'),
       clipBehavior: Clip.antiAlias,
@@ -55,12 +55,82 @@ class NovelAiRelayRecommendation extends StatelessWidget {
   );
 }
 
+class _RelayIntroSession { bool decisionMade = false; }
+_RelayIntroSession? _relayIntroSession;
+
 Future<void> _openRelayRecommendation(BuildContext context) async {
+  if (_relayIntroSession != null) return;
+  final session = _RelayIntroSession();
+  _relayIntroSession = session;
   try {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final app = context.read<AppState>();
+    final reduce = app.settings.reduceMotion || MediaQuery.disableAnimationsOf(context);
+    final enter = await showGeneralDialog<bool>(
+      context: context, barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      transitionDuration: reduce ? Duration.zero : const Duration(milliseconds: 180),
+      pageBuilder: (dialogContext, _, __) => SafeArea(child: _RelayIntroductionDialog(
+        onDecision: () => session.decisionMade = true,
+        onDisposed: () { if (!session.decisionMade && identical(_relayIntroSession, session)) _relayIntroSession = null; },
+      )),
+      transitionBuilder: (dialogContext, animation, _, child) {
+        if (app.settings.reduceMotion || MediaQuery.disableAnimationsOf(dialogContext)) return child;
+        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
+        return FadeTransition(opacity: curved, child: ScaleTransition(
+          scale: Tween<double>(begin: .97, end: 1).animate(curved), child: child));
+      },
+    );
+    if (enter != true || !context.mounted) return;
     final opened = await launchUrl(Uri.parse(novelAiRelayRecommendationUrl), mode: LaunchMode.externalApplication);
     if (!opened) throw StateError('browser unavailable');
   } catch (_) {
     if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_accountText(context, 'accountRelayOpenFailed'))));
+  } finally {
+    if (identical(_relayIntroSession, session)) _relayIntroSession = null;
+  }
+}
+
+class _RelayIntroductionDialog extends StatefulWidget {
+  final VoidCallback onDecision, onDisposed;
+  const _RelayIntroductionDialog({required this.onDecision, required this.onDisposed});
+  @override
+  State<_RelayIntroductionDialog> createState() => _RelayIntroductionDialogState();
+}
+
+class _RelayIntroductionDialogState extends State<_RelayIntroductionDialog> {
+  bool settled = false;
+  void finish(bool enter) {
+    if (settled || !mounted) return;
+    settled = true; widget.onDecision(); Navigator.of(context).pop(enter);
+  }
+  @override
+  void dispose() { widget.onDisposed(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) {
+    final language = context.watch<AppState>().settings.language;
+    String t(String key) => studioAgentText(language, key);
+    return AlertDialog(
+      key: const ValueKey('relay-intro-dialog'), scrollable: true,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      title: Row(children: [
+        Image.asset('assets/relay-brand/logo.png', width: 40, height: 40, excludeFromSemantics: true),
+        const SizedBox(width: 12),
+        Expanded(child: Text(t('accountRelayRecommendation'))),
+      ]),
+      content: SizedBox(width: 400, child: Column(mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('nai.langbai.cc', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 12), Text(t('accountRelayIntro')),
+        ])),
+      actions: [
+        TextButton(key: const ValueKey('relay-intro-back'), autofocus: true,
+          onPressed: () => finish(false), child: Text(t('accountRelayBack'))),
+        FilledButton.icon(key: const ValueKey('relay-intro-visit'),
+          onPressed: () => finish(true), icon: const Icon(Icons.open_in_new, size: 18),
+          label: Text(t('accountRelayVisit'))),
+      ],
+    );
   }
 }
 

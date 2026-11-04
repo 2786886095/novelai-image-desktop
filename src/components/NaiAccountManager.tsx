@@ -9,11 +9,15 @@ import { LuKeyRound, LuMail, LuGlobe, LuPlus, LuX, LuUserRound, LuEye, LuEyeOff,
 import {confirmAction} from './confirm';
 import { motionReduced } from '../motion-system';
 import './NaiAccountManager.css';
+import {confirmRelayRecommendation} from './relay-recommendation-dialog';
 export const novelAiRelayRecommendationUrl = 'https://nai.langbai.cc';
+let relayRecommendationPending=false;
 export function NaiRelayRecommendation({language,onError}:{language?:Parameters<typeof naiAccountText>[0];onError?:()=>void}) {
- return <Button type="button" title={naiAccountText(language,'relayBrowserHint')} onClick={async()=>{
-  try { await window.naiDesktop.openExternal(novelAiRelayRecommendationUrl); }
+ return <Button type="button" aria-haspopup="dialog" title={naiAccountText(language,'relayBrowserHint')} onClick={async()=>{
+  if(relayRecommendationPending)return;relayRecommendationPending=true;
+  try { if(await confirmRelayRecommendation(language))await window.naiDesktop.openExternal(novelAiRelayRecommendationUrl); }
   catch { onError?.(); }
+  finally {relayRecommendationPending=false;}
  }}><img src={`${import.meta.env.BASE_URL}relay-brand/brand-mark.svg`} width={18} height={18} alt="" aria-hidden="true" style={{objectFit:'contain',flexShrink:0}}/>{naiAccountText(language,'relayRecommendation')}</Button>;
 }
 function validationText(code:NaiAccountValidationResult['code']):NaiAccountTextKey {return code==='passed'?'validationPassed':code==='auth'?'validationAuth':code==='unsupported'?'validationUnsupported':code==='network'?'validationNetwork':code==='invalid-input'?'validationInput':code==='invalid-response'?'validationResponse':'validationHttp';}

@@ -1,0 +1,10 @@
+.relay-intro-dialog{box-sizing:border-box;width:min(480px,100%);max-height:calc(100dvh - 40px);overflow:auto;overscroll-behavior:contain}
+.relay-intro-heading{display:flex;align-items:center;gap:14px;min-width:0}
+.relay-intro-heading>img{flex:none;object-fit:contain;border-radius:10px}
+.relay-intro-heading>div{min-width:0}
+.relay-intro-dialog .relay-intro-heading h3{margin:0;font-size:18px;line-height:1.45;overflow-wrap:anywhere}
+.relay-intro-domain{display:block;margin-top:4px;color:var(--text-secondary);font-size:14px;overflow-wrap:anywhere}
+.relay-intro-dialog .relay-intro-description{margin:18px 0 0;line-height:1.7;overflow-wrap:anywhere}
+.relay-intro-dialog .app-confirm-actions{flex-wrap:wrap;gap:10px}
+.relay-intro-dialog .app-confirm-actions>button{min-height:44px;white-space:normal}
+@media(prefers-reduced-motion:reduce){.relay-intro-backdrop,.relay-intro-dialog{transition:none!important}}
