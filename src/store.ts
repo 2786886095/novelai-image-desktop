@@ -243,6 +243,7 @@ interface AppState {
    * reverse history record once its source image is gone. */
   inspectImagePath: string;
   reversePromptText: string;
+  reversePromptWarnings: string[];
   reversePromptMode: ReversePromptMode;
   reversePromptScope: ReversePromptScope;
   reversePromptHint: string;
@@ -379,7 +380,7 @@ interface AppState {
   setBatchIntervalSeconds: (seconds: number) => void;
   setInspectImage: (url: string, meta: Record<string, string>, base64?: string, path?: string) => void;
   clearInspect: () => void;
-  setReversePromptText: (text: string) => void;
+  setReversePromptText: (text: string, warnings?: string[]) => void;
   setReversePromptMode: (mode: ReversePromptMode) => void;
   setReversePromptScope: (scope: ReversePromptScope) => void;
   setReversePromptHint: (hint: string) => void;
@@ -1012,6 +1013,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   inspectImageBase64: "",
   inspectImagePath: "",
   reversePromptText: "",
+  reversePromptWarnings: [],
   reversePromptMode: "tags" as ReversePromptMode,
   reversePromptScope: "full" as ReversePromptScope,
   reversePromptHint: "",
@@ -1955,6 +1957,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       inspectImageBase64: base64,
       inspectImagePath: path,
       reversePromptText: "",
+      reversePromptWarnings: [],
       reversePromptVariants: null,
         });
   },
@@ -1967,12 +1970,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       inspectImageBase64: "",
       inspectImagePath: "",
       reversePromptText: "",
+      reversePromptWarnings: [],
       reversePromptVariants: null,
         });
   },
 
-  setReversePromptText(text) {
-    set({ reversePromptText: text });
+  setReversePromptText(text, warnings) {
+    set({ reversePromptText: text, reversePromptWarnings: warnings ? [...warnings] : [] });
   },
 
   setReversePromptMode(mode) {
@@ -2038,9 +2042,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       const stale=!unchanged(),staleMessage=promptSkillStaleText(get().settings?.language);
       set({
         reverseJobs: get().reverseJobs.map((j) =>
-          j.id === job.id ? { ...j, status: "done", result: result.prompt, variants: result.variants, ...(stale?{message:staleMessage}:{}) } : j,
+          j.id === job.id ? { ...j, status: "done", result: result.prompt, variants: result.variants, warnings: result.warnings ? [...result.warnings] : [], ...(stale?{message:staleMessage}:{}) } : j,
         ),
-        ...(!stale?{reversePromptText: result.prompt,reversePromptVariants: result.variants ?? null}:{}),
+        ...(!stale?{reversePromptText: result.prompt,reversePromptWarnings: result.warnings ? [...result.warnings] : [],reversePromptVariants: result.variants ?? null}:{}),
         toast: stale?staleMessage:storeText(get().settings, "toast.inspectDone"),
       });
       const historyItem: TextToolHistoryItem = {
@@ -2054,6 +2058,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         sourceImagePath: inspectImagePath || undefined,
         result: result.prompt,
         variants: result.variants,
+        warnings: result.warnings ? [...result.warnings] : [],
         createdAt: new Date().toISOString(),
       };
       set({ reverseHistory: [historyItem, ...get().reverseHistory] });

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -14,12 +15,15 @@ import 'package:novelai_mobile/screens/inspect_screen.dart';
 import 'package:novelai_mobile/prompts/prompt_templates.dart';
 import 'package:novelai_mobile/prompts/reverse_template.dart';
 
-const warning='检查未通过，已保留转换结果供手动确认：有效单元不足';
+const warning='检查未通过，已保留结果供手动确认：有效单元不足';
 class _Vault extends Storage {
  @override Future<String?> getConvertKey() async=>'synthetic-only';
+ @override Future<String?> getVisionKey() async=>'synthetic-only';
  @override Future<void> setConvertHistory(List<TextToolHistoryItem> items) async{}
+ @override Future<void> setReverseHistory(List<TextToolHistoryItem> items) async{}
 }
 class _DraftApi extends NaiApi {
+ @override Future<AiTextResult> reversePrompt({required AppSettings settings,required String apiKey,required Uint8List image,required ReversePromptMode mode,required ReversePromptScope scope,required String hint,required bool knownCharacter,required String systemTemplate,String templateVersion=''})async=>const AiTextResult(ok:true,text:'red cup',message:warning);
  @override Future<AiTextResult> convertPrompt({required AppSettings settings,required String apiKey,required String text,required ReversePromptMode mode,required bool knownCharacter,required String systemTemplate})async=>const AiTextResult(ok:true,text:'red cup',message:warning);
 }
 
@@ -104,6 +108,31 @@ void main(){
  test('completed advisory draft reaches editor, history and retained warning',()async{
   final app=AppState(storage:_Vault(),api:_DraftApi());addTearDown(app.dispose);app.promptTemplates=await PromptTemplateLibrary.load();app.convertInput='红色杯子';
   final job=await app.convertPrompt();expect(job!.status,TextToolJobStatus.done);expect(app.convertResult,'red cup');expect(app.convertHistory.single.result,'red cup');expect(app.convertResultWarning,warning);
+ });
+ for(final mode in ReversePromptMode.values){test('mobile reverse ${mode.value} retains failed-check draft with warning in one actual loopback request',()async{
+  final server=await HttpServer.bind(InternetAddress.loopbackIPv4,0);addTearDown(server.close);var calls=0;final draft=mode==ReversePromptMode.natural?'A cat sleeps.':'red cup';
+  server.listen((request)async{calls++;final body=jsonDecode(await utf8.decoder.bind(request).join());expect(body['messages'][1]['content'][0]['image_url']['url'],startsWith('data:image/'));request.response.headers.contentType=ContentType.json;request.response.write(jsonEncode({'choices':[{'message':{'content':draft},'finish_reason':'stop'}]}));await request.response.close();});
+  final settings=AppSettings(proxyMode:'direct',visionApiUrl:'http://127.0.0.1:${server.port}',visionApiModel:'synthetic',promptCodexEnhanceEnabled:false,tagServerEnabled:false);
+  final r=await NaiApi().reversePrompt(settings:settings,apiKey:'synthetic-only',image:Uint8List.fromList([137,80,78,71]),mode:mode,scope:ReversePromptScope.full,hint:'只描述可见内容',knownCharacter:false,systemTemplate:'unused');
+  expect(r.ok,true,reason:r.message);expect(r.text,draft);expect(r.message,contains('检查未通过'));expect(calls,1);
+ });}
+ test('mobile legacy reverse typed short draft is advisory, not repeated count repair',()async{
+  final server=await HttpServer.bind(InternetAddress.loopbackIPv4,0);addTearDown(server.close);var calls=0;
+  server.listen((request)async{calls++;await utf8.decoder.bind(request).join();request.response.headers.contentType=ContentType.json;request.response.write(jsonEncode({'choices':[{'message':{'content':jsonEncode({'segments':[{'units':[{'kind':'tag','text':'red cup'}]}]})},'finish_reason':'stop'}]}));await request.response.close();});
+  const template='有效语义单元 50–150；Tag 65–75%';
+  final settings=AppSettings(proxyMode:'direct',visionApiUrl:'http://127.0.0.1:${server.port}',visionApiModel:'synthetic',reversePromptSkillVersion:'1.0.0',reversePromptTemplates:{'mixed':template},promptCodexEnhanceEnabled:false,tagServerEnabled:false);
+  final r=await NaiApi().reversePrompt(settings:settings,apiKey:'synthetic-only',image:Uint8List.fromList([137,80,78,71]),mode:ReversePromptMode.mixed,scope:ReversePromptScope.full,hint:'',knownCharacter:false,systemTemplate:template);
+  expect(r.ok,true,reason:r.message);expect(r.text,'red cup');expect(r.message,contains('检查未通过'));expect(calls,1);
+ });
+ test('reverse warning draft reaches current editor and history',()async{
+  final app=AppState(storage:_Vault(),api:_DraftApi());addTearDown(app.dispose);app.promptTemplates=await PromptTemplateLibrary.load();app.workbenchImage=WorkingImage(filePath:File('assets/icon/app_icon.png').absolute.path,width:1,height:1);
+  final job=await app.reversePrompt();expect(job!.status,TextToolJobStatus.done);expect(app.reverseResult,'red cup');expect(app.reverseHistory.single.result,'red cup');expect(app.reverseResultWarning,warning);
+ });
+ testWidgets('reverse warning is readable next to result and clears after editing',(tester)async{
+  final app=AppState();addTearDown(app.dispose);app.promptTemplates=(await tester.runAsync(PromptTemplateLibrary.load))!;app.reverseResult='red cup';app.reverseResultWarning=warning;
+  await tester.pumpWidget(ChangeNotifierProvider.value(value:app,child:const MaterialApp(home:InspectScreen(kind:InspectPageKind.reverse))));await tester.pumpAndSettle();
+  await tester.scrollUntilVisible(find.text(warning),250,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();expect(find.text(warning),findsOneWidget);
+  final field=find.byWidgetPredicate((w)=>w is TextField&&w.controller?.text=='red cup');await tester.ensureVisible(field);await tester.enterText(field,'blue cup');await tester.pump();expect(app.reverseResultWarning,isEmpty);expect(find.text(warning),findsNothing);expect(tester.takeException(),isNull);
  });
  test('legacy typed conversion retains draft and warnings while strict reverse is unchanged',(){
   final protocol=ReverseTemplateProtocol.resolve('有效语义单元 50–150；Tag 65–75%',ReversePromptMode.mixed,false,conversion:true)!;

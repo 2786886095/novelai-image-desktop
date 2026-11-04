@@ -3492,7 +3492,7 @@ export async function reversePromptImage(
     const image=await prepareVisionImage(imageBase64);
     const reply=await callVisionApi(system,[{type:'image_url',image_url:{url:`data:${image.mime};base64,${image.base64}`,detail:'high'}},{type:'text',text:userScopeText+'\n请依据实际上传图片与所选2.0.0模板输出。'}],7000,`AI反推 · ${safeTemplateVersion} · 技能${edition} · ${mode}`,true,knownCharacter,false);
     if(!reply.ok)return {ok:false,message:'反推失败，已保留原提示词：'+reply.message};
-    try{const parsed=parsePromptSkillV2Response(reply.content??'',mode,knownCharacter);return {ok:true,...parsed,message:'反推完成：仅格式与可计数单元检查，来源事实需人工复核'};}
+    try{const parsed=parsePromptSkillV2Response(reply.content??'',mode,knownCharacter,true);return {ok:true,...parsed,message:parsed.warnings.some(warning=>warning.startsWith('检查未通过'))?'反推完成（有检查警告）：结果已保留，请自行核对':'反推完成：仅格式与可计数单元检查，来源事实需人工复核'};}
     catch(error){return {ok:false,message:'反推未通过技能2.0.0检查，已保留原提示词：'+(error instanceof Error?error.message:String(error))};}
   }
 
@@ -3578,12 +3578,13 @@ export async function reversePromptImage(
       `AI 反推 · ${safeTemplateVersion} · ${mode} · ${scopeLabel}`, true, !!protocol);
     if (!result.ok) return {ok:false,message:`反推失败：${result.message}`};
     try {
-      if (protocol) return {ok:true,...protocol.parse(result.content ?? ""),message:"反推成功"};
+      if (protocol) {const parsed=protocol.parse(result.content??'','',{validationWarningOnly:true});return {ok:true,...parsed,message:parsed.warnings.length?'反推完成（有检查警告）：结果已保留，请自行核对':'反推成功'};}
       const parsed = parsePromptVariantResponse(result.content ?? "", knownCharacter);
       const outputs = knownCharacter ? [parsed.variants?.namePrompt,parsed.variants?.featurePrompt] : [parsed.primary];
-      if(outputs.some(value=>!value?.trim() || modeNeedsRepair(mode,value)))
-        throw Error("输出缺少完整结果或不符合所选模式；网络角色的两个版本均需符合模板");
-      return {ok:true,prompt:parsed.primary,variants:parsed.variants,message:"反推成功"};
+      if(outputs.some(value=>!value?.trim()||value.length>60000||/^(?:信息不足|模式能力不足|无法完成|我无法|抱歉|对不起|i(?:'m| am) sorry\b|i (?:cannot|can't|won't)\b)/iu.test(value.trim())))
+        throw Error('模型未返回完整可用结果，已保留原提示词');
+      const warnings=outputs.some(value=>modeNeedsRepair(mode,value!))?['检查未通过，已保留结果供手动确认：输出格式可能不符合所选模式']:[];
+      return {ok:true,prompt:parsed.primary,variants:parsed.variants,warnings,message:warnings.length?'反推完成（有检查警告）：结果已保留，请自行核对':'反推成功'};
     } catch(error) {feedback=error instanceof Error ? error.message : String(error);}
   }
   return {ok:false,message:`反推未通过模板校验，已保留原提示词：${feedback}`};

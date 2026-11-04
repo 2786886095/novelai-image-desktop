@@ -453,6 +453,7 @@ class AppState extends ChangeNotifier {
   bool reverseKnownCharacter = false;
   bool convertKnownCharacter = false;
   String reverseResult = '';
+  String reverseResultWarning = '';
   PromptVariants? reversePromptVariants;
   List<PromptCodexMatch> reverseCodexMatches = [];
   // Concurrent job tracker for reverse requests — every submission fires
@@ -3279,9 +3280,10 @@ class AppState extends ChangeNotifier {
       job.result = res.text;
       job.variants = res.variants;
       job.codexMatches = res.codexMatches;
-      if(chosenSkill=='2.0.0')job.message=res.message;
+      if(chosenSkill=='2.0.0'||res.message.contains('检查未通过'))job.message=res.message;
       if(isCurrentContext()&&credentialUnchanged){
         reverseResult = res.text;
+        reverseResultWarning = res.message.contains('检查未通过') ? res.message : '';
         reversePromptVariants = res.variants;
         reverseCodexMatches = res.codexMatches;
         status = _rt('status.reverseDone');
@@ -3385,7 +3387,7 @@ class AppState extends ChangeNotifier {
       job.result = res.text;
       job.variants = res.variants;
       job.codexMatches = res.codexMatches;
-      if(chosenSkill=='2.0.0')job.message=res.message;
+      if(chosenSkill=='2.0.0'||res.message.contains('检查未通过'))job.message=res.message;
       if(isCurrentContext()&&credentialUnchanged){
         convertResult = res.text;
         convertResultWarning = res.message.contains('检查未通过') ? res.message : '';

@@ -132,7 +132,7 @@ export function parsePromptSkillV2Response(raw:string,mode:SkillPromptMode,known
   try{return auditPromptSkillV2(text,mode);}
   catch(error){
    if(!validationWarningOnly)throw error;
-   return {prompt:text,warnings:['检查未通过，已保留转换结果供手动确认：'+(error instanceof Error?error.message:String(error))]};
+   return {prompt:text,warnings:['检查未通过，已保留结果供手动确认：'+(error instanceof Error?error.message:String(error))]};
   }
  };
  if(!knownCharacter){

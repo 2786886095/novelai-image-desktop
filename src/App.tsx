@@ -3959,6 +3959,7 @@ function ReversePanel() {
   const clearInspect = useAppStore((state) => state.clearInspect);
   const inspectImageUrl = useAppStore((state) => state.inspectImageUrl);
   const reversePromptText = useAppStore((state) => state.reversePromptText);
+  const reversePromptWarnings = useAppStore((state) => state.reversePromptWarnings);
   const reversePromptMode = useAppStore((state) => state.reversePromptMode);
   const reversePromptScope = useAppStore((state) => state.reversePromptScope);
   const reversePromptHint = useAppStore((state) => state.reversePromptHint);
@@ -4180,7 +4181,13 @@ function ReversePanel() {
               value={reversePromptText}
               onChange={(e) => setReversePromptText(e.target.value)}
             />
-            <PromptVariantCards variants={reversePromptVariants} onUse={setReversePromptText} />
+            {reversePromptWarnings.length > 0 && (
+              <div className="metadata-warnings prompt-result-warnings" role="status" aria-live="polite">
+                <Icon name="warning" />
+                <div>{reversePromptWarnings.map((warning, index) => <p key={index}>{warning}</p>)}</div>
+              </div>
+            )}
+            <PromptVariantCards variants={reversePromptVariants} onUse={(text) => setReversePromptText(text, reversePromptWarnings)} />
             {templates.length > 0 && (
               <div className="template-apply-row">
                 <span style={{ fontSize: "calc(12px * var(--ui-text-scale, 1))" }}>{t("inspect.applyTemplate")}</span>

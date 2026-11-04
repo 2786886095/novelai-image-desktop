@@ -109,7 +109,7 @@ PromptSkillV2Audit auditPromptSkillV2(String prompt,ReversePromptMode mode){
   try{final audit=auditPromptSkillV2(text,mode);return(prompt:audit.prompt,warnings:audit.warnings);}
   on FormatException catch(error){
    if(!validationWarningOnly)rethrow;
-   return(prompt:text,warnings:['检查未通过，已保留转换结果供手动确认：${error.message}']);
+   return(prompt:text,warnings:['检查未通过，已保留结果供手动确认：${error.message}']);
   }
  }
  if(!knownCharacter){

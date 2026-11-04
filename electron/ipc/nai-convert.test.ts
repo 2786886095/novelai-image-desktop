@@ -536,16 +536,16 @@ describe('reverse follows live saved templates',()=>{
  beforeEach(()=>{
   axiosMock.post.mockReset();settingsRef.current={visionApiUrl:'https://example.test/v1',visionApiKey:'test-only',visionApiModel:'test',reversePromptTemplates:{tags:'',natural:'',mixed:'SAVED V5 有效语义单元 50–150；Tag 65–75%'},reversePromptTemplatesV45:{tags:'',natural:'CUSTOM V45 NATURAL {{input}}',mixed:''}};
  });
- it('audits both known-character variants and retries with the same image',async()=>{
+ it('audits both known-character variants but retains the actual short draft with warning and no count retry',async()=>{
   const {reversePromptImage}=await import('./nai');const good=envelope();
   axiosMock.post.mockResolvedValueOnce(response(JSON.stringify({namePrompt:good,featurePrompt:{segments:[{units:[{kind:'tag',text:'1girl'}]}]}})))
    .mockResolvedValueOnce(response(JSON.stringify({namePrompt:good,featurePrompt:good})));
   const result=await reversePromptImage(Buffer.from('fixture-image').toString('base64'),'mixed','full','only visible details',true,'v5');
-  expect(result.ok).toBe(true);expect(result.variants?.namePrompt.split(',')).toHaveLength(60);expect(result.variants?.featurePrompt.split(',')).toHaveLength(60);
-  expect(axiosMock.post).toHaveBeenCalledTimes(2);
-  const first=axiosMock.post.mock.calls[0][1],second=axiosMock.post.mock.calls[1][1];
+  expect(result.ok).toBe(true);expect(result.variants?.namePrompt.split(',')).toHaveLength(60);expect(result.variants?.featurePrompt).toBe('1girl');expect(result.warnings?.join('')).toContain('检查未通过');
+  expect(axiosMock.post).toHaveBeenCalledTimes(1);
+  const first=axiosMock.post.mock.calls[0][1];
   expect(first.messages[0].content).toContain('SAVED V5');expect(first.max_tokens).toBeGreaterThanOrEqual(7000);
-  expect(second.messages[1].content[0]).toEqual(first.messages[1].content[0]);
+  expect(first.messages[1].content[0].image_url.url).toMatch(/^data:image\//);
  });
  it('stops after three invalid responses instead of returning a short success',async()=>{
   const {reversePromptImage}=await import('./nai');axiosMock.post.mockResolvedValue(response('1girl, solo, cosplay'));

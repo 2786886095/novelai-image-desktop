@@ -1213,7 +1213,7 @@ class NaiApi {
           [...user,if(feedback.isNotEmpty){'type':'text','text':'上次未通过模板校验：$feedback。请对照同一图片重写完整结果，不补不可见内容。'}],
           maxTokens:knownCharacter?7000:4000,label:'AI reverse · $selectedVersion · ${mode.value}',apiKind:'vision',preserveRaw:true,jsonRequired:true);
         if(!response.ok)return response;
-        try {final parsed=protocol.parse(response.text);return AiTextResult(ok:true,message:'Success',text:parsed.prompt,variants:parsed.variants);}
+        try {final parsed=protocol.parse(response.text,validationWarningOnly:true);return AiTextResult(ok:true,message:parsed.warnings.isEmpty?'Success':parsed.warnings.join(' '),text:parsed.prompt,variants:parsed.variants);}
         catch(error){feedback=error.toString();}
       }
       return AiTextResult(ok:false,message:'反推未通过模板校验，已保留原提示词：$feedback');
@@ -1463,7 +1463,7 @@ class NaiApi {
       maxTokens:7000,label:'Prompt skill 2.0.0 · V5 Full · $task · ${mode.value}',apiKind:reverse?'vision':'convert',preserveRaw:true,jsonRequired:knownCharacter,retryEmpty:false);
     if(!reply.ok)return reply;
     try{
-      final parsed=parsePromptSkillV2Response(reply.text,mode,knownCharacter:knownCharacter,validationWarningOnly:task=='convert');
+      final parsed=parsePromptSkillV2Response(reply.text,mode,knownCharacter:knownCharacter,validationWarningOnly:task=='convert'||task=='reverse');
       return AiTextResult(ok:true,message:parsed.warnings.join(' '),text:parsed.prompt,variants:parsed.variants);
     }catch(error){
       // No retry to fill counts: missing evidence is not an invitation to invent.

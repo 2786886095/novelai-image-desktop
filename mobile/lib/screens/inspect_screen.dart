@@ -183,6 +183,24 @@ class _ReversePanelState extends State<_ReversePanel> {
             onRemove: s.removeReverseJob,
           ),
           const SizedBox(height: 12),
+          if (s.reverseResultWarning.isNotEmpty)
+            Semantics(
+              liveRegion: true,
+              child: Card(
+                color: Theme.of(context).colorScheme.secondaryContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.warning_amber_rounded),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(s.reverseResultWarning)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           TextField(
             controller: _resultCtrl,
             maxLines: 8,
@@ -191,6 +209,7 @@ class _ReversePanelState extends State<_ReversePanel> {
                 border: const OutlineInputBorder()),
             onChanged: (v) {
               s.reverseResult = v;
+              s.reverseResultWarning = '';
               s.markChanged();
             },
           ),
@@ -199,6 +218,7 @@ class _ReversePanelState extends State<_ReversePanel> {
             language: language,
             onApply: (value) {
               s.reverseResult = value;
+              s.reverseResultWarning = '';
               s.reversePromptVariants = null;
               s.markChanged();
             },
@@ -221,6 +241,7 @@ class _ReversePanelState extends State<_ReversePanel> {
             onUse: (text) {
               if (text.trim().isEmpty) return;
               s.reverseResult = text;
+              s.reverseResultWarning = '';
               s.applyPrompt(text);
             },
           ),

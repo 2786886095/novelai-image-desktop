@@ -19,9 +19,9 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-- **Relay introduction and preview**: desktop and mobile recommendations first show the logo, domain, third-party description and full website screenshot. Only an explicit Visit opens the browser; Back does not navigate or change accounts/API settings.
-- **Desktop startup feedback**: an independent startup view appears before the large application modules. Startup timeout, loading failure and early renderer termination offer visible feedback and manual retry without deleting user data or automatically resending generation requests.
-- **Release scope**: all five platforms are rebuilt from one source. Windows package startup is checked separately before publication; incomplete physical-device/full-feature acceptance is disclosed. The unsigned IPA requires user signing.
+- **Reverse prompting and text conversion retain usable drafts**: count, ratio and format checks now produce warnings instead of discarding actual model output. Review, edit or reuse the draft; no invented padding or automatic image generation.
+- **Visible result warnings**: desktop and mobile keep diagnostics beside the result and clear stale notices after manual replacement. Complete text code fences are handled correctly.
+- **Unusable responses still fail**: API errors, empty or truncated replies, explicit refusals and unextractable response structures are not successful drafts. All five platforms are rebuilt from the same source; unfinished device/full-feature acceptance is disclosed. The unsigned IPA requires user signing.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

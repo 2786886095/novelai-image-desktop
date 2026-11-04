@@ -5,6 +5,18 @@ const priorVariants={namePrompt:'previous named',featurePrompt:'previous feature
 const settings=()=>({language:'en-US',reversePromptTemplateVersion:'v5',reversePromptSkillVersion:'2.0.0',convertPromptTemplateVersion:'v5',convertPromptSkillVersion:'2.0.0',reversePromptTemplatesV2:{tags:'',natural:'',mixed:''},convertPromptTemplatesV2:{tags:'',natural:'',mixed:''}} as AppSettings);
 beforeEach(()=>{vi.useFakeTimers();useAppStore.setState(useAppStore.getInitialState(),true);useAppStore.setState({settings:settings(),inspectImageBase64:'synthetic-image',reversePromptText:'previous reverse',reversePromptVariants:priorVariants,convertInput:'original input',convertResult:'previous convert',convertResultVariants:priorVariants});});
 afterEach(()=>{vi.clearAllTimers();vi.useRealTimers();vi.unstubAllGlobals();});
+it('reverse warning draft reaches editor, completed job and history without starting generation',async()=>{
+ const warnings=['检查未通过，已保留结果供手动确认：有效单元不足'];const save=vi.fn();
+ vi.stubGlobal('window',{naiDesktop:{reversePrompt:vi.fn(async()=>({ok:true,prompt:'red cup',warnings,message:'反推完成（有检查警告）'})),addReverseHistoryItem:save}});
+ await useAppStore.getState().runReversePrompt();const s=useAppStore.getState();
+ expect(s.reversePromptText).toBe('red cup');expect(s.reversePromptWarnings).toEqual(warnings);expect(s.reverseJobs[0]).toMatchObject({status:'done',warnings});expect(save).toHaveBeenCalledWith(expect.objectContaining({result:'red cup',warnings}));
+ s.setReversePromptText('blue cup');expect(useAppStore.getState().reversePromptWarnings).toEqual([]);
+});
+it('failed reverse keeps previous draft and matching warnings',async()=>{
+ useAppStore.setState({reversePromptWarnings:['previous warning']});vi.stubGlobal('window',{naiDesktop:{reversePrompt:vi.fn(async()=>({ok:false,message:'synthetic API failure'}))}});
+ await useAppStore.getState().runReversePrompt();expect(useAppStore.getState().reversePromptText).toBe('previous reverse');expect(useAppStore.getState().reversePromptWarnings).toEqual(['previous warning']);
+});
+it('new source image clears obsolete reverse warning',()=>{useAppStore.setState({reversePromptWarnings:['previous warning']});useAppStore.getState().clearInspect();expect(useAppStore.getState().reversePromptWarnings).toEqual([]);});
 it.each(['edition','model','template','mode','image','hint'] as const)('a pending reverse response after %s changes is retained only in its original job',async change=>{
  let resolve!:(value:any)=>void;const promise=new Promise(resolveValue=>{resolve=resolveValue;}),history=vi.fn(),api=vi.fn((..._args:unknown[])=>promise);vi.stubGlobal('window',{naiDesktop:{reversePrompt:api,addReverseHistoryItem:history}});
  const running=useAppStore.getState().runReversePrompt(),current=useAppStore.getState();

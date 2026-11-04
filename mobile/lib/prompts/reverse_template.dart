@@ -59,7 +59,7 @@ ${knownCharacter ? '本次内部协议覆盖前文的字符串 JSON 协议：返
       final draft=segments.join(' | ');
       if(draft.isEmpty||draft.length>60000||RegExp(r"^(?:信息不足|模式能力不足|无法完成|我无法|抱歉|对不起|i(?:'m| am) sorry\b|i (?:cannot|can't|won't)\b)",caseSensitive:false).hasMatch(draft))throw const FormatException('模型未返回可用提示词');
       try{return _audit(envelope,source);}on FormatException catch(error){
-        warnings.add('检查未通过，已保留转换结果供手动确认：${error.message}');return draft;
+        warnings.add('检查未通过，已保留结果供手动确认：${error.message}');return draft;
       }
     }
     if(!knownCharacter)return (prompt:inspect(value),variants:null,warnings:warnings);

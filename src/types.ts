@@ -2134,7 +2134,8 @@ export interface NaiDesktopApi {
     ok: boolean;
     prompt?: string;
     variants?: PromptVariants;
-      message: string;
+    warnings?: string[];
+    message: string;
   }>;
   convertPrompt: (
     text: string,

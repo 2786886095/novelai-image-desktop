@@ -37,7 +37,7 @@ export function reverseTemplateProtocol(template:string, mode:string, knownChara
         if(!result.prompt.trim()||result.prompt.length>60000||/^(?:信息不足|模式能力不足|无法完成|我无法|抱歉|对不起|i(?:'m| am) sorry\b|i (?:cannot|can't|won't)\b)/iu.test(result.prompt.trim()))throw Error('模型没有返回可用提示词');
         if(result.issues.length){
           if(!options.validationWarningOnly)throw Error(result.issues.join('；'));
-          warnings.push('检查未通过，已保留转换结果供手动确认：'+result.issues.join('；'));
+          warnings.push('检查未通过，已保留结果供手动确认：'+result.issues.join('；'));
         }
         return result.prompt;
       };
