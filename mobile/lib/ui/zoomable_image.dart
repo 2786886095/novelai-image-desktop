@@ -55,7 +55,8 @@ bool paintedImageContains(GlobalKey imageKey, Offset global,
 
   visit(root);
   if (foundImage) return inside;
-  return !requirePaintedImage && root is RenderBox &&
+  return !requirePaintedImage &&
+      root is RenderBox &&
       (Offset.zero & root.size).contains(root.globalToLocal(global));
 }
 
@@ -81,6 +82,14 @@ class ZoomableImage extends StatefulWidget {
   final List<String>? imagePaths;
   final ValueChanged<int>? onIndexChanged;
 
+  /// Opt-in for Android generation results; other image viewers stay unchanged.
+  final String? imageFirstTitle;
+  final double imageAspectRatio;
+  final double? maxImageHeight;
+  final VoidCallback? onLoad, onPaste, onClearInput;
+  final Widget? overlay;
+  final bool viewEnabled;
+
   const ZoomableImage({
     super.key,
     required this.image,
@@ -89,6 +98,14 @@ class ZoomableImage extends StatefulWidget {
     this.initialIndex = 0,
     this.imagePaths,
     this.onIndexChanged,
+    this.imageFirstTitle,
+    this.imageAspectRatio = 1,
+    this.maxImageHeight,
+    this.onLoad,
+    this.onPaste,
+    this.onClearInput,
+    this.overlay,
+    this.viewEnabled = true,
   });
 
   @override
@@ -163,10 +180,194 @@ class _ZoomableImageState extends State<ZoomableImage> {
     );
   }
 
+  Widget _imageViewport() => ColoredBox(
+        color: widget.backgroundColor ?? Colors.transparent,
+        child: LayoutBuilder(
+          builder: (context, constraints) => GestureDetector(
+            // Double-tap opens the full-screen viewer; pinch still zooms
+            // here in place.
+            onLongPressStart: (details) {
+              if (widget.imagePaths != null &&
+                  index < widget.imagePaths!.length &&
+                  paintedImageContains(imageKey, details.globalPosition,
+                      requirePaintedImage: true)) {
+                showLocalImageActions(context, widget.imagePaths![index]);
+              }
+            },
+            onSecondaryTapUp: (details) {
+              if (widget.imagePaths != null &&
+                  index < widget.imagePaths!.length &&
+                  paintedImageContains(imageKey, details.globalPosition,
+                      requirePaintedImage: true)) {
+                showLocalImageActions(context, widget.imagePaths![index]);
+              }
+            },
+            onDoubleTapDown: (details) =>
+                doubleTapPosition = details.globalPosition,
+            onDoubleTap: () {
+              if (widget.viewEnabled &&
+                  doubleTapPosition != null &&
+                  paintedImageContains(imageKey, doubleTapPosition!)) {
+                _openFullscreen();
+              }
+            },
+            child: InteractiveViewer(
+              transformationController: controller,
+              minScale: 1,
+              maxScale: 8,
+              panEnabled: scale > 1.001,
+              scaleEnabled: true,
+              trackpadScrollCausesScale: true,
+              onInteractionUpdate: (_) => _syncScale(),
+              onInteractionEnd: (_) => _syncScale(),
+              child: SizedBox(
+                key: imageKey,
+                width: constraints.maxWidth,
+                height: constraints.maxHeight,
+                child: images[index],
+              ),
+            ),
+          ),
+        ),
+      );
+
+  Widget _imageFirst(BuildContext context, String language) {
+    final text = generateScreenTextFor(language);
+    final ratio =
+        widget.imageAspectRatio.isFinite && widget.imageAspectRatio > 0
+            ? widget.imageAspectRatio
+            : 1.0;
+    return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: Row(
+                      key: const ValueKey('result-image-toolbar'),
+                      children: [
+                        Expanded(
+                            child: Tooltip(
+                                message: widget.imageFirstTitle!,
+                                child: Text(widget.imageFirstTitle!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelLarge))),
+                        if (images.length > 1) ...[
+                          IconButton(
+                              key: const ValueKey('preview-previous'),
+                              tooltip: MaterialLocalizations.of(context)
+                                  .previousPageTooltip,
+                              onPressed:
+                                  index > 0 ? () => move(index - 1) : null,
+                              icon: const Icon(Icons.chevron_left)),
+                          ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 60),
+                              child: Text('${index + 1}/${images.length}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis)),
+                          IconButton(
+                              key: const ValueKey('preview-next'),
+                              tooltip: MaterialLocalizations.of(context)
+                                  .nextPageTooltip,
+                              onPressed: index + 1 < images.length
+                                  ? () => move(index + 1)
+                                  : null,
+                              icon: const Icon(Icons.chevron_right)),
+                        ],
+                        IconButton(
+                            tooltip: runtimeTextFor(language, 'ui.fullscreen'),
+                            onPressed:
+                                widget.viewEnabled ? _openFullscreen : null,
+                            icon: const Icon(Icons.fullscreen)),
+                        PopupMenuButton<String>(
+                            key: const ValueKey('result-image-tools'),
+                            position: PopupMenuPosition.under,
+                            offset: const Offset(0, 4),
+                            tooltip: MaterialLocalizations.of(context)
+                                .showMenuTooltip,
+                            icon: const Icon(Icons.more_horiz),
+                            onSelected: (action) {
+                              if ((action == 'load' ||
+                                      action == 'paste' ||
+                                      action == 'clear') &&
+                                  context.read<AppState>().busy) return;
+                              switch (action) {
+                                case 'load':
+                                  widget.onLoad?.call();
+                                case 'paste':
+                                  widget.onPaste?.call();
+                                case 'clear':
+                                  widget.onClearInput?.call();
+                                case 'copy':
+                                  _copyImage(
+                                      context, widget.imagePaths![index]);
+                                case 'reset':
+                                  _reset();
+                              }
+                            },
+                            itemBuilder: (context) {
+                              PopupMenuItem<String> item(
+                                      String value,
+                                      IconData icon,
+                                      String label,
+                                      bool enabled) =>
+                                  PopupMenuItem(
+                                      value: value,
+                                      enabled: enabled,
+                                      child: Row(children: [
+                                        Icon(icon, size: 20),
+                                        const SizedBox(width: 12),
+                                        Flexible(child: Text(label))
+                                      ]));
+                              return [
+                                item('load', Icons.image_outlined,
+                                    text.loadImage, widget.onLoad != null),
+                                item(
+                                    'paste',
+                                    Icons.content_paste,
+                                    imageActionsText(language, 'paste'),
+                                    widget.onPaste != null),
+                                if (widget.imagePaths != null &&
+                                    index < widget.imagePaths!.length)
+                                  item('copy', Icons.copy,
+                                      imageActionsText(language, 'copy'), true),
+                                item(
+                                    'reset',
+                                    Icons.fit_screen,
+                                    '${(scale * 100).round()}% · ${runtimeTextFor(language, 'ui.resetZoom')}',
+                                    scale != 1),
+                                if (widget.onClearInput != null)
+                                  item('clear', Icons.close,
+                                      text.switchToTextToImage, true),
+                              ];
+                            }),
+                      ]))),
+          LayoutBuilder(builder: (context, constraints) {
+            final naturalHeight = constraints.maxWidth / ratio;
+            final height = widget.maxImageHeight == null
+                ? naturalHeight
+                : naturalHeight.clamp(1.0, widget.maxImageHeight!);
+            return SizedBox(
+                key: const ValueKey('result-image-stage'),
+                height: height,
+                child: Stack(fit: StackFit.expand, children: [
+                  _imageViewport(),
+                  if (widget.overlay != null) widget.overlay!,
+                ]));
+          }),
+        ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final language = context.watch<AppState>().settings.language;
     String t(String key) => runtimeTextFor(language, key);
+    if (widget.imageFirstTitle != null) return _imageFirst(context, language);
     return Column(
       children: [
         SizedBox(
@@ -214,53 +415,7 @@ class _ZoomableImageState extends State<ZoomableImage> {
             ),
           ),
         ),
-        Expanded(
-          child: ColoredBox(
-            color: widget.backgroundColor ?? Colors.transparent,
-            child: LayoutBuilder(
-              builder: (context, constraints) => GestureDetector(
-                // Double-tap opens the full-screen viewer; pinch still zooms
-                // here in place.
-                onLongPressStart: (details) {
-                  if (widget.imagePaths != null && index < widget.imagePaths!.length &&
-                      paintedImageContains(imageKey, details.globalPosition, requirePaintedImage: true)) {
-                    showLocalImageActions(context, widget.imagePaths![index]);
-                  }
-                },
-                onSecondaryTapUp: (details) {
-                  if (widget.imagePaths != null && index < widget.imagePaths!.length &&
-                      paintedImageContains(imageKey, details.globalPosition, requirePaintedImage: true)) {
-                    showLocalImageActions(context, widget.imagePaths![index]);
-                  }
-                },
-                onDoubleTapDown: (details) =>
-                    doubleTapPosition = details.globalPosition,
-                onDoubleTap: () {
-                  if (doubleTapPosition != null &&
-                      paintedImageContains(imageKey, doubleTapPosition!)) {
-                    _openFullscreen();
-                  }
-                },
-                child: InteractiveViewer(
-                  transformationController: controller,
-                  minScale: 1,
-                  maxScale: 8,
-                  panEnabled: scale > 1.001,
-                  scaleEnabled: true,
-                  trackpadScrollCausesScale: true,
-                  onInteractionUpdate: (_) => _syncScale(),
-                  onInteractionEnd: (_) => _syncScale(),
-                  child: SizedBox(
-                    key: imageKey,
-                    width: constraints.maxWidth,
-                    height: constraints.maxHeight,
-                    child: images[index],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
+        Expanded(child: _imageViewport()),
       ],
     );
   }

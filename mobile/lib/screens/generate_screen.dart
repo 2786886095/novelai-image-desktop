@@ -339,12 +339,11 @@ class GenerateScreen extends StatelessWidget {
                     ? '${state.account.tierName ?? "API"} · ${state.account.anlasBalance ?? "—"}${!showV5Allowance || state.account.opusUsage == null ? "" : " · V5 ${state.account.opusUsage!.isNegative ? 0 : state.account.opusUsage!.percent.clamp(0, 100).round()}%"}'
                     : text.notConfigured;
 
-    final preview = GenerationImageTransfers(
-        child: _PreviewCard(onPick: () => _pickImage(context),
-          aspectRatio: isAndroidRedesign(context)
-              ? (wide ? size.width * 5 / 11 - 64 : size.width - 64) /
-                  (size.height * .28).clamp(140.0, 280.0)
-              : 1));
+    final preview = isAndroidRedesign(context)
+        ? GenerationImageTransfers(builder: (context, onPaste) =>
+            _PreviewCard(onPick: () => _pickImage(context), onPaste: onPaste))
+        : GenerationImageTransfers(
+            child: _PreviewCard(onPick: () => _pickImage(context)));
     if(state.settings.imageProvider=='openai-images' && state.workbenchImage==null) return Scaffold(body:CompatibleGenerateScreen(preview:preview));
     if (isAndroidRedesign(context)) {
       return _AndroidGenerateLayout(preview: preview,
@@ -596,8 +595,7 @@ class _AndroidGenerateLayout extends StatelessWidget {
           _AndroidCreateDisclosure(title: t('shortcuts'), child: _PromptShortcutBar()),
       ]),
     );
-    final result = hasPreview ? AndroidSectionCard(title: t('result'),
-      icon: Icons.image_outlined, child: preview) : GenerationImageTransfers(child: Card(
+    final result = hasPreview ? preview : GenerationImageTransfers(child: Card(
       key: const ValueKey('android-create-empty-result'),
       child: ConstrainedBox(constraints: const BoxConstraints(minHeight: 72),
         child: ListTile(leading: const Icon(Icons.image_outlined),
@@ -2360,8 +2358,9 @@ class _PromptShortcutBar extends StatelessWidget {
 
 class _PreviewCard extends StatelessWidget {
   final VoidCallback onPick;
-  final double aspectRatio;
-  const _PreviewCard({required this.onPick, this.aspectRatio = 1});
+  final double aspectRatio = 1;
+  final VoidCallback? onPaste;
+  const _PreviewCard({required this.onPick, this.onPaste});
 
   @override
   Widget build(BuildContext context) {
@@ -2384,6 +2383,40 @@ class _PreviewCard extends StatelessWidget {
     final historyIndex = history.indexWhere((item) => item.filePath == path);
     final paths = historyIndex < 0 ? <String>[if (path != null) path] :
         history.map((item) => item.filePath).toList();
+    if (isAndroidRedesign(context)) {
+      final width = livePreview != null ? state.params.width : work?.width ?? current?.width ?? 0;
+      final height = livePreview != null ? state.params.height : work?.height ?? current?.height ?? 0;
+      final ratio = width > 0 && height > 0 ? width / height : 1.0;
+      final available = path != null && ImageFiles.keepVisible(path);
+      return Card(key: const ValueKey('android-image-first-result'),
+        margin: EdgeInsets.zero, clipBehavior: Clip.antiAlias,
+        child: ZoomableImage(key: const ValueKey('generate-preview-viewport'),
+          imageFirstTitle: androidPromptText(state.settings.language, 'result'),
+          imageAspectRatio: ratio,
+          maxImageHeight: (MediaQuery.sizeOf(context).height * .68).clamp(160.0, 720.0),
+          viewEnabled: livePreview != null || available,
+          onLoad: state.busy ? null : onPick,
+          onPaste: state.busy ? null : onPaste,
+          onClearInput: !state.busy && work != null ? state.clearWorkbench : null,
+          image: livePreview != null
+            ? Image.memory(livePreview, fit: BoxFit.contain, gaplessPlayback: true, filterQuality: FilterQuality.medium)
+            : available ? imageFile(File(path), fit: BoxFit.contain, errorBuilder: failure)
+            : Center(child: Padding(padding: const EdgeInsets.all(16),
+                child: Text(path == null ? text.previewEmpty : unavailable, textAlign: TextAlign.center))),
+          gallery: livePreview == null && available
+            ? paths.map((p) => imageFile(File(p), fit: BoxFit.contain, errorBuilder: failure)).toList() : null,
+          imagePaths: livePreview == null && available ? paths : null,
+          initialIndex: historyIndex < 0 ? 0 : historyIndex,
+          onIndexChanged: livePreview != null || historyIndex < 0 ? null
+            : (index) => state.setWorkbenchFromHistory(history[index]),
+          overlay: !state.busy ? null : IgnorePointer(child: livePreview == null
+            ? const ColoredBox(color: Colors.black38, child: Center(child: CircularProgressIndicator()))
+            : Align(alignment: Alignment.bottomCenter,
+                child: LinearProgressIndicator(value: state.generationPreviewProgress > 0
+                  ? state.generationPreviewProgress : null, minHeight: 4,
+                  semanticsLabel: streamText.progress))),
+        ));
+    }
     return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
     AspectRatio(
       aspectRatio: aspectRatio,

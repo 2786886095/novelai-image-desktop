@@ -10,8 +10,13 @@ import '../state/app_state.dart';
 
 /// Explicit paste/drop only; a gallery-picker replacement stays image-only.
 class GenerationImageTransfers extends StatefulWidget {
-  final Widget child;
-  const GenerationImageTransfers({super.key, required this.child});
+  final Widget? child;
+
+  /// Compact result surfaces expose paste in their own action menu. The same
+  /// focus/drop region and busy/import guard still own every import action.
+  final Widget Function(BuildContext, VoidCallback? onPaste)? builder;
+  const GenerationImageTransfers({super.key, this.child, this.builder})
+      : assert((child == null) != (builder == null));
   @override
   State<GenerationImageTransfers> createState() =>
       _GenerationImageTransfersState();
@@ -128,16 +133,22 @@ class _GenerationImageTransfersState extends State<GenerationImageTransfers> {
         }
         return KeyEventResult.ignored;
       },
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        KeyedSubtree(key: regionKey, child: widget.child),
-        Align(
-            alignment: AlignmentDirectional.centerEnd,
-            child: TextButton.icon(
-                key: const ValueKey('generation-paste-image'),
-                onPressed: app.busy || importing ? null : _paste,
-                icon: const Icon(Icons.content_paste),
-                label: Text(imageActionsText(app.settings.language, 'paste')))),
-      ]),
+      child: widget.builder != null
+          ? KeyedSubtree(
+              key: regionKey,
+              child: widget.builder!(
+                  context, app.busy || importing ? null : _paste))
+          : Column(mainAxisSize: MainAxisSize.min, children: [
+              KeyedSubtree(key: regionKey, child: widget.child!),
+              Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: TextButton.icon(
+                      key: const ValueKey('generation-paste-image'),
+                      onPressed: app.busy || importing ? null : _paste,
+                      icon: const Icon(Icons.content_paste),
+                      label: Text(
+                          imageActionsText(app.settings.language, 'paste')))),
+            ]),
     );
   }
 }
