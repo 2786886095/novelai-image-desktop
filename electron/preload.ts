@@ -1,6 +1,8 @@
 import { COMFY_SETUP_IPC, type ComfySetupApi } from "../src/comfyui/setup-contract";
 import { COMFY_IPC, type ComfyLocalApi, type ComfyResponse, type ComfyEvent } from "../src/comfyui/contract";
 import { contextBridge, ipcRenderer, webUtils } from "electron";
+// A health-only signal. No account/configuration data crosses this channel.
+window.addEventListener('studio:renderer-ready', () => ipcRenderer.send('window:renderer-ready'), {once:true});
 import { createImageSaveTracker, type ImageSaveNotice } from "../src/image-save-feedback";
 import type {
   CompatibleGenerationRequest,

@@ -26,6 +26,11 @@ window.addEventListener("unhandledrejection", (event) => {
   console.error("[unhandledrejection]", event.reason);
 });
 
+function RendererReady() {
+  React.useEffect(() => { window.dispatchEvent(new Event('studio:renderer-ready')); }, []);
+  return null;
+}
+
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <AppErrorBoundary scope="app" root>
@@ -34,6 +39,7 @@ createRoot(document.getElementById("root")!).render(
       <FavoritesNoticeSupport />
       <McpEventSupport />
       <App />
+      <RendererReady />
     </AppErrorBoundary>
   </React.StrictMode>,
 );

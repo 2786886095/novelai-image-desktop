@@ -1,0 +1,5 @@
+#studio-startup{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;background:#f0eff9;color:#242033;font:16px/1.6 system-ui,sans-serif;padding:24px;box-sizing:border-box}
+#studio-startup section{max-width:32rem;width:100%;box-sizing:border-box;padding:28px;border-radius:20px;background:#fff;box-shadow:0 12px 48px #32206012}
+#studio-startup h1{font-size:20px;line-height:1.4;margin:0 0 12px}#studio-startup p{margin:0 0 16px;overflow-wrap:anywhere}
+#studio-startup button{min-height:44px;padding:10px 20px;border:0;border-radius:10px;background:#7043df;color:white;font:inherit;cursor:pointer}#studio-startup button:focus-visible{outline:3px solid #3c2188;outline-offset:3px}
+#studio-startup[hidden]{display:none}

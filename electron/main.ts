@@ -410,6 +410,7 @@ function pinUserDataAndMigrate() {
 }
 
 import { wireSystemBack } from "./system-navigation";
+import {watchRendererStartup,startupFailureText} from './renderer-startup';
 
 function createWindow() {
   const iconPath = isDev
@@ -443,9 +444,25 @@ function createWindow() {
 
   attachEditContextMenu(mainWindow);
   wireSystemBack(mainWindow);
+  const startupWindow=mainWindow;
+  let startupPrompt=false;
+  const startup=watchRendererStartup({onProblem:reason=>{
+    console.warn('[startup] renderer not ready:',reason);
+    if(uiCapturePath||startupWindow.isDestroyed()||startupPrompt)return;
+    startupPrompt=true;startupWindow.show();
+    const text=startupFailureText(getSettings().language);
+    void dialog.showMessageBox(startupWindow,{type:'warning',title:text.title,message:text.message,detail:text.detail,
+      buttons:[text.retry,text.wait],defaultId:1,cancelId:1,noLink:true}).then(result=>{
+      if(result.response===0&&!startupWindow.isDestroyed()&&!startup.isReady()&&startup.retry())startupWindow.webContents.reload();
+    }).catch(()=>{/* No forced reload or destructive recovery. */}).finally(()=>{startupPrompt=false;});
+  }});
+  startupWindow.webContents.on('ipc-message',(_event,channel)=>{if(channel==='window:renderer-ready')startup.ready();});
+  startupWindow.webContents.on('render-process-gone',(_event,details)=>startup.fail(details.reason));
+  startupWindow.webContents.on('unresponsive',()=>startup.fail('unresponsive'));
+  startupWindow.once('closed',()=>startup.dispose());
   mainWindow.webContents.on("did-fail-load", (_event, code, description, _url, isMainFrame) => {
     if (!isMainFrame || code === -3) return;
-      dialog.showErrorBox("启动失败 / Startup failed", `${description} (${code})`);
+    startup.fail('load-failed');
     mainWindow?.show();
   });
 

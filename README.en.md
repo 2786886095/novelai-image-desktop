@@ -19,9 +19,9 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-- **Image-first Android results**: the image is the main content, with less padding and one compact title/navigation/fullscreen row. Load/paste actions move into a tool menu. Full-image viewing, zoom, browsing and import guards remain; generation resolution is unchanged.
-- **Scoped checks**: reuse70 relevant regressions and scoped Dart analysis. Image area in a square fixture grew from about27% to88%; this is not a promise for every aspect ratio. All five platforms are freshly rebuilt from one source; other platforms synchronize versions, not Android layout.
-- **Limits**: no new APK/release-package physical-device, full-function, GPU, real-account, paid-generation or upgrade acceptance. The emulator is not reopened. UnsignedIPA requires user signing. No new Gemini audit or real-code website-import end-to-end acceptance was completed.
+- **Relay introduction and preview**: desktop and mobile recommendations first show the logo, domain, third-party description and full website screenshot. Only an explicit Visit opens the browser; Back does not navigate or change accounts/API settings.
+- **Desktop startup feedback**: an independent startup view appears before the large application modules. Startup timeout, loading failure and early renderer termination offer visible feedback and manual retry without deleting user data or automatically resending generation requests.
+- **Release scope**: all five platforms are rebuilt from one source. Windows package startup is checked separately before publication; incomplete physical-device/full-feature acceptance is disclosed. The unsigned IPA requires user signing.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
