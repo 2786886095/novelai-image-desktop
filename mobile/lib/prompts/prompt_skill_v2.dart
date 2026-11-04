@@ -97,13 +97,34 @@ PromptSkillV2Audit auditPromptSkillV2(String prompt,ReversePromptMode mode){
  final warnings=[mode==ReversePromptMode.natural?'仅完成自然语言基本格式检查；至少50项来源事实与准确性仍需人工复核。':'仅检查格式与可计数单元；事实真实性、同义概念及来源仍需人工复核。'];
  return mode==ReversePromptMode.natural?PromptSkillV2Audit(literal,'format-only',warnings):PromptSkillV2Audit(literal,'format-and-countable-units',warnings,effectiveUnits:effective,tagWords:tagWords,naturalWords:naturalWords,tagPercent:tagPercent);
 }
-({String prompt,PromptVariants? variants,List<String> warnings}) parsePromptSkillV2Response(String raw,ReversePromptMode mode,{bool knownCharacter=false}){
+/// Conversion may retain a draft with warnings. Response extraction stays fatal;
+/// reverse and assistant callers retain strict validation by default.
+({String prompt,PromptVariants? variants,List<String> warnings}) parsePromptSkillV2Response(String raw,ReversePromptMode mode,{bool knownCharacter=false,bool validationWarningOnly=false}){
  final failure=promptSkillControlledFailure(raw);if(failure!=null)throw FormatException(failure);
- if(!knownCharacter){final a=auditPromptSkillV2(raw,mode);return(prompt:a.prompt,variants:null,warnings:a.warnings);}
+ ({String prompt,List<String> warnings}) inspect(String value){
+  final text=value.trim(),failure=promptSkillControlledFailure(value);if(failure!=null)throw FormatException(failure);
+  if(text.isEmpty||text.length>60000)throw const FormatException('提示词为空或超过软件安全长度');
+  if(RegExp(r"^(?:无法完成|我无法|抱歉|对不起|sorry\b|i(?:\s+am|'m)\s+sorry\b|i\s+(?:can(?:not|'t)|won't|am unable)\b|unable to\b)",caseSensitive:false).hasMatch(text))throw const FormatException('模型未返回可用提示词，已保留原提示词');
+  if(validationWarningOnly&&(RegExp(r'^[\[{]').hasMatch(text)||text.contains('```')))throw const FormatException('模型返回的提示词结构无法解析，已保留原提示词');
+  try{final audit=auditPromptSkillV2(text,mode);return(prompt:audit.prompt,warnings:audit.warnings);}
+  on FormatException catch(error){
+   if(!validationWarningOnly)rethrow;
+   return(prompt:text,warnings:['检查未通过，已保留转换结果供手动确认：${error.message}']);
+  }
+ }
+ if(!knownCharacter){
+  var text=raw.trim();
+  if(text.startsWith('```')){
+   final fence=RegExp(r'^```(?:text|txt|plaintext)?[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$',caseSensitive:false).firstMatch(text);
+   if(fence==null)throw const FormatException('提示词代码围栏必须完整，且只包含提示词正文');
+   text=fence[1]!;
+  }
+  final a=inspect(text);return(prompt:a.prompt,variants:null,warnings:a.warnings);
+ }
  var text=raw.trim();if(text.startsWith('```')){final f=RegExp(r'^```(?:json)?\s*([\s\S]*?)\s*```$',caseSensitive:false).firstMatch(text);if(f==null)throw const FormatException('技能2.0.0双版本JSON围栏必须完整');text=f[1]!;}
  dynamic value;try{value=jsonDecode(text);}catch(_){throw const FormatException('技能2.0.0双版本需要完整JSON字符串字段namePrompt/featurePrompt');}
  if(value is! Map||value['namePrompt'] is! String||value['featurePrompt'] is! String)throw const FormatException('技能2.0.0双版本需要namePrompt/featurePrompt字符串');
  for(final part in [value['namePrompt'],value['featurePrompt']]){final failure=promptSkillControlledFailure(part);if(failure!=null)throw FormatException(failure);}
- final a=auditPromptSkillV2(value['namePrompt'],mode),b=auditPromptSkillV2(value['featurePrompt'],mode);
+ final a=inspect(value['namePrompt']),b=inspect(value['featurePrompt']);
  return(prompt:a.prompt,variants:PromptVariants(namePrompt:a.prompt,featurePrompt:b.prompt),warnings:{...a.warnings,...b.warnings}.toList());
 }

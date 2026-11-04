@@ -512,12 +512,12 @@ describe("prompt codex enhancement", () => {
   expect((await convertPromptText('雨夜撑伞','mixed')).ok).toBe(false);
  });
 
-it('V4.5 retains explicit range repair at most once and rejects an invalid prompt',async()=>{
+it('V4.5 conversion range check warns and retains the actual reply without automatic correction',async()=>{
  const {convertPromptText}=await import('./nai');settingsRef.current={convertApiUrl:'https://example.test/v1',convertApiKey:'test-only',convertApiModel:'test',convertPromptTemplatesV45:{mixed:'有效语义单元总数必须落在 50–150 之间',tags:'',natural:''},reverseConvertDshEnabled:false};
  const reply=(content:string)=>({data:{choices:[{message:{content},finish_reason:'stop'}]}});
  const good=Array.from({length:55},(_,i)=>'tag'+i).join(', ');axiosMock.post.mockReset();axiosMock.post.mockResolvedValueOnce(reply('too short')).mockResolvedValueOnce(reply(good));
- expect((await convertPromptText('雨夜撑伞','mixed',false,'v4.5')).result).toBe(good);expect(axiosMock.post).toHaveBeenCalledTimes(2);
- axiosMock.post.mockReset();axiosMock.post.mockResolvedValue(reply('still short'));expect((await convertPromptText('雨夜撑伞','mixed',false,'v4.5')).ok).toBe(false);expect(axiosMock.post).toHaveBeenCalledTimes(2);
+ const first=await convertPromptText('雨夜撑伞','mixed',false,'v4.5');expect(first.result).toBe('too short');expect(first.warnings?.join('')).toContain('检查未通过');expect(axiosMock.post).toHaveBeenCalledTimes(1);
+ axiosMock.post.mockReset();axiosMock.post.mockResolvedValue(reply('still short'));const second=await convertPromptText('雨夜撑伞','mixed',false,'v4.5');expect(second.ok).toBe(true);expect(second.result).toBe('still short');expect(second.warnings?.join('')).toContain('检查未通过');expect(axiosMock.post).toHaveBeenCalledTimes(1);
 });
 
 it('V5 typed mixed diagnostics warn without blocking or making correction calls',async()=>{
@@ -626,15 +626,15 @@ it('requests documented JSON output on official DeepSeek only for typed prompts'
  expect((await convertPromptText('一个舞台场景','mixed')).ok).toBe(true);expect(axiosMock.post.mock.calls[0][1]).not.toHaveProperty('response_format');
 });
 
-it('pure Tag conversion audits the derived range and JSON transport before success',async()=>{
+it('pure Tag conversion retains extractable JSON text and warns on failed range without retry',async()=>{
  const {convertPromptText}=await import('./nai');axiosMock.post.mockReset();
  settingsRef.current={convertApiUrl:'https://api.deepseek.com',convertApiKey:'fixture',convertApiModel:'fixture',convertPromptTemplates:{tags:'',natural:'',mixed:'有效语义单元 50–150；Tag 65–75%'}};
  const response=(count:number)=>({data:{choices:[{message:{content:JSON.stringify({segments:[{units:Array.from({length:count},(_,i)=>({kind:'tag',text:'visible tag '+i}))}]})},finish_reason:'stop'}]}});
  axiosMock.post.mockResolvedValueOnce(response(46)).mockResolvedValueOnce(response(60));
- const result=await convertPromptText('场景布局与细节','tags');expect(result.ok).toBe(true);expect(result.result?.split(',')).toHaveLength(60);expect(axiosMock.post).toHaveBeenCalledTimes(2);expect(axiosMock.post.mock.calls[0][1].response_format).toEqual({type:'json_object'});
+ const result=await convertPromptText('场景布局与细节','tags');expect(result.ok).toBe(true);expect(result.result?.split(',')).toHaveLength(46);expect(result.warnings?.join('')).toContain('检查未通过');expect(axiosMock.post).toHaveBeenCalledTimes(1);expect(axiosMock.post.mock.calls[0][1].response_format).toEqual({type:'json_object'});
 });
 
-describe('V4.5 retains bounded shared mixed structural and delta repair',()=>{
+describe('V4.5 explicit assistant retains bounded structural and delta repair',()=>{
  const reply=(value:unknown)=>({data:{choices:[{message:{content:JSON.stringify(value)},finish_reason:'stop'}]}});
  const source='两人漫画场景，两位成年女性在室内柜台旁交接一个纸袋，不增加人物。';
  const envelope=()=>{
@@ -653,8 +653,8 @@ describe('V4.5 retains bounded shared mixed structural and delta repair',()=>{
  beforeEach(()=>{
   axiosMock.post.mockReset();settingsRef.current={convertApiUrl:'https://example.test/v1',convertApiKey:'fixture-only',convertApiModel:'fixture',convertPromptTemplatesV45:{mixed:'有效语义单元 50–150；Tag 65–75%',tags:'',natural:''},reverseConvertDshEnabled:false};
  });
- for(const assistant of [undefined,{kind:'custom' as const,instruction:'保留两位成年女性和纸袋，修正多人结构。'}]) {
-  it(`same mixed path permits one full role repair: ${assistant?'custom assistant':'Chinese conversion'}`,async()=>{
+ for(const assistant of [{kind:'optimize' as const,instruction:''},{kind:'custom' as const,instruction:'保留两位成年女性和纸袋，修正多人结构。'}]) {
+  it(`same mixed path permits one full role repair: ${assistant.kind} assistant`,async()=>{
    const {convertPromptText}=await import('./nai');const good=envelope(),bad=envelope();
    [bad.segments[1].units[0],bad.segments[1].units[1]]=[bad.segments[1].units[1],bad.segments[1].units[0]];
    axiosMock.post.mockResolvedValueOnce(reply(bad)).mockResolvedValueOnce(reply(good));
@@ -668,7 +668,7 @@ describe('V4.5 retains bounded shared mixed structural and delta repair',()=>{
  it('unit-only repair has one delta root protocol and keeps valid facts',async()=>{
   const {convertPromptText}=await import('./nai');const bad=envelope();bad.segments[1].units[15].text='her left hand holds the bag handle, gently';
   axiosMock.post.mockResolvedValueOnce(reply(bad)).mockResolvedValueOnce(reply({replace:[{segment:1,index:15,unit:{kind:'natural',text:'her left hand holds the bag handle gently'}}]}));
-  const result=await convertPromptText(source,'mixed',false,'v4.5');expect(result.ok).toBe(true);expect(axiosMock.post).toHaveBeenCalledTimes(2);
+  const result=await convertPromptText(source,'mixed',false,'v4.5',{kind:'optimize',instruction:''});expect(result.ok).toBe(true);expect(axiosMock.post).toHaveBeenCalledTimes(2);
   const repair=axiosMock.post.mock.calls[1][1].messages[0].content;
   expect(repair).toContain('根字段仅 replace/append/remove');expect(repair).not.toContain('{"segments":');expect(repair).not.toContain('返回 JSON 对象');
  });
@@ -676,13 +676,13 @@ describe('V4.5 retains bounded shared mixed structural and delta repair',()=>{
   const {convertPromptText}=await import('./nai');const good=envelope(),bad=envelope();
   bad.segments[1].units.unshift(bad.segments[1].units.splice(5,1)[0]);
   axiosMock.post.mockResolvedValueOnce(reply(bad)).mockResolvedValueOnce(reply(good));
-  expect((await convertPromptText(source,'mixed',false,'v4.5')).ok).toBe(true);expect(axiosMock.post).toHaveBeenCalledTimes(2);
+  expect((await convertPromptText(source,'mixed',false,'v4.5',{kind:'optimize',instruction:''})).ok).toBe(true);expect(axiosMock.post).toHaveBeenCalledTimes(2);
  });
  it('a role missing a relation can use delta even when ratio additions were zero',async()=>{
   const {convertPromptText}=await import('./nai');const bad=envelope();
   bad.segments[0].units.push(...bad.segments[2].units.splice(15));
   axiosMock.post.mockResolvedValueOnce(reply(bad)).mockResolvedValueOnce(reply({append:[{segment:2,units:[{kind:'natural',text:'the right woman receives the paper bag'}]}]}));
-  const result=await convertPromptText(source,'mixed',false,'v4.5');expect(result.ok).toBe(true);expect(result.validation?.total).toBe(61);expect(axiosMock.post).toHaveBeenCalledTimes(2);
+  const result=await convertPromptText(source,'mixed',false,'v4.5',{kind:'optimize',instruction:''});expect(result.ok).toBe(true);expect(result.validation?.total).toBe(61);expect(axiosMock.post).toHaveBeenCalledTimes(2);
   const repair=axiosMock.post.mock.calls[1][1].messages[0].content;expect(repair).toContain('这不是硬配额');expect(repair).toContain('根字段仅 replace/append/remove');
  });
  it('full repair cannot erase a valid first clothing fact or rewrite unrelated facts',async()=>{
@@ -690,13 +690,13 @@ describe('V4.5 retains bounded shared mixed structural and delta repair',()=>{
   bad.segments[1].units.unshift(bad.segments[1].units.splice(5,1)[0]);
   loss.segments[1].units[5].text='blue shirt';
   axiosMock.post.mockResolvedValueOnce(reply(bad)).mockResolvedValueOnce(reply(loss)).mockResolvedValueOnce(reply({remove:[{segment:1,index:0}]}));
-  const result=await convertPromptText(source,'mixed',false,'v4.5');expect(result.ok).toBe(false);expect(result.result).toBeUndefined();
+  const result=await convertPromptText(source,'mixed',false,'v4.5',{kind:'optimize',instruction:''});expect(result.ok).toBe(false);expect(result.result).toBeUndefined();
   expect(result.message).toContain('丢失已合格单元');expect(result.message).toContain('white shirt');expect(axiosMock.post).toHaveBeenCalledTimes(3);
  });
  it('only one complete structural repair is allowed and invalid output never succeeds',async()=>{
   const {convertPromptText}=await import('./nai');const bad=envelope();[bad.segments[1].units[0],bad.segments[1].units[1]]=[bad.segments[1].units[1],bad.segments[1].units[0]];
   axiosMock.post.mockResolvedValueOnce(reply(bad)).mockResolvedValueOnce(reply(bad)).mockResolvedValueOnce(reply({}));
-  const result=await convertPromptText(source,'mixed',false,'v4.5');expect(result.ok).toBe(false);expect(result.result).toBeUndefined();expect(axiosMock.post).toHaveBeenCalledTimes(3);
+  const result=await convertPromptText(source,'mixed',false,'v4.5',{kind:'optimize',instruction:''});expect(result.ok).toBe(false);expect(result.result).toBeUndefined();expect(axiosMock.post).toHaveBeenCalledTimes(3);
   expect(axiosMock.post.mock.calls[1][1].messages[0].content).toContain('一次完整 segments');
   expect(axiosMock.post.mock.calls[2][1].messages[0].content).toContain('根字段仅 replace/append/remove');
  });
@@ -704,28 +704,28 @@ describe('V4.5 retains bounded shared mixed structural and delta repair',()=>{
   const {convertPromptText}=await import('./nai');const bad=envelope();bad.segments[1].units[15].text='her left hand holds the bag handle, gently';
   const patch={replace:[{segment:1,index:15,unit:{kind:'natural',text:'her left hand holds the bag handle gently'}}],remove:[{segment:1,index:5}]};
   axiosMock.post.mockResolvedValueOnce(reply(bad)).mockResolvedValueOnce(reply(patch)).mockResolvedValueOnce(reply(patch));
-  const result=await convertPromptText(source,'mixed',false,'v4.5');expect(result.ok).toBe(false);expect(result.result).toBeUndefined();expect(result.message).toContain('white shirt');expect(axiosMock.post).toHaveBeenCalledTimes(3);
+  const result=await convertPromptText(source,'mixed',false,'v4.5',{kind:'optimize',instruction:''});expect(result.ok).toBe(false);expect(result.result).toBeUndefined();expect(result.message).toContain('white shirt');expect(axiosMock.post).toHaveBeenCalledTimes(3);
  });
  it('full repair cannot swap qualified hair facts between the two adults',async()=>{
   const {convertPromptText}=await import('./nai');const bad=envelope(),swapped=envelope();
   [bad.segments[1].units[0],bad.segments[1].units[1]]=[bad.segments[1].units[1],bad.segments[1].units[0]];
   [swapped.segments[1].units[2],swapped.segments[2].units[2]]=[swapped.segments[2].units[2],swapped.segments[1].units[2]];
   axiosMock.post.mockResolvedValueOnce(reply(bad)).mockResolvedValueOnce(reply(swapped)).mockResolvedValueOnce(reply({}));
-  const result=await convertPromptText(source,'mixed',false,'v4.5');expect(result.ok).toBe(false);expect(result.result).toBeUndefined();expect(axiosMock.post).toHaveBeenCalledTimes(3);
+  const result=await convertPromptText(source,'mixed',false,'v4.5',{kind:'optimize',instruction:''});expect(result.ok).toBe(false);expect(result.result).toBeUndefined();expect(axiosMock.post).toHaveBeenCalledTimes(3);
  });
  it('ambiguous resegmentation does not guess the ownership of existing facts',async()=>{
   const {convertPromptText}=await import('./nai');const bad=envelope(),resegmented=envelope();
   [bad.segments[1].units[0],bad.segments[1].units[1]]=[bad.segments[1].units[1],bad.segments[1].units[0]];
   resegmented.segments[0].units[0].text='3girls';resegmented.segments.push({units:[{kind:'tag',text:'girl'},{kind:'natural',text:'her hands rest beside the counter'}]});
   axiosMock.post.mockResolvedValueOnce(reply(bad)).mockResolvedValueOnce(reply(resegmented)).mockResolvedValueOnce(reply({}));
-  const result=await convertPromptText(source,'mixed',false,'v4.5');expect(result.ok).toBe(false);expect(result.result).toBeUndefined();expect(axiosMock.post).toHaveBeenCalledTimes(3);
+  const result=await convertPromptText(source,'mixed',false,'v4.5',{kind:'optimize',instruction:''});expect(result.ok).toBe(false);expect(result.result).toBeUndefined();expect(axiosMock.post).toHaveBeenCalledTimes(3);
  });
  it('base-count repair cannot silently remove a valid weighted role marker',async()=>{
   const {convertPromptText}=await import('./nai');const bad=envelope(),loss=envelope();
   bad.segments[0].units[0].text='3girls';bad.segments[1].units[0].text='1.2::girl::';
   const patch={replace:[{segment:0,index:0,unit:{kind:'tag',text:'2girls'}},{segment:1,index:0,unit:{kind:'tag',text:'girl'}}]};
   axiosMock.post.mockResolvedValueOnce(reply(bad)).mockResolvedValueOnce(reply(loss)).mockResolvedValueOnce(reply(patch));
-  const result=await convertPromptText(source,'mixed',false,'v4.5');expect(result.ok).toBe(false);expect(result.result).toBeUndefined();expect(result.message).toContain('1.2::girl::');expect(axiosMock.post).toHaveBeenCalledTimes(3);
+  const result=await convertPromptText(source,'mixed',false,'v4.5',{kind:'optimize',instruction:''});expect(result.ok).toBe(false);expect(result.result).toBeUndefined();expect(result.message).toContain('1.2::girl::');expect(axiosMock.post).toHaveBeenCalledTimes(3);
  });
 });
 

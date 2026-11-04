@@ -330,6 +330,24 @@ class _ConvertPanelState extends State<_ConvertPanel> {
             onRemove: s.removeConvertJob,
           ),
           const SizedBox(height: 12),
+          if (s.convertResultWarning.isNotEmpty)
+            Semantics(
+              liveRegion: true,
+              child: Card(
+                color: Theme.of(context).colorScheme.secondaryContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.warning_amber_rounded),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(s.convertResultWarning)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           TextField(
             controller: _resultCtrl,
             maxLines: 8,
@@ -338,6 +356,7 @@ class _ConvertPanelState extends State<_ConvertPanel> {
                 border: const OutlineInputBorder()),
             onChanged: (v) {
               s.convertResult = v;
+              s.convertResultWarning = '';
               s.markChanged();
             },
           ),
@@ -346,6 +365,7 @@ class _ConvertPanelState extends State<_ConvertPanel> {
             language: language,
             onApply: (value) {
               s.convertResult = value;
+              s.convertResultWarning = '';
               s.convertResultVariants = null;
               s.markChanged();
             },
@@ -368,6 +388,7 @@ class _ConvertPanelState extends State<_ConvertPanel> {
             onUse: (text) {
               if (text.trim().isEmpty) return;
               s.convertResult = text;
+              s.convertResultWarning = '';
               s.applyPrompt(text);
             },
           ),

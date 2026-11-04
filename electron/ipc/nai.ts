@@ -4408,6 +4408,7 @@ async function convertPromptTextV2(
   assistant: PromptEditRequest | undefined,
   settings: AppSettings,
   label?: string,
+  validationWarningOnly = false,
 ): ReturnType<typeof convertPromptText> {
   const edition='2.0.0' as const;
     const targetModel=templateVersion==='v4.5'?'v4.5':'v5';
@@ -4418,9 +4419,9 @@ async function convertPromptTextV2(
     const system=injectDshImageAiSystemPrompt({task:'convert',enabled:settings.reverseConvertDshEnabled,mode:settings.reverseConvertDshMode,
       sharedPreset:selectedImageTaskPromptPreset(settings.reverseConvertPromptPresets,settings.convertSystemPromptPresetId??settings.reverseConvertPromptPresetId,'convert'),
       systemPrompt:[renderPromptSkillTemplate(template,'<provided in the user message>'),prepared?.systemSuffix,PROMPT_SKILL_V2_RUNTIME,promptSkillKnownCharacterInstruction(knownCharacter)].filter(Boolean).join('\n\n')});
-    const reply=await callConvertApi(system,prepared?.userText??chineseText,7000,label??`${assistant?'提示词'+(assistant.kind==='optimize'?'优化':'助手'):'文字转换'} · ${targetModel} · 技能${edition} · ${mode}`,true,false,knownCharacter,settings);
+    const reply=await callConvertApi(system,prepared?.userText??chineseText,7000,label??`${assistant?'提示词'+(assistant.kind==='optimize'?'优化':'助手'):'文字转换'} · ${targetModel} · 技能${edition} · ${mode}`,true,false,knownCharacter,settings,undefined,true);
     if(!reply.ok)return {ok:false,message:'转换失败，已保留原提示词：'+reply.message};
-    try{const parsed=parsePromptSkillV2Response(reply.content??'',mode,knownCharacter);return {ok:true,result:parsed.prompt,variants:parsed.variants,warnings:parsed.warnings,message:'转换完成：仅格式与可计数单元检查，来源事实需人工复核'};}
+    try{const parsed=parsePromptSkillV2Response(reply.content??'',mode,knownCharacter,validationWarningOnly&&!assistant);return {ok:true,result:parsed.prompt,variants:parsed.variants,warnings:parsed.warnings,message:parsed.warnings.some(warning=>warning.startsWith('检查未通过'))?'转换完成（有检查警告）：结果已保留，请自行核对':'转换完成：仅格式与可计数单元检查，来源事实需人工复核'};}
     catch(error){return {ok:false,message:'提示词未通过技能2.0.0检查，已保留原提示词，未提交生图：'+(error instanceof Error?error.message:String(error))};}
 }
 
@@ -4454,7 +4455,7 @@ export async function convertPromptText(
     try{const parsed=parsePromptSkillV3Response(reply.content??'',knownCharacter);return {ok:true,result:parsed.prompt,variants:parsed.variants,warnings:parsed.warnings,message:'转换完成：使用所选3.0.0原稿'};}
     catch(error){return {ok:false,message:'转换结果不可用，已保留原提示词：'+(error instanceof Error?error.message:String(error))};}
   }
-  if(edition==='2.0.0') return convertPromptTextV2(chineseText,mode,knownCharacter,templateVersion,assistant,settings);
+  if(edition==='2.0.0') return convertPromptTextV2(chineseText,mode,knownCharacter,templateVersion,assistant,settings,undefined,true);
 
   let assistance: ReturnType<typeof preparePromptAssistance> | undefined;
   if (assistant !== undefined) {
@@ -4511,7 +4512,7 @@ export async function convertPromptText(
     for(let attempt=0;attempt<3;attempt++){
       const reply=await callConvertApi(systemPrompt+'\n\n'+tagProtocol.instruction,userText+(feedback?'\n上次模板校验问题：'+feedback+'。返回完整合格的JSON；保留明确事实，按所选模板允许的边界补足未限定细节，不堆重复词、不违背原输入。':''),5000,`提示词转换 · tags · 模板验收${attempt}`,true,false,true);
       if(!reply.ok)return {ok:false,message:'转换失败：'+reply.message};
-      try{const parsed=tagProtocol.parse(reply.content??'',auditText);return {ok:true,result:parsed.prompt,variants:parsed.variants,message:'转换成功：纯Tag模板验收通过'};}
+      try{const parsed=tagProtocol.parse(reply.content??'',auditText,{validationWarningOnly:!assistance});return {ok:true,result:parsed.prompt,variants:parsed.variants,warnings:parsed.warnings,message:parsed.warnings.length?'转换完成（有检查警告）：结果已保留，请自行核对':'转换成功：纯Tag模板验收通过'};}
       catch(error){feedback=error instanceof Error?error.message:String(error);}
     }
     return {ok:false,message:'提示词未满足纯Tag模板，已保留原提示词，未提交生图：'+feedback};
@@ -4521,14 +4522,14 @@ export async function convertPromptText(
     // V5 mixed template diagnostics are advisory. Return the usable prompt on
     // the first response; do not spend extra model calls to satisfy soft rules.
     // Transport/API errors still fail rather than becoming applicable results.
-    if(safeTemplateVersion==='v5'){
+    if(safeTemplateVersion==='v5'||!assistance){
       const reply=await callConvertApi(systemPrompt+'\n\n'+mixedEnvelopeInstruction,userText,7000,'提示词转换 · mixed · 模板提示',true,false,true);
       if(!reply.ok)return {ok:false,message:'转换失败：'+reply.message};
       try{
         const candidate=normalizeMixedEnvelope(reply.content??'',{repairMetadata:true});
         const audit=auditMixedEnvelope(candidate,auditText,contract);
         if(!audit.prompt.trim())return {ok:false,message:'转换失败：模型未返回可用提示词'};
-        return {ok:true,result:audit.prompt,validation:audit.stats,warnings:audit.issues,
+        return {ok:true,result:audit.prompt,validation:audit.stats,warnings:audit.issues.map(issue=>'检查未通过，已保留转换结果供手动确认：'+issue),
           message:audit.issues.length?'转换完成：模板问题仅供参考，不阻止应用或复用':`转换成功：${audit.stats.total}单元，Tag ${audit.stats.tags} / 自然语言 ${audit.stats.natural}`};
       }catch(error){return {ok:false,message:'转换失败：内部提示词数据无法解析：'+(error instanceof Error?error.message:String(error))};}
     }
@@ -4605,7 +4606,7 @@ export async function convertPromptText(
       return problems;
     };
     let problems=issues();
-    if(safeTemplateVersion==='v5'&&mode==='mixed')conversionWarnings=problems;
+    if(!assistance||(safeTemplateVersion==='v5'&&mode==='mixed'))conversionWarnings=problems.map(issue=>'检查未通过，已保留转换结果供手动确认：'+issue);
     else if(problems.length){
       result=await callConvertApi(systemPrompt,
         `${userText}\n\n模板格式校正：${problems.join('；')}。请按同一模板重新输出完整提示词；保留明确主体、人数、外貌、场景和排除项，只允许模板和用户许可的合理细节。不要凑重复词，不要解释或计数。\n上一版：${result.content ?? ''}`,

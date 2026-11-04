@@ -1463,7 +1463,7 @@ class NaiApi {
       maxTokens:7000,label:'Prompt skill 2.0.0 · V5 Full · $task · ${mode.value}',apiKind:reverse?'vision':'convert',preserveRaw:true,jsonRequired:knownCharacter,retryEmpty:false);
     if(!reply.ok)return reply;
     try{
-      final parsed=parsePromptSkillV2Response(reply.text,mode,knownCharacter:knownCharacter);
+      final parsed=parsePromptSkillV2Response(reply.text,mode,knownCharacter:knownCharacter,validationWarningOnly:task=='convert');
       return AiTextResult(ok:true,message:parsed.warnings.join(' '),text:parsed.prompt,variants:parsed.variants);
     }catch(error){
       // No retry to fill counts: missing evidence is not an invitation to invent.
@@ -1612,8 +1612,8 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
           maxTokens:knownCharacter?7000:4000,label:'Prompt conversion · ${settings.convertPromptTemplateVersion} · ${mode.value}',apiKind:'convert',preserveRaw:true,jsonRequired:true);
         if(!response.ok)return response;
         try {
-          final parsed=protocol.parse(response.text,source:text);
-          return AiTextResult(ok:true,message:'Success',text:parsed.prompt,variants:parsed.variants,codexMatches:enhancement.matches);
+          final parsed=protocol.parse(response.text,source:text,validationWarningOnly:true);
+          return AiTextResult(ok:true,message:parsed.warnings.isEmpty?'Success':parsed.warnings.join(' '),text:parsed.prompt,variants:parsed.variants,codexMatches:enhancement.matches);
         }catch(error){feedback=error.toString();}
       }
       return AiTextResult(ok:false,message:'转换未通过模板校验，已保留原提示词，未提交生图：$feedback',codexMatches:enhancement.matches);

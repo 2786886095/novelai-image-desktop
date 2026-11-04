@@ -462,6 +462,7 @@ class AppState extends ChangeNotifier {
   List<TextToolHistoryItem> reverseHistory = [];
   String convertInput = '';
   String convertResult = '';
+  String convertResultWarning = '';
   PromptVariants? convertResultVariants;
   List<TextToolJob> convertJobs = [];
   bool convertQueueCollapsed = true;
@@ -3387,6 +3388,7 @@ class AppState extends ChangeNotifier {
       if(chosenSkill=='2.0.0')job.message=res.message;
       if(isCurrentContext()&&credentialUnchanged){
         convertResult = res.text;
+        convertResultWarning = res.message.contains('检查未通过') ? res.message : '';
         convertResultVariants = res.variants;
         convertCodexMatches = res.codexMatches;
         status = _rt('status.convertDone');

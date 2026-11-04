@@ -119,13 +119,35 @@ export function auditPromptSkillV2(prompt:string,mode:SkillPromptMode):PromptSki
  const warnings=[mode==='natural'?'仅完成自然语言基本格式检查；至少50项来源事实与准确性仍需人工复核。':'仅检查格式与可计数单元；事实真实性、同义概念及来源仍需人工复核。'];
  return {prompt:literal,warnings,stats:mode==='natural'?{scope:'format-only'}:{effectiveUnits:effective,tagWords,naturalWords,tagPercent,scope:'format-and-countable-units'}};
 }
-export function parsePromptSkillV2Response(raw:string,mode:SkillPromptMode,knownCharacter=false) {
+/** Conversion can retain a draft with advisory diagnostics. Extraction and
+ * transport failures remain fatal; reverse/assistant callers stay strict. */
+export function parsePromptSkillV2Response(raw:string,mode:SkillPromptMode,knownCharacter=false,validationWarningOnly=false) {
  const failure=promptSkillControlledFailure(raw);if(failure)throw Error(failure);
- if(!knownCharacter){const audit=auditPromptSkillV2(raw,mode);return {prompt:audit.prompt,variants:undefined,warnings:audit.warnings};}
+ const inspect=(value:string)=>{
+  const text=value.trim(),failure=promptSkillControlledFailure(text);if(failure)throw Error(failure);
+  if(!text||text.length>60000)throw Error('提示词为空或超过软件安全长度');
+  if(/^(?:无法完成|我无法|抱歉|对不起|sorry\b|i(?:\s+am|'m)\s+sorry\b|i\s+(?:can(?:not|'t)|won't|am unable)\b|unable to\b)/iu.test(text))throw Error('模型未返回可用提示词，已保留原提示词');
+  // Do not present an internal JSON document or nested transport as a prompt.
+  if(validationWarningOnly&&(/^[\[{]/.test(text)||text.includes('```')))throw Error('模型返回的提示词结构无法解析，已保留原提示词');
+  try{return auditPromptSkillV2(text,mode);}
+  catch(error){
+   if(!validationWarningOnly)throw error;
+   return {prompt:text,warnings:['检查未通过，已保留转换结果供手动确认：'+(error instanceof Error?error.message:String(error))]};
+  }
+ };
+ if(!knownCharacter){
+  let text=raw.trim();
+  if(text.startsWith('```')){
+   const fence=/^```(?:text|txt|plaintext)?[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/i.exec(text);
+   if(!fence)throw Error('提示词代码围栏必须完整，且只包含提示词正文');
+   text=fence[1];
+  }
+  const audit=inspect(text);return {prompt:audit.prompt,variants:undefined,warnings:audit.warnings};
+ }
  let text=raw.trim();if(text.startsWith('```')){const f=/^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(text);if(!f)throw Error('技能2.0.0双版本JSON围栏必须完整');text=f[1];}
  let value:any;try{value=JSON.parse(text);}catch{throw Error('技能2.0.0双版本需要完整JSON字符串字段namePrompt/featurePrompt');}
  if(!value||Array.isArray(value)||typeof value.namePrompt!=='string'||typeof value.featurePrompt!=='string')throw Error('技能2.0.0双版本需要namePrompt/featurePrompt字符串');
  for(const part of [value.namePrompt,value.featurePrompt]){const failure=promptSkillControlledFailure(part);if(failure)throw Error(failure);}
- const a=auditPromptSkillV2(value.namePrompt,mode),b=auditPromptSkillV2(value.featurePrompt,mode);
+ const a=inspect(value.namePrompt),b=inspect(value.featurePrompt);
  return {prompt:a.prompt,variants:{namePrompt:a.prompt,featurePrompt:b.prompt},warnings:[...new Set([...a.warnings,...b.warnings])]};
 }

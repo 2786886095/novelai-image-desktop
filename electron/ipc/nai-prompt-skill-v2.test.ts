@@ -15,7 +15,7 @@ const tagPrompt=fixtures.find(f=>f.mode==='tags'&&f.name==='still_life')!.prompt
 const answer=(content:string)=>({choices:[{message:{content},finish_reason:'stop'}]});
 let nai:typeof import('./nai');
 beforeAll(async()=>{
- server=createServer(async(req,res)=>{let raw='';for await(const chunk of req)raw+=chunk;requests.push({url:req.url,body:JSON.parse(raw)});res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify(response));});
+ server=createServer(async(req,res)=>{let raw='';for await(const chunk of req)raw+=chunk;requests.push({url:req.url,body:JSON.parse(raw)});res.writeHead(response.__status??200,{'Content-Type':'application/json'});res.end(JSON.stringify(response));});
  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));base=`http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`;
  nai=await import('./nai');
 });
@@ -27,6 +27,37 @@ beforeEach(()=>{
 });
 const call=(entry:'reverse'|'convert'|'assistant'|'optimize',known=false)=>entry==='reverse'?nai.reversePromptImage(image,'tags','full','only supplied facts',known,'v5','2.0.0'):nai.convertPromptText('CURRENT_SOURCE $& $1','tags',known,'v5',entry==='assistant'?{kind:'custom',instruction:'CHANGE_ONLY $&'}:entry==='optimize'?{kind:'optimize',instruction:''}:undefined,'2.0.0');
 describe('v2 actual loopback AI requests',()=>{
+ for(const mode of ['tags','natural','mixed'] as const)it(`Chinese conversion/${mode} accepts one complete text fence with one actual loopback request`,async()=>{
+  const prompt=fixtures.find(f=>f.mode===mode&&f.name==='still_life')!.prompt;
+  response=answer('```text\n'+prompt+'\n```');
+  const input='白色花瓶旁边放着一本红色书，保持用户提供的场景，不补造细节。';
+  const result=await nai.convertPromptText(input,mode,false,'v5',undefined,'2.0.0');
+  expect(result.ok).toBe(true);expect(result.result).toBe(prompt);expect(requests).toHaveLength(1);
+  expect(requests[0].body.messages[1].content).toBe(input);expect(requests[0].url).toBe('/v1/chat/completions');
+ });
+ for(const output of ['信息不足：请补充场景细节'])it(`Chinese conversion preserves original on fenced insufficient evidence: ${output}`,async()=>{
+  response=answer('```text\n'+output+'\n```');
+  const r=await nai.convertPromptText('红色杯子','tags',false,'v5',undefined,'2.0.0');
+  expect(r.ok).toBe(false);expect(r).not.toHaveProperty('result');expect(r.message).toContain('已保留原提示词');
+  if(output.startsWith('信息不足'))expect(r.message).toContain(output);
+  expect(requests).toHaveLength(1);
+ });
+ for(const mode of ['tags','mixed','natural'] as const)it(`Chinese conversion/${mode} delivers failed validation as warning with no correction request`,async()=>{
+  const prompt=mode==='natural'?'A cat sleeps.':'red cup';response=answer(prompt);
+  const r=await nai.convertPromptText('一只红色杯子',mode,false,'v5',undefined,'2.0.0');
+  expect(r.ok).toBe(true);expect(r.result).toBe(prompt);expect(r.warnings?.join('')).toContain('检查未通过');expect(r.message).toContain('警告');expect(requests).toHaveLength(1);
+ });
+ for(const content of ['',"I'm sorry, but I can't assist with this request.",'模式能力不足：请换模式'])it('Chinese conversion still rejects unusable model output '+content.slice(0,8),async()=>{
+  response=answer(content);const r=await call('convert');expect(r.ok).toBe(false);expect(r).not.toHaveProperty('result');expect(requests).toHaveLength(1);
+ });
+ it('Chinese conversion rejects truncation without retry',async()=>{
+  response={choices:[{message:{content:'red cup'},finish_reason:'length'}]};
+  const r=await call('convert');expect(r.ok).toBe(false);expect(r).not.toHaveProperty('result');expect(requests).toHaveLength(1);
+ });
+ it('Chinese conversion API failure is not delivered as a warning-only result',async()=>{
+  response={__status:503,error:{message:'synthetic unavailable'}};
+  const r=await call('convert');expect(r.ok).toBe(false);expect(r).not.toHaveProperty('result');expect(requests).toHaveLength(1);
+ });
  for(const task of ['reverse','convert'] as const)for(const mode of ['tags','natural','mixed'] as const)it(`${task}/${mode} selects independent v2 body in one ordinary request`,async()=>{
   response=answer(fixtures.find(f=>f.mode===mode&&f.name==='still_life')!.prompt);
   const r=task==='reverse'?await nai.reversePromptImage(image,mode,'object','white vase',false,'v5','2.0.0'):await nai.convertPromptText('user facts $& $1',mode,false,'v5',undefined,'2.0.0');
