@@ -1,5 +1,7 @@
 import type { AppLanguage } from './types';
 export const NAI_ACCOUNT_LOCALES = {
+ relayPreviewAlt:["Langbai NovelAI 网站首页预览", "Langbai NovelAI 網站首頁預覽", "Langbai NovelAI website homepage preview", "Langbai NovelAI サイトのホームページプレビュー", "Langbai NovelAI 웹사이트 홈 미리보기"],
+ relayPreviewCaption:["网站预览（静态截图）", "網站預覽（靜態截圖）", "Website preview (static screenshot)", "サイトプレビュー（静止画像）", "웹사이트 미리보기 (정적 스크린샷)"],
  relayIntro:["第三方 NovelAI 生图 API 中转站点，非 NovelAI 官方网站。可前往了解服务与接入方式；打开网页不会更改当前账号或 API 配置。", "第三方 NovelAI 生圖 API 中轉網站，非 NovelAI 官方網站。可前往了解服務與接入方式；開啟網頁不會變更目前帳戶或 API 設定。", "A third-party NovelAI image API relay, not the official NovelAI website. Visit to learn about its services and connection options. Opening the site does not change your current account or API settings.", "NovelAI画像APIの第三者中継サイトであり、NovelAI公式サイトではありません。サービスや接続方法をサイトで確認できます。開いても現在のアカウントやAPI設定は変更されません。", "NovelAI 이미지 API의 외부 중계 사이트이며 NovelAI 공식 웹사이트가 아닙니다. 서비스와 연결 방법을 사이트에서 확인할 수 있습니다. 열어도 현재 계정이나 API 설정은 바뀌지 않습니다."],
  relayVisit:["进入网站", "進入網站", "Visit website", "サイトへ進む", "웹사이트 방문"],
  relayBack:["返回", "返回", "Back", "戻る", "돌아가기"],

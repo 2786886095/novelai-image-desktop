@@ -75,6 +75,11 @@ void main() {
         await tester.tap(trigger);
         await tester.pumpAndSettle();
         expect(dialog, findsOneWidget);
+        final preview = find.byKey(const ValueKey('relay-intro-preview'));
+        expect(preview, findsOneWidget);
+        expect(tester.widget<Image>(preview).fit, BoxFit.contain);
+        final imageRect = tester.getRect(preview);
+        expect(imageRect.width / imageRect.height, closeTo(1193 / 766, .001));
         expect(f.calls, isEmpty);
         expect(find.text('nai.langbai.cc'), findsWidgets);
         final rect = tester.getRect(dialog);

@@ -122,6 +122,13 @@ class _RelayIntroductionDialogState extends State<_RelayIntroductionDialog> {
         crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('nai.langbai.cc', style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 12), Text(t('accountRelayIntro')),
+          const SizedBox(height: 16),
+          ClipRRect(borderRadius: BorderRadius.circular(12), child: AspectRatio(
+            aspectRatio: 1193 / 766, child: Image.asset('assets/relay-brand/site-preview.png',
+              key: const ValueKey('relay-intro-preview'), fit: BoxFit.contain,
+              semanticLabel: t('accountRelayPreviewAlt')))),
+          const SizedBox(height: 6),
+          Text(t('accountRelayPreviewCaption'), style: Theme.of(context).textTheme.bodySmall),
         ])),
       actions: [
         TextButton(key: const ValueKey('relay-intro-back'), autofocus: true,

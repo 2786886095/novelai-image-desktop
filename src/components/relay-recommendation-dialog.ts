@@ -12,8 +12,13 @@ export function confirmRelayRecommendation(language?:Parameters<typeof naiAccoun
   host.innerHTML=`<section class="app-confirm-dialog relay-intro-dialog" role="dialog" aria-modal="true" aria-labelledby="${id}-title" aria-describedby="${id}-description" tabindex="-1">
    <header class="relay-intro-heading"><img width="40" height="40" alt="" aria-hidden="true"/><div><h3 id="${id}-title"></h3><span class="relay-intro-domain">nai.langbai.cc</span></div></header>
    <p class="relay-intro-description" id="${id}-description"></p>
+   <figure class="relay-intro-preview"><img width="1193" height="766"/><figcaption></figcaption></figure>
    <div class="app-confirm-actions"><button type="button" class="btn btn-secondary" data-result="cancel"></button><button type="button" class="btn btn-primary primary" data-result="confirm"></button></div></section>`;
   host.querySelector('img')!.src=`${import.meta.env.BASE_URL}relay-brand/brand-mark.svg`;
+  const preview=host.querySelector<HTMLImageElement>('.relay-intro-preview img')!;
+  preview.src=`${import.meta.env.BASE_URL}relay-brand/site-preview.png`;
+  preview.alt=naiAccountText(language,'relayPreviewAlt');
+  host.querySelector('figcaption')!.textContent=naiAccountText(language,'relayPreviewCaption');
   host.querySelector('h3')!.textContent=naiAccountText(language,'relayRecommendation');
   host.querySelector('p')!.textContent=naiAccountText(language,'relayIntro');
   const back=host.querySelector<HTMLButtonElement>('[data-result="cancel"]')!;

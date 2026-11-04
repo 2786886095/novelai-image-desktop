@@ -8,3 +8,7 @@
 .relay-intro-dialog .app-confirm-actions{flex-wrap:wrap;gap:10px}
 .relay-intro-dialog .app-confirm-actions>button{min-height:44px;white-space:normal}
 @media(prefers-reduced-motion:reduce){.relay-intro-backdrop,.relay-intro-dialog{transition:none!important}}
+
+.relay-intro-dialog .relay-intro-preview{margin:18px 0 0;min-width:0}
+.relay-intro-preview>img{display:block;width:100%;height:auto;aspect-ratio:1193/766;object-fit:contain;border:1px solid var(--border-color);border-radius:12px;box-sizing:border-box}
+.relay-intro-preview>figcaption{margin-top:6px;color:var(--text-secondary);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
