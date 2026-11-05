@@ -16,7 +16,7 @@
     <application
         android:extractNativeLibs="true"
         android:networkSecurityConfig="@xml/studio_network_security"
-        android:label="Langbai NovelAI Studio"
+        android:label="${studioAppLabel}"
         android:name="${applicationName}"
         android:requestLegacyExternalStorage="true"
         android:icon="@mipmap/ic_launcher">

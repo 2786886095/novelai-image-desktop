@@ -1,3 +1,5 @@
+import 'artist_lookup_screen.dart';
+import '../i18n/issue81_text.dart';
 import '../ui/compact_workbench.dart';
 import '../ui/android/android_gate.dart';
 import 'novelai_accounts_screen.dart';
@@ -173,6 +175,14 @@ class ToolsHubScreen extends StatelessWidget {
               (onBack) => PromptCodexScreen(onBack: onBack),
             ),
           ),
+          const SizedBox(height: StudioSpacing.md),
+          _ToolTile(
+            icon: Icons.person_search_outlined,
+            title: issue81Text(language,'lookup'),
+            subtitle: issue81Text(language,'lookupHint'),
+            onTap:()=>_openTool(context,(onBack)=>ArtistLookupScreen(onBack:onBack)),
+          ),
+          const SizedBox(height: StudioSpacing.md),
         ],
       ),
     );

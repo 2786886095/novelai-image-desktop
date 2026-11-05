@@ -1,3 +1,4 @@
+import 'bounded_backup_archive.dart';
 import 'unified_storage.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -19,16 +20,25 @@ class PortableProjects {
   static void validate(String name, List<int> bytes) {
     final match = _name.firstMatch(name);
     if (match == null ||
-        bytes.length > 1034 * 1024 * 1024 ||
+        bytes.length > BoundedBackupArchive.maxAssetBytes ||
         sha256.convert(bytes).toString() != match.group(2)) {
       throw const FormatException('Portable capsule integrity mismatch');
+    }
+    final directory=ZipDirectory()..read(InputMemoryStream(bytes));
+    var declared=0;
+    for(final h in directory.fileHeaders) {
+      if(h.uncompressedSize>BoundedBackupArchive.maxAssetBytes||
+         (declared+=h.uncompressedSize)>128*1024*1024||
+         ((h.externalFileAttributes>>16)&0xf000)==0xa000) {
+        throw const FormatException('Portable capsule exceeds mobile memory limits.');
+      }
     }
     final zip = ZipDecoder().decodeBytes(bytes);
     final manifest = zip.findFile('manifest.json');
     if (manifest == null || manifest.size > 8 * 1024 * 1024) {
       throw const FormatException('Invalid portable manifest');
     }
-    final json = jsonDecode(utf8.decode(manifest.content as List<int>));
+    final json = jsonDecode(utf8.decode(readBoundedBackupEntry(manifest)));
     if (json is! Map ||
         json['version'] != 1 ||
         json['kind'] != match.group(1) ||
@@ -63,7 +73,7 @@ class PortableProjects {
       final file = zip.findFile('files/$path');
       if (file == null ||
           file.size != size ||
-          sha256.convert(file.content as List<int>).toString() !=
+          sha256.convert(readBoundedBackupEntry(file)).toString() !=
               entry['hash']) {
         throw const FormatException('Portable file integrity mismatch');
       }
@@ -80,16 +90,21 @@ class PortableProjects {
 
   static Map<String, List<int>> inspect(Archive archive, Set<String> selected) {
     final result = <String, List<int>>{};
+    final selectedEntries=archive.files.where((f)=>f.isFile&&f.name.startsWith(prefix)&&
+      _selected(_name.firstMatch(f.name.substring(prefix.length))?.group(1)??'',selected));
+    if(selectedEntries.fold<int>(0,(sum,f)=>sum+f.size)>64*1024*1024) {
+      throw const FormatException('Portable capsules exceed mobile memory limits. Restore categories separately.');
+    }
     for (final file in archive.files) {
       if (!file.isFile || !file.name.startsWith(prefix)) continue;
       final name = file.name.substring(prefix.length),
           match = _name.firstMatch(file.name.substring(prefix.length));
       if (match == null) throw const FormatException('Invalid portable entry');
       if (!_selected(match.group(1)!, selected)) continue;
-      if (file.size > 1034 * 1024 * 1024) {
+      if (file.size > BoundedBackupArchive.maxAssetBytes) {
         throw const FormatException('Capsule too large');
       }
-      final bytes = List<int>.from(file.content as List);
+      final bytes = readBoundedBackupEntry(file);
       validate(name, bytes);
       result[name] = bytes;
     }

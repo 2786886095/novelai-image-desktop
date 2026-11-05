@@ -44,6 +44,7 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.codex.novelai.novelai_mobile"
+        manifestPlaceholders = [studioAppLabel: "Langbai NovelAI Studio"]
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 23
@@ -79,6 +80,10 @@ android {
             }
         }
         release {
+            if (project.hasProperty('studioIssue81Candidate')) {
+                applicationIdSuffix = '.issue81candidate'
+                manifestPlaceholders['studioAppLabel'] = 'Langbai Studio Issue81 Candidate'
+            }
             // Stable release key when key.properties is present; otherwise the
             // debug key so `flutter run --release` and forks still build.
             signingConfig = keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug

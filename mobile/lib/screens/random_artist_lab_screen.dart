@@ -1,4 +1,5 @@
 import '../ui/compact_workbench.dart';
+import '../i18n/issue81_text.dart';
 import '../images/image_file_access.dart';
 import '../images/coordinated_file_image.dart';
 import '../ui/global_typography.dart';
@@ -38,6 +39,7 @@ class _Result {
   String? error;
   String generationModel;
   bool liked;
+  bool shortlisted;
   bool saving = false;
   _Result(this.recipe,
       {this.sequence = 1,
@@ -46,7 +48,7 @@ class _Result {
       this.image,
       this.error,
       this.generationModel = '',
-      this.liked = false});
+      this.liked = false, this.shortlisted = false});
 
   Map<String, dynamic> toJson() => {
         'recipe': recipe.toJson(),
@@ -57,6 +59,7 @@ class _Result {
         'error': error,
         'generationModel': generationModel,
         'liked': liked,
+        'shortlisted': shortlisted,
       };
 
   factory _Result.fromJson(Map<String, dynamic> json) => _Result(
@@ -72,16 +75,19 @@ class _Result {
         error: json['error']?.toString(),
         generationModel: json['generationModel']?.toString() ?? '',
         liked: json['liked'] == true,
+        shortlisted: json['shortlisted'] == true,
       );
 }
 
 class RandomArtistLabScreen extends StatefulWidget {
   final VoidCallback onBack;
   final ArtistTagService? artistService;
+  final bool wholePoolInitially;
   const RandomArtistLabScreen({
     super.key,
     required this.onBack,
     this.artistService,
+    this.wholePoolInitially=false,
   });
 
   @override
@@ -136,7 +142,73 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   final List<_Result> _favorites = [];
   static const int _resultPageSize = 24;
   int _visibleResults = _resultPageSize;
-  int _visibleFavorites = _resultPageSize;
+  int _favoritePage = 1;
+  int _favoritePageSize = 12;
+  bool _shortlistOnly = false;
+  String _lastFavoriteId = '';
+  double _favoriteOffset = 0;
+  bool _wholeArtistPool = false;
+  int _wholePoolTotal = 0;
+  String _i(String key) => issue81Text(context.read<AppState>().settings.language,key);
+
+  List<_Result> get _filteredFavorites => _favorites.where((r) =>
+    (!_shortlistOnly || r.shortlisted) &&
+    (_favoriteModelFilter=='all' || _resultModel(r)==_favoriteModelFilter)).toList(growable:false);
+  List<_Result> get _favoriteWindow {
+    final items=_filteredFavorites;
+    final pages=max(1,(items.length/_favoritePageSize).ceil());
+    final page=_favoritePage.clamp(1,pages).toInt();
+    return items.skip((page-1)*_favoritePageSize).take(_favoritePageSize).toList(growable:false);
+  }
+  Future<void> _saveFavoriteView() async {
+    final prefs=await SharedPreferences.getInstance();
+    await prefs.setString('${_prefsPrefix}favoriteView',jsonEncode({
+      'page':_favoritePage,'pageSize':_favoritePageSize,'model':_favoriteModelFilter,
+      'shortlist':_shortlistOnly,'lastId':_lastFavoriteId,'offset':_favoriteOffset,
+    }));
+    await prefs.setBool('${_prefsPrefix}showFavorites',_showFavorites);
+  }
+  void _changeFavoriteView(VoidCallback update) {
+    setState(update);
+    _favoriteOffset=0;
+    if(_scrollController.hasClients) _scrollController.jumpTo(0);
+    _saveFavoriteView();
+  }
+  void _resumeFavorite() {
+    if(_lastFavoriteId.isNotEmpty && !_filteredFavorites.any((r)=>r.recipe.id==_lastFavoriteId)) {
+      _shortlistOnly=false;_favoriteModelFilter='all';
+    }
+    final index=_filteredFavorites.indexWhere((r)=>r.recipe.id==_lastFavoriteId);
+    setState(() {
+      _showFavorites=true;
+      if(index>=0) _favoritePage=index~/_favoritePageSize+1;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if(mounted&&_scrollController.hasClients) {
+        _scrollController.jumpTo(_favoriteOffset.clamp(0,_scrollController.position.maxScrollExtent));
+      }
+    });
+    _saveFavoriteView();
+  }
+
+  Widget _favoritePager(int total) {
+    final pages=max(1,(total/_favoritePageSize).ceil());
+    final page=_favoritePage.clamp(1,pages).toInt();
+    return Wrap(spacing:8,runSpacing:8,crossAxisAlignment:WrapCrossAlignment.center,children:[
+      SizedBox(width:130,child:StudioDropdownButtonFormField<int>(
+        value:_favoritePageSize,isExpanded:true,decoration:InputDecoration(labelText:_i('perPage')),
+        items:[12,24,48].map((n)=>DropdownMenuItem(value:n,child:Text('$n'))).toList(),
+        onChanged:(n){if(n!=null) _changeFavoriteView((){_favoritePageSize=n;_favoritePage=1;});})),
+      IconButton(tooltip:_i('previous'),onPressed:page>1?()=>_changeFavoriteView(()=>_favoritePage=page-1):null,icon:const Icon(Icons.chevron_left)),
+      SizedBox(width:120,child:StudioDropdownButtonFormField<int>(
+        value:page,isExpanded:true,decoration:InputDecoration(labelText:_i('page').replaceAll('{page}','$page').replaceAll('{pages}','$pages').replaceAll('{total}','$total')),
+        items:List.generate(pages,(i)=>DropdownMenuItem(value:i+1,child:Text('${i+1} / $pages'))),
+        onChanged:(n){if(n!=null) _changeFavoriteView(()=>_favoritePage=n);})),
+      IconButton(tooltip:_i('next'),onPressed:page<pages?()=>_changeFavoriteView(()=>_favoritePage=page+1):null,icon:const Icon(Icons.chevron_right)),
+      Text(_i('page').replaceAll('{page}','$page').replaceAll('{pages}','$pages').replaceAll('{total}','$total')),
+    ]);
+  }
+
   bool _mutateAuxiliary = false;
   bool _includeFranchiseStyles = false;
   String _seedMode = 'fixed';
@@ -934,6 +1006,18 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       softBalance: prefs.getDouble('${_prefsPrefix}weightSoftBalance') ?? 0,
     );
     _showFavorites = prefs.getBool('${_prefsPrefix}showFavorites') ?? false;
+    _wholeArtistPool=widget.wholePoolInitially || (prefs.getBool('${_prefsPrefix}wholePool')??false);
+    try {
+      final view=jsonDecode(prefs.getString('${_prefsPrefix}favoriteView')??'{}') as Map;
+      _favoritePage=(view['page'] as num?)?.toInt().clamp(1,100000)??1;
+      final size=(view['pageSize'] as num?)?.toInt()??12;
+      _favoritePageSize=[12,24,48].contains(size)?size:12;
+      _shortlistOnly=view['shortlist']==true;
+      _favoriteModelFilter=view['model'] as String? ??'all';
+      _lastFavoriteId=view['lastId'] as String? ??'';
+      _favoriteOffset=((view['offset'] as num?)?.toDouble()??0).clamp(0,10000000);
+    } catch(_) { /* Older backups have no view metadata. */ }
+
     for (final entry in <(String, List<_Result>)>[
       ('results', _results),
       ('favorites', _favorites),
@@ -961,6 +1045,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       } catch (_) {}
     }
     await _loadPool(false);
+    if(mounted&&_showFavorites) _resumeFavorite();
   }
 
   Future<void> _saveCustomArtistPool() async {
@@ -1101,20 +1186,27 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         favoriteMutations: _mutateAuxiliary ? favoriteMutations : const [],
       );
 
-  Future<void> _loadPool(bool force) async {
-    if (!mounted) return;
+  Future<bool> _loadPool(bool force) async {
+    if (!mounted) return false;
     setState(() {
       _loading = true;
       _message = '';
     });
     try {
       final app = context.read<AppState>();
-      _onlinePool = await _service.popular(app.settings,
-          limit: _poolLimit(), force: force);
-      if (!mounted) return;
+      if(_wholeArtistPool&&!_useCustomArtists) {
+        final sample=await _service.randomWholePool(app.settings,force:force);
+        _onlinePool=sample.items; _wholePoolTotal=sample.total;
+      } else {
+        _onlinePool = await _service.popular(app.settings,limit:_poolLimit(),force:force);
+        _wholePoolTotal=0;
+      }
+      if (!mounted) return false;
       setState(() => _planned = _buildPlan());
+      return true;
     } catch (error) {
-      if (mounted) setState(() => _message = error.toString());
+      if (mounted) setState(() { _message = '${_i('network')}\n$error'; _planned=const []; });
+      return false;
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1133,6 +1225,10 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   }
 
   Future<void> _draw({bool likedOnly = false}) async {
+    if(_loading||_running) return;
+    if(_wholeArtistPool&&!_useCustomArtists&&!likedOnly) {
+      if(!await _loadPool(false)) return;
+    }
     final favorites = likedOnly
         ? _favorites.expand((item) => item.recipe.artists).toSet()
         : <String>{};
@@ -1531,13 +1627,19 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
 
   Future<void> _previewResult(
       _Result result, Map<String, String> text, AppState app) async {
-    final list = (_showFavorites ? _favorites : _results)
-        .where((i) => i.image != null)
-        .toList();
+    if(_showFavorites) {
+      _lastFavoriteId=result.recipe.id;
+      _favoriteOffset=_scrollController.hasClients?_scrollController.offset:0;
+      await _saveFavoriteView();
+      if(!mounted) return;
+    }
+    final list = (_showFavorites ? _favoriteWindow : _results.take(_visibleResults))
+        .where((i) => i.image != null).toList();
     await showGalleryImagePreview(context,
         images: list
             .map((i) => imageFile(File(i.image!.filePath),
                 fit: BoxFit.contain,
+                cacheWidth: 1200,
                 errorBuilder: (_, __, ___) =>
                     const Icon(Icons.broken_image_outlined)))
             .toList(),
@@ -1661,6 +1763,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     ? 2
                     : 1;
         return GridView.builder(
+          key:PageStorageKey<String>(favorites?'artist-favorite-grid':'artist-result-grid'),
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: items.length,
@@ -1719,8 +1822,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                               child: Text(text[result.status] ?? result.status))
                           : GestureDetector(
                               behavior: HitTestBehavior.opaque,
-                              onDoubleTap: () =>
-                                  _previewResult(result, text, app),
+                              onTap: () => _previewResult(result, text, app),
+                              onDoubleTap: () => _previewResult(result, text, app),
                               child: Tooltip(
                                 message: text['previewImage']!,
                                 child: imageFile(
@@ -1791,6 +1894,16 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          if (favorites)
+                            IconButton(
+                              tooltip: _i(result.shortlisted?'shortlistRemove':'shortlistAdd'),
+                              onPressed: () async {
+                                setState(()=>result.shortlisted=!result.shortlisted);
+                                await _save();
+                              },
+                              icon: Icon(result.shortlisted?Icons.star:Icons.star_border),
+                              color: result.shortlisted?Theme.of(context).colorScheme.primary:null,
+                            ),
                           if (favorites)
                             IconButton(
                               tooltip: text['remove'],
@@ -2263,28 +2376,21 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                       ),
                     ],
                   ),
-                  Wrap(
-                    spacing: 7,
-                    runSpacing: 7,
-                    children: selectedValues
-                        .map((tag) => InputChip(
-                              label: Text(tag),
-                              avatar: Icon(
-                                _customTagModes[tag.toLowerCase()] == 'random'
-                                    ? Icons.casino_outlined
-                                    : Icons.push_pin_outlined,
-                                size: 17,
-                              ),
-                              onPressed: () => _setCustomTagMode(
-                                tag,
-                                _customTagModes[tag.toLowerCase()] == 'random'
-                                    ? 'always'
-                                    : 'random',
-                              ),
-                              onDeleted: () => _toggleCustomTag(tag),
-                            ))
-                        .toList(),
+                  SizedBox(
+                    key:ValueKey('artist-selected-tags-$storageKey'),
+                    height:min(176.0,selectedValues.length*48.0),
+                    child:ListView.builder(key:PageStorageKey<String>('artist-selected-scroll-$storageKey'),primary:false,itemCount:selectedValues.length,
+                      itemBuilder:(context,index) {
+                        final tag=selectedValues[index];
+                        return Align(alignment:Alignment.centerLeft,child:InputChip(
+                          label:Text(tag,maxLines:1,overflow:TextOverflow.ellipsis),
+                          avatar:Icon(_customTagModes[tag.toLowerCase()]=='random'?Icons.casino_outlined:Icons.push_pin_outlined,size:17),
+                          onPressed:()=>_setCustomTagMode(tag,_customTagModes[tag.toLowerCase()]=='random'?'always':'random'),
+                          onDeleted:()=>_toggleCustomTag(tag),
+                        ));
+                      }),
                   ),
+                  Text(_i('selectedHint'),style:Theme.of(context).textTheme.bodySmall),
                 ],
                 if (selectedRandomCount > 0) ...[
                   const SizedBox(height: 10),
@@ -2295,7 +2401,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     children: [
                       Expanded(
                         child: TextField(
-                          controller: _minRandomCustomTags,
+                      key: const PageStorageKey<String>('artist-text-minRandomCustomTags'),
+                      controller: _minRandomCustomTags,
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(labelText: ui['min']),
                           onEditingComplete: _commitCustomTags,
@@ -2304,7 +2411,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: TextField(
-                          controller: _maxRandomCustomTags,
+                      key: const PageStorageKey<String>('artist-text-maxRandomCustomTags'),
+                      controller: _maxRandomCustomTags,
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(labelText: ui['max']),
                           onEditingComplete: _commitCustomTags,
@@ -2315,7 +2423,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                 ],
                 const SizedBox(height: 10),
                 TextField(
-                  controller: _customTagSearch,
+                      key: const PageStorageKey<String>('artist-text-customTagSearch'),
+                      controller: _customTagSearch,
                   decoration: InputDecoration(
                     hintText: ui['search'],
                     prefixIcon: const Icon(Icons.search_rounded),
@@ -2336,6 +2445,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                 ),
                 const SizedBox(height: 9),
                 SingleChildScrollView(
+                  key:PageStorageKey<String>('artist-category-scroll-$storageKey'),
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
@@ -2387,8 +2497,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         : staticEntries.length;
                     final rows = (length / columns).ceil();
                     return SizedBox(
-                      height: min(520.0, max(112.0, rows * 120.0)),
+                      height: min(280.0, max(112.0, rows * 120.0)),
                       child: GridView.builder(
+                        key:PageStorageKey<String>('artist-catalog-scroll-$storageKey'),
                         primary: false,
                         itemCount: length,
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -2466,7 +2577,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     SizedBox(
                       width: constraints.maxWidth,
                       child: TextField(
-                        controller: _weightTuneInput,
+                      key: const PageStorageKey<String>('artist-text-weightTuneInput'),
+                      controller: _weightTuneInput,
                         minLines: 2,
                         maxLines: 4,
                         decoration: InputDecoration(
@@ -2474,7 +2586,10 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                           hintText: '1::artist:foo ::, 0.8::artist:bar ::,',
                           filled: false,
                         ),
-                        onChanged: (_) => _save(),
+                        onChanged: (value) async {
+                        final prefs=await SharedPreferences.getInstance();
+                        await prefs.setString('${_prefsPrefix}weightTuneInput',value);
+                      },
                       ),
                     ),
                     SizedBox(
@@ -2488,7 +2603,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     SizedBox(
                       width: fieldWidth,
                       child: TextField(
-                        controller: _weightTuneCount,
+                      key: const PageStorageKey<String>('artist-text-weightTuneCount'),
+                      controller: _weightTuneCount,
                         keyboardType: TextInputType.number,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly
@@ -2501,7 +2617,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     SizedBox(
                       width: fieldWidth,
                       child: TextField(
-                        controller: _weightVariation,
+                      key: const PageStorageKey<String>('artist-text-weightVariation'),
+                      controller: _weightVariation,
                         keyboardType: TextInputType.number,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly
@@ -2551,12 +2668,14 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
             favoriteModels.contains(_favoriteModelFilter)
         ? _favoriteModelFilter
         : 'all';
+    _favoriteModelFilter=selectedFavoriteModel;
     final filteredFavorites = _favorites.where((result) {
       final model = _resultModel(result);
-      return selectedFavoriteModel == 'all' || model == selectedFavoriteModel;
+      return (!_shortlistOnly || result.shortlisted) && (selectedFavoriteModel == 'all' || model == selectedFavoriteModel);
     }).toList(growable: false);
-    final visibleFavorites =
-        filteredFavorites.take(_visibleFavorites).toList(growable: false);
+    final favoritePages=max(1,(filteredFavorites.length/_favoritePageSize).ceil());
+    _favoritePage=_favoritePage.clamp(1,favoritePages).toInt();
+    final visibleFavorites=filteredFavorites.skip((_favoritePage-1)*_favoritePageSize).take(_favoritePageSize).toList(growable:false);
     final visibleResults =
         _results.take(_visibleResults).toList(growable: false);
     return Scaffold(
@@ -2566,13 +2685,35 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           onPressed: widget.onBack,
         ),
         title: studioAppBarTitle(context, Text(text['title']!)),
+        actions:[IconButton(tooltip:_i('resume'),icon:const Icon(Icons.history),
+          onPressed:_favorites.isEmpty?null:_resumeFavorite)],
       )),
-      body: ListView(
+      body: NotificationListener<ScrollEndNotification>(
+        onNotification:(notification) {
+          if(_showFavorites&&notification.depth==0&&_scrollController.hasClients) {
+            _favoriteOffset=_scrollController.offset; _saveFavoriteView();
+          }
+          return false;
+        },
+        child:ListView(
         controller: _scrollController,
         key: const PageStorageKey<String>('random-artist-lab-scroll'),
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(12, 16, 12, 96),
         children: [
+          if(!_showFavorites) ...[
+          SwitchListTile.adaptive(
+            key:const ValueKey('artist-whole-pool'),
+            title:Text(_i('wholePool')),subtitle:Text(_i('wholeHint')),
+            value:_wholeArtistPool,
+            onChanged:_running||_loading||_useCustomArtists?null:(value) async {
+              setState(()=>_wholeArtistPool=value);
+              final prefs=await SharedPreferences.getInstance();
+              await prefs.setBool('${_prefsPrefix}wholePool',value);
+              await _loadPool(false);
+            }),
+          if(_wholeArtistPool&&!_useCustomArtists&&_wholePoolTotal>0)
+            Text(_i('scope').replaceAll('{total}','$_wholePoolTotal').replaceAll('{count}','${_onlinePool.length}')),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(14),
@@ -2601,9 +2742,10 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                       ],
                     ),
                   ),
-                  SizedBox(
+                  if(!_wholeArtistPool) SizedBox(
                     width: 220,
                     child: TextField(
+                      key: const PageStorageKey<String>('artist-text-poolSize'),
                       controller: _poolSize,
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -2639,7 +2781,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                               }),
                     if (_useCustomArtists)
                       TextField(
-                          controller: _customArtists,
+                      key: const PageStorageKey<String>('artist-text-customArtists'),
+                      controller: _customArtists,
                           minLines: 2,
                           maxLines: 5,
                           enabled: !_running,
@@ -2781,7 +2924,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         SizedBox(
                           width: fieldWidth,
                           child: TextField(
-                            controller: _width,
+                      key: const PageStorageKey<String>('artist-text-width'),
+                      controller: _width,
                             keyboardType: TextInputType.number,
                             inputFormatters: [
                               FilteringTextInputFormatter.digitsOnly
@@ -2796,7 +2940,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         SizedBox(
                           width: fieldWidth,
                           child: TextField(
-                            controller: _height,
+                      key: const PageStorageKey<String>('artist-text-height'),
+                      controller: _height,
                             keyboardType: TextInputType.number,
                             inputFormatters: [
                               FilteringTextInputFormatter.digitsOnly
@@ -2964,7 +3109,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                         SizedBox(
                           width: constraints.maxWidth,
                           child: TextField(
-                            controller: _negative,
+                      key: const PageStorageKey<String>('artist-text-negative'),
+                      controller: _negative,
                             minLines: 2,
                             maxLines: 5,
                             decoration: InputDecoration(
@@ -3105,7 +3251,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     SizedBox(
                       width: constraints.maxWidth,
                       child: TextField(
-                        controller: _base,
+                      key: const PageStorageKey<String>('artist-text-base'),
+                      controller: _base,
                         minLines: 2,
                         maxLines: 5,
                         decoration: InputDecoration(labelText: text['base']),
@@ -3135,7 +3282,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     SizedBox(
                       width: constraints.maxWidth,
                       child: TextField(
-                        controller: _auxiliary,
+                      key: const PageStorageKey<String>('artist-text-auxiliary'),
+                      controller: _auxiliary,
                         minLines: 2,
                         maxLines: 4,
                         decoration: InputDecoration(labelText: text['aux']),
@@ -3144,7 +3292,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     SizedBox(
                       width: constraints.maxWidth,
                       child: TextField(
-                        controller: _customTags,
+                      key: const PageStorageKey<String>('artist-text-customTags'),
+                      controller: _customTags,
                         minLines: 2,
                         maxLines: 4,
                         decoration: InputDecoration(
@@ -3402,6 +3551,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
             ],
           ),
           const SizedBox(height: 12),
+          ],
           SegmentedButton<bool>(
             segments: [
               ButtonSegment(
@@ -3420,12 +3570,13 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
               setState(() {
                 _showFavorites = value.first;
                 if (_showFavorites) {
-                  _visibleFavorites = _resultPageSize;
+                  // Preserve favorite page/filter/bookmark when switching tabs.
                 } else {
                   _visibleResults = _resultPageSize;
                 }
               });
-              _save();
+              _saveFavoriteView();
+              if(_showFavorites) _resumeFavorite();
             },
           ),
           const SizedBox(height: 20),
@@ -3453,6 +3604,16 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Wrap(spacing:8,runSpacing:8,children:[
+                      FilterChip(label:Text(_i('allFavorites')),selected:!_shortlistOnly,
+                        onSelected:(_)=>_changeFavoriteView((){_shortlistOnly=false;_favoritePage=1;})),
+                      FilterChip(label:Text(_i('shortlist')),avatar:const Icon(Icons.star_border,size:18),selected:_shortlistOnly,
+                        onSelected:(_)=>_changeFavoriteView((){_shortlistOnly=!_shortlistOnly;_favoritePage=1;})),
+                      TextButton.icon(onPressed:_lastFavoriteId.isEmpty?null:_resumeFavorite,
+                        icon:const Icon(Icons.history),label:Text(_i('resume'))),
+                    ]),
+                    _favoritePager(filteredFavorites.length),
+                    const SizedBox(height:12),
                     LayoutBuilder(
                       builder: (context, constraints) => Wrap(
                         spacing: 12,
@@ -3501,7 +3662,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                                 if (value == null) return;
                                 setState(() {
                                   _favoriteModelFilter = value;
-                                  _visibleFavorites = _resultPageSize;
+                                  _favoritePage = 1; _saveFavoriteView();
                                 });
                               },
                             ),
@@ -3528,7 +3689,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                                   selectedFavoriteModel == model
                                       ? 'all'
                                       : model;
-                              _visibleFavorites = _resultPageSize;
+                              _favoritePage = 1; _saveFavoriteView();
                             }),
                           );
                         }).toList(growable: false),
@@ -3542,25 +3703,15 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                       )
                     else
                       _resultGrid(visibleFavorites, text, app, favorites: true),
-                    if (visibleFavorites.length < filteredFavorites.length)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 20),
-                        child: OutlinedButton.icon(
-                          onPressed: () => setState(() => _visibleFavorites =
-                              min(_visibleFavorites + _resultPageSize,
-                                  filteredFavorites.length)),
-                          icon: const Icon(Icons.expand_more),
-                          label: Text(
-                              '加载更多（${visibleFavorites.length}/${filteredFavorites.length}）'),
-                        ),
-                      ),
+                    const SizedBox(height:12),
+                    _favoritePager(filteredFavorites.length),
                   ],
                 ),
               ),
             ),
           ],
         ],
-      ),
+      )),
     );
   }
 }

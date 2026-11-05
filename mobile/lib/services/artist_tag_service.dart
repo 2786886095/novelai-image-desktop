@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:async';
+import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,6 +11,83 @@ import '../models/nai_models.dart';
 import 'proxy_http_client.dart';
 
 class ArtistTagService {
+  final http.Client Function(AppSettings)? clientFactory;
+  ArtistTagService({this.clientFactory});
+  http.Client _client(AppSettings settings) => clientFactory?.call(settings) ??
+      createProxyHttpClient(settings, scope: ProxyScope.update);
+
+  /// Uniform ranks without replacement, not popularity-weighted sampling.
+  /// At most 32 tag pages plus 10 count-search pages. Never silently substitutes
+  /// a hot-list cache when the global range cannot be established.
+  Future<ArtistPoolSample> randomWholePool(AppSettings settings,
+      {int sampleSize=32, Random? random, bool force=false}) async {
+    final client=_client(settings);
+    try {
+      final timer=Stopwatch()..start();
+      final count=await _rankingCount(client,'',force:force).timeout(const Duration(seconds:45));
+      if(count.total==0 || count.total>=_maxNumberedPage*_apiPageSize) {
+        throw StateError('Global artist range is unavailable or exceeds the API pagination bound.');
+      }
+      final rng=random??Random.secure();
+      final size=sampleSize.clamp(1,32).clamp(1,count.total).toInt();
+      final ranks=<int>{};
+      for(var j=count.total-size;j<count.total;j++) {
+        final t=rng.nextInt(j+1); ranks.add(ranks.contains(t)?j:t);
+      }
+      final byPage=<int,List<int>>{};
+      for(final rank in ranks) {
+        byPage.putIfAbsent(rank~/_apiPageSize+1,()=>[]).add(rank%_apiPageSize);
+      }
+      final items=<ArtistTagRecord>[];
+      for(final entry in byPage.entries) {
+        if(timer.elapsed>const Duration(seconds:60)) throw TimeoutException('Global artist sampling timed out.');
+        final rows=await _rankingBatch(client,'',entry.key);
+        for(final index in entry.value) {
+          if(index>=rows.length) throw StateError('Artist pool changed; refresh and try again.');
+          items.add(rows[index]);
+        }
+      }
+      if(items.map((e)=>e.id).toSet().length!=items.length) {
+        throw StateError('Artist pool changed; refresh and try again.');
+      }
+      return ArtistPoolSample(items,count.total);
+    } finally {client.close();}
+  }
+
+  /// Only Danbooru is contacted. External profile URLs are search terms, never
+  /// fetch targets. Identity matches are presented for user review, not guessed.
+  Future<List<ArtistIdentity>> lookup(AppSettings settings,String input) async {
+    final query=artistIdentityQuery(input);
+    final client=_client(settings);
+    try {
+      final uri=Uri.https('danbooru.donmai.us','/artists.json',{
+        'limit':'20','search[is_deleted]':'false',
+        query.isUrl?'search[url_matches]':'search[any_name_matches]':query.value,
+        'only':'id,name,other_names,urls,is_deleted,is_banned',
+      });
+      final request=http.Request('GET',uri)..headers.addAll({
+        'Accept':'application/json',
+        'User-Agent':'Langbai-NovelAI-Studio-Mobile/Artist-Lookup',
+      });
+      final response=await client.send(request).timeout(const Duration(seconds:30));
+      if(response.statusCode<200||response.statusCode>=300) {
+        throw http.ClientException('Danbooru HTTP ${response.statusCode}');
+      }
+      final buffer=<int>[];
+      await (() async {
+        await for(final chunk in response.stream) {
+          if(buffer.length+chunk.length>2*1024*1024) throw const FormatException('Artist response too large.');
+          buffer.addAll(chunk);
+        }
+      })().timeout(const Duration(seconds:30));
+      final data=jsonDecode(utf8.decode(buffer));
+      if(data is! List) throw const FormatException('Invalid artist response.');
+      return data.whereType<Map>().where((r)=>r['is_deleted']!=true)
+        .map((r)=>ArtistIdentity.fromJson(Map<String,dynamic>.from(r)))
+        .where((r)=>r.id>0&&r.tag.isNotEmpty).take(20).toList();
+    } finally {client.close();}
+  }
+
   static const _cacheKey = 'artist_lab_popular_pool_v2';
   static const _cacheTimeKey = 'artist_lab_popular_pool_saved_at_v2';
   static const _rankingCountCacheKey = 'artist_ranking_count_cache_v1';
@@ -29,7 +108,7 @@ class ArtistTagService {
   }) async {
     final tag = canonicalArtistTagName(artist);
     if (tag.isEmpty) return const [];
-    final client = createProxyHttpClient(settings, scope: ProxyScope.update);
+    final client = _client(settings);
     try {
       final uri = Uri.https('danbooru.donmai.us', '/posts.json', {
         'limit': '${limit.clamp(1, 6)}',
@@ -98,7 +177,7 @@ class ArtistTagService {
         }
       }
     }
-    final client = createProxyHttpClient(settings, scope: ProxyScope.update);
+    final client = _client(settings);
     final output = <ArtistTagRecord>[];
     final ids = <int>{};
     try {
@@ -232,7 +311,7 @@ class ArtistTagService {
     final normalized = query.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
     final safeQuery = normalized.length > 120 ? normalized.substring(0, 120) : normalized;
     final safePageSize = pageSize.clamp(1, 60).toInt();
-    final client = createProxyHttpClient(settings, scope: ProxyScope.update);
+    final client = _client(settings);
     try {
       final count = await _rankingCount(client, safeQuery, force: force);
       final pageCount = count.total == 0 ? 1 : (count.total / safePageSize).ceil();
@@ -307,3 +386,52 @@ List<ArtistTagRecord> mergeCuratedArtistTags(List<ArtistTagRecord> items) {
 }
 
 int minInt(int left, int right) => left < right ? left : right;
+
+class ArtistPoolSample {
+ final List<ArtistTagRecord> items;
+ final int total;
+ const ArtistPoolSample(this.items,this.total);
+}
+class ArtistIdentity {
+ final int id;
+ final String tag;
+ final List<String> urls;
+ final List<String> aliases;
+ const ArtistIdentity(this.id,this.tag,this.urls,this.aliases);
+ String get naiPrompt=>'1.0::artist:$tag ::';
+ factory ArtistIdentity.fromJson(Map<String,dynamic> json)=>ArtistIdentity(
+   (json['id'] as num?)?.toInt()??0, canonicalArtistTagName('${json['name']??''}'),
+   (json['urls'] as List? ?? []).map((u)=>u is Map?u['url']:u).whereType<String>().where((u)=>u.length<=2048&&Uri.tryParse(u)?.scheme=='https').take(12).toList(),
+   (json['other_names'] as List? ?? []).whereType<String>().take(12).toList());
+}
+({bool isUrl,String value}) artistIdentityQuery(String input) {
+ final value=input.trim();
+ if(value.isEmpty||value.length>240||RegExp(r'[\x00-\x1f*?]').hasMatch(value.replaceAll('?', ''))) {
+   throw const InvalidArtistQuery('Invalid artist query.');
+ }
+ if(value.startsWith('http')||value.contains('://')) {
+   final u=Uri.tryParse(value);
+   if(u==null||!['https','http'].contains(u.scheme)||u.userInfo.isNotEmpty||u.hasPort) {
+     throw const InvalidArtistQuery('Invalid profile URL.');
+   }
+   final host=u.host.toLowerCase();
+   if(['pixiv.net','www.pixiv.net'].contains(host)) {
+     final m=RegExp(r'^/(?:[a-z]{2}/)?users/(\d+)/?$').firstMatch(u.path);
+     final id=m?.group(1)??(u.path=='/member.php'?u.queryParameters['id']:null);
+     if(id!=null&&RegExp(r'^\d+$').hasMatch(id)) return(isUrl:true,value:'https://www.pixiv.net/users/$id');
+   }
+   if(['x.com','www.x.com','twitter.com','www.twitter.com','mobile.twitter.com'].contains(host)) {
+     final m=RegExp(r'^/([A-Za-z0-9_]{1,15})(?:/status/\d+)?/?$').firstMatch(u.path);
+     if(m!=null&&!['home','search','i','intent','explore','settings'].contains(m[1]!.toLowerCase())) {
+       return(isUrl:true,value:'https://twitter.com/${m[1]}');
+     }
+   }
+   throw const InvalidArtistQuery('Use an artist profile, not an artwork or arbitrary URL.');
+ }
+ if(value.contains('/')||value.contains('?')||value.contains('*')||value.length>120) throw const InvalidArtistQuery('Invalid artist name.');
+ return(isUrl:false,value:value.replaceAll(RegExp(r'\s+'),'_'));
+}
+
+class InvalidArtistQuery extends FormatException {
+ const InvalidArtistQuery(super.message);
+}

@@ -358,7 +358,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('switching result folders preserves the page scroll position',
+  testWidgets('favorites open a compact folder without retaining the settings scroll',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(420, 800);
@@ -404,11 +404,12 @@ void main() {
     await _scrollUntilBuilt(tester, bodyScrollable, favoritesTab);
     final scrollable = tester.state<ScrollableState>(bodyScrollable);
     expect(scrollable.position.pixels, greaterThan(0));
-    final before = scrollable.position.pixels;
+
 
     await tester.tap(favoritesTab);
     await tester.pumpAndSettle();
-    expect(scrollable.position.pixels, closeTo(before, 0.5));
+    expect(scrollable.position.pixels, 0);
+    expect(find.byKey(const ValueKey('artist-whole-pool')),findsNothing);
     expect(tester.takeException(), isNull);
   });
 

@@ -1,5 +1,6 @@
 import '../images/image_file_access.dart';
 import 'unified_storage.dart';
+import 'bounded_backup_archive.dart';
 import 'dart:convert';
 import 'compatible_image_backup.dart';
 import 'dart:io';
@@ -23,11 +24,28 @@ import '../references/reference_presets.dart';
 import 'storage.dart';
 import 'portable_projects.dart';
 
-// ZipEncoder is synchronous. Running it on Flutter's UI isolate made a due
-// backup freeze scrolling and touch input for large libraries. Keep the
-// callback top-level so compute() can run it in a background isolate.
-List<int>? _encodeBackupArchive(Archive archive) =>
-    ZipEncoder().encode(archive);
+// Only small JSON and disk paths cross the isolate boundary. Image libraries
+// are hashed and streamed entry-by-entry instead of duplicated in RAM.
+Future<void> _writeBackupArchive(({Archive archive,Map<String,String> sources,String output}) job) async {
+ final output=OutputFileStream(job.output);
+ final encoder=ZipEncoder()..startEncode(output);
+ try {
+   for(final file in job.archive.files) {
+     final source=job.sources[file.name];
+     if(source==null) {encoder.add(file);continue;}
+     final disk=File(source);
+     final expected=file.name.split('/').last.split('.').first;
+     if(await disk.length()!=file.size || (await sha256.bind(disk.openRead()).first).toString()!=expected) {
+       throw const FileSystemException('Backup source changed; original data retained.');
+     }
+     final input=InputFileStream(source,bufferSize:64*1024);
+     try {
+       encoder.add(ArchiveFile.stream(file.name,input)..compression=CompressionType.none);
+     } finally {input.closeSync();}
+   }
+   encoder.endEncode();
+ } finally {output.closeSync();}
+}
 
 /// Canonical categories shared with the Electron archive implementation.
 enum DataBackupCategory {
@@ -131,7 +149,9 @@ class _Counters {
 class _ArchiveBundle {
   final Archive archive;
   final Map<String, dynamic> manifest;
-  const _ArchiveBundle(this.archive, this.manifest);
+  final BoundedBackupArchive backing;
+  const _ArchiveBundle(this.archive, this.manifest,this.backing);
+  void close()=>backing.close();
 }
 
 /// Cross-device, non-destructive data archive service.
@@ -141,10 +161,12 @@ class _ArchiveBundle {
 /// files; Android/iOS use those same files plus mobile-state.json to preserve
 /// tool projects that have no desktop equivalent yet.
 class DataBackupService {
+  static final _assetSources=Expando<Map<String,String>>();
+  static final _assetStages=Expando<Directory>();
   static const format = 'langbai-novelai-studio-backup';
   static const formatVersion = 1;
-  static const _maxJsonBytes = 128 * 1024 * 1024;
-  static const _maxAssetBytes = 256 * 1024 * 1024;
+  static const _maxJsonBytes = BoundedBackupArchive.maxJsonBytes;
+  static const _maxAssetBytes = BoundedBackupArchive.maxAssetBytes;
   static const _artistPreferenceKeys = <String, String>{
     'random': 'artist_lab_random_v1_favorites',
     'v5-repair': 'v5_artist_repair_v1_favorites',
@@ -290,11 +312,11 @@ class DataBackupService {
     return result.substring(0, min(80, result.length));
   }
 
-  Uint8List _entryBytes(ArchiveFile file) =>
-      Uint8List.fromList(List<int>.from(file.content as List));
+  Uint8List _entryBytes(ArchiveFile file) => readBoundedBackupEntry(file);
 
   int _addJson(Archive archive, String name, Object? value) {
     final bytes = utf8.encode(jsonEncode(value));
+    if(bytes.length>_maxJsonBytes) throw const FormatException('Backup JSON exceeds 16 MiB mobile limit. Split the backup into categories; original data retained.');
     archive.addFile(ArchiveFile(name, bytes.length, bytes));
     return bytes.length;
   }
@@ -308,33 +330,32 @@ class DataBackupService {
   }) async {
     if (!includeAssets || filePath == null || filePath.isEmpty) return null;
     final file = File(filePath);
-    final Uint8List bytes;
-    if (isImage) {
-      if (!ImageFiles.keepVisible(file.path)) return null;
-      try { bytes = await ImageFiles.read(file.path, maxBytes: Platform.isIOS ? 64 * 1024 * 1024 : _maxAssetBytes); }
-      on ImageAccessException catch (e) { if (e.code == 'image_size') return null; rethrow; }
+    String sourcePath=file.path;
+    int size;
+    String digest;
+    if(isImage&&Platform.isIOS) {
+      if(!ImageFiles.keepVisible(file.path)) return null;
+      final bytes=await ImageFiles.read(file.path,maxBytes:_maxAssetBytes);
+      size=bytes.length; digest=sha256.convert(bytes).toString();
+      final stage=_assetStages[archive]!;
+      final staged=File('${stage.path}/$digest');
+      await staged.writeAsBytes(bytes,flush:true);
+      sourcePath=staged.path;
     } else {
-      // Text/PDF/other Agent attachments are not image-provider resources.
-      if (!file.existsSync()) return null;
-      final size = await file.length();
-      if (size <= 0 || size > _maxAssetBytes) return null;
-      bytes = await file.readAsBytes();
+      if(isImage&&!ImageFiles.keepVisible(file.path)) return null;
+      if(!await file.exists()) return null;
+      size=await file.length();
+      if(size<=0) return null;
+      if(size>_maxAssetBytes) throw const FormatException('Backup image/attachment exceeds 64 MiB mobile limit; original data retained.');
+      digest=(await sha256.bind(file.openRead()).first).toString();
     }
-    final digest = sha256.convert(bytes).toString();
-    final previous = assets[digest];
-    if (previous != null) return Map<String, dynamic>.from(previous);
-    final assetPath = 'assets/$digest${_extension(file.path)}';
-    final reference = <String, dynamic>{
-      'asset': assetPath,
-      'sha256': digest,
-      'bytes': bytes.length,
-      'originalName': _safeName(file.path),
-    };
-    final archiveFile = ArchiveFile(assetPath, bytes.length, bytes)
-      // Generated images are already PNG/JPEG/WebP-compressed. Re-deflating
-      // them is expensive and normally saves almost nothing.
-      ..compression = CompressionType.none;
-    archive.addFile(archiveFile);
+    final previous=assets[digest];
+    if(previous!=null) return Map<String,dynamic>.from(previous);
+    final assetPath='assets/$digest${_extension(file.path)}';
+    final reference=<String,dynamic>{'asset':assetPath,'sha256':digest,
+      'bytes':size,'originalName':_safeName(file.path)};
+    archive.addFile(ArchiveFile.noData(assetPath)..size=size..compression=CompressionType.none);
+    (_assetSources[archive]??=<String,String>{})[assetPath]=sourcePath;
     assets[digest] = reference;
     return Map<String, dynamic>.from(reference);
   }
@@ -564,6 +585,9 @@ class DataBackupService {
         .toList(growable: false);
     if (selected.isEmpty) throw ArgumentError('Select at least one category.');
     final archive = Archive();
+    final stage=await (await getTemporaryDirectory()).createTemp('issue81-backup-stage-');
+    _assetStages[archive]=stage;
+    try {
     final summaries = <DataBackupCategorySummary>[];
     final assets = <String, Map<String, dynamic>>{};
     final settings = await storage.getSettings();
@@ -888,22 +912,25 @@ class DataBackupService {
       'categories': summaries.map((summary) => summary.toJson()).toList(),
     };
     _addJson(archive, 'manifest.json', manifest);
-    final encoded = await compute(
-      _encodeBackupArchive,
-      archive,
-      debugLabel: 'data-backup-zip',
-    );
-    if (encoded == null) throw StateError('Unable to encode backup archive.');
+    if(archive.files.where((e)=>e.name.endsWith('.json')).fold<int>(0,(sum,e)=>sum+e.size)>48*1024*1024 ||
+       archive.files.fold<int>(0,(sum,e)=>sum+e.size)>BoundedBackupArchive.maxFileBytes-16*1024*1024) {
+      throw const FormatException('Backup exceeds mobile resource limits. Split categories; original data retained.');
+    }
     final directory = internal
         ? await backupDirectory(settings: settings)
         : await getTemporaryDirectory();
-    final file = File(
-        '${directory.path}${Platform.pathSeparator}$prefix-${_stamp()}.naisbackup');
-    final temporary = File('${file.path}.tmp');
-    await temporary.writeAsBytes(encoded, flush: true);
-    if (file.existsSync()) await file.delete();
-    await temporary.rename(file.path);
+    final file = File('${directory.path}${Platform.pathSeparator}$prefix-${_stamp()}-${DateTime.now().microsecondsSinceEpoch}.naisbackup');
+    final temporary=File('${file.path}.tmp');
+    try {
+      await compute(_writeBackupArchive,(archive:archive,sources:_assetSources[archive]??<String,String>{},output:temporary.path),debugLabel:'data-backup-zip');
+      await temporary.rename(file.path);
+    } catch(_) {if(await temporary.exists()) await temporary.delete();rethrow;}
     return file;
+    } finally {
+      _assetSources[archive]?.clear();
+      // This exact directory was created by createTemp above, never user input.
+      if(await stage.exists()) await stage.delete(recursive:true);
+    }
   }
 
   Future<void> shareBackup(File file) => Share.shareXFiles(
@@ -959,8 +986,9 @@ class DataBackupService {
     if (!file.existsSync() || await file.length() <= 0) {
       throw const FormatException('Backup file is empty.');
     }
-    final archive =
-        ZipDecoder().decodeBytes(await file.readAsBytes(), verify: true);
+    final backing=await BoundedBackupArchive.open(filePath);
+    try {
+    final archive=backing.archive;
     final manifestFile = archive.findFile('manifest.json');
     if (manifestFile == null || !manifestFile.isFile) {
       throw const FormatException('Missing backup manifest.');
@@ -975,7 +1003,12 @@ class DataBackupService {
         (manifest['version'] as num?)?.toInt() != formatVersion) {
       throw const FormatException('Unsupported backup format or version.');
     }
-    return _ArchiveBundle(archive, manifest);
+    // Validate all JSON before rescue creation or any preferences are changed.
+    for(final entry in archive.files.where((e)=>e.isFile&&e.name.endsWith('.json'))) {
+      jsonDecode(utf8.decode(_entryBytes(entry)));
+    }
+    return _ArchiveBundle(archive, manifest,backing);
+    } catch(_) {backing.close();rethrow;}
   }
 
   dynamic _readJson(_ArchiveBundle bundle, String name, [dynamic fallback]) {
@@ -1014,6 +1047,7 @@ class DataBackupService {
 
   Future<DataBackupInspection> inspect(String filePath) async {
     final bundle = await _loadArchive(filePath);
+    try {
     final source = bundle.manifest['source'] is Map
         ? Map<String, dynamic>.from(bundle.manifest['source'] as Map)
         : const <String, dynamic>{};
@@ -1042,6 +1076,7 @@ class DataBackupService {
       sourceVersion: source['appVersion']?.toString() ?? 'unknown',
       categories: summaries,
     );
+    } finally {bundle.close();}
   }
 
   Map<String, dynamic>? _assetReference(Object? raw) {
@@ -1871,6 +1906,7 @@ class DataBackupService {
     }
     final imageBefore = await storage.readCompatibleApiState();
     final bundle = await _loadArchive(filePath);
+    try {
     Map<String, dynamic>? imageBackup;
     Future<void> Function()? accountRestore;
     if (requested.contains(DataBackupCategory.apiCredentials)) {
@@ -2152,6 +2188,7 @@ class DataBackupService {
       rescueBackupPath: rescue.path,
       retainedNativeArchives: portable.length,
     );
+    } finally {bundle.close();}
   }
 
   Future<List<File>> _automaticFiles([Directory? root]) async {

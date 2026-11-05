@@ -1,3 +1,5 @@
+import '../i18n/issue81_text.dart';
+import 'random_artist_lab_screen.dart';
 import '../ui/compact_workbench.dart';
 import '../images/coordinated_file_image.dart';
 import '../ui/global_typography.dart';
@@ -33,6 +35,7 @@ class _RepairDrawResult {
   String? error;
   String generationModel;
   bool liked;
+  bool shortlisted;
   bool saving = false;
 
   _RepairDrawResult(
@@ -44,6 +47,7 @@ class _RepairDrawResult {
     this.error,
     this.generationModel = 'nai-diffusion-5-full',
     this.liked = false,
+    this.shortlisted=false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -55,6 +59,7 @@ class _RepairDrawResult {
         'error': error,
         'generationModel': generationModel,
         'liked': liked,
+        'shortlisted':shortlisted,
       };
 
   factory _RepairDrawResult.fromJson(Map<String, dynamic> json) =>
@@ -74,6 +79,7 @@ class _RepairDrawResult {
         generationModel:
             json['generationModel']?.toString() ?? 'nai-diffusion-5-full',
         liked: json['liked'] == true,
+        shortlisted:json['shortlisted']==true,
       );
 }
 
@@ -565,6 +571,57 @@ class _V5ArtistWeightRepairScreenState
   bool _batchReady = false;
   bool _cancelled = false;
   bool _showFavorites = false;
+  int _favoritePage=1,_favoritePageSize=12;
+  bool _shortlistOnly=false;
+  String _lastFavoriteId='';
+  final _favoriteScroll=ScrollController();
+  double _favoriteOffset=0;
+  String _i(String key)=>issue81Text(context.read<AppState>().settings.language,key);
+  List<_RepairDrawResult> get _favoriteWindow {
+    final all=_favorites.where((r)=>!_shortlistOnly||r.shortlisted).toList(growable:false);
+    final pages=max(1,(all.length/_favoritePageSize).ceil());
+    _favoritePage=_favoritePage.clamp(1,pages).toInt();
+    return all.skip((_favoritePage-1)*_favoritePageSize).take(_favoritePageSize).toList(growable:false);
+  }
+  Future<void> _saveFavoriteView() async {
+    final prefs=await SharedPreferences.getInstance();
+    await prefs.setString('${_prefsPrefix}favoriteView',jsonEncode({
+      'page':_favoritePage,'pageSize':_favoritePageSize,'shortlist':_shortlistOnly,
+      'lastId':_lastFavoriteId,'offset':_favoriteOffset,'shown':_showFavorites}));
+  }
+  void _changeFavoriteView(VoidCallback action) {
+    setState(action);_favoriteOffset=0;
+    if(_favoriteScroll.hasClients) _favoriteScroll.jumpTo(0);
+    _saveFavoriteView();
+  }
+  void _resumeFavorite() {
+    if(_lastFavoriteId.isNotEmpty&&!_favorites.any((r)=>r.recipe.id==_lastFavoriteId&&(!_shortlistOnly||r.shortlisted))) _shortlistOnly=false;
+    final all=_favorites.where((r)=>!_shortlistOnly||r.shortlisted).toList(growable:false);
+    final i=all.indexWhere((r)=>r.recipe.id==_lastFavoriteId);
+    setState((){_showFavorites=true;if(i>=0)_favoritePage=i~/_favoritePageSize+1;});
+    WidgetsBinding.instance.addPostFrameCallback((_){
+      if(mounted&&_favoriteScroll.hasClients) _favoriteScroll.jumpTo(_favoriteOffset.clamp(0,_favoriteScroll.position.maxScrollExtent));
+    });
+    _saveFavoriteView();
+  }
+  Widget _favoriteControls() {
+    final total=_favorites.where((r)=>!_shortlistOnly||r.shortlisted).length;
+    final pages=max(1,(total/_favoritePageSize).ceil());
+    final page=_favoritePage.clamp(1,pages).toInt();
+    return Wrap(spacing:8,runSpacing:8,crossAxisAlignment:WrapCrossAlignment.center,children:[
+      FilterChip(label:Text(_i('allFavorites')),selected:!_shortlistOnly,onSelected:(_)=>_changeFavoriteView((){_shortlistOnly=false;_favoritePage=1;})),
+      FilterChip(label:Text(_i('shortlist')),avatar:const Icon(Icons.star_border,size:18),selected:_shortlistOnly,onSelected:(_)=>_changeFavoriteView((){_shortlistOnly=!_shortlistOnly;_favoritePage=1;})),
+      SizedBox(width:130,child:StudioDropdownButtonFormField<int>(isExpanded:true,
+        value:_favoritePageSize,decoration:InputDecoration(labelText:_i('perPage')),
+        items:[12,24,48].map((n)=>DropdownMenuItem(value:n,child:Text('$n'))).toList(),
+        onChanged:(n){if(n!=null)_changeFavoriteView((){_favoritePageSize=n;_favoritePage=1;});})),
+      IconButton(tooltip:_i('previous'),icon:const Icon(Icons.chevron_left),onPressed:page>1?()=>_changeFavoriteView(()=>_favoritePage=page-1):null),
+      Text(_i('page').replaceAll('{page}','$page').replaceAll('{pages}','$pages').replaceAll('{total}','$total')),
+      IconButton(tooltip:_i('next'),icon:const Icon(Icons.chevron_right),onPressed:page<pages?()=>_changeFavoriteView(()=>_favoritePage=page+1):null),
+      TextButton.icon(onPressed:_lastFavoriteId.isEmpty?null:_resumeFavorite,icon:const Icon(Icons.history),label:Text(_i('resume'))),
+    ]);
+  }
+
   WeightControlMode _weightControlMode = WeightControlMode.novice;
   WeightDistributionConfig _weightDistribution =
       const WeightDistributionConfig();
@@ -658,7 +715,17 @@ class _V5ArtistWeightRepairScreenState
     } catch (_) {
       _favorites.clear();
     }
+    try {
+      final view=jsonDecode(prefs.getString('${_prefsPrefix}favoriteView')??'{}') as Map;
+      _favoritePage=(view['page'] as num?)?.toInt().clamp(1,100000)??1;
+      final size=(view['pageSize'] as num?)?.toInt()??12;
+      _favoritePageSize=[12,24,48].contains(size)?size:12;
+      _shortlistOnly=view['shortlist']==true;_lastFavoriteId=view['lastId'] as String? ??'';
+      _favoriteOffset=((view['offset'] as num?)?.toDouble()??0).clamp(0,10000000);
+      _showFavorites=view['shown']==true;
+    } catch(_) {}
     if (mounted) setState(() {});
+    if(mounted&&_showFavorites)_resumeFavorite();
   }
 
   GenerateParams _prepareGenerationParams(GenerateParams source) {
@@ -741,6 +808,7 @@ class _V5ArtistWeightRepairScreenState
 
   @override
   void dispose() {
+    _favoriteScroll.dispose();
     _input.dispose();
     _output.dispose();
     _drawInput.dispose();
@@ -908,7 +976,8 @@ class _V5ArtistWeightRepairScreenState
         childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         children: [
           TextField(
-            controller: _drawTagSearch,
+                    key: const PageStorageKey<String>('artist-repair-text-drawTagSearch'),
+                    controller: _drawTagSearch,
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.search),
@@ -1126,13 +1195,17 @@ class _V5ArtistWeightRepairScreenState
 
   Future<void> _previewResult(
       _RepairDrawResult result, Map<String, String> text) async {
-    final list = (_showFavorites ? _favorites : _results)
-        .where((i) => i.image != null)
-        .toList();
+    if(_showFavorites) {
+      _lastFavoriteId=result.recipe.id;
+      _favoriteOffset=_favoriteScroll.hasClients?_favoriteScroll.offset:0;
+      await _saveFavoriteView();if(!mounted)return;
+    }
+    final list = (_showFavorites ? _favoriteWindow : _results.take(100))
+        .where((i) => i.image != null).toList();
     await showGalleryImagePreview(context,
         images: list
             .map((i) => imageFile(File(i.image!.filePath),
-                fit: BoxFit.contain,
+                fit: BoxFit.contain,cacheWidth:1200,
                 errorBuilder: (_, __, ___) =>
                     const Icon(Icons.broken_image_outlined)))
             .toList(),
@@ -1218,6 +1291,10 @@ class _V5ArtistWeightRepairScreenState
             alignment: MainAxisAlignment.end,
             spacing: 8,
             children: [
+              if(favorite) IconButton(
+                tooltip:_i(result.shortlisted?'shortlistRemove':'shortlistAdd'),
+                icon:Icon(result.shortlisted?Icons.star:Icons.star_border),
+                onPressed:() async {setState(()=>result.shortlisted=!result.shortlisted);await _saveFavorites();}),
               if (favorite)
                 TextButton.icon(
                   onPressed: () => _removeFavorite(result, text),
@@ -1413,7 +1490,8 @@ class _V5ArtistWeightRepairScreenState
                   SizedBox(
                     width: fieldWidth,
                     child: TextField(
-                      controller: _width,
+                    key: const PageStorageKey<String>('artist-repair-text-width'),
+                    controller: _width,
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: InputDecoration(labelText: text['width']),
@@ -1424,7 +1502,8 @@ class _V5ArtistWeightRepairScreenState
                   SizedBox(
                     width: fieldWidth,
                     child: TextField(
-                      controller: _height,
+                    key: const PageStorageKey<String>('artist-repair-text-height'),
+                    controller: _height,
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: InputDecoration(labelText: text['height']),
@@ -1589,7 +1668,8 @@ class _V5ArtistWeightRepairScreenState
                   SizedBox(
                     width: constraints.maxWidth,
                     child: TextField(
-                      controller: _negativePrompt,
+                    key: const PageStorageKey<String>('artist-repair-text-negativePrompt'),
+                    controller: _negativePrompt,
                       minLines: 2,
                       maxLines: 5,
                       decoration: InputDecoration(labelText: text['negative']),
@@ -1656,7 +1736,7 @@ class _V5ArtistWeightRepairScreenState
   ) =>
       [
         const SizedBox(height: 12),
-        _generationSettingsCard(app, _drawParamText(app.settings.language)),
+        if(!_showFavorites) _generationSettingsCard(app, _drawParamText(app.settings.language)),
         const SizedBox(height: 12),
         SegmentedButton<bool>(
           segments: [
@@ -1670,8 +1750,7 @@ class _V5ArtistWeightRepairScreenState
             ),
           ],
           selected: {_showFavorites},
-          onSelectionChanged: (values) =>
-              setState(() => _showFavorites = values.first),
+          onSelectionChanged: (values) {setState(() => _showFavorites = values.first);_saveFavoriteView();if(_showFavorites)_resumeFavorite();},
         ),
         const SizedBox(height: 6),
         Text(
@@ -1680,6 +1759,7 @@ class _V5ArtistWeightRepairScreenState
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 10),
+        if(_showFavorites) _favoriteControls(),
         if (!_showFavorites && _results.isEmpty)
           Padding(
             padding: const EdgeInsets.all(24),
@@ -1691,7 +1771,7 @@ class _V5ArtistWeightRepairScreenState
             child: Text(text['emptyFavorite']!, textAlign: TextAlign.center),
           )
         else
-          ...(_showFavorites ? _favorites : _results).map(
+          ...(_showFavorites ? _favoriteWindow : _results.take(100)).map(
             (item) => _drawResultCard(
               item,
               text,
@@ -1722,7 +1802,8 @@ class _V5ArtistWeightRepairScreenState
               ),
               const SizedBox(height: 5),
               TextField(
-                controller: _drawInput,
+                    key: const PageStorageKey<String>('artist-repair-text-drawInput'),
+                    controller: _drawInput,
                 minLines: 4,
                 maxLines: 9,
                 onChanged: (_) => setState(() => _message = ''),
@@ -1777,7 +1858,8 @@ class _V5ArtistWeightRepairScreenState
               ),
               const SizedBox(height: 12),
               TextField(
-                controller: _basePrompt,
+                    key: const PageStorageKey<String>('artist-repair-text-basePrompt'),
+                    controller: _basePrompt,
                 minLines: 3,
                 maxLines: 7,
                 decoration: InputDecoration(
@@ -1829,7 +1911,8 @@ class _V5ArtistWeightRepairScreenState
                   children: [
                     Expanded(
                       child: TextField(
-                        controller: _seed,
+                    key: const PageStorageKey<String>('artist-repair-text-seed'),
+                    controller: _seed,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
                           labelText: text['seed'],
@@ -1915,6 +1998,13 @@ class _V5ArtistWeightRepairScreenState
     final completed = _results
         .where((item) => item.status == 'done' || item.status == 'failed')
         .length;
+    if(_showFavorites) {
+      return Scaffold(appBar:workbenchAppBar(context,AppBar(
+        leading:BackButton(onPressed:widget.onBack),title:studioAppBarTitle(context,Text(drawText['favorites']!)))),
+        body:NotificationListener<ScrollEndNotification>(onNotification:(n){
+          if(n.depth==0&&_favoriteScroll.hasClients){_favoriteOffset=_favoriteScroll.offset;_saveFavoriteView();}return false;},
+          child:ListView(controller:_favoriteScroll,padding:const EdgeInsets.fromLTRB(12,12,12,36),children:_resultWorkspace(app,drawText))));
+    }
     if (widget.mode == V5ArtistToolMode.draw) {
       return Scaffold(
         appBar: workbenchAppBar(context, AppBar(
@@ -1939,6 +2029,9 @@ class _V5ArtistWeightRepairScreenState
               drawText['hint']!,
               style: Theme.of(context).textTheme.titleMedium,
             ),
+            OutlinedButton.icon(icon:const Icon(Icons.public),label:Text(_i('wholePool')),
+              onPressed:_running?null:()=>Navigator.of(context).push(MaterialPageRoute<void>(
+                builder:(route)=>RandomArtistLabScreen(wholePoolInitially:true,onBack:()=>Navigator.of(route).pop())))),
             ..._drawWorkspace(app, colors, drawText, completed),
           ],
         ),
@@ -2014,6 +2107,7 @@ class _V5ArtistWeightRepairScreenState
                   ),
                   const SizedBox(height: 12),
                   TextField(
+                    key: const PageStorageKey<String>('artist-repair-text-input'),
                     controller: _input,
                     onChanged: (_) => setState(() => _output.clear()),
                     minLines: 5,
@@ -2051,6 +2145,7 @@ class _V5ArtistWeightRepairScreenState
                     ),
                   ),
                   TextField(
+                    key: const PageStorageKey<String>('artist-repair-text-output'),
                     controller: _output,
                     readOnly: true,
                     minLines: 5,
@@ -2087,6 +2182,7 @@ class _V5ArtistWeightRepairScreenState
                   ),
                   const SizedBox(height: 12),
                   TextField(
+                    key: const PageStorageKey<String>('artist-repair-text-basePrompt'),
                     controller: _basePrompt,
                     minLines: 3,
                     maxLines: 7,
@@ -2139,7 +2235,8 @@ class _V5ArtistWeightRepairScreenState
                       children: [
                         Expanded(
                           child: TextField(
-                            controller: _seed,
+                    key: const PageStorageKey<String>('artist-repair-text-seed'),
+                    controller: _seed,
                             keyboardType: TextInputType.number,
                             decoration: InputDecoration(
                               labelText: drawText['seed'],
