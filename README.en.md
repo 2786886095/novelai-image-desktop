@@ -19,9 +19,10 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-- **Reverse prompting and text conversion retain usable drafts**: count, ratio and format checks now produce warnings instead of discarding actual model output. Review, edit or reuse the draft; no invented padding or automatic image generation.
-- **Visible result warnings**: desktop and mobile keep diagnostics beside the result and clear stale notices after manual replacement. Complete text code fences are handled correctly.
-- **Unusable responses still fail**: API errors, empty or truncated replies, explicit refusals and unextractable response structures are not successful drafts. All five platforms are rebuilt from the same source; unfinished device/full-feature acceptance is disclosed. The unsigned IPA requires user signing.
+- **Mobile artist tools**: sample the whole artist-tag pool; paginated favorites, a secondary shortlist and last-viewed restoration, compatible with existing favorites.
+- **Expansion and backup fixes**: isolate scroll and expansion state, lazily display large tag selections, and stream backup data with explicit resource-limit errors while retaining originals.
+- **Artist lookup**: review Danbooru identities from Pixiv/X profiles or names, then copy a tag or NAI artist string; ambiguous identities are not guessed.
+- **Scope and limits**: five platforms rebuilt from one source; desktop synchronizes the version, not the mobile UI. Live API and physical-device acceptance remain incomplete; unsigned IPA requires your own signing. Relay recommendations are unchanged.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
