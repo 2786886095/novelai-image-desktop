@@ -19,3 +19,11 @@ it('comic planning and template library motion use the explicit application pref
  // Full motion retains the interaction transition even if Windows prefers less.
  expect(comic).toMatch(/(?:^|\n)\.comic-composer-segments>button\s*\{[^}]*transition:\s*background 160ms/);
 });
+
+it('keeps related artist numeric controls on the same 44px geometry',()=>{
+ const css=read('src/styles.css');
+ const rules=[...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(m=>/height:\s*44px/.test(m[2])&&/min-height:\s*44px/.test(m[2]));
+ for(const selector of ['.v5-weight-draw-controls input[type="number"]','.v5-seed-control input[type="number"]','.random-custom-tag-random-range input[type="number"]'])expect(rules.some(m=>m[1].includes(selector)),selector).toBe(true);
+ expect(css).toContain('html.motion-reduced .random-custom-tag-random-range input[type="number"]');
+ expect(read('src/components/relay-recommendation-dialog.css')).toContain('html.motion-reduced .relay-intro-backdrop');
+});

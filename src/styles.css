@@ -12262,6 +12262,8 @@ html.theme-dark #root {
 .random-artist-settings input[type="number"],
 .random-generation-settings input[type="number"],
 .artist-weight-tuner-grid input[type="number"],
+.v5-weight-draw-controls input[type="number"],
+.v5-seed-control input[type="number"],
 .random-custom-tag-random-range input[type="number"] {
   height: 44px;
   min-height: 44px;
@@ -14689,9 +14691,7 @@ button:has(> .ui-icon):not(.select-menu-trigger) {
   cursor: not-allowed;
   opacity: .65;
 }
-@media (prefers-reduced-motion: reduce) {
-  .random-custom-tag-random-range input[type="number"] { transition: none; }
-}
+html.motion-reduced .random-custom-tag-random-range input[type="number"] { transition: none; }
 .random-custom-tag-toolbar-status small { color: var(--text-muted); font-size: 10px; white-space: nowrap; }
 .random-custom-tag-results {
   max-height: min(56vh, 620px);
