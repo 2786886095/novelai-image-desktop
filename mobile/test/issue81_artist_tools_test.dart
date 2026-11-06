@@ -19,6 +19,15 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _Artists extends ArtistTagService {
+  // All pool modes are fixture-backed: no filesystem or real HTTP in layout tests.
+  @override
+  Future<ArtistPoolSample> randomWholePool(AppSettings settings,
+      {int sampleSize=32, Random? random, bool force=false,
+       ArtistPoolSource source=ArtistPoolSource.online}) async {
+    final items=await popular(settings);
+    return ArtistPoolSample(items,items.length,source:source,requestedSource:source);
+  }
+
   @override
   Future<List<ArtistTagRecord>> popular(AppSettings settings,
           {int limit = 1000,
@@ -153,53 +162,32 @@ void main() {
           throwsA(isA<http.ClientException>()));
     }
   });
-  test(
-      'whole-pool sampling reaches ranks beyond the hot list with bounded pages',
-      () async {
+  test('broad discovery uses bounded ID cursors, not deep rank pages', () async {
     final requests = <Uri>[];
-    final service = ArtistTagService(
-        clientFactory: (_) => MockClient((req) async {
-              requests.add(req.url);
-              final page = int.parse(req.url.queryParameters['page']!);
-              return http.Response(
-                  jsonEncode(List.generate(
-                      page <= 2
-                          ? 1000
-                          : page == 3
-                              ? 500
-                              : 0,
-                      (i) => {
-                            'id': (page - 1) * 1000 + i + 1,
-                            'name': 'artist_${(page - 1) * 1000 + i + 1}',
-                            'post_count': 3000 - (page - 1) * 1000 - i,
-                          })),
-                  200);
-            }));
-    final result = await service.randomWholePool(AppSettings(),
-        random: Random(81), force: true);
-    expect(result.total, 2500);
-    expect(result.items.length, 32);
-    expect(result.items.map((e) => e.id).toSet().length, 32);
-    expect(result.items.any((e) => e.id > 1000), isTrue);
-    expect(requests.length, lessThanOrEqualTo(42));
-    expect(
-        requests.every((u) =>
-            u.host == 'danbooru.donmai.us' &&
-            u.queryParameters['search[is_deprecated]'] == 'no'),
-        isTrue);
+    var call = 0;
+    final service = ArtistTagService(clientFactory: (_) => MockClient((req) async {
+      requests.add(req.url); call++;
+      return http.Response(jsonEncode(List.generate(call == 1 ? 1 : 100,
+        (i) => {'id': call == 1 ? 100000 : call * 1000 + i,
+          'name': 'artist_${call}_$i', 'post_count': 10, 'category': 1})), 200);
+    }));
+    final result = await service.randomWholePool(AppSettings(), random: Random(81), force: true);
+    expect(result.total, 401); expect(result.items.length, 32);
+    expect(result.fallback, isFalse); expect(result.coverageComplete, isFalse);
+    expect(requests.length, 5);
+    expect(requests.first.queryParameters['page'], '1');
+    for (final uri in requests.skip(1)) {
+      expect(uri.queryParameters['page'], matches(r'^[ab][0-9]+$'));
+      expect(int.parse(uri.queryParameters['limit']!), lessThanOrEqualTo(100));
+    }
   });
-  test('whole-pool failure never silently returns popular cached artists',
-      () async {
-    SharedPreferences.setMockInitialValues({
-      'artist_lab_popular_pool_v2': jsonEncode([
-        {'id': 1, 'name': 'hot', 'post_count': 1}
-      ])
-    });
-    final service = ArtistTagService(
-        clientFactory: (_) =>
-            MockClient((_) async => http.Response('blocked', 403)));
-    await expectLater(service.randomWholePool(AppSettings()),
-        throwsA(isA<http.ClientException>()));
+  test('online failure explicitly identifies local fallback, not online success', () async {
+    final service = ArtistTagService(clientFactory: (_) => MockClient((_) async => http.Response('blocked', 503)));
+    final result = await service.randomWholePool(AppSettings());
+    expect(result.items, isNotEmpty); expect(result.fallback, isTrue);
+    expect(result.source, ArtistPoolSource.local);
+    expect(result.requestedSource, ArtistPoolSource.online);
+    expect(result.warning, isNotEmpty); expect(result.coverageComplete, isFalse);
   });
   for (final kind in ['random', 'draw', 'repair']) {
     testWidgets(

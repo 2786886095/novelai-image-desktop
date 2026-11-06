@@ -1,3 +1,4 @@
+import '../i18n/artist_pool_text.dart';
 import '../ui/global_typography.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:io';
@@ -382,7 +383,8 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
   bool busy = false;
 
   DataBackupService get service =>
-      DataBackupService(context.read<AppState>().storage,templateLibrary:context.read<AppState>().templateLibrary);
+      DataBackupService(context.read<AppState>().storage,
+          templateLibrary: context.read<AppState>().templateLibrary);
 
   @override
   void initState() {
@@ -471,7 +473,12 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
         file,
         dialogTitle: text['export'],
       );
-      if (path != null) _message(text['fileSaved']!);
+      if (path == DataBackupService.sharedBackupResult) {
+        _message(
+            '已打开系统分享／保存面板，请在面板中完成保存。 / Save using the system share sheet.');
+      } else if (path != null) {
+        _message(text['fileSaved']!);
+      }
     } catch (error) {
       _message(error.toString());
     } finally {
@@ -702,7 +709,7 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
           Align(
             alignment: AlignmentDirectional.centerStart,
             child: Text(
-              "${text['desc']!}\n${text['coverage']!}",
+              "${text['desc']!}\n${text['coverage']!}\n${artistPoolText(app.settings.language, 'backupLimit')}",
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -971,7 +978,7 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
               ),
             ),
             if (Platform.isIOS || Platform.isAndroid)
-              Text("${text['desc']!}\n${text['coverage']!}",
+              Text("${text['desc']!}\n${text['coverage']!}\n${artistPoolText(app.settings.language, 'backupLimit')}",
                   style: Theme.of(context).textTheme.bodySmall),
           ],
         ],

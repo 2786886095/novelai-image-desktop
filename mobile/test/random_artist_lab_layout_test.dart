@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:async';
 import 'dart:convert';
 
@@ -13,6 +14,15 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeArtistService extends ArtistTagService {
+  // All pool modes are fixture-backed: no filesystem or real HTTP in layout tests.
+  @override
+  Future<ArtistPoolSample> randomWholePool(AppSettings settings,
+      {int sampleSize=32, Random? random, bool force=false,
+       ArtistPoolSource source=ArtistPoolSource.online}) async {
+    final items=await popular(settings);
+    return ArtistPoolSample(items,items.length,source:source,requestedSource:source);
+  }
+
   @override
   Future<List<ArtistTagRecord>> popular(
     AppSettings settings, {
@@ -156,7 +166,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('随机画师串抽卡'), findsOneWidget);
       expect(find.text('当前候选库共 60 名画师'), findsOneWidget);
-      expect(find.text('画师 Tag 来源：Danbooru'), findsOneWidget);
+      expect(find.text('来源：离线画师标签、内置候选及已缓存候选。'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
@@ -334,6 +344,9 @@ void main() {
     final scrollable = tester.state<ScrollableState>(
       find.descendant(of: bodyList, matching: find.byType(Scrollable)).first,
     );
+    await _scrollUntilBuilt(tester,
+      find.descendant(of:bodyList,matching:find.byType(Scrollable)).first,
+      find.byTooltip('重试'));
     final before = scrollable.position.pixels;
     expect(before, greaterThan(0));
 

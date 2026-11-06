@@ -1,3 +1,4 @@
+import '../i18n/artist_pool_text.dart';
 import '../ui/compact_workbench.dart';
 import '../i18n/issue81_text.dart';
 import '../images/image_file_access.dart';
@@ -149,6 +150,18 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   double _favoriteOffset = 0;
   bool _wholeArtistPool = false;
   int _wholePoolTotal = 0;
+  bool _fixedArtistCount = false;
+  ArtistPoolSource _poolSource = ArtistPoolSource.local;
+  ArtistPoolSample? _poolSample;
+  int _randomCount(TextEditingController controller, int fallback) =>
+      normalizeRandomCustomTagCount(controller.text, fallback: fallback);
+  String _p(String key) => artistPoolText(context.read<AppState>().settings.language, key);
+  void _normalizeRandomCounts() {
+    final a = _randomCount(_minRandomCustomTags, 1);
+    final b = _randomCount(_maxRandomCustomTags, 3);
+    _minRandomCustomTags.text = '${min(a, b)}';
+    _maxRandomCustomTags.text = '${max(a, b)}';
+  }
   String _i(String key) => issue81Text(context.read<AppState>().settings.language,key);
 
   List<_Result> get _filteredFavorites => _favorites.where((r) =>
@@ -840,6 +853,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       _maxArtistWeight.text = '1.2';
       _minCustomTagWeight.text = '0.2';
       _maxCustomTagWeight.text = '1.2';
+      _fixedArtistCount = false;
       _minRandomCustomTags.text = '1';
       _maxRandomCustomTags.text = '3';
       _minFranchiseStyles.text = '0';
@@ -861,6 +875,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
 
   void _commitCustomTags() {
     setState(() {
+      _normalizeRandomCounts();
       _drawSeed = Random.secure().nextInt(0x7fffffff);
       _planned = _buildPlan();
     });
@@ -933,6 +948,10 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     _maxRandomCustomTags.text =
         '${prefs.getInt('${_prefsPrefix}maxRandomCustomTags') ?? 3}';
     _count.text = '${prefs.getInt('${_prefsPrefix}count') ?? 8}';
+    _normalizeRandomCounts();
+    _fixedArtistCount = prefs.getBool('${_prefsPrefix}fixedArtistCount') ?? false;
+    _poolSource = prefs.getString('${_prefsPrefix}poolSource') == 'online'
+        ? ArtistPoolSource.online : ArtistPoolSource.local;
     final oldArtistCount = prefs.getInt('${_prefsPrefix}artistCount');
     _minArtists.text =
         '${prefs.getInt('${_prefsPrefix}minArtists') ?? oldArtistCount ?? 3}';
@@ -1064,9 +1083,11 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     await prefs.setString(
         '${_prefsPrefix}customTagModes', jsonEncode(_customTagModes));
     await prefs.setInt('${_prefsPrefix}minRandomCustomTags',
-        _nonNegative(_minRandomCustomTags, 1));
+        _randomCount(_minRandomCustomTags, 1));
     await prefs.setInt('${_prefsPrefix}maxRandomCustomTags',
-        _nonNegative(_maxRandomCustomTags, 3));
+        _randomCount(_maxRandomCustomTags, 3));
+    await prefs.setBool('${_prefsPrefix}fixedArtistCount', _fixedArtistCount);
+    await prefs.setString('${_prefsPrefix}poolSource', _poolSource.name);
     await prefs.setInt('${_prefsPrefix}count', _positive(_count, 8));
     await prefs.setInt('${_prefsPrefix}minArtists',
         _positive(_minArtists, 3).clamp(1, 20).toInt());
@@ -1164,7 +1185,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         pool: _pool,
         count: _positive(_count, 8),
         minArtists: _positive(_minArtists, 3).clamp(1, 20).toInt(),
-        maxArtists: _positive(_maxArtists, 7).clamp(1, 20).toInt(),
+        maxArtists: _positive(_fixedArtistCount ? _minArtists : _maxArtists, _fixedArtistCount ? 3 : 7).clamp(1, 20).toInt(),
         drawSeed: _drawSeed,
         minArtistWeight: _decimal(_minArtistWeight, _artistWeightMinDefault),
         maxArtistWeight: _decimal(_maxArtistWeight, _artistWeightMaxDefault),
@@ -1175,8 +1196,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         auxiliary: _auxiliary.text,
         customTagPool: _customTags.text,
         customTagModes: _customTagModes,
-        minRandomCustomTags: _nonNegative(_minRandomCustomTags, 1),
-        maxRandomCustomTags: _nonNegative(_maxRandomCustomTags, 3),
+        minRandomCustomTags: _randomCount(_minRandomCustomTags, 1),
+        maxRandomCustomTags: _randomCount(_maxRandomCustomTags, 3),
         minCustomTagWeight:
             _decimal(_minCustomTagWeight, _customTagWeightMinDefault),
         maxCustomTagWeight:
@@ -1194,12 +1215,15 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
     });
     try {
       final app = context.read<AppState>();
-      if(_wholeArtistPool&&!_useCustomArtists) {
-        final sample=await _service.randomWholePool(app.settings,force:force);
+      if(_useCustomArtists) {
+        _onlinePool=const []; _wholePoolTotal=0; _poolSample=null;
+      } else if(_wholeArtistPool||_poolSource==ArtistPoolSource.local) {
+        final sample=await _service.randomWholePool(app.settings,force:force,source:_poolSource,sampleSize:512);
+        _poolSample=sample;
         _onlinePool=sample.items; _wholePoolTotal=sample.total;
       } else {
         _onlinePool = await _service.popular(app.settings,limit:_poolLimit(),force:force);
-        _wholePoolTotal=0;
+        _wholePoolTotal=0; _poolSample=null;
       }
       if (!mounted) return false;
       setState(() => _planned = _buildPlan());
@@ -1341,9 +1365,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
       customTagPool: _customTags.text,
       customTagModes: _customTagModes,
       minRandomCustomTags:
-          _positive(_minRandomCustomTags, 1).clamp(0, 20).toInt(),
+          _randomCount(_minRandomCustomTags, 1),
       maxRandomCustomTags:
-          _positive(_maxRandomCustomTags, 3).clamp(0, 20).toInt(),
+          _randomCount(_maxRandomCustomTags, 3),
       minCustomTagWeight:
           _decimal(_minCustomTagWeight, _customTagWeightMinDefault),
       maxCustomTagWeight:
@@ -2704,7 +2728,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           if(!_showFavorites) ...[
           SwitchListTile.adaptive(
             key:const ValueKey('artist-whole-pool'),
-            title:Text(_i('wholePool')),subtitle:Text(_i('wholeHint')),
+            title:Text(_p('whole')),subtitle:Text(_p('hint')),
             value:_wholeArtistPool,
             onChanged:_running||_loading||_useCustomArtists?null:(value) async {
               setState(()=>_wholeArtistPool=value);
@@ -2712,8 +2736,25 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
               await prefs.setBool('${_prefsPrefix}wholePool',value);
               await _loadPool(false);
             }),
-          if(_wholeArtistPool&&!_useCustomArtists&&_wholePoolTotal>0)
-            Text(_i('scope').replaceAll('{total}','$_wholePoolTotal').replaceAll('{count}','${_onlinePool.length}')),
+          if(!_useCustomArtists) ...[
+            StudioDropdownButtonFormField<ArtistPoolSource>(
+              key: const ValueKey('artist-pool-source'), value: _poolSource,
+              isExpanded:true, decoration:InputDecoration(labelText:_p('source')),
+              items:ArtistPoolSource.values.map((source)=>DropdownMenuItem(
+                value:source,child:Text(_p(source.name),maxLines:1,overflow:TextOverflow.ellipsis))).toList(),
+              onChanged:_running||_loading?null:(value) async {
+                if(value==null) return;
+                setState(()=>_poolSource=value);
+                await _save(); await _loadPool(false);
+              },
+            ),
+            if(_poolSample!=null) Padding(padding:const EdgeInsets.symmetric(vertical:8),child:Text(
+              '${_p(_poolSample!.source==ArtistPoolSource.local ? 'local' : _poolSample!.fromCache ? 'cache':'fresh')} · '
+              '${_p('known').replaceAll('{total}','$_wholePoolTotal').replaceAll('{count}','${_onlinePool.length}')}')),
+            if(_poolSample?.fallback==true) Padding(padding:const EdgeInsets.only(bottom:8),child:Text(
+              _p('fallback'),key:const ValueKey('artist-pool-fallback'),
+              style:TextStyle(color:Theme.of(context).colorScheme.error))),
+          ],
           Card(
             child: Padding(
               padding: const EdgeInsets.all(14),
@@ -2727,7 +2768,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(text['pool']!,
+                        Text(_poolSample != null ? _p('candidates') : text['pool']!,
                             style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 4),
                         Text(
@@ -2737,12 +2778,12 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                                     '{count}', '${_onlinePool.length}'),
                             style: Theme.of(context).textTheme.bodySmall),
                         const SizedBox(height: 4),
-                        Text(text['hint']!,
+                        Text(_poolSample?.source==ArtistPoolSource.local ? _p('localHint') : text['hint']!,
                             style: Theme.of(context).textTheme.bodySmall),
                       ],
                     ),
                   ),
-                  if(!_wholeArtistPool) SizedBox(
+                  if(!_wholeArtistPool&&_poolSource==ArtistPoolSource.online) SizedBox(
                     width: 220,
                     child: TextField(
                       key: const PageStorageKey<String>('artist-text-poolSize'),
@@ -2753,12 +2794,12 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     ),
                   ),
                   OutlinedButton(
-                      onPressed: _loading ? null : () => _loadPool(false),
+                      onPressed: _loading||_running||_useCustomArtists ? null : () => _loadPool(false),
                       child: Text(text['load']!)),
                   OutlinedButton.icon(
-                      onPressed: _loading ? null : () => _loadPool(true),
+                      onPressed: _loading||_running||_useCustomArtists ? null : () => _loadPool(true),
                       icon: const Icon(Icons.refresh),
-                      label: Text(text['refresh']!)),
+                      label: Text(_poolSample!=null ? _p('refresh') : text['refresh']!)),
                 ],
               ),
             ),
@@ -2770,7 +2811,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     SwitchListTile(
                         title: Text(customPoolText[0]),
                         value: _useCustomArtists,
-                        onChanged: _running
+                        onChanged: _running||_loading
                             ? null
                             : (v) {
                                 setState(() {
@@ -2778,6 +2819,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                                   _planned = _buildPlan();
                                 });
                                 unawaited(_saveCustomArtistPool());
+                                if(!v) unawaited(_loadPool(false));
                               }),
                     if (_useCustomArtists)
                       TextField(
@@ -3351,11 +3393,17 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                       setState(() => _planned = _buildPlan());
                       _save();
                     }),
-                    numberField(_minArtists, text['min']!, commit: () {
+                    SizedBox(width:constraints.maxWidth,child:SwitchListTile.adaptive(
+                      key:const ValueKey('artist-fixed-count'),contentPadding:EdgeInsets.zero,
+                      title:Text(_p('fixed')),subtitle:Text(_p('fixedHint')),
+                      value:_fixedArtistCount,onChanged:_running?null:(value) {
+                        setState(() { _fixedArtistCount=value; _planned=_buildPlan(); }); _save();
+                      })),
+                    numberField(_minArtists, _fixedArtistCount ? _p('artists') : text['min']!, commit: () {
                       setState(() => _planned = _buildPlan());
                       _save();
                     }),
-                    numberField(_maxArtists, text['max']!, commit: () {
+                    if(!_fixedArtistCount) numberField(_maxArtists, text['max']!, commit: () {
                       setState(() => _planned = _buildPlan());
                       _save();
                     }),

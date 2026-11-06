@@ -1,3 +1,5 @@
+import 'backup_snapshot.dart';
+import 'package:flutter/services.dart' show MissingPluginException;
 import '../images/image_file_access.dart';
 import 'unified_storage.dart';
 import 'bounded_backup_archive.dart';
@@ -150,8 +152,14 @@ class _ArchiveBundle {
   final Archive archive;
   final Map<String, dynamic> manifest;
   final BoundedBackupArchive backing;
-  const _ArchiveBundle(this.archive, this.manifest,this.backing);
-  void close()=>backing.close();
+  final Directory snapshotDirectory;
+  const _ArchiveBundle(
+      this.archive, this.manifest, this.backing, this.snapshotDirectory);
+  Future<void> close() async {
+    backing.close();
+    // This is an app-created createTemp directory, never the selected source.
+    await snapshotDirectory.delete(recursive: true);
+  }
 }
 
 /// Cross-device, non-destructive data archive service.
@@ -227,7 +235,25 @@ class DataBackupService {
   final MobileTemplateLibrary? templateLibrary;
   final Random _random = Random.secure();
 
-  DataBackupService(this.storage, {this.templateLibrary});
+  final Future<Directory> Function()? temporaryDirectoryProvider;
+  DataBackupService(this.storage,
+      {this.templateLibrary, this.temporaryDirectoryProvider});
+
+  Future<Directory> _snapshotRoot() async {
+    if (temporaryDirectoryProvider != null) {
+      return temporaryDirectoryProvider!();
+    }
+    try {
+      return await getTemporaryDirectory();
+    } on MissingPluginException {
+      if (Platform.isAndroid || Platform.isIOS) rethrow;
+      return Directory
+          .systemTemp; // command-line tests / desktop without plugin
+    }
+  }
+
+  static const mobileSaveMemoryLimit = 16 * 1024 * 1024;
+  static const sharedBackupResult = 'native-share-sheet-opened';
 
   String _id() =>
       '${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 30)}';
@@ -948,23 +974,40 @@ class DataBackupService {
   /// directly to the selected document URI; desktop pickers only return a
   /// path, so the service completes the write atomically there.
   Future<String?> saveBackupFile(File file, {String? dialogTitle}) async {
-    final bytes = await file.readAsBytes();
+    final mobile = Platform.isAndroid || Platform.isIOS;
+    if (mobile && await file.length() > mobileSaveMemoryLimit) {
+      await shareBackup(
+          file); // XFile: native file-based save/share, no giant byte list
+      return sharedBackupResult;
+    }
     final selected = await FilePicker.platform.saveFile(
       dialogTitle: dialogTitle,
       fileName: _basename(file.path),
       type: FileType.custom,
       allowedExtensions: const ['naisbackup'],
-      bytes: Platform.isAndroid || Platform.isIOS ? bytes : null,
+      bytes: mobile ? await file.readAsBytes() : null,
     );
-    if (selected == null) return null;
-    if (Platform.isAndroid || Platform.isIOS) return selected;
-
+    if (selected == null || mobile) return selected;
     final target = File(selected);
-    final temporary = File('$selected.tmp');
-    await temporary.writeAsBytes(bytes, flush: true);
-    if (await target.exists()) await target.delete();
-    await temporary.rename(target.path);
-    return target.path;
+    if (target.absolute.path == file.absolute.path) return selected;
+    final temporary = File('$selected.${_id()}.tmp');
+    final previous = File('$selected.${_id()}.previous');
+    var rotated = false;
+    try {
+      await file.openRead().pipe(temporary.openWrite());
+      if (await target.exists()) {
+        await target.rename(previous.path);
+        rotated = true;
+      }
+      await temporary.rename(target.path);
+      if (rotated) await previous.delete();
+      return target.path;
+    } catch (_) {
+      if (rotated && !await target.exists()) await previous.rename(target.path);
+      rethrow;
+    } finally {
+      if (await temporary.exists()) await temporary.delete();
+    }
   }
 
   Future<String?> pickBackupFile() async {
@@ -982,33 +1025,19 @@ class DataBackupService {
   }
 
   Future<_ArchiveBundle> _loadArchive(String filePath) async {
-    final file = File(filePath);
-    if (!file.existsSync() || await file.length() <= 0) {
-      throw const FormatException('Backup file is empty.');
-    }
-    final backing=await BoundedBackupArchive.open(filePath);
+    final root = await _snapshotRoot();
+    final stage = await root.createTemp('studio-backup-import-');
+    final path = '${stage.path}${Platform.pathSeparator}snapshot.naisbackup';
+    BoundedBackupArchive? backing;
     try {
-    final archive=backing.archive;
-    final manifestFile = archive.findFile('manifest.json');
-    if (manifestFile == null || !manifestFile.isFile) {
-      throw const FormatException('Missing backup manifest.');
+      final manifest = await compute(prepareBackupSnapshot, (filePath, path));
+      backing = await BoundedBackupArchive.open(path);
+      return _ArchiveBundle(backing.archive, manifest, backing, stage);
+    } catch (_) {
+      backing?.close();
+      if (await stage.exists()) await stage.delete(recursive: true);
+      rethrow;
     }
-    final manifestBytes = _entryBytes(manifestFile);
-    if (manifestBytes.length > _maxJsonBytes) {
-      throw const FormatException('Backup manifest is too large.');
-    }
-    final manifest = Map<String, dynamic>.from(
-        jsonDecode(utf8.decode(manifestBytes)) as Map);
-    if (manifest['format'] != format ||
-        (manifest['version'] as num?)?.toInt() != formatVersion) {
-      throw const FormatException('Unsupported backup format or version.');
-    }
-    // Validate all JSON before rescue creation or any preferences are changed.
-    for(final entry in archive.files.where((e)=>e.isFile&&e.name.endsWith('.json'))) {
-      jsonDecode(utf8.decode(_entryBytes(entry)));
-    }
-    return _ArchiveBundle(archive, manifest,backing);
-    } catch(_) {backing.close();rethrow;}
   }
 
   dynamic _readJson(_ArchiveBundle bundle, String name, [dynamic fallback]) {
@@ -1076,7 +1105,7 @@ class DataBackupService {
       sourceVersion: source['appVersion']?.toString() ?? 'unknown',
       categories: summaries,
     );
-    } finally {bundle.close();}
+    } finally {await bundle.close();}
   }
 
   Map<String, dynamic>? _assetReference(Object? raw) {
@@ -2188,7 +2217,7 @@ class DataBackupService {
       rescueBackupPath: rescue.path,
       retainedNativeArchives: portable.length,
     );
-    } finally {bundle.close();}
+    } finally {await bundle.close();}
   }
 
   Future<List<File>> _automaticFiles([Directory? root]) async {

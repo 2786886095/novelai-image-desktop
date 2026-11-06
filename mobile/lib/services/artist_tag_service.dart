@@ -36,7 +36,7 @@ class ArtistTagService {
     final prefs = await SharedPreferences.getInstance();
     final previous = _readArtistCache(prefs.getString(_onlinePoolCacheKey));
     final savedAt = prefs.getInt(_onlinePoolTimeKey) ?? 0;
-    if (!force && previous.isNotEmpty && savedAt > 0 &&
+    if (!force && previous.isNotEmpty && savedAt > 0 && savedAt <= DateTime.now().millisecondsSinceEpoch &&
         DateTime.now().millisecondsSinceEpoch - savedAt < const Duration(hours: 6).inMilliseconds) {
       return _sample(previous, sampleSize, rng,
           source: source, fromCache: true,
@@ -387,7 +387,7 @@ class ArtistTagService {
       final total = int.tryParse('${cached['total']}') ?? 0;
       final savedAt = int.tryParse('${cached['savedAt']}') ?? 0;
       if (total >= 0 &&
-          savedAt > 0 &&
+          savedAt > 0 && savedAt <= DateTime.now().millisecondsSinceEpoch &&
           DateTime.now().millisecondsSinceEpoch - savedAt <
               const Duration(days: 7).inMilliseconds) {
         return (total: total, savedAt: savedAt);

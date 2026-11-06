@@ -80,7 +80,10 @@ android {
             }
         }
         release {
-            if (project.hasProperty('studioIssue81Candidate')) {
+            if (project.hasProperty('studioIssues8283Candidate')) {
+                applicationIdSuffix = '.issues8283candidate'
+                manifestPlaceholders['studioAppLabel'] = 'Langbai Studio 82-83 Test'
+            } else if (project.hasProperty('studioIssue81Candidate')) {
                 applicationIdSuffix = '.issue81candidate'
                 manifestPlaceholders['studioAppLabel'] = 'Langbai Studio Issue81 Candidate'
             }
