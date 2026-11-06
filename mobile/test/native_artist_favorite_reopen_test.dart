@@ -1,3 +1,4 @@
+import 'package:novelai_mobile/services/artist_catalog_service.dart';
 // Host mechanism regression: real production screen, file/prefs storage and
 // pointer dispatch, with controlled local paths and artist-pool data. Platform
 // override exercises layout only; this is not a native Android/iOS receipt.
@@ -47,6 +48,12 @@ List<File> _resolveRequiredRobotoFiles(Iterable<File> entries) {
 }
 
 class _LocalArtistPool extends ArtistTagService {
+  @override
+  Future<ArtistCatalogSelection> localCatalog({int count = 1000, bool random = false, int seed = 0}) async {
+    final rows = await popular(AppSettings(), limit: count);
+    return ArtistCatalogSelection(rows, ArtistCatalogInfo(rows.length, DateTime(2026, 9, 9)));
+  }
+
   @override
   Future<List<ArtistTagRecord>> popular(AppSettings settings,
           {int limit = 1000,

@@ -1,3 +1,4 @@
+import 'package:novelai_mobile/services/artist_catalog_service.dart';
 import 'package:novelai_mobile/screens/prompt/android_prompt_text.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -108,6 +109,12 @@ class _FakePromptCodexService extends PromptCodexService {
 }
 
 class _FakeArtistService extends ArtistTagService {
+  @override
+  Future<ArtistCatalogSelection> localCatalog({int count = 1000, bool random = false, int seed = 0}) async {
+    final rows = await popular(AppSettings(), limit: count);
+    return ArtistCatalogSelection(rows, ArtistCatalogInfo(rows.length, DateTime(2026, 9, 9)));
+  }
+
   @override
   Future<List<ArtistTagRecord>> popular(
     AppSettings settings, {

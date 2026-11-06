@@ -1,3 +1,4 @@
+import 'package:novelai_mobile/services/artist_catalog_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/screens/v5_artist_weight_repair_screen.dart';
@@ -14,6 +15,12 @@ import 'package:novelai_mobile/artist/artist_recipe.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 
 class _DelayedArtists extends ArtistTagService {
+  @override
+  Future<ArtistCatalogSelection> localCatalog({int count = 1000, bool random = false, int seed = 0}) async {
+    final rows = await popular(AppSettings(), limit: count);
+    return ArtistCatalogSelection(rows, ArtistCatalogInfo(rows.length, DateTime(2026, 9, 9)));
+  }
+
   final reply = Completer<List<ArtistTagRecord>>();
   @override
   Future<List<ArtistTagRecord>> popular(AppSettings settings,

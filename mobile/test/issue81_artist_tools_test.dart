@@ -1,3 +1,4 @@
+import 'package:novelai_mobile/services/artist_catalog_service.dart';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:io';
@@ -19,6 +20,12 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _Artists extends ArtistTagService {
+  @override
+  Future<ArtistCatalogSelection> localCatalog({int count = 1000, bool random = false, int seed = 0}) async {
+    final rows = await popular(AppSettings(), limit: count);
+    return ArtistCatalogSelection(rows, ArtistCatalogInfo(rows.length, DateTime(2026, 9, 9)));
+  }
+
   // All pool modes are fixture-backed: no filesystem or real HTTP in layout tests.
   @override
   Future<ArtistPoolSample> randomWholePool(AppSettings settings,

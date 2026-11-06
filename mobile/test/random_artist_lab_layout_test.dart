@@ -1,3 +1,4 @@
+import 'package:novelai_mobile/services/artist_catalog_service.dart';
 import 'dart:math';
 import 'dart:async';
 import 'dart:convert';
@@ -14,6 +15,12 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeArtistService extends ArtistTagService {
+  @override
+  Future<ArtistCatalogSelection> localCatalog({int count = 1000, bool random = false, int seed = 0}) async {
+    final rows = await popular(AppSettings(), limit: count);
+    return ArtistCatalogSelection(rows, ArtistCatalogInfo(rows.length, DateTime(2026, 9, 9)));
+  }
+
   // All pool modes are fixture-backed: no filesystem or real HTTP in layout tests.
   @override
   Future<ArtistPoolSample> randomWholePool(AppSettings settings,
@@ -165,8 +172,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('随机画师串抽卡'), findsOneWidget);
-      expect(find.text('当前候选库共 60 名画师'), findsOneWidget);
-      expect(find.text('来源：离线画师标签、内置候选及已缓存候选。'), findsOneWidget);
+      expect(find.textContaining('镜像快照 60 名 · 本次 60 名'), findsOneWidget);
+      expect(find.text('内置快照 · 离线可用'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

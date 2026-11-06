@@ -10,12 +10,19 @@ import '../artist/curated_artists.dart';
 import '../models/nai_models.dart';
 import '../tags/offline_tag_store.dart';
 import 'proxy_http_client.dart';
+import 'artist_catalog_service.dart';
 
 enum ArtistPoolSource { local, online }
 
 class ArtistTagService {
   final http.Client Function(AppSettings)? clientFactory;
   final OfflineTagStore offlineTags;
+  late final ArtistCatalogService catalog = ArtistCatalogService(clientFactory: _client);
+  Future<ArtistCatalogSelection> localCatalog({int count = 1000, bool random = false, int seed = 0}) =>
+      catalog.select(count: count, random: random, seed: seed);
+  Future<ArtistCatalogInfo> updateCatalog(AppSettings settings,
+      {void Function(int received, int? total)? progress}) => catalog.update(settings, progress: progress);
+  void cancelCatalogUpdate() => catalog.cancelUpdate();
   ArtistTagService({this.clientFactory, OfflineTagStore? offlineTags})
       : offlineTags = offlineTags ?? OfflineTagStore();
   http.Client _client(AppSettings settings) => clientFactory?.call(settings) ??

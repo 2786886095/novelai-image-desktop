@@ -1,0 +1,13 @@
+{
+  "format": "LBART001",
+  "source": "https://danbooru.donmai.us/tags.json",
+  "sourceOrder": "date; cursor traversal; 739 nonempty pages then terminal empty response",
+  "sourceSha256": "50c56cf398b897e89db0a51a86f848ac7033bfc3e25abf5f3fa5cb383d1f067b",
+  "rawRecords": 738106,
+  "uniqueArtistTags": 738103,
+  "removedDuplicateNames": 3,
+  "savedAt": 1788946177802,
+  "byteLength": 8403300,
+  "sha256": "afcb2dd6820abdc1df249cf07e80e480c45fe4ffc399c7e23d1082ef9537e1cd",
+  "note": "Fixed observation, not current live total. Non-deprecated category=1 tags, including zero-post tags. Ranked by post count; identical tag names deduplicated."
+}

@@ -1,3 +1,4 @@
+import 'package:novelai_mobile/services/artist_catalog_service.dart';
 import 'dart:math';
 import 'dart:convert';
 import 'dart:io';
@@ -16,6 +17,12 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _Service extends ArtistTagService {
+  @override
+  Future<ArtistCatalogSelection> localCatalog({int count = 1000, bool random = false, int seed = 0}) async {
+    final rows = (await randomWholePool(AppSettings(), source: ArtistPoolSource.local)).items;
+    return ArtistCatalogSelection(rows, ArtistCatalogInfo(rows.length, DateTime(2026, 9, 9)));
+  }
+
  final calls=<ArtistPoolSource>[];
  @override
  Future<ArtistPoolSample> randomWholePool(AppSettings settings,{int sampleSize=32,Random? random,bool force=false,ArtistPoolSource source=ArtistPoolSource.online}) async {
@@ -67,9 +74,11 @@ void main() {
   await mount();expect(service.calls.last,ArtistPoolSource.online);
   expect(find.byKey(const ValueKey('artist-pool-fallback')),findsOneWidget);
   await capture(tester,'issues8283-source-${size.width.toInt()}');
+  final advanced=find.byKey(const ValueKey('artist-pool-advanced'));
+  await reveal(tester, advanced); await tester.tap(advanced); await tester.pumpAndSettle();
   final source=find.byKey(const ValueKey('artist-pool-source'));
   await tester.tap(source);await tester.pumpAndSettle();
-  await tester.tap(find.text('本地画师库（离线可用）').last);await tester.pumpAndSettle();
+  await tester.tap(find.text('本地完整镜像（默认）').last);await tester.pumpAndSettle();
   expect(service.calls.last,ArtistPoolSource.local);
   expect(find.byKey(const ValueKey('artist-pool-fallback')),findsNothing);
   final fixed=find.byKey(const ValueKey('artist-fixed-count'));

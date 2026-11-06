@@ -2,6 +2,28 @@ import 'app_locales.dart';
 
 String artistPoolText(String language, String key) {
   const values = <String, List<String>>{
+    "catalogTitle": ["Danbooru 固定画师镜像库", "Danbooru 固定畫師鏡像庫", "Danbooru artist snapshot", "Danbooru 絵師スナップショット", "Danbooru 작가 스냅샷"],
+    "mode": ["抽取方式", "抽取方式", "Selection mode", "抽選方法", "추첨 방식"],
+    "ranked": ["热门画师池（按作品数排序）", "熱門畫師池（依作品數排序）", "Popular pool (post count)", "人気プール（投稿数順）", "인기 풀 (작품 수순)"],
+    "random": ["全库随机（等概率、不重复）", "全庫隨機（等機率、不重複）", "Whole snapshot (uniform, unique)", "全スナップショット（均等・重複なし）", "전체 스냅샷 (균등·중복 없음)"],
+    "selectionCount": ["本次画师池数量", "本次畫師池數量", "Artists in this selection", "今回の絵師プール数", "이번 작가 풀 수"],
+    "selectionLimit": ["1–20000；仅限制本次取出的数量，不裁剪镜像全库。", "1–20000；僅限制本次取出數量，不裁切鏡像全庫。", "1–20000 selected artists; the complete snapshot is preserved.", "1～20000人。保存済み全体は削減しません。", "1–20000명 선택. 저장된 전체 스냅샷은 유지됩니다."],
+    "snapshot": ["镜像快照 {total} 名 · 本次 {count} 名 · {date}", "鏡像快照 {total} 名 · 本次 {count} 名 · {date}", "Snapshot: {total} · Selected: {count} · {date}", "保存済み {total} 人・選択 {count} 人・{date}", "스냅샷 {total}명 · 선택 {count}명 · {date}"],
+    "bundledMirror": ["内置快照 · 离线可用", "內建快照 · 可離線使用", "Bundled snapshot · offline ready", "内蔵スナップショット・オフライン可", "내장 스냅샷 · 오프라인 사용"],
+    "downloadedMirror": ["已下载镜像 · 后续抽取不联网", "已下載鏡像 · 後續抽取不連網", "Downloaded snapshot · future draws stay offline", "取得済み・以後の抽選はオフライン", "다운로드됨 · 이후 추첨은 오프라인"],
+    "localMirror": ["本地完整镜像（默认）", "本機完整鏡像（預設）", "Complete local snapshot (default)", "完全ローカルスナップショット（既定）", "전체 로컬 스냅샷 (기본)"],
+    "selectLocal": ["读取／换一批画师", "讀取／換一批畫師", "Read / reselect artists", "読込／絵師を再抽選", "읽기 / 다시 추첨"],
+    "download": ["下载／更新镜像", "下載／更新鏡像", "Download / update snapshot", "スナップショットを取得／更新", "스냅샷 다운로드 / 갱신"],
+    "downloadConfirm": ["从本项目 GitHub 镜像下载固定画师快照（当前约 8 MiB），校验完整性后保存到本地；不逐页请求 Danbooru。失败或取消保留旧库，之后抽取不联网。镜像可能早于实时网站数据。", "從本專案 GitHub 下載固定快照（目前約 8 MiB），驗證後存至本機，不逐頁請求 Danbooru。失敗或取消保留舊庫，後續抽取不連網。鏡像可能不是即時資料。", "Download the project GitHub snapshot (currently about 8 MiB), verify and store locally. No paginated Danbooru scan. Failure/cancel keeps the previous pool; later draws stay offline. Snapshot may lag live data.", "本プロジェクトの GitHub から約8 MiBの固定データを検証して保存。Danbooru のページ巡回はしません。失敗・取消時は既存を保持。以後オフライン抽選。最新情報とは限りません。", "프로젝트 GitHub에서 약 8 MiB 스냅샷을 검증해 저장합니다. Danbooru 페이지 순회 없음. 실패/취소 시 기존 풀 유지, 이후 오프라인 추첨. 실시간 자료와 다를 수 있습니다."],
+    "cancel": ["取消", "取消", "Cancel", "キャンセル", "취소"],
+    "downloading": ["正在下载镜像", "正在下載鏡像", "Downloading snapshot", "取得中", "다운로드 중"],
+    "updated": ["镜像已校验并保存，后续抽取离线完成。", "鏡像已驗證並儲存，後續抽取離線完成。", "Snapshot verified and saved. Future draws are offline.", "検証・保存完了。以後オフラインで抽選します。", "스냅샷 검증 및 저장 완료. 이후 오프라인 추첨."],
+    "updateFailed": ["镜像未更新（可能取消、网络或校验失败），原有画师库保留；可稍后重试。", "鏡像未更新（可能取消、網路或驗證失敗），保留舊庫，可稍後重試。", "Snapshot not updated (cancelled, network or integrity failure). Previous pool preserved; retry later.", "取得未完了（取消・接続・検証失敗）。既存データは保持。後で再試行できます。", "갱신 실패/취소 또는 검증 오류. 기존 풀 유지. 나중에 재시도하세요."],
+    "recovered": ["下载的缓存不可用，已改用内置完整快照；可重新下载。", "下載快取無法使用，已改用內建完整快照，可重新下載。", "Downloaded cache unavailable; using the complete bundled snapshot. You can redownload.", "取得済みデータ不正。内蔵全体に切替済み。再取得できます。", "다운로드 캐시 오류. 내장 전체 스냅샷 사용 중. 다시 다운로드할 수 있습니다."],
+    "snapshotHint": ["“全库”指此镜像快照，不是实时全站总量；等概率只针对快照中的画师。仅点击下载才联网。", "「全庫」指此鏡像快照，不是即時全站；等機率僅針對快照內畫師。僅下載時連網。", "Whole pool means this snapshot, not the live site. Uniform sampling applies within it. Only download contacts the mirror.", "全体は保存済みデータで、実サイトの最新総数ではありません。均等抽選は保存内が対象。取得ボタンのみミラー接続。", "전체는 실시간 사이트가 아닌 스냅샷입니다. 균등 추첨도 스냅샷 내부 기준. 다운로드만 미러에 연결합니다."],
+    "advanced": ["高级：旧版在线发现", "進階：舊版線上探索", "Advanced: legacy online discovery", "詳細：従来のオンライン探索", "고급: 기존 온라인 탐색"],
+    "loadFailed": ["无法读取画师池，请重试或重新下载镜像。", "無法讀取畫師池，請重試或重新下載鏡像。", "Could not read artist pool. Retry or redownload the snapshot.", "絵師プールを読めません。再試行または再取得してください。", "작가 풀을 읽을 수 없습니다. 재시도하거나 스냅샷을 다시 받으세요."],
+
     'candidates': ['已知画师候选库','已知畫師候選庫','Known artist candidates','既知の絵師候補','알려진 작가 후보'],
     'refresh': ['刷新画师库','重新整理畫師庫','Refresh artist pool','絵師候補を更新','작가 풀 새로고침'],
     'localHint': ['来源：离线画师标签、内置候选及已缓存候选。','來源：離線畫師標籤、內建及已快取候選。','Offline artist tags, bundled candidates and saved candidates.','オフラインタグ・内蔵候補・保存済み候補。','오프라인 작가 태그, 내장 및 캐시 후보.'],

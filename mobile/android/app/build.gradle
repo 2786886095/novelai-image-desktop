@@ -80,7 +80,10 @@ android {
             }
         }
         release {
-            if (project.hasProperty('studioMobileUiAuditCandidate')) {
+            if (project.hasProperty('studioIssue85Candidate')) {
+                applicationIdSuffix = '.issue85candidate'
+                manifestPlaceholders['studioAppLabel'] = 'Langbai Studio 85 Test'
+            } else if (project.hasProperty('studioMobileUiAuditCandidate')) {
                 applicationIdSuffix = '.mobileuiaudit'
                 manifestPlaceholders['studioAppLabel'] = 'Langbai Studio UI Test'
             } else if (project.hasProperty('studioIssue83TagsCandidate')) {

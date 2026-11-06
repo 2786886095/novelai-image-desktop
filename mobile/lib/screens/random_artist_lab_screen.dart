@@ -25,6 +25,7 @@ import '../artist/weight_distribution.dart';
 import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../services/artist_tag_service.dart';
+import '../services/artist_catalog_service.dart';
 import '../state/app_state.dart';
 import '../tags/offline_tag_store.dart';
 import '../ui/quality_preset_control.dart';
@@ -153,6 +154,13 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
   bool _fixedArtistCount = false;
   ArtistPoolSource _poolSource = ArtistPoolSource.local;
   ArtistPoolSample? _poolSample;
+  ArtistCatalogInfo? _catalogInfo;
+  bool _catalogUpdating = false;
+  int _catalogReceived = 0;
+  String _catalogMessage = '';
+  bool _catalogFailed = false;
+  int? _catalogExpected;
+  int _poolRequest = 0;
   int _randomCount(TextEditingController controller, int fallback) =>
       normalizeRandomCustomTagCount(controller.text, fallback: fallback);
   String _p(String key) => artistPoolText(context.read<AppState>().settings.language, key);
@@ -1088,6 +1096,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         _randomCount(_maxRandomCustomTags, 3));
     await prefs.setBool('${_prefsPrefix}fixedArtistCount', _fixedArtistCount);
     await prefs.setString('${_prefsPrefix}poolSource', _poolSource.name);
+    await prefs.setBool('${_prefsPrefix}wholePool', _wholeArtistPool);
     await prefs.setInt('${_prefsPrefix}count', _positive(_count, 8));
     await prefs.setInt('${_prefsPrefix}minArtists',
         _positive(_minArtists, 3).clamp(1, 20).toInt());
@@ -1175,7 +1184,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         jsonEncode(_favorites.map((item) => item.toJson()).toList()));
   }
 
-  int _poolLimit() => _positive(_poolSize, 1000).clamp(100, 5000).toInt();
+  int _poolLimit() => _positive(_poolSize, 1000).clamp(1, artistCatalogMaxSelection).toInt();
 
   List<ArtistRecipe> _buildPlan([
     Set<String> favorites = const {},
@@ -1209,31 +1218,124 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
 
   Future<bool> _loadPool(bool force) async {
     if (!mounted) return false;
-    setState(() {
-      _loading = true;
-      _message = '';
-    });
+    final request = ++_poolRequest;
+    setState(() { _loading = true; _message = ''; });
     try {
       final app = context.read<AppState>();
-      if(_useCustomArtists) {
-        _onlinePool=const []; _wholePoolTotal=0; _poolSample=null;
-      } else if(_wholeArtistPool||_poolSource==ArtistPoolSource.local) {
-        final sample=await _service.randomWholePool(app.settings,force:force,source:_poolSource,sampleSize:512);
-        _poolSample=sample;
-        _onlinePool=sample.items; _wholePoolTotal=sample.total;
+      List<ArtistTagRecord> items;
+      ArtistPoolSample? sample;
+      ArtistCatalogInfo? catalog;
+      if (_useCustomArtists) {
+        items = const [];
+      } else if (_poolSource == ArtistPoolSource.local) {
+        final selected = await _service.localCatalog(count: _poolLimit(), random: _wholeArtistPool,
+            seed: Random.secure().nextInt(0x100000000));
+        items = selected.items; catalog = selected.catalog;
+      } else if (_wholeArtistPool) {
+        sample = await _service.randomWholePool(app.settings, force: force,
+            source: _poolSource, sampleSize: 512);
+        items = sample.items;
       } else {
-        _onlinePool = await _service.popular(app.settings,limit:_poolLimit(),force:force);
-        _wholePoolTotal=0; _poolSample=null;
+        items = await _service.popular(app.settings, limit: min(5000, _poolLimit()), force: force);
       }
-      if (!mounted) return false;
-      setState(() => _planned = _buildPlan());
+      if (!mounted || request != _poolRequest) return false;
+      setState(() {
+        _poolSize.text = '${_poolLimit()}';
+        _onlinePool = items; _poolSample = sample; _catalogInfo = catalog;
+        _wholePoolTotal = catalog?.total ?? sample?.total ?? items.length;
+        _planned = _buildPlan();
+      });
       return true;
-    } catch (error) {
-      if (mounted) setState(() { _message = '${_i('network')}\n$error'; _planned=const []; });
+    } catch (_) {
+      if (mounted && request == _poolRequest) setState(() { _message = _p('loadFailed'); _planned = const []; });
       return false;
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && request == _poolRequest) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _updateCatalog() async {
+    if (_running || _loading || _catalogUpdating || _useCustomArtists) return;
+    final confirmed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+      title: Text(_p('download')), content: Text(_p('downloadConfirm')),
+      actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: Text(_p('cancel'))),
+        FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(_p('download')))]));
+    if (confirmed != true || !mounted || _running || _loading || _catalogUpdating) return;
+    setState(() { _catalogUpdating = true; _loading = true; _catalogReceived = 0; _catalogExpected = null; _message = ''; _catalogMessage = ''; _catalogFailed = false; });
+    try {
+      await _service.updateCatalog(context.read<AppState>().settings, progress: (received, total) {
+        if (mounted) setState(() { _catalogReceived = received; _catalogExpected = total; });
+      });
+      if (!mounted) return;
+      setState(() => _poolSource = ArtistPoolSource.local);
+      await _save(); await _loadPool(false);
+      if (mounted) setState(() => _catalogMessage = _p('updated'));
+    } catch (_) {
+      if (mounted) setState(() { _catalogMessage = _p('updateFailed'); _catalogFailed = true; });
+    } finally {
+      if (mounted) setState(() { _catalogUpdating = false; _loading = false; });
+    }
+  }
+
+  Widget _catalogControls() {
+    final disabled = _loading || _running || _catalogUpdating || _useCustomArtists;
+    final info = _catalogInfo;
+    return Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(_p('catalogTitle'), style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        StudioDropdownButtonFormField<bool>(key: const ValueKey('artist-catalog-mode'),
+          value: _wholeArtistPool, isExpanded: true,
+          decoration: InputDecoration(labelText: _p('mode')),
+          items: [DropdownMenuItem(value: false, child: Text(_p('ranked'))),
+            DropdownMenuItem(value: true, child: Text(_p(_poolSource == ArtistPoolSource.local ? 'random' : 'whole')))],
+          onChanged: disabled ? null : (value) async {
+            if (value == null) return; setState(() => _wholeArtistPool = value);
+            await _save(); await _loadPool(false);
+          }),
+        const SizedBox(height: 10),
+        TextField(key: const PageStorageKey<String>('artist-text-poolSize'), controller: _poolSize,
+          enabled: !disabled, keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: InputDecoration(labelText: _p('selectionCount'), helperText: _p('selectionLimit')),
+          onSubmitted: disabled ? null : (_) async { await _save(); await _loadPool(false); }),
+        const SizedBox(height: 8),
+        if (_loading && !_catalogUpdating) const LinearProgressIndicator(minHeight: 3),
+        if (info != null) Text(_p('snapshot').replaceAll('{total}', '${info.total}')
+            .replaceAll('{count}', '${_onlinePool.length}').replaceAll('{date}',
+                '${info.savedAt.year}-${info.savedAt.month.toString().padLeft(2, '0')}-${info.savedAt.day.toString().padLeft(2, '0')}'),
+          key: const ValueKey('artist-catalog-info')),
+        if (info != null) Text(_p(info.downloaded ? 'downloadedMirror' : 'bundledMirror'),
+          style: Theme.of(context).textTheme.bodySmall),
+        if (info?.recovered == true) Text(_p('recovered'), style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        if (_poolSample != null) Text(_p('known').replaceAll('{total}', '$_wholePoolTotal').replaceAll('{count}', '${_onlinePool.length}')),
+        if (_poolSample?.fallback == true) Text(_p('fallback'), key: const ValueKey('artist-pool-fallback')),
+        if (_catalogUpdating) Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Column(children: [
+          LinearProgressIndicator(value: _catalogExpected == null ? null : _catalogReceived / _catalogExpected!),
+          Text('${_p('downloading')} ${(_catalogReceived / 1048576).toStringAsFixed(1)} MiB'),
+          TextButton.icon(key: const ValueKey('artist-catalog-cancel'), onPressed: _service.cancelCatalogUpdate,
+            icon: const Icon(Icons.close), label: Text(_p('cancel')))])),
+        if (_catalogMessage.isNotEmpty) Text(_catalogMessage, key: const ValueKey('artist-catalog-message'),
+          style: TextStyle(color: _catalogFailed ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          OutlinedButton.icon(key: const ValueKey('artist-catalog-redraw'), style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+            onPressed: disabled ? null : () async { await _save(); await _loadPool(false); },
+            icon: const Icon(Icons.shuffle), label: Text(_p('selectLocal'))),
+          OutlinedButton.icon(key: const ValueKey('artist-catalog-refresh'), style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)), onPressed: disabled ? null : _updateCatalog,
+            icon: const Icon(Icons.download_outlined), label: Text(_p('download')))]),
+        Text(_p(_poolSource == ArtistPoolSource.local ? 'snapshotHint' : 'hint'), style: Theme.of(context).textTheme.bodySmall),
+        ExpansionTile(key: const ValueKey('artist-pool-advanced'), title: Text(_p('advanced')), tilePadding: EdgeInsets.zero,
+          children: [StudioDropdownButtonFormField<ArtistPoolSource>(key: const ValueKey('artist-pool-source'),
+            value: _poolSource, isExpanded: true, decoration: InputDecoration(labelText: _p('source')),
+            items: ArtistPoolSource.values.map((source) => DropdownMenuItem(value: source,
+              child: Text(_p(source == ArtistPoolSource.local ? 'localMirror' : 'online'), maxLines: 1, overflow: TextOverflow.ellipsis))).toList(),
+            onChanged: disabled ? null : (value) async {
+              if (value == null) return; setState(() => _poolSource = value); await _save(); await _loadPool(false);
+            }),
+            TextButton.icon(onPressed: disabled || _poolSource != ArtistPoolSource.online ? null : () => _loadPool(true),
+              icon: const Icon(Icons.refresh), label: Text(_p('refresh')))]),
+      ])));
   }
 
   Future<void> _clearCurrent() async {
@@ -1676,6 +1778,8 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
 
   @override
   void dispose() {
+    _poolRequest++;
+    _service.cancelCatalogUpdate();
     _base.dispose();
     _auxiliary.dispose();
     _customTags.dispose();
@@ -2728,84 +2832,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         padding: const EdgeInsets.fromLTRB(12, 16, 12, 96),
         children: [
           if(!_showFavorites) ...[
-          SwitchListTile.adaptive(
-            key:const ValueKey('artist-whole-pool'),
-            title:Text(_p('whole')),subtitle:Text(_p('hint')),
-            value:_wholeArtistPool,
-            onChanged:_running||_loading||_useCustomArtists?null:(value) async {
-              setState(()=>_wholeArtistPool=value);
-              final prefs=await SharedPreferences.getInstance();
-              await prefs.setBool('${_prefsPrefix}wholePool',value);
-              await _loadPool(false);
-            }),
-          if(!_useCustomArtists) ...[
-            StudioDropdownButtonFormField<ArtistPoolSource>(
-              key: const ValueKey('artist-pool-source'), value: _poolSource,
-              isExpanded:true, decoration:InputDecoration(labelText:_p('source')),
-              items:ArtistPoolSource.values.map((source)=>DropdownMenuItem(
-                value:source,child:Text(_p(source.name),maxLines:1,overflow:TextOverflow.ellipsis))).toList(),
-              onChanged:_running||_loading?null:(value) async {
-                if(value==null) return;
-                setState(()=>_poolSource=value);
-                await _save(); await _loadPool(false);
-              },
-            ),
-            if(_poolSample!=null) Padding(padding:const EdgeInsets.symmetric(vertical:8),child:Text(
-              '${_p(_poolSample!.source==ArtistPoolSource.local ? 'local' : _poolSample!.fromCache ? 'cache':'fresh')} · '
-              '${_p('known').replaceAll('{total}','$_wholePoolTotal').replaceAll('{count}','${_onlinePool.length}')}')),
-            if(_poolSample?.fallback==true) Padding(padding:const EdgeInsets.only(bottom:8),child:Text(
-              _p('fallback'),key:const ValueKey('artist-pool-fallback'),
-              style:TextStyle(color:Theme.of(context).colorScheme.error))),
-          ],
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Wrap(
-                spacing: 12,
-                runSpacing: 10,
-                crossAxisAlignment: WrapCrossAlignment.end,
-                children: [
-                  SizedBox(
-                    width: 320,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(_poolSample != null ? _p('candidates') : text['pool']!,
-                            style: Theme.of(context).textTheme.titleMedium),
-                        const SizedBox(height: 4),
-                        Text(
-                            _loading
-                                ? text['empty']!
-                                : text['total']!.replaceAll(
-                                    '{count}', '${_onlinePool.length}'),
-                            style: Theme.of(context).textTheme.bodySmall),
-                        const SizedBox(height: 4),
-                        Text(_poolSample?.source==ArtistPoolSource.local ? _p('localHint') : text['hint']!,
-                            style: Theme.of(context).textTheme.bodySmall),
-                      ],
-                    ),
-                  ),
-                  if(!_wholeArtistPool&&_poolSource==ArtistPoolSource.online) SizedBox(
-                    width: 220,
-                    child: TextField(
-                      key: const PageStorageKey<String>('artist-text-poolSize'),
-                      controller: _poolSize,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: InputDecoration(labelText: text['poolSize']),
-                    ),
-                  ),
-                  OutlinedButton(
-                      onPressed: _loading||_running||_useCustomArtists ? null : () => _loadPool(false),
-                      child: Text(text['load']!)),
-                  OutlinedButton.icon(
-                      onPressed: _loading||_running||_useCustomArtists ? null : () => _loadPool(true),
-                      icon: const Icon(Icons.refresh),
-                      label: Text(_poolSample!=null ? _p('refresh') : text['refresh']!)),
-                ],
-              ),
-            ),
-          ),
+          _catalogControls(),
           Card(
               child: Padding(
                   padding: const EdgeInsets.all(12),
