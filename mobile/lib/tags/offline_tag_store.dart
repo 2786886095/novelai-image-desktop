@@ -164,6 +164,15 @@ class OfflineTagStore {
     return scored.take(limit).map((item) => item.hit).toList();
   }
 
+  /// Actual artist tags in the downloaded snapshot, without a network request.
+  /// The CSV contains names/categories, not verified Danbooru numeric IDs.
+  Future<List<OfflineTagHit>> artistTags() async {
+    final index = await _load();
+    return index
+        .where((hit) => hit.category == 1 && hit.tag.trim().isNotEmpty)
+        .toList(growable: false);
+  }
+
   /// Lazily browses the two namespaces used by the artist-string style picker.
   /// Danbooru has no general "style" category: explicit `_(style)` tags are
   /// the precise parody/style set, while category 3 contains source works

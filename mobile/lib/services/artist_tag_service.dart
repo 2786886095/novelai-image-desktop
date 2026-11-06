@@ -8,50 +8,164 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../artist/artist_recipe.dart';
 import '../artist/curated_artists.dart';
 import '../models/nai_models.dart';
+import '../tags/offline_tag_store.dart';
 import 'proxy_http_client.dart';
+
+enum ArtistPoolSource { local, online }
 
 class ArtistTagService {
   final http.Client Function(AppSettings)? clientFactory;
-  ArtistTagService({this.clientFactory});
+  final OfflineTagStore offlineTags;
+  ArtistTagService({this.clientFactory, OfflineTagStore? offlineTags})
+      : offlineTags = offlineTags ?? OfflineTagStore();
   http.Client _client(AppSettings settings) => clientFactory?.call(settings) ??
       createProxyHttpClient(settings, scope: ProxyScope.update);
 
-  /// Uniform ranks without replacement, not popularity-weighted sampling.
-  /// At most 32 tag pages plus 10 count-search pages. Never silently substitutes
-  /// a hot-list cache when the global range cannot be established.
+  /// Samples known candidates without replacement. Online discovery uses
+  /// bounded ID-cursor windows, never deep numbered-page count probes. This is
+  /// not a uniform sample or a complete count of every Danbooru artist.
   Future<ArtistPoolSample> randomWholePool(AppSettings settings,
-      {int sampleSize=32, Random? random, bool force=false}) async {
+      {int sampleSize = 32,
+      Random? random,
+      bool force = false,
+      ArtistPoolSource source = ArtistPoolSource.online}) async {
+    final rng = random ?? Random.secure();
+    if (source == ArtistPoolSource.local) {
+      return _localSample(sampleSize, rng, requestedSource: source);
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final previous = _readArtistCache(prefs.getString(_onlinePoolCacheKey));
+    final savedAt = prefs.getInt(_onlinePoolTimeKey) ?? 0;
+    if (!force && previous.isNotEmpty && savedAt > 0 &&
+        DateTime.now().millisecondsSinceEpoch - savedAt < const Duration(hours: 6).inMilliseconds) {
+      return _sample(previous, sampleSize, rng,
+          source: source, fromCache: true,
+          updatedAt: DateTime.fromMillisecondsSinceEpoch(savedAt));
+    }
     final client=_client(settings);
     try {
-      final timer=Stopwatch()..start();
-      final count=await _rankingCount(client,'',force:force).timeout(const Duration(seconds:45));
-      if(count.total==0 || count.total>=_maxNumberedPage*_apiPageSize) {
-        throw StateError('Global artist range is unavailable or exceeds the API pagination bound.');
+      final timer = Stopwatch()..start();
+      final latest = await _cursorArtists(client, timer, page: '1', limit: 1);
+      if (latest.isEmpty || latest.first.id > 0x7fffffff) {
+        throw const FormatException('No valid online artist range.');
       }
-      final rng=random??Random.secure();
-      final size=sampleSize.clamp(1,32).clamp(1,count.total).toInt();
-      final ranks=<int>{};
-      for(var j=count.total-size;j<count.total;j++) {
-        final t=rng.nextInt(j+1); ranks.add(ranks.contains(t)?j:t);
+      final discovered = <ArtistTagRecord>[...latest];
+      String? emptyCursor;
+      // At most five requests including the ID-bound lookup. Sequential
+      // cursors use an indexed ID range rather than OFFSET 499000/page=500.
+      for (var attempt = 0; attempt < 4; attempt++) {
+        final pivot = rng.nextInt(latest.first.id) + 1;
+        final page = emptyCursor ?? 'a$pivot';
+        final rows = await _cursorArtists(client, timer, page: page, limit: 100);
+        discovered.addAll(rows);
+        emptyCursor = rows.isEmpty && page.startsWith('a')
+            ? 'b${page.substring(1)}' : null;
       }
-      final byPage=<int,List<int>>{};
-      for(final rank in ranks) {
-        byPage.putIfAbsent(rank~/_apiPageSize+1,()=>[]).add(rank%_apiPageSize);
-      }
-      final items=<ArtistTagRecord>[];
-      for(final entry in byPage.entries) {
-        if(timer.elapsed>const Duration(seconds:60)) throw TimeoutException('Global artist sampling timed out.');
-        final rows=await _rankingBatch(client,'',entry.key);
-        for(final index in entry.value) {
-          if(index>=rows.length) throw StateError('Artist pool changed; refresh and try again.');
-          items.add(rows[index]);
-        }
-      }
-      if(items.map((e)=>e.id).toSet().length!=items.length) {
-        throw StateError('Artist pool changed; refresh and try again.');
-      }
-      return ArtistPoolSample(items,count.total);
+      final candidates = _uniqueArtists([...discovered, ...previous]).take(5000).toList();
+      if (candidates.isEmpty) throw const FormatException('No online artist candidates.');
+      final updatedAt = DateTime.now();
+      await prefs.setString(_onlinePoolCacheKey,
+          jsonEncode(candidates.map((item) => item.toJson()).toList()));
+      await prefs.setInt(_onlinePoolTimeKey, updatedAt.millisecondsSinceEpoch);
+      return _sample(candidates, sampleSize, rng, source: source, updatedAt: updatedAt);
+    } catch (_) {
+      return _localSample(sampleSize, rng, requestedSource: source,
+          fallback: true, warning: 'Online artist discovery is unavailable; using local known candidates.');
     } finally {client.close();}
+  }
+
+  Future<List<ArtistTagRecord>> _cursorArtists(http.Client client, Stopwatch timer,
+      {required String page, required int limit}) async {
+    final remaining = const Duration(seconds: 20) - timer.elapsed;
+    if (remaining <= Duration.zero) throw TimeoutException('Artist discovery timed out.');
+    final timeout = remaining < const Duration(seconds: 8) ? remaining : const Duration(seconds: 8);
+    final uri = Uri.https('danbooru.donmai.us', '/tags.json', {
+      'limit': '$limit', 'page': page,
+      'search[category]': '1', 'search[order]': 'date',
+      'search[is_deprecated]': 'no', 'search[is_empty]': 'false',
+      'only': 'id,name,post_count,category,is_deprecated',
+    });
+    return (() async {
+      final response = await client.send(http.Request('GET', uri)..headers.addAll({
+        'Accept': 'application/json',
+        'User-Agent': 'Langbai-NovelAI-Studio-Mobile/Artist-Pool',
+      }));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw http.ClientException('Danbooru HTTP ${response.statusCode}', uri);
+      }
+      if ((response.contentLength ?? 0) > 1024 * 1024) {
+        throw const FormatException('Artist response too large.');
+      }
+      final bytes = <int>[];
+      await for (final chunk in response.stream) {
+        if (bytes.length + chunk.length > 1024 * 1024) {
+          throw const FormatException('Artist response too large.');
+        }
+        bytes.addAll(chunk);
+      }
+      final data = jsonDecode(utf8.decode(bytes));
+      if (data is! List) throw const FormatException('Invalid artist response.');
+      return _uniqueArtists(data.whereType<Map>()
+          .where((row) => row['category'] == 1)
+          .map((row) => ArtistTagRecord.fromJson(Map<String, dynamic>.from(row)))
+          .where((item) => item.id > 0 && item.postCount > 0)).take(limit).toList();
+    })().timeout(timeout);
+  }
+
+  List<ArtistTagRecord> _readArtistCache(String? raw) {
+    if (raw == null || raw.length > 2 * 1024 * 1024) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const [];
+      return _uniqueArtists(decoded.whereType<Map>()
+          .take(5000)
+          .map((row) => ArtistTagRecord.fromJson(Map<String, dynamic>.from(row)))
+          .where((item) => item.id > 0)).toList();
+    } catch (_) { return const []; }
+  }
+
+  List<ArtistTagRecord> _uniqueArtists(Iterable<ArtistTagRecord> items) {
+    final names = <String>{};
+    final ids = <int>{};
+    final result = <ArtistTagRecord>[];
+    for (final item in items) {
+      final name = canonicalArtistTagName(item.name);
+      if (item.deprecated || name.isEmpty || name.length > 240 ||
+          RegExp(r'[\x00-\x20,]').hasMatch(name) ||
+          names.contains(name) || (item.id > 0 && ids.contains(item.id))) continue;
+      names.add(name);
+      if (item.id > 0) ids.add(item.id);
+      result.add(ArtistTagRecord(item.id, name, item.postCount));
+    }
+    return result;
+  }
+
+  Future<ArtistPoolSample> _localSample(int size, Random rng,
+      {required ArtistPoolSource requestedSource, bool fallback = false, String? warning}) async {
+    final prefs = await SharedPreferences.getInstance();
+    var downloaded = <OfflineTagHit>[];
+    try { downloaded = await offlineTags.artistTags(); } catch (_) { /* bundled/cache candidates remain available */ }
+    final candidates = _uniqueArtists([
+      ..._readArtistCache(prefs.getString(_onlinePoolCacheKey)),
+      ..._readArtistCache(prefs.getString(_cacheKey)),
+      ...kCuratedArtistTags,
+      // Zero means this CSV does not provide a numeric ID, not an invented ID.
+      ...downloaded.map((hit) => ArtistTagRecord(0, hit.tag, hit.postCount)),
+    ]);
+    final savedAt = prefs.getInt(_onlinePoolTimeKey) ?? prefs.getInt(_cacheTimeKey);
+    return _sample(candidates, size, rng, source: ArtistPoolSource.local,
+        requestedSource: requestedSource, fallback: fallback, warning: warning,
+        fromCache: true, updatedAt: savedAt == null || savedAt <= 0
+            ? null : DateTime.fromMillisecondsSinceEpoch(savedAt));
+  }
+
+  ArtistPoolSample _sample(List<ArtistTagRecord> candidates, int size, Random rng,
+      {required ArtistPoolSource source, ArtistPoolSource? requestedSource,
+      bool fromCache = false, bool fallback = false, DateTime? updatedAt, String? warning}) {
+    final shuffled = [...candidates]..shuffle(rng);
+    return ArtistPoolSample(shuffled.take(size.clamp(1, 1000)).toList(), candidates.length,
+        source: source, requestedSource: requestedSource ?? source,
+        fromCache: fromCache, fallback: fallback, updatedAt: updatedAt, warning: warning);
   }
 
   /// Only Danbooru is contacted. External profile URLs are search terms, never
@@ -91,6 +205,8 @@ class ArtistTagService {
   static const _cacheKey = 'artist_lab_popular_pool_v2';
   static const _cacheTimeKey = 'artist_lab_popular_pool_saved_at_v2';
   static const _rankingCountCacheKey = 'artist_ranking_count_cache_v1';
+  static const _onlinePoolCacheKey = 'artist_lab_online_cursor_pool_v3';
+  static const _onlinePoolTimeKey = 'artist_lab_online_cursor_saved_at_v3';
   static const _apiPageSize = 1000;
   static const _maxNumberedPage = 1000;
 
@@ -389,8 +505,21 @@ int minInt(int left, int right) => left < right ? left : right;
 
 class ArtistPoolSample {
  final List<ArtistTagRecord> items;
+ /// Number of known candidates, never a claimed total for all Danbooru artists.
  final int total;
- const ArtistPoolSample(this.items,this.total);
+ final ArtistPoolSource source;
+ final ArtistPoolSource requestedSource;
+ final bool fromCache;
+ final bool fallback;
+ final DateTime? updatedAt;
+ final String? warning;
+ final bool coverageComplete;
+ const ArtistPoolSample(this.items,this.total, {
+   this.source = ArtistPoolSource.online,
+   this.requestedSource = ArtistPoolSource.online,
+   this.fromCache = false, this.fallback = false, this.updatedAt, this.warning,
+   this.coverageComplete = false,
+ });
 }
 class ArtistIdentity {
  final int id;

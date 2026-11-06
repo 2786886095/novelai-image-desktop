@@ -391,6 +391,34 @@ String toggleCustomTagInPool(String input, String tag) {
   return next.join(', ');
 }
 
+/// Match the desktop numeric editor: zero is valid, fractions round down and
+/// the editor accepts at most twenty tags (or the selected random pool size).
+/// Keep preference keys outside this helper so old mobile backups still load.
+int normalizeRandomCustomTagCount(Object? value,
+    {int fallback = 1, int? availableCount}) {
+  final text = value is String ? value.trim() : null;
+  final parsed = value is num
+      ? value
+      : text == null
+          ? null
+          : text.isEmpty
+              ? 0
+              : num.tryParse(text);
+  final numeric = parsed != null && parsed.isFinite ? parsed.floor() : fallback;
+  final limit = availableCount == null ? 20 : availableCount.clamp(0, 20);
+  return numeric.clamp(0, limit).toInt();
+}
+
+/// Recipe execution is bounded by the actual distinct random pool, rather
+/// than by editor limits; this also preserves previously imported recipes.
+({int min, int max}) randomCustomTagCountBounds(
+    int first, int second, int availableCount) {
+  final limit = max(0, availableCount);
+  final left = first.clamp(0, limit).toInt();
+  final right = second.clamp(0, limit).toInt();
+  return (min: min(left, right), max: max(left, right));
+}
+
 List<int> artistGenerationSeeds({
   required int groupCount,
   required int variantsPerGroup,
@@ -457,12 +485,8 @@ List<ArtistRecipe> randomizeArtistWeights({
       .where((value) =>
           customTagModes[value.toLowerCase()]?.toLowerCase() == 'random')
       .toList();
-  final firstRandomCount =
-      minRandomCustomTags.clamp(0, randomCustomTags.length).toInt();
-  final secondRandomCount =
-      maxRandomCustomTags.clamp(0, randomCustomTags.length).toInt();
-  final randomTagLower = min(firstRandomCount, secondRandomCount);
-  final randomTagUpper = max(firstRandomCount, secondRandomCount);
+  final randomTagBounds = randomCustomTagCountBounds(
+      minRandomCustomTags, maxRandomCustomTags, randomCustomTags.length);
   final customTagWeightBounds =
       _normalizedWeightBounds(minCustomTagWeight, maxCustomTagWeight);
   return List.generate(count, (index) {
@@ -473,10 +497,10 @@ List<ArtistRecipe> randomizeArtistWeights({
     }).toList();
     final artistPrompt = tokens.join(', ');
     final selectedCustomTags = <String>[...alwaysCustomTags];
-    if (randomCustomTags.isNotEmpty && randomTagUpper > 0) {
+    if (randomCustomTags.isNotEmpty && randomTagBounds.max > 0) {
       final shuffled = [...randomCustomTags]..shuffle(random);
-      final randomCount =
-          randomTagLower + random.nextInt(randomTagUpper - randomTagLower + 1);
+      final randomCount = randomTagBounds.min +
+          random.nextInt(randomTagBounds.max - randomTagBounds.min + 1);
       selectedCustomTags.addAll(shuffled.take(randomCount));
     }
     final auxiliary = selectedCustomTags
@@ -582,12 +606,8 @@ List<ArtistRecipe> drawArtistRecipes({
       .where((value) =>
           customTagModes[value.toLowerCase()]?.toLowerCase() == 'random')
       .toList();
-  final firstRandomCount =
-      minRandomCustomTags.clamp(0, randomCustomTags.length).toInt();
-  final secondRandomCount =
-      maxRandomCustomTags.clamp(0, randomCustomTags.length).toInt();
-  final randomTagLower = min(firstRandomCount, secondRandomCount);
-  final randomTagUpper = max(firstRandomCount, secondRandomCount);
+  final randomTagBounds = randomCustomTagCountBounds(
+      minRandomCustomTags, maxRandomCustomTags, randomCustomTags.length);
   final customTagWeightBounds =
       _normalizedWeightBounds(minCustomTagWeight, maxCustomTagWeight);
   final output = <ArtistRecipe>[];
@@ -636,10 +656,10 @@ List<ArtistRecipe> drawArtistRecipes({
           .map((item) => '${_number(item.weight)}::${item.value} ::'));
     }
     final selectedCustomTags = <String>[...alwaysCustomTags];
-    if (randomCustomTags.isNotEmpty && randomTagUpper > 0) {
+    if (randomCustomTags.isNotEmpty && randomTagBounds.max > 0) {
       final shuffled = [...randomCustomTags]..shuffle(random);
-      final randomCount =
-          randomTagLower + random.nextInt(randomTagUpper - randomTagLower + 1);
+      final randomCount = randomTagBounds.min +
+          random.nextInt(randomTagBounds.max - randomTagBounds.min + 1);
       selectedCustomTags.addAll(shuffled.take(randomCount));
     }
     if (selectedCustomTags.isNotEmpty) {
