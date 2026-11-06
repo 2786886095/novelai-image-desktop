@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../studio_theme.dart';
 
 @immutable
 class LangbaiAndroidTokens extends ThemeExtension<LangbaiAndroidTokens> {
@@ -117,11 +118,20 @@ ThemeData androidStudioTheme(ThemeData base) {
         labelTextStyle: WidgetStateProperty.all(
             const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
     dividerTheme: base.dividerTheme.copyWith(color: t.outline, thickness: 1),
+    dialogTheme: base.dialogTheme.copyWith(backgroundColor: t.card),
+    bottomSheetTheme: base.bottomSheetTheme.copyWith(backgroundColor: t.card),
+    popupMenuTheme: base.popupMenuTheme.copyWith(color: t.card),
     inputDecorationTheme: base.inputDecorationTheme.copyWith(
         filled: true,
         fillColor: t.card,
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(StudioRadii.control),
+            borderSide: BorderSide(color: t.outline)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(StudioRadii.control),
+            borderSide: BorderSide(color: t.outline)),
+        disabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(StudioRadii.control),
             borderSide: BorderSide(color: t.outline))),
   );
 }

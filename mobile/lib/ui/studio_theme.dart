@@ -182,6 +182,36 @@ abstract final class StudioTheme {
           borderRadius: BorderRadius.circular(StudioRadii.control),
           borderSide: BorderSide(color: scheme.primary, width: 1.5),
         ),
+        // Keep fallback/validation states on the same geometry as enabled
+        // fields, including consumers that declare OutlineInputBorder().
+        disabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(StudioRadii.control),
+          borderSide: BorderSide(color: scheme.outlineVariant),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(StudioRadii.control),
+          borderSide: BorderSide(color: scheme.error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(StudioRadii.control),
+          borderSide: BorderSide(color: scheme.error, width: 1.5),
+        ),
+      ),
+      dialogTheme: foundation.dialogTheme.copyWith(
+        backgroundColor: scheme.surface,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(StudioRadii.dialog)),
+        ),
+      ),
+      bottomSheetTheme: foundation.bottomSheetTheme.copyWith(
+        backgroundColor: scheme.surface,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(StudioRadii.sheet)),
+        ),
+      ),
+      popupMenuTheme: foundation.popupMenuTheme.copyWith(
+        color: scheme.surface,
+        shape: controlShape,
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(shape: controlShape),
