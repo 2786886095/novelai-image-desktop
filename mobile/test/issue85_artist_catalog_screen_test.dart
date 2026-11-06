@@ -25,6 +25,7 @@ void androidTestWidgets(String name, WidgetTesterCallback body) {
   });
 }
 
+bool _hasKoreanFont = false;
 class _Artists extends ArtistTagService {
   bool? random; int? count; int reads = 0;
   Completer<ArtistCatalogInfo>? download;
@@ -61,14 +62,25 @@ Future<void> capture(WidgetTester t, String name) async {
   });
 }
 Future<void> _mount(WidgetTester t, AppState app, _Artists service, {bool dark = false}) async {
+  var surface = androidStudioTheme(dark ? StudioTheme.dark() : StudioTheme.light());
+  if (_hasKoreanFont && app.settings.language == 'ko-KR') {
+    surface = surface.copyWith(textTheme: surface.textTheme.apply(fontFamily: 'AuditKo'),
+      primaryTextTheme: surface.primaryTextTheme.apply(fontFamily: 'AuditKo'));
+  }
   await t.pumpWidget(RepaintBoundary(key: const ValueKey('capture85'), child: ChangeNotifierProvider.value(value: app,
-    child: MaterialApp(debugShowCheckedModeBanner: false, theme: androidStudioTheme(dark ? StudioTheme.dark() : StudioTheme.light()),
+    child: MaterialApp(debugShowCheckedModeBanner: false, theme: surface,
       home: RandomArtistLabScreen(onBack: () {}, artistService: service)))));
   await t.pumpAndSettle();
 }
 void main() {
   setUpAll(() async {
     await (FontLoader('Roboto')..addFont(rootBundle.load('assets/ui-fonts/LXGWWenKaiLite-Regular.ttf'))).load();
+    // System font is used only by host captures, never bundled or copied into the APK.
+    final koreanFont = File(Platform.environment['STUDIO_AUDIT_KOREAN_FONT'] ?? 'C:/Windows/Fonts/malgun.ttf');
+    if (koreanFont.existsSync()) {
+      await (FontLoader('AuditKo')..addFont(Future.value(ByteData.sublistView(koreanFont.readAsBytesSync())))).load();
+      _hasKoreanFont = true;
+    }
     await (FontLoader('MaterialIcons')..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
   });
   for (final language in ['zh-CN', 'zh-TW', 'en-US', 'ja-JP', 'ko-KR']) {

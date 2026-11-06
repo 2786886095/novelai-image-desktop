@@ -1297,7 +1297,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
         TextField(key: const PageStorageKey<String>('artist-text-poolSize'), controller: _poolSize,
           enabled: !disabled, keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: InputDecoration(labelText: _p('selectionCount'), helperText: _p('selectionLimit')),
+          decoration: InputDecoration(labelText: _p('selectionCount'), helperText: _p('selectionLimit'), helperMaxLines: 3),
           onSubmitted: disabled ? null : (_) async { await _save(); await _loadPool(false); }),
         const SizedBox(height: 8),
         if (_loading && !_catalogUpdating) const LinearProgressIndicator(minHeight: 3),

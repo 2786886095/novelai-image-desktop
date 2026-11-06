@@ -189,6 +189,7 @@ class ArtistCatalogService {
         await root.create(recursive: true);
         final bundled = File('${root.path}/bundled.bin.gz');
         if (!await bundled.exists() ||
+            await bundled.length() > _maxCompressed ||
             sha256.convert(await bundled.readAsBytes()).toString() !=
                 bundledSha256) {
           final bytes = await bundledBytes();

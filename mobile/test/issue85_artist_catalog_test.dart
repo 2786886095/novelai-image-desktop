@@ -137,4 +137,19 @@ void main() {
     expect(await current.readAsBytes(), old);
     expect(root.listSync().where((f) => f.path.endsWith('.pending')), isEmpty);
   });
+  test('oversized private bundled cache is replaced by the checked fixed asset', () async {
+    final f = await File('${root.path}/bundled.bin.gz').open(mode: FileMode.write);
+    await f.truncate(33 * 1024 * 1024); await f.close();
+    expect((await service().select(count: 5)).items.length, 5);
+    expect(await File('${root.path}/bundled.bin.gz').length(), bundle.length);
+  });
+  test('transport construction failure releases update ownership for retry', () async {
+    final s = service(client: (_) => throw StateError('fixture transport unavailable'));
+    for (var i = 0; i < 2; i++) {
+      await expectLater(s.update(AppSettings()), throwsA(predicate((e) =>
+          e is StateError && e.message == 'fixture transport unavailable')));
+    }
+    expect((await service().select(count: 2)).items.length, 2);
+  });
+
 }
