@@ -17,12 +17,11 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 > Bring your own **NovelAI Persistent API Token**. Model access and generation charges depend on your NovelAI account. Optional image analysis, prompt conversion and Tavern AI services require separate configuration.
 
-## This update
+## What's new
 
-- **Artist sources and recovery**: mobile Local/Online pool selection with explicit offline fallback. Bounded ID-cursor discovery replaces deep page probes, without claiming uniform site-wide sampling.
-- **Draw count controls**: fixed artists per recipe, separate batch size, and random style-tag min/max counts supporting zero, swapped ranges and restored settings.
-- **Large backups**: 4 GiB compressed input / ZIP64, private streamed snapshots, background integrity preflight and file-based export; per-entry, CRC and memory limits remain.
-- **Scope and limits**: five platforms rebuilt from one source. Redmi/HyperOS physical-device and full-feature acceptance are incomplete; unsigned IPA requires your own signing. See Latest for current packages and disclosures.
+- **Artist recipe controls and desktop UI**: complete per-recipe random-tag minimum/maximum controls and consistent widget/motion styling.
+- **Mobile theme consistency**: align disabled/error fields, default dialogs, sheets and menus with shared theme tokens.
+- **Scope**: five fresh same-source platform builds; 168 Android candidate tests and 30 widget-rendered captures. Physical-device/full acceptance remains incomplete; unsigned IPA requires user signing.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
