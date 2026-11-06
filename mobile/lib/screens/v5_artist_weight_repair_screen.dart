@@ -1,3 +1,4 @@
+import '../i18n/style_tag_draw_text.dart';
 import '../i18n/issue81_text.dart';
 import 'random_artist_lab_screen.dart';
 import '../ui/compact_workbench.dart';
@@ -556,6 +557,18 @@ class _V5ArtistWeightRepairScreenState
   final _output = TextEditingController();
   final _drawInput = TextEditingController();
   final _drawTagSearch = TextEditingController();
+  final _minRandomStyleTags=TextEditingController(text:'1');
+  final _maxRandomStyleTags=TextEditingController(text:'3');
+  final Map<String,String> _drawStyleTagModes={};
+  String _styleText(String key)=>styleTagDrawText(context.read<AppState>().settings.language,key);
+  void _commitStyleTagCounts() {
+    setState(() {
+      _minRandomStyleTags.text='${normalizeRandomCustomTagCount(_minRandomStyleTags.text,fallback:1)}';
+      _maxRandomStyleTags.text='${normalizeRandomCustomTagCount(_maxRandomStyleTags.text,fallback:3)}';
+      _batchReady=false;
+    });
+    _saveDrawState();
+  }
   final _basePrompt = TextEditingController();
   final _minWeight = TextEditingController(text: '0.2');
   final _maxWeight = TextEditingController(text: '1.2');
@@ -688,6 +701,17 @@ class _V5ArtistWeightRepairScreenState
     _drawStyleTags
       ..clear()
       ..addAll(prefs.getStringList('${prefix}styleTags') ?? const <String>[]);
+    _minRandomStyleTags.text='${normalizeRandomCustomTagCount(prefs.getInt('${prefix}minRandomStyleTags'),fallback:1)}';
+    _maxRandomStyleTags.text='${normalizeRandomCustomTagCount(prefs.getInt('${prefix}maxRandomStyleTags'),fallback:3)}';
+    try {
+      final modes=jsonDecode(prefs.getString('${prefix}styleTagModes')??'{}');
+      if(modes is Map) {
+        for(final tag in _drawStyleTags) {
+          _drawStyleTagModes[tag.toLowerCase()]=modes[tag.toLowerCase()]=='random'?'random':'always';
+        }
+      }
+    } catch (_) { /* Existing selections remain always-included. */ }
+
     try {
       final raw = prefs.getString('${prefix}generationParams');
       _generationParams = raw == null
@@ -774,6 +798,9 @@ class _V5ArtistWeightRepairScreenState
         '${prefix}weightSoftBalance', _weightDistribution.softBalance);
     await prefs.setStringList(
         '${prefix}styleTags', _drawStyleTags.toList(growable: false));
+    await prefs.setInt('${prefix}minRandomStyleTags',normalizeRandomCustomTagCount(_minRandomStyleTags.text,fallback:1));
+    await prefs.setInt('${prefix}maxRandomStyleTags',normalizeRandomCustomTagCount(_maxRandomStyleTags.text,fallback:3));
+    await prefs.setString('${prefix}styleTagModes',jsonEncode(_drawStyleTagModes));
     _generationParams.negativePrompt = _negativePrompt.text;
     await prefs.setString(
         '${prefix}generationParams', jsonEncode(_generationParams.toJson()));
@@ -813,6 +840,8 @@ class _V5ArtistWeightRepairScreenState
     _output.dispose();
     _drawInput.dispose();
     _drawTagSearch.dispose();
+    _minRandomStyleTags.dispose();
+    _maxRandomStyleTags.dispose();
     _basePrompt.dispose();
     _minWeight.dispose();
     _maxWeight.dispose();
@@ -868,6 +897,7 @@ class _V5ArtistWeightRepairScreenState
       _minWeight.text = '0.2';
       _maxWeight.text = '1.2';
       _candidateCount.text = '8';
+      _minRandomStyleTags.text='1';_maxRandomStyleTags.text='3';
       _seed.text = '246813579';
       _fixedSeed = true;
       _weightControlMode = WeightControlMode.novice;
@@ -918,10 +948,7 @@ class _V5ArtistWeightRepairScreenState
       setState(() => _message = text['inputEmpty']!);
       return;
     }
-    final source = <String>[
-      _drawInput.text.trim(),
-      ..._drawStyleTags,
-    ].where((value) => value.isNotEmpty).join(', ');
+    final source = _drawInput.text.trim();
     final normalized = normalizeV45ArtistSyntax(source);
     final recipes = drawAllV5ArtistWeights(
       input: normalized.output,
@@ -929,6 +956,9 @@ class _V5ArtistWeightRepairScreenState
       minWeight: double.tryParse(_minWeight.text) ?? .2,
       maxWeight: double.tryParse(_maxWeight.text) ?? 1.2,
       drawSeed: _freshSeed(),
+      customTagPool:_drawStyleTags.join(', '), customTagModes:_drawStyleTagModes,
+      minRandomCustomTags:normalizeRandomCustomTagCount(_minRandomStyleTags.text,fallback:1),
+      maxRandomCustomTags:normalizeRandomCustomTagCount(_maxRandomStyleTags.text,fallback:3),
       weightDistribution: _weightControlMode == WeightControlMode.advanced
           ? _weightDistribution
           : null,
@@ -940,11 +970,7 @@ class _V5ArtistWeightRepairScreenState
     await _installRecipes(recipes);
     if (!mounted) return;
     setState(() {
-      _message = text['all']!
-          .replaceAll('{count}', normalized.totalAdjusted.toString())
-          .replaceAll('{artists}', normalized.artistTagCount.toString())
-          .replaceAll('{quality}', normalized.qualityTagCount.toString())
-          .replaceAll('{other}', normalized.otherTagCount.toString());
+      _message = _styleText('summary').replaceAll('{count}','${recipes.length}');
     });
     _saveDrawState();
   }
@@ -970,11 +996,33 @@ class _V5ArtistWeightRepairScreenState
         initiallyExpanded: false,
         leading: const Icon(Icons.style_outlined),
         title: Text(chinese ? '画风 Tag 库' : 'Style Tag library'),
-        subtitle: Text(chinese
-            ? '已选 ${_drawStyleTags.length} 个；每个候选都会加入并随机赋权'
-            : '${_drawStyleTags.length} selected; added to every draw with random weights'),
+        subtitle: Text(_styleText('selected').replaceAll('{count}','${_drawStyleTags.length}')),
         childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         children: [
+          if(_drawStyleTags.isNotEmpty) SizedBox(height:min(176.0,_drawStyleTags.length*96.0),child:ListView(
+            primary:false,children:_drawStyleTags.map((tag)=>Padding(padding:const EdgeInsets.only(bottom:6),child:Column(
+              crossAxisAlignment:CrossAxisAlignment.start,children:[Text(tag,maxLines:1,overflow:TextOverflow.ellipsis),
+              Wrap(spacing:8,children:[
+                ChoiceChip(label:Text(_styleText('always')),selected:_drawStyleTagModes[tag.toLowerCase()]!='random',onSelected:_running?null:(_){setState((){_drawStyleTagModes[tag.toLowerCase()]='always';_batchReady=false;});_saveDrawState();}),
+                ChoiceChip(label:Text(_styleText('random')),selected:_drawStyleTagModes[tag.toLowerCase()]=='random',onSelected:_running?null:(_){setState((){_drawStyleTagModes[tag.toLowerCase()]='random';_batchReady=false;});_saveDrawState();}),
+              ])]))).toList())),
+          const SizedBox(height:8),
+          Text(_styleText('range'),style:Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height:8),
+          Row(children:[
+            Expanded(child:TextField(key:const ValueKey('artist-string-style-min'),controller:_minRandomStyleTags,
+              enabled:!_running&&_drawStyleTags.any((tag)=>_drawStyleTagModes[tag.toLowerCase()]=='random'),
+              keyboardType:TextInputType.number,inputFormatters:[FilteringTextInputFormatter.digitsOnly],
+              decoration:InputDecoration(labelText:_styleText('min')),onEditingComplete:_commitStyleTagCounts,onTapOutside:(_)=>_commitStyleTagCounts())),
+            const SizedBox(width:8),
+            Expanded(child:TextField(key:const ValueKey('artist-string-style-max'),controller:_maxRandomStyleTags,
+              enabled:!_running&&_drawStyleTags.any((tag)=>_drawStyleTagModes[tag.toLowerCase()]=='random'),
+              keyboardType:TextInputType.number,inputFormatters:[FilteringTextInputFormatter.digitsOnly],
+              decoration:InputDecoration(labelText:_styleText('max')),onEditingComplete:_commitStyleTagCounts,onTapOutside:(_)=>_commitStyleTagCounts())),
+          ]),
+          Padding(padding:const EdgeInsets.symmetric(vertical:8),child:Text(_styleText(
+            _drawStyleTags.any((tag)=>_drawStyleTagModes[tag.toLowerCase()]=='random')?'help':'empty'),style:Theme.of(context).textTheme.bodySmall)),
+
           TextField(
                     key: const PageStorageKey<String>('artist-repair-text-drawTagSearch'),
                     controller: _drawTagSearch,
@@ -1032,10 +1080,12 @@ class _V5ArtistWeightRepairScreenState
                             maxLines: 1, overflow: TextOverflow.ellipsis),
                         subtitle: Text(entry.label(language),
                             maxLines: 1, overflow: TextOverflow.ellipsis),
-                        onChanged: (_) {
+                        onChanged: _running?null:(_) {
                           setState(() {
+                            _batchReady=false;
                             if (selected) {
                               _drawStyleTags.remove(entry.tag);
+                              _drawStyleTagModes.remove(entry.tag.toLowerCase());
                             } else {
                               _drawStyleTags.add(entry.tag);
                             }

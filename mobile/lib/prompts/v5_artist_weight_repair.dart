@@ -384,7 +384,7 @@ List<ArtistRecipe> repairV45ArtistCandidatesForV5({
 int countV5PromptTags(String input) => _parsePromptTags(input).length;
 
 /// Rerolls every valid tag independently and retains the complete tag set in
-/// every candidate. This is a weight draw, not a subset draw.
+/// every candidate. Only explicitly random library tags use subset sampling.
 List<ArtistRecipe> drawAllV5ArtistWeights({
   required String input,
   required int count,
@@ -392,28 +392,43 @@ List<ArtistRecipe> drawAllV5ArtistWeights({
   double maxWeight = defaultV5ArtistDrawMax,
   int? drawSeed,
   WeightDistributionConfig? weightDistribution,
+  String customTagPool = '',
+  Map<String, String> customTagModes = const {},
+  int minRandomCustomTags = 1,
+  int maxRandomCustomTags = 3,
 }) {
   final sourceTags = _parsePromptTags(input);
-  if (sourceTags.isEmpty || count < 1) return const [];
+  final seen = sourceTags.map((tag)=>tag.value.trim().toLowerCase()).toSet();
+  final library = _parsePromptTags(customTagPool).where((tag)=>seen.add(tag.value.trim().toLowerCase())).toList();
+  final always = library.where((tag)=>customTagModes[tag.value.trim().toLowerCase()]!='random').toList();
+  final randomPool = library.where((tag)=>customTagModes[tag.value.trim().toLowerCase()]=='random').toList();
+  final tagBounds = randomCustomTagCountBounds(minRandomCustomTags,maxRandomCustomTags,randomPool.length);
+  if ((sourceTags.isEmpty && library.isEmpty) || count < 1) return const [];
 
   final bounds = _drawBounds(minWeight, maxWeight);
   final random = Random(drawSeed);
   return List.generate(count, (index) {
+    final selected = <_PromptTag>[];
+    if(randomPool.isNotEmpty && tagBounds.max>0) {
+      final take=tagBounds.min+random.nextInt(tagBounds.max-tagBounds.min+1);
+      selected.addAll((List<_PromptTag>.of(randomPool)..shuffle(random)).take(take));
+    }
+    final candidateTags = [...sourceTags,...always,...selected];
     final tags = weightDistribution == null
         ? _migratePromptTags(
-            sourceTags,
+            candidateTags,
             random.nextDouble,
             bounds: bounds,
           )
         : _drawBalancedWeights(
-            sourceTags,
+            candidateTags,
             random,
             bounds.min,
             bounds.max,
             weightDistribution,
           );
     return _recipeFromTags(tags, index, 'v5-weight-${drawSeed ?? 0}');
-  });
+  }).where((recipe)=>recipe.prompt.trim().isNotEmpty).toList();
 }
 
 List<_PromptTag> _drawBalancedWeights(

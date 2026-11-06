@@ -2416,7 +2416,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                   ),
                   Text(_i('selectedHint'),style:Theme.of(context).textTheme.bodySmall),
                 ],
-                if (selectedRandomCount > 0) ...[
+                ...[
                   const SizedBox(height: 10),
                   Text(ui['randomRange']!,
                       style: Theme.of(context).textTheme.labelLarge),
@@ -2426,6 +2426,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                       Expanded(
                         child: TextField(
                       key: const PageStorageKey<String>('artist-text-minRandomCustomTags'),
+                      enabled: selectedRandomCount > 0,
                       controller: _minRandomCustomTags,
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(labelText: ui['min']),
@@ -2436,6 +2437,7 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                       Expanded(
                         child: TextField(
                       key: const PageStorageKey<String>('artist-text-maxRandomCustomTags'),
+                      enabled: selectedRandomCount > 0,
                       controller: _maxRandomCustomTags,
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(labelText: ui['max']),

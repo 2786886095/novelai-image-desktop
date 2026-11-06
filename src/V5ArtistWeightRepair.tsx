@@ -1,3 +1,5 @@
+import { loadStyleTagDrawState, normalizeStyleTagDrawState, type StyleTagDrawState } from "./style-tag-draw-state";
+import { styleTagDrawText } from "./style-tag-draw-text";
 import {PreviewImageViewer} from './components/PreviewImageViewer';
 import {
   useEffect,
@@ -384,7 +386,12 @@ export default function V5ArtistWeightRepair({
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [drawInput, setDrawInput] = useState("");
-  const [drawStyleTags, setDrawStyleTags] = useState<Set<string>>(() => new Set());
+  const drawStyleStorageKey = `novelai.${favoriteCollection}.style-library.v1`;
+  const [drawLibrary, setDrawLibrary] = useState(()=>loadStyleTagDrawState(drawStyleStorageKey));
+  const drawStyleTags = useMemo(()=>new Set(drawLibrary.tags),[drawLibrary.tags]);
+  const styleText = (key: Parameters<typeof styleTagDrawText>[1])=>styleTagDrawText(language,key);
+  const randomStyleCount=drawLibrary.tags.filter(tag=>drawLibrary.modes[tag.toLocaleLowerCase()]==="random").length;
+  useEffect(()=>{try {localStorage.setItem(drawStyleStorageKey,JSON.stringify(drawLibrary));} catch { /* Keep the draft in memory when storage is unavailable. */ }},[drawStyleStorageKey,drawLibrary]);
   const [drawTagQuery, setDrawTagQuery] = useState("");
   const [drawTagCategory, setDrawTagCategory] = useState("all");
   const [drawTagLibraryOpen, setDrawTagLibraryOpen] = useState(false);
@@ -424,8 +431,8 @@ export default function V5ArtistWeightRepair({
   const copiedTimerRef = useRef<number | null>(null);
   const [previewCandidate, setPreviewCandidate] = useState<SharedArtistFavorite | null>(null);
   const drawSource = useMemo(
-    () => [drawInput.trim(), ...drawStyleTags].filter(Boolean).join(", "),
-    [drawInput, drawStyleTags],
+    () => drawInput.trim(),
+    [drawInput],
   );
   const tagSummary = useMemo(
     () => normalizeV45ArtistSyntax(drawMode ? drawSource : input),
@@ -455,13 +462,17 @@ export default function V5ArtistWeightRepair({
     });
   }, [drawCatalogItems, drawStaticSupplements]);
 
+  const patchDrawLibrary = (update: Partial<StyleTagDrawState>) => {
+    setDrawLibrary(current=>normalizeStyleTagDrawState({...current,...update}));
+    setBatchReady(false); setMessage("");
+  };
   const toggleDrawStyleTag = (tag: string) => {
-    setDrawStyleTags((current) => {
-      const next = new Set(current);
-      if (next.has(tag)) next.delete(tag); else next.add(tag);
-      return next;
+    setDrawLibrary(current=>{
+      const tags=current.tags.includes(tag)?current.tags.filter(value=>value!==tag):[...current.tags,tag];
+      const modes={...current.modes};if(!tags.includes(tag))delete modes[tag.toLocaleLowerCase()];
+      return normalizeStyleTagDrawState({...current,tags,modes});
     });
-    setMessage("");
+    setBatchReady(false);setMessage("");
   };
 
   const drawCatalogMeaning = (entry: TagSuggestion) => entry.description?.trim() || entry.tag.replaceAll("_", " ");
@@ -684,7 +695,7 @@ export default function V5ArtistWeightRepair({
 
   const draw = () => {
     setBatchReady(false);
-    if (!drawSource.trim()) return setMessage(text.drawEmpty);
+    if (!drawSource.trim() && drawStyleTags.size===0) return setMessage(text.drawEmpty);
     const normalized = normalizeV45ArtistSyntax(drawSource);
     const recipes = drawAllV5ArtistWeights(
       normalized.output,
@@ -700,15 +711,12 @@ export default function V5ArtistWeightRepair({
         rightDispersion,
         softBalance,
       } : undefined,
+      {customTagPool:drawLibrary.tags.join(", "),customTagModes:drawLibrary.modes,
+       minRandomCustomTags:drawLibrary.min,maxRandomCustomTags:drawLibrary.max},
     );
     if (recipes.length === 0) return setMessage(text.drawNone);
     installCandidates(recipes);
-    setMessage(interpolate(text.allTags, {
-      count: normalized.totalAdjusted,
-      artists: normalized.artistTagCount,
-      quality: normalized.qualityTagCount,
-      other: normalized.otherTagCount,
-    }));
+    setMessage(styleText("summary").replace("{count}",String(recipes.length)));
   };
 
   const normalizeDrawInput = () => {
@@ -799,6 +807,7 @@ export default function V5ArtistWeightRepair({
     setWeightMode(DEFAULT_WEIGHT_DISTRIBUTION.mode);
     setLeftDispersion(DEFAULT_WEIGHT_DISTRIBUTION.leftDispersion);
     setRightDispersion(DEFAULT_WEIGHT_DISTRIBUTION.rightDispersion);
+    patchDrawLibrary({min:1,max:3});
     setCandidateCount(10);
     setSeedMode("fixed");
     setSeed(246813579);
@@ -923,10 +932,24 @@ export default function V5ArtistWeightRepair({
             </label>
             <details className="random-custom-tag-workbench v5-draw-tag-library" onToggle={(event) => setDrawTagLibraryOpen(event.currentTarget.open)}>
               <summary>
-                <span><b>{drawLibraryText.title}</b><small>{interpolate(drawLibraryText.selected, { count: drawStyleTags.size })}</small></span>
+                <span><b>{drawLibraryText.title}</b><small>{interpolate(styleText("selected"), { count: drawStyleTags.size })}</small></span>
                 <Icon name="chevronDown" />
               </summary>
               <div className="random-custom-tag-body">
+                <section className="random-custom-tag-selected" aria-label={drawLibraryText.title}>
+                  <div>{drawLibrary.tags.map(tag=><article key={tag}>
+                    <b title={tag}>{tag}</b><span role="group" aria-label={tag}>
+                      <button type="button" disabled={running} className={drawLibrary.modes[tag.toLocaleLowerCase()]!=="random"?"active":""} onClick={()=>patchDrawLibrary({modes:{...drawLibrary.modes,[tag.toLocaleLowerCase()]:"always"}})}>{styleText("always")}</button>
+                      <button type="button" disabled={running} className={drawLibrary.modes[tag.toLocaleLowerCase()]==="random"?"active":""} onClick={()=>patchDrawLibrary({modes:{...drawLibrary.modes,[tag.toLocaleLowerCase()]:"random"}})}>{styleText("random")}</button>
+                    </span><button type="button" disabled={running} aria-label={`${styleText("remove")}: ${tag}`} onClick={()=>toggleDrawStyleTag(tag)}><Icon name="close"/></button>
+                  </article>)}</div>
+                </section>
+                <fieldset className="random-custom-tag-random-range" data-testid="artist-string-style-counts" disabled={running || randomStyleCount===0}>
+                  <legend>{styleText("range")}</legend>
+                  <label><span>{styleText("min")}</span><NumericDraftInput aria-label={styleText("min")} min={0} max={20} step={1} value={drawLibrary.min} onCommit={min=>patchDrawLibrary({min})}/></label>
+                  <label><span>{styleText("max")}</span><NumericDraftInput aria-label={styleText("max")} min={0} max={20} step={1} value={drawLibrary.max} onCommit={max=>patchDrawLibrary({max})}/></label>
+                </fieldset>
+                <small>{randomStyleCount===0?styleText("empty"):styleText("help")}</small>
                 <div className="random-custom-tag-toolbar">
                   <label className="random-custom-tag-search">
                     <Icon name="search" />
@@ -956,7 +979,7 @@ export default function V5ArtistWeightRepair({
                             className={`${selected ? "selected" : ""}${canPreview ? " has-preview" : ""}`}
                             onPointerEnter={canPreview ? (event) => showDrawStylePreview(entry, meaning, event) : undefined}
                             onPointerLeave={canPreview ? hideDrawStylePreview : undefined}
-                          ><button type="button" className="random-custom-tag-select" aria-pressed={selected} onClick={() => toggleDrawStyleTag(entry.tag)}><span className="random-custom-tag-check"><Icon name={selected ? "check" : "plus"} /></span><span><b>{entry.tag}</b><small>{meaning}</small></span><em>{canPreview ? <Icon name="image" /> : entry.count > 0 ? entry.count.toLocaleString() : ""}</em></button></article>;
+                          ><button type="button" className="random-custom-tag-select" aria-pressed={selected} disabled={running} onClick={() => toggleDrawStyleTag(entry.tag)}><span className="random-custom-tag-check"><Icon name={selected ? "check" : "plus"} /></span><span><b>{entry.tag}</b><small>{meaning}</small></span><em>{canPreview ? <Icon name="image" /> : entry.count > 0 ? entry.count.toLocaleString() : ""}</em></button></article>;
                         })}
                       </div>{drawCatalogItems.length < drawCatalogTotal && <div className="random-custom-tag-load-more"><Button type="button" variant="ghost" disabled={drawCatalogLoadingMore} onClick={() => void loadMoreDrawCatalog()}>{drawCatalogLoadingMore && <span className="spinner" />}{drawLibraryText.more}</Button></div>}</section>}
                 </div>

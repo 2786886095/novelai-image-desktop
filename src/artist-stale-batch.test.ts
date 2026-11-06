@@ -20,6 +20,7 @@ expect(declarations.length).toBe(names.size);
 function runtime() {
   const ctx: any = {
     input: fixture, drawSource: fixture, results: [], batchReady: false,
+    drawStyleTags:new Set(), drawLibrary:{tags:[],modes:{},min:1,max:3}, styleText:()=> 'valid',
     candidateCount: 8, seed: 20261002, seedMode: 'fixed', generationParams: {model: 'nai-diffusion-5-full'},
     weightControlMode: 'novice', minWeight: .2, maxWeight: 1.2, Math,
     basePrompt: 'landscape, lake, no humans', cancelRef: {current: false},

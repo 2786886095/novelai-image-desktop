@@ -1358,7 +1358,7 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
             </div>
           </section>}
 
-          {selectedRandomTagCount > 0 && <fieldset className="random-custom-tag-random-range">
+          {<fieldset className="random-custom-tag-random-range" disabled={selectedRandomTagCount === 0}>
             <legend>{customTagText.randomRange}</legend>
             <label><span>{text.min}</span><NumericDraftInput min={0} max={selectedRandomTagCount} step={1} value={session.randomCustomTagMinCount} normalize={(value) => clampRecipeCount(value, 1, 0)} onCommit={(randomCustomTagMinCount) => patch({ randomCustomTagMinCount, drawSeed: freshSeed() })} /></label>
             <label><span>{text.max}</span><NumericDraftInput min={0} max={selectedRandomTagCount} step={1} value={session.randomCustomTagMaxCount} normalize={(value) => clampRecipeCount(value, 3, 0)} onCommit={(randomCustomTagMaxCount) => patch({ randomCustomTagMaxCount, drawSeed: freshSeed() })} /></label>

@@ -384,14 +384,33 @@ export function drawAllV5ArtistWeights(
   maxWeight = DEFAULT_V5_ARTIST_DRAW_MAX,
   random: () => number = Math.random,
   distribution?: WeightDistributionConfig,
+  styleLibrary?: { customTagPool: string; customTagModes?: Record<string, "always" | "random">;
+    minRandomCustomTags?: number; maxRandomCustomTags?: number },
 ): GeneratedArtistRecipe[] {
   const sourceTags = parsePromptTags(input);
-  if (sourceTags.length === 0 || count < 1) return [];
+  const seen = new Set(sourceTags.map((tag) => tag.value.trim().toLocaleLowerCase()));
+  const library = parsePromptTags(styleLibrary?.customTagPool ?? "").filter((tag) => {
+    const key = tag.value.trim().toLocaleLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+  const always = library.filter((tag) => styleLibrary?.customTagModes?.[tag.value.trim().toLocaleLowerCase()] !== "random");
+  const randomPool = library.filter((tag) => styleLibrary?.customTagModes?.[tag.value.trim().toLocaleLowerCase()] === "random");
+  if ((sourceTags.length === 0 && library.length === 0) || count < 1) return [];
 
   const [min, max] = normalizedDrawBounds(minWeight, maxWeight);
   const total = Math.max(1, Math.floor(Number.isFinite(count) ? count : 1));
   return Array.from({ length: total }, (_, index) => {
-    const tags = drawPromptTagWeights(sourceTags, random, [min, max], distribution);
+    const safeCount = (v: number | undefined, fallback: number) => Number.isFinite(v) ? Math.max(0, Math.floor(Number(v))) : fallback;
+    const a = safeCount(styleLibrary?.minRandomCustomTags, 1), b = safeCount(styleLibrary?.maxRandomCustomTags, 3);
+    const lower = Math.min(randomPool.length, Math.min(a, b)), upper = Math.min(randomPool.length, Math.max(a, b));
+    const selected: PromptTag[] = [];
+    if (randomPool.length && upper > 0) {
+      const take = lower + Math.min(upper - lower, Math.floor(normalizedRandomSample(random) * (upper - lower + 1)));
+      const available = [...randomPool];
+      while (selected.length < take) selected.push(available.splice(Math.min(available.length - 1, Math.floor(normalizedRandomSample(random) * available.length)), 1)[0]);
+    }
+    const tags = drawPromptTagWeights([...sourceTags, ...always, ...selected], random, [min, max], distribution);
     return generatedRecipeFromTags(tags, index, "v5-weight-draw");
-  });
+  }).filter((recipe) => recipe.prompt.trim().length > 0);
 }
