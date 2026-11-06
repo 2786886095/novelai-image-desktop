@@ -19,10 +19,10 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-- **Mobile artist tools**: sample the whole artist-tag pool; paginated favorites, a secondary shortlist and last-viewed restoration, compatible with existing favorites.
-- **Expansion and backup fixes**: isolate scroll and expansion state, lazily display large tag selections, and stream backup data with explicit resource-limit errors while retaining originals.
-- **Artist lookup**: review Danbooru identities from Pixiv/X profiles or names, then copy a tag or NAI artist string; ambiguous identities are not guessed.
-- **Scope and limits**: five platforms rebuilt from one source; desktop synchronizes the version, not the mobile UI. Live API and physical-device acceptance remain incomplete; unsigned IPA requires your own signing. Relay recommendations are unchanged.
+- **Artist sources and recovery**: mobile Local/Online pool selection with explicit offline fallback. Bounded ID-cursor discovery replaces deep page probes, without claiming uniform site-wide sampling.
+- **Draw count controls**: fixed artists per recipe, separate batch size, and random style-tag min/max counts supporting zero, swapped ranges and restored settings.
+- **Large backups**: 4 GiB compressed input / ZIP64, private streamed snapshots, background integrity preflight and file-based export; per-entry, CRC and memory limits remain.
+- **Scope and limits**: five platforms rebuilt from one source. Redmi/HyperOS physical-device and full-feature acceptance are incomplete; unsigned IPA requires your own signing. See Latest for current packages and disclosures.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
