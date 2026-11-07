@@ -36,6 +36,9 @@ typedef _PresetText = ({
   String duplicate,
   String required,
   String confirmDelete,
+  String details,
+  String backToPresets,
+  String noMatches,
 });
 
 _PresetText _textFor(String language) {
@@ -64,6 +67,9 @@ _PresetText _textFor(String language) {
         duplicate: '相同預設已存在，未重複儲存。',
         required: '請填寫正面提示詞。',
         confirmDelete: '刪除這個預設及其參考圖？',
+        details: '詳細資料',
+        backToPresets: '返回預設列表',
+        noMatches: '沒有符合的預設',
       );
     case 'en-US':
       return (
@@ -91,6 +97,9 @@ _PresetText _textFor(String language) {
         duplicate: 'An identical preset already exists.',
         required: 'Enter a positive prompt.',
         confirmDelete: 'Delete this preset and its reference images?',
+        details: 'Details',
+        backToPresets: 'Back to presets',
+        noMatches: 'No matching presets',
       );
     case 'ja-JP':
       return (
@@ -116,6 +125,9 @@ _PresetText _textFor(String language) {
         duplicate: '同じプリセットが既にあります。',
         required: 'ポジティブプロンプトを入力してください。',
         confirmDelete: 'このプリセットと参照画像を削除しますか？',
+        details: '詳細',
+        backToPresets: 'プリセット一覧に戻る',
+        noMatches: '一致するプリセットがありません',
       );
     case 'ko-KR':
       return (
@@ -141,6 +153,9 @@ _PresetText _textFor(String language) {
         duplicate: '동일한 프리셋이 이미 있습니다.',
         required: '긍정 프롬프트를 입력하세요.',
         confirmDelete: '이 프리셋과 참고 이미지를 삭제할까요?',
+        details: '상세 정보',
+        backToPresets: '프리셋 목록으로',
+        noMatches: '일치하는 프리셋이 없습니다',
       );
     default:
       return (
@@ -166,6 +181,9 @@ _PresetText _textFor(String language) {
         duplicate: '相同预设已存在，未重复保存。',
         required: '请填写正面提示词。',
         confirmDelete: '删除这个预设及其参考图？',
+        details: '详情',
+        backToPresets: '返回预设列表',
+        noMatches: '没有匹配的预设',
       );
   }
 }
@@ -222,13 +240,17 @@ Future<void> showPositivePromptPresetSheet(
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    builder: (sheetContext) => FractionallySizedBox(
-      heightFactor: .94,
-      child: _PositivePromptPresetSheet(
-        currentPrompt: currentPrompt,
-        onApply: onApply,
-        currentCaptions: currentCaptions,
-        onApplyCharacters: onApplyCharacters,
+    builder: (sheetContext) => Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
+      child: FractionallySizedBox(
+        heightFactor: .94,
+        child: _PositivePromptPresetSheet(
+          currentPrompt: currentPrompt,
+          onApply: onApply,
+          currentCaptions: currentCaptions,
+          onApplyCharacters: onApplyCharacters,
+        ),
       ),
     ),
   );
@@ -257,6 +279,9 @@ class _PositivePromptPresetSheetState
   final _search = TextEditingController();
   final _name = TextEditingController();
   final _prompt = TextEditingController();
+  final _listScroll = ScrollController();
+  bool _showDetails = false;
+  double? _listOffsetBeforeDetails;
   String? _editingId;
   String _selectedId = '';
   String _activeImageId = '';
@@ -272,6 +297,7 @@ class _PositivePromptPresetSheetState
     _search.dispose();
     _name.dispose();
     _prompt.dispose();
+    _listScroll.dispose();
     super.dispose();
   }
 
@@ -377,6 +403,7 @@ class _PositivePromptPresetSheetState
     if (!mounted) return;
     setState(() {
       _selectedId = state.settings.positivePromptPresets.firstOrNull?.id ?? '';
+      if (_selectedId.isEmpty) _showDetails = false;
       _editingId = null;
       _busy = false;
     });
@@ -417,89 +444,85 @@ class _PositivePromptPresetSheetState
     ]);
   }
 
+  void _filterChanged() {
+    if (_listScroll.hasClients) _listScroll.jumpTo(0);
+    setState(() => _message = '');
+  }
+
   Widget _presetList(
     List<PositivePromptPreset> presets,
     PositivePromptPreset? selected,
-    bool horizontal,
+    _PresetText text,
   ) {
     if (presets.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(20),
-          child: Icon(Icons.bookmarks_outlined, size: 34),
+          padding: const EdgeInsets.all(20),
+          child:
+              Text(_search.text.trim().isEmpty ? text.empty : text.noMatches),
         ),
       );
     }
-    return ListView.separated(
-      scrollDirection: horizontal ? Axis.horizontal : Axis.vertical,
-      padding: const EdgeInsets.all(10),
-      itemCount: presets.length,
-      separatorBuilder: (_, __) => const SizedBox(width: 8, height: 8),
-      itemBuilder: (context, index) {
-        final preset = presets[index];
-        final active = preset.id == selected?.id;
-        final first = preset.previewImages.firstOrNull;
-        return SizedBox(
-          width: horizontal ? 250 : null,
-          child: Card(
+    final colors = Theme.of(context).colorScheme;
+    return Scrollbar(
+      controller: _listScroll,
+      child: ListView.separated(
+        key: const ValueKey('positive-preset-list'),
+        controller: _listScroll,
+        primary: false,
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        itemCount: presets.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 4),
+        itemBuilder: (context, index) {
+          final preset = presets[index];
+          final active = preset.id == selected?.id;
+          return Material(
+            color: active ? colors.primaryContainer : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
             clipBehavior: Clip.antiAlias,
-            color:
-                active ? Theme.of(context).colorScheme.primaryContainer : null,
-            child: InkWell(
-              onTap: () => setState(() {
-                _selectedId = preset.id;
-                _activeImageId = preset.previewImages.firstOrNull?.id ?? '';
-                _message = '';
-              }),
-              child: Padding(
-                padding: const EdgeInsets.all(9),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      clipBehavior: Clip.antiAlias,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest,
-                      ),
-                      child: first == null
-                          ? const Icon(Icons.bookmark_outline)
-                          : imageFile(
-                              File(first.filePath),
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                                  const Icon(Icons.broken_image_outlined),
-                            ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(preset.name,
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                          const SizedBox(height: 3),
-                          Text(
-                            preset.prompt,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Text('${preset.previewImages.length}/3'),
-                  ],
-                ),
+            child: ListTile(
+              key: ValueKey('positive-preset-row-${preset.id}'),
+              selected: active,
+              selectedColor: colors.onPrimaryContainer,
+              minVerticalPadding: 8,
+              leading: Icon(
+                  active ? Icons.check_circle : Icons.bookmark_outline,
+                  size: 21),
+              title: Text(
+                preset.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium,
               ),
+              onTap: () {
+                FocusScope.of(context).unfocus();
+                setState(() {
+                  _selectedId = preset.id;
+                  _activeImageId = preset.previewImages.firstOrNull?.id ?? '';
+                  _message = '';
+                });
+              },
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _referenceDisclosure(
+    AppState state,
+    PositivePromptPreset preset,
+    _PresetText text,
+  ) {
+    return Card.outlined(
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        key: ValueKey('positive-preset-reference-${preset.id}'),
+        leading: const Icon(Icons.photo_library_outlined),
+        title: Text(
+            '${text.images} · ${preset.previewImages.length}/$positivePromptPresetImageLimit'),
+        children: [_images(state, preset, text)],
+      ),
     );
   }
 
@@ -512,125 +535,109 @@ class _PositivePromptPresetSheetState
     final active =
         images.where((item) => item.id == _activeImageId).firstOrNull ??
             images.firstOrNull;
-    return Card.outlined(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(text.images,
-                          style: Theme.of(context).textTheme.titleSmall),
-                      Text(text.imageHint,
-                          style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _busy || images.length >= 3
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(text.imageHint, style: Theme.of(context).textTheme.bodySmall),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: OutlinedButton.icon(
+              onPressed:
+                  _busy || images.length >= positivePromptPresetImageLimit
                       ? null
                       : () => _importImages(state, preset),
-                  icon: const Icon(Icons.add_photo_alternate_outlined),
-                  label: Text('${text.addImages} ${images.length}/3'),
-                ),
-              ],
+              icon: const Icon(Icons.add_photo_alternate_outlined),
+              label: Text(
+                  '${text.addImages} ${images.length}/$positivePromptPresetImageLimit'),
             ),
-            const SizedBox(height: 10),
+          ),
+          if (active != null) ...[
+            const SizedBox(height: 8),
             AspectRatio(
               aspectRatio: 16 / 9,
               child: Material(
                 color: Theme.of(context).colorScheme.surfaceContainerLowest,
                 borderRadius: BorderRadius.circular(12),
                 clipBehavior: Clip.antiAlias,
-                child: active == null
-                    ? InkWell(
-                        onTap: () => _importImages(state, preset),
-                        child: const Center(
-                            child: Icon(Icons.image_outlined, size: 42)),
-                      )
-                    : InkWell(
-                        onTap: () => _showImage(preset, active),
-                        child: imageFile(
-                          File(active.filePath),
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Center(
-                            child: Icon(Icons.broken_image_outlined, size: 42),
-                          ),
-                        ),
-                      ),
-              ),
-            ),
-            if (images.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 76,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: images.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final image = images[index];
-                    return Stack(
-                      children: [
-                        InkWell(
-                          onTap: () =>
-                              setState(() => _activeImageId = image.id),
-                          onLongPress: () => _showImage(preset, image),
-                          child: Container(
-                            width: 94,
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: image.id == active?.id
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context)
-                                        .colorScheme
-                                        .outlineVariant,
-                                width: image.id == active?.id ? 2 : 1,
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            clipBehavior: Clip.antiAlias,
-                            child: imageFile(File(image.filePath),
-                                fit: BoxFit.cover),
-                          ),
-                        ),
-                        Positioned(
-                          top: 2,
-                          right: 2,
-                          child: IconButton.filledTonal(
-                            visualDensity: VisualDensity.compact,
-                            tooltip: text.delete,
-                            onPressed: _busy
-                                ? null
-                                : () async {
-                                    await state.removePositivePromptPresetImage(
-                                      preset: preset,
-                                      image: image,
-                                    );
-                                    if (mounted) {
-                                      setState(() {
-                                        _activeImageId = preset.previewImages
-                                                .firstOrNull?.id ??
-                                            '';
-                                      });
-                                    }
-                                  },
-                            icon: const Icon(Icons.delete_outline, size: 17),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
+                child: InkWell(
+                  onTap: () => _showImage(preset, active),
+                  child: imageFile(
+                    File(active.filePath),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Center(
+                      child: Icon(Icons.broken_image_outlined, size: 42),
+                    ),
+                  ),
                 ),
               ),
-            ],
+            ),
           ],
-        ),
+          if (images.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 76,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: images.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final image = images[index];
+                  return Stack(
+                    children: [
+                      InkWell(
+                        onTap: () => setState(() => _activeImageId = image.id),
+                        onLongPress: () => _showImage(preset, image),
+                        child: Container(
+                          width: 94,
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: image.id == active?.id
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .outlineVariant,
+                              width: image.id == active?.id ? 2 : 1,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: imageFile(File(image.filePath),
+                              fit: BoxFit.cover),
+                        ),
+                      ),
+                      Positioned(
+                        top: 2,
+                        right: 2,
+                        child: IconButton.filledTonal(
+                          visualDensity: VisualDensity.compact,
+                          tooltip: text.delete,
+                          onPressed: _busy
+                              ? null
+                              : () async {
+                                  await state.removePositivePromptPresetImage(
+                                    preset: preset,
+                                    image: image,
+                                  );
+                                  if (mounted) {
+                                    setState(() {
+                                      _activeImageId = preset
+                                              .previewImages.firstOrNull?.id ??
+                                          '';
+                                    });
+                                  }
+                                },
+                          icon: const Icon(Icons.delete_outline, size: 17),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -638,8 +645,9 @@ class _PositivePromptPresetSheetState
   Widget _detail(
     AppState state,
     PositivePromptPreset? selected,
-    _PresetText text,
-  ) {
+    _PresetText text, {
+    bool showApply = true,
+  }) {
     if (selected == null) {
       return Center(child: Text(text.empty));
     }
@@ -671,38 +679,148 @@ class _PositivePromptPresetSheetState
           ),
         ),
         const SizedBox(height: 10),
-        _images(state, selected, text),
+        _referenceDisclosure(state, selected, text),
         const SizedBox(height: 12),
-        FilledButton.icon(
-          onPressed: () {
-            if (selected.captions.isNotEmpty) {
-              if (selected.captions.length > state.params.maxCharacterPrompts) {
-                setState(() => _message =
-                    characterPresetLabels(state.settings.language)[9]);
-                return;
-              }
-              final captions = selected.captions
-                  .map((c) => CharCaptionItem.fromJson(c.toJson()))
-                  .toList();
-              if (widget.onApplyCharacters != null) {
-                widget.onApplyCharacters!(captions);
-              } else {
-                state.extras.charCaptions = captions;
-                state.markCharacterChanged();
-              }
-            } else {
-              widget.onApply(selected.prompt);
-            }
-            Navigator.pop(context);
-          },
-          icon: const Icon(Icons.swap_horiz),
-          label: Text(selected.captions.isNotEmpty
-              ? "${characterPresetLabels(state.settings.language)[2]} · ${selected.captions.length}"
-              : text.apply),
-        ),
-        if (_message.isNotEmpty) ...[
+        if (showApply) _applyButton(state, selected, text),
+        if (showApply && _message.isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(_message, textAlign: TextAlign.center),
+        ],
+      ],
+    );
+  }
+
+  Widget _applyButton(
+      AppState state, PositivePromptPreset selected, _PresetText text,
+      {bool compact = false}) {
+    return FilledButton.icon(
+      key: const ValueKey('positive-preset-apply'),
+      onPressed: () {
+        if (selected.captions.isNotEmpty) {
+          if (selected.captions.length > state.params.maxCharacterPrompts) {
+            setState(() =>
+                _message = characterPresetLabels(state.settings.language)[9]);
+            return;
+          }
+          final captions = selected.captions
+              .map((c) => CharCaptionItem.fromJson(c.toJson()))
+              .toList();
+          if (widget.onApplyCharacters != null) {
+            widget.onApplyCharacters!(captions);
+          } else {
+            state.extras.charCaptions = captions;
+            state.markCharacterChanged();
+          }
+        } else {
+          widget.onApply(selected.prompt);
+        }
+        Navigator.pop(context);
+      },
+      icon: const Icon(Icons.swap_horiz),
+      label: Text(
+          selected.captions.isNotEmpty
+              ? "${characterPresetLabels(state.settings.language)[2]} · ${selected.captions.length}"
+              : compact
+                  ? characterPresetLabels(state.settings.language)[2]
+                  : text.apply,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis),
+    );
+  }
+
+  void _openDetails() {
+    _listOffsetBeforeDetails =
+        _listScroll.hasClients ? _listScroll.offset : null;
+    setState(() => _showDetails = true);
+  }
+
+  void _backToList() {
+    final offset = _listOffsetBeforeDetails;
+    setState(() => _showDetails = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _showDetails ||
+          offset == null ||
+          !_listScroll.hasClients) {
+        return;
+      }
+      final position = _listScroll.position;
+      _listScroll.jumpTo(
+        offset
+            .clamp(position.minScrollExtent, position.maxScrollExtent)
+            .toDouble(),
+      );
+    });
+  }
+
+  Widget _phonePresets(
+    AppState state,
+    List<PositivePromptPreset> presets,
+    PositivePromptPreset? selected,
+    _PresetText text,
+    bool keyboardOpen,
+  ) {
+    final details = _showDetails && selected != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: IndexedStack(
+            index: details ? 1 : 0,
+            sizing: StackFit.expand,
+            children: [
+              _presetList(presets, selected, text),
+              if (details)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: TextButton.icon(
+                        onPressed: _backToList,
+                        icon: const Icon(Icons.arrow_back),
+                        label: Text(text.backToPresets),
+                      ),
+                    ),
+                    Expanded(
+                        child:
+                            _detail(state, selected, text, showApply: false)),
+                  ],
+                )
+              else
+                const SizedBox.shrink(),
+            ],
+          ),
+        ),
+        if (!keyboardOpen && selected != null) ...[
+          const Divider(height: 1),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              child: Column(
+                children: [
+                  if (_message.isNotEmpty)
+                    Text(_message, textAlign: TextAlign.center),
+                  Row(
+                    children: [
+                      if (!details) ...[
+                        OutlinedButton(
+                          onPressed: _openDetails,
+                          child: Text(text.details,
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                          child: _applyButton(state, selected, text,
+                              compact: true)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ],
     );
@@ -761,20 +879,7 @@ class _PositivePromptPresetSheetState
           ),
         const SizedBox(height: 12),
         if ((_editingId ?? '').isNotEmpty && selected != null)
-          _images(state, selected, text)
-        else
-          Card.outlined(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  const Icon(Icons.add_photo_alternate_outlined, size: 34),
-                  const SizedBox(height: 8),
-                  Text(text.imageHint, textAlign: TextAlign.center),
-                ],
-              ),
-            ),
-          ),
+          _referenceDisclosure(state, selected, text),
         if (_message.isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(_message, textAlign: TextAlign.center),
@@ -817,6 +922,11 @@ class _PositivePromptPresetSheetState
     final selected = state.settings.positivePromptPresets
         .where((preset) => preset.id == _selectedId)
         .firstOrNull;
+    final visibleSelection =
+        presets.where((preset) => preset.id == _selectedId).firstOrNull;
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final compactDetails =
+        _showDetails && MediaQuery.sizeOf(context).width < 760;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -831,71 +941,85 @@ class _PositivePromptPresetSheetState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(text.title,
-                        style: Theme.of(context).textTheme.titleLarge),
                     Text(
+                      text.title,
+                      maxLines: keyboardOpen ? 1 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    if (!keyboardOpen)
+                      Text(
                         selected?.captions.isNotEmpty == true
                             ? "${mobileUiTextFor(state.settings.language, 'generate.characterPrompts')} · ${selected!.captions.length}"
                             : text.subtitle,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                   ],
                 ),
               ),
               IconButton(
+                tooltip:
+                    mobileUiTextFor(state.settings.language, 'common.close'),
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.close),
               ),
             ],
           ),
         ),
-        if (_editingId == null)
+        if (_editingId == null && !compactDetails)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
             child: Column(
               children: [
                 TextField(
                   controller: _search,
-                  onChanged: (_) => setState(() {}),
+                  onChanged: (_) => _filterChanged(),
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.search),
                     hintText: text.search,
                     suffixIcon: _search.text.isEmpty
                         ? null
                         : IconButton(
-                            onPressed: () => setState(_search.clear),
+                            onPressed: () {
+                              _search.clear();
+                              _filterChanged();
+                            },
                             icon: const Icon(Icons.clear),
                           ),
                     border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _startCreate(
-                            state.settings.positivePromptPresets, false),
-                        icon: const Icon(Icons.add),
-                        label: Text(text.create),
+                if (!keyboardOpen) const SizedBox(height: 8),
+                if (!keyboardOpen)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _startCreate(
+                              state.settings.positivePromptPresets, false),
+                          icon: const Icon(Icons.add),
+                          label: Text(text.create,
+                              maxLines: 2, overflow: TextOverflow.ellipsis),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: widget.currentPrompt.trim().isEmpty &&
-                                widget.currentCaptions.isEmpty
-                            ? null
-                            : () => _startCreate(
-                                state.settings.positivePromptPresets, true),
-                        icon: const Icon(Icons.push_pin_outlined),
-                        label: Text(text.saveCurrent),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: widget.currentPrompt.trim().isEmpty &&
+                                  widget.currentCaptions.isEmpty
+                              ? null
+                              : () => _startCreate(
+                                  state.settings.positivePromptPresets, true),
+                          icon: const Icon(Icons.push_pin_outlined),
+                          label: Text(text.saveCurrent,
+                              maxLines: 2, overflow: TextOverflow.ellipsis),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -910,22 +1034,20 @@ class _PositivePromptPresetSheetState
                         children: [
                           SizedBox(
                             width: 310,
-                            child: _presetList(presets, selected, false),
+                            child: _presetList(presets, visibleSelection, text),
                           ),
                           const VerticalDivider(width: 1),
-                          Expanded(child: _detail(state, selected, text)),
+                          Expanded(
+                              child: _detail(state, visibleSelection, text)),
                         ],
                       );
                     }
-                    return Column(
-                      children: [
-                        SizedBox(
-                          height: 104,
-                          child: _presetList(presets, selected, true),
-                        ),
-                        const Divider(height: 1),
-                        Expanded(child: _detail(state, selected, text)),
-                      ],
+                    return _phonePresets(
+                      state,
+                      presets,
+                      visibleSelection,
+                      text,
+                      keyboardOpen,
                     );
                   },
                 ),
