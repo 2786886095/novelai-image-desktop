@@ -19,7 +19,7 @@ NovelAI 圖像創作工作臺，介面支援簡體中文、繁體中文、英語
 
 ## 本次更新
 
-桌面角色提示詞新增獨立工具列。桌面與手機支援 Pixiv／X 批次查詢、本機身分索引、權重及 NAI 4.5／V5 匯出。Danbooru 線上查詢及縮圖未驗收；未簽章 IPA 須自行簽章。
+手機角色預設改為全寬直向清單，支援搜尋與底部套用。從詳細資料返回時保留捲動位置，參考圖預設收合。桌面只同步版本，未簽章 IPA 須自行簽章。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

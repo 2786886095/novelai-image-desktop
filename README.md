@@ -24,7 +24,7 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 
 ## 本次更新
 
-桌面角色提示词新增独立工具栏。桌面与手机支持 Pixiv／X 连贴查询、本地身份索引、权重及 NAI 4.5／V5 导出。Danbooru 在线查询和缩略图未验收；未签名 IPA 须自行签名。
+手机角色预设使用全宽竖向列表、搜索和底部应用。从详情返回保留滚动位置；参考图默认折叠。桌面只同步版本，未签名 IPA 须自行签名。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
