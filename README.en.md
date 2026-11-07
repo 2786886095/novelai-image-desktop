@@ -19,7 +19,7 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-Mobile character presets use a full-width vertical list, search, and a bottom Apply action. Returning from details restores the scroll position; reference images are collapsed by default. Desktop only synchronizes the version; the unsigned IPA requires user signing.
+The desktop character prompt More menus are now clickable, and expanded toolbars are compact and right-aligned. Mobile only synchronizes the version. The unsigned IPA requires user signing.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
