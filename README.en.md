@@ -19,9 +19,7 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-- **Mobile artist pools**: popular ranking and whole-snapshot random selection coexist; explicit mirror updates enable offline reuse and preserve the old pool on failure/cancel.
-- **Bounded resources and feedback**: reuse the desktop snapshot format, background parsing, selection limits and localized narrow-screen controls.
-- **Scope**: mobile shared-code changes; desktop already has this feature and only synchronizes the version/build. Five fresh builds, 152 candidate tests; physical-device/full acceptance remains incomplete. Unsigned IPA requires user signing.
+Desktop character fields get independent prompt toolbars. Desktop and mobile support batch Pixiv/X lookup, offline identity indexes, weights, and NAI 4.5/V5 exports. Live Danbooru lookup and thumbnails are unverified; the unsigned IPA requires user signing.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
