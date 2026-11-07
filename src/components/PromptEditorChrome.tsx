@@ -10,9 +10,9 @@ export function SlidingPromptToolbar({children,language,onCollapse}:{children:Re
     <button ref={toggle} type="button" className="compact-icon-button prompt-toolbar-toggle" aria-label={open?labels.collapse:labels.expand} title={open?labels.collapse:labels.expand} aria-expanded={open} aria-controls={id} onClick={()=>{if(open)close();else setOpen(true);}}><Icon name={open?'chevronDown':'sparkles'}/></button>
   </div>;
 }
-export function PromptResizeHandle({language}:{language:unknown}) {
-  const ref=useRef<HTMLDivElement>(null),drag=useRef<{y:number;height:number}|null>(null),[height,setHeight]=useState(240),label=resolutionLabels(language).resize;
-  function resize(value:number|null){const editor=ref.current?.closest<HTMLElement>('.prompt-editor');if(!editor)return;const next=value===null?240:Math.max(140,Math.min(720,Math.round(value)));setHeight(next);if(value===null)editor.style.removeProperty('--prompt-editor-height');else editor.style.setProperty('--prompt-editor-height',`${next}px`);}
+export function PromptResizeHandle({language,initialHeight=240}:{language:unknown;initialHeight?:number}) {
+  const ref=useRef<HTMLDivElement>(null),drag=useRef<{y:number;height:number}|null>(null),[height,setHeight]=useState(initialHeight),label=resolutionLabels(language).resize;
+  function resize(value:number|null){const editor=ref.current?.closest<HTMLElement>('.prompt-editor');if(!editor)return;const next=value===null?initialHeight:Math.max(140,Math.min(720,Math.round(value)));setHeight(next);if(value===null)editor.style.removeProperty('--prompt-editor-height');else editor.style.setProperty('--prompt-editor-height',`${next}px`);}
   return <div ref={ref} className="prompt-resize-handle" role="separator" aria-orientation="horizontal" aria-label={label} title={label} tabIndex={0} aria-valuemin={140} aria-valuemax={720} aria-valuenow={height}
     onDoubleClick={()=>resize(null)} onKeyDown={e=>{if(e.key==='Home'){e.preventDefault();resize(null);}else if(e.key==='ArrowUp'||e.key==='ArrowDown'){e.preventDefault();resize(height+(e.key==='ArrowUp'?-20:20));}}}
     onPointerDown={e=>{if(e.button!==0)return;e.preventDefault();const textarea=ref.current?.closest('.prompt-editor')?.querySelector('textarea');if(!textarea)return;drag.current={y:e.clientY,height:textarea.getBoundingClientRect().height};e.currentTarget.setPointerCapture(e.pointerId);}}

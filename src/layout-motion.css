@@ -193,3 +193,6 @@ html .prompt-editor .prompt-toolbar-dock .prompt-toolbar-toggle {height:40px;min
 html .prompt-editor .prompt-toolbar-dock[data-open=true] .prompt-toolbar-toggle {border-radius:0 10px 10px 0;background:color-mix(in srgb,var(--bg-panel) 90%,var(--border));}
 @container(max-width:280px){html .prompt-editor .prompt-toolbar-dock{min-height:80px;}html .prompt-editor .prompt-toolbar-row.compact-prompt-toolbar{height:80px;grid-template-columns:repeat(4,minmax(0,1fr));}html .prompt-editor:has(.prompt-toolbar-dock[data-open=true]) .prompt-box{padding-bottom:96px!important;}}
 @media(pointer:coarse){html .prompt-editor .prompt-toolbar-dock{min-height:88px;}html .prompt-editor .prompt-toolbar-row.compact-prompt-toolbar{height:88px;}html .prompt-editor .prompt-toolbar-dock .compact-icon-button{height:44px;min-height:44px;max-height:44px;}html .prompt-editor:has(.prompt-toolbar-dock[data-open=true]) .prompt-box{padding-bottom:104px!important;}}
+
+/* Character cards keep a compact text area while sharing the main prompt dock. */
+html .prompt-editor.character-prompt-editor .prompt-box {height:var(--prompt-editor-height,144px)!important;}

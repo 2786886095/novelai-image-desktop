@@ -1137,6 +1137,109 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** Each mounted editor owns one character field, including history and async previews. */
+function CharacterPromptEditor({id, field, model, placeholder, label, onAutoComplete, extras}: {
+  id: string; field: "prompt" | "negativePrompt"; model: string; placeholder: string; label: string;
+  onAutoComplete: () => Promise<void>;
+  extras: (value: string, apply: (value: string) => void) => ReactNode;
+}) {
+  const settings = useAppStore(state => state.settings);
+  const value = useAppStore(state => state.charCaptions.find(c => c.id === id)?.[field] ?? "");
+  const language = settings?.language;
+  const text = getGeneratePanelText(language).prompt;
+  const editorText = promptEditorText(language);
+  const t = (key: string) => desktopUiText(language, key);
+  const [more, setMore] = useState(false);
+  const [tool, setTool] = useState<"translation" | "optimize" | "custom" | "weights" | "capsule" | "normalize" | null>(null);
+  const [backup, setBackup] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const context = JSON.stringify([id, field, model]);
+  const history = usePromptHistory(value, next => useAppStore.getState().updateCharCaption(id, {[field]: next}), context);
+  const weights = useMemo(() => splitPromptTags(value).map(parseWeightedTag), [value]);
+  const assistantMode = resolvePromptAssistantMode(settings);
+  const assistantVersion = settings?.promptAssistantTemplateVersion ?? settings?.convertPromptTemplateVersion ?? "v5";
+  const assistantEdition = skillVersionForModel(settings?.promptAssistantSkillVersion, assistantVersion);
+  const close = () => setTool(null);
+  function applyIfCurrent(next: string, expected: string) {
+    const current = useAppStore.getState().charCaptions.find(caption => caption.id === id);
+    if (!current || (current[field] ?? "") !== expected) {
+      useAppStore.getState().setToast(editorText.stale);
+      return false;
+    }
+    history.commit(next);
+    return true;
+  }
+  function addTag(tag: string) {
+    const prefix = value.trim().replace(/,\s*$/, "");
+    history.commit(prefix ? prefix + ", " + tag + ", " : tag + ", ");
+  }
+  return <div className="prompt-editor character-prompt-editor" data-character-field={field} role="group" aria-label={label}
+    onKeyDownCapture={event => {
+      if (!event.currentTarget.contains(event.target as Node) || event.nativeEvent.isComposing ||
+          !(event.target instanceof HTMLTextAreaElement) || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key !== "z" && key !== "y") return;
+      event.preventDefault(); event.stopPropagation();
+      if (key === "y" || event.shiftKey) history.redo(); else history.undo();
+    }}>
+    <PromptTextarea value={value} model={model} enabled={settings?.autoComplete ?? true} placeholder={placeholder}
+      className="char-prompt" onChange={next => history.commit(next, true)} />
+    <SlidingPromptToolbar language={language} onCollapse={() => setMore(false)}>
+      <div className="prompt-toolbar-row compact-prompt-toolbar" role="toolbar" aria-label={label + " · " + editorText.more}>
+        <CompactIconButton label={editorText.undo} icon="undo" disabled={!history.canUndo} onClick={() => history.undo()} />
+        <CompactIconButton label={editorText.redo} icon="redo" disabled={!history.canRedo} onClick={() => history.redo()} />
+        <CompactIconButton label={translationText(language).title} icon="globe" aria-haspopup="dialog" disabled={!value.trim()} onClick={() => setTool("translation")} />
+        {field === "prompt" && <>
+          <CompactIconButton label={editorText.optimize} icon="wand" aria-haspopup="dialog" disabled={!value.trim()} onClick={() => setTool("optimize")} />
+          <CompactIconButton label={editorText.custom} icon="sparkles" aria-haspopup="dialog" onClick={() => setTool("custom")} />
+        </>}
+        <CompactIconButton label={text.weightAdjust + " (" + weights.length + ")"} icon="sliders" aria-haspopup="dialog" disabled={!weights.length} onClick={() => setTool("weights")} />
+        <CompactIconButton label={text.capsuleTitle} icon="dice" aria-haspopup="dialog" onClick={() => setTool("capsule")} />
+        <PromptToolsPopover label={editorText.more} open={more} onOpenChange={setMore}>
+          {extras(value, next => history.commit(next))}
+          <CompactIconButton label={text.normalize} icon="sparkles" disabled={!value.trim()} onClick={() => {setMore(false);setTool("normalize");}} />
+          <CompactIconButton label={(settings?.autoComplete ?? true) ? text.autocompleteOn : text.autocompleteOff} icon="bulb" role="switch"
+            aria-checked={settings?.autoComplete ?? true} onClick={() => void onAutoComplete()} />
+          {backup !== null && <CompactIconButton label={text.restore} icon="undo" onClick={() => {history.commit(backup);setBackup(null);}} />}
+        </PromptToolsPopover>
+      </div>
+    </SlidingPromptToolbar>
+    <PromptResizeHandle language={language} initialHeight={144} />
+    {tool === "translation" && <TranslationPreview currentValue={value} context={context} language={language} onClose={close}
+      onApply={(next, expected, expectedContext) => {
+        if (expectedContext !== context || !applyIfCurrent(next, expected)) return false;
+        setBackup(expected); return true;
+      }} />}
+    {(tool === "optimize" || tool === "custom") && <PromptAssistant kind={tool} currentValue={value}
+      context={JSON.stringify([context, assistantMode, assistantVersion, assistantEdition, settings?.convertPromptTemplatesV2,
+        settings?.promptOptimizeTemplateV2, settings?.promptAssistantTemplateV2, settings?.convertPromptTemplates,
+        settings?.convertPromptTemplatesV45, settings?.convertSystemPrompt, settings?.promptOptimizeTemplate, settings?.promptAssistantTemplate])}
+      mode={assistantMode} version={assistantVersion} edition={assistantEdition} language={language} onClose={close} onApply={applyIfCurrent} />}
+    {tool === "weights" && <PromptWeightPanel title={text.weightAdjust} closeLabel={editorText.cancel} onClose={close}>
+      <div className="weight-editor">
+        <div className="weight-editor-hint">{text.weightHint}</div>
+        <div className="weight-tag-list">{weights.map((tag, index) =>
+          <div key={tag.core + ":" + index} className={clsx("weight-tag", tag.level > 0 && "up", tag.level < 0 && "down")}>
+            <button type="button" className="weight-btn" aria-label={text.decreaseWeight} title={text.decreaseWeight}
+              onClick={() => history.commit(setTagLevelInPrompt(value, index, tag.level - 1))}><Icon name="minus" /></button>
+            <span className="weight-tag-core" title={tag.raw}>{tag.core || text.emptyTag}
+              {tag.level !== 0 && <em>{formatMultiplier(tag.level)}</em>}</span>
+            <button type="button" className="weight-btn" aria-label={text.increaseWeight} title={text.increaseWeight}
+              onClick={() => history.commit(setTagLevelInPrompt(value, index, tag.level + 1))}><Icon name="plus" /></button>
+          </div>)}</div>
+      </div>
+    </PromptWeightPanel>}
+    {tool === "capsule" && <CapsuleEditor title={text.capsuleTitle} value={value} onChange={next => history.commit(next)} onAdd={addTag} onClose={close} language={language}>
+      <div className="prompt-chip-toolbar"><input className="prompt-chip-search" aria-label={text.capsuleSearchPlaceholder}
+        placeholder={text.capsuleSearchPlaceholder} value={query} onChange={event => setQuery(event.target.value)} /></div>
+      <CapsuleBrowser query={query} onPick={addTag} language={language} />
+    </CapsuleEditor>}
+    {tool === "normalize" && <PromptNormalizeModal value={value} onClose={close} onApply={next => {
+      history.commit(next); close(); useAppStore.getState().setToast(t("prompt.normalizedToast"));
+    }} />}
+  </div>;
+}
+
 // ── Character Captions modal ──────────────────────────────────────────────────
 export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   const language = useAppStore((state) => state.settings?.language);
@@ -1277,51 +1380,21 @@ export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
               </div>
               <AnimatedCollapse open={!collapsed} id={contentId}>
               <div className="char-row-content">
-                <div
-                  className="char-prompt-tools"
-                  role="group"
-                  aria-label={t("character.title")}
-                >
-                  <button
-                    type="button"
-                    className={clsx("prompt-tool-btn", (settings?.autoComplete ?? true) && "tool-on")}
-                    title={generateText.prompt.autocompleteTitle}
-                    onClick={() => void toggleCharacterAutoComplete()}
-                  >
-                    <Icon name="bulb" />
-                    <span>{(settings?.autoComplete ?? true) ? generateText.prompt.autocompleteOn : generateText.prompt.autocompleteOff}</span>
-                  </button>
-                  <PromptChunkControl
-                    value={cc.prompt}
-                    onApply={(prompt) => updateCharCaption(cc.id, { prompt })}
-                  />
-                  <PositivePromptPresetControl
-                    character={cc}
-                    onApplyCharacters={captions=>{if(captions.length===1)updateCharCaption(cc.id,captions[0]);else setCharCaptions(normalizeCharacterCaptions(captions));}}
-                    value={cc.prompt}
-                    onApply={(prompt) => updateCharCaption(cc.id, { prompt })}
-                  />
-                </div>
-                <PromptTextarea
-                  value={cc.prompt}
-                  model={params.model}
-                  enabled={settings?.autoComplete ?? true}
-                  placeholder={t("character.placeholder")}
-                  className="char-prompt"
-                  onChange={(prompt) => updateCharCaption(cc.id, { prompt })}
-                />
-                {!characterMediumEffort && <><label className="field">
+                <CharacterPromptEditor id={cc.id} field="prompt" model={characterModel}
+                  label={generateText.prompt.positivePlaceholder} placeholder={t("character.placeholder")}
+                  onAutoComplete={toggleCharacterAutoComplete}
+                  extras={(value, apply) => <>
+                    <PositivePromptPresetControl compact character={cc} value={value} onApply={apply}
+                      onApplyCharacters={captions=>{if(captions.length===1)updateCharCaption(cc.id,captions[0]);else setCharCaptions(normalizeCharacterCaptions(captions));}} />
+                    <PromptChunkControl compact value={value} onApply={apply} placement="top-right" />
+                  </>} />
+                {!characterMediumEffort && <>
                   <span>{t("character.negative")}</span>
-                  <PromptTextarea
-                    value={cc.negativePrompt ?? ""}
-                    model={params.model}
-                    enabled={settings?.autoComplete ?? true}
-                    placeholder={t("character.negativePlaceholder")}
-                    className="char-prompt"
-                    onChange={(negativePrompt) => updateCharCaption(cc.id, { negativePrompt })}
-                  />
-                </label>
-                <NegativePromptLibraryControl value={cc.negativePrompt ?? ""} onApply={negativePrompt=>updateCharCaption(cc.id,{negativePrompt})}/></>}
+                  <CharacterPromptEditor id={cc.id} field="negativePrompt" model={characterModel}
+                    label={t("character.negative")} placeholder={t("character.negativePlaceholder")}
+                    onAutoComplete={toggleCharacterAutoComplete}
+                    extras={(value, apply) => <NegativePromptLibraryControl value={value} onApply={apply} />} />
+                </>}
                 {cc.useCoords && (
                   <div className="char-coords" aria-label={t("character.exactPosition")}>
                     <NumberInput

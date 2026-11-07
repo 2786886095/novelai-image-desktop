@@ -79,8 +79,8 @@ describe("desktop UI consistency guards", () => {
       source.indexOf("function StylePresetImagesModal"),
     );
     expect(characterModal).toContain("toggleCharacterAutoComplete");
-    expect(characterModal).toContain('<Icon name="bulb" />');
-    expect(characterModal.match(/<PromptTextarea/g)).toHaveLength(2);
+    expect(characterModal.match(/<CharacterPromptEditor/g)).toHaveLength(2);
+    expect(source.slice(source.indexOf("function CharacterPromptEditor"),source.indexOf("function CharCaptionsModal"))).toContain('icon="bulb"');
     expect(characterModal).toContain("<PromptChunkControl");
     expect(characterModal).toContain("<PositivePromptPresetControl");
     expect(chunks).toContain('setSetting("promptChunks", next)');
