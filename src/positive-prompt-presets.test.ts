@@ -65,7 +65,8 @@ describe('positive/negative preset layout integration', () => {
 
   it('places both libraries first in More without consuming a main-toolbar slot', () => {
     const app = source('./App.tsx');
-    const toolbar = app.slice(app.indexOf('<SlidingPromptToolbar language={settings?.language}'), app.indexOf('</SlidingPromptToolbar>'));
+    const mainToolbarStart = app.indexOf('<SlidingPromptToolbar language={settings?.language}');
+    const toolbar = app.slice(mainToolbarStart, app.indexOf('</SlidingPromptToolbar>', mainToolbarStart));
     expect(toolbar).not.toContain('data-preset-toolbar');
     const translation = toolbar.indexOf('label={translationText(settings?.language).title}');
     const positive = toolbar.indexOf('<PositivePromptPresetControl compact');

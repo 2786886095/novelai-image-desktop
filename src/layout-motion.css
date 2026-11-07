@@ -154,6 +154,8 @@ html .prompt-editor .prompt-toolbar-reveal {transition:clip-path 180ms cubic-bez
 html .prompt-editor .prompt-toolbar-dock[data-open=true] .prompt-toolbar-reveal {transition:clip-path 280ms cubic-bezier(.2,0,0,1),opacity 240ms cubic-bezier(.2,0,0,1),visibility 0s;}
 @container(max-width:280px){html .prompt-editor .prompt-toolbar-dock{min-height:72px;}html .prompt-editor .prompt-toolbar-row.compact-prompt-toolbar{height:72px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));}html .prompt-editor .prompt-toolbar-dock .prompt-toolbar-toggle{align-self:flex-end;}}
 html .prompt-tools-popover {position:fixed;z-index:1200;display:flex;gap:4px;align-items:center;flex-wrap:wrap;width:max-content;max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);overflow:auto;padding:8px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-dialog);color:var(--text-primary);box-shadow:0 8px 24px #0003;transform-origin:bottom right;animation:prompt-tools-in 240ms cubic-bezier(.2,0,0,1);}
+/* A dialog-owned root portal is painted after its opener at the same layer. Later dialogs stay above it. */
+html .prompt-tools-popover[data-in-dialog] {z-index:var(--z-overlay);}
 html .prompt-tools-popover .compact-icon-button {width:36px;height:36px;min-height:36px;background:transparent;border-color:transparent;}
 html .prompt-tools-popover .compact-icon-button:hover {background:var(--accent-soft);}
 html .prompt-tools-popover[data-disclosure-open=false] {pointer-events:none;animation:prompt-tools-out 120ms cubic-bezier(.4,0,1,1) forwards;}
@@ -194,5 +196,6 @@ html .prompt-editor .prompt-toolbar-dock[data-open=true] .prompt-toolbar-toggle 
 @container(max-width:280px){html .prompt-editor .prompt-toolbar-dock{min-height:80px;}html .prompt-editor .prompt-toolbar-row.compact-prompt-toolbar{height:80px;grid-template-columns:repeat(4,minmax(0,1fr));}html .prompt-editor:has(.prompt-toolbar-dock[data-open=true]) .prompt-box{padding-bottom:96px!important;}}
 @media(pointer:coarse){html .prompt-editor .prompt-toolbar-dock{min-height:88px;}html .prompt-editor .prompt-toolbar-row.compact-prompt-toolbar{height:88px;}html .prompt-editor .prompt-toolbar-dock .compact-icon-button{height:44px;min-height:44px;max-height:44px;}html .prompt-editor:has(.prompt-toolbar-dock[data-open=true]) .prompt-box{padding-bottom:104px!important;}}
 
-/* Character cards keep a compact text area while sharing the main prompt dock. */
+/* Keep the main prompt proportions in the wider character cards without narrowing the text box. */
+html .prompt-editor.character-prompt-editor .prompt-toolbar-dock {left:auto;width:min(calc(100% - 16px),408px);}
 html .prompt-editor.character-prompt-editor .prompt-box {height:var(--prompt-editor-height,144px)!important;}

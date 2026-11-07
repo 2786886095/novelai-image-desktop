@@ -4,7 +4,7 @@ import {Icon} from './icons';
 import {useDisclosurePresence,disclosureAttributes} from './disclosure-motion';
 
 /** Root overlay: the toolbar reveal intentionally clips, its actions must not. */
-export function PromptToolsPopover({label,open,onOpenChange,children}:{label:string;open:boolean;onOpenChange:(open:boolean)=>void;children:ReactNode}){
+export function PromptToolsPopover({label,open,onOpenChange,children,inDialog=false}:{label:string;open:boolean;onOpenChange:(open:boolean)=>void;children:ReactNode;inDialog?:boolean}){
  const trigger=useRef<HTMLButtonElement>(null),panel=useRef<HTMLDivElement>(null),id=useId();
  const internalPointerEvents=useRef(new WeakSet<Event>());
  const retained=useDisclosurePresence(open),close=useRef(onOpenChange);close.current=onOpenChange;
@@ -22,5 +22,5 @@ export function PromptToolsPopover({label,open,onOpenChange,children}:{label:str
   return()=>{observer.disconnect();window.removeEventListener('resize',position);window.removeEventListener('scroll',position,true);document.removeEventListener('pointerdown',pointer);};
  },[open]);
  return <><button ref={trigger} type="button" className="compact-icon-button" title={label} aria-label={label} aria-expanded={open} aria-controls={id} onClick={()=>onOpenChange(!open)} onKeyDown={e=>{if(e.key==='Escape'&&open){e.preventDefault();e.stopPropagation();onOpenChange(false);}if(e.key==='ArrowDown'){e.preventDefault();onOpenChange(true);requestAnimationFrame(()=>panel.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus());}}}><Icon name="moreHorizontal"/></button>
- {retained&&<AppPortal><div ref={panel} id={id} className="prompt-tools-popover" role="group" aria-label={label} {...disclosureAttributes(open)} onPointerDownCapture={e=>internalPointerEvents.current.add(e.nativeEvent)} onKeyDown={e=>{if(!e.currentTarget.contains(e.target as Node))return;if(e.key==='Escape'){e.preventDefault();e.stopPropagation();onOpenChange(false);trigger.current?.focus({preventScroll:true});}}}>{children}</div></AppPortal>}</>;
+ {retained&&<AppPortal><div ref={panel} id={id} className="prompt-tools-popover" data-in-dialog={inDialog||undefined} role="group" aria-label={label} {...disclosureAttributes(open)} onPointerDownCapture={e=>internalPointerEvents.current.add(e.nativeEvent)} onKeyDown={e=>{if(!e.currentTarget.contains(e.target as Node))return;if(e.key==='Escape'){e.preventDefault();e.stopPropagation();onOpenChange(false);trigger.current?.focus({preventScroll:true});}}}>{children}</div></AppPortal>}</>;
 }

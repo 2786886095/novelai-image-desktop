@@ -1195,7 +1195,7 @@ function CharacterPromptEditor({id, field, model, placeholder, label, onAutoComp
         </>}
         <CompactIconButton label={text.weightAdjust + " (" + weights.length + ")"} icon="sliders" aria-haspopup="dialog" disabled={!weights.length} onClick={() => setTool("weights")} />
         <CompactIconButton label={text.capsuleTitle} icon="dice" aria-haspopup="dialog" onClick={() => setTool("capsule")} />
-        <PromptToolsPopover label={editorText.more} open={more} onOpenChange={setMore}>
+        <PromptToolsPopover label={editorText.more} open={more} onOpenChange={setMore} inDialog>
           {extras(value, next => history.commit(next))}
           <CompactIconButton label={text.normalize} icon="sparkles" disabled={!value.trim()} onClick={() => {setMore(false);setTool("normalize");}} />
           <CompactIconButton label={(settings?.autoComplete ?? true) ? text.autocompleteOn : text.autocompleteOff} icon="bulb" role="switch"
