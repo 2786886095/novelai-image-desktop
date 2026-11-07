@@ -1741,6 +1741,8 @@ export interface ImportedParams {
 export type CopyImageMetadataResult = { status: "copied" | "unsupported" | "failed" };
 
 export interface NaiDesktopApi {
+  artistLookupRead(kind: "identity", input: string): Promise<import("./artist-lookup").ArtistHit[]>;
+  artistLookupRead(kind: "preview", input: string): Promise<import("./artist-lookup").ArtistPreview[]>;
   /** Fixed public official parser assets only; never image bytes or account credentials. */
   fetchOfficialMetadataAsset?: (assetId: string) => Promise<Uint8Array>;
   cancelOfficialMetadataAssetDownloads?: () => Promise<void>;

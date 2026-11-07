@@ -3,6 +3,7 @@ import {getPromptTemplateLibrary, mutatePromptTemplateLibrary} from './ipc/templ
 import { registerComfyIpc, comfyHasActiveJobs, cancelComfyJobs, comfyNeedsQuitCleanup, shutdownOwnedComfy, shutdownOwnedComfySync, resetComfyAfterUpdateFailure } from "./ipc/comfyui-ipc";
 import {UiFontRepository} from "./ipc/ui-fonts";
 import { fetchOfficialMetadataAsset, cancelOfficialMetadataAssetDownloads } from "./ipc/official-metadata-assets";
+import {registerArtistLookupIpc} from "./ipc/artist-lookup";
 import crypto from "node:crypto";
 import {startMcpServer, type McpServerHandle} from "./ipc/mcp-server";
 import {readAgentClipboardFiles} from './ipc/agent-clipboard';
@@ -874,6 +875,7 @@ function registerIpc() {
   ipcMain.handle("promptCodex:cache", () => loadPromptCodexCache());
   ipcMain.handle("promptCodex:bundled", () => loadBundledPromptCodex());
   ipcMain.handle("promptCodex:update", () => updatePromptCodex());
+  registerArtistLookupIpc();
   ipcMain.handle("artistLab:pickTarget", (_event, sourcePath?: string) => pickArtistLabTarget(sourcePath));
   ipcMain.handle("artistDetective:status", () => detectiveStatus());
 ipcMain.handle("artistDetective:downloadStatus", () => detectiveDownloadStatus());

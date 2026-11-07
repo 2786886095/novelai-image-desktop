@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'artist_identity_index.dart';
 import 'dart:async';
 import 'dart:math';
 
@@ -177,36 +178,54 @@ class ArtistTagService {
 
   /// Only Danbooru is contacted. External profile URLs are search terms, never
   /// fetch targets. Identity matches are presented for user review, not guessed.
-  Future<List<ArtistIdentity>> lookup(AppSettings settings,String input) async {
-    final query=artistIdentityQuery(input);
-    final client=_client(settings);
+  Future<dynamic> _lookupJson(AppSettings settings, Uri uri) async {
+    final client = _client(settings);
     try {
-      final uri=Uri.https('danbooru.donmai.us','/artists.json',{
-        'limit':'20','search[is_deleted]':'false',
-        query.isUrl?'search[url_matches]':'search[any_name_matches]':query.value,
-        'only':'id,name,other_names,urls,is_deleted,is_banned',
-      });
-      final request=http.Request('GET',uri)..headers.addAll({
-        'Accept':'application/json',
-        'User-Agent':'Langbai-NovelAI-Studio-Mobile/Artist-Lookup',
-      });
-      final response=await client.send(request).timeout(const Duration(seconds:30));
-      if(response.statusCode<200||response.statusCode>=300) {
-        throw http.ClientException('Danbooru HTTP ${response.statusCode}');
-      }
-      final buffer=<int>[];
-      await (() async {
-        await for(final chunk in response.stream) {
-          if(buffer.length+chunk.length>2*1024*1024) throw const FormatException('Artist response too large.');
+      return await (() async {
+        final request = http.Request('GET', uri)..followRedirects = false;
+        request.headers.addAll({
+          'Accept': 'application/json',
+          'User-Agent': 'Langbai-NovelAI-Studio-Mobile/Artist-Lookup',
+        });
+        final response = await client.send(request);
+        if (response.statusCode != 200) throw http.ClientException('Danbooru HTTP ${response.statusCode}');
+        final buffer = <int>[];
+        await for (final chunk in response.stream) {
+          if (buffer.length + chunk.length > 1024 * 1024) throw const FormatException('Artist response too large');
           buffer.addAll(chunk);
         }
-      })().timeout(const Duration(seconds:30));
-      final data=jsonDecode(utf8.decode(buffer));
-      if(data is! List) throw const FormatException('Invalid artist response.');
-      return data.whereType<Map>().where((r)=>r['is_deleted']!=true)
-        .map((r)=>ArtistIdentity.fromJson(Map<String,dynamic>.from(r)))
-        .where((r)=>r.id>0&&r.tag.isNotEmpty).take(20).toList();
-    } finally {client.close();}
+        return jsonDecode(utf8.decode(buffer));
+      })().timeout(const Duration(seconds: 8));
+    } finally { client.close(); }
+  }
+
+  Future<List<ArtistIdentity>> lookup(AppSettings settings, String input) async {
+    final query = lookupProfile(input);
+    if (query == null) throw const InvalidArtistQuery('Invalid artist query.');
+    final data = await _lookupJson(settings, Uri.https('danbooru.donmai.us', '/artists.json', {
+      'limit':'20', 'search[is_deleted]':'false',
+      query.isUrl ? 'search[url_matches]' : 'search[any_name_matches]':query.value,
+      'only':'id,name,other_names,urls,is_deleted,is_banned',
+    }));
+    if (data is! List) throw const FormatException('Invalid artist response');
+    final rows = <ArtistIdentity>[];
+    for (final row in data.take(20)) {
+      if (row is! Map || row['is_deleted'] == true || row['is_banned'] == true) continue;
+      final id = row['id'], tag = row['name'];
+      final urls = row['urls'] is List ? artistIdentityUrls(row['urls'] as List) : <String>[];
+      if (id is! int || id <= 0 || tag is! String || !validLookupTag(tag) || query.isUrl && !urls.contains(query.value)) continue;
+      rows.add(ArtistIdentity(id, tag, urls, (row['other_names'] is List ? row['other_names'] as List : const []).whereType<String>().take(12).toList()));
+    }
+    return rows;
+  }
+
+  Future<List<ArtistPreview>> lookupRecentPreviews(AppSettings settings, String tag) async {
+    if (!validLookupTag(tag)) throw const InvalidArtistQuery('Invalid artist tag.');
+    final uri = Uri.https('danbooru.donmai.us', '/posts.json', {
+      'limit':'8', 'tags':'$tag rating:g',
+      'only':'id,created_at,rating,is_deleted,preview_file_url',
+    });
+    return parseLookupPreviews(await _lookupJson(settings, uri));
   }
 
   static const _cacheKey = 'artist_lab_popular_pool_v2';

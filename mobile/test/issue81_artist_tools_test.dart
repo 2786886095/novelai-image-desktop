@@ -139,7 +139,7 @@ void main() {
                     {
                       'id': 2,
                       'name': 'verified_artist_(different)',
-                      'urls': []
+                      'urls': [{'url': 'https://twitter.com/verified'}]
                     },
                     {'id': 3, 'name': 'deleted', 'is_deleted': true}
                   ]),
@@ -149,7 +149,7 @@ void main() {
         await service.lookup(AppSettings(), 'https://x.com/verified');
     expect(result.length, 2);
     expect(result.first.naiPrompt, '1.0::artist:verified_artist ::');
-    expect(result.first.urls, ['https://x.com/verified']);
+    expect(result.first.urls, ['https://twitter.com/verified']);
     expect(requests.single.host, 'danbooru.donmai.us');
     expect(requests.single.path, '/artists.json');
     expect(requests.single.queryParameters['search[url_matches]'],

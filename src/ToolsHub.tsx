@@ -34,6 +34,8 @@ function createPreloadedTool(
 const comicTool = createPreloadedTool(() => import("./comic/TagComicGenerator").then((module) => ({ default: module.TagComicGenerator })));
 const japaneseComicTool = createPreloadedTool(() => import("./comic/TagComicGenerator").then((module) => ({ default: (props:ToolScreenProps) => <module.TagComicGenerator {...props} scope="jp-comic" /> })));
 const redrawTool = createPreloadedTool(() => import("./ComicGenerator").then((module) => ({ default: module.BatchRedraw })));
+const artistLookupTool = createPreloadedTool(() => import("./ArtistLookup"));
+const ArtistLookup = artistLookupTool.Component;
 const artistLabTool = createPreloadedTool(() => import("./ArtistLab"));
 const promptCodexTool = createPreloadedTool(() => import("./PromptCodex"));
 const v5ArtistRepairTool = createPreloadedTool(() => import("./V5ArtistWeightRepair"));
@@ -49,12 +51,13 @@ const V5ArtistWeightRepair = v5ArtistRepairTool.Component;
 const ComfyLocalTool = comfyLocalTool.Component;
 const ArtistStringWeightDraw = artistStringDrawTool.Component;
 
-type ToolId = "hub" | "comic" | "japaneseComic" | "redraw" | "artistLab" | "promptCodex" | "v5ArtistRepair" | "artistStringDraw" | "comfyuiLocal";
+type ToolId = "hub" | "comic" | "japaneseComic" | "redraw" | "artistLab" | "artistLookup" | "promptCodex" | "v5ArtistRepair" | "artistStringDraw" | "comfyuiLocal";
 
 const TOOL_ICONS: Record<Exclude<ToolId, "hub">, IconName> = {
   comic: "collections",
   japaneseComic: "collections",
   redraw: "draw",
+  artistLookup: "search",
   artistLab: "palette",
   promptCodex: "code",
   v5ArtistRepair: "restore",
@@ -66,6 +69,7 @@ const TOOL_LOADERS: Partial<Record<ToolId, () => Promise<void>>> = {
   comic: comicTool.preload,
   japaneseComic: japaneseComicTool.preload,
   redraw: redrawTool.preload,
+  artistLookup: artistLookupTool.preload,
   artistLab: artistLabTool.preload,
   promptCodex: promptCodexTool.preload,
   v5ArtistRepair: v5ArtistRepairTool.preload,
@@ -141,6 +145,7 @@ export default function ToolsHub() {
     if (capture === "japanese-comic") return "japaneseComic";
     if (capture === "v5ArtistRepair") return "v5ArtistRepair";
     if (capture === "artistStringDraw") return "artistStringDraw";
+    if (capture === "artistLookup") return "artistLookup";
     if (capture === "randomArtist") return isWindows ? "artistLab" : "hub";
     // A fresh application session always enters the lightweight index. Restoring
     // a previously-opened heavy tool here made the top-level Tools tab appear to
@@ -178,6 +183,7 @@ export default function ToolsHub() {
         {activeTool === "japaneseComic" ? <JapaneseComicGenerator onBack={back} /> : null}
         {activeTool === "redraw" ? <BatchRedraw onBack={back} /> : null}
         {activeTool === "promptCodex" ? <PromptCodex onBack={back} /> : null}
+        {activeTool === "artistLookup" ? <ArtistLookup onBack={back} /> : null}
         {activeTool === "artistLab" && isWindows ? <ArtistLab onBack={back} /> : null}
         {activeTool === "v5ArtistRepair" ? <V5ArtistWeightRepair onBack={back} /> : null}
         {activeTool === "artistStringDraw" ? <ArtistStringWeightDraw onBack={back} /> : null}
@@ -196,6 +202,7 @@ export default function ToolsHub() {
         <button type="button" className="tool-card ready" {...toolCardHandlers("comic")} onClick={() => setActiveTool("comic")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.comic} /></i><b>{text.comicTitle}</b></span><span>{text.comicDesc}</span><small>{text.ready}</small></button>
         <button type="button" className="tool-card ready" {...toolCardHandlers("promptCodex")} onClick={() => setActiveTool("promptCodex")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.promptCodex} /></i><b>{codexText.title}</b></span><span>{codexText.desc}</span><small>{text.ready}</small></button>
         <button type="button" className="tool-card ready" {...toolCardHandlers("redraw")} onClick={() => setActiveTool("redraw")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.redraw} /></i><b>{text.batchTitle}</b></span><span>{text.batchDesc}</span><small>{text.ready}</small></button>
+        <button type="button" className="tool-card ready" {...toolCardHandlers("artistLookup")} onClick={() => setActiveTool("artistLookup")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.artistLookup} /></i><b>{String(language ?? "zh-CN").startsWith("zh") ? "画师链接查询" : "Artist profile lookup"}</b></span><span>Pixiv / X · Danbooru · NovelAI</span><small>{text.ready}</small></button>
         {isWindows ? <button type="button" className="tool-card ready" {...toolCardHandlers("artistLab")} onClick={() => setActiveTool("artistLab")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.artistLab} /></i><b>{text.artistLabTitle}</b></span><span>{text.artistLabDesc}</span><small>{text.ready}</small></button> : null}
         <button type="button" className="tool-card ready" {...toolCardHandlers("v5ArtistRepair")} onClick={() => setActiveTool("v5ArtistRepair")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.v5ArtistRepair} /></i><b>{text.v5ArtistRepairTitle}</b></span><span>{text.v5ArtistRepairDesc}</span><small>{text.ready}</small></button>
         <button type="button" className="tool-card ready" {...toolCardHandlers("artistStringDraw")} onClick={() => setActiveTool("artistStringDraw")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.artistStringDraw} /></i><b>{text.artistStringDrawTitle}</b></span><span>{text.artistStringDrawDesc}</span><small>{text.ready}</small></button>

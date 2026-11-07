@@ -234,6 +234,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   artistLabSelectedArtists: (requestId: string, count: number) => ipcRenderer.invoke("artistLab:selectedArtists", requestId, count),
   artistLabArtistTotal: (force = false) => ipcRenderer.invoke("artistLab:artistTotal", force),
   artistLabCancelArtistSync: (requestId: string) => ipcRenderer.invoke("artistLab:cancelSync", requestId),
+  artistLookupRead: (kind: "identity" | "preview", input: string) => ipcRenderer.invoke("artistLookup:read", kind, input),
   onArtistPoolSyncProgress: (callback: (progress: import("../src/artist-lab").ArtistPoolSyncProgress) => void) => {
     const listener = (_event: unknown, progress: import("../src/artist-lab").ArtistPoolSyncProgress) => callback(progress);
     ipcRenderer.on("artistLab:syncProgress", listener);

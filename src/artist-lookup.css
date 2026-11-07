@@ -1,0 +1,14 @@
+.artist-lookup { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.artist-lookup-panel { padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-panel); display: grid; gap: 10px; min-width: 0; }
+.artist-lookup-panel :is(h3,p,figure) { margin: 0; overflow-wrap: anywhere; }
+.artist-lookup-panel p { color: var(--text-secondary); }
+.artist-lookup-panel textarea { width: 100%; resize: vertical; min-width: 0; }
+.artist-lookup-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.artist-lookup-hit { display: grid; gap: 8px; padding-block: 12px; border-top: 1px solid var(--border); min-width: 0; }
+.artist-lookup-hit label { overflow-wrap: anywhere; }
+.artist-lookup-images { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,130px),1fr)); gap: 12px; }
+.artist-lookup-images figure { max-width: 200px; }
+.artist-lookup-images img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; }
+.artist-lookup-weight { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.artist-lookup-weight input { width: 7em; }
+.artist-lookup-panel summary { cursor: pointer; }
