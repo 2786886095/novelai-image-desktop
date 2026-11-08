@@ -353,7 +353,7 @@ void main() {
             })}');
         expect(observed, {
           'restoredFavoriteCount': 1,
-          'actualFavoriteSegmentPointerTap': true,
+          'actualResumeFavoritePointerTap': true,
           'actualSavedImagePreviewDoublePointerTap': true,
           'actualSavedOriginalPathAndDecodedDimensionsVerified': true,
         });

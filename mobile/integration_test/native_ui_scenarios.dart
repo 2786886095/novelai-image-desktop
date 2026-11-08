@@ -419,40 +419,31 @@ Future<void> _doubleTapArtistPreview(Element element) async {
 
 Future<Map<String, Object?>> verifyNativeArtistFavoriteReopened(
     HistoryItem saved) async {
+  // The app bar's resume action is the stable entry point after reopening.
+  // The Results/Favorites switch itself is a lazy child below the editor.
+  bool isResumeFavorite(Widget w) =>
+      w is IconButton &&
+      w.icon is Icon &&
+      (w.icon as Icon).icon == Icons.history &&
+      w.onPressed != null;
   await nativeUiWait(
-      () => nativeUiElements((w) =>
-          w is IconButton && w.icon is Icon &&
-          (w.icon as Icon).icon == Icons.history && w.onPressed != null)
-          .isNotEmpty,
+      () => nativeUiElements(isResumeFavorite).length == 1,
       'reopened artist library restored the saved Favorite');
-  await _revealArtist(
-      (w) => w is SegmentedButton<bool>, 'reopened Favorite selector');
-  final controls = nativeUiElements((w) => w is SegmentedButton<bool>);
-  require(controls.length == 1,
-      'Exactly one current artist result selector required');
-  final control = controls.single.widget as SegmentedButton<bool>;
-  final favorite = control.segments.singleWhere((segment) => segment.value);
-  require(
-      favorite.label is Text &&
-          ((favorite.label as Text).data?.endsWith(' (1)') ?? false),
-      'Reopened artist Favorite segment did not restore exactly one image');
-  final labels = <Element>[];
-  void findLabel(Element element) {
-    if (identical(element.widget, favorite.label)) labels.add(element);
-    element.visitChildren(findLabel);
-  }
 
-  controls.single.visitChildren(findLabel);
-  require(labels.length == 1, 'Exact restored Favorite segment label missing');
-  await nativeUiTap(labels.single);
+  final prefs = await SharedPreferences.getInstance();
+  const prefix = 'artist_lab_random_v1_';
+  final restored =
+      jsonDecode(prefs.getString('${prefix}favorites') ?? '[]') as List;
+  require(
+      restored.length == 1 &&
+          restored.single['liked'] == true &&
+          restored.single['image']['id'] == saved.id,
+      'Reopened artist library did not restore exactly the saved Favorite');
+
+  await nativeUiTap(nativeUiElements(isResumeFavorite).single);
   await nativeUiWait(
-      () =>
-          nativeUiElements((w) =>
-              w is SegmentedButton<bool> &&
-              w.selected.length == 1 &&
-              w.selected.contains(true)).length ==
-          1,
-      'actual restored Favorite segment selected by pointer');
+      () => prefs.getBool('${prefix}showFavorites') == true,
+      'actual Resume Favorite tap persisted the selected folder');
   final key = ValueKey('favorite:${saved.id}:0');
   await _revealArtist(
       (w) => w is RepaintBoundary && w.key == key, 'saved Favorite card');
@@ -520,7 +511,7 @@ Future<Map<String, Object?>> verifyNativeArtistFavoriteReopened(
       'actual Favorite preview closed by pointer');
   return {
     'restoredFavoriteCount': 1,
-    'actualFavoriteSegmentPointerTap': true,
+    'actualResumeFavoritePointerTap': true,
     'actualSavedImagePreviewDoublePointerTap': true,
     'actualSavedOriginalPathAndDecodedDimensionsVerified': true
   };
