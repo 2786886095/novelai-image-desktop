@@ -25,6 +25,7 @@ describe("assistant refusal prefix versus scene text", () => {
   it.each([
     "I'm sorry, but I can't assist with this request. I can describe non-sensitive elements instead.",
     "I cannot assist with generating that content.",
+    "I won't provide that description.",
     "Sorry, I can't help identify that person in the image.",
     "抱歉，我无法协助处理这个请求。我可以描述其他可见元素。",
     "我无法帮助识别图片中这个人的身份，但可以描述服装。",
@@ -40,6 +41,8 @@ describe("assistant refusal prefix versus scene text", () => {
     'Text: "I cannot assist with generating that content."',
     'A sign says "抱歉，我无法协助处理这个请求。"',
     "I can't help but notice a blue coat in the image.",
+    "I cannot help but notice a blue coat in the image.",
+    "I can’t help but notice a blue coat in the image.",
   ])("keeps quoted descriptions and cannot-help-but observations: %s", async content => {
     const result = await run(content);
     expect(result).toMatchObject({ ok: true, prompt: cleanPromptOutput(content) });

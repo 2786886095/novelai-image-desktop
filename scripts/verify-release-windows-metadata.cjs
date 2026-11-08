@@ -5,7 +5,9 @@ const version=readReleaseVersion(process.cwd());assert.equal(lock.version,versio
 const mobileVersion=fs.readFileSync('mobile/pubspec.yaml','utf8').match(/^version:\s+(\S+)\s*$/m)?.[1];
 assert.match(mobileVersion||'',new RegExp('^'+version.replaceAll('.', '\\.')+'\\+\\d+$'));
 assert.ok(fs.readFileSync('mobile/lib/models/nai_models.dart','utf8').includes(`const appVersion = '${version}';`));
-assert.ok(fs.readFileSync('electron/ipc/mcp-client.ts','utf8').includes(`version: "${version}"`));
+const mcpClient=fs.readFileSync('electron/ipc/mcp-client.ts','utf8');
+assert.ok(mcpClient.includes('import { version as packageVersion } from "../../package.json";'));
+assert.match(mcpClient,/const CLIENT_INFO = \{[^\n]*version: packageVersion\s*\}/);
 const locales=JSON.parse(fs.readFileSync('shared/agent-ux-locales.json','utf8'));
 assert.ok(JSON.stringify(locales).includes('使用酒馆'));
 // Current page entries move with Latest/main; real package/build versions above remain required.

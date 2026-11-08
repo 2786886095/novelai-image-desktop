@@ -21,7 +21,8 @@ describe("release version consistency", () => {
     expect(mobilePubspec).toMatch(
       new RegExp(`^version:\\s+${packageVersion.replaceAll(".", "\\.")}\\+\\d+$`, "m"),
     );
-    expect(mcpClient).toContain(`version: "${packageVersion}"`);
+    expect(mcpClient).toContain('import { version as packageVersion } from "../../package.json";');
+    expect(mcpClient).toMatch(/const CLIENT_INFO = \{[^\n]*version: packageVersion\s*\}/);
   });
 
   it("derives the desktop display version instead of hard-coding it", () => {

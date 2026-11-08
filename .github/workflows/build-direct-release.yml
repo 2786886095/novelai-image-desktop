@@ -53,6 +53,9 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Verify release metadata before packaging
+        if: matrix.name == 'linux'
+        run: node scripts/verify-release-windows-metadata.cjs
       - name: Verify Linux support policy before packaging
         if: matrix.name == 'linux'
         run: node --test scripts/feature-acceptance/linux-release-baseline.test.mjs

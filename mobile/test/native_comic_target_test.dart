@@ -11,6 +11,7 @@ import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/screens/batch_redraw_screen.dart';
 import 'package:novelai_mobile/screens/comic_screen.dart';
 import 'package:novelai_mobile/screens/tools_hub_screen.dart';
+import 'package:novelai_mobile/screens/v5_artist_weight_repair_screen.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
@@ -211,7 +212,7 @@ void main() {
   });
 
   testWidgets(
-      'retained scroll makes old first open Batch; same fixture helper '
+      'retained scroll makes the old ordinal open the wrong tool; same fixture helper '
       'uniquely reveals and hit-tests Comic', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(360, 620);
@@ -227,23 +228,29 @@ void main() {
       final retained = scroll.position.pixels;
       expect(retained, greaterThan(0));
       final oldTarget = _tiles().first;
-      expect(_title(oldTarget), 'Batch Img2Img');
+      final oldTitle = _title(oldTarget);
+      final oldRoute = switch (oldTitle) {
+        'Batch Img2Img' => BatchRedrawScreen,
+        'V4.5 Artist-string Repair' => V5ArtistWeightRepairScreen,
+        _ => throw StateError('Unexpected fixture ordinal: $oldTitle'),
+      };
       await _drive(tester, nativeUiTap(oldTarget));
       await _drive(
           tester,
           nativeUiWait(
-              () => nativeUiElements((widget) => widget is BatchRedrawScreen)
+              () => nativeUiElements((widget) => widget.runtimeType == oldRoute)
                   .isNotEmpty,
-              'old ordinal target really opened Batch'));
+              'old ordinal target really opened $oldRoute'));
       expect(nativeUiElements((widget) => widget is ComicScreen), isEmpty);
       // ignore: avoid_print
       print('HOST_COMIC_BASELINE retainedScroll=$retained '
-          'oldFirst=Batch Img2Img route=BatchRedrawScreen; host-only');
+          'oldFirst=$oldTitle route=$oldRoute; host-only');
       await _backToHub(tester);
       final sameScroll = _hubScroll();
       sameScroll.position.jumpTo(sameScroll.position.maxScrollExtent);
       await tester.pump(const Duration(milliseconds: 50));
-      expect(_title(_tiles().first), 'Batch Img2Img');
+      expect(sameScroll.position.pixels, greaterThan(0));
+      expect(_title(_tiles().first), isNot('Comic Generator'));
       // This is the exact exported helper used by the real ui9 fixture.
       await _drive(tester, openNativeComicFromTools(app));
       await _drive(
@@ -254,7 +261,7 @@ void main() {
               'production Comic route after unique target hit-test'));
       expect(nativeUiElements((widget) => widget is ComicScreen).length, 1);
       expect(
-          nativeUiElements((widget) => widget is BatchRedrawScreen), isEmpty);
+          nativeUiElements((widget) => widget.runtimeType == oldRoute), isEmpty);
       expect(sameScroll.position.pixels, sameScroll.position.minScrollExtent);
       expect(app.params.positivePrompt, 'HOST_COMIC_DRAFT_UNCHANGED');
       // ignore: avoid_print

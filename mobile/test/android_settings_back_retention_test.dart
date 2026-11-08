@@ -36,7 +36,8 @@ void main() {
       await tester.pumpAndSettle();
       final shell = find.byType(AndroidStudioShell);
       AndroidSettingsHub settings() =>
-          tester.widget<AndroidSettingsHub>(find.byType(AndroidSettingsHub));
+          tester.widget<AndroidSettingsHub>(
+            find.byType(AndroidSettingsHub, skipOffstage: false));
       int selectedIndex() =>
           tester.widget<AndroidStudioShell>(shell).selectedIndex;
       ModalRoute<dynamic> rootRoute() => ModalRoute.of(tester.element(shell))!;

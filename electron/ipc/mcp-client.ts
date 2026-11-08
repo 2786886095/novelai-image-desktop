@@ -16,7 +16,8 @@ import { spawn } from "child_process";
 import { EventEmitter } from "events";
 import { proxyConfig } from "./proxy";
 
-const CLIENT_INFO = { name: "langbai-novelai-studio", version: "2.7.2" };
+import { version as packageVersion } from "../../package.json";
+const CLIENT_INFO = { name: "langbai-novelai-studio", version: packageVersion };
 const PROTOCOL_VERSION = "2024-11-05";
 
 interface JsonRpcMessage {

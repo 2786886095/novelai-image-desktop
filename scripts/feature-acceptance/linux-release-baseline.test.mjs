@@ -37,11 +37,13 @@ test('all five README download rows disclose the target baseline and current Ubu
 test('direct packaging checks support policy and Dart analysis before building, without claiming native acceptance',()=>{
  const direct=yaml.load(read('.github/workflows/build-direct-release.yml'));
  const desktop=direct.jobs.desktop.steps;
- const policy=desktop.findIndex(s=>s.run==='node --test scripts/feature-acceptance/linux-release-baseline.test.mjs');
- assert(policy>desktop.findIndex(s=>s.run==='npm ci'));
- assert(policy<desktop.findIndex(s=>s.name.startsWith('Build app (')));
- assert.equal(desktop[policy].if,"matrix.name == 'linux'");
- assert.equal(desktop[policy]['continue-on-error'],undefined);
+ for(const command of ['node scripts/verify-release-windows-metadata.cjs','node --test scripts/feature-acceptance/linux-release-baseline.test.mjs']){
+   const index=desktop.findIndex(s=>s.run===command);
+   assert(index>desktop.findIndex(s=>s.run==='npm ci'));
+   assert(index<desktop.findIndex(s=>s.name.startsWith('Build app (')));
+   assert.equal(desktop[index].if,"matrix.name == 'linux'");
+   assert.equal(desktop[index]['continue-on-error'],undefined);
+ }
  for(const key of ['android','ios-package']){
    const steps=direct.jobs[key].steps;
    const analyze=steps.findIndex(s=>s.run==='flutter analyze --no-pub');

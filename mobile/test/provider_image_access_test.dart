@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:novelai_mobile/images/image_file_access.dart';
 import 'package:novelai_mobile/images/coordinated_file_image.dart';
@@ -19,6 +20,14 @@ final png = base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQV
 HistoryItem history(String path) => HistoryItem(id:'original',filePath:path,
   date:'2026-10-17',createdAt:'2026-10-17T00:00:00Z',seed:1,
   model:'nai-diffusion-5-full',width:1,height:1,prompt:'keep');
+class _FixturePaths extends PathProviderPlatform {
+  _FixturePaths(this.root);
+  final String root;
+
+  @override
+  Future<String?> getApplicationDocumentsPath() async => root;
+}
+
 class SessionStorage extends Storage {
   final File snapshot;
   ({File file,String name})? session;
@@ -76,6 +85,9 @@ void main() {
     permitted=true;expect(await reader.read('/provider/original.png'),png);expect(calls,2);
   });
   test('reconciliation retains unavailable external history and original persistent path',() async {
+    final previousPaths = PathProviderPlatform.instance;
+    PathProviderPlatform.instance = _FixturePaths(temp.path);
+    addTearDown(() => PathProviderPlatform.instance = previousPaths);
     final reader=ImageFileReader(coordinated:true,nativeRead:(p,n) async => throw PlatformException(code:'output_folder_permission'));
     final storage=Storage(imageReader:reader),item=history('/provider/date/original.png');
     await storage.writeHistory([item]);

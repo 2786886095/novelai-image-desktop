@@ -37,7 +37,7 @@ export function isExplicitPromptRefusal(text: string): boolean {
   // Do not constrain the refused object or reject only an exact one-sentence form:
   // a provider may explain its refusal or offer a different kind of assistance.
   // "can't help but notice" is an observation, not a refusal to help the user.
-  if (/^i(?:\s+(?:can't|cannot|can not)|(?:'m| am)\s+unable to)\s+(?:assist\b|comply\b|help\b(?!\s+but\b))/i.test(english)) return true;
+  if (/^i(?:\s+(?:can't|cannot|can not|won't|will not)|(?:'m| am)\s+unable to)\s+(?:assist\b|comply\b|help\b(?!\s+but\b)|(?:provide|generate|fulfill|complete)\b)/i.test(english)) return true;
   const apology = /^(?:很|非常)?(?:抱歉|对不起)[\s，,。:：]*(?:但(?:是)?[\s，,]*)?/;
   const chinese = normalized.replace(apology, "");
   return /^我(?:无法|不能|没办法)(?:为你|为您)?(?:帮助|协助|处理|完成|满足|提供)/.test(chinese)
