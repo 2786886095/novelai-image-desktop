@@ -204,6 +204,7 @@ export function defaultSettings(): AppSettings {
     automaticComparison: normalizeAutomaticComparison(null),
     theme: "light",
     reduceMotion: false,
+    closeToTray: false,
     completionSound: normalizeCompletionSound(null),
     autoComplete: true,
     weightHighlight: true,
@@ -321,6 +322,7 @@ function normalize(raw: Partial<PersistedData> | null): PersistedData {
   settings.uiTypography=normalizeTypography(rawSettings.uiTypography);
   settings.automaticComparison=normalizeAutomaticComparison(rawSettings.automaticComparison);
   settings.copyImageMetadata = rawSettings.copyImageMetadata === true;
+  settings.closeToTray = rawSettings.closeToTray === true;
   settings.agentApiProtocol = normalizeAgentProviderProtocol(settings.agentApiProtocol);
   settings.agentApiBaseUrl = typeof settings.agentApiBaseUrl === "string"
     ? normalizeAgentApiBaseUrl(settings.agentApiBaseUrl)
@@ -701,6 +703,7 @@ export function setSetting<K extends SettingKey>(key: K, value: AppSettings[K]):
   if (key === "mcpServerPort" && (typeof value !== "number" || !Number.isInteger(value) || value < 1024 || value > 65535)) throw new Error("Invalid MCP port");
   if (key === "mcpMaxAnlasPerCall" && (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100000)) throw new Error("Invalid MCP Anlas limit");
   if (key === "copyImageMetadata" && typeof value !== "boolean") throw new Error("Invalid image metadata copy setting");
+  if (key === "closeToTray" && typeof value !== "boolean") throw new Error("Invalid close-to-tray setting");
   if (key === "imageOutputFormat" && value !== "png" && value !== "webp") throw new Error("Invalid image output format");
   if(['apiBaseUrl','imageBaseUrl','allowCustomEndpoint','allowCustomEndpointFallback'].includes(key) && (currentNaiAccount() || naiAccountsBusy())) throw Error('账户接口由所选账户绑定；操作期间不能修改。');
   if(key==='imageProvider'&&value!=='novelai'&&value!=='openai-images')throw Error(NOVELAI_ONLY_MESSAGE);

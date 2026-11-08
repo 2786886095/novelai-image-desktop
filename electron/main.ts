@@ -1,3 +1,4 @@
+import { windowTrayText } from "../src/window-tray-text";
 import {runComicPromptRequest, cancelComicPromptRequest} from './ipc/nai';
 import {getPromptTemplateLibrary, mutatePromptTemplateLibrary} from './ipc/template-library';
 import { registerComfyIpc, comfyHasActiveJobs, cancelComfyJobs, comfyNeedsQuitCleanup, shutdownOwnedComfy, shutdownOwnedComfySync, resetComfyAfterUpdateFailure } from "./ipc/comfyui-ipc";
@@ -33,6 +34,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  Tray,
   session,
   shell,
 } from "electron";
@@ -317,6 +319,48 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let windowTray: Tray | null = null;
+let quittingMainWindow = false;
+
+function disposeWindowTray() {
+  const tray = windowTray;
+  windowTray = null;
+  if (tray && !tray.isDestroyed()) tray.destroy();
+}
+
+function revealMainWindow() {
+  const win = mainWindow;
+  if (!win || win.isDestroyed() || quittingMainWindow) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  disposeWindowTray();
+}
+
+function hideMainWindowToTray(win: BrowserWindow, iconPath: string): boolean {
+  if (process.platform !== "win32" || uiCapturePath || quittingMainWindow || getSetting("closeToTray") !== true) return false;
+  try {
+    if (!windowTray || windowTray.isDestroyed()) {
+      const icon = nativeImage.createFromPath(iconPath);
+      if (icon.isEmpty()) return false;
+      windowTray = new Tray(icon);
+      windowTray.setToolTip("Langbai NovelAI Studio");
+      const text = windowTrayText(getSetting("language"));
+      windowTray.setContextMenu(Menu.buildFromTemplate([
+        { label: text.open, click: revealMainWindow },
+        { label: text.quit, click: () => app.quit() },
+      ]));
+      windowTray.on("click", revealMainWindow);
+    }
+    win.hide();
+    return true;
+  } catch (error) {
+    // Never strand a window in the background when the system tray fails.
+    disposeWindowTray();
+    console.warn("[window-tray] Unable to hide window; using normal close.", error);
+    return false;
+  }
+}
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 
@@ -326,9 +370,7 @@ const relayLinks=createRelayLinkInbox({
   save:input=>importRelayAccount(input,()=>hasActiveAgentRequests()||comfyHasActiveJobs()||harnessNeedsExitConfirmation()||detectiveStatus().running,refreshStoredAccount),
   notify:notice=>{relayImportNotice=notice;if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('naiAccounts:relayImportNotice',notice);},
 });
-wireRelayLinkEvents(app,process.argv,url=>relayLinks.receive(url),()=>{
-  if(!mainWindow)return;if(mainWindow.isMinimized())mainWindow.restore();mainWindow.show();mainWindow.focus();
-});
+wireRelayLinkEvents(app,process.argv,url=>relayLinks.receive(url),revealMainWindow);
 
 /**
  * Right-click context menu for text fields: 剪切 / 复制 / 粘贴 / 全选. Electron
@@ -716,12 +758,17 @@ function createWindow() {
   }
 
   mainWindow.on("close", (event) => {
+    if (hideMainWindowToTray(startupWindow, iconPath)) {
+      event.preventDefault();
+      return;
+    }
     if (!harnessNeedsExitConfirmation()) return;
     event.preventDefault();
     void confirmHarnessExit(mainWindow).then(confirmed => { if (confirmed) mainWindow?.close(); });
   });
 
   mainWindow.on("closed", () => {
+    disposeWindowTray();
     mainWindow = null;
   });
 
@@ -1663,6 +1710,7 @@ let comfyQuitCleanupFinished = false;
 app.on("before-quit", (event) => {
   if (harnessNeedsExitConfirmation()) {
     event.preventDefault();
+    if (windowTray) revealMainWindow();
     void confirmHarnessExit(mainWindow).then(confirmed => { if (confirmed) app.quit(); });
     return;
   }
@@ -1677,11 +1725,13 @@ app.on("before-quit", (event) => {
     }
     return;
   }
+  quittingMainWindow = true;
   void stopAgentRuntime();
   void mcpServer?.close();
 });
 
 app.on("will-quit", () => {
+  disposeWindowTray();
   try { shutdownOwnedComfySync(); }
   catch (error) { console.warn("[comfyui] final owned-process cleanup failed", error); }
 });

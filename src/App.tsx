@@ -1,3 +1,4 @@
+import { windowTrayText } from "./window-tray-text";
 import {FilePicker} from './components/FilePicker';
 import {TemplateLibraryPanel, templateLibraryCopy} from './features/settings/TemplateLibraryPanel';
 import {ComicPromptComposer} from './comic/ComicPromptComposer';
@@ -5780,6 +5781,7 @@ function HistoryPanel() {
 const MemoizedHistoryPanel = memo(HistoryPanel);
 
 // ── Settings modal ────────────────────────────────────────────────────────────
+
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const ft=useFeatureText();
   const [section, setSection] = useState(
@@ -6362,6 +6364,14 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   </SelectMenuCompat>
                 </label>
                 <TypographySettings />
+                {window.naiDesktop?.platform === "win32" && (
+                  <Toggle
+                    checked={settings.closeToTray === true}
+                    onChange={(value) => void update("closeToTray", value)}
+                    label={windowTrayText(settings.language).label}
+                    description={windowTrayText(settings.language).description}
+                  />
+                )}
                 <Toggle
                   checked={settings.reduceMotion}
                   onChange={(value) => void update("reduceMotion", value)}

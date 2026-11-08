@@ -1501,6 +1501,8 @@ export interface AppSettings {
    * Windows' generic animation-effects flag so performance tuning does not
    * silently disable every product transition. */
   reduceMotion: boolean;
+  /** Windows only; false or missing preserves the normal close-and-quit behavior. */
+  closeToTray?: boolean;
   autoComplete: boolean;
   weightHighlight: boolean;
   promptRandomizer: boolean;
