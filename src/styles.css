@@ -3249,28 +3249,21 @@ html.motion-reduced .char-enabled-track, html.motion-reduced .char-enabled-track
   position: relative;
 }
 .ac-dropdown {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 100%;
-  z-index: var(--z-dropdown);
-}
-/* Caret-anchored variant: vertical position follows the caret line, but the
-   dropdown stays full-width (left:0/right:0 from the base rule) so long tag
-   names never overflow the panel and get clipped. */
-.ac-dropdown.ac-dropdown-caret {
-  top: auto; /* overridden by the inline `top` */
-}
-.ac-dropdown {
+  position: fixed;
+  visibility: hidden;
+  z-index: var(--z-floating);
   background: var(--bg-dialog);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  overflow: hidden;
   max-height: 260px;
-  overflow-y: auto;
-  animation: popIn 0.12s var(--ease-out);
-  margin-top: 6px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.ac-dropdown[data-in-dialog] { z-index: var(--z-overlay); }
+:is(.ac-dropdown,.artist-string-tool,.artist-string-tool .random-custom-tag-results)::-webkit-scrollbar {
+  width: 10px;
 }
 .ac-item {
   display: grid;
@@ -3289,7 +3282,7 @@ html.motion-reduced .char-enabled-track, html.motion-reduced .char-enabled-track
   transition: background 0.09s;
 }
 .ac-item:last-child { border-bottom: none; }
-.ac-item:hover, .ac-active {
+.ac-active {
   background: var(--bg-hover);
 }
 .ac-dot {
@@ -3338,7 +3331,7 @@ html.motion-reduced .char-enabled-track, html.motion-reduced .char-enabled-track
   color: var(--text-primary);
   border-color: var(--border);
 }
-.theme-dark .ac-item:hover, .theme-dark .ac-active {
+.theme-dark .ac-active {
   background: var(--bg-hover);
 }
 

@@ -68,7 +68,7 @@ import { normalizeAppLanguage } from "./i18n";
 import { MetadataApplyPanel } from "./MetadataApplyPanel";
 import { ImageSaveFeedback } from "./components/ImageSaveFeedback";
 import { imagePasteProps } from "./image-paste";
-import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import clsx from "clsx";
 import { format } from "date-fns";
@@ -493,54 +493,113 @@ function PromptTextarea({
   className?: string;
 }) {
   const language = useAppStore((state) => state.settings?.language);
+  const activeTab = useAppStore((state) => state.activeTab);
   const [suggestions, setSuggestions] = useState<TagSuggestion[]>([]);
-  // Only the vertical caret position — the dropdown stays full-width so long tag
-  // text never overflows/clips horizontally.
-  const [acTop, setAcTop] = useState<number | null>(null);
   const [activeIdx, setActiveIdx] = useState(0);
+  const listId = useId();
   const composingRef = useRef(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestId = useRef(0);
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
+  const cancelLookup = useCallback(() => {
+    requestId.current++;
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
   }, []);
 
-  function clearSuggestions() { setSuggestions([]); setAcTop(null); }
+  const clearSuggestions = useCallback(() => {
+    cancelLookup();
+    setSuggestions([]);
+  }, [cancelLookup]);
+
+  useEffect(() => cancelLookup, [cancelLookup]);
+  useEffect(() => { clearSuggestions(); }, [enabled, model, readOnly, activeTab, clearSuggestions]);
+
+  useLayoutEffect(() => {
+    const ta = taRef.current, list = listRef.current;
+    if (!ta || !list) return;
+    const scrollHost = ta.closest<HTMLElement>(".panel-scroll,.char-body");
+    const position = () => {
+      const editor = ta.getBoundingClientRect(), bounds = scrollHost?.getBoundingClientRect();
+      const clipTop = Math.max(0, (bounds?.top ?? 0) + (scrollHost?.clientTop ?? 0));
+      const clipBottom = Math.min(innerHeight, bounds && scrollHost ? bounds.top + scrollHost.clientTop + scrollHost.clientHeight : innerHeight);
+      const clipLeft = Math.max(0, (bounds?.left ?? 0) + (scrollHost?.clientLeft ?? 0));
+      const clipRight = Math.min(innerWidth, bounds && scrollHost ? bounds.left + scrollHost.clientLeft + scrollHost.clientWidth : innerWidth);
+      const left = Math.max(editor.left, clipLeft), width = Math.min(editor.right, clipRight) - left;
+      const caret = caretCoordinates(ta, ta.selectionStart);
+      const caretTop = editor.top + caret.top - ta.scrollTop, caretBottom = caretTop + caret.height;
+      const visibleTop = Math.max(clipTop, editor.top), visibleBottom = Math.min(clipBottom, editor.bottom);
+      if (width <= 0 || caretBottom <= visibleTop || caretTop >= visibleBottom ||
+          ta.closest("[inert], [aria-hidden=true]")) {
+        clearSuggestions();
+        return;
+      }
+      const gap = 6, lineTop = Math.max(visibleTop, caretTop), lineBottom = Math.min(visibleBottom, caretBottom);
+      const above = lineTop - clipTop - gap, below = clipBottom - lineBottom - gap;
+      list.style.width = `${width}px`;
+      const preferredHeight = Math.min(260, list.scrollHeight + 2);
+      const useAbove = below < preferredHeight && above > below;
+      const available = useAbove ? above : below;
+      if (available < 40) { clearSuggestions(); return; }
+      list.style.left = `${left}px`;
+      list.style.top = useAbove ? "auto" : `${lineBottom + gap}px`;
+      list.style.bottom = useAbove ? `${innerHeight - lineTop + gap}px` : "auto";
+      list.style.maxHeight = `${Math.min(260, available)}px`;
+      list.style.visibility = "visible";
+    };
+    const onScroll = (event: Event) => { if (!isScrollInsideFloatingMenu(list, event.target)) position(); };
+    const outside = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && !ta.contains(target) && !list.contains(target)) clearSuggestions();
+    };
+    position();
+    const observer = new ResizeObserver(position);
+    observer.observe(ta);
+    if (scrollHost) observer.observe(scrollHost);
+    window.addEventListener("resize", position);
+    window.addEventListener("scroll", onScroll, true);
+    document.addEventListener("pointerdown", outside, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", position);
+      window.removeEventListener("scroll", onScroll, true);
+      document.removeEventListener("pointerdown", outside, true);
+    };
+  }, [suggestions, clearSuggestions]);
+
+  function moveActive(next: number) {
+    const index = Math.max(0, Math.min(next, suggestions.length - 1));
+    setActiveIdx(index);
+    const list = listRef.current;
+    const item = list?.children[index] as HTMLElement | undefined;
+    if (!list || !item) return;
+    const top = item.offsetTop, bottom = top + item.offsetHeight;
+    if (top < list.scrollTop) list.scrollTop = top;
+    else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
+  }
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    const text = e.target.value;
-    const cursor = e.target.selectionStart ?? text.length;
+    const text = e.target.value, cursor = e.target.selectionStart ?? text.length;
     onChange(text);
+    clearSuggestions();
     setActiveIdx(0);
-    if (!enabled || composingRef.current) {
-      clearSuggestions();
-      if (timerRef.current) clearTimeout(timerRef.current);
-      return;
-    }
-
+    if (!enabled || readOnly || composingRef.current) return;
     const { word } = wordAtCursor(text, cursor);
-    if (word.length < 1) {
-      clearSuggestions();
-      if (timerRef.current) clearTimeout(timerRef.current);
-      return;
-    }
-
-    if (timerRef.current) clearTimeout(timerRef.current);
+    if (!word) return;
+    const lookup = requestId.current;
     timerRef.current = setTimeout(async () => {
+      timerRef.current = null;
       try {
-        const res = await window.naiDesktop.suggestTags(model, word);
-        setSuggestions(res.slice(0, 8));
+        const results = await window.naiDesktop.suggestTags(model, word);
         const ta = taRef.current;
-        if (ta && res.length > 0) {
-          const c = caretCoordinates(ta, cursor);
-          // Anchor just below the caret line (vertical only); full-width horizontally.
-          setAcTop(c.top - ta.scrollTop + c.height + 2);
-        }
+        if (requestId.current === lookup && ta && document.activeElement === ta &&
+            ta.value === text && ta.selectionStart === cursor) setSuggestions(results.slice(0, 8));
       } catch {
-        setSuggestions([]);
+        if (requestId.current === lookup) setSuggestions([]);
       }
     }, 160);
   }
@@ -565,10 +624,10 @@ function PromptTextarea({
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.nativeEvent.isComposing || composingRef.current) return;
     if (!suggestions.length) return;
-    if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, suggestions.length - 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); }
+    if (e.key === "ArrowDown") { e.preventDefault(); moveActive(activeIdx + 1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); moveActive(activeIdx - 1); }
     else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); applyTag(suggestions[activeIdx].tag); }
-    else if (e.key === "Escape") { clearSuggestions(); }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); clearSuggestions(); }
   }
 
   return (
@@ -580,28 +639,39 @@ function PromptTextarea({
         placeholder={placeholder}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
+        aria-autocomplete={enabled && !readOnly ? "list" : undefined}
+        aria-controls={suggestions.length ? listId : undefined}
+        aria-activedescendant={suggestions.length ? `${listId}-${activeIdx}` : undefined}
         onCompositionStart={() => {
           composingRef.current = true;
           clearSuggestions();
-          if (timerRef.current) clearTimeout(timerRef.current);
         }}
         onCompositionEnd={(event) => {
           composingRef.current = false;
           handleChange(event as unknown as React.ChangeEvent<HTMLTextAreaElement>);
         }}
-        onBlur={() => { if (timerRef.current) clearTimeout(timerRef.current); setTimeout(clearSuggestions, 180); }}
+        onBlur={(event) => {
+          // Native scrollbar grabs may blur with no related target. Outside
+          // pointer presses and actual focus changes still dismiss the list.
+          if (event.relatedTarget && !listRef.current?.contains(event.relatedTarget)) clearSuggestions();
+          else if (!listRef.current) cancelLookup();
+        }}
       />
       {suggestions.length > 0 && (
-        <div
-          className={clsx("ac-dropdown", acTop != null && "ac-dropdown-caret")}
-          style={acTop != null ? { top: acTop } : undefined}
-        >
+        <AppPortal><div ref={listRef} id={listId} className="ac-dropdown" role="listbox"
+          data-in-dialog={Boolean(taRef.current?.closest(".modal-backdrop")) || undefined}>
           {suggestions.map((s, i) => (
             <button
               key={s.tag}
+              id={`${listId}-${i}`}
+              type="button"
+              role="option"
+              aria-selected={i === activeIdx}
+              tabIndex={-1}
               className={clsx("ac-item", i === activeIdx && "ac-active")}
-              onMouseDown={(e) => { e.preventDefault(); applyTag(s.tag); }}
-              onMouseEnter={() => setActiveIdx(i)}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => applyTag(s.tag)}
+              onMouseMove={() => setActiveIdx(i)}
             >
               <span className="ac-dot" style={{ background: CAT_COLOR[s.category] ?? "#94a3b8" }} />
               <span className="ac-main">
@@ -614,7 +684,7 @@ function PromptTextarea({
               </span>
             </button>
           ))}
-        </div>
+        </div></AppPortal>
       )}
     </div>
   );

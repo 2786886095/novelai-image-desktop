@@ -479,7 +479,6 @@ export default function V5ArtistWeightRepair({
   const loadMoreDrawCatalog = async () => {
     if (drawCatalogLoading || drawCatalogLoadingMore || drawCatalogItems.length >= drawCatalogTotal) return;
     const requestId = drawCatalogRequestRef.current;
-    const previousScrollTop = drawCatalogResultsRef.current?.scrollTop ?? 0;
     setDrawCatalogLoadingMore(true);
     try {
       const result = await window.naiDesktop.artistStyleCatalog(
@@ -499,11 +498,8 @@ export default function V5ArtistWeightRepair({
         })];
       });
       setDrawCatalogTotal(result.total);
-      window.requestAnimationFrame(() => {
-        if (requestId === drawCatalogRequestRef.current && drawCatalogResultsRef.current) {
-          drawCatalogResultsRef.current.scrollTop = previousScrollTop;
-        }
-      });
+      // Appending keeps the current viewport. Restoring the request-time
+      // offset here would override a wheel or thumb drag made while loading.
     } finally {
       if (requestId === drawCatalogRequestRef.current) setDrawCatalogLoadingMore(false);
     }
