@@ -22,7 +22,7 @@ import {normalizePromptSkillVersion,selectPromptSkillTemplate,supportsPromptSkil
 import {resolveTemplateLibrarySlot} from './template-library';
 import {comicPromptEnvelope,parseComicRecommendation,parseComicPromptPages,validateComicPromptRequest,type ComicPromptRequest,type ComicPromptResult} from '../../src/comic/comic-prompt';
 import {parsePromptSkillV2Response,PROMPT_SKILL_V2_RUNTIME,promptSkillKnownCharacterInstruction} from '../../src/prompt-skill-audit';
-import {classifyAiPromptResponse,visionPromptRequestError,redactAiCredentials} from "./ai-prompt-response";
+import {classifyAiPromptResponse,isExplicitPromptRefusal,visionPromptRequestError,redactAiCredentials} from "./ai-prompt-response";
 import { planUpscale } from "../../src/upscale-plan";
 import {matchingVibeEncoding, validateVibeModel} from "../../src/vibe-file";
 import {normalizeNovelAiEndpoint} from '../../src/nai-endpoint';
@@ -3581,7 +3581,7 @@ export async function reversePromptImage(
       if (protocol) {const parsed=protocol.parse(result.content??'','',{validationWarningOnly:true});return {ok:true,...parsed,message:parsed.warnings.length?'反推完成（有检查警告）：结果已保留，请自行核对':'反推成功'};}
       const parsed = parsePromptVariantResponse(result.content ?? "", knownCharacter);
       const outputs = knownCharacter ? [parsed.variants?.namePrompt,parsed.variants?.featurePrompt] : [parsed.primary];
-      if(outputs.some(value=>!value?.trim()||value.length>60000||/^(?:信息不足|模式能力不足|无法完成|我无法|抱歉|对不起|i(?:'m| am) sorry\b|i (?:cannot|can't|won't)\b)/iu.test(value.trim())))
+      if(outputs.some(value=>!value?.trim()||value.length>60000||isExplicitPromptRefusal(value)||/^(?:信息不足|模式能力不足|无法完成|我无法|抱歉|对不起)/u.test(value.trim())))
         throw Error('模型未返回完整可用结果，已保留原提示词');
       const warnings=outputs.some(value=>modeNeedsRepair(mode,value!))?['检查未通过，已保留结果供手动确认：输出格式可能不符合所选模式']:[];
       return {ok:true,prompt:parsed.primary,variants:parsed.variants,warnings,message:warnings.length?'反推完成（有检查警告）：结果已保留，请自行核对':'反推成功'};

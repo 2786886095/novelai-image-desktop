@@ -30,10 +30,19 @@ void main(){
     try {
       t.view.physicalSize=const Size(390,844);t.view.devicePixelRatio=1;
       await mount(t,app,const GenerateScreen());
-      final image=find.byType(InteractiveViewer).first;
-      final load=find.text('加载图片');
-      expect(load,findsOneWidget);
-      expect(t.getTopLeft(load).dy,greaterThanOrEqualTo(t.getBottomRight(image).dy),reason:'Image actions must be outside image viewport');
+      final tools = find.byKey(const ValueKey('result-image-tools'));
+      final stage = find.byKey(const ValueKey('result-image-stage'));
+      expect(tools, findsOneWidget);
+      expect(stage, findsOneWidget);
+      expect(find.text('加载图片'), findsNothing);
+      expect(t.getRect(tools).overlaps(t.getRect(stage)), isFalse,
+          reason: 'Closed image tools must be outside the image viewport');
+      await t.tap(tools);
+      await t.pumpAndSettle();
+      final actions = t.widgetList<PopupMenuItem<String>>(
+          find.byType(PopupMenuItem<String>));
+      expect(actions.where((item) => item.enabled).map((item) => item.value),
+          containsAll(['load', 'paste']));
       expect(t.takeException(),isNull);
     } finally { await t.pumpWidget(const SizedBox.shrink()); await t.pump();app.dispose();dir.deleteSync(recursive:true);t.view.reset();debugDefaultTargetPlatformOverride=null; }
   });

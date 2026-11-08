@@ -6,7 +6,7 @@ const source = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
 describe("desktop startup window contract", () => {
   it("creates only the main BrowserWindow, not an extra startup popup", () => {
     expect(source.match(/new BrowserWindow\s*\(/g)).toHaveLength(1);
-    expect(source).not.toContain("startupWindow");
+    expect(source).toMatch(/const startupWindow\s*=\s*mainWindow\b/);
   });
 
   it("keeps the main window hidden until ready, and preserves capture mode", () => {

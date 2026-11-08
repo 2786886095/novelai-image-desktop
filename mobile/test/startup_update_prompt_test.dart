@@ -75,7 +75,7 @@ void main(){
   testWidgets('V5 migration notice finishes before startup update is presented',(t) async {
     final app=FakeApp()..booted=true..needsNetworkOnboarding=false..updateInfo=newer;
     app.settings.language='zh-CN';app.params.model='nai-diffusion-4-5-full';
-    await t.pumpWidget(ChangeNotifierProvider<AppState>.value(value:app,child:MaterialApp(home:const HomeShell())));
+    await t.pumpWidget(ChangeNotifierProvider<AppState>.value(value:app,child:const MaterialApp(home:HomeShell())));
     await t.pumpAndSettle();
     expect(find.text('NovelAI V5 Full 已上线'),findsOneWidget);
     expect(find.byKey(const ValueKey('startup-update-dialog')),findsNothing);
