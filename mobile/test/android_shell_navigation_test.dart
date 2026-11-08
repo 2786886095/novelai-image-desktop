@@ -88,6 +88,30 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('page actions opens the full catalog and selects a real destination',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final host = GlobalKey<_HostState>();
+    final mounts = <int, int>{};
+    await tester.pumpWidget(_Host(key: host, mounts: mounts));
+    final trigger = find.byKey(const ValueKey('android-all-features'));
+    final catalog = find.byKey(const ValueKey('android-open-feature-catalog'));
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+    expect(catalog, findsOneWidget);
+    await tester.ensureVisible(catalog);
+    await tester.tap(catalog);
+    await tester.pumpAndSettle();
+    final route = find.byKey(const ValueKey('android-catalog-6'));
+    await tester.ensureVisible(route);
+    await tester.tap(route);
+    await tester.pumpAndSettle();
+    expect(host.currentState!.index, 6);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('keyboard hides outer navigation and Back returns group then Create',
       (tester) async {
     final host = GlobalKey<_HostState>();

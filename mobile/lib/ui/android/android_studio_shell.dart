@@ -250,7 +250,8 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
           if (chrome?.bar.actions?.isNotEmpty == true)
             Wrap(spacing: 8, runSpacing: 8, children: workbenchSheetActions(sheetContext, chrome!.bar.actions!)),
           if (widget.accountControls != null) ...[const Divider(), widget.accountControls!],
-          ListTile(leading: const Icon(Icons.apps_outlined), title: Text(androidShellText(widget.language, 'all')),
+          ListTile(key: const ValueKey('android-open-feature-catalog'),
+            leading: const Icon(Icons.apps_outlined), title: Text(androidShellText(widget.language, 'all')),
             onTap: () { Navigator.pop(sheetContext); _showAllFeatures(); }),
         ]))));
 

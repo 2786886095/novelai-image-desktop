@@ -722,14 +722,26 @@ Future<void> _tapKey(Key key, String reason) async {
   await nativeUiTap(found.single);
 }
 
-// Real hit-tested taps on the bottom group bar and member strip, or on the
-// All features catalog; the destination index remains the route identity.
+Future<void> _openAndroidCatalog() async {
+  await _tapKey(const ValueKey('android-all-features'),
+      'Android page-actions trigger missing');
+  const key = ValueKey('android-open-feature-catalog');
+  await nativeUiWait(() => nativeUiElements((w) => w.key == key).length == 1,
+      'Android page-actions catalog entry');
+  await _tapKey(key, 'Android feature catalog entry missing');
+}
+
+Future<void> _openAndroidMemberMenu() =>
+    _tapKey(const ValueKey('android-member-selector'),
+        'Android compact destination selector missing');
+
+// Real hit-tested taps on the group bar and anchored member menu, or via
+// page actions into the All features catalog; the route identity is unchanged.
 Future<void> _androidNavigateTo(int target, {bool viaCatalog = false}) async {
   final group = androidGroupForDestination(target);
   require(group >= 0, 'Destination $target has no Android group');
   if (viaCatalog) {
-    await _tapKey(const ValueKey('android-all-features'),
-        'Android All features control missing');
+    await _openAndroidCatalog();
     await nativeUiWait(
         () => nativeUiElements((w) => w.key == ValueKey('android-catalog-$target'))
             .isNotEmpty,
@@ -748,11 +760,17 @@ Future<void> _androidNavigateTo(int target, {bool viaCatalog = false}) async {
           'Android group $group selected');
     }
     if (_androidShellWidget().selectedIndex != target) {
-      await _tapKey(ValueKey('android-member-$target'),
-          'Android member $target missing');
+      await _openAndroidMemberMenu();
+      final option = ValueKey('android-member-option-$target');
+      await nativeUiWait(
+          () => nativeUiElements((w) => w.key == option).length == 1,
+          'Android menu destination $target');
+      await _tapKey(option, 'Android menu destination $target missing');
     }
   }
-  await nativeUiWait(() => _androidShellWidget().selectedIndex == target,
+  await nativeUiWait(
+      () => nativeUiElements(
+          (w) => w is AndroidStudioShell && w.selectedIndex == target).length == 1,
       'real route $target selected');
 }
 
@@ -1004,7 +1022,7 @@ Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
   suite.check('navigation', 'all-platform-routes', {
     'allProductionHomeShellDestinationsHitTestClicked': visited,
     'destinationCount': count,
-    'androidGroupBarMemberStripAndCatalogUsed': _androidShell,
+    'androidGroupBarAnchoredMenuAndCatalogUsed': _androidShell,
     'nestedToolRoutesAndBackControlsHitTestClicked': nested,
     'actualNativeEngineNarrowPhoneLayout': true,
     'noReplacementPageImplementations': true,
@@ -1114,14 +1132,13 @@ Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
 }
 
 // The Android catalog persists each real reorder drag immediately; there is no
-// separate Save action. Reopen proves the stored order drives the member strip.
+// separate Save action. Reopen proves the stored order drives the member menu.
 Future<Map<String, Object?>> _androidOrdering(AppState app, int count) async {
   final order = StudioAdaptiveShell.normalizeDestinationOrder(
           _androidShellWidget().destinationOrder, count),
       first = order[0],
       third = order[2];
-  await _tapKey(const ValueKey('android-all-features'),
-      'Android All features control missing');
+  await _openAndroidCatalog();
   bool isIconButton(Widget w, IconData icon) =>
       w is IconButton && w.icon is Icon && (w.icon as Icon).icon == icon;
   await nativeUiWait(
@@ -1186,30 +1203,28 @@ Future<Map<String, Object?>> _androidOrdering(AppState app, int count) async {
   final reopened = int.parse(saved.first);
   await _navigateTo(reopened);
   final group = androidGroupForDestination(reopened);
-  final chips = <int>[];
-  void collect(Element e) {
-    final key = e.widget.key;
-    if (e.widget is ChoiceChip &&
-        key is ValueKey<String> &&
-        key.value.startsWith('android-member-')) {
-      chips.add(int.parse(key.value.substring('android-member-'.length)));
-    }
-    e.visitChildren(collect);
-  }
-
-  for (final shell in nativeUiElements((w) => w is AndroidStudioShell)) {
-    collect(shell);
-  }
-  require(
-      chips.join(',') ==
-          androidOrderedGroupMembers(group, saved.map(int.parse).toList())
-              .join(','),
-      'Reopened Android member strip does not follow the saved order');
+  final expected = androidOrderedGroupMembers(group, saved.map(int.parse).toList());
+  bool isOption(Widget w) => w is PopupMenuItem<int> &&
+      w.key is ValueKey<String> &&
+      (w.key! as ValueKey<String>).value.startsWith('android-member-option-');
+  await _openAndroidMemberMenu();
+  await nativeUiWait(() => nativeUiElements(isOption).length == expected.length,
+      'reopened Android member menu');
+  final options = nativeUiElements(isOption)
+      .map((e) => (e.widget as PopupMenuItem<int>).value!).toList();
+  require(options.join(',') == expected.join(','),
+      'Reopened Android member menu does not follow the saved order');
+  await _tapKey(ValueKey('android-member-option-$reopened'),
+      'selected Android menu entry missing');
+  await nativeUiWait(
+      () => nativeUiElements((w) => w is AndroidStudioShell &&
+          w.selectedIndex == reopened).length == 1,
+      'reopened Android member menu dismissed');
   return {
     'actualReorderHandleGestureAndSave': true,
     'androidCatalogReorderPersistsImmediately': true,
     'nativePreferenceOrderReopened': true,
-    'androidMemberStripFollowsSavedOrder': chips,
+    'androidMemberMenuFollowsSavedOrder': options,
     'everyDestinationExactlyOnce': true,
     'logicalViewportWidth': 360,
     'productionPhoneNavigationReachable': true,
