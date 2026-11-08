@@ -12,20 +12,24 @@ import 'package:novelai_mobile/batch/batch_redraw_models.dart';
 import 'package:novelai_mobile/comic/comic_asset_store.dart';
 import 'package:novelai_mobile/comic/comic_models.dart';
 import 'package:novelai_mobile/i18n/app_locales.dart';
+import 'package:novelai_mobile/i18n/issue81_text.dart';
 import 'package:novelai_mobile/i18n/template_feature_text.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/prompts/prompt_templates.dart';
 import 'package:novelai_mobile/prompts/v5_artist_weight_repair.dart';
+import 'package:novelai_mobile/screens/artist_lookup_screen.dart';
 import 'package:novelai_mobile/screens/batch_redraw_screen.dart';
 import 'package:novelai_mobile/screens/comic_screen.dart';
 import 'package:novelai_mobile/screens/prompt_codex_screen.dart';
 import 'package:novelai_mobile/screens/random_artist_lab_screen.dart';
 import 'package:novelai_mobile/screens/tools_hub_screen.dart';
 import 'package:novelai_mobile/screens/v5_artist_weight_repair_screen.dart';
+import 'package:novelai_mobile/services/artist_identity_index.dart';
 import 'package:novelai_mobile/services/prompt_codex_service.dart';
 import 'package:novelai_mobile/services/storage.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 import 'native_scenario_support.dart';
+import 'native_ui_actions.dart' show nativeUiTap, nativeUiElements;
 
 final suite = NativeScenarios(3);
 const converted =
@@ -50,6 +54,7 @@ Map<String, bool Function(Widget)> nativeToolCardMatchers(AppState app) {
     'Artist-string Weight Draw': (w) =>
         w is V5ArtistWeightRepairScreen && w.mode == V5ArtistToolMode.draw,
     'NovelAI Personal Codex': (w) => w is PromptCodexScreen,
+    issue81Text(app.settings.language, 'lookup'): (w) => w is ArtistLookupScreen,
   };
 }
 
@@ -159,6 +164,13 @@ Future<void> _run() async {
   await c.storage.setToken(syntheticToken);
   await c.storage.setConvertKey(syntheticToken);
   app.promptTemplates = await PromptTemplateLibrary.load();
+  const artistUrl = 'https://www.pixiv.net/users/123';
+  const artistTag = 'fixture_artist';
+  await ArtistIdentityIndex().merge([
+    (id: 123, tag: artistTag, urls: [artistUrl],
+      savedAt: 1700000000000, source: 'import')
+  ]);
+  var artistLookupOffline = false;
   try {
     // Navigate all actual hub cards. This alone is deliberately not the proof:
     // each card's production operation is exercised below in this native run.
@@ -182,8 +194,8 @@ Future<void> _run() async {
     }
     final destinations = nativeToolCardMatchers(app);
     require(
-        destinations.length == 7 &&
-            labels.length == destinations.length &&
+        labels.length == destinations.length &&
+            labels.toSet().length == destinations.length &&
             labels.every(destinations.containsKey),
         'Tools hub user-facing inventory changed: $labels');
     for (final label in labels) {
@@ -205,12 +217,45 @@ Future<void> _run() async {
       await frame();
       await frame();
       await frame();
+      if (label == issue81Text(app.settings.language, 'lookup')) {
+        final before = wires.length;
+        final input = nativeUiElements((w) =>
+            w is TextField && w.key == const ValueKey('artist-lookup-input'));
+        require(input.length == 1, 'Actual artist lookup input missing');
+        (input.single.widget as TextField).controller!.text = artistUrl;
+        final localOnly = nativeUiElements(
+            (w) => w is Text && w.data == 'Search local only').single;
+        await nativeUiTap(localOnly);
+        bool match(Widget w) =>
+            w is CheckboxListTile && w.title is Text &&
+            (w.title as Text).data == artistTag;
+        await waitUntil(() => nativeUiElements(match).isNotEmpty,
+            'Offline artist lookup did not return the imported artist');
+        final hit = nativeUiElements(match).single;
+        require(((hit.widget as CheckboxListTile).subtitle as Text)
+            .data!.contains('Imported (unverified)'),
+            'Imported artist was not identified as unverified');
+        await nativeUiTap(hit);
+        await waitUntil(
+            () => nativeUiElements((w) =>
+                w is SelectableText && w.data == '1::artist:fixture_artist ::')
+                .isNotEmpty, 'NAI V5 offline artist format');
+        await nativeUiTap(nativeUiElements(
+            (w) => w is ChoiceChip && (w.label as Text).data == 'NAI 4.5')
+            .single);
+        await waitUntil(() => nativeUiElements(
+            (w) => w is SelectableText && w.data == artistTag).isNotEmpty,
+            'NAI 4.5 offline artist format');
+        require(wires.length == before, 'Local lookup submitted a request');
+        artistLookupOffline = true;
+      }
       Navigator.of(elements(screen).first).pop();
       await frame();
       await frame();
       await frame();
       await frame();
     }
+    require(artistLookupOffline, 'Native offline artist lookup was not exercised');
     final normalized =
         normalizeV45ArtistSyntax('(artist:quasarcake:1.5), blue dress');
     final repaired = repairV45ArtistCandidatesForV5(
@@ -297,6 +342,7 @@ Future<void> _run() async {
       'actualHubCards': labels,
       'nativeRoutesOpenedAndReturned': labels.length,
       'originalSixToolDestinationsRetained': true,
+      'artistLookupOfflineWithBothFormats': artistLookupOffline,
       'japaneseUsesIndependentController': true,
       'randomRepairDrawRealImageFiles': artistFiles.length,
       'artistOutputsSavedToHistory': 3,

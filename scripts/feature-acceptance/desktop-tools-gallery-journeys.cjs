@@ -30,6 +30,7 @@ app.whenReady().then(async()=>{
    ...(process.platform==='win32'?[{label:'Artist Style Lab',selector:'.artist-lab-home',tool:'artistLab'}]:[]),
    {label:'V4.5 Artist-string Repair',selector:'.v5-artist-repair',tool:'v5ArtistRepair'},
    {label:'Artist-string Weight Draw',selector:'.v5-artist-repair',tool:'artistStringDraw'},
+   {label:'Artist profile lookup',selector:'.artist-lookup',tool:'artistLookup'},
   ],results=[];
   await wait('document.querySelectorAll(".tool-card-grid>.tool-card").length>0');
   const labels=await js('[...document.querySelectorAll(".tool-card-grid>.tool-card b")].map(n=>n.textContent.trim())');
@@ -40,6 +41,10 @@ app.whenReady().then(async()=>{
   for(const target of tools){
    await js('window.mountTools()');
    await wait('document.querySelectorAll(".tool-card-grid>.tool-card").length==='+tools.length);
+   if(target.tool==='artistLookup'){
+    const key='langbai.artist-identity-index.v1',index={version:1,artists:[{id:123,tag:'fixture_artist',urls:['https://www.pixiv.net/users/123'],savedAt:1700000000000,source:'import'}]};
+    await js(`localStorage.setItem(${JSON.stringify(key)},${JSON.stringify(JSON.stringify(index))})`);
+   }
    await js(`(()=>{const matches=[...document.querySelectorAll('.tool-card-grid>.tool-card')].filter(card=>card.querySelector('b')?.textContent.trim()===${JSON.stringify(target.label)});if(matches.length!==1)throw Error('Native tool route is not unique');matches[0].click();})()`);
    await wait('localStorage.getItem("langbai.tools.active.v1")==='+JSON.stringify(target.tool)+'&&!!document.querySelector('+JSON.stringify(target.selector)+')');
    const observed={label:target.label,selector:target.selector,tool:target.tool,productionScreenOpened:true};
@@ -56,6 +61,20 @@ app.whenReady().then(async()=>{
     assert.equal(await js('localStorage.getItem('+JSON.stringify(convertDraftKey)+')'),'KEEP CONVERSION DRAFT');
     assert.equal(requests.length,before,'Opening and editing the Japanese tool must not submit a network request');
     Object.assign(observed,{independentJapaneseScope:true,actualComposerMounted:true,actualNativeTemplateLibraryRead:true,legacyProjectSha256:sha(legacy),draftKey,conversionDraftUnchanged:true,automaticRequests:0});
+   }else if(target.tool==='artistLookup'){
+    const before=requests.length,input='https://www.pixiv.net/users/123',output='textarea[aria-label="Artist prompt output"]';
+    await js(`(()=>{const node=document.querySelector('#artist-lookup-input');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(node,${JSON.stringify(input)});node.dispatchEvent(new Event('input',{bubbles:true}));node.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    const offlineButton='[...document.querySelectorAll(".artist-lookup button")].find(b=>b.textContent.trim()==="Search local only")';
+    await wait('!('+offlineButton+')?.disabled&&!!('+offlineButton+')');
+    await js('('+offlineButton+').click()');
+    await wait('document.querySelectorAll(".artist-lookup-hit").length===1');
+    assert.match(await js('document.querySelector(".artist-lookup-hit").textContent'),/fixture_artist.*Imported \(unverified\)/s);
+    await js('document.querySelector(".artist-lookup-hit input[type=checkbox]").click()');
+    await wait('document.querySelector('+JSON.stringify(output)+')?.value==="1::artist:fixture_artist ::"');
+    await js(`(()=>{const select=document.querySelector('.artist-lookup select');select.value='4.5';select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    await wait('document.querySelector('+JSON.stringify(output)+')?.value==="fixture_artist"');
+    assert.equal(requests.length,before,'Local artist lookup must not request a provider');
+    Object.assign(observed,{localIdentityMatch:true,unverifiedImportLabel:true,formats:['5','4.5'],providerRequests:0});
    }else if(target.tool==='comic'){
     assert.equal(await js('!!document.querySelector(".japanese-comic-workspace-note")'),false,'Legacy comic must not mount the Japanese scope');
     assert.equal(await js('localStorage.getItem('+JSON.stringify(legacyKey)+')'),legacy);

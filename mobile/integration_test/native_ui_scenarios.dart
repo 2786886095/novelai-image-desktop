@@ -308,8 +308,11 @@ Future<void> _accounts(NativeContext c, NativeUiTlsFixture tls) async {
   }
 }
 
-Future<void> _revealArtist(bool Function(Widget) predicate) async {
-  for (var i = 0; i < 35; i++) {
+Future<void> _revealArtist(
+    bool Function(Widget) predicate, String description) async {
+  var restartFromTop = true;
+  final budget = Stopwatch()..start();
+  while (budget.elapsed < const Duration(seconds: 12)) {
     if (nativeUiElements(predicate).isNotEmpty) return;
     final roots = nativeUiElements((w) =>
         w is ListView &&
@@ -327,11 +330,20 @@ Future<void> _revealArtist(bool Function(Widget) predicate) async {
     roots.single.visitChildren(walk);
     require(state != null, 'Actual artist scroll position missing');
     final position = state!.position;
-    position.jumpTo((position.pixels + 500)
-        .clamp(position.minScrollExtent, position.maxScrollExtent));
+    if (position.hasContentDimensions && position.viewportDimension > 0) {
+      // A remounted ListView can start at a saved offset below the target.
+      // Overlap each viewport so lazy children cannot be skipped.
+      final next = restartFromTop
+          ? position.minScrollExtent
+          : (position.pixels + position.viewportDimension * .75)
+              .clamp(position.minScrollExtent, position.maxScrollExtent);
+      if ((next - position.pixels).abs() >= .5) position.jumpTo(next);
+      restartFromTop = !restartFromTop &&
+          (next - position.maxScrollExtent).abs() < .5;
+    }
     await frame();
   }
-  throw StateError('Actual artist control did not become visible');
+  throw StateError('Actual artist control did not become visible: $description');
 }
 
 // Pointer IDs use a disjoint range from native_ui_actions.dart (9300).
@@ -407,7 +419,14 @@ Future<void> _doubleTapArtistPreview(Element element) async {
 
 Future<Map<String, Object?>> verifyNativeArtistFavoriteReopened(
     HistoryItem saved) async {
-  await _revealArtist((w) => w is SegmentedButton<bool>);
+  await nativeUiWait(
+      () => nativeUiElements((w) =>
+          w is IconButton && w.icon is Icon &&
+          (w.icon as Icon).icon == Icons.history && w.onPressed != null)
+          .isNotEmpty,
+      'reopened artist library restored the saved Favorite');
+  await _revealArtist(
+      (w) => w is SegmentedButton<bool>, 'reopened Favorite selector');
   final controls = nativeUiElements((w) => w is SegmentedButton<bool>);
   require(controls.length == 1,
       'Exactly one current artist result selector required');
@@ -435,7 +454,8 @@ Future<Map<String, Object?>> verifyNativeArtistFavoriteReopened(
           1,
       'actual restored Favorite segment selected by pointer');
   final key = ValueKey('favorite:${saved.id}:0');
-  await _revealArtist((w) => w is RepaintBoundary && w.key == key);
+  await _revealArtist(
+      (w) => w is RepaintBoundary && w.key == key, 'saved Favorite card');
   final cards = nativeUiElements((w) => w is RepaintBoundary && w.key == key);
   require(cards.length == 1, 'Exact saved Favorite card did not reopen');
   final gestures = <Element>[];
@@ -598,11 +618,13 @@ Future<void> _random(NativeContext c, NativeUiTlsFixture tls) async {
       '${prefix}customArtists', 'native_artist_a, native_artist_b');
   await prefs.setBool('${prefix}useCustomArtists', true);
   await nativeUiMount(app, RandomArtistLabScreen(onBack: () {}));
-  await _revealArtist((w) =>
-      w is IconButton &&
-      w.icon is Icon &&
-      (w.icon as Icon).icon == Icons.favorite_border &&
-      w.onPressed != null);
+  await _revealArtist(
+      (w) =>
+          w is IconButton &&
+          w.icon is Icon &&
+          (w.icon as Icon).icon == Icons.favorite_border &&
+          w.onPressed != null,
+      'generated result Favorite button');
   await nativeUiTap(nativeUiElements((w) =>
       w is IconButton &&
       w.icon is Icon &&
@@ -972,8 +994,7 @@ Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
   final toolTitles = await collectNativeToolTitles(app);
   final destinations = nativeToolCardMatchers(app);
   require(
-      destinations.length == 7 &&
-          toolTitles.length == destinations.length &&
+      toolTitles.length == destinations.length &&
           toolTitles.toSet().length == destinations.length &&
           toolTitles.every(destinations.containsKey),
       'Uncovered or ambiguous nested tool route');
