@@ -334,30 +334,41 @@ function revealMainWindow() {
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
-  disposeWindowTray();
 }
 
-function hideMainWindowToTray(win: BrowserWindow, iconPath: string): boolean {
-  if (process.platform !== "win32" || uiCapturePath || quittingMainWindow || getSetting("closeToTray") !== true) return false;
+function mainWindowIconPath() {
+  return path.join(__dirname, isDev ? "../../public/icon.png" : "../../dist/icon.png");
+}
+
+function syncWindowTray(refreshMenu = false): boolean {
+  if (process.platform !== "win32" || uiCapturePath || quittingMainWindow || !mainWindow || mainWindow.isDestroyed()) return false;
   try {
+    if (getSetting("closeToTray") !== true) {
+      // A preference change must not leave a hidden window without a way back.
+      if (windowTray && !mainWindow.isVisible()) revealMainWindow();
+      disposeWindowTray();
+      return false;
+    }
     if (!windowTray || windowTray.isDestroyed()) {
-      const icon = nativeImage.createFromPath(iconPath);
+      const icon = nativeImage.createFromPath(mainWindowIconPath());
       if (icon.isEmpty()) return false;
       windowTray = new Tray(icon);
       windowTray.setToolTip("Langbai NovelAI Studio");
+      windowTray.on("click", revealMainWindow);
+      refreshMenu = true;
+    }
+    if (refreshMenu) {
       const text = windowTrayText(getSetting("language"));
       windowTray.setContextMenu(Menu.buildFromTemplate([
         { label: text.open, click: revealMainWindow },
         { label: text.quit, click: () => app.quit() },
       ]));
-      windowTray.on("click", revealMainWindow);
     }
-    win.hide();
     return true;
   } catch (error) {
-    // Never strand a window in the background when the system tray fails.
+    if (windowTray && !mainWindow.isVisible()) revealMainWindow();
     disposeWindowTray();
-    console.warn("[window-tray] Unable to hide window; using normal close.", error);
+    console.warn("[window-tray] Unable to display tray icon; using normal close.", error);
     return false;
   }
 }
@@ -456,9 +467,7 @@ import { wireSystemBack } from "./system-navigation";
 import {watchRendererStartup,startupFailureText} from './renderer-startup';
 
 function createWindow() {
-  const iconPath = isDev
-    ? path.join(__dirname, "../../public/icon.png")
-    : path.join(__dirname, "../../dist/icon.png");
+  const iconPath = mainWindowIconPath();
 
   mainWindow = new BrowserWindow({
     width: normalizedUiCapturePath.includes("/compact/") ? 1120 : 1385,
@@ -523,6 +532,7 @@ function createWindow() {
 
   mainWindow.once("ready-to-show", () => {
     if (!uiCapturePath) mainWindow?.show();
+    syncWindowTray();
   });
 
   if (uiCapturePath) {
@@ -758,8 +768,9 @@ function createWindow() {
   }
 
   mainWindow.on("close", (event) => {
-    if (hideMainWindowToTray(startupWindow, iconPath)) {
+    if (syncWindowTray()) {
       event.preventDefault();
+      startupWindow.hide();
       return;
     }
     if (!harnessNeedsExitConfirmation()) return;
@@ -1440,6 +1451,7 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   ipcMain.handle("settings:get", (_event, key) => getSetting(key));
   ipcMain.handle("settings:set", async (_event, key, value) => {
     const saved = setSetting(key, value);
+    if (key === "closeToTray" || key === "language") syncWindowTray(key === "language");
     if ([
       "proxyMode",
       "proxyUrl",
