@@ -74,7 +74,7 @@ void main() {
   await mount();expect(service.calls.last,ArtistPoolSource.online);
   expect(find.byKey(const ValueKey('artist-pool-fallback')),findsOneWidget);
   await capture(tester,'issues8283-source-${size.width.toInt()}');
-  final advanced=find.byKey(const ValueKey('artist-pool-advanced'));
+  final advanced=find.byKey(const PageStorageKey<String>('artist-pool-advanced'));
   await reveal(tester, advanced); await tester.tap(advanced); await tester.pumpAndSettle();
   final source=find.byKey(const ValueKey('artist-pool-source'));
   await tester.tap(source);await tester.pumpAndSettle();

@@ -80,6 +80,58 @@ Future<void> _scrollUntilBuilt(
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  testWidgets('artist pool expansion restores independently of scroll offset',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(420, 800);
+    addTearDown(tester.view.reset);
+    final state = AppState();
+    addTearDown(state.dispose);
+    final bucket = PageStorageBucket();
+    const scrollKey = PageStorageKey<String>('random-artist-lab-scroll');
+    final outer = find.byKey(scrollKey);
+    final advanced = find.byWidgetPredicate((w) =>
+        w is ExpansionTile &&
+        w.key is ValueKey<String> &&
+        (w.key! as ValueKey<String>).value == 'artist-pool-advanced');
+    Future<void> mount() async {
+      await tester.pumpWidget(ChangeNotifierProvider.value(
+        value: state,
+        child: MaterialApp(
+          theme: StudioTheme.light(),
+          home: PageStorage(
+            bucket: bucket,
+            child: RandomArtistLabScreen(
+              onBack: () {},
+              artistService: _FakeArtistService(),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    await mount();
+    expect(advanced, findsOneWidget);
+    // Reproduce the stored double written by the real outer ScrollPosition
+    // on an earlier scroll, with the same PageStorage bucket after remount.
+    bucket.writeState(tester.element(outer), 0.0);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await mount();
+    expect(tester.takeException(), isNull);
+    expect(advanced, findsOneWidget);
+    expect(bucket.readState(tester.element(outer)), isA<double>());
+    await tester.ensureVisible(advanced);
+    await tester.tap(advanced);
+    await tester.pumpAndSettle();
+    expect(bucket.readState(tester.element(advanced)), isTrue);
+    expect(bucket.readState(tester.element(outer)), isA<double>());
+    await tester.pumpWidget(const SizedBox.shrink());
+    await mount();
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('artist-pool-source')), findsOneWidget);
+  });
+
   for (final model in [
     'nai-diffusion-4-5-full',
     'nai-diffusion-4-5-curated',

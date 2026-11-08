@@ -1,7 +1,7 @@
 // Synthetic contract fixtures only: this file never launches native clients/devices.
 import test from 'node:test';import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import crypto from 'node:crypto';import {spawnSync} from 'node:child_process';import {fileURLToPath} from 'node:url';
-import {releaseFeatures,releasePlatforms,supportedPlatforms,releaseExcludedPlatforms,releaseFeatureApplicability,releaseScopeId,releaseScopeSha256,releaseScopeCounts,artistIterationScenarios,agentComponentScenarios,assertReleasePlatformContract,assertReleaseEvidenceFiles} from '../release-platform-contract.mjs';
+import {releaseFeatures,releasePlatforms,supportedPlatforms,releaseExcludedPlatforms,releaseFeatureApplicability,releaseScopeId,releaseScopeSha256,releaseScopeCounts,artistIterationScenarios,agentComponentScenarios,assertReleasePlatformContract,assertReleaseEvidenceFiles,assertV286CloudNativeRun} from '../release-platform-contract.mjs';
 import {fullFeatureProfiles,profileSha256} from './full-feature-profiles.mjs';
 import {buildFullFeatureMatrix,writeFullFeatureMatrix} from './build-full-feature-matrix.mjs';
 import {createWindowsArtistUnitProof} from './windows-artist-contract-fixture.mjs';
@@ -60,3 +60,36 @@ for(const feature of ['agent-components','artist-iteration']){
  test(feature+' Windows still requires all three original scenarios and real receipt admission',()=>{const data=items(),item=data.find(item=>item.receipt.platform==='windows'&&item.receipt.checks.some(c=>c.feature===feature));item.receipt.checks=item.receipt.checks.filter(c=>!(c.feature===feature&&c.scenario===fullFeatureProfiles[feature].scenarios[2]));const r=buildFullFeatureMatrix({version,sourceSha,receipts:data}),cell=r.features.find(f=>f.id===feature).platforms.windows;assert.equal(cell.applicability,'required');assert.equal(cell.status,'partial');assert.deepEqual(cell.missingScenarios,feature==='artist-iteration'?[...fullFeatureProfiles[feature].scenarios]:[fullFeatureProfiles[feature].scenarios[2]]);assert.deepEqual(cell.evidence,[]);assert.equal(r.releaseScopeCertified,false);assert.throws(()=>check(r));});
  for(const platform of ['macos','linux','android','ios'])test(feature+'/'+platform+' dirty observations never become pass or evidence',()=>{const r=receipt(platform,{includeUnsupported:true});r.checks=r.checks.filter(c=>c.feature===feature);r.sourceQualified=false;const m=buildFullFeatureMatrix({version,sourceSha,receipts:[{receipt:r,artifact:'dirty-unit-only.json',sha256:'b'.repeat(64)}]}),cell=m.features.find(f=>f.id===feature).platforms[platform];assert.equal(cell.status,'not-supported');assert.equal(m.summary.verifiedSlots,0);assert.deepEqual(cell.evidence,[]);assert.deepEqual(cell.completedScenarios,[]);assert.deepEqual(cell.declaredScenarios,[...fullFeatureProfiles[feature].scenarios]);assert(m.diagnostics.some(d=>d.classification==='not-release-qualified'));});
 }
+
+test('v2.8.6 cloud waiver requires all 186 non-GPU cells, original evidence, and explicit opt-in',()=>temporary(root=>{
+ const data=items().filter(item=>!item.windowsArtistProof);
+ const options={version:'2.8.6',sourceSha,waiveWindowsArtistGpuV286:true};
+ writeItems(root,data);
+ const scoped=buildFullFeatureMatrix({...options,receipts:data});
+ assert.equal(scoped.releaseScopeCertified,false);
+ assert.equal(scoped.summary.verifiedSlots,186);
+ assert.doesNotThrow(()=>assertReleasePlatformContract(scoped,options));
+ assert.doesNotThrow(()=>assertReleaseEvidenceFiles(scoped,root,options));
+ assert.throws(()=>assertReleasePlatformContract(scoped,{...options,waiveWindowsArtistGpuV286:false}));
+ assert.throws(()=>assertReleasePlatformContract({...scoped,version:'2.8.7'},{...options,version:'2.8.7'}),/only to v2.8.6/);
+ const withoutIos=buildFullFeatureMatrix({...options,receipts:data.filter(x=>x.receipt.platform!=='ios')});
+ assert.throws(()=>assertReleasePlatformContract(withoutIos,options),/not accepted/);
+ const substituted=structuredClone(scoped);
+ substituted.features.find(x=>x.id==='artist-iteration').platforms.windows.completedScenarios=[artistIterationScenarios[0]];
+ assert.throws(()=>assertReleasePlatformContract(substituted,options),/completedScenarios/);
+ fs.appendFileSync(path.join(root,data[0].artifact),' ');
+ assert.throws(()=>assertReleaseEvidenceFiles(scoped,root,options),/bytes changed/);
+}));
+test('v2.8.6 cloud waiver rejects any failed or skipped hosted job',()=>{
+ const components=['core','text','library','os','metadata','gallery','japanese','generation','ui','workflows'];
+ const names=['desktop-components (windows-latest)','desktop-components (macos-15)','desktop-components (ubuntu-24.04)',
+   ...['android','ios'].flatMap(p=>components.map(c=>p+'-components ('+c+')')),'full-client-feature-matrix','windows-artist-local-proof'];
+ const run={headSha:sourceSha,status:'completed',conclusion:'success',jobs:names.map(name=>({name,status:'completed',conclusion:name==='windows-artist-local-proof'?'skipped':'success'}))};
+ assert.doesNotThrow(()=>assertV286CloudNativeRun(run,{sourceSha}));
+ for(const name of ['android-components (ui)','ios-components (os)','desktop-components (macos-15)','full-client-feature-matrix']){
+   const x=structuredClone(run);x.jobs.find(j=>j.name===name).conclusion='skipped';
+   assert.throws(()=>assertV286CloudNativeRun(x,{sourceSha}));
+ }
+ assert.throws(()=>assertV286CloudNativeRun({...run,headSha:'b'.repeat(40)},{sourceSha}));
+ assert.throws(()=>assertV286CloudNativeRun({...run,jobs:run.jobs.slice(1)},{sourceSha}));
+});

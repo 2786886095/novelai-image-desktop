@@ -11,6 +11,11 @@ on:
         default: ''
         required: false
 
+      waive_windows_artist_gpu_v286:
+        description: v2.8.6 only; skip local Windows Artist GPU proof and require all other native/cloud checks
+        type: boolean
+        default: false
+
 # This workflow executes all five current release targets and preserves bounded observations.
 # iOS native checks are required; unsigned packaging cannot substitute for functional evidence.
 permissions:
@@ -447,7 +452,7 @@ jobs:
   windows-artist-local-proof:
     # Admit genuine local hardware execution; this job does not run a GPU model.
     # Missing/failed proof leaves the unchanged Windows Artist cell unverified.
-    if: github.event_name == 'workflow_dispatch' && inputs.windows_artist_evidence_commit != ''
+    if: github.event_name == 'workflow_dispatch' && inputs.windows_artist_evidence_commit != '' && !inputs.waive_windows_artist_gpu_v286
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -489,11 +494,20 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Check matrix rejection rules
         run: node --test scripts/feature-acceptance/five-platform-release-gates.test.mjs scripts/feature-acceptance/release-feature-scope.test.mjs scripts/feature-acceptance/full-feature-matrix.test.mjs scripts/feature-acceptance/windows-artist-contract.test.mjs scripts/feature-acceptance/windows-artist-native.test.mjs scripts/feature-acceptance/windows-artist-matrix.test.mjs scripts/feature-acceptance/import-windows-artist-evidence.test.mjs scripts/feature-acceptance/mobile-scenario-receipt.test.mjs scripts/feature-acceptance/mobile-entry-consistency.test.mjs scripts/feature-acceptance/ios-folder-picker-driver.test.mjs scripts/feature-acceptance/desktop-japanese-comic-controller.test.mjs scripts/feature-acceptance/ios-simulator-locale-regression.test.mjs scripts/feature-acceptance/stop-disposable-ios-simulator.test.mjs scripts/feature-acceptance/linux-release-baseline.test.mjs scripts/feature-acceptance/native-proof-stream.test.mjs scripts/feature-acceptance/native-resident-pending.test.mjs scripts/feature-acceptance/native-begin-entry-parity.test.mjs scripts/feature-acceptance/metadata-import-wrapper.test.mjs scripts/feature-acceptance/prepare-android-image.test.mjs
-      - name: Require 187 scoped cells across five release platforms (eight Windows-local capability cells not-supported)
+      - name: Verify all required cloud cells and preserve the exact matrix
         shell: bash
+        env:
+          WAIVE_WINDOWS_ARTIST_GPU_V286: ${{ inputs.waive_windows_artist_gpu_v286 }}
+          WINDOWS_ARTIST_EVIDENCE_COMMIT: ${{ inputs.windows_artist_evidence_commit }}
         run: |
           version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json","utf8")).version')"
-          node scripts/feature-acceptance/build-full-feature-matrix.mjs "$RUNNER_TEMP/all-native-evidence" "$RUNNER_TEMP/full-feature-matrix" "$GITHUB_SHA" "$version" --require-release-scope
+          flag=--require-release-scope
+          if [ "$WAIVE_WINDOWS_ARTIST_GPU_V286" = true ]; then
+            test -z "$WINDOWS_ARTIST_EVIDENCE_COMMIT"
+            test "$version" = 2.8.6
+            flag=--require-cloud-scope-v286
+          fi
+          node scripts/feature-acceptance/build-full-feature-matrix.mjs "$RUNNER_TEMP/all-native-evidence" "$RUNNER_TEMP/full-feature-matrix" "$GITHUB_SHA" "$version" "$flag"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

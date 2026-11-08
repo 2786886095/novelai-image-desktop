@@ -1325,7 +1325,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
           OutlinedButton.icon(key: const ValueKey('artist-catalog-refresh'), style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)), onPressed: disabled ? null : _updateCatalog,
             icon: const Icon(Icons.download_outlined), label: Text(_p('download')))]),
         Text(_p(_poolSource == ArtistPoolSource.local ? 'snapshotHint' : 'hint'), style: Theme.of(context).textTheme.bodySmall),
-        ExpansionTile(key: const ValueKey('artist-pool-advanced'), title: Text(_p('advanced')), tilePadding: EdgeInsets.zero,
+        // ExpansionTile reads a bool; the ancestor ListView stores a double.
+        // A ValueKey does not separate their PageStorage entries.
+        ExpansionTile(key: const PageStorageKey<String>('artist-pool-advanced'), title: Text(_p('advanced')), tilePadding: EdgeInsets.zero,
           children: [StudioDropdownButtonFormField<ArtistPoolSource>(key: const ValueKey('artist-pool-source'),
             value: _poolSource, isExpanded: true, decoration: InputDecoration(labelText: _p('source')),
             items: ArtistPoolSource.values.map((source) => DropdownMenuItem(value: source,
@@ -3555,6 +3557,9 @@ class _RandomArtistLabScreenState extends State<RandomArtistLabScreen> {
                     SizedBox(
                       height: min(360.0, _planned.length * 62.0),
                       child: ListView.builder(
+                        key: const PageStorageKey<String>(
+                            'random-artist-draw-preview-scroll'),
+                        primary: false,
                         itemCount: _planned.length,
                         itemBuilder: (_, index) => ListTile(
                           dense: true,
