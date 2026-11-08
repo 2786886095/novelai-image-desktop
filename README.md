@@ -24,7 +24,7 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 
 ## 本次更新
 
-桌面端修复角色正、负提示词的「⋯」菜单被遮挡，工具栏展开后紧凑靠右。移动端仅同步版本；未签名 IPA 须自行签名。
+桌面版修复标签补全被控件遮挡及画师串抽卡加载时滚动跳回；相关滚动条也已加宽。移动端仅同步版本；未签名 IPA 须自行签名。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

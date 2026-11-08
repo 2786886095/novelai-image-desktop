@@ -19,7 +19,7 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-The desktop character prompt More menus are now clickable, and expanded toolbars are compact and right-aligned. Mobile only synchronizes the version. The unsigned IPA requires user signing.
+Desktop tag suggestions no longer sit behind other controls. Artist String Draw keeps its scroll position while loading more tags, and its scrollbars are wider. Mobile only synchronizes the version. The unsigned IPA requires user signing.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
