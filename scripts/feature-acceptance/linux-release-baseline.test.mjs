@@ -21,7 +21,7 @@ test('failed, timed-out, truncated or substituted commands cannot grant a baseli
 test('only the two desktop Linux runner selections change; source native and packaging gates remain required',()=>{
  const build=yaml.load(read('.github/workflows/build.yml')),feature=yaml.load(read('.github/workflows/feature-acceptance.yml'));
  assert.equal(build.jobs.build.strategy.matrix.include.find(x=>x.name==='linux').os,'ubuntu-24.04');
- assert.deepEqual(feature.jobs['desktop-components'].strategy.matrix.os,['windows-latest','macos-14','ubuntu-24.04']);
+ assert.deepEqual(feature.jobs['desktop-components'].strategy.matrix.os,['windows-latest','macos-15','ubuntu-24.04']);
  assert.equal(build.jobs['publish-verified']['runs-on'],'ubuntu-latest');assert.equal(feature.jobs['android-components']['runs-on'],'ubuntu-latest');
  for(const[job,phase]of[[build.jobs.build,'desktop-build'],[feature.jobs['desktop-components'],'desktop-native']]) {
   const collect=job.steps.findIndex(s=>s.name==='Record and require actual Ubuntu 24.04 x64 desktop host');assert(collect>=0);const step=job.steps[collect];assert.equal(step.if,"runner.os == 'Linux'");assert.equal(step['continue-on-error'],undefined);assert.match(step.run,new RegExp('linux-release-baseline\\.mjs --source-sha "\\$\\{\\{ github.sha \\}\\}" --phase '+phase));

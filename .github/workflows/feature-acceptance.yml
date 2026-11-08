@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-14, ubuntu-24.04]
+        os: [windows-latest, macos-15, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     steps:
@@ -364,7 +364,7 @@ jobs:
       fail-fast: false
       matrix:
         entry-group: [core, metadata, gallery, library, generation, text, japanese, workflows, ui, os]
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 75
     steps:
       - name: Preserve exact committed bytes before checkout
