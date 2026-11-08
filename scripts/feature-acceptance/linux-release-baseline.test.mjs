@@ -33,6 +33,22 @@ test('only the two desktop Linux runner selections change; source native and pac
  assert(feature.jobs['full-client-feature-matrix'].steps.some(s=>s.name==='Check matrix rejection rules'&&s.run.includes('scripts/feature-acceptance/linux-release-baseline.test.mjs')));
  assert(feature.jobs['desktop-components'].steps.some(s=>typeof s.run==='string'&&s.run.includes('desktop-japanese-comic-native:desktop-japanese-comic-acceptance')));
 });
-test('all five README download rows disclose the target baseline and current Ubuntu 26 limitation',()=>{for(const f of['README.md','README.en.md','README.ja.md','README.ko.md','README.zh-TW.md']){const row=read(f).split(/\r?\n/).find(l=>/^\| Linux /.test(l));assert(row,f);assert.match(row,/Ubuntu 24\.04 LTS/);assert.match(row,/Ubuntu 26\.04/);assert.match(row,/x86_64/);assert.doesNotMatch(row,/validated baseline|已通过|已通過|検証済み|검증 완료/i);}for(const f of['docs/RELEASE_NOTES.md','docs/history/RELEASE_NOTES-2.6.8.md']){const text=read(f);assert.match(text,/Ubuntu 24\.04 LTS/);assert.match(text,/Ubuntu 26\.04/);assert.match(text,/卡住/);assert.match(text,/同源/);assert.match(text,/187/);}});
+test('all five README download rows disclose the target baseline and current Ubuntu 26 limitation',()=>{for(const f of['README.md','README.en.md','README.ja.md','README.ko.md','README.zh-TW.md']){const row=read(f).split(/\r?\n/).find(l=>/^\| Linux /.test(l));assert(row,f);assert.match(row,/Ubuntu 24\.04 LTS/);assert.match(row,/Ubuntu 26\.04/);assert.match(row,/x86_64/);assert.doesNotMatch(row,/validated baseline|已通过|已通過|検証済み|검증 완료/i);}for(const f of['docs/LINUX_SUPPORT.md','docs/history/RELEASE_NOTES-2.6.8.md']){const text=read(f);assert.match(text,/Ubuntu 24\.04 LTS/);assert.match(text,/Ubuntu 26\.04/);assert.match(text,/卡住/);assert.match(text,/同源/);assert.match(text,/187/);}});
+test('direct packaging checks support policy and Dart analysis before building, without claiming native acceptance',()=>{
+ const direct=yaml.load(read('.github/workflows/build-direct-release.yml'));
+ const desktop=direct.jobs.desktop.steps;
+ const policy=desktop.findIndex(s=>s.run==='node --test scripts/feature-acceptance/linux-release-baseline.test.mjs');
+ assert(policy>desktop.findIndex(s=>s.run==='npm ci'));
+ assert(policy<desktop.findIndex(s=>s.name.startsWith('Build app (')));
+ assert.equal(desktop[policy].if,"matrix.name == 'linux'");
+ assert.equal(desktop[policy]['continue-on-error'],undefined);
+ for(const key of ['android','ios-package']){
+   const steps=direct.jobs[key].steps;
+   const analyze=steps.findIndex(s=>s.run==='flutter analyze --no-pub');
+   assert(analyze>steps.findIndex(s=>s.run==='flutter pub get'));
+   assert(analyze<steps.findIndex(s=>typeof s.run==='string'&&s.run.includes('flutter build')));
+   assert.equal(steps[analyze]['continue-on-error'],undefined);
+ }
+});
 test('distribution qualification never changes the 195/187/8 scope or original 132 scenario inventory',()=>{assert.deepEqual(releaseScopeCounts,{declaredSlots:195,requiredSlots:187,notSupportedSlots:8});assert.deepEqual(releasePlatforms,['windows','macos','linux','android','ios']);assert.equal(Object.values(fullFeatureProfiles).reduce((n,p)=>n+p.scenarios.length,0),132);for(const f of['agent-components','artist-iteration'])for(const p of releasePlatforms)assert.equal(releaseFeatureApplicability(f,p),p==='windows'?'required':'not-supported');});
 test('CLI refuses a previous output and has no environment or architecture override inputs',()=>{const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'linux-baseline-policy-'));try{const out=path.join(tmp,'receipt.json');fs.writeFileSync(out,'prior evidence\n');const helper=path.join(root,'scripts/feature-acceptance/linux-release-baseline.mjs');for(const args of[['--source-sha',sourceSha,'--phase','desktop-build','--output',out],['--source-sha',sourceSha,'--phase','desktop-build','--output',path.join(tmp,'fresh.json'),'--arch','x64']]){const r=spawnSync(process.execPath,[helper,...args],{encoding:'utf8',timeout:10000});assert.equal(r.status,1,r.stderr);}assert.equal(fs.readFileSync(out,'utf8'),'prior evidence\n');assert.equal(fs.existsSync(path.join(tmp,'fresh.json')),false);}finally{fs.rmSync(tmp,{recursive:true,force:true});}});
