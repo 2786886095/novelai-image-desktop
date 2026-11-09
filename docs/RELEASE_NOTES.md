@@ -1,9 +1,11 @@
 # 发行说明
 
-## Latest — Windows 系统托盘与 Android 备份救援
+## Latest — 自定义提示词工具栏、Windows 系统托盘与 Android 备份救援
 
 [下载当前版本](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [当前源码](https://github.com/2786886095/novelai-image-desktop/tree/main)
 
+- 桌面普通与角色提示词共用自定义工具栏布局。主栏最多放 5 个可配置工具；满栏时可用「更多」中的工具换位，撤销、重做和「更多」不占名额。
+- 将「还原」统一标注为「翻译还原」，保留恢复翻译前原文的功能。
 - Windows 可在「设置 → 外观」开启「关闭窗口时隐藏到系统托盘」。开启后，主窗口打开、隐藏和恢复时均保留托盘图标；从托盘可恢复窗口或完全退出。
 - 未开启时，点 × 仍完全退出。其他平台不新增托盘功能。
 - Android、iOS：修复画师抽卡页面重开后，滚动位置与高级选项的展开状态冲突。

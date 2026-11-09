@@ -72,7 +72,7 @@ describe('positive/negative preset layout integration', () => {
     const positive = toolbar.indexOf('<PositivePromptPresetControl compact');
     const negative = toolbar.indexOf('<NegativePromptLibraryControl');
     const optimize = toolbar.indexOf('label={editorText.optimize}');
-    const more = toolbar.indexOf('<PromptToolsPopover');
+    const more = toolbar.indexOf('overflow={[');
     expect(translation).toBeGreaterThan(0);
     expect(more).toBeGreaterThan(optimize);
     expect(positive).toBeGreaterThan(more);

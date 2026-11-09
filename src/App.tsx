@@ -31,7 +31,7 @@ import {useStudioRegionMotion} from './use-studio-motion';
 import {InpaintPromptSource} from './components/InpaintPromptSource';
 import {PromptWeightPanel} from './components/PromptWeightPanel';
 import {takeRequestedSettingsSection} from './prompt-ui-settings';
-import {PromptToolsPopover} from './components/PromptToolsPopover';
+import {PromptToolbarArrangement,promptAction,promptToolExtraLabel,type PromptToolbarAction} from './components/PromptToolbarArrangement';
 import {SlidingPromptToolbar,PromptResizeHandle} from './components/PromptEditorChrome';
 import {PromptAssistant} from './components/PromptAssistant';
 import {PromptSkillControls} from './components/PromptSkillControls';
@@ -1212,7 +1212,7 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
 function CharacterPromptEditor({id, field, model, placeholder, label, onAutoComplete, extras}: {
   id: string; field: "prompt" | "negativePrompt"; model: string; placeholder: string; label: string;
   onAutoComplete: () => Promise<void>;
-  extras: (value: string, apply: (value: string) => void) => ReactNode;
+  extras: (value: string, apply: (value: string) => void) => PromptToolbarAction[];
 }) {
   const settings = useAppStore(state => state.settings);
   const value = useAppStore(state => state.charCaptions.find(c => c.id === id)?.[field] ?? "");
@@ -1256,24 +1256,26 @@ function CharacterPromptEditor({id, field, model, placeholder, label, onAutoComp
     <PromptTextarea value={value} model={model} enabled={settings?.autoComplete ?? true} placeholder={placeholder}
       className="char-prompt" onChange={next => history.commit(next, true)} />
     <SlidingPromptToolbar language={language} onCollapse={() => setMore(false)}>
-      <div className="prompt-toolbar-row compact-prompt-toolbar" role="toolbar" aria-label={label + " · " + editorText.more}>
-        <CompactIconButton label={editorText.undo} icon="undo" disabled={!history.canUndo} onClick={() => history.undo()} />
-        <CompactIconButton label={editorText.redo} icon="redo" disabled={!history.canRedo} onClick={() => history.redo()} />
-        <CompactIconButton label={translationText(language).title} icon="globe" aria-haspopup="dialog" disabled={!value.trim()} onClick={() => setTool("translation")} />
-        {field === "prompt" && <>
-          <CompactIconButton label={editorText.optimize} icon="wand" aria-haspopup="dialog" disabled={!value.trim()} onClick={() => setTool("optimize")} />
-          <CompactIconButton label={editorText.custom} icon="sparkles" aria-haspopup="dialog" onClick={() => setTool("custom")} />
+      <PromptToolbarArrangement scope={field==='prompt'?'character-positive':'character-negative'} language={language} label={editorText.more} toolbarLabel={label + " · " + editorText.more} open={more} onOpenChange={setMore} inDialog
+        fixed={<>
+          <CompactIconButton label={editorText.undo} icon="undo" disabled={!history.canUndo} onClick={() => history.undo()} />
+          <CompactIconButton label={editorText.redo} icon="redo" disabled={!history.canRedo} onClick={() => history.redo()} />
         </>}
-        <CompactIconButton label={text.weightAdjust + " (" + weights.length + ")"} icon="sliders" aria-haspopup="dialog" disabled={!weights.length} onClick={() => setTool("weights")} />
-        <CompactIconButton label={text.capsuleTitle} icon="dice" aria-haspopup="dialog" onClick={() => setTool("capsule")} />
-        <PromptToolsPopover label={editorText.more} open={more} onOpenChange={setMore} inDialog>
-          {extras(value, next => history.commit(next))}
-          <CompactIconButton label={text.normalize} icon="sparkles" disabled={!value.trim()} onClick={() => {setMore(false);setTool("normalize");}} />
-          <CompactIconButton label={(settings?.autoComplete ?? true) ? text.autocompleteOn : text.autocompleteOff} icon="bulb" role="switch"
-            aria-checked={settings?.autoComplete ?? true} onClick={() => void onAutoComplete()} />
-          {backup !== null && <CompactIconButton label={text.restore} icon="undo" onClick={() => {history.commit(backup);setBackup(null);}} />}
-        </PromptToolsPopover>
-      </div>
+        bar={[
+          promptAction('translation',translationText(language).title,<CompactIconButton label={translationText(language).title} icon="globe" aria-haspopup="dialog" disabled={!value.trim()} onClick={() => setTool("translation")} />),
+          ...(field === "prompt" ? [
+            promptAction('optimize',editorText.optimize,<CompactIconButton label={editorText.optimize} icon="wand" aria-haspopup="dialog" disabled={!value.trim()} onClick={() => setTool("optimize")} />),
+            promptAction('custom',editorText.custom,<CompactIconButton label={editorText.custom} icon="sparkles" aria-haspopup="dialog" onClick={() => setTool("custom")} />),
+          ] : []),
+          promptAction('weights',text.weightAdjust,<CompactIconButton label={text.weightAdjust + " (" + weights.length + ")"} icon="sliders" aria-haspopup="dialog" disabled={!weights.length} onClick={() => setTool("weights")} />),
+          promptAction('capsule',text.capsuleTitle,<CompactIconButton label={text.capsuleTitle} icon="dice" aria-haspopup="dialog" onClick={() => setTool("capsule")} />),
+        ]}
+        overflow={[
+          ...extras(value,next=>history.commit(next)),
+          promptAction('normalize',text.normalize,<CompactIconButton label={text.normalize} icon="sparkles" disabled={!value.trim()} onClick={() => {setMore(false);setTool("normalize");}} />),
+          promptAction('autocomplete',(settings?.autoComplete ?? true) ? text.autocompleteOn : text.autocompleteOff,<CompactIconButton label={(settings?.autoComplete ?? true) ? text.autocompleteOn : text.autocompleteOff} icon="bulb" role="switch" aria-checked={settings?.autoComplete ?? true} onClick={() => void onAutoComplete()} />),
+          promptAction('restore',text.restore,backup !== null && <CompactIconButton label={text.restore} icon="undo" onClick={() => {history.commit(backup);setBackup(null);}} />),
+        ]} />
     </SlidingPromptToolbar>
     <PromptResizeHandle language={language} initialHeight={144} />
     {tool === "translation" && <TranslationPreview currentValue={value} context={context} language={language} onClose={close}
@@ -1454,17 +1456,17 @@ export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
                 <CharacterPromptEditor id={cc.id} field="prompt" model={characterModel}
                   label={generateText.prompt.positivePlaceholder} placeholder={t("character.placeholder")}
                   onAutoComplete={toggleCharacterAutoComplete}
-                  extras={(value, apply) => <>
-                    <PositivePromptPresetControl compact character={cc} value={value} onApply={apply}
-                      onApplyCharacters={captions=>{if(captions.length===1)updateCharCaption(cc.id,captions[0]);else setCharCaptions(normalizeCharacterCaptions(captions));}} />
-                    <PromptChunkControl compact value={value} onApply={apply} placement="top-right" />
-                  </>} />
+                  extras={(value, apply) => [
+                    promptAction('presets',promptToolExtraLabel(settings?.language,'presets'),<PositivePromptPresetControl compact character={cc} value={value} onApply={apply}
+                      onApplyCharacters={captions=>{if(captions.length===1)updateCharCaption(cc.id,captions[0]);else setCharCaptions(normalizeCharacterCaptions(captions));}} />),
+                    promptAction('chunks',promptToolExtraLabel(settings?.language,'chunks'),<PromptChunkControl compact value={value} onApply={apply} placement="top-right" />),
+                  ]} />
                 {!characterMediumEffort && <>
                   <span>{t("character.negative")}</span>
                   <CharacterPromptEditor id={cc.id} field="negativePrompt" model={characterModel}
                     label={t("character.negative")} placeholder={t("character.negativePlaceholder")}
                     onAutoComplete={toggleCharacterAutoComplete}
-                    extras={(value, apply) => <NegativePromptLibraryControl value={value} onApply={apply} />} />
+                    extras={(value, apply) => [promptAction('negative-library',promptToolExtraLabel(settings?.language,'negative-library'),<NegativePromptLibraryControl value={value} onApply={apply} />)]} />
                 </>}
                 {cc.useCoords && (
                   <div className="char-coords" aria-label={t("character.exactPosition")}>
@@ -2421,24 +2423,30 @@ export function PromptAndParams({
         placeholder={promptTab === "positive" ? generateText.prompt.positivePlaceholder : generateText.prompt.negativePlaceholder}
       />
       <SlidingPromptToolbar language={settings?.language} onCollapse={()=>setShowPromptMore(false)}>
-      <div className="prompt-toolbar-row compact-prompt-toolbar" role="toolbar" aria-label={editorText.more}>
-        <CompactIconButton label={editorText.undo} icon="undo" disabled={!promptHistory.canUndo} onClick={()=>promptHistory.undo()}/>
-        <CompactIconButton label={editorText.redo} icon="redo" disabled={!promptHistory.canRedo} onClick={()=>promptHistory.redo()}/>
-        <CompactIconButton label={translationText(settings?.language).title} icon="globe" aria-haspopup="dialog" onClick={translatePrompt} disabled={!promptValue.trim()}/>
-        {promptTab==='positive'&&<><CompactIconButton label={editorText.optimize} icon="wand" aria-haspopup="dialog" onClick={()=>setAssistantKind('optimize')} disabled={!effectivePositivePrompt.trim()}/><CompactIconButton label={editorText.custom} icon="sparkles" aria-haspopup="dialog" onClick={()=>setAssistantKind('custom')}/></>}
-        <CompactIconButton label={`${generateText.prompt.weightAdjust} (${weightTags.length})`} icon="sliders" aria-expanded={showWeights} aria-haspopup="dialog" onClick={()=>setShowWeights(v=>!v)} disabled={weightTags.length===0}/>
-        <CompactIconButton label={generateText.prompt.capsuleTitle} icon="dice" aria-haspopup="dialog" aria-expanded={chipOpen} onClick={()=>setChipOpen(true)}/>
-        <PromptToolsPopover label={editorText.more} open={showPromptMore} onOpenChange={setShowPromptMore}>
-          {promptTab==='positive'
-            ? <PositivePromptPresetControl compact value={effectivePositivePrompt} onApply={value=>setPromptField("positivePrompt",value)}/>
-            : <NegativePromptLibraryControl value={params.negativePrompt} onApply={value=>setPromptField("negativePrompt",value)}/>}
-          <CompactIconButton label={generateText.prompt.normalize} icon="sparkles" onClick={()=>setShowNormalize(true)} disabled={!promptValue.trim()}/>
-          <CompactIconButton label={(settings?.autoComplete??true)?generateText.prompt.autocompleteOn:generateText.prompt.autocompleteOff} icon="bulb" role="switch" aria-checked={settings?.autoComplete??true} onClick={()=>void toggleAutoComplete()}/>
-          {promptTab==="positive"&&<PromptChunkControl compact value={effectivePositivePrompt} onApply={value=>setPromptField("positivePrompt",value)} placement="top-right"/>}
-          {translateBackup[promptKey]!=null&&<CompactIconButton label={generateText.prompt.restore} icon="undo" onClick={restoreTranslate}/>}
-        </PromptToolsPopover>
-      </div>
-      </SlidingPromptToolbar>
+      <PromptToolbarArrangement scope={promptTab} language={settings?.language} label={editorText.more} open={showPromptMore} onOpenChange={setShowPromptMore}
+        fixed={<>
+          <CompactIconButton label={editorText.undo} icon="undo" disabled={!promptHistory.canUndo} onClick={()=>promptHistory.undo()}/>
+          <CompactIconButton label={editorText.redo} icon="redo" disabled={!promptHistory.canRedo} onClick={()=>promptHistory.redo()}/>
+        </>}
+        bar={[
+          promptAction('translation',translationText(settings?.language).title,<CompactIconButton label={translationText(settings?.language).title} icon="globe" aria-haspopup="dialog" onClick={translatePrompt} disabled={!promptValue.trim()}/>),
+          ...(promptTab==='positive' ? [
+            promptAction('optimize',editorText.optimize,<CompactIconButton label={editorText.optimize} icon="wand" aria-haspopup="dialog" onClick={()=>setAssistantKind('optimize')} disabled={!effectivePositivePrompt.trim()}/>),
+            promptAction('custom',editorText.custom,<CompactIconButton label={editorText.custom} icon="sparkles" aria-haspopup="dialog" onClick={()=>setAssistantKind('custom')}/>),
+          ] : []),
+          promptAction('weights',generateText.prompt.weightAdjust,<CompactIconButton label={`${generateText.prompt.weightAdjust} (${weightTags.length})`} icon="sliders" aria-expanded={showWeights} aria-haspopup="dialog" onClick={()=>setShowWeights(v=>!v)} disabled={weightTags.length===0}/>),
+          promptAction('capsule',generateText.prompt.capsuleTitle,<CompactIconButton label={generateText.prompt.capsuleTitle} icon="dice" aria-haspopup="dialog" aria-expanded={chipOpen} onClick={()=>setChipOpen(true)}/>),
+        ]}
+        overflow={[
+          promptTab==='positive'
+            ? promptAction('presets',promptToolExtraLabel(settings?.language,'presets'),<PositivePromptPresetControl compact value={effectivePositivePrompt} onApply={value=>setPromptField("positivePrompt",value)}/>)
+            : promptAction('negative-library',promptToolExtraLabel(settings?.language,'negative-library'),<NegativePromptLibraryControl value={params.negativePrompt} onApply={value=>setPromptField("negativePrompt",value)}/>),
+          promptAction('normalize',generateText.prompt.normalize,<CompactIconButton label={generateText.prompt.normalize} icon="sparkles" onClick={()=>setShowNormalize(true)} disabled={!promptValue.trim()}/>),
+          promptAction('autocomplete',(settings?.autoComplete??true)?generateText.prompt.autocompleteOn:generateText.prompt.autocompleteOff,<CompactIconButton label={(settings?.autoComplete??true)?generateText.prompt.autocompleteOn:generateText.prompt.autocompleteOff} icon="bulb" role="switch" aria-checked={settings?.autoComplete??true} onClick={()=>void toggleAutoComplete()}/>),
+          ...(promptTab==="positive"?[promptAction('chunks',promptToolExtraLabel(settings?.language,'chunks'),<PromptChunkControl compact value={effectivePositivePrompt} onApply={value=>setPromptField("positivePrompt",value)} placement="top-right"/>)]:[]),
+          promptAction('restore',generateText.prompt.restore,translateBackup[promptKey]!=null&&<CompactIconButton label={generateText.prompt.restore} icon="undo" onClick={restoreTranslate}/>),
+        ]} />
+    </SlidingPromptToolbar>
       <PromptResizeHandle language={settings?.language}/>
       </div>
       {showTranslation&&<TranslationPreview currentValue={promptValue} context={JSON.stringify([promptKey,!!promptOverride])} language={settings?.language} onClose={()=>setShowTranslation(false)} onApply={(next,expected,expectedContext)=>{

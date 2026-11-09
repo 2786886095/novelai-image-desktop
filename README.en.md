@@ -7,6 +7,8 @@
 
 
 
+Customize the desktop prompt toolbar with up to five configurable main-bar tools. Swap tools with the More menu and use Restore pre-translation text to recover the original prompt.
+
 ### From an idea to a collection of images.
 
 A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese, English, Japanese and Korean interfaces.

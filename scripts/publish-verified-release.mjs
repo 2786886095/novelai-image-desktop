@@ -98,9 +98,16 @@ if(existing.status===0)throw Error('Release already exists; do not overwrite it'
 if(!/not found/i.test(existing.stderr??''))throw Error('Release existence check failed: '+existing.stderr);
 const releaseNotes=fs.readFileSync('docs/RELEASE_NOTES.md','utf8');
 if(waiveWindowsArtistGpuV286&&!releaseNotes.includes('Windows 画风迭代的本机 GPU 实测未验收'))throw Error('Release notes must disclose the untested Windows GPU scenarios');
+// Preserve the waiver in verification.json; it is not a public changelog bullet.
+const publicNotesFile=waiveWindowsArtistGpuV286?'release-evidence/public-release-notes.md':'docs/RELEASE_NOTES.md';
+if(waiveWindowsArtistGpuV286){
+ const publicNotes=releaseNotes.replace(/^- Windows 画风迭代的本机 GPU 实测未验收[^\r\n]*(?:\r?\n|$)/m,'');
+ if(publicNotes===releaseNotes)throw Error('Missing canonical Windows GPU waiver line');
+ fs.writeFileSync(publicNotesFile,publicNotes,'utf8');
+}
 const evidence={version,sha,...(waiveWindowsArtistGpuV286?{nativeRun,fullScopeCertified:false,waived:[{platform:'windows',feature:'artist-iteration',scenarios:artistIterationScenarios,status:'not-tested'}]}:{}),mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
 fs.writeFileSync('release-assets/verification.json',JSON.stringify(evidence,null,2));
-call('gh',['release','create',tag,...files,'release-assets/verification.json','--target',sha,'--draft','--title',`Langbai NovelAI Studio ${tag}`,'--notes-file','docs/RELEASE_NOTES.md']);
+call('gh',['release','create',tag,...files,'release-assets/verification.json','--target',sha,'--draft','--title',`Langbai NovelAI Studio ${tag}`,'--notes-file',publicNotesFile]);
 const draft=JSON.parse(call('gh',['release','view',tag,'--json','isDraft,assets']));
 assertReleaseArtifactScope(draft.assets.map(asset=>asset.name),{version,withVerification:true});
 if(!draft.isDraft||files.some(file=>!draft.assets.some(asset=>asset.name===path.basename(file)&&asset.size===fs.statSync(file).size)))throw Error('Draft asset verification failed');
