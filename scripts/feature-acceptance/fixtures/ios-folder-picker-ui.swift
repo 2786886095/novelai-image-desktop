@@ -207,7 +207,7 @@ final class FolderPickerUITests: XCTestCase {
   }
 
   private func currentNamingEditor(_ app: XCUIApplication, _ fileView: XCUIElement?, _ viewFrame: CGRect,
-                                   includeModal: Bool, before deadline: Date) throws -> NamingEditorWitness? {
+                                   includeModal: Bool, retainedFileFrame: CGRect?, before deadline: Date) throws -> NamingEditorWitness? {
     func bound(_ field: XCUIElement, _ owner: XCUIElement?, _ inline: Bool,
                _ identifier: String, _ frame: CGRect) -> NamingEditorWitness {
       return NamingEditorWitness(field: field, modalOwner: owner, isInline: inline,
@@ -216,11 +216,21 @@ final class FolderPickerUITests: XCTestCase {
     }
     let identifier = "DOC.inlineRenameField"
     let exactID = NSPredicate(format: "identifier == %@ AND enabled == YES", identifier)
-    // Start the timed query from the retained system collection element.
-    // An application-rooted query was still late in 42692894724. Keep
-    // the actual binding and full pre-action checks.
-    let matches = fileView?.descendants(matching: .textView)
-      .matching(exactID).allElementsBoundByAccessibilityElement ?? []
+    // The first probe stays scoped. On the final probe the old collection's
+    // AX projection can omit TextView descendants despite showing a focused
+    // editor in the application tree (42713347447). Read a fresh app projection
+    // only when we have a known visible native File View to bound the result.
+    // Each probe still executes only one inline query and the literal ID and
+    // full pre-action validation are unchanged.
+    let useFreshProjection = includeModal && retainedFileFrame != nil
+    let matches: [XCUIElement]
+    if useFreshProjection {
+      matches = app.textViews.matching(exactID).allElementsBoundByAccessibilityElement
+    } else {
+      matches = fileView?.descendants(matching: .textView)
+        .matching(exactID).allElementsBoundByAccessibilityElement ?? []
+    }
+    guard matches.count <= 1 else { throw fail("Ambiguous literal inline editor identities") }
     var inline: [NamingEditorWitness] = []
     for field in matches {
       guard Date() < deadline else { return nil }
@@ -229,7 +239,8 @@ final class FolderPickerUITests: XCTestCase {
       // bounds now, and revalidate the held object before any action below.
       guard field.isHittable else { continue }
       let frame = field.frame
-      if !frame.isEmpty && viewFrame.contains(frame) {
+      if !frame.isEmpty && viewFrame.contains(frame) &&
+         (!useFreshProjection || retainedFileFrame?.contains(CGPoint(x: frame.midX, y: frame.midY)) == true) {
         inline.append(bound(field, nil, true, identifier, frame))
       }
     }
@@ -552,6 +563,7 @@ final class FolderPickerUITests: XCTestCase {
     try preparePickerKeyboard(app, providerLabels)
     let namingViewFrame = app.frame
     let pickerFileView = try observedPickerFileView(app, namingViewFrame)
+    let retainedFileFrame = pickerFileView?.frame
     let newFolderLabels = ["New Folder", "New folder", "Create Folder", "新建文件夹", "新增檔案夾"]
     var create = find(app, newFolderLabels)
     if create == nil, let more = find(app, ["More", "More Actions", "更多", "更多操作", "ellipsis"]) {
@@ -587,7 +599,8 @@ final class FolderPickerUITests: XCTestCase {
       namingQueryCount += 1
       if poll.includeModal { namingModalQueryCount += 1 }
       let probeStartedAt = Date()
-      naming = try currentNamingEditor(app, pickerFileView, namingViewFrame, includeModal: poll.includeModal, before: namingDeadline)
+      naming = try currentNamingEditor(app, pickerFileView, namingViewFrame, includeModal: poll.includeModal,
+        retainedFileFrame: retainedFileFrame, before: namingDeadline)
       let probeEndedAt = Date()
       namingProbeTimes.append(["scheduled": poll.offset,
         "started": probeStartedAt.timeIntervalSince(namingStarted),
@@ -602,6 +615,7 @@ final class FolderPickerUITests: XCTestCase {
       "withinAppearanceDeadline": withinAppearanceDeadline,
       "queryCount": namingQueryCount, "modalQueryCount": namingModalQueryCount,
       "probeTimes": namingProbeTimes,
+      "freshAppProjectionProbed": namingModalQueryCount == 1 && retainedFileFrame != nil,
       "editorFound": naming != nil, "editorKind": naming?.isInline == true ? "inline" : "modal-or-absent",
       "editorIdentifier": naming?.identifier ?? "", "editorFrame": naming?.frame ?? [],
       "boundToAccessibilityElement": naming != nil, "modalOwnerHeld": naming?.modalOwner != nil,

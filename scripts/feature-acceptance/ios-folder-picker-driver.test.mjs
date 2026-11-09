@@ -351,13 +351,13 @@ test('appearance witness holds actual accessibility elements and the same absolu
  assert(s.includes('"probeTimes": namingProbeTimes'));
  assert(rows.every(([offset],i)=>offset<5&&(i===0||offset>rows[i-1][0])));
  const poll=s.split('for poll in namingPolls {')[1].split('let witnessObservedAt')[0];
- assert(poll.includes('if Date() >= namingDeadline { break }'));assert(poll.includes('includeModal: poll.includeModal, before: namingDeadline'));
+ assert(poll.includes('if Date() >= namingDeadline { break }'));assert.match(poll,/includeModal: poll\.includeModal,\s*retainedFileFrame: retainedFileFrame, before: namingDeadline/);
  assert(s.includes('"queryCount": namingQueryCount')&&s.includes('"modalQueryCount": namingModalQueryCount'));
  for(const literal of ['identifier == %@ AND enabled == YES','field.isHittable','viewFrame.contains(frame)'])assert(body.includes(literal));
  assert(!body.includes('field.exists')&&!body.includes('field.isEnabled')&&!body.includes('field.label.lowercased()'));
  assert(body.includes('fileView?.descendants(matching: .textView)'));
  assert(body.includes('.matching(exactID).allElementsBoundByAccessibilityElement'));
- assert(!body.includes('app.textViews')&&!body.includes('app.cells'));
+ assert(!body.includes('app.cells'));
  const bind=s.split('private func observedPickerFileView(')[1].split('private func currentNamingEditor(')[0];
  assert(bind.includes('identifier == %@", "File View"'));
  assert(bind.includes('app.collectionViews.matching(fileViewID).allElementsBoundByAccessibilityElement'));
@@ -492,4 +492,17 @@ test('owned icon spends the open window on one global identity and live scoped/f
  assert.equal((b.match(/usable\(witness\.field, viewFrame\)/g)||[]).length,1);
  assert(b.indexOf('confirmed == folder')<b.indexOf('try tap(icon'));
  assert(b.includes('secondsRemainingAfterAction'));
+});
+
+test('last bounded naming probe uses one fresh literal AX projection when the retained Files subtree is incomplete', () => {
+ const s=swiftSource();
+ const body=s.split('private func currentNamingEditor(')[1].split('private func validatedWitnessFlow(')[0];
+ assert.match(body,/let useFreshProjection = includeModal && retainedFileFrame != nil/);
+ assert.match(body,/if useFreshProjection \{\s*matches = app\.textViews\.matching\(exactID\)\.allElementsBoundByAccessibilityElement\s*\} else \{/);
+ assert.match(body,/retainedFileFrame\?\.contains\(CGPoint\(x: frame\.midX, y: frame\.midY\)\) == true/);
+ assert.match(body,/guard matches\.count <= 1/);
+ assert.match(body,/identifier == %@ AND enabled == YES/);
+ assert.match(s,/let namingDeadline = namingStarted\.addingTimeInterval\(5\)/);
+ assert.match(s,/let control = try validatedWitnessFlow\(app, providerLabels, witness\)/);
+ assert.match(s,/"freshAppProjectionProbed": namingModalQueryCount == 1 && retainedFileFrame != nil/);
 });
