@@ -190,7 +190,7 @@ final class FolderPickerUITests: XCTestCase {
         frame: [Double(frame.origin.x), Double(frame.origin.y), Double(frame.width), Double(frame.height)])
     }
     let identifier = "DOC.inlineRenameField"
-    let exactID = NSPredicate(format: "identifier == %@", identifier)
+    let exactID = NSPredicate(format: "identifier == %@ AND enabled == YES", identifier)
     let matchQuery: XCUIElementQuery
     if includeModal {
       // One snapshot for the exact inline TextView and modal owners. Separate
@@ -198,7 +198,7 @@ final class FolderPickerUITests: XCTestCase {
       let types = [NSNumber(value: XCUIElement.ElementType.alert.rawValue),
                    NSNumber(value: XCUIElement.ElementType.sheet.rawValue)]
       let textView = NSNumber(value: XCUIElement.ElementType.textView.rawValue)
-      let inlineOrModal = NSPredicate(format: "(elementType == %@ AND identifier == %@) OR elementType IN %@",
+      let inlineOrModal = NSPredicate(format: "(elementType == %@ AND identifier == %@ AND enabled == YES) OR elementType IN %@",
                                       textView, identifier, types)
       matchQuery = app.descendants(matching: .any).matching(inlineOrModal)
     } else {
@@ -212,10 +212,10 @@ final class FolderPickerUITests: XCTestCase {
         modalOwners.append(field)
         continue
       }
-      // Identifier is already bound by the query; do not repeat its RPC or
-      // the frame lookup. Keep every usability predicate for the witness.
-      guard field.exists, field.isHittable, field.isEnabled,
-            !["search", "搜索", "搜尋"].contains(field.label.lowercased()) else { continue }
+      // Enumeration is the existence observation; the exact TextView ID and
+      // enabled state are in that same snapshot. Read real hit-testing and
+      // bounds now, and revalidate the held object before any action below.
+      guard field.isHittable else { continue }
       let frame = field.frame
       if !frame.isEmpty && viewFrame.contains(frame) {
         inline.append(bound(field, nil, true, identifier, frame))

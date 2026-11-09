@@ -304,7 +304,11 @@ test('appearance witness holds actual accessibility elements and the same absolu
  assert(body.includes('if let witness = inline.first { return witness }'));
  assert(body.includes('guard includeModal else { return nil }'));
  assert(s.includes('includeModal: false'));assert(s.includes('includeModal: poll % 3 == 0'));
- for(const literal of ['field.exists','field.isHittable','field.isEnabled','viewFrame.contains(frame)'])assert(body.includes(literal));
+ for(const literal of ['identifier == %@ AND enabled == YES','field.isHittable','viewFrame.contains(frame)'])assert(body.includes(literal));
+ assert(!body.includes('field.exists')&&!body.includes('field.isEnabled')&&!body.includes('field.label.lowercased()'));
+ assert(body.includes('let matches = matchQuery.allElementsBoundByAccessibilityElement'));
+ const live=s.split('private func validatedWitnessFlow(')[1].split('private func recordNamingEditorWitness(')[0];
+ assert(live.includes('usable(witness.field, viewFrame)')&&live.includes('isSearchField(witness.field)'));
  assert(!/currentNavigationTitle|currentKeyboardDone|\.buttons/.test(body));
  assert(body.includes('owner.textFields.allElementsBoundByAccessibilityElement'));
  assert(body.includes('app.descendants(matching: .any).matching(inlineOrModal)'));

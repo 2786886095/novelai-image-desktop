@@ -450,6 +450,24 @@ jobs:
         working-directory: mobile
       - name: Check strict Simulator locale and own-device cleanup
         run: node --test scripts/feature-acceptance/ios-simulator-locale-regression.test.mjs scripts/feature-acceptance/stop-disposable-ios-simulator.test.mjs
+      - name: Use Xcode SDK matching the iOS 26.2 simulator under test
+        if: ${{ matrix.entry-group == 'os' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          developer=''
+          for path in /Applications/Xcode_26.2.app/Contents/Developer /Applications/Xcode_26.3.app/Contents/Developer; do
+            [ -d "$path" ] || continue
+            sdk="$(DEVELOPER_DIR="$path" xcrun --sdk iphonesimulator --show-sdk-version)"
+            if [ "$sdk" = '26.2' ]; then developer="$path"; break; fi
+          done
+          if [ -z "$developer" ]; then
+            echo 'No installed Xcode with the actual iOS 26.2 simulator SDK.' >&2
+            exit 1
+          fi
+          DEVELOPER_DIR="$developer" xcodebuild -version
+          DEVELOPER_DIR="$developer" xcrun --sdk iphonesimulator --show-sdk-version
+          printf 'DEVELOPER_DIR=%s\n' "$developer" >> "$GITHUB_ENV"
       - name: Create and boot a new disposable iOS Simulator
         shell: bash
         run: |
