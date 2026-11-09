@@ -195,7 +195,18 @@ final class FolderPickerUITests: XCTestCase {
     let identifier: String
     let frame: [Double]
   }
-  private func currentNamingEditor(_ app: XCUIApplication, _ viewFrame: CGRect,
+  private func observedPickerFileView(_ app: XCUIApplication, _ viewFrame: CGRect) throws -> XCUIElement? {
+    let fileViewID = NSPredicate(format: "identifier == %@", "File View")
+    let visible = app.collectionViews.matching(fileViewID).allElementsBoundByAccessibilityElement.filter {
+      guard $0.exists else { return false }
+      let frame = $0.frame
+      return !frame.isEmpty && viewFrame.intersects(frame)
+    }
+    guard visible.count <= 1 else { throw fail("Ambiguous real Files collection views") }
+    return visible.first
+  }
+
+  private func currentNamingEditor(_ app: XCUIApplication, _ fileView: XCUIElement?, _ viewFrame: CGRect,
                                    includeModal: Bool, before deadline: Date) throws -> NamingEditorWitness? {
     func bound(_ field: XCUIElement, _ owner: XCUIElement?, _ inline: Bool,
                _ identifier: String, _ frame: CGRect) -> NamingEditorWitness {
@@ -205,12 +216,11 @@ final class FolderPickerUITests: XCTestCase {
     }
     let identifier = "DOC.inlineRenameField"
     let exactID = NSPredicate(format: "identifier == %@ AND enabled == YES", identifier)
-    // Bind only the actual native Folder carrier's inline editor. Whole-app
-    // text-view enumeration stalled while Files transitioned (42689502357).
-    // The fresh full-view uniqueness checks still run before any action.
-    let carrierID = NSPredicate(format: "identifier == %@", "Folder")
-    let carrierEditors = app.cells.matching(carrierID).descendants(matching: .textView)
-    let matches = carrierEditors.matching(exactID).allElementsBoundByAccessibilityElement
+    // Start the timed query from the retained system collection element.
+    // An application-rooted query was still late in 42692894724. Keep
+    // the actual binding and full pre-action checks.
+    let matches = fileView?.descendants(matching: .textView)
+      .matching(exactID).allElementsBoundByAccessibilityElement ?? []
     var inline: [NamingEditorWitness] = []
     for field in matches {
       guard Date() < deadline else { return nil }
@@ -532,6 +542,8 @@ final class FolderPickerUITests: XCTestCase {
     capture("observed-external-local-provider")
     let providerLabels = providers.flatMap { $0.1 }
     try preparePickerKeyboard(app, providerLabels)
+    let namingViewFrame = app.frame
+    let pickerFileView = try observedPickerFileView(app, namingViewFrame)
     let newFolderLabels = ["New Folder", "New folder", "Create Folder", "新建文件夹", "新增檔案夾"]
     var create = find(app, newFolderLabels)
     if create == nil, let more = find(app, ["More", "More Actions", "更多", "更多操作", "ellipsis"]) {
@@ -540,7 +552,6 @@ final class FolderPickerUITests: XCTestCase {
       create = find(app, newFolderLabels)
     }
     guard let newFolder = create else { throw fail("System provider did not expose New Folder") }
-    let namingViewFrame = app.frame
     try tap(newFolder, "new-folder-via-system-picker")
     // Restore the original field-appearance stage: the editor itself must be
     // usable within one absolute5s; the later complete safety RPCs are not a
@@ -566,7 +577,7 @@ final class FolderPickerUITests: XCTestCase {
       namingQueryCount += 1
       if poll.includeModal { namingModalQueryCount += 1 }
       let probeStartedAt = Date()
-      naming = try currentNamingEditor(app, namingViewFrame, includeModal: poll.includeModal, before: namingDeadline)
+      naming = try currentNamingEditor(app, pickerFileView, namingViewFrame, includeModal: poll.includeModal, before: namingDeadline)
       let probeEndedAt = Date()
       namingProbeTimes.append(["scheduled": poll.offset,
         "started": probeStartedAt.timeIntervalSince(namingStarted),

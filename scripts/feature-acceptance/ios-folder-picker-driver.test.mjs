@@ -355,10 +355,16 @@ test('appearance witness holds actual accessibility elements and the same absolu
  assert(s.includes('"queryCount": namingQueryCount')&&s.includes('"modalQueryCount": namingModalQueryCount'));
  for(const literal of ['identifier == %@ AND enabled == YES','field.isHittable','viewFrame.contains(frame)'])assert(body.includes(literal));
  assert(!body.includes('field.exists')&&!body.includes('field.isEnabled')&&!body.includes('field.label.lowercased()'));
- assert(body.includes('let carrierID = NSPredicate(format: "identifier == %@", "Folder")'));
- assert(body.includes('app.cells.matching(carrierID).descendants(matching: .textView)'));
- assert(body.includes('carrierEditors.matching(exactID).allElementsBoundByAccessibilityElement'));
- assert(!body.includes('app.textViews'));
+ assert(body.includes('fileView?.descendants(matching: .textView)'));
+ assert(body.includes('.matching(exactID).allElementsBoundByAccessibilityElement'));
+ assert(!body.includes('app.textViews')&&!body.includes('app.cells'));
+ const bind=s.split('private func observedPickerFileView(')[1].split('private func currentNamingEditor(')[0];
+ assert(bind.includes('identifier == %@", "File View"'));
+ assert(bind.includes('app.collectionViews.matching(fileViewID).allElementsBoundByAccessibilityElement'));
+ assert(bind.includes('visible.count <= 1'));
+ assert(s.indexOf('let pickerFileView = try observedPickerFileView(app, namingViewFrame)')<
+        s.indexOf('try tap(newFolder, "new-folder-via-system-picker")'));
+ assert(poll.includes('currentNamingEditor(app, pickerFileView, namingViewFrame'));
  const live=s.split('private func validatedWitnessFlow(')[1].split('private func recordNamingEditorWitness(')[0];
  assert(live.includes('usable(witness.field, viewFrame)')&&live.includes('isSearchField(witness.field)'));
  assert(!/currentNavigationTitle|currentKeyboardDone|\.buttons/.test(body));
