@@ -356,6 +356,7 @@ final class FolderPickerUITests: XCTestCase {
     }
     guard searches.count <= 1 else { throw fail("Ambiguous provider search field during keyboard preparation") }
     guard let search = searches.first else { return }
+    guard let providerTitle = try currentNavigationTitle(app), providerLabels.contains(providerTitle) else { return }
     try tap(search, "prepare-picker-software-keyboard")
     let keyboard = app.keyboards.firstMatch
     let keyboardAppeared = keyboard.waitForExistence(timeout: 4)
@@ -371,8 +372,23 @@ final class FolderPickerUITests: XCTestCase {
     }
     let dismissers = container.children(matching: .other).matching(dismissLabel)
       .allElementsBoundByAccessibilityElement.filter { usable($0, viewFrame) && container.frame.contains($0.frame) }
-    guard dismissers.count == 1 else { throw fail("No unique dismissal control inside the active document search container") }
-    try tap(dismissers[0], "leave-picker-search-without-editing")
+    guard dismissers.count <= 1 else { throw fail("Ambiguous dismissal controls inside the active document search container") }
+    if let dismiss = dismissers.first {
+      try tap(dismiss, "leave-picker-search-without-editing")
+    } else {
+      // Some simulator runtimes expose the scrim in AX but not as hittable.
+      // The same native navigation bar still exposes its real provider Back.
+      let backID = NSPredicate(format: "identifier == %@", "BackButton")
+      let backs = bar.children(matching: .button).matching(backID)
+        .allElementsBoundByAccessibilityElement.filter { usable($0, viewFrame) && bar.frame.contains($0.frame) }
+      guard backs.count == 1 else { throw fail("No unique provider Back while document search is active") }
+      try tap(backs[0], "leave-picker-search-via-provider-back")
+      guard container.waitForNonExistence(timeout: 3) else { throw fail("Document search stayed active after provider Back") }
+      if try currentNavigationTitle(app) != providerTitle {
+        guard let providerLocation = find(app, [providerTitle]) else { throw fail("Original local provider was not offered after provider Back") }
+        try tap(providerLocation, "reopen-original-local-provider-after-keyboard-preparation")
+      }
+    }
     guard container.waitForNonExistence(timeout: 3) else { throw fail("Document search stayed active after dismissal") }
     guard try waitForNavigationTitle(app, providerLabels) else {
       throw fail("Provider navigation title was not restored after keyboard preparation")

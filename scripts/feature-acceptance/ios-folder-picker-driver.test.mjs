@@ -379,7 +379,7 @@ test('owned icon is at most one later attempt under original10s; no diagnostic c
 test('picker keyboard preparation only focuses and cancels native search before the unchanged New Folder timing gate',()=>{
  const s=swiftSource(),prep=s.split('private func preparePickerKeyboard(')[1].split('private func tap(')[0];
  assert(prep.includes('FullDocumentManagerViewControllerNavigationBar'));
- for(const token of ['bar.searchFields','app.keyboards.firstMatch','DOCSearchControllerContainerViewIdentifier','container.children(matching: .other)','dismissers.count == 1','container.waitForNonExistence(timeout: 3)','waitForNavigationTitle(app, providerLabels)'])assert(prep.includes(token),token);
+ for(const token of ['bar.searchFields','app.keyboards.firstMatch','DOCSearchControllerContainerViewIdentifier','container.children(matching: .other)','dismissers.count <= 1','backs.count == 1','bar.children(matching: .button)','find(app, [providerTitle])','container.waitForNonExistence(timeout: 3)','waitForNavigationTitle(app, providerLabels)'])assert(prep.includes(token),token);
  assert(!/typeText|namingDeadline|FileManager|nativePid/.test(prep));
  const warm=s.indexOf('try preparePickerKeyboard(app, providerLabels)');
  assert(warm>=0&&warm<s.indexOf('try tap(newFolder, "new-folder-via-system-picker")')&&warm<s.indexOf('let namingDeadline = namingStarted.addingTimeInterval(5)'));
