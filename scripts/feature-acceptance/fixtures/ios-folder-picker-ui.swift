@@ -476,8 +476,14 @@ final class FolderPickerUITests: XCTestCase {
     element.tap()
   }
 
+  private func suspendPickerPoll(_ seconds: TimeInterval) async throws {
+    if seconds > 0 {
+      try await Task<Never, Never>.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+    }
+  }
+
   @MainActor
-  func testSelectRealExternalNonceFolder() throws {
+  func testSelectRealExternalNonceFolder() async throws {
     continueAfterFailure = false
     let env = ProcessInfo.processInfo.environment
     func required(_ key: String) throws -> String {
@@ -506,7 +512,7 @@ final class FolderPickerUITests: XCTestCase {
     let readyDeadline = Date().addingTimeInterval(15)
     while find(app, cancelLabels) == nil || find(app, openLabels) == nil {
       if Date() >= readyDeadline { throw fail("Actual UIDocumentPicker controls did not appear") }
-      Thread.sleep(forTimeInterval: 0.15)
+      try await suspendPickerPoll(0.15)
     }
     capture("actual-system-picker-present")
 
@@ -523,7 +529,7 @@ final class FolderPickerUITests: XCTestCase {
         }
         if let location = find(app, labels) {
           try tap(location, "open-observed-external-local-provider")
-          Thread.sleep(forTimeInterval: 0.25)
+          try await suspendPickerPoll(0.25)
           capture("provider-tap-\(attempt)-\(canonical)")
           if try waitForNavigationTitle(app, labels) {
             localProvider = canonical
@@ -534,7 +540,7 @@ final class FolderPickerUITests: XCTestCase {
       if localProvider != nil { break }
       if let browse = find(app, ["Browse", "浏览", "瀏覽", "Locations", "位置"]) {
         try tap(browse, "browse-system-provider-locations")
-      } else { Thread.sleep(forTimeInterval: 0.3) }
+      } else { try await suspendPickerPoll(0.3) }
     }
     guard let provider = localProvider else {
       throw fail("External provider navigation title was not verified; availability is undetermined and app Documents is forbidden")
@@ -548,7 +554,7 @@ final class FolderPickerUITests: XCTestCase {
     var create = find(app, newFolderLabels)
     if create == nil, let more = find(app, ["More", "More Actions", "更多", "更多操作", "ellipsis"]) {
       try tap(more, "open-observed-provider-actions")
-      Thread.sleep(forTimeInterval: 0.25)
+      try await suspendPickerPoll(0.25)
       create = find(app, newFolderLabels)
     }
     guard let newFolder = create else { throw fail("System provider did not expose New Folder") }
@@ -572,7 +578,9 @@ final class FolderPickerUITests: XCTestCase {
     for poll in namingPolls {
       if naming != nil || Date() >= namingDeadline { break }
       let delay = namingStarted.addingTimeInterval(poll.offset).timeIntervalSinceNow
-      if delay > 0 { Thread.sleep(forTimeInterval: delay) }
+      // Do not block XCTest's main thread while the remote Files keyboard
+      // transitions. Keep the same absolute probe offsets and deadline.
+      try await suspendPickerPoll(delay)
       if Date() >= namingDeadline { break }
       namingQueryCount += 1
       if poll.includeModal { namingModalQueryCount += 1 }
@@ -641,7 +649,7 @@ final class FolderPickerUITests: XCTestCase {
         continue // Re-read the actual navigation title; do not tap an old page.
       }
       if Date() >= createDeadline { throw fail("The new nonce directory was not opened") }
-      Thread.sleep(forTimeInterval: 0.2)
+        try await suspendPickerPoll(0.2)
     }
     capture("exact-nonce-folder-open-in-system-picker")
     guard let confirm = find(app, openLabels) else {
@@ -652,7 +660,7 @@ final class FolderPickerUITests: XCTestCase {
     while try currentNavigationTitle(app, expectedFolder: folder) != nil ||
           find(app, cancelLabels) != nil || find(app, openLabels) != nil {
       if Date() >= closeDeadline { throw fail("System picker did not dismiss after selection") }
-      Thread.sleep(forTimeInterval: 0.15)
+        try await suspendPickerPoll(0.15)
     }
     let result: [String: Any] = [
       "sourceSha": source, "profileSha": profile,

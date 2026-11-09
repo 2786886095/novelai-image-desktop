@@ -365,6 +365,11 @@ test('appearance witness holds actual accessibility elements and the same absolu
  assert(s.indexOf('let pickerFileView = try observedPickerFileView(app, namingViewFrame)')<
         s.indexOf('try tap(newFolder, "new-folder-via-system-picker")'));
  assert(poll.includes('currentNamingEditor(app, pickerFileView, namingViewFrame'));
+ assert(poll.includes('try await suspendPickerPoll(delay)')&&!poll.includes('Thread.sleep'));
+ assert(s.includes('@MainActor\n  func testSelectRealExternalNonceFolder() async throws'));
+ const suspension=s.split('private func suspendPickerPoll(')[1].split('@MainActor')[0];
+ assert(suspension.includes('try await Task<Never, Never>.sleep(nanoseconds:'));
+ assert(!suspension.includes('deadline')&&!suspension.includes('Thread.sleep'));
  const live=s.split('private func validatedWitnessFlow(')[1].split('private func recordNamingEditorWitness(')[0];
  assert(live.includes('usable(witness.field, viewFrame)')&&live.includes('isSearchField(witness.field)'));
  assert(!/currentNavigationTitle|currentKeyboardDone|\.buttons/.test(body));
