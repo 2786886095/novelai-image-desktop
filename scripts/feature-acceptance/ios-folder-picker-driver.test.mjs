@@ -31,7 +31,7 @@ test('one overall REQUEST budget includes both real PID queries and bounded UI t
 test('XCTest support result must match all native bindings and genuine external-provider action trace',()=>{assert.deepEqual(assertIosPickerUiResult(output(ui),context),ui);for(const change of [{nonce:'other'},{sourceSha:'c'.repeat(40)},{nativePid:111},{appId:'another.app'},{actualSystemPicker:false},{createdExactNonceFolder:false},{confirmedSelection:false},{targetAppNotLaunchedOrTerminated:false},{localProvider:'App Documents'},{actions:[]}])assert.throws(()=>assertIosPickerUiResult(output({...ui,...change}),context));assert.throws(()=>assertIosPickerUiResult('',context));assert.throws(()=>assertIosPickerUiResult(output(ui)+output(ui),context));});
 test('all 126 non-Windows-local scenarios have exactly one fixed native entry per mobile platform',()=>{const required=Object.entries(fullFeatureProfiles).filter(([f])=>!['artist-iteration','agent-components'].includes(f)).flatMap(([f,p])=>p.scenarios.map(s=>f+'/'+s));assert.equal(required.length,126);for(const platform of ['android','ios']){const actual=selectMobileNativeEntries('all',platform).flatMap(e=>mobileScenarioInventories[e]??[]);assert.equal(actual.length,new Set(actual).size);assert.deepEqual(actual.sort(),[...required].sort());}assert.deepEqual(mobileNativeEntries.ios_folder1,{testFile:'integration_test/native_ios_output_folder_scenario.dart',expectedChecks:1,scenarioChecks:1,platforms:['ios']});assert(!selectMobileNativeEntries('all','android').includes('ios_folder1'));});
 test('separate XCTest UI target is generated externally, never an app host or modified Runner project',()=>{const p=iosPickerProject();assert(p.includes('com.apple.product-type.bundle.ui-testing'));assert(p.includes('TEST_TARGET_NAME=""'));assert(!p.includes('com.apple.product-type.application'));assert(!p.includes('Runner.xcodeproj'));assert(iosPickerScheme.includes('FolderPickerUITests'));const ids=[...p.matchAll(/^(A[0-9A-F]+)=/gm)].map(m=>m[1]);assert.equal(ids.length,new Set(ids).size);assert(ids.every(v=>v.length===24));});
-test('Swift fixture uses actual system hierarchy and nonce naming; it never launches the client or writes a grant',()=>{const s=fs.readFileSync(new URL('./fixtures/ios-folder-picker-ui.swift',import.meta.url),'utf8');for(const text of ['XCUIApplication(bundleIdentifier: bundle)','New Folder','On My iPhone','On My iPad','field.typeText(folder)','XCUIScreen.main.screenshot()','app.debugDescription','IOS_FOLDER_PICKER_UI_RESULT:'])assert(s.includes(text));assert(!/\.launch\s*\(|\.terminate\s*\(|UserDefaults|bookmarkData|MethodChannel|coordinate\(/.test(s));const runner=fs.readFileSync(new URL('./run-mobile-native.mjs',import.meta.url),'utf8');assert(runner.indexOf('await prepareIosFolderPickerDriver')<runner.indexOf("nativeCommand = [input.flutter, 'run', '--machine'"));assert(runner.includes('onNativeLine:picker?.onLine'));assert(runner.includes('await picker.finish()'));});
+test('Swift fixture uses actual system hierarchy and nonce naming; it never launches the client or writes a grant',()=>{const s=fs.readFileSync(new URL('./fixtures/ios-folder-picker-ui.swift',import.meta.url),'utf8');for(const text of ['XCUIApplication(bundleIdentifier: bundle)','New Folder','On My iPhone','On My iPad','field.typeText(folder)','XCUIScreen.main.screenshot()','app.debugDescription','IOS_FOLDER_PICKER_UI_RESULT:'])assert(s.includes(text));assert(!/\.launch\s*\(|\.terminate\s*\(|UserDefaults|bookmarkData|MethodChannel|coordinate\(/.test(s.replace("icon.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))", "")));const runner=fs.readFileSync(new URL('./run-mobile-native.mjs',import.meta.url),'utf8');assert(runner.indexOf('await prepareIosFolderPickerDriver')<runner.indexOf("nativeCommand = [input.flutter, 'run', '--machine'"));assert(runner.includes('onNativeLine:picker?.onLine'));assert(runner.includes('await picker.finish()'));});
 test('system driver refuses non-macOS or non-CI environments instead of promoting host fixtures',async()=>{await assert.rejects(()=>prepareIosFolderPickerDriver({...context,environment:{GITHUB_ACTIONS:'false'}}),/Real isolated macOS CI/);});
 
 test('host libproc identity binds exact PID/start time/executable to the fixed Simulator bundle, with no alias fallback',()=>{
@@ -146,7 +146,7 @@ test('real provider taps capture a separate frame and bounded title waits preser
  const wait=s.indexOf('if try waitForNavigationTitle(app, labels)');assert(tap>=0&&tap<capture&&capture<wait);
  assert(s.includes('availability is undetermined and app Documents is forbidden'));
  assert(!s.includes('No real external On My iPhone/iPad provider'));
- assert(!/\.launch\s*\(|\.terminate\s*\(|UserDefaults|bookmarkData|MethodChannel|coordinate\(/.test(s));
+ assert(!/\.launch\s*\(|\.terminate\s*\(|UserDefaults|bookmarkData|MethodChannel|coordinate\(/.test(s.replace("icon.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))", "")));
 });
 
 // STATIC naming-policy controls. The5c capture really contains a TextView with
@@ -236,7 +236,7 @@ test('static naming5s deadline is not renewed; real new-folder and rename commit
  assert.throws(()=>acceptAt(5.1,true),/late naming control/);assert.equal(acceptAt(4.9,true),true);
  const create=s.indexOf('let createDeadline = Date().addingTimeInterval(10)'),capture=s.indexOf('capture("exact-nonce-folder-open-in-system-picker")');assert(create>=0&&create<capture);
  assert.equal((s.match(/Date\(\)\.addingTimeInterval\(10\)/g)||[]).length,2);
- assert(!/UserDefaults|bookmarkData|MethodChannel|\.launch\s*\(|\.terminate\s*\(|coordinate\(/.test(s));
+ assert(!/UserDefaults|bookmarkData|MethodChannel|\.launch\s*\(|\.terminate\s*\(|coordinate\(/.test(s.replace("icon.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))", "")));
 });
 
 // Static source/geometry contract only. Actual b56 attempt2 did not record the
@@ -354,7 +354,7 @@ test('one owned-folder icon action is restricted to the live exact-nonce held ed
  assert(carrier.includes('cell.exists'));assert(carrier.includes('!frame.isEmpty && viewFrame.intersects(frame)'));
  assert(!/isHittable|isEnabled|usable\(/.test(carrier),'read-only carrier identity is not an action target');
  assert(!body.includes('app.images'));assert(!body.includes('matching(identifier:'));assert(!body.includes('cellFrame.contains(witness.field.frame)'));
- assert(!/coordinate\(|FileManager|renameItem|typeText|currentKeyboardDone|Thread.sleep/.test(body));
+ assert(!/FileManager|renameItem|typeText|currentKeyboardDone|Thread.sleep/.test(body));
  const allowed=x=>x.heldAlive&&x.usable&&x.exactNonce&&x.sameProvider&&x.globalEditors===1&&x.ownedCells===1&&x.cellContainsLiteralEditor&&x.scopedEditors===1&&x.exactIcon&&x.scopedIcons===1&&x.iconUsable&&x.iconInsideCellAndApp&&!x.late;
  const good={carrierHittable:false,carrierEnabled:false,heldAlive:true,usable:true,exactNonce:true,sameProvider:true,globalEditors:1,ownedCells:1,cellContainsLiteralEditor:true,scopedEditors:1,exactIcon:true,scopedIcons:1,iconUsable:true,iconInsideCellAndApp:true,late:false};assert(allowed(good));
  for(const change of [{heldAlive:false},{exactNonce:false},{sameProvider:false},{globalEditors:2},{ownedCells:2},{cellContainsLiteralEditor:false},{scopedEditors:2},{exactIcon:false},{scopedIcons:2},{iconUsable:false},{iconInsideCellAndApp:false},{late:true}])assert(!allowed({...good,...change}),JSON.stringify(change));
@@ -398,4 +398,14 @@ test('unlabeled folder image fallback remains bound to one existing exact-nonce 
  const relevant=['scopedValue == folder','if namedIcons.isEmpty','carrierImages.count <= 1','image.identifier.isEmpty && image.label.isEmpty','cellFrame.contains(frame)','frame.maxY <= editorFrame.minY','let confirmed = witness.field.value as? String, confirmed == folder','try tap(icon, "finish-inline-name-via-owned-folder-icon", before: deadline)'];
  let pos=-1;for(const token of relevant){const i=b.indexOf(token);assert(i>pos,token);pos=i;}
  assert(b.includes('unique-unlabeled-owned-image'));assert(!b.includes('app.images'));
+});
+
+
+test('only the unique live image owned by the nonce folder can supply one actual center hit; no software success inferred',()=>{
+ const s=swiftSource(),body=s.split('private func finishInlineNameViaOwnedIcon(')[1].split('private func preparePickerKeyboard(')[0];
+ assert.equal((s.match(/\.coordinate\(/g)||[]).length,1);
+ const start=body.indexOf('if icon.isHittable');const guarded=body.slice(start);
+ for(const token of ['namedIcons.isEmpty','observedIconIdentifier.isEmpty','icon.frame == observedIconFrame','observedIconFrame.maxY <= editorFrame.minY','!overlays.contains','guard Date() < deadline','ownedCenter.tap()'])assert(guarded.includes(token),token);
+ assert(guarded.indexOf('guard Date() < deadline')<guarded.indexOf('ownedCenter.tap()'));assert(!guarded.includes('app.coordinate'));
+ assert(guarded.includes('navigationOrCommitGuaranteed": false'));
 });

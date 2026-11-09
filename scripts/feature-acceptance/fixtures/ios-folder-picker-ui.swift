@@ -350,8 +350,8 @@ final class FolderPickerUITests: XCTestCase {
       guard carrierImages.count <= 1 else { throw fail("Ambiguous image ownership in the held Folder carrier") }
       icons = carrierImages.filter { image in
         let frame = image.frame
-        return image.identifier.isEmpty && image.label.isEmpty && usable(image, viewFrame) &&
-          cellFrame.contains(frame) && frame.maxY <= editorFrame.minY &&
+        return image.identifier.isEmpty && image.label.isEmpty && image.exists && image.isEnabled &&
+          !frame.isEmpty && viewFrame.contains(frame) && cellFrame.contains(frame) && frame.maxY <= editorFrame.minY &&
           editorFrame.minX <= frame.midX && frame.midX <= editorFrame.maxX
       }
     } else {
@@ -363,16 +363,33 @@ final class FolderPickerUITests: XCTestCase {
     guard icons.count == 1 else { throw fail("Ambiguous usable owned folder images") }
     let icon = icons[0]
     let observedIconIdentifier = icon.identifier
+    let observedIconFrame = icon.frame
     guard cell.exists, usable(witness.field, viewFrame),
           witness.field.identifier == "DOC.inlineRenameField",
           let confirmed = witness.field.value as? String, confirmed == folder,
-          usable(icon, viewFrame), cellFrame.contains(icon.frame) else {
+          icon.exists, icon.isEnabled, !observedIconFrame.isEmpty,
+          viewFrame.contains(observedIconFrame), cellFrame.contains(icon.frame) else {
       throw fail("Held editor/carrier/icon invalidated before the one owned action")
     }
     // This is an observed UI action, NOT a guarantee of commit or navigation.
     // The original exact nonce title, Open selection and native bookmark/bytes
     // checks still decide success. No second Done, newline or filesystem edit.
-    try tap(icon, "finish-inline-name-via-owned-folder-icon", before: deadline)
+    if icon.isHittable {
+      try tap(icon, "finish-inline-name-via-owned-folder-icon", before: deadline)
+    } else {
+      // iOS 26 can draw an image without an AX hit action. Only a currently
+      // bound unlabeled image within this exact-nonce cell qualifies for one
+      // real center hit. Never use a device/global coordinate or a second hit.
+      guard namedIcons.isEmpty, observedIconIdentifier.isEmpty, icon.label.isEmpty,
+            icon.frame == observedIconFrame, observedIconFrame.maxY <= editorFrame.minY else { return }
+      let point = CGPoint(x: observedIconFrame.midX, y: observedIconFrame.midY)
+      let overlays = app.keyboards.allElementsBoundByAccessibilityElement
+      guard !overlays.contains(where: { $0.exists && $0.frame.contains(point) }) else { return }
+      let ownedCenter = icon.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+      guard Date() < deadline else { throw fail("Bound folder image hit exceeded original10s window") }
+      actions.append(["action": "finish-inline-name-via-owned-folder-icon", "label": "", "identifier": ""])
+      ownedCenter.tap()
+    }
     print("IOS_FOLDER_OWNED_ICON_ACTION:" + String(decoding:
       try JSONSerialization.data(withJSONObject: ["bindings": bindings,
         "requiredFolderName": folder, "literalCellId": "Folder", "literalIconId": observedIconIdentifier, "imageSelection": namedIcons.isEmpty ? "unique-unlabeled-owned-image" : "literal-Folder84pt",
