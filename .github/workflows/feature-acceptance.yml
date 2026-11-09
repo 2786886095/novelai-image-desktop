@@ -347,8 +347,21 @@ jobs:
             printf 'SDKMANAGER unavailable: %s\n' "$sdkmanager" >&2
             exit 1
           fi
-          "$sdkmanager" --channel=0 --install "emulator"
           emulator="$sdk_root/emulator/emulator"
+          if [ ! -x "$emulator" ]; then
+            install_log="$(mktemp "${RUNNER_TEMP}/android-emulator-install.XXXXXX")"
+            if "$sdkmanager" --channel=0 --install "emulator" >"$install_log" 2>&1; then
+              cat "$install_log"
+            else
+              status=$?
+              cat "$install_log" >&2
+              # Retry only the known SDK archive read failure, not KVM or permission errors.
+              if ! tr '\r' '\n' <"$install_log" | grep -Fxq 'Warning: An error occurred while preparing SDK package Android Emulator: Error reading Zip content from a SeekableByteChannel.'; then
+                exit "$status"
+              fi
+              "$sdkmanager" --channel=0 --install "emulator"
+            fi
+          fi
           if [ ! -x "$emulator" ]; then
             printf 'EMULATOR unavailable: %s\n' "$emulator" >&2
             exit 1

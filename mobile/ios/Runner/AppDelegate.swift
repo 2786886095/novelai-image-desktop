@@ -433,9 +433,16 @@ private final class OfficialMetadataBridge: NSObject, WKNavigationDelegate {
     let end = min(offset + 60000, payload.length)
     if offset < payload.length { expression = "naiMetadataChunk(\(quote(payload.substring(with: NSRange(location: offset, length: end - offset)))))" }
     else { expression = "naiMetadataStart(\(quote(session.worker)))" }
-    session.view.evaluateJavaScript(expression) { [weak self] _, error in
+    // Return a primitive acknowledgement instead of depending on WebKit's
+    // handling of an undefined function result. JS exceptions still fail closed.
+    session.view.evaluateJavaScript(expression + "; true") { [weak self] value, error in
       guard let self = self, self.active === session, !session.settled else { return }
-      if error != nil { self.finish(session, nil, "sandbox_failed"); return }
+      if let error = error {
+        let native = error as NSError
+        NSLog("OfficialMetadataSandbox push failed: %@ (%ld)", native.domain, native.code)
+        self.finish(session, nil, "sandbox_failed"); return
+      }
+      guard (value as? Bool) == true else { self.finish(session, nil, "sandbox_failed"); return }
       if offset < payload.length { self.push(session, end) } else { self.poll(session) }
     }
   }
@@ -443,7 +450,11 @@ private final class OfficialMetadataBridge: NSObject, WKNavigationDelegate {
     guard active === session, !session.settled else { return }
     session.view.evaluateJavaScript("JSON.stringify(globalThis.naiMetadataResult)") { [weak self] value, error in
       guard let self = self, self.active === session, !session.settled else { return }
-      if error != nil { self.finish(session, nil, "sandbox_failed"); return }
+      if let error = error {
+        let native = error as NSError
+        NSLog("OfficialMetadataSandbox poll failed: %@ (%ld)", native.domain, native.code)
+        self.finish(session, nil, "sandbox_failed"); return
+      }
       if let text = value as? String, text != "null" {
         guard text.utf8.count <= 18 * 1024 * 1024, let data = text.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data), object is [String: Any] else {
