@@ -398,7 +398,7 @@ test('source-bound elapsed witness uses cached attributes after the timestamp, a
 // STATIC ownership/dispatch policy only, not an actual cell click or UI result.
 test('one owned-folder icon action is restricted to the live exact-nonce held editor AX subtree, never a global icon or frame-only owner',()=>{
  const s=swiftSource();const body=s.split('private func finishInlineNameViaOwnedIcon(')[1].split('private func tap(')[0];
- for(const token of ['witness.field.exists','usable(witness.field, viewFrame)','value == folder','providerLabels.contains(title)',
+ for(const token of ['witness.field.exists','usable(witness.field, viewFrame)','confirmed == folder','providerLabels.contains(title)',
   'let fieldPredicate = NSPredicate(format: "identifier == %@", "DOC.inlineRenameField")','global.count == 1',
   'app.cells.matching(cellPredicate).containing(fieldPredicate).allElementsBoundByAccessibilityElement','cells.count == 1',
   'cell.textViews.matching(fieldPredicate)','scoped.count == 1','scopedValue == folder',
@@ -462,4 +462,13 @@ test('only the unique live image owned by the nonce folder can supply one actual
  for(const token of ['namedIcons.isEmpty','observedIconIdentifier.isEmpty','icon.frame == observedIconFrame','observedIconFrame.maxY <= editorFrame.minY','!overlays.contains','guard Date() < deadline','ownedCenter.tap()'])assert(guarded.includes(token),token);
  assert(guarded.indexOf('guard Date() < deadline')<guarded.indexOf('ownedCenter.tap()'));assert(!guarded.includes('app.coordinate'));
  assert(guarded.includes('navigationOrCommitGuaranteed": false'));
+});
+
+test('owned icon spends the open window on one global identity and live scoped/final checks',()=>{
+ const s=swiftSource(),b=s.split('private func finishInlineNameViaOwnedIcon(')[1].split('private func preparePickerKeyboard(')[0];
+ const lookup=b.slice(b.indexOf('let global ='),b.indexOf('guard global.count'));
+ assert(!/filter|usable\(|isHittable/.test(lookup));
+ assert.equal((b.match(/usable\(witness\.field, viewFrame\)/g)||[]).length,1);
+ assert(b.indexOf('confirmed == folder')<b.indexOf('try tap(icon'));
+ assert(b.includes('secondsRemainingAfterAction'));
 });

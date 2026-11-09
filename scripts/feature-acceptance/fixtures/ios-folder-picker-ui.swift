@@ -306,21 +306,18 @@ final class FolderPickerUITests: XCTestCase {
     guard witness.isInline && witness.field.exists else { return }
     guard Date() < deadline else { throw fail("Owned-icon action exceeded original10s window") }
     let viewFrame = app.frame
-    guard usable(witness.field, viewFrame) else { return }
-    guard witness.field.identifier == "DOC.inlineRenameField",
-          let value = witness.field.value as? String, value == folder else {
-      throw fail("Held inline editor lost the exact nonce before owned-icon action")
-    }
+    // The held editor's exact value and live hit are revalidated immediately
+    // before dispatch below. Do not issue those same AX RPCs twice.
     let title = try currentNavigationTitle(app)
     if title == folder { return }
     guard let title = title, providerLabels.contains(title) else {
       throw fail("Owned-icon action is not in the verified current provider")
     }
     let fieldPredicate = NSPredicate(format: "identifier == %@", "DOC.inlineRenameField")
-    let global = app.textViews.matching(fieldPredicate).allElementsBoundByAccessibilityElement.filter {
-      !isSearchField($0) && usable($0, viewFrame)
-    }
-    guard global.count == 1 else { throw fail("Owned-icon action lacks one global usable literal editor") }
+    // Reject duplicate literal identities (even stale/non-hittable ones);
+    // use the sole owning subtree to validate the editor's live properties.
+    let global = app.textViews.matching(fieldPredicate).allElementsBoundByAccessibilityElement
+    guard global.count == 1 else { throw fail("Owned-icon action lacks one global literal editor") }
     let cellPredicate = NSPredicate(format: "identifier == %@", "Folder")
     let cells = app.cells.matching(cellPredicate).containing(fieldPredicate).allElementsBoundByAccessibilityElement.filter { cell in
       // The carrier is read-only identity, not the interaction target.
@@ -396,7 +393,8 @@ final class FolderPickerUITests: XCTestCase {
     print("IOS_FOLDER_OWNED_ICON_ACTION:" + String(decoding:
       try JSONSerialization.data(withJSONObject: ["bindings": bindings,
         "requiredFolderName": folder, "literalCellId": "Folder", "literalIconId": observedIconIdentifier, "imageSelection": namedIcons.isEmpty ? "unique-unlabeled-owned-image" : "literal-Folder84pt",
-        "oneAttempt": true, "navigationOrCommitGuaranteed": false], options: [.sortedKeys]), as: UTF8.self))
+        "oneAttempt": true,           "secondsRemainingAfterAction": deadline.timeIntervalSinceNow,
+"navigationOrCommitGuaranteed": false], options: [.sortedKeys]), as: UTF8.self))
   }
   // Warm UIKit’s software keyboard on the disposable picker before measuring
   // the separate New Folder action. Do not type into search or create anything.
