@@ -52,14 +52,13 @@ class _ComicBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = context.watch<ComicController>();
     final t = _text(context);
-    if (!controller.loaded) {
-      return Scaffold(body: Center(child: Text(t('comic.loading'))));
-    }
-    if (controller.loadError != null) {
-      return Scaffold(body: Center(child: Text(controller.loadError!)));
-    }
-    return Scaffold(
-      appBar: workbenchAppBar(context, AppBar(
+    final loadMessage = !controller.loaded ? t('comic.loading') : controller.loadError;
+    final title = loadMessage == null
+        ? controller.displayTitle
+        : controller.japanese
+            ? japaneseComicTitle(controller.app.settings.language)
+            : t('comic.defaultTitle');
+    final toolbar = workbenchAppBar(context, AppBar(
         leading: onBack == null
             ? null
             : IconButton(
@@ -72,7 +71,7 @@ class _ComicBody extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Tooltip(message: controller.displayTitle, child: Text(controller.displayTitle, maxLines: 1, overflow: TextOverflow.ellipsis)),
+            Tooltip(message: title, child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis)),
             Text(
               t('comic.subtitle'),
               maxLines: 1,
@@ -82,7 +81,7 @@ class _ComicBody extends StatelessWidget {
           ],
         )),
         actions: [
-          PopupMenuButton<String>(
+          if (loadMessage == null) PopupMenuButton<String>(
             tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
             onSelected: (action) {
               switch (action) {
@@ -98,7 +97,12 @@ class _ComicBody extends StatelessWidget {
             ],
           ),
         ],
-      ), title: controller.displayTitle),
+      ), title: title);
+    if (loadMessage != null) {
+      return Scaffold(appBar: toolbar, body: Center(child: Text(loadMessage)));
+    }
+    return Scaffold(
+      appBar: toolbar,
       body: SafeArea(
         top: false,
         child: Column(

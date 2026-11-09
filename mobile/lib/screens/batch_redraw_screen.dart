@@ -86,14 +86,8 @@ class _BatchBody extends StatelessWidget {
     final controller = context.watch<BatchRedrawController>();
     final language = context.watch<AppState>().settings.language;
     String t(String key) => mobileUiTextFor(language, key);
-    if (!controller.loaded) {
-      return Scaffold(body: Center(child: Text(t('batch.loading'))));
-    }
-    if (controller.loadError != null) {
-      return Scaffold(body: Center(child: Text(controller.loadError!)));
-    }
-    return Scaffold(
-      appBar: workbenchAppBar(context, AppBar(
+    final loadMessage = !controller.loaded ? t('batch.loading') : controller.loadError;
+    final toolbar = workbenchAppBar(context, AppBar(
         leading: onBack == null
             ? null
             : IconButton(
@@ -102,7 +96,12 @@ class _BatchBody extends StatelessWidget {
                 icon: const Icon(Icons.arrow_back),
               ),
         title: studioAppBarTitle(context, Text(t('batch.title'))),
-      )),
+      ));
+    if (loadMessage != null) {
+      return Scaffold(appBar: toolbar, body: Center(child: Text(loadMessage)));
+    }
+    return Scaffold(
+      appBar: toolbar,
       body: Column(
         children: [
           _BatchStepBar(controller: controller),
