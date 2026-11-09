@@ -91,6 +91,13 @@ jobs:
           console.log(JSON.stringify({ observed: 'COMMITTED_INDEX_RAW_BYTES_VERIFIED', sourceSha: head, verifiedFiles: records.length, full195Certified: false }));
           NODE
       - run: npm ci --no-audit --no-fund
+      - name: Stage and install checksum-verified Electron
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/feature-acceptance/prepare-ci-electron.mjs
+          node node_modules/electron/install.js
+
       - name: Configure Linux test display and Chromium sandbox (CI only)
         if: runner.os == 'Linux'
         shell: bash
@@ -341,6 +348,8 @@ jobs:
           "$emulator" -accel-check
       - name: Prepare fixed Android image with bounded archive recovery
         run: node scripts/feature-acceptance/prepare-android-image.mjs
+      - name: Stage checksum-verified Gradle wrapper distribution
+        run: node scripts/feature-acceptance/prepare-ci-gradle.mjs
       - name: Fresh disposable Android Emulator journeys
         uses: reactivecircus/android-emulator-runner@v2
         with:

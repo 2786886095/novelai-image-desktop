@@ -101,6 +101,13 @@ jobs:
         if: ${{ !inputs.candidate_build_only }}
         run: node --test scripts/feature-acceptance/linux-release-baseline.test.mjs
 
+      - name: Stage and install checksum-verified Electron
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/feature-acceptance/prepare-ci-electron.mjs --package
+          node node_modules/electron/install.js
+
       # Electron 42 may download its binary lazily even after npm ci. Without a
       # serial warm-up, parallel Vitest workers can race while creating
       # electron/dist on fresh Windows and macOS runners (directory exists).
