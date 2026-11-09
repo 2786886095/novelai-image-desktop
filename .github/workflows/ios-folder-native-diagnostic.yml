@@ -29,6 +29,23 @@ jobs:
       - name: Preserve exact committed bytes before checkout
         shell: bash
         run: git config --global core.autocrlf false
+      - name: Use Xcode SDK matching the iOS 26.2 simulator under test
+        shell: bash
+        run: |
+          set -euo pipefail
+          developer=''
+          for path in /Applications/Xcode_26.2.app/Contents/Developer /Applications/Xcode_26.3.app/Contents/Developer; do
+            [ -d "$path" ] || continue
+            sdk="$(DEVELOPER_DIR="$path" xcrun --sdk iphonesimulator --show-sdk-version)"
+            if [ "$sdk" = '26.2' ]; then developer="$path"; break; fi
+          done
+          if [ -z "$developer" ]; then
+            echo 'No installed Xcode with the actual iOS 26.2 simulator SDK.' >&2
+            exit 1
+          fi
+          DEVELOPER_DIR="$developer" xcodebuild -version
+          DEVELOPER_DIR="$developer" xcrun --sdk iphonesimulator --show-sdk-version
+          printf 'DEVELOPER_DIR=%s\n' "$developer" >> "$GITHUB_ENV"
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
         with:
