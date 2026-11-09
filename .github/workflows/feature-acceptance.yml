@@ -90,7 +90,15 @@ jobs:
           if (mismatches.length) throw new Error('Raw checkout byte mismatch: ' + JSON.stringify(mismatches));
           console.log(JSON.stringify({ observed: 'COMMITTED_INDEX_RAW_BYTES_VERIFIED', sourceSha: head, verifiedFiles: records.length, full195Certified: false }));
           NODE
-      - run: npm ci --no-audit --no-fund
+      - name: Install dependencies
+        env:
+          # Linux restores the same four verified CUDA binaries in the next step.
+          ONNXRUNTIME_NODE_INSTALL_CUDA: ${{ runner.os == 'Linux' && 'skip' || '' }}
+        run: npm ci --no-audit --no-fund
+      - name: Stage verified Linux ONNX Runtime CUDA binaries
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash scripts/feature-acceptance/prepare-ci-onnx-cuda.sh
       - name: Stage and install checksum-verified Electron
         shell: bash
         run: |

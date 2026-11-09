@@ -95,7 +95,14 @@ jobs:
           if-no-files-found: error
 
       - name: Install dependencies
+        env:
+          # Linux restores the same four verified CUDA binaries in the next step.
+          ONNXRUNTIME_NODE_INSTALL_CUDA: ${{ runner.os == 'Linux' && 'skip' || '' }}
         run: npm ci
+      - name: Stage verified Linux ONNX Runtime CUDA binaries
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash scripts/feature-acceptance/prepare-ci-onnx-cuda.sh
 
       - name: Verify Linux baseline identity policy
         if: ${{ !inputs.candidate_build_only }}
