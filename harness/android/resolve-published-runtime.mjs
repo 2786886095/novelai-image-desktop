@@ -3,6 +3,42 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
+export function officialRuntimeAssetFetcher(version, get=fetch) {
+ if(!/^\d+\.\d+\.\d+$/.test(version))throw Error('Invalid pinned Android Agent version');
+ const repo='2786886095/novelai-image-desktop',tag='agent-v'+version;
+ const canonical='https://github.com/'+repo+'/releases/download/'+tag+'/';
+ const api='https://api.github.com/repos/'+repo+'/releases/';
+ const allowed=new Set(['android-agent.json','agent-rootfs.zip']);
+ let assets;
+ return async url=>{
+  const name=url.slice(canonical.length);
+  if(url!==canonical+name||!allowed.has(name))throw Error('Unexpected Android Agent asset URL');
+  let primary;
+  try{primary=await get(url,{signal:AbortSignal.timeout(name==='android-agent.json'?10000:600000)});}
+  catch(error){if(!(error instanceof TypeError)&&!['TimeoutError','AbortError'].includes(error?.name))throw error;}
+  if(primary&&primary.status<500)return primary;
+  await primary?.body?.cancel();
+  if(!assets){
+   const index=await get(api+'tags/'+tag,{headers:{Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});
+   if(index.status===404&&name==='android-agent.json')return index;
+   if(!index.ok)throw Error('Published runtime release lookup failed: '+index.status);
+   const release=await index.json();
+   if(release.tag_name!==tag||!Array.isArray(release.assets))throw Error('Unexpected Android Agent release metadata');
+   assets=release.assets;
+  }
+  const matches=assets.filter(asset=>asset.name===name&&asset.browser_download_url===url);
+  const asset=matches[0];
+  if(matches.length!==1||!Number.isSafeInteger(asset.id)||asset.id<=0)throw Error('Missing or ambiguous published Android Agent asset');
+  const response=await get(api+'assets/'+asset.id,{headers:{Accept:'application/octet-stream'},signal:AbortSignal.timeout(600000)});
+  if(!response.ok||name!=='android-agent.json')return response;
+  if(!Number.isSafeInteger(asset.size)||asset.size<=0||asset.size>16384||!/^sha256:[a-f0-9]{64}$/.test(asset.digest))throw Error('Invalid Android Agent descriptor metadata');
+  const chunks=[];let size=0;
+  for await(const chunk of response.body??[]){size+=chunk.length;if(size>asset.size)throw Error('Published Android Agent descriptor checksum mismatch');chunks.push(chunk);}
+  const buffer=Buffer.concat(chunks,size);
+  if(buffer.length!==asset.size||'sha256:'+createHash('sha256').update(buffer).digest('hex')!==asset.digest)throw Error('Published Android Agent descriptor checksum mismatch');
+  return new Response(buffer,{headers:{'Content-Type':'application/json'}});
+ };
+}
 export async function reusePublishedRuntime({lock,out,fetcher=fetch,checkSource}){
  const base=`https://github.com/2786886095/novelai-image-desktop/releases/download/agent-v${lock.version}/`;
  const response=await fetcher(base+'android-agent.json');
@@ -26,7 +62,7 @@ export async function reusePublishedRuntime({lock,out,fetcher=fetch,checkSource}
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){
  const lock=JSON.parse(await fs.readFile('harness/android/runtime-lock.json','utf8'));
- const reused=await reusePublishedRuntime({lock,out:'artifacts/android-runtime',fetcher:url=>fetch(url,{signal:AbortSignal.timeout(600000)}),checkSource:tag=>{
+ const reused=await reusePublishedRuntime({lock,out:'artifacts/android-runtime',fetcher:officialRuntimeAssetFetcher(lock.version),checkSource:tag=>{
   // Runtime sources remain immutable. Like the existing responsive overlay, these
   // exact template inputs rebuild/stage current app-owned assets. Startup replaces
   // only untouched seed plugins with hash-verified managed assets; custom plugins
