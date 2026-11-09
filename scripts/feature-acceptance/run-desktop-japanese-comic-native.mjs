@@ -26,7 +26,15 @@ async function nativeCommand(argv,timeout,phase){
   const witness=await runBoundedNativeCommand(['/bin/ps','-p',String(event.pid),'-o','ppid=','-o','comm='],{cwd:run,env:nativeEnv,timeout:5000,killGrace:1000,drainGrace:1000,maxBuffer:1024*1024});
   fs.writeFileSync(prefix+'.PID_WITNESS.json',JSON.stringify({phase,nonce,nativePid:event.pid,expectedParentPid:process.pid,command:witness},null,2));
   const match=/^\s*(\d+)\s+([\s\S]+?)\s*$/.exec(witness.stdout);
-  if(witness.exitStatus!==0||witness.error||witness.timedOut||witness.outputOverflow||witness.signal!==null||!witness.cleanupComplete||!match||Number(match[1])!==process.pid||path.basename(match[2])!==path.basename(argv[0]))throw Error('Japanese diagnostic PID is not this current native child');
+  // Linux comm is a mutable thread name; verify the running executable via
+  // procfs (with the independent ps parent check), not the Node process title.
+  let executableMatches=false;
+  try {
+    executableMatches=match&&(process.platform==='linux'
+      ? fs.realpathSync('/proc/'+event.pid+'/exe')===fs.realpathSync(argv[0])
+      : path.basename(match[2])===path.basename(argv[0]));
+  } catch {}
+  if(witness.exitStatus!==0||witness.error||witness.timedOut||witness.outputOverflow||witness.signal!==null||!witness.cleanupComplete||!match||Number(match[1])!==process.pid||!executableMatches)throw Error('Japanese diagnostic PID is not this current native child');
   return runBoundedNativeCommand(sampleArgv,options);
  };
  const stopDiagnostics=startMacNativeStallDiagnostics({run,timeout,command:diagnosticCommand});let row;

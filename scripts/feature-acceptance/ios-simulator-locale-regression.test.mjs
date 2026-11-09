@@ -14,3 +14,30 @@ test('shared strict locale readback accepts only en-US and en_US, not arbitrary 
  assert.equal(typeof creator.assertIosSimulatorLocaleReadback,'function');assert.deepEqual(creator.assertIosSimulatorLocaleReadback(languages,region),{languages:['en-US'],locale:'en_US'});
  for(const [l,r]of[[['en'],'en_US'],[['en-GB'],'en_US'],[['zh-Hans'],'en_US'],[['en-US','zh-Hans'],'en_US'],[[],'en_US'],[['en-US'],'en_GB'],[['en-US'],''],[null,'en_US']])assert.throws(()=>creator.assertIosSimulatorLocaleReadback(l,r));
 });
+
+import {spawnSync} from 'node:child_process';
+import {iosLocaleFieldsPython} from './ios-folder-picker-driver.mjs';
+test('booted binary plist with unrelated native types is decoded without weakening locale checks',()=>{
+ const python=process.platform==='win32'?'python':'python3';
+ // Run the production decoder unchanged against a bounded, owned fixture.
+ const command=String.raw`import datetime,os,plistlib,sys,tempfile
+region,script=sys.argv[1:3]
+data={'AppleLanguages':['en-US'],'AppleLocale':region,'BootTime':datetime.datetime(2026,11,8)}
+fd,path=tempfile.mkstemp(prefix='ios-locale-unit-',suffix='.plist')
+try:
+    with os.fdopen(fd,'wb') as f:
+        plistlib.dump(data,f,fmt=plistlib.FMT_BINARY)
+    sys.argv=['fixture',path]
+    exec(script)
+finally:
+    os.unlink(path)
+`;
+ for(const region of ['en_US','en_GB']){
+  const r=spawnSync(python,['-c',command,region,iosLocaleFieldsPython],{encoding:'utf8'});
+  assert.equal(r.status,0,r.error?.message||r.stderr);
+  const result=JSON.parse(r.stdout);
+  assert.deepEqual(result,{languages:['en-US'],locale:region});
+  if(region==='en_US')assert.doesNotThrow(()=>creator.assertIosSimulatorLocaleReadback(result.languages,result.locale));
+  else assert.throws(()=>creator.assertIosSimulatorLocaleReadback(result.languages,result.locale));
+ }
+});

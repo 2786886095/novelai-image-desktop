@@ -13,6 +13,7 @@ import 'package:novelai_mobile/comic/comic_prompt_composer.dart';
 import 'package:novelai_mobile/comic/comic_prompt_controller.dart';
 import 'package:novelai_mobile/i18n/template_feature_text.dart';
 import 'package:novelai_mobile/prompts/template_library.dart';
+import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/screens/tools_hub_screen.dart';
 import 'package:novelai_mobile/screens/comic_screen.dart';
 import 'package:novelai_mobile/screens/inspect_screen.dart';
@@ -206,12 +207,21 @@ Future<void> _run() async {
         'Comic target overwrote image drafts');
     _widget<ChoiceChip>(const ValueKey('convert-target-image'))
         .onSelected!(true);
-    await frame();
-    require(elements((w) => w is PromptSkillSelector).isNotEmpty,
-        'Image target no longer exposes original mode/skill controls');
+    // The ChoiceChip callback commits settings asynchronously before notifying
+    // listeners. A single frame can still contain the old comic subtree.
+    await _wait(
+        () async =>
+            (await Storage().getSettings()).convertPromptTarget == 'image' &&
+            elements((w) => w is ComicPromptComposerView).isEmpty &&
+            elements((w) => w is PromptSkillSelector).length == 1 &&
+            elements((w) => w is SegmentedButton<ReversePromptMode>).length == 1,
+        'persisted image target renders both original skill and mode controls');
     _widget<ChoiceChip>(const ValueKey('convert-target-comic'))
         .onSelected!(true);
-    await _wait(() => elements((w) => w is ComicPromptComposerView).isNotEmpty,
+    await _wait(
+        () async =>
+            (await Storage().getSettings()).convertPromptTarget == 'comic' &&
+            elements((w) => w is ComicPromptComposerView).length == 1,
         'comic target restored');
     require((await _composer()).input == 'Independent conversion comic draft',
         'Comic draft did not reopen independently');

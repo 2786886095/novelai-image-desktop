@@ -70,7 +70,7 @@ export function createNativeProof({ sourceSha, platform, expectedChecks, profile
   return { line, finish, get completion() { return completion; }, get checksCount() { return checks.length; }, get errorsCount() { return errors.length; } };
 }
 
-export async function collectResidentFlutter({ command, cwd, env, sourceSha, platform, device, expectedChecks, profileSha, testEntry, requireNativeBegin=false, onNativeLine, timeoutMs = 1500000, journeyTimeoutMs = 300000, completionTailMs = 750, stopGraceMs = 15000 }) {
+export async function collectResidentFlutter({ command, cwd, env, sourceSha, platform, device, expectedChecks, profileSha, testEntry, requireNativeBegin=false, onNativeLine, timeoutMs = 1500000, journeyTimeoutMs = 300000, completionTailMs = 750, stopGraceMs = 15000, stopTimeoutMs = stopGraceMs }) {
   if(onNativeLine!==undefined&&typeof onNativeLine!=='function')throw Error('Native observer must be a function');
   let observerPending=0;const observerJobs=[],observerErrors=[];
   const proof = createNativeProof({ sourceSha, platform, expectedChecks, profileSha, testEntry, requireNativeBegin });
@@ -78,7 +78,7 @@ export async function collectResidentFlutter({ command, cwd, env, sourceSha, pla
   let actualCloseCode = null, actualCloseSignal = null, timedOut = false, terminationReason = 'unexpected-process-close', processError = null, childClosed=false;
   let journeyStarted = false;
   let appStarted = false, stopDeadline = null;
-  let stopRequested = false, stopReply = null, stopEventObserved = false;
+  let stopRequested = false, stopReply = null, stopEventObserved = false, stopInputEnded = false;
   const protocolErrors = [], protocolEvents = [], stdinCommands = [];
   const buffers = { stdout: '', stderr: '' };
   const child = spawn(command[0], command.slice(1), { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -115,8 +115,8 @@ export async function collectResidentFlutter({ command, cwd, env, sourceSha, pla
       // Only an actual stop request starts stopGrace. DONE-before-started keeps
       // the original build/journey deadline; repeated ready events extend none.
       clearTimeout(deadline);
-      stopDeadline = Date.now() + stopGraceMs;
-      deadline = setTimeout(() => { timedOut = true; forceStop('machine-stop-timeout'); }, stopGraceMs);
+      stopDeadline = Date.now() + stopTimeoutMs;
+      deadline = setTimeout(() => { timedOut = true; forceStop('machine-stop-timeout'); }, stopTimeoutMs);
     }, completionTailMs);
   }
   function nativeLine(text, channel) {
@@ -139,6 +139,13 @@ export async function collectResidentFlutter({ command, cwd, env, sourceSha, pla
     if (appId && proof.errorsCount === beforeErrors && proof.checksCount > beforeChecks) startJourneyDeadline();
     scheduleStopAfterReady(); // Keep draining trailing native async errors.
   }
+  function closeStopInputWhenAcknowledged() {
+    // The resident process gets EOF only after the matching, successful reply
+    // AND stop event. It still must close naturally with exit code zero.
+    if(!stopRequested||stopReply?.result!==true||!stopEventObserved||stopInputEnded||failureReason||childClosed)return;
+    stopInputEnded=true;
+    if(!child.stdin.destroyed&&!child.stdin.writableEnded)child.stdin.end();
+  }
   function transportLine(text, channel) {
     const trimmed = text.trim();
     if (channel === 'stdout' && trimmed.startsWith('[{')) {
@@ -160,8 +167,11 @@ export async function collectResidentFlutter({ command, cwd, env, sourceSha, pla
       } else if (message.event === 'app.stop') {
         protocolEvents.push(message);
         if (!appId || p.appId !== appId || p.error) protocolErrors.push('Flutter app.stop identity/error mismatch.');
-        stopEventObserved = true;
-      } else if (message.id === 'native-proof-stop') { stopReply = message; if (message.result !== true || message.error) protocolErrors.push('Flutter app.stop request failed.'); }
+        else { stopEventObserved = true; closeStopInputWhenAcknowledged(); }
+      } else if (message.id === 'native-proof-stop') {
+        if (message.result !== true || message.error) protocolErrors.push('Flutter app.stop request failed.');
+        else { stopReply = message; closeStopInputWhenAcknowledged(); }
+      }
       else if (message.error) protocolErrors.push('Flutter machine command error: ' + JSON.stringify(message));
     } else nativeLine(text, channel);
   }

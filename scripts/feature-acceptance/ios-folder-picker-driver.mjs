@@ -98,6 +98,12 @@ export const iosPickerScheme=`<?xml version="1.0" encoding="UTF-8"?>
 // Reuse the independently tested process-group/descendant-pipe boundary.
 const asyncCommand=(argv,{cwd,env,timeout})=>runBoundedNativeCommand(argv,{cwd,env,timeout,killGrace:1000,drainGrace:1000,maxBuffer:40*1024*1024});
 
+export const iosLocaleFieldsPython=String.raw`import json,plistlib,sys
+with open(sys.argv[1],'rb') as stream:
+    data=plistlib.load(stream)
+print(json.dumps({'languages':data.get('AppleLanguages'),'locale':data.get('AppleLocale')}))
+`;
+
 export async function prepareIosFolderPickerDriver(options){
  const {outputRoot,command,device,sourceRoot,sourceSha,profileSha,appId,environment=process.env}=options;
  if(process.platform!=='darwin'||environment.GITHUB_ACTIONS!=='true'||options.isolated!==true||options.entry!=='ios_folder1')throw Error('Real isolated macOS CI Simulator is required');
@@ -107,7 +113,11 @@ export async function prepareIosFolderPickerDriver(options){
  const run=(argv,timeout=120000)=>{const r=command(argv,sourceRoot,timeout);if(r.exitStatus!==0||r.error)throw Error('iOS UI preparation failed: '+JSON.stringify(argv));return r.stdout};
  const devices=JSON.parse(run(['xcrun','simctl','list','devices','booted','--json']));const actual=Object.values(devices.devices??{}).flat().filter(d=>d.udid===device&&d.isAvailable===true&&d.state==='Booted');if(actual.length!==1)throw Error('Actual disposable booted Simulator not found');
  const locale=iosSimulatorLocalePaths(actual[0].dataPath,device);
- const actualLanguages=JSON.parse(run(['/usr/bin/plutil','-extract','AppleLanguages','json','-o','-',locale.file]));const actualLocale=run(['/usr/bin/plutil','-extract','AppleLocale','raw','-o','-',locale.file]).trim();
+ // A booted simulator can add plist values (for example dates) that plutil's
+ // JSON destination rejects. Decode the actual plist, then serialize only the
+ // two observed locale fields; this is not a fallback to expected values.
+ const {languages:actualLanguages,locale:actualLocale}=JSON.parse(
+  run(['python3','-c',iosLocaleFieldsPython,locale.file],30000));
  assertIosSimulatorLocaleReadback(actualLanguages,actualLocale);
  const root=path.join(out,'ios-picker-host');fs.mkdirSync(root);const project=path.join(root,'FolderPicker.xcodeproj');fs.mkdirSync(path.join(project,'xcshareddata','xcschemes'),{recursive:true});
  fs.writeFileSync(path.join(project,'project.pbxproj'),iosPickerProject());fs.writeFileSync(path.join(project,'xcshareddata','xcschemes','FolderPickerUITests.xcscheme'),iosPickerScheme);fs.copyFileSync(fixture,path.join(root,'FolderPickerUITests.swift'));

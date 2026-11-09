@@ -23,10 +23,15 @@ if(mode!=='before-start')log(marker);
 frame({event:'app.started',params:{appId:'unit-app'}});
 log('FEATURE_ACCEPTANCE_CHECK:'+JSON.stringify(c));
 log('FEATURE_ACCEPTANCE_DONE:'+JSON.stringify(d));
-let buffer='';process.stdin.on('data',chunk=>{buffer+=chunk;let i;while((i=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,i);buffer=buffer.slice(i+1);const [request]=JSON.parse(line);if(request.method==='app.stop'&&request.params.appId==='unit-app'){process.stdout.write('UNIT_STOP_AT:'+Date.now()+'\n');frame({id:request.id,result:true});frame({event:'app.stop',params:{appId:'unit-app'}});process.exitCode=0;process.stdin.destroy();}}});
+let buffer='';process.stdin.on('data',chunk=>{buffer+=chunk;let i;while((i=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,i);buffer=buffer.slice(i+1);const [request]=JSON.parse(line);if(request.method==='app.stop'&&request.params.appId==='unit-app'){process.stdout.write('UNIT_STOP_AT:'+Date.now()+'\n');frame({id:request.id,result:true});frame({event:'app.stop',params:{appId:'unit-app'}});process.exitCode=0;if(mode!=='wait-stop-eof')process.stdin.destroy();}}});
+if(mode==='wait-stop-eof'){const keep=setInterval(()=>{},500);process.stdin.on('end',()=>{clearInterval(keep);process.stdout.write('UNIT_OBSERVED_STOP_EOF\n');});}
 `;
 async function collect(mode,value=pending,extra={}){return collectResidentFlutter({command:[process.execPath,'-e',child,mode,JSON.stringify(value),JSON.stringify(check),JSON.stringify(done),JSON.stringify(begin)],cwd:process.cwd(),env:process.env,sourceSha,profileSha,platform,testEntry,device,expectedChecks:1,timeoutMs:5000,journeyTimeoutMs:3000,completionTailMs:10,stopGraceMs:1000,...extra});}
 test('resident current-app PENDING is kept separate through successful stop/close',{timeout:10000},async()=>{const r=await collect('valid');assert.equal(r.passed,true,r.errors.join('; '));assert.equal(r.actualCloseCode,0);assert.equal(r.stopReply.result,true);assert.equal(r.pending.length,1);assert.equal(r.checks.length,1);});
+test('resident sends EOF only after the acknowledged stop and observes natural exit',async()=>{
+ const r=await collect('wait-stop-eof');assert.equal(r.passed,true,r.errors.join('; '));assert.equal(r.timedOut,false);assert.equal(r.actualCloseCode,0);
+ assert(r.stdout.indexOf('UNIT_OBSERVED_STOP_EOF')>r.stdout.indexOf('"event":"app.stop"'));
+});
 test('resident rejects PENDING before matching current app.start',{timeout:10000},async()=>{const r=await collect('before-start');assert.equal(r.passed,false);assert.match(r.errors.join('; '),/before matching current app.start/);});
 test('resident cannot lose external profile binding for PENDING',{timeout:10000},async()=>{const r=await collect('valid',{...pending,profileSha:'c'.repeat(64)});assert.equal(r.passed,false);assert.equal(r.pending.length,0);assert.match(r.errors.join('; '),/PENDING.*identity mismatch/);});
 

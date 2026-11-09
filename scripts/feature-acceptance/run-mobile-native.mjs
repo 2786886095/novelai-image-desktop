@@ -177,7 +177,10 @@ try {
       onNativeLine:picker?.onLine,
       requireNativeBegin,
       timeoutMs: input.timeoutMs || 1500000, journeyTimeoutMs: input.journeyTimeoutMs || 300000,
-      completionTailMs: input.completionTailMs || 750, stopGraceMs: input.stopGraceMs || 15000 });
+      completionTailMs: input.completionTailMs || 750, stopGraceMs: input.stopGraceMs || 15000,
+      // CoreSimulator shutdown RPC and resident DevFS teardown can exceed 15s
+      // on hosted macOS. Neither a timeout nor a signal counts as success.
+      stopTimeoutMs: input.stopGraceMs || 60000 });
     nativeStdout = resident.nativeStdout; nativeStderr = resident.nativeStderr; completion = resident.completion;
     ledger.push(resident);
     if (resident.timedOut) {
