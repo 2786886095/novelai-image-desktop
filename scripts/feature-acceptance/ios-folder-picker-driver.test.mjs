@@ -355,14 +355,17 @@ test('appearance witness holds actual accessibility elements and the same absolu
  assert(s.includes('"queryCount": namingQueryCount')&&s.includes('"modalQueryCount": namingModalQueryCount'));
  for(const literal of ['identifier == %@ AND enabled == YES','field.isHittable','viewFrame.contains(frame)'])assert(body.includes(literal));
  assert(!body.includes('field.exists')&&!body.includes('field.isEnabled')&&!body.includes('field.label.lowercased()'));
- assert(body.includes('app.textViews.matching(exactID).allElementsBoundByAccessibilityElement'));
+ assert(body.includes('let carrierID = NSPredicate(format: "identifier == %@", "Folder")'));
+ assert(body.includes('app.cells.matching(carrierID).descendants(matching: .textView)'));
+ assert(body.includes('carrierEditors.matching(exactID).allElementsBoundByAccessibilityElement'));
+ assert(!body.includes('app.textViews'));
  const live=s.split('private func validatedWitnessFlow(')[1].split('private func recordNamingEditorWitness(')[0];
  assert(live.includes('usable(witness.field, viewFrame)')&&live.includes('isSearchField(witness.field)'));
  assert(!/currentNavigationTitle|currentKeyboardDone|\.buttons/.test(body));
  assert(body.includes('owner.textFields.allElementsBoundByAccessibilityElement'));
  // Captured run 42669774045 stops on the old broad OR query; the
  // replacement is typed, starts after inline, and shares the same deadline.
- assert(!/descendants|inlineOrModal|matchQuery/.test(body));
+ assert(!/app\.descendants|inlineOrModal|matchQuery/.test(body));
  const a=body.indexOf('let alerts = app.alerts.allElementsBoundByAccessibilityElement');
  const h=body.indexOf('let sheets = app.sheets.allElementsBoundByAccessibilityElement');
  assert(body.indexOf('if let witness = inline.first { return witness }')<a&&a<h);

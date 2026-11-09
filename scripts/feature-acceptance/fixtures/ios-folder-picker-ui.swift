@@ -205,9 +205,12 @@ final class FolderPickerUITests: XCTestCase {
     }
     let identifier = "DOC.inlineRenameField"
     let exactID = NSPredicate(format: "identifier == %@ AND enabled == YES", identifier)
-    // Keep every inline probe on the exact typed query. An all-descendant
-    // OR snapshot stalled on the real iOS 26.2 picker (run 42669774045).
-    let matches = app.textViews.matching(exactID).allElementsBoundByAccessibilityElement
+    // Bind only the actual native Folder carrier's inline editor. Whole-app
+    // text-view enumeration stalled while Files transitioned (42689502357).
+    // The fresh full-view uniqueness checks still run before any action.
+    let carrierID = NSPredicate(format: "identifier == %@", "Folder")
+    let carrierEditors = app.cells.matching(carrierID).descendants(matching: .textView)
+    let matches = carrierEditors.matching(exactID).allElementsBoundByAccessibilityElement
     var inline: [NamingEditorWitness] = []
     for field in matches {
       guard Date() < deadline else { return nil }
