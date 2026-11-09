@@ -301,7 +301,10 @@ test('first accepted naming control stays within original5s; capture then fresh 
 test('appearance witness holds actual accessibility elements and the same absolute5s, not a by-index replacement or full-flow deadline',()=>{
  const s=swiftSource();const body=s.split('private func currentNamingEditor(')[1].split('private func validatedWitnessFlow(')[0];
  assert(body.includes('allElementsBoundByAccessibilityElement'));assert(!body.includes('allElementsBoundByIndex'));
- assert(body.includes('if let field = inline.first { return bound(field, nil, true) }'));
+ assert(body.includes('if let witness = inline.first { return witness }'));
+ assert(body.includes('guard includeModal else { return nil }'));
+ assert(s.includes('includeModal: false'));assert(s.includes('includeModal: poll % 3 == 0'));
+ for(const literal of ['field.exists','field.isHittable','field.isEnabled','viewFrame.contains(frame)'])assert(body.includes(literal));
  assert(!/currentNavigationTitle|currentKeyboardDone|\.buttons/.test(body));
  assert(body.includes('owner.textFields.allElementsBoundByAccessibilityElement'));
  assert(s.includes('let witnessObservedAt = Date()'));assert(s.includes('witnessObservedAt < namingDeadline'));

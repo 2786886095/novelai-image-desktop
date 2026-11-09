@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../i18n/app_locales.dart';
+import '../services/android_backup_rescue.dart';
 import '../services/data_backup_service.dart';
 import '../services/storage_permission.dart';
 import '../state/app_state.dart';
@@ -464,23 +465,94 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
         false;
   }
 
+  Future<void> _segmentedExport(Map<String, String> text) async {
+    if (!mounted) return;
+    final locale = normalizeAppLocaleCode(context.read<AppState>().settings.language);
+    final zh = locale == 'zh-CN';
+    final tw = locale == 'zh-TW';
+    String tr(String simplified, String traditional, String english) =>
+        zh ? simplified : tw ? traditional : english;
+    var first = '', second = '';
+    final password = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, update) => AlertDialog(
+          title: Text(tr('内存不足，切换分段导出', '記憶體不足，切換分段匯出',
+              'Low memory: switch to segmented export')),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(tr(
+                  '将加密导出本机旧版设置与记录文件，不包含原图或其他独立文件。救援包不是常规备份，不会覆盖任何原数据。请妥善保存密码。',
+                  '將加密匯出本機舊版設定與記錄檔，不包含原圖或其他獨立檔案。救援包不是一般備份，不會覆蓋任何原始資料。請妥善保存密碼。',
+                  'Encrypt and export legacy preferences only, not image originals or separate files. This rescue archive is not a normal backup and never replaces your data. Keep the password.')),
+              TextField(
+                obscureText: true,
+                autocorrect: false,
+                enableSuggestions: false,
+                maxLength: 128,
+                onChanged: (value) => update(() => first = value),
+                decoration: InputDecoration(labelText: tr('密码（至少 12 个字符）',
+                    '密碼（至少 12 個字元）', 'Password (at least 12 characters)')),
+              ),
+              TextField(
+                obscureText: true,
+                autocorrect: false,
+                enableSuggestions: false,
+                maxLength: 128,
+                onChanged: (value) => update(() => second = value),
+                decoration: InputDecoration(labelText: tr('确认密码', '確認密碼', 'Confirm password')),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(text['cancel']!)),
+            FilledButton(
+              onPressed: first.runes.length < 12 || first != second
+                  ? null : () => Navigator.pop(dialogContext, first),
+              child: Text(tr('加密导出', '加密匯出', 'Export encrypted')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (password == null || !mounted) return;
+    try {
+      final saved = await AndroidBackupRescue.export(password);
+      if (mounted && saved) {
+        _message(tr('已保存并校验加密救援包。',
+            '已儲存並驗證加密救援包。',
+            'Encrypted rescue archive saved and verified.'));
+      }
+    } catch (_) {
+      if (mounted) {
+        _message(tr('分段导出未完成。原数据未修改，请勿清除应用数据。',
+            '分段匯出未完成。原始資料未修改，請勿清除應用程式資料。',
+            'Segmented export did not finish. Original data was not changed; do not clear app data.'));
+      }
+    }
+  }
+
   Future<void> _export(Map<String, String> text) async {
     if (exportSelection.isEmpty) return;
     setState(() => busy = true);
     try {
-      final file = await service.createBackup(exportSelection);
-      final path = await service.saveBackupFile(
-        file,
-        dialogTitle: text['export'],
+      await exportWithMemoryFallback<void>(
+        allowRescue: Platform.isAndroid,
+        rescue: () => _segmentedExport(text),
+        normal: () async {
+          final file = await service.createBackup(exportSelection);
+          final path = await service.saveBackupFile(file, dialogTitle: text['export']);
+          if (!mounted) return;
+          if (path == DataBackupService.sharedBackupResult) {
+            _message(
+                '已打开系统分享／保存面板，请在面板中完成保存。 / Save using the system share sheet.');
+          } else if (path != null) {
+            _message(text['fileSaved']!);
+          }
+        },
       );
-      if (path == DataBackupService.sharedBackupResult) {
-        _message(
-            '已打开系统分享／保存面板，请在面板中完成保存。 / Save using the system share sheet.');
-      } else if (path != null) {
-        _message(text['fileSaved']!);
-      }
     } catch (error) {
-      _message(error.toString());
+      if (mounted) _message(error.toString());
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -624,8 +696,14 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
   Future<void> _backupNow() async {
     setState(() => busy = true);
     try {
-      final file = await service.runAutomaticBackup(force: true);
-      if (file != null) _message(file.path);
+      await exportWithMemoryFallback<void>(
+        allowRescue: Platform.isAndroid,
+        rescue: () => _segmentedExport(_backupText(context.read<AppState>().settings.language)),
+        normal: () async {
+          final file = await service.runAutomaticBackup(force: true);
+          if (mounted && file != null) _message(file.path);
+        },
+      );
       await _refreshStatus();
     } catch (error) {
       _message(error.toString());

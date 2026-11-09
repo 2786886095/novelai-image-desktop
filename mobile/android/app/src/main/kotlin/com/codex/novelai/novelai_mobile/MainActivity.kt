@@ -1,9 +1,11 @@
 package com.codex.novelai.novelai_mobile
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
@@ -15,13 +17,18 @@ import java.net.Proxy
 import java.net.ProxySelector
 import java.net.URI
 import java.nio.charset.Charset
+import java.security.MessageDigest
 import java.util.ArrayDeque
 import java.util.UUID
 
 class MainActivity : FlutterActivity() {
     companion object {
+        private const val SAVE_RESCUE_DOCUMENT = 0x4E42
         private const val INCOMING_BACKUP_PENDING = "__incoming_backup_pending__"
     }
+
+    private var pendingRescue: Pair<File, MethodChannel.Result>? = null
+    private var rescueSaving = false
 
     private var composerFiles: ComposerFiles? = null
     private var officialMetadata: OfficialMetadataBridge? = null
@@ -29,6 +36,65 @@ class MainActivity : FlutterActivity() {
     override fun onResume(){super.onResume();updateInstaller.resume()}
     @Deprecated("Used for the platform package installer result")
     override fun onActivityResult(requestCode: Int,resultCode: Int,data: Intent?) {
+        if (requestCode == SAVE_RESCUE_DOCUMENT) {
+            val pending = pendingRescue ?: return
+            pendingRescue = null
+            val (file, reply) = pending
+            val uri = data?.data
+            if (resultCode != Activity.RESULT_OK || uri?.scheme != "content") {
+                reply.success(false)
+                return
+            }
+            rescueSaving = true
+            Thread {
+                var verified = false
+                try {
+                    val hash = MessageDigest.getInstance("SHA-256")
+                    var written = 0L
+                    val buffer = ByteArray(64 * 1024)
+                    val expectedSize = file.length()
+                    val output = contentResolver.openOutputStream(uri, "wt")
+                        ?: error("Rescue destination cannot be opened")
+                    output.use { sink ->
+                        file.inputStream().use { source ->
+                            while (true) {
+                                val n = source.read(buffer)
+                                if (n < 0) break
+                                sink.write(buffer, 0, n)
+                                hash.update(buffer, 0, n)
+                                written += n
+                            }
+                        }
+                    }
+                    check(written == expectedSize)
+                    val expected = hash.digest()
+                    val input = contentResolver.openInputStream(uri)
+                        ?: error("Rescue destination cannot be checked")
+                    input.use { source ->
+                        var checked = 0L
+                        while (true) {
+                            val n = source.read(buffer)
+                            if (n < 0) break
+                            checked += n
+                            check(checked <= written)
+                            hash.update(buffer, 0, n)
+                        }
+                        check(checked == written && MessageDigest.isEqual(expected, hash.digest()))
+                    }
+                    verified = true
+                } catch (_: Exception) {
+                    // Only the newly created document may be removed; never touch app data.
+                    runCatching { DocumentsContract.deleteDocument(contentResolver, uri) }
+                } finally {
+                    runOnUiThread {
+                        rescueSaving = false
+                        if (verified) reply.success(true)
+                        else reply.error("rescue_save_failed", "Unable to verify the saved rescue archive.", null)
+                    }
+                }
+            }.start()
+            return
+        }
         if(updateInstaller.result(requestCode))return
         super.onActivityResult(requestCode,resultCode,data)
     }
@@ -158,6 +224,30 @@ class MainActivity : FlutterActivity() {
             "langbai.novelai/storage",
         ).setMethodCallHandler { call, result ->
             when (call.method) {
+                // Raw, read-only rescue must not instantiate SharedPreferences.
+                "legacyPreferencesDirectory" -> result.success(File(applicationInfo.dataDir, "shared_prefs").path)
+                "saveRescueDocument" -> {
+                    try {
+                        check(pendingRescue == null && !rescueSaving)
+                        val name = call.arguments as? String ?: error("Missing rescue name")
+                        require(name.matches(Regex("studio-recovery-[0-9]+[.]naisrescue")))
+                        val root = cacheDir.canonicalFile
+                        val file = File(root, name).canonicalFile
+                        require(file.parentFile == root && file.name == name && file.isFile)
+                        pendingRescue = Pair(file, result)
+                        try {
+                            startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT)
+                                .addCategory(Intent.CATEGORY_OPENABLE)
+                                .setType("application/octet-stream")
+                                .putExtra(Intent.EXTRA_TITLE, name), SAVE_RESCUE_DOCUMENT)
+                        } catch (error: Exception) {
+                            pendingRescue = null
+                            throw error
+                        }
+                    } catch (_: Exception) {
+                        result.error("rescue_picker_failed", "Unable to open the rescue save dialog.", null)
+                    }
+                }
                 "unifiedStorageInfo" -> {
                     val control=java.io.File(filesDir,"unified-storage.json")
                     val active=if(control.isFile)org.json.JSONObject(control.readText()).optString("root") else ""

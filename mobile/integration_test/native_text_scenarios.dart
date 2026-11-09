@@ -28,6 +28,16 @@ final _samples = Map<String, String>.from(jsonDecode(
 Future<void> main() => suite.run(_run);
 Future<T> bounded<T>(Future<T> value) =>
     value.timeout(const Duration(seconds: 65));
+
+Future<AiTextResult> _publicTranslation(
+    Future<AiTextResult> Function() request) async {
+  final first = await bounded(request());
+  if (first.ok || !first.message.contains('TimeoutException')) return first;
+  // One bounded replay of the same read-only public HTTPS request. An invalid
+  // response is not retried, and the caller still requires actual success.
+  await Future<void>.delayed(const Duration(milliseconds: 250));
+  return bounded(request());
+}
 Future<void> _reveal(bool Function(Widget) predicate) async {
   for (var i = 0; i < 30; i++) {
     if (elements(predicate).isNotEmpty) return;
@@ -553,13 +563,13 @@ Future<void> _run() async {
     await writeNativeSkillCheckpoint(app.settings, sourceSha, profileSha);
 
     // No provider mocks or URL-rewrite adapters: the actual production HTTPS
-    // translator is exercised. Any offline/rate-limit failure fails this entry.
+    // translator is exercised. Persistent timeouts and rate limits still fail this entry.
     app.settings
       ..proxyMode = 'direct'
       ..translateProvider = 'google';
     final detected = <String, String>{};
     for (final target in ['zh-CN', 'zh-TW', 'ja', 'ko', 'en']) {
-      final result = await bounded(app.translatePreviewText(
+      final result = await _publicTranslation(() => app.translatePreviewText(
           target == 'en'
               ? '庭に赤い花が咲いています。'
               : 'Red flowers are blooming in the garden.',
@@ -580,7 +590,7 @@ Future<void> _run() async {
     });
     const protected =
         r'1.2::artist:synthetic_artist::, character:synthetic_name, \\(book\\), https://example.invalid/a.png, red flowers';
-    final translated = await bounded(app.translatePreviewText(protected,
+    final translated = await _publicTranslation(() => app.translatePreviewText(protected,
         target: 'ja', sourceLanguage: 'en'));
     require(
         translated.ok &&
@@ -608,8 +618,7 @@ Future<void> _run() async {
     app.settings.proxyMode = 'direct';
     final session = TranslationSession(
         'Flowers are blooming in a garden.', 'ja', (source, to, from) async {
-      final r = await app.translatePreviewText(source,
-          target: to, sourceLanguage: from);
+      final r = await _publicTranslation(() => app.translatePreviewText(source, target: to, sourceLanguage: from));
       return TranslationReply(
           ok: r.ok,
           text: r.text,

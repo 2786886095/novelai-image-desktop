@@ -181,22 +181,32 @@ final class FolderPickerUITests: XCTestCase {
     let identifier: String
     let frame: [Double]
   }
-  private func currentNamingEditor(_ app: XCUIApplication) throws -> NamingEditorWitness? {
-    let viewFrame = app.frame
-    func bound(_ field: XCUIElement, _ owner: XCUIElement?, _ inline: Bool) -> NamingEditorWitness {
-      let frame = field.frame
+  private func currentNamingEditor(_ app: XCUIApplication, _ viewFrame: CGRect,
+                                   includeModal: Bool) throws -> NamingEditorWitness? {
+    func bound(_ field: XCUIElement, _ owner: XCUIElement?, _ inline: Bool,
+               _ identifier: String, _ frame: CGRect) -> NamingEditorWitness {
       return NamingEditorWitness(field: field, modalOwner: owner, isInline: inline,
-        identifier: field.identifier,
+        identifier: identifier,
         frame: [Double(frame.origin.x), Double(frame.origin.y), Double(frame.width), Double(frame.height)])
     }
-    let exactID = NSPredicate(format: "identifier == %@", "DOC.inlineRenameField")
-    let inline = app.textViews.matching(exactID).allElementsBoundByAccessibilityElement.filter {
-      !isSearchField($0) && usable($0, viewFrame)
+    let identifier = "DOC.inlineRenameField"
+    let exactID = NSPredicate(format: "identifier == %@", identifier)
+    var inline: [NamingEditorWitness] = []
+    for field in app.textViews.matching(exactID).allElementsBoundByAccessibilityElement {
+      // Identifier is already bound by the query; do not repeat its RPC or
+      // the frame lookup. Keep every usability predicate for the witness.
+      guard field.exists, field.isHittable, field.isEnabled,
+            !["search", "搜索", "搜尋"].contains(field.label.lowercased()) else { continue }
+      let frame = field.frame
+      if !frame.isEmpty && viewFrame.contains(frame) {
+        inline.append(bound(field, nil, true, identifier, frame))
+      }
     }
     guard inline.count <= 1 else { throw fail("Ambiguous usable inline editor witnesses") }
     // Appearance witness only: no typing is authorized, and competing modal
     // flows are still checked by the complete validation before any action.
-    if let field = inline.first { return bound(field, nil, true) }
+    if let witness = inline.first { return witness }
+    guard includeModal else { return nil }
     var modalEditors: [NamingEditorWitness] = []
     for owner in app.alerts.allElementsBoundByAccessibilityElement + app.sheets.allElementsBoundByAccessibilityElement {
       guard owner.exists && !owner.frame.isEmpty && viewFrame.intersects(owner.frame) else { continue }
@@ -204,7 +214,7 @@ final class FolderPickerUITests: XCTestCase {
         !isSearchField($0) && usable($0, viewFrame) && owner.frame.contains($0.frame)
       }
       guard fields.count <= 1 else { throw fail("Ambiguous usable same-modal editor witnesses") }
-      if let field = fields.first { modalEditors.append(bound(field, owner, false)) }
+      if let field = fields.first { modalEditors.append(bound(field, owner, false, field.identifier, field.frame)) }
     }
     guard modalEditors.count <= 1 else { throw fail("Multiple usable modal editor witnesses") }
     return modalEditors.first
@@ -412,6 +422,7 @@ final class FolderPickerUITests: XCTestCase {
       create = find(app, newFolderLabels)
     }
     guard let newFolder = create else { throw fail("System provider did not expose New Folder") }
+    let namingViewFrame = app.frame
     try tap(newFolder, "new-folder-via-system-picker")
     // Restore the original field-appearance stage: the editor itself must be
     // usable within one absolute5s; the later complete safety RPCs are not a
@@ -419,11 +430,16 @@ final class FolderPickerUITests: XCTestCase {
     let namingStarted = Date()
     let namingDeadline = namingStarted.addingTimeInterval(5)
     let providerLabels = providers.flatMap { $0.1 }
-    var naming = try currentNamingEditor(app)
+    var naming = try currentNamingEditor(app, namingViewFrame, includeModal: false)
+    var poll = 0
     while naming == nil {
       if Date() >= namingDeadline { break }
-      Thread.sleep(forTimeInterval: 0.15)
-      naming = try currentNamingEditor(app)
+      Thread.sleep(forTimeInterval: 0.10)
+      if Date() >= namingDeadline { break }
+      poll += 1
+      // Two cheap exact-inline polls between whole modal hierarchy scans.
+      // The full live identity/ambiguity check still precedes typing.
+      naming = try currentNamingEditor(app, namingViewFrame, includeModal: poll % 3 == 0)
     }
     let witnessObservedAt = Date()
     let withinAppearanceDeadline = witnessObservedAt < namingDeadline
