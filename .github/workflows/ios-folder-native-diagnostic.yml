@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   ios-folder1-diagnostic-only:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 75
     steps:
       - name: Preserve exact committed bytes before checkout
