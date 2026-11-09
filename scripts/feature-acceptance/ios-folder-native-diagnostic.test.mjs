@@ -24,7 +24,7 @@ function policy(w){
  assert.equal(w.on.workflow_dispatch,null);
  assert.deepEqual(w.permissions,{contents:'read',actions:'read'});
  assert.deepEqual(Object.keys(w.jobs),['ios-folder1-diagnostic-only']);
- const j=w.jobs['ios-folder1-diagnostic-only'];assert.equal(j['runs-on'],'macos-14');
+ const j=w.jobs['ios-folder1-diagnostic-only'];assert.equal(j['runs-on'],'macos-15');
  assert.equal(j['timeout-minutes'],75);assert.equal(j.strategy,undefined);
  assert(j.steps.every(s=>s['continue-on-error']===undefined));
  return j.steps;
