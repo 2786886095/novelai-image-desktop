@@ -337,14 +337,32 @@ final class FolderPickerUITests: XCTestCase {
     // not cell-frame containment of the editor. Only the image must fit both.
     let cellFrame = cell.frame
     let iconPredicate = NSPredicate(format: "identifier == %@", "Folder84pt")
-    let icons = cell.images.matching(iconPredicate).allElementsBoundByAccessibilityElement.filter {
-      usable($0, viewFrame) && cellFrame.contains($0.frame)
+    let namedIcons = cell.images.matching(iconPredicate).allElementsBoundByAccessibilityElement
+    guard namedIcons.count <= 1 else { throw fail("Ambiguous literal Folder84pt icons in the held carrier") }
+    // iOS can render the folder image without an AX identifier while renaming.
+    // Only the unique image under the already bound exact-nonce carrier can
+    // serve as a fallback. It must be above the same editor and contained in
+    // that carrier, not just near a global search result or at a guessed point.
+    let editorFrame = witness.field.frame
+    let icons: [XCUIElement]
+    if namedIcons.isEmpty {
+      let carrierImages = cell.images.allElementsBoundByAccessibilityElement
+      guard carrierImages.count <= 1 else { throw fail("Ambiguous image ownership in the held Folder carrier") }
+      icons = carrierImages.filter { image in
+        let frame = image.frame
+        return image.identifier.isEmpty && image.label.isEmpty && usable(image, viewFrame) &&
+          cellFrame.contains(frame) && frame.maxY <= editorFrame.minY &&
+          editorFrame.minX <= frame.midX && frame.midX <= editorFrame.maxX
+      }
+    } else {
+      icons = namedIcons.filter { usable($0, viewFrame) && cellFrame.contains($0.frame) }
     }
-    // Done may be committing and the OS can remove the icon before dropping
-    // the held inline editor. No icon means no action, not failed navigation.
+    // The real system can drop the icon as the commit settles. Never substitute
+    // a second action, a different cell, or a guessed coordinate for absence.
     if icons.isEmpty { return }
-    guard icons.count == 1 else { throw fail("Ambiguous usable literal Folder84pt icons in the held carrier") }
+    guard icons.count == 1 else { throw fail("Ambiguous usable owned folder images") }
     let icon = icons[0]
+    let observedIconIdentifier = icon.identifier
     guard cell.exists, usable(witness.field, viewFrame),
           witness.field.identifier == "DOC.inlineRenameField",
           let confirmed = witness.field.value as? String, confirmed == folder,
@@ -357,7 +375,7 @@ final class FolderPickerUITests: XCTestCase {
     try tap(icon, "finish-inline-name-via-owned-folder-icon", before: deadline)
     print("IOS_FOLDER_OWNED_ICON_ACTION:" + String(decoding:
       try JSONSerialization.data(withJSONObject: ["bindings": bindings,
-        "requiredFolderName": folder, "literalCellId": "Folder", "literalIconId": "Folder84pt",
+        "requiredFolderName": folder, "literalCellId": "Folder", "literalIconId": observedIconIdentifier, "imageSelection": namedIcons.isEmpty ? "unique-unlabeled-owned-image" : "literal-Folder84pt",
         "oneAttempt": true, "navigationOrCommitGuaranteed": false], options: [.sortedKeys]), as: UTF8.self))
   }
   // Warm UIKit’s software keyboard on the disposable picker before measuring

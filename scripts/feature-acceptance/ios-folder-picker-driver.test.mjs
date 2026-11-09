@@ -345,7 +345,7 @@ test('one owned-folder icon action is restricted to the live exact-nonce held ed
   'app.cells.matching(cellPredicate).containing(fieldPredicate).allElementsBoundByAccessibilityElement','cells.count == 1',
   'cell.textViews.matching(fieldPredicate)','scoped.count == 1','scopedValue == folder',
   'let iconPredicate = NSPredicate(format: "identifier == %@", "Folder84pt")','cell.images.matching(iconPredicate)',
-  'icons.count == 1','cellFrame.contains(icon.frame)','finish-inline-name-via-owned-folder-icon'])assert(body.includes(token),token);
+  'icons.count == 1','cellFrame.contains(icon.frame)','carrierImages.count <= 1','image.identifier.isEmpty && image.label.isEmpty','frame.maxY <= editorFrame.minY','cell.images.allElementsBoundByAccessibilityElement','finish-inline-name-via-owned-folder-icon'])assert(body.includes(token),token);
  const carrier=body.split('let cells =')[1].split('guard cells.count')[0];
  assert(carrier.includes('cell.exists'));assert(carrier.includes('!frame.isEmpty && viewFrame.intersects(frame)'));
  assert(!/isHittable|isEnabled|usable\(/.test(carrier),'read-only carrier identity is not an action target');
@@ -386,4 +386,12 @@ test('picker keyboard preparation only focuses and cancels native search before 
  assert(!/typeText|namingDeadline|FileManager|nativePid/.test(prep));
  const warm=s.indexOf('try preparePickerKeyboard(app, providerLabels)');
  assert(warm>=0&&warm<s.indexOf('try tap(newFolder, "new-folder-via-system-picker")')&&warm<s.indexOf('let namingDeadline = namingStarted.addingTimeInterval(5)'));
+});
+
+
+test('unlabeled folder image fallback remains bound to one existing exact-nonce AX carrier, not a global or ambiguous image',()=>{
+ const s=swiftSource(),b=s.split('private func finishInlineNameViaOwnedIcon(')[1].split('private func preparePickerKeyboard(')[0];
+ const relevant=['scopedValue == folder','if namedIcons.isEmpty','carrierImages.count <= 1','image.identifier.isEmpty && image.label.isEmpty','cellFrame.contains(frame)','frame.maxY <= editorFrame.minY','let confirmed = witness.field.value as? String, confirmed == folder','try tap(icon, "finish-inline-name-via-owned-folder-icon", before: deadline)'];
+ let pos=-1;for(const token of relevant){const i=b.indexOf(token);assert(i>pos,token);pos=i;}
+ assert(b.includes('unique-unlabeled-owned-image'));assert(!b.includes('app.images'));
 });
