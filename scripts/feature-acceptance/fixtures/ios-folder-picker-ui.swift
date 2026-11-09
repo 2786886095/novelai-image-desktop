@@ -191,8 +191,27 @@ final class FolderPickerUITests: XCTestCase {
     }
     let identifier = "DOC.inlineRenameField"
     let exactID = NSPredicate(format: "identifier == %@", identifier)
+    let matchQuery: XCUIElementQuery
+    if includeModal {
+      // One snapshot for the exact inline TextView and modal owners. Separate
+      // TextView, Alert and Sheet RPCs can stall this same 5s appearance gate.
+      let types = [NSNumber(value: XCUIElement.ElementType.alert.rawValue),
+                   NSNumber(value: XCUIElement.ElementType.sheet.rawValue)]
+      let textView = NSNumber(value: XCUIElement.ElementType.textView.rawValue)
+      let inlineOrModal = NSPredicate(format: "(elementType == %@ AND identifier == %@) OR elementType IN %@",
+                                      textView, identifier, types)
+      matchQuery = app.descendants(matching: .any).matching(inlineOrModal)
+    } else {
+      matchQuery = app.textViews.matching(exactID)
+    }
+    let matches = matchQuery.allElementsBoundByAccessibilityElement
     var inline: [NamingEditorWitness] = []
-    for field in app.textViews.matching(exactID).allElementsBoundByAccessibilityElement {
+    var modalOwners: [XCUIElement] = []
+    for field in matches {
+      if includeModal && field.elementType != .textView {
+        modalOwners.append(field)
+        continue
+      }
       // Identifier is already bound by the query; do not repeat its RPC or
       // the frame lookup. Keep every usability predicate for the witness.
       guard field.exists, field.isHittable, field.isEnabled,
@@ -208,7 +227,7 @@ final class FolderPickerUITests: XCTestCase {
     if let witness = inline.first { return witness }
     guard includeModal else { return nil }
     var modalEditors: [NamingEditorWitness] = []
-    for owner in app.alerts.allElementsBoundByAccessibilityElement + app.sheets.allElementsBoundByAccessibilityElement {
+    for owner in modalOwners {
       guard owner.exists && !owner.frame.isEmpty && viewFrame.intersects(owner.frame) else { continue }
       let fields = owner.textFields.allElementsBoundByAccessibilityElement.filter {
         !isSearchField($0) && usable($0, viewFrame) && owner.frame.contains($0.frame)

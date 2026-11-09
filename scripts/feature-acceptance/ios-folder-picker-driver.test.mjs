@@ -307,6 +307,9 @@ test('appearance witness holds actual accessibility elements and the same absolu
  for(const literal of ['field.exists','field.isHittable','field.isEnabled','viewFrame.contains(frame)'])assert(body.includes(literal));
  assert(!/currentNavigationTitle|currentKeyboardDone|\.buttons/.test(body));
  assert(body.includes('owner.textFields.allElementsBoundByAccessibilityElement'));
+ assert(body.includes('app.descendants(matching: .any).matching(inlineOrModal)'));
+ assert(body.includes('let matches = matchQuery.allElementsBoundByAccessibilityElement'));
+ assert(!body.includes('app.alerts.allElementsBoundByAccessibilityElement + app.sheets.allElementsBoundByAccessibilityElement'));
  assert(s.includes('let witnessObservedAt = Date()'));assert(s.includes('witnessObservedAt < namingDeadline'));
  assert(s.includes('witnessObservedAt.timeIntervalSince(namingStarted)'));assert(s.includes('witnessAloneAuthorizesActions'));
  const accepted=s.indexOf('guard let witness = naming'),capture=s.indexOf('capture("after-new-folder-action")'),full=s.indexOf('let control = try validatedWitnessFlow');
