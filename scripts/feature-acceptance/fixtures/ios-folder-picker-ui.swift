@@ -35,11 +35,12 @@ final class FolderPickerUITests: XCTestCase {
     return nil
   }
   // DocumentManager's bar has a generic identifier; the directory name is
-  // a direct StaticText child. Never accept a cached browsingRoot, sidebar,
-  // or a descendant text inside a back button as the current title.
-  private func currentNavigationTitle(_ app: XCUIApplication) throws -> String? {
+  // normally a direct StaticText child. iOS 26.2 Files can expose the
+  // exact nonce directory as a direct, identifier-free title menu button.
+  // Never use a cached root, sidebar, or back button as the current title.
+  private func currentNavigationTitle(_ app: XCUIApplication, expectedFolder: String? = nil) throws -> String? {
     let viewFrame = app.frame
-    var visibleTitles: [XCUIElement] = []
+    var visibleTitles: [String] = []
     for bar in app.navigationBars.allElementsBoundByIndex {
       guard bar.exists else { continue }
       let barFrame = bar.frame
@@ -53,12 +54,25 @@ final class FolderPickerUITests: XCTestCase {
       guard directTitles.count <= 1 else {
         throw fail("Ambiguous visible direct navigation titles")
       }
-      visibleTitles.append(contentsOf: directTitles)
+      if let title = directTitles.first {
+        visibleTitles.append(title.label)
+      } else if let folder = expectedFolder,
+                bar.identifier == "FullDocumentManagerViewControllerNavigationBar" {
+        let exactTitle = folder + ", Actions Menu"
+        let titlePredicate = NSPredicate(format: "label == %@", exactTitle)
+        let menus = bar.children(matching: .button).matching(titlePredicate).allElementsBoundByAccessibilityElement.filter { menu in
+          guard menu.exists, menu.identifier.isEmpty else { return false }
+          let menuFrame = menu.frame
+          return !menuFrame.isEmpty && barFrame.contains(menuFrame) && viewFrame.contains(menuFrame)
+        }
+        guard menus.count <= 1 else { throw fail("Ambiguous exact folder title menu buttons") }
+        if !menus.isEmpty { visibleTitles.append(folder) }
+      }
     }
     guard visibleTitles.count <= 1 else {
       throw fail("Ambiguous current visible navigation bars")
     }
-    return visibleTitles.first?.label
+    return visibleTitles.first
   }
   // Identity text is observed, not tapped. Record hit state independently on
   // exit, with no waits/retries and bounded records; never affects acceptance.
@@ -604,7 +618,7 @@ final class FolderPickerUITests: XCTestCase {
     var ownedIconAttempted = false
     // Full tree/screenshot capture is after exact navigation below, not inside
     // this original10s commit/open window.
-    while try currentNavigationTitle(app) != folder {
+    while try currentNavigationTitle(app, expectedFolder: folder) != folder {
       if Date() >= createDeadline { throw fail("The new nonce directory was not opened") }
       // First prefer the actual exact-nonce item after the system Done. The
       // optional held-editor icon is not itself a precondition for navigation.
@@ -626,7 +640,7 @@ final class FolderPickerUITests: XCTestCase {
     }
     try tap(confirm, "confirm-system-directory-selection")
     let closeDeadline = Date().addingTimeInterval(10)
-    while try currentNavigationTitle(app) != nil ||
+    while try currentNavigationTitle(app, expectedFolder: folder) != nil ||
           find(app, cancelLabels) != nil || find(app, openLabels) != nil {
       if Date() >= closeDeadline { throw fail("System picker did not dismiss after selection") }
       Thread.sleep(forTimeInterval: 0.15)

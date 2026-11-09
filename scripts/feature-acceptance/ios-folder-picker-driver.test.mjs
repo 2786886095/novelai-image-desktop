@@ -81,7 +81,7 @@ const observedBrowseTitleShape=Object.freeze({
 const swiftSource=()=>fs.readFileSync(new URL('./fixtures/ios-folder-picker-ui.swift',import.meta.url),'utf8');
 // A source-selected static policy model, deliberately NOT an XCUI implementation
 // or mock supplied to the native runner. Source-shape guards bind its branches.
-function titleContract(source,shape){
+function titleContract(source,shape,expectedFolder){
  const contains=(a,b)=>b[2]>0&&b[3]>0&&b[0]>=a[0]&&b[1]>=a[1]&&b[0]+b[2]<=a[0]+a[2]&&b[1]+b[3]<=a[1]+a[3];
  const intersect=(a,b)=>Math.min(a[0]+a[2],b[0]+b[2])>Math.max(a[0],b[0])&&Math.min(a[1]+a[3],b[1]+b[3])>Math.max(a[1],b[1]);
  if(!source.includes('private func currentNavigationTitle('))return shape.legacyQuery??null;
@@ -90,6 +90,13 @@ function titleContract(source,shape){
   if(!bar.exists||!intersect(shape.view,bar.frame))continue;
   const titles=bar.directStaticTexts.filter(t=>t.exists&&contains(bar.frame,t.frame)&&contains(shape.view,t.frame));
   assert(titles.length<=1,'Ambiguous visible direct navigation titles');found.push(...titles);
+  if(!titles.length&&expectedFolder&&source.includes('Ambiguous exact folder title menu buttons')&&
+     bar.identifier==='FullDocumentManagerViewControllerNavigationBar'){
+   const menus=(bar.directButtons??[]).filter(m=>m.exists&&!m.identifier&&m.label===expectedFolder+', Actions Menu'&&
+     contains(bar.frame,m.frame)&&contains(shape.view,m.frame));
+   assert(menus.length<=1,'Ambiguous exact folder title menu buttons');
+   if(menus.length)found.push({label:expectedFolder});
+  }
  }
  assert(found.length<=1,'Ambiguous current visible navigation bars');return found[0]?.label??null;
 }
@@ -102,7 +109,7 @@ test('static Swift title policy binds one current visible direct StaticText, not
  const body=s.split('private func currentNavigationTitle(')[1].split('private func waitForNavigationTitle(')[0];
  for(const value of ['app.navigationBars.allElementsBoundByIndex','bar.children(matching: .staticText).allElementsBoundByIndex',
   'guard title.exists else { return false }','barFrame.contains(titleFrame)','viewFrame.contains(titleFrame)',
-  'directTitles.count <= 1','visibleTitles.count <= 1','return visibleTitles.first?.label'])assert(body.includes(value),value);
+  'directTitles.count <= 1','visibleTitles.count <= 1','return visibleTitles.first'])assert(body.includes(value),value);
  assert(!body.includes('.staticTexts'));assert(!body.includes('descendants('));assert(!body.includes('app.cells'));
  assert(!body.includes('DOC.browsingRoot'));assert(!s.includes('app.navigationBars[$0]'));assert(!s.includes('app.navigationBars[folder]'));
 });
@@ -129,9 +136,39 @@ test('static sidebar, descendant back-button, hidden/offscreen, wrong-current an
  const double=shape();double.bars.push(structuredClone(double.bars[0]));assert.throws(()=>titleContract(s,double),/Ambiguous/);
  const duplicateTitle=shape();duplicateTitle.bars[0].directStaticTexts.push(structuredClone(duplicateTitle.bars[0].directStaticTexts[0]));assert.throws(()=>titleContract(s,duplicateTitle),/Ambiguous/);
 });
+test('captured iOS 26.2 Files folder title is a direct menu button, not a back label or cached root',()=>{
+ // Decoded final XCTest accessibility attachment: run 42657805706,
+ // artifact 13697363274, payload data.0~6EOHLlKC. This is a static replay.
+ const name='NativeOutput-34182-1794246534456603';
+ const source=swiftSource();
+ const body=source.split('private func currentNavigationTitle(')[1].split('private func captureCurrentTitleObservation(')[0];
+ for(const token of ['expectedFolder: String? = nil','bar.identifier == "FullDocumentManagerViewControllerNavigationBar"',
+   'folder + ", Actions Menu"','label == %@','bar.children(matching: .button).matching(titlePredicate)',
+   'menu.identifier.isEmpty','barFrame.contains(menuFrame)','viewFrame.contains(menuFrame)'])assert(body.includes(token),token);
+ const opened={view:[0,0,402,874],bars:[{exists:true,identifier:'FullDocumentManagerViewControllerNavigationBar',
+   frame:[0,88,402,114],directStaticTexts:[],directButtons:[
+    {exists:true,identifier:'BackButton',label:'On My iPhone',frame:[16,88,44,44]},
+    {exists:true,identifier:'',label:name+', Actions Menu',frame:[72,99.7,145,20.7]},
+    {exists:true,identifier:'OverflowBarButtonItem',label:'More',frame:[259,92,36,36]},
+    {exists:true,identifier:'',label:'Open',frame:[315,92,67,36]}
+   ]}],cachedRoot:name};
+ assert.equal(titleContract(source,opened,name),name);
+ assert.equal(titleContract(source,opened),null);
+ assert.equal(titleContract(source,opened,'NativeOutput-wrong'),null);
+ for(const mutate of [
+  b=>{b.directButtons[1].identifier='BackButton'},
+  b=>{b.directButtons[1].frame=[72,900,145,20.7]},
+  b=>{b.identifier='AnotherNavigationBar'},
+  b=>{b.directButtons=b.directButtons.filter(x=>!x.label.endsWith(', Actions Menu'))}
+ ]){const c=structuredClone(opened);mutate(c.bars[0]);assert.equal(titleContract(source,c,name),null);}
+ const two=structuredClone(opened);two.bars[0].directButtons.push(two.bars[0].directButtons[1]);
+ assert.throws(()=>titleContract(source,two,name),/Ambiguous/);
+ const browse=structuredClone(opened);browse.bars[0].directStaticTexts.push({exists:true,label:'Browse',frame:[100,90,100,21]});
+ assert.equal(titleContract(source,browse,name),'Browse');
+});
 test('nonce entry and picker dismissal use the same title policy; a Browse transition is not successful dismissal',()=>{
- const s=swiftSource();assert(s.includes('while try currentNavigationTitle(app) != folder'));
- assert(s.includes('while try currentNavigationTitle(app) != nil ||'));
+ const s=swiftSource();assert(s.includes('while try currentNavigationTitle(app, expectedFolder: folder) != folder'));
+ assert(s.includes('while try currentNavigationTitle(app, expectedFolder: folder) != nil ||'));
  assert(s.includes('find(app, cancelLabels) != nil || find(app, openLabels) != nil'));
  assert.equal(titleContract(s,shape(request.requiredFolderName)),request.requiredFolderName);
  assert.notEqual(titleContract(s,shape('Browse')),null,'still-open Browse cannot masquerade as dismissal');
@@ -385,7 +422,7 @@ test('owned icon is at most one later attempt under original10s; no diagnostic c
  const dispatch=s.split('private func tap(')[1].split('@MainActor')[0];assert(dispatch.indexOf('Date() >= deadline')<dispatch.indexOf('element.tap()'));
  assert(dispatch.includes('element.exists && element.isHittable && element.isEnabled'));
  for(const original of ['new-folder-via-system-picker','create-exact-nonce-folder','confirm-system-directory-selection'])assert(s.includes(original));
- assert(s.includes('while try currentNavigationTitle(app) != folder'));assert(s.includes('navigationOrCommitGuaranteed": false'));
+ assert(s.includes('while try currentNavigationTitle(app, expectedFolder: folder) != folder'));assert(s.includes('navigationOrCommitGuaranteed": false'));
  assert.equal((s.match(/Date\(\)\.addingTimeInterval\(10\)/g)||[]).length,2);assert.equal((s.match(/let namingDeadline =/g)||[]).length,1);
  let attempts=0;let performed=0;let used=false;for(let i=0;i<3;i++){if(!used){used=true;attempts++;performed++;}}assert.equal(attempts,1);assert.equal(performed,1);
 });
