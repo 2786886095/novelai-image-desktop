@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {spawn} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
 import {once} from 'node:events';
 import {runBoundedNativeCommand} from './bounded-native-command.mjs';
 
@@ -13,10 +13,34 @@ export async function assertOwnedTestProcessIsGone(pid, result, {
   signalZero = value => process.kill(value, 0),
   afterSignalZero = async () => {},
   readStat = file => fs.readFileSync(file, 'utf8'),
+  readDarwinStat = value => spawnSync('/bin/ps',['-p',String(value),'-o','stat='],
+    {encoding:'utf8',timeout:100,maxBuffer:8192}),
+  waitForReap = () => new Promise(resolve=>setTimeout(resolve,50)),
 } = {}) {
   assert(Number.isSafeInteger(pid) && pid > 0, 'Exact owned test PID required');
   try { signalZero(pid); }
   catch (error) { assert.equal(error.code, 'ESRCH'); return; }
+  if (platform === 'darwin') {
+    // A successful signal 0 can see a dead grandchild before launchd reaps
+    // it. Require Darwin's real Z state or ESRCH, never an assumed death.
+    for(let attempt=0;attempt<6;attempt++){
+      const observed=readDarwinStat(pid);
+      assert.ifError(observed.error);
+      assert.equal(observed.signal??null,null);
+      const state=observed.stdout?.trim()??'';
+      if(observed.status===0){
+        assert.match(state,/^[A-Z?][A-Za-z0-9+<|]*$/,'Invalid Darwin ps state');
+        if(state.startsWith('Z'))return;
+      }else{
+        assert.equal(observed.status,1,'Darwin ps failed');
+        assert.equal(state,'','Darwin ps returned inconsistent state');
+        assert.equal(observed.stderr?.trim()??'','','Darwin ps failed');
+      }
+      try{signalZero(pid);}catch(error){assert.equal(error.code,'ESRCH');return;}
+      if(attempt<5)await waitForReap();
+    }
+    assert.fail('test process '+pid+' survived bounded Darwin reaping: '+JSON.stringify(result));
+  }
   if (platform !== 'linux') assert.fail('test process '+pid+' survived the cleanup deadline: '+JSON.stringify(result));
   await afterSignalZero(pid);
   const procPath = '/proc/'+pid+'/stat';
@@ -149,4 +173,20 @@ test('cleanup probe rejects permission, stat and unrelated-path errors instead o
     signalZero:()=>{throw Object.assign(Error('already gone'),{code:'ESRCH'});},
     readStat:()=>{throw Error('must not read after ESRCH');},
   }));
+});
+
+test('Darwin reaping allows only the exact dead PID and never a live or unreadable process',async()=>{
+  const pid=7319;
+  const base={platform:'darwin',signalZero:()=>{},waitForReap:async()=>{}};
+  const observed=state=>({status:0,stdout:state+'\n',stderr:'',signal:null});
+  let samples=0;
+  await assert.doesNotReject(assertOwnedTestProcessIsGone(pid,{},{
+    ...base,readDarwinStat:value=>{assert.equal(value,pid);return observed(++samples===1?'R+':'Z');}}));
+  assert.equal(samples,2);
+  await assert.rejects(assertOwnedTestProcessIsGone(pid,{},{
+    ...base,readDarwinStat:()=>observed('S')}),/survived bounded Darwin/);
+  await assert.rejects(assertOwnedTestProcessIsGone(pid,{},{
+    ...base,readDarwinStat:()=>({status:1,stdout:'',stderr:'permission denied'})}),/Darwin ps failed/);
+  await assert.rejects(assertOwnedTestProcessIsGone(pid,{},{
+    ...base,readDarwinStat:()=>observed('')}),/Invalid Darwin ps state/);
 });
