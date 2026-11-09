@@ -344,6 +344,11 @@ test('appearance witness holds actual accessibility elements and the same absolu
  assert(budget);
  const rows=[...budget.matchAll(/\(([\d.]+), (true|false)\)/g)].map(([,ms,modal])=>[Number(ms),modal==='true']);
  assert.equal(rows.length,5);assert.equal(rows.filter(x=>x[1]).length,1);assert.equal(rows.at(-1)[1],true);
+ // Run 42674231725 attempt 2: probes at 0.25, 0.95 and 1.70 were
+ // negative; the 1.70 snapshot held the client until about 4.0.
+ assert.deepEqual(rows.map(row=>row[0]),[0.25,2.10,2.80,3.35,3.85]);
+ assert.equal(rows.filter(([offset])=>offset>0.25&&offset<=1.70).length,0);
+ assert(s.includes('"probeTimes": namingProbeTimes'));
  assert(rows.every(([offset],i)=>offset<5&&(i===0||offset>rows[i-1][0])));
  const poll=s.split('for poll in namingPolls {')[1].split('let witnessObservedAt')[0];
  assert(poll.includes('if Date() >= namingDeadline { break }'));assert(poll.includes('includeModal: poll.includeModal, before: namingDeadline'));

@@ -546,14 +546,17 @@ final class FolderPickerUITests: XCTestCase {
     // second appearance wait. No outer allowance or timeout is increased.
     let namingStarted = Date()
     let namingDeadline = namingStarted.addingTimeInterval(5)
-    // Five exact inline probes. Only the last permits scoped alert/sheet
-    // lookup if no exact inline witness has arrived. The deadline is shared.
+    // Warm once, then let the keyboard/rename transition settle before
+    // asking XCUI again. The recorded 1.70s snapshot was still empty and
+    // held the runner until 4.0s (42674231725, attempt 2). Give the later
+    // exact probes the remaining time without extending the 5s deadline.
     let namingPolls: [(offset: TimeInterval, includeModal: Bool)] = [
-      (0.25, false), (0.95, false), (1.70, false), (2.70, false), (3.65, true)
+      (0.25, false), (2.10, false), (2.80, false), (3.35, false), (3.85, true)
     ]
     var naming: NamingEditorWitness?
     var namingQueryCount = 0
     var namingModalQueryCount = 0
+    var namingProbeTimes: [[String: Double]] = []
     for poll in namingPolls {
       if naming != nil || Date() >= namingDeadline { break }
       let delay = namingStarted.addingTimeInterval(poll.offset).timeIntervalSinceNow
@@ -561,7 +564,12 @@ final class FolderPickerUITests: XCTestCase {
       if Date() >= namingDeadline { break }
       namingQueryCount += 1
       if poll.includeModal { namingModalQueryCount += 1 }
+      let probeStartedAt = Date()
       naming = try currentNamingEditor(app, namingViewFrame, includeModal: poll.includeModal, before: namingDeadline)
+      let probeEndedAt = Date()
+      namingProbeTimes.append(["scheduled": poll.offset,
+        "started": probeStartedAt.timeIntervalSince(namingStarted),
+        "ended": probeEndedAt.timeIntervalSince(namingStarted)])
     }
     let witnessObservedAt = Date()
     let withinAppearanceDeadline = witnessObservedAt < namingDeadline
@@ -571,6 +579,7 @@ final class FolderPickerUITests: XCTestCase {
       "elapsedSeconds": elapsed, "appearanceDeadlineSeconds": 5,
       "withinAppearanceDeadline": withinAppearanceDeadline,
       "queryCount": namingQueryCount, "modalQueryCount": namingModalQueryCount,
+      "probeTimes": namingProbeTimes,
       "editorFound": naming != nil, "editorKind": naming?.isInline == true ? "inline" : "modal-or-absent",
       "editorIdentifier": naming?.identifier ?? "", "editorFrame": naming?.frame ?? [],
       "boundToAccessibilityElement": naming != nil, "modalOwnerHeld": naming?.modalOwner != nil,
