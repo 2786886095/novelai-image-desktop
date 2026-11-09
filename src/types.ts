@@ -1502,7 +1502,8 @@ export interface AppSettings {
    * silently disable every product transition. */
   reduceMotion: boolean;
   /** Windows only; false or missing preserves the normal close-and-quit behavior. */
-  closeToTray?: boolean;
+  /** null asks on close; true hides to the tray; false quits. */
+  closeToTray?: boolean | null;
   autoComplete: boolean;
   weightHighlight: boolean;
   promptRandomizer: boolean;

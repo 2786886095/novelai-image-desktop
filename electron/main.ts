@@ -321,6 +321,7 @@ if (!app.requestSingleInstanceLock()) {
 let mainWindow: BrowserWindow | null = null;
 let windowTray: Tray | null = null;
 let quittingMainWindow = false;
+let windowTrayForSession = false;
 
 function disposeWindowTray() {
   const tray = windowTray;
@@ -340,10 +341,11 @@ function mainWindowIconPath() {
   return path.join(__dirname, isDev ? "../../public/icon.png" : "../../dist/icon.png");
 }
 
-function syncWindowTray(refreshMenu = false): boolean {
+function syncWindowTray(refreshMenu = false, showForThisClose = false): boolean {
   if (process.platform !== "win32" || uiCapturePath || quittingMainWindow || !mainWindow || mainWindow.isDestroyed()) return false;
   try {
-    if (getSetting("closeToTray") !== true) {
+    const closeToTray = getSetting("closeToTray");
+    if (closeToTray !== true && !showForThisClose && !(closeToTray == null && windowTrayForSession)) {
       // A preference change must not leave a hidden window without a way back.
       if (windowTray && !mainWindow.isVisible()) revealMainWindow();
       disposeWindowTray();
@@ -767,11 +769,44 @@ function createWindow() {
     });
   }
 
+  let choosingCloseAction = false;
   mainWindow.on("close", (event) => {
-    if (syncWindowTray()) {
-      event.preventDefault();
-      startupWindow.hide();
-      return;
+    if (process.platform === "win32" && !uiCapturePath && !quittingMainWindow) {
+      const choice = getSetting("closeToTray");
+      if (choice === true && syncWindowTray()) {
+        event.preventDefault();
+        startupWindow.hide();
+        return;
+      }
+      if (choice == null) {
+        event.preventDefault();
+        if (choosingCloseAction) return;
+        choosingCloseAction = true;
+        const text = windowTrayText(getSetting("language"));
+        void dialog.showMessageBox(startupWindow, {
+          type: "question", title: text.closeTitle, message: text.closeTitle, detail: text.closeDetail,
+          buttons: [text.hide, text.quit, text.cancel], defaultId: 0, cancelId: 2,
+          checkboxLabel: text.remember, checkboxChecked: false, noLink: true,
+        }).then(async ({ response, checkboxChecked }) => {
+          if (quittingMainWindow || startupWindow.isDestroyed() || (response !== 0 && response !== 1)) return;
+          if (response === 0 && !syncWindowTray(false, true)) {
+            await dialog.showMessageBox(startupWindow, { type: "warning", title: text.closeTitle, message: text.trayUnavailable });
+            return;
+          }
+          if (checkboxChecked) {
+            try { setSetting("closeToTray", response === 0); }
+            catch (error) { console.warn("[window-tray] Unable to remember close action.", error); }
+          }
+          if (response === 0) {
+            windowTrayForSession = true;
+            startupWindow.hide();
+          } else {
+            app.quit();
+          }
+        }).catch(error => console.warn("[window-tray] Unable to ask how to close.", error))
+          .finally(() => { choosingCloseAction = false; });
+        return;
+      }
     }
     if (!harnessNeedsExitConfirmation()) return;
     event.preventDefault();
@@ -779,6 +814,7 @@ function createWindow() {
   });
 
   mainWindow.on("closed", () => {
+    windowTrayForSession = false;
     disposeWindowTray();
     mainWindow = null;
   });
@@ -1451,6 +1487,7 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   ipcMain.handle("settings:get", (_event, key) => getSetting(key));
   ipcMain.handle("settings:set", async (_event, key, value) => {
     const saved = setSetting(key, value);
+    if (key === "closeToTray") windowTrayForSession = false;
     if (key === "closeToTray" || key === "language") syncWindowTray(key === "language");
     if ([
       "proxyMode",

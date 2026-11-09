@@ -6373,12 +6373,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 </label>
                 <TypographySettings />
                 {window.naiDesktop?.platform === "win32" && (
-                  <Toggle
-                    checked={settings.closeToTray === true}
-                    onChange={(value) => void update("closeToTray", value)}
-                    label={windowTrayText(settings.language).label}
-                    description={windowTrayText(settings.language).description}
-                  />
+                  <label className="field">
+                    <span>{windowTrayText(settings.language).label}</span>
+                    <SelectMenuCompat
+                      value={settings.closeToTray == null ? "ask" : settings.closeToTray ? "tray" : "quit"}
+                      onChange={(e) => void update("closeToTray", e.target.value === "ask" ? null : e.target.value === "tray")}
+                    >
+                      <option value="ask">{windowTrayText(settings.language).ask}</option>
+                      <option value="tray">{windowTrayText(settings.language).hide}</option>
+                      <option value="quit">{windowTrayText(settings.language).quit}</option>
+                    </SelectMenuCompat>
+                    <small>{windowTrayText(settings.language).description}</small>
+                  </label>
                 )}
                 <Toggle
                   checked={settings.reduceMotion}
