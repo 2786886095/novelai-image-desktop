@@ -227,9 +227,9 @@ test('static naming5s deadline is not renewed; real new-folder and rename commit
  const s=swiftSource();const tap=s.indexOf('try tap(newFolder, "new-folder-via-system-picker")');
  const deadline=s.indexOf('let namingDeadline = namingStarted.addingTimeInterval(5)'),cap=s.indexOf('capture("after-new-folder-action")');
  assert(tap>=0&&tap<deadline&&deadline<cap);assert.equal((s.match(/let namingDeadline =/g)||[]).length,1);
- assert(s.includes('if Date() >= namingDeadline'));assert(s.includes('while naming == nil'));
+ assert(s.includes('if Date() >= namingDeadline'));assert(s.includes('for poll in namingPolls'));
  const accept=s.indexOf('guard withinAppearanceDeadline else');
- assert(accept>s.indexOf('while naming == nil')&&accept<s.indexOf('guard let witness = naming'));
+ assert(accept>s.indexOf('for poll in namingPolls')&&accept<s.indexOf('guard let witness = naming'));
  // Static acceptance contract: an immediately nonnull result arriving after
  // capture/helper consumed5s must still reject, not skip the nil-only loop.
  const acceptAt=(elapsedSeconds,hasControl)=>{if(accept>=0&&elapsedSeconds>=5)throw new Error('late naming control');return hasControl;};
@@ -303,7 +303,14 @@ test('appearance witness holds actual accessibility elements and the same absolu
  assert(body.includes('allElementsBoundByAccessibilityElement'));assert(!body.includes('allElementsBoundByIndex'));
  assert(body.includes('if let witness = inline.first { return witness }'));
  assert(body.includes('guard includeModal else { return nil }'));
- assert(s.includes('includeModal: false'));assert(s.includes('includeModal: poll % 3 == 0'));
+ const budget=s.match(/let namingPolls:[^=]+?= \[([\s\S]+?)\]/)?.[1];
+ assert(budget);
+ const rows=[...budget.matchAll(/\(([\d.]+), (true|false)\)/g)].map(([,ms,modal])=>[Number(ms),modal==='true']);
+ assert.equal(rows.length,5);assert.equal(rows.filter(x=>x[1]).length,1);
+ assert(rows.every(([offset],i)=>offset<5&&(i===0||offset>rows[i-1][0])));
+ const poll=s.split('for poll in namingPolls {')[1].split('let witnessObservedAt')[0];
+ assert(poll.includes('if Date() >= namingDeadline { break }'));assert(poll.includes('includeModal: poll.includeModal'));
+ assert(s.includes('"queryCount": namingQueryCount')&&s.includes('"modalQueryCount": namingModalQueryCount'));
  for(const literal of ['identifier == %@ AND enabled == YES','field.isHittable','viewFrame.contains(frame)'])assert(body.includes(literal));
  assert(!body.includes('field.exists')&&!body.includes('field.isEnabled')&&!body.includes('field.label.lowercased()'));
  assert(body.includes('let matches = matchQuery.allElementsBoundByAccessibilityElement'));

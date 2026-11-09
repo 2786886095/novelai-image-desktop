@@ -543,16 +543,23 @@ final class FolderPickerUITests: XCTestCase {
     // second appearance wait. No outer allowance or timeout is increased.
     let namingStarted = Date()
     let namingDeadline = namingStarted.addingTimeInterval(5)
-    var naming = try currentNamingEditor(app, namingViewFrame, includeModal: false)
-    var poll = 0
-    while naming == nil {
+    // At most four narrow snapshots and one broad fallback. A native AX
+    // query can block for >1s, so do not spend the deadline enumerating the
+    // same hierarchy every 100ms. A late result still earns no credit.
+    let namingPolls: [(offset: TimeInterval, includeModal: Bool)] = [
+      (0.25, false), (0.95, false), (1.70, true), (2.70, false), (3.65, false)
+    ]
+    var naming: NamingEditorWitness?
+    var namingQueryCount = 0
+    var namingModalQueryCount = 0
+    for poll in namingPolls {
+      if naming != nil || Date() >= namingDeadline { break }
+      let delay = namingStarted.addingTimeInterval(poll.offset).timeIntervalSinceNow
+      if delay > 0 { Thread.sleep(forTimeInterval: delay) }
       if Date() >= namingDeadline { break }
-      Thread.sleep(forTimeInterval: 0.10)
-      if Date() >= namingDeadline { break }
-      poll += 1
-      // Two cheap exact-inline polls between whole modal hierarchy scans.
-      // The full live identity/ambiguity check still precedes typing.
-      naming = try currentNamingEditor(app, namingViewFrame, includeModal: poll % 3 == 0)
+      namingQueryCount += 1
+      if poll.includeModal { namingModalQueryCount += 1 }
+      naming = try currentNamingEditor(app, namingViewFrame, includeModal: poll.includeModal)
     }
     let witnessObservedAt = Date()
     let withinAppearanceDeadline = witnessObservedAt < namingDeadline
@@ -561,6 +568,7 @@ final class FolderPickerUITests: XCTestCase {
       "nativePid": Int(nativePID)!, "nonce": nonce, "appId": bundle,
       "elapsedSeconds": elapsed, "appearanceDeadlineSeconds": 5,
       "withinAppearanceDeadline": withinAppearanceDeadline,
+      "queryCount": namingQueryCount, "modalQueryCount": namingModalQueryCount,
       "editorFound": naming != nil, "editorKind": naming?.isInline == true ? "inline" : "modal-or-absent",
       "editorIdentifier": naming?.identifier ?? "", "editorFrame": naming?.frame ?? [],
       "boundToAccessibilityElement": naming != nil, "modalOwnerHeld": naming?.modalOwner != nil,
