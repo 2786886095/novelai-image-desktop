@@ -359,18 +359,21 @@ final class FolderPickerUITests: XCTestCase {
     try tap(search, "prepare-picker-software-keyboard")
     let keyboard = app.keyboards.firstMatch
     let keyboardAppeared = keyboard.waitForExistence(timeout: 4)
-    let activeSearches = app.searchFields.allElementsBoundByAccessibilityElement.filter {
-      isSearchField($0) && usable($0, viewFrame)
+    // iOS exposes the active search scrim as an Other inside the exact
+    // DocumentManager search container, not a generic Cancel button.
+    let searchContainerID = NSPredicate(format: "identifier == %@", "DOCSearchControllerContainerViewIdentifier")
+    let dismissLabel = NSPredicate(format: "label IN %@", ["Activate to dismiss", "轻点关闭", "啟用以關閉"])
+    let searchContainers = app.otherElements.matching(searchContainerID).allElementsBoundByAccessibilityElement.filter {
+      $0.exists && !$0.frame.isEmpty && viewFrame.contains($0.frame)
     }
-    guard activeSearches.count == 1 else { throw fail("Active provider search could not be identified") }
-    let searchFrame = activeSearches[0].frame
-    let cancelLabel = NSPredicate(format: "label IN %@", ["Cancel", "取消"])
-    let cancels = app.buttons.matching(cancelLabel).allElementsBoundByAccessibilityElement.filter {
-      usable($0, viewFrame) && $0.frame.minX >= searchFrame.midX &&
-        abs($0.frame.midY - searchFrame.midY) <= searchFrame.height
+    guard searchContainers.count == 1, let container = searchContainers.first else {
+      throw fail("No unique active document search container")
     }
-    guard cancels.count == 1 else { throw fail("No unique active search Cancel control in the search row") }
-    try tap(cancels[0], "leave-picker-search-without-editing")
+    let dismissers = container.children(matching: .other).matching(dismissLabel)
+      .allElementsBoundByAccessibilityElement.filter { usable($0, viewFrame) && container.frame.contains($0.frame) }
+    guard dismissers.count == 1 else { throw fail("No unique dismissal control inside the active document search container") }
+    try tap(dismissers[0], "leave-picker-search-without-editing")
+    guard container.waitForNonExistence(timeout: 3) else { throw fail("Document search stayed active after dismissal") }
     guard try waitForNavigationTitle(app, providerLabels) else {
       throw fail("Provider navigation title was not restored after keyboard preparation")
     }
