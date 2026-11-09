@@ -14,6 +14,13 @@ const electronPackage = require.resolve('electron/package.json');
 const version = require(electronPackage).version;
 if (lock.version !== version || !/^\d+\.\d+\.\d+$/.test(version)) throw Error('Electron differs from the lockfile.');
 const checksums = JSON.parse(readFileSync(path.join(path.dirname(electronPackage), 'checksums.json'), 'utf8'));
+// Official electron/electron v42.11.0 REST asset IDs and byte sizes.
+const pinned = {
+  'electron-v42.11.0-darwin-arm64.zip': { id: 537343004, size: 121252676 },
+  'electron-v42.11.0-darwin-x64.zip': { id: 537345881, size: 125479625 },
+  'electron-v42.11.0-linux-x64.zip': { id: 537309975, size: 124861365 },
+  'electron-v42.11.0-win32-x64.zip': { id: 537316799, size: 149257566 },
+};
 const releaseBuild = process.argv[2] === '--package';
 const arches = releaseBuild && process.platform === 'darwin' ? ['arm64', 'x64'] : [process.arch];
 const manifests = [electronPackage, ...(releaseBuild ? [require.resolve('app-builder-lib/package.json')] : [])];
@@ -58,19 +65,27 @@ try {
       continue;
     }
     if (!verified) {
-      if (!metadata) {
-        const index = path.join(scratch, 'release.json');
-        curl(api + '/tags/v' + version, index, 2 * 1024 * 1024, 'application/vnd.github+json');
-        metadata = JSON.parse(readFileSync(index, 'utf8'));
-        if (metadata.tag_name !== 'v' + version) throw Error('Unexpected Electron release tag.');
+      let asset = Object.hasOwn(pinned, file) ? pinned[file] : undefined;
+      if (!asset) {
+        if (!metadata) {
+          const index = path.join(scratch, 'release.json');
+          curl(api + '/tags/v' + version, index, 2 * 1024 * 1024, 'application/vnd.github+json');
+          metadata = JSON.parse(readFileSync(index, 'utf8'));
+          if (metadata.tag_name !== 'v' + version) throw Error('Unexpected Electron release tag.');
+        }
+        const assets = metadata.assets.filter(item => item.name === file && item.browser_download_url === canonical);
+        asset = assets[0];
+        if (assets.length !== 1 || !Number.isSafeInteger(asset.id) || asset.id <= 0 ||
+            !Number.isSafeInteger(asset.size) || asset.size < 1 || asset.size > 512 * 1024 * 1024 ||
+            asset.digest !== 'sha256:' + expected) throw Error('Official metadata disagrees with the pinned Electron checksum.');
       }
-      const assets = metadata.assets.filter(asset => asset.name === file && asset.browser_download_url === canonical);
-      const asset = assets[0];
-      if (assets.length !== 1 || !Number.isSafeInteger(asset.id) || asset.id <= 0 ||
-          !Number.isSafeInteger(asset.size) || asset.size < 1 || asset.size > 512 * 1024 * 1024 ||
-          asset.digest !== 'sha256:' + expected) throw Error('Official metadata disagrees with the pinned Electron checksum.');
       verified = path.join(scratch, file);
-      curl(api + '/assets/' + asset.id, verified, asset.size, 'application/octet-stream');
+      try {
+        curl(api + '/assets/' + asset.id, verified, asset.size, 'application/octet-stream');
+      } catch {
+        console.log('Official API download unavailable; trying the official release URL.');
+        curl(canonical + '?download=1', verified, asset.size, 'application/octet-stream');
+      }
       if (!(await matches(verified, expected))) throw Error('Official Electron archive checksum mismatch.');
     }
     for (const dest of needs) {
