@@ -194,3 +194,16 @@ test('temporary sdkmanager stub is executable without ever running its bytes',()
     assert.deepEqual(f.commands,[]);
   }finally{f.close();}
 });
+
+test('exact observed sdkmanager SeekableByteChannel image failure retries once, not mixed errors',async()=>{
+  const message='Warning: An error occurred while preparing SDK package Google APIs Intel x86_64 Atom System Image: Error reading Zip content from a SeekableByteChannel.\n';
+  const broken=result({exitStatus:1,stderr:message});
+  assert.equal(isRetryableAndroidZipFailure(broken),true);
+  assert.equal(isRetryableAndroidZipFailure({...broken,stderr:message+'Warning: certificate verification failed\n'}),false);
+  assert.equal(isRetryableAndroidZipFailure({...broken,stderr:message.replace('Atom System Image','Android Emulator')}),false);
+  const f=fixture();try{
+    const r=await f.run([broken,result()],{onCall:n=>{if(n===2)f.install();}});
+    assert.equal(r.exitStatus,0);assert.equal(r.attempts.length,2);assert.equal(r.attempts[0].stderr,message);
+    assert.deepEqual(f.commands[0].argv,f.commands[1].argv);
+  }finally{f.close();}
+});

@@ -12,7 +12,7 @@ export const ANDROID_RUNNER_TEMP='/home/runner/work/_temp';
 export const ANDROID_IMAGE_MAX_ATTEMPTS=2;
 const argv=Object.freeze([ANDROID_SDKMANAGER,'--install',ANDROID_IMAGE_PACKAGE,'--channel=0']);
 const hash=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
-const knownZipLine=/^Warning: An error occurred while preparing SDK package Google APIs Intel x86_64 Atom System Image: Error on ZipFile unknown archive\.$/;
+const knownZipLine=/^Warning: An error occurred while preparing SDK package Google APIs Intel x86_64 Atom System Image: (?:Error on ZipFile unknown archive|Error reading Zip content from a SeekableByteChannel)\.$/;
 const errorLine=/\berror\b|exception|\bfailed\b|\bfatal\b|\bfailure\b|\bunknown\b|\binvalid\b|corrupt|malformed|unable|\bcannot\b|unrecognized|unsupported|refused|unavailable|denied|signature|checksum|certificate|\bTLS\b|\bSSL\b|EACCES|EPERM|ENOSPC|no space|not found|not permitted|unauthori|^Warning:/i;
 const lines=result=>(String(result.stdout??'')+'\n'+String(result.stderr??''))
   .replace(/\x1b\[[0-9;]*m/g,'').split(/[\r\n]+/).map(line=>line.trim()).filter(Boolean);
