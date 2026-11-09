@@ -341,6 +341,42 @@ final class FolderPickerUITests: XCTestCase {
         "requiredFolderName": folder, "literalCellId": "Folder", "literalIconId": "Folder84pt",
         "oneAttempt": true, "navigationOrCommitGuaranteed": false], options: [.sortedKeys]), as: UTF8.self))
   }
+  // Warm UIKit’s software keyboard on the disposable picker before measuring
+  // the separate New Folder action. Do not type into search or create anything.
+  private func preparePickerKeyboard(_ app: XCUIApplication, _ providerLabels: [String]) throws {
+    let viewFrame = app.frame
+    let barID = NSPredicate(format: "identifier == %@", "FullDocumentManagerViewControllerNavigationBar")
+    let bars = app.navigationBars.matching(barID).allElementsBoundByAccessibilityElement.filter {
+      $0.exists && !$0.frame.isEmpty && viewFrame.contains($0.frame)
+    }
+    guard bars.count <= 1 else { throw fail("Ambiguous provider navigation bar during keyboard preparation") }
+    guard let bar = bars.first else { return }
+    let searches = bar.searchFields.allElementsBoundByAccessibilityElement.filter {
+      isSearchField($0) && usable($0, viewFrame) && bar.frame.contains($0.frame)
+    }
+    guard searches.count <= 1 else { throw fail("Ambiguous provider search field during keyboard preparation") }
+    guard let search = searches.first else { return }
+    try tap(search, "prepare-picker-software-keyboard")
+    let keyboard = app.keyboards.firstMatch
+    let keyboardAppeared = keyboard.waitForExistence(timeout: 4)
+    let activeSearches = app.searchFields.allElementsBoundByAccessibilityElement.filter {
+      isSearchField($0) && usable($0, viewFrame)
+    }
+    guard activeSearches.count == 1 else { throw fail("Active provider search could not be identified") }
+    let searchFrame = activeSearches[0].frame
+    let cancelLabel = NSPredicate(format: "label IN %@", ["Cancel", "取消"])
+    let cancels = app.buttons.matching(cancelLabel).allElementsBoundByAccessibilityElement.filter {
+      usable($0, viewFrame) && $0.frame.minX >= searchFrame.midX &&
+        abs($0.frame.midY - searchFrame.midY) <= searchFrame.height
+    }
+    guard cancels.count == 1 else { throw fail("No unique active search Cancel control in the search row") }
+    try tap(cancels[0], "leave-picker-search-without-editing")
+    guard try waitForNavigationTitle(app, providerLabels) else {
+      throw fail("Provider navigation title was not restored after keyboard preparation")
+    }
+    print("IOS_FOLDER_PICKER_KEYBOARD_PREPARATION:\(keyboardAppeared)")
+  }
+
   private func tap(_ element: XCUIElement, _ action: String, before deadline: Date? = nil) throws {
     guard element.exists && element.isHittable && element.isEnabled else {
       throw fail("Observed UI control unavailable: " + action)
@@ -417,6 +453,8 @@ final class FolderPickerUITests: XCTestCase {
       throw fail("External provider navigation title was not verified; availability is undetermined and app Documents is forbidden")
     }
     capture("observed-external-local-provider")
+    let providerLabels = providers.flatMap { $0.1 }
+    try preparePickerKeyboard(app, providerLabels)
     let newFolderLabels = ["New Folder", "New folder", "Create Folder", "新建文件夹", "新增檔案夾"]
     var create = find(app, newFolderLabels)
     if create == nil, let more = find(app, ["More", "More Actions", "更多", "更多操作", "ellipsis"]) {
@@ -432,7 +470,6 @@ final class FolderPickerUITests: XCTestCase {
     // second appearance wait. No outer allowance or timeout is increased.
     let namingStarted = Date()
     let namingDeadline = namingStarted.addingTimeInterval(5)
-    let providerLabels = providers.flatMap { $0.1 }
     var naming = try currentNamingEditor(app, namingViewFrame, includeModal: false)
     var poll = 0
     while naming == nil {
