@@ -26,7 +26,7 @@ function healthyProcessResult(r) {
     typeof r.stdout==='string'&&typeof r.stderr==='string';
 }
 export async function observeAndroidRuntimeHealth({adb,device,appId,command,phase=()=>{},journeyDeadline,
-  nativeStdout,sourceSha,profileSha,entry,expectedChecks,expectedNativePid,
+  nativeStdout,sourceSha,profileSha,entry,expectedChecks,expectedNativePid, observeNativeCompletion=false,
   sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms)),now=Date.now}) {
   validateAndroidPreflightTarget({device,appId});
   witness({nativeStdout,sourceSha,profileSha,entry,expectedChecks,expectedNativePid});
@@ -41,7 +41,7 @@ export async function observeAndroidRuntimeHealth({adb,device,appId,command,phas
     // Timeout/overflow/signal/error/nonzero is never a retry candidate.
     if(!healthyProcessResult(r))throw Error('Runtime health observation command failed.');
     const tail=argv.slice(3);
-    if(tail.join(' ')==='shell uiautomator dump '+XML && r.stdout==='' && r.stderr===IDLE_STDERR) {
+    if(tail.join(' ')==='shell uiautomator dump '+XML && r.stdout==='' && r.stderr.replace(/\r\n/g,'\n')===IDLE_STDERR) {
       const e=Error('Runtime hierarchy temporarily unavailable: exact idle-state observation.');
       e.code='ANDROID_RUNTIME_IDLE_UNAVAILABLE';throw e;
     }
@@ -65,6 +65,23 @@ export async function observeAndroidRuntimeHealth({adb,device,appId,command,phas
     } catch(e) {
       if(e.code!=='ANDROID_RUNTIME_IDLE_UNAVAILABLE')throw e;
       phase({stage:'runtime-health-unavailable',reason:'exact-idle-state',attempt,maxAttempts:MAX_ATTEMPTS});
+      // The native journey can finish during the blocking UI dump. Observe
+      // real same-PID completion now rather than blocking again on an already
+      // finished screen. This is not a runtime health observation, never reads
+      // stale XML, and is subject to the original 30s and journey deadlines.
+      if(observeNativeCompletion) {
+        const recent=adbRead(['logcat','-d','-v','raw','--pid='+expectedNativePid]);
+        if(recent.stderr)throw Error('Runtime native log observation returned stderr.');
+        witness({nativeStdout:recent.stdout,sourceSha,profileSha,entry,expectedChecks,expectedNativePid});
+        if(recent.stdout.includes('FEATURE_ACCEPTANCE_DONE:')) {
+          const proof=createNativeProof({sourceSha,profileSha,platform:'android',testEntry:entry,expectedChecks,requireNativeBegin:true});
+          for(const line of recent.stdout.split(/\r?\n/))proof.line(line);
+          const result=proof.finish();
+          if(!result.passed||result.begin.nativePid!==expectedNativePid)throw Error('Runtime completion did not contain all current native checks: '+result.errors.join('; '));
+          phase({stage:'runtime-native-completion-observed',attempt,nativePid:expectedNativePid,checks:result.checks.length});
+          return {completionObserved:true,nativeStdout:recent.stdout,completion:result.completion};
+        }
+      }
       if(attempt===MAX_ATTEMPTS)throw Error('Runtime health exact-idle observation retry budget exhausted.');
       const remaining=deadline-now();if(remaining<=0)throw expired();
       await sleep(Math.min(250,remaining));continue;

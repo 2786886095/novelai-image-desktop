@@ -135,6 +135,7 @@ function fixture({steps=[{}],exhausted=false,options={},cost=0}={}) {
   if(args==='shell dumpsys window windows'||args==='shell dumpsys window')return {...ok,stdout:current.focus??GOOD_FOCUS};
   if(args==='shell dumpsys window displays')return current.displayResult??{...ok,stdout:current.displayFocus??current.focus??GOOD_FOCUS};
   if(args==='shell dumpsys window policy')return {...ok,stdout:current.policy??GOOD_POLICY};
+  if(args==='logcat -d -v raw --pid=6183'&&current.log)return {...ok,stdout:current.log};
   if(args==='shell pidof '+APP)return {...ok,stdout:current.pid??'6183\n'};
   throw Error('Unexpected command; native device commands are never executed by host fixture: '+args);
  };
@@ -242,3 +243,26 @@ test('current-display stderr is a hard failure, not a retry or old-focus fallbac
  const f=fixture({steps:[{displayResult:{...GOOD_DUMP,stdout:GOOD_FOCUS,stderr:'Permission denied\n'}}]});
  await assert.rejects(f.run(),/current-display/);assert.equal(attempts(f),0);noHealth(f);
 });
+
+const completedLog=({doneExit=0,omitLast=false}={})=>{
+ const binding={sourceSha:trace.sourceHead,profileSha:'7c8061884ca02547f679d3537c35cf288ffed790e24ed0ab95ff04f3aea8d188',platform:'android',paidCalls:0};
+ return actualLaunch.stdout+'\n'+Array.from({length:omitLast?14:15},(_,i)=>'FEATURE_ACCEPTANCE_CHECK:'+JSON.stringify({...binding,testEntry:'text15',feature:'text',journey:'case-'+i,kind:'device',mockOnly:false,status:'passed'})).join('\n')+'\nFEATURE_ACCEPTANCE_DONE:'+JSON.stringify({...binding,exitStatus:doneExit,checks:15})+'\n';
+};
+test('Windows CRLF exact idle still needs fresh UI or verified completion',async()=>{
+ const f=fixture({steps:[{dump:{...idle,stderr:'ERROR: could not get idle state.\r\n'}},{}]});
+ assert.equal((await f.run()).attempt,2);
+ assert.equal(attempts(f),1);
+});
+test('a current complete native journey stops repeated idle probes without certifying runtime health',async()=>{
+ const f=fixture({steps:[{dump:idle,log:completedLog()}],options:{observeNativeCompletion:true}});
+ const r=await f.run();
+ assert.equal(r.completionObserved,true);assert.equal(r.completion.checks,15);
+ assert.equal(f.dumps,1);noHealth(f);
+ assert(f.phases.some(p=>p.stage==='runtime-native-completion-observed'));
+});
+for(const log of [completedLog({omitLast:true}),completedLog({doneExit:1}),completedLog().replaceAll('6183','9999')]){
+ test('incomplete, failed or foreign native completion never stops the gate as a pass',async()=>{
+  const f=fixture({steps:[{dump:idle,log}],options:{observeNativeCompletion:true}});
+  await assert.rejects(f.run(),/completion|identity mismatch/);noHealth(f);
+ });
+}

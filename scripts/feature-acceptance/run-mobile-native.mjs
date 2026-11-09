@@ -155,8 +155,14 @@ try {
         // Only a same-process rendered/resumed native witness permits the bounded
         // exact-idle observation policy. Initial/legacy callers remain strict.
         if(requireNativeBegin&&nativeStdout.includes('FEATURE_NATIVE_FOREGROUND:resumed; actual first/resumed frames rendered')){
-          await observeAndroidRuntimeHealth({...input,command,phase:androidPhase,journeyDeadline:end,
-            nativeStdout,sourceSha,profileSha:profileSha256,expectedNativePid:observedAndroidPid});
+          const observed=await observeAndroidRuntimeHealth({...input,command,phase:androidPhase,journeyDeadline:end,
+            nativeStdout,sourceSha,profileSha:profileSha256,expectedNativePid:observedAndroidPid,observeNativeCompletion:true});
+          if(observed.completionObserved){
+            nativeStdout=observed.nativeStdout;
+            nativeStderr='';
+            completion=observed.completion;
+            break;
+          }
         } else await inspectAndroidForeground({...input,command,phase:androidPhase});
       }
       await new Promise(resolve => setTimeout(resolve, 3000));
