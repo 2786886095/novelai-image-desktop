@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 static int fail(const char *operation) {
@@ -105,8 +106,15 @@ static int read_metadata(const char *file, char *identifier, char *executable) {
   return ok;
 }
 
+static int clock_ms(clockid_t clock, uint64_t *out) {
+  struct timespec t;
+  if (clock_gettime(clock, &t) != 0 || t.tv_sec < 0 || t.tv_nsec < 0 || t.tv_nsec >= 1000000000) return 0;
+  *out = (uint64_t)t.tv_sec * 1000 + (uint64_t)t.tv_nsec / 1000000;
+  return 1;
+}
+
 int main(int argc, char **argv) {
-  if (argc != 3 || !argv[1][0]) return fail("exact positive PID and Simulator data root required");
+  if (argc != 4 || !argv[1][0] || !argv[3][0]) return fail("exact PID, Simulator data root and deadline required");
   for (const char *c = argv[1]; *c; c++) {
     if (*c < '0' || *c > '9') return fail("nondecimal PID refused");
   }
@@ -114,6 +122,15 @@ int main(int argc, char **argv) {
   char *end = NULL;
   long value = strtol(argv[1], &end, 10);
   if (errno || !end || *end || value < 1 || value > INT_MAX) return fail("PID range");
+  for (const char *c = argv[3]; *c; c++) {
+    if (*c < '0' || *c > '9') return fail("nondecimal observation deadline refused");
+  }
+  errno = 0;
+  const uint64_t deadline = strtoull(argv[3], &end, 10);
+  if (errno || !end || *end || !deadline || deadline > 9007199254740991ULL) return fail("observation deadline range");
+  uint64_t started, finished, mono_start, mono_finish;
+  if (!clock_ms(CLOCK_MONOTONIC, &mono_start) ||
+      !clock_ms(CLOCK_REALTIME, &started) || started >= deadline) return fail("observation started after deadline");
   int pid = (int)value;
   struct proc_bsdinfo before, after;
   char first[PROC_PIDPATHINFO_MAXSIZE] = {0};
@@ -132,10 +149,16 @@ int main(int argc, char **argv) {
   if (second_len != first_len || strcmp(first, second) != 0 ||
       before.pbi_start_tvsec != after.pbi_start_tvsec ||
       before.pbi_start_tvusec != after.pbi_start_tvusec) return fail("process changed during observation");
+  if (!clock_ms(CLOCK_REALTIME, &finished) || !clock_ms(CLOCK_MONOTONIC, &mono_finish) ||
+      finished < started || finished >= deadline || mono_finish < mono_start ||
+      mono_finish - mono_start >= 5000) return fail("actual observation exceeded deadline");
   printf("IOS_PROCESS_IDENTITY:{\"schemaVersion\":1,\"observer\":\"darwin-libproc\",\"pid\":%d,\"executablePath\":", pid);
   json_string(first);
   printf(",\"startSeconds\":\"%" PRIu64 "\",\"startMicroseconds\":%" PRIu64,
       before.pbi_start_tvsec, before.pbi_start_tvusec);
+  printf(",\"observationStartedAtMs\":%" PRIu64 ",\"observationFinishedAtMs\":%" PRIu64
+         ",\"observationElapsedMs\":%" PRIu64 ",\"observationDeadlineMs\":%" PRIu64,
+      started, finished, mono_finish - mono_start, deadline);
   printf(",\"metadataBracketed\":true,\"metadataPath\":");
   json_string(metadata);
   printf(",\"bundleInfo\":{\"CFBundleIdentifier\":");

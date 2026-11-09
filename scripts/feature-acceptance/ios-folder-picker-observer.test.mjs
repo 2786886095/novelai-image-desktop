@@ -21,11 +21,18 @@ function fixture(t,{mode='ok',now=Date.now,afterProcess=()=>{}}={}){
   calls.push({argv,timeout:opts.timeout,env:opts.env});let code;
   if(argv[0]===context.processObserver){
    pids++;assert(opts.timeout>0&&opts.timeout<=5000);
-   assert.deepEqual(argv,[context.processObserver,String(nativePid),data]);
+   assert.deepEqual(argv.slice(0,3),[context.processObserver,String(nativePid),data]);
+   assert.equal(argv.length,4);
+   const started=now(), deadline=Number(argv[3]);
+   assert(Number.isSafeInteger(deadline)&&deadline>started&&deadline-started<=5000);
    const pid=mode==='wrong-before'&&pids===1||mode==='wrong-after'&&pids===2?nativePid+1:nativePid;
    const processApp=mode==='foreign-container'?app.replace(context.device,'12345678-1234-1234-1234-123456789abc'):app;
    const identity={schemaVersion:1,observer:'darwin-libproc',pid,executablePath:processApp+(mode==='foreign-exe'?'/Runner-extra':'/Runner'),startSeconds:mode==='reused-after'&&pids===2?'1793164065':'1793164064',startMicroseconds:990729,
     metadataBracketed:mode!=='reused-between',metadataPath:mode==='foreign-metadata'?'/foreign/Info.plist':app+'/Info.plist',
+    observationStartedAtMs:mode==='reversed-time'?started+1:started,
+    observationFinishedAtMs:mode==='late-witness'?deadline:started,
+    observationElapsedMs:mode==='monotonic-overrun'?5000:0,
+    observationDeadlineMs:mode==='wrong-deadline'?deadline+1:deadline,
     bundleInfo:{CFBundleIdentifier:mode==='wrong-bundle'?context.appId+'.extra':context.appId,CFBundleExecutable:'Runner'}};
    code=mode==='timeout'?'setInterval(()=>{},1000)':`console.log(${JSON.stringify('IOS_PROCESS_IDENTITY:'+JSON.stringify(identity))})`;
    if(mode==='liveness'&&pids===1){const gate=path.join(root,'parent-loop-gate');setTimeout(()=>fs.writeFileSync(gate,'parent loop remained live'),30);code=`const fs=require('node:fs');const tick=setInterval(()=>{if(fs.existsSync(${JSON.stringify(gate)})){clearInterval(tick);${code}}},5);`;}
@@ -81,8 +88,22 @@ test('same PID and executable with different actual process start time is reject
  const {observer,calls,root}=fixture(t,{mode:'reused-after'});await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),/process changed/);await assert.rejects(observer.finish(),/process changed/);assert.equal(calls.length,3);assert(!fs.existsSync(path.join(root,'UI_RESULT.json')));
 });
 test('the host process/container/plist observation shares one5s phase deadline',async t=>{
- let clock=0;const {observer,calls}=fixture(t,{now:()=>clock,afterProcess:()=>{clock=5001;}});
- await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),/observation phase exceeded5000ms/);assert.equal(calls.length,1);assert.equal(calls[0].timeout,5000);await assert.rejects(observer.finish(),/observation phase exceeded5000ms/);
+ let clock=0;const {observer,calls}=fixture(t,{mode:'late-witness',now:()=>clock,afterProcess:()=>{clock=5774;}});
+ await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),/observation exceeded5000ms/);assert.equal(calls.length,1);assert.equal(calls[0].timeout,5000);await assert.rejects(observer.finish(),/observation exceeded5000ms/);
+});
+
+test('prompt native observations survive late Node delivery without granting any feature credit',async t=>{
+ let clock=0;const {observer,calls}=fixture(t,{now:()=>clock,afterProcess:()=>{clock+=5774;}});
+ await observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request));
+ const support=await observer.finish();
+ assert.equal(support.functionalCertificationGranted,false);assert.equal(calls.length,3);
+ assert.equal(calls[0].timeout,5000);assert.equal(calls[2].timeout,5000);
+});
+
+for(const mode of ['reversed-time','wrong-deadline','monotonic-overrun'])test('invalid native timing cannot reach UI: '+mode,async t=>{
+ let clock=0;const {observer,calls}=fixture(t,{mode,now:()=>clock,afterProcess:()=>{clock=5774;}});
+ await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),/observation exceeded5000ms/);
+ assert.equal(calls.length,1);
 });
 
 test('metadata interval is closed by a fresh second kernel observation before UI',async t=>{

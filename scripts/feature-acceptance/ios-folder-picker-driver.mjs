@@ -145,18 +145,25 @@ export function createIosFolderPickerObserver(options,{execute=asyncCommand,now=
  const observePid=async phase=>{
   // One native read brackets actual metadata with two kernel checks, under
   // the original shared 5s phase deadline. Do not spawn plutil or cache it.
-  const phaseDeadline=now()+Math.min(5000,remaining());
+  const phaseStarted=now();
+  const phaseDeadline=phaseStarted+Math.min(5000,remaining());
   const budget=()=>{const value=Math.min(phaseDeadline-now(),remaining());if(value<=0)throw Error('iOS process observation phase exceeded5000ms');return value;};
   if(typeof processObserver!=='string'||!path.isAbsolute(processObserver)||path.dirname(processObserver)!==root)throw Error('Prepared external host process observer required');
   const data=iosSimulatorLocalePaths(locale?.dataPath,device).dataPath;
-  const proc=await checked([processObserver,String(begin.nativePid),data],budget(),'PID_COMMAND_'+phase+'.json');
-  budget();
+  const proc=await checked([processObserver,String(begin.nativePid),data,String(phaseDeadline)],budget(),'PID_COMMAND_'+phase+'.json');
+  remaining();
   const actual=iosHostProcessIdentity(proc.stdout,begin.nativePid);
   if(actual.metadataBracketed!==true)throw Error('Actual metadata is not bracketed by two matching kernel observations');
+  // Validate when the native kernel observation actually completed, not
+  // when a descheduled host finally delivered stdout and the close event.
+  const {observationStartedAtMs:start,observationFinishedAtMs:end,observationElapsedMs:elapsed,observationDeadlineMs:bound}=actual;
+  if(![start,end,elapsed,bound].every(Number.isSafeInteger)||bound!==phaseDeadline||
+     start<phaseStarted||end<start||end>=phaseDeadline||end>now()||
+     elapsed<0||elapsed>=5000)throw Error('Actual iOS process observation exceeded5000ms or lacks a bounded native time witness');
   const identity=bindIosSimulatorProcess({processStdout:proc.stdout,bundleInfo:actual.bundleInfo,device,appId,nativePid:begin.nativePid,simulatorDataPath:data},canonicalize);
   const infoPath=path.posix.join(identity.appContainer,'Info.plist');
   if(actual.metadataPath!==infoPath||canonicalize(infoPath)!==infoPath)throw Error('Aliased or foreign bundle Info.plist leaf refused');
-  budget();
+  remaining();
   if(phase==='BEFORE')processIdentityBefore=identity;else processIdentityAfter=identity;
   return identity.pid;
  };
