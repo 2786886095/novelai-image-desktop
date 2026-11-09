@@ -356,6 +356,16 @@ test('owned icon is at most one later attempt under original10s; no diagnostic c
  const s=swiftSource();const start=s.indexOf('let createDeadline = Date().addingTimeInterval(10)'),end=s.indexOf('capture("exact-nonce-folder-open-in-system-picker")');
  const window=s.slice(start,end);assert.equal((window.match(/ownedIconAttempted = false/g)||[]).length,1);assert.equal((window.match(/ownedIconAttempted = true/g)||[]).length,1);
  assert(window.includes('witness.isInline && !ownedIconAttempted'));assert(window.includes('folder, createDeadline,'));assert(window.includes('continue // Re-read'));
+ assert(window.indexOf('if let item = find(app, [folder])')<window.indexOf('ownedIconAttempted = true'));
+ assert(window.includes('try tap(item, "open-created-exact-nonce-folder", before: createDeadline)'));
+ const icon=s.split('private func finishInlineNameViaOwnedIcon(')[1].split('private func tap(')[0];
+ assert(icon.indexOf('if icons.isEmpty { return }')<icon.indexOf('guard icons.count == 1'));
+ assert(icon.indexOf('guard icons.count == 1')<icon.indexOf('try tap(icon'));
+ // Zero optional icons permits only another exact-title/folder observation.
+ // Multiple candidates remain ambiguous and cannot authorize a tap.
+ const next=(icons, exact, timedOut)=>timedOut?'fail':exact?'open-exact':icons===0?'observe':icons===1?'one-owned-tap':'fail';
+ assert.equal(next(0,false,false),'observe');assert.equal(next(0,true,false),'open-exact');
+ assert.equal(next(2,false,false),'fail');assert.equal(next(0,false,true),'fail');
  assert(!window.includes('capture('));assert(!window.includes('addingTimeInterval',window.indexOf('\n')+1));
  assert(!s.includes('capture("after-folder-name-commit")'));assert(s.includes('try tap(icon, "finish-inline-name-via-owned-folder-icon", before: deadline)'));
  const dispatch=s.split('private func tap(')[1].split('@MainActor')[0];assert(dispatch.indexOf('Date() >= deadline')<dispatch.indexOf('element.tap()'));

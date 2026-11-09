@@ -321,7 +321,10 @@ final class FolderPickerUITests: XCTestCase {
     let icons = cell.images.matching(iconPredicate).allElementsBoundByAccessibilityElement.filter {
       usable($0, viewFrame) && cellFrame.contains($0.frame)
     }
-    guard icons.count == 1 else { throw fail("No unique usable literal Folder84pt icon in the held carrier") }
+    // Done may be committing and the OS can remove the icon before dropping
+    // the held inline editor. No icon means no action, not failed navigation.
+    if icons.isEmpty { return }
+    guard icons.count == 1 else { throw fail("Ambiguous usable literal Folder84pt icons in the held carrier") }
     let icon = icons[0]
     guard cell.exists, usable(witness.field, viewFrame),
           witness.field.identifier == "DOC.inlineRenameField",
@@ -485,15 +488,16 @@ final class FolderPickerUITests: XCTestCase {
     // this original10s commit/open window.
     while try currentNavigationTitle(app) != folder {
       if Date() >= createDeadline { throw fail("The new nonce directory was not opened") }
-      if witness.isInline && !ownedIconAttempted {
+      // First prefer the actual exact-nonce item after the system Done. The
+      // optional held-editor icon is not itself a precondition for navigation.
+      if let item = find(app, [folder]) {
+        try tap(item, "open-created-exact-nonce-folder", before: createDeadline)
+      } else if witness.isInline && !ownedIconAttempted && Date() < createDeadline {
         ownedIconAttempted = true
         try finishInlineNameViaOwnedIcon(app, witness, providerLabels, folder, createDeadline,
           ["sourceSha": source, "profileSha": profile, "nativePid": nativePID, "nonce": nonce])
         if Date() >= createDeadline { throw fail("The new nonce directory was not opened") }
         continue // Re-read the actual navigation title; do not tap an old page.
-      }
-      if let item = find(app, [folder]) {
-        try tap(item, "open-created-exact-nonce-folder")
       }
       if Date() >= createDeadline { throw fail("The new nonce directory was not opened") }
       Thread.sleep(forTimeInterval: 0.2)
