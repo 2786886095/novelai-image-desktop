@@ -319,6 +319,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let acceptCloseChoice: ((requestId: unknown) => boolean) | undefined;
 let windowTray: Tray | null = null;
 let quittingMainWindow = false;
 let windowTrayForSession = false;
@@ -510,10 +511,37 @@ function createWindow() {
       if(result.response===0&&!startupWindow.isDestroyed()&&!startup.isReady()&&startup.retry())startupWindow.webContents.reload();
     }).catch(()=>{/* No forced reload or destructive recovery. */}).finally(()=>{startupPrompt=false;});
   }});
-  startupWindow.webContents.on('ipc-message',(_event,channel)=>{if(channel==='window:renderer-ready')startup.ready();});
-  startupWindow.webContents.on('render-process-gone',(_event,details)=>startup.fail(details.reason));
-  startupWindow.webContents.on('unresponsive',()=>startup.fail('unresponsive'));
-  startupWindow.once('closed',()=>startup.dispose());
+  let closeChoiceRendererReady = false;
+  let closeChoiceId = 0;
+  type CloseChoiceResult = { response: number; checkboxChecked: boolean };
+  acceptCloseChoice = (requestId) => {
+    if (requestId !== closeChoiceId || !finishRendererCloseChoice || !closeChoiceAckTimer) return false;
+    clearTimeout(closeChoiceAckTimer);
+    closeChoiceAckTimer = undefined;
+    return true;
+  };
+  let finishRendererCloseChoice: ((result: CloseChoiceResult) => void) | undefined;
+  const cancelRendererCloseChoice = () => finishRendererCloseChoice?.({ response: 2, checkboxChecked: false });
+  startupWindow.webContents.on('ipc-message', (event, channel, requestId, action, remember) => {
+    if (event.senderFrame !== startupWindow.webContents.mainFrame) return;
+    if (channel === 'window:renderer-ready') {
+      startup.ready();
+      closeChoiceRendererReady = true;
+    }
+    if (requestId !== closeChoiceId || !finishRendererCloseChoice) return;
+    if (channel === 'window:close-choice-result' &&
+        (action === 'tray' || action === 'quit' || action === 'cancel') && typeof remember === 'boolean') {
+      finishRendererCloseChoice({ response: action === 'tray' ? 0 : action === 'quit' ? 1 : 2, checkboxChecked: remember });
+    }
+  });
+  startupWindow.webContents.on('did-start-loading', () => { closeChoiceRendererReady = false; cancelRendererCloseChoice(); });
+  startupWindow.webContents.on('render-process-gone', (_event, details) => {
+    closeChoiceRendererReady = false;
+    cancelRendererCloseChoice();
+    startup.fail(details.reason);
+  });
+  startupWindow.webContents.on('unresponsive', () => { cancelRendererCloseChoice(); startup.fail('unresponsive'); });
+  startupWindow.once('closed', () => { acceptCloseChoice = undefined; cancelRendererCloseChoice(); startup.dispose(); });
   mainWindow.webContents.on("did-fail-load", (_event, code, description, _url, isMainFrame) => {
     if (!isMainFrame || code === -3) return;
     startup.fail('load-failed');
@@ -770,6 +798,30 @@ function createWindow() {
   }
 
   let choosingCloseAction = false;
+  let closeChoiceAckTimer: ReturnType<typeof setTimeout> | undefined;
+  function askHowToClose(text: ReturnType<typeof windowTrayText>): Promise<CloseChoiceResult> {
+    const nativeFallback = () => dialog.showMessageBox(startupWindow, {
+      type: "question", title: text.closeTitle, message: text.closeTitle, detail: text.closeDetail,
+      buttons: [text.hide, text.quit, text.cancel], defaultId: 0, cancelId: 2,
+      checkboxLabel: text.remember, checkboxChecked: false, noLink: true,
+    });
+    if (!closeChoiceRendererReady) return nativeFallback();
+    return new Promise(resolve => {
+      const requestId = ++closeChoiceId;
+      finishRendererCloseChoice = (result) => {
+        if (closeChoiceAckTimer) clearTimeout(closeChoiceAckTimer);
+        closeChoiceAckTimer = undefined;
+        finishRendererCloseChoice = undefined;
+        resolve(result);
+      };
+      // Never open a second prompt or quit automatically if the renderer cannot show it.
+      closeChoiceAckTimer = setTimeout(() => {
+        closeChoiceRendererReady = false;
+        cancelRendererCloseChoice();
+      }, 2500);
+      startupWindow.webContents.send("window:close-choice-request", requestId, getSetting("language"));
+    });
+  }
   mainWindow.on("close", (event) => {
     if (process.platform === "win32" && !uiCapturePath && !quittingMainWindow) {
       const choice = getSetting("closeToTray");
@@ -783,14 +835,11 @@ function createWindow() {
         if (choosingCloseAction) return;
         choosingCloseAction = true;
         const text = windowTrayText(getSetting("language"));
-        void dialog.showMessageBox(startupWindow, {
-          type: "question", title: text.closeTitle, message: text.closeTitle, detail: text.closeDetail,
-          buttons: [text.hide, text.quit, text.cancel], defaultId: 0, cancelId: 2,
-          checkboxLabel: text.remember, checkboxChecked: false, noLink: true,
-        }).then(async ({ response, checkboxChecked }) => {
+        void askHowToClose(text).then(async ({ response, checkboxChecked }) => {
           if (quittingMainWindow || startupWindow.isDestroyed() || (response !== 0 && response !== 1)) return;
           if (response === 0 && !syncWindowTray(false, true)) {
-            await dialog.showMessageBox(startupWindow, { type: "warning", title: text.closeTitle, message: text.trayUnavailable });
+            if (closeChoiceRendererReady) startupWindow.webContents.send("window:close-tray-unavailable", text.trayUnavailable);
+            else await dialog.showMessageBox(startupWindow, { type: "warning", title: text.closeTitle, message: text.trayUnavailable });
             return;
           }
           if (checkboxChecked) {
@@ -1661,6 +1710,11 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
     else mainWindow.maximize();
   });
   ipcMain.handle("window:close", () => mainWindow?.close());
+  ipcMain.handle("window:close-choice-shown", (event, requestId) => {
+    const contents = mainWindow?.webContents;
+    return !!contents && event.sender === contents && event.senderFrame === contents.mainFrame &&
+      (acceptCloseChoice?.(requestId) ?? false);
+  });
   ipcMain.handle("window:openExternal", (_event, url: string) => {
     // Only ever hand http(s) URLs to the OS — never file:, javascript:, or other
     // schemes that a crafted link in the renderer could abuse.

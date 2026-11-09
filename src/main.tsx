@@ -16,6 +16,9 @@ import "./typography.css";
 import {FavoritesNoticeSupport} from "./components/LocalFavorites";
 import {McpEventSupport} from "./components/McpServerSettings";
 import {installStudioAgent} from './studio-agent';
+import {confirmWindowClose} from './components/confirm';
+import {windowTrayText} from './window-tray-text';
+import {useAppStore} from './store';
 
 installStudioAgent();
 installStudioMotion();
@@ -27,7 +30,20 @@ window.addEventListener("unhandledrejection", (event) => {
 });
 
 function RendererReady() {
-  React.useEffect(() => { window.dispatchEvent(new Event('studio:renderer-ready')); }, []);
+  React.useEffect(() => {
+    const api = window.naiDesktop;
+    const offChoice = api?.onCloseChoiceRequest?.((requestId, language) => {
+      const text = windowTrayText(language);
+      void api.acknowledgeCloseChoice(requestId).then(async accepted => {
+        if (!accepted) return;
+        const { action, remember } = await confirmWindowClose(text);
+        api.sendCloseChoice(requestId, action, remember);
+      }).catch(() => api.sendCloseChoice(requestId, "cancel", false));
+    });
+    const offTrayError = api?.onCloseTrayUnavailable?.(message => useAppStore.getState().setToast(message));
+    window.dispatchEvent(new Event('studio:renderer-ready'));
+    return () => { offChoice?.(); offTrayError?.(); };
+  }, []);
   return null;
 }
 

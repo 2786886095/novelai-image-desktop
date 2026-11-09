@@ -644,6 +644,19 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   minimize: () => ipcRenderer.invoke("window:minimize"),
   maximize: () => ipcRenderer.invoke("window:maximize"),
   close: () => ipcRenderer.invoke("window:close"),
+  onCloseChoiceRequest: (callback: (requestId: number, language: AppSettings["language"]) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, requestId: number, language: AppSettings["language"]) => callback(requestId, language);
+    ipcRenderer.on("window:close-choice-request", listener);
+    return () => ipcRenderer.removeListener("window:close-choice-request", listener);
+  },
+  acknowledgeCloseChoice: (requestId: number) => ipcRenderer.invoke("window:close-choice-shown", requestId),
+  sendCloseChoice: (requestId: number, action: "tray" | "quit" | "cancel", remember: boolean) =>
+    ipcRenderer.send("window:close-choice-result", requestId, action, remember),
+  onCloseTrayUnavailable: (callback: (message: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, message: string) => callback(message);
+    ipcRenderer.on("window:close-tray-unavailable", listener);
+    return () => ipcRenderer.removeListener("window:close-tray-unavailable", listener);
+  },
   openExternal: (url: string) => ipcRenderer.invoke("window:openExternal", url),
   getLogInfo: () =>
     ipcRenderer.invoke("log:getInfo") as Promise<{

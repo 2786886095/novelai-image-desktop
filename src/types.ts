@@ -2254,6 +2254,10 @@ export interface NaiDesktopApi {
   minimize: () => Promise<void>;
   maximize: () => Promise<void>;
   close: () => Promise<void>;
+  onCloseChoiceRequest: (callback: (requestId: number, language: AppLanguage) => void) => () => void;
+  acknowledgeCloseChoice: (requestId: number) => Promise<boolean>;
+  sendCloseChoice: (requestId: number, action: "tray" | "quit" | "cancel", remember: boolean) => void;
+  onCloseTrayUnavailable: (callback: (message: string) => void) => () => void;
   openExternal: (url: string) => Promise<void>;
   getLogInfo: () => Promise<{
     path: string;
