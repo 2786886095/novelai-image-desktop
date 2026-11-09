@@ -21,15 +21,18 @@ function fixture(t,{mode='ok',now=Date.now,afterProcess=()=>{}}={}){
   calls.push({argv,timeout:opts.timeout,env:opts.env});let code;
   if(argv[0]===context.processObserver){
    pids++;assert(opts.timeout>0&&opts.timeout<=5000);
-   const pid=mode==='wrong-before'&&pids===1||mode==='wrong-after'&&pids===3?nativePid+1:nativePid;
+   assert.deepEqual(argv,[context.processObserver,String(nativePid),data]);
+   const pid=mode==='wrong-before'&&pids===1||mode==='wrong-after'&&pids===2?nativePid+1:nativePid;
    const processApp=mode==='foreign-container'?app.replace(context.device,'12345678-1234-1234-1234-123456789abc'):app;
-   const identity={schemaVersion:1,observer:'darwin-libproc',pid,executablePath:processApp+(mode==='foreign-exe'?'/Runner-extra':'/Runner'),startSeconds:mode==='reused-after'&&pids>=3||mode==='reused-between'&&pids===2?'1793164065':'1793164064',startMicroseconds:990729};
+   const identity={schemaVersion:1,observer:'darwin-libproc',pid,executablePath:processApp+(mode==='foreign-exe'?'/Runner-extra':'/Runner'),startSeconds:mode==='reused-after'&&pids===2?'1793164065':'1793164064',startMicroseconds:990729,
+    metadataBracketed:mode!=='reused-between',metadataPath:mode==='foreign-metadata'?'/foreign/Info.plist':app+'/Info.plist',
+    bundleInfo:{CFBundleIdentifier:mode==='wrong-bundle'?context.appId+'.extra':context.appId,CFBundleExecutable:'Runner'}};
    code=mode==='timeout'?'setInterval(()=>{},1000)':`console.log(${JSON.stringify('IOS_PROCESS_IDENTITY:'+JSON.stringify(identity))})`;
    if(mode==='liveness'&&pids===1){const gate=path.join(root,'parent-loop-gate');setTimeout(()=>fs.writeFileSync(gate,'parent loop remained live'),30);code=`const fs=require('node:fs');const tick=setInterval(()=>{if(fs.existsSync(${JSON.stringify(gate)})){clearInterval(tick);${code}}},5);`;}
   }else if(argv[0]==='xcrun'){
    throw Error('No CoreSimulator RPC is allowed during the actual picker request');
   }else if(argv[0]==='/usr/bin/plutil'){
-   assert.deepEqual(argv,['/usr/bin/plutil','-convert','json','-o','-',app+'/Info.plist']);assert(opts.timeout>0&&opts.timeout<=5000);code=`console.log(${JSON.stringify(JSON.stringify({CFBundleIdentifier:mode==='wrong-bundle'?context.appId+'.extra':context.appId,CFBundleExecutable:'Runner'}))})`;
+   throw Error('Unexpected second process for plist metadata');
   }else{
    assert.equal(argv[0],'xcodebuild');assert(opts.timeout>0&&opts.timeout<=140000);
    assert.equal(opts.env.UNIT_PRIVATE_TOKEN,undefined);assert.equal(opts.env.TEST_RUNNER_STUDIO_NONCE,request.nonce);
@@ -46,7 +49,7 @@ function fixture(t,{mode='ok',now=Date.now,afterProcess=()=>{}}={}){
 }
 test('async real PID child leaves parent event loop live and retains both PID bindings',async t=>{
  const {observer,calls,root}=fixture(t,{mode:'liveness'});await observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request));const support=await observer.finish();
- assert.equal(support.supportOnly,true);assert.equal(support.functionalCertificationGranted,false);assert.equal(support.observedPidBefore,nativePid);assert.equal(support.observedPidAfter,nativePid);assert.equal(calls.length,7);assert(calls[0].timeout>0&&calls[0].timeout<=5000);assert(calls[3].timeout<=140000);assert(fs.existsSync(path.join(root,'PID_COMMAND_BEFORE.json')));assert(fs.existsSync(path.join(root,'PID_COMMAND_AFTER.json')));
+ assert.equal(support.supportOnly,true);assert.equal(support.functionalCertificationGranted,false);assert.equal(support.observedPidBefore,nativePid);assert.equal(support.observedPidAfter,nativePid);assert.equal(calls.length,3);assert(calls[0].timeout>0&&calls[0].timeout<=5000);assert(calls[1].timeout<=140000);assert(fs.existsSync(path.join(root,'PID_COMMAND_BEFORE.json')));assert(fs.existsSync(path.join(root,'PID_COMMAND_AFTER.json')));
 });
 for(const mode of ['wrong-before','timeout','bad-cleanup'])test('failed actual host PID boundary retains first error and never starts UI: '+mode,async t=>{
  const {observer,calls,root}=fixture(t,{mode});await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),mode==='wrong-before'?/PID differs/:/picker command failed/);
@@ -57,25 +60,25 @@ for(const change of [{nonce:'foreign'},{sourceSha:'c'.repeat(40)},{profileSha:'d
  const {observer,calls}=fixture(t);await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',{...request,...change})));await assert.rejects(observer.finish(),e=>!e.message.includes('never observed'));assert.equal(calls.length,0);
 });
 test('changed PID after synthetic UI remains failed and cannot write a success witness',async t=>{
- const {observer,calls,root}=fixture(t,{mode:'wrong-after'});await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),/PID differs/);await assert.rejects(observer.finish(),/PID differs/);assert.equal(calls.length,5);assert(!fs.existsSync(path.join(root,'UI_RESULT.json')));
+ const {observer,calls,root}=fixture(t,{mode:'wrong-after'});await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),/PID differs/);await assert.rejects(observer.finish(),/PID differs/);assert.equal(calls.length,3);assert(!fs.existsSync(path.join(root,'UI_RESULT.json')));
 });
 test('UI error is not converted into missing request or a successful support result',async t=>{
- const {observer,calls}=fixture(t,{mode:'ui-error'});await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),/picker command failed.*17/);await assert.rejects(observer.finish(),/picker command failed.*17/);assert.equal(calls.length,4);
+ const {observer,calls}=fixture(t,{mode:'ui-error'});await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),/picker command failed.*17/);await assert.rejects(observer.finish(),/picker command failed.*17/);assert.equal(calls.length,2);
 });
 test('overall160s deadline is unchanged and exhausted budget launches no UI',async t=>{
- let reads=0;const {observer,calls}=fixture(t,{now:()=>++reads<6?0:160001});await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),/deadline exceeded/);assert.equal(calls.length,1);assert(calls[0].timeout>0&&calls[0].timeout<=5000);
+ let clock=0;const {observer,calls}=fixture(t,{now:()=>clock,afterProcess:()=>{clock=160001;}});await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),/deadline exceeded/);assert.equal(calls.length,1);assert(calls[0].timeout>0&&calls[0].timeout<=5000);
 });
 test('absent request is still a hard failure',async t=>{const {observer,calls}=fixture(t);await assert.rejects(observer.finish(),/never observed/);assert.equal(calls.length,0);});
 test('runner preserves actual raw request and resident errors before picker finish',()=>{
  const source=fs.readFileSync(new URL('./run-mobile-native.mjs',import.meta.url),'utf8');assert(source.indexOf('emitNativeRaw();\n      try{')<source.indexOf('folderHostSupport=await picker.finish()'));assert(source.includes('...(resident?.errors||[])'));assert(source.includes('if (!parsed.passed || (resident && !resident.passed))'));
 });
 
-for(const mode of ['foreign-exe','foreign-container','wrong-bundle','aliased-plist'])test('independent process/container/bundle mismatch forbids XCTest: '+mode,async t=>{
- const {observer,calls,root}=fixture(t,{mode});await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),mode==='foreign-exe'?/executable differs/:mode==='foreign-container'?/outside/:mode==='aliased-plist'?/Aliased bundle Info.plist/:/bundle identifier/);await assert.rejects(observer.finish());assert.equal(calls.filter(c=>c.argv[0]==='xcodebuild').length,0);assert(!fs.existsSync(path.join(root,'UI_RESULT.json')));
+for(const mode of ['foreign-exe','foreign-container','wrong-bundle','aliased-plist','foreign-metadata'])test('independent process/container/bundle mismatch forbids XCTest: '+mode,async t=>{
+ const {observer,calls,root}=fixture(t,{mode});await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),mode==='foreign-exe'?/executable differs/:mode==='foreign-container'?/outside/:['aliased-plist','foreign-metadata'].includes(mode)?/Aliased or foreign bundle Info.plist/:/bundle identifier/);await assert.rejects(observer.finish());assert.equal(calls.filter(c=>c.argv[0]==='xcodebuild').length,0);assert(!fs.existsSync(path.join(root,'UI_RESULT.json')));
  if(mode==='foreign-container'||mode==='aliased-plist')assert.equal(calls.filter(c=>c.argv[0]==='/usr/bin/plutil').length,0,'foreign file must not be read');
 });
 test('same PID and executable with different actual process start time is rejected after UI',async t=>{
- const {observer,calls,root}=fixture(t,{mode:'reused-after'});await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),/process changed/);await assert.rejects(observer.finish(),/process changed/);assert.equal(calls.length,7);assert(!fs.existsSync(path.join(root,'UI_RESULT.json')));
+ const {observer,calls,root}=fixture(t,{mode:'reused-after'});await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),/process changed/);await assert.rejects(observer.finish(),/process changed/);assert.equal(calls.length,3);assert(!fs.existsSync(path.join(root,'UI_RESULT.json')));
 });
 test('the host process/container/plist observation shares one5s phase deadline',async t=>{
  let clock=0;const {observer,calls}=fixture(t,{now:()=>clock,afterProcess:()=>{clock=5001;}});
@@ -83,5 +86,12 @@ test('the host process/container/plist observation shares one5s phase deadline',
 });
 
 test('metadata interval is closed by a fresh second kernel observation before UI',async t=>{
- const {observer,calls,root}=fixture(t,{mode:'reused-between'});await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),/process changed during bundle identity/);await assert.rejects(observer.finish(),/process changed during bundle identity/);assert.equal(calls.length,3);assert(!calls.some(c=>c.argv[0]==='xcodebuild'));assert(!fs.existsSync(path.join(root,'UI_RESULT.json')));
+ const {observer,calls,root}=fixture(t,{mode:'reused-between'});await assert.rejects(observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request)),/not bracketed/);await assert.rejects(observer.finish(),/not bracketed/);assert.equal(calls.length,1);assert(!calls.some(c=>c.argv[0]==='xcodebuild'));assert(!fs.existsSync(path.join(root,'UI_RESULT.json')));
+});
+
+test('original phase allows the single bracketed operation with 530ms remaining',async t=>{
+ let clock=0;const {observer,calls}=fixture(t,{now:()=>clock,afterProcess:()=>{clock+=4470;}});
+ await observer.onLine(packet('NATIVE_FOLDER_PICKER_REQUEST',request));
+ const support=await observer.finish();assert.equal(support.functionalCertificationGranted,false);
+ assert.deepEqual(calls.map(c=>c.argv[0]==='xcodebuild'?'ui':'combined'),['combined','ui','combined']);
 });

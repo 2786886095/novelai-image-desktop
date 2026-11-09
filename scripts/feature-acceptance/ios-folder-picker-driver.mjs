@@ -122,7 +122,7 @@ export async function prepareIosFolderPickerDriver(options){
  const root=path.join(out,'ios-picker-host');fs.mkdirSync(root);const project=path.join(root,'FolderPicker.xcodeproj');fs.mkdirSync(path.join(project,'xcshareddata','xcschemes'),{recursive:true});
  fs.writeFileSync(path.join(project,'project.pbxproj'),iosPickerProject());fs.writeFileSync(path.join(project,'xcshareddata','xcschemes','FolderPickerUITests.xcscheme'),iosPickerScheme);fs.copyFileSync(fixture,path.join(root,'FolderPickerUITests.swift'));
  const processSource=path.join(root,'ios-process-identity.c'),processObserver=path.join(root,'ios-process-identity');fs.copyFileSync(processFixture,processSource);
- run(['xcrun','--sdk','macosx','clang','-std=c11','-Wall','-Wextra','-Werror','-O2',processSource,'-lproc','-o',processObserver],30000);
+ run(['xcrun','--sdk','macosx','clang','-std=c11','-Wall','-Wextra','-Werror','-O2',processSource,'-lproc','-framework','CoreFoundation','-o',processObserver],30000);
  if(!fs.statSync(processObserver).isFile()||fs.statSync(processObserver).size<=0)throw Error('Fresh host process observer binary missing');
  run(['xcodebuild','build-for-testing','-project',project,'-scheme','FolderPickerUITests','-configuration','Debug','-sdk','iphonesimulator','-destination','id='+device,'-derivedDataPath',path.join(root,'DerivedData'),'CODE_SIGNING_ALLOWED=NO'],300000);
  const products=path.join(root,'DerivedData','Build','Products');const tests=fs.readdirSync(products).filter(n=>n.endsWith('.xctestrun'));if(tests.length!==1)throw Error('Exactly one freshly built XCTest configuration required');
@@ -131,7 +131,7 @@ export async function prepareIosFolderPickerDriver(options){
 
 // Keep draining Flutter machine events while real OS commands run. The factory
 // is exported for host process regressions, not as device acceptance evidence.
-export function createIosFolderPickerObserver(options,{execute=asyncCommand,now=Date.now,canonicalize=fs.realpathSync}={}){
+export function createIosFolderPickerObserver(options,{execute=asyncCommand,now=Date.now,canonicalize=fs.realpathSync.native}={}){
  const {sourceSha,profileSha,appId,device,environment=process.env,root,products,testRun,locale,actualLanguages,actualLocale,processObserver}=options;
  let begin=null,request=null,promise=null,result=null,firstError=null;
  const observations=[];let observedPidBefore=null,observedPidAfter=null,processIdentityBefore=null,processIdentityAfter=null,requestDeadline=null;
@@ -143,25 +143,19 @@ export function createIosFolderPickerObserver(options,{execute=asyncCommand,now=
   return r;
  };
  const observePid=async phase=>{
-  // All three real queries SHARE the previous5s phase budget, not5s each.
+  // One native read brackets actual metadata with two kernel checks, under
+  // the original shared 5s phase deadline. Do not spawn plutil or cache it.
   const phaseDeadline=now()+Math.min(5000,remaining());
   const budget=()=>{const value=Math.min(phaseDeadline-now(),remaining());if(value<=0)throw Error('iOS process observation phase exceeded5000ms');return value;};
   if(typeof processObserver!=='string'||!path.isAbsolute(processObserver)||path.dirname(processObserver)!==root)throw Error('Prepared external host process observer required');
-  const proc=await checked([processObserver,String(begin.nativePid)],budget(),'PID_COMMAND_'+phase+'.json');
-  iosHostProcessIdentity(proc.stdout,begin.nativePid);
-  // Never ask CoreSimulator RPC while the resident app presents its picker.
-  // Derive anew from the actual kernel path in THIS observation, not a cache.
   const data=iosSimulatorLocalePaths(locale?.dataPath,device).dataPath;
-  const appPath=iosSimulatorContainerFromProcess(iosHostProcessIdentity(proc.stdout,begin.nativePid),data,device,canonicalize);
-  const infoPath=path.posix.join(appPath,'Info.plist');
-  if(canonicalize(infoPath)!==infoPath)throw Error('Aliased bundle Info.plist leaf refused');
-  const info=await checked(['/usr/bin/plutil','-convert','json','-o','-',infoPath],budget(),'APP_INFO_'+phase+'.json');
-  const bundleInfo=JSON.parse(info.stdout);
-  const identity=bindIosSimulatorProcess({processStdout:proc.stdout,bundleInfo,device,appId,nativePid:begin.nativePid,simulatorDataPath:data},canonicalize);
-  // Close the metadata interval with another real read by the unchanged C tool.
-  const confirm=await checked([processObserver,String(begin.nativePid)],budget(),'PID_CONFIRM_'+phase+'.json');
-  const confirmed=bindIosSimulatorProcess({processStdout:confirm.stdout,bundleInfo,device,appId,nativePid:begin.nativePid,simulatorDataPath:data},canonicalize);
-  if(JSON.stringify(confirmed)!==JSON.stringify(identity))throw Error('Actual Simulator process changed during bundle identity observation');
+  const proc=await checked([processObserver,String(begin.nativePid),data],budget(),'PID_COMMAND_'+phase+'.json');
+  budget();
+  const actual=iosHostProcessIdentity(proc.stdout,begin.nativePid);
+  if(actual.metadataBracketed!==true)throw Error('Actual metadata is not bracketed by two matching kernel observations');
+  const identity=bindIosSimulatorProcess({processStdout:proc.stdout,bundleInfo:actual.bundleInfo,device,appId,nativePid:begin.nativePid,simulatorDataPath:data},canonicalize);
+  const infoPath=path.posix.join(identity.appContainer,'Info.plist');
+  if(actual.metadataPath!==infoPath||canonicalize(infoPath)!==infoPath)throw Error('Aliased or foreign bundle Info.plist leaf refused');
   budget();
   if(phase==='BEFORE')processIdentityBefore=identity;else processIdentityAfter=identity;
   return identity.pid;
