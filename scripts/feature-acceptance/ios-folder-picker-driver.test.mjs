@@ -339,25 +339,30 @@ test('appearance witness holds actual accessibility elements and the same absolu
  const s=swiftSource();const body=s.split('private func currentNamingEditor(')[1].split('private func validatedWitnessFlow(')[0];
  assert(body.includes('allElementsBoundByAccessibilityElement'));assert(!body.includes('allElementsBoundByIndex'));
  assert(body.includes('if let witness = inline.first { return witness }'));
- assert(body.includes('guard includeModal else { return nil }'));
+ assert(body.includes('guard includeModal, Date() < deadline else { return nil }'));
  const budget=s.match(/let namingPolls:[^=]+?= \[([\s\S]+?)\]/)?.[1];
  assert(budget);
  const rows=[...budget.matchAll(/\(([\d.]+), (true|false)\)/g)].map(([,ms,modal])=>[Number(ms),modal==='true']);
- assert.equal(rows.length,5);assert.equal(rows.filter(x=>x[1]).length,1);
+ assert.equal(rows.length,5);assert.equal(rows.filter(x=>x[1]).length,1);assert.equal(rows.at(-1)[1],true);
  assert(rows.every(([offset],i)=>offset<5&&(i===0||offset>rows[i-1][0])));
  const poll=s.split('for poll in namingPolls {')[1].split('let witnessObservedAt')[0];
- assert(poll.includes('if Date() >= namingDeadline { break }'));assert(poll.includes('includeModal: poll.includeModal'));
+ assert(poll.includes('if Date() >= namingDeadline { break }'));assert(poll.includes('includeModal: poll.includeModal, before: namingDeadline'));
  assert(s.includes('"queryCount": namingQueryCount')&&s.includes('"modalQueryCount": namingModalQueryCount'));
  for(const literal of ['identifier == %@ AND enabled == YES','field.isHittable','viewFrame.contains(frame)'])assert(body.includes(literal));
  assert(!body.includes('field.exists')&&!body.includes('field.isEnabled')&&!body.includes('field.label.lowercased()'));
- assert(body.includes('let matches = matchQuery.allElementsBoundByAccessibilityElement'));
+ assert(body.includes('app.textViews.matching(exactID).allElementsBoundByAccessibilityElement'));
  const live=s.split('private func validatedWitnessFlow(')[1].split('private func recordNamingEditorWitness(')[0];
  assert(live.includes('usable(witness.field, viewFrame)')&&live.includes('isSearchField(witness.field)'));
  assert(!/currentNavigationTitle|currentKeyboardDone|\.buttons/.test(body));
  assert(body.includes('owner.textFields.allElementsBoundByAccessibilityElement'));
- assert(body.includes('app.descendants(matching: .any).matching(inlineOrModal)'));
- assert(body.includes('let matches = matchQuery.allElementsBoundByAccessibilityElement'));
- assert(!body.includes('app.alerts.allElementsBoundByAccessibilityElement + app.sheets.allElementsBoundByAccessibilityElement'));
+ // Captured run 42669774045 stops on the old broad OR query; the
+ // replacement is typed, starts after inline, and shares the same deadline.
+ assert(!/descendants|inlineOrModal|matchQuery/.test(body));
+ const a=body.indexOf('let alerts = app.alerts.allElementsBoundByAccessibilityElement');
+ const h=body.indexOf('let sheets = app.sheets.allElementsBoundByAccessibilityElement');
+ assert(body.indexOf('if let witness = inline.first { return witness }')<a&&a<h);
+ assert(body.slice(a,h).includes('guard Date() < deadline else { return nil }'));
+ assert(body.slice(h).includes('for owner in alerts + sheets'));
  assert(s.includes('let witnessObservedAt = Date()'));assert(s.includes('witnessObservedAt < namingDeadline'));
  assert(s.includes('witnessObservedAt.timeIntervalSince(namingStarted)'));assert(s.includes('witnessAloneAuthorizesActions'));
  const accepted=s.indexOf('guard let witness = naming'),capture=s.indexOf('capture("after-new-folder-action")'),full=s.indexOf('let control = try validatedWitnessFlow');

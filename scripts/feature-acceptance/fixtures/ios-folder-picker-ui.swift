@@ -196,7 +196,7 @@ final class FolderPickerUITests: XCTestCase {
     let frame: [Double]
   }
   private func currentNamingEditor(_ app: XCUIApplication, _ viewFrame: CGRect,
-                                   includeModal: Bool) throws -> NamingEditorWitness? {
+                                   includeModal: Bool, before deadline: Date) throws -> NamingEditorWitness? {
     func bound(_ field: XCUIElement, _ owner: XCUIElement?, _ inline: Bool,
                _ identifier: String, _ frame: CGRect) -> NamingEditorWitness {
       return NamingEditorWitness(field: field, modalOwner: owner, isInline: inline,
@@ -205,27 +205,12 @@ final class FolderPickerUITests: XCTestCase {
     }
     let identifier = "DOC.inlineRenameField"
     let exactID = NSPredicate(format: "identifier == %@ AND enabled == YES", identifier)
-    let matchQuery: XCUIElementQuery
-    if includeModal {
-      // One snapshot for the exact inline TextView and modal owners. Separate
-      // TextView, Alert and Sheet RPCs can stall this same 5s appearance gate.
-      let types = [NSNumber(value: XCUIElement.ElementType.alert.rawValue),
-                   NSNumber(value: XCUIElement.ElementType.sheet.rawValue)]
-      let textView = NSNumber(value: XCUIElement.ElementType.textView.rawValue)
-      let inlineOrModal = NSPredicate(format: "(elementType == %@ AND identifier == %@ AND enabled == YES) OR elementType IN %@",
-                                      textView, identifier, types)
-      matchQuery = app.descendants(matching: .any).matching(inlineOrModal)
-    } else {
-      matchQuery = app.textViews.matching(exactID)
-    }
-    let matches = matchQuery.allElementsBoundByAccessibilityElement
+    // Keep every inline probe on the exact typed query. An all-descendant
+    // OR snapshot stalled on the real iOS 26.2 picker (run 42669774045).
+    let matches = app.textViews.matching(exactID).allElementsBoundByAccessibilityElement
     var inline: [NamingEditorWitness] = []
-    var modalOwners: [XCUIElement] = []
     for field in matches {
-      if includeModal && field.elementType != .textView {
-        modalOwners.append(field)
-        continue
-      }
+      guard Date() < deadline else { return nil }
       // Enumeration is the existence observation; the exact TextView ID and
       // enabled state are in that same snapshot. Read real hit-testing and
       // bounds now, and revalidate the held object before any action below.
@@ -239,9 +224,13 @@ final class FolderPickerUITests: XCTestCase {
     // Appearance witness only: no typing is authorized, and competing modal
     // flows are still checked by the complete validation before any action.
     if let witness = inline.first { return witness }
-    guard includeModal else { return nil }
+    guard includeModal, Date() < deadline else { return nil }
+    let alerts = app.alerts.allElementsBoundByAccessibilityElement
+    guard Date() < deadline else { return nil }
+    let sheets = app.sheets.allElementsBoundByAccessibilityElement
     var modalEditors: [NamingEditorWitness] = []
-    for owner in modalOwners {
+    for owner in alerts + sheets {
+      guard Date() < deadline else { return nil }
       guard owner.exists && !owner.frame.isEmpty && viewFrame.intersects(owner.frame) else { continue }
       let fields = owner.textFields.allElementsBoundByAccessibilityElement.filter {
         !isSearchField($0) && usable($0, viewFrame) && owner.frame.contains($0.frame)
@@ -557,11 +546,10 @@ final class FolderPickerUITests: XCTestCase {
     // second appearance wait. No outer allowance or timeout is increased.
     let namingStarted = Date()
     let namingDeadline = namingStarted.addingTimeInterval(5)
-    // At most four narrow snapshots and one broad fallback. A native AX
-    // query can block for >1s, so do not spend the deadline enumerating the
-    // same hierarchy every 100ms. A late result still earns no credit.
+    // Five exact inline probes. Only the last permits scoped alert/sheet
+    // lookup if no exact inline witness has arrived. The deadline is shared.
     let namingPolls: [(offset: TimeInterval, includeModal: Bool)] = [
-      (0.25, false), (0.95, false), (1.70, true), (2.70, false), (3.65, false)
+      (0.25, false), (0.95, false), (1.70, false), (2.70, false), (3.65, true)
     ]
     var naming: NamingEditorWitness?
     var namingQueryCount = 0
@@ -573,7 +561,7 @@ final class FolderPickerUITests: XCTestCase {
       if Date() >= namingDeadline { break }
       namingQueryCount += 1
       if poll.includeModal { namingModalQueryCount += 1 }
-      naming = try currentNamingEditor(app, namingViewFrame, includeModal: poll.includeModal)
+      naming = try currentNamingEditor(app, namingViewFrame, includeModal: poll.includeModal, before: namingDeadline)
     }
     let witnessObservedAt = Date()
     let withinAppearanceDeadline = witnessObservedAt < namingDeadline
