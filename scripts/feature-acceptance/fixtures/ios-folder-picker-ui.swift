@@ -443,6 +443,7 @@ final class FolderPickerUITests: XCTestCase {
     guard dismissers.count <= 1 else { throw fail("Ambiguous dismissal controls inside the active document search container") }
     if let dismiss = dismissers.first {
       try tap(dismiss, "leave-picker-search-without-editing")
+      guard container.waitForNonExistence(timeout: 3) else { throw fail("Document search stayed active after dismissal") }
     } else {
       // Some simulator runtimes expose the scrim in AX but not as hittable.
       // The same native navigation bar still exposes its real provider Back.
@@ -457,8 +458,9 @@ final class FolderPickerUITests: XCTestCase {
         try tap(providerLocation, "reopen-original-local-provider-after-keyboard-preparation")
       }
     }
-    guard container.waitForNonExistence(timeout: 3) else { throw fail("Document search stayed active after dismissal") }
-    guard try waitForNavigationTitle(app, providerLabels) else {
+    // The bound search container is already gone. In 42708724609 checking
+    // that old accessibility identity again after opening the provider hung.
+    guard try waitForNavigationTitle(app, [providerTitle]) else {
       throw fail("Provider navigation title was not restored after keyboard preparation")
     }
     print("IOS_FOLDER_PICKER_KEYBOARD_PREPARATION:\(keyboardAppeared)")
