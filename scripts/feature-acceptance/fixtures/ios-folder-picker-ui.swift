@@ -564,12 +564,12 @@ final class FolderPickerUITests: XCTestCase {
     // second appearance wait. No outer allowance or timeout is increased.
     let namingStarted = Date()
     let namingDeadline = namingStarted.addingTimeInterval(5)
-    // Warm once, then let the keyboard/rename transition settle before
-    // asking XCUI again. The recorded 1.70s snapshot was still empty and
-    // held the runner until 4.0s (42674231725, attempt 2). Give the later
-    // exact probes the remaining time without extending the 5s deadline.
+    // Issue no AX queries during the keyboard/rename transition. At 2.10s
+    // the remote Files snapshot never returned in 42699463766, even with
+    // the collection bound and cooperative waits. The late exact and modal
+    // checks still share the original absolute deadline.
     let namingPolls: [(offset: TimeInterval, includeModal: Bool)] = [
-      (0.25, false), (2.10, false), (2.80, false), (3.35, false), (3.85, true)
+      (3.85, false), (4.35, true)
     ]
     var naming: NamingEditorWitness?
     var namingQueryCount = 0
