@@ -1,4 +1,6 @@
 import 'backup_snapshot.dart';
+import 'android_backup_rescue.dart';
+import 'segmented_preference_archive.dart';
 import 'package:flutter/services.dart' show MissingPluginException;
 import '../images/image_file_access.dart';
 import 'unified_storage.dart';
@@ -28,7 +30,7 @@ import 'portable_projects.dart';
 
 // Only small JSON and disk paths cross the isolate boundary. Image libraries
 // are hashed and streamed entry-by-entry instead of duplicated in RAM.
-Future<void> _writeBackupArchive(({Archive archive,Map<String,String> sources,String output}) job) async {
+Future<void> _writeBackupArchive(({Archive archive,Map<String,String> sources,String output,Set<String> staged}) job) async {
  final output=OutputFileStream(job.output);
  final encoder=ZipEncoder()..startEncode(output);
  try {
@@ -37,7 +39,7 @@ Future<void> _writeBackupArchive(({Archive archive,Map<String,String> sources,St
      if(source==null) {encoder.add(file);continue;}
      final disk=File(source);
      final expected=file.name.split('/').last.split('.').first;
-     if(await disk.length()!=file.size || (await sha256.bind(disk.openRead()).first).toString()!=expected) {
+     if(await disk.length()!=file.size || (!job.staged.contains(file.name) && (await sha256.bind(disk.openRead()).first).toString()!=expected)) {
        throw const FileSystemException('Backup source changed; original data retained.');
      }
      final input=InputFileStream(source,bufferSize:64*1024);
@@ -283,13 +285,11 @@ class DataBackupService {
   }
 
   Future<String?> chooseBackupDirectory({String? dialogTitle}) async {
-    final settings = await storage.getSettings();
-    final configured = settings.backupDir.trim();
+    final mobile = Platform.isAndroid || Platform.isIOS;
+    final configured = mobile ? '' : (await storage.getSettings()).backupDir.trim();
     final selected = await FilePicker.platform.getDirectoryPath(
       dialogTitle: dialogTitle,
-      initialDirectory: Platform.isAndroid || Platform.isIOS
-          ? null
-          : (configured.isEmpty ? null : configured),
+      initialDirectory: configured.isEmpty ? null : configured,
     );
     if (selected == null) return null;
     return Directory(selected.trim()).absolute.path;
@@ -343,8 +343,25 @@ class DataBackupService {
   int _addJson(Archive archive, String name, Object? value) {
     final bytes = utf8.encode(jsonEncode(value));
     if(bytes.length>_maxJsonBytes) throw const FormatException('Backup JSON exceeds 16 MiB mobile limit. Split the backup into categories; original data retained.');
-    archive.addFile(ArchiveFile(name, bytes.length, bytes));
+    _addBackupEntry(archive, name, bytes);
     return bytes.length;
+  }
+
+  // In low-memory mode, retain only paths and sizes after serializing each
+  // section. The ZIP worker never receives copies of those byte lists.
+  final _lowMemoryEntries = Expando<Set<String>>();
+
+  void _addBackupEntry(Archive archive, String name, List<int> bytes) {
+    final staged = _lowMemoryEntries[archive];
+    if (staged == null) {
+      archive.addFile(ArchiveFile(name, bytes.length, bytes));
+      return;
+    }
+    final path = '${_assetStages[archive]!.path}/entry-${staged.length}';
+    File(path).writeAsBytesSync(bytes);
+    (_assetSources[archive] ??= <String, String>{})[name] = path;
+    staged.add(name);
+    archive.addFile(ArchiveFile.noData(name)..size = bytes.length);
   }
 
   Future<Map<String, dynamic>?> _addAsset(
@@ -603,6 +620,7 @@ class DataBackupService {
   Future<File> createBackup(
     Set<DataBackupCategory> requested, {
     bool includeAssets = true,
+    bool lowMemory = false,
     String prefix = 'manual',
     bool internal = false,
   }) async {
@@ -613,6 +631,7 @@ class DataBackupService {
     final archive = Archive();
     final stage=await (await getTemporaryDirectory()).createTemp('issue81-backup-stage-');
     _assetStages[archive]=stage;
+    if (lowMemory) _lowMemoryEntries[archive] = <String>{};
     try {
     final summaries = <DataBackupCategorySummary>[];
     final assets = <String, Map<String, dynamic>>{};
@@ -734,23 +753,22 @@ class DataBackupService {
       var assetBytes = 0;
       for (final entry in _artistPreferenceKeys.entries) {
         final values = <Map<String, dynamic>>[];
+        List decoded = const [];
         try {
-          final decoded =
-              jsonDecode(prefs.getString(entry.value) ?? '[]') as List;
-          for (final item in decoded.whereType<Map>()) {
-            final favorite = await _portableFavorite(
-              Map<String, dynamic>.from(item),
-              archive,
-              assets,
-              includeAssets: includeAssets,
-            );
-            assetBytes += (((favorite['image'] as Map?)?['asset']
-                        as Map?)?['bytes'] as num?)
-                    ?.toInt() ??
-                0;
-            values.add(favorite);
-          }
-        } catch (_) {}
+          final raw = jsonDecode(prefs.getString(entry.value) ?? '[]');
+          if (raw is List) decoded = raw;
+        } on FormatException {
+          // Malformed legacy artist JSON has no usable records.
+        }
+        for (final item in decoded.whereType<Map>()) {
+          final favorite = await _portableFavorite(
+            Map<String, dynamic>.from(item), archive, assets,
+            includeAssets: includeAssets,
+          );
+          assetBytes += (((favorite['image'] as Map?)?['asset']
+                      as Map?)?['bytes'] as num?)?.toInt() ?? 0;
+          values.add(favorite);
+        }
         collections[entry.key] = values;
         total += values.length;
       }
@@ -843,7 +861,7 @@ class DataBackupService {
         }
         // Preserve exact bytes even if the library is corrupt, so rescue backups
         // do not silently discard the evidence needed to recover user templates.
-        archive.addFile(ArchiveFile('data/prompt-template-library.json', templateBytes.length, templateBytes));
+        _addBackupEntry(archive, 'data/prompt-template-library.json', templateBytes);
         templateMetadata = {'file':'data/prompt-template-library.json',
           'bytes':templateBytes.length,'sha256':sha256.convert(templateBytes).toString()};
       }
@@ -924,7 +942,8 @@ class DataBackupService {
 
     if (includeAssets) {
       await PortableProjects.export(
-          archive, requested.map((c) => c.id).toSet());
+          archive, requested.map((c) => c.id).toSet(),
+          addEntry: (name, bytes) => _addBackupEntry(archive, name, bytes));
     }
     summaries.addAll(_nativeSummaries(archive));
     final manifest = {
@@ -948,7 +967,7 @@ class DataBackupService {
     final file = File('${directory.path}${Platform.pathSeparator}$prefix-${_stamp()}-${DateTime.now().microsecondsSinceEpoch}.naisbackup');
     final temporary=File('${file.path}.tmp');
     try {
-      await compute(_writeBackupArchive,(archive:archive,sources:_assetSources[archive]??<String,String>{},output:temporary.path),debugLabel:'data-backup-zip');
+      await compute(_writeBackupArchive,(archive:archive,sources:_assetSources[archive]??<String,String>{},output:temporary.path,staged:_lowMemoryEntries[archive]??<String>{}),debugLabel:'data-backup-zip');
       await temporary.rename(file.path);
     } catch(_) {if(await temporary.exists()) await temporary.delete();rethrow;}
     return file;
@@ -1024,7 +1043,22 @@ class DataBackupService {
     return result?.files.single.path;
   }
 
-  Future<_ArchiveBundle> _loadArchive(String filePath) async {
+  Future<_ArchiveBundle> _loadArchive(String filePath, {String? password}) async {
+    final kind = await SegmentedPreferenceArchive.identify(File(filePath));
+    if (kind == SegmentedPreferenceArchive.rescueMagic) {
+      throw const FormatException('legacy_preferences_rescue_only');
+    }
+    if (kind == SegmentedPreferenceArchive.fullMagic) {
+      if (password == null) {
+        throw const FormatException('segmented_backup_password_required');
+      }
+      return AndroidBackupRescue.withFullBackup(
+          filePath, password, _loadZipArchive);
+    }
+    return _loadZipArchive(filePath);
+  }
+
+  Future<_ArchiveBundle> _loadZipArchive(String filePath) async {
     final root = await _snapshotRoot();
     final stage = await root.createTemp('studio-backup-import-');
     final path = '${stage.path}${Platform.pathSeparator}snapshot.naisbackup';
@@ -1074,8 +1108,8 @@ class DataBackupService {
         .toList();
   }
 
-  Future<DataBackupInspection> inspect(String filePath) async {
-    final bundle = await _loadArchive(filePath);
+  Future<DataBackupInspection> inspect(String filePath, {String? password}) async {
+    final bundle = await _loadArchive(filePath, password: password);
     try {
     final source = bundle.manifest['source'] is Map
         ? Map<String, dynamic>.from(bundle.manifest['source'] as Map)
@@ -1925,6 +1959,7 @@ class DataBackupService {
     String filePath,
     Set<DataBackupCategory> requested, {
     required bool confirmConfigurationOverwrite,
+    String? password,
   }) async {
     if (requested.isEmpty) throw ArgumentError('Select at least one category.');
     if ((requested.contains(DataBackupCategory.configuration) ||
@@ -1934,7 +1969,7 @@ class DataBackupService {
           'Configuration overwrite requires a second confirmation.');
     }
     final imageBefore = await storage.readCompatibleApiState();
-    final bundle = await _loadArchive(filePath);
+    final bundle = await _loadArchive(filePath, password: password);
     try {
     Map<String, dynamic>? imageBackup;
     Future<void> Function()? accountRestore;

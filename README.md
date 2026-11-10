@@ -26,11 +26,9 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 
 ## 本次更新
 
-桌面版修复标签补全被控件遮挡及画师串抽卡加载时滚动跳回；相关滚动条也已加宽。移动端仅同步版本；未签名 IPA 须自行签名。
+Android 优先完整导出，内存不足才改用可导入的加密分段备份；仍失败时先询问是否不带图片和关联文件重试。旧救援包不含原图，不能完整导入。其他平台不加入 Android 分段导出功能。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
-
-<a id="quick-start"></a>
 
 ## 先完成你的第一张图
 

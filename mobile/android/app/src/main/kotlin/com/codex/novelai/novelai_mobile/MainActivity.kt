@@ -230,7 +230,7 @@ class MainActivity : FlutterActivity() {
                     try {
                         check(pendingRescue == null && !rescueSaving)
                         val name = call.arguments as? String ?: error("Missing rescue name")
-                        require(name.matches(Regex("studio-recovery-[0-9]+[.]naisrescue")))
+                        require(name.matches(Regex("studio-(recovery-[0-9]+[.]naisrescue|segmented-[0-9]+[.]naisparts)")))
                         val root = cacheDir.canonicalFile
                         val file = File(root, name).canonicalFile
                         require(file.parentFile == root && file.name == name && file.isFile)
@@ -439,7 +439,7 @@ class MainActivity : FlutterActivity() {
 
     private fun isBackupCandidate(mimeType: String?, uri: Uri, originalName: String?): Boolean {
         val name = originalName?.lowercase().orEmpty()
-        if (name.endsWith(".naisbackup") || name.endsWith(".zip")) return true
+        if (listOf(".naisbackup", ".zip", ".naisparts", ".naisrescue").any { name.endsWith(it) }) return true
         return when ((mimeType ?: contentResolver.getType(uri)).orEmpty().lowercase()) {
             "application/x-naisbackup",
             "application/zip",
@@ -458,7 +458,8 @@ class MainActivity : FlutterActivity() {
             ?.trim('.', ' ')
             ?.takeIf { it.isNotEmpty() }
             ?: "shared-backup.naisbackup"
-        val extension = if (rawName.lowercase().endsWith(".zip")) ".zip" else ".naisbackup"
+        val extension = listOf(".zip", ".naisparts", ".naisrescue")
+            .firstOrNull { rawName.lowercase().endsWith(it) } ?: ".naisbackup"
         val stem = rawName.substringBeforeLast('.').ifBlank { "shared-backup" }.take(80)
         val target = File(
             directory,

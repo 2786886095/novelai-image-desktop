@@ -130,7 +130,16 @@ class PortableProjects {
     }
   }
 
-  static Future<void> export(Archive archive, Set<String> selected) async {
+  static Future<void> export(Archive archive, Set<String> selected, {
+    void Function(String, List<int>)? addEntry,
+  }) async {
+    void add(String name, List<int> bytes) {
+      if (addEntry != null) {
+        addEntry(name, bytes);
+      } else {
+        archive.addFile(ArchiveFile(name, bytes.length, bytes));
+      }
+    }
     if(Platform.isAndroid && selected.contains('tavernAgent')) {
       Map<String,dynamic>? lock;
       try {
@@ -139,7 +148,7 @@ class PortableProjects {
           lock=await _native.invokeMapMethod<String,dynamic>('lockData');
           if(lock?['home'] is String) {
             final bytes=await packNativeHome(Directory(lock!['home'] as String));
-            if(bytes!=null){final name='agent-${sha256.convert(bytes)}.zip';archive.addFile(ArchiveFile('$prefix$name',bytes.length,bytes));}
+            if(bytes!=null){final name='agent-${sha256.convert(bytes)}.zip';add('$prefix$name', bytes);}
           }
         }
       } on MissingPluginException { /* Existing mobile builds have no native home. */ }
@@ -157,7 +166,7 @@ class PortableProjects {
       }
       final bytes = await item.readAsBytes();
       validate(name, bytes);
-      archive.addFile(ArchiveFile('$prefix$name', bytes.length, bytes));
+      add('$prefix$name', bytes);
     }
   }
 

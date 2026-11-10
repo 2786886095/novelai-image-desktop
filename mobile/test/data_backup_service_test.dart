@@ -3,6 +3,9 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 
 import 'package:archive/archive.dart';
+import 'package:flutter/services.dart';
+import 'package:novelai_mobile/services/android_backup_rescue.dart';
+import 'package:novelai_mobile/services/segmented_preference_archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/agent/agent_models.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
@@ -80,6 +83,93 @@ void main() {
   tearDown(() {
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
+
+  test('manual export tries complete, then segments only on OOM', () async {
+    final trace = <String>[];
+    final oom = PlatformException(code: 'error', message: 'java.lang.OutOfMemoryError');
+    Future<String?> run({Object? first, bool segmentFails = false}) =>
+        exportBackupInOrder<String?>(
+          allowSegments: true,
+          complete: () async {
+            trace.add('complete');
+            if (first != null) throw first;
+            return null; // Picker cancelled; do not prompt again.
+          },
+          segmented: () async {
+            trace.add('segmented');
+            if (segmentFails) throw const FileSystemException('disk full');
+            return 'saved';
+          },
+          onSegmentFailure: (error) async {
+            trace.add('offer-no-images');
+            return 'declined';
+          },
+        );
+    expect(await run(), isNull);
+    expect(trace, ['complete']);
+    trace.clear();
+    expect(await run(first: oom), 'saved');
+    expect(trace, ['complete', 'segmented']);
+    trace.clear();
+    expect(await run(first: oom, segmentFails: true), 'declined');
+    expect(trace, ['complete', 'segmented', 'offer-no-images']);
+    trace.clear();
+    await expectLater(run(first: StateError('not memory')), throwsStateError);
+    expect(trace, ['complete']);
+    stdout.writeln('FALLBACK: complete only; OOM -> segmented; segment failure -> offer; cancellation/non-OOM -> no retry');
+  });
+
+  test('low-memory segmented export restores configuration and original image bytes', () async {
+    const password = 'synthetic fixture passphrase';
+    final original = File('${root.path}/sample.png');
+    await original.writeAsBytes(List<int>.generate(1100000, (i) => i % 251));
+    final digest = await sha256.bind(original.openRead()).first;
+    final settings = await storage.getSettings();
+    settings.language = 'ja-JP';
+    await storage.setSettings(settings);
+    await storage.writeHistory([_item('original', original.path, 927)]);
+    const categories = {
+      DataBackupCategory.configuration,
+      DataBackupCategory.imageHistory,
+    };
+    final normal = await service.createBackup(categories);
+    expect((await service.inspect(normal.path)).categories.map((x) => x.category).toSet(), categories);
+    final lightweight = await service.createBackup(categories, lowMemory: true, includeAssets: false);
+    final lightStream = InputFileStream(lightweight.path);
+    try {
+      final lightZip = ZipDecoder().decodeStream(lightStream);
+      expect(lightZip.files.where((f) => f.name.startsWith('assets/')), isEmpty);
+      expect(lightZip.findFile('data/image-history.json'), isNotNull);
+    } finally { lightStream.closeSync(); }
+    final low = await service.createBackup(categories, lowMemory: true);
+    final parts = File('${root.path}/backup.naisparts');
+    await SegmentedPreferenceArchive.writeFullBackup(low, parts, password);
+    expect((await service.inspect(parts.path, password: password)).categories.map((x) => x.category).toSet(), categories);
+    await storage.writeHistory([]);
+    settings.language = 'en-US';
+    await storage.setSettings(settings);
+    await expectLater(
+      service.importBackup(parts.path, categories, confirmConfigurationOverwrite: true,
+          password: 'synthetic wrong password'),
+      throwsA(isA<Exception>()),
+    );
+    expect(await storage.getHistory(), isEmpty);
+    expect((await storage.getSettings()).language, 'en-US');
+    final restored = await service.importBackup(parts.path, categories,
+        confirmConfigurationOverwrite: true, password: password);
+    expect(restored.imported, greaterThan(0));
+    final history = (await storage.getHistory()).single;
+    expect(history.seed, 927);
+    expect(await sha256.bind(File(history.filePath).openRead()).first, digest);
+    expect((await storage.getSettings()).language, 'ja-JP');
+    expect(await sha256.bind(original.openRead()).first, digest);
+    final broken = await parts.copy('${root.path}/broken.naisparts');
+    final handle = await broken.open(mode: FileMode.append);
+    await handle.truncate((await broken.length()) - 1);
+    await handle.close();
+    await expectLater(service.inspect(broken.path, password: password), throwsA(isA<Exception>()));
+    stdout.writeln('ROUNDTRIP: normal ZIP readable; segmented restores settings+history+original SHA; wrong password and truncated file rejected; no-assets ZIP keeps record without asset');
+  }, timeout: const Timeout(Duration(minutes: 4)));
 
   test('public backup API preserves desktop native capsules through mobile',
       () async {

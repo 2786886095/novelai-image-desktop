@@ -21,7 +21,7 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-Desktop tag suggestions no longer sit behind other controls. Artist String Draw keeps its scroll position while loading more tags, and its scrollbars are wider. Mobile only synchronizes the version. The unsigned IPA requires user signing.
+Android tries a full backup first and falls back to an importable encrypted backup only when memory runs low. If that also fails, the app asks before omitting images and linked files. Legacy rescue archives do not contain image originals and cannot be restored as full backups. Other platforms do not gain the Android export fallback.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

@@ -3,6 +3,8 @@ import '../ui/global_typography.dart';
 import '../ui/studio_dropdown.dart';
 import 'dart:io';
 
+import '../services/segmented_preference_archive.dart';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -477,8 +479,8 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, update) => AlertDialog(
-          title: Text(tr('内存不足，切换分段导出', '記憶體不足，切換分段匯出',
-              'Low memory: switch to segmented export')),
+          title: Text(tr('仅保全旧偏好文件', '僅保全舊偏好檔',
+              'Legacy preferences rescue only')),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Text(tr(
@@ -532,30 +534,127 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
     }
   }
 
-  Future<void> _export(Map<String, String> text) async {
-    if (exportSelection.isEmpty) return;
+  String _segmentText(String zh, String tw, String en) {
+    final locale = normalizeAppLocaleCode(context.read<AppState>().settings.language);
+    return locale == 'zh-CN' ? zh : locale == 'zh-TW' ? tw : en;
+  }
+
+  Future<String?> _fullBackupPassword({required bool forExport}) async {
+    var password = '', repeat = '';
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(builder: (context, update) {
+        final label = _segmentText('备份密码', '備份密碼', 'Backup password');
+        final accept = password.runes.length >= 12 && (!forExport || repeat == password);
+        return AlertDialog(
+          title: Text(forExport
+              ? _segmentText('加密分段备份', '加密分段備份', 'Encrypted segmented backup')
+              : _segmentText('解锁分段备份', '解鎖分段備份', 'Unlock segmented backup')),
+          content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            if (forExport) Text(_segmentText('包含所选类别及普通备份支持的文件，可用原密码在本页导入。', '包含所選類別及一般備份支援的檔案，可用原密碼在本頁匯入。', 'Contains the selected categories and their supported files. Use the same password to import here.')),
+            TextField(obscureText: true, autocorrect: false, enableSuggestions: false,
+              maxLength: 128, decoration: InputDecoration(labelText: label),
+              onChanged: (value) => update(() => password = value)),
+            if (forExport) TextField(obscureText: true, autocorrect: false, enableSuggestions: false,
+              maxLength: 128, decoration: InputDecoration(labelText: _segmentText('确认密码', '確認密碼', 'Confirm password')),
+              onChanged: (value) => update(() => repeat = value)),
+          ])),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext),
+              child: Text(_segmentText('取消', '取消', 'Cancel'))),
+            FilledButton(onPressed: accept ? () => Navigator.pop(dialogContext, password) : null,
+              child: Text(forExport ? _segmentText('导出', '匯出', 'Export') : _segmentText('解锁', '解鎖', 'Unlock'))),
+          ],
+        );
+      }),
+    );
+  }
+
+  Future<void> _runManualExport(
+    Map<String, String> text,
+    Set<DataBackupCategory> requested, {
+    required Future<File?> Function() normal,
+    required bool includeAssets,
+    bool refreshStatus = false,
+  }) async {
+    if (busy || requested.isEmpty) return;
     setState(() => busy = true);
+    File? backup;
     try {
-      await exportWithMemoryFallback<void>(
-        allowRescue: Platform.isAndroid,
-        rescue: () => _segmentedExport(text),
-        normal: () async {
-          final file = await service.createBackup(exportSelection);
-          final path = await service.saveBackupFile(file, dialogTitle: text['export']);
+      await exportBackupInOrder<void>(
+        allowSegments: Platform.isAndroid,
+        complete: () async {
+          backup = await normal();
+          if (!mounted || backup == null) return;
+          if (refreshStatus) {
+            _message(backup!.path);
+          } else {
+            await _saveManualBackup(backup!, text);
+          }
+        },
+        segmented: () async {
           if (!mounted) return;
-          if (path == DataBackupService.sharedBackupResult) {
-            _message(
-                '已打开系统分享／保存面板，请在面板中完成保存。 / Save using the system share sheet.');
-          } else if (path != null) {
-            _message(text['fileSaved']!);
+          final password = await _fullBackupPassword(forExport: true);
+          if (!mounted || password == null) return;
+          backup ??= await service.createBackup(requested,
+              includeAssets: includeAssets, lowMemory: true);
+          final saved = await AndroidBackupRescue.saveFullBackup(backup!, password);
+          if (mounted && saved) {
+            _message(_segmentText('分段备份已保存，可用同一密码导入。',
+                '分段備份已儲存，可用相同密碼匯入。',
+                'Segmented backup saved. Import using the same password.'));
+          }
+        },
+        onSegmentFailure: (error) async {
+          if (!mounted) return;
+          if (includeAssets && await _confirm(
+              _segmentText('分段备份未完成', '分段備份未完成', 'Segmented backup did not finish'),
+              _segmentText('可重试仅导出所选类别的数据。原图、参考图和关联文件不会导出；手机里的原文件不会被删除。',
+                  '可重試僅匯出所選類別的資料。原圖、參考圖及關聯檔案不會匯出；手機中的原檔不會被刪除。',
+                  'Retry with the selected categories’ data only. Original images, reference images and linked files will be omitted, not deleted.'),
+              _segmentText('不带图片重试', '不含圖片重試', 'Retry without images'))) {
+            if (!mounted) return;
+            final lightweight = await service.createBackup(requested,
+                includeAssets: false, lowMemory: true);
+            await _saveManualBackup(lightweight, text);
+          } else if (!includeAssets) {
+            throw error;
           }
         },
       );
+      if (mounted && refreshStatus) await _refreshStatus();
     } catch (error) {
-      if (mounted) _message(error.toString());
+      if (!mounted) return;
+      if (isBackupMemoryFailure(error) && Platform.isAndroid) {
+        _message(_segmentText('读取本机数据仍然内存不足，未导出完整备份。请勿清除应用数据。',
+            '讀取本機資料仍然記憶體不足，未匯出完整備份。請勿清除應用程式資料。',
+            'Local data could not be read with the available memory. No full backup was exported. Do not clear app data.'));
+        await _segmentedExport(text);
+      } else {
+        _message(error is FormatException ? error.message : _segmentText(
+            '备份未保存，请检查可用空间或保存位置后重试。',
+            '備份未儲存，請檢查可用空間或儲存位置後重試。',
+            'Backup not saved. Check storage space and destination, then try again.'));
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
+  }
+
+  Future<void> _saveManualBackup(File file, Map<String, String> text) async {
+    final path = await service.saveBackupFile(file, dialogTitle: text['export']);
+    if (!mounted) return;
+    if (path == DataBackupService.sharedBackupResult) {
+      _message('已打开系统分享／保存面板，请在面板中完成保存。 / Save using the system share sheet.');
+    } else if (path != null) {
+      _message(text['fileSaved']!);
+    }
+  }
+
+  Future<void> _export(Map<String, String> text) {
+    final requested = Set<DataBackupCategory>.of(exportSelection);
+    return _runManualExport(text, requested,
+        normal: () => service.createBackup(requested), includeAssets: true);
   }
 
   Future<void> _chooseBackupDirectory(Map<String, String> text) async {
@@ -638,8 +737,21 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
         importSelection = {};
       });
     }
+    String? kind;
     try {
-      final value = await service.inspect(path);
+      kind = await SegmentedPreferenceArchive.identify(File(path));
+      if (!mounted) return;
+      if (kind == SegmentedPreferenceArchive.rescueMagic) {
+        throw FormatException(_segmentText(
+            '这是旧版 .naisrescue 救援包，只保存旧偏好文件，不含原图，不能在此完整恢复。请保留原文件。',
+            '這是舊版 .naisrescue 救援包，只儲存舊偏好檔，不含原圖，無法在此完整復原。請保留原檔。',
+            'This legacy .naisrescue file contains preferences only, not image originals. Keep it; it cannot be restored as a full backup here.'));
+      }
+      final password = kind == SegmentedPreferenceArchive.fullMagic
+          ? await _fullBackupPassword(forExport: false)
+          : null;
+      if (!mounted || (kind == SegmentedPreferenceArchive.fullMagic && password == null)) return;
+      final value = await service.inspect(path, password: password);
       if (!mounted) return;
       setState(() {
         inspection = value;
@@ -648,8 +760,13 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => inspectionError = error.toString());
-      _message(error.toString());
+      final message = kind == SegmentedPreferenceArchive.fullMagic
+          ? _segmentText('无法读取分段备份。请检查密码、文件是否完整及可用空间；未导入数据。',
+              '無法讀取分段備份。請檢查密碼、檔案是否完整及可用空間；未匯入資料。',
+              'Cannot open segmented backup. Check the password, file integrity and free space. Nothing was imported.')
+          : error is FormatException ? error.message : error.toString();
+      setState(() => inspectionError = message);
+      _message(message);
     } finally {
       if (managesBusyState && mounted) setState(() => busy = false);
     }
@@ -674,10 +791,17 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
     }
     setState(() => busy = true);
     try {
+      final kind = await SegmentedPreferenceArchive.identify(File(source.path));
+      if (!mounted) return;
+      final password = kind == SegmentedPreferenceArchive.fullMagic
+          ? await _fullBackupPassword(forExport: false)
+          : null;
+      if (!mounted || (kind == SegmentedPreferenceArchive.fullMagic && password == null)) return;
       final report = await service.importBackup(
         source.path,
         importSelection,
         confirmConfigurationOverwrite: overwrites,
+        password: password,
       );
       if (mounted) setState(() => lastReport = report);
       await app.load();
@@ -693,23 +817,13 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
     }
   }
 
-  Future<void> _backupNow() async {
-    setState(() => busy = true);
-    try {
-      await exportWithMemoryFallback<void>(
-        allowRescue: Platform.isAndroid,
-        rescue: () => _segmentedExport(_backupText(context.read<AppState>().settings.language)),
-        normal: () async {
-          final file = await service.runAutomaticBackup(force: true);
-          if (mounted && file != null) _message(file.path);
-        },
-      );
-      await _refreshStatus();
-    } catch (error) {
-      _message(error.toString());
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
+  Future<void> _backupNow() {
+    final settings = context.read<AppState>().settings;
+    return _runManualExport(_backupText(settings.language),
+        DataBackupCategory.values.toSet(),
+        normal: () => service.runAutomaticBackup(force: true),
+        includeAssets: settings.autoBackupIncludeImages,
+        refreshStatus: true);
   }
 
   Widget _categoryList(

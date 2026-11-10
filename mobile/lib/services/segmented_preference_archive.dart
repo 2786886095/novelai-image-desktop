@@ -12,7 +12,28 @@ class SegmentedPreferenceArchive {
     'FlutterSharedPreferences.xml',
     'FlutterSharedPreferences.xml.bak',
   ];
-  static final _magic = ascii.encode('NAIRSC01');
+  static const rescueMagic = 'NAIRSC01';
+  static const fullMagic = 'NAIBKP02';
+  static const fullBackupEntry = 'backup.naisbackup';
+  static const _maxFullBackupBytes = 4 * 1024 * 1024 * 1024;
+
+  static Future<String?> identify(File input) async {
+    final file = await input.open();
+    try {
+      final value = ascii.decode(await file.read(8), allowInvalid: true);
+      return value == rescueMagic || value == fullMagic ? value : null;
+    } finally {
+      await file.close();
+    }
+  }
+
+  static Future<File> writeFullBackup(File input, File output, String password) {
+    return _write(output, password,
+        magic: fullMagic, sources: {fullBackupEntry: input});
+  }
+
+  static Future<void> extractFullBackup(File input, Directory destination,
+      String password) => _extract(input, destination, password, fullMagic);
   static final _cipher = AesGcm.with256bits();
   static final _random = Random.secure();
   static final _kdf =
@@ -48,10 +69,11 @@ class SegmentedPreferenceArchive {
     return bytes;
   }
 
-  static Future<Map<String, FileStat>> _snapshot(Directory source) async {
+  static Future<Map<String, FileStat>> _snapshot(Map<String, File> sources) async {
     final files = <String, FileStat>{};
-    for (final name in _names) {
-      final path = _join(source, name);
+    for (final entry in sources.entries) {
+      final name = entry.key;
+      final path = entry.value.path;
       final type = await FileSystemEntity.type(path, followLinks: false);
       if (type == FileSystemEntityType.notFound) continue;
       if (type != FileSystemEntityType.file) {
@@ -65,8 +87,15 @@ class SegmentedPreferenceArchive {
   /// Requires a new app-private output path. The source files are never edited.
   /// The final name is committed only after authenticating a full readback.
   static Future<File> write(
-      Directory source, File output, String password) async {
-    final before = await _snapshot(source);
+      Directory source, File output, String password) => _write(output, password, magic: rescueMagic,
+          sources: {for (final name in _names) name: File(_join(source, name))});
+
+  static Future<File> _write(File output, String password,
+      {required String magic, required Map<String, File> sources}) async {
+    final before = await _snapshot(sources);
+    if (magic == fullMagic && (before[fullBackupEntry]?.size ?? 0) > _maxFullBackupBytes) {
+      throw const FormatException('Backup exceeds the segmented file limit.');
+    }
     if (before.isEmpty || before.values.every((stat) => stat.size == 0)) {
       throw const FileSystemException('No legacy preferences to rescue.');
     }
@@ -81,12 +110,13 @@ class SegmentedPreferenceArchive {
     try {
       final sink = await partial.open(mode: FileMode.writeOnly);
       try {
-        await sink.writeFrom([..._magic, ...entropy]);
+        await sink.writeFrom([...ascii.encode(magic), ...entropy]);
         var index = 0;
         Future<void> emit(List<int> bytes) async {
           final length = _u32(bytes.length);
           final box = await _cipher.encrypt(bytes,
-              secretKey: key, nonce: _nonce(prefix, index++), aad: length);
+              secretKey: key, nonce: _nonce(prefix, index++),
+              aad: magic == fullMagic ? [...ascii.encode(magic), ...length] : length);
           await sink.writeFrom(length);
           await sink.writeFrom(box.cipherText);
           await sink.writeFrom(box.mac.bytes);
@@ -96,7 +126,7 @@ class SegmentedPreferenceArchive {
           for (final e in before.entries) e.key: e.value.size,
         })));
         for (final e in before.entries) {
-          final file = await File(_join(source, e.key)).open();
+          final file = await sources[e.key]!.open();
           try {
             var remaining = e.value.size;
             while (remaining > 0) {
@@ -117,7 +147,7 @@ class SegmentedPreferenceArchive {
       } finally {
         await sink.close();
       }
-      final after = await _snapshot(source);
+      final after = await _snapshot(sources);
       if (after.length != before.length ||
           before.entries.any((e) =>
               after[e.key]?.size != e.value.size ||
@@ -125,7 +155,7 @@ class SegmentedPreferenceArchive {
               after[e.key]?.changed != e.value.changed)) {
         throw const FileSystemException('Preferences changed during rescue.');
       }
-      await _read(partial, (_) async => key);
+      await _read(partial, (_) async => key, magic: magic);
       if (await FileSystemEntity.type(output.path, followLinks: false) !=
           FileSystemEntityType.notFound) {
         throw const FileSystemException('Rescue output exists.');
@@ -141,14 +171,18 @@ class SegmentedPreferenceArchive {
 
   /// Extracts only into a new directory; never restores over live app data.
   static Future<void> extract(
-      File input, Directory destination, String password) async {
+      File input, Directory destination, String password) =>
+          _extract(input, destination, password, rescueMagic);
+
+  static Future<void> _extract(File input, Directory destination,
+      String password, String magic) async {
     if (await FileSystemEntity.type(destination.path, followLinks: false) !=
         FileSystemEntityType.notFound) {
       throw const FileSystemException('Extraction requires a new directory.');
     }
     final stage = await destination.parent.createTemp('preferences-extract-');
     try {
-      await _read(input, (salt) => _key(password, salt), destination: stage);
+      await _read(input, (salt) => _key(password, salt), destination: stage, magic: magic);
       if (await FileSystemEntity.type(destination.path, followLinks: false) !=
           FileSystemEntityType.notFound) {
         throw const FileSystemException('Extraction destination exists.');
@@ -161,12 +195,12 @@ class SegmentedPreferenceArchive {
 
   static Future<Map<String, int>> _read(
       File input, Future<SecretKey> Function(List<int>) keyForSalt,
-      {Directory? destination}) async {
+      {Directory? destination, String magic = rescueMagic}) async {
     final file = await input.open();
     try {
       final header = await _exact(file, 32);
       if (ascii.decode(header.sublist(0, 8), allowInvalid: true) !=
-          'NAIRSC01') {
+          magic) {
         throw const FormatException('Not a segmented preferences rescue.');
       }
       final key = await keyForSalt(header.sublist(8, 24));
@@ -184,14 +218,15 @@ class SegmentedPreferenceArchive {
         return _cipher.decrypt(
             SecretBox(cipherText, nonce: nonce, mac: Mac(mac)),
             secretKey: key,
-            aad: encoded);
+            aad: magic == fullMagic ? [...ascii.encode(magic), ...encoded] : encoded);
       }
 
       final data = jsonDecode(utf8.decode(await next(1024)));
       if (data is! Map ||
           data.isEmpty ||
-          data.keys.any((key) => !_names.contains(key)) ||
-          data.values.any((size) => size is! int || size < 0)) {
+          data.keys.any((key) => magic == fullMagic ? key != fullBackupEntry : !_names.contains(key)) ||
+          data.values.any((size) => size is! int || size < 0 ||
+              (magic == fullMagic && (size == 0 || size > _maxFullBackupBytes)))) {
         throw const FormatException('Invalid rescue manifest.');
       }
       final entries = Map<String, int>.from(data);

@@ -28,8 +28,55 @@ Future<T> exportWithMemoryFallback<T>({
   }
 }
 
+/// A cancelled picker is a successful null result, not a reason to retry.
+Future<T> exportBackupInOrder<T>({
+  required bool allowSegments,
+  required Future<T> Function() complete,
+  required Future<T> Function() segmented,
+  required Future<T> Function(Object failure) onSegmentFailure,
+}) async {
+  try {
+    return await complete();
+  } catch (error) {
+    if (!allowSegments || !isBackupMemoryFailure(error)) rethrow;
+  }
+  try {
+    return await segmented();
+  } catch (error) {
+    return await onSegmentFailure(error);
+  }
+}
+
 class AndroidBackupRescue {
   static const _channel = MethodChannel('langbai.novelai/storage');
+
+  static Future<bool> saveFullBackup(File backup, String password) async {
+    final temp = await getTemporaryDirectory();
+    final name = 'studio-segmented-${DateTime.now().microsecondsSinceEpoch}.naisparts';
+    final path = '${temp.path}${Platform.pathSeparator}$name';
+    final source = backup.path;
+    await Isolate.run(() => SegmentedPreferenceArchive.writeFullBackup(
+        File(source), File(path), password));
+    try {
+      return await _channel.invokeMethod<bool>('saveRescueDocument', name) == true;
+    } finally {
+      try { await File(path).delete(); } on FileSystemException { /* cache only */ }
+    }
+  }
+
+  /// Plaintext is private and scoped to a single authenticated operation.
+  static Future<T> withFullBackup<T>(String path, String password,
+      Future<T> Function(String path) use) async {
+    final stage = await (await getTemporaryDirectory()).createTemp('segmented-backup-');
+    final destination = '${stage.path}${Platform.pathSeparator}authenticated';
+    try {
+      await Isolate.run(() => SegmentedPreferenceArchive.extractFullBackup(
+          File(path), Directory(destination), password));
+      return await use('$destination${Platform.pathSeparator}${SegmentedPreferenceArchive.fullBackupEntry}');
+    } finally {
+      await stage.delete(recursive: true);
+    }
+  }
 
   static Future<bool> export(String password) async {
     final source =
