@@ -16,8 +16,8 @@ on:
         type: boolean
         default: false
 
-      waive_windows_artist_gpu_v287:
-        description: v2.8.7 only; skip local Windows Artist GPU proof and require all other hosted checks
+      waive_windows_artist_gpu_v288:
+        description: v2.8.8 only; skip local Windows Artist GPU proof and require all other hosted checks
         type: boolean
         default: false
 
@@ -505,7 +505,7 @@ jobs:
   windows-artist-local-proof:
     # Admit genuine local hardware execution; this job does not run a GPU model.
     # Missing/failed proof leaves the unchanged Windows Artist cell unverified.
-    if: github.event_name == 'workflow_dispatch' && inputs.windows_artist_evidence_commit != '' && !inputs.waive_windows_artist_gpu_v286 && !inputs.waive_windows_artist_gpu_v287
+    if: github.event_name == 'workflow_dispatch' && inputs.windows_artist_evidence_commit != '' && !inputs.waive_windows_artist_gpu_v286 && !inputs.waive_windows_artist_gpu_v288
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -551,7 +551,7 @@ jobs:
         shell: bash
         env:
           WAIVE_WINDOWS_ARTIST_GPU_V286: ${{ inputs.waive_windows_artist_gpu_v286 }}
-          WAIVE_WINDOWS_ARTIST_GPU_V287: ${{ inputs.waive_windows_artist_gpu_v287 }}
+          WAIVE_WINDOWS_ARTIST_GPU_V288: ${{ inputs.waive_windows_artist_gpu_v288 }}
           WINDOWS_ARTIST_EVIDENCE_COMMIT: ${{ inputs.windows_artist_evidence_commit }}
         run: |
           version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json","utf8")).version')"
@@ -560,10 +560,10 @@ jobs:
             test -z "$WINDOWS_ARTIST_EVIDENCE_COMMIT"
             test "$version" = 2.8.6
             flag=--require-cloud-scope-v286
-          elif [ "$WAIVE_WINDOWS_ARTIST_GPU_V287" = true ]; then
+          elif [ "$WAIVE_WINDOWS_ARTIST_GPU_V288" = true ]; then
             test -z "$WINDOWS_ARTIST_EVIDENCE_COMMIT"
-            test "$version" = 2.8.7
-            flag=--require-cloud-scope-v287
+            test "$version" = 2.8.8
+            flag=--require-cloud-scope-v288
           fi
           node scripts/feature-acceptance/build-full-feature-matrix.mjs "$RUNNER_TEMP/all-native-evidence" "$RUNNER_TEMP/full-feature-matrix" "$GITHUB_SHA" "$version" "$flag"
       - uses: actions/upload-artifact@v4

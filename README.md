@@ -26,7 +26,7 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 
 ## 本次更新
 
-Android 优先完整导出，内存不足才改用可导入的加密分段备份；仍失败时先询问是否不带图片和关联文件重试。旧救援包不含原图，不能完整导入。其他平台不加入 Android 分段导出功能。
+Android 备份在整份旧偏好文件读取内存不足时，改用逐项读取来导出选中的数据。遇到过大或不支持的旧记录会提示对应类别，不会静默漏项或改写原数据。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

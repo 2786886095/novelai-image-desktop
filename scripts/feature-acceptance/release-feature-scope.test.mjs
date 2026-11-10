@@ -72,12 +72,12 @@ test('v2.8.6 cloud waiver requires all 186 non-GPU cells, original evidence, and
  assert.doesNotThrow(()=>assertReleaseEvidenceFiles(scoped,root,options));
  assert.throws(()=>assertReleasePlatformContract(scoped,{...options,waiveWindowsArtistGpuV286:false}));
  assert.throws(()=>assertReleasePlatformContract({...scoped,version:'2.8.7'},{...options,version:'2.8.7'}),/only to v2.8.6/);
- const current={version:'2.8.7',sourceSha,waiveWindowsArtistGpuV287:true};
+ const current={version:'2.8.8',sourceSha,waiveWindowsArtistGpuV288:true};
  const currentReport=buildFullFeatureMatrix({...current,receipts:data});
  assert.doesNotThrow(()=>assertReleasePlatformContract(currentReport,current));
  assert.doesNotThrow(()=>assertReleaseEvidenceFiles(currentReport,root,current));
- assert.throws(()=>assertReleasePlatformContract(currentReport,{...current,waiveWindowsArtistGpuV287:false}));
- assert.throws(()=>assertReleasePlatformContract({...currentReport,version:'2.8.8'},{...current,version:'2.8.8'}),/only to v2.8.7/);
+ assert.throws(()=>assertReleasePlatformContract(currentReport,{...current,waiveWindowsArtistGpuV288:false}));
+ assert.throws(()=>assertReleasePlatformContract({...currentReport,version:'2.8.9'},{...current,version:'2.8.9'}),/only to v2.8.8/);
  assert.throws(()=>assertReleasePlatformContract(buildFullFeatureMatrix({...current,receipts:data.filter(x=>x.receipt.platform!=='ios')}),current),/not accepted/);
  const withoutIos=buildFullFeatureMatrix({...options,receipts:data.filter(x=>x.receipt.platform!=='ios')});
  assert.throws(()=>assertReleasePlatformContract(withoutIos,options),/not accepted/);
