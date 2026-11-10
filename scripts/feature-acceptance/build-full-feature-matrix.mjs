@@ -79,7 +79,7 @@ export function writeFullFeatureMatrix({evidenceRoot,outputRoot,sourceSha,versio
  if(waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV287){
   assertReleasePlatformContract(report,{sourceSha,version,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV287});
   assertReleaseEvidenceFiles(report,outputRoot,{waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV287});
-  console.log('V2_8_6_CLOUD_SCOPE_VERIFIED: 186 required cells passed; Windows Artist GPU not tested');
+  console.log('VERSION_BOUND_CLOUD_SCOPE_VERIFIED: 186 required cells passed; Windows Artist GPU not tested');
  }
  return{report,exitStatus:(requireFull&&!report.full195Certified)||(requireReleaseScope&&!report.releaseScopeCertified)?1:0};
 }
