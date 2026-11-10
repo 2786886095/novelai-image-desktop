@@ -26,8 +26,8 @@ class FailableStorage extends Storage {
 }
 class HookBackup extends DataBackupService {
  final Future<void> Function() hook; HookBackup(super.storage,this.hook);
- @override Future<File> createBackup(Set<DataBackupCategory> requested,{bool includeAssets=true,String prefix='manual',bool internal=false}) async {
-  final file=await super.createBackup(requested,includeAssets:includeAssets,prefix:prefix,internal:internal);
+ @override Future<File> createBackup(Set<DataBackupCategory> requested,{bool includeAssets=true,bool lowMemory=false,String prefix='manual',bool internal=false}) async {
+  final file=await super.createBackup(requested,includeAssets:includeAssets,lowMemory:lowMemory,prefix:prefix,internal:internal);
   if(prefix=='before-import')await hook();return file;
  }
 }
