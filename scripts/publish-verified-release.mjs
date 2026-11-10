@@ -10,19 +10,21 @@ const call=(command,args)=>execFileSync(command,args,{encoding:'utf8',timeout:60
 const version=JSON.parse(fs.readFileSync('package.json','utf8')).version;
 const tag='v'+version, sha=call('git',['rev-parse','HEAD']);
 const waiveWindowsArtistGpuV286=process.env.WAIVE_WINDOWS_ARTIST_GPU_V286==='true';
+const waiveWindowsArtistGpuV287=process.env.WAIVE_WINDOWS_ARTIST_GPU_V287==='true';
+const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV287;
 const nativeRun=process.env.FEATURE_RUN;
-if(waiveWindowsArtistGpuV286){
- if(version!=='2.8.6'||!/^\d+$/.test(nativeRun??''))throw Error('Explicit v2.8.6 cloud acceptance workflow is required');
+if(waiveWindowsArtistGpu){
+ if((waiveWindowsArtistGpuV286&&version!=='2.8.6')||(waiveWindowsArtistGpuV287&&version!=='2.8.7')||!/^\d+$/.test(nativeRun??''))throw Error('Explicit version-bound cloud acceptance workflow is required');
  assertV286CloudNativeRun(JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs'])),{sourceSha:sha});
 }
 const featureParity=JSON.parse(fs.readFileSync('release-evidence/feature-parity.json','utf8'));
-assertReleasePlatformContract(featureParity,{version,sourceSha:sha,waiveWindowsArtistGpuV286});
-assertReleaseEvidenceFiles(featureParity,'release-evidence',{waiveWindowsArtistGpuV286});
+assertReleasePlatformContract(featureParity,{version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV287});
+assertReleaseEvidenceFiles(featureParity,'release-evidence',{waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV287});
 const buildRun=process.env.BUILD_RUN;
 if(!/^\d+$/.test(buildRun??''))throw Error('A verified desktop build run is required');
 const build=JSON.parse(call('gh',['run','view',buildRun,'--json','headSha,jobs']));
 assertDesktopMetadataGates(build);
-if(waiveWindowsArtistGpuV286&&build.headSha!==sha)throw Error('Desktop installers require the exact accepted source');
+if(waiveWindowsArtistGpu&&build.headSha!==sha)throw Error('Desktop installers require the exact accepted source');
 const desktopJobs=build.jobs.filter(job=>job.name.startsWith('build ('));
 if(desktopJobs.length!==3||desktopJobs.some(job=>job.conclusion!=='success')||!build.jobs.some(job=>job.name==='mac-intel-smoke'&&job.conclusion==='success'))throw Error('All desktop builds and native Intel verification must pass');
 const windows=desktopJobs.find(job=>job.name.includes('windows'));
@@ -39,7 +41,7 @@ const mobileRun=process.env.MOBILE_RUN;
 if(!/^\d+$/.test(mobileRun??''))throw Error('A verified mobile workflow run is required');
 const mobile=JSON.parse(call('gh',['run','view',mobileRun,'--json','status,conclusion,headSha,jobs']));
 assertFivePlatformMobileRun(mobile);
-if(waiveWindowsArtistGpuV286&&mobile.headSha!==sha)throw Error('Mobile installers require the exact accepted source');
+if(waiveWindowsArtistGpu&&mobile.headSha!==sha)throw Error('Mobile installers require the exact accepted source');
 assertMobileMetadataGates(mobile);
 call('git',['diff','--exit-code',mobile.headSha,sha,'--','mobile','shared/image-metadata-compat-fixtures','shared/official-image-metadata-fixtures']);
 call('gh',['run','download',mobileRun,'-n','novelai-mobile-android-apk','-D','mobile-assets/android']);
@@ -97,7 +99,7 @@ const existing=spawnSync('gh',['release','view',tag],{encoding:'utf8',timeout:30
 if(existing.status===0)throw Error('Release already exists; do not overwrite it');
 if(!/not found/i.test(existing.stderr??''))throw Error('Release existence check failed: '+existing.stderr);
 const releaseNotes=fs.readFileSync('docs/RELEASE_NOTES.md','utf8');
-if(waiveWindowsArtistGpuV286&&!releaseNotes.includes('Windows 画风迭代的本机 GPU 实测未验收'))throw Error('Release notes must disclose the untested Windows GPU scenarios');
+if(waiveWindowsArtistGpu&&!releaseNotes.includes('Windows 画风迭代的本机 GPU 实测未验收'))throw Error('Release notes must disclose the untested Windows GPU scenarios');
 // Preserve the waiver in verification.json; it is not a public changelog bullet.
 const publicNotesFile=waiveWindowsArtistGpuV286?'release-evidence/public-release-notes.md':'docs/RELEASE_NOTES.md';
 if(waiveWindowsArtistGpuV286){
@@ -105,7 +107,7 @@ if(waiveWindowsArtistGpuV286){
  if(publicNotes===releaseNotes)throw Error('Missing canonical Windows GPU waiver line');
  fs.writeFileSync(publicNotesFile,publicNotes,'utf8');
 }
-const evidence={version,sha,...(waiveWindowsArtistGpuV286?{nativeRun,fullScopeCertified:false,waived:[{platform:'windows',feature:'artist-iteration',scenarios:artistIterationScenarios,status:'not-tested'}]}:{}),mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
+const evidence={version,sha,...(waiveWindowsArtistGpu?{nativeRun,fullScopeCertified:false,waived:[{platform:'windows',feature:'artist-iteration',scenarios:artistIterationScenarios,status:'not-tested'}]}:{}),mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
 fs.writeFileSync('release-assets/verification.json',JSON.stringify(evidence,null,2));
 call('gh',['release','create',tag,...files,'release-assets/verification.json','--target',sha,'--draft','--title',`Langbai NovelAI Studio ${tag}`,'--notes-file',publicNotesFile]);
 const draft=JSON.parse(call('gh',['release','view',tag,'--json','isDraft,assets']));

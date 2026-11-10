@@ -39,8 +39,11 @@ const releaseScope = Object.freeze({
 export const releaseScopeSha256 = crypto.createHash('sha256').update(JSON.stringify(releaseScope)).digest('hex');
 export const releaseScopeCounts = Object.freeze({declaredSlots:195,requiredSlots:187,notSupportedSlots:8});
 
-export function assertReleasePlatformContract(report, {version, sourceSha, waiveWindowsArtistGpuV286=false}) {
+export function assertReleasePlatformContract(report, {version, sourceSha, waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV287=false}) {
   assert.equal(typeof waiveWindowsArtistGpuV286,'boolean');
+  assert.equal(typeof waiveWindowsArtistGpuV287,'boolean');
+  if(waiveWindowsArtistGpuV287)assert.equal(version,'2.8.7','Windows Artist GPU v2.8.7 waiver applies only to v2.8.7');
+  const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV287;
   if(waiveWindowsArtistGpuV286)assert.equal(version,'2.8.6','Windows Artist GPU waiver applies only to v2.8.6');
   assert.ok(/^\d+\.\d+\.\d+$/.test(version),'Invalid release version');
   assert.ok(/^[a-f0-9]{40}$/i.test(sourceSha),'Invalid immutable source SHA');
@@ -51,8 +54,8 @@ export function assertReleasePlatformContract(report, {version, sourceSha, waive
   assert.equal(report.full195Certified,false,'Not-supported cells must never certify full195');
   assert.equal(report.full156Certified,false,'A scoped report must not claim obsolete full156 certification');
   assert.equal(report.releaseReady,false,'Feature scope alone cannot certify publication readiness');
-  assert.equal(report.releaseScopeCertified,!waiveWindowsArtistGpuV286,
-    waiveWindowsArtistGpuV286?'A waived GPU test is not full scoped certification':'All required scoped cells must be certified');
+  assert.equal(report.releaseScopeCertified,!waiveWindowsArtistGpu,
+    waiveWindowsArtistGpu?'A waived GPU test is not full scoped certification':'All required scoped cells must be certified');
   assert.equal(report.version,version,'Feature evidence version differs');
   assert.equal(report.sourceSha,sourceSha,'Feature evidence belongs to another source');
   assert.deepEqual([...report.platforms].sort(),[...releasePlatforms].sort(),
@@ -80,7 +83,7 @@ export function assertReleasePlatformContract(report, {version, sourceSha, waive
           assert.deepEqual(result[field],[],`Not-supported ${field} must be explicitly empty`);
         continue;
       }
-      if(waiveWindowsArtistGpuV286&&feature.id==='artist-iteration'&&platform==='windows'){
+      if(waiveWindowsArtistGpu&&feature.id==='artist-iteration'&&platform==='windows'){
         assert.equal(result.status,'pending','Windows Artist GPU exception may admit only the explicitly untested cell');
         for(const key of ['declaredScenarios','requiredScenarios','missingScenarios'])
           assert.deepEqual(result[key],[...artistIterationScenarios],key);
@@ -108,7 +111,7 @@ export function assertReleasePlatformContract(report, {version, sourceSha, waive
   assert.deepEqual([...seen].sort(),[...releaseFeatures].sort(),'Incomplete feature inventory');
   for(const [field,value] of Object.entries(releaseScopeCounts))
     assert.equal(report.summary?.[field],value,'Scoped summary differs: '+field);
-  const waived=waiveWindowsArtistGpuV286?1:0;
+  const waived=waiveWindowsArtistGpu?1:0;
   assert.equal(report.summary.verifiedSlots,releaseScopeCounts.requiredSlots-waived,'Required scoped feature coverage is incomplete');
   assert.equal(report.summary.partialSlots,0);assert.equal(report.summary.pendingSlots,waived);
   if(waived)assert.equal(report.summary.missingScenarioSlots,artistIterationScenarios.length);
@@ -133,9 +136,9 @@ export function assertV286CloudNativeRun(run,{sourceSha}){
   }
 }
 
-export function assertReleaseEvidenceFiles(report, evidenceRoot, {waiveWindowsArtistGpuV286=false}={}) {
+export function assertReleaseEvidenceFiles(report, evidenceRoot, {waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV287=false}={}) {
   // Validate the exact policy before an empty not-supported evidence array can be skipped.
-  assertReleasePlatformContract(report,{version:report?.version,sourceSha:report?.sourceSha,waiveWindowsArtistGpuV286});
+  assertReleasePlatformContract(report,{version:report?.version,sourceSha:report?.sourceSha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV287});
   const root=fs.realpathSync(evidenceRoot);
   for(const feature of report.features) for(const platform of releasePlatforms)
     for(const proof of feature.platforms[platform].evidence) {

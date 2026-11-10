@@ -32,6 +32,11 @@ on:
         type: boolean
         default: false
 
+      waive_windows_artist_gpu_v287:
+        description: v2.8.7 only; skip local Windows Artist GPU proof and require all other hosted checks
+        type: boolean
+        default: false
+
 # Needed for softprops/action-gh-release to create/attach to Releases on v* tags.
 permissions:
   contents: write
@@ -309,6 +314,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           FEATURE_RUN: ${{ inputs.feature_run }}
           WAIVE_WINDOWS_ARTIST_GPU_V286: ${{ inputs.waive_windows_artist_gpu_v286 }}
+          WAIVE_WINDOWS_ARTIST_GPU_V287: ${{ inputs.waive_windows_artist_gpu_v287 }}
           MOBILE_RUN: ${{ inputs.mobile_run }}
           BUILD_RUN: ${{ inputs.verified_build_run || github.run_id }}
         run: node scripts/publish-verified-release.mjs
