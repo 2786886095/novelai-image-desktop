@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'legacy_backup_preferences.dart';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
@@ -96,8 +98,18 @@ class UnifiedStorage {
     return active ?? await getApplicationDocumentsDirectory();
   }
 
+  static final _backupSnapshotZone = Object();
+  static LegacyBackupPreferences? get backupSnapshot =>
+      Zone.current[_backupSnapshotZone] as LegacyBackupPreferences?;
+
+  static Future<T> withBackupSnapshot<T>(LegacyBackupPreferences snapshot,
+      Future<T> Function() action) =>
+      runZoned(action, zoneValues: {_backupSnapshotZone: snapshot});
+
   static Future<UnifiedPreferences> preferences() async {
     await initialize();
+    final snapshot = backupSnapshot;
+    if (snapshot != null) return UnifiedPreferences._forBackup(snapshot);
     return UnifiedPreferences(await SharedPreferences.getInstance());
   }
 
@@ -357,8 +369,17 @@ class UnifiedStorage {
 }
 
 class UnifiedPreferences {
-  final SharedPreferences private;
-  UnifiedPreferences(this.private);
+  final SharedPreferences? _private;
+  final LegacyBackupPreferences? _snapshot;
+  UnifiedPreferences(this._private) : _snapshot = null;
+  UnifiedPreferences._forBackup(this._snapshot) : _private = null;
+  SharedPreferences get private => _private ??
+      (throw StateError('Backup preference snapshots are read-only.'));
+
+  Object? get(String key) =>
+      _snapshot == null ? private.get(key) : _snapshot.get(key);
+  Set<String> getKeys() =>
+      _snapshot == null ? private.getKeys() : _snapshot.getKeys();
   File? _file(String key) => UnifiedStorage.active == null ||
           !UnifiedStorage.dataKeys.containsKey(key)
       ? null
@@ -377,7 +398,7 @@ class UnifiedPreferences {
       }
       return null;
     }
-    final raw = private.getString(key);
+    final raw = get(key) as String?;
     if (key != 'app_settings' || UnifiedStorage.active == null) return raw;
     final presets = File(
         p.join(UnifiedStorage.active!.path, 'presets/prompt-presets.json'));
@@ -391,6 +412,7 @@ class UnifiedPreferences {
   }
 
   Future<bool> setString(String key, String value) async {
+    if (_snapshot != null) throw StateError('Backup preference snapshots are read-only.');
     if (UnifiedStorage.migrating) throw StateError('数据迁移期间暂停写入');
     final file = _file(key);
     if (file != null) {
@@ -441,10 +463,10 @@ class UnifiedPreferences {
     await temp.rename(file.path);
   }
 
-  List<String>? getStringList(String key) => private.getStringList(key);
+  List<String>? getStringList(String key) => get(key) as List<String>?;
   Future<bool> setStringList(String key, List<String> value) =>
       private.setStringList(key, value);
-  bool? getBool(String key) => private.getBool(key);
+  bool? getBool(String key) => get(key) as bool?;
   Future<bool> setBool(String key, bool value) => private.setBool(key, value);
   Future<bool> remove(String key) => private.remove(key);
 }

@@ -1,5 +1,6 @@
 import 'backup_snapshot.dart';
 import 'android_backup_rescue.dart';
+import 'legacy_backup_preferences.dart';
 import 'segmented_preference_archive.dart';
 import 'package:flutter/services.dart' show MissingPluginException;
 import '../images/image_file_access.dart';
@@ -624,6 +625,26 @@ class DataBackupService {
     String prefix = 'manual',
     bool internal = false,
   }) async {
+    if (Platform.isAndroid && lowMemory && !internal &&
+        UnifiedStorage.backupSnapshot == null) {
+      try {
+        await SharedPreferences.getInstance();
+      } catch (error) {
+        if (!isBackupMemoryFailure(error)) rethrow;
+        return LegacyBackupPreferences.withNativeSnapshot((snapshot) =>
+            UnifiedStorage.withBackupSnapshot(snapshot, () =>
+                _createBackup(requested, includeAssets: includeAssets,
+                    lowMemory: true, prefix: prefix, internal: false)));
+      }
+    }
+    return _createBackup(requested, includeAssets: includeAssets,
+        lowMemory: lowMemory, prefix: prefix, internal: internal);
+  }
+
+  Future<File> _createBackup(Set<DataBackupCategory> requested, {
+    required bool includeAssets, required bool lowMemory,
+    required String prefix, required bool internal,
+  }) async {
     final selected = DataBackupCategory.values
         .where(requested.contains)
         .toList(growable: false);
@@ -635,8 +656,11 @@ class DataBackupService {
     try {
     final summaries = <DataBackupCategorySummary>[];
     final assets = <String, Map<String, dynamic>>{};
-    final settings = await storage.getSettings();
-    final settingsJson = settings.toJson();
+    final needsSettings = UnifiedStorage.backupSnapshot == null || internal ||
+        requested.any({DataBackupCategory.configuration, DataBackupCategory.apiCredentials,
+          DataBackupCategory.promptPresets}.contains);
+    final settings = needsSettings ? await storage.getSettings() : null;
+    final settingsJson = settings?.toJson() ?? <String, dynamic>{};
 
     if (requested.contains(DataBackupCategory.configuration)) {
       final configuration = Map<String, dynamic>.from(settingsJson)
@@ -747,7 +771,7 @@ class DataBackupService {
     }
 
     if (requested.contains(DataBackupCategory.artistLibrary)) {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await UnifiedStorage.preferences();
       final collections = <String, List<Map<String, dynamic>>>{};
       var total = 0;
       var assetBytes = 0;
@@ -815,7 +839,7 @@ class DataBackupService {
       final styles = <Map<String, dynamic>>[];
       final positivePrompts = <Map<String, dynamic>>[];
       var assetBytes = 0;
-      for (final preset in settings.stylePromptPresets) {
+      for (final preset in settings!.stylePromptPresets) {
         final json = Map<String, dynamic>.from(preset.toJson());
         final previews = <Map<String, dynamic>>[];
         for (final preview in preset.previewImages) {
@@ -911,13 +935,19 @@ class DataBackupService {
     }
 
     if (requested.contains(DataBackupCategory.workspaceData)) {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await UnifiedStorage.preferences();
+      final snapshot = UnifiedStorage.backupSnapshot;
+      var readBytes = 0;
       final mobileState = <String, dynamic>{};
       final portableRenderer = <String, String>{};
       for (final key in prefs.getKeys()) {
         if (_canonicalPreferenceKeys.contains(key) ||
             _artistPreferenceKeys.values.contains(key)) {
           continue;
+        }
+        if (snapshot != null &&
+            (readBytes += snapshot.byteCost(key)) > LegacyBackupPreferences.maxValueBytes) {
+          throw const LegacyBackupValueUnavailable('workspace');
         }
         final value = prefs.get(key);
         if (value is String ||

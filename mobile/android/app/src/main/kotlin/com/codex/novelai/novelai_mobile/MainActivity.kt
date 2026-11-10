@@ -226,6 +226,38 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 // Raw, read-only rescue must not instantiate SharedPreferences.
                 "legacyPreferencesDirectory" -> result.success(File(applicationInfo.dataDir, "shared_prefs").path)
+                "prepareBackupPreferenceSnapshot" -> {
+                    // Private temporary files; no Android SharedPreferences instance.
+                    val stage = File(cacheDir, "backup-prefs-" + UUID.randomUUID())
+                    Thread {
+                        try {
+                            check(stage.mkdir())
+                            BackupPreferenceSnapshot.write(File(applicationInfo.dataDir, "shared_prefs"), stage)
+                            runOnUiThread { result.success(stage.path) }
+                        } catch (_: Exception) {
+                            stage.deleteRecursively()
+                            runOnUiThread { result.error("backup_snapshot_failed", "Unable to read legacy backup data safely.", null) }
+                        } catch (_: OutOfMemoryError) {
+                            stage.deleteRecursively()
+                            runOnUiThread { result.error("backup_snapshot_memory", "Legacy backup snapshot exceeded available memory.", null) }
+                        }
+                    }.start()
+                }
+                "discardBackupPreferenceSnapshot" -> {
+                    val name = call.arguments as? String
+                    if (name == null || !name.matches(Regex("backup-prefs-[a-f0-9-]{36}"))) {
+                        result.error("invalid_backup_snapshot", "Invalid temporary backup reference.", null)
+                    } else {
+                        Thread {
+                            val stage = File(cacheDir, name)
+                            val removed = runCatching {
+                                !stage.exists() || (stage.canonicalFile.parentFile == cacheDir.canonicalFile &&
+                                    stage.canonicalFile.name == name && stage.deleteRecursively())
+                            }.getOrDefault(false)
+                            runOnUiThread { result.success(removed) }
+                        }.start()
+                    }
+                }
                 "saveRescueDocument" -> {
                     try {
                         check(pendingRescue == null && !rescueSaving)

@@ -452,7 +452,7 @@ class Storage {
     try {
       return AppSettings.fromJson(jsonDecode(raw) as Map<String, dynamic>);
     } catch (_) {
-      if (UnifiedStorage.active != null) rethrow;
+      if (UnifiedStorage.active != null || UnifiedStorage.backupSnapshot != null) rethrow;
       return AppSettings();
     }
   }
@@ -494,7 +494,7 @@ class Storage {
         Map<String, dynamic>.from(jsonDecode(raw) as Map),
       );
     } catch (_) {
-      if (UnifiedStorage.active != null) rethrow;
+      if (UnifiedStorage.active != null || UnifiedStorage.backupSnapshot != null) rethrow;
       return AgentWorkspace();
     }
   }
@@ -693,6 +693,7 @@ class Storage {
     try {
       final library = ReferencePresetLibrary.fromJson(
           jsonDecode(raw) as Map<String, dynamic>);
+      if (UnifiedStorage.backupSnapshot != null) return library;
       final valid = library.presets
           .where((preset) => ImageFiles.keepVisible(preset.filePath))
           .toList();
@@ -704,6 +705,7 @@ class Storage {
       }
       return library;
     } catch (_) {
+      if (UnifiedStorage.backupSnapshot != null) rethrow;
       return const ReferencePresetLibrary();
     }
   }
@@ -887,7 +889,8 @@ class Storage {
       repaired.negativePrompt =
           retained.negativePrompt ?? repaired.negativePrompt;
     }
-    if (raw == null || jsonEncode(decoded) != jsonEncode(repaired.toJson())) {
+    if (UnifiedStorage.backupSnapshot == null &&
+        (raw == null || jsonEncode(decoded) != jsonEncode(repaired.toJson()))) {
       await setParams(repaired);
     }
     return repaired;
@@ -1048,6 +1051,12 @@ class Storage {
       _saveVerifiedString('batch_run_v1', jsonEncode(run), '批量任务记录保存失败');
 
   Future<List<HistoryItem>> getHistory() async {
+    if (UnifiedStorage.backupSnapshot != null) {
+      final raw = (await _prefs).getString(_kHistory);
+      if (raw == null) return [];
+      final rows = await compute(_decodeJsonList, raw);
+      return rows.map((e) => HistoryItem.fromJson(e as Map<String, dynamic>)).toList();
+    }
     while (true) {
       final readRevision = _historyRevision;
       if (_cacheRevision != readRevision) _historyCache = null;
@@ -1114,6 +1123,12 @@ class Storage {
     List<TextToolHistoryItem>? Function() readCache,
     void Function(List<TextToolHistoryItem>) writeCache,
   ) async {
+    if (UnifiedStorage.backupSnapshot != null) {
+      final raw = (await _prefs).getString(key);
+      if (raw == null) return [];
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list.map((e) => TextToolHistoryItem.fromJson(e as Map<String, dynamic>)).toList();
+    }
     final cached = readCache();
     if (cached != null) return List.of(cached);
     final raw = (await _prefs).getString(key);

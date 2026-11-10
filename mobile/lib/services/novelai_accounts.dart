@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/nai_models.dart';
 import 'storage.dart';
+import 'unified_storage.dart';
 import 'novelai_account_api.dart';
 
 /// Version 1 mirrors src/nai-accounts.ts. Secrets never enter profile JSON.
@@ -577,6 +578,13 @@ class NovelAiAccountStorage extends Storage {
       legacyToken: super.getToken, legacySettings: super.getSettings);
   @override
   Future<Map<String, dynamic>?> exportNovelAiAccountsBackup() async {
+    if (UnifiedStorage.backupSnapshot != null) {
+      // Do not migrate a legacy credential into the real secure vault from a
+      // read-only backup. Use a detached vault with an in-memory write sink.
+      final isolated = NovelAiAccounts(read: accounts.read, write: (_) async {});
+      await isolated.load(legacyToken: super.getToken, legacySettings: super.getSettings);
+      return isolated.exportBackup();
+    }
     await ready();
     return accounts.exportBackup();
   }
@@ -595,6 +603,7 @@ class NovelAiAccountStorage extends Storage {
 
   @override
   Future<String?> getToken() async {
+    if (UnifiedStorage.backupSnapshot != null) return super.getToken();
     await ready();
     return accounts.operationToken;
   }

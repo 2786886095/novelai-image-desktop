@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 
 import '../i18n/app_locales.dart';
 import '../services/android_backup_rescue.dart';
+import '../services/legacy_backup_preferences.dart';
 import '../services/data_backup_service.dart';
 import '../services/storage_permission.dart';
 import '../state/app_state.dart';
@@ -607,6 +608,8 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
         },
         onSegmentFailure: (error) async {
           if (!mounted) return;
+          if (error is LegacyBackupValueUnavailable ||
+              error is LegacyBackupSnapshotUnavailable) throw error;
           if (includeAssets && await _confirm(
               _segmentText('分段备份未完成', '分段備份未完成', 'Segmented backup did not finish'),
               _segmentText('可重试仅导出所选类别的数据。原图、参考图和关联文件不会导出；手机里的原文件不会被删除。',
@@ -625,7 +628,27 @@ class _DataBackupSettingsPanelState extends State<DataBackupSettingsPanel>
       if (mounted && refreshStatus) await _refreshStatus();
     } catch (error) {
       if (!mounted) return;
-      if (isBackupMemoryFailure(error) && Platform.isAndroid) {
+      if (error is LegacyBackupValueUnavailable) {
+        final key = switch (error.scope) {
+          'history' => 'imageHistory',
+          'text' => 'textHistory',
+          'references' => 'referencePresets',
+          'agent' => 'agentWorkspace',
+          'artists' => 'artistLibrary',
+          'settings' => 'configuration',
+          _ => 'workspaceData',
+        };
+        final label = text[key] ?? key;
+        _message(_segmentText('「$label」中的旧数据过大或格式过旧。未丢弃任何数据；可取消相关类别后再试。',
+            '「$label」中的舊資料過大或格式過舊。未丟棄任何資料；可取消相關類別後再試。',
+            'Legacy data in “$label” is too large or unsupported. Nothing was discarded; deselect the affected categories to retry.'));
+        await _segmentedExport(text);
+      } else if (error is LegacyBackupSnapshotUnavailable) {
+        _message(_segmentText('无法安全读取旧版数据。不会创建缺项备份；可保全旧偏好文件，请勿清除应用数据。',
+            '無法安全讀取舊版資料。不會建立缺項備份；可保全舊偏好檔，請勿清除應用程式資料。',
+            'Legacy data could not be read safely. An incomplete backup was not created. Keep the preferences rescue file and do not clear app data.'));
+        await _segmentedExport(text);
+      } else if (isBackupMemoryFailure(error) && Platform.isAndroid) {
         _message(_segmentText('读取本机数据仍然内存不足，未导出完整备份。请勿清除应用数据。',
             '讀取本機資料仍然記憶體不足，未匯出完整備份。請勿清除應用程式資料。',
             'Local data could not be read with the available memory. No full backup was exported. Do not clear app data.'));
