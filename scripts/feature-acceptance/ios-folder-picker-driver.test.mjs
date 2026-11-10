@@ -166,12 +166,22 @@ test('captured iOS 26.2 Files folder title is a direct menu button, not a back l
  const browse=structuredClone(opened);browse.bars[0].directStaticTexts.push({exists:true,label:'Browse',frame:[100,90,100,21]});
  assert.equal(titleContract(source,browse,name),'Browse');
 });
-test('nonce entry and picker dismissal use the same title policy; a Browse transition is not successful dismissal',()=>{
+test('exact nonce title is required before Open; dismissal uses fresh system-presence counts without resolving a retiring element',()=>{
  const s=swiftSource();assert(s.includes('while try currentNavigationTitle(app, expectedFolder: folder) != folder'));
- assert(s.includes('while try currentNavigationTitle(app, expectedFolder: folder) != nil ||'));
- assert(s.includes('find(app, cancelLabels) != nil || find(app, openLabels) != nil'));
  assert.equal(titleContract(s,shape(request.requiredFolderName)),request.requiredFolderName);
- assert.notEqual(titleContract(s,shape('Browse')),null,'still-open Browse cannot masquerade as dismissal');
+ assert.notEqual(titleContract(s,shape('Browse')),null,'still-open Browse cannot masquerade as the nonce title');
+ const closing=s.split('let closeDeadline =')[1].split('let result:')[0];
+ assert.match(closing,/Date\(\)\.addingTimeInterval\(10\)/);
+ assert.match(closing,/"FullDocumentManagerViewControllerNavigationBar"/);
+ assert.match(closing,/label IN %@ OR identifier IN %@", cancelLabels \+ openLabels, cancelLabels \+ openLabels/);
+ assert.match(closing,/pickerBar\.count == 0 && pickerControls\.count == 0 \? absentSamples \+ 1 : 0/);
+ assert.match(closing,/while absentSamples < 2/);
+ assert.equal((closing.match(/guard Date\(\) < closeDeadline/g)||[]).length,2);
+ assert.doesNotMatch(closing,/\.frame\b|currentNavigationTitle|element\(boundBy:|allElementsBoundByIndex/);
+ let absentCount=0;
+ const samples=[[0,0],[1,0],[0,1],[0,0],[0,0]];
+ assert.deepEqual(samples.map(([bar,control])=>{absentCount=bar===0&&control===0?absentCount+1:0;return absentCount===2;}),[false,false,false,false,true]);
+ assert.match(s,/if !pickerDismissed \{ capture\("final-picker-state"\); captureCurrentTitleObservation\(app\) \}/);
  const absent=shape();absent.bars=[];assert.equal(titleContract(s,absent),null);
 });
 test('real provider taps capture a separate frame and bounded title waits preserve original deadlines and no-grant boundary',()=>{
@@ -294,7 +304,7 @@ test('bounded title hit/frame observation is deferred and acceptance-independent
   '"isHittable": title.isHittable','"frame": rect(title.frame)','"observationOnly": true','"acceptanceDependent": false',
   '"final-current-title-observation-only"'])assert(body.includes(token),token);
  assert(!/Thread.sleep|waitFor|while |\.tap\(|currentNavigationTitle|throw fail/.test(body));
- assert(s.includes('defer { capture("final-picker-state"); captureCurrentTitleObservation(app) }'));
+ assert(s.includes('if !pickerDismissed { capture("final-picker-state"); captureCurrentTitleObservation(app) }'));
  assert(body.includes('Only an observation encoding failure'));assert(s.includes('Usable naming editor witness arrived after original5s appearance deadline'));
  assert.equal((s.match(/let namingDeadline =/g)||[]).length,1);assert.equal((s.match(/Date\(\)\.addingTimeInterval\(10\)/g)||[]).length,2);
 });

@@ -515,7 +515,10 @@ final class FolderPickerUITests: XCTestCase {
     }
     let app = XCUIApplication(bundleIdentifier: bundle)
     target = app
-    defer { capture("final-picker-state"); captureCurrentTitleObservation(app) }
+    var pickerDismissed = false
+    defer {
+      if !pickerDismissed { capture("final-picker-state"); captureCurrentTitleObservation(app) }
+    }
     guard app.state == .runningForeground || app.state == .runningBackground else {
       throw fail("The current Flutter process must already be running")
     }
@@ -673,11 +676,22 @@ final class FolderPickerUITests: XCTestCase {
     }
     try tap(confirm, "confirm-system-directory-selection")
     let closeDeadline = Date().addingTimeInterval(10)
-    while try currentNavigationTitle(app, expectedFolder: folder) != nil ||
-          find(app, cancelLabels) != nil || find(app, openLabels) != nil {
-      if Date() >= closeDeadline { throw fail("System picker did not dismiss after selection") }
-        try await suspendPickerPoll(0.15)
+    // Open tears down a remote Files controller. Re-reading the frame of a
+    // previously enumerated bar can raise kAXErrorInvalidUIElement while the
+    // controller dismisses. Count fresh system selectors, never resolve a
+    // retiring element's geometry. Exact title was proved before tapping Open.
+    let pickerBar = app.navigationBars.matching(NSPredicate(format:
+      "identifier == %@", "FullDocumentManagerViewControllerNavigationBar"))
+    let pickerControls = app.buttons.matching(NSPredicate(format:
+      "label IN %@ OR identifier IN %@", cancelLabels + openLabels, cancelLabels + openLabels))
+    var absentSamples = 0
+    while absentSamples < 2 {
+      guard Date() < closeDeadline else { throw fail("System picker did not dismiss after selection") }
+      absentSamples = pickerBar.count == 0 && pickerControls.count == 0 ? absentSamples + 1 : 0
+      guard Date() < closeDeadline else { throw fail("System picker did not dismiss after selection") }
+      if absentSamples < 2 { try await suspendPickerPoll(0.15) }
     }
+    pickerDismissed = true
     let result: [String: Any] = [
       "sourceSha": source, "profileSha": profile,
       "nativePid": Int(nativePID)!, "nonce": nonce,
