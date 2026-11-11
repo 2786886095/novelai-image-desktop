@@ -37,6 +37,7 @@ it("creates and moves groups, previews exact metadata rules, and finds character
   fixture.dir = fs.mkdtempSync(path.join(os.tmpdir(), "studio-mcp-history-"));
   const { startMcpServer } = await import("./mcp-server");
   const db = await import("./store");
+  const { galleryMcpForWindow } = await import("./mcp-history-gallery-runtime");
   const { DEFAULT_PARAMS } = await import("../../src/types");
   const seed = db.readStore();
   const testCases: [string, string?, number?][] = [
@@ -58,9 +59,10 @@ it("creates and moves groups, previews exact metadata rules, and finds character
   }) });
   const notices: unknown[] = [];
   const token = "fixture-only-local-auth";
-  const handle = await startMcpServer({ port: 0, token, window: () => ({
+  const window = () => ({
     isDestroyed: () => false, isVisible: () => true, webContents: { send: (...a: unknown[]) => notices.push(a) },
-  } as unknown as import("electron").BrowserWindow) });
+  } as unknown as import("electron").BrowserWindow);
+  const handle = await startMcpServer({ port: 0, token, window, galleryTools: galleryMcpForWindow(window) });
   async function rpc(method: string, params: unknown) {
     const response = await fetch("http://127.0.0.1:" + handle.port + "/mcp", {
       method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },

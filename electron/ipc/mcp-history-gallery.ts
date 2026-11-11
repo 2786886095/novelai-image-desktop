@@ -275,3 +275,5 @@ export function createGalleryMcpTools(deps: Dependencies) {
   ];
   return tools;
 }
+
+export type GalleryMcpTool = ReturnType<typeof createGalleryMcpTools>[number];

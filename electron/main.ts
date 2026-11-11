@@ -7,6 +7,7 @@ import { fetchOfficialMetadataAsset, cancelOfficialMetadataAssetDownloads } from
 import {registerArtistLookupIpc} from "./ipc/artist-lookup";
 import crypto from "node:crypto";
 import {startMcpServer, type McpServerHandle} from "./ipc/mcp-server";
+import { galleryMcpForWindow } from "./ipc/mcp-history-gallery-runtime";
 import {readAgentClipboardFiles} from './ipc/agent-clipboard';
 import { registerNaiAccountsIpc, ensureNaiAccountsLoaded, importRelayAccount } from './ipc/nai-accounts';
 import {createRelayLinkInbox,relayCodeJournal,wireRelayLinkEvents} from './relay-link-inbox';
@@ -1751,7 +1752,7 @@ function syncMcpServer() {
       if (settings.credentialIssues?.includes("mcpServerToken")) throw new Error("MCP token is locked; recover local credential encryption or explicitly regenerate the token.");
       let token = settings.mcpServerToken ?? "";
       if (!token) { token = crypto.randomBytes(24).toString("hex"); setSetting("mcpServerToken", token); }
-      mcpServer = await startMcpServer({ port, token, window: () => mainWindow });
+      mcpServer = await startMcpServer({ port, token, window: () => mainWindow, galleryTools: galleryMcpForWindow(() => mainWindow) });
       mcpStatus = { running: true, port: mcpServer.port, url: `http://127.0.0.1:${mcpServer.port}/mcp`, error: "" };
     } catch (error) {
       mcpStatus = { running: false, port, url: "", error: error instanceof Error ? error.message : String(error) };
