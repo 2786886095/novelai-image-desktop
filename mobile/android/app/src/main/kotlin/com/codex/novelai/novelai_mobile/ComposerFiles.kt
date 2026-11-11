@@ -17,12 +17,15 @@ import java.util.UUID
 class ComposerFiles(private val activity: FlutterActivity, messenger: BinaryMessenger) {
     private val channel=MethodChannel(messenger,"langbai.novelai/composer_files")
     private var region: RectF?=null
-    private val allowed=setOf("png","jpg","jpeg","webp","gif","bmp","avif","pdf","txt","md","json","jsonl","csv","tsv","yaml","yml")
+    private val imageExtensions=setOf("png","jpg","jpeg","webp","gif","bmp","avif")
+    private val allowed=imageExtensions+setOf("pdf","txt","md","json","jsonl","csv","tsv","yaml","yml")
+    private val extensionsByMime=mapOf("image/png" to "png","image/jpeg" to "jpg",
+        "image/webp" to "webp","image/gif" to "gif","image/bmp" to "bmp","image/avif" to "avif")
     init {
         channel.setMethodCallHandler { call,result ->
             when(call.method) {
                 "region" -> {val m=call.arguments as? Map<*,*>;region=if(m==null)null else RectF((m["x"] as Number).toFloat(),(m["y"] as Number).toFloat(),((m["x"] as Number).toFloat()+(m["width"] as Number).toFloat()),((m["y"] as Number).toFloat()+(m["height"] as Number).toFloat()));result.success(null)}
-                "paste" -> {val clipboard=activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager;copy(clipboard.primaryClip){paths->result.success(paths)}}
+                "paste" -> {val clipboard=activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager;copy(clipboard.primaryClip, call.argument<Boolean>("imagesOnly")==true){paths->result.success(paths)}}
                 "copyImage" -> {
                     try {
                         val bytes = call.argument<ByteArray>("bytes")
@@ -64,7 +67,7 @@ class ComposerFiles(private val activity: FlutterActivity, messenger: BinaryMess
             }
         }}
     }
-    private fun copy(clip: ClipData?,done:(List<String>)->Unit) {
+    private fun copy(clip: ClipData?,imagesOnly:Boolean=false,done:(List<String>)->Unit) {
         Thread {
             val paths=mutableListOf<String>();var total=0L
             val directory=File(activity.cacheDir,"composer-inputs").apply {mkdirs()}
@@ -73,9 +76,17 @@ class ComposerFiles(private val activity: FlutterActivity, messenger: BinaryMess
                 if(uri.scheme!="content" && uri.scheme!="file")continue
                 var target:File?=null
                 try {
-                    var name="clipboard.png"
-                    activity.contentResolver.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use {cursor->if(cursor.moveToFirst())name=cursor.getString(0)?:name}
-                    val extension=name.substringAfterLast('.',"").lowercase();if(extension !in allowed)continue
+                    val resolver=activity.contentResolver
+                    val name=runCatching { resolver.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)
+                        ?.use { cursor -> if(cursor.moveToFirst()) cursor.getString(0) else null } }.getOrNull()
+                    val namedExtension=name?.substringAfterLast('.',"")?.lowercase().orEmpty()
+                    val mime=runCatching { resolver.getType(uri) }.getOrNull()?.lowercase()
+                    val typed=extensionsByMime[mime]
+                        ?: if(clip.itemCount==1) extensionsByMime.entries.firstOrNull {
+                            (0 until clip.description.mimeTypeCount).any { index -> clip.description.getMimeType(index) == it.key }
+                        }?.value else null
+                    val extension=if(namedExtension in allowed) namedExtension else typed.orEmpty()
+                    if(extension !in (if(imagesOnly) imageExtensions else allowed))continue
                     val destination=File(directory,"${UUID.randomUUID()}.$extension");target=destination
                     var size=0L
                     activity.contentResolver.openInputStream(uri)?.use {input->destination.outputStream().use {output->val buffer=ByteArray(65536);while(true){val n=input.read(buffer);if(n<0)break;size+=n;if(size>48L*1024*1024 || total+size>192L*1024*1024)throw IllegalArgumentException("Attachment too large");output.write(buffer,0,n)}}}

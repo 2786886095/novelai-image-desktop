@@ -62,9 +62,9 @@ export function collectReceiptFiles(evidenceRoot,outputRoot){
  walk(root);return rows;
 }
 
-export function writeFullFeatureMatrix({evidenceRoot,outputRoot,sourceSha,version,requireFull=false,requireReleaseScope=false,waiveWindowsArtistGpuV286=false,waiveWindowsArtistGpuV289=false}){
+export function writeFullFeatureMatrix({evidenceRoot,outputRoot,sourceSha,version,requireFull=false,requireReleaseScope=false,waiveWindowsArtistGpuV286=false,waiveWindowsArtistGpuV290=false}){
  fs.mkdirSync(outputRoot,{recursive:true});const receipts=collectReceiptFiles(evidenceRoot,outputRoot),report=buildFullFeatureMatrix({sourceSha,version,receipts});
- if(report.releaseScopeCertified&&!waiveWindowsArtistGpuV286&&!waiveWindowsArtistGpuV289){assertReleasePlatformContract(report,{sourceSha,version});assertReleaseEvidenceFiles(report,outputRoot);}
+ if(report.releaseScopeCertified&&!waiveWindowsArtistGpuV286&&!waiveWindowsArtistGpuV290){assertReleasePlatformContract(report,{sourceSha,version});assertReleaseEvidenceFiles(report,outputRoot);}
  fs.writeFileSync(path.join(outputRoot,'FULL_FEATURE_MATRIX.json'),JSON.stringify(report,null,2)+'\n');
  const lines=['# Five-platform release acceptance matrix','',`Source: ${sourceSha}; version: ${version}; verified required cells: ${report.summary.verifiedSlots}/${releaseScopeCounts.requiredSlots}; declared: ${releaseScopeCounts.declaredSlots}; not-supported: ${releaseScopeCounts.notSupportedSlots} (not passes).`, 'iOS native functional evidence is required independently of the unsigned package provenance. Eight Windows-only capability cells remain not-supported, not passes.', '', '| Feature | Windows | macOS | Linux | Android | iOS |','|---|---|---|---|---|---|'];
  for(const f of report.features)lines.push('| '+f.id+' | '+releasePlatforms.map(p=>`${f.platforms[p].status} ${f.platforms[p].completedScenarios.length}/${f.platforms[p].requiredScenarios.length}`).join(' | ')+' |');
@@ -76,15 +76,15 @@ export function writeFullFeatureMatrix({evidenceRoot,outputRoot,sourceSha,versio
  if(!fs.readFileSync(publisherFile).equals(reopened))throw Error('Publisher evidence alias bytes differ');
  console.log(JSON.stringify({file:path.join(outputRoot,'FULL_FEATURE_MATRIX.json'),publisherFile,bytes:reopened.length,sha256:sha(reopened),...report.summary,full195Certified:report.full195Certified,full156Certified:report.full156Certified,releaseScopeCertified:report.releaseScopeCertified,releaseReady:report.releaseReady}));
  // Keep the exact pending report on disk even if the scoped gate rejects it.
- if(waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV289){
-  assertReleasePlatformContract(report,{sourceSha,version,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV289});
-  assertReleaseEvidenceFiles(report,outputRoot,{waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV289});
+ if(waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV290){
+  assertReleasePlatformContract(report,{sourceSha,version,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV290});
+  assertReleaseEvidenceFiles(report,outputRoot,{waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV290});
   console.log('VERSION_BOUND_CLOUD_SCOPE_VERIFIED: 186 required cells passed; Windows Artist GPU not tested');
  }
  return{report,exitStatus:(requireFull&&!report.full195Certified)||(requireReleaseScope&&!report.releaseScopeCertified)?1:0};
 }
 if(process.argv[1]&&pathToFileURL(path.resolve(process.argv[1])).href===import.meta.url){
- const[evidenceRoot,outputRoot,sourceSha,version,...flags]=process.argv.slice(2);if(!evidenceRoot||!outputRoot||!sourceSha||!/^\d+\.\d+\.\d+$/.test(version??''))throw Error('usage: build-full-feature-matrix.mjs EVIDENCE_ROOT OUTPUT_ROOT SOURCE_SHA VERSION [--require-full | --require-release-scope | --require-cloud-scope-v286 | --require-cloud-scope-v289]');
- if(flags.some(flag=>!['--require-full','--require-release-scope','--require-cloud-scope-v286','--require-cloud-scope-v289'].includes(flag))||flags.length>1)throw Error('Unknown or conflicting acceptance flag');
- process.exitCode=writeFullFeatureMatrix({evidenceRoot,outputRoot,sourceSha,version,requireFull:flags.includes('--require-full'),requireReleaseScope:flags.includes('--require-release-scope'),waiveWindowsArtistGpuV286:flags.includes('--require-cloud-scope-v286'),waiveWindowsArtistGpuV289:flags.includes('--require-cloud-scope-v289')}).exitStatus;
+ const[evidenceRoot,outputRoot,sourceSha,version,...flags]=process.argv.slice(2);if(!evidenceRoot||!outputRoot||!sourceSha||!/^\d+\.\d+\.\d+$/.test(version??''))throw Error('usage: build-full-feature-matrix.mjs EVIDENCE_ROOT OUTPUT_ROOT SOURCE_SHA VERSION [--require-full | --require-release-scope | --require-cloud-scope-v286 | --require-cloud-scope-v290]');
+ if(flags.some(flag=>!['--require-full','--require-release-scope','--require-cloud-scope-v286','--require-cloud-scope-v290'].includes(flag))||flags.length>1)throw Error('Unknown or conflicting acceptance flag');
+ process.exitCode=writeFullFeatureMatrix({evidenceRoot,outputRoot,sourceSha,version,requireFull:flags.includes('--require-full'),requireReleaseScope:flags.includes('--require-release-scope'),waiveWindowsArtistGpuV286:flags.includes('--require-cloud-scope-v286'),waiveWindowsArtistGpuV290:flags.includes('--require-cloud-scope-v290')}).exitStatus;
 }

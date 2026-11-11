@@ -27,8 +27,8 @@ Uint8List _originalPng() {
   final length=ByteData(4)..setUint32(0,body.length),sum=ByteData(4)..setUint32(0,(crc^0xffffffff)&0xffffffff);
   return Uint8List.fromList([...bytes.take(33),...length.buffer.asUint8List(),...typed,...sum.buffer.asUint8List(),...bytes.skip(33)]);
 }
-Future<Uint8List> _pastePng() async {
-  final paths=await ComposerTransfers.paste();
+Future<Uint8List> _pastePng({bool imagesOnly = false}) async {
+  final paths=await ComposerTransfers.paste(imagesOnly:imagesOnly);
   require(paths.length==1,'Native image paste did not return exactly one real file');
   final file=File(paths.single);
   require(await file.exists(),'Native pasted file is missing');
@@ -57,10 +57,12 @@ Future<void> runNativeOsScenarios(NativeScenarios suite) async {
     const text='acceptance 日本語 🧪 line1\nline2 e\u0301';
     await Clipboard.setData(const ClipboardData(text:text));
     require((await Clipboard.getData(Clipboard.kTextPlain))?.text==text,'Real native Unicode clipboard roundtrip failed');
+    require((await ComposerTransfers.paste(imagesOnly:true)).isEmpty,'Image-only Agent paste imported ordinary text');
     suite.check('clipboard','native-unicode-text',{'unicodeNewlineCombiningEmojiPreserved':true,'nativeMethodChannel':true,'textSha256':digest(utf8.encode(text))});
 
     require(await ImageClipboard.copy(file.path,withOriginalMetadata:true),'Native original-metadata image copy failed');
     final pasted=await _pastePng();require(digest(pasted)==digest(original),'Native image copy/paste altered original PNG bytes');
+    require(digest(await _pastePng(imagesOnly:true))==digest(original),'Image-only Agent paste did not preserve native PNG bytes');
     require(parseImageTextMetadata(pasted)['Comment']?.contains('4294967290')==true,'Native original metadata was not preserved');
     require(await ImageClipboard.copy(file.path,withOriginalMetadata:false),'Native privacy image copy failed');
     final stripped=await _pastePng(),decoded=image.decodePng(stripped)!;

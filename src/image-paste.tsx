@@ -45,6 +45,22 @@ export function imageFiles(transfer: DataTransfer | null): File[] {
   }
   return files.filter(file => file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|avif)$/i.test(file.name));
 }
+/** A chat paste is consumed by its composer, not by a previously focused image picker. */
+export function agentOwnsPaste(target: EventTarget | null): boolean {
+  return target instanceof Element && !!target.closest('[data-agent-composer-paste]');
+}
+export function agentComposerClipboard(transfer: DataTransfer | null) {
+  if (transfer?.getData('text/plain')) return { kind: 'text' } as const;
+  const files = Array.from(transfer?.files ?? []);
+  if (!files.length) for (const item of Array.from(transfer?.items ?? [])) {
+    if (item.kind === 'file') {
+      const file = item.getAsFile();
+      if (file) files.push(file);
+    }
+  }
+  return files.length ? { kind: 'files', files } as const : { kind: 'native' } as const;
+}
+
 export function targetAvailable(target: Target | null): target is Target {
   if (!target || !target.element.isConnected || !target.element.getClientRects().length || target.element.closest('[hidden],[aria-hidden="true"]')) return false;
   if (target.input?.disabled || target.element.matches(':disabled,[aria-disabled="true"]')) return false;
@@ -129,7 +145,7 @@ export function installImagePasteRouter() {
   const paste = (event: ClipboardEvent) => {
     if (synthetic.has(event)) return;
     lastPaste++;
-    if (prefersTextPaste(event.target, event.clipboardData)) return;
+    if (agentOwnsPaste(event.target) || prefersTextPaste(event.target, event.clipboardData)) return;
     const files = imageFiles(event.clipboardData);
     if (files.length) { event.preventDefault(); event.stopImmediatePropagation(); void apply(files,selected,revision); }
     else if (!event.clipboardData?.getData('text/plain')) void nativePaste(selected,revision);

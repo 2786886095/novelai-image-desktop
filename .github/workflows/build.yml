@@ -32,8 +32,8 @@ on:
         type: boolean
         default: false
 
-      waive_windows_artist_gpu_v289:
-        description: v2.8.9 only; skip local Windows Artist GPU proof and require all other hosted checks
+      waive_windows_artist_gpu_v290:
+        description: v2.9.0 only; skip local Windows Artist GPU proof and require all other hosted checks
         type: boolean
         default: false
 
@@ -314,7 +314,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           FEATURE_RUN: ${{ inputs.feature_run }}
           WAIVE_WINDOWS_ARTIST_GPU_V286: ${{ inputs.waive_windows_artist_gpu_v286 }}
-          WAIVE_WINDOWS_ARTIST_GPU_V289: ${{ inputs.waive_windows_artist_gpu_v289 }}
+          WAIVE_WINDOWS_ARTIST_GPU_V290: ${{ inputs.waive_windows_artist_gpu_v290 }}
           MOBILE_RUN: ${{ inputs.mobile_run }}
           BUILD_RUN: ${{ inputs.verified_build_run || github.run_id }}
         run: node scripts/publish-verified-release.mjs

@@ -20,9 +20,10 @@ class ComposerTransfers {
   }
 
   static const channel = MethodChannel('langbai.novelai/composer_files');
-  static Future<List<String>> paste() async {
+  static Future<List<String>> paste({bool imagesOnly = false}) async {
     try {
-      return (await channel.invokeListMethod<String>('paste')) ?? [];
+      return (await channel.invokeListMethod<String>('paste',
+              imagesOnly ? {'imagesOnly': true} : null)) ?? [];
     } on MissingPluginException {
       return [];
     }

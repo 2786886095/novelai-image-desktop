@@ -21,7 +21,7 @@
 
 ## 今回の更新
 
-デスクトップ版の MCP に、ギャラリーグループの作成、一括移動、画像内のタグによる分類、時系列の推定イテレーション検索を追加しました。キャラクターが変わった関連画像は別に表示します。Android／iOS はバージョン更新のみです。
+画像生成エージェントの下書きに画像を貼り付けられます。デスクトップは Ctrl+V／⌘V またはボタン、Android／iOS は入力欄の横のボタンから利用できます。自動送信はしません。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

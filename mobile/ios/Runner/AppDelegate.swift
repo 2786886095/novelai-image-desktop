@@ -253,6 +253,7 @@ final class ComposerFiles: NSObject, UIDropInteractionDelegate {
         if let m=call.arguments as? [String:Double],let x=m["x"],let y=m["y"],let w=m["width"],let h=m["height"] {self.region=CGRect(x:x,y:y,width:w,height:h)} else {self.region=nil}
         result(nil)
       } else if call.method=="paste" {
+        let imagesOnly = (call.arguments as? [String: Any])?["imagesOnly"] as? Bool ?? false
         var paths=[String]();var total=0
         // Prefer encoded data. UIImage.pngData() would erase embedded parameters.
         let board = UIPasteboard.general
@@ -273,6 +274,8 @@ final class ComposerFiles: NSObject, UIDropInteractionDelegate {
         for url in (UIPasteboard.general.urls ?? []).prefix(max(0,64-paths.count)) where url.isFileURL {
           let scoped=url.startAccessingSecurityScopedResource();defer{if scoped{url.stopAccessingSecurityScopedResource()}}
           let ext=url.pathExtension.lowercased()
+          let imageExtensions = Set(["png","jpg","jpeg","webp","gif","bmp","avif"])
+          if imagesOnly && !imageExtensions.contains(ext) {continue}
           if self.allowed.contains(ext),let values=try? url.resourceValues(forKeys:[.fileSizeKey]),let count=values.fileSize,count<=48*1024*1024,total+count<=192*1024*1024,let data=try? Data(contentsOf:url),let path=self.save(data,extension:ext){paths.append(path);total+=data.count}
         }
         result(paths)

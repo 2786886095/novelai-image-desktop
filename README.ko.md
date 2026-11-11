@@ -21,7 +21,7 @@
 
 ## 이번 업데이트
 
-데스크톱 MCP에서 갤러리 그룹 생성, 이미지 일괄 이동, 이미지에 포함된 태그로 분류, 추정 반복 작업의 시간순 조회를 지원합니다. 캐릭터가 바뀐 관련 이미지는 별도로 표시합니다. Android와 iOS는 버전만 업데이트됩니다.
+이미지 생성 에이전트 초안에 이미지를 붙여 넣을 수 있습니다. 데스크톱은 Ctrl+V／⌘V 또는 버튼을, Android와 iOS는 입력창 옆의 버튼을 사용하세요. 자동 전송하지 않습니다.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

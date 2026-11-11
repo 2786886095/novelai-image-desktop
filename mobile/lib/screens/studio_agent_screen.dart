@@ -398,45 +398,53 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                     ]))));
   }
 
-  Future<void> _importTransferredFiles(List<String> paths) async {
-    if (!mounted ||
-        _attachmentBusy ||
-        _agent?.selectedConversation?.archivedAt != null) return;
-    final id = _agent?.selectedConversation?.id;
-    if (id == null) return;
+  Future<void> _importTransferredFiles(List<String> paths) =>
+      _receiveAttachments(() async => paths, received: paths);
+
+  Future<void> _pasteFiles({bool imagesOnly = false}) =>
+      _receiveAttachments(() => ComposerTransfers.paste(imagesOnly: imagesOnly),
+          imagesOnly: imagesOnly);
+
+  Future<void> _receiveAttachments(Future<List<String>> Function() readPaths,
+      {bool imagesOnly = false, List<String> received = const []}) async {
+    final agent = _agent;
+    final chat = agent?.selectedConversation;
+    var paths = received;
+    if (!mounted || _attachmentBusy || agent == null ||
+        chat == null || chat.archivedAt != null) {
+      await _discardTransferFiles(paths);
+      return;
+    }
+    final id = chat.id;
     setState(() => _attachmentBusy = true);
     try {
-      final imported =
-          await _agent!.importAttachmentPaths(paths, conversationId: id);
+      paths = await readPaths();
+      if (!mounted || _agent != agent) return;
+      final imported = paths.isEmpty
+          ? const <AgentAttachment>[]
+          : await agent.importAttachmentPaths(paths, conversationId: id);
       if (imported.isEmpty && mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(_t('attachmentLimit'))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(_t(imagesOnly && paths.isEmpty
+                ? 'pasteImageEmpty'
+                : 'attachmentLimit'))));
       }
     } catch (error) {
-      if (mounted) setState(() => _agent!.error = '$error');
+      if (mounted) setState(() => agent.error = '$error');
     } finally {
       if (mounted) setState(() => _attachmentBusy = false);
-      for (final path in paths) {
-        if (path
-                .replaceAll('\\', '/')
-                .split('/')
-                .reversed
-                .skip(1)
-                .firstOrNull ==
-            'composer-inputs') {
-          try {
-            await File(path).delete();
-          } catch (_) {}
-        }
-      }
+      await _discardTransferFiles(paths);
     }
   }
 
-  Future<void> _pasteFiles() async {
-    try {
-      await _importTransferredFiles(await ComposerTransfers.paste());
-    } catch (error) {
-      if (mounted) setState(() => _agent!.error = '$error');
+  Future<void> _discardTransferFiles(List<String> paths) async {
+    for (final path in paths) {
+      if (path.replaceAll('\\', '/').split('/').reversed.skip(1).firstOrNull ==
+          'composer-inputs') {
+        try {
+          await File(path).delete();
+        } catch (_) {}
+      }
     }
   }
 
@@ -1493,6 +1501,13 @@ class _StudioAgentScreenState extends State<StudioAgentScreen> {
                             ? null
                             : _showAttachmentSources,
                         icon: const Icon(Icons.add)),
+                    IconButton(
+                        key: const ValueKey('agent-paste-image'),
+                        tooltip: _t('pasteImage'),
+                        onPressed: archived || _attachmentBusy
+                            ? null
+                            : () => _pasteFiles(imagesOnly: true),
+                        icon: const Icon(Icons.content_paste)),
                     Expanded(
                         child: TextField(
                             controller: _input,

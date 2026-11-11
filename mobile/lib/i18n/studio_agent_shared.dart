@@ -218,6 +218,8 @@ const studioAgentSharedRows = <String,List<String>>{
   "uploadingAttachments": ["正在添加附件…", "正在新增附件…", "Adding attachments…", "添付を追加中…", "첨부 추가 중…"],
   "nextMessageAttachments": ["附件将随下一条消息发送，不会修改正在执行的请求。", "附件將隨下一則訊息傳送，不修改目前請求。", "Attachments are staged for your next message; the current request is unchanged.", "添付は次のメッセージで送信されます。現在のリクエストは変更しません。", "첨부는 다음 메시지에 전송되며 현재 요청은 변경되지 않습니다."],
   "attachmentLimit": ["不支持的附件或超出限制：单文件 48 MB，总计 192 MB。", "附件不支援或超過限制：單檔 48 MB，總計 192 MB。", "Unsupported attachment or limit exceeded: 48 MB per file, 192 MB total.", "未対応、または容量超過（48 MB/ファイル、合計192 MB）。", "지원되지 않는 첨부 또는 용량 초과: 파일당 48 MB, 총 192 MB."],
+  "pasteImage": ["粘贴图片", "貼上圖片", "Paste image", "画像を貼り付け", "이미지 붙여넣기"],
+  "pasteImageEmpty": ["剪贴板中没有可粘贴的图片。", "剪貼簿中沒有可貼上的圖片。", "No supported image on the clipboard.", "貼り付けできる画像がクリップボードにありません。", "클립보드에 붙여 넣을 수 있는 이미지가 없습니다."],
   "pasteFiles": ["粘贴附件", "貼上附件", "Paste attachment", "添付を貼り付け", "첨부 붙여넣기"],
   "presetInfiniteFive": ["无限五代 · 生图适配", "無限五代 · 生圖適配", "IG5 · Image-task adaptation", "IG5 · 画像タスク向け", "IG5 · 이미지 작업 적용"],
   "presetInfiniteFiveBody": ["参考五代通用规则改写；任务系统预设参与实际调用，但不改变工具、网络或付款权限。不是上游原生生图提示词。", "參考五代通用規則改寫；任務系統預設參與實際呼叫，但不改變工具、網路或付款權限。不是上游原生生圖提示詞。", "A task-scoped rewrite of IG5 workflow rules, not an upstream image preset. Applied in the actual system layer without granting tools, network access or payment approval.", "IG5の一般ルールを画像タスク向けに改写。実際のシステム層に適用しますが、ツール・ネットワーク・支払い権限は付与しません。", "IG5 일반 작업 규칙의 이미지 작업용 적용입니다. 실제 시스템 계층에 적용되지만 도구·네트워크·결제 권한을 부여하지 않습니다."],
