@@ -44,18 +44,25 @@ export async function assertOwnedTestProcessIsGone(pid, result, {
   if (platform !== 'linux') assert.fail('test process '+pid+' survived the cleanup deadline: '+JSON.stringify(result));
   await afterSignalZero(pid);
   const procPath = '/proc/'+pid+'/stat';
-  let stat;
-  try { stat = readStat(procPath); }
-  catch (error) {
-    // Only this exact entry disappearing is death, not permissions, I/O,
-    // malformed stat data or an unrelated missing file.
-    assert.equal(error.code, 'ENOENT');
-    assert.equal(error.path, procPath);
-    try { signalZero(pid); }
-    catch (gone) { assert.equal(gone.code, 'ESRCH'); return; }
-    assert.fail('Missing proc entry but owned test PID still exists; death not proven');
+  // A successful group SIGKILL can close the leader's pipes before the
+  // kernel schedules the last descendant's exit. Poll a bounded 250 ms;
+  // accept only the exact PID in zombie state or confirmed ESRCH.
+  for (let attempt = 0; attempt < 6; attempt++) {
+    let stat;
+    try { stat = readStat(procPath); }
+    catch (error) {
+      assert.equal(error.code, 'ENOENT');
+      assert.equal(error.path, procPath);
+      try { signalZero(pid); }
+      catch (gone) { assert.equal(gone.code, 'ESRCH'); return; }
+      assert.fail('Missing proc entry but owned test PID still exists; death not proven');
+    }
+    const parsed = /^(\d+) \([\s\S]*\) ([A-Za-z]) /.exec(stat);
+    assert(parsed && Number(parsed[1]) === pid, 'Malformed or different Linux proc PID');
+    if (parsed[2] === 'Z') return;
+    if (attempt < 5) await waitForReap();
   }
-  assert.match(stat, /\) Z /);
+  assert.fail('test process '+pid+' survived bounded Linux reaping: '+JSON.stringify(result));
 }
 
 const node = code => [process.execPath, '-e', code];
@@ -172,6 +179,20 @@ test('cleanup probe rejects permission, stat and unrelated-path errors instead o
   await assert.doesNotReject(assertOwnedTestProcessIsGone(pid, {}, {
     signalZero:()=>{throw Object.assign(Error('already gone'),{code:'ESRCH'});},
     readStat:()=>{throw Error('must not read after ESRCH');},
+  }));
+});
+
+test('Linux reaping waits for the exact owned PID to reach zombie state', async () => {
+  const pid=5318;
+  let attempts=0,waits=0;
+  await assertOwnedTestProcessIsGone(pid,{},{
+    platform:'linux',signalZero:()=>{},
+    readStat:()=>pid+' (node) '+(++attempts===2?'Z':'R')+' 0 0',
+    waitForReap:async()=>{waits++;},
+  });
+  assert.equal(waits,1);
+  await assert.rejects(assertOwnedTestProcessIsGone(pid,{},{
+    platform:'linux',signalZero:()=>{},readStat:()=>'9999 (different) Z 0 0',
   }));
 });
 

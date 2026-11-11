@@ -66,7 +66,7 @@ void main() {
     expect(File(chat.draftAttachments.single.filePath).readAsBytesSync(), file.readAsBytesSync());
     expect(find.text('leave this draft alone'), findsOneWidget);
     expect(chat.messages, isEmpty);
-    print('MOBILE_CLIPBOARD: image-only native request, original bytes kept, draft retained, no send');
+    debugPrint('MOBILE_CLIPBOARD: image-only native request, original bytes kept, draft retained, no send');
     paths = [];
     await tester.tap(button);
     await tester.pump();
