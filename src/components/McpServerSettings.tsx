@@ -14,8 +14,12 @@ const toastText = (key: string, params?: Record<string, string | number>) =>
 /** Refresh history / balance when an MCP client generated images. Mount once. */
 export function McpEventSupport() {
   useEffect(() => window.naiDesktop.onMcpEvent?.((event) => {
-    if (event.kind !== "history") return;
     const state = useAppStore.getState();
+    if (event.kind === "history-groups") {
+      void state.refreshHistory().catch(() => undefined);
+      return;
+    }
+    if (event.kind !== "history") return;
     void state.refreshHistory(event.date).catch(() => undefined);
     void state.refreshAccount().catch(() => undefined);
     state.setToast(toastText("MCP：已生成 {count} 张图片", { count: event.count }));

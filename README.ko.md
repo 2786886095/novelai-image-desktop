@@ -21,7 +21,7 @@
 
 ## 이번 업데이트
 
-Android에서 기존 환경설정 파일 전체를 읽다가 메모리가 부족하면 항목별로 읽어 선택한 데이터를 백업합니다. 너무 크거나 지원하지 않는 기록은 해당 분류를 표시하며, 알리지 않고 누락하거나 원본을 바꾸지 않습니다.
+데스크톱 MCP에서 갤러리 그룹 생성, 이미지 일괄 이동, 이미지에 포함된 태그로 분류, 추정 반복 작업의 시간순 조회를 지원합니다. 캐릭터가 바뀐 관련 이미지는 별도로 표시합니다. Android와 iOS는 버전만 업데이트됩니다.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

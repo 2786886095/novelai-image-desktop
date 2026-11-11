@@ -1331,6 +1331,24 @@ export function deleteHistoryGroup(id: string): HistoryGroup[] {
   return data.historyGroups;
 }
 
+/** Apply an MCP batch in one write, only if the preview's identities still match. */
+export function applyMcpHistoryMoves(moves: ReadonlyArray<{ id: string; filePath: string; from: string | null; to: string | null }>): boolean {
+  if (!moves.length) return true;
+  const data = readStore();
+  const changes = new Map(moves.map(move => [move.id, move]));
+  const groups = new Set(data.historyGroups.map(group => group.id));
+  const images = new Map(data.history.filter(item => changes.has(item.id)).map(item => [item.id, item]));
+  if (moves.length > 200 || changes.size !== moves.length || moves.some(move => {
+    const row = images.get(move.id);
+    return !row || row.filePath !== move.filePath || (row.groupId ?? null) !== move.from || (move.to !== null && !groups.has(move.to));
+  })) return false;
+  writeStore({ ...data, history: data.history.map(item => {
+    const move = changes.get(item.id);
+    return move ? { ...item, groupId: move.to ?? undefined } : item;
+  }) });
+  return true;
+}
+
 export function setHistoryGroup(id: string | string[], groupId?: string) {
   const data = readStore();
   const normalized = groupId && groupId !== "__ungrouped" ? groupId : undefined;

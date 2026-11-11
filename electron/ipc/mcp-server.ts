@@ -12,7 +12,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import sharp from "sharp";
 import { PNG } from "pngjs";
-import type { BrowserWindow } from "electron";
+import { dialog, type BrowserWindow } from "electron";
 import {
   APP_VERSION,
   DEFAULT_I2I_PARAMS,
@@ -29,7 +29,10 @@ import { withNaiAccountOperation } from "./nai-accounts-runtime";
 import { bindAgentImageProvider, assertAgentImageProvider, type ImageProviderBinding } from "./agent-image-provider";
 import { agentGenerationInput, agentInpaintInput, executeAgentTool } from "./agent-tools";
 import { quoteAnlasCost, refreshStoredAccount } from "./nai";
-import { getHistory, getSettings } from "./store";
+import { getHistory, getSettings, readStore, ensureHistoryGroup, applyMcpHistoryMoves } from "./store";
+import { extractEmbeddedImageMetadata } from "../image-metadata";
+import { exactLocalCharacterTags } from "./resource-databases";
+import { createGalleryMcpTools } from "./mcp-history-gallery";
 import { MAX_MCP_IMAGE_PIXELS, importMcpImage, looksLikeLocalPath, mcpAttachment, newMcpTempFile, registerMcpFile } from "./mcp-attachments";
 
 export interface McpServerHandle {
@@ -301,6 +304,39 @@ function notify(options: McpServerOptions, images: Array<{ filePath: string; dat
 }
 
 function createTools(options: McpServerOptions): ToolDef[] {
+  const galleryTools: ToolDef[] = createGalleryMcpTools({
+    images: () => readStore().history,
+    groups: () => readStore().historyGroups,
+    create: ensureHistoryGroup,
+    move: applyMcpHistoryMoves,
+    decode: extractEmbeddedImageMetadata,
+    characters: exactLocalCharacterTags,
+    approve: async (moves, signal) => {
+      const groups = new Map(readStore().historyGroups.map(group => [group.id, group.name]));
+      const destinations = new Map<string, number>();
+      for (const move of moves) {
+        const name = (move.to && groups.get(move.to)) || "未分组 / Ungrouped";
+        destinations.set(name, (destinations.get(name) ?? 0) + 1);
+      }
+      const summary = [...destinations].map(([name, count]) => name + " — " + count).join("\n");
+      const optionsMessage = {
+        type: "question" as const, title: "MCP · 图库分类 / Gallery classification",
+        message: "将更新 " + moves.length + " 张图片的图库分组，不会移动原文件。",
+        detail: "Apply the reviewed classification? Original files stay in place.\n\n" + summary,
+        buttons: ["取消 / Cancel", "应用分类 / Apply"], defaultId: 0, cancelId: 0, noLink: true, signal,
+      };
+      const win = options.window();
+      const result = win && !win.isDestroyed() && win.isVisible()
+        ? await dialog.showMessageBox(win, optionsMessage) : await dialog.showMessageBox(optionsMessage);
+      return result.response === 1;
+    },
+    refresh: () => {
+      try {
+        const win = options.window();
+        if (win && !win.isDestroyed()) win.webContents.send("mcp:event", { kind: "history-groups", count: 0 });
+      } catch { /* a renderer closed after the history commit */ }
+    },
+  }).map(({ run, ...definition }) => ({ ...definition, run: async (args, ctx) => ok(await run(args, ctx.signal)) }));
   const imageOperation = async (
     tool: string,
     args: Json,
@@ -491,6 +527,7 @@ function createTools(options: McpServerOptions): ToolDef[] {
         return ok({ groups: data.groups, items });
       },
     },
+    ...galleryTools,
     {
       name: "read_image_metadata",
       title: "Read image metadata",

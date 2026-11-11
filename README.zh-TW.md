@@ -21,7 +21,7 @@ NovelAI 圖像創作工作臺，介面支援簡體中文、繁體中文、英語
 
 ## 本次更新
 
-Android 備份在整份舊偏好檔讀取記憶體不足時，改用逐項讀取匯出所選資料。過大或不支援的舊記錄會提示所屬類別，不會略過而不告知，也不會改寫原始資料。
+桌面版 MCP 新增圖庫分組、批次移動、依圖片內嵌標籤分類，以及按時間查詢推測的迭代路徑；更換角色的相關圖片另外列出。Android／iOS 僅同步版本。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

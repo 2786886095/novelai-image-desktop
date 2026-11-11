@@ -1764,7 +1764,7 @@ export interface NaiDesktopApi {
   /** Fork: local MCP server. */
   mcpStatus: () => Promise<McpServerStatus>;
   mcpRegenerateToken: () => Promise<McpServerStatus>;
-  onMcpEvent: (callback:(event:{kind:'history';date?:string;count:number})=>void) => ()=>void;
+  onMcpEvent: (callback:(event:{kind:'history'|'history-groups';date?:string;count:number})=>void) => ()=>void;
   onFavoritesChanged: (callback:(notice:{message:string})=>void) => ()=>void;
   onStudioAgentRequest?: (callback:(request:import('./studio-agent-contract').StudioAgentRequest)=>void) => ()=>void;
   replyStudioAgent: (id:string,reply:import('./studio-agent-contract').StudioAgentReply) => Promise<void>;

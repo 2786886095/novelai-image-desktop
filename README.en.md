@@ -21,7 +21,7 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-If Android runs out of memory reading the legacy preferences file, backup can read individual values and export the selected data. It identifies oversized or unsupported records by category rather than silently omitting them, and leaves the originals unchanged.
+Desktop MCP can create gallery groups, move images in batches, classify from embedded image tags, and list inferred iterations in chronological order. Related images with a changed character are listed separately. Android and iOS only receive a version update.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

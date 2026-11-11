@@ -95,8 +95,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   // Local MCP server.
   mcpStatus: () => ipcRenderer.invoke('mcp:status'),
   mcpRegenerateToken: () => ipcRenderer.invoke('mcp:regenerateToken'),
-  onMcpEvent: (callback:(event:{kind:'history';date?:string;count:number})=>void) => {
-    const listener=(_event:Electron.IpcRendererEvent,payload:{kind:'history';date?:string;count:number})=>callback(payload);
+  onMcpEvent: (callback:(event:{kind:'history'|'history-groups';date?:string;count:number})=>void) => {
+    const listener=(_event:Electron.IpcRendererEvent,payload:{kind:'history'|'history-groups';date?:string;count:number})=>callback(payload);
     ipcRenderer.on('mcp:event',listener);return ()=>ipcRenderer.removeListener('mcp:event',listener);
   },
   onFavoritesChanged: (callback:(notice:{message:string})=>void) => {

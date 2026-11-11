@@ -512,6 +512,21 @@ function ftsExpression(query: string) {
     .join(" ");
 }
 
+/** Exact category lookups only; never download or send an image prompt off-device. */
+export function exactLocalCharacterTags(tags: string[]): string[] {
+  const names = [...new Set(tags.map(tag => tag.replaceAll(" ", "_").replaceAll("_(", "(")))].slice(0, 1024);
+  if (!names.length) return [];
+  return withDatabase("tagCatalog", db => {
+    const found: string[] = [];
+    for (let offset = 0; offset < names.length; offset += 128) {
+      const chunk = names.slice(offset, offset + 128);
+      const rows = db.prepare("SELECT name FROM tags WHERE category = 4 AND name IN (" + chunk.map(() => "?").join(",") + ")").all(...chunk) as Array<{ name: string }>;
+      found.push(...rows.map(row => row.name));
+    }
+    return found;
+  }) ?? [];
+}
+
 export function searchResourceTagCatalog(query: string, limit = 20): TagSuggestion[] {
   const normalized = query.trim().slice(0, 255);
   if (!normalized) return [];
