@@ -21,7 +21,7 @@
 
 ## 이번 업데이트
 
-이미지 생성 에이전트 초안에 이미지를 붙여 넣을 수 있습니다. 데스크톱은 Ctrl+V／⌘V 또는 버튼을, Android와 iOS는 입력창 옆의 버튼을 사용하세요. 자동 전송하지 않습니다.
+데스크톱 갤러리에서 그룹을 변경하면 원본 이미지 파일도 날짜를 유지한 채 이동하며, 같은 이름의 파일을 덮어쓰지 않습니다. MCP 도구 29개로 생성 저장 그룹 지정, 매개변수 미리 보기, 템플릿 및 프리셋 조회, 프롬프트 변환·이미지 역추론·만화 프롬프트를 지원합니다. Android와 iOS는 버전만 업데이트합니다.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

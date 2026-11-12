@@ -291,7 +291,7 @@ function attachmentForRequest(request: AgentToolBridgeRequest, value: unknown): 
   const validCached = history || attachmentId.startsWith("reference-preset:") ? cached : undefined;
   // Fork: images imported through the local MCP server.
   const mcp = attachmentId.startsWith(MCP_ATTACHMENT_PREFIX) ? mcpAttachment(attachmentId) : undefined;
-  const attachment = local ?? validCached ?? (history ? imageAttachment(history) : undefined) ?? mcp;
+  const attachment = (history ? imageAttachment(history) : undefined) ?? local ?? validCached ?? mcp;
   if (!attachment || attachment.unavailable || !attachment.filePath || !fs.existsSync(attachment.filePath)) {
     throw new Error(`找不到 attachmentId=${attachmentId} 对应的本机文件。`);
   }

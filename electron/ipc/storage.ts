@@ -13,6 +13,7 @@ import {
   getHistoryGroups,
   getSetting,
   removeHistory,
+  pendingHistoryFileEdits,
   removeHistoryItems,
   renameHistoryGroup,
   setHistoryGroup,
@@ -192,14 +193,13 @@ export function assignHistoryGroup(id: string | string[], groupId?: string) {
  * Rename a saved image from the history panel: rename the file on disk (keeping
  * its extension, in the same folder, avoiding collisions) and update the index.
  */
-const renamingHistoryIds = new Set<string>();
 export async function renameHistoryItem(id: string, rawName: string): Promise<{ ok: boolean; message?: string; item?: HistoryItem }> {
   // Windows may allow both pending unlinks to succeed. Serialize identity,
   // not just destination filenames, before the first asynchronous operation.
-  if (renamingHistoryIds.has(id)) return {ok:false,message:"该图片正在重命名，请稍后重试。"};
-  renamingHistoryIds.add(id);
+  if (pendingHistoryFileEdits.has(id)) return {ok:false,message:"该图片正在重命名，请稍后重试。"};
+  pendingHistoryFileEdits.add(id);
   try { return await renameHistoryItemUnlocked(id, rawName); }
-  finally { renamingHistoryIds.delete(id); }
+  finally { pendingHistoryFileEdits.delete(id); }
 }
 async function renameHistoryItemUnlocked(id: string, rawName: string): Promise<{ ok: boolean; message?: string; item?: HistoryItem }> {
   const items = getHistory();
@@ -255,10 +255,10 @@ async function renameHistoryItemUnlocked(id: string, rawName: string): Promise<{
 }
 
 export async function deleteHistoryItem(id: string) {
-  if (renamingHistoryIds.has(id)) return { ok: false, message: '该图片正在处理，请稍后重试。' };
-  renamingHistoryIds.add(id);
+  if (pendingHistoryFileEdits.has(id)) return { ok: false, message: '该图片正在处理，请稍后重试。' };
+  pendingHistoryFileEdits.add(id);
   try { return await deleteHistoryItemUnlocked(id); }
-  finally { renamingHistoryIds.delete(id); }
+  finally { pendingHistoryFileEdits.delete(id); }
 }
 
 /** Batch counterpart of the guarded single delete: disk first, one index commit.
@@ -272,8 +272,8 @@ export async function deleteHistoryItems(rawIds: string[]) {
   const failed: Array<{ id: string; message: string }> = [], deletedIds: string[] = [], owned: string[] = [];
   // Acquire every selected identity before awaiting any filesystem operation.
   for (const id of ids) {
-    if (renamingHistoryIds.has(id)) { failed.push({ id, message: '该图片正在处理，请稍后重试。' }); selected.delete(id); }
-    else { renamingHistoryIds.add(id); owned.push(id); }
+    if (pendingHistoryFileEdits.has(id)) { failed.push({ id, message: '该图片正在处理，请稍后重试。' }); selected.delete(id); }
+    else { pendingHistoryFileEdits.add(id); owned.push(id); }
   }
   const key = (file: string) => process.platform === 'win32' ? path.resolve(file).toLowerCase() : path.resolve(file);
   const outsideSelection = new Set(history.filter(row => !selected.has(row.id) && row.filePath).map(row => key(row.filePath)));
@@ -304,7 +304,7 @@ export async function deleteHistoryItems(rawIds: string[]) {
       invalidateAgentHistoryImage(deletedIds);
     }
     return { ok: failed.length === 0, deletedIds, failed };
-  } finally { for (const id of owned) renamingHistoryIds.delete(id); }
+  } finally { for (const id of owned) pendingHistoryFileEdits.delete(id); }
 }
 async function deleteHistoryItemUnlocked(id: string) {
   const history = getHistory(), item = history.find(row => row.id === id);

@@ -11,9 +11,25 @@ let store:typeof import('./store'),storage:typeof import('./storage'),output:str
 beforeEach(async()=>{fixture.root=fs.mkdtempSync(path.join(tempRoot,'studio-works-batch-'));output=path.join(fixture.root,'output');fs.mkdirSync(output);vi.resetModules();store=await import('./store');storage=await import('./storage');store.writeStore({...store.readStore(),history:[],historyGroups:[{id:'a',name:'A',createdAt:'2026-10-10'},{id:'b',name:'B',createdAt:'2026-10-10'}],settings:{...store.getSettings(),outputDir:output}});});
 afterEach(()=>{vi.restoreAllMocks();if(path.dirname(path.resolve(fixture.root))!==path.resolve(tempRoot)||!path.basename(fixture.root).startsWith('studio-works-batch-'))throw Error('Unsafe fixture cleanup');fs.rmSync(fixture.root,{recursive:true,force:true});});
 function record(id:string,file=path.join(output,id+'.png')){fs.writeFileSync(file,'neutral '+id);const item={id,filePath:file,fileUrl:'',groupId:'a',date:'2026-10-10',createdAt:'2026-10-10',params:{},actualSeed:1,width:1,height:1,model:'nai-diffusion-4-5-full'} as HistoryItem;store.addHistory([item]);return item;}
-it('moves only selected identities atomically and leaves files byte-identical',()=>{const a=record('a'),b=record('b'),c=record('c');expect(storage.assignHistoryGroup(['a','b','a'],'b')).toEqual({ok:true});expect(store.readStore().history.map(i=>[i.id,i.groupId])).toEqual([['c','a'],['b','b'],['a','b']]);for(const item of [a,b,c])expect(fs.readFileSync(item.filePath,'utf8')).toBe('neutral '+item.id);expect(storage.assignHistoryGroup(['a','b'],'__ungrouped').ok).toBe(true);expect(store.readStore().history.filter(i=>!i.groupId).map(i=>i.id).sort()).toEqual(['a','b']);});
+it('moves only selected identities and preserves all image bytes',()=>{
+ const a=record('a'),b=record('b'),c=record('c');
+ expect(storage.assignHistoryGroup(['a','b','a'],'b')).toEqual({ok:true});
+ const rows=store.readStore().history;
+ expect(rows.map(i=>[i.id,i.groupId])).toEqual([['c','a'],['b','b'],['a','b']]);
+ for(const item of [a,b,c])expect(fs.readFileSync(rows.find(row=>row.id===item.id)!.filePath,'utf8')).toBe('neutral '+item.id);
+ expect(storage.assignHistoryGroup(['a','b'],'__ungrouped').ok).toBe(true);
+ expect(store.readStore().history.filter(i=>!i.groupId).map(i=>i.id).sort()).toEqual(['a','b']);
+});
 it.each([[],['unknown'],['a',null],['a']].map(ids=>[ids]))('rejects invalid or stale batches without changing records (%j)',ids=>{record('a');const before=JSON.stringify(store.readStore());expect(storage.assignHistoryGroup(ids as string[],'removed-group').ok).toBe(false);expect(JSON.stringify(store.readStore())).toBe(before);});
-it('supports 6106 selected works without changing batch image counts or file paths',()=>{const data=store.readStore();data.history=Array.from({length:6106},(_,i)=>({id:String(i),groupId:'a',filePath:'unchanged-'+i} as HistoryItem));store.writeStore(data);expect(store.setHistoryGroup(data.history.map(i=>i.id),'b').ok).toBe(true);expect(store.readStore().history.every(i=>i.groupId==='b'&&i.filePath==='unchanged-'+i.id)).toBe(true);});
+it('supports 6106 selected records without duplicating their shared image',()=>{
+ const a=record('a'),data=store.readStore();
+ data.history=Array.from({length:6106},(_,i)=>({...a,id:String(i)}));
+ store.writeStore(data);
+ expect(store.setHistoryGroup(data.history.map(i=>i.id),'b').ok).toBe(true);
+ const target=path.join(output,a.date,'B','a.png');
+ expect(store.readStore().history.every(i=>i.groupId==='b'&&i.filePath===target)).toBe(true);
+ expect(fs.readdirSync(path.dirname(target))).toEqual(['a.png']);
+});
 it('deletes selected original files and records, retaining unselected works',async()=>{const a=record('a'),b=record('b'),c=record('c');const result=await storage.deleteHistoryItems(['a','b','a']);expect(result).toEqual({ok:true,deletedIds:['a','b'],failed:[]});expect(fs.existsSync(a.filePath)).toBe(false);expect(fs.existsSync(b.filePath)).toBe(false);expect(fs.readFileSync(c.filePath,'utf8')).toBe('neutral c');expect(store.readStore().history.map(i=>i.id)).toEqual(['c']);});
 it('reports partial disk failure and keeps only failed selected identities for retry',async()=>{const a=record('a'),b=record('b');const original=fsp.unlink.bind(fsp);vi.spyOn(fsp,'unlink').mockImplementation(async p=>{if(String(p)===b.filePath)throw Object.assign(Error('fixture access denied'),{code:'EACCES'});return original(p);});const result=await storage.deleteHistoryItems(['a','b']);expect(result.ok).toBe(false);expect(result.deletedIds).toEqual(['a']);expect(result.failed.map(x=>x.id)).toEqual(['b']);expect(fs.existsSync(a.filePath)).toBe(false);expect(fs.existsSync(b.filePath)).toBe(true);expect(store.readStore().history.map(i=>i.id)).toEqual(['b']);});
 it('keeps files shared with an unselected record, but removes fully selected shared files once',async()=>{const a=record('a');store.addHistory([{...a,id:'b'}]);expect((await storage.deleteHistoryItems(['a'])).ok).toBe(true);expect(fs.existsSync(a.filePath)).toBe(true);store.addHistory([{...a,id:'c'}]);expect((await storage.deleteHistoryItems(['b','c'])).ok).toBe(true);expect(fs.existsSync(a.filePath)).toBe(false);});

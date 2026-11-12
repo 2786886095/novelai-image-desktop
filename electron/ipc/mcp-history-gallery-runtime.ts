@@ -22,8 +22,8 @@ export function galleryMcpForWindow(window: () => BrowserWindow | null | undefin
       const summary = [...destinations].map(([name, count]) => name + " — " + count).join("\n");
       const optionsMessage = {
         type: "question" as const, title: "MCP · 图库分类 / Gallery classification",
-        message: "将更新 " + moves.length + " 张图片的图库分组，不会移动原文件。",
-        detail: "Apply the reviewed classification? Original files stay in place.\n\n" + summary,
+        message: "将更新 " + moves.length + " 张图片将移入对应日期下的分组文件夹；不会覆盖同名文件。",
+        detail: "Apply the reviewed classification? Files will move under their original date; existing files will not be overwritten.\n\n" + summary,
         buttons: ["取消 / Cancel", "应用分类 / Apply"], defaultId: 0, cancelId: 0, noLink: true, signal,
       };
       const win = window();

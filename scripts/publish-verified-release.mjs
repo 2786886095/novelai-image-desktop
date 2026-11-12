@@ -10,16 +10,16 @@ const call=(command,args)=>execFileSync(command,args,{encoding:'utf8',timeout:60
 const version=JSON.parse(fs.readFileSync('package.json','utf8')).version;
 const tag='v'+version, sha=call('git',['rev-parse','HEAD']);
 const waiveWindowsArtistGpuV286=process.env.WAIVE_WINDOWS_ARTIST_GPU_V286==='true';
-const waiveWindowsArtistGpuV290=process.env.WAIVE_WINDOWS_ARTIST_GPU_V290==='true';
-const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV290;
+const waiveWindowsArtistGpuV291=process.env.WAIVE_WINDOWS_ARTIST_GPU_V291==='true';
+const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV291;
 const nativeRun=process.env.FEATURE_RUN;
 if(waiveWindowsArtistGpu){
- if((waiveWindowsArtistGpuV286&&version!=='2.8.6')||(waiveWindowsArtistGpuV290&&version!=='2.9.0')||!/^\d+$/.test(nativeRun??''))throw Error('Explicit version-bound cloud acceptance workflow is required');
+ if((waiveWindowsArtistGpuV286&&version!=='2.8.6')||(waiveWindowsArtistGpuV291&&version!=='2.9.1')||!/^\d+$/.test(nativeRun??''))throw Error('Explicit version-bound cloud acceptance workflow is required');
  assertV286CloudNativeRun(JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs'])),{sourceSha:sha});
 }
 const featureParity=JSON.parse(fs.readFileSync('release-evidence/feature-parity.json','utf8'));
-assertReleasePlatformContract(featureParity,{version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV290});
-assertReleaseEvidenceFiles(featureParity,'release-evidence',{waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV290});
+assertReleasePlatformContract(featureParity,{version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV291});
+assertReleaseEvidenceFiles(featureParity,'release-evidence',{waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV291});
 const buildRun=process.env.BUILD_RUN;
 if(!/^\d+$/.test(buildRun??''))throw Error('A verified desktop build run is required');
 const build=JSON.parse(call('gh',['run','view',buildRun,'--json','headSha,jobs']));

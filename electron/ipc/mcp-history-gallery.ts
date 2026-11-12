@@ -143,16 +143,18 @@ export function createGalleryMcpTools(deps: Dependencies) {
       const row = byId.get(id);
       if (!row) throw new Error("One or more history IDs no longer exist. No pictures moved.");
       return { id, filePath: row.filePath, from: row.groupId ?? null, to };
-    }).filter(move => move.from !== move.to);
+    });
   }
 
   function commit(moves: GalleryMove[], signal: AbortSignal) {
     signal.throwIfAborted();
-    if (moves.length) {
-      if (!deps.move(moves)) throw new Error("The history or its groups changed. No pictures moved; run a fresh preview.");
-      deps.refresh();
-    }
-    return { moved: moves.length, changes: moves.map(({ id, from, to }) => ({ attachmentId: id, from, to })) };
+    if (!moves.length) return { moved: 0, unchanged: 0, changes: [] };
+    if (!deps.move(moves)) throw new Error("The history or its groups changed. No pictures moved; run a fresh preview.");
+    const paths = new Map(deps.images().map(row => [row.id, row.filePath]));
+    const changes = moves.filter(move => move.from !== move.to || paths.get(move.id) !== move.filePath)
+      .map(({ id, from, to }) => ({ attachmentId: id, from, to, filePath: paths.get(id) }));
+    if (changes.length) deps.refresh();
+    return { moved: changes.length, unchanged: moves.length - changes.length, changes };
   }
 
   const tools = [
@@ -172,7 +174,7 @@ export function createGalleryMcpTools(deps: Dependencies) {
     },
     {
       name: "move_history_images", title: "Move history images to a group",
-      description: "Move only the named history records after the user asks to move them. Use IDs from list_history, not paths. Changes gallery membership, not files.",
+      description: "Move only the named history records after the user asks to move them. Use IDs from list_history, not paths. Moves original files under their existing dates without overwriting. Reapplying a group also repairs legacy path mismatches.",
       inputSchema: schema({ attachmentIds: array(S, MAX_SCAN), groupId: S }, ["attachmentIds", "groupId"]), annotations: WRITE,
       run: async (args: Json, signal: AbortSignal) => commit(movesTo(args.attachmentIds as string[], args.groupId as string, deps.images()), signal),
     },
@@ -217,7 +219,7 @@ export function createGalleryMcpTools(deps: Dependencies) {
     },
     {
       name: "apply_history_tag_classification", title: "Apply reviewed history tag classification",
-      description: "Apply a one-time preview plan after the user also confirms inside Studio. Changed files, images or destination groups reject the entire plan. No image files are modified.",
+      description: "Apply a one-time preview plan after the user also confirms inside Studio. Changed files, images or destination groups reject the entire plan. Files move under their original dates; their contents are unchanged.",
       inputSchema: schema({ planId: S, confirmed: { type: "boolean", enum: [true] } }, ["planId", "confirmed"]), annotations: { ...WRITE, idempotentHint: false },
       run: async (args: Json, signal: AbortSignal) => {
         if (args.confirmed !== true) throw new Error("User confirmation required.");

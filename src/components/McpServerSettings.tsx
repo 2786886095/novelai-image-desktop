@@ -16,7 +16,7 @@ export function McpEventSupport() {
   useEffect(() => window.naiDesktop.onMcpEvent?.((event) => {
     const state = useAppStore.getState();
     if (event.kind === "history-groups") {
-      void state.refreshHistory().catch(() => undefined);
+      void state.refreshHistory(undefined, true).catch(() => undefined);
       return;
     }
     if (event.kind !== "history") return;

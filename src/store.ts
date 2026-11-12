@@ -325,7 +325,7 @@ interface AppState {
   deleteHistoryGroup: (id: string) => Promise<void>;
   exportHistoryGroup: (groupId: string) => Promise<void>;
   setHistoryItemGroup: (id: string, groupId?: string) => Promise<void>;
-  refreshHistory: (date?: string) => Promise<void>;
+  refreshHistory: (date?: string, includeMoved?: boolean) => Promise<void>;
   refreshSettings: () => Promise<void>;
   refreshAccount: () => Promise<AccountSummary>;
   loadWorkbenchImage: () => Promise<void>;
@@ -470,7 +470,7 @@ function rebindHistoryImageReferences(state: AppState, rows: readonly HistoryIte
   }
   const record = (old: HistoryItem|null) => {
     const next=old && byId.get(old.id);
-    return old && next && eligible(old,next) && (old.filePath!==next.filePath || old.fileUrl!==next.fileUrl) ? next : old;
+    return old && next && eligible(old,next) && (old.filePath!==next.filePath || old.fileUrl!==next.fileUrl || old.groupId!==next.groupId) ? next : old;
   };
   const working = (old: WorkingImage|null) => {
     const next=old && replacements.get(old.filePath);
@@ -1423,7 +1423,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         : state.currentImage,
     }));
     try {
-      await window.naiDesktop.setHistoryGroup(id, groupId || undefined);
+      const result = await window.naiDesktop.setHistoryGroup(id, groupId || undefined);
+      if (!result.ok) throw new Error(result.message ?? "未能移动图片。");
     } catch (error: any) {
       if (previous) {
         set((state) => ({
@@ -1432,10 +1433,12 @@ export const useAppStore = create<AppState>((set, get) => ({
           toast: error?.message ?? String(error),
         }));
       }
+      return;
     }
+    await get().refreshHistory(undefined, true);
   },
 
-  async refreshHistory(date) {
+  async refreshHistory(date, includeMoved = false) {
     const revision = ++historyReadRevision;
     const inputRevision = workbenchLoadRevision;
     const [dates, groups] = await Promise.all([
@@ -1445,12 +1448,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (revision !== historyReadRevision) return;
     const selectedDate = date ?? get().selectedDate ?? dates[0] ?? "";
     const selectedGroupId = get().selectedGroupId;
-    const rows = await window.naiDesktop.getHistory(selectedDate || undefined, selectedGroupId || undefined);
+    const allRows = await window.naiDesktop.getHistory(includeMoved ? undefined : selectedDate || undefined, includeMoved ? undefined : selectedGroupId || undefined);
     if (revision !== historyReadRevision) return;
-    const history = rows.map(withCompletedImageBridge);
+    const visibleRows = includeMoved ? allRows.filter(item => (!selectedDate || item.date === selectedDate) &&
+      (!selectedGroupId || (selectedGroupId === "__ungrouped" ? !item.groupId : item.groupId === selectedGroupId))) : allRows;
+    const history = visibleRows.map(withCompletedImageBridge);
     let inputRebound = false;
     set(state => {
-      const rebound=rebindHistoryImageReferences(state,history);
+      const rebound=rebindHistoryImageReferences(state,includeMoved ? allRows : history);
       inputRebound=rebound.workbenchImage!==state.workbenchImage || rebound.i2iOriginalImage!==state.i2iOriginalImage;
       return {historyDates:dates,historyGroups:groups,selectedDate,history,...rebound};
     });

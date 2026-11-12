@@ -26,7 +26,7 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 
 ## 本次更新
 
-生图智能体支持粘贴图片：桌面可用 Ctrl+V／⌘V 或点击按钮，Android／iOS 可点输入框旁的「粘贴图片」。图片先进入草稿，不会自动发送。
+桌面图库换组现在会移动磁盘上的原图，保留日期且不覆盖同名文件。MCP 扩展到 29 项工具，支持指定生图保存分组、预览参数、查询模板和预设，以及调用转换、反推和漫画提示词。Android／iOS 仅同步版本。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

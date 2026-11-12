@@ -15,7 +15,10 @@ export function verifySoftwareAction(action:string,args:Record<string,unknown>,s
  else if(action==='references.groups.delete')passed=!groups.includes(String(args.name).trim())&&!items.some(x=>x.group===String(args.name).trim());
  else if(action.endsWith('.delete'))passed=!items.some(x=>x.id===args.id);
  else if(action.endsWith('.clear'))passed=items.length===0;
- else if(action.endsWith('.move'))passed=items.some(x=>x.id===args.id&&(x[action.startsWith('references.')?'group':'groupId']??'')===String(args.group).trim());
+ else if(action.endsWith('.move')){
+  const target=action==='history.items.move'&&args.group==='__ungrouped'?'':String(args.group).trim();
+  passed=items.some(x=>x.id===args.id&&(x[action.startsWith('references.')?'group':'groupId']??'')===target);
+ }
  if(!passed)throw Error('操作后的回读未符合预期；请查看当前资料，不要自动重试');
 }
 export const SOFTWARE_ACTION_TOOLS=['langbai_software_capabilities','langbai_software_action'] as const;
@@ -55,7 +58,13 @@ export function createSoftwareActions(approve:(request:AgentToolBridgeRequest)=>
      case 'history.groups.create':result=s.createHistoryGroup(name);break;
      case 'history.groups.rename':result=s.renameHistoryGroup(id,name);break;
      case 'history.groups.delete':result=s.deleteHistoryGroup(id);break;
-     case 'history.items.move':if(group&&!data.groups?.some(x=>x.id===group))throw Error('目标历史分组不存在');result=s.setHistoryGroup(id,group);break;
+     case 'history.items.move': {
+      if(group&&group!=='__ungrouped'&&!data.groups?.some(x=>x.id===group))throw Error('目标历史分组不存在');
+      const moved=s.setHistoryGroup(id,group);
+      if(!moved.ok)throw Error(moved.message);
+      result=moved;
+      break;
+     }
      case 'history.items.rename': {
       const renamed=await (await import('./storage.js')).renameHistoryItem(id,name);if(!renamed.ok||!renamed.item)throw Error(renamed.message??'重命名未完成');
       const row=s.getHistory().find(x=>x.id===id);if(row?.filePath!==renamed.item.filePath)throw Error('重命名回读不一致');const stat=await fs.lstat(row.filePath);if(!stat.isFile()||stat.isSymbolicLink())throw Error('重命名文件验证失败');

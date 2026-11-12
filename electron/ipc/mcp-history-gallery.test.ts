@@ -49,7 +49,7 @@ it("creates and moves groups, previews exact metadata rules, and finds character
     ["no-metadata", undefined, 7],
   ];
   const originals = new Map<string, Buffer>();
-  db.writeStore({ ...seed, history: testCases.map(([id, prompt, date]) => {
+  db.writeStore({ ...seed, settings: { ...seed.settings, outputDir: fixture.dir }, history: testCases.map(([id, prompt, date]) => {
     const filePath = path.join(fixture.dir, id + ".png");
     const bytes = makePng(prompt);
     fs.writeFileSync(filePath, bytes);
@@ -80,6 +80,11 @@ it("creates and moves groups, previews exact metadata rules, and finds character
   try {
     const required = ["create_history_group", "move_history_images", "preview_history_tag_classification", "apply_history_tag_classification", "trace_history_iterations"];
     const list = (await rpc("tools/list", {})).result.tools.map((tool: { name: string }) => tool.name);
+    const docs = fs.readFileSync(new URL("../../docs/MCP_GALLERY_AND_PROMPTS.md", import.meta.url), "utf8");
+    const documented = [...docs.matchAll(/^\| `([a-z][a-z0-9_]+)` \|/gm)].map(match => match[1]);
+    expect(documented.length, "MCP inventory table is missing or contains duplicate entries").toBe(new Set(documented).size);
+    expect([...list].sort(), "Update the MCP inventory in the same change as tools/list").toEqual(documented.sort());
+    console.log("MCP_DOCUMENTED_INVENTORY=" + documented.length + "/" + list.length);
     const available = required.filter(name => list.includes(name));
     console.log("MCP_TOOL_COUNT=" + available.length + "/5");
     expect(available).toEqual(required);
@@ -116,7 +121,16 @@ it("creates and moves groups, previews exact metadata rules, and finds character
     expect(db.readStore().history.find(row => row.id === "same")?.groupId).toBe(ocean.id);
     expect(db.readStore().history.find(row => row.id === "different")?.groupId).toBeUndefined();
     expect(notices).toHaveLength(4);
-    for (const [file, original] of originals) expect(fs.readFileSync(file)).toEqual(original);
+    for (const row of db.readStore().history) {
+      const old = path.join(fixture.dir, row.id + ".png");
+      expect(fs.readFileSync(row.filePath)).toEqual(originals.get(old));
+      if (row.groupId) {
+        expect(row.filePath).toBe(path.join(fixture.dir, "2026-01-01", "Ocean", row.id + ".png"));
+        expect(fs.existsSync(old)).toBe(false);
+      } else {
+        expect(row.filePath).toBe(old);
+      }
+    }
     console.log("CLASSIFICATION=preview_no_write, cancel_no_write, stale_no_write, atomic_3, original_bytes_unchanged");
     const trace = await data("trace_history_iterations", { attachmentId: "anchor" });
     expect(trace).toMatchObject({ inference: true, minimumSimilarity: 0.5 });
@@ -128,5 +142,27 @@ it("creates and moves groups, previews exact metadata rules, and finds character
     expect(trace.lines[0].images.at(-1).similarity).toBe(0.5);
     expect(trace.skipped).toEqual([{ attachmentId: "no-metadata", status: "missing_metadata" }]);
     console.log("ITERATIONS=same>anchor>exact-half; related_changed=different; missing_metadata=skipped");
+
+    expect(await data("list_history_groups", {})).toMatchObject({ groups: expect.arrayContaining([ocean, other]), ungrouped: "__ungrouped" });
+    const templates = await data("list_prompt_templates", {});
+    expect(templates.total).toBe(8);
+    expect(templates.items.every((row: Record<string, unknown>) => !("body" in row))).toBe(true);
+    const comic = await data("read_prompt_template", { slot: "comic.jp-page" });
+    expect(comic.body.length).toBeGreaterThan(100);
+    expect(comic.sha256).toMatch(/^[0-9a-f]{64}$/u);
+    expect((await call("read_prompt_template", { slot: "comic.jp-page", kind: "convert" })).result.isError).toBe(true);
+    expect((await call("convert_prompt", { text: "local fixture" })).error.code).toBe(-32602);
+    expect((await call("plan_comic_prompts", { action: "recommend", input: "local fixture", format: "jp-page" })).error.code).toBe(-32602);
+    expect((await call("prepare_generation", { historyGroupId: "invalid" })).result.isError).toBe(true);
+    const bridge = await import("./agent-tools");
+    vi.mocked(bridge.agentGenerationInput).mockImplementation((_request, args) => ({
+      params: { ...DEFAULT_PARAMS, ...args }, extras: { historyGroupId: String(args.historyGroupId ?? "") },
+    }));
+    const previewArgs = { positivePrompt: "neutral fixture", historyGroupId: ocean.id, transparentBackground: true, fileNamePrefix: "group-test", smea: true };
+    expect(await data("prepare_generation", previewArgs)).toMatchObject({ historyGroupId: ocean.id, params: { transparentBackground: true, fileNamePrefix: "group-test", smea: true } });
+    expect(bridge.executeAgentTool).not.toHaveBeenCalled();
+    const { quoteAnlasCost } = await import("./nai");
+    expect(quoteAnlasCost).not.toHaveBeenCalled();
+    console.log("MCP_EXPANSION=groups,8_templates,template_body,protected_text_calls,explicit_group_and_parameters,no_generation_or_quote");
   } finally { await handle.close(); }
 }, 25_000);

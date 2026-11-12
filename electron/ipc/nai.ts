@@ -1,3 +1,4 @@
+import { sanitizeGroupFolderName } from "./store";
 import {removePngGenerationMetadata, removePngMetadataChunks} from './png-privacy';
 import {localGenerationTime} from "./history-generation-time";
 import {extractEmbeddedImageMetadata} from '../image-metadata';
@@ -1940,19 +1941,6 @@ function buildImageFileName(
     .replace(/\s+/g, "_")
     .slice(0, 100);
   return name || `${ctx.now.getTime()}-${ctx.seq}`;
-}
-
-// Sanitize a user group name into a safe folder segment (strip path-illegal
-// characters, collapse whitespace, drop leading dots so we never produce a
-// hidden/`..`-like folder, cap length).
-function sanitizeGroupFolderName(name: string): string {
-  const cleaned = name
-    .replace(/[\\/:*?"<>|]+/g, "-")
-    .replace(/\s+/g, "_")
-    .replace(/^\.+/, "")
-    .trim()
-    .slice(0, 80);
-  return cleaned || "group";
 }
 
 // The generation destination is independent from the history panel's filter.

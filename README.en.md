@@ -21,7 +21,7 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-The image agent supports pasting images into its draft. On desktop, use Ctrl+V / Cmd+V or the Paste image button. On Android and iOS, tap Paste image next to the composer. Nothing is sent automatically.
+Desktop gallery moves now relocate the original files without changing their date or overwriting names. MCP now offers 29 tools, including per-request output groups, generation previews, prompt templates and presets, conversion, reverse prompting, and comic prompts. Android and iOS receive only the version update.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

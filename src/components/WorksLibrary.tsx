@@ -133,7 +133,7 @@ export function WorksLibrary({active = true}: {active?: boolean}) {
         setSelection(old=>new Set([...old].filter(id=>!deleted.has(id))));
         if(!result.ok)setError(`${batch.failed}: ${result.failed?.length??ids.length}. ${result.failed?.[0]?.message??result.message??t.error}`);
       }
-      await useAppStore.getState().refreshHistory();await refresh(true);
+      await useAppStore.getState().refreshHistory(undefined, kind==='move');await refresh(true);
     } catch(e) {setError(e instanceof Error?e.message:t.error);await refresh();}
     finally {busyRef.current=false;setBusy(false);}
   }

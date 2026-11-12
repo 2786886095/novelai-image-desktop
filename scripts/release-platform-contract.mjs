@@ -39,11 +39,11 @@ const releaseScope = Object.freeze({
 export const releaseScopeSha256 = crypto.createHash('sha256').update(JSON.stringify(releaseScope)).digest('hex');
 export const releaseScopeCounts = Object.freeze({declaredSlots:195,requiredSlots:187,notSupportedSlots:8});
 
-export function assertReleasePlatformContract(report, {version, sourceSha, waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV290=false}) {
+export function assertReleasePlatformContract(report, {version, sourceSha, waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV291=false}) {
   assert.equal(typeof waiveWindowsArtistGpuV286,'boolean');
-  assert.equal(typeof waiveWindowsArtistGpuV290,'boolean');
-  if(waiveWindowsArtistGpuV290)assert.equal(version,'2.9.0','Windows Artist GPU v2.9.0 waiver applies only to v2.9.0');
-  const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV290;
+  assert.equal(typeof waiveWindowsArtistGpuV291,'boolean');
+  if(waiveWindowsArtistGpuV291)assert.equal(version,'2.9.1','Windows Artist GPU v2.9.1 waiver applies only to v2.9.1');
+  const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV291;
   if(waiveWindowsArtistGpuV286)assert.equal(version,'2.8.6','Windows Artist GPU waiver applies only to v2.8.6');
   assert.ok(/^\d+\.\d+\.\d+$/.test(version),'Invalid release version');
   assert.ok(/^[a-f0-9]{40}$/i.test(sourceSha),'Invalid immutable source SHA');
@@ -136,9 +136,9 @@ export function assertV286CloudNativeRun(run,{sourceSha}){
   }
 }
 
-export function assertReleaseEvidenceFiles(report, evidenceRoot, {waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV290=false}={}) {
+export function assertReleaseEvidenceFiles(report, evidenceRoot, {waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV291=false}={}) {
   // Validate the exact policy before an empty not-supported evidence array can be skipped.
-  assertReleasePlatformContract(report,{version:report?.version,sourceSha:report?.sourceSha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV290});
+  assertReleasePlatformContract(report,{version:report?.version,sourceSha:report?.sourceSha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV291});
   const root=fs.realpathSync(evidenceRoot);
   for(const feature of report.features) for(const platform of releasePlatforms)
     for(const proof of feature.platforms[platform].evidence) {

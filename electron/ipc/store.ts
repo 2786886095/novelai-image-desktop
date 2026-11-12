@@ -827,14 +827,15 @@ export function pruneMissingReverseHistoryItem(id: string): boolean {
   return true;
 }
 
-function sanitizeGroupFolderName(name: string): string {
+export function sanitizeGroupFolderName(name: string): string {
   const cleaned = name
     .replace(/[\\/:*?"<>|]+/g, "-")
     .replace(/\s+/g, "_")
     .replace(/^\.+/, "")
     .trim()
     .slice(0, 80);
-  return cleaned || "group";
+  const segment = cleaned.replace(/[. ]+$/, "");
+  return /^(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(?:\.|$)/iu.test(segment) ? "_" + segment : segment || "group";
 }
 
 export function fileExists(filePath: string): boolean {
@@ -1331,35 +1332,149 @@ export function deleteHistoryGroup(id: string): HistoryGroup[] {
   return data.historyGroups;
 }
 
-/** Apply an MCP batch in one write, only if the preview's identities still match. */
-export function applyMcpHistoryMoves(moves: ReadonlyArray<{ id: string; filePath: string; from: string | null; to: string | null }>): boolean {
+export const pendingHistoryFileEdits = new Set<string>();
+
+type HistoryDiskMove = { id: string; filePath: string; from: string | null; to: string | null };
+type GroupMoveResult = { ok: true } | { ok: false; message: string };
+const staleGroupMove = (): GroupMoveResult => ({ ok: false, message: "所选作品或目标分组已变化，请刷新后重试。" });
+
+/** UI, Agent and MCP share one main-process disk/index transaction. */
+function moveHistoryFiles(data: PersistedData, moves: ReadonlyArray<HistoryDiskMove>): GroupMoveResult {
+  const selected = new Map(moves.map(move => [move.id, move]));
+  if (moves.some(move => pendingHistoryFileEdits.has(move.id))) {
+    return { ok: false, message: "所选图片正在被重命名或删除，请稍后重试。" };
+  }
+  const groups = new Map(data.historyGroups.map(group => [group.id, group]));
+  const byPath = new Map<string, HistoryItem[]>();
+  const pathKey = (value: string) => normalizeDirectoryEntryName(path.resolve(value));
+  for (const row of data.history) if (row.filePath) {
+    const key = pathKey(row.filePath);
+    const items = byPath.get(key);
+    if (items) items.push(row); else byPath.set(key, [row]);
+  }
+  const plans = new Map<string, { source: string; folder: string; target?: string; removed?: boolean }>();
+  const createdDirectories: string[] = [];
+  try {
+    const output = data.settings.outputDir;
+    if (!output || !path.isAbsolute(output)) throw new Error("图片保存目录不可用。");
+    const root = fs.realpathSync.native(output);
+    // Walk each segment instead of allowing an intermediate symlink/junction.
+    const checkedDirectories = new Set<string>([pathKey(root)]);
+    function directory(relative: string, create: boolean) {
+      let dir = root;
+      for (const part of relative.split(path.sep).filter(Boolean)) {
+        dir = path.join(dir, part);
+        if (checkedDirectories.has(pathKey(dir))) continue;
+        if (create && !fs.existsSync(dir)) {
+          try { fs.mkdirSync(dir); createdDirectories.push(dir); }
+          catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+        }
+        const entry = fs.lstatSync(dir);
+        if (!entry.isDirectory() || entry.isSymbolicLink() || pathKey(fs.realpathSync.native(dir)) !== pathKey(dir)) {
+          throw new Error("图片分组不能通过链接目录移动。");
+        }
+        checkedDirectories.add(pathKey(dir));
+      }
+      return dir;
+    }
+    const rows = new Map(data.history.filter(row => selected.has(row.id)).map(row => [row.id, row]));
+    if (rows.size !== selected.size || moves.length !== selected.size) return staleGroupMove();
+    for (const move of moves) {
+      const row = rows.get(move.id)!;
+      if (row.filePath !== move.filePath || (row.groupId ?? null) !== move.from || (move.to && !groups.has(move.to))) return staleGroupMove();
+    }
+    for (const move of moves) {
+      const row = rows.get(move.id)!;
+      const group = move.to ? groups.get(move.to) : undefined;
+      const folderName = group ? sanitizeGroupFolderName(group.name) : "";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(row.date)) throw new Error("图片缺少有效的历史日期。");
+      const relative = path.relative(output, row.filePath);
+      if (!relative || path.isAbsolute(relative) || relative === ".." || relative.startsWith(".." + path.sep)) {
+        throw new Error("图片不在当前保存目录内，未移动。请先确认旧图片所在的保存目录。");
+      }
+      const source = path.join(directory(path.dirname(relative) === "." ? "" : path.dirname(relative), false), path.basename(relative));
+      const entry = fs.lstatSync(source);
+      if (!entry.isFile() || entry.isSymbolicLink()) throw new Error("图片不是可移动的普通文件。");
+      const folder = path.join(root, row.date, folderName);
+      if (pathKey(path.dirname(source)) === pathKey(folder)) continue;
+      const key = pathKey(row.filePath);
+      const aliases = byPath.get(key) ?? [];
+      if (aliases.some(alias => selected.get(alias.id)?.to !== move.to || alias.date !== row.date)) {
+        throw new Error("这张文件还被其他记录使用，请把关联记录一起移到同一分组。");
+      }
+      plans.set(key, { source, folder });
+    }
+    // A hard link stages the original bytes without copying on NTFS/APFS/ext4.
+    // For other filesystems, exclusive copying retains the no-overwrite guarantee.
+    function stage(source: string, target: string) {
+      try { fs.linkSync(source, target); }
+      catch (error) {
+        if (!["EXDEV", "ENOTSUP", "EOPNOTSUPP", "ENOSYS", "EPERM"].includes(String((error as NodeJS.ErrnoException).code))) throw error;
+        fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL);
+      }
+    }
+    for (const plan of plans.values()) {
+      const dir = directory(path.relative(root, plan.folder), true);
+      const ext = path.extname(plan.source), base = path.basename(plan.source, ext);
+      for (let seq = 0; seq < 10_000; seq++) {
+        const target = path.join(dir, base + (seq ? "_" + seq : "") + ext);
+        try { stage(plan.source, target); plan.target = target; break; }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+      }
+      if (!plan.target) throw new Error("目标分组中同名文件过多。");
+    }
+    for (const plan of plans.values()) { fs.unlinkSync(plan.source); plan.removed = true; }
+    if (plans.size || moves.some(move => move.from !== move.to)) {
+      writeStore({ ...data, history: data.history.map(item => {
+        const move = selected.get(item.id);
+        if (!move) return item;
+        const target = plans.get(pathKey(item.filePath))?.target;
+        const filePath = target ? path.join(output, path.relative(root, target)) : undefined;
+        return { ...item, groupId: move.to ?? undefined,
+          ...(filePath ? { filePath, fileUrl: toLocalMediaUrl(filePath, item.id) } : {}) };
+      }) });
+    }
+    return { ok: true };
+  } catch (error) {
+    const recovery: string[] = [];
+    for (const plan of [...plans.values()].reverse()) {
+      if (!plan.target) continue;
+      try {
+        if (plan.removed) {
+          try { fs.linkSync(plan.target, plan.source); }
+          catch (linkError) {
+            if ((linkError as NodeJS.ErrnoException).code === "EEXIST") throw linkError;
+            fs.copyFileSync(plan.target, plan.source, fs.constants.COPYFILE_EXCL);
+          }
+        }
+        fs.unlinkSync(plan.target);
+      } catch { recovery.push(plan.target); }
+    }
+    for (const dir of createdDirectories.reverse()) try { fs.rmdirSync(dir); } catch { /* nonempty or inaccessible */ }
+    if (recovery.length) return { ok: false, message: "移动未完成；未能回滚的文件副本保留在：" + recovery.slice(0, 5).join("、") };
+    const code = (error as NodeJS.ErrnoException).code;
+    return { ok: false, message: "没有移动图片：" + (code ? code : error instanceof Error ? error.message : String(error)) };
+  }
+}
+
+/** Apply an MCP batch only if the preview's identities still match. */
+export function applyMcpHistoryMoves(moves: ReadonlyArray<HistoryDiskMove>): boolean {
   if (!moves.length) return true;
-  const data = readStore();
-  const changes = new Map(moves.map(move => [move.id, move]));
-  const groups = new Set(data.historyGroups.map(group => group.id));
-  const images = new Map(data.history.filter(item => changes.has(item.id)).map(item => [item.id, item]));
-  if (moves.length > 200 || changes.size !== moves.length || moves.some(move => {
-    const row = images.get(move.id);
-    return !row || row.filePath !== move.filePath || (row.groupId ?? null) !== move.from || (move.to !== null && !groups.has(move.to));
-  })) return false;
-  writeStore({ ...data, history: data.history.map(item => {
-    const move = changes.get(item.id);
-    return move ? { ...item, groupId: move.to ?? undefined } : item;
-  }) });
+  if (moves.length > 200) return false;
+  const result = moveHistoryFiles(readStore(), moves);
+  if (!result.ok) throw new Error(result.message);
   return true;
 }
 
-export function setHistoryGroup(id: string | string[], groupId?: string) {
+export function setHistoryGroup(id: string | string[], groupId?: string): GroupMoveResult {
   const data = readStore();
-  const normalized = groupId && groupId !== "__ungrouped" ? groupId : undefined;
+  const to = groupId && groupId !== "__ungrouped" ? groupId : null;
   const ids = Array.isArray(id) ? id : [id];
-  const available = new Set(data.history.map(item => item.id));
-  if (Array.isArray(id) && (!ids.length || ids.length > 50_000 || ids.some(value => typeof value !== 'string')
-    || (normalized && !data.historyGroups.some(group => group.id === normalized))
-    || ids.some(value => !available.has(value)))) {
-    return { ok: false, message: '所选作品或目标分组已变化，请刷新后重试。' };
-  }
-  const selected = new Set(ids);
-  writeStore({ ...data, history: data.history.map((item) => selected.has(item.id) ? { ...item, groupId: normalized } : item) });
-  return { ok: true };
+  const available = new Map(data.history.map(item => [item.id, item]));
+  if (!ids.length || ids.length > 50_000 || (to && !data.historyGroups.some(group => group.id === to))
+    || ids.some(value => typeof value !== "string" || !available.has(value))) return staleGroupMove();
+  return moveHistoryFiles(data, [...new Set(ids)].map(value => {
+    const row = available.get(value)!;
+    return { id: row.id, filePath: row.filePath, from: row.groupId ?? null, to };
+  }));
 }
