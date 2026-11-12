@@ -581,12 +581,13 @@ final class FolderPickerUITests: XCTestCase {
     // second appearance wait. No outer allowance or timeout is increased.
     let namingStarted = Date()
     let namingDeadline = namingStarted.addingTimeInterval(5)
-    // Issue no AX queries during the keyboard/rename transition. At 2.10s
-    // the remote Files snapshot never returned in 42699463766, even with
-    // the collection bound and cooperative waits. The late exact and modal
-    // checks still share the original absolute deadline.
+    // Leave the transition alone through the earlier 2.10s hang window.
+    // v2.9.1 acceptance saw the first 3.85s scoped query return at 5.17s
+    // with the right editor. Give that exact scoped AX query more time to
+    // finish, and place the fresh projection later if the first is empty.
+    // Both probes, including hit-testing and bounds, still end before 5s.
     let namingPolls: [(offset: TimeInterval, includeModal: Bool)] = [
-      (3.85, false), (4.35, true)
+      (3.15, false), (4.55, true)
     ]
     var naming: NamingEditorWitness?
     var namingQueryCount = 0

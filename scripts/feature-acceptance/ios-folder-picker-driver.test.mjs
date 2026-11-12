@@ -78,7 +78,7 @@ const observedBrowseTitleShape=Object.freeze({
  view:[0,0,393,852],bar:[0,69,393,108],title:[167,86.7,59,20.3],
  cachedRoot:'DOC.browsingRoot Source: com.apple.FileProvider.LocalStorage, Title: On My iPhone',
  sidebar:'DOC.sidebar.item.On My iPhone',isHittableWasCaptured:false});
-const swiftSource=()=>fs.readFileSync(new URL('./fixtures/ios-folder-picker-ui.swift',import.meta.url),'utf8');
+const swiftSource=()=>fs.readFileSync(new URL('./fixtures/ios-folder-picker-ui.swift',import.meta.url),'utf8').replace(/\r\n/g,'\n');
 // A source-selected static policy model, deliberately NOT an XCUI implementation
 // or mock supplied to the native runner. Source-shape guards bind its branches.
 function titleContract(source,shape,expectedFolder){
@@ -354,10 +354,12 @@ test('appearance witness holds actual accessibility elements and the same absolu
  assert(budget);
  const rows=[...budget.matchAll(/\(([\d.]+), (true|false)\)/g)].map(([,ms,modal])=>[Number(ms),modal==='true']);
  assert.equal(rows.length,2);assert.equal(rows.filter(x=>x[1]).length,1);assert.equal(rows.at(-1)[1],true);
- // Run 42699463766: the remote Files snapshot stalled on the second
- // probe despite cooperative waits. There is no early warming snapshot.
- assert.deepEqual(rows.map(row=>row[0]),[3.85,4.35]);
- assert.equal(rows.filter(([offset])=>offset<3.85).length,0);
+ // Run 42699463766: keep the initial keyboard transition free of AX work.
+ // v2.9.1 attempts 1–3: reserve more time for the exact first query to
+ // complete, with a late fresh projection, but preserve the 5s cutoff.
+ assert.deepEqual(rows.map(row=>row[0]),[3.15,4.55]);
+ assert.equal(rows.filter(([offset])=>offset<3).length,0);
+ assert(rows[0][0]+1.75<5,'First exact query retains observed RPC headroom');
  assert(s.includes('"probeTimes": namingProbeTimes'));
  assert(rows.every(([offset],i)=>offset<5&&(i===0||offset>rows[i-1][0])));
  const poll=s.split('for poll in namingPolls {')[1].split('let witnessObservedAt')[0];
