@@ -1,4 +1,4 @@
-import { sanitizeGroupFolderName } from "./store";
+import { sanitizeGroupFolderName } from "./history-file-path";
 import {removePngGenerationMetadata, removePngMetadataChunks} from './png-privacy';
 import {localGenerationTime} from "./history-generation-time";
 import {extractEmbeddedImageMetadata} from '../image-metadata';

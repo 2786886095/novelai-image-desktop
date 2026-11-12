@@ -36,17 +36,27 @@ if (existsSync(dest + '.ok') && existsSync(path.join(dir, `gradle-${version}`, '
   console.log('Gradle wrapper ZIP already verified.');
 } else {
   try {
-    // This is the same upstream ZIP Gradle redirects to, via the official asset API.
-    // No auth header is supplied; never accept a substitute URL or unverified bytes.
-    const result = spawnSync('curl', ['--fail', '--silent', '--show-error', '--location',
-      '--proto', '=https', '--proto-redir', '=https', '--retry', '2',
-      '--connect-timeout', '10', '--max-time', '120', '--retry-max-time', '160',
-      '--max-filesize', '136114148', '--header', 'Accept: application/octet-stream',
-      '--output', temp, officialAsset], { stdio: 'inherit', timeout: 180000 });
-    if (result.error || result.status !== 0) throw Error('Official Gradle release asset download failed.');
-    if (!(await matches(temp))) throw Error('Official Gradle archive checksum mismatch.');
-    await rename(temp, dest);
-    console.log('Pinned Gradle wrapper ZIP staged from the official release asset.');
+    // Both HTTPS origins are Gradle-operated or its official GitHub release.
+    // Never relax the size or SHA-256 check, even when a mirror fails.
+    const officialSources = [url, 'https://downloads.gradle.org/distributions/' + archive, officialAsset];
+    let staged = false;
+    for (const source of officialSources) {
+      await rm(temp, { force: true });
+      const result = spawnSync('curl', ['--fail', '--silent', '--show-error', '--location',
+        '--proto', '=https', '--proto-redir', '=https', '--retry', '1',
+        '--connect-timeout', '10', '--max-time', '120', '--retry-max-time', '150',
+        '--max-filesize', '136114148', '--header', 'Accept: application/octet-stream',
+        '--output', temp, source], { stdio: 'inherit', timeout: 160000 });
+      if (result.error || result.status !== 0 || !(await matches(temp))) {
+        console.warn('Official Gradle source unavailable or invalid: ' + new URL(source).hostname);
+        continue;
+      }
+      await rename(temp, dest);
+      console.log('Pinned Gradle wrapper ZIP staged and verified from ' + new URL(source).hostname);
+      staged = true;
+      break;
+    }
+    if (!staged) throw Error('All official Gradle sources failed or returned incorrect bytes.');
   } finally {
     await rm(temp, { force: true });
   }

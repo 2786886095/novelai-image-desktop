@@ -35,7 +35,20 @@ app.whenReady().then(async()=>{
  });
  await check('output-management','folder-choice-history-link',()=>{assert.equal(store.getSettings().outputDir,output);for(const item of storage.listHistory())assert.equal(path.dirname(item.filePath),output);return {configuredManagedDirectory:output,historyPathsLinked:true};});
  await check('works','rename-collision-bytes',async()=>{const result=await storage.renameHistoryItem(a.id,'collision');assert.equal(result.ok,true);a=result.item;assert.notEqual(path.basename(a.filePath),'collision.png');assert.equal(hash(fs.readFileSync(a.filePath)),imageHash);return {renamed:path.basename(a.filePath),collisionPreserved:true,bytesUnchanged:true};});
- await check('works-batch-edit','move-multiple-dedupe',()=>{const other=store.ensureHistoryGroup('Second fixture','fixture-second');assert.equal(storage.assignHistoryGroup(['a','b','a'],other.id).ok,true);assert.equal(storage.listHistory(undefined,other.id).length,2);return {uniqueMoved:2,filesUnchanged:['a','b'].every(id=>hash(fs.readFileSync(store.readStore().history.find(i=>i.id===id).filePath))===imageHash)};});
+ await check('works-batch-edit','move-multiple-dedupe',()=>{
+  const other=store.ensureHistoryGroup('Second fixture','fixture-second'), oldPaths=[a.filePath,b.filePath];
+  assert.equal(storage.assignHistoryGroup(['a','b','a'],other.id).ok,true);
+  const rows=storage.listHistory(undefined,other.id);
+  assert.equal(rows.length,2);
+  for(const row of rows){
+   assert.equal(path.dirname(row.filePath),path.join(output,row.date,'Second_fixture'));
+   assert.equal(hash(fs.readFileSync(row.filePath)),imageHash);
+  }
+  assert(oldPaths.every(file=>!fs.existsSync(file)));
+  // Subsequent scenarios operate on the updated records, not obsolete paths.
+  a=rows.find(row=>row.id==='a');b=rows.find(row=>row.id==='b');
+  return {uniqueMoved:2,filesUnchanged:true,originalPathsGone:true,datedGroupPathsVerified:true};
+ });
  await check('works-batch-edit','invalid-stale-partial-error',async()=>{const before=JSON.stringify(store.readStore());assert.equal(storage.assignHistoryGroup(['a','unknown'],'deleted-group').ok,false);assert.equal(JSON.stringify(store.readStore()),before);const outsideDir=path.join(profile,'outside'),outside=path.join(outsideDir,'outside.png');fs.mkdirSync(outsideDir);fs.writeFileSync(outside,bytes);store.addHistory([{...a,id:'outside-unmanaged',filePath:outside}]);const indexOnly=await storage.deleteHistoryItems(['outside-unmanaged']);assert.equal(indexOnly.ok,true);assert.equal(hash(fs.readFileSync(outside)),imageHash);const link=path.join(output,'escape-link');fs.symlinkSync(outsideDir,link,process.platform==='win32'?'junction':'dir');store.addHistory([{...a,id:'outside',filePath:path.join(link,'outside.png')}]);const valid=await make('partial-valid');const result=await storage.deleteHistoryItems(['partial-valid','outside']);assert.equal(result.ok,false);assert.equal(fs.existsSync(valid.filePath),false);assert.equal(hash(fs.readFileSync(outside)),imageHash);assert(result.failed.some(i=>i.id==='outside'));assert(store.readStore().history.some(i=>i.id==='outside'));store.removeHistoryItems(['outside']);return {staleGroupRejectedAtomically:true,unmanagedFilePreservedWithIndexOnlyRemoval:true,linkEscapeBlocked:true,partialSuccessRecorded:true,failedSelectedIdentityRetained:true};});
  await check('works-batch-edit','delete-selected-shared-files',async()=>{store.addHistory([{...b,id:'b-shared'}]);let result=await storage.deleteHistoryItems(['b']);assert.equal(result.ok,true);assert.equal(fs.existsSync(b.filePath),true);result=await storage.deleteHistoryItems(['b-shared','b-shared']);assert.equal(result.ok,true);assert.equal(fs.existsSync(b.filePath),false);assert.equal(fs.existsSync(c.filePath),true);return {sharedFileRetainedUntilLastRecord:true,unselectedImageRetained:true,deduplicatedDelete:true};});
  await check('works','delete-safety-and-errors',async()=>{const before=JSON.stringify(store.readStore());const bad=await storage.deleteHistoryItems([null]);assert.equal(bad.ok,false);assert.equal(JSON.stringify(store.readStore()),before);return {malformedBatchRefused:true,recordsUnchanged:true,unselectedFileSha256:hash(fs.readFileSync(c.filePath))};});

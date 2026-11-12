@@ -1,3 +1,4 @@
+import { pendingHistoryFileEdits, sanitizeGroupFolderName } from "./history-file-path";
 import {normalizeNegativePromptPresets} from "../../src/negative-prompt-library";
 import {normalizeAutomaticComparison} from "../../src/automatic-comparison";
 import {normalizeTypography,DEFAULT_TYPOGRAPHY} from "../../src/typography";
@@ -827,17 +828,6 @@ export function pruneMissingReverseHistoryItem(id: string): boolean {
   return true;
 }
 
-export function sanitizeGroupFolderName(name: string): string {
-  const cleaned = name
-    .replace(/[\\/:*?"<>|]+/g, "-")
-    .replace(/\s+/g, "_")
-    .replace(/^\.+/, "")
-    .trim()
-    .slice(0, 80);
-  const segment = cleaned.replace(/[. ]+$/, "");
-  return /^(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(?:\.|$)/iu.test(segment) ? "_" + segment : segment || "group";
-}
-
 export function fileExists(filePath: string): boolean {
   try {
     return fs.existsSync(filePath);
@@ -1331,8 +1321,6 @@ export function deleteHistoryGroup(id: string): HistoryGroup[] {
   writeStore(data);
   return data.historyGroups;
 }
-
-export const pendingHistoryFileEdits = new Set<string>();
 
 type HistoryDiskMove = { id: string; filePath: string; from: string | null; to: string | null };
 type GroupMoveResult = { ok: true } | { ok: false; message: string };

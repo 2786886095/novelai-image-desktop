@@ -59,7 +59,9 @@ describe("history grouping persistence using the production disk store", () => {
     ["group A to ungrouped", "A", "a", "__ungrouped", undefined],
   ])("keeps %s after restart and periodic scans", async (_, folder, original, assigned, expected) => {
     const file = seed(folder, original);
-    store.setHistoryGroup("image", assigned);
+    expect(store.setHistoryGroup("image", assigned)).toEqual({ ok: true });
+    const moved = path.join(output, date, expected ?? "", "image.png");
+    expect(fs.existsSync(file)).toBe(false);
     await restart();
     expect(store.getHistory(date)[0].groupId).toBe(expected);
     expect(store.getHistory(date, expected ?? "__ungrouped")).toHaveLength(1);
@@ -69,7 +71,8 @@ describe("history grouping persistence using the production disk store", () => {
     store.getHistoryGroups();
     expect(store.getHistory()[0].groupId).toBe(expected);
     expect(JSON.parse(fs.readFileSync(path.join(fixture.root, "userData/novelai-image-desktop.json"), "utf8")).history[0].groupId).toBe(expected);
-    expect(fs.readFileSync(file)).toEqual(bytes);
+    expect(store.getHistory()[0].filePath).toBe(moved);
+    expect(fs.readFileSync(moved)).toEqual(bytes);
   });
 
   it("does not resurrect a renamed group from its old folder", async () => {

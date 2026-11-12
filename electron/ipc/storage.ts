@@ -1,3 +1,4 @@
+import { pendingHistoryFileEdits } from "./history-file-path";
 import { dialog, shell } from "electron";
 import fs from "fs/promises";
 import path from "path";
@@ -13,7 +14,6 @@ import {
   getHistoryGroups,
   getSetting,
   removeHistory,
-  pendingHistoryFileEdits,
   removeHistoryItems,
   renameHistoryGroup,
   setHistoryGroup,
