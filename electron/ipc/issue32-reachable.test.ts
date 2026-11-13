@@ -14,3 +14,28 @@ for(const mode of ['401','404','html','non-novelai'] as const)it(`failed ${mode}
 it('explicitly rejects unrelated models before networking or persistence',async()=>{const {s,get,post}=await setup();const result=await call('images:saveCompatibleSettings',{...config,model:'gpt-image-1'},'QA_RELAY_ONLY','openai-images',s.getSettings().imageServiceRevision);expect(result.ok).toBe(false);expect(get).not.toHaveBeenCalled();expect(post).not.toHaveBeenCalled();});
 it('reachable generation performs one POST, decodes PNG, writes real history, and switching native retains independent config',async()=>{const {s,post}=await setup();expect((await call('images:saveCompatibleSettings',config,'QA_RELAY_ONLY','openai-images',s.getSettings().imageServiceRevision)).ok).toBe(true);const bytes=await sharp({create:{width:2,height:2,channels:3,background:'white'}}).png().toBuffer();post.mockResolvedValue({status:200,data:Buffer.from(JSON.stringify({data:[{b64_json:bytes.toString('base64')}]}))});const result=await call('images:generateCompatible',{prompt:'owned fixture',n:1,expectedImageServiceRevision:s.getSettings().imageServiceRevision});expect(result.ok).toBe(true);expect(result.items).toHaveLength(1);expect(fs.existsSync(result.items[0].filePath)).toBe(true);expect(post).toHaveBeenCalledTimes(1);expect(post.mock.calls[0][0]).toBe('https://owned-relay.invalid/custom/v1/images/generations');expect(post.mock.calls[0][2]?.headers?.Authorization).toBe('Bearer QA_RELAY_ONLY');expect(JSON.stringify(post.mock.calls)).not.toContain('QA_OFFICIAL_NEVER_FORWARD');expect((await call('images:setCompatibleProvider','novelai',s.getSettings().imageServiceRevision)).ok).toBe(true);expect(s.getSettings()).toMatchObject({imageProvider:'novelai',imageApiKey:'QA_RELAY_ONLY',compatibleImage:config});});
 it('stale or remote renderer cannot save or submit',async()=>{const {s,get,post}=await setup();expect((await call('images:saveCompatibleSettings',config,'QA_RELAY_ONLY','openai-images','stale')).ok).toBe(false);expect((await f.handlers.get('images:saveCompatibleSettings')!({sender:{},senderFrame:{}},config,'QA_RELAY_ONLY','openai-images',s.getSettings().imageServiceRevision)).ok).toBe(false);expect((await call('images:generateCompatible',{prompt:'fixture',n:1,expectedImageServiceRevision:'stale'})).ok).toBe(false);expect(get).not.toHaveBeenCalled();expect(post).not.toHaveBeenCalled();});
+
+it('explicit OpenAI relay verifies, selects without leaking key, and runs one compatible POST through the reachable renderer IPC',async()=>{
+ const {s,get,post}=await setup();
+ const accounts=await import('./nai-accounts');accounts.registerNaiAccountsIpc();
+ const relay={method:'relay',relayProtocol:'openai-images',relayModel:'gpt-image-1',label:'Owned relay',apiBaseUrl:'https://owned-relay.invalid/custom/v1/images/generations',token:'QA_RELAY_ONLY'};
+ get.mockImplementation(async(url)=>String(url).endsWith('/custom/v1/models')?{status:200,data:{object:'list',data:[{id:'gpt-image-1'}]}}:{status:401});
+ const profile=await call('naiAccounts:add',relay);expect(post).not.toHaveBeenCalled();
+ const oldRevision=s.getSettings().imageServiceRevision;
+ await call('naiAccounts:select',profile.id);
+ expect(s.getSettings()).toMatchObject({naiRelayImageAccount:true,imageProvider:'openai-images',imageApiKey:'',compatibleImage:{baseUrl:'https://owned-relay.invalid/custom/v1',model:'gpt-image-1'}});
+ expect(JSON.stringify(s.getSettings())).not.toContain(relay.token);
+ expect(s.getSettings().imageServiceRevision).not.toBe(oldRevision);
+ expect((await call('images:generateCompatible',{prompt:'fixture',n:1,expectedImageServiceRevision:oldRevision})).ok).toBe(false);
+ const bytes=await sharp({create:{width:2,height:2,channels:3,background:'white'}}).png().toBuffer();
+ post.mockResolvedValueOnce({status:200,data:Buffer.from(JSON.stringify({data:[{b64_json:bytes.toString('base64')}]}))}).mockResolvedValueOnce({status:403,data:Buffer.from('{}')});
+ const req={prompt:'woodland lake',n:1,expectedImageServiceRevision:s.getSettings().imageServiceRevision};
+ const result=await call('images:generateCompatible',req);expect(result.ok).toBe(true);expect(fs.existsSync(result.items[0].filePath)).toBe(true);
+ expect(post).toHaveBeenCalledTimes(1);
+ expect(post.mock.calls[0][0]).toBe(relay.apiBaseUrl);
+ expect(JSON.parse(post.mock.calls[0][1].toString())).toEqual({model:'gpt-image-1',prompt:req.prompt,size:'auto',n:1});
+ expect(post.mock.calls[0][2].headers.Authorization).toBe('Bearer QA_RELAY_ONLY');
+ expect((await call('images:generateCompatible',req)).message).toMatch(/POST \/v1\/images\/generations.*HTTP 403/);
+ expect(post).toHaveBeenCalledTimes(2);
+ expect(get.mock.calls.every(([url])=>new URL(url).pathname==='/custom/v1/models')).toBe(true);
+});

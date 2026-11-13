@@ -228,7 +228,8 @@ class _NovelAiAccountsScreenState extends State<NovelAiAccountsScreen> {
       image = TextEditingController();
   String t(String key, {String? name}) =>
       _accountText(context, key, name: name);
-  String method = 'token';
+  String method = 'token', relayProtocol = 'native';
+  final relayModel = TextEditingController();
   bool submitting = false, showInputKey = false, initialized = false;
   final visibleKeys = <String>{};
   final results = <String, _VerificationMessage>{};
@@ -244,7 +245,7 @@ class _NovelAiAccountsScreenState extends State<NovelAiAccountsScreen> {
 
   @override
   void dispose() {
-    for (final c in [label, token, email, password, api, image]) {
+    for (final c in [label, token, email, password, api, image, relayModel]) {
       c.dispose();
     }
     super.dispose();
@@ -265,13 +266,14 @@ class _NovelAiAccountsScreenState extends State<NovelAiAccountsScreen> {
     }
     final text = error is FormatException ? error.message.toString() : '';
     final match =
-        RegExp(r'NAI_ACCOUNT_VALIDATION:([a-z-]+):(\d+)').firstMatch(text);
+        RegExp(r'NAI_ACCOUNT_VALIDATION:([a-z-]+):(\d+)(?::(/user/data|/user/subscription|/v1/models))?').firstMatch(text);
     final detail = match == null
         ? t('accountSaveFailed')
-        : 'HTTP ${match.group(2)} · ${switch (match.group(1)) {
+        : '${match.group(3) != null ? 'GET ${match.group(3)} · ' : ''}${match.group(2) != '0' ? 'HTTP ${match.group(2)} · ' : ''}${switch (match.group(1)) {
             'unsupported' => t('accountUnsupported'),
             'auth' => t('accountAuthFailed'),
             'invalid-response' => t('accountInvalidResponse'),
+            'network' => t('accountValidationNetwork'),
             _ => t('accountValidationFailed')
           }}';
     return _VerificationMessage(false, t('accountFailed'), detail);
@@ -290,7 +292,9 @@ class _NovelAiAccountsScreenState extends State<NovelAiAccountsScreen> {
           email: email.text,
           password: secret,
           apiBaseUrl: api.text,
-          imageBaseUrl: image.text);
+          imageBaseUrl: image.text,
+          relayProtocol: method == 'relay' ? relayProtocol : null,
+          relayModel: method == 'relay' && relayProtocol == 'openai-images' ? relayModel.text : null);
       if (!mounted) return;
       setState(() {
         message = _VerificationMessage(
@@ -578,9 +582,22 @@ class _NovelAiAccountsScreenState extends State<NovelAiAccountsScreen> {
                     : t('accountMethodKey'),
                 secret: true),
           if (method == 'relay') ...[
+            DropdownButtonFormField<String>(
+              key: const ValueKey('account-relay-protocol'),
+              decoration: InputDecoration(labelText: t('accountRelayProtocol')),
+              isExpanded: true, value: relayProtocol,
+              items: [
+                DropdownMenuItem(value: 'native', child: Text(t('accountRelayNative'))),
+                DropdownMenuItem(value: 'models', child: Text(t('accountRelayModels'))),
+                DropdownMenuItem(value: 'openai-images', child: Text(t('accountRelayOpenAi'))),
+              ],
+              onChanged: submitting ? null : (v) => setState(() { relayProtocol = v!; message = null; }),
+            ),
+            if (relayProtocol != 'native') Text(t(relayProtocol == 'models'
+                ? 'accountRelayModelsHelp' : 'accountRelayOpenAiHelp')),
             field(api, t('accountApiAddress'), hint: 'https://relay.example'),
             Text(t('accountAddressHint')),
-            field(image, t('accountImageAddress'),
+            if (relayProtocol == 'openai-images') field(relayModel, t('accountRelayModel')) else field(image, t('accountImageAddress'),
                 hint: 'https://images.relay.example')
           ],
           FilledButton(

@@ -21,7 +21,7 @@ NovelAI 圖像創作工作臺，介面支援簡體中文、繁體中文、英語
 
 ## 本次更新
 
-桌面和行動版刪除風格分組前會顯示分組名稱並要求確認。取消不會變更資料；確認後，組內風格移回預設分組，風格與預覽圖會保留。
+桌面與行動版可選 NovelAI 原生、/v1 驗證後使用 NovelAI 生圖，或 OpenAI 相容文生圖。驗證失敗會顯示介面路徑，不會提交生圖。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

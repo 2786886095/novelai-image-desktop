@@ -76,7 +76,7 @@ const _rows = <String, List<String>>{
     "읽기 전용 검증 미지원. 저장하지 않음"
   ],
   "accountAuthFailed": [
-    "API Token 无效或无权限，未保存账号",
+    "该接口拒绝鉴权。请核对接口类型、站方 Key 和权限；未保存账号",
     "API Token 無效或無權限，未儲存帳號",
     "Invalid or unauthorized API Token; account not saved",
     "API Token が無効または権限不足。未保存",
@@ -256,6 +256,14 @@ const _rows = <String, List<String>>{
     "中継 API Token",
     "중계 API Token"
   ],
+  "accountValidationNetwork": ["无法连接选定接口，请检查地址或网络。","無法連線至選定介面。","Could not reach the selected endpoint.","選択した API に接続できません。","선택한 API에 연결할 수 없습니다."],
+  "accountRelayProtocol": ["中转站接口类型", "中轉站介面類型", "Relay interface", "中継 API の種類", "중계 API 유형"],
+  "accountRelayNative": ["NovelAI 原生", "NovelAI 原生", "Native NovelAI", "NovelAI ネイティブ", "NovelAI 네이티브"],
+  "accountRelayModels": ["/v1 验 Key，NovelAI 生图", "/v1 驗 Key，NovelAI 生圖", "/v1 authentication + native NovelAI", "/v1 認証＋NovelAI 生成", "/v1 인증 + NovelAI 생성"],
+  "accountRelayOpenAi": ["OpenAI 兼容生图", "OpenAI 相容生圖", "OpenAI-compatible image generation", "OpenAI 互換画像生成", "OpenAI 호환 이미지 생성"],
+  "accountRelayModel": ["站方图片模型 ID", "站方圖片模型 ID", "Provider image model ID", "提供元の画像モデル ID", "제공자 이미지 모델 ID"],
+  "accountRelayModelsHelp": ["只用 GET /v1/models 验 Key；生图仍走 NovelAI 原生接口。","只用 GET /v1/models 驗 Key；生圖仍使用 NovelAI 原生介面。","GET /v1/models verifies the key. Images still use the native NovelAI route.","GET /v1/models で認証し、NovelAI API で生成します。","GET /v1/models로 인증하고 NovelAI API로 생성합니다."],
+  "accountRelayOpenAiHelp": ["验证不生图；选中账号后通过 /v1/images/generations 文生图。","驗證不生圖；選中帳戶後使用 /v1/images/generations。","Verification does not generate images. Select the account to use /v1/images/generations.","確認では生成されません。選択後は /v1/images/generations を使用します。","확인 중에는 생성하지 않습니다. 선택 시 /v1/images/generations를 사용합니다."],
   "accountApiAddress": [
     "API 接口地址",
     "API 介面位址",

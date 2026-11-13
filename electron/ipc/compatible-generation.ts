@@ -1,4 +1,5 @@
 import {localGenerationTime} from "./history-generation-time";
+import {currentNaiAccount,withNaiAccountOperation} from './nai-accounts-runtime';
 import {NAI_RELAY_MODEL_IDS} from '../../src/nai-accounts';
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
@@ -40,6 +41,7 @@ function staleImageSettings() {
 /** Switching off also works when the compatible endpoint is malformed or its key is missing. */
 export function switchCompatibleImageProvider(provider: 'novelai', expectedRevision: string) {
   if (!expectedRevision || expectedRevision !== getSettings().imageServiceRevision) return staleImageSettings();
+  if(getSettings().naiRelayImageAccount)return {ok:false,message:'请在账户管理中切换生图账号。'};
   if (provider !== 'novelai') return { ok: false, message: '请通过保存配置启用兼容服务。' };
   try {
     setSetting('imageProvider', 'novelai');
@@ -49,6 +51,9 @@ export function switchCompatibleImageProvider(provider: 'novelai', expectedRevis
 
 /** Ordinary T2I only: no native token/account calls and no fallback to NovelAI. */
 export async function generateConfiguredImages(request: CompatibleGenerationRequest, options: { signal?: AbortSignal; expectedProvider?: ImageProviderBinding; size?: string; beforeSubmit?: () => void | Promise<void> } = {}): Promise<GenerateResult> {
+  return withNaiAccountOperation(()=>generateBoundImages(request,options));
+}
+async function generateBoundImages(request:CompatibleGenerationRequest,options:{signal?:AbortSignal;expectedProvider?:ImageProviderBinding;size?:string;beforeSubmit?:()=>void|Promise<void>}):Promise<GenerateResult>{
   const items: HistoryItem[] = [];
   const job = beginJob();
   const abort = () => job.controller.abort();
@@ -68,8 +73,9 @@ export async function generateConfiguredImages(request: CompatibleGenerationRequ
     if (settings.imageProvider !== "openai-images" || !settings.compatibleImage) {
       return { ok: false, items, message: "请先在设置中选择并保存兼容图片服务。" };
     }
-    if(!NAI_RELAY_MODEL_IDS.includes(settings.compatibleImage.model as any)) return {ok:false,items,message:'仅兼容 NovelAI 模型；未提交生成。'};
-    const config = { ...settings.compatibleImage, apiKey: settings.imageApiKey ?? "" };
+    if(!settings.naiRelayImageAccount&&!NAI_RELAY_MODEL_IDS.includes(settings.compatibleImage.model as any)) return {ok:false,items,message:'仅兼容 NovelAI 模型；未提交生成。'};
+    const relay=currentNaiAccount();
+    const config = { ...settings.compatibleImage, apiKey: settings.naiRelayImageAccount&&relay?.relayProtocol==='openai-images'?relay.token:settings.imageApiKey??'' };
     const input = { prompt: request.prompt, n: request.n, size: options.size ?? config.size, extensions: config.extensions };
     const body = buildCompatibleImageRequest(config, input);
     const groupId = request.historyGroupId ?? settings.generationGroupId;
@@ -92,7 +98,7 @@ export async function generateConfiguredImages(request: CompatibleGenerationRequ
         assertAgentImageProvider(getSettings(), options.expectedProvider);
         await options.beforeSubmit?.();
       },
-      route: (url) => proxyConfigForUrl("ai", url, settings),
+      route: (url) => proxyConfigForUrl(settings.naiRelayImageAccount?'nai':'ai', url, settings),
     });
     submitted = batch.submitted;
     // Persist accepted partial outputs, including outputs preceding a cancellation.
@@ -116,7 +122,7 @@ export async function generateConfiguredImages(request: CompatibleGenerationRequ
       ok: batch.complete, items,
       message: batch.complete
         ? `兼容图片服务生成完成，已保存 ${items.length} 张。费用请以服务商记录为准。`
-        : `${batch.cancelled ? "请求已停止。" : batch.error?.message ?? "生成未完成。"} 已保存 ${items.length} 张；没有自动重发生成请求。`,
+        : `${batch.cancelled ? "请求已停止。" : (batch.error?.phase==='generate'?'POST /v1/images/generations · ':'')+(batch.error?.message??'生成未完成。')} 已保存 ${items.length} 张；没有自动重发生成请求。`,
     };
   } catch {
     return { ok: false, items, message: submitted

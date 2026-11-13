@@ -64,3 +64,30 @@ it('failed probe retains last Anlas balance as stale cache, never marks a subscr
  get.mockResolvedValue({status:401});expect(await call('naiAccounts:probe',profile.id)).toMatchObject({ok:false,subscription:'skipped'});
  expect(runtime.getNaiAccountSummary(runtime.currentNaiAccount())).toMatchObject({anlasBalance:19,stale:true,hasActiveSubscription:false});
 });
+
+it('v1-only explicit account skips Native 401, retains the separate generation prefix and restores mode from vault',async()=>{
+ const store=await setup(); const axios=(await import('axios')).default;
+ const get=vi.spyOn(axios,'get').mockImplementation(async(url)=>url.endsWith('/v1/models')
+  ?{status:200,data:{object:'list',data:[{id:'relay-custom-image'}]}}:{status:401});
+ const input={...candidate,apiBaseUrl:candidate.apiBaseUrl+'/prefix/v1/models',imageBaseUrl:'',relayProtocol:'models'};
+ const profile=await call('naiAccounts:add',input);
+ expect(profile).toMatchObject({apiBaseUrl:candidate.apiBaseUrl+'/prefix/v1',imageBaseUrl:candidate.apiBaseUrl+'/prefix',relayProtocol:'models'});
+ call('naiAccounts:select',profile.id);
+ const restored=await call('naiAccounts:probe',profile.id);
+ expect(restored).toMatchObject({ok:true,route:'/v1/models',subscription:'skipped'});
+ expect(get.mock.calls.map(([url])=>new URL(url).pathname)).toEqual(['/prefix/v1/models','/prefix/v1/models']);
+ expect(store.getSettings().imageProvider).toBe('novelai');
+});
+it.each([401,403,503,0])('v1-only rejection exposes sanitized route, preserves encrypted vault and does not try another host: %s',async(status)=>{
+ await setup(); const axios=(await import('axios')).default;
+ const get=vi.spyOn(axios,'get').mockImplementation(async()=>{if(!status)throw Error('never expose QA_ONLY_NEWAPI_PLACEHOLDER');return {status};});
+ const file=path.join(fixture.root,'nai-accounts-v1.json'),before=fs.readFileSync(file);
+ await expect(call('naiAccounts:add',{...candidate,relayProtocol:'models'})).rejects.toThrow('NAI_ACCOUNT_VALIDATION:'+(status===0?'network':status===503?'http':'auth')+':'+status+':/v1/models');
+ expect(get).toHaveBeenCalledTimes(1);expect(fs.readFileSync(file)).toEqual(before);
+});
+it('native option preserves hard 401 and identifies the rejected subscription route',async()=>{
+ await setup(); const axios=(await import('axios')).default;
+ const get=vi.spyOn(axios,'get').mockImplementation(async(url)=>url.endsWith('/user/data')?{status:404}:{status:401});
+ await expect(call('naiAccounts:add',{...candidate,relayProtocol:'native'})).rejects.toThrow('NAI_ACCOUNT_VALIDATION:auth:401:/user/subscription');
+ expect(get.mock.calls.map(([url])=>new URL(url).pathname)).toEqual(['/user/data','/user/subscription']);
+});

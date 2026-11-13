@@ -15,6 +15,7 @@ export function registerCompatibleImageIpc(getWindow: () => BrowserWindow | null
   const stale = () => ({ ok: false, code: 'stale', message: '请重新读取图片服务配置后重试。' });
   ipcMain.handle('images:saveCompatibleSettings', async (event,config,key,provider,revision) => {
     if(!trusted(event)||!hasRevision(revision)||revision!==getSettings().imageServiceRevision) return stale();
+    if(getSettings().naiRelayImageAccount)return {ok:false,message:'请在账户管理中切换生图账号。'};
     if(provider!=='openai-images') return {ok:false,message:'仅通过此入口保存 NovelAI 兼容中转。'};
     let candidate; try { candidate=structuredClone(config); await verifyNovelAiImageEnvelope(candidate,key); }
     catch { return {ok:false,message:'验证未通过：请检查接口、独立 Token 和 NovelAI 模型；未保存配置。'}; }

@@ -25,7 +25,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '2.9.2';
+const appVersion = '2.9.3';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -950,8 +950,17 @@ class HistoryItem {
 }
 
 class AppSettings {
-  String imageProvider;
-  Map<String, dynamic> compatibleImage;
+  String _imageProvider;
+  Map<String, dynamic> _compatibleImage;
+  // Selected relay routing is a runtime overlay only; never writes account Key or overrides
+  // independent image service preferences on disk.
+  String? relayImageProtocol;
+  Map<String, dynamic>? relayImageConfig;
+  String get imageProvider => relayImageProtocol == 'openai-images' ? 'openai-images'
+      : relayImageProtocol == null ? _imageProvider : 'novelai';
+  set imageProvider(String value) => _imageProvider = value;
+  Map<String, dynamic> get compatibleImage => relayImageConfig ?? _compatibleImage;
+  set compatibleImage(Map<String, dynamic> value) => _compatibleImage = value;
   Map<String, dynamic> openAIEdit;
   CompletionSound completionSound;
   bool persistI2IParams;
@@ -1098,8 +1107,8 @@ class AppSettings {
   int autoBackupAssetPolicyVersion;
 
   AppSettings({
-    this.imageProvider = 'novelai',
-    this.compatibleImage = const {},
+    String imageProvider = 'novelai',
+    Map<String, dynamic> compatibleImage = const {},
     this.openAIEdit = const {},
     this.completionSound = const CompletionSound(),
     this.persistI2IParams = true,
@@ -1228,7 +1237,8 @@ class AppSettings {
     this.autoBackupRetentionCount = 7,
     this.autoBackupIncludeImages = false,
     this.autoBackupAssetPolicyVersion = 1,
-  })  : reversePromptSkillVersion = normalizePromptSkillVersion(reversePromptSkillVersion,
+  })  : _imageProvider = imageProvider, _compatibleImage = compatibleImage,
+        reversePromptSkillVersion = normalizePromptSkillVersion(reversePromptSkillVersion,
             model: reversePromptTemplateVersion, legacy: [reversePromptTemplates,reversePromptTemplatesV45]),
         convertPromptSkillVersion = normalizePromptSkillVersion(convertPromptSkillVersion,
             model: convertPromptTemplateVersion, legacy: [convertPromptTemplates,convertPromptTemplatesV45]),
@@ -1263,8 +1273,8 @@ class AppSettings {
 
   Map<String, dynamic> toJson() => {
         'apiBaseUrl': apiBaseUrl,
-        'imageProvider': imageProvider,
-        'compatibleImage': compatibleImage,
+        'imageProvider': _imageProvider,
+        'compatibleImage': _compatibleImage,
         'openAIEdit': openAIEdit,
         'imageBaseUrl': imageBaseUrl,
         'allowCustomEndpoint': allowCustomEndpoint,

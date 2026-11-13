@@ -23,7 +23,7 @@ export function parsePortableNaiAccounts(value: unknown,allowLegacyForExport=fal
     !(value.selectedId===null||typeof value.selectedId==='string'))return fail();
   const ids=new Set<string>();
   const accounts=value.accounts.map((raw:unknown)=>{
-    if(!obj(raw)||Object.keys(raw).some(k=>!['id','label','method','apiBaseUrl','imageBaseUrl','token','accountSummary',...(allowLegacyForExport?['legacyConfiguration']:[])].includes(k))||
+    if(!obj(raw)||Object.keys(raw).some(k=>!['id','label','method','apiBaseUrl','imageBaseUrl','token','accountSummary','relayProtocol','relayModel',...(allowLegacyForExport?['legacyConfiguration']:[])].includes(k))||
       !['id','label','method','apiBaseUrl','imageBaseUrl','token'].every(k=>typeof raw[k]==='string')||
       !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(raw.id)||ids.has(raw.id))return fail();
     ids.add(raw.id);
@@ -49,17 +49,24 @@ export function parsePortableNaiAccounts(value: unknown,allowLegacyForExport=fal
       (summary.expiresAt!==undefined&&(typeof summary.expiresAt!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(summary.expiresAt)))||
       (summary.hasActiveSubscription!==undefined&&typeof summary.hasActiveSubscription!=='boolean')))return fail();
     return {id:raw.id,label:raw.label.trim(),method:normalized.method,apiBaseUrl:normalized.apiBaseUrl,
-      imageBaseUrl:normalized.imageBaseUrl,token:raw.token.trim(),...(allowLegacyForExport&&raw.legacyConfiguration?{legacyConfiguration:{...raw.legacyConfiguration}}:{}),...(summary?{accountSummary:stableNaiAccountSummary(summary)}:{})};
+      imageBaseUrl:normalized.imageBaseUrl,...relayFields(normalized),token:raw.token.trim(),...(allowLegacyForExport&&raw.legacyConfiguration?{legacyConfiguration:{...raw.legacyConfiguration}}:{}),...(summary?{accountSummary:stableNaiAccountSummary(summary)}:{})};
   });
   if(value.selectedId!==null&&!ids.has(value.selectedId))return fail();
   return {version:1,selectedId:value.selectedId,accounts};
+}
+
+function relayFields(a:Pick<NaiAccountProfile,'relayProtocol'|'relayModel'>) {
+  return {...(a.relayProtocol?{relayProtocol:a.relayProtocol}:{}),...(a.relayModel?{relayModel:a.relayModel}:{})};
+}
+function sameRelayInterface(a:Pick<NaiAccountProfile,'relayProtocol'|'relayModel'>,b:Pick<NaiAccountProfile,'relayProtocol'|'relayModel'>) {
+  return a.relayProtocol===b.relayProtocol&&a.relayModel===b.relayModel;
 }
 
 /** Secrets never enter list results. Failed decryption does not rewrite ciphertext. */
 export class NaiAccountsVault {
   private leases = 0;
   constructor(private document: AccountVaultDocument, private cipher: Cipher, private persist: (document: AccountVaultDocument) => void) {}
-  list(): NaiAccountProfile[] { return this.document.accounts.map(a => ({id:a.id,label:a.label,method:a.method,apiBaseUrl:a.apiBaseUrl,imageBaseUrl:a.imageBaseUrl,...(a.legacyConfiguration?{legacyConfiguration:{...a.legacyConfiguration}}:{})})); }
+  list(): NaiAccountProfile[] { return this.document.accounts.map(a => ({id:a.id,label:a.label,method:a.method,apiBaseUrl:a.apiBaseUrl,imageBaseUrl:a.imageBaseUrl,...relayFields(a),...(a.legacyConfiguration?{legacyConfiguration:{...a.legacyConfiguration}}:{})})); }
   accountSummary(id:string){const value=this.document.accounts.find(a=>a.id===id)?.accountSummary;return value?stableNaiAccountSummary(value):undefined;}
   rememberAccountSummary(id:string,summary:NaiAccountSummary){
     const account=this.document.accounts.find(a=>a.id===id);if(!account)return;
@@ -91,7 +98,7 @@ export class NaiAccountsVault {
     const accounts=[...this.document.accounts],mapping=new Map<string,string>();
     const endpoint=(value:string)=>new URL(value.trim()).href.replace(/\/+$/,'');
     for(const incoming of portable.accounts){
-      const duplicate=accounts.find(a=>endpoint(a.apiBaseUrl)===endpoint(incoming.apiBaseUrl)&&
+      const duplicate=accounts.find(a=>endpoint(a.apiBaseUrl)===endpoint(incoming.apiBaseUrl)&&sameRelayInterface(a,incoming)&&
         this.cipher.decryptString(Buffer.from(a.encryptedToken,'base64')).trim()===incoming.token);
       const id=duplicate?.id??(accounts.some(a=>a.id===incoming.id)?crypto.randomUUID():incoming.id);
       mapping.set(incoming.id,id);
@@ -106,7 +113,7 @@ export class NaiAccountsVault {
     const next:AccountVaultDocument={...this.document,managed:true,legacyMigrated:true,accounts,
       selectedId:portable.accounts.length?(portable.selectedId===null?undefined:mapping.get(portable.selectedId)):this.document.selectedId};
     const selected=next.accounts.find(a=>a.id===next.selectedId);
-    const snapshot=selected?{id:selected.id,label:selected.label,method:selected.method,apiBaseUrl:selected.apiBaseUrl,imageBaseUrl:selected.imageBaseUrl,
+    const snapshot=selected?{id:selected.id,label:selected.label,method:selected.method,apiBaseUrl:selected.apiBaseUrl,imageBaseUrl:selected.imageBaseUrl,...relayFields(selected),
       ...(selected.legacyConfiguration?{legacyConfiguration:selected.legacyConfiguration}:{}),
       token:this.cipher.decryptString(Buffer.from(selected.encryptedToken,'base64'))}:undefined;
     return {snapshot,commit:()=>{
@@ -121,7 +128,7 @@ export class NaiAccountsVault {
     if(!accountCipherAvailable(this.cipher))throw Error('OS credential encryption unavailable');
     const address=new URL(normalized.apiBaseUrl).href.replace(/\/+$/,'');
     for(const account of this.list()){
-      if(new URL(account.apiBaseUrl).href.replace(/\/+$/,'')!==address)continue;
+      if(new URL(account.apiBaseUrl).href.replace(/\/+$/,'')!==address||!sameRelayInterface(account,normalized))continue;
       const lease=this.bind(account.id);try{if(lease.snapshot.token.trim()===normalized.token.trim())return account;}finally{lease.release();}
     }
     return undefined;
@@ -137,7 +144,7 @@ export class NaiAccountsVault {
     const endpoint=(value:string)=>new URL(value.trim()).href.replace(/\/+$/,'');
     const address=endpoint(candidate.apiBaseUrl),key=candidate.token.trim();
     for(const account of this.document.accounts){
-      if(endpoint(account.apiBaseUrl)!==address)continue;
+      if(endpoint(account.apiBaseUrl)!==address||!sameRelayInterface(account,candidate))continue;
       let storedKey:string;
       try{storedKey=this.cipher.decryptString(Buffer.from(account.encryptedToken,'base64')).trim();}
       catch{throw Error('Stored account key unavailable');}
@@ -168,7 +175,7 @@ export class NaiAccountsVault {
     // Recheck at the synchronous write boundary, including concurrent IPC additions.
     this.assertUnique(normalized);
     const token=input.token;
-    const profile={label:normalized.label,method:normalized.method,apiBaseUrl:normalized.apiBaseUrl,imageBaseUrl:normalized.imageBaseUrl};
+    const profile={label:normalized.label,method:normalized.method,apiBaseUrl:normalized.apiBaseUrl,imageBaseUrl:normalized.imageBaseUrl,...relayFields(normalized)};
     const account = { ...profile, id, encryptedToken: this.cipher.encryptString(token.trim()).toString('base64'),
       ...(summary ? {accountSummary:stableNaiAccountSummary(summary)} : {}) };
     const next: AccountVaultDocument = { ...this.document, managed:true, accounts: [...this.document.accounts, account] };

@@ -114,7 +114,7 @@ export function desktopComicRunAdapter(ask:ComicRunHostAdapter['ask'],wait:Comic
 export function comicSourceBinding(settings:import('../../src/types').AppSettings,token:string){
  if(settings.imageProvider==='openai-images'){
   const config=settings.compatibleImage;
-  if(!config||!settings.imageApiKey?.trim()||/[\r\n]/.test(settings.imageApiKey))throw Error('请先保存兼容图片服务配置与独立 API Key；未自动切换服务');
+  if(!config||(!settings.naiRelayImageAccount&&!settings.imageApiKey?.trim())||/[\r\n]/.test(settings.imageApiKey??''))throw Error('请先保存兼容图片服务配置与独立 API Key；未自动切换服务');
   imageGenerationEndpoint(config.baseUrl);
   buildCompatibleImageRequest(config,{prompt:'configuration validation',size:config.size,n:1,extensions:config.extensions});
   return bindAgentImageProvider(settings).revision;

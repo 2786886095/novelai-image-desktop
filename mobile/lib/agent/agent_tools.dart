@@ -842,7 +842,7 @@ class AgentToolExecutor {
       compatibleAgentInput(generation, app.settings, requirePrompt: !template);
       String? key;
       try {
-        key = await app.storage.getCompatibleImageKey(
+        key = await app.compatibleImageCredential(
             app.settings.compatibleImage['credentialId'] as String? ?? '');
       } catch (_) {
         throw StateError('独立图片密钥读取未完成，请在软件设置中重新保存。');
@@ -873,7 +873,7 @@ class AgentToolExecutor {
     if (app.settings.imageProvider == 'openai-images') {
       var configured = false;
       try {
-        configured = (await app.storage.getCompatibleImageKey(
+        configured = (await app.compatibleImageCredential(
                     app.settings.compatibleImage['credentialId'] as String? ??
                         ''))
                 ?.trim()

@@ -21,7 +21,7 @@
 
 ## 이번 업데이트
 
-데스크톱과 모바일에서 스타일 그룹을 삭제하기 전에 그룹 이름과 확인 창이 표시됩니다. 취소하면 변경 사항이 없으며, 확인하면 스타일과 미리보기 이미지를 보존한 채 스타일을 기본 그룹으로 옮깁니다.
+데스크톱과 모바일에 NovelAI 기본, /v1 인증 후 NovelAI 생성 및 OpenAI 호환 이미지 생성 옵션을 제공합니다. 확인 실패 시 요청 경로를 표시하며 이미지를 생성하지 않습니다。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

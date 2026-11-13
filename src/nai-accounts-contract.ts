@@ -13,7 +13,12 @@
  * probe(id) -> {status:number,subscription:'skipped'|'available',protocol:'unverified',message:string}.
  * probe also returns ok/code: auth, unsupported, network, invalid-input, invalid-response, http, passed.
  * add/login must pass read-only verification before persistence; failure preserves stored accounts.
- * Relay first uses its declared image base + /user/data, matching the legacy verifier.
+ * Existing relay profiles keep their legacy route order.
+ * Explicit native mode uses only /user/data and /user/subscription.
+ * Explicit models and openai-images modes use only /v1/models, preserving the declared prefix.
+ * Models mode keeps the separate native generation base; openai-images validates the chosen
+ * model ID and uses /v1/images/generations for text-to-image (no paid configuration probe).
+ * Failures identify a fixed whitelisted operation path without a token or upstream body.
  * Missing-route 404/405/501 alone permits its declared API base + /user/subscription.
  * Both requests carry the independent relay Key; no anonymous-status gate is required.
  * Successful responses require compatible account data, not merely HTTP 200 or an HTML page.

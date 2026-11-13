@@ -175,6 +175,7 @@ export function isOfficialNaiHost(baseUrl: string): boolean {
 function tokenSafeBaseUrl(rawUrl: string, fallback: string): string {
   const selected=currentNaiAccount();
   if(selected) {
+    if(selected.relayProtocol==='openai-images')throw Error('当前中转站使用 OpenAI 兼容生图，仅支持文生图；未请求 NovelAI 原生接口。');
     const expected=fallback==='https://api.novelai.net'?selected.apiBaseUrl:selected.imageBaseUrl;
     if(normalizeBaseUrl(rawUrl, '')!==normalizeBaseUrl(expected, '')) throw Error('账户绑定接口不匹配；未回退到其他主机。');
     return expected.replace(/\/+$/,'');
@@ -333,6 +334,8 @@ export async function verifyToken(token: string): Promise<TokenStatus> {
 }
 
 export async function refreshStoredAccount(): Promise<AccountSummary> {
+  const relay=currentNaiAccount();
+  if(relay?.relayProtocol==='models'||relay?.relayProtocol==='openai-images')return getNaiAccountSummary(relay);
   const token = getToken();
   if (!token) return { hasToken: false };
 
@@ -1571,6 +1574,7 @@ export async function quoteAnlasCost(
   request: AnlasQuoteRequest,
 ): Promise<AnlasQuoteResult> {
   const boundAccount = currentNaiAccount();
+  if(boundAccount?.relayProtocol==='openai-images')return {ok:false,source:'unavailable',message:'OpenAI 兼容接口没有 Anlas 报价；费用以服务商记录为准。'};
   const isIndependentRelay = boundAccount?.method === "relay";
   const token = getToken();
   if (!token) {
@@ -5399,7 +5403,9 @@ function handleGenerateError(error: any, prefix: string): GenerateResult {
     };
   }
   const status = error?.response?.status;
-  const detail = responseErrorText(error) || error?.message || "未知错误";
+  const selectedRelay=currentNaiAccount()?.method==='relay';
+  const relayRoute=selectedRelay?['/ai/generate-image-stream','/ai/generate-image','/ai/upscale','/ai/augment-image','/ai/encode-vibe'].find(p=>String(error?.config?.url??'').endsWith(p)):undefined;
+  const detail = relayRoute ? (status?'服务端拒绝请求':'网络请求失败或超时') : responseErrorText(error) || error?.message || "未知错误";
   logError(`${prefix}${status ? `（HTTP ${status}）` : ""}`, detail);
   const failureKind =
     status === 401 || status === 403
@@ -5418,7 +5424,8 @@ function handleGenerateError(error: any, prefix: string): GenerateResult {
   return {
     ok: false,
     message:
-      authHint || `${prefix}${status ? `（HTTP ${status}）` : ""}：${detail}`,
+      (relayRoute ? `POST ${relayRoute} · ` : '') +
+      (authHint || `${prefix}${status ? `（HTTP ${status}）` : ""}：${detail}`),
     items: [],
     failureKind,
     statusCode: status,

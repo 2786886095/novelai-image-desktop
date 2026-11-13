@@ -65,6 +65,9 @@ class NovelAiAccountApi extends NaiApi {
       AppSettings settings, http.BaseRequest request,
       {bool allowReadStatus = false}) async {
     _checkCancelled();
+    if (snapshot.profile.openAiRelay && request.method != 'GET') {
+      throw const FormatException('当前中转站只使用 OpenAI 兼容文生图；未请求 NovelAI 原生接口。');
+    }
     snapshot.profile.validate(snapshot.token);
     GenerationScope.current?.credentials(snapshot.token, settings);
     request.followRedirects = false;
@@ -96,7 +99,7 @@ class NovelAiAccountApi extends NaiApi {
           : response.statusCode < 200 || response.statusCode >= 300) {
         // Redirect/error bodies are cancelled without reading or disclosure.
         throw NaiHttpException(response.statusCode,
-            'NovelAI HTTP ${response.statusCode}；未自动重试或回退');
+            '${request.method} ${request.url.path} · HTTP ${response.statusCode}；未自动重试或回退');
       }
       return response;
     } on http.ClientException {
@@ -134,52 +137,58 @@ class NovelAiAccountApi extends NaiApi {
     _operations++;
     try {
       final frozen = snapshot.settings(settings);
-      final urls = [
-        snapshot.imageRoute('/user/data'),
-        if (snapshot.profile.relay)
-          Uri.parse('${snapshot.profile.apiBaseUrl}/user/subscription'),
-        if (snapshot.profile.relay) _relayModelsUri(snapshot.profile.apiBaseUrl),
+      final profile = snapshot.profile;
+      final protocol = profile.relayProtocol;
+      final modelsOnly = profile.relay && (protocol == 'models' || profile.openAiRelay);
+      final reads = <(Uri, String)>[
+        if (!modelsOnly) (snapshot.imageRoute('/user/data'), '/user/data'),
+        if (profile.relay && !modelsOnly)
+          (Uri.parse('${profile.apiBaseUrl}/user/subscription'), '/user/subscription'),
+        if (profile.relay && protocol != 'native')
+          (_relayModelsUri(profile.apiBaseUrl), '/v1/models'),
       ];
       var nativeHtml = false;
-      for (var i = 0; i < urls.length; i++) {
-        final response = await _send(
-            snapshot, frozen, http.Request('GET', urls[i]),
-            allowReadStatus: true);
-        final status = response.statusCode;
-        if ([404, 405, 501].contains(status) && i + 1 < urls.length) continue;
-        if (nativeHtml && [404, 405, 501].contains(status)) {
-          throw const FormatException('NAI_ACCOUNT_VALIDATION:invalid-response:200');
+      for (var i = 0; i < reads.length; i++) {
+        final (uri, route) = reads[i];
+        Never fail(String code, int status) =>
+          throw FormatException('NAI_ACCOUNT_VALIDATION:$code:$status:$route');
+        final http.Response response;
+        try {
+          response = await _send(snapshot, frozen, http.Request('GET', uri)
+              ..headers['Accept'] = 'application/json', allowReadStatus: true);
+        } catch (_) {
+          fail('network', 0);
         }
+        final status = response.statusCode;
+        if ([404, 405, 501].contains(status) && i + 1 < reads.length) continue;
+        if (nativeHtml && [404, 405, 501].contains(status)) fail('invalid-response', 200);
         if (status != 200) {
-          final code = [401, 403].contains(status)
+          fail([401, 403].contains(status)
               ? 'auth'
               : [301, 302, 303, 307, 308, 404, 405, 501].contains(status)
-                  ? 'unsupported'
-                  : 'http';
-          throw FormatException('NAI_ACCOUNT_VALIDATION:$code:$status');
+                  ? 'unsupported' : 'http', status);
         }
-        if (snapshot.profile.relay && i < 2 &&
+        if (profile.relay && route != '/v1/models' &&
             RegExp(r'^\s*(?:<!doctype\s+html|<html(?:\s|>))', caseSensitive: false).hasMatch(response.body)) {
           nativeHtml = true;
-          continue;
+          if (i + 1 < reads.length) continue;
+          fail('invalid-response', status);
+        }
+        if (route == '/v1/models') {
+          final List<String> models;
+          try {
+            models = _relayModelIds(jsonDecode(response.body));
+          } catch (_) {
+            fail('invalid-response', status);
+          }
+          if ((!modelsOnly && !models.any(_nativeRelayModelIds.contains)) ||
+              (profile.openAiRelay && !models.contains(profile.relayModel))) fail('unsupported', status);
+          return const AccountSummary(hasToken: true, hasActiveSubscription: false);
         }
         try {
-          if (snapshot.profile.relay && i == 2) {
-            final models = _novelAiRelayModelIds(jsonDecode(response.body));
-            if (models.isEmpty) {
-              throw const FormatException('NAI_ACCOUNT_VALIDATION:unsupported:200');
-            }
-            // New API token quota is not Anlas and is deliberately not converted.
-            return const AccountSummary(hasToken: true, hasActiveSubscription: false);
-          }
-          return _parseAccountData(response.body,
-              relay: snapshot.profile.relay);
-        } on FormatException catch (error) {
-          if (error.message == 'NAI_ACCOUNT_VALIDATION:unsupported:200') rethrow;
-          throw const FormatException(
-              'NAI_ACCOUNT_VALIDATION:invalid-response:200');
+          return _parseAccountData(response.body, relay: profile.relay);
         } catch (_) {
-          throw const FormatException('NAI_ACCOUNT_VALIDATION:invalid-response:200');
+          fail('invalid-response', status);
         }
       }
       throw const FormatException('NAI_ACCOUNT_VALIDATION:unsupported:0');
@@ -193,7 +202,9 @@ class NovelAiAccountApi extends NaiApi {
     return Uri.parse('$prefix${prefix.endsWith('/v1') ? '/models' : '/v1/models'}');
   }
 
-  static List<String> _novelAiRelayModelIds(Object? body) {
+  static final _nativeRelayModelIds = {...naiModels.map((m) => m.value), ...naiInpaintModels.map((m) => m.value)};
+
+  static List<String> _relayModelIds(Object? body) {
     if (body is! Map || body['object'] != 'list' || body['data'] is! List ||
         (body['data'] as List).length > 10000 || body['success'] == false || body['error'] != null) {
       throw const FormatException('Invalid model list');
@@ -202,8 +213,7 @@ class NovelAiAccountApi extends NaiApi {
     if (!rows.every((r) => r is Map && r['id'] is String && (r['id'] as String).length <= 256)) {
       throw const FormatException('Invalid model identity');
     }
-    final allowed = {...naiModels.map((m) => m.value), ...naiInpaintModels.map((m) => m.value)};
-    return rows.map((r) => (r as Map)['id'] as String).where(allowed.contains).toSet().toList();
+    return rows.map((r) => (r as Map)['id'] as String).toSet().toList();
   }
 
   @override

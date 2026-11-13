@@ -11,7 +11,7 @@ export const PAID_IMAGE_TOOLS = new Set(['langbai_generate_image', 'langbai_redr
 export function bindAgentImageProvider(settings: AppSettings): ImageProviderBinding {
   const provider = settings.imageProvider === 'openai-images' ? 'openai-images' : 'novelai';
   const revision = createHmac('sha256', bindingKey).update(JSON.stringify([
-    provider, provider === 'openai-images' ? [settings.compatibleImage, settings.imageApiKey] : null,
+    provider, provider === 'openai-images' ? [settings.compatibleImage, settings.imageApiKey,settings.naiRelayImageAccount?settings.naiAccountRevision:undefined] : null,
     settings.outputDir, settings.generationGroupId, settings.proxyMode, settings.proxyUrl, settings.proxyForAi,
   ])).digest('hex');
   return { provider, revision };
@@ -40,7 +40,7 @@ export function compatibleAgentInput(args: Record<string, unknown>, settings: Ap
   if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 1 || count > 8) throw Error('单次 Agent 生成张数须为1–8。');
   const prompt = args.positivePrompt;
   if (requirePrompt && (typeof prompt !== 'string' || !prompt.trim())) throw Error('正面提示词不能为空。');
-  if (!settings.imageApiKey?.trim() || /[\r\n]/.test(settings.imageApiKey)) throw Error('请先在软件设置中填写独立图片 API Key。');
+  if ((!settings.naiRelayImageAccount&&!settings.imageApiKey?.trim()) || /[\r\n]/.test(settings.imageApiKey??'')) throw Error('请先在软件设置中填写独立图片 API Key。');
   imageGenerationEndpoint(config.baseUrl);
   buildCompatibleImageRequest(config, { prompt: requirePrompt ? prompt as string : 'configuration validation', size: config.size, n: count, extensions: config.extensions });
   return { prompt: typeof prompt === 'string' ? prompt : '', n: count };
@@ -57,7 +57,7 @@ export function agentImageProviderState(settings: AppSettings): Record<string, u
     params: { model: config?.model ?? '', size: config?.size ?? 'auto' },
     imageService: {
       provider: 'openai-images', endpoint, model: config?.model ?? '', size: config?.size ?? 'auto',
-      responseFormat: config?.responseFormat ?? 'auto', credentialConfigured: Boolean(settings.imageApiKey?.trim()),
+      responseFormat: config?.responseFormat ?? 'auto', credentialConfigured: Boolean(settings.naiRelayImageAccount||settings.imageApiKey?.trim()),
       extensions: config?.extensions ?? {}, capabilities: ['text-to-image'],
       instructions: '使用软件已保存的独立图片服务配置；生图传 positivePrompt、count。模板转换仍遵循软件模板；原生风格锁、参考图、角色分段和其他原生图片操作不自动应用。不自动重试或切换到 NovelAI。费用以所选服务商记录为准。',
     },

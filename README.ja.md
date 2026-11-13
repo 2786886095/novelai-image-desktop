@@ -21,7 +21,7 @@
 
 ## 今回の更新
 
-デスクトップ版とモバイル版では、スタイルグループを削除する前にグループ名を表示して確認します。キャンセルでは変更せず、削除を確定するとスタイルとプレビュー画像を保持したまま既定のグループへ移動します。
+デスクトップ版とモバイル版では NovelAI ネイティブ、/v1 認証＋NovelAI 生成、OpenAI 互換画像生成を選択できます。認証エラーに API パスを表示し、確認時には生成しません。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

@@ -691,8 +691,16 @@ export function getSettings(): AppSettings {
   const legacy=boundLegacyNaiAccount();
   if(legacy) { const {token:_token,...endpoints}=legacy; Object.assign(settings,endpoints); }
   if(selected) Object.assign(settings,{apiBaseUrl:selected.apiBaseUrl,imageBaseUrl:selected.imageBaseUrl,allowCustomEndpoint:selected.legacyConfiguration?.allowCustomEndpoint??(selected.method==='relay'),allowCustomEndpointFallback:selected.legacyConfiguration?.allowCustomEndpointFallback??false});
-  const stamp = imageSettingsStamp(settings);
-  return { ...settings, naiAccountId:selected?.id, naiAccountRevision:naiAccountRevision(), credentialIssues: credentialVault.issues(), imageServiceRevision: stamp.revision, imageServiceVersion: stamp.version };
+  if(selected?.relayProtocol==='openai-images'){
+    settings.imageProvider='openai-images';
+    settings.compatibleImage={baseUrl:selected.apiBaseUrl,model:selected.relayModel!,size:'auto',responseFormat:'auto'};
+    settings.imageApiKey=''; // Selected relay credentials are never exposed via settings IPC.
+    settings.naiRelayImageAccount=true;
+  } else if(selected?.method==='relay'&&selected.relayProtocol) {
+    settings.imageProvider='novelai';
+  }
+  const stamp = imageSettingsStamp(readStore().settings);
+  return { ...settings, naiAccountId:selected?.id, naiAccountRevision:naiAccountRevision(), credentialIssues: credentialVault.issues(), imageServiceRevision: selected?.relayProtocol?stamp.revision+':'+naiAccountRevision():stamp.revision, imageServiceVersion: stamp.version };
 }
 
 export function getSetting<K extends SettingKey>(key: K): AppSettings[K] {

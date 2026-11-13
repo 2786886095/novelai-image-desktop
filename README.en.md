@@ -21,7 +21,7 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-Desktop and mobile now ask for confirmation by group name before deleting a style group. Cancelling changes nothing; confirming moves its styles to the default group without deleting styles or preview images.
+Desktop and mobile distinguish native NovelAI, /v1 key verification with native generation, and OpenAI-compatible text-to-image. Account verification reports the failed route without submitting a generation.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

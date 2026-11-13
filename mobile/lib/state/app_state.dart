@@ -1,3 +1,4 @@
+import 'package:http/http.dart' as http;
 import '../prompts/template_library.dart';
 import '../images/image_file_access.dart';
 import '../images/coordinated_file_image.dart';
@@ -120,6 +121,14 @@ class AppState extends ChangeNotifier {
       (_batchRedraw?.queueRunning ?? false);
   void _applyNaiAccount() {
     final active = naiAccounts.active;
+    settings.relayImageProtocol = active?.profile.relayProtocol;
+    settings.relayImageConfig = active?.profile.openAiRelay == true ? {
+      'baseUrl': active!.profile.apiBaseUrl,
+      'model': active.profile.relayModel!,
+      'size': 'auto',
+      'responseFormat': 'auto',
+      'credentialId': 'account:${active.profile.id}',
+    } : null;
     if (active == null) return;
     settings
       ..apiBaseUrl = active.profile.apiBaseUrl
@@ -163,12 +172,13 @@ class AppState extends ChangeNotifier {
   Future<void> removeNaiAccount(String id) => _changeNaiAccount(() => naiAccounts.remove(id));
   Future<void> addNaiAccount({required String label, required String method, String token = '',
       String email = '', String password = '', String apiBaseUrl = 'https://api.novelai.net',
-      String imageBaseUrl = 'https://image.novelai.net'}) async {
+      String imageBaseUrl = 'https://image.novelai.net', String? relayProtocol, String? relayModel}) async {
     await _changeNaiAccount(() async {
     final secret = method == 'official-login' ? await NovelAiOfficialAuth(settingsProvider: () => settings).login(email, password) : token;
     final transport=api is NovelAiAccountApi ? api as NovelAiAccountApi : NovelAiAccountApi(naiAccounts);
     await naiAccounts.addVerified(label: label, method: method, token: secret,
       verify:(snapshot)=>transport.verifyCandidate(snapshot,settings),
+      relayProtocol:relayProtocol, relayModel:relayModel,
       apiBaseUrl: method == 'relay' ? apiBaseUrl : 'https://api.novelai.net',
       imageBaseUrl: method == 'relay' ? imageBaseUrl : 'https://image.novelai.net');
     });
@@ -231,19 +241,30 @@ class AppState extends ChangeNotifier {
     _scheduleGenerationQuote();
   }
 
+  Future<String?> compatibleImageCredential(String id) async {
+    final account = naiAccounts.active;
+    if (id.startsWith('account:')) {
+      return account?.profile.openAiRelay == true && id == 'account:${account!.profile.id}'
+          ? account.token : null;
+    }
+    return storage.getCompatibleImageKey(id);
+  }
+
   /// Agent inputs never overwrite the user's current prompt, batch or workbench.
   Future<CompatibleGenerationOutcome> generateCompatibleForAgent({required String prompt,
       required int count, required VoidCallback ensureCurrent}) async {
     ensureCurrent();
     if (busy) throw StateError('另一个图像任务正在运行，请稍后重试。');
-    if (settings.imageProvider != 'openai-images') throw StateError('图片服务配置已变化，未提交生图。');
+    if (_naiChanging || settings.imageProvider != 'openai-images') throw StateError('图片服务配置已变化，未提交生图。');
     return _generateCompatible(promptOverride: prompt, countOverride: count, ensureCurrent: ensureCurrent);
   }
 
   Future<CompatibleGenerationOutcome> _generateCompatible({String? promptOverride, int? countOverride, VoidCallback? ensureCurrent}) async {
     final snapshot = AppSettings.fromJson(jsonDecode(jsonEncode(settings.toJson())) as Map<String, dynamic>);
-    final c = snapshot.compatibleImage;
-    if(!novelAiEnvelopeModels.contains(c['model'])) throw StateError('仅兼容 NovelAI 模型，未提交生成。');
+    final relay = naiAccounts.active?.profile.openAiRelay == true ? naiAccounts.active : null;
+    final c = Map<String, dynamic>.from(settings.compatibleImage);
+    final boundCredential = c['credentialId'];
+    if(relay == null && !novelAiEnvelopeModels.contains(c['model'])) throw StateError('仅兼容 NovelAI 模型，未提交生成。');
     final prompt = promptOverride ?? params.positivePrompt, count = countOverride ?? batchCount, group = generationGroupId;
     final text = compatibleImageText(snapshot.language);
     final cancel = CompatibleImageCancellation();
@@ -253,7 +274,7 @@ class AppState extends ChangeNotifier {
     final items = <HistoryItem>[];
     var complete = false;
     try {
-      final key = await storage.getCompatibleImageKey(c['credentialId'] as String? ?? '');
+      final key = await compatibleImageCredential(c['credentialId'] as String? ?? '');
       if (cancel.cancelled) { status = text['stopped']!; return CompatibleGenerationOutcome(false, items, status); }
       ensureCurrent?.call();
       final config = CompatibleImageConfig(baseUrl: c['baseUrl'] as String? ?? '', model: c['model'] as String? ?? '',
@@ -263,14 +284,24 @@ class AppState extends ChangeNotifier {
       try { await BackgroundQueueService.start('compatible-generation', title:text['panel']!,text:text['requesting']!); } catch (_) { /* Foreground generation still works. */ }
       final batch = await generateCompatibleImages(config, prompt: prompt, size: c['size'] as String? ?? 'auto', n: count,
         extensions: Map<String, Object?>.from(c['extensions'] as Map? ?? {}), cancellation: cancel,
-        clientForUri: (uri) => createProxyHttpClientForUri(snapshot, uri, scope: ProxyScope.ai));
+        beforeSubmit: () {
+          ensureCurrent?.call();
+          if (settings.imageProvider != 'openai-images' || settings.compatibleImage['credentialId'] != boundCredential) {
+            throw StateError('图片服务已切换，本次未提交。');
+          }
+        },
+        clientForUri: (uri) {
+          final scope = relay == null ? ProxyScope.ai : ProxyScope.nai;
+          return compatibleClientFactory?.call(snapshot, uri, scope) ??
+              createProxyHttpClientForUri(snapshot, uri, scope: scope);
+        });
       for (final bytes in batch.images) {
         try { items.add(await storage.saveCompatibleImage(bytes, body, snapshot, groupId: group.ifEmptyNull)); }
         on SavedImageHistoryException catch (error) { items.add(error.item); rethrow; }
       }
       if (!_compatibleDisposed && items.isNotEmpty) await _commitCompletedHistory(items);
       complete = batch.complete;
-      status = batch.complete ? '${text['done']} ${items.length}' : '${batch.cancelled ? text['stopped'] : text['failed']} ${batch.error?.status ?? ''} · ${text['savedCount']} ${items.length}';
+      status = batch.complete ? '${text['done']} ${items.length}' : '${batch.cancelled ? text['stopped'] : text['failed']}  ${batch.error?.phase == 'generate' ? 'POST /v1/images/generations ' : ''}${batch.error?.status != null ? 'HTTP ${batch.error!.status}' : ''} · ${text['savedCount']} ${items.length}';
     } on SavedImageHistoryException {
       if (!_compatibleDisposed && items.isNotEmpty) await _commitCompletedHistory(items);
       status = '${text['historyFailed']} ${items.length}';
@@ -288,6 +319,7 @@ class AppState extends ChangeNotifier {
   final Storage storage;
   final OfflineTagStore offlineTags;
   final CompletedImagePreloader _preloadCompletedImage;
+  final Future<http.Client> Function(AppSettings, Uri, ProxyScope)? compatibleClientFactory;
 
   AppState({
     NaiApi? api,
@@ -295,6 +327,7 @@ class AppState extends ChangeNotifier {
     MobileTemplateLibrary? templateLibrary,
     OfflineTagStore? offlineTags,
     CompletedImagePreloader? preloadCompletedImage,
+    this.compatibleClientFactory,
   })  : api = api ?? NovelAiAccountApi(NovelAiAccounts.shared),
         storage = storage ?? NovelAiAccountStorage(NovelAiAccounts.shared),
         templateLibrary = templateLibrary ?? MobileTemplateLibrary(),
@@ -522,7 +555,7 @@ class AppState extends ChangeNotifier {
         await (storage as NovelAiAccountStorage).ready();
         _applyNaiAccount();
       }
-      if (settings.imageProvider != 'novelai' && (settings.imageProvider != 'openai-images' || !novelAiEnvelopeModels.contains(settings.compatibleImage['model']))) {
+      if (settings.relayImageProtocol == null && settings.imageProvider != 'novelai' && (settings.imageProvider != 'openai-images' || !novelAiEnvelopeModels.contains(settings.compatibleImage['model']))) {
         // Preserve only an explicitly configured supported NovelAI envelope.
         // Unsupported archived models keep their metadata, but stay inactive.
         settings.imageProvider = 'novelai';
@@ -1096,6 +1129,7 @@ class AppState extends ChangeNotifier {
     next.stylePromptPresets = [...settings.stylePromptPresets, ...presets];
     await storage.setSettings(next);
     settings = next;
+    _applyNaiAccount();
     notifyListeners();
   }
 
@@ -1138,6 +1172,7 @@ class AppState extends ChangeNotifier {
       update(copy);
       await storage.setSettings(copy);
       settings = copy;
+      _applyNaiAccount();
       notifyListeners();
     });
     _styleWrites = next;
@@ -3970,7 +4005,7 @@ class AppState extends ChangeNotifier {
       }
     }
 
-    if (settings.imageProvider != 'novelai' && (settings.imageProvider != 'openai-images' || !novelAiEnvelopeModels.contains(settings.compatibleImage['model']))) {
+    if (settings.relayImageProtocol == 'openai-images' || (settings.imageProvider != 'novelai' && (settings.imageProvider != 'openai-images' || !novelAiEnvelopeModels.contains(settings.compatibleImage['model'])))) {
       throw StateError('当前兼容图片服务未接入图生图；请切回 NovelAI，未自动回退或提交');
     }
     final snapshot = AppSettings.fromJson(jsonDecode(jsonEncode(settings.toJson())));

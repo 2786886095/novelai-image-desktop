@@ -18,3 +18,9 @@ describe('accessible account dialog',()=>{
  it('implements three roving tabs and keyboard wrap/home/end',()=>{expect(NAI_ACCOUNT_METHODS).toHaveLength(3);expect(naiAccountTabKey('relay','ArrowRight')).toBe('token');expect(naiAccountTabKey('token','ArrowLeft')).toBe('relay');expect(naiAccountTabKey('official-login','Home')).toBe('token');expect(naiAccountTabKey('official-login','End')).toBe('relay');});
  it('keeps Escape, backdrop/close cleanup, focus trapping and confirmation guards in the live component',()=>{const source=readFileSync('src/components/NaiAccountManager.tsx','utf8');expect(source).toContain("event.key==='Escape'");expect(source).toContain("event.key!=='Tab'");expect(source).toContain("setToken('');setPassword('')");expect(source).toContain('clearSecrets();setClosing(true)');expect(source).toContain('setOpen(false);setClosing(false);trigger.current?.focus()');expect(source).toContain('motionReduced()?0:160');expect(source).toContain('window.clearTimeout(closeTimer.current)');expect(source).toContain('confirmAction(');expect(source).toContain('role="tablist"');expect(source).toContain('role="tab"');expect(source).toContain('role="tabpanel"');expect(source).toContain('createPortal');expect(source).not.toMatch(/console\.|localStorage|sessionStorage/);expect(source).toContain('autoComplete="off"');});
 });
+
+it('names the exact rejected relay route alongside HTTP status in feedback',()=>{
+ const html=renderToStaticMarkup(createElement(NaiAccountFeedback,{message:'validationAuth',httpStatus:401,
+  route:'/v1/models',nt:key=>naiAccountText('zh-CN',key)}));
+ expect(html).toContain('GET /v1/models');expect(html).toContain('HTTP 401');
+});

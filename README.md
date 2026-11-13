@@ -26,7 +26,7 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 
 ## 本次更新
 
-桌面和移动端删除风格分组前都会显示分组名称并要求确认。取消不改动数据；确认后，组内风格移回默认分组，风格和预览图保留。
+电脑和手机可分别选择 NovelAI 原生、/v1 验 Key 后使用 NovelAI 生图，或 OpenAI 兼容文生图。账号验证失败时显示接口路径，不会为了验证而提交生图。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

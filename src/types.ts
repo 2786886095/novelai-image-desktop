@@ -1444,6 +1444,8 @@ export interface McpServerStatus { running: boolean; port: number; url: string; 
 export interface AppSettings {
   /** Runtime-only account identity and process-keyed credential/endpoint revision; no secret. */
   naiAccountId?: string;
+  /** Public mode flag only; the account credential remains in the account vault. */
+  naiRelayImageAccount?: boolean;
   naiAccountRevision?: string;
   /** Applies to ordinary text-to-image only; other NovelAI tools retain their own provider. */
   imageProvider?: "novelai" | "openai-images";

@@ -17,7 +17,7 @@ const revisionKey=randomBytes(32);
 const proposals=new Map<string,string>();
 export function naiAccountRevision() {
   const selected=currentNaiAccount(); const legacy=boundLegacyNaiAccount() ?? (legacyNaiBindingAllowed()?legacyProvider?.():undefined);
-  return createHmac('sha256',revisionKey).update(JSON.stringify(selected ? [selected.id,selected.token,selected.apiBaseUrl,selected.imageBaseUrl] : [legacy?'legacy':'signed-out',legacy])).digest('hex');
+  return createHmac('sha256',revisionKey).update(JSON.stringify(selected ? [selected.id,selected.token,selected.apiBaseUrl,selected.imageBaseUrl,selected.relayProtocol,selected.relayModel] : [legacy?'legacy':'signed-out',legacy])).digest('hex');
 }
 export function rememberNaiProposal(conversationId:string,messageId:string) { proposals.set(JSON.stringify([conversationId,messageId]),naiAccountRevision()); }
 export function assertNaiProposalAccount(conversationId:string,messageId:string) {
@@ -39,7 +39,7 @@ export async function withNaiAccountOperation<T>(callback: () => T | Promise<T>)
 const summaries=new Map<string,NaiAccountSummary>();
 let summaryStorage:{read:(id:string)=>NaiAccountSummary|undefined;write:(id:string,value:NaiAccountSummary)=>void}|undefined;
 export function configureNaiAccountSummaries(storage:NonNullable<typeof summaryStorage>){summaryStorage=storage;summaries.clear();}
-function summaryKey(snapshot:NaiAccountSnapshot){return createHmac('sha256',revisionKey).update(JSON.stringify([snapshot.id,snapshot.token,snapshot.apiBaseUrl,snapshot.imageBaseUrl])).digest('hex');}
+function summaryKey(snapshot:NaiAccountSnapshot){return createHmac('sha256',revisionKey).update(JSON.stringify([snapshot.id,snapshot.token,snapshot.apiBaseUrl,snapshot.imageBaseUrl,snapshot.relayProtocol,snapshot.relayModel])).digest('hex');}
 export function getNaiAccountSummary(snapshot=currentNaiAccount()):AccountSummary {
   if(!snapshot)return {hasToken:false};
   const key=summaryKey(snapshot),fresh=summaries.get(key);

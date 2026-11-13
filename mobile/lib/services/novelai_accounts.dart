@@ -10,10 +10,18 @@ import 'novelai_account_api.dart';
 /// Version 1 mirrors src/nai-accounts.ts. Secrets never enter profile JSON.
 class NovelAiAccount {
   final String id, label, method, apiBaseUrl, imageBaseUrl;
+  final String? relayProtocol, relayModel;
+  bool get openAiRelay => relay && relayProtocol == 'openai-images';
+  static String relayV1Base(String source) {
+    final base = source.trim().replaceFirst(RegExp(r'/+$'), '')
+        .replaceFirst(RegExp(r'/v1/(models|images/generations)$'), '/v1');
+    return base.endsWith('/v1') ? base : '$base/v1';
+  }
   const NovelAiAccount(
       {required this.id,
       required this.label,
       required this.method,
+      this.relayProtocol, this.relayModel,
       this.apiBaseUrl = 'https://api.novelai.net',
       this.imageBaseUrl = 'https://image.novelai.net'});
   bool get relay => method == 'relay';
@@ -27,14 +35,17 @@ class NovelAiAccount {
         'label': label,
         'method': method,
         'apiBaseUrl': apiBaseUrl,
-        'imageBaseUrl': imageBaseUrl
+        'imageBaseUrl': imageBaseUrl,
+        if (relayProtocol != null) 'relayProtocol': relayProtocol,
+        if (relayModel != null) 'relayModel': relayModel
       };
   factory NovelAiAccount.fromJson(Map<String, dynamic> j) => NovelAiAccount(
       id: j['id'] as String,
       label: j['label'] as String,
       method: j['method'] as String,
       apiBaseUrl: j['apiBaseUrl'] as String,
-      imageBaseUrl: j['imageBaseUrl'] as String);
+      imageBaseUrl: j['imageBaseUrl'] as String,
+      relayProtocol: j['relayProtocol'] as String?, relayModel: j['relayModel'] as String?);
   void validate(String token) {
     if (id.isEmpty ||
         label.trim().isEmpty ||
@@ -44,6 +55,14 @@ class NovelAiAccount {
         token.length > 16384 ||
         RegExp(r'[\r\n]').hasMatch(token)) {
       throw const FormatException('账号名称、类型或 API Token 无效');
+    }
+    if (relayProtocol != null &&
+        (!relay || !const ['native', 'models', 'openai-images'].contains(relayProtocol))) {
+      throw const FormatException('Invalid relay interface');
+    }
+    if (openAiRelay ? (relayModel == null || relayModel!.trim().isEmpty ||
+        relayModel!.length > 256 || RegExp(r'[\x00-\x1f\x7f]').hasMatch(relayModel!)) : relayModel != null) {
+      throw const FormatException('Invalid relay image model');
     }
     for (final pair in [
       (apiBaseUrl, 'api.novelai.net'),
@@ -280,6 +299,7 @@ class NovelAiAccounts {
       _entries
           .where((e) =>
               _identity(e.profile.apiBaseUrl) == _identity(p.apiBaseUrl) &&
+              e.profile.relayProtocol == p.relayProtocol && e.profile.relayModel == p.relayModel &&
               e.token == token.trim())
           .firstOrNull;
 
@@ -316,17 +336,21 @@ class NovelAiAccounts {
           required Future<AccountSummary> Function(NovelAiCredentialSnapshot)
               verify,
           String apiBaseUrl = 'https://api.novelai.net',
-          String imageBaseUrl = 'https://image.novelai.net'}) =>
+          String imageBaseUrl = 'https://image.novelai.net',
+          String? relayProtocol, String? relayModel}) =>
       _change(() async {
-        final api = NovelAiAccount.normalizeBase(apiBaseUrl);
-        final image = NovelAiAccount.normalizeBase(
-            imageBaseUrl.trim().isEmpty ? apiBaseUrl : imageBaseUrl);
+        final cleanBase = NovelAiAccount.normalizeBase(apiBaseUrl);
+        if (cleanBase.isEmpty) throw const FormatException('NAI_ACCOUNT_VALIDATION:invalid-input:0');
+        final api = method == 'relay' && (relayProtocol == 'models' || relayProtocol == 'openai-images')
+            ? NovelAiAccount.relayV1Base(cleanBase) : cleanBase;
+        final image = relayProtocol == 'openai-images' ? api : NovelAiAccount.normalizeBase(
+            imageBaseUrl.trim().isEmpty ? (relayProtocol == 'models' ? api.substring(0, api.length - 3) : apiBaseUrl) : imageBaseUrl);
         final p = NovelAiAccount(
             id: '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}',
             label: label.trim().isEmpty ? nextLabel : label.trim(),
             method: method,
             apiBaseUrl: api,
-            imageBaseUrl: image);
+            imageBaseUrl: image, relayProtocol: relayProtocol, relayModel: relayModel?.trim());
         p.validate(token);
         final duplicate = _duplicate(p, token),
             snapshot = duplicate ?? NovelAiCredentialSnapshot(p, token.trim());
@@ -439,10 +463,11 @@ class NovelAiAccounts {
                 'apiBaseUrl',
                 'imageBaseUrl',
                 'token',
-                'accountSummary'
+                'accountSummary', 'relayProtocol', 'relayModel'
               ].contains(k)) ||
           !['id', 'label', 'method', 'apiBaseUrl', 'imageBaseUrl', 'token']
               .every((k) => raw[k] is String) ||
+          ['relayProtocol', 'relayModel'].any((k) => raw.containsKey(k) && raw[k] is! String) ||
           !RegExp(r'^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$')
               .hasMatch(raw['id'] as String) ||
           !ids.add(raw['id'] as String)) fail();
@@ -513,6 +538,7 @@ class NovelAiAccounts {
       final duplicate = entries
           .where((e) =>
               _identity(e.profile.apiBaseUrl) == _identity(p.apiBaseUrl) &&
+              e.profile.relayProtocol == p.relayProtocol && e.profile.relayModel == p.relayModel &&
               e.token == token)
           .firstOrNull;
       final id = duplicate?.profile.id ??
@@ -527,7 +553,8 @@ class NovelAiAccounts {
                 label: p.label,
                 method: p.method,
                 apiBaseUrl: p.apiBaseUrl,
-                imageBaseUrl: p.imageBaseUrl),
+                imageBaseUrl: p.imageBaseUrl,
+                relayProtocol: p.relayProtocol, relayModel: p.relayModel),
             token));
       }
       final cached = raw['accountSummary'] as Map?;
