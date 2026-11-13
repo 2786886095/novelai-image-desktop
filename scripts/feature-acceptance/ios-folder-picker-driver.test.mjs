@@ -355,9 +355,9 @@ test('appearance witness holds actual accessibility elements and the same absolu
  const rows=[...budget.matchAll(/\(([\d.]+), (true|false)\)/g)].map(([,ms,modal])=>[Number(ms),modal==='true']);
  assert.equal(rows.length,2);assert.equal(rows.filter(x=>x[1]).length,1);assert.equal(rows.at(-1)[1],true);
  // Run 42699463766: keep the initial keyboard transition free of AX work.
- // v2.9.1 attempts 1–3: reserve more time for the exact first query to
- // complete, with a late fresh projection, but preserve the 5s cutoff.
- assert.deepEqual(rows.map(row=>row[0]),[3.15,4.55]);
+ // v2.9.2 attempts 1–2: the scoped projection missed an editor later
+ // visible in the app snapshot. Reserve time for fresh queries within 5s.
+ assert.deepEqual(rows.map(row=>row[0]),[3,3.75]);
  assert.equal(rows.filter(([offset])=>offset<3).length,0);
  assert(rows[0][0]+1.75<5,'First exact query retains observed RPC headroom');
  assert(s.includes('"probeTimes": namingProbeTimes'));
@@ -368,6 +368,9 @@ test('appearance witness holds actual accessibility elements and the same absolu
  for(const literal of ['identifier == %@ AND enabled == YES','field.isHittable','viewFrame.contains(frame)'])assert(body.includes(literal));
  assert(!body.includes('field.exists')&&!body.includes('field.isEnabled')&&!body.includes('field.label.lowercased()'));
  assert(body.includes('fileView?.descendants(matching: .textView)'));
+ assert(body.includes('let useFreshProjection = retainedFileFrame != nil'));
+ assert(!body.includes('useFreshProjection = includeModal'));
+ assert(poll.includes('if retainedFileFrame != nil { namingFreshQueryCount += 1 }'));
  assert(body.includes('.matching(exactID).allElementsBoundByAccessibilityElement'));
  assert(!body.includes('app.cells'));
  const bind=s.split('private func observedPickerFileView(')[1].split('private func currentNamingEditor(')[0];
@@ -506,15 +509,15 @@ test('owned icon spends the open window on one global identity and live scoped/f
  assert(b.includes('secondsRemainingAfterAction'));
 });
 
-test('last bounded naming probe uses one fresh literal AX projection when the retained Files subtree is incomplete', () => {
+test('both bounded naming probes use a fresh literal AX projection when Files geometry is known', () => {
  const s=swiftSource();
  const body=s.split('private func currentNamingEditor(')[1].split('private func validatedWitnessFlow(')[0];
- assert.match(body,/let useFreshProjection = includeModal && retainedFileFrame != nil/);
+ assert.match(body,/let useFreshProjection = retainedFileFrame != nil/);
  assert.match(body,/if useFreshProjection \{\s*matches = app\.textViews\.matching\(exactID\)\.allElementsBoundByAccessibilityElement\s*\} else \{/);
  assert.match(body,/retainedFileFrame\?\.contains\(CGPoint\(x: frame\.midX, y: frame\.midY\)\) == true/);
  assert.match(body,/guard matches\.count <= 1/);
  assert.match(body,/identifier == %@ AND enabled == YES/);
  assert.match(s,/let namingDeadline = namingStarted\.addingTimeInterval\(5\)/);
  assert.match(s,/let control = try validatedWitnessFlow\(app, providerLabels, witness\)/);
- assert.match(s,/"freshAppProjectionProbed": namingModalQueryCount == 1 && retainedFileFrame != nil/);
+ assert.match(s,/"freshAppProjectionProbed": namingFreshQueryCount > 0/);
 });

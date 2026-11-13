@@ -216,13 +216,12 @@ final class FolderPickerUITests: XCTestCase {
     }
     let identifier = "DOC.inlineRenameField"
     let exactID = NSPredicate(format: "identifier == %@ AND enabled == YES", identifier)
-    // The first probe stays scoped. On the final probe the old collection's
-    // AX projection can omit TextView descendants despite showing a focused
-    // editor in the application tree (42713347447). Read a fresh app projection
-    // only when we have a known visible native File View to bound the result.
-    // Each probe still executes only one inline query and the literal ID and
-    // full pre-action validation are unchanged.
-    let useFreshProjection = includeModal && retainedFileFrame != nil
+    // Files can replace the collection's AX subtree when entering rename.
+    // Probe the current app first, with the literal enabled ID and geometry
+    // of the previously witnessed native File View. Use the held collection
+    // only when that geometric bound is unavailable. This remains a
+    // read-only witness, not authority to interact with a matching field.
+    let useFreshProjection = retainedFileFrame != nil
     let matches: [XCUIElement]
     if useFreshProjection {
       matches = app.textViews.matching(exactID).allElementsBoundByAccessibilityElement
@@ -581,17 +580,17 @@ final class FolderPickerUITests: XCTestCase {
     // second appearance wait. No outer allowance or timeout is increased.
     let namingStarted = Date()
     let namingDeadline = namingStarted.addingTimeInterval(5)
-    // Leave the transition alone through the earlier 2.10s hang window.
-    // v2.9.1 acceptance saw the first 3.85s scoped query return at 5.17s
-    // with the right editor. Give that exact scoped AX query more time to
-    // finish, and place the fresh projection later if the first is empty.
-    // Both probes, including hit-testing and bounds, still end before 5s.
+    // Avoid querying during the keyboard transition. Give the live AX query
+    // time for both enumeration and hit-testing: on two runners starting the
+    // live query at 4.55s left less time than a single snapshot required.
+    // The ready deadline and full safety checks are unchanged.
     let namingPolls: [(offset: TimeInterval, includeModal: Bool)] = [
-      (3.15, false), (4.55, true)
+      (3.0, false), (3.75, true)
     ]
     var naming: NamingEditorWitness?
     var namingQueryCount = 0
     var namingModalQueryCount = 0
+    var namingFreshQueryCount = 0
     var namingProbeTimes: [[String: Double]] = []
     for poll in namingPolls {
       if naming != nil || Date() >= namingDeadline { break }
@@ -602,6 +601,7 @@ final class FolderPickerUITests: XCTestCase {
       if Date() >= namingDeadline { break }
       namingQueryCount += 1
       if poll.includeModal { namingModalQueryCount += 1 }
+      if retainedFileFrame != nil { namingFreshQueryCount += 1 }
       let probeStartedAt = Date()
       naming = try currentNamingEditor(app, pickerFileView, namingViewFrame, includeModal: poll.includeModal,
         retainedFileFrame: retainedFileFrame, before: namingDeadline)
@@ -619,7 +619,8 @@ final class FolderPickerUITests: XCTestCase {
       "withinAppearanceDeadline": withinAppearanceDeadline,
       "queryCount": namingQueryCount, "modalQueryCount": namingModalQueryCount,
       "probeTimes": namingProbeTimes,
-      "freshAppProjectionProbed": namingModalQueryCount == 1 && retainedFileFrame != nil,
+      "freshAppProjectionProbed": namingFreshQueryCount > 0,
+      "freshAppProjectionQueryCount": namingFreshQueryCount,
       "editorFound": naming != nil, "editorKind": naming?.isInline == true ? "inline" : "modal-or-absent",
       "editorIdentifier": naming?.identifier ?? "", "editorFrame": naming?.frame ?? [],
       "boundToAccessibilityElement": naming != nil, "modalOwnerHeld": naming?.modalOwner != nil,
