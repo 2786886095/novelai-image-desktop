@@ -15,6 +15,36 @@ import '../ui/studio_dropdown.dart';
 import '../ui/zoomable_image.dart';
 import '../services/gallery_download.dart';
 
+Future<bool> confirmStyleGroupDeletion(
+  BuildContext context, {
+  required String group,
+  required String language,
+}) async {
+  final labels = styleLibraryText(language);
+  return await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(labels['deleteGroupTitle']!.replaceAll('{name}', group)),
+          content: Text(labels['deleteGroupHint']!),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(labels['cancel']!),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+              ),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(labels['deleteGroup']!),
+            ),
+          ],
+        ),
+      ) ==
+      true;
+}
+
 class StyleSortPicker extends StatelessWidget {
   const StyleSortPicker({super.key});
   @override
@@ -261,13 +291,26 @@ class _StyleLibraryScreenState extends State<StyleLibraryScreen> {
                       icon: const Icon(Icons.folder_delete_outlined),
                       onPressed: busy || group.isEmpty || group == 'Default'
                           ? null
-                          : () => run(() => state.updateStyleLibrary((s) {
-                                s.stylePromptPresetGroups.remove(group);
-                                for (final p in s.stylePromptPresets) {
-                                  if (p.group == group) p.group = 'Default';
+                          : () async {
+                              final target = group;
+                              final confirmed = await confirmStyleGroupDeletion(
+                                context,
+                                group: target,
+                                language: s.language,
+                              );
+                              if (!confirmed || !context.mounted || busy) return;
+                              await run(() async {
+                                await state.updateStyleLibrary((s) {
+                                  s.stylePromptPresetGroups.remove(target);
+                                  for (final p in s.stylePromptPresets) {
+                                    if (p.group == target) p.group = 'Default';
+                                  }
+                                });
+                                if (mounted && group == target) {
+                                  setState(() => group = '');
                                 }
-                                group = '';
-                              })))
+                              });
+                            })
                 ]),
                 const StyleSortPicker(),
                 if (error != null)

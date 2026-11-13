@@ -1442,7 +1442,6 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
     String exists,
     String created,
     String deleteGroup,
-    String deleteConfirm,
     String moveTo,
     String manage
   }) _groupText(String language) => switch (language) {
@@ -1455,7 +1454,6 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
             exists: '該分組已存在。',
             created: '已建立分組',
             deleteGroup: '刪除分組',
-            deleteConfirm: '分組內的風格會移至預設分組。',
             moveTo: '移至分組',
             manage: '選擇與管理風格'
           ),
@@ -1468,7 +1466,6 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
             exists: 'That group already exists.',
             created: 'Group created',
             deleteGroup: 'Delete group',
-            deleteConfirm: 'Styles in it will move to the default group.',
             moveTo: 'Move to group',
             manage: 'Choose and manage styles'
           ),
@@ -1481,7 +1478,6 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
             exists: '同じグループが既に存在します。',
             created: 'グループを作成しました',
             deleteGroup: 'グループを削除',
-            deleteConfirm: 'スタイルはデフォルトグループへ移動します。',
             moveTo: 'グループへ移動',
             manage: 'スタイルを選択・管理'
           ),
@@ -1494,7 +1490,6 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
             exists: '같은 그룹이 이미 있습니다.',
             created: '그룹을 만들었습니다',
             deleteGroup: '그룹 삭제',
-            deleteConfirm: '스타일은 기본 그룹으로 이동합니다.',
             moveTo: '그룹으로 이동',
             manage: '스타일 선택 및 관리'
           ),
@@ -1507,7 +1502,6 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
             exists: '该分组已经存在。',
             created: '已创建分组',
             deleteGroup: '删除分组',
-            deleteConfirm: '分组内的风格会移动到默认分组。',
             moveTo: '移动到分组',
             manage: '选择与管理风格'
           ),
@@ -1857,39 +1851,6 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
     );
   }
 
-  Future<bool> _confirmGroupDelete(
-    BuildContext context,
-    String group,
-    String language,
-  ) async {
-    final labels = _groupText(language);
-    final title = switch (language) {
-      'en-US' => '${labels.deleteGroup} “$group”?',
-      'ja-JP' => '「$group」を${labels.deleteGroup}しますか？',
-      'ko-KR' => '“$group” ${labels.deleteGroup}할까요?',
-      _ => '${labels.deleteGroup}“$group”？',
-    };
-    return await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: Text(title),
-            content: Text(labels.deleteConfirm),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child:
-                    Text(MaterialLocalizations.of(context).cancelButtonLabel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: Text(labels.deleteGroup),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-  }
-
   Future<bool> _confirmStyleDelete(
     BuildContext context,
     String name,
@@ -2147,10 +2108,17 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                                         tooltip: labels.deleteGroup,
                                         visualDensity: VisualDensity.compact,
                                         onPressed: () async {
-                                          if (!await _confirmGroupDelete(
-                                              sheetContext,
-                                              group,
-                                              state.settings.language)) return;
+                                          final confirmed =
+                                              await confirmStyleGroupDeletion(
+                                            sheetContext,
+                                            group: group,
+                                            language: state.settings.language,
+                                          );
+                                          if (!confirmed ||
+                                              !sheetContext.mounted ||
+                                              !mounted) {
+                                            return;
+                                          }
                                           await state
                                               .removeStylePromptPresetGroup(
                                                   group);

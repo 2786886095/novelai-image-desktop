@@ -47,7 +47,7 @@ import {CompactIconButton,FurryModeSwitch,ResolutionPicker,CapsuleEditor} from "
 import {useFeatureText} from "./feature-i18n";
 import {localizeStoreMessage} from './store-i18n';
 import {CompletionSoundSettings} from "./components/CompletionSoundSettings";
-import StyleLibrary from "./StyleLibrary";
+import StyleLibrary, { confirmStyleGroupDeletion } from "./StyleLibrary";
 import {sortStyles} from "./style-library";
 import {countStyleUse} from "./style-library-client";
 import { planUpscale } from "./upscale-plan";
@@ -2006,7 +2006,7 @@ export function PromptAndParams({
   async function deleteStylePromptGroup(groupOverride?: string) {
     const group = groupOverride ?? selectedStylePresetGroup;
     if (group === "all" || group === "Default") return;
-    if (!(await confirmAction(f("prompt.styleGroupDeleteConfirm", { name: group })))) return;
+    if (!(await confirmStyleGroupDeletion(settings?.language, group))) return;
     await window.naiDesktop.setSetting(
       "stylePromptPresets",
       stylePromptPresets.map((preset) => preset.group === group ? { ...preset, group: "Default" } : preset),

@@ -21,7 +21,7 @@ NovelAI 圖像創作工作臺，介面支援簡體中文、繁體中文、英語
 
 ## 本次更新
 
-桌面圖庫變更分組時會移動原始檔案，保留日期且不覆蓋同名檔案。MCP 已擴充至 29 項工具，可指定生圖儲存分組、預覽參數、查詢模板和預設，以及呼叫轉換、反推與漫畫提示詞。Android／iOS 僅同步版本。
+桌面和行動版刪除風格分組前會顯示分組名稱並要求確認。取消不會變更資料；確認後，組內風格移回預設分組，風格與預覽圖會保留。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

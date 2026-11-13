@@ -3,6 +3,7 @@ import {FilePicker} from './components/FilePicker';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import labels from '../shared/style-library-ui.json';
 import {useAppStore} from './store';
+import {desktopUiFormat,desktopUiText} from './i18n';
 import {STYLE_SORTS,sortStyles,moveStyle,parseStyleLines,matchStyleImages,styleCoverIndex} from './style-library';
 import {changeStyles,countStyleUse,setStyleSort,saveGalleryStyle} from './style-library-client';
 import type {StylePromptPreset} from './types';
@@ -10,6 +11,12 @@ import {Button,SelectMenuCompat as Select} from './components/ui';
 import {Icon} from './components/icons';
 import {PreviewImageViewer} from './components/PreviewImageViewer';
 export const styleText=(language:unknown)=>labels[language as keyof typeof labels]??labels['en-US'];
+export function confirmStyleGroupDeletion(language: unknown, group: string) {
+ const label=desktopUiText(language,'prompt.styleGroupDelete');
+ return confirmAction(desktopUiFormat(language,'prompt.styleGroupDeleteConfirm',{name:group}),label,undefined,undefined,{
+  confirm:label,cancel:desktopUiText(language,'common.cancel'),localized:true,
+ });
+}
 export function StyleSortSelect(){const s=useAppStore(x=>x.settings),t=styleText(s?.language);return <label>{t.sort}<Select aria-label={t.sort} value={s?.stylePromptPresetSort??'default'} onChange={e=>void setStyleSort(e.target.value).catch(e=>useAppStore.getState().setToast(String(e)))}>{STYLE_SORTS.map(v=><option key={v} value={v}>{v==='name'?t.nameSort:t[v]}</option>)}</Select></label>;}
 export function GallerySaveStyleButton({name,prompt,images}:{name:string;prompt:string;images:string[]}) {
  const t=styleText(useAppStore(s=>s.settings?.language));const [busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -30,6 +37,18 @@ export default function StyleLibrary(){
  const groups=[...new Set(['Default',...(settings?.stylePromptPresetGroups??[]),...items.map(p=>p.group)])];
  const visible=sortStyles(items,settings?.stylePromptPresetSort).filter(p=>(!group||p.group===group)&&`${p.name}\n${p.prompt}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
  async function run(work:()=>Promise<unknown>){setBusy(true);setError('');try{await work();}catch(e){setError(String(e));}finally{setBusy(false);}}
+ async function deleteGroup(){
+  const target=group;
+  if(busy||!target||target==='Default')return;
+  if(!await confirmStyleGroupDeletion(settings?.language,target))return;
+  await run(async()=>{
+   await changeStyles(all=>all.map(p=>p.group===target?{...p,group:'Default'}:p));
+   const latest=await window.naiDesktop.getSettings();
+   await window.naiDesktop.setSetting('stylePromptPresetGroups',(latest.stylePromptPresetGroups??[]).filter(g=>g!==target));
+   await useAppStore.getState().refreshSettings();
+   setGroup('');
+  });
+ }
  const fresh=(name='',prompt=''):StylePromptPreset=>({id:crypto.randomUUID(),name,prompt,group:group||'Default',createdAt:new Date().toISOString(),rating:0,usageCount:0,previewImages:[]});
  async function cancel(){if(draft){const original=items.find(p=>p.id===draft.id);for(const im of draft.previewImages??[])if(!original?.previewImages?.some(x=>x.id===im.id))await window.naiDesktop.deleteStylePromptPresetImage(draft.id,im.id);}setDraft(null);setBatch(false);}
  async function apply(p:StylePromptPreset){await countStyleUse(p.id);useAppStore.getState().setParam('stylePrompt',p.prompt);useAppStore.getState().setActiveTab('generate');}
@@ -46,7 +65,7 @@ export default function StyleLibrary(){
  }
  return <main ref={libraryRef} className="style-library">{!draft&&<><header className="style-library-heading"><div><h2>{t.title}</h2><span>{items.length}</span></div><Button disabled={busy||!!draft||batch} onClick={()=>edit(fresh())}><Icon name="plus"/>{t.new}</Button><Button disabled={busy||!!draft||batch} onClick={()=>setBatch(true)}>{t.batch}</Button></header>
  <div className="style-library-filters"><input aria-label={t.search} placeholder={t.search} value={query} onChange={e=>setQuery(e.target.value)}/><Select aria-label={t.group} value={group} onChange={e=>setGroup(e.target.value)}><option value="">{t.all}</option>{groups.map(g=><option key={g}>{g}</option>)}</Select><StyleSortSelect/></div>
- <div className="style-library-groups"><input aria-label={t.newGroup} placeholder={t.newGroup} value={groupName} onChange={e=>setGroupName(e.target.value)}/><Button disabled={busy||!groupName.trim()||groups.includes(groupName.trim())} onClick={()=>void run(async()=>{await window.naiDesktop.setSetting('stylePromptPresetGroups',[...groups,groupName.trim()]);await useAppStore.getState().refreshSettings();setGroup(groupName.trim());setGroupName('');})}>{t.newGroup}</Button><Button disabled={busy||!group||group==='Default'} onClick={()=>void run(async()=>{await changeStyles(all=>all.map(p=>p.group===group?{...p,group:'Default'}:p));await window.naiDesktop.setSetting('stylePromptPresetGroups',groups.filter(g=>g!==group));await useAppStore.getState().refreshSettings();setGroup('');})}>{t.deleteGroup}</Button></div></>}
+ <div className="style-library-groups"><input aria-label={t.newGroup} placeholder={t.newGroup} value={groupName} onChange={e=>setGroupName(e.target.value)}/><Button disabled={busy||!groupName.trim()||groups.includes(groupName.trim())} onClick={()=>void run(async()=>{await window.naiDesktop.setSetting('stylePromptPresetGroups',[...groups,groupName.trim()]);await useAppStore.getState().refreshSettings();setGroup(groupName.trim());setGroupName('');})}>{t.newGroup}</Button><Button disabled={busy||!group||group==='Default'} onClick={deleteGroup}>{t.deleteGroup}</Button></div></>}
  {error&&<p role="alert">{error}</p>}
  {draft&&<section className="style-library-editor" aria-label={t.edit}><h3>{draft.name||t.new}</h3><label>{t.name}<input value={draft.name} maxLength={120} onChange={e=>setDraft({...draft,name:e.target.value})}/></label><label>{t.prompt}<textarea aria-label={t.prompt} rows={6} value={draft.prompt} onChange={e=>setDraft({...draft,prompt:e.target.value})}/></label><div className="style-library-filters"><label>{t.group}<Select value={draft.group} onChange={e=>setDraft({...draft,group:e.target.value})}>{groups.map(g=><option key={g}>{g}</option>)}</Select></label><label>{t.rating}<input aria-label={t.rating} type="number" min="0" max="5" step="any" inputMode="decimal" value={ratingText} aria-invalid={!ratingValid} aria-describedby={!ratingValid?'style-rating-error':undefined} onChange={e=>setRatingText(e.target.value)}/>{!ratingValid&&<small id="style-rating-error" role="alert">{t.ratingRange}</small>}</label></div>
  <div className="style-library-previews">{draft.previewImages?.map((im,i)=><div key={im.id}><button onClick={()=>setPreview({preset:draft,index:i})}><img src={im.fileUrl} alt={im.name}/></button><Button disabled={busy} aria-pressed={styleCoverIndex(draft)===i} onClick={()=>setDraft({...draft,coverImageId:im.id})}>{styleCoverIndex(draft)===i?t.cover:t.setCover}</Button><Button disabled={busy} onClick={async()=>{if(!await confirmAction(`${t.confirmImageDelete}\n${im.name}`,t.delete))return;void run(async()=>{if(!items.find(p=>p.id===draft.id)?.previewImages?.some(x=>x.id===im.id))await window.naiDesktop.deleteStylePromptPresetImage(draft.id,im.id);setDraft({...draft,previewImages:draft.previewImages!.filter(x=>x.id!==im.id)});});}}>{t.delete}</Button></div>)}</div>
