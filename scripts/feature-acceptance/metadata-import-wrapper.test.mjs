@@ -80,7 +80,7 @@ test('the actual public inventory still contains exactly the ten pinned IDs; onl
   assert.throws(()=>parseMetadataImportAssets(inventory.replace('https://novelai.net/','https://novelai.net.evil/')),/Non-fixed/);
   assert.throws(()=>parseMetadataImportAssets(inventory.replace("'png-text'","'unknown-asset'")),/Non-fixed/);
   assert.throws(()=>parseMetadataImportAssets(inventory.replace("'exif'","'png-text'")),/Non-fixed/);
-  assert.throws(()=>parseMetadataImportAssets(inventory.replace('33637,','0,')),/Non-fixed/);
+  assert.throws(()=>parseMetadataImportAssets(inventory.replace(','+assets[0].bytes+',',',0,')),/Non-fixed/);
   assert.throws(()=>parseMetadataImportAssets(inventory.split('\n').filter(line=>!line.includes("OfficialMetadataAsset('png-text'")).join('\n')),/ten pinned/);
 });
 
