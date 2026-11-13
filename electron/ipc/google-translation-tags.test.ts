@@ -7,7 +7,7 @@ function production(respond:(q:string)=>unknown, categories:Record<string,number
  const fn=ast.statements.find((n):n is ts.FunctionDeclaration=>ts.isFunctionDeclaration(n)&&n.name?.text==='googleTranslate')!;
  const get=vi.fn(async(_url:string,options:any)=>({data:respond(options.params.q)}));
  const fnCode=ts.transpileModule(fn.getText(ast),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
- const api=vm.runInNewContext(fnCode+'\ngoogleTranslate',{...translation,...prompts,exports:{},axios:{get},proxyConfig:(scope:string)=>{expect(scope).toBe('translate');return{};},searchDanbooru:async(tag:string)=>categories[tag]===undefined?[]:[{tag,category:categories[tag]}]});
+ const api=vm.runInNewContext(fnCode+'\ngoogleTranslate',{...translation,...prompts,setTimeout,exports:{},axios:{get},proxyConfig:(scope:string)=>{expect(scope).toBe('translate');return{};},searchDanbooru:async(tag:string)=>categories[tag]===undefined?[]:[{tag,category:categories[tag]}]});
  return {api,get};
 }
 describe('real Google production function / Issue66 request boundaries',()=>{
@@ -24,6 +24,22 @@ describe('real Google production function / Issue66 request boundaries',()=>{
  it('429 is a failure, without automatic reissue or partial translation',async()=>{
   const f=production(()=>{throw Error('HTTP 429');});
   const r=await f.api('black_hat, white_dress','zh-CN','en');expect(r.ok).toBe(false);expect(r.text).toBeUndefined();expect(f.get).toHaveBeenCalledTimes(1);
+ });
+ it('recovers from one HTTP 500 with the same request and source detection',async()=>{
+  let calls=0;
+  const f=production(()=>{if(++calls===1)throw Object.assign(Error('HTTP 500'),{response:{status:500}});return [[['紅色花朵']],null,'en'];});
+  const result=await f.api('Red flowers.','zh-TW','auto');
+  console.log('GOOGLE_DESKTOP_TRANSIENT',JSON.stringify({ok:result.ok,calls}));
+  expect(result).toMatchObject({ok:true,text:'紅色花朵',sourceLanguage:'en'});
+  expect(f.get.mock.calls[0]).toEqual(f.get.mock.calls[1]);
+  expect(f.get).toHaveBeenCalledTimes(2);
+ });
+ it('does not reissue indefinitely or return partial text on HTTP 503',async()=>{
+  const f=production(()=>{throw Object.assign(Error('HTTP 503'),{response:{status:503}});});
+  const result=await f.api('Red flowers.','zh-TW','auto');
+  expect(result.ok).toBe(false);
+  expect(result.text).toBeUndefined();
+  expect(f.get).toHaveBeenCalledTimes(2);
  });
  it('merged or malformed batches do not silently mismatch labels',async()=>{
   for(const response of [[[['黑帽金发']],null,'en'],[[[null]],null,'en'],[[],null,'en']]) {

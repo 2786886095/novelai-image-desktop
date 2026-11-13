@@ -303,10 +303,15 @@ class NaiApi {
         final uri = Uri.https('translate.googleapis.com', '/translate_a/single', {
           'client': 'gtx', 'sl': from, 'tl': resolvedTarget, 'dt': 't', 'q': query,
         });
-        final response = await _withClient(settings,
-          (client) => client.get(uri).timeout(const Duration(seconds: 8)),
-          scope: ProxyScope.translate,
-        );
+        final response = await _withClient(settings, (client) async {
+          final first = await client.get(uri).timeout(const Duration(seconds: 8));
+          if (!const [500, 502, 503, 504].contains(first.statusCode)) {
+            return first;
+          }
+          // Retry only the failing read-only segment, on the same proxy.
+          await Future<void>.delayed(const Duration(milliseconds: 250));
+          return client.get(uri).timeout(const Duration(seconds: 8));
+        }, scope: ProxyScope.translate);
         if (response.statusCode >= 400) {
           return AiTextResult(ok: false, message: 'Google Translate failed (HTTP ${response.statusCode})');
         }

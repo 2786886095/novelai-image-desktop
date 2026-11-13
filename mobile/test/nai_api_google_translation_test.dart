@@ -51,6 +51,7 @@ void main() {
     final queries = <String>[];
     Map<String, dynamic>? row;
     var status = 200;
+    int? oneShotStatus;
     Object? overrideResponse;
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
@@ -66,7 +67,8 @@ void main() {
         }
       }
       final text = q.split('\n').map((s) => words[s] ?? s).join('\n');
-      request.response.statusCode = status;
+      request.response.statusCode = oneShotStatus ?? status;
+      oneShotStatus = null;
       request.response.headers.contentType = ContentType.json;
       request.response.write(jsonEncode(overrideResponse ??
           [
@@ -103,7 +105,28 @@ void main() {
       }
       debugPrint('MOBILE_REPAIR_BEHAVIOR: ${jsonEncode(observations)}',
           wrapWidth: null);
-      // HTTP failures and malformed responses never retry or publish partial text.
+      row = null;
+      queries.clear();
+      oneShotStatus = 500;
+      overrideResponse = [[['紅色花朵']], null, 'en'];
+      final recovered = await NaiApi().translateText(
+        'Red flowers.', settings, target: 'zh-TW', sourceLanguage: 'auto');
+      debugPrint('GOOGLE_MOBILE_TRANSIENT ok=${recovered.ok} calls=${queries.length}');
+      expect(recovered.ok, isTrue);
+      expect(recovered.text, '紅色花朵');
+      expect(recovered.sourceLanguage, 'en');
+      expect(queries, ['Red flowers.', 'Red flowers.']);
+
+      queries.clear();
+      status = 503;
+      final unavailable = await NaiApi().translateText(
+        'Red flowers.', settings, target: 'zh-TW', sourceLanguage: 'auto');
+      expect(unavailable.ok, isFalse);
+      expect(unavailable.text, isEmpty);
+      expect(queries, ['Red flowers.', 'Red flowers.']);
+      overrideResponse = null;
+
+      // Rate limits and malformed responses never retry or publish partial text.
       queries.clear();
       status = 429;
       final failed = await NaiApi().translateText(

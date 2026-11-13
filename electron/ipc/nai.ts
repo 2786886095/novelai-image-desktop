@@ -5606,14 +5606,20 @@ async function googleTranslate(
     const outputs: string[] = [];
     let detected = normalizeTranslationSource(sourceLanguage);
     for (const query of plan.queries) {
-      const res = await axios.get(
-        "https://translate.googleapis.com/translate_a/single",
-        {
-          params: { client: "gtx", sl: sourceLanguage, tl: target, dt: "t", q: query },
-          timeout: 8_000,
-          ...proxyConfig("translate"),
-        },
-      );
+      const options = {
+        params: { client: "gtx", sl: sourceLanguage, tl: target, dt: "t", q: query },
+        timeout: 8_000,
+        ...proxyConfig("translate"),
+      };
+      const url = "https://translate.googleapis.com/translate_a/single";
+      const res = await axios.get(url, options).catch(async (error: unknown) => {
+        const status = (error as { response?: { status?: number } } | null)?.response?.status;
+        if (status === undefined || ![500, 502, 503, 504].includes(status)) throw error;
+        // Read-only translation: retry only this failed segment, never a 429
+        // or an invalid body. The second failure still discards all output.
+        await new Promise<void>((resolve) => setTimeout(resolve, 250));
+        return axios.get(url, options);
+      });
       const segments = Array.isArray(res.data?.[0]) ? res.data[0] : [];
       const out = segments.map((s: unknown) => Array.isArray(s) && typeof s[0] === 'string' ? s[0] : '').join('').trim();
       if (!out) return { ok: false, error: "谷歌翻译结果为空。" };

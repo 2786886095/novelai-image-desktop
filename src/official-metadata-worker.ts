@@ -83,20 +83,26 @@ async function readOfficial(assets: OfficialMetadataAssetPayload[], input: Array
     new Function(text)();
   }
   const registry = new Map<number, Factory>();
-  for (const record of workerScope.TURBOPACK) {
+  function register(values: unknown[]) {
     let ids: number[] = [];
-    for (const value of record.slice(1)) {
+    for (const value of values) {
       if (typeof value === "number") ids.push(value);
-      else if (typeof value === "function") { for (const id of ids) registry.set(id, value as Factory); ids = []; }
+      else if (typeof value === "function") {
+        for (const id of ids) registry.set(id, value as Factory);
+        ids = [];
+      } else if (Array.isArray(value)) {
+        register(value);
+      }
     }
   }
+  for (const record of workerScope.TURBOPACK) register(record.slice(1));
   let metadataInflateError: Error | undefined;
   let parserFailure = false;
   const cache = new Map<number, ModuleExports>([
-    [421464, {}], [240748, { toast() { parserFailure = true; } }],
-    [760727, { logError() { parserFailure = true; } }],
-    [845555, { default: { release: { name: "node" }, versions: { node: "0.0.0" } } }],
-    [661332, { decompressSync(value: Uint8Array) {
+    [134691, {}], [240748, { c() { parserFailure = true; } }],
+    [635587, { W() { parserFailure = true; } }],
+    [610974, { default: { release: { name: "node" }, versions: { node: "0.0.0" } } }],
+    [661332, { b(value: Uint8Array) {
       try { return inflateMetadata(value); }
       catch (error) {
         metadataInflateError = new Error(error instanceof Error && error.message.includes("too large")
@@ -104,7 +110,7 @@ async function readOfficial(assets: OfficialMetadataAssetPayload[], input: Array
         throw metadataInflateError;
       }
     } }],
-    [740039, { getPicaInstance: deny }],
+    [165628, { z: deny }],
     [588307, { fromPng() { throw new Error("官方 PNG JS fallback 不在联网隔离读取范围。"); }, toPng: deny }],
   ]);
   const dynamicTargets = new Map([[636994, 988471], [979997, 199733]]);
@@ -115,12 +121,14 @@ async function readOfficial(assets: OfficialMetadataAssetPayload[], input: Array
     const exports: ModuleExports = {}, module = { exports };
     cache.set(id, exports);
     const runtime = {
+      g: globalThis,
       i: load, r(target: number) { const item = load(target); return item.default ?? item; },
       A(target: number) { const mapped = dynamicTargets.get(target); if (mapped === undefined) return Promise.reject(new Error("未允许的官方动态模块。")); return Promise.resolve(load(mapped)); },
       U: class extends URL { constructor(value: string) { super(value, "https://novelai.net"); } },
       F(value: string) { return new URL(value, "https://novelai.net/").href; },
       q(value: unknown) { exports.default = value; },
-      s(fields: unknown[]) {
+      s(fields: unknown[], moduleId = id) {
+        if (moduleId !== id) throw new Error("未支持的官方模块导出。");
         for (let index = 0; index < fields.length; index += 3) {
           if (fields[index + 1] !== 0) throw new Error("未支持的官方导出格式。");
           exports[String(fields[index])] = fields[index + 2];
@@ -131,19 +139,18 @@ async function readOfficial(assets: OfficialMetadataAssetPayload[], input: Array
     cache.set(id, module.exports);
     return module.exports;
   }
-  const codec = load(217354);
+  const codec = load(428132);
   const helperText = new TextDecoder("utf-8", { fatal: true }).decode(verified.get("alpha-helper"));
-  const helper = helperText.slice(9326, 9463);
+  const helper = helperText.slice(7921, 8040);
   const helperHash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(helper)));
-  if (Array.from(helperHash, byte => byte.toString(16).padStart(2, "0")).join("") !== "ab89ae6b282d7739b16da1f6d901e7d184495e0279a2f494e3cadb171408b65e")
+  if (Array.from(helperHash, byte => byte.toString(16).padStart(2, "0")).join("") !== "08ed8035fc6135ef4ad4cb5adc69ecc257bba8539f88a2195f097eff7000beb4")
     throw new Error("官方 alpha 辅助函数边界校验失败。");
-  const getStealth = new Function("h", "p", "return (" + helper + ")")(codec.decodeImage, codec);
-  cache.set(939743, { getStealthPngCompString: getStealth });
-  // Inspect reads an ArrayBuffer and then explicitly uses its own Buffer.from
-  // (verified current Inspect chunk offset 34401). Both ExifReader.isBuffer and
-  // the pixel codec's .length dispatch depend on that exact browser contract.
-  const officialBuffer = load(671861).Buffer as { from(value: ArrayBuffer): Uint8Array };
-  const importer = load(522560).getMetadataFromBuffer as (value: Uint8Array) => Promise<unknown>;
+  const getStealth = new Function("p", "g", "return (" + helper + ")")(codec.$, codec);
+  cache.set(530499, { c: getStealth });
+  // Inspect still explicitly uses its own Buffer.from before invoking the
+  // importer. ExifReader.isBuffer and the pixel codec depend on this contract.
+  const officialBuffer = load(436005).Buffer as { from(value: ArrayBuffer): Uint8Array };
+  const importer = load(40797).f as (value: Uint8Array) => Promise<unknown>;
   const raw = await importer(officialBuffer.from(input));
   // The official helper intentionally swallows some decode errors. Safety
   // failures must remain visible instead of masquerading as "no metadata".
