@@ -10,16 +10,16 @@ const call=(command,args)=>execFileSync(command,args,{encoding:'utf8',timeout:60
 const version=JSON.parse(fs.readFileSync('package.json','utf8')).version;
 const tag='v'+version, sha=call('git',['rev-parse','HEAD']);
 const waiveWindowsArtistGpuV286=process.env.WAIVE_WINDOWS_ARTIST_GPU_V286==='true';
-const waiveWindowsArtistGpuV291=process.env.WAIVE_WINDOWS_ARTIST_GPU_V291==='true';
-const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV291;
+const waiveWindowsArtistGpuV292=process.env.WAIVE_WINDOWS_ARTIST_GPU_V292==='true';
+const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV292;
 const nativeRun=process.env.FEATURE_RUN;
 if(waiveWindowsArtistGpu){
- if((waiveWindowsArtistGpuV286&&version!=='2.8.6')||(waiveWindowsArtistGpuV291&&version!=='2.9.1')||!/^\d+$/.test(nativeRun??''))throw Error('Explicit version-bound cloud acceptance workflow is required');
+ if((waiveWindowsArtistGpuV286&&version!=='2.8.6')||(waiveWindowsArtistGpuV292&&version!=='2.9.2')||!/^\d+$/.test(nativeRun??''))throw Error('Explicit version-bound cloud acceptance workflow is required');
  assertV286CloudNativeRun(JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs'])),{sourceSha:sha});
 }
 const featureParity=JSON.parse(fs.readFileSync('release-evidence/feature-parity.json','utf8'));
-assertReleasePlatformContract(featureParity,{version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV291});
-assertReleaseEvidenceFiles(featureParity,'release-evidence',{waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV291});
+assertReleasePlatformContract(featureParity,{version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292});
+assertReleaseEvidenceFiles(featureParity,'release-evidence',{waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292});
 const buildRun=process.env.BUILD_RUN;
 if(!/^\d+$/.test(buildRun??''))throw Error('A verified desktop build run is required');
 const build=JSON.parse(call('gh',['run','view',buildRun,'--json','headSha,jobs']));
@@ -99,8 +99,8 @@ const existing=spawnSync('gh',['release','view',tag],{encoding:'utf8',timeout:30
 if(existing.status===0)throw Error('Release already exists; do not overwrite it');
 if(!/not found/i.test(existing.stderr??''))throw Error('Release existence check failed: '+existing.stderr);
 const releaseNotes=fs.readFileSync('docs/RELEASE_NOTES.md','utf8');
-if(waiveWindowsArtistGpu&&!releaseNotes.includes('Windows 画风迭代的本机 GPU 实测未验收'))throw Error('Release notes must disclose the untested Windows GPU scenarios');
-// Preserve the waiver in verification.json; it is not a public changelog bullet.
+if(waiveWindowsArtistGpuV286&&!releaseNotes.includes('Windows 画风迭代的本机 GPU 实测未验收'))throw Error('Release notes must disclose the untested Windows GPU scenarios');
+// v2.9.2 keeps the precise untested scope in verification.json without a public changelog bullet.
 const publicNotesFile=waiveWindowsArtistGpuV286?'release-evidence/public-release-notes.md':'docs/RELEASE_NOTES.md';
 if(waiveWindowsArtistGpuV286){
  const publicNotes=releaseNotes.replace(/^- Windows 画风迭代的本机 GPU 实测未验收[^\r\n]*(?:\r?\n|$)/m,'');
