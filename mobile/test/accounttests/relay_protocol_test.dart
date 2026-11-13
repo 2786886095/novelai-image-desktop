@@ -52,7 +52,7 @@ void main() {
         if (status == 0) throw const FormatException('QA_PRIVATE_RESPONSE');
         return http.Response(jsonEncode({'object':'list','data':[{'id':'other-model'}]}),status);
       }));
-      final snapshot = NovelAiCredentialSnapshot(const NovelAiAccount(id:'probe',label:'Probe',method:'relay',
+      const snapshot = NovelAiCredentialSnapshot(NovelAiAccount(id:'probe',label:'Probe',method:'relay',
         relayProtocol:'openai-images',relayModel:'expected-model',apiBaseUrl:'https://relay-fixture.invalid/v1',
         imageBaseUrl:'https://relay-fixture.invalid/v1'), 'QA_ONLY_RELAY');
       await expectLater(api.verifyCandidate(snapshot, AppSettings()),

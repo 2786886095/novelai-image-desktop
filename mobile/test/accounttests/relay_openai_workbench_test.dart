@@ -45,7 +45,7 @@ void main() {
     final requests=<String>[];
     var responseStatus=200;
     final accountApi=NovelAiAccountApi(vault,clientFactory:(_,__)=>MockClient((r) async {
-      requests.add('GET '+r.url.path);
+      requests.add('GET ${r.url.path}');
       expect(r.method,'GET');expect(r.headers['Authorization'],'Bearer QA_ONLY_RELAY');
       return http.Response(jsonEncode({'object':'list','data':[{'id':'custom-image'}]}),200);
     }));
@@ -53,7 +53,7 @@ void main() {
       compatibleClientFactory:(_,uri,scope) async {
         expect(scope,ProxyScope.nai);
         return MockClient((r) async {
-          requests.add(r.method+' '+r.url.path);
+          requests.add('${r.method} ${r.url.path}');
           expect(r.url.origin,'https://owned-relay.invalid');
           expect(r.headers['Authorization'],'Bearer QA_ONLY_RELAY');
           expect(r.followRedirects,isFalse);
