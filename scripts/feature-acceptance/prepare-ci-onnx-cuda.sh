@@ -3,7 +3,7 @@ set -euo pipefail
 [[ "$(uname -s)/$(uname -m)" == 'Linux/x86_64' ]] || { echo 'Expected Linux x86_64' >&2; exit 1; }
 version='1.21.0'
 # Public microsoft/onnxruntime release v1.21.0, Linux x64 GPU asset from the npm installer.
-asset='https://api.github.com/repos/microsoft/onnxruntime/releases/assets/236224852'
+asset='https://github.com/microsoft/onnxruntime/releases/download/v1.21.0/onnxruntime-linux-x64-gpu-1.21.0.tgz'
 sha='ef37a33ba75e457aebfd0d7b342ab20424aa6126bc5f565d247f1201b66996cf'
 python3 - "$version" <<'PY'
 import json, sys
@@ -27,7 +27,7 @@ cleanup() {
 trap cleanup EXIT
 curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
   --retry 2 --connect-timeout 10 --max-time 150 --retry-max-time 180 \
-  --max-filesize 225318955 --header 'Accept: application/octet-stream' --output "$archive" "$asset"
+  --max-filesize 225318955 --output "$archive" "$asset"
 printf '%s  %s\n' "$sha" "$archive" | sha256sum --check --status
 entries=()
 for item in "${files[@]}"; do entries+=("$name/lib/$item"); done
