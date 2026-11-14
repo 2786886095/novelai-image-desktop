@@ -87,6 +87,21 @@ test('v2.8.6 cloud waiver requires all 186 non-GPU cells, original evidence, and
  fs.appendFileSync(path.join(root,data[0].artifact),' ');
  assert.throws(()=>assertReleaseEvidenceFiles(scoped,root,options),/bytes changed/);
 }));
+test('v2.9.3 exception is exact-version, opt-in, and cannot waive another cell',()=>temporary(root=>{
+ const data=items().filter(item=>!item.windowsArtistProof);
+ const options={version:'2.9.3',sourceSha,waiveWindowsArtistGpuV293:true};
+ writeItems(root,data);
+ const report=buildFullFeatureMatrix({...options,receipts:data});
+ assert.equal(report.releaseScopeCertified,false);
+ assert.equal(report.summary.verifiedSlots,186);
+ assert.equal(report.summary.pendingSlots,1);
+ assert.doesNotThrow(()=>assertReleasePlatformContract(report,options));
+ assert.doesNotThrow(()=>assertReleaseEvidenceFiles(report,root,options));
+ assert.throws(()=>assertReleasePlatformContract(report,{...options,waiveWindowsArtistGpuV293:false}),/All required scoped cells/);
+ assert.throws(()=>assertReleasePlatformContract({...report,version:'2.9.4'},{...options,version:'2.9.4'}),/only to v2.9.3/);
+ assert.throws(()=>assertReleasePlatformContract(report,{...options,waiveWindowsArtistGpuV292:true}),/only to v2.9.2/);
+ assert.throws(()=>assertReleasePlatformContract(buildFullFeatureMatrix({...options,receipts:data.filter(x=>x.receipt.platform!=='ios')}),options),/not accepted/);
+}));
 test('v2.8.6 cloud waiver rejects any failed or skipped hosted job',()=>{
  const components=['core','text','library','os','metadata','gallery','japanese','generation','ui','workflows'];
  const names=['desktop-components (windows-latest)','desktop-components (macos-15)','desktop-components (ubuntu-24.04)',
