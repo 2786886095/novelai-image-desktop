@@ -21,7 +21,7 @@
 
 ## 今回の更新
 
-デスクトップ版とモバイル版では NovelAI ネイティブ、/v1 認証＋NovelAI 生成、OpenAI 互換画像生成を選択できます。認証エラーに API パスを表示し、確認時には生成しません。
+デスクトップ版で、空のファイルを含む酒場 Agent の作業領域をエクスポートするとサイズ不一致になる問題を修正しました。空のファイルもバックアップからそのまま復元できます。Android と iOS はバージョン番号のみの更新です。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

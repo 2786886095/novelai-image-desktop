@@ -21,7 +21,7 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-Desktop and mobile distinguish native NovelAI, /v1 key verification with native generation, and OpenAI-compatible text-to-image. Account verification reports the failed route without submitting a generation.
+Desktop backups now export and restore zero-byte files in Tavern Agent workspaces without a false size mismatch. Android and iOS receive only the version update.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

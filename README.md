@@ -26,7 +26,7 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 
 ## 本次更新
 
-电脑和手机可分别选择 NovelAI 原生、/v1 验 Key 后使用 NovelAI 生图，或 OpenAI 兼容文生图。账号验证失败时显示接口路径，不会为了验证而提交生图。
+修复桌面端导出包含空文件的酒馆 Agent 工作区时出现的大小校验错误，空文件可以随备份原样导出和恢复。Android 和 iOS 仅同步版本。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

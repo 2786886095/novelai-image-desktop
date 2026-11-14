@@ -76,7 +76,12 @@ export async function validateCapsule(bytes:Buffer, expected?:Kind) {
     relative(entry.name); if(seen.has(entry.name.toLowerCase()))throw Error('Duplicate portable path'); seen.add(entry.name.toLowerCase());
     if(!Number.isSafeInteger(entry.bytes) || entry.bytes<0 || entry.bytes>MAX_FILE || (total+=entry.bytes)>MAX_TOTAL)throw Error('Invalid portable size');
     const file=zip.file(`files/${entry.name}`);
-    if(!file || (file as any)._data?.uncompressedSize!==entry.bytes)throw Error('Portable size mismatch');
+    // JSZip normalizes loaded zero-byte entries to a resolved empty string.
+    const stored=(file as (JSZip.JSZipObject & {_data?: Promise<string> | {uncompressedSize:number}}) | null)?._data;
+    const storedBytes=stored instanceof Promise
+      ? (entry.bytes===0 && await stored==='' ? 0 : undefined)
+      : stored?.uncompressedSize;
+    if(!file || storedBytes!==entry.bytes)throw Error('Portable size mismatch');
     const data=await file.async('nodebuffer'); if(data.length!==entry.bytes || hash(data)!==entry.hash)throw Error('Portable integrity mismatch');
     if(manifest.kind==='detective' && !/^(?:reference\.(?:png|jpg|jpeg|webp)|run\/(?:.*\.(?:png|jpg|jpeg|webp)|status\.json|fixed-prompt\.json|search\/(?:round-\d+|finalists)\.json))$/i.test(entry.name))throw Error('Unexpected detective file');
     contents.set(entry.name,data);

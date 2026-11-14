@@ -92,6 +92,35 @@ it('style activation retains previous binding and rejects edited recovery images
  await expect(activatePortableRecovery(target,'detective',r.id)).rejects.toThrow('changed');
 });
 
+it('exports, previews and restores zero-byte workspace files without dropping them',async()=>{
+ await put('source/TavernAgent/user-home/profiles/empty.txt','');
+ await put('source/TavernAgent/user-home/profiles/normal.json','{}');
+ const selection=new Set(['tavernAgent']);
+ const zip=new JSZip();
+ await exportPortableProjects(path.join(root,'source'),zip,selection);
+ expect(await portableSummaries(zip)).toEqual([{category:'tavernAgent',items:2,bytes:2}]);
+ const packed=await JSZip.loadAsync(await zip.generateAsync({type:'nodebuffer'}));
+ const capsules=await inspectPortableProjects(packed,selection);
+ const target=path.join(root,'fresh-empty-profile');
+ const [recovery]=await restorePortableProjects(target,capsules);
+ expect(recovery.status).toBe('restored');
+ const home=path.join(target,'TavernAgent/user-home/profiles');
+ expect((await fs.stat(path.join(home,'empty.txt'))).size).toBe(0);
+ expect(await fs.readFile(path.join(home,'normal.json'),'utf8')).toBe('{}');
+});
+it.each([
+ ['missing entry',0,null,false,'Portable size mismatch'],
+ ['nonempty declared empty',0,'x',false,'Portable size mismatch'],
+ ['empty declared nonempty',1,'',false,'Portable size mismatch'],
+ ['invalid empty hash',0,'',true,'Portable integrity mismatch'],
+] as const)('rejects a portable capsule with %s',async(_case,bytes,payload,wrongHash,error)=>{
+ const zip=new JSZip();
+ if(payload!==null)zip.file('files/entry.txt',payload);
+ const hash=wrongHash?'0'.repeat(64):crypto.createHash('sha256').update('').digest('hex');
+ zip.file('manifest.json',JSON.stringify({version:1,kind:'agent',files:[{name:'entry.txt',bytes,hash}],omitted:[]}));
+ await expect(validateCapsule(await zip.generateAsync({type:'nodebuffer'}))).rejects.toThrow(error);
+});
+
 it('ordinary data-only exports are not blocked by a running native Agent',async()=>{
  registerPortableBusy(()=>true);
  await expect(exportPortableProjects(root,new JSZip(),new Set(['imageHistory']))).resolves.toBeUndefined();

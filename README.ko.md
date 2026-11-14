@@ -21,7 +21,7 @@
 
 ## 이번 업데이트
 
-데스크톱과 모바일에 NovelAI 기본, /v1 인증 후 NovelAI 생성 및 OpenAI 호환 이미지 생성 옵션을 제공합니다. 확인 실패 시 요청 경로를 표시하며 이미지를 생성하지 않습니다。
+데스크톱에서 빈 파일이 있는 Tavern Agent 작업 공간을 내보낼 때 발생하던 크기 불일치 오류를 수정했습니다. 빈 파일도 백업에 포함되어 그대로 복원됩니다. Android와 iOS는 버전 번호만 갱신됩니다.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
