@@ -102,6 +102,21 @@ test('v2.9.3 exception is exact-version, opt-in, and cannot waive another cell',
  assert.throws(()=>assertReleasePlatformContract(report,{...options,waiveWindowsArtistGpuV292:true}),/only to v2.9.2/);
  assert.throws(()=>assertReleasePlatformContract(buildFullFeatureMatrix({...options,receipts:data.filter(x=>x.receipt.platform!=='ios')}),options),/not accepted/);
 }));
+test('v2.9.4 exception is exact-version, opt-in, and cannot waive another cell',()=>temporary(root=>{
+ const data=items().filter(item=>!item.windowsArtistProof);
+ const options={version:'2.9.4',sourceSha,waiveWindowsArtistGpuV294:true};
+ writeItems(root,data);
+ const report=buildFullFeatureMatrix({...options,receipts:data});
+ assert.equal(report.releaseScopeCertified,false);
+ assert.equal(report.summary.verifiedSlots,186);
+ assert.equal(report.summary.pendingSlots,1);
+ assert.doesNotThrow(()=>assertReleasePlatformContract(report,options));
+ assert.doesNotThrow(()=>assertReleaseEvidenceFiles(report,root,options));
+ assert.throws(()=>assertReleasePlatformContract(report,{...options,waiveWindowsArtistGpuV294:false}),/All required scoped cells/);
+ assert.throws(()=>assertReleasePlatformContract({...report,version:'2.9.5'},{...options,version:'2.9.5'}),/only to v2.9.4/);
+ assert.throws(()=>assertReleasePlatformContract(report,{...options,waiveWindowsArtistGpuV292:true}),/only to v2.9.2/);
+ assert.throws(()=>assertReleasePlatformContract(buildFullFeatureMatrix({...options,receipts:data.filter(x=>x.receipt.platform!=='ios')}),options),/not accepted/);
+}));
 test('v2.8.6 cloud waiver rejects any failed or skipped hosted job',()=>{
  const components=['core','text','library','os','metadata','gallery','japanese','generation','ui','workflows'];
  const names=['desktop-components (windows-latest)','desktop-components (macos-15)','desktop-components (ubuntu-24.04)',

@@ -12,15 +12,16 @@ const tag='v'+version, sha=call('git',['rev-parse','HEAD']);
 const waiveWindowsArtistGpuV286=process.env.WAIVE_WINDOWS_ARTIST_GPU_V286==='true';
 const waiveWindowsArtistGpuV292=process.env.WAIVE_WINDOWS_ARTIST_GPU_V292==='true';
 const waiveWindowsArtistGpuV293=process.env.WAIVE_WINDOWS_ARTIST_GPU_V293==='true';
-const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV292||waiveWindowsArtistGpuV293;
+const waiveWindowsArtistGpuV294=process.env.WAIVE_WINDOWS_ARTIST_GPU_V294==='true';
+const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV292||waiveWindowsArtistGpuV293||waiveWindowsArtistGpuV294;
 const nativeRun=process.env.FEATURE_RUN;
 if(waiveWindowsArtistGpu){
- if((waiveWindowsArtistGpuV286&&version!=='2.8.6')||(waiveWindowsArtistGpuV292&&version!=='2.9.2')||(waiveWindowsArtistGpuV293&&version!=='2.9.3')||!/^\d+$/.test(nativeRun??''))throw Error('Explicit version-bound cloud acceptance workflow is required');
+ if((waiveWindowsArtistGpuV286&&version!=='2.8.6')||(waiveWindowsArtistGpuV292&&version!=='2.9.2')||(waiveWindowsArtistGpuV293&&version!=='2.9.3')||(waiveWindowsArtistGpuV294&&version!=='2.9.4')||!/^\d+$/.test(nativeRun??''))throw Error('Explicit version-bound cloud acceptance workflow is required');
  assertV286CloudNativeRun(JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs'])),{sourceSha:sha});
 }
 const featureParity=JSON.parse(fs.readFileSync('release-evidence/feature-parity.json','utf8'));
-assertReleasePlatformContract(featureParity,{version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293});
-assertReleaseEvidenceFiles(featureParity,'release-evidence',{waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293});
+assertReleasePlatformContract(featureParity,{version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294});
+assertReleaseEvidenceFiles(featureParity,'release-evidence',{waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294});
 const buildRun=process.env.BUILD_RUN;
 if(!/^\d+$/.test(buildRun??''))throw Error('A verified desktop build run is required');
 const build=JSON.parse(call('gh',['run','view',buildRun,'--json','headSha,jobs']));
@@ -101,7 +102,7 @@ if(existing.status===0)throw Error('Release already exists; do not overwrite it'
 if(!/not found/i.test(existing.stderr??''))throw Error('Release existence check failed: '+existing.stderr);
 const releaseNotes=fs.readFileSync('docs/RELEASE_NOTES.md','utf8');
 if(waiveWindowsArtistGpuV286&&!releaseNotes.includes('Windows 画风迭代的本机 GPU 实测未验收'))throw Error('Release notes must disclose the untested Windows GPU scenarios');
-// v2.9.2 and v2.9.3 keep the precise untested scope in verification.json without a separate changelog bullet.
+// v2.9.2, v2.9.3, and v2.9.4 keep the precise untested scope in verification.json without a separate changelog bullet.
 const publicNotesFile=waiveWindowsArtistGpuV286?'release-evidence/public-release-notes.md':'docs/RELEASE_NOTES.md';
 if(waiveWindowsArtistGpuV286){
  const publicNotes=releaseNotes.replace(/^- Windows 画风迭代的本机 GPU 实测未验收[^\r\n]*(?:\r?\n|$)/m,'');
