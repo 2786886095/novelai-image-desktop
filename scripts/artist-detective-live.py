@@ -517,7 +517,10 @@ def main(command):
         if (out / "STOP").exists() or time.monotonic() >= deadline:
             cancelled.set()
             raise RuntimeError("Run stopped; completed images retained")
+    phase = None
     def progress(stage, **values):
+        if phase is not None:
+            values.setdefault("phase", phase)
         persist_progress(out, command["budget"], stage, **values)
 
     asset = Path(command["assets"])
@@ -561,15 +564,24 @@ def main(command):
     generator.prompt_budget = NovelAIPromptBudget(asset / "tokenizers/t5")
     initial = proposed["targets"][0]["initializers"]
     rank = resources.surrogate.for_target(hypothesis["content_tags"], hypothesis["style_tags"], reference)
-    def scored(stage, **event):
+    def report_search_progress(stage, **event):
+        nonlocal phase
         check()
-        if stage == "scored":
+        phase = event["phase"]
+        if stage in ("generating", "scoring"):
+            progress(stage, count=event["count"])
+        elif stage == "scored":
             rows = event["results"]
-            progress("scored", phase=event["phase"], best=max(r["mean_score"] for r in rows))
+            progress("scored", best=max(r["mean_score"] for r in rows))
+
+    def rank_with_progress(recipes):
+        check()
+        progress("ranking", count=len(recipes))
+        return rank(recipes)
     result = run_search({**target, **hypothesis}, initial["hybrid"], initial["shortlist"], generator, score,
         out / "search", search_config, artist_weights=initial["predicted_weights"],
-        scorer_identity=resources.scorer.identity, proposal_ranker=rank,
-        proposal_ranker_identity=resources.surrogate.identity, on_progress=scored)
+        scorer_identity=resources.scorer.identity, proposal_ranker=rank_with_progress,
+        proposal_ranker_identity=resources.surrogate.identity, on_progress=report_search_progress)
     atomic_json(out / "result.json", result)
     progress("complete", best=result["finalists"][0]["mean_score"])
     generator.client.close()

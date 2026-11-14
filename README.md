@@ -28,6 +28,8 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 
 修复桌面端导出包含空文件的酒馆 Agent 工作区时出现的大小校验错误，空文件可以随备份原样导出和恢复。Android 和 iOS 仅同步版本。
 
+桌面端画风迭代新增图片进度条，区分出图、本地评分与筛选下一轮组合；长时间没有更新时会给出提示。
+
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
 ## 先完成你的第一张图

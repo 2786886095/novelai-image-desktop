@@ -29,7 +29,7 @@ function restore(): Draft {
   } catch { /* new or invalid settings */ }
   return { target: null, prompt: "", style: "", subjectHint: "", knownCharacter: false, reverseMode: "mixed", budget: 300, parameters: detectiveParameters() };
 }
-const STAGE: Record<string, string> = { idle: "未开始", loading: "校验与加载本地模型", retrieving: "检索相似画师组合", generating: "正在生成", generated: "图片已保存", scoring: "本地评分", scored: "本轮评分完成", complete: "迭代完成", failed: "任务已停止" };
+const STAGE: Record<string, string> = { idle: "未开始", loading: "校验与加载本地模型", retrieving: "检索相似画师组合", generating: "正在生成", generated: "图片已保存", scoring: "本地评分", ranking: "本地筛选下一轮组合", rate_limited: "请求限流等待", scored: "本轮评分完成", complete: "迭代完成", failed: "任务已停止" };
 
 export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
   const ft=useFeatureText();
@@ -41,6 +41,7 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
   const [download, setDownload] = useState<Download | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [checkedAt,setCheckedAt] = useState(Date.now);
   const applyParams = useAppStore(s => s.applyParams);
   const templateVersion = useAppStore(s => s.settings?.reversePromptTemplateVersion) === "v4.5" ? "v4.5" : "v5";
   const recoveryText=detectiveRecoveryLabels(language);
@@ -66,13 +67,14 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
     const poll = async () => {
       try {
         const next = await window.naiDesktop.artistDetectiveStatus();
-        const install = await window.naiDesktop.artistDetectiveDownloadStatus();
         if (!disposed) {
-          setDownload(install);
           setSnapshot(next);
+          setCheckedAt(Date.now());
           if (next.reference) setDraft(current => current.target ? current : { ...current, target: next.reference!,
             prompt: current.prompt || next.fixedPrompt?.content_tags || "", style: current.style || next.fixedPrompt?.style_tags || "" });
         }
+        const install = await window.naiDesktop.artistDetectiveDownloadStatus();
+        if (!disposed) setDownload(install);
       }
       catch (e) { if (!disposed) setError(String(e)); }
       if (!disposed) timer = setTimeout(poll, 2000);
@@ -116,6 +118,9 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
     setSnapshot(await window.naiDesktop.artistDetectiveClearResults({directory:snapshot.directory,deleteImages}));
     setPreview(null);
   });
+  const searchIndex = snapshot?.phase?.startsWith('round-') ? Number(snapshot.phase.slice(6))+1 : null;
+  const quietSeconds = snapshot?.lastProgressAt !== undefined ? Math.max(0,Math.floor((checkedAt-snapshot.lastProgressAt)/1000)) : null;
+  const waitedSeconds = Math.max(180,(snapshot?.retryWaitSeconds ?? 0)+60);
   return <main className="artist-lab target-artist-lab">
     <header className="artist-lab-hero"><div><h2>{ft("目标画风自动迭代 · Artist Detective")}</h2><p>{ft("本地画风模型检索、筛选与评分；使用 NAI 4.5 Full 实际生成，按多个 Seed 复测画师组合。")}</p></div><Button onClick={onBack}>{ft("返回画风实验室")}</Button></header>
     <section className="artist-lab-config-grid">
@@ -212,6 +217,20 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
       <Button disabled={!snapshot?.directory} onClick={() => void window.naiDesktop.artistDetectiveOpenResults()}>{ft("打开结果目录")}</Button>
       <Button disabled={active || !snapshot?.directory} onClick={() => void clearResults()}>{ft("清空迭代结果")}</Button>
     </section>
+    {snapshot?.running && <div className="detective-run-progress">
+      <label>
+        <span>{ft("已保存图片（上限 {total} 张）",{total:snapshot.budget})}</span>
+        <progress value={snapshot.completed} max={snapshot.budget} />
+      </label>
+      {snapshot.stage !== 'ranking' && searchIndex !== null && <span>{ft("搜索第 {round}/{total} 轮",{round:searchIndex,total:snapshot.rounds})}</span>}
+      {snapshot.phase === 'finalists' && <span>{ft("最终复测")}</span>}
+      {snapshot.stage === 'scoring' && <label>
+        <span>{snapshot.phaseCount === undefined ? ft("本地评分") : ft("本地评分 · 本批 {count} 张",{count:snapshot.phaseCount})}</span>
+        <progress />
+      </label>}
+      {snapshot.stage === 'ranking' && <label><span>{ft("本地筛选下一轮组合")}</span><progress /></label>}
+      {quietSeconds !== null && quietSeconds >= waitedSeconds && <small role="status">{ft("超过 {minutes} 分钟没有新的进度记录。后台尚未退出，但不代表仍在推进。可以打开结果目录查看 run.log，或停止并保留已完成图片。",{minutes:Math.floor(quietSeconds/60)})}</small>}
+    </div>}
     {!snapshot?.running && snapshot?.recovery?.message && <p role="status">{ft(snapshot.recovery.message)}</p>}
     {!snapshot?.running && snapshot?.recovery?.requiresPaidReplayConfirmation && <p role="status">{recoveryText.warning}</p>}
     {(error || snapshot?.message) && <p className="artist-error" role="alert">{ft(error || snapshot?.message || "")}</p>}

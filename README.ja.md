@@ -23,6 +23,8 @@
 
 デスクトップ版で、空のファイルを含む酒場 Agent の作業領域をエクスポートするとサイズ不一致になる問題を修正しました。空のファイルもバックアップからそのまま復元できます。Android と iOS はバージョン番号のみの更新です。
 
+デスクトップ版の画風反復に進捗バーを追加し、画像生成・ローカル採点・次ラウンドの候補選別を区別します。更新が長時間ない場合は通知します。
+
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
 ## はじめ方

@@ -62,3 +62,8 @@
 .detective-download-panel > summary { font-weight: 700; }
 .detective-download-panel[open] > summary { margin-bottom: 12px; }
 .detective-runtime-summary { grid-column: 1 / -1; margin: 0; color: var(--text-secondary); overflow-wrap: anywhere; }
+
+.detective-run-progress { display:grid; gap:8px; min-width:0; padding:10px 14px; border:1px solid var(--border); border-radius:12px; background:var(--bg-canvas); }
+.detective-run-progress label { display:grid; gap:4px; min-width:0; }
+.detective-run-progress progress { width:100%; height:10px; accent-color:var(--accent); }
+.detective-run-progress small { color:var(--text-secondary); overflow-wrap:anywhere; }

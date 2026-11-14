@@ -265,6 +265,48 @@
     "画像を保存しました",
     "이미지 저장됨"
   ],
+  "本地筛选下一轮组合": [
+    "本地筛选下一轮组合",
+    "本地篩選下一輪組合",
+    "Selecting next-round combinations locally",
+    "次のラウンドの組み合わせをローカルで選別中",
+    "다음 라운드 조합을 로컬에서 선별 중"
+  ],
+  "请求限流等待": [
+    "请求限流等待",
+    "請求限流等待",
+    "Waiting for the rate limit",
+    "レート制限の解除を待機中",
+    "요청 제한 해제 대기 중"
+  ],
+  "已保存图片（上限 {total} 张）": [
+    "已保存图片（上限 {total} 张）",
+    "已儲存圖片（上限 {total} 張）",
+    "Images saved (up to {total})",
+    "保存済み画像（上限 {total} 枚）",
+    "저장된 이미지 (최대 {total}장)"
+  ],
+  "搜索第 {round}/{total} 轮": [
+    "搜索第 {round}/{total} 轮",
+    "搜尋第 {round}/{total} 輪",
+    "Search round {round}/{total}",
+    "探索ラウンド {round}/{total}",
+    "검색 라운드 {round}/{total}"
+  ],
+  "本地评分 · 本批 {count} 张": [
+    "本地评分 · 本批 {count} 张",
+    "本地評分 · 本批 {count} 張",
+    "Local scoring · {count} images in this batch",
+    "ローカル採点 · このバッチは {count} 枚",
+    "로컬 채점 · 이번 배치 {count}장"
+  ],
+  "超过 {minutes} 分钟没有新的进度记录。后台尚未退出，但不代表仍在推进。可以打开结果目录查看 run.log，或停止并保留已完成图片。": [
+    "超过 {minutes} 分钟没有新的进度记录。后台尚未退出，但不代表仍在推进。可以打开结果目录查看 run.log，或停止并保留已完成图片。",
+    "超過 {minutes} 分鐘沒有新的進度記錄。背景程序尚未結束，但不代表仍在推進。可以開啟結果目錄查看 run.log，或停止並保留已完成的圖片。",
+    "No recorded progress for over {minutes} min. The process has not exited, but may not be advancing. Open the results folder for run.log, or stop and keep completed images.",
+    "{minutes} 分以上、進捗記録がありません。プロセスは終了していませんが、進行しているとは限りません。結果フォルダーの run.log を確認するか、停止して完了済みの画像を保持できます。",
+    "{minutes}분 넘게 새 진행 기록이 없습니다. 프로세스가 종료되지 않았지만 작업이 진행 중이라는 뜻은 아닙니다. 결과 폴더에서 run.log를 보거나 중지하여 완료된 이미지를 보존할 수 있습니다."
+  ],
   "本地评分": [
     "本地评分",
     "本機評分",

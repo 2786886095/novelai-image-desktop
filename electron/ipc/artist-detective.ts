@@ -28,7 +28,12 @@ function ready(c: Config) { return !!(c.python && c.assets && fs.existsSync(c.py
 
 export function detectiveStatus(): DetectiveSnapshot {
   const c = config(), running = alive(c.pid);
-  const status = c.directory ? read(path.join(c.directory, "status.json")) : null;
+  const statusPath = c.directory ? path.join(c.directory, "status.json") : undefined;
+  const status = statusPath ? read(statusPath) : null;
+  const lastProgressAt = status && statusPath ? fs.statSync(statusPath, {throwIfNoEntry:false})?.mtimeMs : undefined;
+  const phase = typeof status?.phase === "string" && /^(?:round-\d{1,16}|finalists)$/.test(status.phase) ? status.phase as string : undefined;
+  const phaseCount = Number.isSafeInteger(status?.count) && status.count > 0 ? status.count as number : undefined;
+  const retryWaitSeconds = Number.isFinite(status?.wait_seconds) && status.wait_seconds >= 0 ? status.wait_seconds as number : undefined;
   const failure = c.directory ? read(path.join(c.directory, "failure.json")) : null;
   const budget = status?.budget ?? 300;
   const reference = c.image && fs.existsSync(c.image) ? { filePath: c.image, fileUrl: toLocalMediaUrl(c.image), name: path.basename(c.image) } : undefined;
@@ -58,6 +63,7 @@ export function detectiveStatus(): DetectiveSnapshot {
   const models=Object.fromEntries((['full','light'] as const).map(v=>{const p=detectiveProfile(c,v);return [v,{...p,configured:ready(p),validation:detectiveRuntimeValidation({...p,variant:v})}];})) as NonNullable<DetectiveSnapshot['models']>;
   return { selectedVariant,activeVariant:c.python&&c.assets?c.variant:undefined,models,ready:ready(selected),runtimeValidation:detectiveRuntimeValidation(selected), running, stage: failure && !running ? (failure.paused ? "paused" : "failed") : status?.stage ?? "idle",
     completed: status?.completed ?? 0, budget, rounds: detectiveRounds(budget),
+    phase, phaseCount, lastProgressAt, retryWaitSeconds,
     best: candidates[0]?.score ?? status?.best, message: failure?.message, directory: c.directory,
     reference, fixedPrompt, recovery:c.directory ? safeRecovery(c) : undefined, candidates: candidates.slice(0, 32) };
 }

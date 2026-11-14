@@ -45,6 +45,10 @@ export interface DetectiveSnapshot {
   completed: number;
   budget: number;
   rounds: number;
+  phase?: string;
+  phaseCount?: number;
+  lastProgressAt?: number;
+  retryWaitSeconds?: number;
   best?: number;
   message?: string;
   directory?: string;

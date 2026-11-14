@@ -23,6 +23,8 @@
 
 데스크톱에서 빈 파일이 있는 Tavern Agent 작업 공간을 내보낼 때 발생하던 크기 불일치 오류를 수정했습니다. 빈 파일도 백업에 포함되어 그대로 복원됩니다. Android와 iOS는 버전 번호만 갱신됩니다.
 
+데스크톱 화풍 반복에 진행률 표시를 추가해 이미지 생성, 로컬 채점, 다음 라운드 후보 선별을 구분하고 오래 업데이트되지 않으면 안내합니다.
+
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
 ## 빠른 시작

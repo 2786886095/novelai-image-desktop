@@ -23,6 +23,8 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 Desktop backups now export and restore zero-byte files in Tavern Agent workspaces without a false size mismatch. Android and iOS receive only the version update.
 
+Desktop style iteration shows image progress, local scoring and next-round selection, and warns when progress has not updated for a while.
+
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
 ## Quick start
