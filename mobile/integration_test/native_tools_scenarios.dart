@@ -18,6 +18,8 @@ import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/prompts/prompt_templates.dart';
 import 'package:novelai_mobile/prompts/v5_artist_weight_repair.dart';
 import 'package:novelai_mobile/screens/artist_lookup_screen.dart';
+import 'package:novelai_mobile/screens/metadata_edit_screen.dart';
+import 'package:novelai_mobile/images/metadata_edit.dart';
 import 'package:novelai_mobile/screens/batch_redraw_screen.dart';
 import 'package:novelai_mobile/screens/comic_screen.dart';
 import 'package:novelai_mobile/screens/prompt_codex_screen.dart';
@@ -46,6 +48,7 @@ Map<String, bool Function(Widget)> nativeToolCardMatchers(AppState app) {
         w is ComicScreen &&
         (w.controller?.japanese ?? false) &&
         identical(w.controller, app.japaneseComic),
+    metadataEditTitle(app.settings.language): (w) => w is MetadataEditScreen,
     text.comicTitle: (w) => w is ComicScreen && w.controller == null,
     text.batchTitle: (w) => w is BatchRedrawScreen,
     text.artistLabTitle: (w) => w is RandomArtistLabScreen,
@@ -217,6 +220,15 @@ Future<void> _run() async {
       await frame();
       await frame();
       await frame();
+      if (label == metadataEditTitle(app.settings.language)) {
+        final dropdown = elements((w) => w is DropdownButtonFormField<MetadataEditKind>);
+        require(dropdown.length == 1, 'Image metadata operation selector was not mounted');
+        require(elements((w) => w is Text && w.data == 'Remove generation metadata').isNotEmpty,
+            'Expected safe default metadata operation');
+        final save = elements((w) => w is FilledButton && w.child is Text &&
+            (w.child as Text).data == 'Save processed images').single.widget as FilledButton;
+        require(save.onPressed == null, 'An empty metadata batch must not export');
+      }
       if (label == issue81Text(app.settings.language, 'lookup')) {
         final before = wires.length;
         final input = nativeUiElements((w) =>

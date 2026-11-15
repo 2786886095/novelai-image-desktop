@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "workerSha256": "8d7dec91e825153f4ac20784c87342a85f8c4975615f22b8d87543a81ed20106",
+  "workerSha256": "3e5a299bc07282e036b727ca6a7fb36449d70531fc0e6a1fcfd74a68c705775a",
   "hostSha256": "157a9d73fbbe894bf703290e343663f711a8b6b533bacc97b461374f4a411830",
   "sources": [
     {
@@ -13,7 +13,7 @@
     },
     {
       "file": "src/image-metadata-pixels.ts",
-      "sha256": "fd950d9d80013de70475dbdd830c1391452418414bfcd9aa26e9f0c89972c637"
+      "sha256": "44c79d201245b03935f22ce5c7f3a6dda527431960183896973ef1fc4a413a97"
     },
     {
       "file": "shared/official-metadata-assets.ts",

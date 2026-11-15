@@ -30,6 +30,7 @@ app.whenReady().then(async()=>{
    ...(process.platform==='win32'?[{label:'Artist Style Lab',selector:'.artist-lab-home',tool:'artistLab'}]:[]),
    {label:'V4.5 Artist-string Repair',selector:'.v5-artist-repair',tool:'v5ArtistRepair'},
    {label:'Artist-string Weight Draw',selector:'.v5-artist-repair',tool:'artistStringDraw'},
+   {label:'Image metadata tools',selector:'.tools-hub input[type=file][multiple]',tool:'imageMetadataEdit'},
    {label:'Artist profile lookup',selector:'.artist-lookup',tool:'artistLookup'},
   ],results=[];
   await wait('document.querySelectorAll(".tool-card-grid>.tool-card").length>0');
@@ -61,6 +62,15 @@ app.whenReady().then(async()=>{
     assert.equal(await js('localStorage.getItem('+JSON.stringify(convertDraftKey)+')'),'KEEP CONVERSION DRAFT');
     assert.equal(requests.length,before,'Opening and editing the Japanese tool must not submit a network request');
     Object.assign(observed,{independentJapaneseScope:true,actualComposerMounted:true,actualNativeTemplateLibraryRead:true,legacyProjectSha256:sha(legacy),draftKey,conversionDraftUnchanged:true,automaticRequests:0});
+   }else if(target.tool==='imageMetadataEdit'){
+    const options=await js('[...document.querySelectorAll(".tools-hub select:first-of-type option")].map(o=>o.value)');
+    assert.deepEqual(options.slice(0,3),['remove','novelai','sd']);
+    const before=requests.length;
+    await js(`(()=>{const s=document.querySelector('.tools-hub select');Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(s,'novelai');s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    await wait('document.querySelector(".tools-hub select[aria-label]")?.value==="online"');
+    assert.equal(await js('document.querySelector(".tools-hub button.btn.primary")?.disabled'),true);
+    assert.equal(requests.length,before,'Opening metadata tools must not send data');
+    Object.assign(observed,{formats:options.slice(0,3),officialOnlineDefault:true,batchWithoutFilesBlocked:true,automaticRequests:0});
    }else if(target.tool==='artistLookup'){
     const before=requests.length,input='https://www.pixiv.net/users/123',output='textarea[aria-label="Artist prompt output"]';
     await js(`(()=>{const node=document.querySelector('#artist-lookup-input');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(node,${JSON.stringify(input)});node.dispatchEvent(new Event('input',{bubbles:true}));node.dispatchEvent(new Event('change',{bubbles:true}));})()`);

@@ -25,9 +25,9 @@ const mocks=new Map([
  ['electron/ipc/nai-accounts-runtime.ts',{withNaiAccountOperation:async fn=>fn()}],
  ['electron/ipc/harness-prompt-templates.ts',{createPromptTemplateTools:()=>({}),templateSelection:()=>{throw Error('not exercised');}}],
  ['electron/ipc/agent-template-tools.ts',{createTemplateWorkflow:()=>({})}],
- ...['electron/ipc/agent-web-search.ts','electron/ipc/danbooru-tags.ts','electron/ipc/online-gallery.ts','electron/ipc/reference-presets.ts','electron/ipc/agent-store.ts','electron/image-metadata.ts','src/png-meta.ts'].map(f=>[f,{}]),
+ ...['electron/ipc/agent-web-search.ts','electron/ipc/danbooru-tags.ts','electron/ipc/multilingual-tags.ts','electron/ipc/online-gallery.ts','electron/ipc/reference-presets.ts','electron/ipc/agent-store.ts','electron/image-metadata.ts','src/png-meta.ts'].map(f=>[f,{}]),
 ].map(([f,v])=>[resolve(f),v]));
-const allowed=new Set(['src/types.ts','src/metadata-replay.ts','src/nai-dimensions.ts','src/upscale-plan.ts','src/anlas.ts','src/retained-prompts.ts','src/agent/image-outcome.ts','src/agent/generation-input.ts','electron/ipc/agent-tools.ts','electron/ipc/mcp-server.ts'].map(resolve));
+const allowed=new Set(['src/types.ts','src/nax-gallery.ts','src/metadata-replay.ts','src/nai-dimensions.ts','src/upscale-plan.ts','src/anlas.ts','src/retained-prompts.ts','src/agent/image-outcome.ts','src/agent/generation-input.ts','electron/ipc/agent-tools.ts','electron/ipc/mcp-server.ts'].map(resolve));
 function load(file){
  file=path.resolve(file);if(mocks.has(file))return mocks.get(file);if(cache.has(file))return cache.get(file).exports;
  if(file.endsWith('package.json'))return JSON.parse(fs.readFileSync(file,'utf8'));
