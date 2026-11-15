@@ -81,13 +81,6 @@ class ToolsHubScreen extends StatelessWidget {
         padding: const EdgeInsets.all(StudioSpacing.lg),
         children: [
           _ToolTile(
-            icon: Icons.edit_document,
-            title: metadataEditTitle(language),
-            subtitle: metadataEditSubtitle(language),
-            onTap: () => _openTool(context, (onBack) => MetadataEditScreen(onBack: onBack)),
-          ),
-          const SizedBox(height: StudioSpacing.md),
-          _ToolTile(
             icon:Icons.auto_awesome_mosaic_outlined,
             title:templateFeatureText(language,'japanese'),
             subtitle:templateFeatureText(language,'japaneseHint'),
@@ -189,6 +182,13 @@ class ToolsHubScreen extends StatelessWidget {
             title: issue81Text(language,'lookup'),
             subtitle: issue81Text(language,'lookupHint'),
             onTap:()=>_openTool(context,(onBack)=>ArtistLookupScreen(onBack:onBack)),
+          ),
+          const SizedBox(height: StudioSpacing.md),
+          _ToolTile(
+            icon: Icons.edit_document,
+            title: metadataEditTitle(language),
+            subtitle: metadataEditSubtitle(language),
+            onTap: () => _openTool(context, (onBack) => MetadataEditScreen(onBack: onBack)),
           ),
           const SizedBox(height: StudioSpacing.md),
         ],

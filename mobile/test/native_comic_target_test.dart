@@ -232,6 +232,7 @@ void main() {
       final oldRoute = switch (oldTitle) {
         'Batch Img2Img' => BatchRedrawScreen,
         'V4.5 Artist-string Repair' => V5ArtistWeightRepairScreen,
+        'Artist-string Weight Draw' => V5ArtistWeightRepairScreen,
         _ => throw StateError('Unexpected fixture ordinal: $oldTitle'),
       };
       await _drive(tester, nativeUiTap(oldTarget));

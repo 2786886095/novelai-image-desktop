@@ -699,29 +699,24 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
 
   Widget _sourceToolbar(
       BuildContext context, _GalleryText text, String language) {
-    final selector = StudioDropdownButtonFormField<String>(
-      value: source.id,
+    final selector = StudioDropdownButtonFormField<OnlineGallerySource>(
+      value: source,
       isExpanded: true,
       decoration: InputDecoration(
         labelText: text.source,
         prefixIcon: const Icon(Icons.public_outlined),
       ),
-      items: [
-        for (final value in OnlineGallerySource.values)
-          DropdownMenuItem(value: value.id,
-            child: Text(_sourceLabel(value, language), overflow: TextOverflow.ellipsis)),
-        const DropdownMenuItem(value: 'nax', child: Text('NAX · NovelAI Tag Experiments',
-            overflow: TextOverflow.ellipsis)),
-      ],
+      items: OnlineGallerySource.values
+          .map((value) => DropdownMenuItem(
+                value: value,
+                child: Text(_sourceLabel(value, language),
+                    overflow: TextOverflow.ellipsis),
+              ))
+          .toList(),
       onChanged: loading
           ? null
           : (value) {
-              if (value == 'nax') {
-                Navigator.of(context).push<void>(MaterialPageRoute(
-                    builder: (_) => NaxGalleryScreen(language: language)));
-              } else if (value != null) {
-                _selectSource(OnlineGallerySource.values.firstWhere((item) => item.id == value));
-              }
+              if (value != null) _selectSource(value);
             },
     );
     return Material(
@@ -752,6 +747,11 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
       appBar: workbenchAppBar(context, AppBar(
         title: studioAppBarTitle(context, Text(text.title)),
         actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).push<void>(MaterialPageRoute(
+                builder: (_) => NaxGalleryScreen(language: language))),
+            child: const Text('NAX'),
+          ),
           const GalleryFavoritesButton(),
           IconButton(
             tooltip: text.refresh,
