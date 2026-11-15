@@ -1,3 +1,5 @@
+import {NAX_ATTRIBUTION,searchNaxCollections} from "../../src/nax-gallery";
+import {searchDanbooru} from "./danbooru-tags";
 // Local Model Context Protocol server.
 //
 // Exposes the Studio's existing Agent tool executor (agent-tools.ts) to
@@ -794,13 +796,23 @@ function createTools(options: McpServerOptions): ToolDef[] {
     {
       name: "search_tags",
       title: "Search Danbooru tags",
-      description: "Look up Danbooru tags (exact + concept search) to check tag spelling/popularity.",
+      description: "Search the active offline tag dictionary by canonical tag or translation; results contain the original tag, translation and usage count. No remote API quota is used.",
       inputSchema: schema({ query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 100 } }, ["query"]),
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: false },
       run: async (raw) => {
-        const result = await runAgentTool("langbai_search_tags", { query: raw.query, limit: raw.limit });
-        return result.ok ? ok(result.data) : fail(result.output);
+        const query=typeof raw.query==="string"?raw.query.slice(0,300).trim():"";
+        if(!query)return fail("A tag query is required");
+        const limit=typeof raw.limit==="number"&&Number.isFinite(raw.limit)?Math.max(1,Math.min(100,Math.trunc(raw.limit))):20;
+        return ok(await searchDanbooru(query,limit));
       },
+    },
+    {
+      name: "search_nax_collections",
+      title: "Search NovelAI Tag Experiments",
+      description: "Search the attributed NAX experiment directory by model or collection title. Returns collection links, not images.",
+      inputSchema: schema({query:{type:"string",maxLength:200}},[]),
+      annotations: {readOnlyHint:true,openWorldHint:false},
+      run: async (raw) => ok({source:NAX_ATTRIBUTION,items:searchNaxCollections(typeof raw.query==="string"?raw.query:"")}),
     },
     {
       name: "apply_to_workbench",

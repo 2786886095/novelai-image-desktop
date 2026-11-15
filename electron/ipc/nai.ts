@@ -1,3 +1,4 @@
+import {activeTagPack} from "./multilingual-tags";
 import { sanitizeGroupFolderName } from "./history-file-path";
 import {removePngGenerationMetadata, removePngMetadataChunks} from './png-privacy';
 import {localGenerationTime} from "./history-generation-time";
@@ -3655,6 +3656,7 @@ export async function searchTagServer(
 ): Promise<TagSuggestion[]> {
   const settings = getSettings();
   if (!settings.mcpForCapsule) return [];
+  if(activeTagPack())return [];
   const tags = await queryTagServer(query, limit);
   return enrichTagsWithChinese(tags);
 }
@@ -5479,7 +5481,7 @@ export async function suggestTags(
   // Prefer the local Danbooru index when the user has downloaded it: it is
   // offline, Chinese-aware, has full tag coverage and real post counts.
   const danbooru = await searchDanbooru(prompt, 12);
-  if (danbooru.length > 0) return danbooru;
+  if (danbooru.length > 0 || activeTagPack()) return danbooru;
   const fallback = localSuggestTags(prompt);
   const serverTags = await queryTagServer(prompt, 12);
   if (serverTags.length > 0) return serverTags;

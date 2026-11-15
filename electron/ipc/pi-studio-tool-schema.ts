@@ -26,7 +26,7 @@ export function studioPiToolSchema(name:string):Schema {
     case 'langbai_edit_prompt':properties={kind:choice('optimize','custom'),currentPrompt:text(24_000),instruction:text(8_000),mode:template.mode,templateVersion:template.templateVersion,skillVersion:template.skillVersion};required=['kind','currentPrompt'];break;
     case 'langbai_search_tags':properties={query:requiredText(1000),limit:integer(1,100)};required=['query'];break;
     case 'langbai_search_artist_styles':properties={query:text(1000),limit:integer(1,100)};break;
-    case 'langbai_search_online_gallery':properties={source:choice('aitag','artist-ranking','danbooru','safebooru','gelbooru','quicktag','tags-gallery'),query:text(2000),page:integer(1,1000),pageSize:integer(1,100),sort:text(50)};required=['source','query'];break;
+    case 'langbai_search_online_gallery':properties={source:choice('aitag','artist-ranking','danbooru','safebooru','gelbooru','quicktag','tags-gallery','nax'),query:text(2000),page:integer(1,1000),pageSize:integer(1,100),sort:text(50)};required=['source','query'];break;
     case 'langbai_list_prompt_presets':properties={kind:choice('positive','style','negative','all'),query:text(1000)};break;
     case 'langbai_list_reference_presets':properties={query:text(1000),kind:text(50)};break;
     case 'langbai_read_image_metadata':properties={attachmentId:id};required=['attachmentId'];break;

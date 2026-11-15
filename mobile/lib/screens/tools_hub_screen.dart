@@ -1,3 +1,4 @@
+import 'metadata_edit_screen.dart';
 import 'artist_lookup_screen.dart';
 import '../i18n/issue81_text.dart';
 import '../ui/compact_workbench.dart';
@@ -79,6 +80,13 @@ class ToolsHubScreen extends StatelessWidget {
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(StudioSpacing.lg),
         children: [
+          _ToolTile(
+            icon: Icons.edit_document,
+            title: metadataEditTitle(language),
+            subtitle: metadataEditSubtitle(language),
+            onTap: () => _openTool(context, (onBack) => MetadataEditScreen(onBack: onBack)),
+          ),
+          const SizedBox(height: StudioSpacing.md),
           _ToolTile(
             icon:Icons.auto_awesome_mosaic_outlined,
             title:templateFeatureText(language,'japanese'),

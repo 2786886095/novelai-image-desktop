@@ -1,3 +1,4 @@
+import 'tag_pack_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -67,6 +68,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         Icons.style_outlined,
         t('onboarding.capsuleTitle'),
         t('onboarding.capsuleBody'),
+        extra: const [SizedBox(height: 14), TagPackSelector()],
       ),
     ];
     final isLast = _page == pages.length - 1;

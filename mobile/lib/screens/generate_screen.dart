@@ -1,3 +1,4 @@
+import '../ui/tag_pack_selector.dart';
 import '../ui/compact_workbench.dart';
 import '../images/image_file_access.dart';
 import '../images/coordinated_file_image.dart';
@@ -829,9 +830,9 @@ class PromptEditorState extends State<PromptEditor> {
             if (context.read<AppState>().settings.autoComplete)
               for (final suggestion in suggestions) Padding(
                 padding: const EdgeInsets.only(right: 6),
-                child: ActionChip(label: Text('${suggestion.tag} · ${localizedTagLabel(
+                child: ActionChip(label: Text('${suggestion.tag} · ${(suggestion.localizedDescription ? suggestion.description : localizedTagLabel(
                   context.read<AppState>().settings.language, suggestion.tag,
-                  sourceLabel: suggestion.description)}'),
+                  sourceLabel: suggestion.description))}'),
                   onPressed: () => _applySuggestion(suggestion))),
           ]),
         ),
@@ -1326,11 +1327,11 @@ class PromptEditorState extends State<PromptEditor> {
                 .map(
                   (suggestion) => ActionChip(
                     label: Text(
-                      '${suggestion.tag} · ${localizedTagLabel(
+                      '${suggestion.tag} · ${(suggestion.localizedDescription ? suggestion.description : localizedTagLabel(
                         language,
                         suggestion.tag,
                         sourceLabel: suggestion.description,
-                      )}',
+                      ))}',
                     ),
                     onPressed: () => _applySuggestion(suggestion),
                   ),
@@ -2539,7 +2540,6 @@ class _TagSearchBoxState extends State<_TagSearchBox> {
     final state = context.watch<AppState>();
     final text = generateScreenTextFor(state.settings.language);
     final language = state.settings.language;
-    final hasOfflineTags = state.offlineTagStatus.downloaded;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -2566,35 +2566,16 @@ class _TagSearchBoxState extends State<_TagSearchBox> {
                   icon: const Icon(Icons.category_outlined),
                   label: Text(text.browseCategories),
                 ),
-                if (!hasOfflineTags)
-                  FilledButton.tonalIcon(
-                    onPressed:
-                        state.offlineTagBusy ? null : state.downloadOfflineTags,
-                    icon: state.offlineTagBusy
-                        ? const SizedBox.square(
-                            dimension: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.download_for_offline_outlined),
-                    label: Text(state.offlineTagBusy
-                        ? text.downloadBusy
-                        : text.downloadChineseTags),
-                  )
-                else
-                  Text(
-                    '${text.tagsReadyPrefix}${state.offlineTagStatus.count}${text.tagsReadySuffix}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    await openTagPackSelector(context);
+                    if (mounted) await _search(ctrl.text);
+                  },
+                  icon: const Icon(Icons.download_for_offline_outlined),
+                  label: Text(tagPackSelectorTitle(language)),
+                ),
               ],
             ),
-            if (!hasOfflineTags)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  text.offlineTagHint,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
             if (tags.isNotEmpty) ...[
               const SizedBox(height: 8),
               Wrap(
@@ -2603,11 +2584,11 @@ class _TagSearchBoxState extends State<_TagSearchBox> {
                 children: tags
                     .map((t) => ActionChip(
                         label: Text(
-                          '${t.tag} · ${localizedTagLabel(
+                          '${t.tag} · ${(t.localizedDescription ? t.description : localizedTagLabel(
                             language,
                             t.tag,
                             sourceLabel: t.description,
-                          )}',
+                          ))}',
                         ),
                         onPressed: () => widget.onInsert(t.tag, false)))
                     .toList(),

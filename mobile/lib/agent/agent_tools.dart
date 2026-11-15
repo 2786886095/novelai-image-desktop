@@ -384,7 +384,7 @@ List<Map<String, dynamic>> agentToolSchemas() => [
           '读取当前图片服务、模型、尺寸与实际能力；兼容服务不应用原生风格锁和参考图。', {}),
       _function(
         'langbai_search_tags',
-        '按中文、英文、角色、动作、表情、构图或物体检索准确 Tag。',
+        '离线检索 Tag 和热门度；已下载词包时返回所选语言释义。',
         {
           'query': _string('要检索的概念'),
           'limit': _integer('返回数量', 1, 50),
@@ -1375,7 +1375,7 @@ class AgentToolExecutor {
         case 'langbai_search_tags':
           final query = _text(args['query'], 300);
           final limit = _int(args['limit'], 20, 1, 50);
-          final results = await app.suggestTags(query);
+          final results = await app.suggestTags(query, offlineOnly: true, limit: limit);
           return AgentToolResult(
             ok: true,
             title: title,

@@ -134,6 +134,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("resource-database:pause", id),
   restorePreviousResourceDatabase: (id: ResourceDatabaseId, confirmed = false): Promise<ResourceDatabaseDownloadResult> =>
     ipcRenderer.invoke("resource-database:restore-previous", id, confirmed),
+  multilingualTagStatus: () => ipcRenderer.invoke("tag-pack:status"),
+  installMultilingualTagPack: (language: import("../shared/multilingual-tag-pack-contract").TagPackLanguage, source:"use"|"file"|"download") => ipcRenderer.invoke("tag-pack:install",language,source),
   openResourceDatabaseDirectory: (): Promise<{ ok: boolean; message?: string }> =>
     ipcRenderer.invoke("resource-database:open-directory"),
   clearResourceQueryCache: (): Promise<{ ok: boolean }> =>

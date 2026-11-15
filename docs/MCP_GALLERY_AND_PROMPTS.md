@@ -55,6 +55,7 @@
 | `import_image` | 导入本地 PNG、JPEG 或 WebP | 已有 |
 | `view_image` | 预览本地图片 | 已有 |
 | `read_image_metadata` | 读取本地图片内嵌参数 | 已有 |
+| `search_nax_collections` | 查询 NAX 模型实验目录，返回带来源署名的原站链接，不镜像图片。 | 新增 |
 | `apply_to_workbench` | 把图片及内嵌生成参数加载到工作台 | 已有 |
 
 ### 模板、预设与提示词
@@ -66,7 +67,7 @@
 | `list_prompt_presets` | 查询正面和风格提示词预设 | 新增 |
 | `list_reference_presets` | 查询氛围转移／精准参考预设及引用 ID | 新增 |
 | `search_artist_styles` | 搜索本地画风与画师标签 | 新增 |
-| `search_tags` | 搜索 Tag | 已有 |
+| `search_tags` | 按英文原 Tag 或当前离线词包翻译搜索，返回原 Tag、翻译和使用量；不发起网络请求。未安装四语词包时保留原本地库。 | 已有 |
 | `convert_prompt` | 调用配置的转换服务；需调用方确认，可能计费 | 新增 |
 | `reverse_prompt` | 调用配置的图片反推服务；需调用方确认，可能计费 | 新增 |
 | `plan_comic_prompts` | 推荐页数或生成逐页提示词，不提交生图；可能计费 | 新增 |

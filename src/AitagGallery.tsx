@@ -8,6 +8,7 @@ import {PreviewImageViewer} from './components/PreviewImageViewer';
 import {Icon} from './components/icons';
 import { formatAitagFailure } from "./aitag-error";
 import { galleryDownloadFeedback } from "./gallery-download";
+import {NAX_ATTRIBUTION,NAX_COLLECTIONS} from "./nax-gallery";
 import quickTagLabels from "../shared/quicktag-ui.json";
 import { quickCharacters } from "./quicktag";
 import { QuickTagNavigation } from "./QuickTagNavigation";
@@ -909,7 +910,7 @@ function ExternalGallery({
   onBack,
   text,
 }: {
-  source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking">;
+  source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking" | "nax">;
   onSourceChange: (source: OnlineGallerySourceId) => void;
   onBack?: () => void;
   text: GalleryText;
@@ -1593,6 +1594,18 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
     ];
   }, [config.availableMonths, config.availableYears, sort, text]);
 
+  if (gallerySource === "nax") {
+    return <main className="aitag-page">
+      <header className="aitag-header online-gallery-header">
+        <div><div className="online-gallery-title-line"><h2>{NAX_ATTRIBUTION.name}</h2><GallerySourcePicker value="nax" onChange={setGallerySource} text={text} /></div>
+          <p><button type="button" className="btn secondary compact" onClick={()=>void window.naiDesktop.openExternal(NAX_ATTRIBUTION.url)}>{text.openSourceSite}</button>
+            {" · "}{NAX_ATTRIBUTION.author} · <button type="button" className="btn secondary compact" onClick={()=>void window.naiDesktop.openExternal(NAX_ATTRIBUTION.licenseUrl)}>{NAX_ATTRIBUTION.license}</button></p></div>
+      </header>
+      {["V5","V4.5","V4"].map(model=><section className="aitag-search-panel" key={model}><h3>NAI Diffusion {model}</h3><div className="tool-card-grid">
+        {NAX_COLLECTIONS.filter(row=>row.model===model).map(row=><button key={row.id} type="button" className="tool-card ready" onClick={()=>void window.naiDesktop.openExternal(row.url)}><b>{row.title}</b><small>nax.moe ↗</small></button>)}
+      </div></section>)}
+    </main>;
+  }
   if (gallerySource === "artist-ranking") {
     return <ArtistRankingGallery onSourceChange={setGallerySource} onBack={onBack} text={text} />;
   }

@@ -16,6 +16,7 @@
 // ENCODING NOTE: the CSV is GBK-encoded (verified bytes B8F6 C5AE BAA2 = 个女孩),
 // NOT UTF-8 — decode with TextDecoder("gbk").
 
+import {TAG_PACK_MANIFEST} from "../../shared/multilingual-tag-pack-contract";
 import axios from "axios";
 import fs from "fs/promises";
 import path from "path";
@@ -32,6 +33,7 @@ import {
   getResourceDatabaseOverview,
   searchResourceTagCatalog,
 } from "./resource-databases";
+import {searchMultilingualTags, multilingualTagStatus} from "./multilingual-tags";
 import { matchesArtistStyleScope } from "./artist-style-taxonomy";
 
 // Pinned to a specific commit (NOT the mutable `main` branch) so the downloaded
@@ -65,6 +67,8 @@ export async function danbooruStatus(): Promise<{
   bilingualDownloaded: boolean;
   bilingualCount: number;
 }> {
+  const pack=multilingualTagStatus();
+  if(pack.active){const info=TAG_PACK_MANIFEST.packs[pack.active];return {downloaded:true,sizeBytes:info.databaseSize,count:info.count,catalogDownloaded:false,bilingualDownloaded:true,bilingualCount:info.count};}
   let catalogDownloaded = false;
   let catalogSize = 0;
   let catalogCount = 0;
@@ -267,6 +271,8 @@ export async function browseDanbooru(category: number, offset: number, limit: nu
  * autocomplete dropdown renders them (every entry carries Chinese).
  */
 export async function searchDanbooru(query: string, limit = 12): Promise<TagSuggestion[]> {
+  const translated=searchMultilingualTags(query,limit);
+  if(translated!==null)return translated;
   const raw = query.trim();
   if (!raw) return [];
   const isCjk = /[㐀-鿿]/.test(raw);

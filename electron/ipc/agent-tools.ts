@@ -1,3 +1,4 @@
+import {NAX_ATTRIBUTION,searchNaxCollections} from "../../src/nax-gallery";
 import {retainedPrompts} from "../../src/retained-prompts.js";
 import {templateSelection} from "./harness-prompt-templates";
 import {createPromptTemplateTools} from './harness-prompt-templates';
@@ -50,7 +51,7 @@ import {
   reversePromptImage,
   upscaleImg,
 } from "./nai";
-import { artistStyleCatalog, searchDanbooru, searchDanbooruConcepts } from "./danbooru-tags";
+import { artistStyleCatalog, searchDanbooru } from "./danbooru-tags";
 import { searchOnlineGallery } from "./online-gallery";
 import { listReferencePresets } from "./reference-presets";
 import { getHistory, getHistoryGroups, getSettings, setSetting } from "./store";
@@ -374,12 +375,8 @@ export async function executeAgentTool(
       case "langbai_search_tags": {
         const query = text(args.query, 300);
         const limit = Math.trunc(finite(args.limit, 20, 1, 100));
-        const [exact, concepts] = await Promise.all([
-          searchDanbooru(query, limit),
-          searchDanbooruConcepts(query, limit),
-        ]);
-        const byTag = new Map([...exact, ...concepts].map((item) => [item.tag, item]));
-        return response(true, `Tag 检索：${query}`, [...byTag.values()].slice(0, limit));
+        const items=await searchDanbooru(query,limit);
+        return response(true, `本地 Tag 检索：${query}`, items);
       }
       case "langbai_search_artist_styles": {
         const query = text(args.query, 300);
@@ -389,6 +386,7 @@ export async function executeAgentTool(
         return response(true, `画风库检索：${query || "全部"}`, result);
       }
       case "langbai_search_online_gallery": {
+        if(args.source==="nax")return response(true,"NAX 实验目录",{source:NAX_ATTRIBUTION,items:searchNaxCollections(text(args.query,200))});
         const result = await searchOnlineGallery({
           source: ["danbooru", "safebooru", "gelbooru", "quicktag"].includes(String(args.source)) ? args.source : "danbooru",
           query: text(args.query, 300),

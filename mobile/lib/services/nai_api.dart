@@ -55,7 +55,8 @@ class TagSuggestion {
   final String tag;
   final int count;
   final String? description;
-  const TagSuggestion({required this.tag, this.count = 0, this.description});
+  final bool localizedDescription;
+  const TagSuggestion({required this.tag, this.count = 0, this.description, this.localizedDescription = false});
 }
 
 class GenerationCancelledException implements Exception {

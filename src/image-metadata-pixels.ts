@@ -4,7 +4,7 @@ export type DecodedMetadataPixels = {data: Uint8Array; width: number; height: nu
 export type MetadataPixelDecoder = (bytes: Uint8Array) => Promise<DecodedMetadataPixels | null>;
 
 /** Sniff actual file bytes, not an extension or MIME label, before allocating pixels. */
-export function metadataImageHeader(bytes: Uint8Array): {width: number; height: number; kind: 'png'|'webp'} | null {
+export function metadataImageHeader(bytes: Uint8Array, minPixels=152): {width: number; height: number; kind: 'png'|'webp'} | null {
   if (bytes.length < 33 || bytes.length > MAX_METADATA_IMAGE_BYTES) return null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let width = 0, height = 0, kind: 'png'|'webp';
@@ -30,7 +30,7 @@ export function metadataImageHeader(bytes: Uint8Array): {width: number; height: 
     }
     if (offset!==end) return null;
   } else return null;
-  if (!width || !height || width*height<152 || width*height>MAX_METADATA_IMAGE_PIXELS) return null;
+  if (!width || !height || width*height<minPixels || width*height>MAX_METADATA_IMAGE_PIXELS) return null;
   return {width,height,kind};
 }
 
@@ -55,8 +55,8 @@ export function metadataPixelBytes(bytes: Uint8Array): Uint8Array {
 }
 
 /** Alpha is read exactly; RGB canvas premultiplication is irrelevant to the alpha LSB. */
-export const decodeBrowserMetadataPixels: MetadataPixelDecoder = async (bytes) => {
-  const header=metadataImageHeader(bytes);if(!header || typeof createImageBitmap!=='function') return null;
+export async function decodeBrowserMetadataPixels(bytes:Uint8Array,minPixels=152):Promise<DecodedMetadataPixels|null>{
+  const header=metadataImageHeader(bytes,minPixels);if(!header || typeof createImageBitmap!=='function') return null;
   const bitmap=await createImageBitmap(new Blob([Uint8Array.from(bytes)],{type:header.kind==='png'?'image/png':'image/webp'}),
     {premultiplyAlpha:'none',colorSpaceConversion:'none',imageOrientation:'none'});
   try {

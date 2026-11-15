@@ -1362,8 +1362,9 @@ export interface TagSuggestion {
   count: number;
   /** 0=general, 1=artist, 3=copyright, 4=character, 5=meta */
   category: number;
-  /** Optional Chinese note shown in the renderer autocomplete menu. */
+  /** Label from the selected dictionary, if available. */
   description?: string;
+  localizedDescription?: boolean;
 }
 
 /** Lazy catalogs used by the random artist-string style picker. Danbooru has
@@ -1785,6 +1786,8 @@ export interface NaiDesktopApi {
   harnessOpenBackups: () => Promise<void>;
   harnessRestoreBackup: () => Promise<import("./harness-types").HarnessSnapshot>;
   platform: NodeJS.Platform;
+  multilingualTagStatus: () => Promise<import("../shared/multilingual-tag-pack-contract").TagPackStatus>;
+  installMultilingualTagPack: (language: import("../shared/multilingual-tag-pack-contract").TagPackLanguage, source:"use"|"file"|"download") => Promise<import("../shared/multilingual-tag-pack-contract").TagPackStatus>;
   getResourceDatabaseOverview: () => Promise<ResourceDatabaseOverview>;
   downloadResourceDatabase: (id: ResourceDatabaseId, confirmReplace?: boolean) => Promise<ResourceDatabaseDownloadResult>;
   pauseResourceDatabaseDownload: (id: ResourceDatabaseId) => Promise<{ ok: boolean; message: string }>;

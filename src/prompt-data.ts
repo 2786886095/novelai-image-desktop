@@ -1090,6 +1090,7 @@ export function pickPromptChips(count = 24, query = ""): PromptChip[] {
 }
 
 export function tagDescription(s: TagSuggestion, language?: unknown): string {
+  if(s.localizedDescription)return s.description||s.tag;
   return localizedTagLabel(s.tag, s.description, language) || `${localizedCategoryLabel(s.category, language)} category`;
 }
 

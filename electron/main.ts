@@ -1,3 +1,4 @@
+import {installMultilingualTagPack,multilingualTagStatus} from "./ipc/multilingual-tags";
 import { windowTrayText } from "../src/window-tray-text";
 import {runComicPromptRequest, cancelComicPromptRequest} from './ipc/nai';
 import {getPromptTemplateLibrary, mutatePromptTemplateLibrary} from './ipc/template-library';
@@ -1385,6 +1386,8 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
     (_event, scope: import("../src/types").ArtistStyleCatalogScope, query: string, offset: number, limit: number) =>
       artistStyleCatalog(scope, query, offset, limit),
   );
+  ipcMain.handle("tag-pack:status", () => multilingualTagStatus());
+  ipcMain.handle("tag-pack:install", (_event,lang:unknown,source:unknown) => installMultilingualTagPack(lang,source));
   ipcMain.handle("resource-database:overview", () => getResourceDatabaseOverview());
   ipcMain.handle("resource-database:download", (_event, id: ResourceDatabaseId, confirmReplace?: boolean) =>
     downloadResourceDatabase(id, confirmReplace),

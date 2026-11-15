@@ -4,6 +4,8 @@ import { getToolsHubText } from "./i18n";
 import { useAppStore } from "./store";
 import { Icon, type IconName } from "./components/icons";
 
+import {metadataToolLabels} from "./image-metadata-tool-labels";
+
 type ToolScreenProps = { onBack: () => void };
 
 /** Unlike React.lazy alone, this wrapper remembers the resolved component when
@@ -31,6 +33,8 @@ function createPreloadedTool(
   return { Component: PreloadedTool, preload };
 }
 
+const metadataTool = createPreloadedTool(() => import("./ImageMetadataTool"));
+const ImageMetadataTool = metadataTool.Component;
 const comicTool = createPreloadedTool(() => import("./comic/TagComicGenerator").then((module) => ({ default: module.TagComicGenerator })));
 const japaneseComicTool = createPreloadedTool(() => import("./comic/TagComicGenerator").then((module) => ({ default: (props:ToolScreenProps) => <module.TagComicGenerator {...props} scope="jp-comic" /> })));
 const redrawTool = createPreloadedTool(() => import("./ComicGenerator").then((module) => ({ default: module.BatchRedraw })));
@@ -51,7 +55,7 @@ const V5ArtistWeightRepair = v5ArtistRepairTool.Component;
 const ComfyLocalTool = comfyLocalTool.Component;
 const ArtistStringWeightDraw = artistStringDrawTool.Component;
 
-type ToolId = "hub" | "comic" | "japaneseComic" | "redraw" | "artistLab" | "artistLookup" | "promptCodex" | "v5ArtistRepair" | "artistStringDraw" | "comfyuiLocal";
+type ToolId = "hub" | "comic" | "japaneseComic" | "redraw" | "artistLab" | "artistLookup" | "promptCodex" | "v5ArtistRepair" | "artistStringDraw" | "comfyuiLocal" | "imageMetadataEdit";
 
 const TOOL_ICONS: Record<Exclude<ToolId, "hub">, IconName> = {
   comic: "collections",
@@ -63,6 +67,7 @@ const TOOL_ICONS: Record<Exclude<ToolId, "hub">, IconName> = {
   v5ArtistRepair: "restore",
   artistStringDraw: "dice",
   comfyuiLocal: "code",
+  imageMetadataEdit: "collections",
 };
 
 const TOOL_LOADERS: Partial<Record<ToolId, () => Promise<void>>> = {
@@ -75,6 +80,7 @@ const TOOL_LOADERS: Partial<Record<ToolId, () => Promise<void>>> = {
   v5ArtistRepair: v5ArtistRepairTool.preload,
   artistStringDraw: artistStringDrawTool.preload,
   comfyuiLocal: comfyLocalTool.preload,
+  imageMetadataEdit: metadataTool.preload,
 };
 
 function waitForToolWarmSlot() {
@@ -173,12 +179,14 @@ export default function ToolsHub() {
     onPointerDown: () => warmTool(tool),
   }), [warmTool]);
 
+  const metadataText = metadataToolLabels(language);
   const back = () => setActiveTool("hub");
   if (activeTool !== "hub") {
     const title = activeTool === "promptCodex" ? codexText.title : text.title;
     return (
       <Suspense fallback={<ToolLoading title={title} />}>
         {activeTool === "comfyuiLocal" && window.naiComfy ? <ComfyLocalTool onBack={back} /> : null}
+        {activeTool === "imageMetadataEdit" ? <ImageMetadataTool onBack={back} /> : null}
         {activeTool === "comic" ? <TagComicGenerator onBack={back} /> : null}
         {activeTool === "japaneseComic" ? <JapaneseComicGenerator onBack={back} /> : null}
         {activeTool === "redraw" ? <BatchRedraw onBack={back} /> : null}
@@ -197,6 +205,7 @@ export default function ToolsHub() {
         <div><span className="eyebrow">{text.eyebrow}</span><h2>{text.title}</h2><p>{text.subtitle}</p></div>
       </section>
       <section className="tool-card-grid">
+        <button type="button" className="tool-card ready" {...toolCardHandlers("imageMetadataEdit")} onClick={() => setActiveTool("imageMetadataEdit")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.imageMetadataEdit} /></i><b>{metadataText[0]}</b></span><span>{metadataText[1]}</span><small>{text.ready}</small></button>
         {window.naiComfy ? <button type="button" className="tool-card ready" {...toolCardHandlers("comfyuiLocal")} onClick={() => setActiveTool("comfyuiLocal")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.comfyuiLocal} /></i><b>{text.comfyLocalTitle}</b></span><span>{text.comfyLocalDesc}</span><small>{text.ready}</small></button> : null}
         <button type="button" className="tool-card ready" {...toolCardHandlers("japaneseComic")} onClick={() => setActiveTool("japaneseComic")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.japaneseComic} /></i><b>{japaneseComicText.newToolTitle}</b></span><span>{japaneseComicText.newToolDescription}</span><small>{text.ready}</small></button>
         <button type="button" className="tool-card ready" {...toolCardHandlers("comic")} onClick={() => setActiveTool("comic")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.comic} /></i><b>{text.comicTitle}</b></span><span>{text.comicDesc}</span><small>{text.ready}</small></button>

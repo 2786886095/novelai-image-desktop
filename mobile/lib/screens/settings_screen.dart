@@ -1,3 +1,4 @@
+import '../ui/tag_pack_selector.dart';
 import '../ui/android/android_gate.dart';
 import '../ui/android/android_tokens.dart';
 import 'settings/android_settings_hub.dart';
@@ -596,22 +597,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (value) =>
                   state.setSettings((x) => x.tagServerEnabled = value),
             ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.download_for_offline_outlined),
-              title: Text(settingsDetailText.tagLibraryTitle),
-              subtitle: Text(state.offlineTagStatus.downloaded
-                  ? '${settingsDetailText.downloadedTagsPrefix}${state.offlineTagStatus.count}${settingsDetailText.downloadedTagsSuffix}'
-                  : settingsDetailText.tagLibraryNotDownloaded),
-              trailing: FilledButton.tonal(
-                onPressed:
-                    state.offlineTagBusy ? null : state.downloadOfflineTags,
-                child: Text(state.offlineTagBusy
-                    ? settingsDetailText.downloadBusy
-                    : settingsDetailText.download),
-              ),
-            ),
-            Text(settingsDetailText.tagDataNotice),
+            const TagPackSelector(),
             _TextSetting(
                 label: settingsDetailText.tagMcpUrl,
                 value: s.tagServerUrl,

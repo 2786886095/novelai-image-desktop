@@ -1,3 +1,4 @@
+import TagPackSettings,{tagPackSelectorTitle} from "./TagPackSettings";
 import { windowTrayText } from "./window-tray-text";
 import {FilePicker} from './components/FilePicker';
 import {TemplateLibraryPanel, templateLibraryCopy} from './features/settings/TemplateLibraryPanel';
@@ -234,78 +235,6 @@ function fitSizeWithinPixels(width: number, height: number, maxPixels: number) {
   };
 }
 
-// Settings section: download/manage the local Danbooru Chinese tag library. The
-// data is an optional download (GPL-3.0 source kept out of this MIT app's
-// bundle); once present, both the tag autocomplete and the inspiration capsule
-// use it. Exposed via an onChange callback so the capsule can refresh.
-function TagLibrarySettingsSection({ onChanged }: { onChanged?: () => void }) {
-  const setToast = useAppStore((state) => state.setToast);
-  const language = useAppStore((state) => state.settings?.language);
-  const [status, setStatus] = useState<{ downloaded: boolean; count: number } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
-  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
-
-  const refresh = useCallback(() => {
-    void window.naiDesktop.danbooruStatus().then((s) => setStatus({
-      downloaded: s.bilingualDownloaded,
-      count: s.bilingualCount,
-    }));
-  }, []);
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  async function download() {
-    if (busy) return;
-    setBusy(true);
-    setToast(t("tagLibrary.downloadingToast"));
-    try {
-      const res = await window.naiDesktop.downloadDanbooru();
-      setToast(res.message);
-      if (res.ok) {
-        setStatus({ downloaded: true, count: res.count ?? 0 });
-        onChanged?.();
-      }
-    } catch (error) {
-      setToast(f("tagLibrary.downloadFailed", { message: error instanceof Error ? error.message : String(error) }));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <>
-      <label className="field">
-        <span>{t("tagLibrary.title")}</span>
-        <input
-          readOnly
-          value={
-            status?.downloaded
-              ? `${t("tagLibrary.downloaded")}${status.count ? `（${f("tagLibrary.itemCount", { count: status.count })}）` : ""}`
-              : t("tagLibrary.notDownloaded")
-          }
-        />
-      </label>
-      <p className="field-hint">
-        {t("tagLibrary.hint")}
-      </p>
-      <div className="row-actions">
-        <Button onClick={() => void download()} disabled={busy}>
-          <IconText icon={<Icon name="globe" />}>
-            {busy ? t("tagLibrary.downloading") : status?.downloaded ? t("tagLibrary.redownload") : t("tagLibrary.download")}
-          </IconText>
-        </Button>
-      </div>
-    </>
-  );
-}
-
-// Inspiration capsule browser. BROWSE (no search) uses the curated, accurate
-// CAPSULE_TAXONOMY — every tag genuinely belongs to its category (the old
-// substring-seed approach leaked cross-category tags, e.g. cropped_jacket under
-// 构图). SEARCH queries the local Danbooru library for breadth. Browse works
-// offline; search needs the downloaded library.
 function capsuleBrowserText(language: unknown) {
   switch (language) {
     case "zh-TW":
@@ -326,13 +255,15 @@ function CapsuleBrowser({ query, onPick, language }: { query: string; onPick: (t
   const [items, setItems] = useState<TagSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const q = query.trim();
+  const [packRevision,bumpPackRevision]=useState(0);
+  useEffect(()=>{const callback=()=>bumpPackRevision(r=>r+1);window.addEventListener("langbai:multilingual-tags-changed",callback);return()=>window.removeEventListener("langbai:multilingual-tags-changed",callback);},[]);
   const text = capsuleBrowserText(language);
 
   useEffect(() => {
     void window.naiDesktop.danbooruStatus().then((s) => {
       setDownloaded(/[㐀-鿿]/.test(q) ? s.bilingualDownloaded : s.downloaded);
     });
-  }, [query]);
+  }, [query,packRevision]);
 
   useEffect(() => {
     if (!q) {
@@ -349,18 +280,19 @@ function CapsuleBrowser({ query, onPick, language }: { query: string; onPick: (t
     return () => {
       alive = false;
     };
-  }, [q]);
+  }, [q,packRevision]);
 
   if (q) {
     if (downloaded === false) {
-      return <><p className="chip-empty">{text.needsLibrary}</p><McpTagSuggestions query={q} onPick={onPick}/></>;
+      return <><p className="chip-empty">{text.needsLibrary}</p><TagPackSettings /><McpTagSuggestions query={q} onPick={onPick}/></>;
     }
     return (
       <div className="capsule-browser">
+        <details><summary>{tagPackSelectorTitle(language)}</summary><TagPackSettings /></details>
         <McpTagSuggestions query={q} onPick={onPick}/>
         <div className="capsule-browser-list">
           {items.map((t) => {
-            const label = localizedTagLabel(t.tag, t.description, language);
+            const label = t.localizedDescription ? (t.description||t.tag) : localizedTagLabel(t.tag, t.description, language);
             return (
               <button
                 key={t.tag}
@@ -6215,7 +6147,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   refreshSettings={refreshSettings}
                 />
                 <ResourceDatabaseSettings language={settings.language} />
-                <TagLibrarySettingsSection />
+                <TagPackSettings />
                 <div className="row-actions">
                   <Button
                     onClick={() => {
@@ -7001,7 +6933,7 @@ function OnboardingWizard() {
             )}
             {step === 5 && (
               <div className="settings-form">
-                <TagLibrarySettingsSection />
+                <TagPackSettings />
               </div>
             )}
             {step === 6 && (

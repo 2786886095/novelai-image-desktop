@@ -60,6 +60,7 @@ import '../services/background_queue_service.dart';
 import '../services/data_backup_service.dart';
 import '../services/resource_database_service.dart';
 import '../tags/offline_tag_store.dart';
+import '../tags/multilingual_tag_packs.dart';
 
 // A finished convert/reverse job is already reflected in the result box and
 // history — leaving it in the tracker list just forces a manual ✕ tap.
@@ -318,6 +319,7 @@ class AppState extends ChangeNotifier {
   final NaiApi api;
   final Storage storage;
   final OfflineTagStore offlineTags;
+  final multilingualTags = MultilingualTagPacks();
   final CompletedImagePreloader _preloadCompletedImage;
   final Future<http.Client> Function(AppSettings, Uri, ProxyScope)? compatibleClientFactory;
 
@@ -3591,10 +3593,16 @@ class AppState extends ChangeNotifier {
     });
   }
 
-  Future<List<TagSuggestion>> suggestTags(String query) async {
+  Future<List<TagSuggestion>> suggestTags(String query, {bool offlineOnly = false, int limit = 12}) async {
     final raw = query.trim();
     if (raw.isEmpty) return [];
-    final key = await storage.getTagKey() ?? '';
+    final packed = await multilingualTags.search(raw, limit: limit);
+    if (packed != null) {
+      return packed.map((hit) => TagSuggestion(
+          tag: hit.tag, count: hit.count, description: hit.description,
+          localizedDescription: true)).toList();
+    }
+    final key = offlineOnly ? '' : await storage.getTagKey() ?? '';
     final results = <TagSuggestion>[];
     final seen = <String>{};
     void merge(Iterable<TagSuggestion> items) {
@@ -3607,7 +3615,7 @@ class AppState extends ChangeNotifier {
     }
 
     // 0) Remote Tag / MCP service when the user enabled it for the capsule.
-    if (settings.tagServerEnabled &&
+    if (!offlineOnly && settings.tagServerEnabled &&
         settings.mcpForCapsule &&
         settings.tagServerUrl.trim().isNotEmpty) {
       merge(await api.searchTags(settings, raw, 12,
@@ -3637,7 +3645,7 @@ class AppState extends ChangeNotifier {
               tag: tag.tag.replaceAll('_', ' '), description: tag.label)));
     }
     // 4) Tiny built-in fallback only if nothing matched anywhere.
-    if (results.isEmpty) {
+    if (!offlineOnly && results.isEmpty) {
       merge(await api.searchTags(settings, raw, 12, apiKey: key));
     }
     return results;
@@ -4385,6 +4393,7 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     externalMcp.dispose();
+    multilingualTags.dispose();
     _comic?.dispose();
     _japaneseComic?.dispose();
     templateLibrary.removeListener(_templateLibraryChanged);

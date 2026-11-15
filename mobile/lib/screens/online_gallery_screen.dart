@@ -1,3 +1,4 @@
+import 'nax_gallery_screen.dart';
 import '../ui/compact_workbench.dart';
 import '../ui/global_typography.dart';
 import '../services/aitag_service.dart';
@@ -698,24 +699,29 @@ class _OnlineGalleryScreenState extends State<OnlineGalleryScreen> {
 
   Widget _sourceToolbar(
       BuildContext context, _GalleryText text, String language) {
-    final selector = StudioDropdownButtonFormField<OnlineGallerySource>(
-      value: source,
+    final selector = StudioDropdownButtonFormField<String>(
+      value: source.id,
       isExpanded: true,
       decoration: InputDecoration(
         labelText: text.source,
         prefixIcon: const Icon(Icons.public_outlined),
       ),
-      items: OnlineGallerySource.values
-          .map((value) => DropdownMenuItem(
-                value: value,
-                child: Text(_sourceLabel(value, language),
-                    overflow: TextOverflow.ellipsis),
-              ))
-          .toList(),
+      items: [
+        for (final value in OnlineGallerySource.values)
+          DropdownMenuItem(value: value.id,
+            child: Text(_sourceLabel(value, language), overflow: TextOverflow.ellipsis)),
+        const DropdownMenuItem(value: 'nax', child: Text('NAX · NovelAI Tag Experiments',
+            overflow: TextOverflow.ellipsis)),
+      ],
       onChanged: loading
           ? null
           : (value) {
-              if (value != null) _selectSource(value);
+              if (value == 'nax') {
+                Navigator.of(context).push<void>(MaterialPageRoute(
+                    builder: (_) => NaxGalleryScreen(language: language)));
+              } else if (value != null) {
+                _selectSource(OnlineGallerySource.values.firstWhere((item) => item.id == value));
+              }
             },
     );
     return Material(

@@ -21,9 +21,7 @@ NovelAI 圖像創作工作臺，介面支援簡體中文、繁體中文、英語
 
 ## 本次更新
 
-修正桌面版匯出含空檔案的酒館 Agent 工作區時發生的大小驗證錯誤，空檔案可隨備份原樣匯出及還原。Android 與 iOS 僅同步版本。
-
-桌面版畫風迭代新增圖片進度條，區分出圖、本地評分與篩選下一輪組合；長時間沒有更新時會顯示提示。
+桌面與手機新增圖片中繼資料批次處理和 NAX 線上畫廊目錄。可在設定、新手引導或提示詞工具下載四種語言的離線 Tag 詞庫。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

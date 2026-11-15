@@ -1,0 +1,8 @@
+const dictionary={
+ "zh-CN":["图片元数据处理","批量清除或改写 NovelAI / Stable Diffusion 元数据","返回","移除元数据","读取第一张作为编辑模板","NovelAI 官方联网读取","本地读取","选择 PNG / WebP（多个）","批量另存 ZIP","输出为静态 PNG，不覆盖原图。改写会将同一份参数应用到所有成功处理的图片。官方联网加载解析器，图片不上传。","官方读取失败，请手动切换到本地读取。","读取方式未能保存。"],
+ "zh-TW":["圖片中繼資料處理","批次清除或改寫 NovelAI / Stable Diffusion 中繼資料","返回","移除中繼資料","讀取第一張作為編輯範本","NovelAI 官方連線讀取","本機讀取","選擇多張 PNG / WebP","批次另存 ZIP","輸出靜態 PNG，不覆寫原圖。改寫將同一組參數套用至成功處理的圖片。官方模式連線載入解析程式、不上傳圖片。","官方讀取失敗，請手動切換至本機讀取。","讀取方式未能儲存。"],
+ "en-US":["Image metadata tools","Strip or rewrite NovelAI / Stable Diffusion metadata in batches","Back","Strip metadata","Read first image as an edit template","NovelAI official online reader","Local reader","Select PNG / WebP files","Save as ZIP","Exports static PNG without overwriting originals. Edits apply the same parameters to all successful files. Online mode downloads the reader, not your images.","Official read failed. Switch to the local reader manually.","Could not save the reading preference."],
+ "ja-JP":["画像メタデータ処理","NovelAI / Stable Diffusion のメタデータを一括削除・編集","戻る","メタデータを削除","最初の画像をテンプレートとして読み込む","NovelAI 公式オンライン読み取り","ローカル読み取り","PNG / WebP を複数選択","ZIP として保存","元画像を上書きせず静止 PNG を出力します。編集内容は処理できた画像に一律適用されます。画像はアップロードしません。","公式読み取りに失敗しました。手動でローカル読み取りに切り替えてください。","読み取り方式を保存できませんでした。"],
+ "ko-KR":["이미지 메타데이터 처리","NovelAI / Stable Diffusion 메타데이터 일괄 삭제 및 수정","뒤로","메타데이터 삭제","첫 이미지를 편집 템플릿으로 읽기","NovelAI 공식 온라인 읽기","로컬 읽기","PNG / WebP 여러 장 선택","ZIP으로 저장","원본을 덮어쓰지 않고 정적 PNG로 저장합니다. 수정 내용은 성공한 이미지에 동일하게 적용됩니다. 이미지는 업로드되지 않습니다.","공식 읽기에 실패했습니다. 수동으로 로컬 읽기로 전환하세요.","읽기 설정을 저장할 수 없습니다."]
+} as const;
+export function metadataToolLabels(language:string|undefined){return dictionary[language as keyof typeof dictionary]??dictionary["zh-CN"];}

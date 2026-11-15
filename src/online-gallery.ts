@@ -1,6 +1,7 @@
 export type OnlineGallerySourceId =
   | "aitag"
   | "artist-ranking"
+  | "nax"
   | "danbooru"
   | "safebooru"
   | "gelbooru"
@@ -24,6 +25,7 @@ export interface OnlineGallerySourceInfo {
 }
 
 export const ONLINE_GALLERY_SOURCES: readonly OnlineGallerySourceInfo[] = [
+  {id:"nax", label:"NovelAI Tag Experiments", siteUrl:"https://nax.moe/", supportsPromptSearch:false, supportsCollections:true},
   {id:"tags-gallery", label:"TAGs · V4.5", siteUrl:"https://tags.gallery/v4-5", supportsPromptSearch:false, supportsCollections:false},
   {
     id: "artist-ranking",
@@ -72,7 +74,7 @@ export const ONLINE_GALLERY_SOURCES: readonly OnlineGallerySourceInfo[] = [
 
 export interface OnlineGallerySearchRequest {
   sort?: "score" | "count" | "name";
-  source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking">;
+  source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking" | "nax">;
   page?: number;
   pageSize?: number;
   query?: string;
@@ -104,7 +106,7 @@ export interface OnlineGalleryTagGroups {
 }
 
 export interface OnlineGalleryItem {
-  source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking">;
+  source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking" | "nax">;
   id: string;
   kind: OnlineGalleryItemKind;
   collectionId?: string;
@@ -126,7 +128,7 @@ export interface OnlineGalleryItem {
 
 export interface OnlineGalleryPage {
   navigation?: import("./quicktag").QuickNavigation;
-  source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking">;
+  source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking" | "nax">;
   page: number;
   pageSize: number;
   total?: number;
@@ -170,7 +172,7 @@ export interface OnlineGalleryDownloadResult {
 }
 
 export interface OnlineGalleryDetailRequest {
-  source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking">;
+  source: Exclude<OnlineGallerySourceId, "aitag" | "artist-ranking" | "nax">;
   id: string;
   collectionId?: string;
   gelbooruApiKey?: string;
