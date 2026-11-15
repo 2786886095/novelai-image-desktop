@@ -312,7 +312,17 @@ import type {
 const uiCapturePath = process.env.NAI_UI_CAPTURE_PATH?.trim();
 const uiCaptureUserData = process.env.NAI_UI_CAPTURE_USER_DATA?.trim();
 const normalizedUiCapturePath = uiCapturePath?.replaceAll("\\", "/").toLowerCase() ?? "";
-if (uiCaptureUserData) app.setPath("userData", path.resolve(uiCaptureUserData));
+if (uiCaptureUserData) {
+  // Isolated QA profile: keep every default user-data destination (output,
+  // backups, favorites, downloads) inside the sandbox so acceptance runs can
+  // never touch the real Pictures/Documents libraries.
+  const sandboxRoot = path.resolve(uiCaptureUserData);
+  app.setPath("userData", sandboxRoot);
+  for (const name of ["pictures", "documents", "desktop", "downloads"] as const) {
+    const target = path.join(sandboxRoot, "sandbox-home", name);
+    try { fs.mkdirSync(target, { recursive: true }); app.setPath(name, target); } catch { /* keep isolated userData */ }
+  }
+}
 else pinUserDataAndMigrate();
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -480,7 +490,7 @@ function createWindow() {
     minHeight: 720,
     show: false,
     frame: false,
-    backgroundColor: "#f0eff9",
+    backgroundColor: "#f2f3f5",
     title: "Langbai NovelAI Studio",
     icon: iconPath,
     webPreferences: {

@@ -11,6 +11,8 @@ import {confirmAction} from './confirm';
 import {ConvertedHistoryRestoreButton} from './ConvertedHistoryRestoreButton';
 import {worksBatchText} from '../works-text';
 import '../works-library.css';
+import {applyImageParameters} from '../apply-image-parameters';
+import {favoritesText} from '../favorites-text';
 
 export function WorksThumbnailImage({src,onMissing}: {src:string;onMissing:()=>void|Promise<void>}) {
   return <img key={src} src={src} alt="" loading="lazy" decoding="async"
@@ -177,7 +179,10 @@ export function WorksLibrary({active = true}: {active?: boolean}) {
           <div className="works-preview-actions"><button type="button" onClick={()=>setPreviewOpen(true)}>{workflow.preview}</button><ImageFavoriteButton src={selected.fileUrl}/></div>
           {previewOpen&&<ImagePreviewDialog images={previewImages} index={selectedIndex} onIndex={goTo} onClose={()=>setPreviewOpen(false)}/>}
           <div className="works-preview-meta"><span>{selected.width} × {selected.height}</span><span>{selected.model}</span><span>Seed {selected.actualSeed}</span></div>
-          <button onClick={()=>void openFolder(selected)}>{t.open}</button>
+          <div className="works-detail-actions">
+            <button type="button" className="btn btn-primary" onClick={()=>void applyImageParameters(selected.filePath)}>{favoritesText(language).loadParams}</button>
+            <button onClick={()=>void openFolder(selected)}>{t.open}</button>
+          </div>
           <div className="works-prompt" aria-busy={promptLoading}>
             <h3>{t.prompt}</h3>
             {promptLoading&&<p role="status">{t.loading}</p>}

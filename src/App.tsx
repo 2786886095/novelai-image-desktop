@@ -120,8 +120,11 @@ import { confirmAction } from "./components/confirm";
 import {CharacterPresetControls} from './components/CharacterPresetControls';
 import {CharacterNameControl} from './components/CharacterNameControl';
 import { Icon, type IconName } from "./components/icons";
-import { AppMenuBar, AppTitleBar } from "./app/AppChrome";
-import AppTabBar from "./app/AppTabBar";
+import { CommandPalette, GenerationProgressLine, LayoutNotice, StudioNavRail, StudioTopBar, useRailCollapsed } from "./shell/StudioShell";
+import { DockOrPortal, WorkbenchDockProvider } from "./shell/WorkbenchDock";
+import { shellText } from "./shell/shell-text";
+import { PanelSectionNav } from "./shell/PanelSectionNav";
+import { applyImageParameters } from "./apply-image-parameters";
 import {WorksLibrary} from "./components/WorksLibrary";
 import {GalleryFavoritesLibrary} from "./components/GalleryFavorites";
 import { isActiveTab } from "./app/navigation";
@@ -825,6 +828,19 @@ function QualityAndTransparencyControls({ compact = false }: { compact?: boolean
 }
 
 // ── Advanced params modal ─────────────────────────────────────────────────────
+/** One-line summary of the layered advanced parameters, shown on its button so
+ *  the common values are visible without opening the panel. */
+function advancedParamsSummary(stored: GenerateParams, language: unknown) {
+  const params = effectiveNAIEffortParams(stored);
+  const sampler = NAI_SAMPLERS.find((item) => item.value === params.sampler);
+  const parts = [
+    isNAIMediumEffort(stored) ? "" : `${desktopUiText(language, "advanced.steps")} ${params.steps}`,
+    `CFG ${params.cfgScale}`,
+    isNAIMediumEffort(stored) ? "" : localizedDesktopOptionLabel(language, params.sampler, sampler?.label ?? String(params.sampler)),
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
 function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
   const storedParams = useAppStore(state => state.params);
   const inpaintModel = useAppStore(state => state.inpaintModel);
@@ -836,7 +852,7 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
   const t = useCallback((key: string) => desktopUiText(settings?.language, key), [settings?.language]);
 
   return (
-    <AppPortal>
+    <DockOrPortal>
       <div className="modal-backdrop">
       <div className="modal advanced-modal">
         <header>
@@ -902,7 +918,7 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
         </footer>
       </div>
       </div>
-    </AppPortal>
+    </DockOrPortal>
   );
 }
 
@@ -1031,7 +1047,7 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <AppPortal>
+    <DockOrPortal>
       <div className="modal-backdrop">
       <div className="modal vibe-modal">
         <header>
@@ -1204,7 +1220,7 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
           onClose={() => setQuickSaveSource(null)}
         />
       )}
-    </AppPortal>
+    </DockOrPortal>
   );
 }
 
@@ -1361,7 +1377,7 @@ export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   }, [charCaptions, setCharCaptions]);
 
   return (
-    <AppPortal>
+    <DockOrPortal>
       <div className="modal-backdrop">
       <div className="modal char-modal">
         <header>
@@ -1508,7 +1524,7 @@ export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
         </footer>
       </div>
       </div>
-    </AppPortal>
+    </DockOrPortal>
   );
 }
 
@@ -2213,7 +2229,7 @@ export function PromptAndParams({
   return (
     <>
       {includeModel && (
-        <div className="field">
+        <div className="field" data-panel-section="model">
           <div className="compact-model-label"><span>{generateText.prompt.model}</span><FurryModeSwitch checked={modelMode === "furry"} label={generateText.prompt.furryMode} onChange={checked=>switchModelMode(checked?"furry":"anime").catch(error=>setToast(String(error)))}/></div>
           <SelectMenuCompat value={params.model} onChange={(e) => setParam("model", e.target.value as GenerateParams["model"])}>
             {NAI_MODELS.filter((m) => supportsNAIModelMode(m.value, modelMode)).map((m) => (
@@ -2223,7 +2239,7 @@ export function PromptAndParams({
         </div>
       )}
       {includeModel && <EffortControl model={params.model} value={params.effort ?? "high"} language={settings?.language} onChange={value => setParam("effort", value)} />}
-      <label className="field">
+      <label className="field" data-panel-section="style">
         <span className="field-label-row">
           {generateText.prompt.stylePrompt}
 
@@ -2398,7 +2414,34 @@ export function PromptAndParams({
               </div>
             )}
       </CapsuleEditor>}
-      <div className="prompt-tabs">
+      <div className="quick-actions" data-panel-section="refs">
+        <Button onClick={() => setShowCharModal(true)}>
+          <IconText icon="♙">{generateText.prompt.characterPrompt}{charCaptions.length > 0 ? ` · ${charCaptions.length}` : ""}</IconText>
+        </Button>
+        <Button onClick={() => setShowVibeModal(true)}>
+          <IconText icon="◒">{generateText.prompt.vibeTransfer}{vibeImages.length > 0 ? ` · ${vibeImages.length}` : ""}</IconText>
+        </Button>
+        <Button onClick={() => setShowVibeModal(true)}>
+          <IconText icon="◇">{generateText.prompt.preciseReference}{preciseRefCount > 0 ? ` · ${preciseRefCount}` : ""}</IconText>
+        </Button>
+        {templates.length > 0 && (
+          <div className="template-dropdown" style={{ position: "relative" }}>
+            <Button aria-expanded={showTemplateMenu} onClick={() => setShowTemplateMenu((v) => !v)}>
+              <IconText icon="▣">{generateText.prompt.template}<Icon name="chevronDown" className={clsx("prompt-tool-chevron", showTemplateMenu && "open")} /></IconText>
+            </Button>
+            {templateMenuPresent && (
+              <div ref={templateMenuRef} className="menu-pop template-pop disclosure-popover" {...disclosureAttributes(showTemplateMenu)}>
+                {templates.map((tpl) => (
+                  <button key={tpl.id} onClick={() => applyTemplate(tpl)}>
+                    <span>{tpl.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="prompt-tabs" data-panel-section="prompt">
         <button className={clsx(promptTab === "positive" && "active")} onClick={() => setPromptTab("positive")}>
           {generateText.prompt.positivePrompt}
         </button>
@@ -2482,33 +2525,6 @@ export function PromptAndParams({
               ≈{tokenEst} tokens{tokenWarn ? <> <Icon name="warning" /> {generateText.prompt.tokenLimitExceeded}</> : ""}
             </span>
           </>
-        )}
-      </div>
-      <div className="quick-actions">
-        <Button onClick={() => setShowCharModal(true)}>
-          <IconText icon="♙">{generateText.prompt.characterPrompt}{charCaptions.length > 0 ? ` · ${charCaptions.length}` : ""}</IconText>
-        </Button>
-        <Button onClick={() => setShowVibeModal(true)}>
-          <IconText icon="◒">{generateText.prompt.vibeTransfer}{vibeImages.length > 0 ? ` · ${vibeImages.length}` : ""}</IconText>
-        </Button>
-        <Button onClick={() => setShowVibeModal(true)}>
-          <IconText icon="◇">{generateText.prompt.preciseReference}{preciseRefCount > 0 ? ` · ${preciseRefCount}` : ""}</IconText>
-        </Button>
-        {templates.length > 0 && (
-          <div className="template-dropdown" style={{ position: "relative" }}>
-            <Button aria-expanded={showTemplateMenu} onClick={() => setShowTemplateMenu((v) => !v)}>
-              <IconText icon="▣">{generateText.prompt.template}<Icon name="chevronDown" className={clsx("prompt-tool-chevron", showTemplateMenu && "open")} /></IconText>
-            </Button>
-            {templateMenuPresent && (
-              <div ref={templateMenuRef} className="menu-pop template-pop disclosure-popover" {...disclosureAttributes(showTemplateMenu)}>
-                {templates.map((tpl) => (
-                  <button key={tpl.id} onClick={() => applyTemplate(tpl)}>
-                    <span>{tpl.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
         )}
       </div>
       {imageToImage && workbenchImage && (
@@ -2620,6 +2636,7 @@ export function PromptAndParams({
       )}
       <Button className="full prompt-advanced-button" onClick={() => setShowAdvanced(true)}>
         <IconText icon="settings">{generateText.prompt.advancedParams}</IconText>
+        <span className="advanced-summary">{advancedParamsSummary(params, settings?.language)}</span>
       </Button>
       {showAdvanced && <AdvancedParamsModal onClose={() => setShowAdvanced(false)} />}
       {showVibeModal && <VibeTransferModal onClose={() => setShowVibeModal(false)} />}
@@ -3392,6 +3409,7 @@ function AccountAndRunButton({
             inert={!isGenerating}
           >
             <div className="run-state-pane-inner">
+              <GenerationProgressLine />
               {allowQueue && <QueuePanel />}
               <div className="anlas-spent">
                 {currentAnlasSpent != null ? f("account.currentSpent", { amount: currentAnlasSpent }) : t("account.currentReading")}
@@ -3468,6 +3486,7 @@ function GeneratePanel({openSettings}:{openSettings:()=>void}) {
       <div className="panel-scroll">
         <AutomaticComparisonControl surface="generate:t2i" />
         <PromptAndParams />
+        <div className="panel-section-anchor" data-panel-section="batch" aria-hidden="true" />
         <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
         <CommittedNumberInput
           label={t("generate.batchInterval")}
@@ -3571,6 +3590,7 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
         <NumberInput label={t("i2i.extraNoiseSeed")} value={i2iParams.extraNoiseSeed} min={0} onChange={(v) => setI2IParam("extraNoiseSeed", v)} />
         <div className="panel-divider" />
         <PromptAndParams imageToImage />
+        <div className="panel-section-anchor" data-panel-section="batch" aria-hidden="true" />
         <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
         <CommittedNumberInput
           label={t("generate.batchInterval")}
@@ -4431,33 +4451,40 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
         </div>
       </div>
       {activeTab === "generate" && (
-        <>
-          <div className="generate-mode-switcher">
-            <button
-              className={clsx(generateMode === "t2i" && "active")}
-              onClick={() => setGenerateMode("t2i")}
-            >
-              {generateText.modeSwitch.textToImage}
-            </button>
-            <button
-              className={clsx(generateMode === "i2i" && "active")}
-              onClick={() => setGenerateMode("i2i")}
-            >
-              {generateText.modeSwitch.imageToImage}
-            </button>
-            <button
-              className={clsx(generateMode === "enhance" && "active")}
-              onClick={() => setGenerateMode("enhance")}
-            >
-              {t("postprocess.enhance")}
-            </button>
-          </div>
-          {generateMode === "t2i"
-            ? <GeneratePanel openSettings={openSettings} />
-            : generateMode === "i2i"
-              ? <I2IPanel openSettings={openSettings} />
-              : <EnhancePanel openSettings={openSettings} />}
-        </>
+        <div className="generate-mode-switcher" role="tablist" aria-label={meta.title}>
+          <button
+            role="tab"
+            aria-selected={generateMode === "t2i"}
+            className={clsx(generateMode === "t2i" && "active")}
+            onClick={() => setGenerateMode("t2i")}
+          >
+            {generateText.modeSwitch.textToImage}
+          </button>
+          <button
+            role="tab"
+            aria-selected={generateMode === "i2i"}
+            className={clsx(generateMode === "i2i" && "active")}
+            onClick={() => setGenerateMode("i2i")}
+          >
+            {generateText.modeSwitch.imageToImage}
+          </button>
+          <button
+            role="tab"
+            aria-selected={generateMode === "enhance"}
+            className={clsx(generateMode === "enhance" && "active")}
+            onClick={() => setGenerateMode("enhance")}
+          >
+            {t("postprocess.enhance")}
+          </button>
+        </div>
+      )}
+      <PanelSectionNav key={`${activeTab}:${generateMode}`} />
+      {activeTab === "generate" && (
+        generateMode === "t2i"
+          ? <GeneratePanel openSettings={openSettings} />
+          : generateMode === "i2i"
+            ? <I2IPanel openSettings={openSettings} />
+            : <EnhancePanel openSettings={openSettings} />
       )}
       {activeTab === "inpaint" && <InpaintPanel openSettings={openSettings} />}
       {activeTab === "postprocess" && <PostprocessPanel openSettings={openSettings} />}
@@ -5344,10 +5371,8 @@ export function ImageCanvas() {
       )}
       {!currentImage && !isGenerating && (
         <button className="empty-canvas" onClick={generate}>
-          <span className="empty-illustration" aria-hidden="true">
-            <span className="empty-orb empty-orb-a" />
-            <span className="empty-orb empty-orb-b" />
-            <span className="empty-gem"><Icon name="sparkles" /></span>
+          <span className="empty-illustration is-plain" aria-hidden="true">
+            <Icon name="image" />
           </span>
           <strong>{t("canvas.emptyTitle")}</strong>
           <span>{t("canvas.emptyHint")}</span>
@@ -5684,7 +5709,8 @@ function HistoryPanel() {
       <HistoryItemMenu src={item.fileUrl} label={t("history.moreActions")} filePathLabel={t("history.viewFilePath")} onFilePath={()=>setFilePathTarget(item.filePath)}
         metadataLabel={t("history.menuMetadata")} renameLabel={t("history.rename")} deleteLabel={t("history.menuDelete")}
         metadataTitle={t("history.metadataTitle")} renameTitle={t("history.renameImageTitle")} deleteTitle={t("history.deleteImageTitle")}
-        onMetadata={() => void inspectHistoryMetadata(item)} onRename={() => renameItem(item)} onDelete={() => void deleteItem(item)}/>
+        onMetadata={() => void inspectHistoryMetadata(item)} onRename={() => renameItem(item)} onDelete={() => void deleteItem(item)}
+        loadParamsLabel={favoritesText(language).loadParams} onLoadParams={() => void applyImageParameters(item.filePath)}/>
     </div>
   );
 
@@ -5790,7 +5816,7 @@ const MemoizedHistoryPanel = memo(HistoryPanel);
 
 // ── Settings modal ────────────────────────────────────────────────────────────
 
-export function SettingsModal({ onClose }: { onClose: () => void }) {
+export function SettingsModal({ onClose, variant = "modal" }: { onClose: () => void; variant?: "modal" | "page" }) {
   const ft=useFeatureText();
   const [section, setSection] = useState(
     () => takeRequestedSettingsSection() ?? new URLSearchParams(window.location.search).get("uiSettingsSection") ?? "api",
@@ -6091,11 +6117,17 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   );
 
   return (
-    <AppPortal>
-      <div className="modal-backdrop">
-      <div className="modal settings-modal">
+    <SettingsFrame page={variant === "page"}>
+      <div className={clsx("modal settings-modal", variant === "page" && "settings-as-page")} role={variant === "page" ? "region" : undefined} aria-label={variant === "page" ? settingsShellText.title : undefined}>
         <header>
+          {variant === "page" ? (
+            <button type="button" className="settings-page-back" onClick={onClose}>
+              <Icon name="chevronRight" className="settings-back-icon" />
+              <span>{shellText(settings.language).settingsBack}</span>
+            </button>
+          ) : null}
           <h2>{settingsShellText.title}</h2>
+
           <button aria-label={t("common.close")} onClick={onClose}><Icon name="close" /></button>
         </header>
         <div className="settings-body">
@@ -6785,14 +6817,20 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
         <footer>
           <Button variant="primary" onClick={onClose}>
-            <IconText icon="✓">{t("settings.close")}</IconText>
+            <IconText icon="✓">{variant === "page" ? shellText(settings.language).settingsBack : t("settings.close")}</IconText>
           </Button>
         </footer>
       </div>
-      </div>
       {showTokenGuide && <TokenGuideModal onClose={() => setShowTokenGuide(false)} />}
-    </AppPortal>
+    </SettingsFrame>
   );
+}
+
+/** Settings opens as a page inside the shell; the modal frame is kept for any
+ *  remaining modal callers. */
+function SettingsFrame({ page, children }: { page: boolean; children: React.ReactNode }) {
+  if (page) return <div className="settings-page">{children}</div>;
+  return <AppPortal><div className="modal-backdrop">{children}</div></AppPortal>;
 }
 
 // ── Onboarding wizard ─────────────────────────────────────────────────────────
@@ -7347,6 +7385,8 @@ function PersistentCanvasSurface({
 }
 
 function MainPage() {
+  const [dockHost, setDockHost] = useState<HTMLDivElement | null>(null);
+  const { collapsed: railCollapsed } = useRailCollapsed();
   const showSettings = useAppStore((state) => state.showSettings);
   const setShowSettings = useAppStore((state) => state.setShowSettings);
   const showOnboarding = useAppStore((state) => state.showOnboarding);
@@ -7450,74 +7490,103 @@ function MainPage() {
     return () => window.clearTimeout(timer);
   }, [toast, clearToast]);
 
+  // Settings is a page inside the shell now. Esc returns to the previous page
+  // unless a real dialog, popover or text field currently owns the key.
+  useEffect(() => {
+    if (!showSettings) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true'], [role='combobox'], [role='listbox']")) return;
+      if (document.querySelector(".modal-backdrop:not(.settings-page-backdrop), .app-confirm-backdrop, .select-menu-popover[data-disclosure-open='true'], .shell-palette")) return;
+      setShowSettings(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showSettings, setShowSettings]);
+
   return (
-    <div className="app-shell">
-      <AppTitleBar />
+    <div className="app-shell studio-shell" data-rail={railCollapsed ? "collapsed" : "expanded"}>
+      <StudioTopBar account={<NaiAccountManager />} />
       <div className="app-notice-slot">
         <UpdateBanner />
         <WorkspaceMigrationNotice />
       </div>
       <V5MigrationNotice />
-      <AppMenuBar openSettings={() => setShowSettings(true)}>
-        <NaiAccountManager />
-      </AppMenuBar>
-      <AppTabBar />
-      <div
-        className="workspace"
-        data-history-collapsed={wsHistoryCollapsed}
-        data-history-resizing={wsHistoryDragWidth !== null}
-        style={{ "--ws-left": `${wsLeftWidth}px`, "--ws-right": `${displayedHistoryWidth}px` } as CSSProperties}
-      >
-        <PersistentTabView
-          active={workbenchActive}
-          scope={`tab:${activeTab}`}
-          resetKey={activeTab}
-          className="persistent-workbench-view"
-        >
-          <LeftPanel openSettings={() => setShowSettings(true)} />
-          <WorkspaceResizer edge="left" />
-          <div className="persistent-canvas-host">
-            <PersistentCanvasSurface active={activeTab !== "inpaint"}>
-              <ImageCanvas />
-            </PersistentCanvasSurface>
-            <PersistentCanvasSurface active={activeTab === "inpaint"}>
-              <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingInpaint")}</div>}>
-                <InpaintCanvas />
+      <div className="shell-body">
+        <StudioNavRail />
+        <main className="shell-main">
+          <LayoutNotice />
+          <div
+            className="workspace"
+            data-history-collapsed={wsHistoryCollapsed}
+            data-history-resizing={wsHistoryDragWidth !== null}
+            aria-hidden={showSettings || undefined}
+            inert={showSettings || undefined}
+            style={{ "--ws-left": `${wsLeftWidth}px`, "--ws-right": `${displayedHistoryWidth}px` } as CSSProperties}
+          >
+            <PersistentTabView
+              active={workbenchActive}
+              scope={`tab:${activeTab}`}
+              resetKey={activeTab}
+              className="persistent-workbench-view"
+            >
+              <WorkbenchDockProvider host={dockHost}>
+                <LeftPanel openSettings={() => setShowSettings(true)} />
+                <WorkspaceResizer edge="left" />
+                <div className="persistent-canvas-host">
+                  <div className="workbench-dock" ref={setDockHost} />
+                  <div className="persistent-canvas-stage">
+                    <PersistentCanvasSurface active={activeTab !== "inpaint"}>
+                      <ImageCanvas />
+                    </PersistentCanvasSurface>
+                    <PersistentCanvasSurface active={activeTab === "inpaint"}>
+                      <Suspense fallback={<div className="lazy-tool-loading" role="status" aria-busy="true"><span className="lazy-tool-spinner" aria-hidden="true" />{t("tool.loadingInpaint")}</div>}>
+                        <InpaintCanvas />
+                      </Suspense>
+                    </PersistentCanvasSurface>
+                  </div>
+                </div>
+                <HistoryRailControls />
+                <HistoryRailPane><MemoizedHistoryPanel /></HistoryRailPane>
+              </WorkbenchDockProvider>
+            </PersistentTabView>
+            <PersistentTabView active={activeTab === "styles"} scope="tab:styles"><StyleLibrary/></PersistentTabView>
+            <PersistentTabView active={activeTab === "records"} scope="tab:records">
+              <AiLogPanel />
+            </PersistentTabView>
+            <PersistentTabView active={activeTab === "tools"} scope="tab:tools">
+              <Suspense fallback={<div className="lazy-tool-loading" role="status" aria-busy="true"><span className="lazy-tool-spinner" aria-hidden="true" />{t("tool.loadingTools")}</div>}>
+                <ToolsHub />
               </Suspense>
-            </PersistentCanvasSurface>
+            </PersistentTabView>
+            <PersistentTabView active={activeTab === "metadata"} scope="tab:metadata">
+              <Suspense fallback={<div className="lazy-tool-loading" role="status" aria-busy="true"><span className="lazy-tool-spinner" aria-hidden="true" />{t("tool.loadingTools")}</div>}>
+                <MetadataInspector onBack={() => useAppStore.getState().setActiveTab("generate")} />
+              </Suspense>
+            </PersistentTabView>
+            <PersistentTabView active={activeTab === "works"} scope="tab:works"><WorksLibrary active={activeTab === "works"} /></PersistentTabView>
+            <PersistentTabView active={activeTab === "favorites"} scope="tab:favorites"><GalleryFavoritesLibrary embedded onClose={()=>useAppStore.getState().setActiveTab("generate")} /></PersistentTabView>
+            <PersistentTabView active={activeTab === "onlineGallery"} scope="tab:onlineGallery">
+              <Suspense fallback={<div className="lazy-tool-loading" role="status" aria-busy="true"><span className="lazy-tool-spinner" aria-hidden="true" />{t("tool.loadingTools")}</div>}>
+                <OnlineGalleryPage />
+              </Suspense>
+            </PersistentTabView>
+            <PersistentTabView active={activeTab === "agent"} scope="tab:agent">
+              <Suspense fallback={<div className="lazy-tool-loading" role="status" aria-busy="true"><span className="lazy-tool-spinner" aria-hidden="true" />{t("tool.loadingTools")}</div>}>
+                <AgentPage active={activeTab === "agent"} />
+              </Suspense>
+            </PersistentTabView>
+            <PersistentTabView active={activeTab === "referencePresets"} scope="tab:referencePresets">
+              <ReferencePresetManager onBack={() => useAppStore.getState().setActiveTab("tools")} />
+            </PersistentTabView>
           </div>
-          <HistoryRailControls />
-          <HistoryRailPane><MemoizedHistoryPanel /></HistoryRailPane>
-        </PersistentTabView>
-        <PersistentTabView active={activeTab === "styles"} scope="tab:styles"><StyleLibrary/></PersistentTabView>
-        <PersistentTabView active={activeTab === "records"} scope="tab:records">
-          <AiLogPanel />
-        </PersistentTabView>
-        <PersistentTabView active={activeTab === "tools"} scope="tab:tools">
-          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
-            <ToolsHub />
-          </Suspense>
-        </PersistentTabView>
-        <PersistentTabView active={activeTab === "metadata"} scope="tab:metadata">
-          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
-            <MetadataInspector onBack={() => useAppStore.getState().setActiveTab("generate")} />
-          </Suspense>
-        </PersistentTabView>
-        <PersistentTabView active={activeTab === "works"} scope="tab:works"><WorksLibrary active={activeTab === "works"} /></PersistentTabView>
-        <PersistentTabView active={activeTab === "favorites"} scope="tab:favorites"><GalleryFavoritesLibrary embedded onClose={()=>useAppStore.getState().setActiveTab("generate")} /></PersistentTabView>
-        <PersistentTabView active={activeTab === "onlineGallery"} scope="tab:onlineGallery">
-          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
-            <OnlineGalleryPage />
-          </Suspense>
-        </PersistentTabView>
-        <PersistentTabView active={activeTab === "agent"} scope="tab:agent">
-          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
-            <AgentPage active={activeTab === "agent"} />
-          </Suspense>
-        </PersistentTabView>
-        <PersistentTabView active={activeTab === "referencePresets"} scope="tab:referencePresets">
-          <ReferencePresetManager onBack={() => useAppStore.getState().setActiveTab("tools")} />
-        </PersistentTabView>
+          {showSettings && (
+            <div className="shell-page-layer">
+              <SettingsModal variant="page" onClose={() => setShowSettings(false)} />
+            </div>
+          )}
+        </main>
       </div>
       <footer className="status-bar">
         <span className="status-bar-message" title={displayStatusText}>{displayStatusText}</span>
@@ -7527,7 +7596,7 @@ function MainPage() {
       </footer>
       {showOnboarding && <OnboardingWizard />}
       <ImageSaveFeedback language={language} />
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      <CommandPalette />
       {displayToast && (
         <AppPortal><div className="toast" role="alert">
           <span>{displayToast}</span>
@@ -7540,7 +7609,7 @@ function MainPage() {
   );
 }
 
-// ── Root ──────────────────────────────────────────────────────────────────────
+// ── Root ──
 export default function App() {
   const SPLASH_MIN_VISIBLE_MS = 700;
   const [splash, setSplash] = useState(true);

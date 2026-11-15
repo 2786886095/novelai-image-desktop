@@ -10,6 +10,8 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { AppPortal, Button, SelectMenuCompat } from "./components/ui";
+import { confirmAction } from "./components/confirm";
+import { deleteFavoriteImageText } from "./shell/shell-text";
 import { Icon } from "./components/icons";
 import { QualityPresetControl } from "./components/QualityPresetControl";
 import { PositivePromptPresetControl } from "./PositivePromptPresets";
@@ -779,6 +781,8 @@ export default function V5ArtistWeightRepair({
 
   const removeFavorite = async (candidate: SharedArtistFavorite) => {
     if (!candidate.image) return;
+    const deleteText = deleteFavoriteImageText(language);
+    if (!(await confirmAction(deleteText.message, deleteText.title, undefined, undefined, { confirm: deleteText.confirm, cancel: deleteText.cancel, localized: true }))) return;
     const deleted = await deleteHistory(candidate.image.id);
     if (!deleted) return;
     removeArtistFavorite(favoriteCollection, candidate.id);

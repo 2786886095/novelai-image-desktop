@@ -1,0 +1,591 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   STUDIO SHELL (desktop redesign, v2.9.4 candidate)
+   Final layer: grouped navigation rail + single title bar, settings as a page,
+   docked workbench panels, task center and command palette. Reuses the
+   semantic light/dark tokens and the 6/10/14/20 radius scale defined in
+   styles.css; no new one-off colours outside the token set.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.studio-shell {
+  --shell-topbar-h: 44px;
+  --shell-rail-w: 212px;
+  --shell-rail-collapsed-w: 56px;
+  display: flex;
+  flex-direction: column;
+  grid-template-rows: none;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  background: var(--bg-window);
+}
+.studio-shell::before,
+.studio-shell::after { display: none; }
+
+/* ── Title bar ─────────────────────────────────────────────────────────── */
+.studio-shell .shell-topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: var(--shell-topbar-h);
+  min-height: var(--shell-topbar-h);
+  padding: 0 0 0 12px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: none;
+  grid-template-columns: none;
+  -webkit-app-region: drag;
+  position: relative;
+  z-index: var(--z-sticky);
+}
+.shell-topbar > *:not(.shell-brand):not(.shell-topbar-spacer) { -webkit-app-region: no-drag; }
+.shell-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: none;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.shell-brand .title-icon { width: 22px; height: 22px; box-shadow: none; border-radius: var(--radius-sm); }
+.shell-brand .title-ver { font-size: 11px; font-weight: 500; color: var(--text-muted); }
+.shell-topbar-spacer { flex: 1 1 auto; min-width: 8px; align-self: stretch; }
+
+.shell-search-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 320px;
+  min-width: 140px;
+  height: 30px;
+  margin-left: 12px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+}
+.shell-search-trigger > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shell-search-trigger kbd,
+.shell-palette kbd {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font: 600 11px/18px var(--font-sans);
+}
+.shell-search-trigger:hover { border-color: var(--border-strong); color: var(--text-secondary); }
+.shell-search-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.studio-shell .shell-account-status.title-account {
+  position: static;
+  transform: none;
+  justify-self: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 240px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--bg-canvas);
+  color: var(--text-secondary);
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.studio-shell .shell-account-status > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.studio-shell .shell-account-status.online { color: var(--success); border-color: color-mix(in srgb, var(--success) 30%, var(--border)); background: var(--success-soft); }
+
+/* The account manager keeps its own behaviour; only its frame is compacted. */
+.shell-account { display: flex; align-items: center; min-width: 0; flex: 0 1 auto; }
+.shell-account .nai-account-manager { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: nowrap; }
+.shell-account .nai-account-manager > button,
+.shell-account .nai-account-selector { height: 30px; min-height: 30px; }
+.shell-account .nai-account-selector { min-width: 0; max-width: 260px; }
+.shell-account .nai-account-selector-label { display: none; }
+
+.shell-topbar-tools { display: flex; align-items: center; gap: 2px; flex: none; }
+.shell-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.shell-icon-btn .ui-icon { width: 17px; height: 17px; }
+.shell-icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.shell-icon-btn.active { color: var(--accent); background: var(--accent-soft); }
+.shell-icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.shell-icon-btn:disabled { opacity: .45; cursor: default; }
+.studio-shell .shell-topbar .window-controls { min-width: 138px; height: 100%; display: flex; flex: none; }
+.studio-shell .shell-topbar .window-controls button { height: 100%; width: 46px; border-radius: 0; }
+
+/* ── Body / rail ───────────────────────────────────────────────────────── */
+.shell-body { display: flex; flex: 1 1 auto; min-height: 0; min-width: 0; }
+.shell-rail {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: var(--shell-rail-w);
+  min-height: 0;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  transition: width .18s var(--ease-out);
+}
+.shell-rail.is-collapsed { width: var(--shell-rail-collapsed-w); }
+html.motion-reduced .shell-rail { transition: none; }
+.shell-rail-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 8px 4px; scrollbar-width: thin; }
+.shell-rail-group + .shell-rail-group { margin-top: 10px; }
+.shell-rail-group-title {
+  margin: 0 0 4px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  line-height: 20px;
+  font-weight: 650;
+  letter-spacing: .02em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shell-rail.is-collapsed .shell-rail-group-title { height: 1px; margin: 6px 8px; padding: 0; background: var(--border); color: transparent; font-size: 0; }
+.shell-rail-row { position: relative; }
+.shell-rail-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.shell-rail-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.shell-rail-item.active { background: var(--bg-selected); color: var(--accent); font-weight: 650; }
+.shell-rail-item.active::before { content: ""; position: absolute; left: -8px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+.shell-rail-item:focus-visible,
+.shell-rail-subitem:focus-visible,
+.shell-rail-disclosure:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.shell-rail-icon { display: inline-grid; place-items: center; width: 20px; height: 20px; flex: none; }
+.shell-rail-icon .ui-icon { width: 17px; height: 17px; }
+.shell-rail-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.shell-rail.is-collapsed .shell-rail-item { justify-content: center; padding: 0; }
+.shell-rail.is-collapsed .shell-rail-label { display: none; }
+.shell-rail-disclosure {
+  position: absolute;
+  right: 4px;
+  top: 5px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.shell-rail-disclosure:hover { background: var(--bg-hover); color: var(--text-primary); }
+.shell-rail-disclosure .ui-icon { width: 14px; height: 14px; }
+.shell-rail-sub { display: grid; gap: 1px; margin: 2px 0 4px 20px; padding-left: 8px; border-left: 1px solid var(--border); }
+.shell-rail-subitem {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  gap: 8px;
+  min-height: 28px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.shell-rail-subitem .ui-icon { width: 14px; height: 14px; flex: none; color: var(--text-muted); }
+.shell-rail-subitem span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shell-rail-subitem:hover { background: var(--bg-hover); color: var(--text-primary); }
+.shell-rail-grip { color: var(--text-muted); letter-spacing: -2px; }
+.shell-rail.is-editing .shell-rail-item { cursor: grab; outline: 1px dashed var(--border-strong); outline-offset: -1px; }
+.shell-rail.is-editing .shell-rail-item.is-dragging { opacity: .45; }
+.shell-rail-edit-help { display: grid; gap: 6px; margin: 4px 8px; padding: 8px 10px; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.shell-task-dot { position: absolute; right: 30px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: var(--radius-round); background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.shell-rail.is-collapsed .shell-task-dot { right: 8px; top: 9px; margin: 0; }
+.shell-rail-footer { flex: none; display: grid; gap: 4px; padding: 6px 8px 8px; border-top: 1px solid var(--border); }
+.shell-rail-utility { display: flex; align-items: center; justify-content: space-between; gap: 2px; }
+.shell-rail.is-collapsed .shell-rail-utility { flex-direction: column; }
+.shell-rail-collapse-icon { transition: transform .18s var(--ease-out); }
+.shell-rail-collapse-icon.is-open { transform: rotate(180deg); }
+
+/* ── Main area ─────────────────────────────────────────────────────────── */
+.shell-main { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; min-height: 0; }
+.studio-shell .shell-main > .workspace { flex: 1 1 auto; min-height: 0; }
+.studio-shell .status-bar { flex: none; }
+.studio-shell .app-notice-slot:empty { display: none; }
+
+/* Settings as a page: overlays only the main area; navigation stays usable. */
+.shell-page-layer { position: absolute; inset: 0; z-index: var(--z-raised); display: flex; padding: 12px; background: var(--bg-window); }
+.settings-page { display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; }
+.studio-shell .settings-page > .modal.settings-as-page {
+  position: relative;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  transform: none;
+  animation: none;
+  box-shadow: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+}
+.studio-shell .settings-as-page > header { display: flex !important; grid-template-columns: none !important; align-items: center; gap: 12px; padding: 12px 16px; }
+.studio-shell .settings-as-page > header > h2 { flex: 1; margin: 0; }
+.studio-shell .settings-as-page > header > .settings-page-back { flex: none; white-space: nowrap; width: auto; }
+.studio-shell .settings-as-page .settings-body { flex: 1 1 auto; min-height: 0; }
+.studio-shell .settings-as-page .settings-nav { width: 208px; }
+.studio-shell .settings-as-page .settings-nav button { justify-content: flex-start; text-align: left; }
+.settings-page-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.settings-page-back:hover { color: var(--text-primary); border-color: var(--border-strong); }
+.settings-page-back .settings-back-icon { transform: rotate(180deg); width: 14px; height: 14px; }
+
+/* ── Workbench parameter column ────────────────────────────────────────── */
+/* The navigation already names the page: the panel header becomes a single
+   compact line, returning vertical space to the prompt editor. */
+.studio-shell .left-panel > .panel-head { min-height: 0; padding: 9px 14px 8px; gap: 10px; align-items: center; }
+.studio-shell .left-panel > .panel-head > span { width: 26px; height: 26px; border-radius: var(--radius-sm); }
+.studio-shell .left-panel > .panel-head > span .ui-icon { width: 15px; height: 15px; }
+.studio-shell .left-panel > .panel-head > div { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.studio-shell .left-panel > .panel-head strong { flex: none; font-size: 14px; }
+.studio-shell .left-panel > .panel-head small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.panel-section-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: none;
+  padding: 6px 12px 7px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+.panel-section-nav.is-empty { display: none; }
+.panel-section-nav button {
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.panel-section-nav button:hover { background: var(--bg-hover); color: var(--text-primary); }
+.panel-section-nav button.active { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 28%, transparent); }
+.panel-section-nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.panel-section-anchor { height: 0; margin: 0; padding: 0; }
+.studio-shell .quick-actions[data-panel-section="refs"] { margin: 2px 0 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 6px; }
+.studio-shell .quick-actions[data-panel-section="refs"] .btn { min-height: 32px; height: auto; justify-content: flex-start; white-space: nowrap; }
+.studio-shell .prompt-advanced-button { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 4px 10px; height: auto; min-height: 36px; padding-block: 6px; }
+.advanced-summary { min-width: 0; color: var(--text-muted); font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Workbench: docked panels beside the canvas ────────────────────────── */
+.studio-shell .persistent-canvas-host { display: flex; gap: 0; }
+.persistent-canvas-stage { position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; }
+.workbench-dock { display: none; }
+.workbench-dock:not(:empty) {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: none;
+  width: clamp(320px, 28vw, 440px);
+  min-height: 0;
+  margin-right: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.workbench-dock-slot { display: block; min-width: 0; }
+.workbench-dock .modal-backdrop {
+  position: static;
+  inset: auto;
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  backdrop-filter: none;
+  animation: none;
+  z-index: auto;
+  overflow: visible;
+}
+.workbench-dock .modal-backdrop > .modal {
+  position: relative;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0;
+  transform: none !important;
+  animation: none !important;
+  box-shadow: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-canvas);
+}
+.workbench-dock .modal-backdrop > .modal > header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-base);
+  background: var(--bg-canvas);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.workbench-dock .modal-backdrop > .modal > header h2 { font-size: 14px; }
+.workbench-dock .modal-backdrop > .modal > footer { position: sticky; bottom: 0; background: var(--bg-canvas); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+.workbench-dock .advanced-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+
+/* ── Small windows: overlays instead of squeezing the canvas ──────────── */
+@media (max-width: 1360px) {
+  .studio-shell .workspace,
+  .studio-shell .workspace[data-history-collapsed] {
+    grid-template-columns: var(--ws-left, 360px) var(--ws-handle, 14px) minmax(300px, 1fr) var(--ws-right-handle, 32px);
+  }
+  .studio-shell .persistent-workbench-view { position: relative; }
+  .studio-shell .history-rail {
+    display: block;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(340px, 46vw);
+    z-index: var(--z-raised);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    background: var(--bg-panel);
+  }
+  .studio-shell .history-rail.is-collapsed { display: none; }
+  .studio-shell .history-rail-control { position: relative; z-index: calc(var(--z-raised) + 1); }
+}
+@media (max-width: 1280px) {
+  .workbench-dock:not(:empty) {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: var(--z-raised);
+    width: min(400px, 78%);
+    margin: 0;
+    padding-right: 6px;
+    background: var(--bg-window);
+    box-shadow: var(--shadow-lg);
+    border-radius: var(--radius-lg);
+  }
+}
+
+/* ── Task center ───────────────────────────────────────────────────────── */
+.shell-task-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 300px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-canvas);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.shell-task-button .ui-icon { width: 16px; height: 16px; flex: none; }
+.shell-task-button:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.shell-task-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.shell-task-button.is-busy { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); background: var(--accent-soft); }
+.shell-task-button.is-paused { color: var(--warning); }
+.shell-task-button.has-failure { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.shell-task-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shell-task-count { padding: 0 6px; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-text); font-size: 11px; line-height: 18px; }
+.shell-task-percent { font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.shell-task-ring {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: var(--radius-round);
+  background: conic-gradient(var(--accent) var(--p, 0%), var(--border) 0);
+  -webkit-mask: radial-gradient(circle 5px, transparent 98%, #000 100%);
+  mask: radial-gradient(circle 5px, transparent 98%, #000 100%);
+}
+.shell-task-popover {
+  position: fixed;
+  z-index: var(--z-overlay-raised);
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(72vh, 620px);
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-dialog);
+  box-shadow: var(--shadow-lg);
+  -webkit-app-region: no-drag;
+}
+.shell-task-popover:focus { outline: none; }
+.shell-task-popover > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 8px; font-size: 13.5px; }
+.shell-task-popover > h3 { margin: 10px 4px 6px; font-size: 12px; color: var(--text-muted); font-weight: 650; }
+.shell-task-empty { margin: 4px; padding: 14px; border: 1px dashed var(--border); border-radius: var(--radius-md); color: var(--text-secondary); font-size: 12.5px; line-height: 1.6; }
+.shell-task-row { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-canvas); }
+.shell-task-row + .shell-task-row { margin-top: 6px; }
+.shell-task-row.is-compact { padding: 8px 10px; margin-bottom: 8px; background: var(--bg-panel); }
+.shell-task-row-head { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12.5px; }
+.shell-task-row-head strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); }
+.shell-task-row-head time { flex: none; color: var(--text-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.shell-task-state { flex: none; padding: 0 7px; border-radius: var(--radius-pill); font-size: 11px; line-height: 19px; font-weight: 650; background: var(--bg-subtle); color: var(--text-secondary); }
+.shell-task-state.is-running { background: var(--accent-soft); color: var(--accent); }
+.shell-task-state.is-paused,
+.shell-task-state.is-waiting { background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--warning); }
+.shell-task-state.is-done { background: var(--success-soft); color: var(--success); }
+.shell-task-state.is-failed { background: var(--danger-soft); color: var(--danger); }
+.shell-task-state.is-cancelled { background: var(--bg-subtle); color: var(--text-muted); }
+.shell-task-step { color: var(--text-secondary); font-size: 12px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.shell-task-bar { height: 6px; overflow: hidden; border-radius: var(--radius-pill); background: var(--border); }
+.shell-task-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .3s var(--ease-out); }
+.shell-task-row.is-paused .shell-task-bar > span { background: var(--warning); }
+.shell-task-message { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.shell-task-row.is-failed .shell-task-message { color: var(--danger); }
+.shell-task-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+
+/* ── Command palette ───────────────────────────────────────────────────── */
+.shell-palette-backdrop { position: fixed; inset: 0; z-index: var(--z-overlay-top); display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; background: color-mix(in srgb, var(--bg-window) 40%, transparent); }
+.shell-palette {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, calc(100vw - 48px));
+  max-height: min(70vh, 560px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-dialog);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+}
+.shell-palette-input { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--border); }
+.shell-palette-input .ui-icon { width: 18px; height: 18px; color: var(--text-muted); flex: none; }
+.shell-palette-input input { flex: 1; height: 48px; border: 0; outline: none; background: transparent; color: var(--text-primary); font-size: 15px; box-shadow: none; }
+.shell-palette-list { flex: 1 1 auto; overflow-y: auto; padding: 6px; }
+.shell-palette-item {
+  display: grid;
+  grid-template-columns: 20px minmax(0, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.shell-palette-item .ui-icon { width: 16px; height: 16px; color: var(--text-secondary); }
+.shell-palette-item.active { background: var(--bg-selected); }
+.shell-palette-item.active .ui-icon { color: var(--accent); }
+.shell-palette-label { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shell-palette-item small { min-width: 0; color: var(--text-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shell-palette-item em { font-style: normal; font-size: 11px; color: var(--text-muted); padding: 0 6px; border: 1px solid var(--border); border-radius: var(--radius-pill); line-height: 18px; }
+.shell-palette-empty { margin: 18px; color: var(--text-secondary); text-align: center; font-size: 13px; }
+.shell-palette-footer { padding: 8px 14px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 11.5px; }
+
+/* ── Layout notice ─────────────────────────────────────────────────────── */
+.shell-layout-notice { flex: none; margin: 10px 12px 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); border-radius: var(--radius-md); background: var(--accent-soft); color: var(--text-primary); }
+.shell-layout-notice-main { display: flex; align-items: flex-start; gap: 10px; }
+.shell-layout-notice-main > .ui-icon { width: 18px; height: 18px; flex: none; margin-top: 2px; color: var(--accent); }
+.shell-layout-notice-main > div:nth-child(2) { flex: 1; min-width: 0; }
+.shell-layout-notice strong { font-size: 13px; }
+.shell-layout-notice p { margin: 2px 0 0; color: var(--text-secondary); font-size: 12.5px; line-height: 1.55; }
+.shell-layout-notice-actions { display: flex; gap: 6px; flex: none; }
+.shell-layout-changes { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 12.5px; }
+.shell-layout-changes td { padding: 5px 8px; border-top: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border)); vertical-align: top; color: var(--text-secondary); }
+.shell-layout-changes td:first-child { width: 36%; color: var(--text-muted); }
+.shell-layout-changes td:nth-child(2) { width: 18px; color: var(--accent); }
+.shell-layout-changes td:last-child { color: var(--text-primary); }
+
+/* ── Loading / feedback consistency ────────────────────────────────────── */
+.works-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.works-detail-actions > button { flex: 1 1 140px; min-height: 32px; }
+.studio-shell .lazy-tool-loading { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--text-secondary); font-size: 13px; }
+.lazy-tool-spinner { width: 16px; height: 16px; border-radius: var(--radius-round); border: 2px solid var(--border); border-top-color: var(--accent); animation: shell-spin .8s linear infinite; }
+html.motion-reduced .lazy-tool-spinner { animation: none; }
+@keyframes shell-spin { to { transform: rotate(360deg); } }
+
+/* Keep popovers (tag suggestions, menus) above docked panels and the task popover below confirmations. */
+.workbench-dock { z-index: auto; }
+
+/* ── Close-window choice (three explicit, non-overlapping actions) ─────── */
+.app-confirm-dialog.is-close-choice { width: min(460px, calc(100vw - 32px)); }
+.app-confirm-dialog.is-close-choice .app-confirm-actions { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.app-confirm-dialog.is-close-choice .app-confirm-actions .btn { justify-content: flex-start; min-height: 44px; height: auto; padding: 8px 12px; text-align: left; white-space: normal; }
+.app-confirm-dialog.is-close-choice .close-choice-label { display: grid; gap: 2px; }
+.app-confirm-dialog.is-close-choice .close-choice-label small { font-weight: 400; opacity: .8; font-size: 12px; }
+.app-confirm-dialog.is-close-choice [data-result="alternative"] { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+
+@media (max-width: 1200px) {
+  .shell-search-trigger { flex-basis: 200px; }
+  .shell-brand .shell-brand-name { display: none; }
+}
+@media (max-width: 1640px) {
+  /* The account selector and the run panel already show the account; keep the
+     title bar to one row instead of truncating every control. */
+  .studio-shell .shell-account-status.title-account { display: none; }
+}
+.shell-account .nai-account-manager button,
+.shell-account .nai-account-manager .btn { white-space: nowrap; }
+.shell-task-button { flex: none; }
+@media (forced-colors: active) {
+  .shell-rail-item.active { outline: 2px solid CanvasText; }
+  .shell-task-ring { forced-color-adjust: none; }
+}

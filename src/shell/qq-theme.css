@@ -1,0 +1,384 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   QQ-STYLE THEME (final layer)
+   Reference: QQ NT desktop — neutral light-gray canvas, white surfaces, one
+   clear blue accent, thin hairline borders, 8/12 px radii and almost no
+   shadow. No gradients, glow, glass or decorative blobs. Semantic tokens are
+   redefined here so every feature module follows automatically.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root,
+html:not(.theme-dark) {
+  --qq-blue: #0099ff;
+  --bg-window: #f2f3f5;
+  --bg-panel: #f7f8fa;
+  --bg-canvas: #ffffff;
+  --bg-dialog: #ffffff;
+  --bg-input: #ffffff;
+  --bg-subtle: #f0f1f3;
+  --bg-hover: #f0f1f3;
+  --bg-selected: #e6f4ff;
+  --rail-bg: #ebedf0;
+  --rail-hover: rgba(0, 0, 0, 0.05);
+  --rail-active: #ffffff;
+
+  --border: #e5e6eb;
+  --border-strong: #c9cdd4;
+
+  --accent: #0099ff;
+  --accent-hover: #0088e6;
+  --accent-pressed: #0077cc;
+  --accent-soft: #e6f4ff;
+  --accent-text: #ffffff;
+  --accent-cyan: #0099ff;
+  --accent-2: #0099ff;
+  --accent-gold: #ff8a00;
+  --primary: var(--accent);
+
+  --danger: #f54a45;
+  --danger-soft: #fff0ef;
+  --success: #1aad5a;
+  --success-soft: #e9f8ef;
+  --warning: #e57a00;
+
+  --text-primary: #1a1a1a;
+  --text-secondary: #545b66;
+  --text-muted: #767c85;
+  --muted: var(--text-muted);
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.10);
+  --shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.14);
+  --focus-ring: 0 0 0 3px rgba(0, 153, 255, 0.20);
+}
+
+.theme-dark,
+html.theme-dark {
+  --bg-window: #1a1a1a;
+  --bg-panel: #222222;
+  --bg-canvas: #262626;
+  --bg-dialog: #2b2b2b;
+  --bg-input: #1f1f1f;
+  --bg-subtle: #2f2f2f;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-selected: rgba(0, 153, 255, 0.16);
+  --rail-bg: #1f1f1f;
+  --rail-hover: rgba(255, 255, 255, 0.06);
+  --rail-active: #333333;
+
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  --accent: #2ea4ff;
+  --accent-hover: #4db2ff;
+  --accent-pressed: #1a8fe6;
+  --accent-soft: rgba(0, 153, 255, 0.16);
+  --accent-text: #ffffff;
+  --accent-cyan: #2ea4ff;
+  --accent-2: #2ea4ff;
+  --primary: var(--accent);
+
+  --danger: #ff5f57;
+  --danger-soft: rgba(245, 74, 69, 0.16);
+  --success: #3cc47c;
+  --success-soft: rgba(26, 173, 90, 0.16);
+  --warning: #ffa940;
+
+  --text-primary: #e8e8e8;
+  --text-secondary: #a8acb3;
+  --text-muted: #8c9199;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --focus-ring: 0 0 0 3px rgba(46, 164, 255, 0.28);
+}
+
+/* ── Base ──────────────────────────────────────────────────────────────── */
+html, body, #root { background: var(--bg-window); }
+.app-shell::before, .app-shell::after,
+.studio-shell .left-panel::before, .studio-shell .left-panel::after,
+.studio-shell .history-panel::before, .studio-shell .history-panel::after,
+.studio-shell .canvas-area::before, .studio-shell .canvas-area::after,
+.studio-shell .empty-canvas::before, .studio-shell .empty-canvas::after,
+.studio-shell .tools-hero::before, .studio-shell .tools-hero::after,
+.studio-shell .tool-card::before, .studio-shell .tool-card::after { display: none !important; content: none !important; }
+.studio-shell ::selection { background: color-mix(in srgb, var(--accent) 24%, transparent); }
+.studio-shell * { scrollbar-color: color-mix(in srgb, var(--text-muted) 40%, transparent) transparent; scrollbar-width: thin; }
+.studio-shell ::-webkit-scrollbar { width: 8px; height: 8px; }
+.studio-shell ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-muted) 35%, transparent); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+.studio-shell ::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--text-muted) 55%, transparent); }
+.studio-shell ::-webkit-scrollbar-track { background: transparent; }
+
+/* ── Title bar & rail: QQ's quiet gray chrome ──────────────────────────── */
+.studio-shell .shell-topbar { background: var(--rail-bg); border-bottom: 0; }
+.studio-shell .shell-brand { font-weight: 600; }
+.studio-shell .shell-brand .title-icon { border-radius: 6px; }
+.studio-shell .shell-search-trigger { background: var(--bg-canvas); border-color: transparent; border-radius: var(--radius-md); }
+.studio-shell .shell-search-trigger:hover { border-color: var(--border); }
+.studio-shell .shell-search-trigger kbd { background: var(--bg-subtle); border-color: transparent; }
+.studio-shell .shell-task-button,
+.studio-shell .shell-account-status.title-account { background: var(--bg-canvas); border-color: transparent; }
+.studio-shell .shell-task-button.is-busy { background: var(--accent-soft); color: var(--accent); }
+.studio-shell .shell-account-status.online { background: var(--bg-canvas); color: var(--text-secondary); }
+.studio-shell .shell-account-status.online .pulse-dot { background: var(--success); box-shadow: none; }
+.studio-shell .window-controls button:hover { background: var(--rail-hover); }
+.studio-shell .window-controls .close:hover { background: #e81123; color: #fff; }
+
+.studio-shell .shell-rail { background: var(--rail-bg); border-right: 0; }
+.studio-shell .shell-rail-group-title { color: var(--text-muted); font-weight: 500; font-size: 12px; letter-spacing: 0; }
+.studio-shell .shell-rail-item { height: 36px; color: var(--text-secondary); font-weight: 500; }
+.studio-shell .shell-rail-item:hover { background: var(--rail-hover); color: var(--text-primary); }
+.studio-shell .shell-rail-item.active { background: var(--rail-active); color: var(--text-primary); font-weight: 600; box-shadow: var(--shadow-sm); }
+.studio-shell .shell-rail-item.active::before { display: none; }
+.studio-shell .shell-rail-item.active .shell-rail-icon { color: var(--accent); }
+.studio-shell .shell-rail-subitem:hover { background: var(--rail-hover); }
+.studio-shell .shell-rail-sub { border-left-color: var(--border-strong); }
+.studio-shell .shell-rail-footer { border-top: 1px solid color-mix(in srgb, var(--text-muted) 15%, transparent); }
+.studio-shell .shell-icon-btn:hover { background: var(--rail-hover); }
+.studio-shell .shell-icon-btn.active { background: var(--accent-soft); color: var(--accent); }
+
+/* ── Surfaces: white cards on gray, hairline borders, no shadow ───────── */
+.studio-shell .workspace { background: transparent; }
+.studio-shell .left-panel,
+.studio-shell .history-panel,
+.studio-shell .canvas-area,
+.studio-shell .tools-hub .tool-card,
+.studio-shell .tools-hero,
+.studio-shell .settings-page > .modal,
+.studio-shell .works-library > *,
+.studio-shell .shell-task-row {
+  background: var(--bg-canvas);
+  background-image: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+}
+.studio-shell .canvas-area { background: var(--bg-panel); }
+.studio-shell .left-panel > .panel-head { border-bottom: 1px solid var(--border); background: transparent; }
+.studio-shell .left-panel > .panel-head > span { background: var(--accent-soft); color: var(--accent); box-shadow: none; }
+.studio-shell .panel-section-nav { background: transparent; }
+.studio-shell .panel-section-nav button.active { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.studio-shell .status-bar { background: var(--rail-bg); border-top: 0; color: var(--text-muted); }
+.studio-shell .shell-page-layer { background: var(--bg-window); }
+
+/* Empty canvas: one line-icon, plain text — no orb, gem or glow. */
+.studio-shell .empty-canvas { background: transparent; border: 0; box-shadow: none; }
+.studio-shell .empty-canvas .empty-illustration.is-plain { display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto 14px; border-radius: 14px; background: var(--bg-subtle); color: var(--text-muted); box-shadow: none; }
+.studio-shell .empty-canvas .empty-illustration.is-plain .ui-icon { width: 26px; height: 26px; }
+.studio-shell .empty-canvas strong { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+.studio-shell .empty-canvas > span:not(.empty-illustration):not(.empty-shortcuts) { color: var(--text-secondary); }
+.studio-shell .empty-shortcuts > span { background: var(--bg-canvas); border: 1px solid var(--border); color: var(--text-secondary); border-radius: var(--radius-pill); }
+
+/* ── Buttons ───────────────────────────────────────────────────────────── */
+.studio-shell .btn,
+.studio-shell button.btn-secondary {
+  background: var(--bg-canvas);
+  background-image: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  box-shadow: none;
+  font-weight: 500;
+  text-shadow: none;
+}
+.studio-shell .btn:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-strong); transform: none; }
+.studio-shell .btn:active:not(:disabled) { background: var(--bg-subtle); transform: none; }
+.studio-shell .btn-primary,
+.studio-shell .btn.primary,
+.studio-shell .nai-account-primary {
+  background: var(--accent) !important;
+  background-image: none !important;
+  border: 1px solid var(--accent) !important;
+  color: var(--accent-text) !important;
+  box-shadow: none !important;
+}
+.studio-shell .btn-primary:hover:not(:disabled),
+.studio-shell .nai-account-primary:hover:not(:disabled) { background: var(--accent-hover) !important; border-color: var(--accent-hover) !important; }
+.studio-shell .btn-primary:active:not(:disabled) { background: var(--accent-pressed) !important; }
+.studio-shell .btn-primary:disabled { opacity: .45; }
+.studio-shell .btn-danger { background: var(--bg-canvas); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
+.studio-shell .btn-danger:hover:not(:disabled) { background: var(--danger-soft); }
+.studio-shell .btn-ghost { background: transparent; border-color: transparent; }
+.studio-shell .btn:focus-visible,
+.studio-shell button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; box-shadow: none; }
+
+/* ── Segmented controls (QQ-style: gray track, white thumb) ────────────── */
+.studio-shell .generate-mode-switcher,
+.studio-shell .prompt-tabs,
+.studio-shell .seed-mode-switch,
+.studio-shell .quality-preset-segments,
+.studio-shell .i2i-size-mode,
+.studio-shell .nai-account-method-tabs {
+  background: var(--bg-subtle);
+  background-image: none;
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: 2px;
+  gap: 2px;
+  box-shadow: none;
+}
+.studio-shell .generate-mode-switcher { margin: 8px 12px 0; }
+.studio-shell .generate-mode-switcher button,
+.studio-shell .prompt-tabs button,
+.studio-shell .seed-mode-switch button,
+.studio-shell .quality-preset-segments button,
+.studio-shell .i2i-size-mode button,
+.studio-shell .nai-account-method-tabs button {
+  background: transparent;
+  background-image: none;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  box-shadow: none;
+  font-weight: 500;
+  min-height: 28px;
+}
+.studio-shell .generate-mode-switcher button::after,
+.studio-shell .prompt-tabs button::after { display: none; }
+.studio-shell .generate-mode-switcher button:hover,
+.studio-shell .prompt-tabs button:hover,
+.studio-shell .seed-mode-switch button:hover,
+.studio-shell .quality-preset-segments button:hover { color: var(--text-primary); background: transparent; }
+.studio-shell .generate-mode-switcher button.active,
+.studio-shell .prompt-tabs button.active,
+.studio-shell .seed-mode-switch button.active,
+.studio-shell .quality-preset-segments button[aria-checked="true"],
+.studio-shell .quality-preset-segments button.active,
+.studio-shell .i2i-size-mode button.active,
+.studio-shell .nai-account-method-tabs button[aria-selected="true"] {
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  border: 0;
+}
+.theme-dark .studio-shell .generate-mode-switcher button.active,
+.theme-dark .studio-shell .prompt-tabs button.active,
+.theme-dark .studio-shell .seed-mode-switch button.active,
+.theme-dark .studio-shell .quality-preset-segments button[aria-checked="true"] { background: #3a3a3a; }
+
+/* ── Form fields ───────────────────────────────────────────────────────── */
+.studio-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+.studio-shell textarea,
+.studio-shell .select-menu-trigger,
+.studio-shell .style-preset-trigger {
+  background: var(--bg-input);
+  background-image: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+  color: var(--text-primary);
+}
+.studio-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):hover,
+.studio-shell textarea:hover,
+.studio-shell .select-menu-trigger:hover { border-color: var(--border-strong); }
+.studio-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+.studio-shell textarea:focus,
+.studio-shell .select-menu-trigger[aria-expanded="true"] { border-color: var(--accent); box-shadow: var(--focus-ring); outline: none; }
+.studio-shell input::placeholder,
+.studio-shell textarea::placeholder { color: color-mix(in srgb, var(--text-muted) 80%, transparent); }
+.studio-shell input[type="checkbox"], .studio-shell input[type="radio"] { accent-color: var(--accent); }
+.studio-shell .field > span,
+.studio-shell .compact-model-label > span,
+.studio-shell .quality-preset-title,
+.studio-shell .resolution-select-label { color: var(--text-secondary); font-weight: 500; }
+
+/* Menus / popovers / dialogs: white, hairline, soft shadow. */
+.select-menu-popover,
+.menu-pop,
+.history-action-menu,
+.shell-task-popover,
+.shell-palette,
+.ac-dropdown,
+.modal,
+.app-confirm-dialog {
+  background: var(--bg-dialog) !important;
+  background-image: none !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-lg) !important;
+  backdrop-filter: none !important;
+}
+.modal, .app-confirm-dialog, .shell-palette { border-radius: var(--radius-lg) !important; }
+.modal-backdrop, .app-confirm-backdrop, .shell-palette-backdrop { background: rgba(0, 0, 0, 0.32) !important; backdrop-filter: none !important; }
+.theme-dark .modal-backdrop, .theme-dark .app-confirm-backdrop, .theme-dark .shell-palette-backdrop { background: rgba(0, 0, 0, 0.55) !important; }
+.workbench-dock .modal-backdrop { background: transparent !important; }
+.workbench-dock .modal-backdrop > .modal { box-shadow: none !important; }
+.select-menu-popover [role="option"][aria-selected="true"] { background: var(--accent-soft); color: var(--accent); }
+.select-menu-popover [role="option"]:hover { background: var(--bg-hover); }
+.toast { background: rgba(30, 30, 30, 0.92) !important; color: #fff !important; border: 0 !important; border-radius: var(--radius-md) !important; box-shadow: var(--shadow-lg) !important; backdrop-filter: none !important; }
+.toast button { color: #fff !important; }
+
+/* Toggles in QQ blue. */
+.studio-shell [role="switch"][aria-checked="true"] .stream-preview-state,
+.studio-shell .toggle input:checked + span,
+.studio-shell .toggle-track.on { background: var(--accent) !important; }
+
+/* Chips, tags, badges: quiet gray instead of tinted pills. */
+.studio-shell .empty-shortcuts > span,
+.studio-shell .shell-palette-item em,
+.studio-shell .tool-card small { background: var(--bg-subtle); border-color: transparent; color: var(--text-secondary); }
+.studio-shell .tool-card i,
+.studio-shell .tool-card-heading i { background: var(--accent-soft); color: var(--accent); box-shadow: none; }
+.studio-shell .tool-card:hover { border-color: var(--border-strong); transform: none; box-shadow: none; }
+
+/* Progress: flat blue. */
+.studio-shell .queue-progressbar-fill,
+.studio-shell .shell-task-bar > span,
+.studio-shell .update-install-progress i { background: var(--accent) !important; background-image: none !important; }
+
+/* Layout notice: neutral info bar. */
+.studio-shell .shell-layout-notice { background: var(--bg-canvas); border-color: var(--border); }
+.studio-shell .shell-layout-notice-main > .ui-icon { color: var(--accent); }
+
+/* History thumbnails: square-ish, no glow. */
+.studio-shell .history-item { border-radius: var(--radius-md); box-shadow: none; border-color: var(--border); background: var(--bg-canvas); }
+.studio-shell .history-item:hover { border-color: var(--border-strong); transform: none; }
+.studio-shell .history-item.active, .studio-shell .history-item[aria-current="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+/* Typography rhythm: calmer weights. */
+.studio-shell h1, .studio-shell h2 { font-weight: 600; letter-spacing: 0; }
+.studio-shell .eyebrow { display: none; }
+
+.studio-shell .panel-section-nav { flex-wrap: nowrap; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.studio-shell .panel-section-nav::-webkit-scrollbar { display: none; }
+.studio-shell .panel-section-nav button { padding: 0 8px; flex: none; }
+
+
+/* Settings page: the header ✕, the footer "返回工作区" and the rail toggle
+   already return to the workspace; keep the header to a single title row. */
+.studio-shell .settings-as-page > header > .settings-page-back { display: none; }
+.studio-shell .settings-as-page > header > h2 { font-size: 16px; }
+.studio-shell .settings-as-page > header { border-bottom: 1px solid var(--border); }
+.studio-shell .settings-as-page > footer { border-top: 1px solid var(--border); background: transparent; }
+.studio-shell .settings-nav { background: transparent; border-right: 1px solid var(--border); }
+.studio-shell .settings-nav button { border-radius: var(--radius-md); color: var(--text-secondary); font-weight: 500; }
+.studio-shell .settings-nav button:hover { background: var(--bg-hover); }
+.studio-shell .settings-nav button.active { background: var(--accent-soft); color: var(--accent); box-shadow: none; border: 0; }
+.studio-shell .settings-nav button.active::before { display: none; }
+
+/* Solid, theme-aware run footer and canvas toolbar (no translucent black). */
+.studio-shell .left-footer { background: var(--bg-canvas); border-top: 1px solid var(--border); box-shadow: none; }
+.studio-shell .image-viewer-toolbar { background: var(--bg-dialog); border: 1px solid var(--border); box-shadow: var(--shadow-sm); color: var(--text-primary); }
+.studio-shell .image-viewer-toolbar button { color: var(--text-secondary); }
+.studio-shell .image-viewer-toolbar button:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* Settings page covers the workspace: hide it so no floating control can paint through. */
+.studio-shell .shell-main > .workspace[inert] { visibility: hidden; }
+
+.studio-shell .shell-main > .workspace[inert] * { visibility: hidden !important; }
+
+
+/* Small windows: keep history reachable as a drawer (legacy rules hid it below 1200px). */
+@media (max-width: 1360px) {
+  .studio-shell .history-rail > .history-panel { display: grid; }
+  .studio-shell .history-rail-control { display: flex; }
+}
+

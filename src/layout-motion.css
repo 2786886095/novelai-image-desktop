@@ -77,7 +77,7 @@ html :is(.artist-lab-panel,.v5-artist-repair-card,.tag-comic-card,.redraw-card,.
 html :is(.artist-lab-panel,.v5-artist-repair-card,.tag-comic-card,.redraw-card)>h3 {font-size:var(--studio-section-title);}
 html :is(.tavern-message.is-entering,.tavern-composer-popover,.tavern-copy-feedback,.image-save-notice) {animation:studio-view-in 160ms var(--studio-enter);}
 html .tavern-page {--tavern-motion-ease:var(--studio-enter);--tavern-motion-base:160ms;}
-html.theme-dark {--accent-text:#171122;}
+html.theme-dark {--accent-text:#161616;}
 html .btn.btn-primary {background:var(--accent);color:var(--accent-text);border-color:var(--accent);box-shadow:none;}
 html .btn.btn-primary:hover:not(:disabled) {background:var(--accent-hover);border-color:var(--accent-hover);}
 html :is(.tab-bar button,.menu-bar .btn,.btn-primary) .ui-icon {background:transparent;border:0;box-shadow:none;color:inherit;}

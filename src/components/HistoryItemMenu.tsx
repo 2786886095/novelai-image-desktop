@@ -6,9 +6,11 @@ import {ImageFavoriteButton} from './ImageFavoriteButton';
 import './history-item-menu.css';
 
 /** No backdrop: an outside image click dismisses the menu AND selects the image. */
-export function HistoryItemMenu({src, label, metadataLabel, renameLabel, deleteLabel, metadataTitle, renameTitle, deleteTitle, filePathLabel, onFilePath, onMetadata, onRename, onDelete}: {
+export function HistoryItemMenu({src, label, metadataLabel, renameLabel, deleteLabel, metadataTitle, renameTitle, deleteTitle, filePathLabel, onFilePath, onMetadata, onRename, onDelete, loadParamsLabel, onLoadParams}: {
   src:string; label:string; metadataLabel:string; renameLabel:string; deleteLabel:string;
   filePathLabel?:string; onFilePath?:()=>void;
+  /** Explicit "load parameters" (same as the image context menu item). */
+  loadParamsLabel?:string; onLoadParams?:()=>void;
   metadataTitle?:string; renameTitle?:string; deleteTitle?:string;
   onMetadata:()=>void; onRename:()=>void; onDelete:()=>void;
 }) {
@@ -47,6 +49,7 @@ export function HistoryItemMenu({src, label, metadataLabel, renameLabel, deleteL
       }
     }}>
       <ImageFavoriteButton src={src} menuItem/>
+      {onLoadParams&&loadParamsLabel&&<button type="button" role="menuitem" onClick={()=>action(onLoadParams)}><Icon name="restore"/>{loadParamsLabel}</button>}
       <button type="button" role="menuitem" title={metadataTitle??metadataLabel} onClick={()=>action(onMetadata)}><Icon name="eye"/>{metadataLabel}</button>
       {onFilePath&&<button type="button" role="menuitem" onClick={()=>action(onFilePath)}><Icon name="folder"/>{filePathLabel}</button>}
       <button type="button" role="menuitem" title={renameTitle??renameLabel} onClick={()=>action(onRename)}><Icon name="brush"/>{renameLabel}</button>

@@ -19,9 +19,14 @@ import {installStudioAgent} from './studio-agent';
 import {confirmWindowClose} from './components/confirm';
 import {windowTrayText} from './window-tray-text';
 import {useAppStore} from './store';
+import {installTaskTracker} from './shell/task-tracker';
+import {shellText} from './shell/shell-text';
+import "./shell/studio-shell.css";
+import "./shell/qq-theme.css";
 
 installStudioAgent();
 installStudioMotion();
+installTaskTracker(useAppStore);
 document.addEventListener("pointerdown", unlockCompletionSound, {once:true});
 document.addEventListener("keydown", unlockCompletionSound, {once:true});
 
@@ -36,7 +41,8 @@ function RendererReady() {
       const text = windowTrayText(language);
       void api.acknowledgeCloseChoice(requestId).then(async accepted => {
         if (!accepted) return;
-        const { action, remember } = await confirmWindowClose(text);
+        const hints = shellText(language).closeConfirm;
+        const { action, remember } = await confirmWindowClose({ ...text, trayHint: hints.trayHint, quitHint: hints.quitHint, cancelHint: hints.cancelHint });
         api.sendCloseChoice(requestId, action, remember);
       }).catch(() => api.sendCloseChoice(requestId, "cancel", false));
     });
