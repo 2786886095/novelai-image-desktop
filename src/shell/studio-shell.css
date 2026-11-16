@@ -23,54 +23,6 @@
 .studio-shell::before,
 .studio-shell::after { display: none; }
 
-/* ── Shared Dock Pin Pill Button ───────────────────────────────────────── */
-html body button.dock-pin-btn {
-  display: inline-flex !important;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  height: 24px;
-  min-height: 24px;
-  padding: 0 9px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg-canvas);
-  color: var(--text-secondary);
-  font-size: 11.5px;
-  line-height: 1;
-  cursor: pointer;
-  white-space: nowrap;
-  flex: none;
-  transition:
-    border-color 140ms var(--qf-ease-out),
-    background-color 140ms var(--qf-ease-out),
-    color 140ms var(--qf-ease-out),
-    transform 120ms var(--qf-spring);
-}
-html body button.dock-pin-btn .ui-icon {
-  width: 13px;
-  height: 13px;
-  flex: 0 0 13px;
-  transform: rotate(35deg);
-  transition: transform 180ms var(--qf-spring), color 140ms var(--qf-ease-out);
-}
-html body button.dock-pin-btn:hover {
-  border-color: var(--detection, var(--accent));
-  color: var(--text-primary);
-}
-html body button.dock-pin-btn:active {
-  transform: scale(0.95);
-}
-html body button.dock-pin-btn.is-pinned {
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-html body button.dock-pin-btn.is-pinned .ui-icon {
-  transform: rotate(0deg);
-  color: var(--accent);
-}
-
 /* ── Title bar ─────────────────────────────────────────────────────────── */
 .studio-shell .shell-topbar {
   display: flex;
@@ -286,52 +238,6 @@ html body button.shell-icon-btn:disabled { opacity: .45; cursor: default; }
 .shell-rail.is-open {
   width: var(--shell-rail-w);
 }
-.shell-rail.is-floating.is-open {
-  background: var(--bg-panel);
-  border-right-color: var(--border-strong);
-  box-shadow: var(--shadow-lg);
-}
-
-.shell-rail-dockbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  flex: none;
-  height: 38px;
-  padding: 0 8px 0 14px;
-  border-bottom: 1px solid var(--border);
-  opacity: 1;
-  transform: translateX(0);
-  transition:
-    height 200ms var(--qf-spring),
-    opacity 160ms var(--qf-ease-out),
-    transform 200ms var(--qf-spring),
-    border-color 160ms ease;
-  overflow: hidden;
-}
-.shell-rail.is-collapsed .shell-rail-dockbar {
-  height: 0;
-  padding-block: 0;
-  border-bottom-color: transparent;
-  opacity: 0;
-  transform: translateX(-8px);
-  pointer-events: none;
-}
-.shell-rail-dock-title {
-  font-size: 12px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.shell-rail-dock-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: none;
-}
-.shell-rail-close-btn { width: 26px !important; height: 26px !important; }
 
 .shell-rail-scroll {
   flex: 1 1 auto;
@@ -490,7 +396,8 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
 .shell-rail-grip { color: var(--text-muted); letter-spacing: -2px; }
 .shell-rail.is-editing .shell-rail-item { cursor: grab; outline: 1px dashed var(--border-strong); outline-offset: -1px; }
 .shell-rail.is-editing .shell-rail-item.is-dragging { opacity: .45; }
-.shell-rail-edit-help { display: grid; gap: 6px; margin: 4px 8px; padding: 8px 10px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--bg-canvas); color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.shell-rail-edit-help { display: grid; gap: 6px; min-width: 176px; margin: 4px 8px; padding: 8px 10px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--bg-canvas); color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.shell-rail.is-collapsed .shell-rail-edit-help { display: none; }
 .shell-task-dot { position: absolute; right: 30px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .shell-rail.is-collapsed .shell-task-dot { right: 8px; top: 9px; margin: 0; }
 .shell-rail-footer { flex: none; display: grid; gap: 4px; padding: 6px 8px 8px; border-top: 1px solid var(--border); }
@@ -513,18 +420,20 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
   flex: 1 1 auto;
   min-height: 0;
   --ws-handle: 12px;
-  --ws-right-handle: 32px;
+  --ws-right-handle: 12px;
   grid-template-columns:
     var(--ws-left, 380px)
     var(--ws-handle, 12px)
-    minmax(300px, 1fr)
-    var(--ws-right-handle, 32px)
+    minmax(260px, 1fr)
+    var(--ws-right-handle, 12px)
     var(--ws-right, 0px);
   transition: grid-template-columns 240ms var(--qf-spring);
 }
-.studio-shell .shell-main > .workspace[data-left-collapsed="true"],
-.studio-shell .shell-main > .workspace[data-left-dock="floating"] {
+.studio-shell .shell-main > .workspace[data-left-collapsed="true"] {
   --ws-handle: 0px;
+}
+.studio-shell .shell-main > .workspace[data-history-collapsed="true"] {
+  --ws-right-handle: 32px;
 }
 .studio-shell .shell-main > .workspace[data-history-resizing="true"] {
   transition: none;
@@ -535,7 +444,7 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
 .studio-shell .status-bar { flex: none; }
 .studio-shell .app-notice-slot:empty { display: none; }
 
-/* Left Parameter Panel: Docked vs Floating + Rightward Expand / Leftward Collapse */
+/* Left Parameter Panel: Inline + Rightward Expand / Leftward Collapse */
 .studio-shell .left-panel {
   transition:
     transform 240ms var(--qf-spring),
@@ -550,23 +459,7 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
   pointer-events: none;
   border-width: 0;
 }
-.studio-shell .left-panel.is-floating {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: min(var(--ws-left-floating, 380px), calc(100% - 48px));
-  z-index: calc(var(--z-raised) + 3);
-  box-shadow: var(--shadow-lg);
-  border-color: var(--border-strong);
-}
-.studio-shell .left-panel.is-floating.is-collapsed {
-  opacity: 0;
-  transform: translateX(calc(-100% - 16px));
-  pointer-events: none;
-}
-.studio-shell .workspace[data-left-collapsed="true"] .ws-resizer.left,
-.studio-shell .workspace[data-left-dock="floating"] .ws-resizer.left {
+.studio-shell .workspace[data-left-collapsed="true"] .ws-resizer.left {
   width: 0;
   opacity: 0;
   pointer-events: none;
@@ -600,7 +493,7 @@ html body button.left-panel-reopen-tab:hover {
 }
 html body button.left-panel-reopen-tab:active { transform: scale(0.96); }
 
-/* Right History Panel: Dockable (Floating Drawer right->left OR Docked Inline) */
+/* Right History Panel: Inline Right Column with Left-Edge Splitter when Open */
 .studio-shell .history-rail.is-docked {
   min-width: 0;
   min-height: 0;
@@ -619,44 +512,28 @@ html body button.left-panel-reopen-tab:active { transform: scale(0.96); }
   opacity: 0;
 }
 
-.studio-shell .history-rail.is-floating {
-  position: absolute;
-  top: 0;
-  right: 34px;
-  bottom: 0;
-  width: min(var(--history-drawer-w, 340px), calc(100% - 48px));
-  z-index: calc(var(--z-raised) + 2);
-  overflow: hidden;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  visibility: visible;
-  pointer-events: auto;
-  transform: translateX(0);
-  opacity: 1;
-  transition:
-    transform 250ms var(--qf-spring),
-    opacity 190ms var(--qf-ease-out),
-    visibility 0s;
-}
-.studio-shell .history-rail.is-floating > .history-panel {
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  border-color: var(--border-strong);
-}
-.studio-shell .history-rail.is-floating.is-collapsed {
-  transform: translateX(calc(100% + 44px));
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition:
-    transform 190ms var(--qf-ease-in),
-    opacity 150ms linear,
-    visibility 0s 195ms;
-}
 .studio-shell .history-rail-control {
   position: relative;
   z-index: calc(var(--z-raised) + 3);
+}
+.studio-shell .history-rail-control.is-collapsed {
+  cursor: default !important;
+}
+.studio-shell .history-rail-control.is-collapsed .ws-resizer-grip {
+  display: none !important;
+  opacity: 0 !important;
+}
+.studio-shell .history-rail-control.is-open {
+  cursor: col-resize !important;
+}
+.studio-shell .history-rail-control.is-open .history-rail-toggle {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  padding: 0 !important;
+  border-width: 0 !important;
+  overflow: hidden !important;
 }
 .studio-shell .history-title {
   display: flex !important;
@@ -815,6 +692,40 @@ html body .panel-section-nav button.active {
 .studio-shell .left-panel .field {
   margin-bottom: 10px;
 }
+.studio-shell .left-panel :is(.seed-row, .size-row, .batch-inline-grid) > .field {
+  margin-bottom: 0 !important;
+}
+.studio-shell .seed-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  align-items: end;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.studio-shell .seed-row > .field input {
+  height: 36px !important;
+  min-height: 36px !important;
+  box-sizing: border-box;
+}
+html body .studio-shell .seed-row > button.seed-randomize-button {
+  width: 36px !important;
+  min-width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  align-self: end;
+}
+.studio-shell .history-group-create {
+  align-items: center;
+}
+.studio-shell .history-group-create > input,
+.studio-shell .history-group-create > button {
+  height: 34px !important;
+  min-height: 34px !important;
+  margin: 0 !important;
+  box-sizing: border-box;
+}
 .studio-shell .style-preset-row {
   display: grid;
   gap: 6px;
@@ -858,6 +769,12 @@ html body .panel-section-nav button.active {
 .studio-shell .quick-actions[data-panel-section="refs"] .btn.qf-ref-trigger.has-count {
   border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
   background: color-mix(in srgb, var(--accent-soft) 55%, var(--bg-canvas));
+}
+html body .studio-shell .quick-actions[data-panel-section="refs"] .btn.qf-ref-trigger.is-panel-open,
+html body .studio-shell button.prompt-advanced-button.is-panel-open {
+  border-color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
 }
 .qf-count-badge {
   font-style: normal;
@@ -908,6 +825,11 @@ html body .studio-shell button.prompt-advanced-button {
 .studio-shell button.prompt-advanced-button:hover .prompt-advanced-chevron {
   transform: translateX(2px);
   color: var(--detection, var(--accent));
+}
+.studio-shell button.prompt-advanced-button .prompt-advanced-chevron.is-open,
+.studio-shell button.prompt-advanced-button.is-panel-open:hover .prompt-advanced-chevron {
+  transform: rotate(180deg);
+  color: var(--accent);
 }
 
 .batch-inline-grid {
@@ -1072,7 +994,7 @@ html body .studio-shell button.prompt-advanced-button {
 }
 .workbench-dock .modal-backdrop > .modal > header h2 {
   font-size: 14px;
-  padding-right: 76px;
+  padding-right: 8px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1090,15 +1012,18 @@ html body .studio-shell button.prompt-advanced-button {
 .workbench-dock .char-position-toolbar { flex-wrap: wrap; gap: 8px; }
 .workbench-dock .char-position-section { background: var(--bg-subtle); border-color: var(--border); }
 
-/* ── Small windows (<1360px): graceful overlay adaptation ──────────────── */
-@media (max-width: 1360px) {
+/* ── Narrow half-screen windows (<920px): graceful overlay adaptation ───── */
+@media (max-width: 920px) {
   .studio-shell .shell-main > .workspace {
     grid-template-columns:
-      var(--ws-left, 356px)
+      var(--ws-left, 340px)
       var(--ws-handle, 12px)
-      minmax(280px, 1fr)
+      minmax(240px, 1fr)
       var(--ws-right-handle, 32px)
       0px;
+  }
+  .studio-shell .shell-main > .workspace[data-history-collapsed="false"] {
+    --ws-right-handle: 32px;
   }
   .studio-shell .history-rail.is-docked {
     position: absolute;

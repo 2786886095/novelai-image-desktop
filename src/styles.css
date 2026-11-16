@@ -12461,11 +12461,11 @@ html.theme-dark #root {
   place-items: center;
   width: 46px;
   height: 46px;
-  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
   border-radius: var(--radius-lg);
-  background: var(--accent);
+  background: var(--accent-soft);
   color: var(--accent);
-  box-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 13%, transparent);
+  box-shadow: none;
 }
 .reference-catalog-cloud-mark > .ui-icon,
 .reference-catalog-series-icon > .ui-icon { width: 22px; height: 22px; color: inherit; }
@@ -18170,8 +18170,9 @@ button.prompt-chip-head::after,
 
 /* 酒馆 AI 生图 · focused conversation shell */
 .tavern-avatar.is-software {
-  background: var(--accent);
+  background: var(--accent-soft);
   color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
 }
 .tavern-avatar.is-software > svg { width: 52%; height: 52%; }
 .tavern-chat-header.is-minimal:not(.has-group) { display: none; }

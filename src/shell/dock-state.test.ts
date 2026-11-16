@@ -29,34 +29,26 @@ afterEach(() => {
   useDockStore.setState({ ...DEFAULT_DOCK_PREFS });
 });
 
-describe("dockable panel state and baseline workspace", () => {
+describe("workspace panel state and baseline layout", () => {
   it("starts on the clean baseline workspace by default", () => {
     const prefs = readDockPrefs();
     expect(prefs).toEqual({
       railOpen: false,
-      railDocked: false,
       leftCollapsed: false,
-      leftDocked: true,
-      subpanelDocked: false,
       subpanelWidth: 376,
-      rightDocked: false,
     });
   });
 
-  it("persists left rail, left panel, subpanel and right panel docking toggles", () => {
+  it("persists left rail, left panel collapse, and subpanel width", () => {
     const store = useDockStore.getState();
-    store.toggleRailDocked();
-    expect(useDockStore.getState()).toMatchObject({ railDocked: true, railOpen: true });
-
-    store.toggleSubpanelDocked();
+    store.toggleRailOpen();
+    store.toggleLeftCollapsed();
     store.setSubpanelWidth(420);
-    store.toggleRightDocked();
-    expect(readDockPrefs()).toMatchObject({
-      railDocked: true,
+
+    expect(readDockPrefs()).toEqual({
       railOpen: true,
-      subpanelDocked: true,
+      leftCollapsed: true,
       subpanelWidth: 420,
-      rightDocked: true,
     });
 
     store.resetToBaseline();
@@ -76,7 +68,6 @@ describe("dockable panel state and baseline workspace", () => {
     expect(calls).toEqual([true]);
     expect(storage.get(BASELINE_STORAGE_KEY)).toBe("1");
 
-    // Second call is a no-op so user's subsequent choice is respected.
     ensureBaselineWorkspace((value) => calls.push(value));
     expect(calls).toEqual([true]);
   });
@@ -88,11 +79,11 @@ describe("dockable panel state and baseline workspace", () => {
     expect(calls).toEqual([]);
   });
 
-  it("exposes localized dock controls in all five UI languages", () => {
+  it("exposes localized panel controls in all five UI languages", () => {
     for (const lang of ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR"]) {
       const t = dockText(lang);
-      expect(t.pin).toBeTruthy();
-      expect(t.pinned).toBeTruthy();
+      expect(t.collapseLeft).toBeTruthy();
+      expect(t.collapseRight).toBeTruthy();
       expect(t.resetBaseline).toBeTruthy();
     }
   });

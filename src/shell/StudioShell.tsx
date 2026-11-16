@@ -33,12 +33,11 @@ function useLanguage() {
   return useAppStore((state) => state.settings?.language);
 }
 
-/* ── Rail dock & collapse state (baseline: 56px collapsed rail) ───────────── */
+/* ── Rail collapse state (baseline: 56px collapsed rail, expands inline) ─── */
 export function useRailCollapsed() {
   const railOpen = useDockStore((state) => state.railOpen);
-  const railDocked = useDockStore((state) => state.railDocked);
   const toggleRailOpen = useDockStore((state) => state.toggleRailOpen);
-  return { collapsed: !railOpen, docked: railDocked, toggle: toggleRailOpen };
+  return { collapsed: !railOpen, toggle: toggleRailOpen };
 }
 export function toggleRail() {
   useDockStore.getState().toggleRailOpen();
@@ -195,18 +194,15 @@ function MoonGlyph() {
   return <svg className="ui-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" aria-hidden="true"><path d="M15.8 12.6A6.5 6.5 0 0 1 7.4 4.2a6.5 6.5 0 1 0 8.4 8.4Z" /></svg>;
 }
 
-/* ── Navigation rail (dockable left panel; baseline = 56px icon rail) ─────── */
+/* ── Navigation rail (inline expandable left rail; baseline = 56px icon rail) */
 export function StudioNavRail() {
   const language = useLanguage();
   const text = shellText(language);
-  const dt = dockText(language);
   const activeTab = useAppStore((state) => state.activeTab);
   const showSettings = useAppStore((state) => state.showSettings);
   const railOpen = useDockStore((state) => state.railOpen);
-  const railDocked = useDockStore((state) => state.railDocked);
   const toggleRailOpen = useDockStore((state) => state.toggleRailOpen);
   const setRailOpen = useDockStore((state) => state.setRailOpen);
-  const toggleRailDocked = useDockStore((state) => state.toggleRailDocked);
   const collapsed = !railOpen;
   const navRef = useRef<HTMLElement>(null);
 
@@ -225,25 +221,9 @@ export function StudioNavRail() {
     return () => window.removeEventListener("studio:collections-changed", reload);
   }, []);
 
-  // When expanded as an undocked floating drawer, outside clicks or Escape collapse back to baseline.
   useEffect(() => {
-    if (!railOpen || railDocked || editing) return;
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null;
-      if (target && !navRef.current?.contains(target)) setRailOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !event.defaultPrevented) {
-        setRailOpen(false);
-      }
-    };
-    document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [editing, railDocked, railOpen, setRailOpen]);
+    if (collapsed && editing) setEditing(false);
+  }, [collapsed, editing]);
 
   const persist = (next: ActiveTab[]) => {
     try { saveTabOrder(next); setOrder(normalizeTabOrder(next)); }
@@ -259,49 +239,17 @@ export function StudioNavRail() {
     all[(index + delta + all.length) % all.length]?.focus();
   };
 
-  const afterNavigate = () => {
-    if (railOpen && !railDocked && !editing) setRailOpen(false);
-  };
-
   return (
-    <div className={clsx("shell-rail-slot", railOpen && railDocked && "is-docked")}>
+    <div className={clsx("shell-rail-slot", railOpen && "is-docked")}>
       <nav
         ref={navRef}
         className={clsx(
-          "shell-rail",
+          "shell-rail is-docked",
           collapsed ? "is-collapsed" : "is-open",
-          railDocked ? "is-docked" : "is-floating",
-          editing && "is-editing",
+          editing && !collapsed && "is-editing",
         )}
-        data-dock-mode={railDocked ? "docked" : "floating"}
         aria-label={text.paletteTitle}
       >
-        <div className="shell-rail-dockbar" aria-hidden={collapsed}>
-          <span className="shell-rail-dock-title">{dt.railTitle}</span>
-          <div className="shell-rail-dock-actions">
-            <button
-              type="button"
-              className={clsx("dock-pin-btn", railDocked && "is-pinned")}
-              aria-pressed={railDocked}
-              title={railDocked ? dt.unpinTip : dt.pinTip}
-              tabIndex={collapsed ? -1 : 0}
-              onClick={toggleRailDocked}
-            >
-              <Icon name="pin" />
-              <span>{railDocked ? dt.pinned : dt.pin}</span>
-            </button>
-            <button
-              type="button"
-              className="shell-icon-btn shell-rail-close-btn"
-              title={text.collapse}
-              aria-label={text.collapse}
-              tabIndex={collapsed ? -1 : 0}
-              onClick={() => setRailOpen(false)}
-            >
-              <Icon name="chevronRight" className="shell-rail-collapse-icon is-open" />
-            </button>
-          </div>
-        </div>
         <div className="shell-rail-scroll">
           {groups.map((group) => (
             <section className="shell-rail-group" key={group.id} aria-label={text.groups[group.id]}>
@@ -319,7 +267,7 @@ export function StudioNavRail() {
                       className={clsx("shell-rail-item", active && "active", dragging === tab && "is-dragging")}
                       aria-current={active ? "page" : undefined}
                       title={editing ? text.arrangeHelp : `${item.title} — ${item.desc}`}
-                      draggable={editing}
+                      draggable={editing && !collapsed}
                       onDragStart={(event) => { setDragging(tab); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", tab); }}
                       onDragOver={(event) => { if (editing && dragging && group.tabs.includes(dragging)) event.preventDefault(); }}
                       onDrop={(event) => { if (editing && dragging && group.tabs.includes(dragging)) { event.preventDefault(); persist(moveTab(order, dragging, tab)); } setDragging(null); }}
@@ -334,11 +282,11 @@ export function StudioNavRail() {
                           focusSibling(event.currentTarget, event.key === "ArrowDown" ? 1 : -1);
                         } else if (event.key === "Escape" && editing) setEditing(false);
                       }}
-                      onClick={() => { if (!editing) { navigateTo(tab); afterNavigate(); } }}
+                      onClick={() => { if (!editing) navigateTo(tab); }}
                     >
                       <span className="shell-rail-icon"><Icon name={item.icon} /></span>
                       <span className="shell-rail-label">{item.label}</span>
-                      {editing ? <span className="shell-rail-grip" aria-hidden="true">⋮⋮</span> : null}
+                      {editing && !collapsed ? <span className="shell-rail-grip" aria-hidden="true">⋮⋮</span> : null}
                       {tab === "tools" && !editing ? <TaskDot /> : null}
                     </button>
                     {tab === "tools" && !editing && !collapsed ? (
@@ -357,7 +305,7 @@ export function StudioNavRail() {
                               className="shell-rail-subitem"
                               title={text.tools[tool.id]}
                               onKeyDown={(event) => { if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); focusSibling(event.currentTarget, event.key === "ArrowDown" ? 1 : -1); } }}
-                              onClick={() => { openTool(tool.id); afterNavigate(); }}
+                              onClick={() => openTool(tool.id)}
                             >
                               <span className="shell-subitem-icon" aria-hidden="true"><Icon name={tool.icon} /></span>
                               <span>{text.tools[tool.id]}</span>
@@ -372,7 +320,7 @@ export function StudioNavRail() {
             </section>
           ))}
         </div>
-        <AnimatedCollapse open={editing}>
+        <AnimatedCollapse open={editing && !collapsed}>
           <div className="shell-rail-edit-help" role="note">
             <span>{text.arrangeHelp}</span>
             <button type="button" className="btn btn-sm" onClick={() => persist(defaultRailOrder())}>{text.arrangeReset}</button>
@@ -388,7 +336,6 @@ export function StudioNavRail() {
             onClick={() => {
               if (showSettings) useAppStore.getState().setShowSettings(false);
               else openSettings();
-              afterNavigate();
             }}
           >
             <span className="shell-rail-icon"><Icon name="settings" /></span>
@@ -399,10 +346,10 @@ export function StudioNavRail() {
             <button type="button" className="shell-icon-btn" title={text.docs} aria-label={text.docs} onClick={() => window.naiDesktop.openExternal(DOCS_URL)}><Icon name="help" /></button>
             <button
               type="button"
-              className={clsx("shell-icon-btn", editing && "active")}
-              aria-pressed={editing}
-              title={editing ? text.arrangeDone : text.arrange}
-              aria-label={editing ? text.arrangeDone : text.arrange}
+              className={clsx("shell-icon-btn", editing && !collapsed && "active")}
+              aria-pressed={editing && !collapsed}
+              title={editing && !collapsed ? text.arrangeDone : text.arrange}
+              aria-label={editing && !collapsed ? text.arrangeDone : text.arrange}
               onClick={() => { if (collapsed && !editing) setRailOpen(true); setEditing(!editing); }}
             >
               <Icon name="sliders" />
@@ -414,7 +361,7 @@ export function StudioNavRail() {
               aria-label={collapsed ? text.expand : text.collapse}
               aria-expanded={!collapsed}
               aria-keyshortcuts="Control+\"
-              onClick={toggleRailOpen}
+              onClick={() => { if (!collapsed && editing) setEditing(false); toggleRailOpen(); }}
             >
               <Icon name="chevronRight" className={clsx("shell-rail-collapse-icon", !collapsed && "is-open")} />
             </button>
@@ -683,8 +630,6 @@ export function CommandPalette() {
       { id: "act:tasks", label: text.actions.tasks, hint: "", group: text.cmdGroups.action, icon: "history", keywords: "tasks queue progress 任务 队列 进度", run: () => window.dispatchEvent(new Event(SHELL_EVENTS.tasks)) },
       { id: "act:history", label: text.actions.history, hint: "", group: text.cmdGroups.action, icon: "images", keywords: "history rail 历史 素材 右侧", run: () => { navigateTo("generate"); const s = useAppStore.getState(); s.setWsHistoryCollapsed(!s.wsHistoryCollapsed); } },
       { id: "act:rail", label: text.actions.rail, hint: "Ctrl+\\", group: text.cmdGroups.action, icon: "sliders", keywords: "navigation sidebar 侧栏 导航 展开 收起", run: toggleRail },
-      { id: "act:rail-dock", label: `${dt.pin} / ${dt.float} · ${dt.railTitle}`, hint: "", group: text.cmdGroups.action, icon: "pin", keywords: "dock pin float rail 停靠 悬浮 导航 侧栏", run: () => useDockStore.getState().toggleRailDocked() },
-      { id: "act:right-dock", label: `${dt.pin} / ${dt.float} · ${text.actions.history}`, hint: "", group: text.cmdGroups.action, icon: "pin", keywords: "dock pin float history 停靠 悬浮 历史 右侧", run: () => { const s = useAppStore.getState(); if (s.wsHistoryCollapsed) s.setWsHistoryCollapsed(false); useDockStore.getState().toggleRightDocked(); } },
       { id: "act:baseline", label: dt.resetBaseline, hint: "", group: text.cmdGroups.action, icon: "refresh", keywords: "baseline reset 基准 恢复 默认 面板", run: () => { useDockStore.getState().resetToBaseline(); const s = useAppStore.getState(); s.setWsWidth("left", 380); s.setWsWidth("right", 340); s.setWsHistoryCollapsed(true); s.saveWsWidths(); } },
       { id: "act:output", label: text.actions.output, hint: "", group: text.cmdGroups.action, icon: "folder", keywords: "output folder explorer 输出 目录 文件夹", run: openOutputDir },
       { id: "act:onboarding", label: text.actions.onboarding, hint: "", group: text.cmdGroups.action, icon: "help", keywords: "onboarding guide wizard 引导 教程", run: () => useAppStore.getState().setShowOnboarding(true) },

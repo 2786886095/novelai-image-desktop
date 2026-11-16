@@ -1,16 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
-import { Icon } from "../components/icons";
 import { AppPortal } from "../components/ui";
 import { motionReduced } from "../motion-system";
 import { useAppStore } from "../store";
 import { dockText, SUBPANEL_DEFAULT_WIDTH, useDockStore } from "./dock-state";
 
-/** Host element for dockable workbench sub-panels (character prompts, vibe
- *  transfer, precise references, advanced parameters). Panels can either float
- *  as a left-to-right drawer over the canvas edge (preserving baseline canvas
- *  width) or pin inline beside the parameter column with drag-to-resize. */
+/** Host element for workbench sub-panels (character prompts, vibe transfer,
+ *  precise references, advanced parameters). Slides smoothly from left to right
+ *  beside the parameter column and collapses leftward when closed. */
 const DockContext = createContext<HTMLElement | null>(null);
 
 export function WorkbenchDockProvider({ host, children }: { host: HTMLElement | null; children: ReactNode }) {
@@ -29,9 +27,7 @@ function closeDockedPanel(slot: HTMLElement) {
 export function WorkbenchDockPane({ onHost }: { onHost: (host: HTMLDivElement | null) => void }) {
   const language = useAppStore((s) => s.settings?.language);
   const dt = dockText(language);
-  const docked = useDockStore((s) => s.subpanelDocked);
   const width = useDockStore((s) => s.subpanelWidth);
-  const toggleDocked = useDockStore((s) => s.toggleSubpanelDocked);
   const setWidth = useDockStore((s) => s.setSubpanelWidth);
   const [hasContent, setHasContent] = useState(false);
   const [leavingHtml, setLeavingHtml] = useState<string | null>(null);
@@ -92,30 +88,14 @@ export function WorkbenchDockPane({ onHost }: { onHost: (host: HTMLDivElement | 
   return (
     <div
       className={clsx(
-        "workbench-dock-shell",
-        docked ? "is-docked" : "is-floating",
+        "workbench-dock-shell is-floating",
         hasContent && "is-open",
         !hasContent && leavingHtml && "is-leaving",
         !visible && "is-closed",
       )}
-      data-dock-mode={docked ? "docked" : "floating"}
       style={{ "--subpanel-w": `${width}px` } as CSSProperties}
       aria-hidden={!hasContent || undefined}
     >
-      {visible && (
-        <div className="workbench-dock-bar">
-          <button
-            type="button"
-            className={clsx("dock-pin-btn", docked && "is-pinned")}
-            aria-pressed={docked}
-            title={docked ? dt.unpinTip : dt.pinTip}
-            onClick={toggleDocked}
-          >
-            <Icon name="pin" />
-            <span>{docked ? dt.pinned : dt.pin}</span>
-          </button>
-        </div>
-      )}
       <div className="workbench-dock" ref={bindHost} />
       {!hasContent && leavingHtml ? (
         <div
@@ -159,7 +139,7 @@ export function WorkbenchDockPane({ onHost }: { onHost: (host: HTMLDivElement | 
   );
 }
 
-/** Drop-in replacement for AppPortal used by dockable workbench panels. */
+/** Drop-in replacement for AppPortal used by workbench sub-panels. */
 export function DockOrPortal({ children }: { children: ReactNode }) {
   const dock = useWorkbenchDock();
   if (!dock) return <AppPortal>{children}</AppPortal>;

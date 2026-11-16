@@ -272,11 +272,14 @@ html.theme-dark .studio-shell .left-panel > .panel-head {
   border-bottom: 1px solid var(--border) !important;
   background: var(--bg-panel) !important;
 }
-.studio-shell .left-panel > .panel-head > span {
-  background: var(--accent-soft);
-  color: var(--accent);
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
-  box-shadow: none;
+.studio-shell .left-panel > .panel-head > span,
+.studio-shell .reference-catalog-cloud-mark,
+.studio-shell .reference-catalog-series-icon,
+.studio-shell .tavern-avatar.is-software {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent) !important;
+  box-shadow: none !important;
 }
 
 /* Empty canvas */

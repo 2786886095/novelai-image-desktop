@@ -1,10 +1,10 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { useAppStore } from '../store';
-import { useDockStore } from '../shell/dock-state';
 import { historyRailText, HISTORY_MIN_WIDTH, HISTORY_MAX_WIDTH } from '../workspace-history';
 
-/** The handle remains mounted while dragging through zero width. The history
- * itself stays mounted, preserving filters, selection and virtual scroll. */
+/** When collapsed, renders only the top-right expand button (no drag-to-open
+ *  bar on the empty right edge). When expanded, sits on the LEFT border of the
+ *  opened right history panel as its width-resize splitter. */
 export function HistoryRailControls() {
   const collapsed = useAppStore(s => s.wsHistoryCollapsed);
   const width = useAppStore(s => s.wsRightWidth);
@@ -19,23 +19,27 @@ export function HistoryRailControls() {
   useEffect(() => {
     cancel();
     return cancel;
-  }, [activeTab]);
+  }, [activeTab, collapsed]);
+  const modified = !collapsed && width !== 340;
   return <div
-    className="ws-resizer right history-rail-control"
+    className={`ws-resizer right history-rail-control${collapsed ? ' is-collapsed' : ' is-open'}`}
+    data-collapsed={collapsed ? 'true' : 'false'}
+    data-modified={modified ? 'true' : 'false'}
     role="separator" tabIndex={0} aria-orientation="vertical"
     aria-label={text.resize} aria-controls="history-rail-pane"
     aria-valuemin={0} aria-valuemax={HISTORY_MAX_WIDTH}
-    aria-valuenow={collapsed ? 0 : width} title={text.resize}
+    aria-valuenow={collapsed ? 0 : width} title={collapsed ? undefined : text.resize}
     onPointerDown={event => {
-      if (event.button !== 0) return;
+      if (collapsed || event.button !== 0) return;
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
-      drag.current = { x: event.clientX, width: collapsed ? 0 : width };
-      useAppStore.getState().setWsHistoryDragWidth(drag.current.width);
+      drag.current = { x: event.clientX, width };
+      useAppStore.getState().setWsHistoryDragWidth(width);
     }}
     onPointerMove={event => {
       if (!drag.current) return;
-      useAppStore.getState().setWsHistoryDragWidth(drag.current.width + drag.current.x - event.clientX);
+      const next = Math.max(HISTORY_MIN_WIDTH, Math.min(HISTORY_MAX_WIDTH, drag.current.width + drag.current.x - event.clientX));
+      useAppStore.getState().setWsHistoryDragWidth(next);
     }}
     onPointerUp={event => {
       if (!drag.current) return;
@@ -45,6 +49,7 @@ export function HistoryRailControls() {
     }}
     onPointerCancel={cancel} onLostPointerCapture={cancel}
     onDoubleClick={() => {
+      if (collapsed) return;
       const state = useAppStore.getState();
       state.setWsWidth('right', 340);
       state.saveWsWidths();
@@ -54,13 +59,14 @@ export function HistoryRailControls() {
       const state = useAppStore.getState();
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault(); state.setWsHistoryCollapsed(!state.wsHistoryCollapsed);
-      } else if (event.key === 'ArrowLeft') {
-        event.preventDefault(); state.setWsWidth('right', state.wsHistoryCollapsed ? state.wsRightWidth : state.wsRightWidth + 24);
-        state.setWsHistoryCollapsed(false);
-      } else if (event.key === 'ArrowRight') {
+      } else if (event.key === 'ArrowLeft' && !state.wsHistoryCollapsed) {
         event.preventDefault();
-        if (state.wsRightWidth <= HISTORY_MIN_WIDTH) state.setWsHistoryCollapsed(true);
-        else { state.setWsWidth('right', state.wsRightWidth - 24); state.saveWsWidths(); }
+        state.setWsWidth('right', Math.min(HISTORY_MAX_WIDTH, state.wsRightWidth + 24));
+        state.saveWsWidths();
+      } else if (event.key === 'ArrowRight' && !state.wsHistoryCollapsed) {
+        event.preventDefault();
+        state.setWsWidth('right', Math.max(HISTORY_MIN_WIDTH, state.wsRightWidth - 24));
+        state.saveWsWidths();
       } else if (event.key === 'Escape') { event.preventDefault(); cancel(); }
     }}
   >
@@ -76,6 +82,23 @@ export function HistoryRailControls() {
       </svg>
     </button>
     <span className="ws-resizer-grip" />
+    {!collapsed && (
+      <button
+        type="button"
+        className="ws-resizer-reset"
+        title={text.resize}
+        aria-label={text.resize}
+        onPointerDown={event => event.stopPropagation()}
+        onClick={event => {
+          event.stopPropagation();
+          const state = useAppStore.getState();
+          state.setWsWidth('right', 340);
+          state.saveWsWidths();
+        }}
+      >
+        ↺
+      </button>
+    )}
   </div>;
 }
 
@@ -83,7 +106,6 @@ export function HistoryRailPane({ children }: { children: ReactNode }) {
   const collapsed = useAppStore(s => s.wsHistoryCollapsed);
   const dragWidth = useAppStore(s => s.wsHistoryDragWidth);
   const rightWidth = useAppStore(s => s.wsRightWidth);
-  const rightDocked = useDockStore(s => s.rightDocked);
   const hidden = dragWidth === null ? collapsed : dragWidth === 0;
   const activeWidth = dragWidth === null ? rightWidth : Math.max(HISTORY_MIN_WIDTH, dragWidth);
   const ref = useRef<HTMLDivElement>(null);
@@ -91,16 +113,9 @@ export function HistoryRailPane({ children }: { children: ReactNode }) {
   return <div
     ref={ref}
     id="history-rail-pane"
-    className={`history-rail ${rightDocked ? 'is-docked' : 'is-floating'}${hidden ? ' is-collapsed' : ' is-open'}`}
-    data-dock-mode={rightDocked ? 'docked' : 'floating'}
+    className={`history-rail is-docked${hidden ? ' is-collapsed' : ' is-open'}`}
     style={{ '--history-drawer-w': `${activeWidth}px` } as CSSProperties}
     aria-hidden={hidden}
-    onKeyDown={event => {
-      if (event.key !== 'Escape' || rightDocked || hidden || event.defaultPrevented || event.nativeEvent.isComposing) return;
-      if (document.querySelector('.select-menu-popover[data-disclosure-open="true"], .modal-backdrop, .app-confirm-backdrop, .history-action-menu')) return;
-      event.stopPropagation();
-      useAppStore.getState().setWsHistoryCollapsed(true);
-    }}
   >
     {children}
   </div>;

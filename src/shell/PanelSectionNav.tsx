@@ -32,6 +32,7 @@ export function PanelSectionNav() {
   const root = useRef<HTMLDivElement>(null);
   const [present, setPresent] = useState<SectionId[]>([]);
   const [current, setCurrent] = useState<SectionId | null>(null);
+  const manualPinRef = useRef<{ id: SectionId; clampedTop: number; until: number } | null>(null);
 
   const scroller = useCallback(() => root.current?.closest(".left-panel")?.querySelector<HTMLElement>(".panel-scroll") ?? null, []);
 
@@ -47,18 +48,31 @@ export function PanelSectionNav() {
         if (el !== scrollEl) {
           scrollEl?.removeEventListener("scroll", measure);
           scrollEl = el;
+          manualPinRef.current = null;
           scrollEl?.addEventListener("scroll", measure, { passive: true });
         }
         if (!el) { setPresent([]); return; }
         const found = SECTIONS.filter((section) => el.querySelector(section.selector)).map((section) => section.id);
         setPresent((previous) => (previous.join() === found.join() ? previous : found));
-        const top = el.getBoundingClientRect().top + 8;
+
+        const pin = manualPinRef.current;
+        if (pin && found.includes(pin.id)) {
+          if (performance.now() < pin.until || Math.abs(el.scrollTop - pin.clampedTop) <= 8) {
+            setCurrent(pin.id);
+            return;
+          }
+          manualPinRef.current = null;
+        }
+
+        const top = el.getBoundingClientRect().top + 12;
         let active: SectionId | null = found[0] ?? null;
         for (const id of found) {
           const target = el.querySelector<HTMLElement>(SECTIONS.find((section) => section.id === id)!.selector);
           if (target && target.getBoundingClientRect().top <= top + 4) active = id;
         }
-        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 4 && found.length) active = found[found.length - 1];
+        if (el.scrollHeight > el.clientHeight + 8 && el.scrollTop + el.clientHeight >= el.scrollHeight - 2 && found.length) {
+          active = found[found.length - 1];
+        }
         setCurrent(active);
       });
     };
@@ -81,9 +95,12 @@ export function PanelSectionNav() {
             const el = scroller();
             const target = el?.querySelector<HTMLElement>(SECTIONS.find((section) => section.id === id)!.selector);
             if (!el || !target) return;
-            const offset = target.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - 6;
-            el.scrollTo({ top: Math.max(0, offset), behavior: document.documentElement.classList.contains("motion-reduced") ? "auto" : "smooth" });
+            const rawOffset = target.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - 6;
+            const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
+            const clampedTop = Math.max(0, Math.min(maxScroll, rawOffset));
+            manualPinRef.current = { id, clampedTop, until: performance.now() + 700 };
             setCurrent(id);
+            el.scrollTo({ top: clampedTop, behavior: document.documentElement.classList.contains("motion-reduced") ? "auto" : "smooth" });
           }}
         >
           {labels[id]}

@@ -953,7 +953,7 @@ function recommendPreciseSize(w?: number, h?: number) {
   return { target, exact, padPercent };
 }
 
-export function VibeTransferModal({ onClose }: { onClose: () => void }) {
+export function VibeTransferModal({ onClose, focusSection }: { onClose: () => void; focusSection?: "vibe" | "precise" }) {
   const language = useAppStore((state) => state.settings?.language);
   const vibeImages = useAppStore((state) => state.vibeImages);
   const addVibeImage = useAppStore((state) => state.addVibeImage);
@@ -1053,10 +1053,26 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
     reader.readAsDataURL(file);
   }
 
+  const modalRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!focusSection) return;
+    const id = requestAnimationFrame(() => {
+      const target = modalRef.current?.querySelector<HTMLElement>(`[data-vibe-section="${focusSection}"]`);
+      const dock = modalRef.current?.closest<HTMLElement>(".workbench-dock");
+      if (target && dock) {
+        const offset = target.getBoundingClientRect().top - dock.getBoundingClientRect().top + dock.scrollTop - 8;
+        dock.scrollTo({ top: focusSection === "vibe" ? 0 : Math.max(0, offset), behavior: "smooth" });
+      } else {
+        target?.scrollIntoView({ block: "start", behavior: "smooth" });
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [focusSection]);
+
   return (
     <DockOrPortal>
       <div className="modal-backdrop">
-      <div className="modal vibe-modal">
+      <div ref={modalRef} className="modal vibe-modal">
         <header>
           <h2>{t("reference.title")}</h2>
           <div className="vibe-header-actions">
@@ -1065,7 +1081,7 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
           </div>
         </header>
         <div className="vibe-body">
-          <h3 className="vibe-section-title">
+          <h3 className="vibe-section-title" data-vibe-section="vibe">
             {t("reference.vibeTitle")}
             {!vibeSupported && <span className="vibe-hint">{t("reference.vibeUnsupportedV5")}</span>}
           </h3>
@@ -1109,7 +1125,7 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
             </div>
           ))}
 
-          <h3 className="vibe-section-title">
+          <h3 className="vibe-section-title" data-vibe-section="precise">
             {t("reference.preciseTitle")}
             {!preciseSupported && <span className="vibe-hint">{t("reference.preciseUnsupported")}</span>}
           </h3>
@@ -1703,7 +1719,39 @@ export function PromptAndParams({
   const refreshSettings = useAppStore((state) => state.refreshSettings);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showVibeModal, setShowVibeModal] = useState(false);
+  const [vibeSection, setVibeSection] = useState<"vibe" | "precise">("vibe");
   const [showCharModal, setShowCharModal] = useState(false);
+
+  const toggleCharModal = () => {
+    setShowCharModal((open) => {
+      const next = !open;
+      if (next) {
+        setShowVibeModal(false);
+        setShowAdvanced(false);
+      }
+      return next;
+    });
+  };
+  const toggleVibeModal = (target: "vibe" | "precise") => {
+    if (showVibeModal && vibeSection === target) {
+      setShowVibeModal(false);
+      return;
+    }
+    setShowCharModal(false);
+    setShowAdvanced(false);
+    setVibeSection(target);
+    setShowVibeModal(true);
+  };
+  const toggleAdvancedModal = () => {
+    setShowAdvanced((open) => {
+      const next = !open;
+      if (next) {
+        setShowCharModal(false);
+        setShowVibeModal(false);
+      }
+      return next;
+    });
+  };
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const templateMenuRef = useRef<HTMLDivElement>(null);
   const templateMenuPresent = useDisclosurePresence(showTemplateMenu, templateMenuRef);
@@ -2422,15 +2470,27 @@ export function PromptAndParams({
             )}
       </CapsuleEditor>}
       <div className="quick-actions" data-panel-section="refs">
-        <Button className={clsx("qf-ref-trigger", charCaptions.length > 0 && "has-count")} onClick={() => setShowCharModal(true)}>
+        <Button
+          className={clsx("qf-ref-trigger", charCaptions.length > 0 && "has-count", showCharModal && "is-panel-open")}
+          aria-expanded={showCharModal}
+          onClick={toggleCharModal}
+        >
           <IconText icon="♙">{generateText.prompt.characterPrompt}</IconText>
           {charCaptions.length > 0 ? <em className="qf-count-badge">{charCaptions.length}</em> : null}
         </Button>
-        <Button className={clsx("qf-ref-trigger", vibeImages.length > 0 && "has-count")} onClick={() => setShowVibeModal(true)}>
+        <Button
+          className={clsx("qf-ref-trigger", vibeImages.length > 0 && "has-count", showVibeModal && vibeSection === "vibe" && "is-panel-open")}
+          aria-expanded={showVibeModal && vibeSection === "vibe"}
+          onClick={() => toggleVibeModal("vibe")}
+        >
           <IconText icon="◒">{generateText.prompt.vibeTransfer}</IconText>
           {vibeImages.length > 0 ? <em className="qf-count-badge">{vibeImages.length}</em> : null}
         </Button>
-        <Button className={clsx("qf-ref-trigger", preciseRefCount > 0 && "has-count")} onClick={() => setShowVibeModal(true)}>
+        <Button
+          className={clsx("qf-ref-trigger", preciseRefCount > 0 && "has-count", showVibeModal && vibeSection === "precise" && "is-panel-open")}
+          aria-expanded={showVibeModal && vibeSection === "precise"}
+          onClick={() => toggleVibeModal("precise")}
+        >
           <IconText icon="◇">{generateText.prompt.preciseReference}</IconText>
           {preciseRefCount > 0 ? <em className="qf-count-badge">{preciseRefCount}</em> : null}
         </Button>
@@ -2644,13 +2704,17 @@ export function PromptAndParams({
           onClose={() => setStyleGroupPromptOpen(false)}
         />
       )}
-      <Button className="full prompt-advanced-button" onClick={() => setShowAdvanced(true)}>
+      <Button
+        className={clsx("full prompt-advanced-button", showAdvanced && "is-panel-open")}
+        aria-expanded={showAdvanced}
+        onClick={toggleAdvancedModal}
+      >
         <IconText icon="settings">{generateText.prompt.advancedParams.replace(/\.{2,}|…$/g, "").trim()}</IconText>
         <span className="advanced-summary">{advancedParamsSummary(params, settings?.language)}</span>
-        <Icon name="chevronRight" className="prompt-advanced-chevron" />
+        <Icon name="chevronRight" className={clsx("prompt-advanced-chevron", showAdvanced && "is-open")} />
       </Button>
       {showAdvanced && <AdvancedParamsModal onClose={() => setShowAdvanced(false)} />}
-      {showVibeModal && <VibeTransferModal onClose={() => setShowVibeModal(false)} />}
+      {showVibeModal && <VibeTransferModal focusSection={vibeSection} onClose={() => setShowVibeModal(false)} />}
       {showCharModal && <CharCaptionsModal onClose={() => setShowCharModal(false)} />}
       {showNormalize && (
         <PromptNormalizeModal
@@ -4458,17 +4522,13 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
   }, [activeTab, currentImage?.filePath, generateMode, loadWorkbenchFromPath, workbenchImage]);
   const dt = dockText(language);
   const leftCollapsed = useDockStore((state) => state.leftCollapsed);
-  const leftDocked = useDockStore((state) => state.leftDocked);
   const toggleLeftCollapsed = useDockStore((state) => state.toggleLeftCollapsed);
-  const toggleLeftDocked = useDockStore((state) => state.toggleLeftDocked);
   return (
     <aside
       className={clsx(
-        "left-panel",
-        leftDocked ? "is-docked" : "is-floating",
+        "left-panel is-docked",
         leftCollapsed ? "is-collapsed" : "is-open",
       )}
-      data-dock-mode={leftDocked ? "docked" : "floating"}
       aria-hidden={leftCollapsed || undefined}
       inert={leftCollapsed || undefined}
     >
@@ -4479,16 +4539,6 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
           <small>{meta.desc}</small>
         </div>
         <div className="panel-head-actions">
-          <button
-            type="button"
-            className={clsx("dock-pin-btn", leftDocked && "is-pinned")}
-            aria-pressed={leftDocked}
-            title={leftDocked ? dt.unpinTip : dt.pinTip}
-            onClick={toggleLeftDocked}
-          >
-            <Icon name="pin" />
-            <span>{leftDocked ? dt.pinned : dt.float}</span>
-          </button>
           <button
             type="button"
             className="shell-icon-btn left-panel-collapse-btn"
@@ -5765,8 +5815,6 @@ function HistoryPanel() {
   );
 
   const dt = dockText(language);
-  const rightDocked = useDockStore((state) => state.rightDocked);
-  const toggleRightDocked = useDockStore((state) => state.toggleRightDocked);
 
   return (
     <aside className="history-panel">
@@ -5776,16 +5824,6 @@ function HistoryPanel() {
           <small>{history.length > 0 ? f("history.count", { count: history.length }) : t("history.emptySubtitle")}</small>
         </div>
         <div className="history-title-actions">
-          <button
-            type="button"
-            className={clsx("dock-pin-btn", rightDocked && "is-pinned")}
-            aria-pressed={rightDocked}
-            title={rightDocked ? dt.unpinTip : dt.pinTip}
-            onClick={toggleRightDocked}
-          >
-            <Icon name="pin" />
-            <span>{rightDocked ? dt.pinned : dt.pin}</span>
-          </button>
           <button
             type="button"
             className="shell-icon-btn history-panel-close-btn"
@@ -7485,13 +7523,11 @@ function MainPage() {
   const wsHistoryCollapsed = useAppStore((state) => state.wsHistoryCollapsed);
   const wsHistoryDragWidth = useAppStore((state) => state.wsHistoryDragWidth);
   const leftCollapsed = useDockStore((state) => state.leftCollapsed);
-  const leftDocked = useDockStore((state) => state.leftDocked);
-  const rightDocked = useDockStore((state) => state.rightDocked);
   const dt = dockText(language);
-  const displayedLeftWidth = leftDocked && !leftCollapsed ? wsLeftWidth : 0;
-  const displayedHistoryWidth = rightDocked
-    ? (wsHistoryDragWidth ?? (wsHistoryCollapsed ? 0 : wsRightWidth))
-    : 0;
+  const displayedLeftWidth = leftCollapsed ? 0 : wsLeftWidth;
+  const displayedHistoryWidth = wsHistoryDragWidth === null
+    ? (wsHistoryCollapsed ? 0 : wsRightWidth)
+    : wsHistoryDragWidth;
   const uiCaptureParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const uiCaptureTheme = uiCaptureParams.get("uiTheme");
   // Final render-boundary guard: even if a future IPC path forgets to sanitize
@@ -7613,15 +7649,12 @@ function MainPage() {
           <div
             className="workspace"
             data-left-collapsed={leftCollapsed}
-            data-left-dock={leftDocked ? "docked" : "floating"}
-            data-right-dock={rightDocked ? "docked" : "floating"}
             data-history-collapsed={wsHistoryCollapsed}
             data-history-resizing={wsHistoryDragWidth !== null}
             aria-hidden={showSettings || undefined}
             inert={showSettings || undefined}
             style={{
               "--ws-left": `${displayedLeftWidth}px`,
-              "--ws-left-floating": `${wsLeftWidth}px`,
               "--ws-right": `${displayedHistoryWidth}px`,
             } as CSSProperties}
           >
