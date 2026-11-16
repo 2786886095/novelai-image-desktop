@@ -225,6 +225,34 @@ export function StudioNavRail() {
     if (collapsed && editing) setEditing(false);
   }, [collapsed, editing]);
 
+  // Left navigation opens as a floating popover card: click outside or press Escape to close.
+  useEffect(() => {
+    if (!railOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target || navRef.current?.contains(target)) return;
+      if (target.closest(".app-confirm-backdrop, .modal-backdrop, .select-menu-popover")) return;
+      if (editing) setEditing(false);
+      setRailOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        if (editing) setEditing(false);
+        setRailOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [editing, railOpen, setRailOpen]);
+
+  const closeFloatingRail = () => {
+    if (railOpen && !editing) setRailOpen(false);
+  };
+
   const persist = (next: ActiveTab[]) => {
     try { saveTabOrder(next); setOrder(normalizeTabOrder(next)); }
     catch { useAppStore.getState().setToast(text.arrangeHelp); }
@@ -242,11 +270,11 @@ export function StudioNavRail() {
   const railDragRef = useRef<{ startX: number; open: boolean } | null>(null);
 
   return (
-    <div className={clsx("shell-rail-slot", railOpen && "is-docked")}>
+    <div className={clsx("shell-rail-slot", railOpen && "is-popover-open")}>
       <nav
         ref={navRef}
         className={clsx(
-          "shell-rail is-docked",
+          "shell-rail is-floating-popover",
           collapsed ? "is-collapsed" : "is-open",
           editing && !collapsed && "is-editing",
         )}
@@ -284,7 +312,7 @@ export function StudioNavRail() {
                           focusSibling(event.currentTarget, event.key === "ArrowDown" ? 1 : -1);
                         } else if (event.key === "Escape" && editing) setEditing(false);
                       }}
-                      onClick={() => { if (!editing) navigateTo(tab); }}
+                      onClick={() => { if (!editing) { navigateTo(tab); closeFloatingRail(); } }}
                     >
                       <span className="shell-rail-icon"><Icon name={item.icon} /></span>
                       <span className="shell-rail-label">{item.label}</span>
@@ -307,7 +335,7 @@ export function StudioNavRail() {
                               className="shell-rail-subitem"
                               title={text.tools[tool.id]}
                               onKeyDown={(event) => { if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); focusSibling(event.currentTarget, event.key === "ArrowDown" ? 1 : -1); } }}
-                              onClick={() => openTool(tool.id)}
+                              onClick={() => { openTool(tool.id); closeFloatingRail(); }}
                             >
                               <span className="shell-subitem-icon" aria-hidden="true"><Icon name={tool.icon} /></span>
                               <span>{text.tools[tool.id]}</span>
@@ -338,6 +366,7 @@ export function StudioNavRail() {
             onClick={() => {
               if (showSettings) useAppStore.getState().setShowSettings(false);
               else openSettings();
+              closeFloatingRail();
             }}
           >
             <span className="shell-rail-icon"><Icon name="settings" /></span>

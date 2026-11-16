@@ -202,7 +202,7 @@ html body button.shell-icon-btn:disabled { opacity: .45; cursor: default; }
 .studio-shell .shell-topbar .window-controls { min-width: 138px; height: 100%; display: flex; flex: none; }
 .studio-shell .shell-topbar .window-controls button { height: 100%; width: 46px; border-radius: 0; }
 
-/* ── Body & Dockable Left Navigation Rail ──────────────────────────────── */
+/* ── Body & Left Navigation Floating Popover (`悬浮弹窗`) ──────────────── */
 .shell-body { position: relative; display: flex; flex: 1 1 auto; min-height: 0; min-width: 0; }
 
 .shell-rail-slot {
@@ -210,11 +210,12 @@ html body button.shell-icon-btn:disabled { opacity: .45; cursor: default; }
   flex: none;
   width: var(--shell-rail-collapsed-w);
   min-height: 0;
+  background: var(--rail-bg);
+  border-right: 1px solid var(--border);
   z-index: calc(var(--z-sticky) + 4);
-  transition: width 220ms var(--qf-spring);
 }
-.shell-rail-slot.is-docked {
-  width: var(--shell-rail-w);
+.shell-rail-slot.is-popover-open {
+  z-index: calc(var(--z-overlay) - 2);
 }
 
 .shell-rail {
@@ -227,28 +228,44 @@ html body button.shell-icon-btn:disabled { opacity: .45; cursor: default; }
   width: var(--shell-rail-collapsed-w);
   min-height: 0;
   background: var(--rail-bg);
-  border-right: 1px solid var(--border);
+  border: 1px solid transparent;
+  border-right-color: var(--border);
+  border-radius: 0;
+  box-shadow: none;
   overflow: hidden;
   transition:
     width 220ms var(--qf-spring),
+    top 200ms var(--qf-spring),
+    bottom 200ms var(--qf-spring),
+    left 200ms var(--qf-spring),
+    border-radius 200ms var(--qf-spring),
+    box-shadow 200ms var(--qf-ease-out),
     background-color 160ms ease,
     border-color 160ms ease;
 }
+.shell-rail.is-floating-popover.is-open {
+  top: 8px;
+  bottom: 8px;
+  left: 8px;
+  width: var(--shell-rail-w);
+  background: var(--bg-dialog);
+  border-color: var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+}
 .shell-rail-resizer {
   position: absolute;
-  top: 0;
+  top: 12px;
   right: 0;
-  bottom: 0;
+  bottom: 12px;
   width: 5px;
+  border-radius: 999px;
   cursor: col-resize;
   z-index: 4;
   transition: background-color 140ms ease;
 }
-.shell-rail-resizer:hover {
+.shell-rail.is-open .shell-rail-resizer:hover {
   background: color-mix(in srgb, var(--detection, var(--accent)) 55%, transparent);
-}
-.shell-rail.is-open {
-  width: var(--shell-rail-w);
 }
 
 .shell-rail-scroll {
@@ -417,8 +434,13 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
 .shell-rail.is-collapsed .shell-rail-utility { flex-direction: column; }
 .shell-rail-collapse-icon { transition: transform 220ms var(--qf-spring); }
 .shell-rail-collapse-icon.is-open { transform: rotate(180deg); }
+html body button.shell-icon-btn.shell-rail-expand-btn.active {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 36%, transparent);
+  color: var(--accent);
+}
 
-/* ── Main area & Dockable Workspace Columns ────────────────────────────── */
+/* ── Main area & Baseline Workspace Columns ────────────────────────────── */
 .shell-main {
   position: relative;
   display: flex;
@@ -433,133 +455,58 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
   flex: 1 1 auto;
   min-height: 0;
   --ws-handle: 12px;
-  --ws-right-handle: 12px;
+  --ws-right-handle: 40px;
   grid-template-columns:
     var(--ws-left, 380px)
     var(--ws-handle, 12px)
     minmax(220px, 1fr)
-    var(--ws-right-handle, 12px)
+    var(--ws-right-handle, 40px)
     var(--ws-right, 0px);
   transition: grid-template-columns 220ms var(--qf-spring);
 }
 .studio-shell .shell-main > .workspace[data-left-collapsed="true"] {
   --ws-handle: 8px;
 }
-.studio-shell .shell-main > .workspace[data-left-floating="true"] {
-  --ws-handle: 0px;
-}
 .studio-shell .shell-main > .workspace[data-history-collapsed="true"] {
   --ws-right-handle: 40px;
-}
-.studio-shell .shell-main > .workspace[data-right-floating="true"] {
-  --ws-right-handle: 0px;
 }
 .studio-shell .shell-main > .workspace[data-history-resizing="true"],
 .studio-shell .shell-main > .workspace[data-left-resizing="true"] {
   transition: none !important;
 }
-/* Explicit grid tracks so detaching any panel to `position: fixed/absolute` never shifts sibling columns */
+/* Explicit grid tracks so out-of-flow floating popovers never shift sibling columns */
 .studio-shell .workspace .left-panel.is-docked { grid-column: 1; grid-row: 1; }
 .studio-shell .workspace .ws-resizer.left { grid-column: 2; grid-row: 1; }
 .studio-shell .workspace .persistent-canvas-host { grid-column: 3; grid-row: 1; }
 .studio-shell .workspace .history-rail-control { grid-column: 4; grid-row: 1; }
-.studio-shell .workspace .history-rail.is-docked { grid-column: 5; grid-row: 1; }
 .studio-shell .persistent-workbench-view {
   position: relative;
+}
+.studio-shell .persistent-workbench-view.is-active {
+  overflow: visible;
 }
 .studio-shell .status-bar { flex: none; }
 .studio-shell .app-notice-slot:empty { display: none; }
 
-/* ── Magnetic Snap-Dock Dropzone Indicator & Draggable Headers ─────────── */
-.qf-dock-snap-overlay {
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  z-index: calc(var(--z-overlay) - 2);
-  display: grid;
-  place-items: center;
-  border: 2px dashed var(--detection, var(--accent));
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--detection, var(--accent)) 11%, transparent);
-  pointer-events: none;
-  animation: qf-snap-zone-in 150ms var(--qf-spring);
-}
-.qf-dock-snap-overlay.zone-left {
-  left: 8px;
-  width: 360px;
-}
-.qf-dock-snap-overlay.zone-right {
-  right: 8px;
-  width: 340px;
-}
-.qf-dock-snap-overlay.zone-subpanel {
-  left: calc(var(--ws-left, 380px) + var(--ws-handle, 12px) + 4px);
-  width: 348px;
-}
-.qf-dock-snap-pill {
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: #ffffff;
-  font-size: 12px;
-  box-shadow: var(--shadow-md);
-  white-space: nowrap;
-}
-@keyframes qf-snap-zone-in {
-  from { opacity: 0; transform: scale(0.97); }
-  to   { opacity: 1; transform: scale(1); }
-}
-
-.qf-draggable-header,
-.workbench-dock .modal-backdrop > .modal > header {
-  position: relative;
-  cursor: grab;
-  user-select: none;
-}
-.qf-draggable-header:active,
-.workbench-dock .modal-backdrop > .modal > header:active {
-  cursor: grabbing;
-}
-.qf-draggable-header::before,
-.workbench-dock .modal-backdrop > .modal > header::before {
-  content: "";
-  position: absolute;
-  top: 4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 28px;
-  height: 3px;
-  border-radius: 999px;
-  background: var(--border-strong);
-  opacity: 0.45;
-  pointer-events: none;
-  transition: opacity 150ms ease, width 170ms var(--qf-spring), background-color 150ms ease;
-}
-.qf-draggable-header:hover::before,
-.workbench-dock .modal-backdrop > .modal > header:hover::before {
-  opacity: 1;
-  width: 36px;
-  background: var(--detection, var(--accent));
-}
-
+/* ── Floating Popover Edge Resizer ─────────────────────────────────────── */
 .floating-edge-resizer {
   position: absolute;
-  top: 8px;
-  bottom: 8px;
+  top: 10px;
+  bottom: 10px;
   width: 10px;
   z-index: 6;
   cursor: col-resize;
   display: grid;
   place-items: center;
 }
-.floating-edge-resizer.left { left: -2px; }
-.floating-edge-resizer.right { right: -2px; }
+.floating-edge-resizer.left { left: 0; }
+.floating-edge-resizer.right { right: 0; }
 .floating-edge-resizer .ws-resizer-grip {
   width: 2.5px;
   height: 34px;
   border-radius: 2px;
   background: var(--border-strong);
-  opacity: 0.55;
+  opacity: 0.45;
   transition: opacity 140ms ease, background-color 140ms ease;
 }
 .floating-edge-resizer:hover .ws-resizer-grip {
@@ -567,7 +514,7 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
   background: var(--detection, var(--accent));
 }
 
-/* ── Symmetrical Left & Right Floating-Dockable Panels ─────────────────── */
+/* ── Baseline Left Parameter Panel & Collapsed Strip ───────────────────── */
 .studio-shell .left-panel {
   position: relative;
   overflow: hidden;
@@ -576,28 +523,6 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
     border-color 180ms ease,
     box-shadow 180ms var(--qf-spring);
 }
-.studio-shell .left-panel.is-peek-open {
-  overflow: visible !important;
-  z-index: calc(var(--z-raised) + 6);
-}
-.studio-shell .left-panel.is-free-floating {
-  position: fixed !important;
-  z-index: calc(var(--z-overlay) - 4);
-  border-color: var(--border-strong) !important;
-  box-shadow: var(--shadow-lg) !important;
-  animation: qf-float-detach 180ms var(--qf-spring);
-}
-.studio-shell .left-panel[data-dragging-float="true"],
-.studio-shell .history-rail[data-dragging-float="true"],
-.workbench-dock-shell[data-dragging-float="true"] {
-  transition: none !important;
-  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.22) !important;
-}
-@keyframes qf-float-detach {
-  from { transform: scale(0.985); }
-  to   { transform: scale(1); }
-}
-
 .studio-shell .left-panel-inner {
   display: flex;
   flex-direction: column;
@@ -610,27 +535,10 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
   transform: translateX(0);
   transition: opacity 160ms var(--qf-ease-out), transform 220ms var(--qf-spring);
 }
-.studio-shell .left-panel.is-collapsed > .left-panel-inner:not(.is-peek-floating) {
+.studio-shell .left-panel.is-collapsed > .left-panel-inner {
   opacity: 0;
   transform: translateX(-16px);
   pointer-events: none;
-}
-.studio-shell .left-panel-inner.is-peek-floating {
-  position: absolute;
-  left: 42px;
-  top: 0;
-  bottom: 0;
-  width: var(--left-peek-w, 380px);
-  z-index: calc(var(--z-raised) + 6);
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  opacity: 1;
-  transform: translateX(0);
-  pointer-events: auto;
-  overflow: hidden;
-  animation: qf-panel-slide-right 210ms var(--qf-spring);
 }
 .studio-shell .left-panel-mode-stage {
   display: flex;
@@ -644,15 +552,14 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
   from { opacity: 0; transform: translateY(5px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.studio-shell .workspace[data-left-collapsed="true"] .ws-resizer.left,
-.studio-shell .workspace[data-left-floating="true"] .ws-resizer.left {
+.studio-shell .workspace[data-left-collapsed="true"] .ws-resizer.left {
   width: 0;
   opacity: 0;
   pointer-events: none;
   overflow: hidden;
 }
 
-/* Collapsed Left Dock Strip (symmetrical with Right Dock Strip) */
+/* Collapsed Left Dock Strip (symmetrical with Right Trigger Strip) */
 .studio-shell .left-panel.left-dock-strip {
   padding: 0 !important;
   cursor: pointer;
@@ -678,7 +585,7 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
   flex: none;
 }
 
-/* Shared Vertical Dock Tab inside Left & Right Collapsed Dock Strips */
+/* Shared Vertical Tab inside Left & Right Strips */
 html body button.dock-strip-tab {
   display: flex !important;
   flex-direction: column !important;
@@ -698,10 +605,13 @@ html body button.dock-strip-tab {
     color 160ms var(--qf-ease-out),
     transform 160ms var(--qf-spring) !important;
 }
-html body button.dock-strip-tab:hover {
+html body button.dock-strip-tab:hover,
+html body button.dock-strip-tab.active {
   background: var(--accent-soft);
-  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
   color: var(--accent);
+}
+html body button.dock-strip-tab:hover {
   transform: translateY(-1px);
 }
 html body button.dock-strip-tab:active {
@@ -735,65 +645,54 @@ html body button.dock-strip-tab:active {
   text-align: center;
 }
 
-/* Right History Panel: Hover-Peek Floating, Free-Floating, & Docked Modes */
-.studio-shell .history-rail.is-docked {
-  min-width: 0;
-  min-height: 0;
+/* ── Right History & Materials Floating Popover (`悬浮弹窗`) ───────────── */
+.studio-shell .history-rail.is-floating-popover {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  right: 48px;
+  width: min(var(--history-drawer-w, 340px), calc(100% - 64px));
+  z-index: calc(var(--z-raised) + 6);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-dialog);
+  box-shadow: var(--shadow-xl);
   overflow: hidden;
+  transform-origin: right center;
 }
-.studio-shell .history-rail.is-docked > .history-panel {
+.studio-shell .history-rail.is-floating-popover > .history-panel {
   width: 100%;
   min-width: 220px;
   height: 100%;
-  transform: translateX(0);
+  border: 0 !important;
+  border-radius: inherit;
+  background: var(--bg-dialog) !important;
+  box-shadow: none !important;
+}
+.studio-shell .history-rail.is-floating-popover.is-open {
   opacity: 1;
-  transition: transform 220ms var(--qf-spring), opacity 170ms var(--qf-ease-out);
+  transform: translateX(0) scale(1);
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    transform 220ms var(--qf-spring),
+    opacity 170ms var(--qf-ease-out),
+    visibility 0s;
 }
-.studio-shell .history-rail.is-docked.is-collapsed > .history-panel {
-  transform: translateX(20px);
+.studio-shell .history-rail.is-floating-popover.is-collapsed {
   opacity: 0;
-}
-
-.studio-shell .history-rail.is-peek-floating {
-  position: absolute;
-  right: 52px;
-  top: 8px;
-  bottom: 8px;
-  width: min(var(--history-drawer-w, 340px), calc(100% - 68px));
-  z-index: calc(var(--z-raised) + 6);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-  animation: qf-peek-right-in 210ms var(--qf-spring);
-}
-.studio-shell .history-rail.is-peek-floating > .history-panel,
-.studio-shell .history-rail.is-free-floating > .history-panel {
-  width: 100%;
-  height: 100%;
-  border-color: var(--border-strong) !important;
-}
-.studio-shell .history-rail.is-free-floating {
-  position: fixed !important;
-  z-index: calc(var(--z-overlay) - 4);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-  animation: qf-float-detach 180ms var(--qf-spring);
-}
-@keyframes qf-peek-right-in {
-  from { opacity: 0; transform: translateX(18px); }
-  to   { opacity: 1; transform: translateX(0); }
+  transform: translateX(18px) scale(0.985);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform 170ms var(--qf-ease-in),
+    opacity 135ms linear,
+    visibility 0s 175ms;
 }
 
 .studio-shell .history-rail-control {
   position: relative;
   z-index: calc(var(--z-raised) + 3);
-}
-.studio-shell .history-rail-control.is-floating-detached {
-  width: 0 !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-  overflow: hidden !important;
 }
 .studio-shell .history-rail-control.right-dock-strip {
   display: flex !important;
@@ -807,10 +706,16 @@ html body button.dock-strip-tab:active {
   border: 1px solid var(--border) !important;
   border-radius: var(--radius-lg);
   cursor: pointer !important;
-  transition: border-color 160ms var(--qf-ease-out), background-color 160ms ease;
+  transition: border-color 160ms var(--qf-ease-out), background-color 160ms ease, box-shadow 160ms ease;
 }
-.studio-shell .history-rail-control.right-dock-strip:hover {
+.studio-shell .history-rail-control.right-dock-strip:hover,
+.studio-shell .history-rail-control.right-dock-strip.is-popover-active {
   border-color: var(--detection, var(--accent)) !important;
+}
+.studio-shell .history-rail-control.right-dock-strip.is-popover-active .history-rail-toggle {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent) !important;
+  color: var(--accent) !important;
+  background: var(--accent-soft) !important;
 }
 .studio-shell .history-rail-control.right-dock-strip .history-rail-toggle {
   position: static !important;
@@ -818,21 +723,9 @@ html body button.dock-strip-tab:active {
   margin: 0 !important;
   flex: none;
 }
-.studio-shell .history-rail-control.is-collapsed .ws-resizer-grip {
+.studio-shell .history-rail-control .ws-resizer-grip {
   display: none !important;
   opacity: 0 !important;
-}
-.studio-shell .history-rail-control.is-open {
-  cursor: col-resize !important;
-}
-.studio-shell .history-rail-control.is-open .history-rail-toggle {
-  opacity: 0 !important;
-  pointer-events: none !important;
-  width: 0 !important;
-  height: 0 !important;
-  padding: 0 !important;
-  border-width: 0 !important;
-  overflow: hidden !important;
 }
 .studio-shell .history-title {
   display: flex !important;
@@ -1163,10 +1056,10 @@ html body .studio-shell button.prompt-advanced-button {
   min-width: 0;
 }
 
-/* Floating Sub-Panel Mode (default: floats beside left panel without squeezing canvas; draggable anywhere) */
+/* Left Sub-Panel Floating Popover (`悬浮弹窗` beside parameter column) */
 .workbench-dock-shell.is-floating {
   position: absolute;
-  left: 4px;
+  left: 6px;
   top: 4px;
   bottom: 4px;
   width: min(var(--subpanel-w, 368px), calc(100% - 16px));
@@ -1174,15 +1067,9 @@ html body .studio-shell button.prompt-advanced-button {
   padding: 8px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
-  background: var(--bg-panel);
-  box-shadow: var(--shadow-lg);
+  background: var(--bg-dialog);
+  box-shadow: var(--shadow-xl);
   overflow: hidden;
-}
-.workbench-dock-shell.is-floating.is-free-floating {
-  position: fixed !important;
-  bottom: auto;
-  max-height: calc(100vh - 76px);
-  z-index: calc(var(--z-overlay) - 3);
 }
 .workbench-dock-shell.is-floating.is-open {
   animation: qf-panel-slide-right 220ms var(--qf-spring) both;
@@ -1194,48 +1081,7 @@ html body .studio-shell button.prompt-advanced-button {
 .workbench-dock-shell.is-floating.is-closed {
   display: none !important;
 }
-
-/* Docked Inline Sub-Panel (magnetic-snapped beside parameter column) */
-.workbench-dock-shell.is-docked {
-  position: relative;
-  flex: none;
-  width: clamp(280px, var(--subpanel-w, 356px), 42%);
-  margin-right: 10px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--bg-panel);
-  opacity: 1;
-  transform: translateX(0);
-  overflow: hidden;
-  transition:
-    width 220ms var(--qf-spring),
-    margin-right 220ms var(--qf-spring),
-    padding 220ms var(--qf-spring),
-    opacity 170ms var(--qf-ease-out),
-    transform 220ms var(--qf-spring),
-    border-color 150ms ease;
-}
-.workbench-dock-shell.is-docked.is-open {
-  animation: qf-dock-expand-right 220ms var(--qf-spring) both;
-}
-.workbench-dock-shell.is-docked.is-closing,
-.workbench-dock-shell.is-docked.is-closed {
-  width: 0 !important;
-  margin-right: 0 !important;
-  padding-inline: 0 !important;
-  border-width: 0 !important;
-  opacity: 0;
-  transform: translateX(-16px);
-  pointer-events: none;
-  transition:
-    width 175ms var(--qf-ease-in),
-    margin-right 175ms var(--qf-ease-in),
-    padding 175ms var(--qf-ease-in),
-    opacity 140ms linear,
-    transform 175ms var(--qf-ease-in);
-}
-.workbench-dock-shell.is-docked.is-resizing {
+.workbench-dock-shell.is-floating.is-resizing {
   transition: none !important;
   animation: none !important;
 }
@@ -1707,12 +1553,12 @@ html body .shell-palette button.shell-palette-item.active .shell-palette-item-ic
 
 /* ── Directional Keyframes ─────────────────────────────────────────────── */
 @keyframes qf-panel-slide-right {
-  from { opacity: 0; transform: translateX(-20px); clip-path: inset(0 6% 0 0 round 12px); }
-  to   { opacity: 1; transform: translateX(0); clip-path: inset(0 0 0 0 round 12px); }
+  from { opacity: 0; transform: translateX(-18px) scale(0.985); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
 }
 @keyframes qf-panel-exit-left {
-  from { opacity: 1; transform: translateX(0); }
-  to   { opacity: 0; transform: translateX(-18px); }
+  from { opacity: 1; transform: translateX(0) scale(1); }
+  to   { opacity: 0; transform: translateX(-16px) scale(0.985); }
 }
 @keyframes qf-dock-expand-right {
   from { opacity: 0; transform: translateX(-14px); }
