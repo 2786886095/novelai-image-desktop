@@ -4552,6 +4552,7 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
           }}
           onPointerUp={() => { stripDragRef.current = null; }}
           onPointerCancel={() => { stripDragRef.current = null; }}
+          onClick={() => setLeftCollapsed(false)}
         >
           <button
             type="button"

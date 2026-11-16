@@ -25,6 +25,7 @@ export function HistoryRailControls() {
   const text = historyRailText(language);
   const shortLabel = dockStripShortLabel(language);
   const dragStartRef = useRef<{ x: number; moved: boolean } | null>(null);
+  const suppressNextClickRef = useRef(false);
   const toggleOpen = () => {
     const state = useAppStore.getState();
     state.setWsHistoryCollapsed(!state.wsHistoryCollapsed);
@@ -38,6 +39,7 @@ export function HistoryRailControls() {
     aria-valuenow={collapsed ? 0 : width} title={collapsed ? text.show : text.hide}
     onPointerDown={event => {
       if (event.button !== 0) return;
+      suppressNextClickRef.current = false;
       dragStartRef.current = { x: event.clientX, moved: false };
       event.currentTarget.setPointerCapture(event.pointerId);
     }}
@@ -46,23 +48,28 @@ export function HistoryRailControls() {
       const dx = event.clientX - dragStartRef.current.x;
       if (dx < -28 && useAppStore.getState().wsHistoryCollapsed) {
         dragStartRef.current.moved = true;
+        suppressNextClickRef.current = true;
         useAppStore.getState().setWsHistoryCollapsed(false);
       } else if (dx > 28 && !useAppStore.getState().wsHistoryCollapsed) {
         dragStartRef.current.moved = true;
+        suppressNextClickRef.current = true;
         useAppStore.getState().setWsHistoryCollapsed(true);
       }
     }}
     onPointerUp={event => {
-      const moved = dragStartRef.current?.moved ?? false;
       dragStartRef.current = null;
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
-      if (!moved && event.button === 0) {
-        toggleOpen();
-      }
     }}
     onPointerCancel={() => { dragStartRef.current = null; }}
+    onClick={() => {
+      if (suppressNextClickRef.current) {
+        suppressNextClickRef.current = false;
+        return;
+      }
+      toggleOpen();
+    }}
     onKeyDown={event => {
       if (event.target !== event.currentTarget) return;
       if (event.key === 'Enter' || event.key === ' ') {
