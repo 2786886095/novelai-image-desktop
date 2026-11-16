@@ -10,6 +10,10 @@ import { estimateOpusImages, estimateOpusUsagePercent } from "./anlas";
 import { EffortControl, effortText } from "./components/EffortControl";
 import {TypographySettings} from './components/TypographySettings';
 import {useGlobalTypography} from './global-typography';
+import { useDesktopLayout, setDesktopLayout, desktopLayoutLabels } from "./shell/desktop-layout";
+import { HistoryRailControls as ClassicHistoryRailControls, HistoryRailPane as ClassicHistoryRailPane } from "./components/ClassicHistoryRail";
+import { AppMenuBar, AppTitleBar } from "./app/AppChrome";
+import AppTabBar from "./app/AppTabBar";
 import { HistoryRailControls, HistoryRailPane } from './components/HistoryRailControls';
 import {TranslationPreview} from './components/TranslationPreview';
 import {TRANSLATION_LANGUAGES,translationEditorText,normalizeTranslationPreference,translationText} from './translation';
@@ -121,8 +125,12 @@ import { confirmAction } from "./components/confirm";
 import {CharacterPresetControls} from './components/CharacterPresetControls';
 import {CharacterNameControl} from './components/CharacterNameControl';
 import { Icon, type IconName } from "./components/icons";
-import { AppMenuBar, AppTitleBar } from "./app/AppChrome";
-import AppTabBar from "./app/AppTabBar";
+import { CommandPalette, GenerationProgressLine, LayoutNotice, StudioNavRail, StudioTopBar, useRailCollapsed } from "./shell/StudioShell";
+import { DockOrPortal, useDeferredPanelPresence, WorkbenchDockPane, WorkbenchDockProvider } from "./shell/WorkbenchDock";
+import { dockText, ensureBaselineWorkspace, useDockStore } from "./shell/dock-state";
+import { shellText } from "./shell/shell-text";
+import { PanelSectionNav } from "./shell/PanelSectionNav";
+import { applyImageParameters } from "./apply-image-parameters";
 import {WorksLibrary} from "./components/WorksLibrary";
 import {GalleryFavoritesLibrary} from "./components/GalleryFavorites";
 import { isActiveTab } from "./app/navigation";
@@ -757,7 +765,26 @@ function QualityAndTransparencyControls({ compact = false }: { compact?: boolean
 }
 
 // ── Advanced params modal ─────────────────────────────────────────────────────
-function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
+/** One-line summary of the layered advanced parameters, shown on its button so
+ *  the common values are visible without opening the panel. */
+function stripSummaryParens(label: string) {
+  return label.replace(/\s*[（(][^）)]*[）)]/g, "").trim();
+}
+
+function advancedParamsSummary(stored: GenerateParams, language: unknown) {
+  const params = effectiveNAIEffortParams(stored);
+  const sampler = NAI_SAMPLERS.find((item) => item.value === params.sampler);
+  const stepsLabel = stripSummaryParens(desktopUiText(language, "advanced.steps")) || "Steps";
+  const samplerLabel = stripSummaryParens(localizedDesktopOptionLabel(language, params.sampler, sampler?.label ?? String(params.sampler)));
+  const parts = [
+    isNAIMediumEffort(stored) ? "" : `${stepsLabel} ${params.steps}`,
+    `CFG ${params.cfgScale}`,
+    isNAIMediumEffort(stored) ? "" : samplerLabel,
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
+function AdvancedParamsModal({ onClose, closing = false }: { onClose: () => void; closing?: boolean }) {
   const storedParams = useAppStore(state => state.params);
   const inpaintModel = useAppStore(state => state.inpaintModel);
   const isInpaintPanel = useAppStore(state => state.activeTab) === "inpaint";
@@ -768,7 +795,7 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
   const t = useCallback((key: string) => desktopUiText(settings?.language, key), [settings?.language]);
 
   return (
-    <AppPortal>
+    <DockOrPortal closing={closing}>
       <div className="modal-backdrop">
       <div className="modal advanced-modal">
         <header>
@@ -834,7 +861,7 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
         </footer>
       </div>
       </div>
-    </AppPortal>
+    </DockOrPortal>
   );
 }
 
@@ -862,7 +889,7 @@ function recommendPreciseSize(w?: number, h?: number) {
   return { target, exact, padPercent };
 }
 
-export function VibeTransferModal({ onClose }: { onClose: () => void }) {
+export function VibeTransferModal({ onClose, focusSection, closing = false }: { onClose: () => void; focusSection?: "vibe" | "precise"; closing?: boolean }) {
   const language = useAppStore((state) => state.settings?.language);
   const vibeImages = useAppStore((state) => state.vibeImages);
   const addVibeImage = useAppStore((state) => state.addVibeImage);
@@ -962,10 +989,26 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
     reader.readAsDataURL(file);
   }
 
+  const modalRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!focusSection) return;
+    const id = requestAnimationFrame(() => {
+      const target = modalRef.current?.querySelector<HTMLElement>(`[data-vibe-section="${focusSection}"]`);
+      const dock = modalRef.current?.closest<HTMLElement>(".workbench-dock");
+      if (target && dock) {
+        const offset = target.getBoundingClientRect().top - dock.getBoundingClientRect().top + dock.scrollTop - 8;
+        dock.scrollTo({ top: focusSection === "vibe" ? 0 : Math.max(0, offset), behavior: "smooth" });
+      } else {
+        target?.scrollIntoView({ block: "start", behavior: "smooth" });
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [focusSection]);
+
   return (
-    <AppPortal>
+    <DockOrPortal closing={closing}>
       <div className="modal-backdrop">
-      <div className="modal vibe-modal">
+      <div ref={modalRef} className="modal vibe-modal">
         <header>
           <h2>{t("reference.title")}</h2>
           <div className="vibe-header-actions">
@@ -974,7 +1017,7 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
           </div>
         </header>
         <div className="vibe-body">
-          <h3 className="vibe-section-title">
+          <h3 className="vibe-section-title" data-vibe-section="vibe">
             {t("reference.vibeTitle")}
             {!vibeSupported && <span className="vibe-hint">{t("reference.vibeUnsupportedV5")}</span>}
           </h3>
@@ -1018,7 +1061,7 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
             </div>
           ))}
 
-          <h3 className="vibe-section-title">
+          <h3 className="vibe-section-title" data-vibe-section="precise">
             {t("reference.preciseTitle")}
             {!preciseSupported && <span className="vibe-hint">{t("reference.preciseUnsupported")}</span>}
           </h3>
@@ -1136,7 +1179,7 @@ export function VibeTransferModal({ onClose }: { onClose: () => void }) {
           onClose={() => setQuickSaveSource(null)}
         />
       )}
-    </AppPortal>
+    </DockOrPortal>
   );
 }
 
@@ -1246,7 +1289,7 @@ function CharacterPromptEditor({id, field, model, placeholder, label, onAutoComp
 }
 
 // ── Character Captions modal ──────────────────────────────────────────────────
-export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
+export function CharCaptionsModal({ onClose, closing = false }: { onClose: () => void; closing?: boolean }) {
   const language = useAppStore((state) => state.settings?.language);
   const settings = useAppStore((state) => state.settings);
   const charCaptions = useAppStore((state) => state.charCaptions);
@@ -1293,7 +1336,7 @@ export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   }, [charCaptions, setCharCaptions]);
 
   return (
-    <AppPortal>
+    <DockOrPortal closing={closing}>
       <div className="modal-backdrop">
       <div className="modal char-modal">
         <header>
@@ -1440,7 +1483,7 @@ export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
         </footer>
       </div>
       </div>
-    </AppPortal>
+    </DockOrPortal>
   );
 }
 
@@ -1612,7 +1655,42 @@ export function PromptAndParams({
   const refreshSettings = useAppStore((state) => state.refreshSettings);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showVibeModal, setShowVibeModal] = useState(false);
+  const [vibeSection, setVibeSection] = useState<"vibe" | "precise">("vibe");
   const [showCharModal, setShowCharModal] = useState(false);
+  const renderAdvanced = useDeferredPanelPresence(showAdvanced);
+  const renderVibeModal = useDeferredPanelPresence(showVibeModal);
+  const renderCharModal = useDeferredPanelPresence(showCharModal);
+
+  const toggleCharModal = () => {
+    setShowCharModal((open) => {
+      const next = !open;
+      if (next) {
+        setShowVibeModal(false);
+        setShowAdvanced(false);
+      }
+      return next;
+    });
+  };
+  const toggleVibeModal = (target: "vibe" | "precise") => {
+    if (showVibeModal && vibeSection === target) {
+      setShowVibeModal(false);
+      return;
+    }
+    setShowCharModal(false);
+    setShowAdvanced(false);
+    setVibeSection(target);
+    setShowVibeModal(true);
+  };
+  const toggleAdvancedModal = () => {
+    setShowAdvanced((open) => {
+      const next = !open;
+      if (next) {
+        setShowCharModal(false);
+        setShowVibeModal(false);
+      }
+      return next;
+    });
+  };
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const templateMenuRef = useRef<HTMLDivElement>(null);
   const templateMenuPresent = useDisclosurePresence(showTemplateMenu, templateMenuRef);
@@ -2145,7 +2223,7 @@ export function PromptAndParams({
   return (
     <>
       {includeModel && (
-        <div className="field">
+        <div className="field" data-panel-section="model">
           <div className="compact-model-label"><span>{generateText.prompt.model}</span><FurryModeSwitch checked={modelMode === "furry"} label={generateText.prompt.furryMode} onChange={checked=>switchModelMode(checked?"furry":"anime").catch(error=>setToast(String(error)))}/></div>
           <SelectMenuCompat value={params.model} onChange={(e) => setParam("model", e.target.value as GenerateParams["model"])}>
             {NAI_MODELS.filter((m) => supportsNAIModelMode(m.value, modelMode)).map((m) => (
@@ -2155,7 +2233,7 @@ export function PromptAndParams({
         </div>
       )}
       {includeModel && <EffortControl model={params.model} value={params.effort ?? "high"} language={settings?.language} onChange={value => setParam("effort", value)} />}
-      <label className="field">
+      <label className="field" data-panel-section="style">
         <span className="field-label-row">
           {generateText.prompt.stylePrompt}
 
@@ -2205,7 +2283,7 @@ export function PromptAndParams({
         <AppPortal>
           <div
             ref={stylePresetMenuRef}
-            className="style-preset-menu disclosure-popover" {...disclosureAttributes(stylePresetMenuOpen)}
+            className="style-preset-menu disclosure-popover qf-dropdown-panel" {...disclosureAttributes(stylePresetMenuOpen)}
             role="listbox"
             style={{
               left: stylePresetMenuPosition.left,
@@ -2330,7 +2408,49 @@ export function PromptAndParams({
               </div>
             )}
       </CapsuleEditor>}
-      <div className="prompt-tabs">
+      <div className="quick-actions" data-panel-section="refs">
+        <Button
+          className={clsx("qf-ref-trigger", charCaptions.length > 0 && "has-count", showCharModal && "is-panel-open")}
+          aria-expanded={showCharModal}
+          onClick={toggleCharModal}
+        >
+          <IconText icon="♙">{generateText.prompt.characterPrompt}</IconText>
+          {charCaptions.length > 0 ? <em className="qf-count-badge">{charCaptions.length}</em> : null}
+        </Button>
+        <Button
+          className={clsx("qf-ref-trigger", vibeImages.length > 0 && "has-count", showVibeModal && vibeSection === "vibe" && "is-panel-open")}
+          aria-expanded={showVibeModal && vibeSection === "vibe"}
+          onClick={() => toggleVibeModal("vibe")}
+        >
+          <IconText icon="◒">{generateText.prompt.vibeTransfer}</IconText>
+          {vibeImages.length > 0 ? <em className="qf-count-badge">{vibeImages.length}</em> : null}
+        </Button>
+        <Button
+          className={clsx("qf-ref-trigger", preciseRefCount > 0 && "has-count", showVibeModal && vibeSection === "precise" && "is-panel-open")}
+          aria-expanded={showVibeModal && vibeSection === "precise"}
+          onClick={() => toggleVibeModal("precise")}
+        >
+          <IconText icon="◇">{generateText.prompt.preciseReference}</IconText>
+          {preciseRefCount > 0 ? <em className="qf-count-badge">{preciseRefCount}</em> : null}
+        </Button>
+        {templates.length > 0 && (
+          <div className="template-dropdown" style={{ position: "relative" }}>
+            <Button aria-expanded={showTemplateMenu} onClick={() => setShowTemplateMenu((v) => !v)}>
+              <IconText icon="▣">{generateText.prompt.template}<Icon name="chevronDown" className={clsx("prompt-tool-chevron", showTemplateMenu && "open")} /></IconText>
+            </Button>
+            {templateMenuPresent && (
+              <div ref={templateMenuRef} className="menu-pop template-pop disclosure-popover qf-dropdown-panel" {...disclosureAttributes(showTemplateMenu)}>
+                {templates.map((tpl) => (
+                  <button key={tpl.id} onClick={() => applyTemplate(tpl)}>
+                    <span>{tpl.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="prompt-tabs" data-panel-section="prompt">
         <button className={clsx(promptTab === "positive" && "active")} onClick={() => setPromptTab("positive")}>
           {generateText.prompt.positivePrompt}
         </button>
@@ -2414,33 +2534,6 @@ export function PromptAndParams({
               ≈{tokenEst} tokens{tokenWarn ? <> <Icon name="warning" /> {generateText.prompt.tokenLimitExceeded}</> : ""}
             </span>
           </>
-        )}
-      </div>
-      <div className="quick-actions">
-        <Button onClick={() => setShowCharModal(true)}>
-          <IconText icon="♙">{generateText.prompt.characterPrompt}{charCaptions.length > 0 ? ` · ${charCaptions.length}` : ""}</IconText>
-        </Button>
-        <Button onClick={() => setShowVibeModal(true)}>
-          <IconText icon="◒">{generateText.prompt.vibeTransfer}{vibeImages.length > 0 ? ` · ${vibeImages.length}` : ""}</IconText>
-        </Button>
-        <Button onClick={() => setShowVibeModal(true)}>
-          <IconText icon="◇">{generateText.prompt.preciseReference}{preciseRefCount > 0 ? ` · ${preciseRefCount}` : ""}</IconText>
-        </Button>
-        {templates.length > 0 && (
-          <div className="template-dropdown" style={{ position: "relative" }}>
-            <Button aria-expanded={showTemplateMenu} onClick={() => setShowTemplateMenu((v) => !v)}>
-              <IconText icon="▣">{generateText.prompt.template}<Icon name="chevronDown" className={clsx("prompt-tool-chevron", showTemplateMenu && "open")} /></IconText>
-            </Button>
-            {templateMenuPresent && (
-              <div ref={templateMenuRef} className="menu-pop template-pop disclosure-popover" {...disclosureAttributes(showTemplateMenu)}>
-                {templates.map((tpl) => (
-                  <button key={tpl.id} onClick={() => applyTemplate(tpl)}>
-                    <span>{tpl.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
         )}
       </div>
       {imageToImage && workbenchImage && (
@@ -2550,12 +2643,18 @@ export function PromptAndParams({
           onClose={() => setStyleGroupPromptOpen(false)}
         />
       )}
-      <Button className="full prompt-advanced-button" onClick={() => setShowAdvanced(true)}>
-        <IconText icon="settings">{generateText.prompt.advancedParams}</IconText>
+      <Button
+        className={clsx("full prompt-advanced-button", showAdvanced && "is-panel-open")}
+        aria-expanded={showAdvanced}
+        onClick={toggleAdvancedModal}
+      >
+        <IconText icon="settings">{generateText.prompt.advancedParams.replace(/\.{2,}|…$/g, "").trim()}</IconText>
+        <span className="advanced-summary">{advancedParamsSummary(params, settings?.language)}</span>
+        <Icon name="chevronRight" className={clsx("prompt-advanced-chevron", showAdvanced && "is-open")} />
       </Button>
-      {showAdvanced && <AdvancedParamsModal onClose={() => setShowAdvanced(false)} />}
-      {showVibeModal && <VibeTransferModal onClose={() => setShowVibeModal(false)} />}
-      {showCharModal && <CharCaptionsModal onClose={() => setShowCharModal(false)} />}
+      {renderAdvanced && <AdvancedParamsModal closing={!showAdvanced} onClose={() => setShowAdvanced(false)} />}
+      {renderVibeModal && <VibeTransferModal closing={!showVibeModal} focusSection={vibeSection} onClose={() => setShowVibeModal(false)} />}
+      {renderCharModal && <CharCaptionsModal closing={!showCharModal} onClose={() => setShowCharModal(false)} />}
       {showNormalize && (
         <PromptNormalizeModal
           value={promptValue}
@@ -3324,6 +3423,7 @@ function AccountAndRunButton({
             inert={!isGenerating}
           >
             <div className="run-state-pane-inner">
+              <GenerationProgressLine />
               {allowQueue && <QueuePanel />}
               <div className="anlas-spent">
                 {currentAnlasSpent != null ? f("account.currentSpent", { amount: currentAnlasSpent }) : t("account.currentReading")}
@@ -3400,15 +3500,18 @@ function GeneratePanel({openSettings}:{openSettings:()=>void}) {
       <div className="panel-scroll">
         <AutomaticComparisonControl surface="generate:t2i" />
         <PromptAndParams />
-        <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
-        <CommittedNumberInput
-          label={t("generate.batchInterval")}
-          value={batchIntervalSeconds}
-          min={0}
-          max={3600}
-          normalize={(value) => Math.max(0, Math.min(3600, Math.round(value)))}
-          onCommit={setBatchIntervalSeconds}
-        />
+        <div className="panel-section-anchor" data-panel-section="batch" aria-hidden="true" />
+        <div className="batch-inline-grid">
+          <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
+          <CommittedNumberInput
+            label={t("generate.batchInterval")}
+            value={batchIntervalSeconds}
+            min={0}
+            max={3600}
+            normalize={(value) => Math.max(0, Math.min(3600, Math.round(value)))}
+            onCommit={setBatchIntervalSeconds}
+          />
+        </div>
         
         <label className="field">
           <span>{t("generate.fileNamePrefix")}</span>
@@ -3503,15 +3606,18 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
         <NumberInput label={t("i2i.extraNoiseSeed")} value={i2iParams.extraNoiseSeed} min={0} onChange={(v) => setI2IParam("extraNoiseSeed", v)} />
         <div className="panel-divider" />
         <PromptAndParams imageToImage />
-        <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
-        <CommittedNumberInput
-          label={t("generate.batchInterval")}
-          value={batchIntervalSeconds}
-          min={0}
-          max={3600}
-          normalize={(value) => Math.max(0, Math.min(3600, Math.round(value)))}
-          onCommit={setBatchIntervalSeconds}
-        />
+        <div className="panel-section-anchor" data-panel-section="batch" aria-hidden="true" />
+        <div className="batch-inline-grid">
+          <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
+          <CommittedNumberInput
+            label={t("generate.batchInterval")}
+            value={batchIntervalSeconds}
+            min={0}
+            max={3600}
+            normalize={(value) => Math.max(0, Math.min(3600, Math.round(value)))}
+            onCommit={setBatchIntervalSeconds}
+          />
+        </div>
         
         <FeatureCostCard label={t("cost.beforeRun")} feature="i2i" />
       </div>
@@ -4327,7 +4433,7 @@ function ReversePanel() {
 }
 
 // ── Left panel ────────────────────────────────────────────────────────────────
-function LeftPanel({ openSettings }: { openSettings: () => void }) {
+function ClassicLeftPanel({ openSettings }: { openSettings: () => void }) {
   const activeTab = useAppStore((state) => state.activeTab);
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
@@ -4395,6 +4501,154 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
       {activeTab === "postprocess" && <PostprocessPanel openSettings={openSettings} />}
       {activeTab === "inspect" && <ReversePanel />}
       {activeTab === "convert" && <PromptConverterPanel />}
+    </aside>
+  );
+}
+
+function LeftPanel({ openSettings }: { openSettings: () => void }) {
+  const activeTab = useAppStore((state) => state.activeTab);
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const [generateMode, setGenerateMode] = useState<"t2i" | "i2i" | "enhance">("t2i");
+  const setActiveCanvasSurface = useAppStore((state) => state.setActiveCanvasSurface);
+  const currentImage = useAppStore((state) => state.currentImage);
+  const workbenchImage = useAppStore((state) => state.workbenchImage);
+  const loadWorkbenchFromPath = useAppStore((state) => state.loadWorkbenchFromPath);
+  const tabItems = useMemo(() => getLocalizedTabItems(language), [language]);
+  const generateText = useMemo(() => getGeneratePanelText(language), [language]);
+  const meta = tabItems.find((item) => item.value === activeTab) ?? tabItems[0];
+  useEffect(() => {
+    if (activeTab === "generate") setActiveCanvasSurface(`generate:${generateMode}`);
+    if (activeTab === "inpaint") setActiveCanvasSurface("inpaint");
+  }, [activeTab, generateMode, setActiveCanvasSurface]);
+  useEffect(() => {
+    if (
+      activeTab === "generate" &&
+      generateMode === "enhance" &&
+      !workbenchImage &&
+      currentImage?.filePath
+    ) {
+      void loadWorkbenchFromPath(currentImage.filePath, { silent: true });
+    }
+  }, [activeTab, currentImage?.filePath, generateMode, loadWorkbenchFromPath, workbenchImage]);
+  const dt = dockText(language);
+  const leftCollapsed = useDockStore((state) => state.leftCollapsed);
+  const toggleLeftCollapsed = useDockStore((state) => state.toggleLeftCollapsed);
+  const setLeftCollapsed = useDockStore((state) => state.setLeftCollapsed);
+  const stripDragRef = useRef<number | null>(null);
+
+  return (
+    <aside
+      className={clsx(
+        "left-panel is-docked",
+        leftCollapsed ? "is-collapsed dock-strip left-dock-strip" : "is-open",
+      )}
+    >
+      {leftCollapsed && (
+        <div
+          className="left-dock-strip-face"
+          onPointerDown={(e) => {
+            if (e.button !== 0) return;
+            stripDragRef.current = e.clientX;
+          }}
+          onPointerMove={(e) => {
+            if (stripDragRef.current === null) return;
+            if (e.clientX - stripDragRef.current > 36) {
+              stripDragRef.current = null;
+              setLeftCollapsed(false);
+            }
+          }}
+          onPointerUp={() => { stripDragRef.current = null; }}
+          onPointerCancel={() => { stripDragRef.current = null; }}
+          onClick={() => setLeftCollapsed(false)}
+        >
+          <button
+            type="button"
+            className="shell-icon-btn left-dock-expand-btn"
+            title={dt.expandLeft}
+            aria-label={dt.expandLeft}
+            onClick={() => setLeftCollapsed(false)}
+          >
+            <Icon name="chevronRight" />
+          </button>
+          <button
+            type="button"
+            className="dock-strip-tab"
+            title={`${dt.expandLeft} · ${meta.title}`}
+            aria-label={dt.expandLeft}
+            onClick={() => setLeftCollapsed(false)}
+          >
+            <Icon name={meta.icon} className="dock-strip-icon" />
+            <span className="dock-strip-label">{meta.label || dt.leftParamsShort}</span>
+          </button>
+        </div>
+      )}
+      <div
+        className="left-panel-inner"
+        aria-hidden={leftCollapsed || undefined}
+        inert={leftCollapsed || undefined}
+      >
+      <div className="panel-head">
+        <span aria-hidden="true"><Icon name={meta.icon} /></span>
+        <div className="panel-head-copy">
+          <strong>{meta.title}</strong>
+          <small>{meta.desc}</small>
+        </div>
+        <div className="panel-head-actions">
+          <button
+            type="button"
+            className="shell-icon-btn left-panel-collapse-btn"
+            title={dt.collapseLeft}
+            aria-label={dt.collapseLeft}
+            onClick={toggleLeftCollapsed}
+          >
+            <Icon name="chevronRight" className="left-panel-collapse-icon" />
+          </button>
+        </div>
+      </div>
+      {activeTab === "generate" && (
+        <div className="generate-mode-switcher" role="tablist" aria-label={meta.title}>
+          <button
+            role="tab"
+            aria-selected={generateMode === "t2i"}
+            className={clsx(generateMode === "t2i" && "active")}
+            onClick={() => setGenerateMode("t2i")}
+          >
+            {generateText.modeSwitch.textToImage}
+          </button>
+          <button
+            role="tab"
+            aria-selected={generateMode === "i2i"}
+            className={clsx(generateMode === "i2i" && "active")}
+            onClick={() => setGenerateMode("i2i")}
+          >
+            {generateText.modeSwitch.imageToImage}
+          </button>
+          <button
+            role="tab"
+            aria-selected={generateMode === "enhance"}
+            className={clsx(generateMode === "enhance" && "active")}
+            onClick={() => setGenerateMode("enhance")}
+          >
+            {t("postprocess.enhance")}
+          </button>
+        </div>
+      )}
+      <PanelSectionNav key={`nav:${activeTab}:${generateMode}`} />
+      <div key={`stage:${activeTab}:${generateMode}`} className="left-panel-mode-stage">
+        {activeTab === "generate" && (
+          generateMode === "t2i"
+            ? <GeneratePanel openSettings={openSettings} />
+            : generateMode === "i2i"
+              ? <I2IPanel openSettings={openSettings} />
+              : <EnhancePanel openSettings={openSettings} />
+        )}
+        {activeTab === "inpaint" && <InpaintPanel openSettings={openSettings} />}
+        {activeTab === "postprocess" && <PostprocessPanel openSettings={openSettings} />}
+        {activeTab === "inspect" && <ReversePanel />}
+        {activeTab === "convert" && <PromptConverterPanel />}
+      </div>
+      </div>
     </aside>
   );
 }
@@ -5276,10 +5530,8 @@ export function ImageCanvas() {
       )}
       {!currentImage && !isGenerating && (
         <button className="empty-canvas" onClick={generate}>
-          <span className="empty-illustration" aria-hidden="true">
-            <span className="empty-orb empty-orb-a" />
-            <span className="empty-orb empty-orb-b" />
-            <span className="empty-gem"><Icon name="sparkles" /></span>
+          <span className="empty-illustration is-plain" aria-hidden="true">
+            <Icon name="image" />
           </span>
           <strong>{t("canvas.emptyTitle")}</strong>
           <span>{t("canvas.emptyHint")}</span>
@@ -5616,18 +5868,31 @@ function HistoryPanel() {
       <HistoryItemMenu src={item.fileUrl} label={t("history.moreActions")} filePathLabel={t("history.viewFilePath")} onFilePath={()=>setFilePathTarget(item.filePath)}
         metadataLabel={t("history.menuMetadata")} renameLabel={t("history.rename")} deleteLabel={t("history.menuDelete")}
         metadataTitle={t("history.metadataTitle")} renameTitle={t("history.renameImageTitle")} deleteTitle={t("history.deleteImageTitle")}
-        onMetadata={() => void inspectHistoryMetadata(item)} onRename={() => renameItem(item)} onDelete={() => void deleteItem(item)}/>
+        onMetadata={() => void inspectHistoryMetadata(item)} onRename={() => renameItem(item)} onDelete={() => void deleteItem(item)}
+        loadParamsLabel={favoritesText(language).loadParams} onLoadParams={() => void applyImageParameters(item.filePath)}/>
     </div>
   );
+
+  const dt = dockText(language);
 
   return (
     <aside className="history-panel">
       <div className="history-title">
-        <div>
+        <div className="history-title-copy">
           <strong>{t("history.title")}</strong>
           <small>{history.length > 0 ? f("history.count", { count: history.length }) : t("history.emptySubtitle")}</small>
         </div>
-        <ConvertedHistoryRestoreButton disabled={isGenerating} />
+        <div className="history-title-actions">
+          <button
+            type="button"
+            className="shell-icon-btn history-panel-close-btn"
+            title={dt.collapseRight}
+            aria-label={dt.collapseRight}
+            onClick={() => useAppStore.getState().setWsHistoryCollapsed(true)}
+          >
+            <Icon name="chevronRight" />
+          </button>
+        </div>
       </div>
       <div className="history-filters">
         <SelectMenu
@@ -5667,6 +5932,9 @@ function HistoryPanel() {
           <button type="button" disabled={!activeGroup} title={t("history.deleteGroupTitle")} onClick={deleteActiveGroup}>
             <Icon name="trash" /> {t("history.delete")}
           </button>
+        </div>
+        <div className="history-restore-row">
+          <ConvertedHistoryRestoreButton disabled={isGenerating} />
         </div>
       </div>
       <div ref={historyScrollRef} className={clsx("history-grid", virtualizeHistory && "is-virtualized")}>
@@ -5722,7 +5990,19 @@ const MemoizedHistoryPanel = memo(HistoryPanel);
 
 // ── Settings modal ────────────────────────────────────────────────────────────
 
-export function SettingsModal({ onClose }: { onClose: () => void }) {
+function DesktopLayoutSelector({language}: {language?:string}) {
+  const layout=useDesktopLayout();
+  const labels=desktopLayoutLabels(language);
+  return <label className="field" data-desktop-layout-setting>
+    <span>{labels[0]}</span>
+    <SelectMenuCompat aria-label={labels[0]} value={layout} onChange={e=>setDesktopLayout(e.target.value)}>
+      <option value="classic">{labels[1]}</option>
+      <option value="redesign">{labels[2]}</option>
+    </SelectMenuCompat>
+    <small>{labels[3]}</small>
+  </label>;
+}
+export function SettingsModal({ onClose, variant = "modal" }: { onClose: () => void; variant?: "modal" | "page" }) {
   const ft=useFeatureText();
   const [section, setSection] = useState(
     () => takeRequestedSettingsSection() ?? new URLSearchParams(window.location.search).get("uiSettingsSection") ?? "api",
@@ -6023,11 +6303,17 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   );
 
   return (
-    <AppPortal>
-      <div className="modal-backdrop">
-      <div className="modal settings-modal">
+    <SettingsFrame page={variant === "page"}>
+      <div className={clsx("modal settings-modal", variant === "page" && "settings-as-page")} role={variant === "page" ? "region" : undefined} aria-label={variant === "page" ? settingsShellText.title : undefined}>
         <header>
+          {variant === "page" ? (
+            <button type="button" className="settings-page-back" onClick={onClose}>
+              <Icon name="chevronRight" className="settings-back-icon" />
+              <span>{shellText(settings.language).settingsBack}</span>
+            </button>
+          ) : null}
           <h2>{settingsShellText.title}</h2>
+
           <button aria-label={t("common.close")} onClick={onClose}><Icon name="close" /></button>
         </header>
         <div className="settings-body">
@@ -6295,6 +6581,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             {section === "mcp" && <McpServerSettings settings={settings} update={update} />}
             {section === "appearance" && (
               <div className="settings-form">
+                {window.naiDesktop?.platform === "win32" && <DesktopLayoutSelector language={settings.language} />}
                 <label className="field">
                   <span>{settingsSectionText.appearance.theme}</span>
                   <SelectMenuCompat value={settings.theme} onChange={(e) => void update("theme", e.target.value as AppSettings["theme"])}>
@@ -6717,14 +7004,20 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
         <footer>
           <Button variant="primary" onClick={onClose}>
-            <IconText icon="✓">{t("settings.close")}</IconText>
+            <IconText icon="✓">{variant === "page" ? shellText(settings.language).settingsBack : t("settings.close")}</IconText>
           </Button>
         </footer>
       </div>
-      </div>
       {showTokenGuide && <TokenGuideModal onClose={() => setShowTokenGuide(false)} />}
-    </AppPortal>
+    </SettingsFrame>
   );
+}
+
+/** Settings opens as a page inside the shell; the modal frame is kept for any
+ *  remaining modal callers. */
+function SettingsFrame({ page, children }: { page: boolean; children: React.ReactNode }) {
+  if (page) return <div className="settings-page">{children}</div>;
+  return <AppPortal><div className="modal-backdrop">{children}</div></AppPortal>;
 }
 
 // ── Onboarding wizard ─────────────────────────────────────────────────────────
@@ -7178,37 +7471,68 @@ function WorkspaceMigrationNotice() {
 // Draggable splitter between workspace rails. Drag = resize; double-click = reset.
 // Width changes apply live (store) and persist to localStorage on release.
 function WorkspaceResizer({ edge }: { edge: "left" | "right" }) {
+  const defaultWidth = edge === "left" ? 380 : 340;
   const width = useAppStore((s) => (edge === "left" ? s.wsLeftWidth : s.wsRightWidth));
   const setWsWidth = useAppStore((s) => s.setWsWidth);
   const saveWsWidths = useAppStore((s) => s.saveWsWidths);
-  const resetWsWidths = useAppStore((s) => s.resetWsWidths);
   const language = useAppStore((s) => s.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const drag = useRef<{ startX: number; startW: number } | null>(null);
+  const resetEdgeWidth = () => {
+    setWsWidth(edge, defaultWidth);
+    saveWsWidths();
+  };
+
+  const setWorkspaceResizing = (active: boolean) => {
+    const ws = document.querySelector<HTMLElement>(".studio-shell .workspace");
+    if (!ws) return;
+    if (active) ws.dataset.leftResizing = "true";
+    else delete ws.dataset.leftResizing;
+  };
 
   return (
     <div
       className={clsx("ws-resizer", edge)}
+      data-modified={width !== defaultWidth ? "true" : "false"}
       role="separator"
       aria-orientation="vertical"
       title={t("workspace.resizeTitle")}
       onPointerDown={(e) => {
+        if (e.button !== 0) return;
         e.preventDefault();
         e.currentTarget.setPointerCapture(e.pointerId);
         drag.current = { startX: e.clientX, startW: width };
+        setWorkspaceResizing(true);
       }}
       onPointerMove={(e) => {
         if (!drag.current) return;
         const dx = e.clientX - drag.current.startX;
-        setWsWidth(edge, drag.current.startW + (edge === "left" ? dx : -dx));
+        const raw = drag.current.startW + (edge === "left" ? dx : -dx);
+        if (raw >= 145) setWsWidth(edge, raw);
       }}
       onPointerUp={(e) => {
         if (!drag.current) return;
+        const dx = e.clientX - drag.current.startX;
+        const raw = drag.current.startW + (edge === "left" ? dx : -dx);
+        const startW = drag.current.startW;
         drag.current = null;
-        e.currentTarget.releasePointerCapture(e.pointerId);
-        saveWsWidths();
+        setWorkspaceResizing(false);
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        }
+        if (edge === "left" && raw < 145) {
+          setWsWidth("left", startW);
+          saveWsWidths();
+          useDockStore.getState().setLeftCollapsed(true);
+        } else {
+          saveWsWidths();
+        }
       }}
-      onDoubleClick={() => resetWsWidths()}
+      onPointerCancel={() => {
+        drag.current = null;
+        setWorkspaceResizing(false);
+      }}
+      onDoubleClick={resetEdgeWidth}
     >
       <span className="ws-resizer-grip" />
       <button
@@ -7218,7 +7542,7 @@ function WorkspaceResizer({ edge }: { edge: "left" | "right" }) {
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
-          resetWsWidths();
+          resetEdgeWidth();
         }}
       >
         <Icon name="refresh" />
@@ -7279,6 +7603,9 @@ function PersistentCanvasSurface({
 }
 
 function MainPage() {
+  const isRedesign = useDesktopLayout() === "redesign";
+  const [dockHost, setDockHost] = useState<HTMLDivElement | null>(null);
+  const { collapsed: railCollapsed } = useRailCollapsed();
   const showSettings = useAppStore((state) => state.showSettings);
   const setShowSettings = useAppStore((state) => state.setShowSettings);
   const showOnboarding = useAppStore((state) => state.showOnboarding);
@@ -7291,10 +7618,13 @@ function MainPage() {
   const language = settings?.language;
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const wsLeftWidth = useAppStore((state) => state.wsLeftWidth);
-  const wsRightWidth = useAppStore((state) => state.wsRightWidth);
-  const wsHistoryCollapsed = useAppStore((state) => state.wsHistoryCollapsed);
   const wsHistoryDragWidth = useAppStore((state) => state.wsHistoryDragWidth);
-  const displayedHistoryWidth = wsHistoryDragWidth ?? (wsHistoryCollapsed ? 0 : wsRightWidth);
+  const leftCollapsed = useDockStore((state) => state.leftCollapsed);
+  const classicRightWidth = useAppStore((state) => state.wsRightWidth);
+  const rightCollapsed = useAppStore((state) => state.wsHistoryCollapsed);
+  const displayedLeftWidth = isRedesign && leftCollapsed ? 36 : wsLeftWidth;
+  // Right history always opens as a floating popover over the canvas edge (never squeezes baseline canvas)
+  const displayedHistoryWidth = isRedesign ? 0 : wsHistoryDragWidth ?? (rightCollapsed ? 0 : classicRightWidth);
   const uiCaptureParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const uiCaptureTheme = uiCaptureParams.get("uiTheme");
   // Final render-boundary guard: even if a future IPC path forgets to sanitize
@@ -7345,6 +7675,10 @@ function MainPage() {
     }
   }, [uiCaptureParams]);
 
+  useEffect(() => {
+    if (isRedesign) ensureBaselineWorkspace((collapsed) => useAppStore.getState().setWsHistoryCollapsed(collapsed));
+  }, [isRedesign]);
+
   useGlobalTypography(settings?.uiTypography);
 
   // Apply theme class
@@ -7382,74 +7716,116 @@ function MainPage() {
     return () => window.clearTimeout(timer);
   }, [toast, clearToast]);
 
+  // Settings is a page inside the shell now. Esc returns to the previous page
+  // unless a real dialog, popover or text field currently owns the key.
+  useEffect(() => {
+    if (!showSettings || !isRedesign) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true'], [role='combobox'], [role='listbox']")) return;
+      if (document.querySelector(".modal-backdrop:not(.settings-page-backdrop), .app-confirm-backdrop, .select-menu-popover[data-disclosure-open='true'], .shell-palette")) return;
+      setShowSettings(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showSettings, setShowSettings, isRedesign]);
+
   return (
-    <div className="app-shell">
-      <AppTitleBar />
+    <div className={clsx("app-shell", isRedesign && "studio-shell")} data-desktop-layout={isRedesign ? "redesign" : "classic"} data-rail={isRedesign ? (railCollapsed ? "collapsed" : "expanded") : undefined}>
+      {isRedesign ? <StudioTopBar account={<NaiAccountManager />} /> : <AppTitleBar />}
       <div className="app-notice-slot">
         <UpdateBanner />
         <WorkspaceMigrationNotice />
       </div>
       <V5MigrationNotice />
-      <AppMenuBar openSettings={() => setShowSettings(true)}>
-        <NaiAccountManager />
-      </AppMenuBar>
-      <AppTabBar />
-      <div
-        className="workspace"
-        data-history-collapsed={wsHistoryCollapsed}
-        data-history-resizing={wsHistoryDragWidth !== null}
-        style={{ "--ws-left": `${wsLeftWidth}px`, "--ws-right": `${displayedHistoryWidth}px` } as CSSProperties}
-      >
-        <PersistentTabView
-          active={workbenchActive}
-          scope={`tab:${activeTab}`}
-          resetKey={activeTab}
-          className="persistent-workbench-view"
-        >
-          <LeftPanel openSettings={() => setShowSettings(true)} />
-          <WorkspaceResizer edge="left" />
-          <div className="persistent-canvas-host">
-            <PersistentCanvasSurface active={activeTab !== "inpaint"}>
-              <ImageCanvas />
-            </PersistentCanvasSurface>
-            <PersistentCanvasSurface active={activeTab === "inpaint"}>
-              <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingInpaint")}</div>}>
-                <InpaintCanvas />
+      {!isRedesign && <>
+        <AppMenuBar openSettings={() => setShowSettings(true)}><NaiAccountManager /></AppMenuBar>
+        <AppTabBar />
+      </>}
+      <div className={isRedesign ? "shell-body" : "classic-layout-contents"}>
+        {isRedesign && <StudioNavRail />}
+        <main className={isRedesign ? "shell-main" : "classic-layout-contents"}>
+          {isRedesign && <LayoutNotice />}
+          <div
+            className="workspace"
+            data-left-collapsed={isRedesign && leftCollapsed}
+            data-history-collapsed={isRedesign || rightCollapsed}
+            data-history-resizing={wsHistoryDragWidth !== null}
+            aria-hidden={showSettings || undefined}
+            inert={showSettings || undefined}
+            style={{
+              "--ws-left": `${displayedLeftWidth}px`,
+              "--ws-right": `${displayedHistoryWidth}px`,
+            } as CSSProperties}
+          >
+            <PersistentTabView
+              active={workbenchActive}
+              scope={`tab:${activeTab}`}
+              resetKey={activeTab}
+              className="persistent-workbench-view"
+            >
+              <WorkbenchDockProvider host={isRedesign ? dockHost : null}>
+                {isRedesign ? <LeftPanel openSettings={() => setShowSettings(true)} /> : <ClassicLeftPanel openSettings={() => setShowSettings(true)} />}
+                <WorkspaceResizer edge="left" />
+                <div className="persistent-canvas-host">
+                  {isRedesign && <WorkbenchDockPane onHost={setDockHost} />}
+                  <div className={isRedesign ? "persistent-canvas-stage" : "classic-layout-contents"}>
+                    <PersistentCanvasSurface active={activeTab !== "inpaint"}>
+                      <ImageCanvas />
+                    </PersistentCanvasSurface>
+                    <PersistentCanvasSurface active={activeTab === "inpaint"}>
+                      <Suspense fallback={<div className="lazy-tool-loading" role="status" aria-busy="true"><span className="lazy-tool-spinner" aria-hidden="true" />{t("tool.loadingInpaint")}</div>}>
+                        <InpaintCanvas />
+                      </Suspense>
+                    </PersistentCanvasSurface>
+                  </div>
+                </div>
+                {isRedesign ? <>
+                  <HistoryRailControls />
+                  <HistoryRailPane><MemoizedHistoryPanel /></HistoryRailPane>
+                </> : <>
+                  <ClassicHistoryRailControls />
+                  <ClassicHistoryRailPane><MemoizedHistoryPanel /></ClassicHistoryRailPane>
+                </>}
+              </WorkbenchDockProvider>
+            </PersistentTabView>
+            <PersistentTabView active={activeTab === "styles"} scope="tab:styles"><StyleLibrary/></PersistentTabView>
+            <PersistentTabView active={activeTab === "records"} scope="tab:records">
+              <AiLogPanel />
+            </PersistentTabView>
+            <PersistentTabView active={activeTab === "tools"} scope="tab:tools">
+              <Suspense fallback={<div className="lazy-tool-loading" role="status" aria-busy="true"><span className="lazy-tool-spinner" aria-hidden="true" />{t("tool.loadingTools")}</div>}>
+                <ToolsHub />
               </Suspense>
-            </PersistentCanvasSurface>
+            </PersistentTabView>
+            <PersistentTabView active={activeTab === "metadata"} scope="tab:metadata">
+              <Suspense fallback={<div className="lazy-tool-loading" role="status" aria-busy="true"><span className="lazy-tool-spinner" aria-hidden="true" />{t("tool.loadingTools")}</div>}>
+                <MetadataInspector onBack={() => useAppStore.getState().setActiveTab("generate")} />
+              </Suspense>
+            </PersistentTabView>
+            <PersistentTabView active={activeTab === "works"} scope="tab:works"><WorksLibrary active={activeTab === "works"} /></PersistentTabView>
+            <PersistentTabView active={activeTab === "favorites"} scope="tab:favorites"><GalleryFavoritesLibrary embedded onClose={()=>useAppStore.getState().setActiveTab("generate")} /></PersistentTabView>
+            <PersistentTabView active={activeTab === "onlineGallery"} scope="tab:onlineGallery">
+              <Suspense fallback={<div className="lazy-tool-loading" role="status" aria-busy="true"><span className="lazy-tool-spinner" aria-hidden="true" />{t("tool.loadingTools")}</div>}>
+                <OnlineGalleryPage />
+              </Suspense>
+            </PersistentTabView>
+            <PersistentTabView active={activeTab === "agent"} scope="tab:agent">
+              <Suspense fallback={<div className="lazy-tool-loading" role="status" aria-busy="true"><span className="lazy-tool-spinner" aria-hidden="true" />{t("tool.loadingTools")}</div>}>
+                <AgentPage active={activeTab === "agent"} />
+              </Suspense>
+            </PersistentTabView>
+            <PersistentTabView active={activeTab === "referencePresets"} scope="tab:referencePresets">
+              <ReferencePresetManager onBack={() => useAppStore.getState().setActiveTab("tools")} />
+            </PersistentTabView>
           </div>
-          <HistoryRailControls />
-          <HistoryRailPane><MemoizedHistoryPanel /></HistoryRailPane>
-        </PersistentTabView>
-        <PersistentTabView active={activeTab === "styles"} scope="tab:styles"><StyleLibrary/></PersistentTabView>
-        <PersistentTabView active={activeTab === "records"} scope="tab:records">
-          <AiLogPanel />
-        </PersistentTabView>
-        <PersistentTabView active={activeTab === "tools"} scope="tab:tools">
-          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
-            <ToolsHub />
-          </Suspense>
-        </PersistentTabView>
-        <PersistentTabView active={activeTab === "metadata"} scope="tab:metadata">
-          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
-            <MetadataInspector onBack={() => useAppStore.getState().setActiveTab("generate")} />
-          </Suspense>
-        </PersistentTabView>
-        <PersistentTabView active={activeTab === "works"} scope="tab:works"><WorksLibrary active={activeTab === "works"} /></PersistentTabView>
-        <PersistentTabView active={activeTab === "favorites"} scope="tab:favorites"><GalleryFavoritesLibrary embedded onClose={()=>useAppStore.getState().setActiveTab("generate")} /></PersistentTabView>
-        <PersistentTabView active={activeTab === "onlineGallery"} scope="tab:onlineGallery">
-          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
-            <OnlineGalleryPage />
-          </Suspense>
-        </PersistentTabView>
-        <PersistentTabView active={activeTab === "agent"} scope="tab:agent">
-          <Suspense fallback={<div className="lazy-tool-loading">{t("tool.loadingTools")}</div>}>
-            <AgentPage active={activeTab === "agent"} />
-          </Suspense>
-        </PersistentTabView>
-        <PersistentTabView active={activeTab === "referencePresets"} scope="tab:referencePresets">
-          <ReferencePresetManager onBack={() => useAppStore.getState().setActiveTab("tools")} />
-        </PersistentTabView>
+          {showSettings && (
+            <div className={isRedesign ? "shell-page-layer" : "classic-layout-contents"}>
+              <SettingsModal variant={isRedesign ? "page" : "modal"} onClose={() => setShowSettings(false)} />
+            </div>
+          )}
+        </main>
       </div>
       <footer className="status-bar">
         <span className="status-bar-message" title={displayStatusText}>{displayStatusText}</span>
@@ -7459,7 +7835,7 @@ function MainPage() {
       </footer>
       {showOnboarding && <OnboardingWizard />}
       <ImageSaveFeedback language={language} />
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {isRedesign && <CommandPalette />}
       {displayToast && (
         <AppPortal><div className="toast" role="alert">
           <span>{displayToast}</span>
@@ -7472,7 +7848,7 @@ function MainPage() {
   );
 }
 
-// ── Root ──────────────────────────────────────────────────────────────────────
+// ── Root ──
 export default function App() {
   const SPLASH_MIN_VISIBLE_MS = 700;
   const [splash, setSplash] = useState(true);

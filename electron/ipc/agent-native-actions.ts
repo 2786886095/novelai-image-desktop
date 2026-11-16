@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import type {BrowserWindow} from 'electron';
 import type {AgentToolBridgeRequest,AgentToolBridgeResponse} from '../../src/agent/types';
-import {detectiveBudget,detectiveParameters,type DetectiveRunRequest,type DetectiveSnapshot} from '../../src/artist-detective-contract';
+import {detectiveBudget,detectiveParameters,detectiveLockedArtists,type DetectiveRunRequest,type DetectiveSnapshot} from '../../src/artist-detective-contract';
 import type {DetectiveDownloadStatus} from './detective-download';
 import {projectStudioData} from '../../src/studio-agent-contract';
 
@@ -21,7 +21,7 @@ const detectiveActions:Record<string,Spec>={
  'detective.downloadDirectory':{title:'选择模型下载目录',effect:'write'},
  'detective.download':{title:'下载并安装当前画风模型和环境',effect:'confirm',help:'先读取下载大小、版本与目录；仅此操作下载，已验证模型不重复下载。'},
  'detective.cancelDownload':{title:'停止画风模型下载',effect:'write'},
- 'detective.start':{title:'开始画风自动迭代（可能收费）',effect:'confirm',fields:['prompt','style','budget','attachmentId','parameters'],help:'prompt、style 为字符串；budget 为至少24的偶数；attachmentId 可选，来自历史，省略使用当前目标图；parameters 可选，沿用软件校验规则。'},
+ 'detective.start':{title:'开始画风自动迭代（可能收费）',effect:'confirm',fields:['prompt','style','budget','attachmentId','parameters','lockedArtists'],help:'prompt、style 为字符串；budget 为至少24的偶数；attachmentId 可选，来自历史，省略使用当前目标图；parameters 可选，沿用软件校验规则；lockedArtists 可选，最多 8 个 {tag,weight}，每张图保留；使用本人通过目录选择器设置的保存位置。'},
  'detective.stop':{title:'停止画风迭代并保留已完成图片',effect:'write'},
  'detective.clear':{title:'清空画风迭代结果',effect:'confirm',fields:['deleteImages'],help:'deleteImages 必须明确选择 true 或 false；true 将生成图片移入回收站，false 只清空结果展示，参考图保留。'},
  'detective.openResults':{title:'打开画风迭代结果目录',effect:'write'},
@@ -68,13 +68,13 @@ export function createNativeSoftwareActions(adapter:NativeActionAdapter,approve:
     if(args.attachmentId!==undefined&&(typeof args.attachmentId!=='string'||!args.attachmentId||args.attachmentId.length>200))throw Error('attachmentId 无效');
     const image=args.attachmentId?await adapter.image(String(args.attachmentId)):('status' in before?before.status.reference?.filePath:undefined);
     if(!image)throw Error('请先选择目标图片，或提供历史图片 attachmentId');
-    run={image,prompt:args.prompt,style:args.style,budget:detectiveBudget(args.budget),parameters:detectiveParameters(args.parameters as DetectiveRunRequest['parameters'])};
+    run={image,prompt:args.prompt,style:args.style,budget:detectiveBudget(args.budget),parameters:detectiveParameters(args.parameters as DetectiveRunRequest['parameters']),...(args.lockedArtists!==undefined?{lockedArtists:detectiveLockedArtists(args.lockedArtists)}:{})};
    }
    if(['detective.clear','detective.openResults'].includes(action)&&'status' in before&&!before.status.directory)throw Error('当前没有迭代结果目录');
    if(action==='detective.download'&&'status' in before&&before.status.runtimeValidation?.state==='passed')throw Error('当前模型和环境已验证，无需重复下载；如需其他模型，请先切换');
    assertNotStopped();
    if(spec.effect==='confirm'){
-    const consent={...args,title:spec.title,...('status' in before?{selectedVariant:before.status.selectedVariant,downloadBytes:action==='detective.download'?before.download.total:undefined,directory:action==='detective.download'?before.download.directory:before.status.directory,targetImage:run?.image}:{}),...(run?{parameters:run.parameters}:{})};
+    const consent={...args,title:spec.title,...('status' in before?{selectedVariant:before.status.selectedVariant,downloadBytes:action==='detective.download'?before.download.total:undefined,directory:action==='detective.download'?before.download.directory:before.status.directory,targetImage:run?.image}:{}),...(run?{parameters:run.parameters,lockedArtists:run.lockedArtists,outputRoot:'status' in before?before.status.outputRoot:undefined}:{})};
     const controller=new AbortController();if(operation)pendingApprovals.set(controller,operation);
     let approved=false;
     try{approved=await approve({...request,args:consent,signal:request.signal?AbortSignal.any([request.signal,controller.signal]):controller.signal});}

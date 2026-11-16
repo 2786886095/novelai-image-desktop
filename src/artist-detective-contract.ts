@@ -4,8 +4,36 @@ export interface DetectiveRunRequest {
   style: string;
   budget: number;
   parameters?: Partial<DetectiveParameters>;
+  lockedArtists?: DetectiveLockedArtist[];
 }
 /** Only the current owned run may be resumed. This is not paid-replay consent. */
+export interface DetectiveLockedArtist {tag:string; weight:number}
+export function detectiveLockedArtists(value:unknown):DetectiveLockedArtist[] {
+  if(value===undefined)return [];
+  if(!Array.isArray(value)||value.length>8)throw Error("最多固定 8 位画师。");
+  const seen=new Set<string>();
+  return value.map((row:DetectiveLockedArtist)=>{
+    if(!row||typeof row.tag!=="string"||typeof row.weight!=="number"||
+      !Number.isFinite(row.weight)||row.weight<.25||row.weight>2.4)
+      throw Error("画师权重须在 0.25～2.4 之间。");
+    const tag=row.tag.normalize("NFC").trim();
+    if(!tag||tag.length>200||/[:,{}\[\]\x00-\x1F]/.test(tag))throw Error("请输入有效的画师标签。");
+    let balance=0;
+    for(const ch of tag){balance+=(ch==="("?1:ch===")"?-1:0);if(balance<0)throw Error("画师标签括号不配对。");}
+    if(balance!==0||seen.has(tag.toLowerCase()))throw Error("画师标签重复或括号不配对。");
+    seen.add(tag.toLowerCase());
+    return {tag,weight:Math.round(row.weight*100)/100};
+  });
+}
+export function parseDetectiveArtists(text:string):DetectiveLockedArtist[] {
+  if(text.length>1700)throw Error("画师标签过长。");
+  return detectiveLockedArtists(text.split(/[,，\n]+/u).map(x=>x.trim()).filter(Boolean).map(x=>{
+    const m=/^([\d.]+)\s*::\s*(.*?)\s*::$/u.exec(x);
+    let tag=(m?.[2]??x).replace(/^artist:\s*/i,"");
+    if(tag.startsWith("(")&&tag.endsWith(")"))tag=tag.slice(1,-1);
+    return {tag,weight:m?Number(m[1]):1};
+  }));
+}
 export interface DetectiveResumeRequest {
   directory: string;
   manifestSha256: string;
@@ -52,6 +80,9 @@ export interface DetectiveSnapshot {
   best?: number;
   message?: string;
   directory?: string;
+  outputRoot?: string;
+  savedImagesDirectory?: string;
+  outputWarning?: string;
   reference?: { filePath: string; fileUrl: string; name: string };
   fixedPrompt?: { content_tags: string; style_tags: string };
   recovery?: DetectiveRecovery;

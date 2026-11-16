@@ -1,36 +1,36 @@
 {
-  "updatedAt": "2026-11-15",
+  "updatedAt": "2026-11-16",
   "packs": {
     "zh-CN": {
-      "file": "tags-2026-11-15-zh-CN.sqlite.gz",
-      "size": 45558796,
-      "sha256": "ccb67064401c8e2f6c6698c9d3528e22bb1fa60d50d4b83eeaaf1ac89b121ef7",
-      "databaseSize": 99418112,
-      "databaseSha256": "35b8b55d701f4f3a0aaeffea7225f711055de18db721e1317309c267e57a682f",
+      "file": "tags-2026-11-16-zh-CN.sqlite.gz",
+      "size": 45803697,
+      "sha256": "6de4da29a6447a994c86fe6038b2404f2fa0005edaa135abe74399ef6476f86d",
+      "databaseSize": 99942400,
+      "databaseSha256": "479de707f24232b673a129ba79cec0078a4e2311df0eb9a168bbe4661a875548",
       "count": 510084
     },
     "zh-TW": {
-      "file": "tags-2026-11-15-zh-TW.sqlite.gz",
-      "size": 45604440,
-      "sha256": "ad8346247f7419c0edc81d7f2861abf24932e225ed2284d1e94755bf74326156",
-      "databaseSize": 99454976,
-      "databaseSha256": "9721b8eb59fc4708f61d242eea57e2adb8360c180cd048cfd4f6580fb4e84ab3",
+      "file": "tags-2026-11-16-zh-TW.sqlite.gz",
+      "size": 45851211,
+      "sha256": "b8b3fbddb56d4551a86d90b128a69390a0fcd94ac2eacf68f0e52505b7306989",
+      "databaseSize": 99954688,
+      "databaseSha256": "1fd59f2c9be97b48848125d40a306eedc6d47f7ec86aae0b0efb07e07c169e21",
       "count": 510084
     },
     "ja-JP": {
-      "file": "tags-2026-11-15-ja-JP.sqlite.gz",
-      "size": 46787472,
-      "sha256": "398a59433db1c598964d3799e137ac2f57e92cff49ad6da35dd69ad365aa9e6f",
-      "databaseSize": 111583232,
-      "databaseSha256": "702b4fbcb05327c9079d8170d0444efde6d7c7d267a83e1a8c65410f52d18e6b",
+      "file": "tags-2026-11-16-ja-JP.sqlite.gz",
+      "size": 46861674,
+      "sha256": "e8ba6e92c38fd76de8360331c8a7e0850719e88fcadb49c13c9f345da1259ce9",
+      "databaseSize": 112189440,
+      "databaseSha256": "debe938f271b50bf0e31802720697ee2971aa636940181e39622fa0f5a53d097",
       "count": 510084
     },
     "ko-KR": {
-      "file": "tags-2026-11-15-ko-KR.sqlite.gz",
-      "size": 45917981,
-      "sha256": "b219857f89d46268b63e33eea66af58bed0adabb710108051d9e60a56a57cedf",
-      "databaseSize": 107483136,
-      "databaseSha256": "d140b6af2b431d74faea2f8d56909917640dcab7fbb473efa307cefd0e78858e",
+      "file": "tags-2026-11-16-ko-KR.sqlite.gz",
+      "size": 45695670,
+      "sha256": "f887e8fc0848f6a6bb516fd2e6962c9e46f6e93ee771f0c8f9cf8687836aa194",
+      "databaseSize": 107192320,
+      "databaseSha256": "ed8edac0b2d749754528bd147886489a2d9c9387b03c825ed36e8f678dfb6475",
       "count": 510084
     }
   }

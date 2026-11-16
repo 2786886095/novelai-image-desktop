@@ -1,4 +1,5 @@
 import { confirmAction } from "./components/confirm";
+import { deleteFavoriteImageText } from "./shell/shell-text";
 import {PreviewImageViewer} from './components/PreviewImageViewer';
 import {FavoriteStyleExport} from './components/FavoriteStyleExport';
 import {parseCustomArtistPool, customArtistPoolText} from './custom-artist-pool';
@@ -1184,6 +1185,8 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
 
   const removeFavorite = async (result: RandomResult) => {
     if (!result.image) return;
+    const deleteText = deleteFavoriteImageText(language);
+    if (!(await confirmAction(deleteText.message, deleteText.title, undefined, undefined, { confirm: deleteText.confirm, cancel: deleteText.cancel, localized: true }))) return;
     const previousFavorites = session.favorites;
     const previousResults = session.results;
     setSession((current) => ({

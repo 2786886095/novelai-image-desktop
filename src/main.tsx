@@ -6,7 +6,11 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
-import "./styles.css";
+import classicStyles from "./styles.css?inline";
+import redesignedStyles from "./styles-redesign.css?inline";
+import shellStyles from "./shell/studio-shell.css?inline";
+import paletteStyles from "./shell/qq-theme.css?inline";
+import { attachDesktopLayoutStyles } from "./shell/desktop-layout";
 import "./favorites.css";
 import "./layout-motion.css";
 import "./studio-interactions.css";
@@ -19,9 +23,13 @@ import {installStudioAgent} from './studio-agent';
 import {confirmWindowClose} from './components/confirm';
 import {windowTrayText} from './window-tray-text';
 import {useAppStore} from './store';
+import {installTaskTracker} from './shell/task-tracker';
+import {shellText} from './shell/shell-text';
+attachDesktopLayoutStyles(document, classicStyles, redesignedStyles, shellStyles + "\n" + paletteStyles);
 
 installStudioAgent();
 installStudioMotion();
+installTaskTracker(useAppStore);
 document.addEventListener("pointerdown", unlockCompletionSound, {once:true});
 document.addEventListener("keydown", unlockCompletionSound, {once:true});
 
@@ -36,7 +44,8 @@ function RendererReady() {
       const text = windowTrayText(language);
       void api.acknowledgeCloseChoice(requestId).then(async accepted => {
         if (!accepted) return;
-        const { action, remember } = await confirmWindowClose(text);
+        const hints = shellText(language).closeConfirm;
+        const { action, remember } = await confirmWindowClose({ ...text, trayHint: hints.trayHint, quitHint: hints.quitHint, cancelHint: hints.cancelHint });
         api.sendCloseChoice(requestId, action, remember);
       }).catch(() => api.sendCloseChoice(requestId, "cancel", false));
     });

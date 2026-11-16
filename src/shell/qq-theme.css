@@ -1,0 +1,1350 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   QUANTIZED LINE FIELD × DESKTOP STUDIO THEME (final layer)
+   Inspired by StyleKit's Quantized Line Field (https://www.stylekit.top/zh/styles/quantized-line-field):
+   - Paper (#f3f4f1 / #fafaf8) & Night Field (#111212) opaque surfaces
+   - 1px hairline structure (#d9dbd5 / #2d302f), zero blur / zero glass glow
+   - Electric Blue (#2152e7 / #2962f6) primary CTA & Detection Blue (#267dff / #4eaeff)
+     interaction lines & focus rings
+   - Unblurred structural plates + tactile spring press & directional motion
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root,
+html:not(.theme-dark) {
+  --qf-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --qf-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --qf-ease-in: cubic-bezier(0.4, 0, 1, 1);
+
+  --bg-window: #f3f4f1;
+  --bg-panel: #f8f8f6;
+  --bg-canvas: #ffffff;
+  --bg-dialog: #ffffff;
+  --bg-input: #ffffff;
+  --bg-subtle: #eeeeeb;
+  --bg-hover: #e9eae5;
+  --bg-selected: #eaf1ff;
+  --rail-bg: #eeeeeb;
+  --rail-hover: rgba(32, 34, 32, 0.06);
+  --rail-active: #ffffff;
+
+  --border: #d9dbd5;
+  --border-strong: #b7bab1;
+  --qf-plate: rgba(32, 34, 32, 0.09);
+
+  --accent: #2152e7;
+  --accent-fill: #2152e7;
+  --accent-hover: #1b46cc;
+  --accent-pressed: #1539ad;
+  --accent-plate: #112e8f;
+  --detection: #267dff;
+  --accent-soft: #edf3ff;
+  --accent-text: #ffffff;
+  --accent-cyan: #2152e7;
+  --accent-2: #267dff;
+  --accent-gold: #d97300;
+  --primary: var(--accent);
+
+  --danger: #ec353e;
+  --danger-hover: #d42831;
+  --danger-plate: #a61b22;
+  --danger-soft: #fff0f1;
+  --success: #189952;
+  --success-soft: #eaf8f0;
+  --warning: #d97300;
+
+  --text-primary: #202220;
+  --text-secondary: #525550;
+  --text-muted: #686b64;
+  --text: var(--text-primary);
+  --muted: var(--text-muted);
+  --panel: var(--bg-dialog);
+  --panel-2: var(--bg-input);
+  --surface: var(--bg-dialog);
+
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 13px;
+  --radius-xl: 16px;
+  --radius-2xl: 17px;
+
+  --shadow-sm: 0 1px 0 rgba(32, 34, 32, 0.06);
+  --shadow-md: 0 6px 18px rgba(32, 34, 32, 0.08);
+  --shadow-lg: 0 12px 32px rgba(32, 34, 32, 0.11);
+  --shadow-xl: 0 16px 44px rgba(32, 34, 32, 0.15);
+  --focus-ring: 0 0 0 2px rgba(38, 125, 255, 0.22);
+}
+
+.theme-dark,
+html.theme-dark {
+  --bg-window: #111212;
+  --bg-panel: #181a1a;
+  --bg-canvas: #1f2121;
+  --bg-dialog: #232626;
+  --bg-input: #141616;
+  --bg-subtle: #272a2a;
+  --bg-hover: rgba(250, 250, 248, 0.06);
+  --bg-selected: rgba(41, 98, 246, 0.18);
+  --rail-bg: #151717;
+  --rail-hover: rgba(250, 250, 248, 0.07);
+  --rail-active: #252828;
+
+  --border: #2d302f;
+  --border-strong: #454947;
+  --qf-plate: rgba(0, 0, 0, 0.45);
+
+  --accent: #5294ff;
+  --accent-fill: #2962f6;
+  --accent-hover: #3d73ff;
+  --accent-pressed: #1f4fd1;
+  --accent-plate: #13338f;
+  --detection: #4eaeff;
+  --accent-soft: rgba(56, 118, 255, 0.20);
+  --accent-text: #ffffff;
+  --accent-cyan: #4eaeff;
+  --accent-2: #4eaeff;
+  --primary: var(--accent);
+
+  --danger: #ff525a;
+  --danger-hover: #ec353e;
+  --danger-plate: #991b22;
+  --danger-soft: rgba(236, 53, 62, 0.18);
+  --success: #34c778;
+  --success-soft: rgba(24, 153, 82, 0.18);
+  --warning: #ffa938;
+
+  --text-primary: #f2f2ef;
+  --text-secondary: #a6aaa4;
+  --text-muted: #848882;
+  --text: var(--text-primary);
+  --muted: var(--text-muted);
+  --panel: var(--bg-dialog);
+  --panel-2: var(--bg-input);
+  --surface: var(--bg-dialog);
+
+  --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.42);
+  --shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.54);
+  --shadow-xl: 0 20px 52px rgba(0, 0, 0, 0.64);
+  --focus-ring: 0 0 0 2px rgba(78, 174, 255, 0.28);
+}
+
+/* ── 1. Root & Shell Surfaces (100% Opaque in Light AND Dark Modes) ────── */
+html,
+html body,
+html body #root,
+html.theme-dark,
+html.theme-dark body,
+html.theme-dark #root,
+html body .app-shell,
+html.theme-dark body .app-shell,
+html body .studio-shell,
+html.theme-dark body .studio-shell {
+  background: var(--bg-window) !important;
+  background-image: none !important;
+  color: var(--text-primary);
+}
+
+.app-shell::before, .app-shell::after,
+.studio-shell .left-panel::before, .studio-shell .left-panel::after,
+.studio-shell .history-panel::before, .studio-shell .history-panel::after,
+.studio-shell .canvas-area::before, .studio-shell .canvas-area::after,
+.studio-shell .empty-canvas::before, .studio-shell .empty-canvas::after,
+.studio-shell .tools-hero::before, .studio-shell .tools-hero::after,
+.studio-shell .tool-card::before, .studio-shell .tool-card::after {
+  display: none !important;
+  content: none !important;
+}
+
+::selection {
+  background: #c2dcff;
+  color: #202220;
+}
+html.theme-dark ::selection {
+  background: rgba(78, 174, 255, 0.32);
+  color: #ffffff;
+}
+
+/* Unified scrollbars (including portaled dialogs & menus in dark mode) */
+html body * {
+  scrollbar-color: color-mix(in srgb, var(--text-muted) 38%, transparent) transparent;
+  scrollbar-width: thin;
+}
+html body ::-webkit-scrollbar { width: 7px; height: 7px; }
+html body ::-webkit-scrollbar-thumb,
+html.theme-dark body ::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-muted) 34%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+html body ::-webkit-scrollbar-thumb:hover,
+html.theme-dark body ::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--text-muted) 56%, transparent);
+}
+html body ::-webkit-scrollbar-track { background: transparent; }
+
+/* ── 2. Workspace Chrome, Resizers & Status Bar (Light & Dark) ─────────── */
+.studio-shell .shell-main,
+.studio-shell .workspace {
+  background: var(--bg-window) !important;
+}
+.studio-shell .status-bar,
+html.theme-dark .studio-shell .status-bar {
+  background: var(--rail-bg) !important;
+  border-top: 1px solid var(--border) !important;
+  color: var(--text-muted) !important;
+  height: 24px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+.studio-shell .window-controls button:hover { background: var(--rail-hover); }
+.studio-shell .window-controls .close:hover { background: var(--danger) !important; color: #ffffff !important; }
+
+/* Resizer handles & right history rail trigger in Light & Dark */
+.studio-shell .ws-resizer,
+.studio-shell .history-rail-control {
+  background: transparent !important;
+}
+.studio-shell .ws-resizer .ws-resizer-grip {
+  background: var(--border-strong) !important;
+  box-shadow: none !important;
+}
+.studio-shell .ws-resizer:hover .ws-resizer-grip {
+  background: var(--detection) !important;
+}
+html body .studio-shell .ws-resizer-reset {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong) !important;
+  background: var(--bg-canvas) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: var(--shadow-sm) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+html body .studio-shell .ws-resizer[data-modified="true"]:hover .ws-resizer-reset {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+html body .studio-shell .ws-resizer-reset:hover {
+  border-color: var(--detection) !important;
+  color: var(--accent) !important;
+  background: var(--bg-canvas) !important;
+}
+.studio-shell .history-rail-toggle {
+  background: var(--bg-canvas) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: var(--shadow-sm) !important;
+  transition:
+    border-color 140ms var(--qf-ease-out),
+    color 140ms var(--qf-ease-out),
+    background-color 140ms var(--qf-ease-out),
+    transform 120ms var(--qf-spring);
+}
+.studio-shell .history-rail-toggle:hover {
+  border-color: var(--detection) !important;
+  color: var(--accent) !important;
+  background: var(--bg-canvas) !important;
+  transform: translateX(-1px);
+}
+.studio-shell .history-rail-toggle:active {
+  transform: scale(0.92);
+}
+
+/* ── 3. Cards & Panels (Clean 1px Hairlines, No Glass or Blur) ─────────── */
+.studio-shell .left-panel,
+.studio-shell .history-panel,
+.studio-shell .canvas-area,
+.studio-shell .tools-hub .tool-card,
+.studio-shell .tools-hero,
+.studio-shell .settings-page > .modal,
+.studio-shell .works-library > *,
+.studio-shell .shell-task-row,
+html.theme-dark .studio-shell .left-panel,
+html.theme-dark .studio-shell .history-panel,
+html.theme-dark .studio-shell .canvas-area {
+  background: var(--bg-panel) !important;
+  background-image: none !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+  backdrop-filter: none !important;
+}
+.studio-shell .canvas-area,
+html.theme-dark .studio-shell .canvas-area {
+  background: var(--bg-canvas) !important;
+}
+.studio-shell .left-panel .panel-head,
+html.theme-dark .studio-shell .left-panel .panel-head {
+  border-bottom: 1px solid var(--border) !important;
+  background: var(--bg-panel) !important;
+}
+.studio-shell .left-panel .panel-head > span,
+.studio-shell .reference-catalog-cloud-mark,
+.studio-shell .reference-catalog-series-icon,
+.studio-shell .tavern-avatar.is-software {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent) !important;
+  box-shadow: none !important;
+}
+
+/* Empty canvas */
+.studio-shell .empty-canvas,
+html.theme-dark .studio-shell .empty-canvas {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.studio-shell .empty-canvas .empty-illustration.is-plain {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
+  transition: transform 200ms var(--qf-spring), border-color 160ms ease;
+}
+.studio-shell .empty-canvas:hover .empty-illustration.is-plain {
+  transform: translateY(-2px);
+  border-color: var(--detection);
+  color: var(--accent);
+}
+.studio-shell .empty-canvas:active .empty-illustration.is-plain {
+  transform: translateY(0) scale(0.96);
+}
+.studio-shell .empty-canvas .empty-illustration.is-plain .ui-icon { width: 26px; height: 26px; }
+.studio-shell .empty-canvas strong { font-size: 18px; color: var(--text-primary); }
+.studio-shell .empty-canvas > span:not(.empty-illustration):not(.empty-shortcuts) { color: var(--text-secondary); }
+.studio-shell .empty-shortcuts > span {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 999px;
+}
+
+/* ── 4. Cost Preview Card & Left Footer (Clean in Both Light & Dark) ───── */
+html body .cost-row.cost-card {
+  position: relative;
+  margin-top: 10px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--border) !important;
+  border-left: 3px solid var(--accent) !important;
+  border-radius: var(--radius-md);
+  background: var(--bg-canvas) !important;
+  color: var(--text-primary);
+  box-shadow: none !important;
+}
+html body .cost-row.cost-card.cost-free {
+  border-left-color: var(--success) !important;
+}
+html body .cost-row.cost-card.cost-warn {
+  border-left-color: var(--danger) !important;
+  background: color-mix(in srgb, var(--danger-soft) 40%, var(--bg-canvas)) !important;
+}
+html body .cost-row.cost-card > div:first-child > span {
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+html body .cost-row.cost-card .cost-primary {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+html body .cost-row.cost-card.cost-free .cost-primary {
+  border-color: color-mix(in srgb, var(--success) 32%, var(--border));
+  background: var(--success-soft);
+  color: var(--success);
+}
+html body .cost-row.cost-card.cost-warn .cost-primary {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+html body .cost-row.cost-card small {
+  color: var(--text-secondary) !important;
+  line-height: 1.5;
+}
+
+/* Left Footer & Account / Opus Allowance */
+.studio-shell .left-footer,
+html.theme-dark .studio-shell .left-footer {
+  background: var(--bg-panel) !important;
+  border-top: 1px solid var(--border) !important;
+  box-shadow: none !important;
+  padding: 8px 12px 10px;
+  gap: 8px;
+}
+html body .account-details-shell > button.account-details-toggle,
+html body .account-details-shell.collapsed > button.account-details-toggle {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between !important;
+  width: 100%;
+  min-height: 28px;
+  height: auto;
+  padding: 4px 8px !important;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+}
+html body .account-details-shell > button.account-details-toggle:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+html body .account-mini button {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-size: 11.5px;
+  transition: border-color 140ms var(--qf-ease-out), transform 110ms var(--qf-spring), color 140ms ease;
+}
+html body .account-mini button:hover:not(:disabled) {
+  border-color: var(--detection);
+  color: var(--accent);
+}
+html body .account-mini button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+html body .account-opus-usage {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md);
+  background: var(--bg-canvas) !important;
+  box-shadow: none !important;
+  padding: 6px 10px;
+  transition: border-color 140ms var(--qf-ease-out), transform 120ms var(--qf-spring);
+}
+html body .account-opus-usage:hover {
+  border-color: var(--detection) !important;
+}
+html body .account-opus-usage:active {
+  transform: scale(0.99);
+}
+html body .account-opus-label {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+/* ── 5. Quantized Line Field Button System (Workspace + Portals) ───────── */
+html body .btn,
+html body button.btn-secondary,
+html body .nai-account-manager > button,
+html body .history-group-create > button,
+html body .history-group-actions > button,
+html body .reference-ui-dialog-button,
+html.theme-dark body .btn,
+html.theme-dark body .history-group-create > button,
+html.theme-dark body .history-group-actions > button {
+  background: var(--bg-canvas);
+  background-image: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  box-shadow: 0 1px 0 var(--qf-plate);
+  text-shadow: none;
+  transform: translateY(0);
+  transition:
+    background-color 170ms var(--qf-ease-out),
+    border-color 170ms var(--qf-ease-out),
+    color 160ms var(--qf-ease-out),
+    box-shadow 170ms var(--qf-ease-out),
+    transform 190ms cubic-bezier(0.34, 1.45, 0.64, 1) !important;
+}
+
+html body .btn:hover:not(:disabled),
+html body button.btn-secondary:hover:not(:disabled),
+html body .nai-account-manager > button:hover:not(:disabled),
+html body .history-group-create > button:hover:not(:disabled),
+html body .history-group-actions > button:hover:not(:disabled),
+html body .reference-ui-dialog-button:hover:not(:disabled) {
+  background: var(--bg-canvas);
+  border-color: var(--detection);
+  color: var(--text-primary);
+  transform: translateY(-1.5px) !important;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--detection) 32%, var(--border)) !important;
+}
+
+html body .btn:active:not(:disabled),
+html body button.btn-secondary:active:not(:disabled),
+html body .nai-account-manager > button:active:not(:disabled),
+html body .history-group-create > button:active:not(:disabled),
+html body .history-group-actions > button:active:not(:disabled),
+html body .reference-ui-dialog-button:active:not(:disabled) {
+  background: var(--bg-subtle);
+  border-color: var(--accent);
+  transform: translateY(1.5px) scale(0.968) !important;
+  box-shadow: 0 0 0 transparent !important;
+  filter: none !important;
+  transition-duration: 90ms !important;
+}
+
+/* Primary CTA Button (Electric Blue + Structural Plate) */
+html body .btn.btn-primary,
+html body .btn.primary,
+html body .nai-account-primary,
+html body .pi-agent .pi-primary,
+html body .reference-ui-dialog-button-primary,
+html.theme-dark body .btn.btn-primary,
+html.theme-dark body .nai-account-primary,
+html.theme-dark body .pi-agent .pi-primary {
+  background: var(--accent-fill, var(--accent)) !important;
+  background-image: none !important;
+  border: 1px solid var(--accent-pressed) !important;
+  color: var(--accent-text) !important;
+  box-shadow: 0 2px 0 var(--accent-plate) !important;
+}
+html body .btn.btn-primary:hover:not(:disabled),
+html body .btn.primary:hover:not(:disabled),
+html body .nai-account-primary:hover:not(:disabled),
+html body .reference-ui-dialog-button-primary:hover:not(:disabled) {
+  background: var(--accent-hover) !important;
+  border-color: var(--accent) !important;
+  transform: translateY(-1.5px) !important;
+  box-shadow: 0 4px 0 var(--accent-plate) !important;
+}
+html body .btn.btn-primary:active:not(:disabled),
+html body .btn.primary:active:not(:disabled),
+html body .nai-account-primary:active:not(:disabled),
+html body .reference-ui-dialog-button-primary:active:not(:disabled) {
+  background: var(--accent-pressed) !important;
+  transform: translateY(2px) scale(0.972) !important;
+  box-shadow: 0 0 0 transparent !important;
+  transition-duration: 90ms !important;
+}
+
+/* Danger Button (Signal Red) */
+html body .btn.btn-danger,
+html.theme-dark body .btn.btn-danger {
+  background: var(--danger) !important;
+  background-image: none !important;
+  border: 1px solid var(--danger-hover) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 0 var(--danger-plate) !important;
+}
+html body .btn.btn-danger:hover:not(:disabled) {
+  background: var(--danger-hover) !important;
+  transform: translateY(-1.5px) !important;
+  box-shadow: 0 4px 0 var(--danger-plate) !important;
+}
+html body .btn.btn-danger:active:not(:disabled) {
+  transform: translateY(2px) scale(0.972) !important;
+  box-shadow: 0 0 0 transparent !important;
+  transition-duration: 90ms !important;
+}
+
+/* Ghost Button */
+html body .btn.btn-ghost,
+html.theme-dark body .btn.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+html body .btn.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border);
+  transform: translateY(-1px) !important;
+  box-shadow: none !important;
+}
+html body .btn.btn-ghost:active:not(:disabled) {
+  background: var(--bg-subtle);
+  transform: scale(0.955) !important;
+  box-shadow: none !important;
+}
+
+/* Disabled Controls */
+html body .btn:disabled,
+html body .btn.btn-primary:disabled,
+html body .btn.btn-danger:disabled,
+html body .history-group-create > button:disabled,
+html body .history-group-actions > button:disabled {
+  background: var(--bg-subtle) !important;
+  border-color: var(--border) !important;
+  color: var(--text-muted) !important;
+  box-shadow: none !important;
+  transform: none !important;
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Detection Blue Focus Ring (Quantized Line Field spec) */
+html body :is(button, .btn, [role="button"], summary):not(.image-preview-viewer):not(.zoom-frame-shell):not(.canvas-area):focus-visible {
+  outline: 2px solid var(--detection) !important;
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/* ── 6. Segmented Controls & Tabs (Tactile Switch Track) ───────────────── */
+html body :is(
+  .generate-mode-switcher,
+  .prompt-tabs,
+  .seed-mode-switch,
+  .quality-preset-segments,
+  .i2i-size-mode,
+  .mode-selector,
+  .nai-account-method-tabs
+) {
+  background: var(--bg-subtle) !important;
+  background-image: none !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md);
+  padding: 2px;
+  gap: 2px;
+  box-shadow: none !important;
+}
+.studio-shell .generate-mode-switcher { margin: 8px 12px 0; }
+
+html body :is(
+  .generate-mode-switcher,
+  .prompt-tabs,
+  .seed-mode-switch,
+  .quality-preset-segments,
+  .i2i-size-mode,
+  .mode-selector,
+  .nai-account-method-tabs
+) button {
+  background: transparent;
+  background-image: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  box-shadow: none;
+  min-height: 28px;
+  transition:
+    background-color 150ms var(--qf-ease-out),
+    border-color 150ms var(--qf-ease-out),
+    color 140ms var(--qf-ease-out),
+    box-shadow 150ms var(--qf-ease-out),
+    transform 110ms var(--qf-spring);
+}
+.studio-shell .generate-mode-switcher button::after,
+.studio-shell .prompt-tabs button::after { display: none; }
+
+html body :is(
+  .generate-mode-switcher,
+  .prompt-tabs,
+  .seed-mode-switch,
+  .quality-preset-segments,
+  .i2i-size-mode,
+  .mode-selector,
+  .nai-account-method-tabs
+) button:hover:not(.active):not([aria-checked="true"]):not([aria-selected="true"]) {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-canvas) 45%, transparent);
+}
+html body :is(
+  .generate-mode-switcher,
+  .prompt-tabs,
+  .seed-mode-switch,
+  .quality-preset-segments,
+  .i2i-size-mode,
+  .mode-selector,
+  .nai-account-method-tabs
+) button:active {
+  transform: scale(0.97);
+}
+html body :is(
+  .generate-mode-switcher button.active,
+  .prompt-tabs button.active,
+  .seed-mode-switch button.active,
+  .quality-preset-segments button[aria-checked="true"],
+  .quality-preset-segments button.active,
+  .i2i-size-mode button.active,
+  .mode-selector button.active,
+  .nai-account-method-tabs button[aria-selected="true"]
+) {
+  background: var(--bg-canvas) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+  box-shadow: 0 1px 2px var(--qf-plate) !important;
+}
+
+/* ── 7. Form Inputs, Textareas & Select Triggers (Workspace + Portals) ─── */
+html body :is(
+  .field input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  .field textarea,
+  .prompt-box,
+  .prompt-chip-search,
+  .history-group-create input,
+  .select-menu-trigger:not(.pi-chat-more):not(.pi-tools-trigger),
+  .style-preset-trigger
+),
+html.theme-dark body :is(
+  .field input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  .field textarea,
+  .prompt-box,
+  .prompt-chip-search,
+  .history-group-create input,
+  .select-menu-trigger:not(.pi-chat-more):not(.pi-tools-trigger),
+  .style-preset-trigger
+) {
+  background: var(--bg-input) !important;
+  background-image: none !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md);
+  box-shadow: none !important;
+  color: var(--text-primary) !important;
+  transition:
+    border-color 140ms var(--qf-ease-out),
+    box-shadow 140ms var(--qf-ease-out),
+    background-color 140ms var(--qf-ease-out);
+}
+
+html body :is(
+  .field input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  .field textarea,
+  .prompt-box,
+  .prompt-chip-search,
+  .history-group-create input,
+  .select-menu-trigger:not(.pi-chat-more):not(.pi-tools-trigger),
+  .style-preset-trigger
+):hover:not(:disabled) {
+  border-color: var(--border-strong) !important;
+}
+
+html body :is(.nai-account-settings, .nai-account-panel) .nai-account-selector {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+}
+
+html body :is(
+  .field input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  .field textarea,
+  .prompt-box,
+  .prompt-chip-search,
+  .history-group-create input
+):focus,
+html body :is(.select-menu-trigger, .style-preset-trigger)[aria-expanded="true"] {
+  border-color: var(--detection) !important;
+  box-shadow: var(--focus-ring) !important;
+  outline: none !important;
+}
+
+html body input::placeholder,
+html body textarea::placeholder {
+  color: color-mix(in srgb, var(--text-muted) 85%, transparent);
+}
+html body input[type="checkbox"],
+html body input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+/* ── 8. Downward List Expansion ("列表向下展开") & Popovers / Dialogs ─── */
+.select-menu-popover,
+.style-preset-menu,
+.menu-pop,
+.history-action-menu,
+.shell-task-popover,
+.shell-palette,
+.ac-dropdown,
+.context-menu,
+.prompt-chunk-popover,
+.weight-help-popover,
+.modal,
+.app-confirm-dialog,
+.nai-account-panel {
+  background: var(--bg-dialog) !important;
+  background-image: none !important;
+  border: 1px solid var(--border-strong) !important;
+  color: var(--text-primary) !important;
+  box-shadow: var(--shadow-lg) !important;
+  backdrop-filter: none !important;
+}
+.modal, .app-confirm-dialog, .shell-palette, .nai-account-panel { border-radius: var(--radius-lg) !important; }
+.modal-backdrop, .app-confirm-backdrop, .nai-account-overlay { background: rgba(17, 18, 18, 0.36) !important; backdrop-filter: none !important; }
+html.theme-dark .modal-backdrop, html.theme-dark .app-confirm-backdrop, html.theme-dark .shell-palette-backdrop, html.theme-dark .nai-account-overlay {
+  background: rgba(5, 6, 6, 0.62) !important;
+}
+html body :is(.modal, .nai-account-panel, .app-confirm-dialog, .shell-task-popover, .shell-palette)[tabindex="-1"]:is(:focus, :focus-visible) {
+  outline: none !important;
+}
+.workbench-dock .modal-backdrop { background: transparent !important; }
+.workbench-dock .modal-backdrop > .modal { box-shadow: none !important; border-color: var(--border) !important; }
+
+/* SelectMenu: Crisp Top-Origin Downward Unfold & Upward Retract */
+html body .select-menu-popover.disclosure-popover {
+  interpolate-size: allow-keywords;
+  height: var(--disclosure-height, auto);
+  opacity: 1;
+  transform-origin: top center;
+  transform: translateY(0) scaleY(1);
+  overflow-y: auto;
+  transition:
+    height 190ms var(--qf-spring),
+    opacity 150ms var(--qf-ease-out),
+    transform 190ms var(--qf-spring);
+}
+html body .select-menu-popover.disclosure-popover[data-disclosure-open="false"] {
+  height: 0;
+  min-height: 0;
+  opacity: 0;
+  transform: translateY(-5px) scaleY(0.96);
+  pointer-events: none;
+  overflow: clip;
+  transition:
+    height 115ms var(--qf-ease-in),
+    opacity 100ms linear,
+    transform 115ms var(--qf-ease-in);
+}
+
+@starting-style {
+  html body .select-menu-popover.disclosure-popover[data-disclosure-open="true"] {
+    height: 0;
+    opacity: 0;
+    transform: translateY(-6px) scaleY(0.96);
+  }
+}
+
+/* Compound Dropdown Panels (Task Center, Command Palette, Style Preset Menu, Template Menu) */
+html body .qf-dropdown-panel[data-disclosure-open="true"] {
+  animation: qf-dropdown-down 200ms var(--qf-spring) both;
+}
+html body .qf-dropdown-panel[data-disclosure-open="false"] {
+  pointer-events: none;
+  animation: qf-dropdown-up 125ms var(--qf-ease-in) forwards;
+}
+
+html body :is(.history-action-menu, .ac-dropdown, .context-menu, .menu-pop:not(.disclosure-popover)) {
+  transform-origin: top center;
+  animation: qf-dropdown-down 180ms var(--qf-spring) both;
+}
+
+/* Select options & menu items tactile feel */
+html body .select-menu-option {
+  border-radius: var(--radius-sm);
+  transition: background-color 110ms var(--qf-ease-out), color 110ms var(--qf-ease-out), transform 100ms var(--qf-spring);
+}
+html body .select-menu-option:hover { background: var(--bg-hover); }
+html body .select-menu-option:active { transform: scale(0.988); }
+html body .select-menu-popover [role="option"][aria-selected="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Inline Collapsible Lists (AnimatedCollapse): Smooth Downward Slide + Row Unfold */
+html body .animated-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 170ms var(--qf-ease-in),
+    opacity 130ms linear,
+    visibility 0s 170ms;
+}
+html body .animated-collapse > div {
+  min-height: 0;
+  overflow: hidden;
+  transform: translateY(-6px);
+  transition: transform 170ms var(--qf-ease-in);
+}
+html body .animated-collapse.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    grid-template-rows 220ms var(--qf-spring),
+    opacity 180ms var(--qf-ease-out),
+    visibility 0s;
+}
+html body .animated-collapse.is-open > div {
+  transform: translateY(0);
+  transition: transform 220ms var(--qf-spring);
+}
+
+@keyframes qf-dropdown-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scaleY(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+@keyframes qf-dropdown-up {
+  from {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px) scaleY(0.97);
+  }
+}
+
+/* ── 9. Toggles, Badges, Progress, History Thumbs & Settings Page ─────── */
+.studio-shell [role="switch"][aria-checked="true"] .stream-preview-state,
+html body .toggle input:checked + span,
+html body .toggle-track.on { background: var(--accent) !important; }
+
+.studio-shell .tool-card i,
+.studio-shell .tool-card-heading i { background: var(--accent-soft); color: var(--accent); box-shadow: none; }
+.studio-shell .tool-card {
+  background: var(--bg-canvas) !important;
+  transition: border-color 150ms var(--qf-ease-out), transform 160ms var(--qf-spring), box-shadow 160ms var(--qf-ease-out);
+}
+.studio-shell .tool-card:hover {
+  border-color: var(--detection) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--detection) 22%, var(--border)) !important;
+}
+.studio-shell .tool-card:active {
+  transform: translateY(0.5px) scale(0.992);
+  box-shadow: none !important;
+}
+
+.studio-shell .queue-progressbar-fill,
+.studio-shell .shell-task-bar > span,
+.studio-shell .update-install-progress i {
+  background: var(--accent) !important;
+  background-image: none !important;
+}
+
+.studio-shell .history-item,
+html.theme-dark .studio-shell .history-item {
+  border-radius: var(--radius-md);
+  box-shadow: none;
+  border: 1px solid var(--border) !important;
+  background: var(--bg-canvas) !important;
+  transition: border-color 150ms var(--qf-ease-out), transform 150ms var(--qf-spring);
+}
+.studio-shell .history-item > button:first-child,
+html.theme-dark .studio-shell .history-item > button:first-child {
+  background: var(--bg-subtle) !important;
+}
+.studio-shell .history-item:hover {
+  border-color: var(--detection) !important;
+}
+.studio-shell .history-item:active {
+  transform: scale(0.988);
+}
+.studio-shell .history-item.active,
+.studio-shell .history-item[aria-current="true"] {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* Settings Page & Nav */
+.studio-shell .settings-as-page > header > .settings-page-back { display: none; }
+.studio-shell .settings-as-page > header > h2 { font-size: 16px; }
+.studio-shell .settings-as-page > header { border-bottom: 1px solid var(--border); background: var(--bg-panel) !important; }
+.studio-shell .settings-as-page > footer { border-top: 1px solid var(--border); background: var(--bg-panel) !important; }
+.studio-shell .settings-nav { background: var(--bg-panel) !important; border-right: 1px solid var(--border); }
+.studio-shell .settings-content { background: var(--bg-canvas) !important; }
+.studio-shell .settings-nav button {
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  transition: background-color 130ms var(--qf-ease-out), color 130ms var(--qf-ease-out), transform 110ms var(--qf-spring);
+}
+.studio-shell .settings-nav button:hover { background: var(--bg-hover); color: var(--text-primary); }
+.studio-shell .settings-nav button:active { transform: scale(0.975); }
+.studio-shell .settings-nav button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.studio-shell .settings-nav button.active::before { display: none; }
+
+/* Canvas Floating Toolbar */
+.studio-shell .image-viewer-toolbar,
+html.theme-dark .studio-shell .image-viewer-toolbar {
+  background: var(--bg-dialog) !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 999px !important;
+  padding: 4px 6px !important;
+  box-shadow: var(--shadow-md) !important;
+  color: var(--text-primary) !important;
+}
+.studio-shell .image-viewer-toolbar :is(button, .btn, .image-favorite-action) {
+  border-radius: 999px !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: var(--text-secondary);
+}
+.studio-shell .image-viewer-toolbar button:hover:not(:disabled) {
+  background: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+  transform: none !important;
+}
+.studio-shell .image-viewer-toolbar button:active:not(:disabled) {
+  transform: scale(0.94) !important;
+}
+
+/* Toast */
+html body .toast {
+  background: #202220 !important;
+  color: #fafaf8 !important;
+  border: 1px solid #3a3d3a !important;
+  border-radius: 999px !important;
+  padding: 8px 16px !important;
+  box-shadow: var(--shadow-lg) !important;
+  backdrop-filter: none !important;
+}
+html body .toast button { color: #fafaf8 !important; }
+
+/* Settings page covers the workspace cleanly */
+.studio-shell .shell-main > .workspace[inert] { visibility: hidden; }
+.studio-shell .shell-main > .workspace[inert] * { visibility: hidden !important; }
+
+/* Keep history reachable on compact windows */
+@media (max-width: 1360px) {
+  .studio-shell .history-rail > .history-panel { display: grid; }
+  .studio-shell .history-rail-control { display: flex; }
+}
+
+/* ── 10. Comprehensive App-Wide Spring Micro-Interactions (GPU-Only) ────── */
+/* Universal button & action spring across all 14 pages */
+html body :is(
+  .reference-ui-btn,
+  .prompt-tool-btn,
+  .prompt-toolbar-toggle,
+  .compact-icon-button,
+  .aitag-pagination button,
+  .tavern-icon-button,
+  .tavern-starter-grid > button,
+  .tag-comic-steps button,
+  .comic-step-btn,
+  .account-mini button,
+  .account-opus-usage,
+  .vibe-save-preset,
+  .vibe-remove,
+  .modal > header button:not(.btn),
+  .reference-preset-close
+) {
+  transition:
+    background-color 170ms var(--qf-ease-out),
+    border-color 170ms var(--qf-ease-out),
+    color 160ms var(--qf-ease-out),
+    box-shadow 170ms var(--qf-ease-out),
+    transform 190ms cubic-bezier(0.34, 1.45, 0.64, 1) !important;
+}
+
+html body :is(
+  .reference-ui-btn,
+  .aitag-pagination button,
+  .tavern-starter-grid > button,
+  .tag-comic-steps button,
+  .comic-step-btn,
+  .account-mini button,
+  .account-opus-usage
+):hover:not(:disabled) {
+  border-color: var(--detection) !important;
+  transform: translateY(-1.5px) !important;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--detection) 28%, var(--border)) !important;
+}
+html body .reference-ui-btn.reference-ui-btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 4px 0 var(--accent-plate) !important;
+}
+
+html body :is(
+  .reference-ui-btn,
+  .prompt-tool-btn,
+  .prompt-toolbar-toggle,
+  .compact-icon-button,
+  .aitag-pagination button,
+  .tavern-icon-button,
+  .tavern-starter-grid > button,
+  .tag-comic-steps button,
+  .comic-step-btn,
+  .account-mini button,
+  .account-opus-usage,
+  .vibe-save-preset,
+  .vibe-remove,
+  .modal > header button:not(.btn),
+  .reference-preset-close,
+  .inpaint-mask-toolbar button,
+  .image-preview-controls button
+):active:not(:disabled) {
+  transform: translateY(1.5px) scale(0.955) !important;
+  transition-duration: 85ms !important;
+  filter: none !important;
+}
+
+/* Segmented tabs & section pills: active spring pop + tactile click */
+html body :is(
+  .generate-mode-switcher,
+  .prompt-tabs,
+  .seed-mode-switch,
+  .quality-preset-segments,
+  .i2i-size-mode,
+  .mode-selector,
+  .nai-account-method-tabs,
+  .panel-section-nav,
+  .reference-ui-navbar,
+  .reference-preset-tabs,
+  .tavern-inspector-tabs
+) button {
+  transition:
+    background-color 170ms var(--qf-ease-out),
+    border-color 170ms var(--qf-ease-out),
+    color 160ms var(--qf-ease-out),
+    box-shadow 170ms var(--qf-ease-out),
+    transform 190ms cubic-bezier(0.34, 1.45, 0.64, 1) !important;
+}
+html body :is(
+  .generate-mode-switcher,
+  .prompt-tabs,
+  .seed-mode-switch,
+  .quality-preset-segments,
+  .i2i-size-mode,
+  .mode-selector,
+  .nai-account-method-tabs,
+  .panel-section-nav,
+  .reference-ui-navbar,
+  .reference-preset-tabs,
+  .tavern-inspector-tabs
+) button:active:not(:disabled) {
+  transform: scale(0.945) !important;
+  transition-duration: 80ms !important;
+}
+html body :is(
+  .generate-mode-switcher button.active,
+  .prompt-tabs button.active,
+  .seed-mode-switch button.active,
+  .quality-preset-segments button[aria-checked="true"],
+  .quality-preset-segments button.active,
+  .panel-section-nav button.active
+) {
+  animation: qf-pill-pop 210ms cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+@keyframes qf-pill-pop {
+  from { transform: scale(0.94); }
+  to   { transform: scale(1); }
+}
+
+/* Left nav rail active bar vertical spring pop */
+html body button.shell-rail-item.active::after {
+  animation: qf-rail-bar-in 220ms cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+@keyframes qf-rail-bar-in {
+  from { transform: scaleY(0.2); opacity: 0.4; }
+  to   { transform: scaleY(1); opacity: 1; }
+}
+
+/* Dropdown triggers & downward list expansion */
+html body :is(.select-menu-trigger, .style-preset-trigger) {
+  transition:
+    border-color 160ms var(--qf-ease-out),
+    box-shadow 160ms var(--qf-ease-out),
+    background-color 160ms var(--qf-ease-out),
+    transform 180ms cubic-bezier(0.34, 1.45, 0.64, 1) !important;
+}
+html body :is(.select-menu-trigger, .style-preset-trigger):hover:not(:disabled) {
+  transform: translateY(-0.5px);
+}
+html body :is(.select-menu-trigger, .style-preset-trigger):active:not(:disabled) {
+  transform: scale(0.985) !important;
+  transition-duration: 80ms !important;
+}
+html body :is(.select-menu-trigger, .style-preset-trigger) :is(.select-menu-chevron, svg:last-child) {
+  transition: transform 200ms cubic-bezier(0.34, 1.45, 0.64, 1), color 150ms ease !important;
+}
+html body :is(.select-menu-trigger, .style-preset-trigger)[aria-expanded="true"] :is(.select-menu-chevron, svg:last-child) {
+  transform: rotate(180deg) !important;
+  color: var(--accent) !important;
+}
+
+/* Dropdown & context-menu option rows: crisp rightward slide + tactile click */
+html body :is(
+  .select-menu-option,
+  .style-preset-item,
+  .menu-pop button,
+  .context-menu button,
+  .history-action-menu button,
+  .ac-item
+) {
+  transition:
+    background-color 140ms var(--qf-ease-out),
+    color 140ms var(--qf-ease-out),
+    transform 170ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+html body :is(
+  .select-menu-option,
+  .menu-pop button,
+  .context-menu button,
+  .history-action-menu button,
+  .ac-item
+):hover:not(:disabled) {
+  transform: translateX(3px) !important;
+}
+html body :is(
+  .select-menu-option,
+  .style-preset-item,
+  .menu-pop button,
+  .context-menu button,
+  .history-action-menu button,
+  .ac-item
+):active:not(:disabled) {
+  transform: scale(0.975) !important;
+  transition-duration: 75ms !important;
+}
+
+/* Accordions & AnimatedCollapse downward reveal */
+html .animated-collapse {
+  transition:
+    grid-template-rows 200ms var(--qf-ease-in),
+    opacity 150ms var(--qf-ease-in),
+    visibility 0s 200ms !important;
+}
+html .animated-collapse.is-open {
+  transition:
+    grid-template-rows 240ms var(--qf-spring),
+    opacity 190ms var(--qf-ease-out),
+    visibility 0s !important;
+}
+html .animated-collapse > div {
+  transform: translateY(-5px);
+  transition: transform 220ms var(--qf-spring);
+}
+html .animated-collapse.is-open > div {
+  transform: translateY(0);
+}
+
+/* Switches, checkboxes, radios & range sliders: spring bounce */
+html body :is(.toggle, .toggle-switch, .compact-switch, .char-enabled-toggle, .tavern-toggle, [role="switch"]) {
+  transition: background-color 180ms var(--qf-ease-out), border-color 150ms var(--qf-ease-out), transform 170ms cubic-bezier(0.34, 1.45, 0.64, 1) !important;
+}
+html body :is(.toggle, .char-enabled-toggle):active:not(:disabled) {
+  transform: scale(0.95) !important;
+}
+html body :is(input[type="checkbox"], input[type="radio"]) {
+  transition: transform 180ms cubic-bezier(0.34, 1.5, 0.64, 1) !important;
+}
+html body :is(input[type="checkbox"], input[type="radio"]):active:not(:disabled) {
+  transform: scale(0.84) !important;
+}
+html body :is(input[type="checkbox"], input[type="radio"]):checked {
+  animation: qf-check-pop 200ms cubic-bezier(0.34, 1.5, 0.64, 1);
+}
+@keyframes qf-check-pop {
+  0%   { transform: scale(0.82); }
+  65%  { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+html body input[type="range"]::-webkit-slider-thumb {
+  transition: transform 170ms cubic-bezier(0.34, 1.45, 0.64, 1), box-shadow 150ms var(--qf-ease-out), background-color 150ms ease !important;
+}
+html body input[type="range"]:hover:not(:disabled)::-webkit-slider-thumb {
+  transform: scale(1.16);
+}
+html body input[type="range"]:active:not(:disabled)::-webkit-slider-thumb {
+  transform: scale(1.26);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--detection) 24%, transparent);
+}
+
+/* Cards, gallery tiles & dropzones across all 14 pages: spring lift + image zoom + tactile press */
+.studio-shell :is(
+  .works-tile,
+  .aitag-card,
+  .reference-catalog-card,
+  .reference-preset-card,
+  .style-card,
+  .artist-lab-mode-card,
+  .tavern-library-card,
+  .redraw-project-card,
+  .prompt-codex-entry
+) {
+  transition:
+    border-color 170ms var(--qf-ease-out),
+    transform 200ms var(--qf-spring),
+    box-shadow 180ms var(--qf-ease-out) !important;
+}
+.studio-shell :is(
+  .works-tile,
+  .aitag-card,
+  .reference-catalog-card,
+  .reference-preset-card,
+  .style-card,
+  .artist-lab-mode-card,
+  .tavern-library-card,
+  .redraw-project-card,
+  .prompt-codex-entry
+):hover {
+  border-color: var(--detection) !important;
+  transform: translateY(-3px) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.studio-shell :is(
+  .works-tile,
+  .aitag-card,
+  .reference-catalog-card,
+  .reference-preset-card,
+  .style-card,
+  .artist-lab-mode-card,
+  .tavern-library-card,
+  .redraw-project-card
+):active {
+  transform: translateY(0) scale(0.985) !important;
+  transition-duration: 85ms !important;
+}
+
+/* Page & settings view transitions: crisp 200ms directional spring reveal */
+html .studio-shell .persistent-tools-view.is-active:not([data-view-scope="tab:works"]) > * {
+  animation: qf-surface-in 200ms var(--qf-spring);
+}
+.studio-shell .settings-content > * {
+  animation: qf-surface-in 200ms var(--qf-spring);
+}
+@keyframes qf-surface-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Toast entrance */
+html body .toast {
+  animation: qf-toast-in 220ms cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+@keyframes qf-toast-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Lightweight GPU & scroll containment: kill ambient blurs & skip offscreen layout */
+.app-shell::before,
+.app-shell::after,
+body::before,
+body::after {
+  display: none !important;
+  filter: none !important;
+}
+.studio-shell :is(.reference-catalog-card, .aitag-card, .prompt-codex-entry) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 280px;
+}
+
+/* Never animate canvas / drawing / drag-resizer coordinates, and honor reduced motion */
+html body :is(canvas, .inpaint-base-img, .inpaint-cursor, .inpaint-region-overlay, .inpaint-mask-canvas, .ws-resizer, .workbench-dock-resizer, .shell-rail-resizer, .image-preview-stage > img, .image-preview-transform, .char-position-marker) {
+  transition: none !important;
+}
+html.motion-reduced *,
+html.motion-reduced *::before,
+html.motion-reduced *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}

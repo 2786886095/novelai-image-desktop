@@ -3,6 +3,7 @@ import { createElement, Suspense, useCallback, useEffect, useMemo, useState, typ
 import { getToolsHubText } from "./i18n";
 import { useAppStore } from "./store";
 import { Icon, type IconName } from "./components/icons";
+import { OPEN_TOOL_EVENT, takePendingTool } from "./shell/nav-model";
 
 import {metadataToolLabels} from "./image-metadata-tool-labels";
 
@@ -164,6 +165,23 @@ export default function ToolsHub() {
   useEffect(() => {
     localStorage.setItem("langbai.tools.active.v1", activeTool);
   }, [activeTool]);
+
+  // Navigation rail / command palette can open a tool directly. The request
+  // is honoured whether the page was already mounted or is mounting now.
+  useEffect(() => {
+    const allowed = (tool: unknown): tool is ToolId =>
+      typeof tool === "string" && tool in TOOL_ICONS
+      && (tool !== "artistLab" || isWindows) && (tool !== "comfyuiLocal" || Boolean(window.naiComfy));
+    const apply = (tool: unknown) => {
+      if (tool === "hub") setActiveTool("hub");
+      else if (allowed(tool)) { void TOOL_LOADERS[tool]?.(); setActiveTool(tool); }
+    };
+    apply(takePendingTool());
+    if (typeof window.addEventListener !== "function") return;
+    const onRequest = (event: Event) => { takePendingTool(); apply((event as CustomEvent).detail); };
+    window.addEventListener(OPEN_TOOL_EVENT, onRequest);
+    return () => window.removeEventListener(OPEN_TOOL_EVENT, onRequest);
+  }, [isWindows]);
 
   useEffect(() => {
     if (redirectLegacyAitag) setActiveTab("onlineGallery");

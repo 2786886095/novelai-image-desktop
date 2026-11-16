@@ -8,10 +8,10 @@ import { confirmAction } from "./components/confirm";
 import { useAppStore } from "./store";
 import {InlineReversePromptSkillControls, callSelectedInlineReverse, reversePromptSelectionIdentity} from './components/InlineReversePromptSkillControls';
 import { imagePasteProps } from "./image-paste";
-import { detectiveRoundBudget, detectiveRounds, detectiveParameters, detectiveRecoveryLabels, resetDetectiveDraft, type DetectiveParameters, type DetectiveSnapshot } from "./artist-detective-contract";
+import { detectiveRoundBudget, detectiveRounds, detectiveParameters, detectiveRecoveryLabels, parseDetectiveArtists, resetDetectiveDraft, type DetectiveParameters, type DetectiveSnapshot } from "./artist-detective-contract";
 
 type Target = { filePath: string; fileUrl: string; name: string };
-type Draft = { target: Target | null; prompt: string; style: string; subjectHint: string; knownCharacter: boolean; reverseMode: "tags" | "natural" | "mixed"; budget: number; parameters: DetectiveParameters };
+type Draft = { lockedArtistText: string; target: Target | null; prompt: string; style: string; subjectHint: string; knownCharacter: boolean; reverseMode: "tags" | "natural" | "mixed"; budget: number; parameters: DetectiveParameters };
 type Download = Awaited<ReturnType<Window["naiDesktop"]["artistDetectiveDownloadStatus"]>>;
 const bytes = (value: number) => value >= 1024 ** 3 ? `${(value / 1024 ** 3).toFixed(2)} GiB` : `${(value / 1024 ** 2).toFixed(1)} MiB`;
 const DOWNLOAD_STAGE: Record<string, string> = { idle: "按需下载", downloading: "下载中", verifying: "校验 SHA-256", extracting: "解压中", checking: "检查 CUDA 与模型", complete: "安装完成", cancelled: "已取消，可继续", failed: "安装失败" };
@@ -21,13 +21,13 @@ function restore(): Draft {
     const value = JSON.parse(localStorage.getItem(KEY) ?? "null");
     if (value && typeof value.prompt === "string" && typeof value.style === "string") {
       detectiveRounds(value.budget);
-      return { target: value.target ?? null, prompt: value.prompt, style: value.style,
+      return { lockedArtistText: typeof value.lockedArtistText==="string"?value.lockedArtistText:"", target: value.target ?? null, prompt: value.prompt, style: value.style,
         subjectHint: typeof value.subjectHint === "string" ? value.subjectHint : "", knownCharacter: value.knownCharacter === true,
         reverseMode: value.reverseMode === "tags" || value.reverseMode === "natural" ? value.reverseMode : "mixed",
         budget: value.budget, parameters: detectiveParameters(value.parameters) };
     }
   } catch { /* new or invalid settings */ }
-  return { target: null, prompt: "", style: "", subjectHint: "", knownCharacter: false, reverseMode: "mixed", budget: 300, parameters: detectiveParameters() };
+  return { lockedArtistText:"", target: null, prompt: "", style: "", subjectHint: "", knownCharacter: false, reverseMode: "mixed", budget: 300, parameters: detectiveParameters() };
 }
 const STAGE: Record<string, string> = { idle: "未开始", loading: "校验与加载本地模型", retrieving: "检索相似画师组合", generating: "正在生成", generated: "图片已保存", scoring: "本地评分", ranking: "本地筛选下一轮组合", rate_limited: "请求限流等待", scored: "本轮评分完成", complete: "迭代完成", failed: "任务已停止" };
 
@@ -180,6 +180,21 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
           <small>{ft("修改这些选项后需重新点击反推；结果填入上方固定内容提示词，不会自动开始生图。")}</small>
         </section>
         <label><span>{ft("固定辅助画风词（可选）")}</span><textarea disabled={active} value={draft.style} onChange={e => patch({ style: e.target.value })} /></label>
+        <label><span>{ft("固定画师标签（可选）")}</span>
+          <textarea disabled={active} value={draft.lockedArtistText} maxLength={1700}
+            placeholder="artist:patzzi, 1.2::artist:(other_artist)::"
+            aria-describedby="detective-locked-artists-help" onChange={e=>patch({lockedArtistText:e.target.value})} />
+        </label>
+        <small id="detective-locked-artists-help">{ft("支持手动添加目录外标签，逗号或换行分隔，最多 8 位。每张搜索图和复测图都保留固定画师；未指定权重时用 1.0。")}</small>
+        <section className="detective-parameters">
+          <h3>{ft("迭代图片保存位置")}</h3>
+          <p style={{overflowWrap:"anywhere"}}>{snapshot?.outputRoot??ft("默认保存到任务目录")}</p>
+          <div className="artist-candidate-actions">
+            <Button disabled={active} onClick={()=>void action(()=>window.naiDesktop.artistDetectiveOutputDirectory("pick"))}>{ft("选择迭代图片保存目录")}</Button>
+            {snapshot?.outputRoot&&<Button disabled={active} onClick={()=>void action(()=>window.naiDesktop.artistDetectiveOutputDirectory("reset"))}>{ft("恢复默认")}</Button>}
+          </div>
+          <small>{ft("仅影响新任务。图片另存到所选目录的独立任务子文件夹；日志、恢复记录和原图继续保留在内部任务目录。清空列表不会清除另存副本。")}</small>
+        </section>
         <div className="artist-run-options">
           <CommittedNumberInput label={ft("迭代轮数")} value={detectiveRounds(draft.budget)} min={1} disabled={active} normalize={v => Math.max(1, Math.floor(v))} onCommit={rounds => { try { patch({ budget: detectiveRoundBudget(rounds) }); } catch (e) { setError(String(e)); } }} />
           <CommittedNumberInput label={ft("最多生成图片数（含最终复测）")} value={draft.budget} min={24} step={2} disabled={active} normalize={v => Math.max(24, Math.floor(v / 2) * 2)} onCommit={budget => { try { detectiveRounds(budget); patch({ budget }); } catch (e) { setError(String(e)); } }} />
@@ -211,10 +226,11 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
     </section>
     <section className="artist-lab-actions">
       {snapshot?.running ? <Button variant="danger" disabled={busy} onClick={() => void action(() => window.naiDesktop.artistDetectiveStop())}>{ft("停止（保留当前请求结果）")}</Button>
-        : <Button variant="primary" disabled={active || !runtimeVerified || !draft.target || !draft.prompt.trim()} onClick={() => void action(() => window.naiDesktop.artistDetectiveStart({ image: draft.target!.filePath, prompt: draft.prompt, style: draft.style, budget: draft.budget, parameters: draft.parameters }))}>{snapshot?.directory ? recoveryText.newRun : ft("开始自动迭代")}</Button>}
+        : <Button variant="primary" disabled={active || !runtimeVerified || !draft.target || !draft.prompt.trim()} onClick={() => void action(() => window.naiDesktop.artistDetectiveStart({ image: draft.target!.filePath, prompt: draft.prompt, style: draft.style, budget: draft.budget, parameters: draft.parameters, lockedArtists:parseDetectiveArtists(draft.lockedArtistText) }))}>{snapshot?.directory ? recoveryText.newRun : ft("开始自动迭代")}</Button>}
       {!snapshot?.running && snapshot?.recovery?.supported && snapshot.recovery.manifestSha256 && <Button disabled={active} onClick={()=>void action(()=>window.naiDesktop.artistDetectiveResume({directory:snapshot.directory!,manifestSha256:snapshot.recovery!.manifestSha256!,pendingRequestHash:snapshot.recovery!.pendingRequestHash}))}>{recoveryText.resume}</Button>}
       <span role="status">{snapshot ? ft("{stage} · {done}/{total} 张",{stage:snapshot.stage==='paused'?recoveryText.paused:ft(STAGE[snapshot.stage] ?? snapshot.stage),done:snapshot.completed,total:snapshot.budget}) : ft("读取状态…")}</span>
       <Button disabled={!snapshot?.directory} onClick={() => void window.naiDesktop.artistDetectiveOpenResults()}>{ft("打开结果目录")}</Button>
+      {snapshot?.savedImagesDirectory&&<Button onClick={()=>void action(()=>window.naiDesktop.artistDetectiveOpenSavedImages())}>{ft("打开图片保存目录")}</Button>}
       <Button disabled={active || !snapshot?.directory} onClick={() => void clearResults()}>{ft("清空迭代结果")}</Button>
     </section>
     {snapshot?.running && <div className="detective-run-progress">
@@ -233,6 +249,7 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
     </div>}
     {!snapshot?.running && snapshot?.recovery?.message && <p role="status">{ft(snapshot.recovery.message)}</p>}
     {!snapshot?.running && snapshot?.recovery?.requiresPaidReplayConfirmation && <p role="status">{recoveryText.warning}</p>}
+    {snapshot?.outputWarning&&<p role="status">{ft(snapshot.outputWarning)}</p>}
     {(error || snapshot?.message) && <p className="artist-error" role="alert">{ft(error || snapshot?.message || "")}</p>}
     {!!snapshot?.candidates.length && <section className="artist-gallery-section"><h3>{snapshot.candidates[0].phase === "finalists" ? ft("最终候选 · 4 个新 Seed 的平均相似度") : ft("搜索候选 · 2 个固定 Seed 的平均相似度")}</h3><div className="artist-candidate-grid">{snapshot.candidates.map((item, i) => <article className="artist-candidate done" key={item.image + item.phase}>
       <header className="artist-candidate-header"><b>#{i + 1} · {item.score.toFixed(4)}</b><span>{ft(item.phase === 'finalists' ? '最终复测' : '搜索候选')}</span></header>

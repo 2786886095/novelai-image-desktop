@@ -1,11 +1,11 @@
 /** Shared interaction lifecycle. Visual-only exits never retain live controls. */
-export const STUDIO_MOTION = {enter:200,exit:160,menuEnter:160,menuExit:120,
-  enterEase:'cubic-bezier(0,0,.2,1)',exitEase:'cubic-bezier(.4,0,1,1)'} as const;
+export const STUDIO_MOTION = {enter:200,exit:145,menuEnter:185,menuExit:130,
+  enterEase:'cubic-bezier(0.22,1,0.36,1)',exitEase:'cubic-bezier(0.4,0,1,1)'} as const;
 const ghosts=new Set<HTMLElement>();
 const activeAnimations=new Set<Animation>();
 export function cancelStudioAnimations(){for(const animation of activeAnimations)animation.cancel();activeAnimations.clear();}
-function play(node:Element,frames:Keyframe[],duration:number){
- const animation=node.animate(frames,{duration,easing:STUDIO_MOTION.enterEase});activeAnimations.add(animation);
+function play(node:Element,frames:Keyframe[],duration:number,easing:string=STUDIO_MOTION.enterEase){
+ const animation=node.animate(frames,{duration,easing});activeAnimations.add(animation);
  const forget=()=>activeAnimations.delete(animation);
  animation.addEventListener('finish',forget,{once:true});animation.addEventListener('cancel',forget,{once:true});
  return()=>{animation.cancel();forget();};
@@ -14,30 +14,33 @@ const modals:HTMLElement[]=[];
 let rootWasInert=false;
 export function motionReduced(){return typeof window==='undefined'||document.documentElement.classList.contains('motion-reduced');}
 /** Fade only the mounted content; never transform a portal's containing block. */
-export function animateStudioEntry(target:Element|NodeListOf<Element>|null,duration=150){
+export function animateStudioEntry(target:Element|NodeListOf<Element>|null,duration=190){
  if(!target||motionReduced())return()=>{};
  const nodes=target instanceof Element?[target]:Array.from(target);
- const stops=nodes.map(node=>play(node,[{opacity:0},{opacity:1}],duration));
+ const capped=nodes.length>24?nodes.slice(0,24):nodes;
+ const stops=capped.map((node,idx)=>play(node,[{opacity:0,transform:'translateY(6px)'},{opacity:1,transform:'translateY(0)'}],Math.min(duration+idx*12,240)));
  return()=>stops.forEach(stop=>stop());
 }
 /** Only leaf headings move; fixed/portalled controls keep their coordinate space. */
 export function animateStudioHeading(node:Element|null){
  if(!node||motionReduced())return()=>{};
- return play(node,[{transform:'translateY(5px)'},{transform:'translateY(0)'}],220);
+ return play(node,[{opacity:0.65,transform:'translateY(6px)'},{opacity:1,transform:'translateY(0)'}],210);
 }
 export function animatePortalEntry(host:HTMLElement|null){
  const surface=host?.firstElementChild;
  if(!surface||motionReduced()||surface.matches('[data-disclosure-open]'))return()=>{};
- const stop=animateStudioEntry(surface,200);
+ const stop=play(surface,[{opacity:0},{opacity:1}],180);
+ const dialog=surface.querySelector(':scope > .modal, :scope > .app-confirm-dialog, :scope > .reference-ui-dialog, :scope > .nai-account-panel');
+ const stopDialog=dialog?play(dialog,[{opacity:0,transform:'translateY(10px) scale(0.965)'},{opacity:1,transform:'translateY(0) scale(1)'}],215):()=>{};
  const heading=animateStudioHeading(surface.querySelector('h1,h2,h3'));
- return()=>{stop();heading();};
+ return()=>{stop();stopDialog();heading();};
 }
 function clearGhosts(){for(const ghost of ghosts){ghost.remove();}ghosts.clear();}
 export function installStudioMotion(){
  let dark=document.documentElement.classList.contains('theme-dark'),frame=0;
  const sync=()=>{const html=document.documentElement,next=html.classList.contains('theme-dark');if(dark!==next){dark=next;html.dataset.studioThemeChanging='true';cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{delete html.dataset.studioThemeChanging;});}html.dataset.studioMotion=motionReduced()?'reduced':'full';if(motionReduced()){clearGhosts();cancelStudioAnimations();}};
  const observer=new MutationObserver(sync);observer.observe(document.documentElement,{attributes:true,attributeFilter:['class']});sync();
- const loaded=(event:Event)=>{const img=event.target;if(img instanceof HTMLImageElement&&!motionReduced()&&img.closest('.history-item,.aitag-card,.works-tile,.favorite-image'))play(img,[{opacity:0},{opacity:1}],240);};
+ const loaded=(event:Event)=>{const img=event.target;if(img instanceof HTMLImageElement&&!motionReduced()&&img.closest('.history-item,.aitag-card,.works-tile,.favorite-image'))play(img,[{opacity:0},{opacity:1}],170);};
  document.addEventListener('load',loaded,true);
  return()=>{observer.disconnect();document.removeEventListener('load',loaded,true);cancelAnimationFrame(frame);clearGhosts();cancelStudioAnimations();};
 }
@@ -68,6 +71,8 @@ export function retainPortalExit(host:HTMLElement|null){
  const surface=host.firstElementChild;
  if(!(surface instanceof HTMLElement)||!surface.matches('.modal-backdrop,[role="dialog"],[role="alertdialog"],.reference-ui-mask,.style-image-lightbox,.gallery-favorite-lightbox,.toast,.context-menu,.menu-pop,.tavern-composer-popover'))return;
  if(!surface.getClientRects().length||getComputedStyle(surface).visibility==='hidden')return;
+ // Skip deep DOM cloning on massive trees so closing large galleries stays 0ms instant.
+ if(surface.getElementsByTagName('*').length>260)return;
  const clone=surface.cloneNode(true) as HTMLElement;
  clone.classList.add('studio-motion-ghost');clone.inert=true;clone.setAttribute('aria-hidden','true');clone.removeAttribute('role');clone.removeAttribute('id');
  for(const node of clone.querySelectorAll('[id],[autofocus],[role]')){node.removeAttribute('id');node.removeAttribute('autofocus');node.removeAttribute('role');}
@@ -75,6 +80,6 @@ export function retainPortalExit(host:HTMLElement|null){
  queueMicrotask(()=>{if(host.isConnected||motionReduced())return;document.body.append(clone);ghosts.add(clone);
   const animation=clone.animate([{opacity:1},{opacity:0}],{duration:STUDIO_MOTION.exit,easing:STUDIO_MOTION.exitEase});
   const remove=()=>{clone.remove();ghosts.delete(clone);};animation.addEventListener('finish',remove,{once:true});animation.addEventListener('cancel',remove,{once:true});
-  window.setTimeout(remove,STUDIO_MOTION.exit+100);
+  window.setTimeout(remove,STUDIO_MOTION.exit+80);
  });
 }

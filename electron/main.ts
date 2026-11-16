@@ -25,7 +25,7 @@ import { openAIInpaintWorkbench } from "./ipc/openai-image-edit-workbench";
 import {registerImageFavoritesIpc,favoriteContextMenuItem,imageParametersContextMenuItem} from "./ipc/image-favorites-ipc";
 import {portableRecoveryPath, activatePortableRecovery, listPortableRecoveries} from './ipc/portable-projects';
 import {registerHarnessLauncher, harnessNeedsExitConfirmation, confirmHarnessExit, stopHarnessForUpdate,resetHarnessExitAfterUpdateFailure} from "./ipc/harness-launcher";
-import { detectiveStatus, detectiveConfigure, detectiveStart, detectiveResume, detectiveStop, detectiveOpenResults, detectiveClearResults, detectiveVerifyRuntime, detectiveSelectModel } from "./ipc/artist-detective";
+import { detectiveStatus, detectiveConfigure, detectiveStart, detectiveResume, detectiveStop, detectiveOpenResults, detectiveOpenSavedImages, detectiveOutputDirectory, detectiveClearResults, detectiveVerifyRuntime, detectiveSelectModel } from "./ipc/artist-detective";
 import { detectiveDownloadStatus, detectiveDownloadStart, detectiveDownloadCancel, detectiveDownloadDirectory, detectiveDownloadVariant } from "./ipc/detective-download";
 import { recoverLegacyCredentials } from "./ipc/credential-recovery";
 import { copyImageWithMetadata, preparePngForClipboard, readClipboardImageFiles, savePastedImageFiles } from "./ipc/image-clipboard";
@@ -36,6 +36,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  nativeTheme,
   Tray,
   session,
   shell,
@@ -313,7 +314,17 @@ import type {
 const uiCapturePath = process.env.NAI_UI_CAPTURE_PATH?.trim();
 const uiCaptureUserData = process.env.NAI_UI_CAPTURE_USER_DATA?.trim();
 const normalizedUiCapturePath = uiCapturePath?.replaceAll("\\", "/").toLowerCase() ?? "";
-if (uiCaptureUserData) app.setPath("userData", path.resolve(uiCaptureUserData));
+if (uiCaptureUserData) {
+  // Isolated QA profile: keep every default user-data destination (output,
+  // backups, favorites, downloads) inside the sandbox so acceptance runs can
+  // never touch the real Pictures/Documents libraries.
+  const sandboxRoot = path.resolve(uiCaptureUserData);
+  app.setPath("userData", sandboxRoot);
+  for (const name of ["pictures", "documents", "desktop", "downloads"] as const) {
+    const target = path.join(sandboxRoot, "sandbox-home", name);
+    try { fs.mkdirSync(target, { recursive: true }); app.setPath(name, target); } catch { /* keep isolated userData */ }
+  }
+}
 else pinUserDataAndMigrate();
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -481,7 +492,7 @@ function createWindow() {
     minHeight: 720,
     show: false,
     frame: false,
-    backgroundColor: "#f0eff9",
+    backgroundColor: (() => { const t = getSettings().theme; return t === "dark" || (t === "system" && nativeTheme.shouldUseDarkColors) ? "#111212" : "#f3f4f1"; })(),
     title: "Langbai NovelAI Studio",
     icon: iconPath,
     webPreferences: {
@@ -1033,6 +1044,8 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   ipcMain.handle("artistDetective:resume", (_event, request) => detectiveResume(request));
   ipcMain.handle("artistDetective:stop", () => detectiveStop());
   ipcMain.handle("artistDetective:openResults", () => detectiveOpenResults());
+  ipcMain.handle("artistDetective:outputDirectory", (_event, action) => detectiveOutputDirectory(action));
+  ipcMain.handle("artistDetective:openSavedImages", () => detectiveOpenSavedImages());
   ipcMain.handle("artistDetective:verifyRuntime", () => detectiveVerifyRuntime());
   ipcMain.handle("artistDetective:selectModel", (_event, value) => detectiveSelectModel(value));
   ipcMain.handle("artistDetective:clearResults", (_event, request) => detectiveClearResults(request));
@@ -1540,6 +1553,10 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   ipcMain.handle("settings:get", (_event, key) => getSetting(key));
   ipcMain.handle("settings:set", async (_event, key, value) => {
     const saved = setSetting(key, value);
+    if (key === "theme" && mainWindow && !mainWindow.isDestroyed()) {
+      const dark = saved.theme === "dark" || (saved.theme === "system" && nativeTheme.shouldUseDarkColors);
+      mainWindow.setBackgroundColor(dark ? "#111212" : "#f3f4f1");
+    }
     if (key === "closeToTray") windowTrayForSession = false;
     if (key === "closeToTray" || key === "language") syncWindowTray(key === "language");
     if ([

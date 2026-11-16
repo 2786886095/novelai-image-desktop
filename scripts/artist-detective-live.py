@@ -9,6 +9,8 @@ import json
 import math
 import os
 import re
+import random
+import shutil
 import stat
 import uuid
 import sys
@@ -193,6 +195,163 @@ def record_run_failure(output, command, error, secrets):
                   + safe_text(persistence_error), flush=True)
 
 
+# This branch is used only when a run explicitly pins artists. Ordinary tasks
+# keep the upstream optimizer and its exact previous request planning.
+def search_with_locked_artists(target, initial, shortlist, locked, generator, score,
+                               output, config, rank, progress):
+    fixed = {a["tag"]: a["weight"] for a in locked}
+    output.mkdir(parents=True, exist_ok=True)
+    rng = random.Random(config.random_seed)
+    catalog = list(dict.fromkeys([*shortlist, *(r["canonical_tag"] for r in generator.store.catalog)]))
+    pool_tags = [tag for tag in catalog if tag not in fixed]
+    limit = 12 - len(fixed)
+    def identity(recipe):
+        return hashlib.sha256(json.dumps(sorted((a["tag"], a["weight"]) for a in recipe),
+                                         ensure_ascii=False).encode("utf-8")).hexdigest()
+    def constrain(recipe):
+        if isinstance(recipe, dict):
+            recipe = recipe["artists"]
+        mutable = {}
+        for a in recipe:
+            raw = a.get("canonical_tag", a.get("tag"))
+            if raw not in generator.store.lookup:
+                continue
+            tag = generator.store.lookup[raw]["canonical_tag"]
+            if tag not in fixed and len(mutable) < limit:
+                mutable[tag] = round(float(a.get("weight", 1)), 2)
+        return [{"tag": tag, "weight": weight} for tag, weight in [*fixed.items(), *mutable.items()]]
+    all_seeds = rng.sample(range(2**32), config.search_seeds + config.final_seeds + config.extra_final_seeds)
+    search_seeds, final_seeds = all_seeds[:config.search_seeds], all_seeds[config.search_seeds:]
+    specification = {k: target[k] for k in ("content_tags", "style_tags", "width", "height", "image_sha256")}
+    specification.update({"locked": locked, "seed": config.random_seed, "budget": config.render_budget, "version": 1})
+    seen, history = set(), []
+    def ordered(rows):
+        return sorted(rows, key=lambda r: (-r["mean_score"], r["recipe_hash"]))
+    def round_result(label, recipes, seeds):
+        plan = {"spec": specification, "recipes": recipes, "seeds": seeds}
+        plan_file, result_file = output / (label+".plan.json"), output / (label+".json")
+        if plan_file.exists() and json.loads(plan_file.read_text(encoding="utf-8")) != plan:
+            raise RuntimeError("Locked artist search plan differs; no paid requests sent")
+        atomic_json(plan_file, plan)
+        base = {"prompt": target["content_tags"], "style": target["style_tags"],
+                "width": target["width"], "height": target["height"]}
+        requests = [{**base,"artists":recipe,"seed":seed} for recipe in recipes for seed in seeds]
+        # Let the durable generator revalidate every cached result and any
+        # uncertain request. It never resends an already verified render.
+        progress("generating", phase=label, count=len(requests))
+        images = generator.generate(requests)
+        if len(images)!=len(requests):
+            raise RuntimeError("Wrong generated image count")
+        if result_file.exists():
+            saved=json.loads(result_file.read_text(encoding="utf-8"))
+            expected=[(r["request_hash"],r["image_sha256"]) for r in images]
+            prior=[(r["request_hash"],r["image_sha256"]) for row in saved["results"] for r in row["renders"]]
+            if expected!=prior:
+                raise RuntimeError("Locked search scores do not match verified images")
+            return saved["results"]
+        progress("scoring", phase=label, count=len(requests))
+        scores = list(map(float, score([Path(img["image"]) for img in images])))
+        if len(scores)!=len(requests) or not all(math.isfinite(x) for x in scores):
+            raise ValueError("Invalid artist score")
+        rows=[]
+        for i,recipe in enumerate(recipes):
+            start=i*len(seeds)
+            renders=[{**{k:img[k] for k in ("image","image_sha256","request_hash")},
+                      "seed":seed,"score":scores[start+j]}
+                     for j,(seed,img) in enumerate(zip(seeds,images[start:start+len(seeds)]))]
+            rows.append({"artists":recipe,"recipe_hash":identity(recipe),"phase":label,"renders":renders,
+                         "mean_score":sum(r["score"] for r in renders)/len(renders)})
+        atomic_json(result_file,{"results":rows})
+        progress("scored",phase=label,results=rows)
+        return rows
+    parents = [constrain(recipe) for recipe in initial] or [locked]
+    remaining = (config.render_budget - config.finalists * len(final_seeds)) // len(search_seeds)
+    for index in range(config.rounds):
+        wanted=min(remaining,config.population)
+        pool_size=wanted * (1 if index==0 else config.proposal_pool_multiplier)
+        candidates={}
+        def include(recipe):
+            key=identity(recipe)
+            if key not in seen and len(candidates)<pool_size:
+                candidates.setdefault(key,recipe)
+        if index==0:
+            for recipe in parents:
+                include(recipe)
+        for _ in range(max(128,pool_size*150)):
+            if len(candidates)>=pool_size:
+                break
+            mutable=[dict(a) for a in rng.choice(parents) if a["tag"] not in fixed]
+            kinds=["weights","drop"] if mutable else []
+            unknown=[tag for tag in pool_tags if not any(a["tag"]==tag for a in mutable)]
+            if unknown:
+                if len(mutable)<limit:
+                    kinds.append("add")
+                if mutable:
+                    kinds.append("swap")
+            if not kinds:
+                break
+            mode=rng.choice(kinds)
+            if mode in ("add","swap"):
+                item={"tag":rng.choice(unknown),"weight":1.0}
+                if mode=="add":
+                    mutable.append(item)
+                else:
+                    mutable[rng.randrange(len(mutable))]=item
+            elif mode=="drop":
+                mutable.pop(rng.randrange(len(mutable)))
+            else:
+                i=rng.randrange(len(mutable))
+                mutable[i]["weight"]=round(max(.25,min(2.4,mutable[i]["weight"]*math.exp(rng.gauss(0,config.weight_sigma)))),2)
+            include(constrain(mutable))
+        if len(candidates)<wanted:
+            raise RuntimeError("The fixed artists leave too few distinct combinations")
+        choices=list(candidates.values())
+        if index and len(choices)>wanted:
+            priors=list(map(float,rank(choices)))
+            if len(priors)!=len(choices) or not all(math.isfinite(x) for x in priors):
+                raise RuntimeError("Invalid artist proposal scores")
+            ordering=sorted(range(len(choices)),key=lambda i:(-priors[i],identity(choices[i])))
+            count=min(wanted-1,round(wanted*config.proposal_exploration_fraction))
+            cutoff=wanted-count
+            choices=[choices[i] for i in [*ordering[:cutoff],*rng.sample(ordering[cutoff:],count)]]
+        else:
+            choices=choices[:wanted]
+        seen.update(identity(recipe) for recipe in choices)
+        history.extend(round_result(f"round-{index:02d}",choices,search_seeds))
+        parents=[row["artists"] for row in ordered(history)[:config.population]]
+        remaining-=len(choices)
+    finalists = [row["artists"] for row in ordered(history)[:config.finalists]]
+    return {"finalists":ordered(round_result("finalists",finalists,final_seeds)),"history":history,
+            "lockedArtists":locked,"budget":{"total":config.render_budget}}
+
+
+def copy_selected_result(directory, key, image, expected):
+    if not re.fullmatch(r"[0-9a-f]{64}",key) or not directory.is_absolute():
+        raise ValueError("Invalid result destination")
+    info=directory.lstat()
+    if directory.resolve(strict=True)!=directory or directory.is_symlink() or not stat.S_ISDIR(info.st_mode) or getattr(info,"st_file_attributes",0)&stat.FILE_ATTRIBUTE_REPARSE_POINT:
+        raise ValueError("Selected output directory changed")
+    dest=directory/(key+".png")
+    if dest.exists() or dest.is_symlink():
+        if dest.is_symlink() or not dest.is_file() or file_sha256(dest)!=expected:
+            raise FileExistsError("Existing file has different content")
+        return
+    temp=directory/("."+key+"."+uuid.uuid4().hex+".tmp")
+    try:
+        with image.open("rb") as source, temp.open("xb") as output:
+            shutil.copyfileobj(source,output,1024*1024)
+            output.flush()
+            os.fsync(output.fileno())
+        if file_sha256(temp)!=expected:
+            raise ValueError("Saved copy differs from original")
+        if os.name=="nt":
+            temp.rename(dest) # Windows rename never replaces an existing name.
+        else:
+            os.link(temp,dest) # Exclusive name creation on other platforms.
+    finally:
+        temp.unlink(missing_ok=True)
+
+
 class LiveGenerator(NovelAIGenerator):
     def __init__(self, root, catalog, budget, token, check, progress,
                  image_base_url="https://image.novelai.net", language="en-US", transport_bridge=None,
@@ -231,6 +390,17 @@ class LiveGenerator(NovelAIGenerator):
         self.client = httpx.Client(trust_env=False, timeout=httpx.Timeout(180, connect=30),
                                    limits=httpx.Limits(max_keepalive_connections=0), follow_redirects=False)
         self.next_request_at = 0.0
+        self.saved_images_directory = None
+        self.output_warning = None
+
+    def copy_output(self, key, result):
+        if self.saved_images_directory is None:
+            return
+        try:
+            copy_selected_result(self.saved_images_directory,key,Path(result["image"]),result["image_sha256"])
+        except (OSError,ValueError):
+            self.output_warning = "自定义目录保存失败；原图仍保留在任务结果目录，可打开结果目录取回。"
+
 
     def _directory(self, name):
         directory = self.store.root / name
@@ -432,6 +602,7 @@ class LiveGenerator(NovelAIGenerator):
             key = record["request_hash"]
             cached = self.store.result(key, verify=True)
             if cached:
+                self.copy_output(key,cached)
                 result.append(cached)
                 continue
             job = self.store.native_jobs([record])[0]
@@ -500,6 +671,7 @@ class LiveGenerator(NovelAIGenerator):
             saved = {**record, "image": str(image), "image_sha256": hashlib.sha256(content).hexdigest(),
                      "native_job": native, "native_payload": job["request"]}
             atomic_json(path, saved)
+            self.copy_output(key,saved)
             result.append(saved)
             self.progress("generated", image=str(image), request_hash=key)
         return result
@@ -556,12 +728,39 @@ def main(command):
             encoder=resources.scorer.encoder, proposal_index=resources.proposals, features=features)
         atomic_json(proposal_path, proposed)
     score, reference = resources.scorer.bind(image)
-    generator = LiveGenerator(out / "spool", asset / "retrieval/catalog.json", budget, command.pop("token"), check, progress,
+    catalog_path = asset / "retrieval/catalog.json"
+    external = set()
+    locks = command.get("lockedArtists") or []
+    if locks:
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        trained = {r["canonical_tag"] for r in catalog}
+        external = {a["tag"] for a in locks if a["tag"] not in trained}
+        if external:
+            # Private immutable extension for this run only. Never mutate the model's catalog.
+            for tag in sorted(external):
+                catalog.append({"tag":tag,"canonical_tag":tag,"source_slug":tag,
+                                "score":0,"source_score":0,"post_count":0,"favorite":False})
+            catalog_path = out / "manual-artist-catalog.json"
+            if catalog_path.exists():
+                if json.loads(catalog_path.read_text(encoding="utf-8"))!=catalog:
+                    raise RuntimeError("Locked artist catalog changed")
+            else:
+                atomic_json(catalog_path,catalog)
+    generator = LiveGenerator(out / "spool", catalog_path, budget, command.pop("token"), check, progress,
                               image_base_url=command.get("imageBaseUrl", "https://image.novelai.net"),
                               language=command.get("language", "en-US"),
                               transport_bridge=command.get("transportBridge"),
                               resume=command.get("resume", False), resume_authorization=command.get("resumeAuthorization"))
     generator.prompt_budget = NovelAIPromptBudget(asset / "tokenizers/t5")
+    if command.get("savedImagesDirectory"):
+        generator.saved_images_directory = Path(command["savedImagesDirectory"])
+    base_progress = progress
+    def progress_with_output(stage, **values):
+        if generator.output_warning:
+            values["output_warning"] = generator.output_warning
+        base_progress(stage, **values)
+    progress = progress_with_output
+    generator.progress = progress_with_output
     initial = proposed["targets"][0]["initializers"]
     rank = resources.surrogate.for_target(hypothesis["content_tags"], hypothesis["style_tags"], reference)
     def report_search_progress(stage, **event):
@@ -577,11 +776,26 @@ def main(command):
     def rank_with_progress(recipes):
         check()
         progress("ranking", count=len(recipes))
-        return rank(recipes)
-    result = run_search({**target, **hypothesis}, initial["hybrid"], initial["shortlist"], generator, score,
-        out / "search", search_config, artist_weights=initial["predicted_weights"],
-        scorer_identity=resources.scorer.identity, proposal_ranker=rank_with_progress,
-        proposal_ranker_identity=resources.surrogate.identity, on_progress=report_search_progress)
+        if not external:
+            return rank(recipes)
+        # The pretrained ranker has no embedding for manually supplied artists.
+        # Filter only for nomination; every actual render and score keeps them.
+        filtered = [[a for a in recipe if a["tag"] not in external] for recipe in recipes]
+        valid = [i for i,recipe in enumerate(filtered) if recipe]
+        values = [0.0] * len(filtered)
+        if valid:
+            for i,value in zip(valid,rank([filtered[i] for i in valid]),strict=True):
+                values[i] = value
+        return values
+    if locks:
+        result = search_with_locked_artists({**target, **hypothesis}, initial["hybrid"], initial["shortlist"],
+            command["lockedArtists"], generator, score, out / "search", search_config,
+            rank_with_progress, report_search_progress)
+    else:
+        result = run_search({**target, **hypothesis}, initial["hybrid"], initial["shortlist"], generator, score,
+            out / "search", search_config, artist_weights=initial["predicted_weights"],
+            scorer_identity=resources.scorer.identity, proposal_ranker=rank_with_progress,
+            proposal_ranker_identity=resources.surrogate.identity, on_progress=report_search_progress)
     atomic_json(out / "result.json", result)
     progress("complete", best=result["finalists"][0]["mean_score"])
     generator.client.close()

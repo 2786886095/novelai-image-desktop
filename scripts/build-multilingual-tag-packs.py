@@ -3,6 +3,7 @@ import csv
 import gzip
 import hashlib
 import json
+from datetime import date
 import shutil
 import sqlite3
 import sys
@@ -12,7 +13,7 @@ from pathlib import Path
 source=Path(sys.argv[1])
 output=Path(sys.argv[2])
 manifest=Path(sys.argv[3])
-version='2026-11-15'
+version=date.fromisoformat(sys.argv[4] if len(sys.argv)>4 else '2026-11-15').isoformat()
 languages={'zh-CN':6,'zh-TW':7,'ja-JP':8,'ko-KR':9}
 def fold(value):
     return " ".join(unicodedata.normalize("NFKC",value).lower().replace("_"," ").split())
@@ -38,7 +39,8 @@ for lang,column in languages.items():
     with source.open('r',encoding='utf-8-sig',newline='') as f:
         reader=csv.reader(f)
         header=next(reader)
-        assert len(header)==12 and header[column] in ('简体中文','繁體中文','日语(日本語)','韩语(한국어)')
+        if len(header)<10 or header[1]!='D站英文标签' or not header[2].startswith('使用量(') or header[column] not in ('简体中文','繁體中文','日语(日本語)','韩语(한국어)'):
+            raise ValueError(f'Unexpected tag dataset headers: {header[:10]}')
         db.executemany('INSERT INTO terms VALUES (?,?,?,?,?,?)',(
             (r[1],fold(r[1]),r[column],fold(r[column]),category(r),int(r[2])) for r in reader
         ))

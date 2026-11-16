@@ -10,7 +10,7 @@ import { detectiveDownloadStatus } from "./detective-download";
 import {detectiveRuntimeChecking, detectiveRuntimeValidation, validateDetectiveRuntime} from './detective-runtime-check';
 import {readDetectiveConfig,saveDetectiveConfig,detectiveProfile,updateDetectiveProfile,validDetectiveVariant,type DetectiveConfig,type DetectiveModelVariant} from './detective-models';
 import {detectiveDownloadVariant} from './detective-download';
-import { detectiveBudget, detectiveParameters, detectiveRounds, detectiveRecoveryLabels, type DetectiveRunRequest, type DetectiveResumeRequest, type DetectiveSnapshot } from "../../src/artist-detective-contract";
+import { detectiveBudget, detectiveParameters, detectiveLockedArtists, detectiveRounds, detectiveRecoveryLabels, type DetectiveRunRequest, type DetectiveResumeRequest, type DetectiveSnapshot } from "../../src/artist-detective-contract";
 import {resolveNovelAiGenerationBaseUrl} from './nai';
 import {startDetectiveGenerationBridge} from './detective-generation-bridge';
 import {archiveDetectivePause, createDetectiveRunManifest, detectiveOwnedRun, detectiveRecovery, detectiveVerifiedResults, readDetectiveRunManifest, verifyDetectiveRunBinding, type DetectiveBinding, type DetectiveRunManifest} from './detective-run-resume';
@@ -64,7 +64,8 @@ export function detectiveStatus(): DetectiveSnapshot {
   return { selectedVariant,activeVariant:c.python&&c.assets?c.variant:undefined,models,ready:ready(selected),runtimeValidation:detectiveRuntimeValidation(selected), running, stage: failure && !running ? (failure.paused ? "paused" : "failed") : status?.stage ?? "idle",
     completed: status?.completed ?? 0, budget, rounds: detectiveRounds(budget),
     phase, phaseCount, lastProgressAt, retryWaitSeconds,
-    best: candidates[0]?.score ?? status?.best, message: failure?.message, directory: c.directory,
+    best: candidates[0]?.score ?? status?.best, message: failure?.message, directory: c.directory, outputRoot:c.outputRoot, savedImagesDirectory:c.directory?c.savedImagesDirectory:undefined,
+    outputWarning:typeof status?.output_warning==="string"?status.output_warning:undefined,
     reference, fixedPrompt, recovery:c.directory ? safeRecovery(c) : undefined, candidates: candidates.slice(0, 32) };
 }
 
@@ -132,7 +133,7 @@ async function launchRun(c:Config,directory:string,manifest:DetectiveRunManifest
     });
     const deadline=Date.now()+Math.max(3*3600_000,(manifest.request.budget-completed)*180_000+600_000)+60_000;
     timer=setInterval(()=>{if(Date.now()>=deadline)active.kill();},60_000);
-    save({...c,directory,pid:active.pid,image:manifest.reference.path,runManifestSha256:manifestSha256});
+    save({...c,directory,pid:active.pid,image:manifest.reference.path,runManifestSha256:manifestSha256,savedImagesDirectory:manifest.request.savedImagesDirectory});
     atomicWriteFileSync(path.join(directory,'status.json'),JSON.stringify({stage:'loading',completed,budget:manifest.request.budget,resuming:resume}));
     active.stdin!.end(JSON.stringify({output:directory,assets:manifest.runtime.assets,image:manifest.reference.path,...manifest.request,token:binding.token,imageBaseUrl:binding.imageBaseUrl,transportBridge:activeBridge.connection,language:getSetting('language'),...(resume?{resume:true}:{}),...(authorization?{resumeAuthorization:authorization}:{})}));
     return detectiveStatus();
@@ -158,9 +159,24 @@ export async function detectiveStart(value:DetectiveRunRequest) {
   if(!value || typeof value.image!=='string' || !fs.existsSync(value.image))throw Error('请选择目标图片。');
   if(typeof value.prompt!=='string'||!value.prompt.trim()||value.prompt.length>16000||typeof value.style!=='string'||value.style.length>8000)throw Error('请填写有效的固定内容提示词。');
   detectiveParameters(value.parameters);detectiveBudget(value.budget);
+  if(/artist:\s*/i.test(value.prompt)||/artist:\s*/i.test(value.style))throw Error("画师标签请填到「固定画师标签」，不要填进内容提示词或辅助画风词。");
+  const locks=detectiveLockedArtists(value.lockedArtists);
+  if(locks.length){
+    const entries=JSON.parse(fs.readFileSync(path.join(selected.assets!,"retrieval/catalog.json"),"utf8")) as Record<string,string>[];
+    const lookup=new Map(entries.flatMap(r=>[r.tag,r.canonical_tag,r.source_slug].filter(Boolean).map(k=>[k.toLowerCase(),r.canonical_tag] as const)));
+    value={...value,lockedArtists:detectiveLockedArtists(locks.map(({tag,weight})=>{
+      return {tag:lookup.get(tag.toLowerCase())??tag,weight};
+    }))};
+  }
   const binding=runBinding(c),directory=path.join(app.getPath('userData'),'artist-detective-runs',randomUUID());
   fs.mkdirSync(directory,{recursive:true});detectiveOwnedRun(app.getPath('userData'),directory);
-  const {manifest,manifestSha256}=createDetectiveRunManifest(directory,value,binding);
+  let savedImagesDirectory:string|undefined;
+  if(c.outputRoot){
+    const root=plainOutputRoot(c.outputRoot);
+    savedImagesDirectory=path.join(root,"Artist-Detective-"+path.basename(directory));
+    fs.mkdirSync(savedImagesDirectory); // Unique task directory; never reuse existing content.
+  }
+  const {manifest,manifestSha256}=createDetectiveRunManifest(directory,value,binding,savedImagesDirectory);
   return launchRun(c,directory,manifest,manifestSha256,binding);
 }
 export async function detectiveResume(request:DetectiveResumeRequest) {
@@ -196,6 +212,32 @@ export function detectiveStop() {
   const c = config();
   if (c.directory && alive(c.pid)) fs.writeFileSync(path.join(c.directory, "STOP"), "stop after current request\n");
   return detectiveStatus();
+}
+function plainOutputRoot(input:string) {
+  if(!path.isAbsolute(input))throw Error("请选择有效的本地保存目录。");
+  const root=fs.realpathSync(input),st=fs.lstatSync(root);
+  if(!st.isDirectory()||st.isSymbolicLink())throw Error("请选择普通的可写目录。");
+  return root;
+}
+export async function detectiveOutputDirectory(action:"pick"|"reset") {
+  assertPortableIdle();assertWorkerIdle();
+  if(action!=="pick"&&action!=="reset")throw Error("Invalid output directory operation");
+  const c=config();
+  const picked=action==="pick"?await dialog.showOpenDialog({
+    title:featureText(getSetting("language"),"选择迭代图片保存目录"),
+    defaultPath:c.outputRoot,properties:["openDirectory","createDirectory"],
+  }):null;
+  if(action==="pick"&&(!picked||picked.canceled||!picked.filePaths[0]))return detectiveStatus();
+  assertPortableIdle();assertWorkerIdle();
+  save({...config(),outputRoot:action==="pick"?plainOutputRoot(picked!.filePaths[0]):undefined});
+  return detectiveStatus();
+}
+export async function detectiveOpenSavedImages() {
+  const c=config();
+  if(!c.directory||!c.savedImagesDirectory)throw Error("当前任务未选择自定义保存目录。");
+  const picked=plainOutputRoot(c.savedImagesDirectory);
+  if(path.basename(picked)!=="Artist-Detective-"+path.basename(c.directory))throw Error("图片保存目录已变化。");
+  const error=await shell.openPath(picked);if(error)throw Error(error);
 }
 export async function detectiveOpenResults() {
   const c = config();
@@ -278,7 +320,7 @@ export async function detectiveClearResults(request:{directory:string;deleteImag
     }
     const latest=config();
     if(latest.directory!==c.directory)throw Error('当前迭代结果已变化，请刷新后重试。');
-    save({...latest,directory:undefined,pid:undefined});
+    save({...latest,directory:undefined,pid:undefined,savedImagesDirectory:undefined});
   } finally {clearing=false;}
   return detectiveStatus();
 }

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
-import {detectiveBudget, detectiveParameters, type DetectiveParameters, type DetectiveRecovery, type DetectiveRunRequest} from '../../src/artist-detective-contract';
+import {detectiveBudget, detectiveParameters, detectiveLockedArtists, type DetectiveLockedArtist, type DetectiveParameters, type DetectiveRecovery, type DetectiveRunRequest} from '../../src/artist-detective-contract';
 
 const HEX = /^[a-f0-9]{64}$/;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -49,7 +49,7 @@ function safeEndpoint(value:string,token?:string) {
 }
 export interface DetectiveRunManifest {
   schema:1;runId:string;createdAt:string;
-  request:{prompt:string;style:string;budget:number;parameters:DetectiveParameters};
+  request:{prompt:string;style:string;budget:number;parameters:DetectiveParameters;lockedArtists?:DetectiveLockedArtist[];savedImagesDirectory?:string};
   reference:FileIdentity;
   runtime:{python:FileIdentity;assets:string;manifestSha256:string;filesIdentitySha256:string;variant:'full'|'light'};
   runner:FileIdentity;endpoint:string;accountId:string|null;credentialFingerprint:string;payloadIdentity:string;
@@ -65,9 +65,10 @@ function runtimeIdentity(binding:DetectiveBinding):DetectiveRunManifest['runtime
   });
   return {python:fileIdentity(binding.python),assets,manifestSha256:detectiveFileHash(file),filesIdentitySha256:sha(JSON.stringify(entries)),variant:binding.variant};
 }
-export function createDetectiveRunManifest(directory:string,value:DetectiveRunRequest,binding:DetectiveBinding) {
+export function createDetectiveRunManifest(directory:string,value:DetectiveRunRequest,binding:DetectiveBinding,savedImagesDirectory?:string) {
   safeEndpoint(binding.imageBaseUrl,binding.token);
-  const request={prompt:value.prompt.trim(),style:value.style.trim(),budget:detectiveBudget(value.budget),parameters:detectiveParameters(value.parameters)};
+  const locks=detectiveLockedArtists(value.lockedArtists);
+  const request={prompt:value.prompt.trim(),style:value.style.trim(),budget:detectiveBudget(value.budget),parameters:detectiveParameters(value.parameters),...(locks.length?{lockedArtists:locks}:{}),...(savedImagesDirectory?{savedImagesDirectory}:{})};
   regular(value.image);
   const reference=path.join(directory,'reference'+(/\.(png|jpe?g|webp)$/i.exec(value.image)?.[0].toLowerCase()??'.image'));
   fs.copyFileSync(value.image,reference,fs.constants.COPYFILE_EXCL);
@@ -80,6 +81,8 @@ export function readDetectiveRunManifest(directory:string,expected:string):Detec
   if(detectiveFileHash(file)!==expected)throw fail();const m=json(file) as DetectiveRunManifest;
   if(m.schema!==1 || m.runId!==path.basename(directory) || !m.reference?.path || !HEX.test(m.reference.sha256) || !m.runner?.path || !m.runtime?.python?.path || !m.runtime.assets || !['full','light'].includes(m.runtime.variant) || !HEX.test(m.credentialFingerprint) || !m.request || typeof m.request.prompt!=='string' || typeof m.request.style!=='string' || !m.request.prompt.trim() || m.request.prompt.length>16000 || m.request.style.length>8000)throw fail();
   detectiveBudget(m.request.budget);const parameters=detectiveParameters(m.request.parameters);
+  detectiveLockedArtists(m.request.lockedArtists);
+  if(m.request.savedImagesDirectory!==undefined&&(!path.isAbsolute(m.request.savedImagesDirectory)||path.basename(m.request.savedImagesDirectory)!=="Artist-Detective-"+m.runId))throw fail();
   safeEndpoint(m.endpoint);
   if(JSON.stringify(parameters)!==JSON.stringify(m.request.parameters) || sha(JSON.stringify(m.request))!==m.payloadIdentity)throw fail();
   within(directory,m.reference.path);return m;

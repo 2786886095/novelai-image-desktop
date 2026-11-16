@@ -222,6 +222,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   artistDetectiveResume: (request: import("../src/artist-detective-contract").DetectiveResumeRequest) => ipcRenderer.invoke("artistDetective:resume", request),
   artistDetectiveStop: () => ipcRenderer.invoke("artistDetective:stop"),
   artistDetectiveOpenResults: () => ipcRenderer.invoke("artistDetective:openResults"),
+  artistDetectiveOutputDirectory: (action:"pick"|"reset") => ipcRenderer.invoke("artistDetective:outputDirectory",action),
+  artistDetectiveOpenSavedImages: () => ipcRenderer.invoke("artistDetective:openSavedImages"),
   artistDetectiveVerifyRuntime: () => ipcRenderer.invoke("artistDetective:verifyRuntime"),
   artistDetectiveSelectModel: (variant:'full'|'light') => ipcRenderer.invoke("artistDetective:selectModel", variant),
   artistDetectiveClearResults: (request: {directory:string;deleteImages:boolean}) => ipcRenderer.invoke("artistDetective:clearResults", request),

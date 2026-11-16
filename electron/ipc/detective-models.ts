@@ -5,6 +5,7 @@ import {atomicWriteFileSync} from './store';
 export type DetectiveModelVariant='full'|'light';
 export type DetectiveModelProfile={python?:string;assets?:string;downloadDirectory?:string};
 export type DetectiveConfig=DetectiveModelProfile & {
+  outputRoot?:string;savedImagesDirectory?:string;
   directory?:string;pid?:number;image?:string;variant?:DetectiveModelVariant;
   selectedVariant?:DetectiveModelVariant;downloadVariant?:DetectiveModelVariant;
   models?:Partial<Record<DetectiveModelVariant,DetectiveModelProfile>>;
