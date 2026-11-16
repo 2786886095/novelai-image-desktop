@@ -35,6 +35,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  nativeTheme,
   Tray,
   session,
   shell,
@@ -490,7 +491,7 @@ function createWindow() {
     minHeight: 720,
     show: false,
     frame: false,
-    backgroundColor: "#f2f3f5",
+    backgroundColor: (() => { const t = getSettings().theme; return t === "dark" || (t === "system" && nativeTheme.shouldUseDarkColors) ? "#111212" : "#f3f4f1"; })(),
     title: "Langbai NovelAI Studio",
     icon: iconPath,
     webPreferences: {
@@ -1547,6 +1548,10 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   ipcMain.handle("settings:get", (_event, key) => getSetting(key));
   ipcMain.handle("settings:set", async (_event, key, value) => {
     const saved = setSetting(key, value);
+    if (key === "theme" && mainWindow && !mainWindow.isDestroyed()) {
+      const dark = saved.theme === "dark" || (saved.theme === "system" && nativeTheme.shouldUseDarkColors);
+      mainWindow.setBackgroundColor(dark ? "#111212" : "#f3f4f1");
+    }
     if (key === "closeToTray") windowTrayForSession = false;
     if (key === "closeToTray" || key === "language") syncWindowTray(key === "language");
     if ([

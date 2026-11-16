@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVE_TABS } from "../app/navigation";
 import { normalizeTabOrder } from "../app/tab-order";
-import { groupedTabOrder, moveTabWithinGroup, NAV_GROUPS, rankCommands, SETTINGS_SECTIONS, TOOL_ENTRIES, type CommandItem } from "./nav-model";
+import { formatCommandHint, groupedTabOrder, moveTabWithinGroup, NAV_GROUPS, rankCommands, SETTINGS_SECTIONS, TOOL_ENTRIES, type CommandItem } from "./nav-model";
 
 describe("navigation rail model", () => {
   it("places every destination in exactly one group (no feature dropped)", () => {
@@ -49,5 +49,11 @@ describe("navigation rail model", () => {
     expect(rankCommands(items, "batch").map((i) => i.id)).toEqual(["a"]);
     expect(rankCommands(items, "")).toHaveLength(3);
     expect(rankCommands(items, "zzz")).toHaveLength(0);
+  });
+
+  it("deduplicates redundant command hints against the item label", () => {
+    expect(formatCommandHint("风格管理", "风格管理", "风格管理")).toBe("");
+    expect(formatCommandHint("在线画廊", "在线画廊", "浏览公开作品并提取提示词与原参数")).toBe("浏览公开作品并提取提示词与原参数");
+    expect(formatCommandHint("生成", "文生图 / 图生图", "提示词、参考图、批量生成")).toBe("文生图 / 图生图 · 提示词、参考图、批量生成");
   });
 });

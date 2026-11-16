@@ -1,152 +1,230 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   QQ-STYLE THEME (final layer)
-   Reference: QQ NT desktop — neutral light-gray canvas, white surfaces, one
-   clear blue accent, thin hairline borders, 8/12 px radii and almost no
-   shadow. No gradients, glow, glass or decorative blobs. Semantic tokens are
-   redefined here so every feature module follows automatically.
+   QUANTIZED LINE FIELD × DESKTOP STUDIO THEME (final layer)
+   Inspired by StyleKit's Quantized Line Field (https://www.stylekit.top/zh/styles/quantized-line-field):
+   - Paper (#f3f4f1 / #fafaf8) & Night Field (#111212) opaque surfaces
+   - 1px hairline structure (#d9dbd5 / #2d302f), zero blur / zero glass glow
+   - Electric Blue (#2152e7 / #2962f6) primary CTA & Detection Blue (#267dff / #4eaeff)
+     interaction lines & focus rings
+   - Unblurred structural plates + tactile spring press & directional motion
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root,
 html:not(.theme-dark) {
-  --qq-blue: #0099ff;
-  --bg-window: #f2f3f5;
-  --bg-panel: #f7f8fa;
+  --qf-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --qf-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --qf-ease-in: cubic-bezier(0.4, 0, 1, 1);
+
+  --bg-window: #f3f4f1;
+  --bg-panel: #f8f8f6;
   --bg-canvas: #ffffff;
   --bg-dialog: #ffffff;
   --bg-input: #ffffff;
-  --bg-subtle: #f0f1f3;
-  --bg-hover: #f0f1f3;
-  --bg-selected: #e6f4ff;
-  --rail-bg: #ebedf0;
-  --rail-hover: rgba(0, 0, 0, 0.05);
+  --bg-subtle: #eeeeeb;
+  --bg-hover: #e9eae5;
+  --bg-selected: #eaf1ff;
+  --rail-bg: #eeeeeb;
+  --rail-hover: rgba(32, 34, 32, 0.06);
   --rail-active: #ffffff;
 
-  --border: #e5e6eb;
-  --border-strong: #c9cdd4;
+  --border: #d9dbd5;
+  --border-strong: #b7bab1;
+  --qf-plate: rgba(32, 34, 32, 0.09);
 
-  --accent: #0099ff;
-  --accent-hover: #0088e6;
-  --accent-pressed: #0077cc;
-  --accent-soft: #e6f4ff;
+  --accent: #2152e7;
+  --accent-hover: #1b46cc;
+  --accent-pressed: #1539ad;
+  --accent-plate: #112e8f;
+  --detection: #267dff;
+  --accent-soft: #edf3ff;
   --accent-text: #ffffff;
-  --accent-cyan: #0099ff;
-  --accent-2: #0099ff;
-  --accent-gold: #ff8a00;
+  --accent-cyan: #2152e7;
+  --accent-2: #267dff;
+  --accent-gold: #d97300;
   --primary: var(--accent);
 
-  --danger: #f54a45;
-  --danger-soft: #fff0ef;
-  --success: #1aad5a;
-  --success-soft: #e9f8ef;
-  --warning: #e57a00;
+  --danger: #ec353e;
+  --danger-hover: #d42831;
+  --danger-plate: #a61b22;
+  --danger-soft: #fff0f1;
+  --success: #189952;
+  --success-soft: #eaf8f0;
+  --warning: #d97300;
 
-  --text-primary: #1a1a1a;
-  --text-secondary: #545b66;
-  --text-muted: #767c85;
+  --text-primary: #202220;
+  --text-secondary: #525550;
+  --text-muted: #686b64;
   --muted: var(--text-muted);
+
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace;
 
   --radius-sm: 6px;
   --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-lg: 13px;
   --radius-xl: 16px;
-  --radius-2xl: 20px;
+  --radius-2xl: 17px;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.10);
-  --shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.14);
-  --focus-ring: 0 0 0 3px rgba(0, 153, 255, 0.20);
+  --shadow-sm: 0 1px 0 rgba(32, 34, 32, 0.06);
+  --shadow-md: 0 6px 18px rgba(32, 34, 32, 0.08);
+  --shadow-lg: 0 12px 32px rgba(32, 34, 32, 0.11);
+  --shadow-xl: 0 16px 44px rgba(32, 34, 32, 0.15);
+  --focus-ring: 0 0 0 2px rgba(38, 125, 255, 0.22);
 }
 
 .theme-dark,
 html.theme-dark {
-  --bg-window: #1a1a1a;
-  --bg-panel: #222222;
-  --bg-canvas: #262626;
-  --bg-dialog: #2b2b2b;
-  --bg-input: #1f1f1f;
-  --bg-subtle: #2f2f2f;
-  --bg-hover: rgba(255, 255, 255, 0.06);
-  --bg-selected: rgba(0, 153, 255, 0.16);
-  --rail-bg: #1f1f1f;
-  --rail-hover: rgba(255, 255, 255, 0.06);
-  --rail-active: #333333;
+  --bg-window: #111212;
+  --bg-panel: #181a1a;
+  --bg-canvas: #1f2121;
+  --bg-dialog: #232626;
+  --bg-input: #141616;
+  --bg-subtle: #272a2a;
+  --bg-hover: rgba(250, 250, 248, 0.06);
+  --bg-selected: rgba(41, 98, 246, 0.18);
+  --rail-bg: #151717;
+  --rail-hover: rgba(250, 250, 248, 0.07);
+  --rail-active: #252828;
 
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.16);
+  --border: #2d302f;
+  --border-strong: #454947;
+  --qf-plate: rgba(0, 0, 0, 0.45);
 
-  --accent: #2ea4ff;
-  --accent-hover: #4db2ff;
-  --accent-pressed: #1a8fe6;
-  --accent-soft: rgba(0, 153, 255, 0.16);
+  --accent: #2962f6;
+  --accent-hover: #3d73ff;
+  --accent-pressed: #1f4fd1;
+  --accent-plate: #13338f;
+  --detection: #4eaeff;
+  --accent-soft: rgba(41, 98, 246, 0.18);
   --accent-text: #ffffff;
-  --accent-cyan: #2ea4ff;
-  --accent-2: #2ea4ff;
+  --accent-cyan: #4eaeff;
+  --accent-2: #4eaeff;
   --primary: var(--accent);
 
-  --danger: #ff5f57;
-  --danger-soft: rgba(245, 74, 69, 0.16);
-  --success: #3cc47c;
-  --success-soft: rgba(26, 173, 90, 0.16);
-  --warning: #ffa940;
+  --danger: #ff525a;
+  --danger-hover: #ec353e;
+  --danger-plate: #991b22;
+  --danger-soft: rgba(236, 53, 62, 0.18);
+  --success: #34c778;
+  --success-soft: rgba(24, 153, 82, 0.18);
+  --warning: #ffa938;
 
-  --text-primary: #e8e8e8;
-  --text-secondary: #a8acb3;
-  --text-muted: #8c9199;
+  --text-primary: #f2f2ef;
+  --text-secondary: #a6aaa4;
+  --text-muted: #787c76;
+  --muted: var(--text-muted);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.45);
-  --shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.55);
-  --focus-ring: 0 0 0 3px rgba(46, 164, 255, 0.28);
+  --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.42);
+  --shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.54);
+  --shadow-xl: 0 20px 52px rgba(0, 0, 0, 0.64);
+  --focus-ring: 0 0 0 2px rgba(78, 174, 255, 0.28);
 }
 
-/* ── Base ──────────────────────────────────────────────────────────────── */
-html, body, #root { background: var(--bg-window); }
+/* ── 1. Root & Shell Surfaces (100% Opaque in Light AND Dark Modes) ────── */
+html,
+html body,
+html body #root,
+html.theme-dark,
+html.theme-dark body,
+html.theme-dark #root,
+html body .app-shell,
+html.theme-dark body .app-shell,
+html body .studio-shell,
+html.theme-dark body .studio-shell {
+  background: var(--bg-window) !important;
+  background-image: none !important;
+  color: var(--text-primary);
+}
+
 .app-shell::before, .app-shell::after,
 .studio-shell .left-panel::before, .studio-shell .left-panel::after,
 .studio-shell .history-panel::before, .studio-shell .history-panel::after,
 .studio-shell .canvas-area::before, .studio-shell .canvas-area::after,
 .studio-shell .empty-canvas::before, .studio-shell .empty-canvas::after,
 .studio-shell .tools-hero::before, .studio-shell .tools-hero::after,
-.studio-shell .tool-card::before, .studio-shell .tool-card::after { display: none !important; content: none !important; }
-.studio-shell ::selection { background: color-mix(in srgb, var(--accent) 24%, transparent); }
-.studio-shell * { scrollbar-color: color-mix(in srgb, var(--text-muted) 40%, transparent) transparent; scrollbar-width: thin; }
-.studio-shell ::-webkit-scrollbar { width: 8px; height: 8px; }
-.studio-shell ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-muted) 35%, transparent); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
-.studio-shell ::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--text-muted) 55%, transparent); }
-.studio-shell ::-webkit-scrollbar-track { background: transparent; }
+.studio-shell .tool-card::before, .studio-shell .tool-card::after {
+  display: none !important;
+  content: none !important;
+}
 
-/* ── Title bar & rail: QQ's quiet gray chrome ──────────────────────────── */
-.studio-shell .shell-topbar { background: var(--rail-bg); border-bottom: 0; }
-.studio-shell .shell-brand { font-weight: 600; }
-.studio-shell .shell-brand .title-icon { border-radius: 6px; }
-.studio-shell .shell-search-trigger { background: var(--bg-canvas); border-color: transparent; border-radius: var(--radius-md); }
-.studio-shell .shell-search-trigger:hover { border-color: var(--border); }
-.studio-shell .shell-search-trigger kbd { background: var(--bg-subtle); border-color: transparent; }
-.studio-shell .shell-task-button,
-.studio-shell .shell-account-status.title-account { background: var(--bg-canvas); border-color: transparent; }
-.studio-shell .shell-task-button.is-busy { background: var(--accent-soft); color: var(--accent); }
-.studio-shell .shell-account-status.online { background: var(--bg-canvas); color: var(--text-secondary); }
-.studio-shell .shell-account-status.online .pulse-dot { background: var(--success); box-shadow: none; }
+::selection {
+  background: #c2dcff;
+  color: #202220;
+}
+html.theme-dark ::selection {
+  background: rgba(78, 174, 255, 0.32);
+  color: #ffffff;
+}
+
+/* Unified scrollbars (including portaled dialogs & menus in dark mode) */
+html body * {
+  scrollbar-color: color-mix(in srgb, var(--text-muted) 38%, transparent) transparent;
+  scrollbar-width: thin;
+}
+html body ::-webkit-scrollbar { width: 7px; height: 7px; }
+html body ::-webkit-scrollbar-thumb,
+html.theme-dark body ::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-muted) 34%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+html body ::-webkit-scrollbar-thumb:hover,
+html.theme-dark body ::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--text-muted) 56%, transparent);
+}
+html body ::-webkit-scrollbar-track { background: transparent; }
+
+/* ── 2. Workspace Chrome, Resizers & Status Bar (Light & Dark) ─────────── */
+.studio-shell .shell-main,
+.studio-shell .workspace {
+  background: var(--bg-window) !important;
+}
+.studio-shell .status-bar,
+html.theme-dark .studio-shell .status-bar {
+  background: var(--rail-bg) !important;
+  border-top: 1px solid var(--border) !important;
+  color: var(--text-muted) !important;
+  height: 24px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
 .studio-shell .window-controls button:hover { background: var(--rail-hover); }
-.studio-shell .window-controls .close:hover { background: #e81123; color: #fff; }
+.studio-shell .window-controls .close:hover { background: var(--danger) !important; color: #ffffff !important; }
 
-.studio-shell .shell-rail { background: var(--rail-bg); border-right: 0; }
-.studio-shell .shell-rail-group-title { color: var(--text-muted); font-weight: 500; font-size: 12px; letter-spacing: 0; }
-.studio-shell .shell-rail-item { height: 36px; color: var(--text-secondary); font-weight: 500; }
-.studio-shell .shell-rail-item:hover { background: var(--rail-hover); color: var(--text-primary); }
-.studio-shell .shell-rail-item.active { background: var(--rail-active); color: var(--text-primary); font-weight: 600; box-shadow: var(--shadow-sm); }
-.studio-shell .shell-rail-item.active::before { display: none; }
-.studio-shell .shell-rail-item.active .shell-rail-icon { color: var(--accent); }
-.studio-shell .shell-rail-subitem:hover { background: var(--rail-hover); }
-.studio-shell .shell-rail-sub { border-left-color: var(--border-strong); }
-.studio-shell .shell-rail-footer { border-top: 1px solid color-mix(in srgb, var(--text-muted) 15%, transparent); }
-.studio-shell .shell-icon-btn:hover { background: var(--rail-hover); }
-.studio-shell .shell-icon-btn.active { background: var(--accent-soft); color: var(--accent); }
+/* Resizer handles & right history rail trigger in Light & Dark */
+.studio-shell .ws-resizer,
+.studio-shell .history-rail-control {
+  background: transparent !important;
+}
+.studio-shell .ws-resizer .ws-resizer-grip {
+  background: var(--border-strong) !important;
+  box-shadow: none !important;
+}
+.studio-shell .ws-resizer:hover .ws-resizer-grip {
+  background: var(--detection) !important;
+}
+.studio-shell .history-rail-toggle {
+  background: var(--bg-canvas) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: var(--shadow-sm) !important;
+  transition:
+    border-color 140ms var(--qf-ease-out),
+    color 140ms var(--qf-ease-out),
+    background-color 140ms var(--qf-ease-out),
+    transform 120ms var(--qf-spring);
+}
+.studio-shell .history-rail-toggle:hover {
+  border-color: var(--detection) !important;
+  color: var(--accent) !important;
+  background: var(--bg-canvas) !important;
+  transform: translateX(-1px);
+}
+.studio-shell .history-rail-toggle:active {
+  transform: scale(0.92);
+}
 
-/* ── Surfaces: white cards on gray, hairline borders, no shadow ───────── */
-.studio-shell .workspace { background: transparent; }
+/* ── 3. Cards & Panels (Clean 1px Hairlines, No Glass or Blur) ─────────── */
 .studio-shell .left-panel,
 .studio-shell .history-panel,
 .studio-shell .canvas-area,
@@ -154,231 +232,754 @@ html, body, #root { background: var(--bg-window); }
 .studio-shell .tools-hero,
 .studio-shell .settings-page > .modal,
 .studio-shell .works-library > *,
-.studio-shell .shell-task-row {
-  background: var(--bg-canvas);
-  background-image: none;
-  border: 1px solid var(--border);
+.studio-shell .shell-task-row,
+html.theme-dark .studio-shell .left-panel,
+html.theme-dark .studio-shell .history-panel,
+html.theme-dark .studio-shell .canvas-area {
+  background: var(--bg-panel) !important;
+  background-image: none !important;
+  border: 1px solid var(--border) !important;
   border-radius: var(--radius-lg);
   box-shadow: none;
+  backdrop-filter: none !important;
 }
-.studio-shell .canvas-area { background: var(--bg-panel); }
-.studio-shell .left-panel > .panel-head { border-bottom: 1px solid var(--border); background: transparent; }
-.studio-shell .left-panel > .panel-head > span { background: var(--accent-soft); color: var(--accent); box-shadow: none; }
-.studio-shell .panel-section-nav { background: transparent; }
-.studio-shell .panel-section-nav button.active { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
-.studio-shell .status-bar { background: var(--rail-bg); border-top: 0; color: var(--text-muted); }
-.studio-shell .shell-page-layer { background: var(--bg-window); }
+.studio-shell .canvas-area,
+html.theme-dark .studio-shell .canvas-area {
+  background: var(--bg-canvas) !important;
+}
+.studio-shell .left-panel > .panel-head,
+html.theme-dark .studio-shell .left-panel > .panel-head {
+  border-bottom: 1px solid var(--border) !important;
+  background: var(--bg-panel) !important;
+}
+.studio-shell .left-panel > .panel-head > span {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: none;
+}
 
-/* Empty canvas: one line-icon, plain text — no orb, gem or glow. */
-.studio-shell .empty-canvas { background: transparent; border: 0; box-shadow: none; }
-.studio-shell .empty-canvas .empty-illustration.is-plain { display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto 14px; border-radius: 14px; background: var(--bg-subtle); color: var(--text-muted); box-shadow: none; }
+/* Empty canvas */
+.studio-shell .empty-canvas,
+html.theme-dark .studio-shell .empty-canvas {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.studio-shell .empty-canvas .empty-illustration.is-plain {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
+  transition: transform 200ms var(--qf-spring), border-color 160ms ease;
+}
+.studio-shell .empty-canvas:hover .empty-illustration.is-plain {
+  transform: translateY(-2px);
+  border-color: var(--detection);
+  color: var(--accent);
+}
+.studio-shell .empty-canvas:active .empty-illustration.is-plain {
+  transform: translateY(0) scale(0.96);
+}
 .studio-shell .empty-canvas .empty-illustration.is-plain .ui-icon { width: 26px; height: 26px; }
-.studio-shell .empty-canvas strong { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+.studio-shell .empty-canvas strong { font-size: 18px; color: var(--text-primary); }
 .studio-shell .empty-canvas > span:not(.empty-illustration):not(.empty-shortcuts) { color: var(--text-secondary); }
-.studio-shell .empty-shortcuts > span { background: var(--bg-canvas); border: 1px solid var(--border); color: var(--text-secondary); border-radius: var(--radius-pill); }
+.studio-shell .empty-shortcuts > span {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 999px;
+}
 
-/* ── Buttons ───────────────────────────────────────────────────────────── */
-.studio-shell .btn,
-.studio-shell button.btn-secondary {
+/* ── 4. Cost Preview Card & Left Footer (Clean in Both Light & Dark) ───── */
+html body .cost-row.cost-card {
+  position: relative;
+  margin-top: 10px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--border) !important;
+  border-left: 3px solid var(--accent) !important;
+  border-radius: var(--radius-md);
+  background: var(--bg-canvas) !important;
+  color: var(--text-primary);
+  box-shadow: none !important;
+}
+html body .cost-row.cost-card.cost-free {
+  border-left-color: var(--success) !important;
+}
+html body .cost-row.cost-card.cost-warn {
+  border-left-color: var(--danger) !important;
+  background: color-mix(in srgb, var(--danger-soft) 40%, var(--bg-canvas)) !important;
+}
+html body .cost-row.cost-card > div:first-child > span {
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+html body .cost-row.cost-card .cost-primary {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+html body .cost-row.cost-card.cost-free .cost-primary {
+  border-color: color-mix(in srgb, var(--success) 32%, var(--border));
+  background: var(--success-soft);
+  color: var(--success);
+}
+html body .cost-row.cost-card.cost-warn .cost-primary {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+html body .cost-row.cost-card small {
+  color: var(--text-secondary) !important;
+  line-height: 1.5;
+}
+
+/* Left Footer & Account / Opus Allowance */
+.studio-shell .left-footer,
+html.theme-dark .studio-shell .left-footer {
+  background: var(--bg-panel) !important;
+  border-top: 1px solid var(--border) !important;
+  box-shadow: none !important;
+  padding: 8px 12px 10px;
+  gap: 8px;
+}
+html body .account-details-shell > button.account-details-toggle,
+html body .account-details-shell.collapsed > button.account-details-toggle {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between !important;
+  width: 100%;
+  min-height: 28px;
+  height: auto;
+  padding: 4px 8px !important;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+}
+html body .account-details-shell > button.account-details-toggle:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+html body .account-mini button {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-size: 11.5px;
+  transition: border-color 140ms var(--qf-ease-out), transform 110ms var(--qf-spring), color 140ms ease;
+}
+html body .account-mini button:hover:not(:disabled) {
+  border-color: var(--detection);
+  color: var(--accent);
+}
+html body .account-mini button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+html body .account-opus-usage {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md);
+  background: var(--bg-canvas) !important;
+  box-shadow: none !important;
+  padding: 6px 10px;
+  transition: border-color 140ms var(--qf-ease-out), transform 120ms var(--qf-spring);
+}
+html body .account-opus-usage:hover {
+  border-color: var(--detection) !important;
+}
+html body .account-opus-usage:active {
+  transform: scale(0.99);
+}
+html body .account-opus-label {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+/* ── 5. Quantized Line Field Button System (Workspace + Portals) ───────── */
+html body .btn,
+html body button.btn-secondary,
+html body .nai-account-manager > button,
+html body .history-group-create > button,
+html body .history-group-actions > button,
+html body .reference-ui-dialog-button,
+html.theme-dark body .btn,
+html.theme-dark body .history-group-create > button,
+html.theme-dark body .history-group-actions > button {
   background: var(--bg-canvas);
   background-image: none;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  box-shadow: none;
-  font-weight: 500;
+  box-shadow: 0 1px 0 var(--qf-plate);
   text-shadow: none;
+  transform: translateY(0);
+  transition:
+    background-color 140ms var(--qf-ease-out),
+    border-color 140ms var(--qf-ease-out),
+    color 140ms var(--qf-ease-out),
+    box-shadow 140ms var(--qf-ease-out),
+    transform 130ms var(--qf-spring);
 }
-.studio-shell .btn:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-strong); transform: none; }
-.studio-shell .btn:active:not(:disabled) { background: var(--bg-subtle); transform: none; }
-.studio-shell .btn-primary,
-.studio-shell .btn.primary,
-.studio-shell .nai-account-primary {
+
+html body .btn:hover:not(:disabled),
+html body button.btn-secondary:hover:not(:disabled),
+html body .nai-account-manager > button:hover:not(:disabled),
+html body .history-group-create > button:hover:not(:disabled),
+html body .history-group-actions > button:hover:not(:disabled),
+html body .reference-ui-dialog-button:hover:not(:disabled) {
+  background: var(--bg-canvas);
+  border-color: var(--detection);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--detection) 28%, var(--border));
+}
+
+html body .btn:active:not(:disabled),
+html body button.btn-secondary:active:not(:disabled),
+html body .nai-account-manager > button:active:not(:disabled),
+html body .history-group-create > button:active:not(:disabled),
+html body .history-group-actions > button:active:not(:disabled),
+html body .reference-ui-dialog-button:active:not(:disabled) {
+  background: var(--bg-subtle);
+  border-color: var(--accent);
+  transform: translateY(1px) scale(0.985);
+  box-shadow: 0 0 0 transparent;
+  filter: none;
+  transition-duration: 70ms;
+}
+
+/* Primary CTA Button (Electric Blue + Structural Plate) */
+html body .btn.btn-primary,
+html body .btn.primary,
+html body .nai-account-primary,
+html body .reference-ui-dialog-button-primary,
+html.theme-dark body .btn.btn-primary,
+html.theme-dark body .nai-account-primary {
   background: var(--accent) !important;
   background-image: none !important;
-  border: 1px solid var(--accent) !important;
+  border: 1px solid var(--accent-pressed) !important;
   color: var(--accent-text) !important;
-  box-shadow: none !important;
+  box-shadow: 0 2px 0 var(--accent-plate) !important;
 }
-.studio-shell .btn-primary:hover:not(:disabled),
-.studio-shell .nai-account-primary:hover:not(:disabled) { background: var(--accent-hover) !important; border-color: var(--accent-hover) !important; }
-.studio-shell .btn-primary:active:not(:disabled) { background: var(--accent-pressed) !important; }
-.studio-shell .btn-primary:disabled { opacity: .45; }
-.studio-shell .btn-danger { background: var(--bg-canvas); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
-.studio-shell .btn-danger:hover:not(:disabled) { background: var(--danger-soft); }
-.studio-shell .btn-ghost { background: transparent; border-color: transparent; }
-.studio-shell .btn:focus-visible,
-.studio-shell button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; box-shadow: none; }
+html body .btn.btn-primary:hover:not(:disabled),
+html body .btn.primary:hover:not(:disabled),
+html body .nai-account-primary:hover:not(:disabled),
+html body .reference-ui-dialog-button-primary:hover:not(:disabled) {
+  background: var(--accent-hover) !important;
+  border-color: var(--accent) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 0 var(--accent-plate) !important;
+}
+html body .btn.btn-primary:active:not(:disabled),
+html body .btn.primary:active:not(:disabled),
+html body .nai-account-primary:active:not(:disabled),
+html body .reference-ui-dialog-button-primary:active:not(:disabled) {
+  background: var(--accent-pressed) !important;
+  transform: translateY(1px) scale(0.988);
+  box-shadow: 0 0 0 transparent !important;
+  transition-duration: 70ms;
+}
 
-/* ── Segmented controls (QQ-style: gray track, white thumb) ────────────── */
-.studio-shell .generate-mode-switcher,
-.studio-shell .prompt-tabs,
-.studio-shell .seed-mode-switch,
-.studio-shell .quality-preset-segments,
-.studio-shell .i2i-size-mode,
-.studio-shell .nai-account-method-tabs {
+/* Danger Button (Signal Red) */
+html body .btn.btn-danger,
+html.theme-dark body .btn.btn-danger {
+  background: var(--danger) !important;
+  background-image: none !important;
+  border: 1px solid var(--danger-hover) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 0 var(--danger-plate) !important;
+}
+html body .btn.btn-danger:hover:not(:disabled) {
+  background: var(--danger-hover) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 0 var(--danger-plate) !important;
+}
+html body .btn.btn-danger:active:not(:disabled) {
+  transform: translateY(1px) scale(0.988);
+  box-shadow: 0 0 0 transparent !important;
+  transition-duration: 70ms;
+}
+
+/* Ghost Button */
+html body .btn.btn-ghost,
+html.theme-dark body .btn.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+html body .btn.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border);
+  transform: none;
+  box-shadow: none;
+}
+html body .btn.btn-ghost:active:not(:disabled) {
   background: var(--bg-subtle);
-  background-image: none;
-  border: 0;
+  transform: scale(0.97);
+  box-shadow: none;
+}
+
+/* Disabled Controls */
+html body .btn:disabled,
+html body .btn.btn-primary:disabled,
+html body .btn.btn-danger:disabled,
+html body .history-group-create > button:disabled,
+html body .history-group-actions > button:disabled {
+  background: var(--bg-subtle) !important;
+  border-color: var(--border) !important;
+  color: var(--text-muted) !important;
+  box-shadow: none !important;
+  transform: none !important;
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Detection Blue Focus Ring (Quantized Line Field spec) */
+html body :is(button, .btn, [role="button"], summary):not(.image-preview-viewer):not(.zoom-frame-shell):not(.canvas-area):focus-visible {
+  outline: 2px solid var(--detection) !important;
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/* ── 6. Segmented Controls & Tabs (Tactile Switch Track) ───────────────── */
+html body :is(
+  .generate-mode-switcher,
+  .prompt-tabs,
+  .seed-mode-switch,
+  .quality-preset-segments,
+  .i2i-size-mode,
+  .mode-selector,
+  .nai-account-method-tabs
+) {
+  background: var(--bg-subtle) !important;
+  background-image: none !important;
+  border: 1px solid var(--border) !important;
   border-radius: var(--radius-md);
   padding: 2px;
   gap: 2px;
-  box-shadow: none;
+  box-shadow: none !important;
 }
 .studio-shell .generate-mode-switcher { margin: 8px 12px 0; }
-.studio-shell .generate-mode-switcher button,
-.studio-shell .prompt-tabs button,
-.studio-shell .seed-mode-switch button,
-.studio-shell .quality-preset-segments button,
-.studio-shell .i2i-size-mode button,
-.studio-shell .nai-account-method-tabs button {
+
+html body :is(
+  .generate-mode-switcher,
+  .prompt-tabs,
+  .seed-mode-switch,
+  .quality-preset-segments,
+  .i2i-size-mode,
+  .mode-selector,
+  .nai-account-method-tabs
+) button {
   background: transparent;
   background-image: none;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 6px;
   color: var(--text-secondary);
   box-shadow: none;
-  font-weight: 500;
   min-height: 28px;
+  transition:
+    background-color 150ms var(--qf-ease-out),
+    border-color 150ms var(--qf-ease-out),
+    color 140ms var(--qf-ease-out),
+    box-shadow 150ms var(--qf-ease-out),
+    transform 110ms var(--qf-spring);
 }
 .studio-shell .generate-mode-switcher button::after,
 .studio-shell .prompt-tabs button::after { display: none; }
-.studio-shell .generate-mode-switcher button:hover,
-.studio-shell .prompt-tabs button:hover,
-.studio-shell .seed-mode-switch button:hover,
-.studio-shell .quality-preset-segments button:hover { color: var(--text-primary); background: transparent; }
-.studio-shell .generate-mode-switcher button.active,
-.studio-shell .prompt-tabs button.active,
-.studio-shell .seed-mode-switch button.active,
-.studio-shell .quality-preset-segments button[aria-checked="true"],
-.studio-shell .quality-preset-segments button.active,
-.studio-shell .i2i-size-mode button.active,
-.studio-shell .nai-account-method-tabs button[aria-selected="true"] {
-  background: var(--bg-canvas);
-  color: var(--text-primary);
-  font-weight: 600;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-  border: 0;
-}
-.theme-dark .studio-shell .generate-mode-switcher button.active,
-.theme-dark .studio-shell .prompt-tabs button.active,
-.theme-dark .studio-shell .seed-mode-switch button.active,
-.theme-dark .studio-shell .quality-preset-segments button[aria-checked="true"] { background: #3a3a3a; }
 
-/* ── Form fields ───────────────────────────────────────────────────────── */
-.studio-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
-.studio-shell textarea,
-.studio-shell .select-menu-trigger,
-.studio-shell .style-preset-trigger {
-  background: var(--bg-input);
-  background-image: none;
-  border: 1px solid var(--border);
+html body :is(
+  .generate-mode-switcher,
+  .prompt-tabs,
+  .seed-mode-switch,
+  .quality-preset-segments,
+  .i2i-size-mode,
+  .mode-selector,
+  .nai-account-method-tabs
+) button:hover:not(.active):not([aria-checked="true"]):not([aria-selected="true"]) {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-canvas) 45%, transparent);
+}
+html body :is(
+  .generate-mode-switcher,
+  .prompt-tabs,
+  .seed-mode-switch,
+  .quality-preset-segments,
+  .i2i-size-mode,
+  .mode-selector,
+  .nai-account-method-tabs
+) button:active {
+  transform: scale(0.97);
+}
+html body :is(
+  .generate-mode-switcher button.active,
+  .prompt-tabs button.active,
+  .seed-mode-switch button.active,
+  .quality-preset-segments button[aria-checked="true"],
+  .quality-preset-segments button.active,
+  .i2i-size-mode button.active,
+  .mode-selector button.active,
+  .nai-account-method-tabs button[aria-selected="true"]
+) {
+  background: var(--bg-canvas) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+  box-shadow: 0 1px 2px var(--qf-plate) !important;
+}
+
+/* ── 7. Form Inputs, Textareas & Select Triggers (Workspace + Portals) ─── */
+html body :is(
+  .field input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  .field textarea,
+  .prompt-box,
+  .prompt-chip-search,
+  .history-group-create input,
+  .select-menu-trigger,
+  .style-preset-trigger,
+  .nai-account-selector
+),
+html.theme-dark body :is(
+  .field input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  .field textarea,
+  .prompt-box,
+  .prompt-chip-search,
+  .history-group-create input,
+  .select-menu-trigger,
+  .style-preset-trigger,
+  .nai-account-selector
+) {
+  background: var(--bg-input) !important;
+  background-image: none !important;
+  border: 1px solid var(--border) !important;
   border-radius: var(--radius-md);
-  box-shadow: none;
-  color: var(--text-primary);
+  box-shadow: none !important;
+  color: var(--text-primary) !important;
+  transition:
+    border-color 140ms var(--qf-ease-out),
+    box-shadow 140ms var(--qf-ease-out),
+    background-color 140ms var(--qf-ease-out);
 }
-.studio-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):hover,
-.studio-shell textarea:hover,
-.studio-shell .select-menu-trigger:hover { border-color: var(--border-strong); }
-.studio-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
-.studio-shell textarea:focus,
-.studio-shell .select-menu-trigger[aria-expanded="true"] { border-color: var(--accent); box-shadow: var(--focus-ring); outline: none; }
-.studio-shell input::placeholder,
-.studio-shell textarea::placeholder { color: color-mix(in srgb, var(--text-muted) 80%, transparent); }
-.studio-shell input[type="checkbox"], .studio-shell input[type="radio"] { accent-color: var(--accent); }
-.studio-shell .field > span,
-.studio-shell .compact-model-label > span,
-.studio-shell .quality-preset-title,
-.studio-shell .resolution-select-label { color: var(--text-secondary); font-weight: 500; }
 
-/* Menus / popovers / dialogs: white, hairline, soft shadow. */
+html body :is(
+  .field input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  .field textarea,
+  .prompt-box,
+  .prompt-chip-search,
+  .history-group-create input,
+  .select-menu-trigger,
+  .style-preset-trigger,
+  .nai-account-selector
+):hover:not(:disabled) {
+  border-color: var(--border-strong) !important;
+}
+
+html body :is(
+  .field input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  .field textarea,
+  .prompt-box,
+  .prompt-chip-search,
+  .history-group-create input
+):focus,
+html body :is(.select-menu-trigger, .style-preset-trigger)[aria-expanded="true"] {
+  border-color: var(--detection) !important;
+  box-shadow: var(--focus-ring) !important;
+  outline: none !important;
+}
+
+html body input::placeholder,
+html body textarea::placeholder {
+  color: color-mix(in srgb, var(--text-muted) 85%, transparent);
+}
+html body input[type="checkbox"],
+html body input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+/* ── 8. Downward List Expansion ("列表向下展开") & Popovers / Dialogs ─── */
 .select-menu-popover,
+.style-preset-menu,
 .menu-pop,
 .history-action-menu,
 .shell-task-popover,
 .shell-palette,
 .ac-dropdown,
+.context-menu,
+.prompt-chunk-popover,
+.weight-help-popover,
 .modal,
-.app-confirm-dialog {
+.app-confirm-dialog,
+.nai-account-panel {
   background: var(--bg-dialog) !important;
   background-image: none !important;
-  border: 1px solid var(--border) !important;
+  border: 1px solid var(--border-strong) !important;
+  color: var(--text-primary) !important;
   box-shadow: var(--shadow-lg) !important;
   backdrop-filter: none !important;
 }
-.modal, .app-confirm-dialog, .shell-palette { border-radius: var(--radius-lg) !important; }
-.modal-backdrop, .app-confirm-backdrop, .shell-palette-backdrop { background: rgba(0, 0, 0, 0.32) !important; backdrop-filter: none !important; }
-.theme-dark .modal-backdrop, .theme-dark .app-confirm-backdrop, .theme-dark .shell-palette-backdrop { background: rgba(0, 0, 0, 0.55) !important; }
+.modal, .app-confirm-dialog, .shell-palette, .nai-account-panel { border-radius: var(--radius-lg) !important; }
+.modal-backdrop, .app-confirm-backdrop { background: rgba(17, 18, 18, 0.36) !important; backdrop-filter: none !important; }
+html.theme-dark .modal-backdrop, html.theme-dark .app-confirm-backdrop, html.theme-dark .shell-palette-backdrop {
+  background: rgba(5, 6, 6, 0.62) !important;
+}
 .workbench-dock .modal-backdrop { background: transparent !important; }
-.workbench-dock .modal-backdrop > .modal { box-shadow: none !important; }
-.select-menu-popover [role="option"][aria-selected="true"] { background: var(--accent-soft); color: var(--accent); }
-.select-menu-popover [role="option"]:hover { background: var(--bg-hover); }
-.toast { background: rgba(30, 30, 30, 0.92) !important; color: #fff !important; border: 0 !important; border-radius: var(--radius-md) !important; box-shadow: var(--shadow-lg) !important; backdrop-filter: none !important; }
-.toast button { color: #fff !important; }
+.workbench-dock .modal-backdrop > .modal { box-shadow: none !important; border-color: var(--border) !important; }
 
-/* Toggles in QQ blue. */
+/* SelectMenu: Crisp Top-Origin Downward Unfold & Upward Retract */
+html body .select-menu-popover.disclosure-popover {
+  interpolate-size: allow-keywords;
+  height: var(--disclosure-height, auto);
+  opacity: 1;
+  transform-origin: top center;
+  transform: translateY(0) scaleY(1);
+  overflow-y: auto;
+  transition:
+    height 190ms var(--qf-spring),
+    opacity 150ms var(--qf-ease-out),
+    transform 190ms var(--qf-spring);
+}
+html body .select-menu-popover.disclosure-popover[data-disclosure-open="false"] {
+  height: 0;
+  min-height: 0;
+  opacity: 0;
+  transform: translateY(-5px) scaleY(0.96);
+  pointer-events: none;
+  overflow: clip;
+  transition:
+    height 125ms var(--qf-ease-in),
+    opacity 110ms linear,
+    transform 125ms var(--qf-ease-in);
+}
+@starting-style {
+  html body .select-menu-popover.disclosure-popover[data-disclosure-open="true"] {
+    height: 0;
+    opacity: 0;
+    transform: translateY(-6px) scaleY(0.96);
+  }
+}
+
+/* Compound Dropdown Panels (Task Center, Command Palette, Style Preset Menu, Template Menu) */
+html body .qf-dropdown-panel[data-disclosure-open="true"] {
+  animation: qf-dropdown-down 200ms var(--qf-spring) both;
+}
+html body .qf-dropdown-panel[data-disclosure-open="false"] {
+  pointer-events: none;
+  animation: qf-dropdown-up 125ms var(--qf-ease-in) forwards;
+}
+
+html body :is(.history-action-menu, .ac-dropdown, .context-menu, .menu-pop:not(.disclosure-popover)) {
+  transform-origin: top center;
+  animation: qf-dropdown-down 180ms var(--qf-spring) both;
+}
+
+/* Select options & menu items tactile feel */
+html body .select-menu-option {
+  border-radius: var(--radius-sm);
+  transition: background-color 110ms var(--qf-ease-out), color 110ms var(--qf-ease-out), transform 100ms var(--qf-spring);
+}
+html body .select-menu-option:hover { background: var(--bg-hover); }
+html body .select-menu-option:active { transform: scale(0.988); }
+html body .select-menu-popover [role="option"][aria-selected="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Inline Collapsible Lists (AnimatedCollapse): Smooth Downward Slide + Row Unfold */
+html body .animated-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 170ms var(--qf-ease-in),
+    opacity 130ms linear,
+    visibility 0s 170ms;
+}
+html body .animated-collapse > div {
+  min-height: 0;
+  overflow: hidden;
+  transform: translateY(-6px);
+  transition: transform 170ms var(--qf-ease-in);
+}
+html body .animated-collapse.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    grid-template-rows 220ms var(--qf-spring),
+    opacity 180ms var(--qf-ease-out),
+    visibility 0s;
+}
+html body .animated-collapse.is-open > div {
+  transform: translateY(0);
+  transition: transform 220ms var(--qf-spring);
+}
+
+@keyframes qf-dropdown-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scaleY(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+@keyframes qf-dropdown-up {
+  from {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px) scaleY(0.97);
+  }
+}
+
+/* ── 9. Toggles, Badges, Progress, History Thumbs & Settings Page ─────── */
 .studio-shell [role="switch"][aria-checked="true"] .stream-preview-state,
-.studio-shell .toggle input:checked + span,
-.studio-shell .toggle-track.on { background: var(--accent) !important; }
+html body .toggle input:checked + span,
+html body .toggle-track.on { background: var(--accent) !important; }
 
-/* Chips, tags, badges: quiet gray instead of tinted pills. */
-.studio-shell .empty-shortcuts > span,
-.studio-shell .shell-palette-item em,
-.studio-shell .tool-card small { background: var(--bg-subtle); border-color: transparent; color: var(--text-secondary); }
 .studio-shell .tool-card i,
 .studio-shell .tool-card-heading i { background: var(--accent-soft); color: var(--accent); box-shadow: none; }
-.studio-shell .tool-card:hover { border-color: var(--border-strong); transform: none; box-shadow: none; }
+.studio-shell .tool-card {
+  background: var(--bg-canvas) !important;
+  transition: border-color 150ms var(--qf-ease-out), transform 160ms var(--qf-spring), box-shadow 160ms var(--qf-ease-out);
+}
+.studio-shell .tool-card:hover {
+  border-color: var(--detection) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--detection) 22%, var(--border)) !important;
+}
+.studio-shell .tool-card:active {
+  transform: translateY(0.5px) scale(0.992);
+  box-shadow: none !important;
+}
 
-/* Progress: flat blue. */
 .studio-shell .queue-progressbar-fill,
 .studio-shell .shell-task-bar > span,
-.studio-shell .update-install-progress i { background: var(--accent) !important; background-image: none !important; }
+.studio-shell .update-install-progress i {
+  background: var(--accent) !important;
+  background-image: none !important;
+}
 
-/* Layout notice: neutral info bar. */
-.studio-shell .shell-layout-notice { background: var(--bg-canvas); border-color: var(--border); }
-.studio-shell .shell-layout-notice-main > .ui-icon { color: var(--accent); }
+.studio-shell .history-item,
+html.theme-dark .studio-shell .history-item {
+  border-radius: var(--radius-md);
+  box-shadow: none;
+  border: 1px solid var(--border) !important;
+  background: var(--bg-canvas) !important;
+  transition: border-color 150ms var(--qf-ease-out), transform 150ms var(--qf-spring);
+}
+.studio-shell .history-item > button:first-child,
+html.theme-dark .studio-shell .history-item > button:first-child {
+  background: var(--bg-subtle) !important;
+}
+.studio-shell .history-item:hover {
+  border-color: var(--detection) !important;
+}
+.studio-shell .history-item:active {
+  transform: scale(0.988);
+}
+.studio-shell .history-item.active,
+.studio-shell .history-item[aria-current="true"] {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 1px var(--accent);
+}
 
-/* History thumbnails: square-ish, no glow. */
-.studio-shell .history-item { border-radius: var(--radius-md); box-shadow: none; border-color: var(--border); background: var(--bg-canvas); }
-.studio-shell .history-item:hover { border-color: var(--border-strong); transform: none; }
-.studio-shell .history-item.active, .studio-shell .history-item[aria-current="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-
-/* Typography rhythm: calmer weights. */
-.studio-shell h1, .studio-shell h2 { font-weight: 600; letter-spacing: 0; }
-.studio-shell .eyebrow { display: none; }
-
-.studio-shell .panel-section-nav { flex-wrap: nowrap; gap: 2px; overflow-x: auto; scrollbar-width: none; }
-.studio-shell .panel-section-nav::-webkit-scrollbar { display: none; }
-.studio-shell .panel-section-nav button { padding: 0 8px; flex: none; }
-
-
-/* Settings page: the header ✕, the footer "返回工作区" and the rail toggle
-   already return to the workspace; keep the header to a single title row. */
+/* Settings Page & Nav */
 .studio-shell .settings-as-page > header > .settings-page-back { display: none; }
 .studio-shell .settings-as-page > header > h2 { font-size: 16px; }
-.studio-shell .settings-as-page > header { border-bottom: 1px solid var(--border); }
-.studio-shell .settings-as-page > footer { border-top: 1px solid var(--border); background: transparent; }
-.studio-shell .settings-nav { background: transparent; border-right: 1px solid var(--border); }
-.studio-shell .settings-nav button { border-radius: var(--radius-md); color: var(--text-secondary); font-weight: 500; }
-.studio-shell .settings-nav button:hover { background: var(--bg-hover); }
-.studio-shell .settings-nav button.active { background: var(--accent-soft); color: var(--accent); box-shadow: none; border: 0; }
+.studio-shell .settings-as-page > header { border-bottom: 1px solid var(--border); background: var(--bg-panel) !important; }
+.studio-shell .settings-as-page > footer { border-top: 1px solid var(--border); background: var(--bg-panel) !important; }
+.studio-shell .settings-nav { background: var(--bg-panel) !important; border-right: 1px solid var(--border); }
+.studio-shell .settings-content { background: var(--bg-canvas) !important; }
+.studio-shell .settings-nav button {
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  transition: background-color 130ms var(--qf-ease-out), color 130ms var(--qf-ease-out), transform 110ms var(--qf-spring);
+}
+.studio-shell .settings-nav button:hover { background: var(--bg-hover); color: var(--text-primary); }
+.studio-shell .settings-nav button:active { transform: scale(0.975); }
+.studio-shell .settings-nav button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+}
 .studio-shell .settings-nav button.active::before { display: none; }
 
-/* Solid, theme-aware run footer and canvas toolbar (no translucent black). */
-.studio-shell .left-footer { background: var(--bg-canvas); border-top: 1px solid var(--border); box-shadow: none; }
-.studio-shell .image-viewer-toolbar { background: var(--bg-dialog); border: 1px solid var(--border); box-shadow: var(--shadow-sm); color: var(--text-primary); }
-.studio-shell .image-viewer-toolbar button { color: var(--text-secondary); }
-.studio-shell .image-viewer-toolbar button:hover { background: var(--bg-hover); color: var(--text-primary); }
+/* Canvas Floating Toolbar */
+.studio-shell .image-viewer-toolbar,
+html.theme-dark .studio-shell .image-viewer-toolbar {
+  background: var(--bg-dialog) !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 999px !important;
+  padding: 4px 6px !important;
+  box-shadow: var(--shadow-md) !important;
+  color: var(--text-primary) !important;
+}
+.studio-shell .image-viewer-toolbar :is(button, .btn, .image-favorite-action) {
+  border-radius: 999px !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: var(--text-secondary);
+}
+.studio-shell .image-viewer-toolbar button:hover:not(:disabled) {
+  background: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+  transform: none !important;
+}
+.studio-shell .image-viewer-toolbar button:active:not(:disabled) {
+  transform: scale(0.94) !important;
+}
 
-/* Settings page covers the workspace: hide it so no floating control can paint through. */
+/* Toast */
+html body .toast {
+  background: #202220 !important;
+  color: #fafaf8 !important;
+  border: 1px solid #3a3d3a !important;
+  border-radius: 999px !important;
+  padding: 8px 16px !important;
+  box-shadow: var(--shadow-lg) !important;
+  backdrop-filter: none !important;
+}
+html body .toast button { color: #fafaf8 !important; }
+
+/* Settings page covers the workspace cleanly */
 .studio-shell .shell-main > .workspace[inert] { visibility: hidden; }
-
 .studio-shell .shell-main > .workspace[inert] * { visibility: hidden !important; }
 
-
-/* Small windows: keep history reachable as a drawer (legacy rules hid it below 1200px). */
+/* Keep history reachable on compact windows */
 @media (max-width: 1360px) {
   .studio-shell .history-rail > .history-panel { display: grid; }
   .studio-shell .history-rail-control { display: flex; }
 }
 
+/* Never animate canvas / drawing / drag-resizer coordinates, and honor reduced motion */
+html body :is(canvas, .inpaint-base-img, .inpaint-cursor, .inpaint-region-overlay, .inpaint-mask-canvas, .ws-resizer, .workbench-dock-resizer, .image-preview-stage > img, .image-preview-transform, .char-position-marker) {
+  transition: none !important;
+}
+html.motion-reduced *,
+html.motion-reduced *::before,
+html.motion-reduced *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}

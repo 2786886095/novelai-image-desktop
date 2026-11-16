@@ -104,6 +104,26 @@ function normalize(value: string) {
   return value.toLowerCase().normalize("NFKC").replace(/\s+/g, " ").trim();
 }
 
+/** Deduplicate subtitle/hint parts against the primary command label so items
+ *  like "风格管理" never render "风格管理 风格管理 · 风格管理". */
+export function formatCommandHint(label: string, ...parts: Array<string | undefined | null>): string {
+  const normLabel = normalize(label);
+  const seen = new Set<string>(normLabel ? [normLabel] : []);
+  const kept: string[] = [];
+  for (const raw of parts) {
+    if (!raw) continue;
+    for (const segment of raw.split(/\s*·\s*/)) {
+      const trimmed = segment.trim();
+      if (!trimmed) continue;
+      const key = normalize(trimmed);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      kept.push(trimmed);
+    }
+  }
+  return kept.join(" · ");
+}
+
 /** Rank commands for the palette: prefix > word > substring > subsequence. */
 export function rankCommands(items: readonly CommandItem[], query: string, limit = 40): CommandItem[] {
   const q = normalize(query);

@@ -121,7 +121,8 @@ import {CharacterPresetControls} from './components/CharacterPresetControls';
 import {CharacterNameControl} from './components/CharacterNameControl';
 import { Icon, type IconName } from "./components/icons";
 import { CommandPalette, GenerationProgressLine, LayoutNotice, StudioNavRail, StudioTopBar, useRailCollapsed } from "./shell/StudioShell";
-import { DockOrPortal, WorkbenchDockProvider } from "./shell/WorkbenchDock";
+import { DockOrPortal, WorkbenchDockPane, WorkbenchDockProvider } from "./shell/WorkbenchDock";
+import { dockText, ensureBaselineWorkspace, useDockStore } from "./shell/dock-state";
 import { shellText } from "./shell/shell-text";
 import { PanelSectionNav } from "./shell/PanelSectionNav";
 import { applyImageParameters } from "./apply-image-parameters";
@@ -830,13 +831,19 @@ function QualityAndTransparencyControls({ compact = false }: { compact?: boolean
 // ── Advanced params modal ─────────────────────────────────────────────────────
 /** One-line summary of the layered advanced parameters, shown on its button so
  *  the common values are visible without opening the panel. */
+function stripSummaryParens(label: string) {
+  return label.replace(/\s*[（(][^）)]*[）)]/g, "").trim();
+}
+
 function advancedParamsSummary(stored: GenerateParams, language: unknown) {
   const params = effectiveNAIEffortParams(stored);
   const sampler = NAI_SAMPLERS.find((item) => item.value === params.sampler);
+  const stepsLabel = stripSummaryParens(desktopUiText(language, "advanced.steps")) || "Steps";
+  const samplerLabel = stripSummaryParens(localizedDesktopOptionLabel(language, params.sampler, sampler?.label ?? String(params.sampler)));
   const parts = [
-    isNAIMediumEffort(stored) ? "" : `${desktopUiText(language, "advanced.steps")} ${params.steps}`,
+    isNAIMediumEffort(stored) ? "" : `${stepsLabel} ${params.steps}`,
     `CFG ${params.cfgScale}`,
-    isNAIMediumEffort(stored) ? "" : localizedDesktopOptionLabel(language, params.sampler, sampler?.label ?? String(params.sampler)),
+    isNAIMediumEffort(stored) ? "" : samplerLabel,
   ].filter(Boolean);
   return parts.join(" · ");
 }
@@ -2289,7 +2296,7 @@ export function PromptAndParams({
         <AppPortal>
           <div
             ref={stylePresetMenuRef}
-            className="style-preset-menu disclosure-popover" {...disclosureAttributes(stylePresetMenuOpen)}
+            className="style-preset-menu disclosure-popover qf-dropdown-panel" {...disclosureAttributes(stylePresetMenuOpen)}
             role="listbox"
             style={{
               left: stylePresetMenuPosition.left,
@@ -2415,14 +2422,17 @@ export function PromptAndParams({
             )}
       </CapsuleEditor>}
       <div className="quick-actions" data-panel-section="refs">
-        <Button onClick={() => setShowCharModal(true)}>
-          <IconText icon="♙">{generateText.prompt.characterPrompt}{charCaptions.length > 0 ? ` · ${charCaptions.length}` : ""}</IconText>
+        <Button className={clsx("qf-ref-trigger", charCaptions.length > 0 && "has-count")} onClick={() => setShowCharModal(true)}>
+          <IconText icon="♙">{generateText.prompt.characterPrompt}</IconText>
+          {charCaptions.length > 0 ? <em className="qf-count-badge">{charCaptions.length}</em> : null}
         </Button>
-        <Button onClick={() => setShowVibeModal(true)}>
-          <IconText icon="◒">{generateText.prompt.vibeTransfer}{vibeImages.length > 0 ? ` · ${vibeImages.length}` : ""}</IconText>
+        <Button className={clsx("qf-ref-trigger", vibeImages.length > 0 && "has-count")} onClick={() => setShowVibeModal(true)}>
+          <IconText icon="◒">{generateText.prompt.vibeTransfer}</IconText>
+          {vibeImages.length > 0 ? <em className="qf-count-badge">{vibeImages.length}</em> : null}
         </Button>
-        <Button onClick={() => setShowVibeModal(true)}>
-          <IconText icon="◇">{generateText.prompt.preciseReference}{preciseRefCount > 0 ? ` · ${preciseRefCount}` : ""}</IconText>
+        <Button className={clsx("qf-ref-trigger", preciseRefCount > 0 && "has-count")} onClick={() => setShowVibeModal(true)}>
+          <IconText icon="◇">{generateText.prompt.preciseReference}</IconText>
+          {preciseRefCount > 0 ? <em className="qf-count-badge">{preciseRefCount}</em> : null}
         </Button>
         {templates.length > 0 && (
           <div className="template-dropdown" style={{ position: "relative" }}>
@@ -2430,7 +2440,7 @@ export function PromptAndParams({
               <IconText icon="▣">{generateText.prompt.template}<Icon name="chevronDown" className={clsx("prompt-tool-chevron", showTemplateMenu && "open")} /></IconText>
             </Button>
             {templateMenuPresent && (
-              <div ref={templateMenuRef} className="menu-pop template-pop disclosure-popover" {...disclosureAttributes(showTemplateMenu)}>
+              <div ref={templateMenuRef} className="menu-pop template-pop disclosure-popover qf-dropdown-panel" {...disclosureAttributes(showTemplateMenu)}>
                 {templates.map((tpl) => (
                   <button key={tpl.id} onClick={() => applyTemplate(tpl)}>
                     <span>{tpl.name}</span>
@@ -2635,8 +2645,9 @@ export function PromptAndParams({
         />
       )}
       <Button className="full prompt-advanced-button" onClick={() => setShowAdvanced(true)}>
-        <IconText icon="settings">{generateText.prompt.advancedParams}</IconText>
+        <IconText icon="settings">{generateText.prompt.advancedParams.replace(/\.{2,}|…$/g, "").trim()}</IconText>
         <span className="advanced-summary">{advancedParamsSummary(params, settings?.language)}</span>
+        <Icon name="chevronRight" className="prompt-advanced-chevron" />
       </Button>
       {showAdvanced && <AdvancedParamsModal onClose={() => setShowAdvanced(false)} />}
       {showVibeModal && <VibeTransferModal onClose={() => setShowVibeModal(false)} />}
@@ -3487,15 +3498,17 @@ function GeneratePanel({openSettings}:{openSettings:()=>void}) {
         <AutomaticComparisonControl surface="generate:t2i" />
         <PromptAndParams />
         <div className="panel-section-anchor" data-panel-section="batch" aria-hidden="true" />
-        <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
-        <CommittedNumberInput
-          label={t("generate.batchInterval")}
-          value={batchIntervalSeconds}
-          min={0}
-          max={3600}
-          normalize={(value) => Math.max(0, Math.min(3600, Math.round(value)))}
-          onCommit={setBatchIntervalSeconds}
-        />
+        <div className="batch-inline-grid">
+          <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
+          <CommittedNumberInput
+            label={t("generate.batchInterval")}
+            value={batchIntervalSeconds}
+            min={0}
+            max={3600}
+            normalize={(value) => Math.max(0, Math.min(3600, Math.round(value)))}
+            onCommit={setBatchIntervalSeconds}
+          />
+        </div>
         
         <label className="field">
           <span>{t("generate.fileNamePrefix")}</span>
@@ -3591,15 +3604,17 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
         <div className="panel-divider" />
         <PromptAndParams imageToImage />
         <div className="panel-section-anchor" data-panel-section="batch" aria-hidden="true" />
-        <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
-        <CommittedNumberInput
-          label={t("generate.batchInterval")}
-          value={batchIntervalSeconds}
-          min={0}
-          max={3600}
-          normalize={(value) => Math.max(0, Math.min(3600, Math.round(value)))}
-          onCommit={setBatchIntervalSeconds}
-        />
+        <div className="batch-inline-grid">
+          <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
+          <CommittedNumberInput
+            label={t("generate.batchInterval")}
+            value={batchIntervalSeconds}
+            min={0}
+            max={3600}
+            normalize={(value) => Math.max(0, Math.min(3600, Math.round(value)))}
+            onCommit={setBatchIntervalSeconds}
+          />
+        </div>
         
         <FeatureCostCard label={t("cost.beforeRun")} feature="i2i" />
       </div>
@@ -4441,13 +4456,48 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
       void loadWorkbenchFromPath(currentImage.filePath, { silent: true });
     }
   }, [activeTab, currentImage?.filePath, generateMode, loadWorkbenchFromPath, workbenchImage]);
+  const dt = dockText(language);
+  const leftCollapsed = useDockStore((state) => state.leftCollapsed);
+  const leftDocked = useDockStore((state) => state.leftDocked);
+  const toggleLeftCollapsed = useDockStore((state) => state.toggleLeftCollapsed);
+  const toggleLeftDocked = useDockStore((state) => state.toggleLeftDocked);
   return (
-    <aside className="left-panel">
+    <aside
+      className={clsx(
+        "left-panel",
+        leftDocked ? "is-docked" : "is-floating",
+        leftCollapsed ? "is-collapsed" : "is-open",
+      )}
+      data-dock-mode={leftDocked ? "docked" : "floating"}
+      aria-hidden={leftCollapsed || undefined}
+      inert={leftCollapsed || undefined}
+    >
       <div className="panel-head">
         <span aria-hidden="true"><Icon name={meta.icon} /></span>
-        <div>
+        <div className="panel-head-copy">
           <strong>{meta.title}</strong>
           <small>{meta.desc}</small>
+        </div>
+        <div className="panel-head-actions">
+          <button
+            type="button"
+            className={clsx("dock-pin-btn", leftDocked && "is-pinned")}
+            aria-pressed={leftDocked}
+            title={leftDocked ? dt.unpinTip : dt.pinTip}
+            onClick={toggleLeftDocked}
+          >
+            <Icon name="pin" />
+            <span>{leftDocked ? dt.pinned : dt.float}</span>
+          </button>
+          <button
+            type="button"
+            className="shell-icon-btn left-panel-collapse-btn"
+            title={dt.collapseLeft}
+            aria-label={dt.collapseLeft}
+            onClick={toggleLeftCollapsed}
+          >
+            <Icon name="chevronRight" className="left-panel-collapse-icon" />
+          </button>
         </div>
       </div>
       {activeTab === "generate" && (
@@ -5714,14 +5764,38 @@ function HistoryPanel() {
     </div>
   );
 
+  const dt = dockText(language);
+  const rightDocked = useDockStore((state) => state.rightDocked);
+  const toggleRightDocked = useDockStore((state) => state.toggleRightDocked);
+
   return (
     <aside className="history-panel">
       <div className="history-title">
-        <div>
+        <div className="history-title-copy">
           <strong>{t("history.title")}</strong>
           <small>{history.length > 0 ? f("history.count", { count: history.length }) : t("history.emptySubtitle")}</small>
         </div>
-        <ConvertedHistoryRestoreButton disabled={isGenerating} />
+        <div className="history-title-actions">
+          <button
+            type="button"
+            className={clsx("dock-pin-btn", rightDocked && "is-pinned")}
+            aria-pressed={rightDocked}
+            title={rightDocked ? dt.unpinTip : dt.pinTip}
+            onClick={toggleRightDocked}
+          >
+            <Icon name="pin" />
+            <span>{rightDocked ? dt.pinned : dt.pin}</span>
+          </button>
+          <button
+            type="button"
+            className="shell-icon-btn history-panel-close-btn"
+            title={dt.collapseRight}
+            aria-label={dt.collapseRight}
+            onClick={() => useAppStore.getState().setWsHistoryCollapsed(true)}
+          >
+            <Icon name="chevronRight" />
+          </button>
+        </div>
       </div>
       <div className="history-filters">
         <SelectMenu
@@ -5761,6 +5835,9 @@ function HistoryPanel() {
           <button type="button" disabled={!activeGroup} title={t("history.deleteGroupTitle")} onClick={deleteActiveGroup}>
             <Icon name="trash" /> {t("history.delete")}
           </button>
+        </div>
+        <div className="history-restore-row">
+          <ConvertedHistoryRestoreButton disabled={isGenerating} />
         </div>
       </div>
       <div ref={historyScrollRef} className={clsx("history-grid", virtualizeHistory && "is-virtualized")}>
@@ -7402,7 +7479,14 @@ function MainPage() {
   const wsRightWidth = useAppStore((state) => state.wsRightWidth);
   const wsHistoryCollapsed = useAppStore((state) => state.wsHistoryCollapsed);
   const wsHistoryDragWidth = useAppStore((state) => state.wsHistoryDragWidth);
-  const displayedHistoryWidth = wsHistoryDragWidth ?? (wsHistoryCollapsed ? 0 : wsRightWidth);
+  const leftCollapsed = useDockStore((state) => state.leftCollapsed);
+  const leftDocked = useDockStore((state) => state.leftDocked);
+  const rightDocked = useDockStore((state) => state.rightDocked);
+  const dt = dockText(language);
+  const displayedLeftWidth = leftDocked && !leftCollapsed ? wsLeftWidth : 0;
+  const displayedHistoryWidth = rightDocked
+    ? (wsHistoryDragWidth ?? (wsHistoryCollapsed ? 0 : wsRightWidth))
+    : 0;
   const uiCaptureParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const uiCaptureTheme = uiCaptureParams.get("uiTheme");
   // Final render-boundary guard: even if a future IPC path forgets to sanitize
@@ -7452,6 +7536,10 @@ function MainPage() {
       useAppStore.getState().setShowSettings(true);
     }
   }, [uiCaptureParams]);
+
+  useEffect(() => {
+    ensureBaselineWorkspace((collapsed) => useAppStore.getState().setWsHistoryCollapsed(collapsed));
+  }, []);
 
   useGlobalTypography(settings?.uiTypography);
 
@@ -7519,11 +7607,18 @@ function MainPage() {
           <LayoutNotice />
           <div
             className="workspace"
+            data-left-collapsed={leftCollapsed}
+            data-left-dock={leftDocked ? "docked" : "floating"}
+            data-right-dock={rightDocked ? "docked" : "floating"}
             data-history-collapsed={wsHistoryCollapsed}
             data-history-resizing={wsHistoryDragWidth !== null}
             aria-hidden={showSettings || undefined}
             inert={showSettings || undefined}
-            style={{ "--ws-left": `${wsLeftWidth}px`, "--ws-right": `${displayedHistoryWidth}px` } as CSSProperties}
+            style={{
+              "--ws-left": `${displayedLeftWidth}px`,
+              "--ws-left-floating": `${wsLeftWidth}px`,
+              "--ws-right": `${displayedHistoryWidth}px`,
+            } as CSSProperties}
           >
             <PersistentTabView
               active={workbenchActive}
@@ -7532,10 +7627,22 @@ function MainPage() {
               className="persistent-workbench-view"
             >
               <WorkbenchDockProvider host={dockHost}>
+                {leftCollapsed ? (
+                  <button
+                    type="button"
+                    className="left-panel-reopen-tab"
+                    title={dt.expandLeft}
+                    aria-label={dt.expandLeft}
+                    onClick={() => useDockStore.getState().setLeftCollapsed(false)}
+                  >
+                    <Icon name="chevronRight" />
+                    <span>{dt.leftParamsShort}</span>
+                  </button>
+                ) : null}
                 <LeftPanel openSettings={() => setShowSettings(true)} />
                 <WorkspaceResizer edge="left" />
                 <div className="persistent-canvas-host">
-                  <div className="workbench-dock" ref={setDockHost} />
+                  <WorkbenchDockPane onHost={setDockHost} />
                   <div className="persistent-canvas-stage">
                     <PersistentCanvasSurface active={activeTab !== "inpaint"}>
                       <ImageCanvas />

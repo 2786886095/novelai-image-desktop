@@ -1,10 +1,16 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import clsx from "clsx";
+import { Icon } from "../components/icons";
 import { AppPortal } from "../components/ui";
+import { motionReduced } from "../motion-system";
+import { useAppStore } from "../store";
+import { dockText, SUBPANEL_DEFAULT_WIDTH, useDockStore } from "./dock-state";
 
-/** Host element for docked workbench panels (character prompts, references,
- *  advanced parameters). When present, those panels render beside the canvas
- *  instead of as blocking modals, so the preview and history stay usable. */
+/** Host element for dockable workbench sub-panels (character prompts, vibe
+ *  transfer, precise references, advanced parameters). Panels can either float
+ *  as a left-to-right drawer over the canvas edge (preserving baseline canvas
+ *  width) or pin inline beside the parameter column with drag-to-resize. */
 const DockContext = createContext<HTMLElement | null>(null);
 
 export function WorkbenchDockProvider({ host, children }: { host: HTMLElement | null; children: ReactNode }) {
@@ -18,6 +24,139 @@ export function useWorkbenchDock() {
 function closeDockedPanel(slot: HTMLElement) {
   const close = slot.querySelector<HTMLButtonElement>(".modal > header button[aria-label], .modal > header button:last-child");
   close?.click();
+}
+
+export function WorkbenchDockPane({ onHost }: { onHost: (host: HTMLDivElement | null) => void }) {
+  const language = useAppStore((s) => s.settings?.language);
+  const dt = dockText(language);
+  const docked = useDockStore((s) => s.subpanelDocked);
+  const width = useDockStore((s) => s.subpanelWidth);
+  const toggleDocked = useDockStore((s) => s.toggleSubpanelDocked);
+  const setWidth = useDockStore((s) => s.setSubpanelWidth);
+  const [hasContent, setHasContent] = useState(false);
+  const [leavingHtml, setLeavingHtml] = useState<string | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const lastSnapshotRef = useRef<string>("");
+  const dragRef = useRef<{ startX: number; startW: number } | null>(null);
+
+  const bindHost = useCallback((node: HTMLDivElement | null) => {
+    hostRef.current = node;
+    onHost(node);
+  }, [onHost]);
+
+  useEffect(() => {
+    const node = hostRef.current;
+    if (!node) return;
+    let leaveTimer: number | undefined;
+    const sync = () => {
+      const count = node.childElementCount;
+      if (count > 0) {
+        if (leaveTimer !== undefined) {
+          window.clearTimeout(leaveTimer);
+          leaveTimer = undefined;
+        }
+        setLeavingHtml(null);
+        setHasContent(true);
+        lastSnapshotRef.current = node.innerHTML;
+      } else {
+        setHasContent(false);
+        if (!motionReduced() && lastSnapshotRef.current) {
+          const clean = lastSnapshotRef.current
+            .replace(/\sid="[^"]*"/g, "")
+            .replace(/\sautofocus(?:="[^"]*")?/g, "");
+          setLeavingHtml(clean);
+          lastSnapshotRef.current = "";
+          leaveTimer = window.setTimeout(() => setLeavingHtml(null), 180);
+        } else {
+          lastSnapshotRef.current = "";
+          setLeavingHtml(null);
+        }
+      }
+    };
+    const observer = new MutationObserver(() => {
+      if (node.childElementCount > 0) {
+        lastSnapshotRef.current = node.innerHTML;
+      }
+      sync();
+    });
+    observer.observe(node, { childList: true });
+    sync();
+    return () => {
+      observer.disconnect();
+      if (leaveTimer !== undefined) window.clearTimeout(leaveTimer);
+    };
+  }, []);
+
+  const visible = hasContent || Boolean(leavingHtml);
+
+  return (
+    <div
+      className={clsx(
+        "workbench-dock-shell",
+        docked ? "is-docked" : "is-floating",
+        hasContent && "is-open",
+        !hasContent && leavingHtml && "is-leaving",
+        !visible && "is-closed",
+      )}
+      data-dock-mode={docked ? "docked" : "floating"}
+      style={{ "--subpanel-w": `${width}px` } as CSSProperties}
+      aria-hidden={!hasContent || undefined}
+    >
+      {visible && (
+        <div className="workbench-dock-bar">
+          <button
+            type="button"
+            className={clsx("dock-pin-btn", docked && "is-pinned")}
+            aria-pressed={docked}
+            title={docked ? dt.unpinTip : dt.pinTip}
+            onClick={toggleDocked}
+          >
+            <Icon name="pin" />
+            <span>{docked ? dt.pinned : dt.pin}</span>
+          </button>
+        </div>
+      )}
+      <div className="workbench-dock" ref={bindHost} />
+      {!hasContent && leavingHtml ? (
+        <div
+          className="workbench-dock workbench-dock-ghost"
+          inert
+          aria-hidden="true"
+          dangerouslySetInnerHTML={{ __html: leavingHtml }}
+        />
+      ) : null}
+      {visible && (
+        <div
+          className="workbench-dock-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          title={dt.subpanelResize}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            dragRef.current = { startX: event.clientX, startW: width };
+          }}
+          onPointerMove={(event) => {
+            if (!dragRef.current) return;
+            setWidth(dragRef.current.startW + (event.clientX - dragRef.current.startX), false);
+          }}
+          onPointerUp={(event) => {
+            if (!dragRef.current) return;
+            const finalWidth = dragRef.current.startW + (event.clientX - dragRef.current.startX);
+            dragRef.current = null;
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+            setWidth(finalWidth, true);
+          }}
+          onDoubleClick={() => setWidth(SUBPANEL_DEFAULT_WIDTH, true)}
+        >
+          <span className="ws-resizer-grip" />
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Drop-in replacement for AppPortal used by dockable workbench panels. */

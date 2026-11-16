@@ -1,5 +1,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import clsx from "clsx";
+import { AnimatedCollapse } from "../components/CharacterEditing";
+import { disclosureAttributes, useDisclosurePresence } from "../components/disclosure-motion";
 import { Icon } from "../components/icons";
 import { AppPortal } from "../components/ui";
 import { useFeatureText } from "../feature-i18n";
@@ -9,9 +11,10 @@ import { useAppStore } from "../store";
 import { APP_NAME, APP_VERSION } from "../types";
 import type { ActiveTab } from "../app/navigation";
 import { loadTabOrder, normalizeTabOrder, saveTabOrder, moveTab, TAB_ORDER_KEY } from "../app/tab-order";
+import { dockText, useDockStore } from "./dock-state";
 import {
-  groupedTabOrder, moveTabWithinGroup, NAV_GROUPS, rankCommands, requestOpenTool, SETTINGS_SECTIONS, TOOL_ENTRIES,
-  type CommandItem, type ToolEntryId,
+  formatCommandHint, groupedTabOrder, moveTabWithinGroup, NAV_GROUPS, rankCommands, requestOpenTool,
+  SETTINGS_SECTIONS, TOOL_ENTRIES, type CommandItem, type ToolEntryId,
 } from "./nav-model";
 import { activeTaskCount, isActive, useTaskStore, type TaskRecord } from "./task-tracker";
 import { fill, shellText } from "./shell-text";
@@ -23,7 +26,6 @@ function loadRailOrder() {
   try { return localStorage.getItem(TAB_ORDER_KEY) ? loadTabOrder() : defaultRailOrder(); }
   catch { return defaultRailOrder(); }
 }
-const RAIL_KEY = "langbai.shell.rail.v1";
 const NOTICE_KEY = "langbai.shell.layout-notice.v3";
 export const SHELL_EVENTS = { palette: "studio:shell-palette", tasks: "studio:shell-tasks", notice: "studio:shell-notice" } as const;
 
@@ -31,36 +33,15 @@ function useLanguage() {
   return useAppStore((state) => state.settings?.language);
 }
 
-/* ── Rail collapse preference ─────────────────────────────────────────────── */
-type RailPref = "auto" | "expanded" | "collapsed";
-function readRailPref(): RailPref {
-  const value = localStorage.getItem(RAIL_KEY);
-  return value === "expanded" || value === "collapsed" ? value : "auto";
-}
+/* ── Rail dock & collapse state (baseline: 56px collapsed rail) ───────────── */
 export function useRailCollapsed() {
-  const [pref, setPref] = useState<RailPref>(readRailPref);
-  const [narrow, setNarrow] = useState(() => window.innerWidth < 1500);
-  useEffect(() => {
-    const onResize = () => setNarrow(window.innerWidth < 1500);
-    const onPref = () => setPref(readRailPref());
-    window.addEventListener("resize", onResize);
-    window.addEventListener("studio:rail-pref", onPref);
-    return () => { window.removeEventListener("resize", onResize); window.removeEventListener("studio:rail-pref", onPref); };
-  }, []);
-  const collapsed = pref === "auto" ? narrow : pref === "collapsed";
-  const toggle = useCallback(() => {
-    const next = collapsed ? "expanded" : "collapsed";
-    try { localStorage.setItem(RAIL_KEY, next); } catch { /* preference only */ }
-    setPref(next);
-    window.dispatchEvent(new Event("studio:rail-pref"));
-  }, [collapsed]);
-  return { collapsed, toggle };
+  const railOpen = useDockStore((state) => state.railOpen);
+  const railDocked = useDockStore((state) => state.railDocked);
+  const toggleRailOpen = useDockStore((state) => state.toggleRailOpen);
+  return { collapsed: !railOpen, docked: railDocked, toggle: toggleRailOpen };
 }
 export function toggleRail() {
-  const current = readRailPref();
-  const collapsed = current === "auto" ? window.innerWidth < 1500 : current === "collapsed";
-  try { localStorage.setItem(RAIL_KEY, collapsed ? "expanded" : "collapsed"); } catch { /* preference only */ }
-  window.dispatchEvent(new Event("studio:rail-pref"));
+  useDockStore.getState().toggleRailOpen();
 }
 
 /* ── Shared actions ───────────────────────────────────────────────────────── */
@@ -93,6 +74,21 @@ async function toggleStreamPreview() {
 function openOutputDir() {
   const dir = useAppStore.getState().settings?.outputDir;
   if (dir) window.naiDesktop.openInExplorer(dir);
+}
+
+function useActiveDarkTheme() {
+  const themeSetting = useAppStore((state) => state.settings?.theme);
+  const [dark, setDark] = useState(() =>
+    typeof document !== "undefined" && document.documentElement.classList.contains("theme-dark"),
+  );
+  useEffect(() => {
+    const sync = () => setDark(document.documentElement.classList.contains("theme-dark"));
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, [themeSetting]);
+  return dark;
 }
 
 /* ── Relative time ────────────────────────────────────────────────────────── */
@@ -128,7 +124,7 @@ export function StudioTopBar({ account }: { account: ReactNode }) {
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const streamEnabled = settings?.streamPreviewEnabled ?? true;
   const [streamBusy, setStreamBusy] = useState(false);
-  const dark = settings?.theme === "dark" || (settings?.theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const dark = useActiveDarkTheme();
 
   // Opus allowance refresh, unchanged from the previous title bar.
   useEffect(() => {
@@ -146,8 +142,8 @@ export function StudioTopBar({ account }: { account: ReactNode }) {
         <span className="title-ver">v{APP_VERSION}</span>
       </div>
       <button type="button" className="shell-search-trigger" onClick={() => window.dispatchEvent(new Event(SHELL_EVENTS.palette))} aria-keyshortcuts="Control+K">
-        <Icon name="search" />
-        <span>{text.search}</span>
+        <span className="shell-trigger-icon" aria-hidden="true"><Icon name="search" /></span>
+        <span className="shell-search-placeholder">{text.search}</span>
         <kbd>Ctrl K</kbd>
       </button>
       <div className="shell-topbar-spacer" />
@@ -172,8 +168,15 @@ export function StudioTopBar({ account }: { account: ReactNode }) {
         >
           <Icon name={streamEnabled ? "eye" : "eyeOff"} />
         </button>
-        <button type="button" className="shell-icon-btn" aria-label={text.actions.theme} title={`${text.actions.theme}（${dark ? text.themeDark : text.themeLight}）`} onClick={() => void toggleTheme()}>
-          {dark ? <MoonGlyph /> : <SunGlyph />}
+        <button
+          type="button"
+          className="shell-icon-btn shell-theme-toggle"
+          data-theme={dark ? "dark" : "light"}
+          aria-label={text.actions.theme}
+          title={`${text.actions.theme}（${dark ? text.themeDark : text.themeLight}）`}
+          onClick={() => void toggleTheme()}
+        >
+          {dark ? <SunGlyph /> : <MoonGlyph />}
         </button>
       </div>
       <div className="window-controls">
@@ -192,13 +195,21 @@ function MoonGlyph() {
   return <svg className="ui-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" aria-hidden="true"><path d="M15.8 12.6A6.5 6.5 0 0 1 7.4 4.2a6.5 6.5 0 1 0 8.4 8.4Z" /></svg>;
 }
 
-/* ── Navigation rail ──────────────────────────────────────────────────────── */
+/* ── Navigation rail (dockable left panel; baseline = 56px icon rail) ─────── */
 export function StudioNavRail() {
   const language = useLanguage();
   const text = shellText(language);
+  const dt = dockText(language);
   const activeTab = useAppStore((state) => state.activeTab);
   const showSettings = useAppStore((state) => state.showSettings);
-  const { collapsed, toggle } = useRailCollapsed();
+  const railOpen = useDockStore((state) => state.railOpen);
+  const railDocked = useDockStore((state) => state.railDocked);
+  const toggleRailOpen = useDockStore((state) => state.toggleRailOpen);
+  const setRailOpen = useDockStore((state) => state.setRailOpen);
+  const toggleRailDocked = useDockStore((state) => state.toggleRailDocked);
+  const collapsed = !railOpen;
+  const navRef = useRef<HTMLElement>(null);
+
   const [order, setOrder] = useState(loadRailOrder);
   const [editing, setEditing] = useState(false);
   const [dragging, setDragging] = useState<ActiveTab | null>(null);
@@ -213,6 +224,27 @@ export function StudioNavRail() {
     window.addEventListener("studio:collections-changed", reload);
     return () => window.removeEventListener("studio:collections-changed", reload);
   }, []);
+
+  // When expanded as an undocked floating drawer, outside clicks or Escape collapse back to baseline.
+  useEffect(() => {
+    if (!railOpen || railDocked || editing) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && !navRef.current?.contains(target)) setRailOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        setRailOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [editing, railDocked, railOpen, setRailOpen]);
+
   const persist = (next: ActiveTab[]) => {
     try { saveTabOrder(next); setOrder(normalizeTabOrder(next)); }
     catch { useAppStore.getState().setToast(text.arrangeHelp); }
@@ -227,91 +259,169 @@ export function StudioNavRail() {
     all[(index + delta + all.length) % all.length]?.focus();
   };
 
+  const afterNavigate = () => {
+    if (railOpen && !railDocked && !editing) setRailOpen(false);
+  };
+
   return (
-    <nav className={clsx("shell-rail", collapsed && "is-collapsed", editing && "is-editing")} aria-label={text.paletteTitle}>
-      <div className="shell-rail-scroll">
-        {groups.map((group) => (
-          <section className="shell-rail-group" key={group.id} aria-label={text.groups[group.id]}>
-            <h2 className="shell-rail-group-title">{text.groups[group.id]}</h2>
-            {group.tabs.map((tab) => {
-              const item = items.find((entry) => entry.value === tab);
-              if (!item) return null;
-              const active = !showSettings && activeTab === tab;
-              return (
-                <div className="shell-rail-row" key={tab}>
-                  <button
-                    type="button"
-                    data-rail-item
-                    data-tab={tab}
-                    className={clsx("shell-rail-item", active && "active", dragging === tab && "is-dragging")}
-                    aria-current={active ? "page" : undefined}
-                    title={editing ? text.arrangeHelp : `${item.title} — ${item.desc}`}
-                    draggable={editing}
-                    onDragStart={(event) => { setDragging(tab); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", tab); }}
-                    onDragOver={(event) => { if (editing && dragging && group.tabs.includes(dragging)) event.preventDefault(); }}
-                    onDrop={(event) => { if (editing && dragging && group.tabs.includes(dragging)) { event.preventDefault(); persist(moveTab(order, dragging, tab)); } setDragging(null); }}
-                    onDragEnd={() => setDragging(null)}
-                    onKeyDown={(event) => {
-                      if (editing && event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
-                        event.preventDefault();
-                        persist(moveTabWithinGroup(order, tab, event.key === "ArrowUp" ? -1 : 1));
-                        requestAnimationFrame(() => (document.querySelector(`.shell-rail [data-tab="${tab}"]`) as HTMLElement | null)?.focus());
-                      } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-                        event.preventDefault();
-                        focusSibling(event.currentTarget, event.key === "ArrowDown" ? 1 : -1);
-                      } else if (event.key === "Escape" && editing) setEditing(false);
-                    }}
-                    onClick={() => { if (!editing) navigateTo(tab); }}
-                  >
-                    <span className="shell-rail-icon"><Icon name={item.icon} /></span>
-                    <span className="shell-rail-label">{item.label}</span>
-                    {editing ? <span className="shell-rail-grip" aria-hidden="true">⋮⋮</span> : null}
-                    {tab === "tools" && !editing ? <TaskDot /> : null}
-                  </button>
-                  {tab === "tools" && !editing && !collapsed ? (
-                    <button type="button" className="shell-rail-disclosure" aria-expanded={toolsOpen} aria-label={item.label} onClick={toggleTools}>
-                      <Icon name="chevronRight" className={clsx("disclosure-chevron", toolsOpen && "open")} />
+    <div className={clsx("shell-rail-slot", railOpen && railDocked && "is-docked")}>
+      <nav
+        ref={navRef}
+        className={clsx(
+          "shell-rail",
+          collapsed ? "is-collapsed" : "is-open",
+          railDocked ? "is-docked" : "is-floating",
+          editing && "is-editing",
+        )}
+        data-dock-mode={railDocked ? "docked" : "floating"}
+        aria-label={text.paletteTitle}
+      >
+        <div className="shell-rail-dockbar" aria-hidden={collapsed}>
+          <span className="shell-rail-dock-title">{dt.railTitle}</span>
+          <div className="shell-rail-dock-actions">
+            <button
+              type="button"
+              className={clsx("dock-pin-btn", railDocked && "is-pinned")}
+              aria-pressed={railDocked}
+              title={railDocked ? dt.unpinTip : dt.pinTip}
+              tabIndex={collapsed ? -1 : 0}
+              onClick={toggleRailDocked}
+            >
+              <Icon name="pin" />
+              <span>{railDocked ? dt.pinned : dt.pin}</span>
+            </button>
+            <button
+              type="button"
+              className="shell-icon-btn shell-rail-close-btn"
+              title={text.collapse}
+              aria-label={text.collapse}
+              tabIndex={collapsed ? -1 : 0}
+              onClick={() => setRailOpen(false)}
+            >
+              <Icon name="chevronRight" className="shell-rail-collapse-icon is-open" />
+            </button>
+          </div>
+        </div>
+        <div className="shell-rail-scroll">
+          {groups.map((group) => (
+            <section className="shell-rail-group" key={group.id} aria-label={text.groups[group.id]}>
+              <h2 className="shell-rail-group-title">{text.groups[group.id]}</h2>
+              {group.tabs.map((tab) => {
+                const item = items.find((entry) => entry.value === tab);
+                if (!item) return null;
+                const active = !showSettings && activeTab === tab;
+                return (
+                  <div className="shell-rail-row" key={tab}>
+                    <button
+                      type="button"
+                      data-rail-item
+                      data-tab={tab}
+                      className={clsx("shell-rail-item", active && "active", dragging === tab && "is-dragging")}
+                      aria-current={active ? "page" : undefined}
+                      title={editing ? text.arrangeHelp : `${item.title} — ${item.desc}`}
+                      draggable={editing}
+                      onDragStart={(event) => { setDragging(tab); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", tab); }}
+                      onDragOver={(event) => { if (editing && dragging && group.tabs.includes(dragging)) event.preventDefault(); }}
+                      onDrop={(event) => { if (editing && dragging && group.tabs.includes(dragging)) { event.preventDefault(); persist(moveTab(order, dragging, tab)); } setDragging(null); }}
+                      onDragEnd={() => setDragging(null)}
+                      onKeyDown={(event) => {
+                        if (editing && event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+                          event.preventDefault();
+                          persist(moveTabWithinGroup(order, tab, event.key === "ArrowUp" ? -1 : 1));
+                          requestAnimationFrame(() => (document.querySelector(`.shell-rail [data-tab="${tab}"]`) as HTMLElement | null)?.focus());
+                        } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                          event.preventDefault();
+                          focusSibling(event.currentTarget, event.key === "ArrowDown" ? 1 : -1);
+                        } else if (event.key === "Escape" && editing) setEditing(false);
+                      }}
+                      onClick={() => { if (!editing) { navigateTo(tab); afterNavigate(); } }}
+                    >
+                      <span className="shell-rail-icon"><Icon name={item.icon} /></span>
+                      <span className="shell-rail-label">{item.label}</span>
+                      {editing ? <span className="shell-rail-grip" aria-hidden="true">⋮⋮</span> : null}
+                      {tab === "tools" && !editing ? <TaskDot /> : null}
                     </button>
-                  ) : null}
-                  {tab === "tools" && toolsOpen && !editing && !collapsed ? (
-                    <div className="shell-rail-sub" role="group" aria-label={item.label}>
-                      {tools.map((tool) => (
-                        <button type="button" data-rail-item key={tool.id} className="shell-rail-subitem" title={text.tools[tool.id]}
-                          onKeyDown={(event) => { if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); focusSibling(event.currentTarget, event.key === "ArrowDown" ? 1 : -1); } }}
-                          onClick={() => openTool(tool.id)}>
-                          <Icon name={tool.icon} /><span>{text.tools[tool.id]}</span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-          </section>
-        ))}
-      </div>
-      {editing ? (
-        <div className="shell-rail-edit-help" role="note">
-          <span>{text.arrangeHelp}</span>
-          <button type="button" className="btn btn-sm" onClick={() => persist(defaultRailOrder())}>{text.arrangeReset}</button>
+                    {tab === "tools" && !editing && !collapsed ? (
+                      <button type="button" className="shell-rail-disclosure" aria-expanded={toolsOpen} aria-label={item.label} onClick={toggleTools}>
+                        <Icon name="chevronRight" className={clsx("disclosure-chevron", toolsOpen && "open")} />
+                      </button>
+                    ) : null}
+                    {tab === "tools" ? (
+                      <AnimatedCollapse open={toolsOpen && !editing && !collapsed} className="shell-rail-sub-collapse">
+                        <div className="shell-rail-sub" role="group" aria-label={item.label}>
+                          {tools.map((tool) => (
+                            <button
+                              type="button"
+                              data-rail-item
+                              key={tool.id}
+                              className="shell-rail-subitem"
+                              title={text.tools[tool.id]}
+                              onKeyDown={(event) => { if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); focusSibling(event.currentTarget, event.key === "ArrowDown" ? 1 : -1); } }}
+                              onClick={() => { openTool(tool.id); afterNavigate(); }}
+                            >
+                              <span className="shell-subitem-icon" aria-hidden="true"><Icon name={tool.icon} /></span>
+                              <span>{text.tools[tool.id]}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </AnimatedCollapse>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </section>
+          ))}
         </div>
-      ) : null}
-      <footer className="shell-rail-footer">
-        <button type="button" data-rail-item className={clsx("shell-rail-item", showSettings && "active")} aria-current={showSettings ? "page" : undefined} title={`${text.settings} — ${text.settingsHint}`}
-          onClick={() => (showSettings ? useAppStore.getState().setShowSettings(false) : openSettings())}>
-          <span className="shell-rail-icon"><Icon name="settings" /></span><span className="shell-rail-label">{text.settings}</span>
-        </button>
-        <div className="shell-rail-utility">
-          <button type="button" className="shell-icon-btn" title={text.outputDir} aria-label={text.outputDir} onClick={openOutputDir}><Icon name="folder" /></button>
-          <button type="button" className="shell-icon-btn" title={text.docs} aria-label={text.docs} onClick={() => window.naiDesktop.openExternal(DOCS_URL)}><Icon name="help" /></button>
-          <button type="button" className={clsx("shell-icon-btn", editing && "active")} aria-pressed={editing} title={editing ? text.arrangeDone : text.arrange} aria-label={editing ? text.arrangeDone : text.arrange}
-            onClick={() => { if (collapsed && !editing) toggle(); setEditing(!editing); }}><Icon name="sliders" /></button>
-          <button type="button" className="shell-icon-btn" title={collapsed ? text.expand : text.collapse} aria-label={collapsed ? text.expand : text.collapse} aria-keyshortcuts="Control+\" onClick={toggle}>
-            <Icon name="chevronRight" className={clsx("shell-rail-collapse-icon", !collapsed && "is-open")} />
+        <AnimatedCollapse open={editing}>
+          <div className="shell-rail-edit-help" role="note">
+            <span>{text.arrangeHelp}</span>
+            <button type="button" className="btn btn-sm" onClick={() => persist(defaultRailOrder())}>{text.arrangeReset}</button>
+          </div>
+        </AnimatedCollapse>
+        <footer className="shell-rail-footer">
+          <button
+            type="button"
+            data-rail-item
+            className={clsx("shell-rail-item", showSettings && "active")}
+            aria-current={showSettings ? "page" : undefined}
+            title={`${text.settings} — ${text.settingsHint}`}
+            onClick={() => {
+              if (showSettings) useAppStore.getState().setShowSettings(false);
+              else openSettings();
+              afterNavigate();
+            }}
+          >
+            <span className="shell-rail-icon"><Icon name="settings" /></span>
+            <span className="shell-rail-label">{text.settings}</span>
           </button>
-        </div>
-      </footer>
-    </nav>
+          <div className="shell-rail-utility">
+            <button type="button" className="shell-icon-btn" title={text.outputDir} aria-label={text.outputDir} onClick={openOutputDir}><Icon name="folder" /></button>
+            <button type="button" className="shell-icon-btn" title={text.docs} aria-label={text.docs} onClick={() => window.naiDesktop.openExternal(DOCS_URL)}><Icon name="help" /></button>
+            <button
+              type="button"
+              className={clsx("shell-icon-btn", editing && "active")}
+              aria-pressed={editing}
+              title={editing ? text.arrangeDone : text.arrange}
+              aria-label={editing ? text.arrangeDone : text.arrange}
+              onClick={() => { if (collapsed && !editing) setRailOpen(true); setEditing(!editing); }}
+            >
+              <Icon name="sliders" />
+            </button>
+            <button
+              type="button"
+              className={clsx("shell-icon-btn shell-rail-expand-btn", !collapsed && "active")}
+              title={collapsed ? text.expand : text.collapse}
+              aria-label={collapsed ? text.expand : text.collapse}
+              aria-expanded={!collapsed}
+              aria-keyshortcuts="Control+\"
+              onClick={toggleRailOpen}
+            >
+              <Icon name="chevronRight" className={clsx("shell-rail-collapse-icon", !collapsed && "is-open")} />
+            </button>
+          </div>
+        </footer>
+      </nav>
+    </div>
   );
 }
 
@@ -333,6 +443,8 @@ export function TaskCenterButton() {
   const tasks = useTaskStore();
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const renderPopover = useDisclosurePresence(open, popoverRef);
   const count = activeTaskCount(tasks);
   const lead = [tasks.generation, tasks.batch, ...Object.values(tasks.textJobs)].find(isActive) ?? null;
   const percent = lead ? taskPercent(lead) : 0;
@@ -347,61 +459,80 @@ export function TaskCenterButton() {
       <button
         ref={anchor}
         type="button"
-        className={clsx("shell-task-button", count > 0 && "is-busy", lead?.state === "paused" && "is-paused", !count && unseenFailure && "has-failure")}
+        className={clsx("shell-task-button", open && "is-open", count > 0 && "is-busy", lead?.state === "paused" && "is-paused", !count && unseenFailure && "has-failure")}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
         title={text.tasksTitle}
       >
-        {count > 0 ? <span className="shell-task-ring" style={{ "--p": `${percent}%` } as CSSProperties} aria-hidden="true" /> : <Icon name="history" />}
+        {count > 0 ? <span className="shell-task-ring" style={{ "--p": `${percent}%` } as CSSProperties} aria-hidden="true" /> : <span className="shell-trigger-icon" aria-hidden="true"><Icon name="history" /></span>}
         <span className="shell-task-label">{count > 0 && lead ? `${text.kind[lead.kind]} · ${lead.state === "paused" ? text.state.paused : text.step[lead.step]}` : text.tasks}</span>
         {count > 1 ? <span className="shell-task-count">{count}</span> : null}
         {count > 0 && lead ? <span className="shell-task-percent">{percent}%</span> : null}
       </button>
-      {open ? <TaskCenterPopover anchor={anchor.current} onClose={() => setOpen(false)} /> : null}
+      {renderPopover ? (
+        <TaskCenterPopover
+          open={open}
+          panelRef={popoverRef}
+          anchor={anchor.current}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
     </>
   );
 }
 
-function TaskCenterPopover({ anchor, onClose }: { anchor: HTMLElement | null; onClose: () => void }) {
+function TaskCenterPopover({
+  open,
+  panelRef,
+  anchor,
+  onClose,
+}: {
+  open: boolean;
+  panelRef: React.RefObject<HTMLDivElement | null>;
+  anchor: HTMLElement | null;
+  onClose: () => void;
+}) {
   const language = useLanguage();
   const text = shellText(language);
   const tasks = useTaskStore();
   const active = [tasks.generation, tasks.batch, ...Object.values(tasks.textJobs)].filter((record): record is TaskRecord => isActive(record));
   const recent = tasks.recent.filter((record) => !active.some((item) => item.id === record.id));
-  const now = useNow(true);
-  const panel = useRef<HTMLDivElement>(null);
+  const now = useNow(open);
   const rect = anchor?.getBoundingClientRect();
   useEffect(() => {
-    panel.current?.focus();
-    // Navigating anywhere (rail, palette, task "前往") closes the popover.
+    if (!open) return;
+    panelRef.current?.focus();
     const offNavigate = useAppStore.subscribe((state, previous) => {
       if (state.activeTab !== previous.activeTab || state.showSettings !== previous.showSettings) onClose();
     });
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { event.stopPropagation(); onClose(); anchor?.focus(); } };
     const onDown = (event: PointerEvent) => {
       const target = event.target as Node;
-      if (!panel.current?.contains(target) && !anchor?.contains(target)) onClose();
+      if (!panelRef.current?.contains(target) && !anchor?.contains(target)) onClose();
     };
     document.addEventListener("keydown", onKey, true);
     document.addEventListener("pointerdown", onDown, true);
     return () => { offNavigate(); document.removeEventListener("keydown", onKey, true); document.removeEventListener("pointerdown", onDown, true); };
-  }, [anchor, onClose]);
+  }, [anchor, onClose, open, panelRef]);
   return (
-    <div
-      ref={panel}
-      className="shell-task-popover"
-      role="dialog"
-      aria-label={text.tasksTitle}
-      tabIndex={-1}
-      style={{ top: (rect?.bottom ?? 40) + 6, right: Math.max(8, window.innerWidth - (rect?.right ?? window.innerWidth - 8)) }}
-    >
-      <header><strong>{text.tasksTitle}</strong>{recent.length ? <button type="button" className="btn btn-sm btn-ghost" onClick={() => useTaskStore.getState().dismissRecent()}>{text.clearRecent}</button> : null}</header>
-      {active.length === 0 && recent.length === 0 ? <p className="shell-task-empty">{text.tasksEmpty}</p> : null}
-      {active.map((record) => <TaskRow key={record.id} record={record} now={now} onNavigate={onClose} />)}
-      {recent.length ? <h3>{text.recent}</h3> : null}
-      {recent.map((record) => <TaskRow key={record.id} record={record} now={now} onNavigate={onClose} />)}
-    </div>
+    <AppPortal>
+      <div
+        ref={panelRef}
+        className="shell-task-popover qf-dropdown-panel"
+        {...disclosureAttributes(open)}
+        role={open ? "dialog" : undefined}
+        aria-label={text.tasksTitle}
+        tabIndex={-1}
+        style={{ top: (rect?.bottom ?? 40) + 6, right: Math.max(8, window.innerWidth - (rect?.right ?? window.innerWidth - 8)) }}
+      >
+        <header><strong>{text.tasksTitle}</strong>{recent.length ? <button type="button" className="btn btn-sm btn-ghost" onClick={() => useTaskStore.getState().dismissRecent()}>{text.clearRecent}</button> : null}</header>
+        {active.length === 0 && recent.length === 0 ? <p className="shell-task-empty">{text.tasksEmpty}</p> : null}
+        {active.map((record) => <TaskRow key={record.id} record={record} now={now} onNavigate={onClose} />)}
+        {recent.length ? <h3>{text.recent}</h3> : null}
+        {recent.map((record) => <TaskRow key={record.id} record={record} now={now} onNavigate={onClose} />)}
+      </div>
+    </AppPortal>
   );
 }
 
@@ -476,14 +607,17 @@ export function GenerationProgressLine() {
   return <TaskRow record={record} now={now} compact />;
 }
 
-/* ── Command palette ──────────────────────────────────────────────────────── */
+/* ── Command palette (Ctrl+K) ─────────────────────────────────────────────── */
 export function CommandPalette() {
   const language = useLanguage();
   const text = shellText(language);
+  const dt = dockText(language);
   const ft = useFeatureText();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
+  const paletteRef = useRef<HTMLDivElement>(null);
+  const present = useDisclosurePresence(open, paletteRef);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const restore = useRef<HTMLElement | null>(null);
@@ -502,38 +636,63 @@ export function CommandPalette() {
   }, []);
 
   const commands = useMemo<CommandItem[]>(() => {
-    if (!open) return [];
+    if (!present) return [];
     const items = getLocalizedTabItems(language);
     const settingsNav = getSettingsShellText(language).nav as Record<string, string>;
     const extraSettingLabels: Record<string, string> = { sound: ft("提示音"), mcp: ft("MCP 服务") };
     const isWindows = window.naiDesktop?.platform === "win32";
     const pages: CommandItem[] = items.map((item) => ({
-      id: `page:${item.value}`, label: item.label, hint: `${item.title} · ${item.desc}`, group: text.cmdGroups.page, icon: item.icon,
-      keywords: item.value, run: () => navigateTo(item.value as ActiveTab),
+      id: `page:${item.value}`,
+      label: item.label,
+      hint: formatCommandHint(item.label, item.title, item.desc),
+      group: text.cmdGroups.page,
+      icon: item.icon,
+      keywords: `${item.value} ${item.title} ${item.desc}`,
+      run: () => navigateTo(item.value as ActiveTab),
     }));
-    const tools: CommandItem[] = TOOL_ENTRIES.filter((tool) => (!tool.windowsOnly || isWindows) && (!tool.comfyOnly || Boolean(window.naiComfy))).map((tool) => ({
-      id: `tool:${tool.id}`, label: text.tools[tool.id], hint: text.groups.automation, group: text.cmdGroups.tool, icon: tool.icon, keywords: tool.id, run: () => openTool(tool.id),
-    }));
+    const tools: CommandItem[] = TOOL_ENTRIES.filter((tool) => (!tool.windowsOnly || isWindows) && (!tool.comfyOnly || Boolean(window.naiComfy))).map((tool) => {
+      const label = text.tools[tool.id];
+      return {
+        id: `tool:${tool.id}`,
+        label,
+        hint: formatCommandHint(label, text.groups.automation),
+        group: text.cmdGroups.tool,
+        icon: tool.icon,
+        keywords: `${tool.id} tool 工具`,
+        run: () => openTool(tool.id),
+      };
+    });
     const settings: CommandItem[] = [
-      { id: "settings", label: text.settings, hint: text.settingsHint, group: text.cmdGroups.setting, icon: "settings", keywords: "settings preferences", run: () => openSettings() },
-      ...SETTINGS_SECTIONS.map((section) => ({
-        id: `setting:${section.id}`, label: settingsNav[section.id] ?? extraSettingLabels[section.id] ?? section.id, hint: text.settings, group: text.cmdGroups.setting,
-        icon: section.icon, keywords: `${section.id} settings`, run: () => openSettings(section.id),
-      })),
+      { id: "settings", label: text.settings, hint: formatCommandHint(text.settings, text.settingsHint), group: text.cmdGroups.setting, icon: "settings", keywords: "settings preferences 设置 偏好", run: () => openSettings() },
+      ...SETTINGS_SECTIONS.map((section) => {
+        const label = settingsNav[section.id] ?? extraSettingLabels[section.id] ?? section.id;
+        return {
+          id: `setting:${section.id}`,
+          label,
+          hint: formatCommandHint(label, text.settings),
+          group: text.cmdGroups.setting,
+          icon: section.icon,
+          keywords: `${section.id} settings 设置`,
+          run: () => openSettings(section.id),
+        };
+      }),
     ];
     const actions: CommandItem[] = [
-      { id: "act:theme", label: text.actions.theme, hint: "", group: text.cmdGroups.action, icon: "palette", keywords: "theme dark light", run: () => void toggleTheme() },
-      { id: "act:stream", label: text.actions.stream, hint: "", group: text.cmdGroups.action, icon: "eye", keywords: "stream preview", run: () => void toggleStreamPreview() },
-      { id: "act:tasks", label: text.actions.tasks, hint: "", group: text.cmdGroups.action, icon: "history", keywords: "tasks queue progress", run: () => window.dispatchEvent(new Event(SHELL_EVENTS.tasks)) },
-      { id: "act:history", label: text.actions.history, hint: "", group: text.cmdGroups.action, icon: "images", keywords: "history rail", run: () => { navigateTo("generate"); const s = useAppStore.getState(); s.setWsHistoryCollapsed(!s.wsHistoryCollapsed); } },
-      { id: "act:rail", label: text.actions.rail, hint: "Ctrl+\\", group: text.cmdGroups.action, icon: "sliders", keywords: "navigation sidebar", run: toggleRail },
-      { id: "act:output", label: text.actions.output, hint: "", group: text.cmdGroups.action, icon: "folder", keywords: "output folder explorer", run: openOutputDir },
-      { id: "act:onboarding", label: text.actions.onboarding, hint: "", group: text.cmdGroups.action, icon: "help", keywords: "onboarding guide wizard", run: () => useAppStore.getState().setShowOnboarding(true) },
-      { id: "act:layout", label: text.actions.layout, hint: "", group: text.cmdGroups.action, icon: "info", keywords: "layout changes moved", run: () => window.dispatchEvent(new Event(SHELL_EVENTS.notice)) },
-      { id: "act:docs", label: text.actions.docs, hint: "", group: text.cmdGroups.action, icon: "externalLink", keywords: "docs help", run: () => window.naiDesktop.openExternal(DOCS_URL) },
+      { id: "act:theme", label: text.actions.theme, hint: "", group: text.cmdGroups.action, icon: "palette", keywords: "theme dark light 主题 深色 浅色 暗黑 夜间", run: () => void toggleTheme() },
+      { id: "act:stream", label: text.actions.stream, hint: "", group: text.cmdGroups.action, icon: "eye", keywords: "stream preview 流式 预览", run: () => void toggleStreamPreview() },
+      { id: "act:tasks", label: text.actions.tasks, hint: "", group: text.cmdGroups.action, icon: "history", keywords: "tasks queue progress 任务 队列 进度", run: () => window.dispatchEvent(new Event(SHELL_EVENTS.tasks)) },
+      { id: "act:history", label: text.actions.history, hint: "", group: text.cmdGroups.action, icon: "images", keywords: "history rail 历史 素材 右侧", run: () => { navigateTo("generate"); const s = useAppStore.getState(); s.setWsHistoryCollapsed(!s.wsHistoryCollapsed); } },
+      { id: "act:rail", label: text.actions.rail, hint: "Ctrl+\\", group: text.cmdGroups.action, icon: "sliders", keywords: "navigation sidebar 侧栏 导航 展开 收起", run: toggleRail },
+      { id: "act:rail-dock", label: `${dt.pin} / ${dt.float} · ${dt.railTitle}`, hint: "", group: text.cmdGroups.action, icon: "pin", keywords: "dock pin float rail 停靠 悬浮 导航 侧栏", run: () => useDockStore.getState().toggleRailDocked() },
+      { id: "act:right-dock", label: `${dt.pin} / ${dt.float} · ${text.actions.history}`, hint: "", group: text.cmdGroups.action, icon: "pin", keywords: "dock pin float history 停靠 悬浮 历史 右侧", run: () => { const s = useAppStore.getState(); if (s.wsHistoryCollapsed) s.setWsHistoryCollapsed(false); useDockStore.getState().toggleRightDocked(); } },
+      { id: "act:baseline", label: dt.resetBaseline, hint: "", group: text.cmdGroups.action, icon: "refresh", keywords: "baseline reset 基准 恢复 默认 面板", run: () => { useDockStore.getState().resetToBaseline(); useAppStore.getState().setWsHistoryCollapsed(true); } },
+      { id: "act:output", label: text.actions.output, hint: "", group: text.cmdGroups.action, icon: "folder", keywords: "output folder explorer 输出 目录 文件夹", run: openOutputDir },
+      { id: "act:onboarding", label: text.actions.onboarding, hint: "", group: text.cmdGroups.action, icon: "help", keywords: "onboarding guide wizard 引导 教程", run: () => useAppStore.getState().setShowOnboarding(true) },
+      { id: "act:layout", label: text.actions.layout, hint: "", group: text.cmdGroups.action, icon: "info", keywords: "layout changes moved 布局 变化", run: () => window.dispatchEvent(new Event(SHELL_EVENTS.notice)) },
+      { id: "act:docs", label: text.actions.docs, hint: "", group: text.cmdGroups.action, icon: "externalLink", keywords: "docs help 文档 帮助", run: () => window.naiDesktop.openExternal(DOCS_URL) },
     ];
     return [...pages, ...tools, ...settings, ...actions];
-  }, [open, language, text, ft]);
+  }, [present, language, text, dt, ft]);
 
   const results = useMemo(() => rankCommands(commands, query), [commands, query]);
   useEffect(() => { setCursor(0); }, [query]);
@@ -542,17 +701,30 @@ export function CommandPalette() {
     list.current?.querySelector<HTMLElement>(`[data-index="${cursor}"]`)?.scrollIntoView({ block: "nearest" });
   }, [cursor]);
 
-  if (!open) return null;
+  if (!present) return null;
   const close = (focusBack = true) => { setOpen(false); if (focusBack) restore.current?.focus?.(); };
   const run = (item: CommandItem | undefined) => { if (!item) return; close(false); item.run(); };
   return (
     <AppPortal>
-      <div className="shell-palette-backdrop" onMouseDown={() => close()}>
-        <div className="shell-palette" role="dialog" aria-modal="true" aria-label={text.paletteTitle} onMouseDown={(event) => event.stopPropagation()}>
+      <div
+        className={clsx("shell-palette-backdrop", !open && "is-closing")}
+        data-palette-open={open ? "true" : "false"}
+        onMouseDown={() => close()}
+      >
+        <div
+          ref={paletteRef}
+          className="shell-palette qf-dropdown-panel"
+          {...disclosureAttributes(open)}
+          role={open ? "dialog" : undefined}
+          aria-modal={open ? "true" : undefined}
+          aria-label={text.paletteTitle}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
           <div className="shell-palette-input">
-            <Icon name="search" />
+            <span className="shell-palette-search-icon" aria-hidden="true"><Icon name="search" /></span>
             <input
               ref={input}
+              type="text"
               value={query}
               placeholder={text.search}
               role="combobox"
@@ -568,6 +740,17 @@ export function CommandPalette() {
                 else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); }
               }}
             />
+            {query ? (
+              <button
+                type="button"
+                className="shell-palette-clear"
+                aria-label="Clear"
+                onClick={() => { setQuery(""); input.current?.focus(); }}
+              >
+                <Icon name="close" />
+              </button>
+            ) : null}
+            <kbd>Esc</kbd>
           </div>
           <div className="shell-palette-list" id="shell-palette-list" role="listbox" ref={list}>
             {results.length === 0 ? <p className="shell-palette-empty">{text.searchEmpty}</p> : results.map((item, index) => (
@@ -583,14 +766,17 @@ export function CommandPalette() {
                 onClick={() => run(item)}
                 tabIndex={-1}
               >
-                <Icon name={item.icon} />
+                <span className="shell-palette-item-icon" aria-hidden="true"><Icon name={item.icon} /></span>
                 <span className="shell-palette-label">{item.label}</span>
-                {item.hint ? <small>{item.hint}</small> : null}
+                <small className="shell-palette-hint">{item.hint}</small>
                 <em>{item.group}</em>
               </button>
             ))}
           </div>
-          <footer className="shell-palette-footer">{text.paletteHint}</footer>
+          <footer className="shell-palette-footer">
+            <span>{text.paletteHint}</span>
+            <span className="shell-palette-count">{results.length}</span>
+          </footer>
         </div>
       </div>
     </AppPortal>
@@ -621,11 +807,11 @@ export function LayoutNotice() {
           <button type="button" className="btn btn-sm btn-primary" onClick={dismiss}>{text.dismiss}</button>
         </div>
       </div>
-      {details ? (
+      <AnimatedCollapse open={details}>
         <table className="shell-layout-changes">
           <tbody>{text.layoutChanges.map(([before, after]) => <tr key={before}><td>{before}</td><td aria-hidden="true">→</td><td>{after}</td></tr>)}</tbody>
         </table>
-      ) : null}
+      </AnimatedCollapse>
     </aside>
   );
 }

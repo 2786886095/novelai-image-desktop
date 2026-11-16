@@ -1,5 +1,6 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { useAppStore } from '../store';
+import { useDockStore } from '../shell/dock-state';
 import { historyRailText, HISTORY_MIN_WIDTH, HISTORY_MAX_WIDTH } from '../workspace-history';
 
 /** The handle remains mounted while dragging through zero width. The history
@@ -81,10 +82,26 @@ export function HistoryRailControls() {
 export function HistoryRailPane({ children }: { children: ReactNode }) {
   const collapsed = useAppStore(s => s.wsHistoryCollapsed);
   const dragWidth = useAppStore(s => s.wsHistoryDragWidth);
+  const rightWidth = useAppStore(s => s.wsRightWidth);
+  const rightDocked = useDockStore(s => s.rightDocked);
   const hidden = dragWidth === null ? collapsed : dragWidth === 0;
+  const activeWidth = dragWidth === null ? rightWidth : Math.max(HISTORY_MIN_WIDTH, dragWidth);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { if (ref.current) ref.current.inert = hidden; }, [hidden]);
-  return <div ref={ref} id="history-rail-pane" className={`history-rail${hidden ? ' is-collapsed' : ''}`} aria-hidden={hidden}>
+  return <div
+    ref={ref}
+    id="history-rail-pane"
+    className={`history-rail ${rightDocked ? 'is-docked' : 'is-floating'}${hidden ? ' is-collapsed' : ' is-open'}`}
+    data-dock-mode={rightDocked ? 'docked' : 'floating'}
+    style={{ '--history-drawer-w': `${activeWidth}px` } as CSSProperties}
+    aria-hidden={hidden}
+    onKeyDown={event => {
+      if (event.key !== 'Escape' || rightDocked || hidden || event.defaultPrevented || event.nativeEvent.isComposing) return;
+      if (document.querySelector('.select-menu-popover[data-disclosure-open="true"], .modal-backdrop, .app-confirm-backdrop, .history-action-menu')) return;
+      event.stopPropagation();
+      useAppStore.getState().setWsHistoryCollapsed(true);
+    }}
+  >
     {children}
   </div>;
 }
