@@ -122,13 +122,13 @@ export function HistoryRailPane({ children }: { children: ReactNode }) {
       if (!target || ref.current?.contains(target)) return;
       if (
         target.closest(
-          '.history-rail-control, [data-studio-portal], .select-menu-popover, .history-action-menu, .context-menu, .modal-backdrop, .app-confirm-backdrop, .image-preview-dialog-backdrop',
+          '.history-rail-control, [data-studio-portal], .select-menu-popover, .history-action-menu, .context-menu, .app-confirm-backdrop, .image-preview-dialog-backdrop',
         )
       ) {
         return;
       }
-      swallowCanvasClickOnDismiss(target);
       useAppStore.getState().setWsHistoryCollapsed(true);
+      swallowCanvasClickOnDismiss(target);
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;

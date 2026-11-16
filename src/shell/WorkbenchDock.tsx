@@ -99,13 +99,13 @@ export function WorkbenchDockPane({ onHost }: { onHost: (host: HTMLDivElement | 
       if (!target || shellRef.current?.contains(target)) return;
       if (
         target.closest(
-          ".qf-ref-trigger, .prompt-advanced-button, .char-position-marker, [data-studio-portal], .select-menu-popover, .ac-dropdown, .context-menu, .menu-pop, .app-confirm-backdrop, .modal-backdrop",
+          ".qf-ref-trigger, .prompt-advanced-button, .char-position-marker, [data-studio-portal], .select-menu-popover, .ac-dropdown, .context-menu, .menu-pop, .app-confirm-backdrop",
         )
       ) {
         return;
       }
-      swallowCanvasClickOnDismiss(target);
       closeDockedPanel(hostRef.current);
+      swallowCanvasClickOnDismiss(target);
     };
     document.addEventListener("pointerdown", onPointerDown, true);
     return () => document.removeEventListener("pointerdown", onPointerDown, true);

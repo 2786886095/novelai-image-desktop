@@ -231,10 +231,10 @@ export function StudioNavRail() {
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as HTMLElement | null;
       if (!target || navRef.current?.contains(target)) return;
-      if (target.closest(".app-confirm-backdrop, .modal-backdrop, .select-menu-popover")) return;
-      swallowCanvasClickOnDismiss(target);
+      if (target.closest(".app-confirm-backdrop, [data-studio-portal], .select-menu-popover")) return;
       if (editing) setEditing(false);
       setRailOpen(false);
+      swallowCanvasClickOnDismiss(target);
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !event.defaultPrevented) {
