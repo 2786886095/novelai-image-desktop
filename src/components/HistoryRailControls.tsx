@@ -47,7 +47,7 @@ export function HistoryRailControls() {
     onDoubleClick={() => {
       const state = useAppStore.getState();
       state.setWsWidth('right', 340);
-      state.setWsHistoryCollapsed(false);
+      state.saveWsWidths();
     }}
     onKeyDown={event => {
       if (event.target !== event.currentTarget) return;

@@ -7361,17 +7361,22 @@ function WorkspaceMigrationNotice() {
 // Draggable splitter between workspace rails. Drag = resize; double-click = reset.
 // Width changes apply live (store) and persist to localStorage on release.
 function WorkspaceResizer({ edge }: { edge: "left" | "right" }) {
+  const defaultWidth = edge === "left" ? 380 : 340;
   const width = useAppStore((s) => (edge === "left" ? s.wsLeftWidth : s.wsRightWidth));
   const setWsWidth = useAppStore((s) => s.setWsWidth);
   const saveWsWidths = useAppStore((s) => s.saveWsWidths);
-  const resetWsWidths = useAppStore((s) => s.resetWsWidths);
   const language = useAppStore((s) => s.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const drag = useRef<{ startX: number; startW: number } | null>(null);
+  const resetEdgeWidth = () => {
+    setWsWidth(edge, defaultWidth);
+    saveWsWidths();
+  };
 
   return (
     <div
       className={clsx("ws-resizer", edge)}
+      data-modified={width !== defaultWidth ? "true" : "false"}
       role="separator"
       aria-orientation="vertical"
       title={t("workspace.resizeTitle")}
@@ -7391,7 +7396,7 @@ function WorkspaceResizer({ edge }: { edge: "left" | "right" }) {
         e.currentTarget.releasePointerCapture(e.pointerId);
         saveWsWidths();
       }}
-      onDoubleClick={() => resetWsWidths()}
+      onDoubleClick={resetEdgeWidth}
     >
       <span className="ws-resizer-grip" />
       <button
@@ -7401,7 +7406,7 @@ function WorkspaceResizer({ edge }: { edge: "left" | "right" }) {
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
-          resetWsWidths();
+          resetEdgeWidth();
         }}
       >
         <Icon name="refresh" />

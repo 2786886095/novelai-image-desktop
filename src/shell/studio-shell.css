@@ -176,10 +176,40 @@ html body button.shell-search-trigger:active {
 
 .shell-account { display: flex; align-items: center; min-width: 0; flex: 0 1 auto; }
 .shell-account .nai-account-manager { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: nowrap; }
-.shell-account .nai-account-manager > button,
-.shell-account .nai-account-selector { height: 30px; min-height: 30px; }
-.shell-account .nai-account-selector { min-width: 0; max-width: 260px; }
+.shell-account .nai-account-manager > button { height: 30px; min-height: 30px; font-size: 12.5px; padding: 0 10px; }
+.shell-account .nai-account-selector {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  max-width: 260px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.shell-account .nai-account-selector > svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+  height: 15px;
+  color: var(--text-muted);
+  pointer-events: none;
+  z-index: 1;
+}
 .shell-account .nai-account-selector-label { display: none; }
+html body .shell-account .nai-account-selector .select-menu-trigger {
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 28px 0 30px !important;
+  font-size: 12.5px;
+  border-radius: var(--radius-md);
+}
 
 .shell-topbar-tools { display: flex; align-items: center; gap: 3px; flex: none; margin-left: 2px; }
 html body button.shell-icon-btn {

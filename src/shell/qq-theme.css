@@ -203,6 +203,26 @@ html.theme-dark .studio-shell .status-bar {
 .studio-shell .ws-resizer:hover .ws-resizer-grip {
   background: var(--detection) !important;
 }
+html body .studio-shell .ws-resizer-reset {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong) !important;
+  background: var(--bg-canvas) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: var(--shadow-sm) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+html body .studio-shell .ws-resizer[data-modified="true"]:hover .ws-resizer-reset {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+html body .studio-shell .ws-resizer-reset:hover {
+  border-color: var(--detection) !important;
+  color: var(--accent) !important;
+  background: var(--bg-canvas) !important;
+}
 .studio-shell .history-rail-toggle {
   background: var(--bg-canvas) !important;
   border: 1px solid var(--border) !important;
@@ -651,8 +671,7 @@ html body :is(
   .prompt-chip-search,
   .history-group-create input,
   .select-menu-trigger,
-  .style-preset-trigger,
-  .nai-account-selector
+  .style-preset-trigger
 ),
 html.theme-dark body :is(
   .field input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
@@ -661,8 +680,7 @@ html.theme-dark body :is(
   .prompt-chip-search,
   .history-group-create input,
   .select-menu-trigger,
-  .style-preset-trigger,
-  .nai-account-selector
+  .style-preset-trigger
 ) {
   background: var(--bg-input) !important;
   background-image: none !important;
@@ -683,10 +701,16 @@ html body :is(
   .prompt-chip-search,
   .history-group-create input,
   .select-menu-trigger,
-  .style-preset-trigger,
-  .nai-account-selector
+  .style-preset-trigger
 ):hover:not(:disabled) {
   border-color: var(--border-strong) !important;
+}
+
+html body :is(.nai-account-settings, .nai-account-panel) .nai-account-selector {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
 }
 
 html body :is(
