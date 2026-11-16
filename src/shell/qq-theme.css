@@ -803,10 +803,11 @@ html body .select-menu-popover.disclosure-popover[data-disclosure-open="false"] 
   pointer-events: none;
   overflow: clip;
   transition:
-    height 125ms var(--qf-ease-in),
-    opacity 110ms linear,
-    transform 125ms var(--qf-ease-in);
+    height 115ms var(--qf-ease-in),
+    opacity 100ms linear,
+    transform 115ms var(--qf-ease-in);
 }
+
 @starting-style {
   html body .select-menu-popover.disclosure-popover[data-disclosure-open="true"] {
     height: 0;

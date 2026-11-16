@@ -114,6 +114,8 @@ export function HistoryRailPane({ children }: { children: ReactNode }) {
   const collapsed = useAppStore(s => s.wsHistoryCollapsed);
   const dragWidth = useAppStore(s => s.wsHistoryDragWidth);
   const rightWidth = useAppStore(s => s.wsRightWidth);
+  const language = useAppStore(s => s.settings?.language);
+  const text = historyRailText(language);
   const resizeRef = useRef<{ startX: number; startW: number } | null>(null);
 
   const hidden = dragWidth === null ? collapsed : dragWidth === 0;
@@ -165,7 +167,7 @@ export function HistoryRailPane({ children }: { children: ReactNode }) {
         className="floating-edge-resizer left"
         role="separator"
         aria-orientation="vertical"
-        title="拖动调整宽度；双击恢复默认"
+        title={text.resize}
         onPointerDown={event => {
           if (event.button !== 0) return;
           event.preventDefault();
