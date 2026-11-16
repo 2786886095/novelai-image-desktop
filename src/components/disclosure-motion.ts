@@ -1,7 +1,7 @@
 import {motionReduced} from '../motion-system';
 import {useLayoutEffect, useState, type RefObject} from "react";
 
-export const DISCLOSURE_MOTION = {open: 135, close: 95} as const;
+export const DISCLOSURE_MOTION = {open: 185, close: 130} as const;
 
 /** Keep outgoing content mounted but inert. Reopening cancels the pending removal. */
 export function useDisclosurePresence(open: boolean, element?: RefObject<HTMLElement | null>) {

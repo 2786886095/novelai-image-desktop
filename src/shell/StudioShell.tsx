@@ -239,6 +239,8 @@ export function StudioNavRail() {
     all[(index + delta + all.length) % all.length]?.focus();
   };
 
+  const railDragRef = useRef<{ startX: number; open: boolean } | null>(null);
+
   return (
     <div className={clsx("shell-rail-slot", railOpen && "is-docked")}>
       <nav
@@ -367,6 +369,39 @@ export function StudioNavRail() {
             </button>
           </div>
         </footer>
+        <div
+          className="shell-rail-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          title={collapsed ? text.expand : text.collapse}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            railDragRef.current = { startX: event.clientX, open: railOpen };
+          }}
+          onPointerMove={(event) => {
+            if (!railDragRef.current) return;
+            const dx = event.clientX - railDragRef.current.startX;
+            if (!railDragRef.current.open && dx > 42) {
+              railDragRef.current.open = true;
+              railDragRef.current.startX = event.clientX;
+              setRailOpen(true);
+            } else if (railDragRef.current.open && dx < -42) {
+              railDragRef.current.open = false;
+              railDragRef.current.startX = event.clientX;
+              if (editing) setEditing(false);
+              setRailOpen(false);
+            }
+          }}
+          onPointerUp={(event) => {
+            railDragRef.current = null;
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+          }}
+          onPointerCancel={() => { railDragRef.current = null; }}
+        />
       </nav>
     </div>
   );

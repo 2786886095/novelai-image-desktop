@@ -1,5 +1,5 @@
 /** Shared interaction lifecycle. Visual-only exits never retain live controls. */
-export const STUDIO_MOTION = {enter:150,exit:110,menuEnter:130,menuExit:95,
+export const STUDIO_MOTION = {enter:200,exit:145,menuEnter:185,menuExit:130,
   enterEase:'cubic-bezier(0.22,1,0.36,1)',exitEase:'cubic-bezier(0.4,0,1,1)'} as const;
 const ghosts=new Set<HTMLElement>();
 const activeAnimations=new Set<Animation>();
@@ -14,24 +14,24 @@ const modals:HTMLElement[]=[];
 let rootWasInert=false;
 export function motionReduced(){return typeof window==='undefined'||document.documentElement.classList.contains('motion-reduced');}
 /** Fade only the mounted content; never transform a portal's containing block. */
-export function animateStudioEntry(target:Element|NodeListOf<Element>|null,duration=140){
+export function animateStudioEntry(target:Element|NodeListOf<Element>|null,duration=190){
  if(!target||motionReduced())return()=>{};
  const nodes=target instanceof Element?[target]:Array.from(target);
  const capped=nodes.length>24?nodes.slice(0,24):nodes;
- const stops=capped.map((node,idx)=>play(node,[{opacity:0},{opacity:1}],Math.min(duration+idx*8,180)));
+ const stops=capped.map((node,idx)=>play(node,[{opacity:0,transform:'translateY(6px)'},{opacity:1,transform:'translateY(0)'}],Math.min(duration+idx*12,240)));
  return()=>stops.forEach(stop=>stop());
 }
 /** Only leaf headings move; fixed/portalled controls keep their coordinate space. */
 export function animateStudioHeading(node:Element|null){
  if(!node||motionReduced())return()=>{};
- return play(node,[{opacity:0.75,transform:'translateY(4px)'},{opacity:1,transform:'translateY(0)'}],165);
+ return play(node,[{opacity:0.65,transform:'translateY(6px)'},{opacity:1,transform:'translateY(0)'}],210);
 }
 export function animatePortalEntry(host:HTMLElement|null){
  const surface=host?.firstElementChild;
  if(!surface||motionReduced()||surface.matches('[data-disclosure-open]'))return()=>{};
- const stop=animateStudioEntry(surface,145);
+ const stop=play(surface,[{opacity:0},{opacity:1}],180);
  const dialog=surface.querySelector(':scope > .modal, :scope > .app-confirm-dialog, :scope > .reference-ui-dialog, :scope > .nai-account-panel');
- const stopDialog=dialog?play(dialog,[{transform:'translateY(5px) scale(0.985)'},{transform:'translateY(0) scale(1)'}],160):()=>{};
+ const stopDialog=dialog?play(dialog,[{opacity:0,transform:'translateY(10px) scale(0.965)'},{opacity:1,transform:'translateY(0) scale(1)'}],215):()=>{};
  const heading=animateStudioHeading(surface.querySelector('h1,h2,h3'));
  return()=>{stop();stopDialog();heading();};
 }

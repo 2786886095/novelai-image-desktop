@@ -121,7 +121,7 @@ import {CharacterPresetControls} from './components/CharacterPresetControls';
 import {CharacterNameControl} from './components/CharacterNameControl';
 import { Icon, type IconName } from "./components/icons";
 import { CommandPalette, GenerationProgressLine, LayoutNotice, StudioNavRail, StudioTopBar, useRailCollapsed } from "./shell/StudioShell";
-import { DockOrPortal, WorkbenchDockPane, WorkbenchDockProvider } from "./shell/WorkbenchDock";
+import { DockOrPortal, useDeferredPanelPresence, WorkbenchDockPane, WorkbenchDockProvider } from "./shell/WorkbenchDock";
 import { dockText, ensureBaselineWorkspace, useDockStore } from "./shell/dock-state";
 import { shellText } from "./shell/shell-text";
 import { PanelSectionNav } from "./shell/PanelSectionNav";
@@ -848,7 +848,7 @@ function advancedParamsSummary(stored: GenerateParams, language: unknown) {
   return parts.join(" · ");
 }
 
-function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
+function AdvancedParamsModal({ onClose, closing = false }: { onClose: () => void; closing?: boolean }) {
   const storedParams = useAppStore(state => state.params);
   const inpaintModel = useAppStore(state => state.inpaintModel);
   const isInpaintPanel = useAppStore(state => state.activeTab) === "inpaint";
@@ -859,7 +859,7 @@ function AdvancedParamsModal({ onClose }: { onClose: () => void }) {
   const t = useCallback((key: string) => desktopUiText(settings?.language, key), [settings?.language]);
 
   return (
-    <DockOrPortal>
+    <DockOrPortal closing={closing}>
       <div className="modal-backdrop">
       <div className="modal advanced-modal">
         <header>
@@ -953,7 +953,7 @@ function recommendPreciseSize(w?: number, h?: number) {
   return { target, exact, padPercent };
 }
 
-export function VibeTransferModal({ onClose, focusSection }: { onClose: () => void; focusSection?: "vibe" | "precise" }) {
+export function VibeTransferModal({ onClose, focusSection, closing = false }: { onClose: () => void; focusSection?: "vibe" | "precise"; closing?: boolean }) {
   const language = useAppStore((state) => state.settings?.language);
   const vibeImages = useAppStore((state) => state.vibeImages);
   const addVibeImage = useAppStore((state) => state.addVibeImage);
@@ -1070,7 +1070,7 @@ export function VibeTransferModal({ onClose, focusSection }: { onClose: () => vo
   }, [focusSection]);
 
   return (
-    <DockOrPortal>
+    <DockOrPortal closing={closing}>
       <div className="modal-backdrop">
       <div ref={modalRef} className="modal vibe-modal">
         <header>
@@ -1353,7 +1353,7 @@ function CharacterPromptEditor({id, field, model, placeholder, label, onAutoComp
 }
 
 // ── Character Captions modal ──────────────────────────────────────────────────
-export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
+export function CharCaptionsModal({ onClose, closing = false }: { onClose: () => void; closing?: boolean }) {
   const language = useAppStore((state) => state.settings?.language);
   const settings = useAppStore((state) => state.settings);
   const charCaptions = useAppStore((state) => state.charCaptions);
@@ -1400,7 +1400,7 @@ export function CharCaptionsModal({ onClose }: { onClose: () => void }) {
   }, [charCaptions, setCharCaptions]);
 
   return (
-    <DockOrPortal>
+    <DockOrPortal closing={closing}>
       <div className="modal-backdrop">
       <div className="modal char-modal">
         <header>
@@ -1721,6 +1721,9 @@ export function PromptAndParams({
   const [showVibeModal, setShowVibeModal] = useState(false);
   const [vibeSection, setVibeSection] = useState<"vibe" | "precise">("vibe");
   const [showCharModal, setShowCharModal] = useState(false);
+  const renderAdvanced = useDeferredPanelPresence(showAdvanced);
+  const renderVibeModal = useDeferredPanelPresence(showVibeModal);
+  const renderCharModal = useDeferredPanelPresence(showCharModal);
 
   const toggleCharModal = () => {
     setShowCharModal((open) => {
@@ -2713,9 +2716,9 @@ export function PromptAndParams({
         <span className="advanced-summary">{advancedParamsSummary(params, settings?.language)}</span>
         <Icon name="chevronRight" className={clsx("prompt-advanced-chevron", showAdvanced && "is-open")} />
       </Button>
-      {showAdvanced && <AdvancedParamsModal onClose={() => setShowAdvanced(false)} />}
-      {showVibeModal && <VibeTransferModal focusSection={vibeSection} onClose={() => setShowVibeModal(false)} />}
-      {showCharModal && <CharCaptionsModal onClose={() => setShowCharModal(false)} />}
+      {renderAdvanced && <AdvancedParamsModal closing={!showAdvanced} onClose={() => setShowAdvanced(false)} />}
+      {renderVibeModal && <VibeTransferModal closing={!showVibeModal} focusSection={vibeSection} onClose={() => setShowVibeModal(false)} />}
+      {renderCharModal && <CharCaptionsModal closing={!showCharModal} onClose={() => setShowCharModal(false)} />}
       {showNormalize && (
         <PromptNormalizeModal
           value={promptValue}
@@ -4523,15 +4526,54 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
   const dt = dockText(language);
   const leftCollapsed = useDockStore((state) => state.leftCollapsed);
   const toggleLeftCollapsed = useDockStore((state) => state.toggleLeftCollapsed);
+  const setLeftCollapsed = useDockStore((state) => state.setLeftCollapsed);
+  const stripDragRef = useRef<number | null>(null);
   return (
     <aside
       className={clsx(
         "left-panel is-docked",
-        leftCollapsed ? "is-collapsed" : "is-open",
+        leftCollapsed ? "is-collapsed dock-strip left-dock-strip" : "is-open",
       )}
-      aria-hidden={leftCollapsed || undefined}
-      inert={leftCollapsed || undefined}
     >
+      {leftCollapsed && (
+        <div
+          className="left-dock-strip-face"
+          onPointerDown={(e) => {
+            if (e.button !== 0) return;
+            stripDragRef.current = e.clientX;
+          }}
+          onPointerMove={(e) => {
+            if (stripDragRef.current === null) return;
+            if (e.clientX - stripDragRef.current > 36) {
+              stripDragRef.current = null;
+              setLeftCollapsed(false);
+            }
+          }}
+          onPointerUp={() => { stripDragRef.current = null; }}
+          onPointerCancel={() => { stripDragRef.current = null; }}
+        >
+          <button
+            type="button"
+            className="shell-icon-btn left-dock-expand-btn"
+            title={dt.expandLeft}
+            aria-label={dt.expandLeft}
+            onClick={() => setLeftCollapsed(false)}
+          >
+            <Icon name="chevronRight" />
+          </button>
+          <button
+            type="button"
+            className="dock-strip-tab"
+            title={`${dt.expandLeft} · ${meta.title}`}
+            aria-label={dt.expandLeft}
+            onClick={() => setLeftCollapsed(false)}
+          >
+            <Icon name={meta.icon} className="dock-strip-icon" />
+            <span className="dock-strip-label">{meta.label || dt.leftParamsShort}</span>
+          </button>
+        </div>
+      )}
+      <div className="left-panel-inner" aria-hidden={leftCollapsed || undefined} inert={leftCollapsed || undefined}>
       <div className="panel-head">
         <span aria-hidden="true"><Icon name={meta.icon} /></span>
         <div className="panel-head-copy">
@@ -4579,17 +4621,20 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
         </div>
       )}
       <PanelSectionNav key={`${activeTab}:${generateMode}`} />
-      {activeTab === "generate" && (
-        generateMode === "t2i"
-          ? <GeneratePanel openSettings={openSettings} />
-          : generateMode === "i2i"
-            ? <I2IPanel openSettings={openSettings} />
-            : <EnhancePanel openSettings={openSettings} />
-      )}
-      {activeTab === "inpaint" && <InpaintPanel openSettings={openSettings} />}
-      {activeTab === "postprocess" && <PostprocessPanel openSettings={openSettings} />}
-      {activeTab === "inspect" && <ReversePanel />}
-      {activeTab === "convert" && <PromptConverterPanel />}
+      <div key={`${activeTab}:${generateMode}`} className="left-panel-mode-stage">
+        {activeTab === "generate" && (
+          generateMode === "t2i"
+            ? <GeneratePanel openSettings={openSettings} />
+            : generateMode === "i2i"
+              ? <I2IPanel openSettings={openSettings} />
+              : <EnhancePanel openSettings={openSettings} />
+        )}
+        {activeTab === "inpaint" && <InpaintPanel openSettings={openSettings} />}
+        {activeTab === "postprocess" && <PostprocessPanel openSettings={openSettings} />}
+        {activeTab === "inspect" && <ReversePanel />}
+        {activeTab === "convert" && <PromptConverterPanel />}
+      </div>
+      </div>
     </aside>
   );
 }
@@ -7549,8 +7594,7 @@ function MainPage() {
   const wsHistoryCollapsed = useAppStore((state) => state.wsHistoryCollapsed);
   const wsHistoryDragWidth = useAppStore((state) => state.wsHistoryDragWidth);
   const leftCollapsed = useDockStore((state) => state.leftCollapsed);
-  const dt = dockText(language);
-  const displayedLeftWidth = leftCollapsed ? 0 : wsLeftWidth;
+  const displayedLeftWidth = leftCollapsed ? 36 : wsLeftWidth;
   const displayedHistoryWidth = wsHistoryDragWidth === null
     ? (wsHistoryCollapsed ? 0 : wsRightWidth)
     : wsHistoryDragWidth;
@@ -7691,18 +7735,6 @@ function MainPage() {
               className="persistent-workbench-view"
             >
               <WorkbenchDockProvider host={dockHost}>
-                {leftCollapsed ? (
-                  <button
-                    type="button"
-                    className="left-panel-reopen-tab"
-                    title={dt.expandLeft}
-                    aria-label={dt.expandLeft}
-                    onClick={() => useDockStore.getState().setLeftCollapsed(false)}
-                  >
-                    <Icon name="chevronRight" />
-                    <span>{dt.leftParamsShort}</span>
-                  </button>
-                ) : null}
                 <LeftPanel openSettings={() => setShowSettings(true)} />
                 <WorkspaceResizer edge="left" />
                 <div className="persistent-canvas-host">

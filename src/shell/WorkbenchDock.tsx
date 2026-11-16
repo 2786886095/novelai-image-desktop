@@ -2,13 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { AppPortal } from "../components/ui";
+import { motionReduced } from "../motion-system";
 import { useAppStore } from "../store";
 import { dockText, SUBPANEL_DEFAULT_WIDTH, useDockStore } from "./dock-state";
 
 /** Host element for dockable workbench sub-panels (character prompts, vibe
  *  transfer, precise references, advanced parameters). Docks inline beside the
- *  parameter column with zero-latency drag resize and snap-collapse, without
- *  covering the center canvas or requiring any pin button. */
+ *  parameter column with smooth expand/collapse and zero-latency drag resize. */
 const DockContext = createContext<HTMLElement | null>(null);
 
 export function WorkbenchDockProvider({ host, children }: { host: HTMLElement | null; children: ReactNode }) {
@@ -17,6 +17,23 @@ export function WorkbenchDockProvider({ host, children }: { host: HTMLElement | 
 
 export function useWorkbenchDock() {
   return useContext(DockContext);
+}
+
+export function useDeferredPanelPresence(open: boolean, closeMs = 180) {
+  const [mounted, setMounted] = useState(open);
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      return;
+    }
+    if (motionReduced()) {
+      setMounted(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setMounted(false), closeMs);
+    return () => window.clearTimeout(timer);
+  }, [open, closeMs]);
+  return open || mounted;
 }
 
 function closeDockedPanel(slot: HTMLElement | null) {
@@ -29,7 +46,7 @@ export function WorkbenchDockPane({ onHost }: { onHost: (host: HTMLDivElement | 
   const dt = dockText(language);
   const width = useDockStore((s) => s.subpanelWidth);
   const setWidth = useDockStore((s) => s.setSubpanelWidth);
-  const [hasContent, setHasContent] = useState(false);
+  const [phase, setPhase] = useState<"closed" | "open" | "closing">("closed");
   const [resizing, setResizing] = useState(false);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
@@ -42,26 +59,44 @@ export function WorkbenchDockPane({ onHost }: { onHost: (host: HTMLDivElement | 
   useEffect(() => {
     const node = hostRef.current;
     if (!node) return;
-    const sync = () => setHasContent(node.childElementCount > 0);
-    const observer = new MutationObserver(sync);
-    observer.observe(node, { childList: true });
+    const sync = () => {
+      const slots = [...node.querySelectorAll<HTMLElement>(":scope > .workbench-dock-slot")];
+      if (slots.length === 0) {
+        setPhase("closed");
+      } else if (slots.some((slot) => slot.dataset.closing !== "true")) {
+        setPhase("open");
+      } else {
+        setPhase("closing");
+      }
+    };
+    const childObserver = new MutationObserver(sync);
+    childObserver.observe(node, { childList: true });
+    const attrObserver = new MutationObserver(sync);
+    attrObserver.observe(node, { attributes: true, subtree: true, attributeFilter: ["data-closing"] });
     sync();
-    return () => observer.disconnect();
+    return () => {
+      childObserver.disconnect();
+      attrObserver.disconnect();
+    };
   }, []);
+
+  const active = phase === "open";
 
   return (
     <div
       className={clsx(
         "workbench-dock-shell is-docked",
-        hasContent ? "is-open" : "is-closed",
+        phase === "open" && "is-open",
+        phase === "closing" && "is-closing",
+        phase === "closed" && "is-closed",
         resizing && "is-resizing",
       )}
       style={{ "--subpanel-w": `${width}px` } as CSSProperties}
-      aria-hidden={!hasContent || undefined}
-      inert={!hasContent || undefined}
+      aria-hidden={!active || undefined}
+      inert={!active || undefined}
     >
       <div className="workbench-dock" ref={bindHost} />
-      {hasContent && (
+      {active && (
         <div
           className="workbench-dock-resizer"
           role="separator"
@@ -109,14 +144,17 @@ export function WorkbenchDockPane({ onHost }: { onHost: (host: HTMLDivElement | 
 }
 
 /** Drop-in replacement for AppPortal used by dockable workbench sub-panels. */
-export function DockOrPortal({ children }: { children: ReactNode }) {
+export function DockOrPortal({ children, closing = false }: { children: ReactNode; closing?: boolean }) {
   const dock = useWorkbenchDock();
-  if (!dock) return <AppPortal>{children}</AppPortal>;
+  if (!dock) return closing ? null : <AppPortal>{children}</AppPortal>;
   return createPortal(
     <div
       className="workbench-dock-slot"
+      data-closing={closing ? "true" : "false"}
+      inert={closing || undefined}
+      aria-hidden={closing || undefined}
       onKeyDown={(event) => {
-        if (event.key !== "Escape" || event.nativeEvent.isComposing || event.defaultPrevented) return;
+        if (closing || event.key !== "Escape" || event.nativeEvent.isComposing || event.defaultPrevented) return;
         if (document.querySelector('.select-menu-popover[data-disclosure-open="true"], .ac-dropdown, .tag-suggestions, .autocomplete-popover, .menu-pop[data-disclosure-open="true"]')) return;
         event.preventDefault();
         closeDockedPanel(event.currentTarget);

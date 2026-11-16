@@ -267,12 +267,12 @@ html.theme-dark .studio-shell .canvas-area {
 html.theme-dark .studio-shell .canvas-area {
   background: var(--bg-canvas) !important;
 }
-.studio-shell .left-panel > .panel-head,
-html.theme-dark .studio-shell .left-panel > .panel-head {
+.studio-shell .left-panel .panel-head,
+html.theme-dark .studio-shell .left-panel .panel-head {
   border-bottom: 1px solid var(--border) !important;
   background: var(--bg-panel) !important;
 }
-.studio-shell .left-panel > .panel-head > span,
+.studio-shell .left-panel .panel-head > span,
 .studio-shell .reference-catalog-cloud-mark,
 .studio-shell .reference-catalog-series-icon,
 .studio-shell .tavern-avatar.is-software {
@@ -454,11 +454,11 @@ html.theme-dark body .history-group-actions > button {
   text-shadow: none;
   transform: translateY(0);
   transition:
-    background-color 140ms var(--qf-ease-out),
-    border-color 140ms var(--qf-ease-out),
-    color 140ms var(--qf-ease-out),
-    box-shadow 140ms var(--qf-ease-out),
-    transform 130ms var(--qf-spring);
+    background-color 170ms var(--qf-ease-out),
+    border-color 170ms var(--qf-ease-out),
+    color 160ms var(--qf-ease-out),
+    box-shadow 170ms var(--qf-ease-out),
+    transform 190ms cubic-bezier(0.34, 1.45, 0.64, 1) !important;
 }
 
 html body .btn:hover:not(:disabled),
@@ -470,8 +470,8 @@ html body .reference-ui-dialog-button:hover:not(:disabled) {
   background: var(--bg-canvas);
   border-color: var(--detection);
   color: var(--text-primary);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 0 color-mix(in srgb, var(--detection) 28%, var(--border));
+  transform: translateY(-1.5px) !important;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--detection) 32%, var(--border)) !important;
 }
 
 html body .btn:active:not(:disabled),
@@ -482,10 +482,10 @@ html body .history-group-actions > button:active:not(:disabled),
 html body .reference-ui-dialog-button:active:not(:disabled) {
   background: var(--bg-subtle);
   border-color: var(--accent);
-  transform: translateY(1px) scale(0.985);
-  box-shadow: 0 0 0 transparent;
-  filter: none;
-  transition-duration: 70ms;
+  transform: translateY(1.5px) scale(0.968) !important;
+  box-shadow: 0 0 0 transparent !important;
+  filter: none !important;
+  transition-duration: 90ms !important;
 }
 
 /* Primary CTA Button (Electric Blue + Structural Plate) */
@@ -507,17 +507,17 @@ html body .nai-account-primary:hover:not(:disabled),
 html body .reference-ui-dialog-button-primary:hover:not(:disabled) {
   background: var(--accent-hover) !important;
   border-color: var(--accent) !important;
-  transform: translateY(-1px);
-  box-shadow: 0 3px 0 var(--accent-plate) !important;
+  transform: translateY(-1.5px) !important;
+  box-shadow: 0 4px 0 var(--accent-plate) !important;
 }
 html body .btn.btn-primary:active:not(:disabled),
 html body .btn.primary:active:not(:disabled),
 html body .nai-account-primary:active:not(:disabled),
 html body .reference-ui-dialog-button-primary:active:not(:disabled) {
   background: var(--accent-pressed) !important;
-  transform: translateY(1px) scale(0.988);
+  transform: translateY(2px) scale(0.972) !important;
   box-shadow: 0 0 0 transparent !important;
-  transition-duration: 70ms;
+  transition-duration: 90ms !important;
 }
 
 /* Danger Button (Signal Red) */
@@ -531,13 +531,13 @@ html.theme-dark body .btn.btn-danger {
 }
 html body .btn.btn-danger:hover:not(:disabled) {
   background: var(--danger-hover) !important;
-  transform: translateY(-1px);
-  box-shadow: 0 3px 0 var(--danger-plate) !important;
+  transform: translateY(-1.5px) !important;
+  box-shadow: 0 4px 0 var(--danger-plate) !important;
 }
 html body .btn.btn-danger:active:not(:disabled) {
-  transform: translateY(1px) scale(0.988);
+  transform: translateY(2px) scale(0.972) !important;
   box-shadow: 0 0 0 transparent !important;
-  transition-duration: 70ms;
+  transition-duration: 90ms !important;
 }
 
 /* Ghost Button */
@@ -550,13 +550,13 @@ html.theme-dark body .btn.btn-ghost {
 html body .btn.btn-ghost:hover:not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--border);
-  transform: none;
-  box-shadow: none;
+  transform: translateY(-1px) !important;
+  box-shadow: none !important;
 }
 html body .btn.btn-ghost:active:not(:disabled) {
   background: var(--bg-subtle);
-  transform: scale(0.97);
-  box-shadow: none;
+  transform: scale(0.955) !important;
+  box-shadow: none !important;
 }
 
 /* Disabled Controls */
@@ -999,8 +999,8 @@ html body .toast button { color: #fafaf8 !important; }
   .studio-shell .history-rail-control { display: flex; }
 }
 
-/* ── 10. Comprehensive App-Wide Lightweight Micro-Interactions & Perf ──── */
-/* Cover EVERY button & action surface across all 14 pages with GPU-only spring */
+/* ── 10. Comprehensive App-Wide Spring Micro-Interactions (GPU-Only) ────── */
+/* Universal button & action spring across all 14 pages */
 html body :is(
   .reference-ui-btn,
   .prompt-tool-btn,
@@ -1019,11 +1019,11 @@ html body :is(
   .reference-preset-close
 ) {
   transition:
-    background-color 110ms var(--qf-ease-out),
-    border-color 110ms var(--qf-ease-out),
-    color 110ms var(--qf-ease-out),
-    box-shadow 110ms var(--qf-ease-out),
-    transform 105ms var(--qf-spring) !important;
+    background-color 170ms var(--qf-ease-out),
+    border-color 170ms var(--qf-ease-out),
+    color 160ms var(--qf-ease-out),
+    box-shadow 170ms var(--qf-ease-out),
+    transform 190ms cubic-bezier(0.34, 1.45, 0.64, 1) !important;
 }
 
 html body :is(
@@ -1036,12 +1036,13 @@ html body :is(
   .account-opus-usage
 ):hover:not(:disabled) {
   border-color: var(--detection) !important;
-  transform: translateY(-1px);
+  transform: translateY(-1.5px) !important;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--detection) 28%, var(--border)) !important;
 }
 html body .reference-ui-btn.reference-ui-btn-primary:hover:not(:disabled) {
   background: var(--accent-hover) !important;
   border-color: var(--accent) !important;
-  box-shadow: 0 2px 0 var(--accent-plate) !important;
+  box-shadow: 0 4px 0 var(--accent-plate) !important;
 }
 
 html body :is(
@@ -1063,31 +1064,96 @@ html body :is(
   .inpaint-mask-toolbar button,
   .image-preview-controls button
 ):active:not(:disabled) {
-  transform: translateY(1px) scale(0.97) !important;
-  transition-duration: 60ms !important;
+  transform: translateY(1.5px) scale(0.955) !important;
+  transition-duration: 85ms !important;
   filter: none !important;
 }
 
-/* Dropdown triggers: tactile press + smooth 180deg chevron rotation */
-html body :is(.select-menu-trigger, .style-preset-trigger) {
+/* Segmented tabs & section pills: active spring pop + tactile click */
+html body :is(
+  .generate-mode-switcher,
+  .prompt-tabs,
+  .seed-mode-switch,
+  .quality-preset-segments,
+  .i2i-size-mode,
+  .mode-selector,
+  .nai-account-method-tabs,
+  .panel-section-nav,
+  .reference-ui-navbar,
+  .reference-preset-tabs,
+  .tavern-inspector-tabs
+) button {
   transition:
-    border-color 110ms var(--qf-ease-out),
-    box-shadow 110ms var(--qf-ease-out),
-    background-color 110ms var(--qf-ease-out),
-    transform 95ms var(--qf-spring) !important;
+    background-color 170ms var(--qf-ease-out),
+    border-color 170ms var(--qf-ease-out),
+    color 160ms var(--qf-ease-out),
+    box-shadow 170ms var(--qf-ease-out),
+    transform 190ms cubic-bezier(0.34, 1.45, 0.64, 1) !important;
 }
-html body :is(.select-menu-trigger, .style-preset-trigger):active:not(:disabled) {
-  transform: scale(0.992);
+html body :is(
+  .generate-mode-switcher,
+  .prompt-tabs,
+  .seed-mode-switch,
+  .quality-preset-segments,
+  .i2i-size-mode,
+  .mode-selector,
+  .nai-account-method-tabs,
+  .panel-section-nav,
+  .reference-ui-navbar,
+  .reference-preset-tabs,
+  .tavern-inspector-tabs
+) button:active:not(:disabled) {
+  transform: scale(0.945) !important;
+  transition-duration: 80ms !important;
 }
-html body :is(.select-menu-trigger, .style-preset-trigger) :is(.select-menu-chevron, svg:last-child) {
-  transition: transform 155ms var(--qf-spring), color 120ms ease;
+html body :is(
+  .generate-mode-switcher button.active,
+  .prompt-tabs button.active,
+  .seed-mode-switch button.active,
+  .quality-preset-segments button[aria-checked="true"],
+  .quality-preset-segments button.active,
+  .panel-section-nav button.active
+) {
+  animation: qf-pill-pop 210ms cubic-bezier(0.34, 1.45, 0.64, 1);
 }
-html body :is(.select-menu-trigger, .style-preset-trigger)[aria-expanded="true"] :is(.select-menu-chevron, svg:last-child) {
-  transform: rotate(180deg);
-  color: var(--accent);
+@keyframes qf-pill-pop {
+  from { transform: scale(0.94); }
+  to   { transform: scale(1); }
 }
 
-/* Dropdown & context-menu option rows: crisp slide + tactile click */
+/* Left nav rail active bar vertical spring pop */
+html body button.shell-rail-item.active::after {
+  animation: qf-rail-bar-in 220ms cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+@keyframes qf-rail-bar-in {
+  from { transform: scaleY(0.2); opacity: 0.4; }
+  to   { transform: scaleY(1); opacity: 1; }
+}
+
+/* Dropdown triggers & downward list expansion */
+html body :is(.select-menu-trigger, .style-preset-trigger) {
+  transition:
+    border-color 160ms var(--qf-ease-out),
+    box-shadow 160ms var(--qf-ease-out),
+    background-color 160ms var(--qf-ease-out),
+    transform 180ms cubic-bezier(0.34, 1.45, 0.64, 1) !important;
+}
+html body :is(.select-menu-trigger, .style-preset-trigger):hover:not(:disabled) {
+  transform: translateY(-0.5px);
+}
+html body :is(.select-menu-trigger, .style-preset-trigger):active:not(:disabled) {
+  transform: scale(0.985) !important;
+  transition-duration: 80ms !important;
+}
+html body :is(.select-menu-trigger, .style-preset-trigger) :is(.select-menu-chevron, svg:last-child) {
+  transition: transform 200ms cubic-bezier(0.34, 1.45, 0.64, 1), color 150ms ease !important;
+}
+html body :is(.select-menu-trigger, .style-preset-trigger)[aria-expanded="true"] :is(.select-menu-chevron, svg:last-child) {
+  transform: rotate(180deg) !important;
+  color: var(--accent) !important;
+}
+
+/* Dropdown & context-menu option rows: crisp rightward slide + tactile click */
 html body :is(
   .select-menu-option,
   .style-preset-item,
@@ -1097,9 +1163,9 @@ html body :is(
   .ac-item
 ) {
   transition:
-    background-color 90ms var(--qf-ease-out),
-    color 90ms var(--qf-ease-out),
-    transform 95ms var(--qf-spring);
+    background-color 140ms var(--qf-ease-out),
+    color 140ms var(--qf-ease-out),
+    transform 170ms cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 html body :is(
   .select-menu-option,
@@ -1108,7 +1174,7 @@ html body :is(
   .history-action-menu button,
   .ac-item
 ):hover:not(:disabled) {
-  transform: translateX(2px);
+  transform: translateX(3px) !important;
 }
 html body :is(
   .select-menu-option,
@@ -1118,57 +1184,64 @@ html body :is(
   .history-action-menu button,
   .ac-item
 ):active:not(:disabled) {
-  transform: scale(0.985);
-  transition-duration: 55ms;
+  transform: scale(0.975) !important;
+  transition-duration: 75ms !important;
 }
 
-/* Switches, checkboxes, radios & range sliders: spring thumb & tactile squish */
-html body :is(.toggle, .toggle-switch, .compact-switch, .char-enabled-toggle, .tavern-toggle, [role="switch"]) {
-  transition: background-color 140ms var(--qf-ease-out), border-color 120ms var(--qf-ease-out), transform 95ms var(--qf-spring);
+/* Accordions & AnimatedCollapse downward reveal */
+html .animated-collapse {
+  transition:
+    grid-template-rows 200ms var(--qf-ease-in),
+    opacity 150ms var(--qf-ease-in),
+    visibility 0s 200ms !important;
 }
-html body :is(.toggle, .char-enabled-toggle):active:not(:disabled) :is(span::after, .char-enabled-track > span) {
-  transform: scaleX(1.14);
+html .animated-collapse.is-open {
+  transition:
+    grid-template-rows 240ms var(--qf-spring),
+    opacity 190ms var(--qf-ease-out),
+    visibility 0s !important;
+}
+html .animated-collapse > div {
+  transform: translateY(-5px);
+  transition: transform 220ms var(--qf-spring);
+}
+html .animated-collapse.is-open > div {
+  transform: translateY(0);
+}
+
+/* Switches, checkboxes, radios & range sliders: spring bounce */
+html body :is(.toggle, .toggle-switch, .compact-switch, .char-enabled-toggle, .tavern-toggle, [role="switch"]) {
+  transition: background-color 180ms var(--qf-ease-out), border-color 150ms var(--qf-ease-out), transform 170ms cubic-bezier(0.34, 1.45, 0.64, 1) !important;
+}
+html body :is(.toggle, .char-enabled-toggle):active:not(:disabled) {
+  transform: scale(0.95) !important;
 }
 html body :is(input[type="checkbox"], input[type="radio"]) {
-  transition: transform 95ms var(--qf-spring);
+  transition: transform 180ms cubic-bezier(0.34, 1.5, 0.64, 1) !important;
 }
 html body :is(input[type="checkbox"], input[type="radio"]):active:not(:disabled) {
-  transform: scale(0.86);
+  transform: scale(0.84) !important;
+}
+html body :is(input[type="checkbox"], input[type="radio"]):checked {
+  animation: qf-check-pop 200ms cubic-bezier(0.34, 1.5, 0.64, 1);
+}
+@keyframes qf-check-pop {
+  0%   { transform: scale(0.82); }
+  65%  { transform: scale(1.12); }
+  100% { transform: scale(1); }
 }
 html body input[type="range"]::-webkit-slider-thumb {
-  transition: transform 110ms var(--qf-spring), box-shadow 110ms var(--qf-ease-out), background-color 110ms ease;
+  transition: transform 170ms cubic-bezier(0.34, 1.45, 0.64, 1), box-shadow 150ms var(--qf-ease-out), background-color 150ms ease !important;
 }
 html body input[type="range"]:hover:not(:disabled)::-webkit-slider-thumb {
-  transform: scale(1.14);
+  transform: scale(1.16);
 }
 html body input[type="range"]:active:not(:disabled)::-webkit-slider-thumb {
-  transform: scale(1.22);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--detection) 22%, transparent);
+  transform: scale(1.26);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--detection) 24%, transparent);
 }
 
-/* Segmented controls & tabs across subpages (Reference Presets, Tavern, Section Nav) */
-html body :is(
-  .reference-ui-navbar button,
-  .reference-preset-tabs button,
-  .tavern-inspector-tabs button,
-  .account-details-toggle
-) {
-  transition:
-    background-color 120ms var(--qf-ease-out),
-    border-color 120ms var(--qf-ease-out),
-    color 120ms var(--qf-ease-out),
-    transform 95ms var(--qf-spring);
-}
-html body :is(
-  .reference-ui-navbar button,
-  .reference-preset-tabs button,
-  .tavern-inspector-tabs button,
-  .account-details-toggle
-):active:not(:disabled) {
-  transform: scale(0.975);
-}
-
-/* Cards, gallery tiles & dropzones across all 14 pages: crisp lift + press */
+/* Cards, gallery tiles & dropzones across all 14 pages: spring lift + image zoom + tactile press */
 .studio-shell :is(
   .works-tile,
   .aitag-card,
@@ -1181,9 +1254,9 @@ html body :is(
   .prompt-codex-entry
 ) {
   transition:
-    border-color 130ms var(--qf-ease-out),
-    transform 135ms var(--qf-spring),
-    box-shadow 130ms var(--qf-ease-out);
+    border-color 170ms var(--qf-ease-out),
+    transform 200ms var(--qf-spring),
+    box-shadow 180ms var(--qf-ease-out) !important;
 }
 .studio-shell :is(
   .works-tile,
@@ -1197,7 +1270,8 @@ html body :is(
   .prompt-codex-entry
 ):hover {
   border-color: var(--detection) !important;
-  transform: translateY(-2px);
+  transform: translateY(-3px) !important;
+  box-shadow: var(--shadow-md) !important;
 }
 .studio-shell :is(
   .works-tile,
@@ -1209,20 +1283,29 @@ html body :is(
   .tavern-library-card,
   .redraw-project-card
 ):active {
-  transform: translateY(0) scale(0.992);
-  transition-duration: 60ms;
+  transform: translateY(0) scale(0.985) !important;
+  transition-duration: 85ms !important;
 }
 
-/* Page & settings view transitions: crisp 135ms directional reveal */
+/* Page & settings view transitions: crisp 200ms directional spring reveal */
 html .studio-shell .persistent-tools-view.is-active:not([data-view-scope="tab:works"]) > * {
-  animation: qf-surface-in 135ms var(--qf-spring);
+  animation: qf-surface-in 200ms var(--qf-spring);
 }
 .studio-shell .settings-content > * {
-  animation: qf-surface-in 135ms var(--qf-spring);
+  animation: qf-surface-in 200ms var(--qf-spring);
 }
 @keyframes qf-surface-in {
-  from { opacity: 0; transform: translateY(3px); }
+  from { opacity: 0; transform: translateY(7px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Toast entrance */
+html body .toast {
+  animation: qf-toast-in 220ms cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+@keyframes qf-toast-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* Lightweight GPU & scroll containment: kill ambient blurs & skip offscreen layout */
@@ -1239,7 +1322,7 @@ body::after {
 }
 
 /* Never animate canvas / drawing / drag-resizer coordinates, and honor reduced motion */
-html body :is(canvas, .inpaint-base-img, .inpaint-cursor, .inpaint-region-overlay, .inpaint-mask-canvas, .ws-resizer, .workbench-dock-resizer, .image-preview-stage > img, .image-preview-transform, .char-position-marker) {
+html body :is(canvas, .inpaint-base-img, .inpaint-cursor, .inpaint-region-overlay, .inpaint-mask-canvas, .ws-resizer, .workbench-dock-resizer, .shell-rail-resizer, .image-preview-stage > img, .image-preview-transform, .char-position-marker) {
   transition: none !important;
 }
 html.motion-reduced *,

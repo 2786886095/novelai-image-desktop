@@ -211,7 +211,7 @@ html body button.shell-icon-btn:disabled { opacity: .45; cursor: default; }
   width: var(--shell-rail-collapsed-w);
   min-height: 0;
   z-index: calc(var(--z-sticky) + 4);
-  transition: width 165ms var(--qf-spring);
+  transition: width 220ms var(--qf-spring);
 }
 .shell-rail-slot.is-docked {
   width: var(--shell-rail-w);
@@ -230,9 +230,22 @@ html body button.shell-icon-btn:disabled { opacity: .45; cursor: default; }
   border-right: 1px solid var(--border);
   overflow: hidden;
   transition:
-    width 165ms var(--qf-spring),
-    background-color 140ms ease,
-    border-color 140ms ease;
+    width 220ms var(--qf-spring),
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+.shell-rail-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 4;
+  transition: background-color 140ms ease;
+}
+.shell-rail-resizer:hover {
+  background: color-mix(in srgb, var(--detection, var(--accent)) 55%, transparent);
 }
 .shell-rail.is-open {
   width: var(--shell-rail-w);
@@ -426,13 +439,13 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
     minmax(220px, 1fr)
     var(--ws-right-handle, 12px)
     var(--ws-right, 0px);
-  transition: grid-template-columns 165ms var(--qf-spring);
+  transition: grid-template-columns 220ms var(--qf-spring);
 }
 .studio-shell .shell-main > .workspace[data-left-collapsed="true"] {
-  --ws-handle: 0px;
+  --ws-handle: 8px;
 }
 .studio-shell .shell-main > .workspace[data-history-collapsed="true"] {
-  --ws-right-handle: 32px;
+  --ws-right-handle: 40px;
 }
 .studio-shell .shell-main > .workspace[data-history-resizing="true"],
 .studio-shell .shell-main > .workspace[data-left-resizing="true"] {
@@ -444,20 +457,43 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
 .studio-shell .status-bar { flex: none; }
 .studio-shell .app-notice-slot:empty { display: none; }
 
-/* Left Parameter Panel: Inline + Rightward Expand / Leftward Collapse */
+/* ── Symmetrical Left & Right Dockable Panels + Vertical Dock Strips ───── */
 .studio-shell .left-panel {
+  position: relative;
+  overflow: hidden;
   transition:
-    transform 240ms var(--qf-spring),
-    opacity 190ms var(--qf-ease-out),
-    box-shadow 220ms var(--qf-spring),
-    border-color 180ms ease;
-  transform-origin: left center;
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms var(--qf-spring);
 }
-.studio-shell .left-panel.is-docked.is-collapsed {
+.studio-shell .left-panel-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 280px;
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 160ms var(--qf-ease-out), transform 220ms var(--qf-spring);
+}
+.studio-shell .left-panel.is-collapsed > .left-panel-inner {
   opacity: 0;
-  transform: translateX(-20px);
+  transform: translateX(-16px);
   pointer-events: none;
-  border-width: 0;
+}
+.studio-shell .left-panel-mode-stage {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  animation: qf-mode-stage-in 190ms var(--qf-spring);
+}
+@keyframes qf-mode-stage-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .studio-shell .workspace[data-left-collapsed="true"] .ws-resizer.left {
   width: 0;
@@ -466,34 +502,90 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
   overflow: hidden;
 }
 
-/* Reopen tab when Left Parameter Panel is collapsed */
-html body button.left-panel-reopen-tab {
-  position: absolute;
-  left: 4px;
-  top: 12px;
-  z-index: calc(var(--z-raised) + 4);
-  display: inline-flex !important;
-  align-items: center;
-  gap: 4px;
-  height: 30px;
-  padding: 0 10px 0 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  background: var(--bg-canvas);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-md);
-  font-size: 12px;
+/* Collapsed Left Dock Strip (symmetrical with Right Dock Strip) */
+.studio-shell .left-panel.left-dock-strip {
+  padding: 0 !important;
   cursor: pointer;
+}
+.studio-shell .left-panel.left-dock-strip:hover {
+  border-color: var(--detection, var(--accent)) !important;
+}
+.left-dock-strip-face {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  gap: 8px;
+  background: var(--bg-panel);
   animation: qf-slide-in-left 200ms var(--qf-spring);
 }
-html body button.left-panel-reopen-tab .ui-icon { width: 15px; height: 15px; color: var(--accent); }
-html body button.left-panel-reopen-tab:hover {
-  border-color: var(--detection, var(--accent));
-  transform: translateX(2px);
+.left-dock-expand-btn {
+  width: 26px !important;
+  height: 26px !important;
+  flex: none;
 }
-html body button.left-panel-reopen-tab:active { transform: scale(0.96); }
 
-/* Right History Panel: Inline Right Column with Left-Edge Splitter when Open */
+/* Shared Vertical Dock Tab inside Left & Right Collapsed Dock Strips */
+html body button.dock-strip-tab {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px;
+  width: 28px;
+  padding: 10px 2px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color 160ms var(--qf-ease-out),
+    border-color 160ms var(--qf-ease-out),
+    color 160ms var(--qf-ease-out),
+    transform 160ms var(--qf-spring) !important;
+}
+html body button.dock-strip-tab:hover {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+html body button.dock-strip-tab:active {
+  transform: scale(0.95) !important;
+}
+.dock-strip-icon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+.dock-strip-label {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 2px;
+  font-size: 11.5px;
+  line-height: 1.15;
+  white-space: nowrap;
+  user-select: none;
+}
+.dock-strip-badge {
+  font-style: normal;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+  font-size: 10.5px;
+  line-height: 16px;
+  min-width: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  text-align: center;
+}
+
+/* Right History Panel: Docked Right Strip (collapsed) <-> Docked Right Panel with Left-Edge Splitter (open) */
 .studio-shell .history-rail.is-docked {
   min-width: 0;
   min-height: 0;
@@ -505,10 +597,10 @@ html body button.left-panel-reopen-tab:active { transform: scale(0.96); }
   height: 100%;
   transform: translateX(0);
   opacity: 1;
-  transition: transform 240ms var(--qf-spring), opacity 180ms var(--qf-ease-out);
+  transition: transform 220ms var(--qf-spring), opacity 170ms var(--qf-ease-out);
 }
 .studio-shell .history-rail.is-docked.is-collapsed > .history-panel {
-  transform: translateX(24px);
+  transform: translateX(20px);
   opacity: 0;
 }
 
@@ -516,8 +608,28 @@ html body button.left-panel-reopen-tab:active { transform: scale(0.96); }
   position: relative;
   z-index: calc(var(--z-raised) + 3);
 }
-.studio-shell .history-rail-control.is-collapsed {
-  cursor: default !important;
+.studio-shell .history-rail-control.right-dock-strip {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-left: 6px;
+  padding: 8px 0;
+  background: var(--bg-panel) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg);
+  cursor: pointer !important;
+  transition: border-color 160ms var(--qf-ease-out), background-color 160ms ease;
+}
+.studio-shell .history-rail-control.right-dock-strip:hover {
+  border-color: var(--detection, var(--accent)) !important;
+}
+.studio-shell .history-rail-control.right-dock-strip .history-rail-toggle {
+  position: static !important;
+  inset: auto !important;
+  margin: 0 !important;
+  flex: none;
 }
 .studio-shell .history-rail-control.is-collapsed .ws-resizer-grip {
   display: none !important;
@@ -595,34 +707,34 @@ html body button.left-panel-reopen-tab:active { transform: scale(0.96); }
 .studio-shell .settings-as-page .settings-nav button { justify-content: flex-start; text-align: left; }
 
 /* ── Polished Left Parameter Column (.left-panel) ──────────────────────── */
-.studio-shell .left-panel > .panel-head {
+.studio-shell .left-panel .panel-head {
   min-height: 44px;
   padding: 8px 10px 8px 12px;
   gap: 9px;
   align-items: center;
 }
-.studio-shell .left-panel > .panel-head > span {
+.studio-shell .left-panel .panel-head > span {
   width: 26px;
   height: 26px;
   flex: none;
   border-radius: var(--radius-sm);
 }
-.studio-shell .left-panel > .panel-head > span .ui-icon { width: 15px; height: 15px; }
-.studio-shell .left-panel > .panel-head > .panel-head-copy {
+.studio-shell .left-panel .panel-head > span .ui-icon { width: 15px; height: 15px; }
+.studio-shell .left-panel .panel-head > .panel-head-copy {
   display: flex;
   flex-direction: column;
   gap: 1px;
   flex: 1 1 auto;
   min-width: 0;
 }
-.studio-shell .left-panel > .panel-head strong {
+.studio-shell .left-panel .panel-head strong {
   font-size: 13.5px;
   line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.studio-shell .left-panel > .panel-head small {
+.studio-shell .left-panel .panel-head small {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -631,7 +743,7 @@ html body button.left-panel-reopen-tab:active { transform: scale(0.96); }
   line-height: 1.25;
   color: var(--text-muted);
 }
-.studio-shell .left-panel > .panel-head > .panel-head-actions {
+.studio-shell .left-panel .panel-head > .panel-head-actions {
   display: inline-flex !important;
   flex-direction: row !important;
   align-items: center;
@@ -864,7 +976,7 @@ html body .studio-shell button.prompt-advanced-button {
   min-width: 0;
 }
 
-/* Docked Inline Sub-Panel (expands left -> right beside parameter column, never covers canvas) */
+/* Docked Inline Sub-Panel (expands left -> right beside parameter column, slides back left on close) */
 .workbench-dock-shell.is-docked {
   position: relative;
   flex: none;
@@ -878,30 +990,35 @@ html body .studio-shell button.prompt-advanced-button {
   transform: translateX(0);
   overflow: hidden;
   transition:
-    width 165ms var(--qf-spring),
-    margin-right 165ms var(--qf-spring),
-    padding 165ms var(--qf-spring),
-    opacity 135ms var(--qf-ease-out),
-    transform 165ms var(--qf-spring),
-    border-color 140ms ease;
+    width 220ms var(--qf-spring),
+    margin-right 220ms var(--qf-spring),
+    padding 220ms var(--qf-spring),
+    opacity 170ms var(--qf-ease-out),
+    transform 220ms var(--qf-spring),
+    border-color 150ms ease;
 }
+.workbench-dock-shell.is-docked.is-open {
+  animation: qf-dock-expand-right 220ms var(--qf-spring) both;
+}
+.workbench-dock-shell.is-docked.is-closing,
 .workbench-dock-shell.is-docked.is-closed {
   width: 0 !important;
   margin-right: 0 !important;
   padding-inline: 0 !important;
   border-width: 0 !important;
   opacity: 0;
-  transform: translateX(-10px);
+  transform: translateX(-16px);
   pointer-events: none;
   transition:
-    width 125ms var(--qf-ease-in),
-    margin-right 125ms var(--qf-ease-in),
-    padding 125ms var(--qf-ease-in),
-    opacity 100ms linear,
-    transform 125ms var(--qf-ease-in);
+    width 175ms var(--qf-ease-in),
+    margin-right 175ms var(--qf-ease-in),
+    padding 175ms var(--qf-ease-in),
+    opacity 140ms linear,
+    transform 175ms var(--qf-ease-in);
 }
 .workbench-dock-shell.is-docked.is-resizing {
   transition: none !important;
+  animation: none !important;
 }
 
 .workbench-dock {

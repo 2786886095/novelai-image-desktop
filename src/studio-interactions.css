@@ -1,7 +1,7 @@
 /* Interaction vocabulary. Forms stay mounted; drawing and zoom never interpolate. */
 :root {--interaction-fast:140ms;--interaction-base:200ms;--interaction-enter:cubic-bezier(.2,.8,.2,1);--interaction-exit:cubic-bezier(.4,0,1,1);}
 html body :is(button,[role=button],summary):not(.ws-resizer):not(.works-thumbnail):not(.works-preview-open) {
- transition:background-color var(--interaction-fast) var(--interaction-enter),border-color var(--interaction-fast) var(--interaction-enter),color var(--interaction-fast) var(--interaction-enter),box-shadow var(--interaction-fast) var(--interaction-enter),opacity var(--interaction-fast) var(--interaction-enter);
+ transition:background-color var(--interaction-fast) var(--interaction-enter),border-color var(--interaction-fast) var(--interaction-enter),color var(--interaction-fast) var(--interaction-enter),box-shadow var(--interaction-fast) var(--interaction-enter),opacity var(--interaction-fast) var(--interaction-enter),transform 180ms cubic-bezier(.22,1,.36,1);
 }
 html body :is(button,[role=button],summary):focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
 html body :is(.btn,.compact-icon-button,.image-favorite-action,.menu-action):active:not(:disabled) {filter:brightness(.95);}

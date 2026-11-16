@@ -2,15 +2,30 @@ import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { useAppStore } from '../store';
 import { historyRailText, HISTORY_MIN_WIDTH, HISTORY_MAX_WIDTH, HISTORY_COLLAPSE_AT } from '../workspace-history';
 
-/** When collapsed, renders only the top-right expand button (no drag-to-open
- *  bar on the empty right edge). When expanded, sits on the LEFT border of the
- *  opened right history panel as its zero-latency width-resize & snap-collapse splitter. */
+function dockStripShortLabel(language: unknown): string {
+  const map: Record<string, string> = {
+    'zh-CN': '历史与素材',
+    'zh-TW': '歷史與素材',
+    'en-US': 'History',
+    'ja-JP': '履歴と素材',
+    'ko-KR': '기록·소재',
+  };
+  return map[String(language)] ?? map['zh-CN'];
+}
+
+/** Right Dockable Panel Controller:
+ *  - When collapsed: renders as a symmetrical 36px Right Dock Strip with a
+ *    clickable vertical dock tab (no stray resize bar on the right edge).
+ *  - When expanded: sits on the LEFT border of the opened right panel as its
+ *    zero-latency width-resize & snap-dock splitter. */
 export function HistoryRailControls() {
   const collapsed = useAppStore(s => s.wsHistoryCollapsed);
   const width = useAppStore(s => s.wsRightWidth);
   const activeTab = useAppStore(s => s.activeTab);
   const language = useAppStore(s => s.settings?.language);
+  const historyCount = useAppStore(s => (s as { history?: unknown[] }).history?.length ?? 0);
   const text = historyRailText(language);
+  const shortLabel = dockStripShortLabel(language);
   const drag = useRef<{ x: number; width: number } | null>(null);
   const cancel = () => {
     drag.current = null;
@@ -22,13 +37,13 @@ export function HistoryRailControls() {
   }, [activeTab, collapsed]);
   const modified = !collapsed && width !== 340;
   return <div
-    className={`ws-resizer right history-rail-control${collapsed ? ' is-collapsed' : ' is-open'}`}
+    className={`ws-resizer right history-rail-control${collapsed ? ' is-collapsed dock-strip right-dock-strip' : ' is-open'}`}
     data-collapsed={collapsed ? 'true' : 'false'}
     data-modified={modified ? 'true' : 'false'}
     role="separator" tabIndex={0} aria-orientation="vertical"
     aria-label={text.resize} aria-controls="history-rail-pane"
     aria-valuemin={0} aria-valuemax={HISTORY_MAX_WIDTH}
-    aria-valuenow={collapsed ? 0 : width} title={collapsed ? undefined : text.resize}
+    aria-valuenow={collapsed ? 0 : width} title={collapsed ? text.show : text.resize}
     onPointerDown={event => {
       if (collapsed || event.button !== 0) return;
       event.preventDefault();
@@ -82,6 +97,19 @@ export function HistoryRailControls() {
         <polyline points={collapsed ? '12.5,5 7.5,10 12.5,15' : '7.5,5 12.5,10 7.5,15'} />
       </svg>
     </button>
+    {collapsed && (
+      <button
+        type="button"
+        className="dock-strip-tab"
+        title={text.show}
+        aria-label={text.show}
+        onPointerDown={event => event.stopPropagation()}
+        onClick={() => useAppStore.getState().setWsHistoryCollapsed(false)}
+      >
+        <span className="dock-strip-label">{shortLabel}</span>
+        {historyCount > 0 && <em className="dock-strip-badge">{historyCount}</em>}
+      </button>
+    )}
     <span className="ws-resizer-grip" />
     {!collapsed && (
       <button
