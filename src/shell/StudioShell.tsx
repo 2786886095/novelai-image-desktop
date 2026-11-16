@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import clsx from "clsx";
 import { AnimatedCollapse } from "../components/CharacterEditing";
 import { disclosureAttributes, useDisclosurePresence } from "../components/disclosure-motion";
@@ -47,7 +47,7 @@ export function toggleRail() {
 export function navigateTo(tab: ActiveTab) {
   const state = useAppStore.getState();
   if (state.showSettings) state.setShowSettings(false);
-  startTransition(() => state.setActiveTab(tab));
+  if (state.activeTab !== tab) state.setActiveTab(tab);
 }
 export function openTool(tool: ToolEntryId) {
   navigateTo("tools");

@@ -1,10 +1,10 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { useAppStore } from '../store';
-import { historyRailText, HISTORY_MIN_WIDTH, HISTORY_MAX_WIDTH } from '../workspace-history';
+import { historyRailText, HISTORY_MIN_WIDTH, HISTORY_MAX_WIDTH, HISTORY_COLLAPSE_AT } from '../workspace-history';
 
 /** When collapsed, renders only the top-right expand button (no drag-to-open
  *  bar on the empty right edge). When expanded, sits on the LEFT border of the
- *  opened right history panel as its width-resize splitter. */
+ *  opened right history panel as its zero-latency width-resize & snap-collapse splitter. */
 export function HistoryRailControls() {
   const collapsed = useAppStore(s => s.wsHistoryCollapsed);
   const width = useAppStore(s => s.wsRightWidth);
@@ -38,7 +38,8 @@ export function HistoryRailControls() {
     }}
     onPointerMove={event => {
       if (!drag.current) return;
-      const next = Math.max(HISTORY_MIN_WIDTH, Math.min(HISTORY_MAX_WIDTH, drag.current.width + drag.current.x - event.clientX));
+      const raw = drag.current.width + drag.current.x - event.clientX;
+      const next = raw <= HISTORY_COLLAPSE_AT ? 0 : Math.max(HISTORY_MIN_WIDTH, Math.min(HISTORY_MAX_WIDTH, raw));
       useAppStore.getState().setWsHistoryDragWidth(next);
     }}
     onPointerUp={event => {
@@ -65,8 +66,8 @@ export function HistoryRailControls() {
         state.saveWsWidths();
       } else if (event.key === 'ArrowRight' && !state.wsHistoryCollapsed) {
         event.preventDefault();
-        state.setWsWidth('right', Math.max(HISTORY_MIN_WIDTH, state.wsRightWidth - 24));
-        state.saveWsWidths();
+        if (state.wsRightWidth <= HISTORY_MIN_WIDTH) state.setWsHistoryCollapsed(true);
+        else { state.setWsWidth('right', state.wsRightWidth - 24); state.saveWsWidths(); }
       } else if (event.key === 'Escape') { event.preventDefault(); cancel(); }
     }}
   >

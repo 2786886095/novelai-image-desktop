@@ -999,6 +999,245 @@ html body .toast button { color: #fafaf8 !important; }
   .studio-shell .history-rail-control { display: flex; }
 }
 
+/* ── 10. Comprehensive App-Wide Lightweight Micro-Interactions & Perf ──── */
+/* Cover EVERY button & action surface across all 14 pages with GPU-only spring */
+html body :is(
+  .reference-ui-btn,
+  .prompt-tool-btn,
+  .prompt-toolbar-toggle,
+  .compact-icon-button,
+  .aitag-pagination button,
+  .tavern-icon-button,
+  .tavern-starter-grid > button,
+  .tag-comic-steps button,
+  .comic-step-btn,
+  .account-mini button,
+  .account-opus-usage,
+  .vibe-save-preset,
+  .vibe-remove,
+  .modal > header button:not(.btn),
+  .reference-preset-close
+) {
+  transition:
+    background-color 110ms var(--qf-ease-out),
+    border-color 110ms var(--qf-ease-out),
+    color 110ms var(--qf-ease-out),
+    box-shadow 110ms var(--qf-ease-out),
+    transform 105ms var(--qf-spring) !important;
+}
+
+html body :is(
+  .reference-ui-btn,
+  .aitag-pagination button,
+  .tavern-starter-grid > button,
+  .tag-comic-steps button,
+  .comic-step-btn,
+  .account-mini button,
+  .account-opus-usage
+):hover:not(:disabled) {
+  border-color: var(--detection) !important;
+  transform: translateY(-1px);
+}
+html body .reference-ui-btn.reference-ui-btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 2px 0 var(--accent-plate) !important;
+}
+
+html body :is(
+  .reference-ui-btn,
+  .prompt-tool-btn,
+  .prompt-toolbar-toggle,
+  .compact-icon-button,
+  .aitag-pagination button,
+  .tavern-icon-button,
+  .tavern-starter-grid > button,
+  .tag-comic-steps button,
+  .comic-step-btn,
+  .account-mini button,
+  .account-opus-usage,
+  .vibe-save-preset,
+  .vibe-remove,
+  .modal > header button:not(.btn),
+  .reference-preset-close,
+  .inpaint-mask-toolbar button,
+  .image-preview-controls button
+):active:not(:disabled) {
+  transform: translateY(1px) scale(0.97) !important;
+  transition-duration: 60ms !important;
+  filter: none !important;
+}
+
+/* Dropdown triggers: tactile press + smooth 180deg chevron rotation */
+html body :is(.select-menu-trigger, .style-preset-trigger) {
+  transition:
+    border-color 110ms var(--qf-ease-out),
+    box-shadow 110ms var(--qf-ease-out),
+    background-color 110ms var(--qf-ease-out),
+    transform 95ms var(--qf-spring) !important;
+}
+html body :is(.select-menu-trigger, .style-preset-trigger):active:not(:disabled) {
+  transform: scale(0.992);
+}
+html body :is(.select-menu-trigger, .style-preset-trigger) :is(.select-menu-chevron, svg:last-child) {
+  transition: transform 155ms var(--qf-spring), color 120ms ease;
+}
+html body :is(.select-menu-trigger, .style-preset-trigger)[aria-expanded="true"] :is(.select-menu-chevron, svg:last-child) {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+
+/* Dropdown & context-menu option rows: crisp slide + tactile click */
+html body :is(
+  .select-menu-option,
+  .style-preset-item,
+  .menu-pop button,
+  .context-menu button,
+  .history-action-menu button,
+  .ac-item
+) {
+  transition:
+    background-color 90ms var(--qf-ease-out),
+    color 90ms var(--qf-ease-out),
+    transform 95ms var(--qf-spring);
+}
+html body :is(
+  .select-menu-option,
+  .menu-pop button,
+  .context-menu button,
+  .history-action-menu button,
+  .ac-item
+):hover:not(:disabled) {
+  transform: translateX(2px);
+}
+html body :is(
+  .select-menu-option,
+  .style-preset-item,
+  .menu-pop button,
+  .context-menu button,
+  .history-action-menu button,
+  .ac-item
+):active:not(:disabled) {
+  transform: scale(0.985);
+  transition-duration: 55ms;
+}
+
+/* Switches, checkboxes, radios & range sliders: spring thumb & tactile squish */
+html body :is(.toggle, .toggle-switch, .compact-switch, .char-enabled-toggle, .tavern-toggle, [role="switch"]) {
+  transition: background-color 140ms var(--qf-ease-out), border-color 120ms var(--qf-ease-out), transform 95ms var(--qf-spring);
+}
+html body :is(.toggle, .char-enabled-toggle):active:not(:disabled) :is(span::after, .char-enabled-track > span) {
+  transform: scaleX(1.14);
+}
+html body :is(input[type="checkbox"], input[type="radio"]) {
+  transition: transform 95ms var(--qf-spring);
+}
+html body :is(input[type="checkbox"], input[type="radio"]):active:not(:disabled) {
+  transform: scale(0.86);
+}
+html body input[type="range"]::-webkit-slider-thumb {
+  transition: transform 110ms var(--qf-spring), box-shadow 110ms var(--qf-ease-out), background-color 110ms ease;
+}
+html body input[type="range"]:hover:not(:disabled)::-webkit-slider-thumb {
+  transform: scale(1.14);
+}
+html body input[type="range"]:active:not(:disabled)::-webkit-slider-thumb {
+  transform: scale(1.22);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--detection) 22%, transparent);
+}
+
+/* Segmented controls & tabs across subpages (Reference Presets, Tavern, Section Nav) */
+html body :is(
+  .reference-ui-navbar button,
+  .reference-preset-tabs button,
+  .tavern-inspector-tabs button,
+  .account-details-toggle
+) {
+  transition:
+    background-color 120ms var(--qf-ease-out),
+    border-color 120ms var(--qf-ease-out),
+    color 120ms var(--qf-ease-out),
+    transform 95ms var(--qf-spring);
+}
+html body :is(
+  .reference-ui-navbar button,
+  .reference-preset-tabs button,
+  .tavern-inspector-tabs button,
+  .account-details-toggle
+):active:not(:disabled) {
+  transform: scale(0.975);
+}
+
+/* Cards, gallery tiles & dropzones across all 14 pages: crisp lift + press */
+.studio-shell :is(
+  .works-tile,
+  .aitag-card,
+  .reference-catalog-card,
+  .reference-preset-card,
+  .style-card,
+  .artist-lab-mode-card,
+  .tavern-library-card,
+  .redraw-project-card,
+  .prompt-codex-entry
+) {
+  transition:
+    border-color 130ms var(--qf-ease-out),
+    transform 135ms var(--qf-spring),
+    box-shadow 130ms var(--qf-ease-out);
+}
+.studio-shell :is(
+  .works-tile,
+  .aitag-card,
+  .reference-catalog-card,
+  .reference-preset-card,
+  .style-card,
+  .artist-lab-mode-card,
+  .tavern-library-card,
+  .redraw-project-card,
+  .prompt-codex-entry
+):hover {
+  border-color: var(--detection) !important;
+  transform: translateY(-2px);
+}
+.studio-shell :is(
+  .works-tile,
+  .aitag-card,
+  .reference-catalog-card,
+  .reference-preset-card,
+  .style-card,
+  .artist-lab-mode-card,
+  .tavern-library-card,
+  .redraw-project-card
+):active {
+  transform: translateY(0) scale(0.992);
+  transition-duration: 60ms;
+}
+
+/* Page & settings view transitions: crisp 135ms directional reveal */
+html .studio-shell .persistent-tools-view.is-active:not([data-view-scope="tab:works"]) > * {
+  animation: qf-surface-in 135ms var(--qf-spring);
+}
+.studio-shell .settings-content > * {
+  animation: qf-surface-in 135ms var(--qf-spring);
+}
+@keyframes qf-surface-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Lightweight GPU & scroll containment: kill ambient blurs & skip offscreen layout */
+.app-shell::before,
+.app-shell::after,
+body::before,
+body::after {
+  display: none !important;
+  filter: none !important;
+}
+.studio-shell :is(.reference-catalog-card, .aitag-card, .prompt-codex-entry) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 280px;
+}
+
 /* Never animate canvas / drawing / drag-resizer coordinates, and honor reduced motion */
 html body :is(canvas, .inpaint-base-img, .inpaint-cursor, .inpaint-region-overlay, .inpaint-mask-canvas, .ws-resizer, .workbench-dock-resizer, .image-preview-stage > img, .image-preview-transform, .char-position-marker) {
   transition: none !important;

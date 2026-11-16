@@ -211,7 +211,7 @@ html body button.shell-icon-btn:disabled { opacity: .45; cursor: default; }
   width: var(--shell-rail-collapsed-w);
   min-height: 0;
   z-index: calc(var(--z-sticky) + 4);
-  transition: width 240ms var(--qf-spring);
+  transition: width 165ms var(--qf-spring);
 }
 .shell-rail-slot.is-docked {
   width: var(--shell-rail-w);
@@ -230,10 +230,9 @@ html body button.shell-icon-btn:disabled { opacity: .45; cursor: default; }
   border-right: 1px solid var(--border);
   overflow: hidden;
   transition:
-    width 240ms var(--qf-spring),
-    box-shadow 220ms var(--qf-spring),
-    background-color 180ms ease,
-    border-color 180ms ease;
+    width 165ms var(--qf-spring),
+    background-color 140ms ease,
+    border-color 140ms ease;
 }
 .shell-rail.is-open {
   width: var(--shell-rail-w);
@@ -424,10 +423,10 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
   grid-template-columns:
     var(--ws-left, 380px)
     var(--ws-handle, 12px)
-    minmax(260px, 1fr)
+    minmax(220px, 1fr)
     var(--ws-right-handle, 12px)
     var(--ws-right, 0px);
-  transition: grid-template-columns 240ms var(--qf-spring);
+  transition: grid-template-columns 165ms var(--qf-spring);
 }
 .studio-shell .shell-main > .workspace[data-left-collapsed="true"] {
   --ws-handle: 0px;
@@ -435,8 +434,9 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
 .studio-shell .shell-main > .workspace[data-history-collapsed="true"] {
   --ws-right-handle: 32px;
 }
-.studio-shell .shell-main > .workspace[data-history-resizing="true"] {
-  transition: none;
+.studio-shell .shell-main > .workspace[data-history-resizing="true"],
+.studio-shell .shell-main > .workspace[data-left-resizing="true"] {
+  transition: none !important;
 }
 .studio-shell .persistent-workbench-view {
   position: relative;
@@ -863,59 +863,45 @@ html body .studio-shell button.prompt-advanced-button {
   min-height: 0;
   min-width: 0;
 }
-.workbench-dock-shell.is-closed {
-  display: none;
-}
 
-/* Floating Drawer Mode (default: slides left -> right over canvas edge) */
-.workbench-dock-shell.is-floating {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: min(var(--subpanel-w, 376px), calc(100% - 20px));
-  z-index: calc(var(--z-raised) + 2);
-  padding: 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  background: var(--bg-panel);
-  box-shadow: var(--shadow-lg);
-}
-.workbench-dock-shell.is-floating.is-open {
-  animation: qf-panel-slide-right 230ms var(--qf-spring) both;
-}
-.workbench-dock-shell.is-floating.is-leaving {
-  pointer-events: none;
-  animation: qf-panel-exit-left 175ms var(--qf-ease-in) forwards;
-}
-
-/* Docked Inline Mode (pinned beside parameter column) */
+/* Docked Inline Sub-Panel (expands left -> right beside parameter column, never covers canvas) */
 .workbench-dock-shell.is-docked {
   position: relative;
   flex: none;
-  width: var(--subpanel-w, 376px);
+  width: clamp(280px, var(--subpanel-w, 356px), 42%);
   margin-right: 10px;
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-panel);
+  opacity: 1;
+  transform: translateX(0);
+  overflow: hidden;
+  transition:
+    width 165ms var(--qf-spring),
+    margin-right 165ms var(--qf-spring),
+    padding 165ms var(--qf-spring),
+    opacity 135ms var(--qf-ease-out),
+    transform 165ms var(--qf-spring),
+    border-color 140ms ease;
 }
-.workbench-dock-shell.is-docked.is-open {
-  animation: qf-dock-expand-right 230ms var(--qf-spring) both;
-}
-.workbench-dock-shell.is-docked.is-leaving {
+.workbench-dock-shell.is-docked.is-closed {
+  width: 0 !important;
+  margin-right: 0 !important;
+  padding-inline: 0 !important;
+  border-width: 0 !important;
+  opacity: 0;
+  transform: translateX(-10px);
   pointer-events: none;
-  animation: qf-dock-collapse-left 175ms var(--qf-ease-in) forwards;
+  transition:
+    width 125ms var(--qf-ease-in),
+    margin-right 125ms var(--qf-ease-in),
+    padding 125ms var(--qf-ease-in),
+    opacity 100ms linear,
+    transform 125ms var(--qf-ease-in);
 }
-
-.workbench-dock-bar {
-  position: absolute;
-  top: 21px;
-  right: 58px;
-  z-index: 6;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.workbench-dock-shell.is-docked.is-resizing {
+  transition: none !important;
 }
 
 .workbench-dock {
@@ -923,20 +909,20 @@ html body .studio-shell button.prompt-advanced-button {
   flex-direction: column;
   gap: 10px;
   flex: 1 1 auto;
+  min-width: 260px;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
 .workbench-dock:empty { display: none; }
-.workbench-dock-ghost { pointer-events: none; }
 .workbench-dock-slot { display: block; min-width: 0; }
 
 .workbench-dock-resizer {
   position: absolute;
   top: 8px;
   bottom: 8px;
-  right: -6px;
+  right: 0;
   width: 10px;
   cursor: col-resize;
   display: grid;
@@ -948,8 +934,8 @@ html body .studio-shell button.prompt-advanced-button {
   height: 32px;
   border-radius: 2px;
   background: var(--border-strong);
-  opacity: 0;
-  transition: opacity 140ms ease, background-color 140ms ease;
+  opacity: 0.45;
+  transition: opacity 120ms ease, background-color 120ms ease;
 }
 .workbench-dock-resizer:hover .ws-resizer-grip {
   opacity: 1;
@@ -1046,13 +1032,13 @@ html body .studio-shell button.prompt-advanced-button {
   }
 }
 
-@media (max-width: 1240px) {
+@media (max-width: 900px) {
   .workbench-dock-shell.is-docked {
     position: absolute;
     left: 0;
     top: 0;
     bottom: 0;
-    width: min(var(--subpanel-w, 376px), calc(100% - 20px));
+    width: min(var(--subpanel-w, 356px), calc(100% - 20px));
     margin: 0;
     z-index: calc(var(--z-raised) + 2);
     box-shadow: var(--shadow-lg);

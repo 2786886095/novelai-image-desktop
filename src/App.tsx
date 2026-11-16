@@ -7411,6 +7411,13 @@ function WorkspaceResizer({ edge }: { edge: "left" | "right" }) {
     saveWsWidths();
   };
 
+  const setWorkspaceResizing = (active: boolean) => {
+    const ws = document.querySelector<HTMLElement>(".studio-shell .workspace");
+    if (!ws) return;
+    if (active) ws.dataset.leftResizing = "true";
+    else delete ws.dataset.leftResizing;
+  };
+
   return (
     <div
       className={clsx("ws-resizer", edge)}
@@ -7419,20 +7426,39 @@ function WorkspaceResizer({ edge }: { edge: "left" | "right" }) {
       aria-orientation="vertical"
       title={t("workspace.resizeTitle")}
       onPointerDown={(e) => {
+        if (e.button !== 0) return;
         e.preventDefault();
         e.currentTarget.setPointerCapture(e.pointerId);
         drag.current = { startX: e.clientX, startW: width };
+        setWorkspaceResizing(true);
       }}
       onPointerMove={(e) => {
         if (!drag.current) return;
         const dx = e.clientX - drag.current.startX;
-        setWsWidth(edge, drag.current.startW + (edge === "left" ? dx : -dx));
+        const raw = drag.current.startW + (edge === "left" ? dx : -dx);
+        if (raw >= 145) setWsWidth(edge, raw);
       }}
       onPointerUp={(e) => {
         if (!drag.current) return;
+        const dx = e.clientX - drag.current.startX;
+        const raw = drag.current.startW + (edge === "left" ? dx : -dx);
+        const startW = drag.current.startW;
         drag.current = null;
-        e.currentTarget.releasePointerCapture(e.pointerId);
-        saveWsWidths();
+        setWorkspaceResizing(false);
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        }
+        if (edge === "left" && raw < 145) {
+          setWsWidth("left", startW);
+          saveWsWidths();
+          useDockStore.getState().setLeftCollapsed(true);
+        } else {
+          saveWsWidths();
+        }
+      }}
+      onPointerCancel={() => {
+        drag.current = null;
+        setWorkspaceResizing(false);
       }}
       onDoubleClick={resetEdgeWidth}
     >
