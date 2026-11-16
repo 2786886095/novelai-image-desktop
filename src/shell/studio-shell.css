@@ -7,7 +7,7 @@
 
 .studio-shell {
   --shell-topbar-h: 44px;
-  --shell-rail-w: 216px;
+  --shell-rail-w: 232px;
   --shell-rail-collapsed-w: 56px;
   --qf-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --qf-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -358,7 +358,14 @@ html body button.shell-rail-item.active::after {
   transform: translateX(0);
   transition: opacity 160ms var(--qf-ease-out), transform 200ms var(--qf-spring);
 }
-.shell-rail.is-collapsed button.shell-rail-item { justify-content: center !important; padding: 0; }
+.shell-rail:not(.is-collapsed) .shell-rail-row:has(.shell-rail-disclosure) > button.shell-rail-item {
+  padding-right: 28px;
+}
+.shell-rail.is-collapsed button.shell-rail-item {
+  justify-content: flex-start !important;
+  padding: 0 8px;
+  gap: 0;
+}
 .shell-rail.is-collapsed .shell-rail-label {
   opacity: 0;
   transform: translateX(-6px);
@@ -366,7 +373,6 @@ html body button.shell-rail-item.active::after {
   flex: 0 0 0;
   pointer-events: none;
 }
-.shell-rail.is-collapsed button.shell-rail-item { gap: 0; }
 
 html body button.shell-rail-disclosure {
   position: absolute;
@@ -387,6 +393,7 @@ html body button.shell-rail-disclosure:hover { background: var(--rail-hover); co
 html body button.shell-rail-disclosure:active { transform: scale(0.9); }
 .shell-rail-disclosure .ui-icon { width: 14px; height: 14px; }
 
+.shell-rail.is-collapsed .shell-rail-sub-collapse { display: none; }
 .shell-rail-sub-collapse > div { overflow: hidden; }
 .shell-rail-sub {
   display: grid;
@@ -647,6 +654,8 @@ html body button.dock-strip-tab:active {
 
 /* ── Right History & Materials Floating Popover (`悬浮弹窗`) ───────────── */
 .studio-shell .history-rail.is-floating-popover {
+  display: flex !important;
+  flex-direction: column;
   position: absolute;
   top: 4px;
   bottom: 4px;
@@ -936,23 +945,30 @@ html body .studio-shell .seed-row > button.seed-randomize-button {
 
 .studio-shell .quick-actions[data-panel-section="refs"] {
   margin: 2px 0 10px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 5px;
 }
-.studio-shell .quick-actions[data-panel-section="refs"] .btn.qf-ref-trigger {
+html body .studio-shell .quick-actions[data-panel-section="refs"] .btn.qf-ref-trigger {
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 33px;
   height: auto;
-  padding: 5px 8px;
-  justify-content: space-between;
+  padding: 5px 6px !important;
+  justify-content: center;
   gap: 4px;
   font-size: 12px;
   white-space: nowrap;
 }
 .studio-shell .quick-actions[data-panel-section="refs"] .btn.qf-ref-trigger .icon-text {
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
   overflow: hidden;
+}
+.studio-shell .quick-actions[data-panel-section="refs"] .btn.qf-ref-trigger .icon-text svg {
+  width: 13.5px;
+  height: 13.5px;
+  flex: none;
 }
 .studio-shell .quick-actions[data-panel-section="refs"] .btn.qf-ref-trigger .icon-text > span:last-child {
   overflow: hidden;
@@ -971,12 +987,12 @@ html body .studio-shell button.prompt-advanced-button.is-panel-open {
 .qf-count-badge {
   font-style: normal;
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
-  font-size: 11px;
-  line-height: 16px;
-  min-width: 16px;
-  padding: 0 5px;
+  font-size: 10.5px;
+  line-height: 15px;
+  min-width: 15px;
+  padding: 0 4px;
   border-radius: 999px;
-  background: var(--accent);
+  background: var(--accent-fill, var(--accent));
   color: #ffffff;
   text-align: center;
   flex: none;
@@ -1409,6 +1425,14 @@ html body .shell-palette button.shell-palette-clear {
 html body .shell-palette button.shell-palette-clear:hover {
   color: var(--text-primary);
   background: var(--bg-hover);
+}
+.shell-palette-input kbd {
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease;
+}
+.shell-palette-input kbd:hover {
+  border-color: var(--detection, var(--accent));
+  color: var(--text-primary);
 }
 
 .shell-palette-list {

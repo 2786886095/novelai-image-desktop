@@ -60,14 +60,19 @@ export function openSettings(section?: string) {
 async function toggleTheme() {
   const settings = useAppStore.getState().settings;
   if (!settings) return;
-  const dark = document.documentElement.classList.contains("theme-dark");
-  await window.naiDesktop.setSetting("theme", dark ? "light" : "dark");
+  const nextDark = !document.documentElement.classList.contains("theme-dark");
+  const nextTheme = nextDark ? "dark" : "light";
+  document.documentElement.classList.toggle("theme-dark", nextDark);
+  useAppStore.setState({ settings: { ...settings, theme: nextTheme } });
+  await window.naiDesktop.setSetting("theme", nextTheme);
   await useAppStore.getState().refreshSettings();
 }
 async function toggleStreamPreview() {
   const settings = useAppStore.getState().settings;
   if (!settings) return;
-  await window.naiDesktop.setSetting("streamPreviewEnabled", !(settings.streamPreviewEnabled ?? true));
+  const nextEnabled = !(settings.streamPreviewEnabled ?? true);
+  useAppStore.setState({ settings: { ...settings, streamPreviewEnabled: nextEnabled } });
+  await window.naiDesktop.setSetting("streamPreviewEnabled", nextEnabled);
   await useAppStore.getState().refreshSettings();
 }
 function openOutputDir() {
@@ -708,6 +713,19 @@ export function CommandPalette() {
   useEffect(() => { setCursor(0); }, [query]);
   useEffect(() => { if (open) requestAnimationFrame(() => input.current?.focus()); }, [open]);
   useEffect(() => {
+    if (!open) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.isComposing && !event.defaultPrevented) {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        restore.current?.focus?.();
+      }
+    };
+    window.addEventListener("keydown", onEscape, true);
+    return () => window.removeEventListener("keydown", onEscape, true);
+  }, [open]);
+  useEffect(() => {
     list.current?.querySelector<HTMLElement>(`[data-index="${cursor}"]`)?.scrollIntoView({ block: "nearest" });
   }, [cursor]);
 
@@ -760,7 +778,7 @@ export function CommandPalette() {
                 <Icon name="close" />
               </button>
             ) : null}
-            <kbd>Esc</kbd>
+            <kbd onClick={() => close()} role="button" tabIndex={-1} title="Esc">Esc</kbd>
           </div>
           <div className="shell-palette-list" id="shell-palette-list" role="listbox" ref={list}>
             {results.length === 0 ? <p className="shell-palette-empty">{text.searchEmpty}</p> : results.map((item, index) => (

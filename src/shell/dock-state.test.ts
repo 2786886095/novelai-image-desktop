@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BASELINE_STORAGE_KEY,
@@ -109,5 +110,18 @@ describe("floating & snap-dockable panel state", () => {
       expect(t.snapLeftLabel).toBeTruthy();
       expect(t.snapRightLabel).toBeTruthy();
     }
+  });
+
+  it("guards against duplicate sibling keys, narrow-window history hiding, and double-toggle regressions", () => {
+    const app = readFileSync(new URL("../App.tsx", import.meta.url), "utf8");
+    const shellCss = readFileSync(new URL("./studio-shell.css", import.meta.url), "utf8");
+    const themeCss = readFileSync(new URL("./qq-theme.css", import.meta.url), "utf8");
+    const historyControls = readFileSync(new URL("../components/HistoryRailControls.tsx", import.meta.url), "utf8");
+
+    expect(app).toContain('key={`nav:${activeTab}:${generateMode}`}');
+    expect(app).toContain('key={`stage:${activeTab}:${generateMode}`}');
+    expect(shellCss).toMatch(/\.studio-shell\s+\.history-rail\.is-floating-popover\s*\{[^}]*display:\s*flex\s*!important/);
+    expect(themeCss).toContain(".select-menu-trigger:not(.pi-chat-more):not(.pi-tools-trigger)");
+    expect(historyControls).not.toMatch(/onPointerUp=\{[^}]*toggleOpen/);
   });
 });

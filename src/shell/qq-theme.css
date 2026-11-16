@@ -31,6 +31,7 @@ html:not(.theme-dark) {
   --qf-plate: rgba(32, 34, 32, 0.09);
 
   --accent: #2152e7;
+  --accent-fill: #2152e7;
   --accent-hover: #1b46cc;
   --accent-pressed: #1539ad;
   --accent-plate: #112e8f;
@@ -53,7 +54,11 @@ html:not(.theme-dark) {
   --text-primary: #202220;
   --text-secondary: #525550;
   --text-muted: #686b64;
+  --text: var(--text-primary);
   --muted: var(--text-muted);
+  --panel: var(--bg-dialog);
+  --panel-2: var(--bg-input);
+  --surface: var(--bg-dialog);
 
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace;
 
@@ -88,12 +93,13 @@ html.theme-dark {
   --border-strong: #454947;
   --qf-plate: rgba(0, 0, 0, 0.45);
 
-  --accent: #2962f6;
+  --accent: #5294ff;
+  --accent-fill: #2962f6;
   --accent-hover: #3d73ff;
   --accent-pressed: #1f4fd1;
   --accent-plate: #13338f;
   --detection: #4eaeff;
-  --accent-soft: rgba(41, 98, 246, 0.18);
+  --accent-soft: rgba(56, 118, 255, 0.20);
   --accent-text: #ffffff;
   --accent-cyan: #4eaeff;
   --accent-2: #4eaeff;
@@ -109,8 +115,12 @@ html.theme-dark {
 
   --text-primary: #f2f2ef;
   --text-secondary: #a6aaa4;
-  --text-muted: #787c76;
+  --text-muted: #848882;
+  --text: var(--text-primary);
   --muted: var(--text-muted);
+  --panel: var(--bg-dialog);
+  --panel-2: var(--bg-input);
+  --surface: var(--bg-dialog);
 
   --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.35);
   --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.42);
@@ -492,10 +502,12 @@ html body .reference-ui-dialog-button:active:not(:disabled) {
 html body .btn.btn-primary,
 html body .btn.primary,
 html body .nai-account-primary,
+html body .pi-agent .pi-primary,
 html body .reference-ui-dialog-button-primary,
 html.theme-dark body .btn.btn-primary,
-html.theme-dark body .nai-account-primary {
-  background: var(--accent) !important;
+html.theme-dark body .nai-account-primary,
+html.theme-dark body .pi-agent .pi-primary {
+  background: var(--accent-fill, var(--accent)) !important;
   background-image: none !important;
   border: 1px solid var(--accent-pressed) !important;
   color: var(--accent-text) !important;
@@ -673,7 +685,7 @@ html body :is(
   .prompt-box,
   .prompt-chip-search,
   .history-group-create input,
-  .select-menu-trigger,
+  .select-menu-trigger:not(.pi-chat-more):not(.pi-tools-trigger),
   .style-preset-trigger
 ),
 html.theme-dark body :is(
@@ -682,7 +694,7 @@ html.theme-dark body :is(
   .prompt-box,
   .prompt-chip-search,
   .history-group-create input,
-  .select-menu-trigger,
+  .select-menu-trigger:not(.pi-chat-more):not(.pi-tools-trigger),
   .style-preset-trigger
 ) {
   background: var(--bg-input) !important;
@@ -703,7 +715,7 @@ html body :is(
   .prompt-box,
   .prompt-chip-search,
   .history-group-create input,
-  .select-menu-trigger,
+  .select-menu-trigger:not(.pi-chat-more):not(.pi-tools-trigger),
   .style-preset-trigger
 ):hover:not(:disabled) {
   border-color: var(--border-strong) !important;
@@ -760,9 +772,12 @@ html body input[type="radio"] {
   backdrop-filter: none !important;
 }
 .modal, .app-confirm-dialog, .shell-palette, .nai-account-panel { border-radius: var(--radius-lg) !important; }
-.modal-backdrop, .app-confirm-backdrop { background: rgba(17, 18, 18, 0.36) !important; backdrop-filter: none !important; }
-html.theme-dark .modal-backdrop, html.theme-dark .app-confirm-backdrop, html.theme-dark .shell-palette-backdrop {
+.modal-backdrop, .app-confirm-backdrop, .nai-account-overlay { background: rgba(17, 18, 18, 0.36) !important; backdrop-filter: none !important; }
+html.theme-dark .modal-backdrop, html.theme-dark .app-confirm-backdrop, html.theme-dark .shell-palette-backdrop, html.theme-dark .nai-account-overlay {
   background: rgba(5, 6, 6, 0.62) !important;
+}
+html body :is(.modal, .nai-account-panel, .app-confirm-dialog, .shell-task-popover, .shell-palette)[tabindex="-1"]:is(:focus, :focus-visible) {
+  outline: none !important;
 }
 .workbench-dock .modal-backdrop { background: transparent !important; }
 .workbench-dock .modal-backdrop > .modal { box-shadow: none !important; border-color: var(--border) !important; }

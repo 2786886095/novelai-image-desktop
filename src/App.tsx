@@ -4626,8 +4626,8 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
           </button>
         </div>
       )}
-      <PanelSectionNav key={`${activeTab}:${generateMode}`} />
-      <div key={`${activeTab}:${generateMode}`} className="left-panel-mode-stage">
+      <PanelSectionNav key={`nav:${activeTab}:${generateMode}`} />
+      <div key={`stage:${activeTab}:${generateMode}`} className="left-panel-mode-stage">
         {activeTab === "generate" && (
           generateMode === "t2i"
             ? <GeneratePanel openSettings={openSettings} />
