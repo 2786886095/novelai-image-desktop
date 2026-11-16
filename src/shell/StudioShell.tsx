@@ -11,7 +11,7 @@ import { useAppStore } from "../store";
 import { APP_NAME, APP_VERSION } from "../types";
 import type { ActiveTab } from "../app/navigation";
 import { loadTabOrder, normalizeTabOrder, saveTabOrder, moveTab, TAB_ORDER_KEY } from "../app/tab-order";
-import { dockText, useDockStore } from "./dock-state";
+import { dockText, swallowCanvasClickOnDismiss, useDockStore } from "./dock-state";
 import {
   formatCommandHint, groupedTabOrder, moveTabWithinGroup, NAV_GROUPS, rankCommands, requestOpenTool,
   SETTINGS_SECTIONS, TOOL_ENTRIES, type CommandItem, type ToolEntryId,
@@ -232,6 +232,7 @@ export function StudioNavRail() {
       const target = event.target as HTMLElement | null;
       if (!target || navRef.current?.contains(target)) return;
       if (target.closest(".app-confirm-backdrop, .modal-backdrop, .select-menu-popover")) return;
+      swallowCanvasClickOnDismiss(target);
       if (editing) setEditing(false);
       setRailOpen(false);
     };

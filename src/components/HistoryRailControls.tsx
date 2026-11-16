@@ -1,4 +1,5 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { swallowCanvasClickOnDismiss } from '../shell/dock-state';
 import { useAppStore } from '../store';
 import { historyRailText, HISTORY_MIN_WIDTH, HISTORY_MAX_WIDTH } from '../workspace-history';
 
@@ -126,6 +127,7 @@ export function HistoryRailPane({ children }: { children: ReactNode }) {
       ) {
         return;
       }
+      swallowCanvasClickOnDismiss(target);
       useAppStore.getState().setWsHistoryCollapsed(true);
     };
     const onKeyDown = (event: KeyboardEvent) => {

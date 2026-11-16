@@ -282,3 +282,18 @@ const DOCK_TEXT = {
 export function dockText(language?: string) {
   return DOCK_TEXT[normalizeAppLanguage(language)] ?? DOCK_TEXT["zh-CN"];
 }
+
+/** When dismissing a floating popover by clicking on the center canvas / image,
+ *  swallow the trailing click so the image's fullscreen lightbox doesn't pop open
+ *  accidentally, while leaving real buttons/links interactive in a single click. */
+export function swallowCanvasClickOnDismiss(target: HTMLElement | null) {
+  if (!target || typeof window === "undefined") return;
+  if (!target.closest(".persistent-canvas-stage")) return;
+  if (target.closest("button, a, input, select, textarea, label, [role='button'], .char-position-marker")) return;
+  const absorb = (event: MouseEvent) => {
+    event.stopPropagation();
+    event.preventDefault();
+  };
+  window.addEventListener("click", absorb, { capture: true, once: true });
+  window.setTimeout(() => window.removeEventListener("click", absorb, true), 400);
+}

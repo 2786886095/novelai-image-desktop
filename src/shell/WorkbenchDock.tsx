@@ -13,7 +13,7 @@ import clsx from "clsx";
 import { AppPortal } from "../components/ui";
 import { motionReduced } from "../motion-system";
 import { useAppStore } from "../store";
-import { dockText, SUBPANEL_DEFAULT_WIDTH, useDockStore } from "./dock-state";
+import { dockText, SUBPANEL_DEFAULT_WIDTH, swallowCanvasClickOnDismiss, useDockStore } from "./dock-state";
 
 const DockContext = createContext<HTMLElement | null>(null);
 
@@ -104,6 +104,7 @@ export function WorkbenchDockPane({ onHost }: { onHost: (host: HTMLDivElement | 
       ) {
         return;
       }
+      swallowCanvasClickOnDismiss(target);
       closeDockedPanel(hostRef.current);
     };
     document.addEventListener("pointerdown", onPointerDown, true);
