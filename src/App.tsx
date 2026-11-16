@@ -121,8 +121,8 @@ import {CharacterPresetControls} from './components/CharacterPresetControls';
 import {CharacterNameControl} from './components/CharacterNameControl';
 import { Icon, type IconName } from "./components/icons";
 import { CommandPalette, GenerationProgressLine, LayoutNotice, StudioNavRail, StudioTopBar, useRailCollapsed } from "./shell/StudioShell";
-import { DockOrPortal, useDeferredPanelPresence, WorkbenchDockPane, WorkbenchDockProvider } from "./shell/WorkbenchDock";
-import { dockText, ensureBaselineWorkspace, useDockStore } from "./shell/dock-state";
+import { DockOrPortal, DockSnapOverlay, useDeferredPanelPresence, useFloatingHeaderDrag, WorkbenchDockPane, WorkbenchDockProvider } from "./shell/WorkbenchDock";
+import { clampFloatingRect, dockText, ensureBaselineWorkspace, useDockStore } from "./shell/dock-state";
 import { shellText } from "./shell/shell-text";
 import { PanelSectionNav } from "./shell/PanelSectionNav";
 import { applyImageParameters } from "./apply-image-parameters";
@@ -4525,19 +4525,84 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
   }, [activeTab, currentImage?.filePath, generateMode, loadWorkbenchFromPath, workbenchImage]);
   const dt = dockText(language);
   const leftCollapsed = useDockStore((state) => state.leftCollapsed);
+  const leftFloating = useDockStore((state) => state.leftFloating);
+  const leftFloatRect = useDockStore((state) => state.leftFloatRect);
+  const leftPeek = useDockStore((state) => state.leftPeek);
+  const wsLeftWidth = useAppStore((state) => state.wsLeftWidth);
+  const setWsWidth = useAppStore((state) => state.setWsWidth);
+  const saveWsWidths = useAppStore((state) => state.saveWsWidths);
   const toggleLeftCollapsed = useDockStore((state) => state.toggleLeftCollapsed);
   const setLeftCollapsed = useDockStore((state) => state.setLeftCollapsed);
+  const panelRef = useRef<HTMLElement | null>(null);
   const stripDragRef = useRef<number | null>(null);
+  const peekTimerRef = useRef<number | undefined>(undefined);
+  const floatResizeRef = useRef<{ startX: number; startW: number } | null>(null);
+
+  const openLeftPeek = () => {
+    if (peekTimerRef.current !== undefined) {
+      window.clearTimeout(peekTimerRef.current);
+      peekTimerRef.current = undefined;
+    }
+    if (!useDockStore.getState().leftPeek) {
+      peekTimerRef.current = window.setTimeout(() => {
+        peekTimerRef.current = undefined;
+        useDockStore.getState().setLeftPeek(true);
+      }, 85);
+    }
+  };
+  const closeLeftPeek = () => {
+    if (peekTimerRef.current !== undefined) window.clearTimeout(peekTimerRef.current);
+    peekTimerRef.current = window.setTimeout(() => {
+      peekTimerRef.current = undefined;
+      if (document.querySelector('.select-menu-popover[data-disclosure-open="true"], .style-preset-menu[data-disclosure-open="true"], .menu-pop[data-disclosure-open="true"]')) return;
+      useDockStore.getState().setLeftPeek(false);
+    }, 180);
+  };
+  const keepLeftPeek = () => {
+    if (peekTimerRef.current !== undefined) {
+      window.clearTimeout(peekTimerRef.current);
+      peekTimerRef.current = undefined;
+    }
+  };
+
+  const headerDrag = useFloatingHeaderDrag({
+    kind: "left",
+    panelRef,
+    onDock: () => useDockStore.getState().dockLeftPanel(),
+    onFloat: (rect) => useDockStore.getState().floatLeftPanel(rect),
+  });
+
+  const isPeeking = leftCollapsed && !leftFloating && leftPeek;
+  const showStrip = leftCollapsed && !leftFloating;
+  const panelStyle: CSSProperties | undefined = leftFloating
+    ? {
+        left: `${leftFloatRect.x}px`,
+        top: `${leftFloatRect.y}px`,
+        width: `${leftFloatRect.w}px`,
+        height: `${leftFloatRect.h}px`,
+      }
+    : isPeeking
+      ? ({ "--left-peek-w": `${wsLeftWidth}px` } as CSSProperties)
+      : undefined;
+
   return (
     <aside
+      ref={panelRef}
+      style={panelStyle}
       className={clsx(
-        "left-panel is-docked",
-        leftCollapsed ? "is-collapsed dock-strip left-dock-strip" : "is-open",
+        "left-panel",
+        leftFloating
+          ? "is-free-floating is-open"
+          : showStrip
+            ? clsx("is-docked is-collapsed dock-strip left-dock-strip", isPeeking && "is-peek-open")
+            : "is-docked is-open",
       )}
     >
-      {leftCollapsed && (
+      {showStrip && (
         <div
           className="left-dock-strip-face"
+          onMouseEnter={openLeftPeek}
+          onMouseLeave={closeLeftPeek}
           onPointerDown={(e) => {
             if (e.button !== 0) return;
             stripDragRef.current = e.clientX;
@@ -4573,8 +4638,19 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
           </button>
         </div>
       )}
-      <div className="left-panel-inner" aria-hidden={leftCollapsed || undefined} inert={leftCollapsed || undefined}>
-      <div className="panel-head">
+      <div
+        className={clsx("left-panel-inner", isPeeking && "is-peek-floating")}
+        aria-hidden={(showStrip && !isPeeking) || undefined}
+        inert={(showStrip && !isPeeking) || undefined}
+        onMouseEnter={() => { if (showStrip) keepLeftPeek(); }}
+        onMouseLeave={() => { if (isPeeking) closeLeftPeek(); }}
+      >
+      <div
+        className="panel-head qf-draggable-header"
+        title={dt.dragHeaderHint}
+        onPointerDown={headerDrag.onPointerDown}
+        onDoubleClick={headerDrag.onDoubleClick}
+      >
         <span aria-hidden="true"><Icon name={meta.icon} /></span>
         <div className="panel-head-copy">
           <strong>{meta.title}</strong>
@@ -4634,6 +4710,37 @@ function LeftPanel({ openSettings }: { openSettings: () => void }) {
         {activeTab === "inspect" && <ReversePanel />}
         {activeTab === "convert" && <PromptConverterPanel />}
       </div>
+      {(leftFloating || isPeeking) && (
+        <div
+          className="floating-edge-resizer right"
+          role="separator"
+          aria-orientation="vertical"
+          onPointerDown={(e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.setPointerCapture(e.pointerId);
+            floatResizeRef.current = { startX: e.clientX, startW: leftFloating ? leftFloatRect.w : wsLeftWidth };
+          }}
+          onPointerMove={(e) => {
+            if (!floatResizeRef.current) return;
+            const nextW = Math.max(300, Math.min(520, floatResizeRef.current.startW + (e.clientX - floatResizeRef.current.startX)));
+            if (leftFloating) {
+              useDockStore.getState().floatLeftPanel(clampFloatingRect({ ...leftFloatRect, w: nextW }, window.innerWidth, window.innerHeight));
+            } else {
+              setWsWidth("left", nextW);
+            }
+          }}
+          onPointerUp={(e) => {
+            if (!floatResizeRef.current) return;
+            floatResizeRef.current = null;
+            if (!leftFloating) saveWsWidths();
+            if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+          }}
+        >
+          <span className="ws-resizer-grip" />
+        </div>
+      )}
       </div>
     </aside>
   );
@@ -5860,10 +5967,31 @@ function HistoryPanel() {
   );
 
   const dt = dockText(language);
+  const historyPaneRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    historyPaneRef.current = document.getElementById("history-rail-pane");
+  }, []);
+  const rightHeaderDrag = useFloatingHeaderDrag({
+    kind: "right",
+    panelRef: historyPaneRef,
+    onDock: () => {
+      useDockStore.getState().dockRightPanel();
+      useAppStore.getState().setWsHistoryCollapsed(false);
+    },
+    onFloat: (rect) => useDockStore.getState().floatRightPanel(rect),
+  });
 
   return (
     <aside className="history-panel">
-      <div className="history-title">
+      <div
+        className="history-title qf-draggable-header"
+        title={dt.dragHeaderHint}
+        onPointerDown={(event) => {
+          historyPaneRef.current = document.getElementById("history-rail-pane");
+          rightHeaderDrag.onPointerDown(event);
+        }}
+        onDoubleClick={rightHeaderDrag.onDoubleClick}
+      >
         <div className="history-title-copy">
           <strong>{t("history.title")}</strong>
           <small>{history.length > 0 ? f("history.count", { count: history.length }) : t("history.emptySubtitle")}</small>
@@ -5874,7 +6002,10 @@ function HistoryPanel() {
             className="shell-icon-btn history-panel-close-btn"
             title={dt.collapseRight}
             aria-label={dt.collapseRight}
-            onClick={() => useAppStore.getState().setWsHistoryCollapsed(true)}
+            onClick={() => {
+              useDockStore.getState().dockRightPanel();
+              useAppStore.getState().setWsHistoryCollapsed(true);
+            }}
           >
             <Icon name="chevronRight" />
           </button>
@@ -7594,10 +7725,14 @@ function MainPage() {
   const wsHistoryCollapsed = useAppStore((state) => state.wsHistoryCollapsed);
   const wsHistoryDragWidth = useAppStore((state) => state.wsHistoryDragWidth);
   const leftCollapsed = useDockStore((state) => state.leftCollapsed);
-  const displayedLeftWidth = leftCollapsed ? 36 : wsLeftWidth;
-  const displayedHistoryWidth = wsHistoryDragWidth === null
-    ? (wsHistoryCollapsed ? 0 : wsRightWidth)
-    : wsHistoryDragWidth;
+  const leftFloating = useDockStore((state) => state.leftFloating);
+  const rightFloating = useDockStore((state) => state.rightFloating);
+  const displayedLeftWidth = leftFloating ? 0 : leftCollapsed ? 36 : wsLeftWidth;
+  const displayedHistoryWidth = rightFloating
+    ? 0
+    : wsHistoryDragWidth === null
+      ? (wsHistoryCollapsed ? 0 : wsRightWidth)
+      : wsHistoryDragWidth;
   const uiCaptureParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const uiCaptureTheme = uiCaptureParams.get("uiTheme");
   // Final render-boundary guard: even if a future IPC path forgets to sanitize
@@ -7718,8 +7853,10 @@ function MainPage() {
           <LayoutNotice />
           <div
             className="workspace"
-            data-left-collapsed={leftCollapsed}
-            data-history-collapsed={wsHistoryCollapsed}
+            data-left-collapsed={leftCollapsed && !leftFloating}
+            data-left-floating={leftFloating}
+            data-right-floating={rightFloating}
+            data-history-collapsed={wsHistoryCollapsed && !rightFloating}
             data-history-resizing={wsHistoryDragWidth !== null}
             aria-hidden={showSettings || undefined}
             inert={showSettings || undefined}
@@ -7735,6 +7872,7 @@ function MainPage() {
               className="persistent-workbench-view"
             >
               <WorkbenchDockProvider host={dockHost}>
+                <DockSnapOverlay />
                 <LeftPanel openSettings={() => setShowSettings(true)} />
                 <WorkspaceResizer edge="left" />
                 <div className="persistent-canvas-host">

@@ -429,6 +429,7 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
   background: var(--bg-window);
 }
 .studio-shell .shell-main > .workspace {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   --ws-handle: 12px;
@@ -444,20 +445,129 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
 .studio-shell .shell-main > .workspace[data-left-collapsed="true"] {
   --ws-handle: 8px;
 }
+.studio-shell .shell-main > .workspace[data-left-floating="true"] {
+  --ws-handle: 0px;
+}
 .studio-shell .shell-main > .workspace[data-history-collapsed="true"] {
   --ws-right-handle: 40px;
+}
+.studio-shell .shell-main > .workspace[data-right-floating="true"] {
+  --ws-right-handle: 0px;
 }
 .studio-shell .shell-main > .workspace[data-history-resizing="true"],
 .studio-shell .shell-main > .workspace[data-left-resizing="true"] {
   transition: none !important;
 }
+/* Explicit grid tracks so detaching any panel to `position: fixed/absolute` never shifts sibling columns */
+.studio-shell .workspace .left-panel.is-docked { grid-column: 1; grid-row: 1; }
+.studio-shell .workspace .ws-resizer.left { grid-column: 2; grid-row: 1; }
+.studio-shell .workspace .persistent-canvas-host { grid-column: 3; grid-row: 1; }
+.studio-shell .workspace .history-rail-control { grid-column: 4; grid-row: 1; }
+.studio-shell .workspace .history-rail.is-docked { grid-column: 5; grid-row: 1; }
 .studio-shell .persistent-workbench-view {
   position: relative;
 }
 .studio-shell .status-bar { flex: none; }
 .studio-shell .app-notice-slot:empty { display: none; }
 
-/* ── Symmetrical Left & Right Dockable Panels + Vertical Dock Strips ───── */
+/* ── Magnetic Snap-Dock Dropzone Indicator & Draggable Headers ─────────── */
+.qf-dock-snap-overlay {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  z-index: calc(var(--z-overlay) - 2);
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--detection, var(--accent));
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--detection, var(--accent)) 11%, transparent);
+  pointer-events: none;
+  animation: qf-snap-zone-in 150ms var(--qf-spring);
+}
+.qf-dock-snap-overlay.zone-left {
+  left: 8px;
+  width: 360px;
+}
+.qf-dock-snap-overlay.zone-right {
+  right: 8px;
+  width: 340px;
+}
+.qf-dock-snap-overlay.zone-subpanel {
+  left: calc(var(--ws-left, 380px) + var(--ws-handle, 12px) + 4px);
+  width: 348px;
+}
+.qf-dock-snap-pill {
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 12px;
+  box-shadow: var(--shadow-md);
+  white-space: nowrap;
+}
+@keyframes qf-snap-zone-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.qf-draggable-header,
+.workbench-dock .modal-backdrop > .modal > header {
+  position: relative;
+  cursor: grab;
+  user-select: none;
+}
+.qf-draggable-header:active,
+.workbench-dock .modal-backdrop > .modal > header:active {
+  cursor: grabbing;
+}
+.qf-draggable-header::before,
+.workbench-dock .modal-backdrop > .modal > header::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 150ms ease, width 170ms var(--qf-spring), background-color 150ms ease;
+}
+.qf-draggable-header:hover::before,
+.workbench-dock .modal-backdrop > .modal > header:hover::before {
+  opacity: 1;
+  width: 36px;
+  background: var(--detection, var(--accent));
+}
+
+.floating-edge-resizer {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  width: 10px;
+  z-index: 6;
+  cursor: col-resize;
+  display: grid;
+  place-items: center;
+}
+.floating-edge-resizer.left { left: -2px; }
+.floating-edge-resizer.right { right: -2px; }
+.floating-edge-resizer .ws-resizer-grip {
+  width: 2.5px;
+  height: 34px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  opacity: 0.55;
+  transition: opacity 140ms ease, background-color 140ms ease;
+}
+.floating-edge-resizer:hover .ws-resizer-grip {
+  opacity: 1;
+  background: var(--detection, var(--accent));
+}
+
+/* ── Symmetrical Left & Right Floating-Dockable Panels ─────────────────── */
 .studio-shell .left-panel {
   position: relative;
   overflow: hidden;
@@ -466,6 +576,28 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
     border-color 180ms ease,
     box-shadow 180ms var(--qf-spring);
 }
+.studio-shell .left-panel.is-peek-open {
+  overflow: visible !important;
+  z-index: calc(var(--z-raised) + 6);
+}
+.studio-shell .left-panel.is-free-floating {
+  position: fixed !important;
+  z-index: calc(var(--z-overlay) - 4);
+  border-color: var(--border-strong) !important;
+  box-shadow: var(--shadow-lg) !important;
+  animation: qf-float-detach 180ms var(--qf-spring);
+}
+.studio-shell .left-panel[data-dragging-float="true"],
+.studio-shell .history-rail[data-dragging-float="true"],
+.workbench-dock-shell[data-dragging-float="true"] {
+  transition: none !important;
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.22) !important;
+}
+@keyframes qf-float-detach {
+  from { transform: scale(0.985); }
+  to   { transform: scale(1); }
+}
+
 .studio-shell .left-panel-inner {
   display: flex;
   flex-direction: column;
@@ -478,10 +610,27 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
   transform: translateX(0);
   transition: opacity 160ms var(--qf-ease-out), transform 220ms var(--qf-spring);
 }
-.studio-shell .left-panel.is-collapsed > .left-panel-inner {
+.studio-shell .left-panel.is-collapsed > .left-panel-inner:not(.is-peek-floating) {
   opacity: 0;
   transform: translateX(-16px);
   pointer-events: none;
+}
+.studio-shell .left-panel-inner.is-peek-floating {
+  position: absolute;
+  left: 42px;
+  top: 0;
+  bottom: 0;
+  width: var(--left-peek-w, 380px);
+  z-index: calc(var(--z-raised) + 6);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+  overflow: hidden;
+  animation: qf-panel-slide-right 210ms var(--qf-spring);
 }
 .studio-shell .left-panel-mode-stage {
   display: flex;
@@ -495,7 +644,8 @@ html body button.shell-rail-subitem:active { transform: translateX(1px) scale(0.
   from { opacity: 0; transform: translateY(5px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.studio-shell .workspace[data-left-collapsed="true"] .ws-resizer.left {
+.studio-shell .workspace[data-left-collapsed="true"] .ws-resizer.left,
+.studio-shell .workspace[data-left-floating="true"] .ws-resizer.left {
   width: 0;
   opacity: 0;
   pointer-events: none;
@@ -585,7 +735,7 @@ html body button.dock-strip-tab:active {
   text-align: center;
 }
 
-/* Right History Panel: Docked Right Strip (collapsed) <-> Docked Right Panel with Left-Edge Splitter (open) */
+/* Right History Panel: Hover-Peek Floating, Free-Floating, & Docked Modes */
 .studio-shell .history-rail.is-docked {
   min-width: 0;
   min-height: 0;
@@ -604,9 +754,46 @@ html body button.dock-strip-tab:active {
   opacity: 0;
 }
 
+.studio-shell .history-rail.is-peek-floating {
+  position: absolute;
+  right: 52px;
+  top: 8px;
+  bottom: 8px;
+  width: min(var(--history-drawer-w, 340px), calc(100% - 68px));
+  z-index: calc(var(--z-raised) + 6);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: qf-peek-right-in 210ms var(--qf-spring);
+}
+.studio-shell .history-rail.is-peek-floating > .history-panel,
+.studio-shell .history-rail.is-free-floating > .history-panel {
+  width: 100%;
+  height: 100%;
+  border-color: var(--border-strong) !important;
+}
+.studio-shell .history-rail.is-free-floating {
+  position: fixed !important;
+  z-index: calc(var(--z-overlay) - 4);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: qf-float-detach 180ms var(--qf-spring);
+}
+@keyframes qf-peek-right-in {
+  from { opacity: 0; transform: translateX(18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
 .studio-shell .history-rail-control {
   position: relative;
   z-index: calc(var(--z-raised) + 3);
+}
+.studio-shell .history-rail-control.is-floating-detached {
+  width: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
 }
 .studio-shell .history-rail-control.right-dock-strip {
   display: flex !important;
@@ -976,7 +1163,39 @@ html body .studio-shell button.prompt-advanced-button {
   min-width: 0;
 }
 
-/* Docked Inline Sub-Panel (expands left -> right beside parameter column, slides back left on close) */
+/* Floating Sub-Panel Mode (default: floats beside left panel without squeezing canvas; draggable anywhere) */
+.workbench-dock-shell.is-floating {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  bottom: 4px;
+  width: min(var(--subpanel-w, 368px), calc(100% - 16px));
+  z-index: calc(var(--z-raised) + 4);
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.workbench-dock-shell.is-floating.is-free-floating {
+  position: fixed !important;
+  bottom: auto;
+  max-height: calc(100vh - 76px);
+  z-index: calc(var(--z-overlay) - 3);
+}
+.workbench-dock-shell.is-floating.is-open {
+  animation: qf-panel-slide-right 220ms var(--qf-spring) both;
+}
+.workbench-dock-shell.is-floating.is-closing {
+  pointer-events: none;
+  animation: qf-panel-exit-left 175ms var(--qf-ease-in) forwards;
+}
+.workbench-dock-shell.is-floating.is-closed {
+  display: none !important;
+}
+
+/* Docked Inline Sub-Panel (magnetic-snapped beside parameter column) */
 .workbench-dock-shell.is-docked {
   position: relative;
   flex: none;

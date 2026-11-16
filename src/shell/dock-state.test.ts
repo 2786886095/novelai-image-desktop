@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BASELINE_STORAGE_KEY,
+  clampFloatingRect,
   clampSubpanelWidth,
   DEFAULT_DOCK_PREFS,
   DOCK_STORAGE_KEY,
@@ -21,34 +22,53 @@ beforeEach(() => {
     setItem: (key: string, value: string) => { storage.set(key, value); },
     removeItem: (key: string) => { storage.delete(key); },
   });
-  useDockStore.setState({ ...DEFAULT_DOCK_PREFS });
+  useDockStore.setState({ ...DEFAULT_DOCK_PREFS, leftPeek: false, rightPeek: false, snapPreview: null });
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  useDockStore.setState({ ...DEFAULT_DOCK_PREFS });
+  useDockStore.setState({ ...DEFAULT_DOCK_PREFS, leftPeek: false, rightPeek: false, snapPreview: null });
 });
 
-describe("workspace panel state and baseline layout", () => {
-  it("starts on the clean baseline workspace by default", () => {
+describe("floating & snap-dockable panel state", () => {
+  it("starts on the clean baseline workspace with subpanels floating by default", () => {
     const prefs = readDockPrefs();
-    expect(prefs).toEqual({
+    expect(prefs).toMatchObject({
       railOpen: false,
       leftCollapsed: false,
-      subpanelWidth: 376,
+      leftFloating: false,
+      subpanelDocked: false,
+      subpanelFloatPos: null,
+      subpanelWidth: 368,
+      rightFloating: false,
     });
   });
 
-  it("persists left rail, left panel collapse, and subpanel width", () => {
+  it("persists floating coordinates and magnetic snap-dock transitions for left, subpanel and right panels", () => {
     const store = useDockStore.getState();
-    store.toggleRailOpen();
-    store.toggleLeftCollapsed();
-    store.setSubpanelWidth(420);
+    store.floatLeftPanel({ x: 140, y: 80, w: 390, h: 640 });
+    store.floatRightPanel({ x: 760, y: 90, w: 350, h: 620 });
+    store.setSubpanelFloatPos({ x: 480, y: 72 });
+    store.setSubpanelWidth(410);
 
-    expect(readDockPrefs()).toEqual({
-      railOpen: true,
-      leftCollapsed: true,
-      subpanelWidth: 420,
+    expect(readDockPrefs()).toMatchObject({
+      leftFloating: true,
+      leftFloatRect: { x: 140, y: 80, w: 390, h: 640 },
+      rightFloating: true,
+      rightFloatRect: { x: 760, y: 90, w: 350, h: 620 },
+      subpanelDocked: false,
+      subpanelFloatPos: { x: 480, y: 72 },
+      subpanelWidth: 410,
+    });
+
+    store.dockLeftPanel();
+    store.dockRightPanel();
+    store.setSubpanelDocked(true);
+    expect(readDockPrefs()).toMatchObject({
+      leftFloating: false,
+      rightFloating: false,
+      subpanelDocked: true,
+      subpanelFloatPos: null,
     });
 
     store.resetToBaseline();
@@ -56,10 +76,13 @@ describe("workspace panel state and baseline layout", () => {
     expect(storage.has(DOCK_STORAGE_KEY)).toBe(true);
   });
 
-  it("clamps subpanel width safely within bounds", () => {
+  it("clamps subpanel width and floating rects safely within viewport bounds", () => {
     expect(clampSubpanelWidth(120)).toBe(SUBPANEL_MIN_WIDTH);
     expect(clampSubpanelWidth(980)).toBe(SUBPANEL_MAX_WIDTH);
     expect(clampSubpanelWidth(Number.NaN)).toBe(DEFAULT_DOCK_PREFS.subpanelWidth);
+    const clamped = clampFloatingRect({ x: -200, y: -50, w: 400, h: 600 }, 1280, 800);
+    expect(clamped.x).toBeGreaterThanOrEqual(8);
+    expect(clamped.y).toBeGreaterThanOrEqual(46);
   });
 
   it("initializes right history collapsed once on fresh baseline without overwriting saved preference", () => {
@@ -79,12 +102,12 @@ describe("workspace panel state and baseline layout", () => {
     expect(calls).toEqual([]);
   });
 
-  it("exposes localized panel controls in all five UI languages", () => {
+  it("exposes localized floating-dock hints in all five UI languages", () => {
     for (const lang of ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR"]) {
       const t = dockText(lang);
-      expect(t.collapseLeft).toBeTruthy();
-      expect(t.collapseRight).toBeTruthy();
-      expect(t.resetBaseline).toBeTruthy();
+      expect(t.dragHeaderHint).toBeTruthy();
+      expect(t.snapLeftLabel).toBeTruthy();
+      expect(t.snapRightLabel).toBeTruthy();
     }
   });
 });
