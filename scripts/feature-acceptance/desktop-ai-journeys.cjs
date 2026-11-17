@@ -27,11 +27,12 @@ function rendererSetup(){
  window.nativeMountLogPanel=()=>{
   const React=req('react'),{useState,useCallback,useEffect}=React;
   const {desktopUiText}=load(path.join(source,'src/i18n.ts')),{AnimatedCollapse}=load(path.join(source,'src/components/CharacterEditing.tsx')),{Icon}=load(path.join(source,'src/components/icons.tsx')),clsx=req('clsx'),{format}=req('date-fns');
+  const {pageUi}=load(path.join(source,'src/desktop-page-ui.ts')),{Button}=load(path.join(source,'src/components/ui.tsx'));
   const file=path.join(source,'src/App.tsx'),text=fs.readFileSync(file,'utf8'),ast=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
   const body=ast.statements.filter(n=>ts.isFunctionDeclaration(n)&&['AiLogPanel','AiLogField'].includes(n.name?.text)).map(n=>n.getText(ast)).join('\n');
   if(!body.includes('function AiLogPanel')||!body.includes('function AiLogField'))throw Error('Literal production log panel missing');
   const js=ts.transpileModule(body+'\nmodule.exports={AiLogPanel};',{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,m={exports:{}};
-  new Function('require','module','exports','useState','useCallback','useEffect','useAppStore','desktopUiText','AnimatedCollapse','Icon','clsx','format',js)(req,m,m.exports,useState,useCallback,useEffect,useAppStore,desktopUiText,AnimatedCollapse,Icon,clsx,format);
+  new Function('require','module','exports','useState','useCallback','useEffect','useAppStore','desktopUiText','AnimatedCollapse','Icon','clsx','format','pageUi','Button',js)(req,m,m.exports,useState,useCallback,useEffect,useAppStore,desktopUiText,AnimatedCollapse,Icon,clsx,format,pageUi,Button);
   const node=document.createElement('div');document.body.append(node);req('react-dom/client').createRoot(node).render(React.createElement(m.exports.AiLogPanel));
   window.nativeLogPanelSourceHash=crypto.createHash('sha256').update(body).digest('hex');
  };
