@@ -28,5 +28,5 @@ const {report,exitStatus}=writeFullFeatureMatrix({evidenceRoot:root,outputRoot:o
 assert.equal(exitStatus,0);
 assertReleasePlatformContract(report,{version:'2.9.7',sourceSha:sha,waiveWindowsArtistGpuV297:true});
 assertReleaseEvidenceFiles(report,out,{waiveWindowsArtistGpuV297:true});
-fs.writeFileSync(path.join(out,'SUPPLEMENT_PROVENANCE.json'),JSON.stringify({sourceSha:sha,originalNativeRun:'44124653287',originalRunAttempt:4,uiSupplementRun:process.env.GITHUB_RUN_ID,uiSupplementPolicySha:process.env.GITHUB_SHA,runnerPolicy:'macos-26 ARM; unchanged same-source UI/native scenario entries',summary:report.summary,onlyOmission:'Windows artist-iteration GPU not tested'},null,2)+'\n');
+fs.writeFileSync(path.join(out,'SUPPLEMENT_PROVENANCE.json'),JSON.stringify({sourceSha:sha,originalNativeRun:'44124653287',originalRunAttempt:4,uiSupplementRun:process.env.GITHUB_RUN_ID,uiSupplementPolicySha:process.env.GITHUB_SHA,runnerPolicy:'original macos-15 ARM; unchanged same-source UI/native scenario entries',summary:report.summary,onlyOmission:'Windows artist-iteration GPU not tested'},null,2)+'\n');
 console.log('RECOMBINED_ALL_186_OTHER_CELLS_VERIFIED',JSON.stringify(report.summary));

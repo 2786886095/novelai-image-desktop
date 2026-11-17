@@ -34,7 +34,7 @@ if(waiveWindowsArtistGpu){
 const featureParity=JSON.parse(fs.readFileSync('release-evidence/feature-parity.json','utf8'));
 if(waiveWindowsArtistGpuV297){
  const provenance=JSON.parse(fs.readFileSync('release-evidence/SUPPLEMENT_PROVENANCE.json','utf8'));
- if(provenance.sourceSha!==sha||provenance.originalNativeRun!==nativeRun||String(provenance.uiSupplementRun)!==uiSupplementRun||provenance.uiSupplementPolicySha!=='95e77dd2749fb0d6a8384f2070a7e8ccd4fd768d')throw Error('Recombined native source provenance differs');
+ if(provenance.sourceSha!==sha||provenance.originalNativeRun!==nativeRun||String(provenance.uiSupplementRun)!==uiSupplementRun||provenance.uiSupplementPolicySha!=='70a6c9aced0b378f9d9844a83f0403e06ffb6af1')throw Error('Recombined native source provenance differs');
 }
 assertReleasePlatformContract(featureParity,{version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV297});
 assertReleaseEvidenceFiles(featureParity,'release-evidence',{waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV297});
@@ -134,7 +134,7 @@ if(waiveWindowsArtistGpuV286){
  if(publicNotes===releaseNotes)throw Error('Missing canonical Windows GPU waiver line');
  fs.writeFileSync(publicNotesFile,publicNotes,'utf8');
 }
-const evidence={version,sha,...(waiveWindowsArtistGpuV297?{metadataRun:process.env.METADATA_RUN,nativeSupplementRun:uiSupplementRun,nativeSupplementPolicySha:"95e77dd2749fb0d6a8384f2070a7e8ccd4fd768d"}:{}),...(waiveWindowsArtistGpu?{nativeRun,fullScopeCertified:false,waived:[{platform:'windows',feature:'artist-iteration',scenarios:artistIterationScenarios,status:'not-tested'}]}:{}),mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
+const evidence={version,sha,...(waiveWindowsArtistGpuV297?{metadataRun:process.env.METADATA_RUN,nativeSupplementRun:uiSupplementRun,nativeSupplementPolicySha:"70a6c9aced0b378f9d9844a83f0403e06ffb6af1"}:{}),...(waiveWindowsArtistGpu?{nativeRun,fullScopeCertified:false,waived:[{platform:'windows',feature:'artist-iteration',scenarios:artistIterationScenarios,status:'not-tested'}]}:{}),mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
 fs.writeFileSync('release-assets/verification.json',JSON.stringify(evidence,null,2));
 call('gh',['release','create',tag,...files,'release-assets/verification.json','--target',sha,'--draft','--title',`Langbai NovelAI Studio ${tag}`,'--notes-file',publicNotesFile]);
 const draft=JSON.parse(call('gh',['release','view',tag,'--json','isDraft,assets']));
