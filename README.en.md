@@ -23,7 +23,7 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-Desktop and mobile now support batch image metadata editing, the NAX gallery directory, and in-app downloads for four offline tag dictionaries.
+On the first launch after updating on Windows, preview both layouts side by side and keep or change your current layout. You can switch later under Settings → Appearance → Desktop layout. Artist Detective can vary each pinned artist’s weight within an optional range while continuing to search other artists. Leave the range blank to keep the original weight.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

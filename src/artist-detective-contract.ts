@@ -7,7 +7,17 @@ export interface DetectiveRunRequest {
   lockedArtists?: DetectiveLockedArtist[];
 }
 /** Only the current owned run may be resumed. This is not paid-replay consent. */
-export interface DetectiveLockedArtist {tag:string; weight:number}
+export interface DetectiveArtistWeightRange {min:number; max:number}
+export interface DetectiveLockedArtist {tag:string; weight:number; weightRange?:DetectiveArtistWeightRange}
+export type DetectiveArtistRangeDrafts = Record<string,{min:string;max:string}>;
+function normalizeArtistWeightRange(value:unknown):DetectiveArtistWeightRange {
+  const range=value as Partial<DetectiveArtistWeightRange>|null;
+  const valid=(weight:unknown):weight is number=>typeof weight==="number" && Number.isFinite(weight)
+    && weight>=.25 && weight<=2.4 && Math.abs(weight*100-Math.round(weight*100))<1e-7;
+  if(!range || !valid(range.min) || !valid(range.max) || range.min >= range.max)
+    throw Error("画师权重范围须在 0.25～2.4 之间，最多两位小数，下限须小于上限。");
+  return {min:range.min,max:range.max};
+}
 export function detectiveLockedArtists(value:unknown):DetectiveLockedArtist[] {
   if(value===undefined)return [];
   if(!Array.isArray(value)||value.length>8)throw Error("最多固定 8 位画师。");
@@ -22,16 +32,20 @@ export function detectiveLockedArtists(value:unknown):DetectiveLockedArtist[] {
     for(const ch of tag){balance+=(ch==="("?1:ch===")"?-1:0);if(balance<0)throw Error("画师标签括号不配对。");}
     if(balance!==0||seen.has(tag.toLowerCase()))throw Error("画师标签重复或括号不配对。");
     seen.add(tag.toLowerCase());
-    return {tag,weight:Math.round(row.weight*100)/100};
+    return {tag,weight:Math.round(row.weight*100)/100,...(row.weightRange===undefined?{}:{weightRange:normalizeArtistWeightRange(row.weightRange)})};
   });
 }
-export function parseDetectiveArtists(text:string):DetectiveLockedArtist[] {
+export function parseDetectiveArtists(text:string,ranges?:DetectiveArtistRangeDrafts):DetectiveLockedArtist[] {
   if(text.length>1700)throw Error("画师标签过长。");
   return detectiveLockedArtists(text.split(/[,，\n]+/u).map(x=>x.trim()).filter(Boolean).map(x=>{
     const m=/^([\d.]+)\s*::\s*(.*?)\s*::$/u.exec(x);
     let tag=(m?.[2]??x).replace(/^artist:\s*/i,"");
     if(tag.startsWith("(")&&tag.endsWith(")"))tag=tag.slice(1,-1);
-    return {tag,weight:m?Number(m[1]):1};
+    const key=tag.normalize("NFC").trim().toLowerCase();
+    const range=ranges && Object.hasOwn(ranges,key)?ranges[key]:undefined;
+    const min=range?.min.trim()??"",max=range?.max.trim()??"";
+    if ((min || max) && (!min || !max))throw Error("请同时填写画师权重的下限和上限，或将两栏留空。");
+    return {tag,weight:m?Number(m[1]):1,...(min&&max?{weightRange:{min:Number(min),max:Number(max)}}:{})};
   }));
 }
 export interface DetectiveResumeRequest {

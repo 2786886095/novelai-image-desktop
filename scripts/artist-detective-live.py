@@ -200,6 +200,25 @@ def record_run_failure(output, command, error, secrets):
 def search_with_locked_artists(target, initial, shortlist, locked, generator, score,
                                output, config, rank, progress):
     fixed = {a["tag"]: a["weight"] for a in locked}
+    ranged = {}
+    for artist in locked:
+        bounds = artist.get("weightRange")
+        if bounds is not None:
+            low, high = round(bounds["min"] * 100), round(bounds["max"] * 100)
+            if not 25 <= low < high <= 240:
+                raise ValueError("Invalid locked artist weight range")
+            ranged[artist["tag"]] = (low, high)
+    ranged_tags = list(ranged)
+
+    def bounded_weight(tag, value):
+        low, high = ranged[tag]
+        return max(low, min(high, round(value * 100))) / 100
+
+    def next_weight(tag, value):
+        low, high = ranged[tag]
+        current = round(bounded_weight(tag, value) * 100)
+        drawn = rng.randrange(low, high)
+        return (drawn + (drawn >= current)) / 100
     output.mkdir(parents=True, exist_ok=True)
     rng = random.Random(config.random_seed)
     catalog = list(dict.fromkeys([*shortlist, *(r["canonical_tag"] for r in generator.store.catalog)]))
@@ -208,7 +227,7 @@ def search_with_locked_artists(target, initial, shortlist, locked, generator, sc
     def identity(recipe):
         return hashlib.sha256(json.dumps(sorted((a["tag"], a["weight"]) for a in recipe),
                                          ensure_ascii=False).encode("utf-8")).hexdigest()
-    def constrain(recipe):
+    def constrain(recipe, weights=None):
         if isinstance(recipe, dict):
             recipe = recipe["artists"]
         mutable = {}
@@ -219,11 +238,14 @@ def search_with_locked_artists(target, initial, shortlist, locked, generator, sc
             tag = generator.store.lookup[raw]["canonical_tag"]
             if tag not in fixed and len(mutable) < limit:
                 mutable[tag] = round(float(a.get("weight", 1)), 2)
-        return [{"tag": tag, "weight": weight} for tag, weight in [*fixed.items(), *mutable.items()]]
+        anchors = {tag: bounded_weight(tag, (weights or {}).get(tag, weight)) if tag in ranged else weight
+                   for tag, weight in fixed.items()}
+        return [{"tag": tag, "weight": weight} for tag, weight in [*anchors.items(), *mutable.items()]]
     all_seeds = rng.sample(range(2**32), config.search_seeds + config.final_seeds + config.extra_final_seeds)
     search_seeds, final_seeds = all_seeds[:config.search_seeds], all_seeds[config.search_seeds:]
     specification = {k: target[k] for k in ("content_tags", "style_tags", "width", "height", "image_sha256")}
-    specification.update({"locked": locked, "seed": config.random_seed, "budget": config.render_budget, "version": 1})
+    specification.update({"locked": locked, "seed": config.random_seed, "budget": config.render_budget,
+                          "version": 2 if ranged else 1})
     seen, history = set(), []
     def ordered(rows):
         return sorted(rows, key=lambda r: (-r["mean_score"], r["recipe_hash"]))
@@ -264,7 +286,7 @@ def search_with_locked_artists(target, initial, shortlist, locked, generator, sc
         atomic_json(result_file,{"results":rows})
         progress("scored",phase=label,results=rows)
         return rows
-    parents = [constrain(recipe) for recipe in initial] or [locked]
+    parents = [constrain(recipe) for recipe in initial] or [constrain([]) if ranged else locked]
     remaining = (config.render_budget - config.finalists * len(final_seeds)) // len(search_seeds)
     for index in range(config.rounds):
         wanted=min(remaining,config.population)
@@ -274,14 +296,41 @@ def search_with_locked_artists(target, initial, shortlist, locked, generator, sc
             key=identity(recipe)
             if key not in seen and len(candidates)<pool_size:
                 candidates.setdefault(key,recipe)
+        reserved = None
+        if ranged and pool_size > 0:
+            # Try a different allowed anchor weight each round without adding
+            # renders to the established budget. Rotate anchors across rounds.
+            for parent in parents:
+                anchor = ranged_tags[index % len(ranged_tags)]
+                weights = {a["tag"]: a["weight"] for a in parent}
+                value = weights[anchor]
+                low, high = ranged[anchor]
+                drawn = next_weight(anchor, value)
+                trials = dict.fromkeys([drawn, low / 100, high / 100] +
+                                       [i / 100 for i in range(low, high + 1)])
+                for trial in trials:
+                    if trial == value:
+                        continue
+                    recipe = constrain(parent, {**weights, anchor: trial})
+                    key = identity(recipe)
+                    if key not in seen:
+                        include(recipe)
+                        reserved = recipe
+                        break
+                if reserved is not None:
+                    break
         if index==0:
             for recipe in parents:
                 include(recipe)
         for _ in range(max(128,pool_size*150)):
             if len(candidates)>=pool_size:
                 break
-            mutable=[dict(a) for a in rng.choice(parents) if a["tag"] not in fixed]
+            parent=rng.choice(parents)
+            mutable=[dict(a) for a in parent if a["tag"] not in fixed]
+            weights={a["tag"]:a["weight"] for a in parent if a["tag"] in ranged}
             kinds=["weights","drop"] if mutable else []
+            if ranged:
+                kinds.append("anchor")
             unknown=[tag for tag in pool_tags if not any(a["tag"]==tag for a in mutable)]
             if unknown:
                 if len(mutable)<limit:
@@ -299,10 +348,13 @@ def search_with_locked_artists(target, initial, shortlist, locked, generator, sc
                     mutable[rng.randrange(len(mutable))]=item
             elif mode=="drop":
                 mutable.pop(rng.randrange(len(mutable)))
+            elif mode=="anchor":
+                tag=rng.choice(ranged_tags)
+                weights[tag]=next_weight(tag,weights[tag])
             else:
                 i=rng.randrange(len(mutable))
                 mutable[i]["weight"]=round(max(.25,min(2.4,mutable[i]["weight"]*math.exp(rng.gauss(0,config.weight_sigma)))),2)
-            include(constrain(mutable))
+            include(constrain(mutable, weights))
         if len(candidates)<wanted:
             raise RuntimeError("The fixed artists leave too few distinct combinations")
         choices=list(candidates.values())
@@ -316,6 +368,8 @@ def search_with_locked_artists(target, initial, shortlist, locked, generator, sc
             choices=[choices[i] for i in [*ordering[:cutoff],*rng.sample(ordering[cutoff:],count)]]
         else:
             choices=choices[:wanted]
+        if reserved is not None and choices and reserved not in choices:
+            choices[-1] = reserved
         seen.update(identity(recipe) for recipe in choices)
         history.extend(round_result(f"round-{index:02d}",choices,search_seeds))
         parents=[row["artists"] for row in ordered(history)[:config.population]]

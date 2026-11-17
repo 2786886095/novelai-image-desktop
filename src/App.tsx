@@ -13,6 +13,7 @@ import { EffortControl, effortText } from "./components/EffortControl";
 import {TypographySettings} from './components/TypographySettings';
 import {useGlobalTypography} from './global-typography';
 import { useDesktopLayout, setDesktopLayout, desktopLayoutLabels } from "./shell/desktop-layout";
+import { DesktopLayoutUpdatePrompt } from "./shell/DesktopLayoutUpdatePrompt";
 import { HistoryRailControls as ClassicHistoryRailControls, HistoryRailPane as ClassicHistoryRailPane } from "./components/ClassicHistoryRail";
 import { AppMenuBar, AppTitleBar } from "./app/AppChrome";
 import AppTabBar from "./app/AppTabBar";
@@ -7687,6 +7688,8 @@ function MainPage() {
   const displayedHistoryWidth = isRedesign ? 0 : wsHistoryDragWidth ?? (rightCollapsed ? 0 : classicRightWidth);
   const uiCaptureParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const uiCaptureTheme = uiCaptureParams.get("uiTheme");
+  // Capture eligibility at boot: a first-run onboarding completion is not an upgrade.
+  const [existingLayoutUser] = useState(() => settings?.hasOnboarded === true && !showOnboarding);
   // Final render-boundary guard: even if a future IPC path forgets to sanitize
   // an upstream HTML error page, it can never expand across the application.
   const displayStatusText = useMemo(
@@ -7901,6 +7904,7 @@ function MainPage() {
         )}
       </footer>
       {showOnboarding && <OnboardingWizard />}
+      <DesktopLayoutUpdatePrompt enabled={existingLayoutUser && !showOnboarding && !uiCaptureParams.has("uiCapture")} language={language} />
       <ImageSaveFeedback language={language} />
       {isRedesign && <CommandPalette />}
       {displayToast && (

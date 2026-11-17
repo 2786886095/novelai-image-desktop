@@ -1,5 +1,6 @@
 import {manageModalPortal,motionReduced} from '../motion-system';
 import './close-window-choice.css';
+import './layout-choice.css';
 let confirmationId=0;
 import {useAppStore} from '../store';
 import {featureKey,featureText} from '../feature-text';
@@ -10,6 +11,11 @@ type ConfirmationLabels = { confirm?: string; cancel?: string; alternative?: str
 
 export function confirmAction(message: string, title = "请确认", choice?: ConfirmationChoice, signal?: AbortSignal, buttonLabels?: ConfirmationLabels): Promise<boolean> {
   return showConfirmation(message, title, choice, signal, buttonLabels).then(result => result === "confirm");
+}
+
+type ConfirmationPreview = {label: string; src: string};
+export function confirmLayoutIntro(message: string, title: string, signal: AbortSignal, labels: ConfirmationLabels, previews: readonly ConfirmationPreview[]) {
+  return showConfirmation(message, title, undefined, signal, labels, {variant: "layout-choice", previews}).then(result => result === "confirm");
 }
 
 export async function confirmWindowClose(text: { closeDetail: string; closeTitle: string; remember: string; hide: string; closeQuit: string; cancel: string }) {
@@ -27,7 +33,8 @@ type ConfirmationOptions = {
   /** Window close actions are guarded against
    *  carried-over clicks (double-click on the window close button, a press
    *  that started on another control, or key repeat). */
-  variant?: "close-choice";
+  variant?: "close-choice" | "layout-choice";
+  previews?: readonly ConfirmationPreview[];
 };
 
 /** Pointer activations this soon after the dialog opens are treated as carry-over. */
@@ -40,6 +47,8 @@ function showConfirmation(message: string, title: string, choice?: ConfirmationC
     let release=()=>{},enterFrame=0;
     const titleId=`app-confirm-title-${++confirmationId}`;
     const closeChoice = options.variant === "close-choice";
+    const layoutChoice = options.variant === "layout-choice";
+    const guardActivation = closeChoice || layoutChoice;
     const backdrop = document.createElement("div");
     backdrop.className = closeChoice ? "app-confirm-backdrop is-window-close" : "app-confirm-backdrop";
     backdrop.innerHTML = `
@@ -52,8 +61,28 @@ function showConfirmation(message: string, title: string, choice?: ConfirmationC
         </div>
       </section>`;
     if (closeChoice) backdrop.querySelector(".app-confirm-dialog")?.classList.add("is-close-choice");
+    const dialog = backdrop.querySelector("section");
     const heading = backdrop.querySelector("h3");
     const body = backdrop.querySelector("p");
+    if (layoutChoice && dialog && options.previews?.length) {
+      dialog.classList.add("is-layout-choice");
+      dialog.setAttribute("role", "dialog");
+      const grid = document.createElement("div");
+      grid.className = "app-layout-choice-previews";
+      for (const preview of options.previews) {
+        const card = document.createElement("figure");
+        const image = document.createElement("img");
+        image.alt = "";
+        image.width = 1180;
+        image.height = 767;
+        image.src = preview.src;
+        const caption = document.createElement("figcaption");
+        caption.textContent = preview.label;
+        card.append(caption, image);
+        grid.append(card);
+      }
+      body?.after(grid);
+    }
     const option=choice?document.createElement('label'):null;
     if(option && choice){
       option.className=closeChoice?'checkbox-line close-choice-remember':'checkbox-line';
@@ -109,7 +138,8 @@ function showConfirmation(message: string, title: string, choice?: ConfirmationC
       const target = event.target as HTMLElement;
       // Close choice: a pointer click only counts when it both started and
       // ended on the same action, and not in the first moments after opening.
-      if (closeChoice && event.detail > 0) {
+      if (layoutChoice && target === backdrop) return;
+      if (guardActivation && event.detail > 0) {
         const hit = pointerTarget(target);
         const accepted = hit !== null && hit === pressed && performance.now() - openedAt >= CLOSE_CHOICE_GUARD_MS;
         pressed = null;
@@ -121,13 +151,14 @@ function showConfirmation(message: string, title: string, choice?: ConfirmationC
     });
     backdrop.addEventListener("keydown", (event) => {
       if(settled)return;
-      if (closeChoice && event.repeat && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); event.stopPropagation(); return; }
-      if (event.key === "Escape") {event.preventDefault();event.stopPropagation();finish("cancel");return;}
+      if (guardActivation && (event.repeat || (layoutChoice && performance.now() - openedAt < CLOSE_CHOICE_GUARD_MS)) && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); event.stopPropagation(); return; }
+      if (event.key === "Escape") {event.preventDefault();event.stopPropagation();if(!layoutChoice)finish("cancel");return;}
 
       if (event.key === "Tab") {
         const buttons=Array.from(backdrop.querySelectorAll<HTMLElement>('button,input'));
         const index=buttons.indexOf(document.activeElement as HTMLElement);
-        event.preventDefault();event.stopPropagation();buttons[(index+(event.shiftKey?-1:1)+buttons.length)%buttons.length].focus();
+        event.preventDefault();event.stopPropagation();const next=index===-1?(event.shiftKey?buttons.length-1:0):(index+(event.shiftKey?-1:1)+buttons.length)%buttons.length;
+        buttons[next]?.focus();
       }
     });
     const abort=()=>finish("cancel");
@@ -135,7 +166,7 @@ function showConfirmation(message: string, title: string, choice?: ConfirmationC
     document.body.appendChild(backdrop);
     release=manageModalPortal(backdrop);
     enterFrame=window.requestAnimationFrame(()=>{if(!settled)backdrop.classList.add('is-visible')});
-    (backdrop.querySelector('[data-result="cancel"]') as HTMLElement | null)?.focus();
+    (layoutChoice ? dialog : backdrop.querySelector<HTMLElement>('[data-result="cancel"]'))?.focus();
     if(signal?.aborted)abort();
   });
 }

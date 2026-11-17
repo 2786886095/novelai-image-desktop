@@ -164,8 +164,8 @@ export async function detectiveStart(value:DetectiveRunRequest) {
   if(locks.length){
     const entries=JSON.parse(fs.readFileSync(path.join(selected.assets!,"retrieval/catalog.json"),"utf8")) as Record<string,string>[];
     const lookup=new Map(entries.flatMap(r=>[r.tag,r.canonical_tag,r.source_slug].filter(Boolean).map(k=>[k.toLowerCase(),r.canonical_tag] as const)));
-    value={...value,lockedArtists:detectiveLockedArtists(locks.map(({tag,weight})=>{
-      return {tag:lookup.get(tag.toLowerCase())??tag,weight};
+    value={...value,lockedArtists:detectiveLockedArtists(locks.map(({tag,...options})=>{
+      return {tag:lookup.get(tag.toLowerCase())??tag,...options};
     }))};
   }
   const binding=runBinding(c),directory=path.join(app.getPath('userData'),'artist-detective-runs',randomUUID());

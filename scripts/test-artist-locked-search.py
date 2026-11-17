@@ -25,7 +25,9 @@ exec(compile(tree,str(source),"exec"))
 
 lock = [{"tag":"patzzi","weight":1.25}]
 class FakeGenerator:
-    def __init__(self):
+    def __init__(self, validate=None):
+        self.validate = validate or (lambda recipe: [a for a in recipe if a["tag"]=="patzzi"] == lock)
+        self.recipes = []
         names=["patzzi","a","b","c","d","e"]
         rows=[{"canonical_tag":tag} for tag in names]
         self.store=SimpleNamespace(catalog=rows,lookup=dict(zip(names,rows)))
@@ -34,7 +36,8 @@ class FakeGenerator:
     def generate(self,requests):
         images=[]
         for r in requests:
-            assert [a for a in r["artists"] if a["tag"]=="patzzi"]==lock
+            assert self.validate(r["artists"])
+            self.recipes.append(r["artists"])
             assert len(r["artists"])==len({a["tag"] for a in r["artists"]})<=12
             key=sha256(json.dumps(r,sort_keys=True).encode()).hexdigest()
             if key not in self.manifest:
@@ -58,6 +61,37 @@ with tempfile.TemporaryDirectory() as tmp:
     assert len(first["history"])==20 and len(first["finalists"])==4
     assert search_with_locked_artists(*args)==first and fake.paid==56
     print("locked patzzi@1.25 in all 56 search/finalist requests; repeat reused 56 cached results")
+    ranges = [
+        {"tag":"patzzi","weight":1.25,"weightRange":{"min":.65,"max":.86}},
+        {"tag":"manual-artist","weight":1.4},
+    ]
+    def valid(recipe):
+        table = {a["tag"]:a["weight"] for a in recipe}
+        return .65<=table["patzzi"]<=.86 and table["manual-artist"]==1.4
+    variable=FakeGenerator(valid)
+    path=root/"ranged-search"
+    inputs=(target,[[{"tag":"a","weight":1}]],["a","b","c"],ranges,variable,
+            args[5],path,cfg,args[8],args[9])
+    worked=search_with_locked_artists(*inputs)
+    assert variable.paid==56 and len(worked["finalists"])==4
+    search=[variable.recipes[:32],variable.recipes[32:40]]
+    def value(recipe):
+        return next(a["weight"] for a in recipe if a["tag"]=="patzzi")
+    assert all(len({value(item) for item in round_recipes})>1 for round_recipes in search)
+    assert len({tuple(a["tag"] for a in item if a["tag"] not in {"patzzi","manual-artist"})
+                for item in variable.recipes[:40]})>1
+    selected={x["recipe_hash"] for x in worked["history"]}
+    assert all(x["recipe_hash"] in selected for x in worked["finalists"])
+    assert search_with_locked_artists(*inputs)==worked and variable.paid==56
+    wrong=[{**ranges[0],"weightRange":{"min":.66,"max":.86}},ranges[1]]
+    try:
+        search_with_locked_artists(*inputs[:3],wrong,*inputs[4:])
+    except RuntimeError as err:
+        assert "plan differs" in str(err)
+    else:
+        raise AssertionError("Expected resume with changed range to be refused")
+    assert variable.paid==56
+    print("range .65-.86 varied in both search rounds; both artists locked, other artists varied, finalists kept selected recipe; budget 56 unchanged; replay paid=0")
     image=root/"original.png"; image.write_bytes(b"reference PNG bytes")
     dest=root/"user-selected";dest.mkdir()
     key="a"*64

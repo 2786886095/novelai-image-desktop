@@ -10,26 +10,32 @@ import { confirmAction } from "./components/confirm";
 import { useAppStore } from "./store";
 import {InlineReversePromptSkillControls, callSelectedInlineReverse, reversePromptSelectionIdentity} from './components/InlineReversePromptSkillControls';
 import { imagePasteProps } from "./image-paste";
-import { detectiveRoundBudget, detectiveRounds, detectiveParameters, detectiveRecoveryLabels, parseDetectiveArtists, resetDetectiveDraft, type DetectiveParameters, type DetectiveSnapshot } from "./artist-detective-contract";
+import { detectiveRoundBudget, detectiveRounds, detectiveParameters, detectiveRecoveryLabels, parseDetectiveArtists, resetDetectiveDraft, type DetectiveArtistRangeDrafts, type DetectiveLockedArtist, type DetectiveParameters, type DetectiveSnapshot } from "./artist-detective-contract";
 
 type Target = { filePath: string; fileUrl: string; name: string };
-type Draft = { lockedArtistText: string; target: Target | null; prompt: string; style: string; subjectHint: string; knownCharacter: boolean; reverseMode: "tags" | "natural" | "mixed"; budget: number; parameters: DetectiveParameters };
+type Draft = { lockedArtistText: string; lockedArtistRanges: DetectiveArtistRangeDrafts; target: Target | null; prompt: string; style: string; subjectHint: string; knownCharacter: boolean; reverseMode: "tags" | "natural" | "mixed"; budget: number; parameters: DetectiveParameters };
 type Download = Awaited<ReturnType<Window["naiDesktop"]["artistDetectiveDownloadStatus"]>>;
 const bytes = (value: number) => value >= 1024 ** 3 ? `${(value / 1024 ** 3).toFixed(2)} GiB` : `${(value / 1024 ** 2).toFixed(1)} MiB`;
 const DOWNLOAD_STAGE: Record<string, string> = { idle: "按需下载", downloading: "下载中", verifying: "校验 SHA-256", extracting: "解压中", checking: "检查 CUDA 与模型", complete: "安装完成", cancelled: "已取消，可继续", failed: "安装失败" };
 const KEY = "langbai.artist-detective.v1";
+function restoreRanges(value:unknown):DetectiveArtistRangeDrafts {
+  if(!value || typeof value!=="object" || Array.isArray(value))return {};
+  return Object.fromEntries(Object.entries(value).slice(0,32).flatMap(([tag,range])=>
+    tag.length<=200 && typeof range?.min==="string" && typeof range?.max==="string"
+      ? [[tag,{min:range.min.slice(0,12),max:range.max.slice(0,12)}]] : []));
+}
 function restore(): Draft {
   try {
     const value = JSON.parse(localStorage.getItem(KEY) ?? "null");
     if (value && typeof value.prompt === "string" && typeof value.style === "string") {
       detectiveRounds(value.budget);
-      return { lockedArtistText: typeof value.lockedArtistText==="string"?value.lockedArtistText:"", target: value.target ?? null, prompt: value.prompt, style: value.style,
+      return { lockedArtistText: typeof value.lockedArtistText==="string"?value.lockedArtistText:"", lockedArtistRanges: restoreRanges(value.lockedArtistRanges), target: value.target ?? null, prompt: value.prompt, style: value.style,
         subjectHint: typeof value.subjectHint === "string" ? value.subjectHint : "", knownCharacter: value.knownCharacter === true,
         reverseMode: value.reverseMode === "tags" || value.reverseMode === "natural" ? value.reverseMode : "mixed",
         budget: value.budget, parameters: detectiveParameters(value.parameters) };
     }
   } catch { /* new or invalid settings */ }
-  return { lockedArtistText:"", target: null, prompt: "", style: "", subjectHint: "", knownCharacter: false, reverseMode: "mixed", budget: 300, parameters: detectiveParameters() };
+  return { lockedArtistText:"", lockedArtistRanges:{}, target: null, prompt: "", style: "", subjectHint: "", knownCharacter: false, reverseMode: "mixed", budget: 300, parameters: detectiveParameters() };
 }
 const STAGE: Record<string, string> = { idle: "未开始", loading: "校验与加载本地模型", retrieving: "检索相似画师组合", generating: "正在生成", generated: "图片已保存", scoring: "本地评分", ranking: "本地筛选下一轮组合", rate_limited: "请求限流等待", scored: "本轮评分完成", complete: "迭代完成", failed: "任务已停止" };
 
@@ -57,6 +63,22 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
     return()=>window.removeEventListener("langbai:workspace-imported",refresh);
   },[active]);
   const patch = (value: Partial<Draft>) => setDraft(s => ({ ...s, ...value }));
+  const patchLockedRange = (tag:string, field:"min"|"max", value:string) => setDraft(current=>{
+    const key=tag.toLowerCase();
+    const ranges=Object.fromEntries(parseDetectiveArtists(current.lockedArtistText)
+      .filter(artist=>Object.hasOwn(current.lockedArtistRanges,artist.tag.toLowerCase()))
+      .map(artist=>[artist.tag.toLowerCase(),current.lockedArtistRanges[artist.tag.toLowerCase()]]));
+    const next={...(Object.hasOwn(ranges,key)?ranges[key]:{min:"",max:""}),[field]:value};
+    if(next.min||next.max)ranges[key]=next;
+    else delete ranges[key];
+    return {...current,lockedArtistRanges:ranges};
+  });
+  let lockedArtists:DetectiveLockedArtist[]=[];
+  let lockedArtistError="";
+  try {
+    lockedArtists=parseDetectiveArtists(draft.lockedArtistText);
+    parseDetectiveArtists(draft.lockedArtistText,draft.lockedArtistRanges);
+  } catch(reason) { lockedArtistError=reason instanceof Error ? reason.message : String(reason); }
   const patchParameters = (value: Partial<DetectiveParameters>) => {
     try { patch({ parameters: detectiveParameters({...draft.parameters, ...value}) }); } catch(e) { setError(String(e)); }
   };
@@ -189,6 +211,24 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
             aria-describedby="detective-locked-artists-help" onChange={e=>patch({lockedArtistText:e.target.value})} />
         </label>
         <small id="detective-locked-artists-help">{ft("支持手动添加目录外标签，逗号或换行分隔，最多 8 位。每张搜索图和复测图都保留固定画师；未指定权重时用 1.0。")}</small>
+        {lockedArtists.length>0 && <details className="detective-parameters" open={lockedArtists.some(({tag})=>Object.hasOwn(draft.lockedArtistRanges,tag.toLowerCase())) || undefined}>
+          <summary>{ft("固定画师权重范围（可选）")}</summary>
+          <p id="detective-weight-range-help">{ft("两栏留空时使用原固定权重；填写两端后，仅在范围内尝试权重，每轮保留该画师，其他画师照常搜索。")}</p>
+          {lockedArtists.map(({tag,weight})=>{
+            const key=tag.toLowerCase();
+            const range=Object.hasOwn(draft.lockedArtistRanges,key)?draft.lockedArtistRanges[key]:undefined;
+            return <fieldset key={tag}>
+              <legend>{tag} · {ft("原固定权重")} {weight.toFixed(2)}</legend>
+              <div className="detective-parameter-grid">{(["min","max"] as const).map(field=><label key={field}>
+                <span>{ft(field==="min"?"权重下限":"权重上限")}</span>
+                <input type="number" aria-label={`${tag} · ${ft(field==="min"?"权重下限":"权重上限")}`}
+                  aria-describedby="detective-weight-range-help" min={.25} max={2.4} step={.01} disabled={active}
+                  value={range?.[field]??""} onChange={e=>patchLockedRange(tag,field,e.target.value)}/>
+              </label>)}</div>
+            </fieldset>;
+          })}
+        </details>}
+        {lockedArtistError && <p className="artist-error" role="alert">{ft(lockedArtistError)}</p>}
         <section className="detective-parameters">
           <h3>{ft("迭代图片保存位置")}</h3>
           <p style={{overflowWrap:"anywhere"}}>{snapshot?.outputRoot??ft("默认保存到任务目录")}</p>
@@ -229,7 +269,7 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
     </section>
     <section className="artist-lab-actions" data-tool-anchor="run" tabIndex={-1}>
       {snapshot?.running ? <Button variant="danger" disabled={busy} onClick={() => void action(() => window.naiDesktop.artistDetectiveStop())}>{ft("停止（保留当前请求结果）")}</Button>
-        : <Button variant="primary" disabled={active || !runtimeVerified || !draft.target || !draft.prompt.trim()} onClick={() => void action(() => window.naiDesktop.artistDetectiveStart({ image: draft.target!.filePath, prompt: draft.prompt, style: draft.style, budget: draft.budget, parameters: draft.parameters, lockedArtists:parseDetectiveArtists(draft.lockedArtistText) }))}>{snapshot?.directory ? recoveryText.newRun : ft("开始自动迭代")}</Button>}
+        : <Button variant="primary" disabled={active || !runtimeVerified || !draft.target || !draft.prompt.trim() || Boolean(lockedArtistError)} onClick={() => void action(() => window.naiDesktop.artistDetectiveStart({ image: draft.target!.filePath, prompt: draft.prompt, style: draft.style, budget: draft.budget, parameters: draft.parameters, lockedArtists:parseDetectiveArtists(draft.lockedArtistText,draft.lockedArtistRanges) }))}>{snapshot?.directory ? recoveryText.newRun : ft("开始自动迭代")}</Button>}
       {!snapshot?.running && snapshot?.recovery?.supported && snapshot.recovery.manifestSha256 && <Button disabled={active} onClick={()=>void action(()=>window.naiDesktop.artistDetectiveResume({directory:snapshot.directory!,manifestSha256:snapshot.recovery!.manifestSha256!,pendingRequestHash:snapshot.recovery!.pendingRequestHash}))}>{recoveryText.resume}</Button>}
       <span role="status">{snapshot ? ft("{stage} · {done}/{total} 张",{stage:snapshot.stage==='paused'?recoveryText.paused:ft(STAGE[snapshot.stage] ?? snapshot.stage),done:snapshot.completed,total:snapshot.budget}) : ft("读取状态…")}</span>
       <Button disabled={!snapshot?.directory} onClick={() => void window.naiDesktop.artistDetectiveOpenResults()}>{ft("打开结果目录")}</Button>

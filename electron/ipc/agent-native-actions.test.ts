@@ -45,7 +45,9 @@ it('clear requires explicit image choice, Agent confirmation once, binds directo
 });
 it('single Agent approval starts a bounded validated run and status/stop stay responsive',async()=>{
  const approvals=createImageApprovals(2000),f=fixture(vi.fn(r=>approvals.wait(r)));
- const revision=await f.read(),args={action:'detective.start',prompt:'fixture scene',style:'',budget:24,attachmentId:'known',expectedRevision:revision};
+ const lockedArtists=[{tag:'fixture_artist',weight:1,weightRange:{min:.75,max:1.15}}];
+ const revision=await f.read(),args={action:'detective.start',prompt:'fixture scene',style:'',budget:24,attachmentId:'known',expectedRevision:revision,lockedArtists};
+ expect(f.gateway.catalog['detective.start'].help).toContain('weightRange');
  const pending=f.call(args);
  const query=()=>approvals.execute({tool:'studio_image_approval',args:{},sessionId:'native-test'});
  await vi.waitFor(()=>expect(query().data).not.toBeNull());
@@ -53,12 +55,13 @@ it('single Agent approval starts a bounded validated run and status/stop stay re
  const id=query().data!.id;
  approvals.execute({tool:'studio_resolve_image_approval',sessionId:'native-test',args:{id,approved:true}});
  expect((await pending).ok).toBe(true);expect(f.invoke).toHaveBeenCalledTimes(1);expect(f.approve).toHaveBeenCalledTimes(1);
- expect(f.invoke.mock.calls[0][1]).toMatchObject({image:'C:/fixture/known.png',budget:24,parameters:{model:'nai-diffusion-4-5-full'}});
+ expect(f.approve.mock.calls[0][0].args.lockedArtists).toEqual(lockedArtists);
+ expect(f.invoke.mock.calls[0][1]).toMatchObject({image:'C:/fixture/known.png',budget:24,parameters:{model:'nai-diffusion-4-5-full'},lockedArtists});
  expect((await f.call({action:'detective.stop'})).ok).toBe(true);expect(f.state.running).toBe(false);approvals.close();
 });
 it('rejects stale approval, arbitrary paths, caller consent flags and invalid paid inputs before execution',async()=>{
  const f=fixture();const revision=await f.read();
- for(const extra of [{budget:25},{image:'C:/arbitrary'},{confirmed:true},{parameters:{steps:999}},{attachmentId:'unknown'}]){
+ for(const extra of [{budget:25},{image:'C:/arbitrary'},{confirmed:true},{parameters:{steps:999}},{attachmentId:'unknown'},{lockedArtists:[{tag:'p',weight:1,weightRange:{min:2,max:1}}]}]){
   const r=await f.call({action:'detective.start',prompt:'fixture',style:'',budget:24,expectedRevision:revision,...extra});expect(r.ok,r.output).toBe(false);
  }
  expect(f.approve).not.toHaveBeenCalled();expect(f.invoke).not.toHaveBeenCalled();

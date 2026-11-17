@@ -21,7 +21,7 @@ const detectiveActions:Record<string,Spec>={
  'detective.downloadDirectory':{title:'选择模型下载目录',effect:'write'},
  'detective.download':{title:'下载并安装当前画风模型和环境',effect:'confirm',help:'先读取下载大小、版本与目录；仅此操作下载，已验证模型不重复下载。'},
  'detective.cancelDownload':{title:'停止画风模型下载',effect:'write'},
- 'detective.start':{title:'开始画风自动迭代（可能收费）',effect:'confirm',fields:['prompt','style','budget','attachmentId','parameters','lockedArtists'],help:'prompt、style 为字符串；budget 为至少24的偶数；attachmentId 可选，来自历史，省略使用当前目标图；parameters 可选，沿用软件校验规则；lockedArtists 可选，最多 8 个 {tag,weight}，每张图保留；使用本人通过目录选择器设置的保存位置。'},
+ 'detective.start':{title:'开始画风自动迭代（可能收费）',effect:'confirm',fields:['prompt','style','budget','attachmentId','parameters','lockedArtists'],help:'prompt、style 为字符串；budget 为至少24的偶数；attachmentId 可选，来自历史，省略使用当前目标图；parameters 可选，沿用软件校验规则；lockedArtists 可选，最多 8 个 {tag,weight,weightRange?:{min,max}}，每张图保留，范围两端须在 0.25–2.4 内且最多两位小数，省略范围时权重固定；使用本人通过目录选择器设置的保存位置。'},
  'detective.stop':{title:'停止画风迭代并保留已完成图片',effect:'write'},
  'detective.clear':{title:'清空画风迭代结果',effect:'confirm',fields:['deleteImages'],help:'deleteImages 必须明确选择 true 或 false；true 将生成图片移入回收站，false 只清空结果展示，参考图保留。'},
  'detective.openResults':{title:'打开画风迭代结果目录',effect:'write'},

@@ -23,7 +23,7 @@ NovelAI 圖像創作工作臺，介面支援簡體中文、繁體中文、英語
 
 ## 本次更新
 
-桌面與手機新增圖片中繼資料批次處理和 NAX 線上畫廊目錄。可在設定、新手引導或提示詞工具下載四種語言的離線 Tag 詞庫。
+Windows 更新後首次啟動會並排預覽兩款介面；使用者可保留目前介面或切換，不會自動更換。之後可在「設定 → 外觀 → 桌面介面配置」隨時切換。畫風自動迭代可為每位固定繪師設定選用的權重範圍；留空則保留原權重，其他繪師照常搜尋。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
