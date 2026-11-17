@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {execFileSync,spawnSync} from 'node:child_process';
-import {assertReleasePlatformContract,assertReleaseEvidenceFiles,assertV286CloudNativeRun,artistIterationScenarios} from './release-platform-contract.mjs';
+import {assertReleasePlatformContract,assertReleaseEvidenceFiles,assertV286CloudNativeRun,assertV297CloudNativeRun,artistIterationScenarios} from './release-platform-contract.mjs';
 import {assertDesktopMetadataGates,assertMobileMetadataGates} from './image-metadata-release-contract.mjs';
 import {assertFivePlatformMobileRun,assertReleaseArtifactScope,assertUnsignedIosPackage,unsignedIosIpaInspectionPython,supplementalArtifactPolicyId,supplementalArtifactPolicySha256} from './release-artifact-scope.mjs';
 const call=(command,args)=>execFileSync(command,args,{encoding:'utf8',timeout:600000,maxBuffer:8*1024*1024}).trim();
@@ -14,15 +14,23 @@ const waiveWindowsArtistGpuV292=process.env.WAIVE_WINDOWS_ARTIST_GPU_V292==='tru
 const waiveWindowsArtistGpuV293=process.env.WAIVE_WINDOWS_ARTIST_GPU_V293==='true';
 const waiveWindowsArtistGpuV294=process.env.WAIVE_WINDOWS_ARTIST_GPU_V294==='true';
 const waiveWindowsArtistGpuV295=process.env.WAIVE_WINDOWS_ARTIST_GPU_V295==='true';
-const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV292||waiveWindowsArtistGpuV293||waiveWindowsArtistGpuV294||waiveWindowsArtistGpuV295;
+const waiveWindowsArtistGpuV297=process.env.WAIVE_WINDOWS_ARTIST_GPU_V297==='true';
+const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV292||waiveWindowsArtistGpuV293||waiveWindowsArtistGpuV294||waiveWindowsArtistGpuV295||waiveWindowsArtistGpuV297;
 const nativeRun=process.env.FEATURE_RUN;
 if(waiveWindowsArtistGpu){
- if((waiveWindowsArtistGpuV286&&version!=='2.8.6')||(waiveWindowsArtistGpuV292&&version!=='2.9.2')||(waiveWindowsArtistGpuV293&&version!=='2.9.3')||(waiveWindowsArtistGpuV294&&version!=='2.9.4')||(waiveWindowsArtistGpuV295&&version!=='2.9.5')||!/^\d+$/.test(nativeRun??''))throw Error('Explicit version-bound cloud acceptance workflow is required');
- assertV286CloudNativeRun(JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs'])),{sourceSha:sha});
+ if((waiveWindowsArtistGpuV286&&version!=='2.8.6')||(waiveWindowsArtistGpuV292&&version!=='2.9.2')||(waiveWindowsArtistGpuV293&&version!=='2.9.3')||(waiveWindowsArtistGpuV294&&version!=='2.9.4')||(waiveWindowsArtistGpuV295&&version!=='2.9.5')||(waiveWindowsArtistGpuV297&&version!=='2.9.7')||!/^\d+$/.test(nativeRun??''))throw Error('Explicit version-bound cloud acceptance workflow is required');
+ const run=JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs']));
+ if(waiveWindowsArtistGpuV297){
+  if(sha!=='c7e3c194e90e9a8d4494d04604518ec5c5d86de5'||nativeRun!=='44124653287'||process.env.BUILD_RUN!=='44124636191'||process.env.MOBILE_RUN!=='44124643712')throw Error('v2.9.7 waiver requires the pinned accepted source and artifact runs');
+  assertV297CloudNativeRun(run,{sourceSha:sha});
+  if(process.env.METADATA_RUN!=='44124668172')throw Error('Pinned metadata regression required');
+  const metadata=JSON.parse(call('gh',['run','view',process.env.METADATA_RUN,'--json','headSha,status,conclusion,jobs']));
+  if(metadata.headSha!==sha||metadata.status!=='completed'||metadata.conclusion!=='success'||metadata.jobs.length!==4||metadata.jobs.some(job=>job.status!=='completed'||job.conclusion!=='success'))throw Error('All same-source image metadata regression jobs must pass');
+ }else assertV286CloudNativeRun(run,{sourceSha:sha});
 }
 const featureParity=JSON.parse(fs.readFileSync('release-evidence/feature-parity.json','utf8'));
-assertReleasePlatformContract(featureParity,{version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295});
-assertReleaseEvidenceFiles(featureParity,'release-evidence',{waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295});
+assertReleasePlatformContract(featureParity,{version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV297});
+assertReleaseEvidenceFiles(featureParity,'release-evidence',{waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV297});
 const buildRun=process.env.BUILD_RUN;
 if(!/^\d+$/.test(buildRun??''))throw Error('A verified desktop build run is required');
 const build=JSON.parse(call('gh',['run','view',buildRun,'--json','headSha,jobs']));
@@ -112,13 +120,14 @@ if(!/not found/i.test(existing.stderr??''))throw Error('Release existence check 
 const releaseNotes=fs.readFileSync('docs/RELEASE_NOTES.md','utf8');
 if(waiveWindowsArtistGpuV286&&!releaseNotes.includes('Windows 画风迭代的本机 GPU 实测未验收'))throw Error('Release notes must disclose the untested Windows GPU scenarios');
 // v2.9.2, v2.9.3, and v2.9.4 keep the precise untested scope in verification.json without a separate changelog bullet.
-const publicNotesFile=waiveWindowsArtistGpuV286?'release-evidence/public-release-notes.md':'docs/RELEASE_NOTES.md';
+const publicNotesFile=(waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV297)?'release-evidence/public-release-notes.md':'docs/RELEASE_NOTES.md';
+if(waiveWindowsArtistGpuV297)fs.writeFileSync(publicNotesFile,releaseNotes.trimEnd()+'\n\n- Windows 画风迭代的 GPU 实测本版未执行；其余 186 项必验项均通过。\n','utf8');
 if(waiveWindowsArtistGpuV286){
  const publicNotes=releaseNotes.replace(/^- Windows 画风迭代的本机 GPU 实测未验收[^\r\n]*(?:\r?\n|$)/m,'');
  if(publicNotes===releaseNotes)throw Error('Missing canonical Windows GPU waiver line');
  fs.writeFileSync(publicNotesFile,publicNotes,'utf8');
 }
-const evidence={version,sha,...(waiveWindowsArtistGpu?{nativeRun,fullScopeCertified:false,waived:[{platform:'windows',feature:'artist-iteration',scenarios:artistIterationScenarios,status:'not-tested'}]}:{}),mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
+const evidence={version,sha,...(waiveWindowsArtistGpuV297?{metadataRun:process.env.METADATA_RUN}:{}),...(waiveWindowsArtistGpu?{nativeRun,fullScopeCertified:false,waived:[{platform:'windows',feature:'artist-iteration',scenarios:artistIterationScenarios,status:'not-tested'}]}:{}),mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
 fs.writeFileSync('release-assets/verification.json',JSON.stringify(evidence,null,2));
 call('gh',['release','create',tag,...files,'release-assets/verification.json','--target',sha,'--draft','--title',`Langbai NovelAI Studio ${tag}`,'--notes-file',publicNotesFile]);
 const draft=JSON.parse(call('gh',['release','view',tag,'--json','isDraft,assets']));
