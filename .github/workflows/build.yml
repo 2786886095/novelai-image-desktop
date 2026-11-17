@@ -1,9 +1,10 @@
 name: Build
-
 on:
   push:
-    branches: [main]
-    tags: ['v*']
+    branches:
+      - main
+    tags:
+      - v*
   workflow_dispatch:
     inputs:
       publish_v297_gpu_waiver:
@@ -30,12 +31,10 @@ on:
         description: Same-source native feature run for all five release platforms (Windows/macOS/Linux/Android/iOS)
         type: string
         required: false
-
       waive_windows_artist_gpu_v286:
         description: v2.8.6 only; allow only the explicitly untested local Windows Artist GPU cell
         type: boolean
         default: false
-
       waive_windows_artist_gpu_v292:
         description: v2.9.2 only; skip local Windows Artist GPU proof and require all other hosted checks
         type: boolean
@@ -52,18 +51,17 @@ on:
         description: v2.9.5 only; skip local Windows Artist GPU proof and require all other hosted checks
         type: boolean
         default: false
-
-# Needed for softprops/action-gh-release to create/attach to Releases on v* tags.
+      v297_ios_ui_supplement:
+        description: Retry only same-source iOS UI on macOS Intel after hosted ARM capacity cancellations; no functional waiver
+        type: boolean
+        default: false
 permissions:
   contents: write
-
-# Force bundled JS actions onto Node 24 (silences the Node 20 deprecation notice).
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
-    if: ${{ !inputs.verified_build_run && !inputs.publish_v297_gpu_waiver }}
+    if: ${{ !inputs.verified_build_run && !inputs.publish_v297_gpu_waiver && !inputs.v297_ios_ui_supplement }}
     strategy:
       fail-fast: false
       matrix:
@@ -82,31 +80,23 @@ jobs:
             name: linux
             artifacts: |
               release/*.AppImage
-
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
-
     steps:
       - name: Preserve exact source bytes before checkout
         shell: bash
         working-directory: ${{ github.workspace }}
         run: git config --global core.autocrlf false
-
       - name: Checkout
         uses: actions/checkout@v5
-
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          # Electron 42 requires Node >=22.12. Keep CI on the same supported
-          # runtime family used by the packaged application tooling.
           node-version: 24
           cache: npm
-
       - name: Record and require actual Ubuntu 24.04 x64 desktop host
         if: runner.os == 'Linux'
         run: node scripts/feature-acceptance/linux-release-baseline.mjs --source-sha "${{ github.sha }}" --phase desktop-build --output "${{ runner.temp }}/linux-baseline/desktop-build.json"
-
       - name: Upload Linux baseline identity and raw host commands
         if: always() && runner.os == 'Linux'
         uses: actions/upload-artifact@v4
@@ -114,35 +104,26 @@ jobs:
           name: linux-baseline-desktop-build-${{ github.sha }}
           path: ${{ runner.temp }}/linux-baseline/desktop-build.json
           if-no-files-found: error
-
       - name: Install dependencies
         env:
-          # Linux restores the same four verified CUDA binaries in the next step.
           ONNXRUNTIME_NODE_INSTALL_CUDA: ${{ runner.os == 'Linux' && 'skip' || '' }}
         run: npm ci
       - name: Stage verified Linux ONNX Runtime CUDA binaries
         if: runner.os == 'Linux'
         shell: bash
         run: bash scripts/feature-acceptance/prepare-ci-onnx-cuda.sh
-
       - name: Verify Linux baseline identity policy
         if: ${{ !inputs.candidate_build_only }}
         run: node --test scripts/feature-acceptance/linux-release-baseline.test.mjs
-
       - name: Stage and install checksum-verified Electron
         shell: bash
         run: |
           set -euo pipefail
           node scripts/feature-acceptance/prepare-ci-electron.mjs --package
           node node_modules/electron/install.js
-
-      # Electron 42 may download its binary lazily even after npm ci. Without a
-      # serial warm-up, parallel Vitest workers can race while creating
-      # electron/dist on fresh Windows and macOS runners (directory exists).
       - name: Warm Electron binary
         if: runner.os != 'Linux'
         run: npx electron --version
-
       - name: Configure Linux test display and Chromium sandbox (CI only)
         if: runner.os == 'Linux' && !inputs.candidate_build_only
         shell: bash
@@ -151,7 +132,6 @@ jobs:
           node -e "console.log(require('electron'))"
           sudo chown root:root node_modules/electron/dist/chrome-sandbox
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
-
       - name: Validate desktop source
         if: ${{ !inputs.candidate_build_only }}
         env:
@@ -159,7 +139,6 @@ jobs:
           COMFY_LIFECYCLE_EVIDENCE_DIR: ${{ runner.temp }}/comfyui-ci/lifecycle
           COMFY_SERVICE_EVIDENCE_DIR: ${{ runner.temp }}/comfyui-ci/service
         run: npm run typecheck && npm test
-
       - name: Retain ComfyUI real-process fixture diagnostics
         if: always() && !inputs.candidate_build_only
         uses: actions/upload-artifact@v4
@@ -168,7 +147,6 @@ jobs:
           path: ${{ runner.temp }}/comfyui-ci/
           if-no-files-found: warn
           retention-days: 7
-
       - name: Verify official image metadata
         if: ${{ !inputs.candidate_build_only }}
         shell: bash
@@ -179,27 +157,21 @@ jobs:
           else
             npm run test:metadata
           fi
-
       - name: Install both macOS sharp architectures
         if: runner.os == 'macOS'
         run: |
           node --test scripts/install-macos-sharp.test.mjs
           node scripts/install-macos-sharp.mjs
-
       - name: Build app (${{ matrix.name }})
         run: npm run build && npx electron-builder --publish never
         env:
-          # No signing certs in CI — skip macOS code signing / notarization.
           CSC_IDENTITY_AUTO_DISCOVERY: false
-
       - name: Install CJK fonts for Linux UI verification
         if: runner.os == 'Linux' && !inputs.candidate_build_only
         run: sudo apt-get update -qq && sudo apt-get install -y fonts-noto-cjk
-
       - name: Verify packaged native runtime and startup
         if: ${{ !inputs.candidate_build_only }}
         run: node scripts/verify-packaged-runtime.mjs
-
       - name: Decode final Windows installers with the actual NSIS decoder
         if: runner.os == 'Windows' && !inputs.candidate_build_only
         shell: pwsh
@@ -208,14 +180,12 @@ jobs:
             node scripts/verify-windows-installer.mjs $_.FullName release/win-unpacked release/installer-smoke
             if ($LASTEXITCODE -ne 0) { throw 'Final installer payload differs from build output' }
           }
-
       - name: Verify Windows clean installation and upgrade from 2.4.0
         if: runner.os == 'Windows' && !inputs.candidate_build_only
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/verify-windows-upgrade.ps1
-
       - name: Verify real on-demand Agent download, startup and offline reuse
         if: runner.os == 'Windows' && !inputs.candidate_build_only
         env:
@@ -223,7 +193,6 @@ jobs:
         run: |
           node --test scripts/ci-github-api-auth.test.cjs
           node scripts/verify-agent-on-demand.cjs release/agent-smoke
-
       - name: Upload packaged smoke evidence
         if: always() && !inputs.candidate_build_only
         uses: actions/upload-artifact@v4
@@ -238,25 +207,21 @@ jobs:
             release/upgrade-smoke/*.jsonl
             release/agent-smoke/verification.json
           if-no-files-found: warn
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: novelai-image-desktop-${{ matrix.name }}
           path: ${{ matrix.artifacts }}
           if-no-files-found: error
-
       - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v') && !inputs.candidate_build_only
         uses: softprops/action-gh-release@v2
         with:
           body_path: docs/RELEASE_NOTES.md
-          # Desktop hotfixes are published only after all release assets are verified.
           draft: true
           files: ${{ matrix.artifacts }}
-
   mac-intel-smoke:
-    if: ${{ !inputs.candidate_build_only && !inputs.publish_v297_gpu_waiver }}
+    if: ${{ !inputs.candidate_build_only && !inputs.publish_v297_gpu_waiver && !inputs.v297_ios_ui_supplement }}
     needs: build
     runs-on: macos-15-intel
     timeout-minutes: 15
@@ -265,7 +230,6 @@ jobs:
         shell: bash
         working-directory: ${{ github.workspace }}
         run: git config --global core.autocrlf false
-
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
@@ -289,10 +253,11 @@ jobs:
             release/packaged-smoke/*.json
             release/packaged-smoke/*.log
             release/packaged-smoke/*.png
-
   publish-verified:
-    needs: [build, mac-intel-smoke]
-    if: always() && !inputs.candidate_build_only && !inputs.publish_v297_gpu_waiver && github.event_name == 'workflow_dispatch' && inputs.publish_after_verification && (inputs.verified_build_run || (needs.build.result == 'success' && needs.mac-intel-smoke.result == 'success'))
+    needs:
+      - build
+      - mac-intel-smoke
+    if: always() && !inputs.candidate_build_only && !inputs.publish_v297_gpu_waiver && github.event_name == 'workflow_dispatch' && inputs.publish_after_verification && (inputs.verified_build_run || (needs.build.result == 'success' && needs.mac-intel-smoke.result == 'success')) && !inputs.v297_ios_ui_supplement
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -303,7 +268,6 @@ jobs:
         shell: bash
         working-directory: ${{ github.workspace }}
         run: git config --global core.autocrlf false
-
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
@@ -337,9 +301,8 @@ jobs:
           MOBILE_RUN: ${{ inputs.mobile_run }}
           BUILD_RUN: ${{ inputs.verified_build_run || github.run_id }}
         run: node scripts/publish-verified-release.mjs
-
   publish-v297-explicit-gpu-waiver:
-    if: github.event_name == 'workflow_dispatch' && inputs.publish_v297_gpu_waiver && !inputs.candidate_build_only && !inputs.publish_after_verification
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_v297_gpu_waiver && !inputs.candidate_build_only && !inputs.publish_after_verification && !inputs.v297_ios_ui_supplement
     runs-on: ubuntu-latest
     timeout-minutes: 125
     permissions:
@@ -378,24 +341,24 @@ jobs:
           pattern: novelai-image-desktop-*
           path: release-source/release-assets
           merge-multiple: true
-          run-id: '44124636191'
+          run-id: "44124636191"
           github-token: ${{ github.token }}
       - uses: actions/download-artifact@v4
         with:
           name: five-platform-feature-evidence
           path: release-source/release-evidence
-          run-id: '44124653287'
+          run-id: "44124653287"
           github-token: ${{ github.token }}
       - name: Verify exact artifacts and publish v2.9.7
         working-directory: release-source
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          BUILD_RUN: '44124636191'
-          MOBILE_RUN: '44124643712'
-          FEATURE_RUN: '44124653287'
-          METADATA_RUN: '44124668172'
-          WAIVE_WINDOWS_ARTIST_GPU_V297: 'true'
+          BUILD_RUN: "44124636191"
+          MOBILE_RUN: "44124643712"
+          FEATURE_RUN: "44124653287"
+          METADATA_RUN: "44124668172"
+          WAIVE_WINDOWS_ARTIST_GPU_V297: "true"
         run: node ../publisher-policy/scripts/publish-verified-release.mjs
       - name: Fast-forward main and verify the public release
         working-directory: release-source
@@ -413,3 +376,158 @@ jobs:
           name: v297-verified-publication-ledger
           path: release-source/release-assets/verification.json
           if-no-files-found: ignore
+  v297-ios-ui-supplement:
+    if: github.event_name == 'workflow_dispatch' && inputs.v297_ios_ui_supplement && !inputs.publish_v297_gpu_waiver && !inputs.publish_after_verification && !inputs.candidate_build_only
+    runs-on: macos-15-intel
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: release-source
+    steps:
+      - name: Preserve exact committed bytes before checkout
+        shell: bash
+        run: |-
+          export GITHUB_SHA=c7e3c194e90e9a8d4494d04604518ec5c5d86de5
+          git config --global core.autocrlf false
+        working-directory: ${{ github.workspace }}
+      - uses: actions/checkout@v5
+        with:
+          ref: c7e3c194e90e9a8d4494d04604518ec5c5d86de5
+          persist-credentials: false
+          path: release-source
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+          cache: npm
+          cache-dependency-path: release-source/package-lock.json
+      - name: Verify exact checkout bytes against index and commit
+        shell: bash
+        run: |
+          export GITHUB_SHA=c7e3c194e90e9a8d4494d04604518ec5c5d86de5
+          node <<'NODE'
+          const fs = require('node:fs');
+          const cp = require('node:child_process');
+          const crypto = require('node:crypto');
+          function git(args, encoding) {
+            const result = cp.spawnSync('git', args, { encoding, maxBuffer: 64 * 1024 * 1024 });
+            if (result.error || result.status !== 0) {
+              throw new Error('Git command failed: ' + JSON.stringify(args) + '; exit=' + result.status + '; ' + (result.stderr || ''));
+            }
+            return result.stdout;
+          }
+          const head = git(['rev-parse', 'HEAD'], 'utf8').trim();
+          if (!/^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA || '') || head !== process.env.GITHUB_SHA) {
+            throw new Error('Checkout HEAD must equal GITHUB_SHA.');
+          }
+          // Index must still be exactly the committed tree; this alone is NOT a raw-byte proof.
+          git(['diff', '--cached', '--exit-code'], 'utf8');
+          const records = git(['ls-files', '--stage', '-z']).toString('utf8').split('\0').filter(Boolean);
+          if (!records.length) throw new Error('No tracked checkout files found.');
+          const mismatches = [];
+          for (const record of records) {
+            const match = /^([0-7]{6}) ([a-f0-9]{40}) ([0-3])\t([\s\S]+)$/.exec(record);
+            if (!match || match[3] !== '0') throw new Error('Unmerged or invalid Git index entry.');
+            const mode = match[1], oid = match[2], file = match[4];
+            let bytes;
+            if (mode === '120000') {
+              bytes = fs.readlinkSync(file, { encoding: 'buffer' });
+            } else if (mode === '100644' || mode === '100755') {
+              bytes = fs.readFileSync(file);
+            } else {
+              throw new Error('Unsupported tracked entry mode: ' + mode + ' ' + file);
+            }
+            const actual = crypto.createHash('sha1').update(Buffer.from('blob ' + bytes.length + '\0')).update(bytes).digest('hex');
+            if (actual !== oid) mismatches.push(file);
+          }
+          if (mismatches.length) throw new Error('Raw checkout byte mismatch: ' + JSON.stringify(mismatches));
+          console.log(JSON.stringify({ observed: 'COMMITTED_INDEX_RAW_BYTES_VERIFIED', sourceSha: head, verifiedFiles: records.length, full195Certified: false }));
+          NODE
+      - run: |-
+          export GITHUB_SHA=c7e3c194e90e9a8d4494d04604518ec5c5d86de5
+          npm ci --ignore-scripts --no-audit --no-fund
+        shell: bash
+      - name: Verify pinned mobile metadata runtime without regeneration
+        run: |-
+          export GITHUB_SHA=c7e3c194e90e9a8d4494d04604518ec5c5d86de5
+          node scripts/build-mobile-metadata-runtime.mjs --check
+        shell: bash
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.24.0
+          channel: stable
+          cache: true
+      - run: |-
+          export GITHUB_SHA=c7e3c194e90e9a8d4494d04604518ec5c5d86de5
+          flutter pub get
+        working-directory: release-source/mobile
+        shell: bash
+      - name: Check strict Simulator locale and own-device cleanup
+        run: |-
+          export GITHUB_SHA=c7e3c194e90e9a8d4494d04604518ec5c5d86de5
+          node --test scripts/feature-acceptance/ios-simulator-locale-regression.test.mjs scripts/feature-acceptance/stop-disposable-ios-simulator.test.mjs
+        shell: bash
+      - name: Create and boot a new disposable iOS Simulator
+        shell: bash
+        run: |
+          export GITHUB_SHA=c7e3c194e90e9a8d4494d04604518ec5c5d86de5
+          node scripts/feature-acceptance/create-disposable-ios-simulator.mjs
+      - name: Run independently counted component and client-scenario entries
+        run: |-
+          export GITHUB_SHA=c7e3c194e90e9a8d4494d04604518ec5c5d86de5
+          node scripts/feature-acceptance/run-ci-mobile-entries.mjs ios "$FEATURE_SIMULATOR" "ui"
+        shell: bash
+      - name: Stop only the newly created test simulator
+        if: always() && env.FEATURE_SIMULATOR != ''
+        run: |-
+          export GITHUB_SHA=c7e3c194e90e9a8d4494d04604518ec5c5d86de5
+          node scripts/feature-acceptance/stop-disposable-ios-simulator.mjs
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-components-ios-ui-c7e3c194e90e9a8d4494d04604518ec5c5d86de5
+          path: ${{ runner.temp }}/feature-native-ios/
+          if-no-files-found: error
+  v297-recombined-native-evidence:
+    needs:
+      - v297-ios-ui-supplement
+    if: github.event_name == 'workflow_dispatch' && inputs.v297_ios_ui_supplement
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: release-source
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: c7e3c194e90e9a8d4494d04604518ec5c5d86de5
+          path: release-source
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          path: publisher-policy
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-components-*-c7e3c194e90e9a8d4494d04604518ec5c5d86de5
+          path: ${{ runner.temp }}/all-native-evidence
+          run-id: "44124653287"
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-components-ios-ui-c7e3c194e90e9a8d4494d04604518ec5c5d86de5
+          path: ${{ runner.temp }}/all-native-evidence/native-components-ios-ui-c7e3c194e90e9a8d4494d04604518ec5c5d86de5
+      - name: Revalidate every same-source native scenario and only the approved GPU omission
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: node ../publisher-policy/scripts/v297-recombine-native-evidence.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v297-recombined-feature-evidence
+          path: ${{ runner.temp }}/v297-recombined-feature-evidence/
+          if-no-files-found: error
