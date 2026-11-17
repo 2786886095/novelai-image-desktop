@@ -6,6 +6,10 @@ on:
     tags: ['v*']
   workflow_dispatch:
     inputs:
+      publish_v296_gpu_waiver:
+        description: Publish the exact accepted v2.9.6 candidate; only Windows Artist GPU is untested
+        type: boolean
+        default: false
       candidate_build_only:
         description: Build private delivery candidates only; skip additional tests and forbid release publication
         type: boolean
@@ -59,7 +63,7 @@ env:
 
 jobs:
   build:
-    if: ${{ !inputs.verified_build_run }}
+    if: ${{ !inputs.verified_build_run && !inputs.publish_v296_gpu_waiver }}
     strategy:
       fail-fast: false
       matrix:
@@ -252,7 +256,7 @@ jobs:
           files: ${{ matrix.artifacts }}
 
   mac-intel-smoke:
-    if: ${{ !inputs.candidate_build_only }}
+    if: ${{ !inputs.candidate_build_only && !inputs.publish_v296_gpu_waiver }}
     needs: build
     runs-on: macos-15-intel
     timeout-minutes: 15
@@ -288,7 +292,7 @@ jobs:
 
   publish-verified:
     needs: [build, mac-intel-smoke]
-    if: always() && !inputs.candidate_build_only && github.event_name == 'workflow_dispatch' && inputs.publish_after_verification && (inputs.verified_build_run || (needs.build.result == 'success' && needs.mac-intel-smoke.result == 'success'))
+    if: always() && !inputs.candidate_build_only && !inputs.publish_v296_gpu_waiver && github.event_name == 'workflow_dispatch' && inputs.publish_after_verification && (inputs.verified_build_run || (needs.build.result == 'success' && needs.mac-intel-smoke.result == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -333,3 +337,59 @@ jobs:
           MOBILE_RUN: ${{ inputs.mobile_run }}
           BUILD_RUN: ${{ inputs.verified_build_run || github.run_id }}
         run: node scripts/publish-verified-release.mjs
+
+  publish-v296-explicit-gpu-waiver:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_v296_gpu_waiver && !inputs.candidate_build_only && !inputs.publish_after_verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      group: publish-v296-exact-candidate
+      cancel-in-progress: false
+    steps:
+      - name: Preserve exact bytes
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+        with:
+          path: publisher-policy
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          ref: b431e2f0706d76b7f29cce99459fcdf71d9e5ebd
+          path: release-source
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: novelai-image-desktop-*
+          path: release-source/release-assets
+          merge-multiple: true
+          run-id: '44043175127'
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: five-platform-feature-evidence
+          path: release-source/release-evidence
+          run-id: '44043280340'
+          github-token: ${{ github.token }}
+      - name: Verify exact artifacts and publish v2.9.6
+        working-directory: release-source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BUILD_RUN: '44043175127'
+          MOBILE_RUN: '44043184517'
+          FEATURE_RUN: '44043280340'
+          WAIVE_WINDOWS_ARTIST_GPU_V296: 'true'
+        run: node ../publisher-policy/scripts/publish-verified-release.mjs
+      - name: Retain verification record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v296-verified-publication-ledger
+          path: release-source/release-assets/verification.json
+          if-no-files-found: ignore
