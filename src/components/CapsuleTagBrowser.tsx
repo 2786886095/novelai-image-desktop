@@ -42,11 +42,11 @@ const feedback={
   "ko-KR":["선택됨","사이트 정보","이전","다음","검색을 지우거나 Esc로 둘러보기","사용자 태그로 추가","등급과 사이트 정보는 검색에서만 표시"],
 } as const;
 const pagingCopy={
-  "zh-CN":["全库标签","搜索范围","全库","当前分类","页码","跳转","匹配标签","浏览标签","标签未能载入，请重试。"],
-  "zh-TW":["全庫標籤","搜尋範圍","全庫","目前分類","頁碼","跳轉","符合的標籤","可瀏覽標籤","無法載入標籤，請重試。"],
-  "en-US":["All tags","Search scope","Entire dictionary","Current category","Page number","Go","matches","browsable tags","Could not load tags. Try again."],
-  "ja-JP":["全タグ","検索範囲","辞書全体","現在のカテゴリ","ページ番号","移動","一致タグ","閲覧タグ","タグを読み込めません。再試行してください。"],
-  "ko-KR":["전체 태그","검색 범위","전체 사전","현재 분류","페이지 번호","이동","일치 태그","탐색 태그","태그를 불러오지 못했습니다. 다시 시도하세요."],
+  "zh-CN":["全库标签","搜索范围","全库","当前分类","页码","跳转","匹配标签","浏览标签","标签未能载入，请重试。","重试"],
+  "zh-TW":["全庫標籤","搜尋範圍","全庫","目前分類","頁碼","跳轉","符合的標籤","可瀏覽標籤","無法載入標籤，請重試。","重試"],
+  "en-US":["All tags","Search scope","Entire dictionary","Current category","Page number","Go","matches","browsable tags","Could not load tags. Try again.","Retry"],
+  "ja-JP":["全タグ","検索範囲","辞書全体","現在のカテゴリ","ページ番号","移動","一致タグ","閲覧タグ","タグを読み込めません。再試行してください。","再試行"],
+  "ko-KR":["전체 태그","검색 범위","전체 사전","현재 분류","페이지 번호","이동","일치 태그","탐색 태그","태그를 불러오지 못했습니다. 다시 시도하세요.","재시도"],
 } as const;
 
 const SORT_KEY="langbai.capsule-tag-sort.v1";
@@ -269,7 +269,7 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
          </div>}
          <div ref={results} className="capsule-library-results" data-capsule-search-results={q?"":undefined} aria-busy={pending}>
           {pending?<p className="capsule-library-empty" role="status">{l[14]}</p>:
-           !data?<div className="capsule-library-empty" role="alert"><p>{paging[8]}</p><button type="button" className="capsule-library-more" onClick={()=>setRetry(value=>value+1)}>{l[7]}</button></div>:
+           !data?<div className="capsule-library-empty" role="alert"><p>{paging[8]}</p><button type="button" className="capsule-library-more" onClick={()=>setRetry(value=>value+1)}>{paging[9]}</button></div>:
            data.rows.length?<TagCards rows={data.rows} selected={selected} badges={badges} onPick={onPick}/>:
            <div className="capsule-library-empty"><p>{l[9]}</p>{q&&<button className="capsule-library-more" type="button" onClick={()=>onPick(q)}>{badges[5]}</button>}</div>}
          </div>

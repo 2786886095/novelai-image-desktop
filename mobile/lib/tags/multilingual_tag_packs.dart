@@ -284,6 +284,7 @@ class MultilingualTagPacks extends ChangeNotifier {
       .replaceAll(RegExp(r'\s+'), ' ');
 
   /// Return exact canonical matches and, optionally, exact translated matches.
+  /// Translated labels with more than one canonical tag are for search only.
   /// Searches are bounded; no full dictionary is loaded into Dart.
   Future<List<TagPackExactHit>?> lookupExact(Iterable<String> terms,
       {bool translations = false}) async {
@@ -298,17 +299,27 @@ class MultilingualTagPacks extends ChangeNotifier {
       final found = <String, TagPackHit>{};
       for (final col in ['key', if (translations) 'translated_key']) {
         for (var start = 0; start < keys.length; start += 160) {
-          final batch = keys.skip(start).take(160).toList();
+          final batch = keys.skip(start).take(160)
+              .where((term) => col == 'key' || !found.containsKey(term)).toList();
+          if (batch.isEmpty) continue;
           final marks = List.filled(batch.length, '?').join(',');
           final rows = await db.rawQuery(
               'SELECT tag,translated,count,category,$col AS term FROM terms '
               'WHERE $col IN ($marks) ORDER BY count DESC,tag', batch);
+          final matches = <String, TagPackHit>{};
+          final ambiguous = <String>{};
           for (final row in rows) {
-            found.putIfAbsent(row['term'] as String, () => (
-              tag: row['tag'] as String, description: row['translated'] as String,
+            final term = row['term'] as String;
+            final tag = row['tag'] as String;
+            if (col == 'translated_key' && matches[term]?.tag != null && matches[term]!.tag != tag) {
+              ambiguous.add(term);
+            }
+            matches.putIfAbsent(term, () => (
+              tag: tag, description: row['translated'] as String,
               count: row['count'] as int, category: row['category'] as int,
             ));
           }
+          found.addEntries(matches.entries.where((entry) => !ambiguous.contains(entry.key)));
         }
       }
       return [for (final k in keys) if (found.containsKey(k)) (query: k, entry: found[k]!)];

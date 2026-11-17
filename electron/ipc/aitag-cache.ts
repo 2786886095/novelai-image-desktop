@@ -146,8 +146,11 @@ async function cacheGalleryImage(rawSource: unknown, rawUrl: unknown, rawDays?: 
     await fs.writeFile(temporary, bytes);
     try {
       await fs.rename(temporary, target);
-    } catch {
-      await fs.rm(temporary, { force: true });
+    } catch (error) {
+      await fs.rm(temporary, { force: true }).catch(() => undefined);
+      // A different process may have populated the same cache entry. Never
+      // publish a local URL unless a complete, usable file actually exists.
+      if (!await isUsableCachedImage(target)) throw error;
     }
     return toLocalMediaUrl(target);
   })();

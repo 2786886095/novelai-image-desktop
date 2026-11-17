@@ -3656,25 +3656,40 @@ class AppState extends ChangeNotifier {
 
   Future<List<RelatedPromptTag>> suggestRelatedPromptTags(String prompt,
       {int limit = 8}) async {
-    final present = splitPromptTags(prompt);
+    final present = splitPromptTags(prompt).map((tag) => parseWeightedTag(tag).core).toList();
     if (present.isEmpty) return const [];
-    final installed = await ResourceDatabaseService.shared.relatedTags(
-      present,
-      limit: limit,
-    );
-    final themes = installed.isEmpty ? relatedPromptTags(prompt, limit: limit) :
-        installed.map((item) => RelatedPromptTag(item.tag, item.description)).toList();
-    List<TagPackExactHit>? labels;
+    final cap = limit.clamp(1, 20);
+    List<TagPackExactHit>? resolved;
     try {
-      labels = await multilingualTags.lookupExact(themes.map((item) => item.tag));
+      resolved = await multilingualTags.lookupExact(present, translations: true);
     } catch (_) {
       return const [];
     }
-    if (labels != null) {
+    final canon = {for (final row in resolved ?? <TagPackExactHit>[]) row.query: row.entry.tag};
+    final anchors = present.map((tag) => canon[MultilingualTagPacks.key(tag)] ?? tag).toList();
+    final query = anchors.join(', ');
+    final candidateCount = resolved == null ? cap : cap * 3;
+    final installed = await ResourceDatabaseService.shared.relatedTags(
+      anchors,
+      limit: candidateCount,
+    );
+    if (resolved != null) {
+      final excluded = {...anchors.map(MultilingualTagPacks.key)};
+      final themes = [
+        ...installed.map((item) => item.tag),
+        ...relatedPromptTags(query, limit: candidateCount).map((item) => item.tag),
+      ].where((tag) => excluded.add(MultilingualTagPacks.key(tag))).toList();
+      List<TagPackExactHit>? labels;
+      try {
+        labels = await multilingualTags.lookupExact(themes);
+      } catch (_) {
+        return const [];
+      }
+      if (labels == null) return const [];
       final byKey = {for (final row in labels) row.query: row.entry};
-      return [for (final item in themes)
-        if (byKey[MultilingualTagPacks.key(item.tag)] case final entry?)
-          RelatedPromptTag(entry.tag.replaceAll('_',' '), entry.description)];
+      return [for (final tag in themes)
+        if (byKey[MultilingualTagPacks.key(tag)] case final entry?)
+          RelatedPromptTag(entry.tag.replaceAll('_',' '), entry.description)].take(cap).toList();
     }
     if (installed.isNotEmpty) {
       return installed
@@ -3684,7 +3699,7 @@ class AppState extends ChangeNotifier {
               ))
           .toList();
     }
-    return relatedPromptTags(prompt, limit: limit);
+    return relatedPromptTags(query, limit: cap);
   }
 
   Future<String> testTagService() async {

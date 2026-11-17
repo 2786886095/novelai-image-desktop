@@ -95,16 +95,17 @@ void main() {
       expect(call.method,'query');
       final args = call.arguments as Map;
       final sql = args['sql'] as String;
-      expect(sql, contains('IN (?,?)'));
-      expect(args['arguments'], ['blue eyes','蓝眼睛']);
       final translation = sql.contains('translated_key AS term');
+      expect(sql, contains(translation ? 'IN (?,?)' : 'IN (?,?,?)'));
+      expect(args['arguments'], translation ? ['蓝眼睛','短词'] : ['blue eyes','蓝眼睛','短词']);
       return {'columns':['tag','translated','count','category','term'],
         'rows': translation
-          ? [['other','different',999,0,'blue eyes'],['blue_eyes','蓝眼睛',123,0,'蓝眼睛']]
+          ? [['blue_eyes','蓝眼睛',123,0,'蓝眼睛'],
+             ['short_hair','短词',99,0,'短词'],['short_sleeves','短词',21,0,'短词']]
           : [['blue_eyes','蓝眼睛',123,0,'blue eyes']]};
     });
     addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
-    final hits = await pack.lookupExact(['blue_eyes','蓝眼睛'], translations:true);
+    final hits = await pack.lookupExact(['blue_eyes','蓝眼睛','短词'], translations:true);
     expect(hits!.map((hit)=>hit.entry.tag), ['blue_eyes','blue_eyes']);
   });
 }

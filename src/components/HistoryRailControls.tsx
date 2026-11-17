@@ -172,7 +172,7 @@ export function HistoryRailPane({ children }: { children: ReactNode }) {
           event.preventDefault();
           event.stopPropagation();
           event.currentTarget.setPointerCapture(event.pointerId);
-          resizeRef.current = { startX: event.clientX, startW: activeWidth };
+          resizeRef.current = { startX: event.clientX, startW: ref.current?.offsetWidth ?? activeWidth };
         }}
         onPointerMove={event => {
           if (!resizeRef.current) return;

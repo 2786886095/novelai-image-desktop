@@ -79,6 +79,19 @@ describe("AITag image cache", () => {
     expect(axiosGet.mock.calls.length).toBe(callsBefore + 1);
     expect(fs.readFileSync(cacheFile).subarray(0, 4).toString("ascii")).toBe("RIFF");
   });
+
+  it("does not publish a local media URL for a failed cache rename", async () => {
+    const url = "https://example.com/rename-error.webp";
+    const file = path.join(root, "aitag-image-cache", createHash("sha256").update(url).digest("hex") + ".webp");
+    const rename = vi.spyOn(fs.promises, "rename").mockRejectedValueOnce(new Error("cache locked"));
+    try {
+      await expect(cacheAitagImage(url, 30)).rejects.toThrow("cache locked");
+      expect(fs.existsSync(file)).toBe(false);
+      expect(fs.readdirSync(path.dirname(file)).some(name => name.startsWith(path.basename(file) + "."))).toBe(false);
+    } finally { rename.mockRestore(); }
+    await expect(cacheAitagImage(url, 30)).resolves.toMatch(/^local:/);
+    expect(fs.existsSync(file)).toBe(true);
+  });
 });
 
 it("uses the NAX media context with no redirects and rejects other NAX image hosts",async()=>{

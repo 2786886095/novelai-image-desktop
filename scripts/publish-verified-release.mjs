@@ -46,7 +46,7 @@ const mobile=JSON.parse(call('gh',['run','view',mobileRun,'--json','status,concl
 assertFivePlatformMobileRun(mobile);
 if(waiveWindowsArtistGpu&&mobile.headSha!==sha)throw Error('Mobile installers require the exact accepted source');
 assertMobileMetadataGates(mobile);
-call('git',['diff','--exit-code',mobile.headSha,sha,'--','mobile','shared/image-metadata-compat-fixtures','shared/official-image-metadata-fixtures']);
+call('git',['diff','--exit-code',mobile.headSha,sha,'--','mobile','shared','package.json','package-lock.json','scripts/build-mobile-metadata-runtime.mjs','scripts/prepare-agent-presentation.cjs']);
 call('gh',['run','download',mobileRun,'-n','novelai-mobile-android-apk','-D','mobile-assets/android']);
 call('gh',['run','download',mobileRun,'-n','novelai-mobile-ios-ipa-unsigned','-D','mobile-assets/ios']);
 const desktop=[`Langbai-NovelAI-Studio-Setup-${version}.exe`,`Langbai-NovelAI-Studio-${version}.exe`,`Langbai-NovelAI-Studio-${version}-universal.dmg`,`Langbai-NovelAI-Studio-${version}.zip`,`Langbai-NovelAI-Studio-${version}.AppImage`,'latest.yml'].map(name=>path.join('release-assets',name));
@@ -98,6 +98,14 @@ const badging=file=>call(path.join(tools,'aapt'),['dump','badging',file]);
 const current=badging(apk),previous=badging('previous-android/app-release.apk');
 const code=text=>Number(text.match(/versionCode='(\d+)'/)?.[1]);
 if(!current.includes(`versionName='${version}'`)||!(code(current)>code(previous)))throw Error('APK version does not upgrade previous release');
+const latest=call('gh',['api','repos/2786886095/novelai-image-desktop/releases/latest','--jq','.tag_name']);
+if(!/^v\d+\.\d+\.\d+$/.test(latest)||latest===tag)throw Error('Missing distinct current Latest Android upgrade baseline');
+if(latest!=='v2.4.4'){
+ call('gh',['release','download',latest,'-p','app-release.apk','-D','latest-android']);
+ const latestApk='latest-android/app-release.apk';
+ if(certificate(latestApk)!==signingHash||!(code(current)>code(badging(latestApk))))
+  throw Error('APK cannot upgrade the latest public Android release');
+}
 const existing=spawnSync('gh',['release','view',tag],{encoding:'utf8',timeout:30000});
 if(existing.status===0)throw Error('Release already exists; do not overwrite it');
 if(!/not found/i.test(existing.stderr??''))throw Error('Release existence check failed: '+existing.stderr);

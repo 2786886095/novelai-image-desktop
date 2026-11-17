@@ -1387,6 +1387,7 @@ function NaxGallery({sourcePicker,language,text}:{
   const [chapter,setChapter]=useState(1),[page,setPage]=useState(1),[retry,setRetry]=useState(0);
   const [loaded,setLoaded]=useState<{key:string; value?:NaxAlbumPage}>();
   const [zoom,setZoom]=useState<number|null>(null);
+  const albumHeading=useRef<HTMLHeadingElement>(null);
   const [eyebrow,description,modelLabel,collectionsLabel,,attribution] = NAX_PAGE_COPY[language];
   const [view,back,sourceSection,notice,error] = NAX_NATIVE_COPY[language];
   const rows = NAX_COLLECTIONS.filter(row => row.model === model);
@@ -1398,6 +1399,15 @@ function NaxGallery({sourcePicker,language,text}:{
   const total=Math.max(1,Math.ceil((album?.images.length??0)/pageSize));
   const items=album?.images.slice((page-1)*pageSize,page*pageSize)??[];
   const selected=zoom===null?undefined:items[zoom];
+  function changeAlbumPage(next:number) {
+    if(next===page)return;
+    setZoom(null);
+    setPage(next);
+    requestAnimationFrame(()=>{
+      albumHeading.current?.focus({preventScroll:true});
+      albumHeading.current?.scrollIntoView({block:"start",behavior:"instant"});
+    });
+  }
   useEffect(()=>{
     if(!collection)return;
     let active=true;
@@ -1435,7 +1445,7 @@ function NaxGallery({sourcePicker,language,text}:{
       </ul>
     </section> : <section className="aitag-search-panel nax-collections nax-album" aria-labelledby="nax-album-title">
       <div className="nax-collections-toolbar">
-        <div><h3 id="nax-album-title">{naxExperimentCopy(row.id,language)[0]}</h3>
+        <div><h3 id="nax-album-title" ref={albumHeading} tabIndex={-1}>{naxExperimentCopy(row.id,language)[0]}</h3>
           <small>NAI Diffusion {row.model} · {notice}</small></div>
         <button className="btn secondary" type="button" onClick={()=>{setZoom(null);setCollection("");}}>{back}</button>
       </div>
@@ -1450,10 +1460,10 @@ function NaxGallery({sourcePicker,language,text}:{
             onOpen={()=>setZoom(i)}/>)}
         </ul>
         {total>1&&<nav className="aitag-pagination" aria-label={text.choosePage}>
-          <button type="button" className="btn secondary" disabled={page===1} onClick={()=>setPage(x=>x-1)}>{text.previous}</button>
+          <button type="button" className="btn secondary" disabled={page===1} onClick={()=>changeAlbumPage(page-1)}>{text.previous}</button>
           <b aria-live="polite">{page} / {total}</b>
-          <GalleryPageNumberInput page={page} pageCount={total} disabled={false} text={text} onChange={setPage}/>
-          <button type="button" className="btn secondary" disabled={page===total} onClick={()=>setPage(x=>x+1)}>{text.next}</button>
+          <GalleryPageNumberInput page={page} pageCount={total} disabled={false} text={text} onChange={changeAlbumPage}/>
+          <button type="button" className="btn secondary" disabled={page===total} onClick={()=>changeAlbumPage(page+1)}>{text.next}</button>
         </nav>}
        </>}
     </section>}
