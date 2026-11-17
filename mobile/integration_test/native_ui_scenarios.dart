@@ -1090,17 +1090,41 @@ Future<void> _navigation(NativeContext c, NativeUiTlsFixture tls) async {
   firstRow.visitChildren(find);
   require(handle != null, 'Actual production drag handle missing');
   await nativeUiDrag(handle!, thirdRow);
+
+  // ReorderableListView calls onReorder after its drop proxy animation, not
+  // at PointerUp. Wait for a real changed row position before pressing Save.
+  int? movedPosition;
+  await nativeUiWait(() {
+    final rows = nativeUiElements(
+        (w) => w.key == ValueKey('navigation-order-$first'));
+    if (rows.length != 1) return false;
+    handle = null;
+    rows.single.visitChildren(find);
+    final dragHandle = handle?.widget;
+    if (dragHandle is! ReorderableDragStartListener || dragHandle.index <= 0) {
+      return false;
+    }
+    movedPosition = dragHandle.index;
+    return true;
+  }, 'actual reorder drop animation commits the moved row');
+  final expected = order.toList()
+    ..removeAt(0)
+    ..insert(movedPosition!, first);
   await nativeUiTextTap('Save');
   final prefs = await SharedPreferences.getInstance();
-  await nativeUiWait(
-      () => prefs.getStringList('mobile_navigation_order_v1') != null,
-      'native order commit');
+  String? committed;
+  final expectedOrder = expected.join(',');
+  final deadline = Stopwatch()..start();
+  const budget = Duration(seconds: 10);
+  while (deadline.elapsed < budget) {
+    await prefs.reload().timeout(budget - deadline.elapsed);
+    committed = prefs.getStringList('mobile_navigation_order_v1')?.join(',');
+    if (committed == expectedOrder) break;
+    await frame();
+  }
+  require(committed == expectedOrder,
+      'Actual native reorder drag did not persist the displayed order');
   final saved = prefs.getStringList('mobile_navigation_order_v1')!;
-  require(
-      saved.length == count &&
-          saved.toSet().length == count &&
-          saved.join(',') != order.join(','),
-      'Actual native reorder drag did not persist');
   await nativeUiMount(app, const SizedBox.shrink());
   await nativeUiMount(app, const HomeShell(),
       shellKey: const ValueKey('native-navigation-b'));
