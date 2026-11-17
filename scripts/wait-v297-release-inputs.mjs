@@ -1,3 +1,4 @@
+import {assertV297UiSupplement,uiSupplementRun} from './v297-ui-supplement-contract.mjs';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {setTimeout as sleep} from 'node:timers/promises';
@@ -82,7 +83,9 @@ for(let i=0;i<110;i++){
    const native=JSON.parse(gh('run','view',id,'--repo',repo,'--json','headSha,status,conclusion,jobs'));
    // This strict aggregate may fail only for the deliberately missing hardware proof.
    // The original matrix and every source-bound receipt are revalidated by the publisher.
-   assertV297CloudNativeRun(native,{sourceSha:sha});
+   const supplement=JSON.parse(gh('run','view',uiSupplementRun,'--repo',repo,'--json','databaseId,headSha,status,conclusion,jobs'));
+   if(supplement.status!=='completed'){pending++;continue;}
+   assertV297UiSupplement(native,supplement);
   }else assert.equal(evidence.conclusion,'success',workflow+' must pass before publication');
  }
  if(!pending){

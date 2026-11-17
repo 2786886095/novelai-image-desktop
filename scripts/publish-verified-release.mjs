@@ -1,3 +1,4 @@
+import {assertV297UiSupplement,uiSupplementRun} from './v297-ui-supplement-contract.mjs';
 // Manual gated publication only. Does not close or modify issues.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,13 +23,19 @@ if(waiveWindowsArtistGpu){
  const run=JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs']));
  if(waiveWindowsArtistGpuV297){
   if(sha!=='c7e3c194e90e9a8d4494d04604518ec5c5d86de5'||nativeRun!=='44124653287'||process.env.BUILD_RUN!=='44124636191'||process.env.MOBILE_RUN!=='44124643712')throw Error('v2.9.7 waiver requires the pinned accepted source and artifact runs');
-  assertV297CloudNativeRun(run,{sourceSha:sha});
+  if(process.env.UI_SUPPLEMENT_RUN!==uiSupplementRun)throw Error('Pinned genuine iOS UI native supplement required');
+  const supplement=JSON.parse(call('gh',['run','view',uiSupplementRun,'--json','databaseId,headSha,status,conclusion,jobs']));
+  assertV297UiSupplement(run,supplement);
   if(process.env.METADATA_RUN!=='44124668172')throw Error('Pinned metadata regression required');
   const metadata=JSON.parse(call('gh',['run','view',process.env.METADATA_RUN,'--json','headSha,status,conclusion,jobs']));
   if(metadata.headSha!==sha||metadata.status!=='completed'||metadata.conclusion!=='success'||metadata.jobs.length!==4||metadata.jobs.some(job=>job.status!=='completed'||job.conclusion!=='success'))throw Error('All same-source image metadata regression jobs must pass');
  }else assertV286CloudNativeRun(run,{sourceSha:sha});
 }
 const featureParity=JSON.parse(fs.readFileSync('release-evidence/feature-parity.json','utf8'));
+if(waiveWindowsArtistGpuV297){
+ const provenance=JSON.parse(fs.readFileSync('release-evidence/SUPPLEMENT_PROVENANCE.json','utf8'));
+ if(provenance.sourceSha!==sha||provenance.originalNativeRun!==nativeRun||String(provenance.uiSupplementRun)!==uiSupplementRun||provenance.uiSupplementPolicySha!=='95e77dd2749fb0d6a8384f2070a7e8ccd4fd768d')throw Error('Recombined native source provenance differs');
+}
 assertReleasePlatformContract(featureParity,{version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV297});
 assertReleaseEvidenceFiles(featureParity,'release-evidence',{waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV297});
 const buildRun=process.env.BUILD_RUN;
@@ -127,7 +134,7 @@ if(waiveWindowsArtistGpuV286){
  if(publicNotes===releaseNotes)throw Error('Missing canonical Windows GPU waiver line');
  fs.writeFileSync(publicNotesFile,publicNotes,'utf8');
 }
-const evidence={version,sha,...(waiveWindowsArtistGpuV297?{metadataRun:process.env.METADATA_RUN}:{}),...(waiveWindowsArtistGpu?{nativeRun,fullScopeCertified:false,waived:[{platform:'windows',feature:'artist-iteration',scenarios:artistIterationScenarios,status:'not-tested'}]}:{}),mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
+const evidence={version,sha,...(waiveWindowsArtistGpuV297?{metadataRun:process.env.METADATA_RUN,nativeSupplementRun:uiSupplementRun,nativeSupplementPolicySha:"95e77dd2749fb0d6a8384f2070a7e8ccd4fd768d"}:{}),...(waiveWindowsArtistGpu?{nativeRun,fullScopeCertified:false,waived:[{platform:'windows',feature:'artist-iteration',scenarios:artistIterationScenarios,status:'not-tested'}]}:{}),mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
 fs.writeFileSync('release-assets/verification.json',JSON.stringify(evidence,null,2));
 call('gh',['release','create',tag,...files,'release-assets/verification.json','--target',sha,'--draft','--title',`Langbai NovelAI Studio ${tag}`,'--notes-file',publicNotesFile]);
 const draft=JSON.parse(call('gh',['release','view',tag,'--json','isDraft,assets']));
