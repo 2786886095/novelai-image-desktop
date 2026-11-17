@@ -7,7 +7,7 @@ import {featureKey,featureText} from '../feature-text';
 /** Promise-based in-app confirmation used instead of blocking browser dialogs. */
 type ConfirmationResult = "confirm" | "cancel" | "alternative";
 type ConfirmationChoice = { label: string; onChange: (checked: boolean) => void };
-type ConfirmationLabels = { confirm?: string; cancel?: string; alternative?: string; localized?: boolean };
+type ConfirmationLabels = { confirm?: string; cancel?: string; alternative?: string; dismiss?: string; localized?: boolean };
 
 export function confirmAction(message: string, title = "请确认", choice?: ConfirmationChoice, signal?: AbortSignal, buttonLabels?: ConfirmationLabels): Promise<boolean> {
   return showConfirmation(message, title, choice, signal, buttonLabels).then(result => result === "confirm");
@@ -64,9 +64,19 @@ function showConfirmation(message: string, title: string, choice?: ConfirmationC
     const dialog = backdrop.querySelector("section");
     const heading = backdrop.querySelector("h3");
     const body = backdrop.querySelector("p");
-    if (layoutChoice && dialog && options.previews?.length) {
+    const dismiss = layoutChoice && buttonLabels?.dismiss ? document.createElement("button") : null;
+    if (layoutChoice && dialog) {
       dialog.classList.add("is-layout-choice");
       dialog.setAttribute("role", "dialog");
+      if (dismiss) {
+        dismiss.type = "button";
+        dismiss.className = "btn btn-icon app-layout-choice-dismiss";
+        dismiss.dataset.result = "dismiss";
+        dismiss.textContent = "×";
+        dialog.prepend(dismiss);
+      }
+    }
+    if (layoutChoice && dialog && options.previews?.length) {
       const grid = document.createElement("div");
       grid.className = "app-layout-choice-previews";
       for (const preview of options.previews) {
@@ -113,6 +123,11 @@ function showConfirmation(message: string, title: string, choice?: ConfirmationC
       setLabel(backdrop.querySelector('[data-result="cancel"]'), localized(buttonLabels?.cancel??'取消'));
       setLabel(backdrop.querySelector('[data-result="confirm"]'), localized(buttonLabels?.confirm??'确认'));
       if (alternative && buttonLabels?.alternative) setLabel(alternative, localized(buttonLabels.alternative));
+      if (dismiss && buttonLabels?.dismiss) {
+        const label = localized(buttonLabels.dismiss);
+        dismiss.setAttribute("aria-label", label);
+        dismiss.title = label;
+      }
     };
     render();const unsubscribe=useAppStore.subscribe(render);
     const finish = (value: ConfirmationResult) => {
@@ -145,7 +160,7 @@ function showConfirmation(message: string, title: string, choice?: ConfirmationC
         pressed = null;
         if (!accepted) return;
       }
-      if (target === backdrop || target.closest('[data-result="cancel"]')) finish("cancel");
+      if (target === backdrop || target.closest('[data-result="cancel"],[data-result="dismiss"]')) finish("cancel");
       else if (target.closest('[data-result="alternative"]')) finish("alternative");
       else if (target.closest('[data-result="confirm"]')) finish("confirm");
     });

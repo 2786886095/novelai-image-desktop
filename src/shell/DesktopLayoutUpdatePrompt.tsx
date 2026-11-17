@@ -18,6 +18,12 @@ const PREVIEW_NAMES:Record<string,readonly [string,string]>={
   "ja-JP":["クラシック","新しいレイアウト"], "ko-KR":["기존 레이아웃","새 레이아웃"],
 };
 
+const DISMISS_LABELS:Record<string,string>={
+  "zh-CN":"关闭提示并保留当前界面", "zh-TW":"關閉提示並保留目前介面",
+  "en-US":"Dismiss and keep current layout",
+  "ja-JP":"閉じて現在のレイアウトを維持", "ko-KR":"닫고 현재 레이아웃 유지",
+};
+
 const TEXT:Record<string,readonly [string,string,string,string,string]>={
   "zh-CN":["选择桌面界面","更新后，你可以继续使用当前界面，也可以换另一套布局。两套界面共用账号、提示词和图库，不需要重启。以后可在「设置 → 外观 → 桌面界面布局」随时切换。","保留当前界面","切换新版界面","切回经典界面"],
   "zh-TW":["選擇桌面介面","更新後，你可以保留目前介面或切換配置。兩套介面共用帳號、提示詞與圖庫，不需重新啟動。日後可在「設定 → 外觀 → 桌面介面配置」隨時切換。","保留目前介面","切換新版介面","切回經典介面"],
@@ -36,12 +42,13 @@ export function DesktopLayoutUpdatePrompt({enabled,language}:{enabled:boolean;la
     const lifetime=new AbortController();
     const [classicLabel,redesignLabel]=PREVIEW_NAMES[language??""]??PREVIEW_NAMES["zh-CN"];
     void confirmLayoutIntro(message,title,lifetime.signal,{
-      confirm:redesign?classic:tryNew,cancel:keep,localized:true,
+      confirm:redesign?classic:tryNew,cancel:keep,dismiss:DISMISS_LABELS[language??""]??DISMISS_LABELS["zh-CN"],localized:true,
     },[{label:classicLabel,src:classicPreview},{label:redesignLabel,src:redesignPreview}]).then(switchLayout=>{
       if(lifetime.signal.aborted)return;
-      if(switchLayout)setDesktopLayout(redesign?"classic":"redesign");
+      // All explicit exits, including ×, acknowledge this introduction once.
       try {storage.setItem(DESKTOP_LAYOUT_INTRO_KEY,"1");}
       catch { /* The selection still applies for the current session. */ }
+      if(switchLayout)setDesktopLayout(redesign?"classic":"redesign");
     });
     return ()=>lifetime.abort();
   },[enabled,language]);

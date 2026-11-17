@@ -1,7 +1,24 @@
 html body .app-confirm-dialog.is-layout-choice {
+  position: relative;
   box-sizing: border-box;
   width: min(980px, calc(100vw - 32px));
   max-width: none;
+}
+html body .app-confirm-dialog.is-layout-choice > h3 {
+  padding-inline-end: 40px;
+}
+html body .app-layout-choice-dismiss {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline-end: 12px;
+  display: grid;
+  place-items: center;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1;
 }
 .app-layout-choice-previews {
   display: grid;
