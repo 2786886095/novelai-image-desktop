@@ -266,3 +266,49 @@ for(const log of [completedLog({omitLast:true}),completedLog({doneExit:1}),compl
   await assert.rejects(f.run(),/completion|identity mismatch/);noHealth(f);
  });
 }
+// Retain the real captured command's idle signature; ui9 proof and display rows
+// below are synthetic counterexamples and never native release evidence.
+function ui9Fixture(step={}, {checks=3, done=null, options={}}={}) {
+ const ui9=completedLog().replaceAll('"testEntry":"text15"','"testEntry":"ui9"')
+  .replace('"expectedChecks":15','"expectedChecks":9');
+ const header=ui9.slice(0,ui9.indexOf('FEATURE_ACCEPTANCE_CHECK:'));
+ const rows=ui9.split(/\r?\n/).filter(l=>l.startsWith('FEATURE_ACCEPTANCE_CHECK:')).slice(0,checks);
+ const terminal=done===null?'':ui9.split(/\r?\n/).find(l=>l.startsWith('FEATURE_ACCEPTANCE_DONE:'))
+  .replace('"checks":15','"checks":9').replace('"exitStatus":0','"exitStatus":'+done);
+ const log=header+rows.join('\n')+'\n'+terminal+(step.extra??'');
+ return fixture({steps:[{dump:idle,log,...step}],options:{nativeStdout:header,entry:'ui9',
+  expectedChecks:9,observeNativeCompletion:true,deferBusyUi9:true,...options}});
+}
+test('busy ui9 current foreground is pending only; never reads stale hierarchy or runs actions',async()=>{
+ const f=ui9Fixture();const r=await f.run();
+ assert.equal(r.proofPending,true);assert.equal(r.completionObserved,undefined);assert.equal(f.dumps,1);
+ assert.equal(f.phases.find(p=>p.stage==='runtime-ui9-proof-pending').checks,3);
+ assert.equal(f.calls.some(c=>c.argv.includes('cat')),false);
+ assert(f.calls.some(c=>c.argv.includes('pidof')));noHealth(f);
+});
+test('busy ui9 still requires the complete exact-profile nine checks and DONE',async()=>{
+ const partial=ui9Fixture({}, {checks:8,done:0});
+ await assert.rejects(partial.run(),/all current native checks/);noHealth(partial);
+ const passed=ui9Fixture({}, {checks:9,done:0});
+ assert.equal((await passed.run()).completionObserved,true);
+ assert.equal(passed.phases.some(p=>p.stage==='runtime-ui9-proof-pending'),false);
+ const failed=ui9Fixture({}, {checks:9,done:1});
+ await assert.rejects(failed.run(),/all current native checks/);noHealth(failed);
+});
+for(const [label,step,error] of [
+ ['lost focus',{displayFocus:'mCurrentFocus=null\nmFocusedApp=null'},/foreground/],
+ ['locked',{policy:GOOD_POLICY.replace('showing=false','showing=true')},/keyguard/],
+ ['new PID',{pid:'7342\n'},/PID/],
+ ['native framework failure',{extra:'FEATURE_ACCEPTANCE_FAILURE:fixture crash\n'},/framework failure/],
+ ['malformed proof',{extra:'FEATURE_ACCEPTANCE_CHECK:{invalid\n'},/stream failed validation/],
+ ['unrecognized adb response',{dump:{...idle,stderr:'Permission denied\n'}},/fresh hierarchy/],
+]) test('ui9 busy path rejects '+label,async()=>{
+ const f=ui9Fixture(step);await assert.rejects(f.run(),error);
+ assert(!f.phases.some(p=>p.stage==='runtime-ui9-proof-pending'));noHealth(f);
+});
+test('busy observation cannot be enabled for other entries or a collector that does not read completion',async()=>{
+ for(const f of [fixture({options:{deferBusyUi9:true,observeNativeCompletion:true}}),
+  ui9Fixture({}, {options:{observeNativeCompletion:false}})]){
+  await assert.rejects(f.run(),/restricted to the ui9/);assert.equal(f.calls.length,0);
+ }
+});

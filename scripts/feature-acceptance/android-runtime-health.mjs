@@ -25,10 +25,31 @@ function healthyProcessResult(r) {
   return r&&r.exitStatus===0&&!r.error&&!r.signal&&!r.timedOut&&!r.outputOverflow&&
     typeof r.stdout==='string'&&typeof r.stderr==='string';
 }
+function readCurrentAndroidForeground(adbRead, appId, expectedNativePid) {
+  const escaped=appId.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  // Current DisplayContent, never historical LAST ANR.
+  const display=adbRead(['shell','dumpsys','window','displays']);
+  if(display.stderr||/WINDOW MANAGER LAST ANR/.test(display.stdout))throw Error('Runtime current-display observation is invalid.');
+  const focus=display.stdout.split(/\r?\n/).filter(l=>/mCurrentFocus=|mFocusedApp=/.test(l));
+  const current=focus.filter(l=>/mCurrentFocus=/.test(l));
+  const focused=focus.filter(l=>/mFocusedApp=/.test(l));
+  const target=new RegExp('\\b'+escaped+'\\/');
+  if(current.length===0||focused.length===0||[...current,...focused].some(l=>!target.test(l)||/mCurrentFocus=null|ImmersiveModeConfirmation|Application Not Responding/.test(l)))throw Error('Runtime target foreground focus is not positively confirmed.');
+  const policy=adbRead(['shell','dumpsys','window','policy']);
+  if(policy.stderr)throw Error('Runtime keyguard policy returned stderr.');
+  const delegate=/KeyguardServiceDelegate\s*\n([\s\S]*?)(?=\n\s*Looper state:|$)/.exec(policy.stdout)?.[1];
+  const flags=[...(delegate||'').matchAll(/(?:^|\n)\s*(showing|mIsShowing|inputRestricted|mInputRestricted)=([^\s]+)/g)];
+  if(!flags.some(f=>['showing','mIsShowing'].includes(f[1]))||flags.some(f=>f[2]!=='false'))throw Error('Runtime unlocked keyguard state is not positively confirmed.');
+  const pid=adbRead(['shell','pidof',appId]);
+  if(pid.stderr||pid.stdout.trim()!==String(expectedNativePid))throw Error('Runtime native PID changed or disappeared.');
+  return focus;
+}
+
 export async function observeAndroidRuntimeHealth({adb,device,appId,command,phase=()=>{},journeyDeadline,
-  nativeStdout,sourceSha,profileSha,entry,expectedChecks,expectedNativePid, observeNativeCompletion=false,
+  nativeStdout,sourceSha,profileSha,entry,expectedChecks,expectedNativePid, observeNativeCompletion=false, deferBusyUi9=false,
   sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms)),now=Date.now}) {
   validateAndroidPreflightTarget({device,appId});
+  if(deferBusyUi9&&(entry!=='ui9'||!observeNativeCompletion))throw Error('Busy UI observation is restricted to the ui9 proof collector.');
   witness({nativeStdout,sourceSha,profileSha,entry,expectedChecks,expectedNativePid});
   if(typeof command!=='function'||!Number.isFinite(journeyDeadline)||journeyDeadline<=now())throw Error('Runtime health original journey deadline is expired/invalid.');
   const deadline=Math.min(journeyDeadline,now()+MAX_BUDGET_MS);
@@ -81,29 +102,26 @@ export async function observeAndroidRuntimeHealth({adb,device,appId,command,phas
           phase({stage:'runtime-native-completion-observed',attempt,nativePid:expectedNativePid,checks:result.checks.length});
           return {completionObserved:true,nativeStdout:recent.stdout,completion:result.completion};
         }
+        if(deferBusyUi9) {
+          // ui9 exercises real navigation/scrolling. UiAutomation.waitForIdle may
+          // be unavailable while Flutter is actively doing this work. A current
+          // unlocked foreground with the same PID permits continued log polling
+          // only; it is not a UI snapshot or a completed test. The caller retains
+          // its original deadline and still requires all nine checks and DONE.
+          const proof=createNativeProof({sourceSha,profileSha,platform:'android',testEntry:entry,expectedChecks,requireNativeBegin:true});
+          for(const line of recent.stdout.split(/\r?\n/))proof.line(line);
+          if(proof.errorsCount)throw Error('Busy UI proof stream failed validation.');
+          const focus=readCurrentAndroidForeground(adbRead,appId,expectedNativePid);
+          phase({stage:'runtime-ui9-proof-pending',attempt,nativePid:expectedNativePid,checks:proof.checksCount,focus});
+          return {proofPending:true,nativeStdout:recent.stdout};
+        }
       }
       if(attempt===MAX_ATTEMPTS)throw Error('Runtime health exact-idle observation retry budget exhausted.');
       const remaining=deadline-now();if(remaining<=0)throw expired();
       await sleep(Math.min(250,remaining));continue;
     }
     if(observation.modal)throw Error('Runtime modal cannot establish health.');
-    const escaped=appId.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    // The complete window dump includes historical LAST ANR snapshots. Query
-    // only current DisplayContent summaries instead of treating old focus as now.
-    const display=adbRead(['shell','dumpsys','window','displays']);
-    if(display.stderr||/WINDOW MANAGER LAST ANR/.test(display.stdout))throw Error('Runtime current-display observation is invalid.');
-    const focus=display.stdout.split(/\r?\n/).filter(l=>/mCurrentFocus=|mFocusedApp=/.test(l));
-    const current=focus.filter(l=>/mCurrentFocus=/.test(l));
-    const focused=focus.filter(l=>/mFocusedApp=/.test(l));
-    const target=new RegExp('\\b'+escaped+'\\/');
-    if(current.length===0||focused.length===0||[...current,...focused].some(l=>!target.test(l)||/mCurrentFocus=null|ImmersiveModeConfirmation|Application Not Responding/.test(l)))throw Error('Runtime target foreground focus is not positively confirmed.');
-    const policy=adbRead(['shell','dumpsys','window','policy']);
-    if(policy.stderr)throw Error('Runtime keyguard policy returned stderr.');
-    const delegate=/KeyguardServiceDelegate\s*\n([\s\S]*?)(?=\n\s*Looper state:|$)/.exec(policy.stdout)?.[1];
-    const flags=[...(delegate||'').matchAll(/(?:^|\n)\s*(showing|mIsShowing|inputRestricted|mInputRestricted)=([^\s]+)/g)];
-    if(!flags.some(f=>['showing','mIsShowing'].includes(f[1]))||flags.some(f=>f[2]!=='false'))throw Error('Runtime unlocked keyguard state is not positively confirmed.');
-    const pid=adbRead(['shell','pidof',appId]);
-    if(pid.stderr||pid.stdout.trim()!==String(expectedNativePid))throw Error('Runtime native PID changed or disappeared.');
+    const focus=readCurrentAndroidForeground(adbRead, appId, expectedNativePid);
     if(now()>=deadline)throw expired();
     const value={attempt,observedNativePid:expectedNativePid,freshHierarchySha256:crypto.createHash('sha256').update(hierarchy).digest('hex'),focus,keyguardShowing:false};
     phase({stage:'runtime-health-observed',...value});

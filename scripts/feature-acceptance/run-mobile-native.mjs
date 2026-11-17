@@ -156,13 +156,15 @@ try {
         // exact-idle observation policy. Initial/legacy callers remain strict.
         if(requireNativeBegin&&nativeStdout.includes('FEATURE_NATIVE_FOREGROUND:resumed; actual first/resumed frames rendered')){
           const observed=await observeAndroidRuntimeHealth({...input,command,phase:androidPhase,journeyDeadline:end,
-            nativeStdout,sourceSha,profileSha:profileSha256,expectedNativePid:observedAndroidPid,observeNativeCompletion:true});
+            nativeStdout,sourceSha,profileSha:profileSha256,expectedNativePid:observedAndroidPid,observeNativeCompletion:true,
+            deferBusyUi9:input.entry==='ui9'});
           if(observed.completionObserved){
             nativeStdout=observed.nativeStdout;
             nativeStderr='';
             completion=observed.completion;
             break;
           }
+          if(observed.proofPending)nativeStdout=observed.nativeStdout;
         } else await inspectAndroidForeground({...input,command,phase:androidPhase});
       }
       await new Promise(resolve => setTimeout(resolve, 3000));
