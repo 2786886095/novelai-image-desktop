@@ -21,6 +21,25 @@ app.whenReady().then(async()=>{
  const methods={getSettings:()=>store.getSettings(),templateLibraryGet:()=>load('electron/ipc/template-library.js').getPromptTemplateLibrary(),setSetting:(...args)=>store.setSetting(...args),getHistory:()=>store.getHistoryReferenceItems(),getHistoryGroups:()=>store.getHistoryGroups(),getHistoryDates:()=>store.getHistoryDates(),promptCodexBundled:()=>codex.loadBundledPromptCodex(),promptCodexCache:()=>codex.loadPromptCodexCache(),artistLabModelStatus:(...args)=>load('electron/ipc/artist-lab.js').artistLabModelStatus(...args),artistStyleCatalog:(...args)=>load('electron/ipc/danbooru-tags.js').artistStyleCatalog(...args),onlineGallerySearch:(...args)=>gallery.searchOnlineGallery(...args),onlineGalleryDetail:(...args)=>gallery.getOnlineGalleryDetail(...args),onlineGalleryClearDataCache:()=>gallery.clearOnlineGalleryDataCache(),onlineGalleryCacheImage:(...args)=>load('electron/ipc/aitag-cache.js').cacheOnlineGalleryImage(...args),downloadOnlineGalleryImages:(...args)=>gallery.downloadOnlineGalleryImages(...args),listReferencePresets:()=>refs.listReferencePresets()};
  ipcMain.handle('native-tools-gallery',async(_e,{method,args})=>{assert(Object.hasOwn(methods,method),'Undeclared native method '+method);return methods[method](...args);});const preload=path.join(run,'preload.cjs');fs.writeFileSync(preload,`const{contextBridge,ipcRenderer}=require('electron');const names=${JSON.stringify(Object.keys(methods))};contextBridge.exposeInMainWorld('naiDesktop',{platform:process.platform,...Object.fromEntries(names.map(name=>[name,(...args)=>ipcRenderer.invoke('native-tools-gallery',{method:name,args})]))});`);
  win=new BrowserWindow({show:false,width:1280,height:960,webPreferences:{preload,sandbox:true,nodeIntegration:false,contextIsolation:true,offscreen:true,backgroundThrottling:false}});win.webContents.on('console-message',(_e,...args)=>{if(args.some(x=>typeof x==='string'&&/Error:|Unhandled/.test(x)))rendererErrors.push(args.filter(x=>typeof x==='string').join(' '));});win.webContents.session.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(d,cb)=>cb({cancel:new URL(d.url).origin!==config.origin}));await win.loadURL(config.origin+'/__native_tools_gallery__');const js=code=>win.webContents.executeJavaScript(code),wait=async(code,limit=1500)=>{for(let i=0;i<limit;i++){if(await js(code))return;await delay(20);}throw Error('Native tools UI wait timeout '+code+' errors='+JSON.stringify(rendererErrors.slice(-5))+' ui='+JSON.stringify(await js('({tool:localStorage.getItem("langbai.tools.active.v1"),titles:[...document.querySelectorAll("main h2")].map(x=>x.textContent),files:[...document.querySelectorAll("input[type=file]")].map(x=>({multiple:x.multiple}))})')));};await wait('window.failure||window.ready');assert.equal(await js('window.failure||window.ready'),true);
+ // Exercise the application's portaled listbox through its accessible UI, not
+ // through hidden/native select state (there is no HTML select on these pages).
+ async function openSelect(label){
+  const trigger=[label+':',label];
+  const expression=`[...document.querySelectorAll('button[aria-haspopup="listbox"]')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(trigger[1])}||b.getAttribute('aria-label')?.startsWith(${JSON.stringify(trigger[0])}))`;
+  await wait(`!!(${expression})&&!((${expression}).disabled)`);
+  await js(`(${expression}).click()`);
+  const listbox=`[...document.querySelectorAll('[role="listbox"]')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(label)})`;
+  await wait(`!!(${listbox})`);
+  return listbox;
+ }
+ async function selectOptions(listbox){
+  return js(`[...(${listbox}).querySelectorAll('[role="option"]')].map(n=>({label:n.textContent.trim(),selected:n.getAttribute('aria-selected')==='true'}))`);
+ }
+ async function chooseOption(listbox,label){
+  const option=`[...(${listbox}).querySelectorAll('[role="option"]')].find(b=>b.textContent.trim()===${JSON.stringify(label)})`;
+  await wait(`!!(${option})&&!((${option}).disabled)`);
+  await js(`(${option}).click()`);
+ }
  await check('tools','all-user-exposed-tools',async()=>{
   const tools=[
    {label:'Japanese Comic Generator',selector:'.tag-comic',tool:'japaneseComic'},
@@ -63,14 +82,19 @@ app.whenReady().then(async()=>{
     assert.equal(requests.length,before,'Opening and editing the Japanese tool must not submit a network request');
     Object.assign(observed,{independentJapaneseScope:true,actualComposerMounted:true,actualNativeTemplateLibraryRead:true,legacyProjectSha256:sha(legacy),draftKey,conversionDraftUnchanged:true,automaticRequests:0});
    }else if(target.tool==='imageMetadataEdit'){
-    const options=await js('[...document.querySelectorAll(".tools-hub select:first-of-type option")].map(o=>o.value)');
-    assert.deepEqual(options.slice(0,3),['remove','novelai','sd']);
-    const before=requests.length;
-    await js(`(()=>{const s=document.querySelector('.tools-hub select');Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(s,'novelai');s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-    await wait('document.querySelector(".tools-hub select[aria-label]")?.value==="online"');
+    const before=requests.length, operation=await openSelect('Operation'), options=await selectOptions(operation);
+    assert.deepEqual(options,[{label:'Strip metadata',selected:true},{label:'NovelAI · Comment JSON',selected:false},{label:'Stable Diffusion · parameters',selected:false}]);
+    await chooseOption(operation,'NovelAI · Comment JSON');
+    await wait(`!!document.querySelector('textarea[aria-label="Comment JSON"]')`);
+    const reader=await openSelect('Metadata reader');
+    assert.deepEqual(await selectOptions(reader),[{label:'NovelAI official online reader',selected:true},{label:'Local reader',selected:false}]);
+    await chooseOption(reader,'Local reader');
+    await wait(`!!document.querySelector('button[aria-label="Metadata reader: Local reader"]')`);
+    const sd=await openSelect('Operation');await chooseOption(sd,'Stable Diffusion · parameters');
+    await wait(`!!document.querySelector('textarea[aria-label="Stable Diffusion parameters"]')`);
     assert.equal(await js('document.querySelector(".tools-hub button.btn-primary")?.disabled'),true);
     assert.equal(requests.length,before,'Opening metadata tools must not send data');
-    Object.assign(observed,{formats:options.slice(0,3),officialOnlineDefault:true,batchWithoutFilesBlocked:true,automaticRequests:0});
+    Object.assign(observed,{formats:options.map(o=>o.label),officialOnlineDefault:true,localReaderSelected:true,batchWithoutFilesBlocked:true,automaticRequests:0});
    }else if(target.tool==='artistLookup'){
     const before=requests.length,input='https://www.pixiv.net/users/123',output='textarea[aria-label="Artist prompt output"]';
     await js(`(()=>{const node=document.querySelector('#artist-lookup-input');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(node,${JSON.stringify(input)});node.dispatchEvent(new Event('input',{bubbles:true}));node.dispatchEvent(new Event('change',{bubbles:true}));})()`);
@@ -81,7 +105,7 @@ app.whenReady().then(async()=>{
     assert.match(await js('document.querySelector(".artist-lookup-hit").textContent'),/fixture_artist.*Imported \(unverified\)/s);
     await js('document.querySelector(".artist-lookup-hit input[type=checkbox]").click()');
     await wait('document.querySelector('+JSON.stringify(output)+')?.value==="1::artist:fixture_artist ::"');
-    await js(`(()=>{const select=document.querySelector('.artist-lookup select');select.value='4.5';select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    const format=await openSelect('Output format');await chooseOption(format,'NAI 4.5');
     await wait('document.querySelector('+JSON.stringify(output)+')?.value==="fixture_artist"');
     assert.equal(requests.length,before,'Local artist lookup must not request a provider');
     Object.assign(observed,{localIdentityMatch:true,unverifiedImportLabel:true,formats:['5','4.5'],providerRequests:0});
