@@ -379,7 +379,7 @@ jobs:
           if-no-files-found: ignore
   v297-ios-ui-supplement:
     if: github.event_name == 'workflow_dispatch' && inputs.v297_ios_ui_supplement && !inputs.publish_v297_gpu_waiver && !inputs.publish_after_verification && !inputs.candidate_build_only
-    runs-on: macos-15-intel
+    runs-on: macos-26
     timeout-minutes: 75
     defaults:
       run:
