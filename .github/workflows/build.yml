@@ -347,7 +347,7 @@ jobs:
         with:
           name: v297-recombined-feature-evidence
           path: release-source/release-evidence
-          run-id: "44149127383"
+          run-id: "44153610287"
           github-token: ${{ github.token }}
       - name: Verify exact artifacts and publish v2.9.7
         working-directory: release-source
@@ -359,7 +359,7 @@ jobs:
           FEATURE_RUN: "44124653287"
           METADATA_RUN: "44124668172"
           WAIVE_WINDOWS_ARTIST_GPU_V297: "true"
-          UI_SUPPLEMENT_RUN: "44149127383"
+          UI_SUPPLEMENT_RUN: "44153610287"
         run: node ../publisher-policy/scripts/publish-verified-release.mjs
       - name: Fast-forward main and verify the public release
         working-directory: release-source
