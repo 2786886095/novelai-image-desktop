@@ -1786,7 +1786,11 @@ export interface NaiDesktopApi {
   harnessOpenBackups: () => Promise<void>;
   harnessRestoreBackup: () => Promise<import("./harness-types").HarnessSnapshot>;
   platform: NodeJS.Platform;
+  searchMultilingualTags: (query: string, limit?: number) => Promise<TagSuggestion[]>;
+  lookupMultilingualTags: (tags: readonly string[]) => Promise<TagSuggestion[]>;
   multilingualTagStatus: () => Promise<import("../shared/multilingual-tag-pack-contract").TagPackStatus>;
+  browseMultilingualTags: (group:string,query:string,page:number,sort?:import("../shared/multilingual-tag-pack-contract").TagPackSort) => Promise<import("../shared/multilingual-tag-pack-contract").TagPackPage>;
+  relatedMultilingualTags: (tags:string[],limit?:number) => Promise<TagSuggestion[]>;
   installMultilingualTagPack: (language: import("../shared/multilingual-tag-pack-contract").TagPackLanguage, source:"use"|"file"|"download") => Promise<import("../shared/multilingual-tag-pack-contract").TagPackStatus>;
   getResourceDatabaseOverview: () => Promise<ResourceDatabaseOverview>;
   downloadResourceDatabase: (id: ResourceDatabaseId, confirmReplace?: boolean) => Promise<ResourceDatabaseDownloadResult>;
@@ -1999,6 +2003,7 @@ export interface NaiDesktopApi {
   aitagCacheImage: (url: string, retentionDays?: number, force?: boolean) => Promise<string>;
   aitagCacheStats: () => Promise<{ bytes: number; files: number }>;
   aitagClearCache: () => Promise<{ bytes: number; files: number }>;
+  readNaxGallery:(collection:string,page:number)=>Promise<import("./nax-gallery").NaxAlbumPage>;
   onlineGallerySearch: (
     request: import("./online-gallery").OnlineGallerySearchRequest,
   ) => Promise<import("./online-gallery").OnlineGalleryPage>;

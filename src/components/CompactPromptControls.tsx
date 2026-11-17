@@ -1,8 +1,9 @@
-import {useEffect,useRef,useState,type ButtonHTMLAttributes,type ReactNode} from 'react';
+import {useEffect,useId,useRef,useState,type ButtonHTMLAttributes,type ReactNode} from 'react';
 import {AppPortal,SelectMenu} from './ui';
 import {RESOLUTION_TIERS,RESOLUTION_RATIOS,resolutionForTier,nearestResolutionTier,nearestResolutionRatio,resolutionLabels,resolutionPickerRatio,resolutionSizeAllowed} from '../resolution-tiers';
 import {Icon,type IconName} from './icons';
-import {capsulePromptUnits,removeCapsuleUnit,compactText} from '../compact-prompt';
+import {capsuleTagUnits,capsuleWeightText,changeCapsuleWeight,removeCapsuleTag,compactText,capsuleWheelDirection} from '../compact-prompt';
+import {tagPackKey,useTagPackLabels} from '../tag-pack-lookup';
 import '../compact-prompt.css';
 
 export function CompactIconButton({label,icon,children,...props}:ButtonHTMLAttributes<HTMLButtonElement>&{label:string;icon:IconName}) {
@@ -30,11 +31,56 @@ export function ResolutionPicker({width,height,onChange,language,children,maxDim
 }
 export function CapsuleEditor({title,value,onChange,onAdd,onClose,language,children}:{title:string;value:string;onChange:(value:string)=>void;onAdd:(tag:string)=>void;onClose:()=>void;language:unknown;children:ReactNode}) {
  const ref=useRef<HTMLElement>(null),close=useRef(onClose),[draft,setDraft]=useState('');close.current=onClose;
- const text=compactText(language),units=capsulePromptUnits(value);
+ const [manual,setManual]=useState(false),manualId=useId();
+ const text=compactText(language),units=capsuleTagUnits(value),labels=useTagPackLabels(units.map(unit=>unit.core));
+ const [increase,decrease,gesture]=capsuleWeightText(language);
+ const pending=useRef(value),rendered=useRef(value),write=useRef(onChange);
+ if(rendered.current!==value){pending.current=value;rendered.current=value;}
+ write.current=onChange;
+ const held=useRef<{index:number;pointerId:number}|null>(null);
+ function nudge(index:number,direction:1|-1){
+  const base=pending.current;
+  const next=changeCapsuleWeight(base,index,direction);
+  if(next!==base){pending.current=next;write.current(next);}
+ }
+ useEffect(()=>{
+  const release=(event:PointerEvent)=>{if(held.current?.pointerId===event.pointerId)held.current=null;};
+  const blur=()=>{held.current=null;};
+  let burst:{index:number;direction:1|-1;last:number;pending:number}|null=null;
+  const wheel=(event:WheelEvent)=>{
+   const direction=capsuleWheelDirection(event);
+   if(!direction || !(event.target instanceof Element) || !ref.current?.contains(event.target))return;
+   const hovered=event.target.closest<HTMLElement>('[data-capsule-wheel]');
+   const index=held.current?.index??(hovered ? Number(hovered.dataset.capsuleWheel) : NaN);
+   if(!Number.isInteger(index)||!capsuleTagUnits(pending.current)[index]?.adjustable)return;
+   event.preventDefault();
+   const now=performance.now();
+   const amount=Math.abs(event.deltaY);
+   // A small touchpad tick must work immediately after a pause. Coalesce the
+   // remaining tiny events in that direction to avoid runaway weights.
+   if(event.deltaMode===0 && amount<24 && burst?.index===index && burst.direction===direction && now-burst.last<140){
+    burst.pending+=amount;
+    if(burst.pending<24)return;
+   }
+   burst={index,direction,last:now,pending:0};
+   nudge(index,direction);
+  };
+  const target=ref.current;
+  target?.addEventListener('wheel',wheel,{passive:false});
+  window.addEventListener('pointerup',release);window.addEventListener('pointercancel',release);window.addEventListener('blur',blur);
+  return ()=>{target?.removeEventListener('wheel',wheel);window.removeEventListener('pointerup',release);window.removeEventListener('pointercancel',release);window.removeEventListener('blur',blur);};
+ },[]);
  useEffect(()=>{
   const previous=document.activeElement as HTMLElement|null;ref.current?.querySelector<HTMLButtonElement>('button')?.focus();
   const key=(e:KeyboardEvent)=>{
-   if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close.current();return;}
+   if(e.key==='Escape'){
+    const menu=ref.current?.querySelector<HTMLButtonElement>('[data-capsule-pack-trigger][aria-expanded="true"]');
+    const target=e.target;
+    if(!menu&&target instanceof HTMLInputElement&&target.matches('[data-capsule-query]')&&target.value)return;
+    e.preventDefault();e.stopPropagation();
+    if(menu){menu.click();menu.focus();return;}
+    close.current();return;
+   }
    if(e.key!=='Tab')return;
    const elements=[...ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),textarea,select,[tabindex="0"]')??[]].filter(el=>el.getClientRects().length);
    const first=elements[0],last=elements[elements.length-1];
@@ -44,7 +90,33 @@ export function CapsuleEditor({title,value,onChange,onAdd,onClose,language,child
  },[]);
  return <AppPortal><div className="modal-backdrop compact-capsule-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}><section ref={ref} className="modal compact-capsule-dialog" role="dialog" aria-modal="true" aria-label={title}>
   <header><h2>{title}</h2><CompactIconButton label={text[5]} icon="close" onClick={onClose}/></header>
-  <div className="compact-capsule-body"><h3>{text[2]}</h3><div className="compact-current-tags">{units.map((unit,index)=><span key={`${index}:${unit.text}`}><span>{unit.text}</span><button type="button" aria-label={`${text[6]} ${unit.text}`} title={`${text[6]} ${unit.text}`} onClick={()=>onChange(removeCapsuleUnit(value,index))}><Icon name="close"/></button></span>)}</div>
-  <form className="compact-tag-add" onSubmit={e=>{e.preventDefault();if(draft.trim()){onAdd(draft.trim());setDraft('');}}}><input aria-label={text[4]} placeholder={text[4]} value={draft} onChange={e=>setDraft(e.target.value)}/><button type="submit" disabled={!draft.trim()}>{text[3]}</button></form>
+  <div className="compact-capsule-body">
+  <div className="capsule-selected-head"><h3>{text[2]}{units.length ? ` · ${units.length}` : ''}</h3>
+   <button type="button" className="capsule-manual-toggle" aria-expanded={manual} aria-controls={manualId}
+     onClick={()=>setManual(value=>!value)}><Icon name="plus"/>{({"zh-CN":"手动输入","zh-TW":"手動輸入","ja-JP":"手入力","ko-KR":"직접 입력"} as Record<string,string>)[String(language)]??"Enter manually"}</button>
+  </div>{units.length>0&&<p className="compact-weight-gesture">{gesture}</p>}
+  <div className="compact-current-tags">{units.map((unit,index)=>{
+   const label=labels.get(tagPackKey(unit.core))?.description||unit.core;
+   const shownWeight=unit.weight!==1?` ×${unit.weight}`:'';
+   return <span key={index} data-capsule-term={unit.core}>
+    <span className="compact-weight-step">
+     <button type="button" disabled={!unit.adjustable} aria-label={`${increase}：${label}`} title={increase} onClick={()=>nudge(index,1)}>＋</button>
+     <button type="button" disabled={!unit.adjustable} aria-label={`${decrease}：${label}`} title={decrease} onClick={()=>nudge(index,-1)}>－</button>
+    </span>
+    <button type="button" className="compact-weight-tag" data-capsule-hold data-capsule-wheel={unit.adjustable?index:undefined} title={unit.core}
+      aria-label={`${label}${shownWeight} · ${gesture}`}
+      onPointerDown={event=>{
+       if(event.button!==0||!unit.adjustable)return;
+       held.current={index,pointerId:event.pointerId};
+      }}
+      onKeyDown={event=>{
+       if(!unit.adjustable||!['ArrowUp','ArrowDown','+','-'].includes(event.key))return;
+       event.preventDefault();nudge(index,event.key==='ArrowUp'||event.key==='+'?1:-1);
+      }}
+    ><span>{label}</span>{shownWeight&&<small>{shownWeight}</small>}</button>
+    <button type="button" aria-label={`${text[6]} ${label}`} title={`${text[6]} ${label}`} onClick={()=>onChange(removeCapsuleTag(value,index))}><Icon name="close"/></button>
+   </span>;
+  })}</div>
+  {manual&&<form id={manualId} className="compact-tag-add" onSubmit={e=>{e.preventDefault();if(draft.trim()){onAdd(draft.trim());setDraft('');}}}><input autoFocus aria-label={text[4]} placeholder={text[4]} value={draft} onChange={e=>setDraft(e.target.value)}/><button type="submit" disabled={!draft.trim()}>{text[3]}</button></form>}
   {children}</div></section></div></AppPortal>;
 }

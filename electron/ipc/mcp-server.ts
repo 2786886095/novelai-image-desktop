@@ -1,5 +1,5 @@
 import {NAX_ATTRIBUTION,searchNaxCollections} from "../../src/nax-gallery";
-import {searchDanbooru} from "./danbooru-tags";
+import {searchMultilingualTags,relatedMultilingualTags} from "./multilingual-tags";
 // Local Model Context Protocol server.
 //
 // Exposes the Studio's existing Agent tool executor (agent-tools.ts) to
@@ -797,13 +797,25 @@ function createTools(options: McpServerOptions): ToolDef[] {
       name: "search_tags",
       title: "Search Danbooru tags",
       description: "Search the active offline tag dictionary by canonical tag or translation; results contain the original tag, translation and usage count. No remote API quota is used.",
-      inputSchema: schema({ query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 100 } }, ["query"]),
+      inputSchema: schema({ query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 100 }, sort: {type:"string",enum:["relevance","popular","alphabetical"]} }, ["query"]),
       annotations: { readOnlyHint: true, openWorldHint: false },
       run: async (raw) => {
         const query=typeof raw.query==="string"?raw.query.slice(0,300).trim():"";
         if(!query)return fail("A tag query is required");
         const limit=typeof raw.limit==="number"&&Number.isFinite(raw.limit)?Math.max(1,Math.min(100,Math.trunc(raw.limit))):20;
-        return ok(await searchDanbooru(query,limit));
+        const items = searchMultilingualTags(query,limit,raw.sort);
+        return items === null ? fail("No active offline Tag pack. Download and activate a dictionary in Studio settings.") : ok(items);
+      },
+    },
+    {
+      name: "related_offline_tags",
+      title: "Recommend related offline tags",
+      description: "Suggest co-occurring tags using local data and active dictionary translations. No remote requests.",
+      inputSchema: schema({tags:{type:"array",minItems:1,maxItems:12,items:{type:"string",maxLength:128}},limit:{type:"integer",minimum:1,maximum:20}},["tags"]),
+      annotations:{readOnlyHint:true,openWorldHint:false},
+      run: async (raw) => {
+        const items=relatedMultilingualTags(raw.tags,raw.limit);
+        return items===null?fail("No active offline Tag pack. Download and activate a dictionary in Studio settings."):ok(items);
       },
     },
     {
@@ -813,6 +825,21 @@ function createTools(options: McpServerOptions): ToolDef[] {
       inputSchema: schema({query:{type:"string",maxLength:200}},[]),
       annotations: {readOnlyHint:true,openWorldHint:false},
       run: async (raw) => ok({source:NAX_ATTRIBUTION,items:searchNaxCollections(typeof raw.query==="string"?raw.query:"")}),
+    },
+    {
+      name:"browse_nax_collection",
+      title:"Browse NAX comparison images",
+      description:"Read an allow-listed public NovelAI Tag Experiments collection from NAX. Returns one Studio-sized page of images and source chapter navigation.",
+      inputSchema:schema({collectionId:{type:"string",maxLength:80},chapter:{type:"integer",minimum:1,maximum:500},page:{type:"integer",minimum:1,maximum:500}},["collectionId"]),
+      annotations:{readOnlyHint:true,openWorldHint:true},
+      run:async(raw)=>{
+        const {readNaxGallery}=await import("./online-gallery.js");
+        const chapter=raw.chapter??1;
+        const album=await readNaxGallery(raw.collectionId,chapter);
+        const pages=Math.max(1,Math.ceil(album.images.length/24));
+        const page=typeof raw.page==="number"&&Number.isSafeInteger(raw.page)?Math.max(1,Math.min(pages,raw.page)):1;
+        return ok({...album,source:NAX_ATTRIBUTION,chapter:album.page,page,pages,images:album.images.slice((page-1)*24,page*24)});
+      },
     },
     {
       name: "apply_to_workbench",

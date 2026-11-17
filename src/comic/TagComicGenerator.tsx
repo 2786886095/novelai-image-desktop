@@ -1,3 +1,4 @@
+import {toolWorkspaceText} from "../tool-workspace-text";
 import {ComicPromptComposer} from './ComicPromptComposer';
 import {comicComposerText} from './comic-composer-text';
 import {JAPANESE_COMIC_DRAFT_KEY,type ComicWorkspaceScope} from './comic-scope';
@@ -1431,7 +1432,7 @@ export function TagComicGenerator({ onBack,scope='tag-comic' }: { onBack?: () =>
   ];
 
   return (
-    <main className="tag-comic" aria-label={copy("title")}>
+    <main className="tag-comic" data-comic-edition={japanese?"japanese":"tags"} aria-label={copy("title")}>
       {comicSnapshot.error&&<p role="alert">{comicPersistenceMessage(language)}: {comicSnapshot.error}</p>}
       <header className="tag-comic-header">
         <div>
@@ -1454,12 +1455,18 @@ export function TagComicGenerator({ onBack,scope='tag-comic' }: { onBack?: () =>
         </div>
       </header>
 
+      <div className="tool-comic-overview" role="status">
+        <strong>{toolWorkspaceText(language).step} {stepItems.findIndex(([key])=>key===step)+1} / {stepItems.length}</strong>
+        <span>{toolWorkspaceText(language).panels} {panels.length}</span>
+        {japanese&&<span>{jpCopy.workspace}</span>}
+      </div>
       <nav className="tag-comic-steps" aria-label={copy("title")}>
         {stepItems.map(([key, label, hint], index) => (
           <button
             key={key}
             type="button"
             className={clsx(step === key && "active")}
+            aria-current={step===key?"step":undefined}
             onClick={() => setStep(key)}
           >
             <b>{index + 1}</b>
@@ -2085,7 +2092,7 @@ export function TagComicGenerator({ onBack,scope='tag-comic' }: { onBack?: () =>
             )}
           </div>
           {queue && (
-            <div className="tag-comic-progress-block">
+            <div className="tag-comic-progress-block" role="status">
               <div className="tag-comic-progress">
                 <span
                   style={{
@@ -2096,7 +2103,7 @@ export function TagComicGenerator({ onBack,scope='tag-comic' }: { onBack?: () =>
               <b>{formatCopy("progress", queue)}</b>
             </div>
           )}
-          <div className="tag-comic-gallery">
+          <div className="tag-comic-gallery tool-results-scroll" tabIndex={0} role="region" aria-label={copy("stepGenerate")}>
             {panels.map((panel) => {
               const main = selectedCandidate(panel);
               const expanded = expandedCandidates.has(panel.id);

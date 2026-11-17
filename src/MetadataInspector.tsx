@@ -892,6 +892,7 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
           </div>}</AnimatedCollapse>
       </section>
 
+      <div className={clsx("metadata-inspection-workspace", report && "is-inspecting")}>
       <section
         className={clsx("metadata-drop", dragging && "dragging", report && "has-image")}
         onDragOver={(event) => {
@@ -933,7 +934,7 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
       </section>
 
       {report && (
-        <>
+        <div className="metadata-inspection-data" role="region" aria-label={text.params}>
           <section className="metadata-summary">
             <div>
               <span>{text.detected}</span>
@@ -991,8 +992,9 @@ export default function MetadataInspector({ onBack }: { onBack: () => void }) {
             </div>
             <pre>{report.rawText || text.noParams}</pre>
           </details>
-        </>
+        </div>
       )}
+      </div>
     </main>
   );
 }

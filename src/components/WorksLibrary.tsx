@@ -1,3 +1,4 @@
+import { pageUi } from "../desktop-page-ui";
 import {SelectMenuCompat} from './ui';
 import {workflowText} from '../workflow-text';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -27,6 +28,7 @@ export function WorksLibrary({active = true}: {active?: boolean}) {
   const [query,setQuery] = useState(''), [date,setDate] = useState(''), [group,setGroup] = useState(''), [directory,setDirectory] = useState('');
   const [order,setOrder] = useState<'newest'|'oldest'>('newest'), [page,setPage] = useState(0);
   const [focused,setFocused] = useState<string|null>(null), [selection,setSelection] = useState<Set<string>>(new Set());
+  const [density,setDensity]=useState(1);
   const anchor = useRef<string|null>(null), revision = useRef(0);
   const [editMode,setEditMode] = useState(false), [destination,setDestination] = useState('__ungrouped'), [busy,setBusy] = useState(false);
   const busyRef = useRef(false), pruning = useRef(new Set<string>());
@@ -145,6 +147,10 @@ export function WorksLibrary({active = true}: {active?: boolean}) {
       <input type="search" aria-label={t.search} placeholder={t.search} value={query} onChange={e=>setQuery(e.target.value)}/>
       <SelectMenuCompat aria-label={t.dates} value={date} onChange={e=>setDate(e.target.value)}><option value="">{t.dates}</option>{dates.map(d=><option key={d}>{d}</option>)}</SelectMenuCompat>
       <SelectMenuCompat aria-label={t.newest} value={order} onChange={e=>setOrder(e.target.value as typeof order)}><option value="newest">{t.newest}</option><option value="oldest">{t.oldest}</option></SelectMenuCompat>
+      <div className="works-density" role="group" aria-label={pageUi(language).thumbnailSize}>
+        <span>{pageUi(language).thumbnailSize}</span>
+        <div className="studio-mini-segments">{pageUi(language).sizes.map((name,index)=><button key={name} type="button" aria-pressed={density===index} onClick={()=>setDensity(index)}>{name}</button>)}</div>
+      </div>
       <button onClick={reset}>{t.reset}</button><ConvertedHistoryRestoreButton disabled={busy||loading} onRestored={()=>{reset();return refresh(true);}}/><span className="works-count">{filtered.length} {t.count}</span>
     </div>
     {error&&<div className="works-error" role="alert">{error} <button onClick={()=>void refresh()}>{t.retry}</button></div>}
@@ -161,7 +167,7 @@ export function WorksLibrary({active = true}: {active?: boolean}) {
         <div className="works-selection"><span>{t.selected} {selection.size}</span><button disabled={!visible.length||busy} onClick={()=>{setEditMode(true);setSelection(new Set(visible.map(i=>i.id)));}}>{t.selectPage}</button><button disabled={!filtered.length||busy} onClick={()=>{setEditMode(true);setSelection(new Set(filtered.map(i=>i.id)));}}>{t.selectAll}</button><button disabled={!selection.size||busy} onClick={()=>setSelection(new Set())}>{t.clear}</button>
           {editMode&&<div className="works-batch-controls" aria-busy={busy}><SelectMenuCompat aria-label={batch.destination} value={destination} disabled={busy} onChange={e=>setDestination(e.target.value)}><option value="__ungrouped">{t.ungrouped}</option>{groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</SelectMenuCompat><button disabled={!selection.size||busy||loading} onClick={()=>void edit('move')}>{batch.move}</button><button className="works-batch-delete" disabled={!selection.size||busy||loading} onClick={()=>void edit('delete')}>{busy?t.loading:batch.remove}</button></div>}
         </div>
-        {!filtered.length?<div className="works-empty">{loading?t.loading:items.length?t.noMatch:t.empty}</div>:<div className="works-grid">
+        {!filtered.length?<div className="works-empty">{loading?t.loading:items.length?t.noMatch:t.empty}</div>:<div className="works-grid" data-thumbnail-density={density}>
           {visible.map(item=><article key={item.id} className={`works-tile${focused===item.id?' is-focused':''}${selection.has(item.id)?' is-selected':''}`}>
             <ImageFavoriteButton src={item.fileUrl} compact/><button className="works-thumbnail" onDoubleClick={()=>{focus(item);setPreviewOpen(true);}} aria-label={worksName(item.filePath)} aria-pressed={focused===item.id} onClick={e=>{if(e.ctrlKey||e.metaKey||e.shiftKey)toggle(item,e.shiftKey);else{focus(item);anchor.current=item.id;}}} onKeyDown={e=>{const delta=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(delta){e.preventDefault();goTo((selectedIndex>=0?selectedIndex:filtered.indexOf(item))+delta);}}}>
               <WorksThumbnailImage src={item.fileUrl} onMissing={()=>missing(item)}/><span className="works-missing">{t.missing}</span>
@@ -178,7 +184,7 @@ export function WorksLibrary({active = true}: {active?: boolean}) {
           <button className="works-preview-open" type="button" aria-label={workflow.preview} onClick={()=>setPreviewOpen(true)}>{imageFailed?<p role="status">{t.missing}</p>:<img key={selected.fileUrl} src={selected.fileUrl} alt={worksName(selected.filePath)} onError={()=>{setImageFailed(true);void missing(selected);}}/>}</button>
           <div className="works-preview-actions"><button type="button" onClick={()=>setPreviewOpen(true)}>{workflow.preview}</button><ImageFavoriteButton src={selected.fileUrl}/></div>
           {previewOpen&&<ImagePreviewDialog images={previewImages} index={selectedIndex} onIndex={goTo} onClose={()=>setPreviewOpen(false)}/>}
-          <div className="works-preview-meta"><span>{selected.width} × {selected.height}</span><span>{selected.model}</span><span>Seed {selected.actualSeed}</span></div>
+          <div className="works-preview-meta"><span>{selected.width} × {selected.height}</span><span>{selected.model}</span><span>Seed {selected.actualSeed}</span><button type="button" className="btn btn-mini" disabled={selected.actualSeed==null} onClick={()=>void copy(String(selected.actualSeed))}>{pageUi(language).copySeed}</button></div>
           <div className="works-detail-actions">
             <button type="button" className="btn btn-primary" onClick={()=>void applyImageParameters(selected.filePath)}>{favoritesText(language).loadParams}</button>
             <button onClick={()=>void openFolder(selected)}>{t.open}</button>

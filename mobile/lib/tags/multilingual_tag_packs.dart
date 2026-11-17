@@ -22,6 +22,7 @@ typedef TagPackHit = ({
   int count,
   int category
 });
+typedef TagPackExactHit = ({String query, TagPackHit entry});
 
 class MultilingualTagPacks extends ChangeNotifier {
   MultilingualTagPacks({Future<Directory> Function()? getRoot})
@@ -271,6 +272,46 @@ class MultilingualTagPacks extends ChangeNotifier {
                 category: r['category'] as int
               ))
           .toList();
+    } finally {
+      await db.close();
+    }
+  }
+
+  static String key(String word) => word
+      .toLowerCase()
+      .replaceAll('_', ' ')
+      .trim()
+      .replaceAll(RegExp(r'\s+'), ' ');
+
+  /// Return exact canonical matches and, optionally, exact translated matches.
+  /// Searches are bounded; no full dictionary is loaded into Dart.
+  Future<List<TagPackExactHit>?> lookupExact(Iterable<String> terms,
+      {bool translations = false}) async {
+    await load();
+    final lang = active;
+    if (lang == null) return null;
+    final keys = terms.map(key).where((t) => t.isNotEmpty && t.length <= 255)
+        .toSet().take(480).toList();
+    if (keys.isEmpty) return const [];
+    final db = await openReadOnlyDatabase(_database(lang).path, singleInstance: false);
+    try {
+      final found = <String, TagPackHit>{};
+      for (final col in ['key', if (translations) 'translated_key']) {
+        for (var start = 0; start < keys.length; start += 160) {
+          final batch = keys.skip(start).take(160).toList();
+          final marks = List.filled(batch.length, '?').join(',');
+          final rows = await db.rawQuery(
+              'SELECT tag,translated,count,category,$col AS term FROM terms '
+              'WHERE $col IN ($marks) ORDER BY count DESC,tag', batch);
+          for (final row in rows) {
+            found.putIfAbsent(row['term'] as String, () => (
+              tag: row['tag'] as String, description: row['translated'] as String,
+              count: row['count'] as int, category: row['category'] as int,
+            ));
+          }
+        }
+      }
+      return [for (final k in keys) if (found.containsKey(k)) (query: k, entry: found[k]!)];
     } finally {
       await db.close();
     }

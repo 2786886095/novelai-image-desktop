@@ -11,7 +11,7 @@ vi.mock("./gallery-network", async () => {
 vi.mock("./proxy", () => ({ proxyConfig: () => ({}), proxyConfigForUrl: async () => ({ proxy: false }) }));
 vi.mock("./store", () => ({ getSettings: () => ({ proxyMode: "direct" }), setSetting: vi.fn() }));
 
-import { clearOnlineGalleryDataCache, getOnlineGalleryDetail, searchOnlineGallery } from "./online-gallery";
+import { clearOnlineGalleryDataCache, getOnlineGalleryDetail, searchOnlineGallery, readNaxGallery } from "./online-gallery";
 
 beforeEach(() => {
   clearOnlineGalleryDataCache();
@@ -111,4 +111,15 @@ describe("online gallery adapters", () => {
     expect(detail.negativePrompt).toBe("lowres");
     expect(detail.categoryPath).toEqual(["光线"]);
   });
+});
+
+it("loads and coalesces an allowed NAX chapter and rejects unknown collections before network",async()=>{
+ const collection="danbooru-hair-tags-v5";
+ const url="https://cdn.zele.st/data/NAX/Images/"+collection+"/side%2520bun.webp";
+ axiosGet.mockResolvedValue({data:'<img src="'+url+'" alt="An image depicting side bun">'});
+ const [a,b]=await Promise.all([readNaxGallery(collection,2),readNaxGallery(collection,2)]);
+ expect(a.images).toEqual([{tag:"side bun",url}]);expect(a).toEqual(b);
+ expect(axiosGet).toHaveBeenCalledExactlyOnceWith("https://nax.moe/?gallery="+collection+"&sort=date&page=2",expect.objectContaining({maxRedirects:0,responseType:"text"}));
+ await expect(readNaxGallery("unknown",1)).rejects.toThrow("Unknown NAX collection");
+ expect(axiosGet).toHaveBeenCalledTimes(1);
 });

@@ -1,4 +1,6 @@
-import TagPackSettings,{tagPackSelectorTitle} from "./TagPackSettings";
+import { pageUi } from "./desktop-page-ui";
+import {settingsSearchText,matchSettingsSection} from "./settings-search";
+import TagPackSettings from "./TagPackSettings";
 import { windowTrayText } from "./window-tray-text";
 import {FilePicker} from './components/FilePicker';
 import {TemplateLibraryPanel, templateLibraryCopy} from './features/settings/TemplateLibraryPanel';
@@ -15,10 +17,12 @@ import { HistoryRailControls as ClassicHistoryRailControls, HistoryRailPane as C
 import { AppMenuBar, AppTitleBar } from "./app/AppChrome";
 import AppTabBar from "./app/AppTabBar";
 import { HistoryRailControls, HistoryRailPane } from './components/HistoryRailControls';
+import { HISTORY_MIN_WIDTH } from './workspace-history';
 import {TranslationPreview} from './components/TranslationPreview';
 import {TRANSLATION_LANGUAGES,translationEditorText,normalizeTranslationPreference,translationText} from './translation';
 import {favoritesText} from './favorites-text';
-import {McpToolSettings,McpTagSuggestions} from './components/McpTools';
+import {McpToolSettings} from './components/McpTools';
+import {CapsuleTagBrowser} from './components/CapsuleTagBrowser';
 import {CompatibleImageSettingsCard,CompatibleGenerationPanel} from './components/CompatibleImages';
 import {InpaintEngineSwitch,OpenAIImageEditSettingsCard,OpenAIInpaintControls,OpenAIInpaintRunButton} from './components/OpenAIImageEdit';
 import { NaiAccountManager } from './components/NaiAccountManager';
@@ -94,8 +98,9 @@ const AgentPage = lazy(loadAgentPage);
 const InpaintCanvas = lazy(loadInpaintCanvas);
 const MetadataInspector = lazy(loadMetadataInspector);
 import { useAppStore } from "./store";
-import { relatedTags } from "./related-tags";
 import { fmtCount, wordAtCursor } from "./text-utils";
+import {TAG_BROWSE_PAGE_SIZE,TAG_PACK_NAMES,type TagPackLanguage} from "../shared/multilingual-tag-pack-contract";
+import {useTagPackRevision} from "./tag-pack-lookup";
 import { inspectImageMetadata, parseImageMetaAsync } from "./png-meta";
 import { INPAINT_BRUSH_SLIDER_MAX, INPAINT_BRUSH_SLIDER_MIN } from "./inpaint-brush";
 import { droppedImagePath, droppedImagePaths, hasDraggedFiles } from "./drag-drop";
@@ -104,7 +109,7 @@ import { flushArtistFavoritePersistence, hydrateArtistFavoriteLibrary } from "./
 import { BackupRestoreSettings, DataPortabilitySettings } from "./features/settings/DataBackupSettings";
 import ResourceDatabaseSettings from "./features/settings/ResourceDatabaseSettings";
 import { collectPortableWorkspaceData } from "./features/settings/data-backup-workspace";
-import { splitPromptTags, parseWeightedTag, formatMultiplier, setTagLevelInPrompt } from "./prompt-weight";
+import {capsuleTagUnits,capsuleWeightText,capsuleWheelDirection,changeCapsuleWeight} from "./compact-prompt";
 import {
   normalizePrompt,
   DEFAULT_NORMALIZE_OPTIONS,
@@ -156,11 +161,7 @@ import {
 import { desktopUiFormat, desktopUiText, getGeneratePanelText, getLocalizedTabItems, getSettingsSectionText, getSettingsShellText, getTokenGuideText, localizedDesktopOptionLabel, SUPPORTED_APP_LANGUAGES } from "./i18n";
 import {
   CAT_COLOR,
-  CAPSULE_TAXONOMY,
-  localizedCapsuleCategoryName,
-  localizedCapsuleSubgroupName,
   localizedCategoryLabel,
-  localizedTagLabel,
   tagDescription,
 } from "./prompt-data";
 import {
@@ -243,139 +244,47 @@ function fitSizeWithinPixels(width: number, height: number, maxPixels: number) {
   };
 }
 
-function capsuleBrowserText(language: unknown) {
-  switch (language) {
-    case "zh-TW":
-      return { needsLibrary: "搜尋需要本地標籤庫，請先到設定下載。下方分類可離線使用。", empty: "沒有匹配的標籤", loading: "載入中…" };
-    case "en-US":
-      return { needsLibrary: "Search requires the local tag library. Download it in Settings first. Categories below work offline.", empty: "No matching tags", loading: "Loading…" };
-    case "ja-JP":
-      return { needsLibrary: "検索にはローカルタグライブラリが必要です。先に設定でダウンロードしてください。下のカテゴリはオフラインで使えます。", empty: "一致するタグがありません", loading: "読み込み中…" };
-    case "ko-KR":
-      return { needsLibrary: "검색에는 로컬 태그 라이브러리가 필요합니다. 먼저 설정에서 다운로드하세요. 아래 분류는 오프라인으로 사용할 수 있습니다.", empty: "일치하는 태그 없음", loading: "불러오는 중…" };
-    default:
-      return { needsLibrary: "搜索需要本地标签库，请先到设置下载。下方分类可离线使用。", empty: "没有匹配的标签", loading: "加载中…" };
-  }
-}
-
-function CapsuleBrowser({ query, onPick, language }: { query: string; onPick: (tag: string) => void; language?: unknown }) {
-  const [downloaded, setDownloaded] = useState<boolean | null>(null);
-  const [items, setItems] = useState<TagSuggestion[]>([]);
-  const [loading, setLoading] = useState(false);
-  const q = query.trim();
-  const [packRevision,bumpPackRevision]=useState(0);
-  useEffect(()=>{const callback=()=>bumpPackRevision(r=>r+1);window.addEventListener("langbai:multilingual-tags-changed",callback);return()=>window.removeEventListener("langbai:multilingual-tags-changed",callback);},[]);
-  const text = capsuleBrowserText(language);
-
-  useEffect(() => {
-    void window.naiDesktop.danbooruStatus().then((s) => {
-      setDownloaded(/[㐀-鿿]/.test(q) ? s.bilingualDownloaded : s.downloaded);
-    });
-  }, [query,packRevision]);
-
-  useEffect(() => {
-    if (!q) {
-      setItems([]);
-      return;
-    }
-    let alive = true;
-    setLoading(true);
-    void window.naiDesktop.danbooruSearch(q, 150).then((res) => {
-      if (!alive) return;
-      setItems(res);
-      setLoading(false);
-    });
-    return () => {
-      alive = false;
+function PromptWeightControls({value,language,onChange}:{value:string;language:unknown;onChange:(next:string)=>void}) {
+  const [increase,decrease,hint]=capsuleWeightText(language);
+  const data=capsuleTagUnits(value);
+  const list=useRef<HTMLDivElement>(null);
+  const pending=useRef(value),rendered=useRef(value),write=useRef(onChange);
+  if(rendered.current!==value){rendered.current=value;pending.current=value;}
+  write.current=onChange;
+  const nudge=useCallback((index:number,direction:1|-1)=>{
+    const base=pending.current,next=changeCapsuleWeight(base,index,direction);
+    if(next!==base){pending.current=next;write.current(next);}
+  },[]);
+  useEffect(()=>{
+    const host=list.current;
+    let burst:{index:number;direction:1|-1;last:number;carry:number}|undefined;
+    const wheel=(event:WheelEvent)=>{
+      const direction=capsuleWheelDirection(event);
+      if(!direction||!(event.target instanceof Element))return;
+      const label=event.target.closest<HTMLElement>("[data-weight-wheel]");
+      const index=label?Number(label.dataset.weightWheel):NaN;
+      if(!Number.isInteger(index)||!capsuleTagUnits(pending.current)[index]?.adjustable)return;
+      event.preventDefault();
+      const now=performance.now(),amount=Math.abs(event.deltaY);
+      if(event.deltaMode===0&&amount<24&&burst?.index===index&&burst.direction===direction&&now-burst.last<140){
+        burst.carry+=amount;
+        if(burst.carry<24)return;
+      }
+      burst={index,direction,last:now,carry:0};
+      nudge(index,direction);
     };
-  }, [q,packRevision]);
-
-  if (q) {
-    if (downloaded === false) {
-      return <><p className="chip-empty">{text.needsLibrary}</p><TagPackSettings /><McpTagSuggestions query={q} onPick={onPick}/></>;
-    }
-    return (
-      <div className="capsule-browser">
-        <details><summary>{tagPackSelectorTitle(language)}</summary><TagPackSettings /></details>
-        <McpTagSuggestions query={q} onPick={onPick}/>
-        <div className="capsule-browser-list">
-          {items.map((t) => {
-            const label = t.localizedDescription ? (t.description||t.tag) : localizedTagLabel(t.tag, t.description, language);
-            return (
-              <button
-                key={t.tag}
-                type="button"
-                className="capsule-tax-chip"
-                onClick={() => onPick(t.tag)}
-                title={`${t.tag}｜${label}｜${fmtCount(t.count)}`}
-              >
-                <span className="capsule-tax-zh">{label}</span>
-                <span className="capsule-tax-en">{t.tag}</span>
-              </button>
-            );
-          })}
-          {items.length === 0 && !loading && <span className="chip-empty">{text.empty}</span>}
-          {loading && <span className="chip-empty">{text.loading}</span>}
-        </div>
-      </div>
-    );
-  }
-
-  return <CapsuleTaxonomy onPick={onPick} language={language} />;
-}
-
-// Inspiration capsule taxonomy: category tabs → subgroup tabs → bilingual chips.
-// Built-in fallback used when the local library isn't downloaded.
-function CapsuleTaxonomy({ onPick, language }: { onPick: (tag: string) => void; language?: unknown }) {
-  const [catIdx, setCatIdx] = useState(0);
-  const [subIdx, setSubIdx] = useState(0);
-  const category = CAPSULE_TAXONOMY[catIdx] ?? CAPSULE_TAXONOMY[0];
-  const subgroup = category.subgroups[subIdx] ?? category.subgroups[0];
-  return (
-    <div className="capsule-tax">
-      <div className="capsule-tax-cats">
-        {CAPSULE_TAXONOMY.map((c, i) => (
-          <button
-            key={c.name}
-            type="button"
-            className={clsx("capsule-tax-cat", i === catIdx && "active")}
-            onClick={() => {
-              setCatIdx(i);
-              setSubIdx(0);
-            }}
-          >
-            {localizedCapsuleCategoryName(c.name, language)}
-          </button>
-        ))}
-      </div>
-      <div className="capsule-tax-subs">
-        {category.subgroups.map((s, i) => (
-          <button
-            key={s.name}
-            type="button"
-            className={clsx("capsule-tax-sub", i === subIdx && "active")}
-            onClick={() => setSubIdx(i)}
-          >
-            {localizedCapsuleSubgroupName(s.name, language)}
-          </button>
-        ))}
-      </div>
-      <div className="capsule-tax-chips">
-        {subgroup.tags.map((t) => (
-          <button
-            key={t.en}
-            type="button"
-            className="capsule-tax-chip"
-            onClick={() => onPick(t.en)}
-            title={`${t.en}：${t.zh}`}
-          >
-            <span className="capsule-tax-zh">{localizedTagLabel(t.en, t.zh, language)}</span>
-            <span className="capsule-tax-en">{t.en}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+    host?.addEventListener("wheel",wheel,{passive:false});
+    return ()=>host?.removeEventListener("wheel",wheel);
+  },[nudge]);
+  return <div className="weight-editor">
+    <div className="weight-editor-hint">{hint}</div>
+    <div ref={list} className="weight-tag-list">{data.map((tag,index)=>
+      <div key={`${tag.core}:${index}`} className={clsx("weight-tag",tag.weight>1&&"up",tag.weight<1&&"down")}>
+        <button type="button" className="weight-btn" disabled={!tag.adjustable} aria-label={decrease} title={decrease} onClick={()=>nudge(index,-1)}><Icon name="minus"/></button>
+        <span className="weight-tag-core" data-weight-wheel={index} title={tag.core}>{tag.core}{tag.weight!==1&&<em>×{tag.weight}</em>}</span>
+        <button type="button" className="weight-btn" disabled={!tag.adjustable} aria-label={increase} title={increase} onClick={()=>nudge(index,1)}><Icon name="plus"/></button>
+      </div>)}</div>
+  </div>;
 }
 
 // Pixel position of the caret inside a textarea (relative to the textarea's own
@@ -416,6 +325,22 @@ function caretCoordinates(el: HTMLTextAreaElement, position: number): { top: num
 }
 
 // ── PromptTextarea: textarea with Danbooru tag autocomplete ───────────────────
+const tagLookupCopy = {
+  "zh-CN":["离线词库","{count} 条匹配","上一页","下一页","未启用词库：到设置 → 数据与存储下载并启用。","没有匹配的标签","词库读取失败，请重新输入后重试。","正在读取标签…"],
+  "zh-TW":["離線詞庫","{count} 筆符合","上一頁","下一頁","尚未啟用詞庫：到設定 → 資料與儲存下載並啟用。","沒有符合的標籤","詞庫讀取失敗，請重新輸入。","正在讀取標籤…"],
+  "en-US":["Offline dictionary","{count} matches","Previous","Next","No active dictionary. Download and activate one in Settings → Data & storage.","No matching tags","Could not read the dictionary. Type again to retry.","Loading tags…"],
+  "ja-JP":["オフライン辞書","{count} 件","前へ","次へ","設定 → データとストレージで辞書をダウンロードして有効にしてください。","一致するタグがありません","辞書を読み込めません。再入力してください。","タグを読み込み中…"],
+  "ko-KR":["오프라인 사전","일치 {count}개","이전","다음","설정 → 데이터 및 저장소에서 사전을 다운로드하고 활성화하세요.","일치하는 태그가 없습니다","사전을 읽을 수 없습니다. 다시 입력하세요.","태그 불러오는 중…"],
+} as const;
+const tagPageCopy = {
+  "zh-CN":["按关联度排序","页码","跳转"],
+  "zh-TW":["按關聯度排序","頁碼","跳轉"],
+  "en-US":["Sorted by relevance","Page number","Go"],
+  "ja-JP":["関連度順","ページ番号","移動"],
+  "ko-KR":["관련도순","페이지 번호","이동"],
+} as const;
+type PromptLookup = {rows:TagSuggestion[];total:number;page:number;language:TagPackLanguage|null;error?:boolean};
+
 function PromptTextarea({
   value,
   onChange,
@@ -435,12 +360,26 @@ function PromptTextarea({
 }) {
   const language = useAppStore((state) => state.settings?.language);
   const activeTab = useAppStore((state) => state.activeTab);
-  const [suggestions, setSuggestions] = useState<TagSuggestion[]>([]);
+  const tagCopy=tagLookupCopy[normalizeAppLanguage(language)];
+  const [relevanceLabel,pageLabel,jumpLabel]=tagPageCopy[normalizeAppLanguage(language)];
+  const revision=useTagPackRevision();
+  const [result,setResult]=useState<PromptLookup|null>(null);
+  const [paging,setPaging]=useState(false);
+  const [pageDraft,setPageDraft]=useState<string|null>(null);
+  const displayedPage=result ? result.page+1 : 1;
+  const pageText=pageDraft??String(displayedPage);
+  const suggestions=result?.rows??[];
+  const pageCount=Math.max(1,Math.ceil((result?.total??0)/TAG_BROWSE_PAGE_SIZE));
+  const requestedPage=/^[0-9]+$/.test(pageText)?Number(pageText):0;
+  const validPage=Number.isSafeInteger(requestedPage)&&requestedPage>=1&&requestedPage<=pageCount;
   const [activeIdx, setActiveIdx] = useState(0);
   const listId = useId();
   const composingRef = useRef(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const optionsRef=useRef<HTMLDivElement>(null);
+  const pageInputRef=useRef<HTMLInputElement>(null);
+  const queryRef=useRef<{text:string;cursor:number;word:string}|null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestId = useRef(0);
 
@@ -454,11 +393,14 @@ function PromptTextarea({
 
   const clearSuggestions = useCallback(() => {
     cancelLookup();
-    setSuggestions([]);
+    queryRef.current=null;
+    setPageDraft(null);
+    setResult(null);
+    setPaging(false);
   }, [cancelLookup]);
 
   useEffect(() => cancelLookup, [cancelLookup]);
-  useEffect(() => { clearSuggestions(); }, [enabled, model, readOnly, activeTab, clearSuggestions]);
+  useEffect(() => { clearSuggestions(); }, [enabled, model, readOnly, activeTab, revision, clearSuggestions]);
 
   useLayoutEffect(() => {
     const ta = taRef.current, list = listRef.current;
@@ -482,14 +424,16 @@ function PromptTextarea({
       const gap = 6, lineTop = Math.max(visibleTop, caretTop), lineBottom = Math.min(visibleBottom, caretBottom);
       const above = lineTop - clipTop - gap, below = clipBottom - lineBottom - gap;
       list.style.width = `${width}px`;
-      const preferredHeight = Math.min(260, list.scrollHeight + 2);
+      const preferredHeight = Math.min(300, (optionsRef.current?.scrollHeight ?? 0) +
+        (list.querySelector("nav")?.getBoundingClientRect().height ?? 0) +
+        (list.querySelector(".ac-dictionary-label")?.getBoundingClientRect().height ?? 0) + 4);
       const useAbove = below < preferredHeight && above > below;
       const available = useAbove ? above : below;
       if (available < 40) { clearSuggestions(); return; }
       list.style.left = `${left}px`;
       list.style.top = useAbove ? "auto" : `${lineBottom + gap}px`;
       list.style.bottom = useAbove ? `${innerHeight - lineTop + gap}px` : "auto";
-      list.style.maxHeight = `${Math.min(260, available)}px`;
+      list.style.maxHeight = `${Math.min(300, available)}px`;
       list.style.visibility = "visible";
     };
     const onScroll = (event: Event) => { if (!isScrollInsideFloatingMenu(list, event.target)) position(); };
@@ -510,12 +454,12 @@ function PromptTextarea({
       window.removeEventListener("scroll", onScroll, true);
       document.removeEventListener("pointerdown", outside, true);
     };
-  }, [suggestions, clearSuggestions]);
+  }, [result, clearSuggestions]);
 
   function moveActive(next: number) {
     const index = Math.max(0, Math.min(next, suggestions.length - 1));
     setActiveIdx(index);
-    const list = listRef.current;
+    const list = optionsRef.current;
     const item = list?.children[index] as HTMLElement | undefined;
     if (!list || !item) return;
     const top = item.offsetTop, bottom = top + item.offsetHeight;
@@ -523,36 +467,68 @@ function PromptTextarea({
     else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
   }
 
+  function hasCurrentQuery():boolean {
+    const ta=taRef.current,snapshot=queryRef.current;
+    return !!(ta&&snapshot&&ta.value===snapshot.text&&ta.selectionStart===snapshot.cursor&&
+      (document.activeElement===ta||listRef.current?.contains(document.activeElement)));
+  }
+
+  async function fetchPage(page:number) {
+    const snapshot=queryRef.current;
+    if(!snapshot||!hasCurrentQuery())return;
+    const request=++requestId.current;
+    if(page!==0||result)setPaging(true);
+    try{
+      const [data,info]=await Promise.all([
+        window.naiDesktop.browseMultilingualTags("all",snapshot.word,page,"relevance"),
+        window.naiDesktop.multilingualTagStatus(),
+      ]);
+      if(request!==requestId.current||!hasCurrentQuery())return;
+      setActiveIdx(0);
+      setPageDraft(null);
+      if(optionsRef.current)optionsRef.current.scrollTop=0;
+      setResult({...data,language:info.active});
+    }catch{
+      if(request===requestId.current&&hasCurrentQuery())setResult({rows:[],page:0,total:0,language:null,error:true});
+    }finally{
+      if(request===requestId.current)setPaging(false);
+    }
+  }
+
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    const text = e.target.value, cursor = e.target.selectionStart ?? text.length;
-    onChange(text);
-    clearSuggestions();
-    setActiveIdx(0);
-    if (!enabled || readOnly || composingRef.current) return;
-    const { word } = wordAtCursor(text, cursor);
-    if (!word) return;
-    const lookup = requestId.current;
-    timerRef.current = setTimeout(async () => {
-      timerRef.current = null;
-      try {
-        const results = await window.naiDesktop.suggestTags(model, word);
-        const ta = taRef.current;
-        if (requestId.current === lookup && ta && document.activeElement === ta &&
-            ta.value === text && ta.selectionStart === cursor) setSuggestions(results.slice(0, 8));
-      } catch {
-        if (requestId.current === lookup) setSuggestions([]);
-      }
-    }, 160);
+    const text=e.target.value,cursor=e.target.selectionStart??text.length;
+    onChange(text);clearSuggestions();setActiveIdx(0);
+    if(!enabled||readOnly||composingRef.current)return;
+    const {word}=wordAtCursor(text,cursor);
+    if(!word)return;
+    queryRef.current={text,cursor,word};
+    timerRef.current=setTimeout(()=>{timerRef.current=null;void fetchPage(0);},160);
+  }
+
+  function goToPage(delta:number) {
+    if(!result||paging)return;
+    const page=result.page+delta;
+    if(page>=0&&page<pageCount)void fetchPage(page);
+  }
+
+  function jumpToPage() {
+    if(!result||paging||!validPage)return;
+    const ta=taRef.current;
+    if(!ta||!hasCurrentQuery()){clearSuggestions();return;}
+    if(requestedPage!==displayedPage)void fetchPage(requestedPage-1);
+    else setPageDraft(null);
+    ta.focus({preventScroll:true});
   }
 
   function applyTag(tag: string) {
+    if(!hasCurrentQuery()){clearSuggestions();return;}
     const ta = taRef.current;
     if (!ta) return;
     const cursor = ta.selectionStart ?? value.length;
     const { start } = wordAtCursor(value, cursor);
     // Extend forward to cover the rest of any partial word
     let end = cursor;
-    while (end < value.length && /[\w-]/.test(value[end])) end++;
+    while (end < value.length && /[\p{L}\p{M}\p{N}_-]/u.test(value[end])) end++;
     const after = value.slice(end).replace(/^\s*,\s*/, "").trimStart();
     const before = value.slice(0, start);
     const newVal = before + tag + ", " + after;
@@ -564,11 +540,16 @@ function PromptTextarea({
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.nativeEvent.isComposing || composingRef.current) return;
-    if (!suggestions.length) return;
+    if(result&&e.key==="Escape"){e.preventDefault();e.stopPropagation();clearSuggestions();return;}
+    if(!suggestions.length)return;
+    if(e.altKey&&e.code==="KeyG"&&pageInputRef.current){
+      e.preventDefault();e.stopPropagation();
+      pageInputRef.current.focus();pageInputRef.current.select();return;
+    }
+    if(e.key==="PageDown"||e.key==="PageUp"){e.preventDefault();goToPage(e.key==="PageDown"?1:-1);return;}
     if (e.key === "ArrowDown") { e.preventDefault(); moveActive(activeIdx + 1); }
     else if (e.key === "ArrowUp") { e.preventDefault(); moveActive(activeIdx - 1); }
     else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); applyTag(suggestions[activeIdx].tag); }
-    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); clearSuggestions(); }
   }
 
   return (
@@ -582,6 +563,7 @@ function PromptTextarea({
         onKeyDown={handleKeyDown}
         aria-autocomplete={enabled && !readOnly ? "list" : undefined}
         aria-controls={suggestions.length ? listId : undefined}
+        aria-keyshortcuts={pageCount>1?"PageUp PageDown Alt+G":undefined}
         aria-activedescendant={suggestions.length ? `${listId}-${activeIdx}` : undefined}
         onCompositionStart={() => {
           composingRef.current = true;
@@ -598,9 +580,15 @@ function PromptTextarea({
           else if (!listRef.current) cancelLookup();
         }}
       />
-      {suggestions.length > 0 && (
-        <AppPortal><div ref={listRef} id={listId} className="ac-dropdown" role="listbox"
+      {result && (
+        <AppPortal><div ref={listRef} className="ac-dropdown ac-full-dictionary" data-ac-total={result.total}
+          onBlur={e=>{if(e.relatedTarget&&e.relatedTarget!==taRef.current&&!e.currentTarget.contains(e.relatedTarget))clearSuggestions();}}
           data-in-dialog={Boolean(taRef.current?.closest(".modal-backdrop")) || undefined}>
+          <div className="ac-dictionary-label" role="status">
+            {result.error?tagCopy[6]:!result.language?tagCopy[4]:`${tagCopy[0]} · ${TAG_PACK_NAMES[result.language]} · ${tagCopy[1].replace("{count}",result.total.toLocaleString(language))}${result.total>1?` · ${relevanceLabel}`:""}`}
+          </div>
+          {result.language&&!result.rows.length&&<div className="ac-dictionary-label">{tagCopy[5]}</div>}
+          {suggestions.length>0&&<div ref={optionsRef} id={listId} className="ac-options" role="listbox" aria-busy={paging}>
           {suggestions.map((s, i) => (
             <button
               key={s.tag}
@@ -625,6 +613,27 @@ function PromptTextarea({
               </span>
             </button>
           ))}
+          </div>}
+          {pageCount>1&&<nav className="ac-pagination" aria-label={tagCopy[0]}>
+            <button type="button" className="btn secondary" disabled={paging||result.page===0} onMouseDown={e=>e.preventDefault()} onClick={()=>goToPage(-1)}>{tagCopy[2]}</button>
+            <span role="status">{paging?tagCopy[7]:`${result.page+1} / ${pageCount}`}</span>
+            <div className="ac-jump">
+              <input ref={pageInputRef} className="lb-input" type="text" inputMode="numeric" autoComplete="off"
+                aria-label={`${pageLabel} (1–${pageCount})`} title={`${pageLabel} (1–${pageCount}) · Alt+G`}
+                aria-invalid={pageDraft!==null&&!validPage} readOnly={paging}
+                value={pageText}
+                onFocus={e=>e.currentTarget.select()}
+                onChange={e=>setPageDraft(e.target.value.normalize("NFKC").trim())}
+                onKeyDown={e=>{
+                  if(e.nativeEvent.isComposing)return;
+                  if(e.key==="Enter"){e.preventDefault();e.stopPropagation();jumpToPage();}
+                  else if(e.key==="Escape"){e.preventDefault();e.stopPropagation();setPageDraft(null);taRef.current?.focus({preventScroll:true});}
+                }} />
+              <button type="button" className="btn secondary" disabled={paging||!validPage}
+                onMouseDown={e=>e.preventDefault()} onClick={jumpToPage}>{jumpLabel}</button>
+            </div>
+            <button type="button" className="btn secondary" disabled={paging||result.page+1>=pageCount} onMouseDown={e=>e.preventDefault()} onClick={()=>goToPage(1)}>{tagCopy[3]}</button>
+          </nav>}
         </div></AppPortal>
       )}
     </div>
@@ -1201,7 +1210,7 @@ function CharacterPromptEditor({id, field, model, placeholder, label, onAutoComp
   const [query, setQuery] = useState("");
   const context = JSON.stringify([id, field, model]);
   const history = usePromptHistory(value, next => useAppStore.getState().updateCharCaption(id, {[field]: next}), context);
-  const weights = useMemo(() => splitPromptTags(value).map(parseWeightedTag), [value]);
+  const weights = useMemo(() => capsuleTagUnits(value), [value]);
   const assistantMode = resolvePromptAssistantMode(settings);
   const assistantVersion = settings?.promptAssistantTemplateVersion ?? settings?.convertPromptTemplateVersion ?? "v5";
   const assistantEdition = skillVersionForModel(settings?.promptAssistantSkillVersion, assistantVersion);
@@ -1264,23 +1273,11 @@ function CharacterPromptEditor({id, field, model, placeholder, label, onAutoComp
         settings?.convertPromptTemplatesV45, settings?.convertSystemPrompt, settings?.promptOptimizeTemplate, settings?.promptAssistantTemplate])}
       mode={assistantMode} version={assistantVersion} edition={assistantEdition} language={language} onClose={close} onApply={applyIfCurrent} />}
     {tool === "weights" && <PromptWeightPanel title={text.weightAdjust} closeLabel={editorText.cancel} onClose={close}>
-      <div className="weight-editor">
-        <div className="weight-editor-hint">{text.weightHint}</div>
-        <div className="weight-tag-list">{weights.map((tag, index) =>
-          <div key={tag.core + ":" + index} className={clsx("weight-tag", tag.level > 0 && "up", tag.level < 0 && "down")}>
-            <button type="button" className="weight-btn" aria-label={text.decreaseWeight} title={text.decreaseWeight}
-              onClick={() => history.commit(setTagLevelInPrompt(value, index, tag.level - 1))}><Icon name="minus" /></button>
-            <span className="weight-tag-core" title={tag.raw}>{tag.core || text.emptyTag}
-              {tag.level !== 0 && <em>{formatMultiplier(tag.level)}</em>}</span>
-            <button type="button" className="weight-btn" aria-label={text.increaseWeight} title={text.increaseWeight}
-              onClick={() => history.commit(setTagLevelInPrompt(value, index, tag.level + 1))}><Icon name="plus" /></button>
-          </div>)}</div>
-      </div>
+      <PromptWeightControls value={value} language={language} onChange={next=>history.commit(next)}/>
     </PromptWeightPanel>}
     {tool === "capsule" && <CapsuleEditor title={text.capsuleTitle} value={value} onChange={next => history.commit(next)} onAdd={addTag} onClose={close} language={language}>
-      <div className="prompt-chip-toolbar"><input className="prompt-chip-search" aria-label={text.capsuleSearchPlaceholder}
-        placeholder={text.capsuleSearchPlaceholder} value={query} onChange={event => setQuery(event.target.value)} /></div>
-      <CapsuleBrowser query={query} onPick={addTag} language={language} />
+      <CapsuleTagBrowser selectedPrompt={value} query={query} onQueryChange={setQuery} onPick={addTag}
+        searchPlaceholder={text.capsuleSearchPlaceholder} language={language} />
     </CapsuleEditor>}
     {tool === "normalize" && <PromptNormalizeModal value={value} onClose={close} onApply={next => {
       history.commit(next); close(); useAppStore.getState().setToast(t("prompt.normalizedToast"));
@@ -1655,6 +1652,7 @@ export function PromptAndParams({
   const refreshSettings = useAppStore((state) => state.refreshSettings);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showVibeModal, setShowVibeModal] = useState(false);
+  const redesign = useDesktopLayout() === "redesign";
   const [vibeSection, setVibeSection] = useState<"vibe" | "precise">("vibe");
   const [showCharModal, setShowCharModal] = useState(false);
   const renderAdvanced = useDeferredPanelPresence(showAdvanced);
@@ -1774,38 +1772,6 @@ export function PromptAndParams({
   const generateText = useMemo(() => getGeneratePanelText(settings?.language), [settings?.language]);
   const t = useCallback((key: string) => desktopUiText(settings?.language, key), [settings?.language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(settings?.language, key, values), [settings?.language]);
-  // Co-occurrence: prefer the user-installed SQLite pack and retain the small
-  // built-in table as an offline fallback until that pack is installed.
-  const fallbackRelated = useMemo(() => relatedTags(effectivePositivePrompt, 8), [effectivePositivePrompt]);
-  const [databaseRelated, setDatabaseRelated] = useState(fallbackRelated);
-  useEffect(() => {
-    setDatabaseRelated([]);
-    const sourceTags = splitPromptTags(effectivePositivePrompt)
-      .map((segment) => parseWeightedTag(segment).core)
-      .filter(Boolean);
-    if (!sourceTags.length) {
-      setDatabaseRelated([]);
-      return;
-    }
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      void window.naiDesktop.relatedResourceTags(sourceTags, 8).then((items) => {
-        if (cancelled) return;
-        setDatabaseRelated(items.map((item) => ({
-          tag: item.tag.replaceAll("_", " "),
-          zh: item.description || "本地相关标签",
-        })));
-      }).catch(() => {
-        if (!cancelled) setDatabaseRelated([]);
-      });
-    }, 140);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [effectivePositivePrompt]);
-  const related = databaseRelated.length > 0 ? databaseRelated : fallbackRelated;
-
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("uiStylePresetOpen") !== "1") return;
     let cancelled = false;
@@ -2156,16 +2122,7 @@ export function PromptAndParams({
     setPromptValue(next);
   }
 
-  // Per-tag weight editor: parse the active prompt into { core, level } chips.
-  const weightTags = useMemo(
-    () => splitPromptTags(promptValue).map((seg) => parseWeightedTag(seg)),
-    [promptValue],
-  );
-  function bumpWeight(index: number, delta: number) {
-    const tag = weightTags[index];
-    if (!tag) return;
-    setPromptValue(setTagLevelInPrompt(promptValue, index, tag.level + delta));
-  }
+  const weightTags=useMemo(()=>capsuleTagUnits(promptValue),[promptValue]);
 
   async function toggleAutoComplete() {
     const next = !(settings?.autoComplete ?? true);
@@ -2219,6 +2176,51 @@ export function PromptAndParams({
   // Rough CLIP token estimate: each tag ≈ 1.5 tokens on average
   const tokenEst = Math.round(tagCount * 1.5);
   const tokenWarn = tokenEst > 225;
+
+  const quickActions = (
+    <div className="quick-actions" data-panel-section={redesign ? "refs" : undefined}>
+      <Button
+        className={redesign ? clsx("qf-ref-trigger", charCaptions.length > 0 && "has-count", showCharModal && "is-panel-open") : undefined}
+        aria-expanded={redesign ? showCharModal : undefined}
+        onClick={redesign ? toggleCharModal : () => setShowCharModal(true)}
+      >
+        <IconText icon="♙">{generateText.prompt.characterPrompt}{!redesign && charCaptions.length > 0 ? ` · ${charCaptions.length}` : ""}</IconText>
+        {redesign && charCaptions.length > 0 ? <em className="qf-count-badge">{charCaptions.length}</em> : null}
+      </Button>
+      <Button
+        className={redesign ? clsx("qf-ref-trigger", vibeImages.length > 0 && "has-count", showVibeModal && vibeSection === "vibe" && "is-panel-open") : undefined}
+        aria-expanded={redesign ? showVibeModal && vibeSection === "vibe" : undefined}
+        onClick={() => redesign ? toggleVibeModal("vibe") : setShowVibeModal(true)}
+      >
+        <IconText icon="◒">{generateText.prompt.vibeTransfer}{!redesign && vibeImages.length > 0 ? ` · ${vibeImages.length}` : ""}</IconText>
+        {redesign && vibeImages.length > 0 ? <em className="qf-count-badge">{vibeImages.length}</em> : null}
+      </Button>
+      <Button
+        className={redesign ? clsx("qf-ref-trigger", preciseRefCount > 0 && "has-count", showVibeModal && vibeSection === "precise" && "is-panel-open") : undefined}
+        aria-expanded={redesign ? showVibeModal && vibeSection === "precise" : undefined}
+        onClick={() => redesign ? toggleVibeModal("precise") : setShowVibeModal(true)}
+      >
+        <IconText icon="◇">{generateText.prompt.preciseReference}{!redesign && preciseRefCount > 0 ? ` · ${preciseRefCount}` : ""}</IconText>
+        {redesign && preciseRefCount > 0 ? <em className="qf-count-badge">{preciseRefCount}</em> : null}
+      </Button>
+      {templates.length > 0 && (
+        <div className="template-dropdown" style={{ position: "relative" }}>
+          <Button aria-expanded={showTemplateMenu} onClick={() => setShowTemplateMenu((v) => !v)}>
+            <IconText icon="▣">{generateText.prompt.template}<Icon name="chevronDown" className={clsx("prompt-tool-chevron", showTemplateMenu && "open")} /></IconText>
+          </Button>
+          {templateMenuPresent && (
+            <div ref={templateMenuRef} className={clsx("menu-pop template-pop disclosure-popover", redesign && "qf-dropdown-panel")} {...disclosureAttributes(showTemplateMenu)}>
+              {templates.map((tpl) => (
+                <button key={tpl.id} onClick={() => applyTemplate(tpl)}>
+                  <span>{tpl.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -2283,7 +2285,7 @@ export function PromptAndParams({
         <AppPortal>
           <div
             ref={stylePresetMenuRef}
-            className="style-preset-menu disclosure-popover qf-dropdown-panel" {...disclosureAttributes(stylePresetMenuOpen)}
+            className={clsx("style-preset-menu disclosure-popover", redesign && "qf-dropdown-panel")} {...disclosureAttributes(stylePresetMenuOpen)}
             role="listbox"
             style={{
               left: stylePresetMenuPosition.left,
@@ -2380,76 +2382,10 @@ export function PromptAndParams({
         />
       )}
       {chipOpen && <CapsuleEditor title={generateText.prompt.capsuleTitle} value={promptValue} onChange={value=>setPromptField(promptKey,value)} onAdd={appendChip} onClose={()=>setChipOpen(false)} language={settings?.language}>
-            <div className="prompt-chip-toolbar">
-              <input
-                className="prompt-chip-search"
-                value={chipQuery}
-                placeholder={generateText.prompt.capsuleSearchPlaceholder}
-                onChange={(e) => setChipQuery(e.target.value)}
-              />
-            </div>
-            <CapsuleBrowser query={chipQuery} onPick={appendChip} language={settings?.language} />
-            {related.length > 0 && (
-              <div className="related-tags">
-                <div className="related-tags-head"><Icon name="link" /> {generateText.prompt.relatedTitle}</div>
-                <div className="prompt-chip-list">
-                  {related.map((r) => (
-                    <button
-                      key={r.tag}
-                      type="button"
-                      onClick={() => appendChip(r.tag)}
-                      title={`${r.tag}: ${localizedTagLabel(r.tag, r.zh, settings?.language)}`}
-                    >
-                      <span>{r.tag}</span>
-                      <small>{localizedTagLabel(r.tag, r.zh, settings?.language)}</small>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            <CapsuleTagBrowser selectedPrompt={promptValue} query={chipQuery} onQueryChange={setChipQuery} onPick={appendChip}
+              searchPlaceholder={generateText.prompt.capsuleSearchPlaceholder} language={settings?.language} />
       </CapsuleEditor>}
-      <div className="quick-actions" data-panel-section="refs">
-        <Button
-          className={clsx("qf-ref-trigger", charCaptions.length > 0 && "has-count", showCharModal && "is-panel-open")}
-          aria-expanded={showCharModal}
-          onClick={toggleCharModal}
-        >
-          <IconText icon="♙">{generateText.prompt.characterPrompt}</IconText>
-          {charCaptions.length > 0 ? <em className="qf-count-badge">{charCaptions.length}</em> : null}
-        </Button>
-        <Button
-          className={clsx("qf-ref-trigger", vibeImages.length > 0 && "has-count", showVibeModal && vibeSection === "vibe" && "is-panel-open")}
-          aria-expanded={showVibeModal && vibeSection === "vibe"}
-          onClick={() => toggleVibeModal("vibe")}
-        >
-          <IconText icon="◒">{generateText.prompt.vibeTransfer}</IconText>
-          {vibeImages.length > 0 ? <em className="qf-count-badge">{vibeImages.length}</em> : null}
-        </Button>
-        <Button
-          className={clsx("qf-ref-trigger", preciseRefCount > 0 && "has-count", showVibeModal && vibeSection === "precise" && "is-panel-open")}
-          aria-expanded={showVibeModal && vibeSection === "precise"}
-          onClick={() => toggleVibeModal("precise")}
-        >
-          <IconText icon="◇">{generateText.prompt.preciseReference}</IconText>
-          {preciseRefCount > 0 ? <em className="qf-count-badge">{preciseRefCount}</em> : null}
-        </Button>
-        {templates.length > 0 && (
-          <div className="template-dropdown" style={{ position: "relative" }}>
-            <Button aria-expanded={showTemplateMenu} onClick={() => setShowTemplateMenu((v) => !v)}>
-              <IconText icon="▣">{generateText.prompt.template}<Icon name="chevronDown" className={clsx("prompt-tool-chevron", showTemplateMenu && "open")} /></IconText>
-            </Button>
-            {templateMenuPresent && (
-              <div ref={templateMenuRef} className="menu-pop template-pop disclosure-popover qf-dropdown-panel" {...disclosureAttributes(showTemplateMenu)}>
-                {templates.map((tpl) => (
-                  <button key={tpl.id} onClick={() => applyTemplate(tpl)}>
-                    <span>{tpl.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      {redesign && quickActions}
       <div className="prompt-tabs" data-panel-section="prompt">
         <button className={clsx(promptTab === "positive" && "active")} onClick={() => setPromptTab("positive")}>
           {generateText.prompt.positivePrompt}
@@ -2510,21 +2446,7 @@ export function PromptAndParams({
         positiveHistory.commit(next);return true;
       }}/>}
       {showWeights && <PromptWeightPanel title={generateText.prompt.weightAdjust} closeLabel={editorText.cancel} onClose={()=>setShowWeights(false)}>
-        <div className="weight-editor">
-          <div className="weight-editor-hint">{generateText.prompt.weightHint}</div>
-          <div className="weight-tag-list">
-            {weightTags.map((wt, i) => (
-              <div key={`${wt.core}-${i}`} className={clsx("weight-tag", wt.level > 0 && "up", wt.level < 0 && "down")}>
-                <button type="button" className="weight-btn" title={generateText.prompt.decreaseWeight} onClick={() => bumpWeight(i, -1)}><Icon name="minus" /></button>
-                <span className="weight-tag-core" title={wt.raw}>
-                  {wt.core || generateText.prompt.emptyTag}
-                  {wt.level !== 0 && <em>{formatMultiplier(wt.level)}</em>}
-                </span>
-                <button type="button" className="weight-btn" title={generateText.prompt.increaseWeight} onClick={() => bumpWeight(i, 1)}><Icon name="plus" /></button>
-              </div>
-            ))}
-          </div>
-        </div>
+        <PromptWeightControls value={promptValue} language={settings?.language} onChange={setPromptValue}/>
       </PromptWeightPanel>}
       <div className="token-counter">
         {tagCount > 0 && (
@@ -2536,6 +2458,7 @@ export function PromptAndParams({
           </>
         )}
       </div>
+      {!redesign && quickActions}
       {imageToImage && workbenchImage && (
         <div className="i2i-size-control">
           <div className="i2i-size-mode" role="group" aria-label={t("i2i.sizeMode")}>
@@ -2643,7 +2566,7 @@ export function PromptAndParams({
           onClose={() => setStyleGroupPromptOpen(false)}
         />
       )}
-      <Button
+      {redesign ? <Button
         className={clsx("full prompt-advanced-button", showAdvanced && "is-panel-open")}
         aria-expanded={showAdvanced}
         onClick={toggleAdvancedModal}
@@ -2651,9 +2574,11 @@ export function PromptAndParams({
         <IconText icon="settings">{generateText.prompt.advancedParams.replace(/\.{2,}|…$/g, "").trim()}</IconText>
         <span className="advanced-summary">{advancedParamsSummary(params, settings?.language)}</span>
         <Icon name="chevronRight" className={clsx("prompt-advanced-chevron", showAdvanced && "is-open")} />
-      </Button>
+      </Button> : <Button className="full prompt-advanced-button" onClick={() => setShowAdvanced(true)}>
+        <IconText icon="settings">{generateText.prompt.advancedParams}</IconText>
+      </Button>}
       {renderAdvanced && <AdvancedParamsModal closing={!showAdvanced} onClose={() => setShowAdvanced(false)} />}
-      {renderVibeModal && <VibeTransferModal closing={!showVibeModal} focusSection={vibeSection} onClose={() => setShowVibeModal(false)} />}
+      {renderVibeModal && <VibeTransferModal closing={!showVibeModal} focusSection={redesign ? vibeSection : undefined} onClose={() => setShowVibeModal(false)} />}
       {renderCharModal && <CharCaptionsModal closing={!showCharModal} onClose={() => setShowCharModal(false)} />}
       {showNormalize && (
         <PromptNormalizeModal
@@ -3290,11 +3215,16 @@ function LogSettingsSection({
   );
 }
 
+function RedesignedGenerationProgress() {
+  return useDesktopLayout() === "redesign" ? <GenerationProgressLine /> : null;
+}
+
 function AccountAndRunButton({
   label,
   onRun,
   openSettings,
   model,
+  costPreview,
   allowQueue = false,
   disabled = false,
   disabledReason = "",
@@ -3303,6 +3233,7 @@ function AccountAndRunButton({
   onRun: () => void;
   openSettings: () => void;
   model?: string;
+  costPreview?: React.ReactNode;
   allowQueue?: boolean;
   disabled?: boolean;
   disabledReason?: string;
@@ -3353,7 +3284,8 @@ function AccountAndRunButton({
     });
   }
   return (
-    <div className="left-footer">
+    <div className="left-footer generation-run-footer">
+      <div className="generation-run-details">
       <div className={clsx("account-details-shell", accountDetailsCollapsed && "collapsed")}>
         <button
           type="button"
@@ -3411,6 +3343,8 @@ function AccountAndRunButton({
             )}
           </div>}</AnimatedCollapse>
       </div>
+      {costPreview && <div className="generation-run-quote">{account.hasToken ? costPreview : <details className="generation-quote-guest"><summary>{t("cost.beforeRun")}</summary>{costPreview}</details>}</div>}
+      </div>
       {!account.hasToken ? (
         <Button variant="primary" className="full" onClick={openSettings}>
           <IconText icon={<Icon name="key" />}>{t("account.setupFirst")}</IconText>
@@ -3423,7 +3357,7 @@ function AccountAndRunButton({
             inert={!isGenerating}
           >
             <div className="run-state-pane-inner">
-              <GenerationProgressLine />
+              <RedesignedGenerationProgress />
               {allowQueue && <QueuePanel />}
               <div className="anlas-spent">
                 {currentAnlasSpent != null ? f("account.currentSpent", { amount: currentAnlasSpent }) : t("account.currentReading")}
@@ -3475,6 +3409,7 @@ function AccountAndRunButton({
 
 // ── Generate panel (T2I) ──────────────────────────────────────────────────────
 function GeneratePanel({openSettings}:{openSettings:()=>void}) {
+  const redesign = useDesktopLayout() === "redesign";
   const imageProvider = useAppStore(state=>state.settings?.imageProvider);
   const language = useAppStore((state) => state.settings?.language);
   const generate = useAppStore((state) => state.generate);
@@ -3495,23 +3430,26 @@ function GeneratePanel({openSettings}:{openSettings:()=>void}) {
 
   if(imageProvider==='openai-images') return <CompatibleGenerationPanel openSettings={openSettings} />;
 
+  const batchFields = <>
+    <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
+    <CommittedNumberInput
+      label={t("generate.batchInterval")}
+      value={batchIntervalSeconds}
+      min={0}
+      max={3600}
+      normalize={(value) => Math.max(0, Math.min(3600, Math.round(value)))}
+      onCommit={setBatchIntervalSeconds}
+    />
+  </>;
   return (
     <>
       <div className="panel-scroll">
         <AutomaticComparisonControl surface="generate:t2i" />
         <PromptAndParams />
-        <div className="panel-section-anchor" data-panel-section="batch" aria-hidden="true" />
-        <div className="batch-inline-grid">
-          <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
-          <CommittedNumberInput
-            label={t("generate.batchInterval")}
-            value={batchIntervalSeconds}
-            min={0}
-            max={3600}
-            normalize={(value) => Math.max(0, Math.min(3600, Math.round(value)))}
-            onCommit={setBatchIntervalSeconds}
-          />
-        </div>
+        {redesign ? <>
+          <div className="panel-section-anchor" data-panel-section="batch" aria-hidden="true" />
+          <div className="batch-inline-grid">{batchFields}</div>
+        </> : batchFields}
         
         <label className="field">
           <span>{t("generate.fileNamePrefix")}</span>
@@ -3561,13 +3499,13 @@ function GeneratePanel({openSettings}:{openSettings:()=>void}) {
           </button>
         </div>
 
-        <FeatureCostCard label={t("cost.beforeRun")} feature="generate" />
       </div>
       <AccountAndRunButton
         label={batchCount > 1 ? f("generate.batchRun", { count: batchCount }) : t("generate.run")}
         onRun={() => void generate()}
         openSettings={openSettings}
         model={model}
+        costPreview={<FeatureCostCard label={t("cost.beforeRun")} feature="generate" />}
         allowQueue
       />
     </>
@@ -3576,6 +3514,7 @@ function GeneratePanel({openSettings}:{openSettings:()=>void}) {
 
 // ── I2I panel ─────────────────────────────────────────────────────────────────
 function I2IPanel({ openSettings }: { openSettings: () => void }) {
+  const redesign = useDesktopLayout() === "redesign";
   const language = useAppStore((state) => state.settings?.language);
   const i2iParams = useAppStore((state) => state.i2iParams);
   const batchCount = useAppStore((state) => state.batchCount);
@@ -3589,6 +3528,17 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
   const generateI2I = useAppStore((state) => state.generateI2I);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
+  const batchFields = <>
+    <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
+    <CommittedNumberInput
+      label={t("generate.batchInterval")}
+      value={batchIntervalSeconds}
+      min={0}
+      max={3600}
+      normalize={(value) => Math.max(0, Math.min(3600, Math.round(value)))}
+      onCommit={setBatchIntervalSeconds}
+    />
+  </>;
   return (
     <>
       <div className="panel-scroll">
@@ -3606,26 +3556,18 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
         <NumberInput label={t("i2i.extraNoiseSeed")} value={i2iParams.extraNoiseSeed} min={0} onChange={(v) => setI2IParam("extraNoiseSeed", v)} />
         <div className="panel-divider" />
         <PromptAndParams imageToImage />
-        <div className="panel-section-anchor" data-panel-section="batch" aria-hidden="true" />
-        <div className="batch-inline-grid">
-          <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
-          <CommittedNumberInput
-            label={t("generate.batchInterval")}
-            value={batchIntervalSeconds}
-            min={0}
-            max={3600}
-            normalize={(value) => Math.max(0, Math.min(3600, Math.round(value)))}
-            onCommit={setBatchIntervalSeconds}
-          />
-        </div>
+        {redesign ? <>
+          <div className="panel-section-anchor" data-panel-section="batch" aria-hidden="true" />
+          <div className="batch-inline-grid">{batchFields}</div>
+        </> : batchFields}
         
-        <FeatureCostCard label={t("cost.beforeRun")} feature="i2i" />
       </div>
       <AccountAndRunButton
         label={batchCount > 1 ? f("generate.batchRun", { count: batchCount }) : t("i2i.run")}
         onRun={() => void generateI2I()}
         openSettings={openSettings}
         model={model}
+        costPreview={<FeatureCostCard label={t("cost.beforeRun")} feature="i2i" />}
       />
     </>
   );
@@ -3986,9 +3928,9 @@ function PostprocessPanel({ openSettings }: { openSettings: () => void }) {
   }, [mode, setActiveCanvasSurface]);
   return (
     <>
-      <div className="postprocess-mode-switcher" role="tablist" aria-label={t("postprocess.tools")}>
-        <button className={clsx(mode === "upscale" && "active")} onClick={() => setMode("upscale")}>{t("postprocess.upscale")}</button>
-        <button className={clsx(mode === "director" && "active")} onClick={() => setMode("director")}>{t("postprocess.director")}</button>
+      <div className="postprocess-mode-switcher" role="group" aria-label={t("postprocess.tools")}>
+        <button type="button" aria-pressed={mode === "upscale"} className={clsx(mode === "upscale" && "active")} onClick={() => setMode("upscale")}>{t("postprocess.upscale")}</button>
+        <button type="button" aria-pressed={mode === "director"} className={clsx(mode === "director" && "active")} onClick={() => setMode("director")}>{t("postprocess.director")}</button>
       </div>
       {mode === "upscale"
         ? <UpscalePanel openSettings={openSettings} />
@@ -4144,6 +4086,16 @@ function PromptVariantCards({
   );
 }
 
+function jumpToPromptWorkbenchSection(button: HTMLElement, section: "result" | "history") {
+  const scroller = button.closest(".prompt-tool-workflow");
+  const target = scroller?.querySelector<HTMLElement>(`[data-prompt-workbench="${section}"]`);
+  if (!target || !scroller) return;
+  const y = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+  const bar = scroller.querySelector(".prompt-workflow-nav");
+  scroller.scrollTo({ top: y - (bar?.clientHeight ?? 0) - 12 });
+  target.focus({ preventScroll: true });
+}
+
 function ReversePanel() {
   const setInspectImage = useAppStore((state) => state.setInspectImage);
   const clearInspect = useAppStore((state) => state.clearInspect);
@@ -4270,7 +4222,11 @@ function ReversePanel() {
 
   return (
     <>
-      <div className="panel-scroll">
+      <div className="panel-scroll prompt-tool-workflow">
+        <div className="prompt-workflow-nav">
+          <Button disabled={!reversePromptText.trim()} onClick={(e) => jumpToPromptWorkbenchSection(e.currentTarget, "result")}>{t("inspect.result")}</Button>
+          <Button onClick={(e) => jumpToPromptWorkbenchSection(e.currentTarget, "history")}>{pageUi(language).history} · {reverseHistory.length}</Button>
+        </div>
         <div
           className={clsx("inspect-drop-zone", dragging && "dragging")}
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -4364,9 +4320,9 @@ function ReversePanel() {
 
         {reversePromptText && (
           <>
-            <div className="inspect-result-label">{t("inspect.result")}</div>
+            <div className="inspect-result-label" tabIndex={-1} data-prompt-workbench="result">{t("inspect.result")}</div>
             <textarea
-              className="prompt-box"
+              className="prompt-box prompt-workbench-output"
               style={{ minHeight: 120 }}
               value={reversePromptText}
               onChange={(e) => setReversePromptText(e.target.value)}
@@ -4397,12 +4353,14 @@ function ReversePanel() {
           </>
         )}
 
+        <section className="prompt-workbench-history" data-prompt-workbench="history" tabIndex={-1} aria-label={pageUi(language).history}>
         <TextToolHistoryPanel
           items={reverseHistory}
           onDelete={(id) => void deleteReverseHistoryItem(id)}
           onClear={() => void clearReverseHistory()}
           onUse={setReversePromptText}
         />
+        </section>
 
         {!hasImage && (
           <div className="inspect-hint">
@@ -4714,7 +4672,11 @@ export function PromptConverterPanel() {
 
   return (
     <>
-      <div className="panel-scroll">
+      <div className="panel-scroll prompt-tool-workflow">
+        <div className="prompt-workflow-nav">
+          <Button disabled={!convertResult.trim()} onClick={(e) => jumpToPromptWorkbenchSection(e.currentTarget, "result")}>{t("convert.result")}</Button>
+          <Button onClick={(e) => jumpToPromptWorkbenchSection(e.currentTarget, "history")}>{pageUi(language).history} · {convertHistory.length}</Button>
+        </div>
         <div className="convert-header">
           <strong>{t("convert.title")}</strong>
           <small>{t("convert.subtitle")}</small>
@@ -4778,9 +4740,9 @@ export function PromptConverterPanel() {
 
         {convertResult && (
           <>
-            <div className="inspect-result-label">{t("convert.result")}</div>
+            <div className="inspect-result-label" tabIndex={-1} data-prompt-workbench="result">{t("convert.result")}</div>
             <textarea
-              className="prompt-box"
+              className="prompt-box prompt-workbench-output"
               style={{ minHeight: 130 }}
               value={convertResult}
               onChange={(e) => setConvertResult(e.target.value)}
@@ -4807,12 +4769,14 @@ export function PromptConverterPanel() {
           </>
         )}
 
+        <section className="prompt-workbench-history" data-prompt-workbench="history" tabIndex={-1} aria-label={pageUi(language).history}>
         <TextToolHistoryPanel
           items={convertHistory}
           onDelete={(id) => void deleteConvertHistoryItem(id)}
           onClear={() => void clearConvertHistory()}
           onUse={setConvertResult}
         />
+        </section>
 
         {!convertResult && (
           <div className="inspect-hint">
@@ -4844,14 +4808,20 @@ function AiLogPanel() {
   const [entries, setEntries] = useState<AiCallLogEntry[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [filter, setFilter] = useState<"all" | "ok" | "fail">("all");
+  const [logQuery, setLogQuery] = useState("");
   const language = useAppStore((state) => state.settings?.language);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setFailed(false);
     try {
       const list = await window.naiDesktop.getAiCallLog();
       setEntries(Array.isArray(list) ? list : []);
+    } catch {
+      setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -4871,13 +4841,19 @@ function AiLogPanel() {
   }
 
   async function clearAll() {
-    await window.naiDesktop.clearAiCallLog();
-    setExpanded(new Set());
-    await load();
+    try {
+      await window.naiDesktop.clearAiCallLog();
+      setExpanded(new Set());
+      await load();
+    } catch { setFailed(true); }
   }
 
+  const copy = pageUi(language);
+  const query = logQuery.trim().toLocaleLowerCase();
+  const visibleLogs = entries.filter(entry => (filter === "all" || (filter === "ok") === entry.ok)
+    && (!query || [entry.label, entry.model].some(value => value?.toLocaleLowerCase().includes(query))));
   return (
-    <main className="ai-log-panel">
+    <main className="ai-log-panel" aria-busy={loading}>
       <div className="ai-log-head">
         <div>
           <strong>{t("aiLog.title")}</strong>
@@ -4892,11 +4868,22 @@ function AiLogPanel() {
           </button>
         </div>
       </div>
-      {entries.length === 0 ? (
-        <div className="ai-log-empty">{t("aiLog.empty")}</div>
+      <div className="ai-log-filters" role="group" aria-label={copy.filters}>
+        <label className="ai-log-search">
+          <Icon name="search" aria-hidden="true"/>
+          <input type="search" aria-label={copy.searchLogs} placeholder={copy.searchLogs} value={logQuery} onChange={e => setLogQuery(e.target.value)} />
+        </label>
+        <div className="ai-log-filter-status">
+          <div className="studio-mini-segments">{(["all","ok","fail"] as const).map(status => <Button key={status} aria-pressed={filter === status} onClick={() => setFilter(status)}>{status === "all" ? copy.all : t(`aiLog.${status}`)}</Button>)}</div>
+          <output aria-live="polite">{visibleLogs.length} / {entries.length}</output>
+        </div>
+      </div>
+      {failed && <div className="ai-log-load-error" role="alert">{copy.loadFailed} <Button onClick={() => void load()} disabled={loading}>{t("aiLog.refresh")}</Button></div>}
+      {visibleLogs.length === 0 ? (
+        <div className="ai-log-empty">{entries.length ? copy.noMatch : t("aiLog.empty")}</div>
       ) : (
         <div className="ai-log-list">
-          {entries.map((entry) => {
+          {visibleLogs.map((entry) => {
             const open = expanded.has(entry.id);
             return (
               <div className={clsx("ai-log-item", entry.ok ? "ok" : "fail")} key={entry.id}>
@@ -5332,7 +5319,7 @@ function ZoomableImageStage({
   );
 }
 
-export function ImageCanvas() {
+export function ImageCanvas({ redesign = false }: { redesign?: boolean } = {}) {
   const currentImage = useAppStore(resolveCanvasImage);
   const comparisonBeforeImage = useAppStore((state) => state.comparisonBeforeImage);
   const comparisonSurface = useAppStore((state) => state.comparisonSurface);
@@ -5468,6 +5455,9 @@ export function ImageCanvas() {
           <div className="coming-soon-icon"><Icon name="wand" /></div>
           <h2>{t("postprocess.emptyTitle")}</h2>
           <p>{t("postprocess.emptyHint")}</p>
+          <Button variant="primary" className="workbench-empty-action" onClick={() => void useAppStore.getState().loadWorkbenchImage()}>
+            <IconText icon={<Icon name="folderOpen" />}>{t("workbench.load")}</IconText>
+          </Button>
         </div>
       </main>
     );
@@ -5530,9 +5520,13 @@ export function ImageCanvas() {
       )}
       {!currentImage && !isGenerating && (
         <button className="empty-canvas" onClick={generate}>
-          <span className="empty-illustration is-plain" aria-hidden="true">
+          {redesign ? <span className="empty-illustration is-plain" aria-hidden="true">
             <Icon name="image" />
-          </span>
+          </span> : <span className="empty-illustration" aria-hidden="true">
+            <span className="empty-orb empty-orb-a" />
+            <span className="empty-orb empty-orb-b" />
+            <span className="empty-gem"><Icon name="sparkles" /></span>
+          </span>}
           <strong>{t("canvas.emptyTitle")}</strong>
           <span>{t("canvas.emptyHint")}</span>
           <span className="empty-shortcuts">
@@ -5738,7 +5732,7 @@ function TokenGuideModal({ onClose }: { onClose: () => void }) {
 }
 
 // ── History panel ─────────────────────────────────────────────────────────────
-function HistoryPanel() {
+function HistoryPanel({ redesign }: { redesign: boolean }) {
   const history = useAppStore((state) => state.history);
   const isGenerating = useAppStore((state) => state.isGenerating);
   const generationPhase = useAppStore((state) => state.generationPhase);
@@ -5878,11 +5872,11 @@ function HistoryPanel() {
   return (
     <aside className="history-panel">
       <div className="history-title">
-        <div className="history-title-copy">
+        <div className={redesign ? "history-title-copy" : undefined}>
           <strong>{t("history.title")}</strong>
           <small>{history.length > 0 ? f("history.count", { count: history.length }) : t("history.emptySubtitle")}</small>
         </div>
-        <div className="history-title-actions">
+        {redesign ? <div className="history-title-actions">
           <button
             type="button"
             className="shell-icon-btn history-panel-close-btn"
@@ -5892,7 +5886,7 @@ function HistoryPanel() {
           >
             <Icon name="chevronRight" />
           </button>
-        </div>
+        </div> : <ConvertedHistoryRestoreButton disabled={isGenerating} />}
       </div>
       <div className="history-filters">
         <SelectMenu
@@ -5933,9 +5927,9 @@ function HistoryPanel() {
             <Icon name="trash" /> {t("history.delete")}
           </button>
         </div>
-        <div className="history-restore-row">
+        {redesign && <div className="history-restore-row">
           <ConvertedHistoryRestoreButton disabled={isGenerating} />
-        </div>
+        </div>}
       </div>
       <div ref={historyScrollRef} className={clsx("history-grid", virtualizeHistory && "is-virtualized")}>
         {isGenerating && (
@@ -6008,6 +6002,7 @@ export function SettingsModal({ onClose, variant = "modal" }: { onClose: () => v
     () => takeRequestedSettingsSection() ?? new URLSearchParams(window.location.search).get("uiSettingsSection") ?? "api",
   );
   const sectionMotion=useStudioRegionMotion(section);
+  const [navQuery,setNavQuery]=useState("");
   useEffect(()=>{const navigate=()=>{const next=takeRequestedSettingsSection();if(next)setSection(next);};window.addEventListener('studio:settings-section',navigate);return()=>window.removeEventListener('studio:settings-section',navigate);},[]);
   const settings = useAppStore((state) => state.settings);
   const refreshSettings = useAppStore((state) => state.refreshSettings);
@@ -6239,6 +6234,9 @@ export function SettingsModal({ onClose, variant = "modal" }: { onClose: () => v
     ["mcp", ft("MCP 服务"), "plug"],
     ["about", settingsShellText.nav.about, "info"],
   ];
+  const query=navQuery.trim();
+  const searchCopy=settingsSearchText(settings.language);
+  const navResults=nav.filter(([value,label])=>matchSettingsSection(value,label,query));
   const selectedReverseConvertPreset = selectedImageTaskPromptPreset(settings.reverseConvertPromptPresets, promptPresetSelectedId, promptPresetTask);
   const reverseConvertPresetManager = (
     <section className="reverse-convert-preset-manager">
@@ -6304,7 +6302,7 @@ export function SettingsModal({ onClose, variant = "modal" }: { onClose: () => v
 
   return (
     <SettingsFrame page={variant === "page"}>
-      <div className={clsx("modal settings-modal", variant === "page" && "settings-as-page")} role={variant === "page" ? "region" : undefined} aria-label={variant === "page" ? settingsShellText.title : undefined}>
+      <div tabIndex={-1} className={clsx("modal settings-modal", variant === "page" && "settings-as-page")} role={variant === "page" ? "region" : undefined} aria-label={variant === "page" ? settingsShellText.title : undefined}>
         <header>
           {variant === "page" ? (
             <button type="button" className="settings-page-back" onClick={onClose}>
@@ -6318,8 +6316,21 @@ export function SettingsModal({ onClose, variant = "modal" }: { onClose: () => v
         </header>
         <div className="settings-body">
           <nav className="settings-nav">
-            {nav.map(([value, label, icon]) => (
-              <button className={clsx(section === value && "active")} key={value} onClick={() => setSection(value)}>
+            <div className="settings-finder">
+              <label>
+                <Icon name="search"/>
+                <input className="settings-nav-search" type="search" aria-label={searchCopy.label} placeholder={searchCopy.label} value={navQuery}
+                  onChange={event=>setNavQuery(event.target.value)}
+                  onKeyDown={event=>{
+                    if(event.key==="Escape"&&navQuery){event.preventDefault();event.stopPropagation();setNavQuery("");}
+                    if(event.key==="Enter"&&query&&navResults[0]){event.preventDefault();setSection(navResults[0][0]);}
+                  }}/>
+              </label>
+              {query&&<div className="settings-finder-count" role="status">{navResults.length?navResults.length+" "+searchCopy.groups:searchCopy.empty}</div>}
+              {query&&<button type="button" className="settings-finder-clear" onClick={()=>setNavQuery("")}>{searchCopy.reset}</button>}
+            </div>
+            {navResults.map(([value, label, icon]) => (
+              <button className={clsx(section === value && "active")} key={value} aria-current={section === value ? "page" : undefined} onClick={() => setSection(value)}>
                 <Icon name={icon} /><span>{label}</span>
               </button>
             ))}
@@ -7072,10 +7083,9 @@ function OnboardingWizard() {
       <div className="modal-backdrop onboarding-backdrop">
       <div className="onboarding">
         <div className="onboarding-top">
-          <div className="dots">
-            {cards.map((_, index) => (
-              <span key={index} className={clsx(index === step && "active")} />
-            ))}
+          <div className="onboarding-progress" role="progressbar" aria-label={cards[step].title} aria-valuemin={1} aria-valuemax={cards.length} aria-valuenow={step+1}>
+            <strong>{step+1} / {cards.length}</strong><span>{cards[step].title}</span>
+            <div className="dots" aria-hidden="true">{cards.map((_, index) => <i key={index} className={clsx(index <= step && "active")} />)}</div>
           </div>
           <button onClick={finish}>{t("onboarding.skip")}</button>
         </div>
@@ -7470,6 +7480,56 @@ function WorkspaceMigrationNotice() {
 // ── Main page ─────────────────────────────────────────────────────────────────
 // Draggable splitter between workspace rails. Drag = resize; double-click = reset.
 // Width changes apply live (store) and persist to localStorage on release.
+function ClassicWorkspaceResizer({ edge }: { edge: "left" | "right" }) {
+  const width = useAppStore((s) => (edge === "left" ? s.wsLeftWidth : s.wsRightWidth));
+  const setWsWidth = useAppStore((s) => s.setWsWidth);
+  const saveWsWidths = useAppStore((s) => s.saveWsWidths);
+  const resetWsWidths = useAppStore((s) => s.resetWsWidths);
+  const language = useAppStore((s) => s.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const drag = useRef<{ startX: number; startW: number } | null>(null);
+
+  return (
+    <div
+      className={clsx("ws-resizer", edge)}
+      role="separator"
+      aria-orientation="vertical"
+      title={t("workspace.resizeTitle")}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        drag.current = { startX: e.clientX, startW: width };
+      }}
+      onPointerMove={(e) => {
+        if (!drag.current) return;
+        const dx = e.clientX - drag.current.startX;
+        setWsWidth(edge, drag.current.startW + (edge === "left" ? dx : -dx));
+      }}
+      onPointerUp={(e) => {
+        if (!drag.current) return;
+        drag.current = null;
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        saveWsWidths();
+      }}
+      onDoubleClick={() => resetWsWidths()}
+    >
+      <span className="ws-resizer-grip" />
+      <button
+        type="button"
+        className="ws-resizer-reset"
+        title={t("workspace.resetTitle")}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          resetWsWidths();
+        }}
+      >
+        <Icon name="refresh" />
+      </button>
+    </div>
+  );
+}
+
 function WorkspaceResizer({ edge }: { edge: "left" | "right" }) {
   const defaultWidth = edge === "left" ? 380 : 340;
   const width = useAppStore((s) => (edge === "left" ? s.wsLeftWidth : s.wsRightWidth));
@@ -7573,7 +7633,7 @@ function PersistentTabView({
   return (
     <div
       ref={viewMotion} className={clsx("persistent-tools-view", className, active ? "is-active" : "is-hidden")}
-      data-view-scope={scope}
+      data-view-scope={scope} tabIndex={active ? -1 : undefined}
       aria-hidden={!active}
     >
       <AppErrorBoundary scope={scope} resetKey={resetKey}>
@@ -7732,7 +7792,11 @@ function MainPage() {
   }, [showSettings, setShowSettings, isRedesign]);
 
   return (
-    <div className={clsx("app-shell", isRedesign && "studio-shell")} data-desktop-layout={isRedesign ? "redesign" : "classic"} data-rail={isRedesign ? (railCollapsed ? "collapsed" : "expanded") : undefined}>
+    <div className={clsx("app-shell", isRedesign && "studio-shell")} data-desktop-layout={isRedesign ? "redesign" : "classic"} data-studio-surface={showSettings ? "settings" : activeTab} data-rail={isRedesign ? (railCollapsed ? "collapsed" : "expanded") : undefined}>
+      <a className="desktop-workspace-skip" href="#studio-main-workspace"
+        onClick={event=>{event.preventDefault();const target=document.querySelector<HTMLElement>(showSettings?".settings-modal":".persistent-tools-view.is-active"); (target??document.getElementById("studio-main-workspace"))?.focus({preventScroll:true});}}>
+        {({"zh-CN":"跳到工作区","zh-TW":"跳至工作區","ja-JP":"作業領域へ","ko-KR":"작업 영역으로 이동"} as Record<string,string>)[language??""]??"Skip to workspace"}
+      </a>
       {isRedesign ? <StudioTopBar account={<NaiAccountManager />} /> : <AppTitleBar />}
       <div className="app-notice-slot">
         <UpdateBanner />
@@ -7745,7 +7809,7 @@ function MainPage() {
       </>}
       <div className={isRedesign ? "shell-body" : "classic-layout-contents"}>
         {isRedesign && <StudioNavRail />}
-        <main className={isRedesign ? "shell-main" : "classic-layout-contents"}>
+        <main id="studio-main-workspace" tabIndex={-1} className={isRedesign ? "shell-main" : "classic-layout-contents"}>
           {isRedesign && <LayoutNotice />}
           <div
             className="workspace"
@@ -7757,6 +7821,9 @@ function MainPage() {
             style={{
               "--ws-left": `${displayedLeftWidth}px`,
               "--ws-right": `${displayedHistoryWidth}px`,
+              ...(isRedesign ? {
+                "--history-drawer-w": `${wsHistoryDragWidth === null ? classicRightWidth : Math.max(HISTORY_MIN_WIDTH, wsHistoryDragWidth)}px`,
+              } : {}),
             } as CSSProperties}
           >
             <PersistentTabView
@@ -7767,12 +7834,12 @@ function MainPage() {
             >
               <WorkbenchDockProvider host={isRedesign ? dockHost : null}>
                 {isRedesign ? <LeftPanel openSettings={() => setShowSettings(true)} /> : <ClassicLeftPanel openSettings={() => setShowSettings(true)} />}
-                <WorkspaceResizer edge="left" />
+                {isRedesign ? <WorkspaceResizer edge="left" /> : <ClassicWorkspaceResizer edge="left" />}
                 <div className="persistent-canvas-host">
                   {isRedesign && <WorkbenchDockPane onHost={setDockHost} />}
                   <div className={isRedesign ? "persistent-canvas-stage" : "classic-layout-contents"}>
                     <PersistentCanvasSurface active={activeTab !== "inpaint"}>
-                      <ImageCanvas />
+                      <ImageCanvas redesign={isRedesign} />
                     </PersistentCanvasSurface>
                     <PersistentCanvasSurface active={activeTab === "inpaint"}>
                       <Suspense fallback={<div className="lazy-tool-loading" role="status" aria-busy="true"><span className="lazy-tool-spinner" aria-hidden="true" />{t("tool.loadingInpaint")}</div>}>
@@ -7783,10 +7850,10 @@ function MainPage() {
                 </div>
                 {isRedesign ? <>
                   <HistoryRailControls />
-                  <HistoryRailPane><MemoizedHistoryPanel /></HistoryRailPane>
+                  <HistoryRailPane><MemoizedHistoryPanel redesign /></HistoryRailPane>
                 </> : <>
                   <ClassicHistoryRailControls />
-                  <ClassicHistoryRailPane><MemoizedHistoryPanel /></ClassicHistoryRailPane>
+                  <ClassicHistoryRailPane><MemoizedHistoryPanel redesign={false} /></ClassicHistoryRailPane>
                 </>}
               </WorkbenchDockProvider>
             </PersistentTabView>

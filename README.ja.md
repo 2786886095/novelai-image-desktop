@@ -1,6 +1,8 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 # Langbai NovelAI Studio
 
+デスクトップではクラシック版と新しい UI をいつでも切り替えられます。新版の履歴・素材パネルはキャンバスを動かさずに表示され、NAX の比較画像は元の縦横比で閲覧し、タグをコピーできます。
+
 > 現在の配布ファイルとリリース説明は [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) を参照してください。インストール方法と制限は下のダウンロード欄に記載しています。
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)

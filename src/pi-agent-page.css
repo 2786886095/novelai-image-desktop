@@ -224,6 +224,14 @@ html.motion-reduced .pi-question-card{animation:none}
 html.motion-reduced .pi-motion-disclosure,html.motion-reduced .pi-resource-details-toggle svg{transition:none}
 
 .pi-transcript-content{min-height:100%;display:flow-root;flex-shrink:0}
+.studio-shell .pi-main > .pi-setup { flex: 0 0 auto; }
+.studio-shell .pi-transcript-wrap { overflow: hidden; }
+@media(max-height:690px) {
+  .studio-shell .pi-main > .pi-setup { padding-block: 8px; margin-block-start: 8px; }
+  .studio-shell .pi-transcript:has(.pi-empty) { padding-block: 10px; }
+  .studio-shell .pi-empty { padding-block: 8px; }
+  .studio-shell .pi-starters { margin-block-start: 12px; }
+}
 .pi-agent.pi-context-popover{position:fixed;z-index:20020;display:block;height:auto;overflow:auto;padding:12px;border:1px solid var(--pi-line);border-radius:12px;box-shadow:0 8px 24px #20143822;animation:studio-view-in 160ms ease-out}.pi-context-popover .pi-context-panel-content>p{margin:0 0 8px}.pi-context-popover progress{width:100%;height:5px}.pi-context-popover pre{white-space:pre-wrap;overflow-wrap:anywhere}.pi-context-trigger{margin-left:auto}.pi-context-popover .pi-context-controls{display:flex;flex-wrap:wrap;gap:8px}.pi-context-popover .pi-context-controls label{display:flex;gap:6px;align-items:center}.pi-question-custom-confirm{margin:8px 0}
 html.motion-reduced .pi-agent.pi-context-popover{animation:none}
 

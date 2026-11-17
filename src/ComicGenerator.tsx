@@ -1,3 +1,4 @@
+import {toolWorkspaceText} from "./tool-workspace-text";
 import {FilePicker} from './components/FilePicker';
 import {selectBatchTasks} from './batch/generation-queue';
 import {BatchSizeImportError,parseBatchSizeImport} from './batch/size-import';
@@ -689,7 +690,7 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
   const progress = useAppStore((state) => state.batchProgress);
   const setToast = useAppStore((state) => state.setToast);
   const refreshHistory = useAppStore((state) => state.refreshHistory);
-  const { t, f } = useBatchLocale();
+  const { t, f, language } = useBatchLocale();
 
   const [aiFilling, setAiFilling] = useState(false);
   const [showReferencePresets, setShowReferencePresets] = useState(false);
@@ -1224,6 +1225,10 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
         </div>
       </div>
 
+      <div className="tool-redraw-overview" role="status">
+        <strong>{toolWorkspaceText(language).step} {REDRAW_STEPS.findIndex(meta=>meta.key===step)+1} / {REDRAW_STEPS.length}</strong>
+        <span>{t(REDRAW_STEPS.find(meta=>meta.key===step)?.hintKey ?? REDRAW_STEPS[0].hintKey)}</span>
+      </div>
       <nav className="comic-steps" aria-label={t("batch.titleEyebrow")}>
         {REDRAW_STEPS.map((meta, index) => (
           <button
@@ -1400,7 +1405,7 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
               {f("batch.params.strength", { value: globalStrength.toFixed(2) })}
             </span>
             <RangeInput
-              
+
               min={0.1}
               max={0.99}
               step={0.01}
@@ -1951,7 +1956,7 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
             <span>{t("batch.results.tip")}</span>
           </div>
 
-          <div className="redraw-results-scroll">
+          <div className="redraw-results-scroll" tabIndex={0} role="region" aria-label={t("batch.results.filterAria")}>
             {items.length === 0 ? (
               <div className="redraw-results-empty">
                 <b>{t("batch.results.emptyTitle")}</b>

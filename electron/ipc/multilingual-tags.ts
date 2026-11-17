@@ -2,14 +2,18 @@ import {app,dialog} from "electron";
 import axios from "axios";
 import {createHash,randomUUID} from "node:crypto";
 import fs from "node:fs/promises";
-import {createReadStream,createWriteStream,existsSync,readFileSync,statSync} from "node:fs";
+import {createReadStream,createWriteStream,existsSync,readFileSync,renameSync,statSync} from "node:fs";
 import path from "node:path";
 import {pipeline} from "node:stream/promises";
 import {DatabaseSync} from "node:sqlite";
 import {createGunzip} from "node:zlib";
-import {TAG_PACK_LANGUAGES,TAG_PACK_MANIFEST,tagPackLanguage,type TagPackLanguage,type TagPackStatus} from "../../shared/multilingual-tag-pack-contract";
+import {TAG_PACK_LANGUAGES,TAG_PACK_MANIFEST,tagPackLanguage,tagPackSort,type TagPackLanguage,type TagPackStatus} from "../../shared/multilingual-tag-pack-contract";
 import type {TagSuggestion} from "../../src/types";
 import {proxyConfig} from "./proxy";
+import {relatedResourceTags} from "./resource-databases";
+import {relatedTags} from "../../src/related-tags";
+import {browseTagPackDatabase,closeTagPackReader,lookupTagPackDatabase,searchTagPackDatabase,type TagDictionaryMatch} from "./tag-pack-reader";
+export {lookupTagPackDatabase,searchTagPackDatabase,type TagDictionaryMatch} from "./tag-pack-reader";
 
 let installing=false;
 const root=()=>path.join(app.getPath("userData"),"resources","multilingual-tags");
@@ -18,37 +22,49 @@ const selection=()=>path.join(root(),"active.json");
 function installed(lang:TagPackLanguage){
  try{return existsSync(dbPath(lang))&&statSync(dbPath(lang)).size===TAG_PACK_MANIFEST.packs[lang].databaseSize;}catch{return false;}
 }
+function preferredTagPack():TagPackLanguage|null {
+ try{return tagPackLanguage(JSON.parse(readFileSync(selection(),"utf8")));}catch{return null;}
+}
 export function activeTagPack():TagPackLanguage|null{
- try{
-  const lang=tagPackLanguage(JSON.parse(readFileSync(selection(),"utf8")));
-  return lang&&installed(lang)?lang:null;
- }catch{return null;}
+ const lang=preferredTagPack();
+ return lang&&installed(lang)?lang:null;
 }
 export function multilingualTagStatus():TagPackStatus {
- return {active:activeTagPack(),installed:TAG_PACK_LANGUAGES.filter(installed),updatedAt:TAG_PACK_MANIFEST.updatedAt};
+ return {active:activeTagPack(),installed:TAG_PACK_LANGUAGES.filter(installed),updatedAt:TAG_PACK_MANIFEST.updatedAt,preferred:preferredTagPack()};
 }
-function fold(value:string){return value.normalize("NFKC").toLowerCase().replaceAll("_"," ").trim().replace(/\s+/g," ");}
-function limitOf(value:number){return Number.isSafeInteger(value)?Math.max(1,Math.min(200,value)):20;}
-export function searchTagPackDatabase(file:string,query:string,limit:number):TagSuggestion[]{
- const word=fold(query.slice(0,255));if(!word)return [];
- const n=limitOf(limit);
- const db=new DatabaseSync(file,{readOnly:true});
- try{
-  const byTag=new Map<string,{tag:string;translated:string;count:number;category:number;priority:number}>();
-  for(const col of ["key","translated_key"]){
-   const candidates=db.prepare("SELECT tag,translated,category,count, CASE WHEN "+col+" = ? THEN 0 ELSE 1 END AS priority FROM terms WHERE "+col+" >= ? AND "+col+" < ? ORDER BY priority, count DESC, tag LIMIT ?")
-    .all(word,word,word+String.fromCodePoint(0x10ffff),n) as unknown as Array<{tag:string;translated:string;count:number;category:number;priority:number}>;
-   for(const s of candidates)if(!byTag.has(s.tag)||s.priority<byTag.get(s.tag)!.priority)byTag.set(s.tag,s);
-  }
-  return [...byTag.values()].sort((a,b)=>a.priority-b.priority||b.count-a.count||a.tag.localeCompare(b.tag))
-   .slice(0,n).map(row=>({tag:row.tag,description:row.translated,count:row.count,category:row.category,localizedDescription:true}));
- }finally{db.close();}
+export function browseMultilingualTags(group:unknown,query:unknown,page:unknown,sort?:unknown){
+ const lang=activeTagPack();
+ if(!lang||typeof group!=="string"||typeof query!=="string"||typeof page!=="number")return {rows:[],total:0,page:0};
+ return browseTagPackDatabase(dbPath(lang),path.join(app.getAppPath(),"shared","tag-pack-groups.bin"),group,query,page,tagPackSort(sort));
 }
 /** Null means no selected library; [] is an authoritative offline miss. */
-export function searchMultilingualTags(query:string,limit=20):TagSuggestion[]|null {
+export function searchMultilingualTags(query:string,limit=20,sort?:unknown):TagSuggestion[]|null {
  const lang=activeTagPack();if(!lang)return null;
- return searchTagPackDatabase(dbPath(lang),query,limit);
+ return searchTagPackDatabase(dbPath(lang),query,limit,tagPackSort(sort));
 }
+export function lookupMultilingualTags(input: readonly string[], includeTranslation = false): TagDictionaryMatch[] {
+ const lang = activeTagPack();
+ if (!lang) return [];
+ return lookupTagPackDatabase(dbPath(lang), input, includeTranslation);
+}
+
+/** Rank suggestions locally, and use the active dictionary as the sole display/translation source. */
+export function relatedMultilingualTags(input:unknown,limit:unknown=8):TagSuggestion[]|null {
+ const lang=activeTagPack();if(!lang)return null;
+ if(!Array.isArray(input))return [];
+ const seeds=input.slice(0,12).filter((item):item is string=>typeof item==="string").map(item=>item.slice(0,128));
+ const file=dbPath(lang);
+ const anchors=lookupTagPackDatabase(file,seeds,true).map(item=>item.tag);
+ if(!anchors.length)return [];
+ const cap=typeof limit==="number"&&Number.isInteger(limit)?Math.max(1,Math.min(20,limit)):8;
+ const key=(tag:string)=>tag.normalize("NFKC").toLowerCase().replaceAll("_"," ").trim().replace(/\s+/g," ");
+ const excluded=new Set(anchors.map(key));
+ const names=[...relatedResourceTags(anchors,Math.min(40,cap*3)),...relatedTags(anchors.join(", "),cap*3)].map(item=>item.tag);
+ const eligible=[...new Set(names.map(key))].filter(name=>!excluded.has(name)&&!/^rating\s*:/.test(name)
+  && !/^(?:commentary(?: request)?|translated|partially translated|translation request|check translation|copyright name|tagme)$/.test(name));
+ return lookupTagPackDatabase(file,eligible).slice(0,cap).map(({query:_,...item})=>item);
+}
+
 async function copyVerified(input:AsyncIterable<Uint8Array>,dest:string,size:number,sha:string){
  const hash=createHash("sha256");let length=0;
  await pipeline(input,async function* (chunks:AsyncIterable<Uint8Array>){
@@ -94,7 +110,10 @@ export async function installMultilingualTagPack(value:unknown, input:unknown):P
     const info=db.prepare("select language,updated_at from info").get();
     if(info?.language!==lang||info.updated_at!==TAG_PACK_MANIFEST.updatedAt)throw Error("Wrong tag pack language or version");
    }finally{db.close();}
-   await fs.rename(dbTemp,dbPath(lang));
+   const destination=dbPath(lang);
+   // Release SQLite handles before replacing a downloaded pack on Windows.
+   closeTagPackReader(destination);
+   renameSync(dbTemp,destination);
   }
   await selectInstalled(lang);
   return multilingualTagStatus();

@@ -67,7 +67,7 @@ export function AppMenuBar({ openSettings, children }: { openSettings: () => voi
   };
 
   return (
-    <nav className="menu-bar compact-toolbar">
+    <nav className="menu-bar compact-toolbar classic-account-toolbar">
       {children}
       <div className="menu-actions-row">
         <button

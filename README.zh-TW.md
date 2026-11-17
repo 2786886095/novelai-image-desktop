@@ -1,6 +1,8 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 # Langbai NovelAI Studio
 
+桌面版可以隨時切換經典與新版介面。新版「歷史與素材」以浮動視窗呈現，不會擠動畫布，NAX 對照圖可在軟體內按原比例顯示並複製目前的標籤。
+
 > [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) 提供目前的發行說明與實際附件；安裝方式與限制請見下方下載區。
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)

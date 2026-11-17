@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../services/nai_api.dart';
 import '../ui/studio_dropdown.dart';
+import '../i18n/app_locales.dart';
+import '../tags/multilingual_tag_packs.dart';
 
 class McpToolSettings extends StatefulWidget {
   const McpToolSettings({super.key});
@@ -141,6 +143,11 @@ class _McpCapsuleSuggestionsState extends State<McpCapsuleSuggestions> {
   List<TagSuggestion> tags = [];
   bool busy = false;
   @override
+  void initState() {
+    super.initState();
+    unawaited(context.read<AppState>().multilingualTags.load());
+  }
+  @override
   void dispose() {
     revision++;
     timer?.cancel();
@@ -158,9 +165,14 @@ class _McpCapsuleSuggestionsState extends State<McpCapsuleSuggestions> {
     timer = Timer(const Duration(milliseconds: 250), () async {
       final state = context.read<AppState>();
       try {
-        final key = await state.storage.getTagKey() ?? '';
-        final found = await state.api.searchTags(state.settings, q, 24,
-            apiKey: key, fallbackLocal: false);
+        final packed = await state.multilingualTags.search(q, limit: 24);
+        final found = packed != null
+            ? packed.map((row) => TagSuggestion(tag:row.tag, count:row.count,
+                description:row.description, localizedDescription:true)).toList()
+            : state.settings.tagServerEnabled && state.settings.mcpForCapsule
+                ? await state.api.searchTags(state.settings, q, 24,
+                    apiKey: await state.storage.getTagKey() ?? '', fallbackLocal:false)
+                : <TagSuggestion>[];
         if (mounted && id == revision) setState(() => tags = found);
       } catch (_) {
       } finally {
@@ -171,19 +183,25 @@ class _McpCapsuleSuggestionsState extends State<McpCapsuleSuggestions> {
 
   @override
   Widget build(BuildContext context) {
-    final s = context.watch<AppState>().settings;
-    if (!s.tagServerEnabled || !s.mcpForCapsule) return const SizedBox.shrink();
+    final app = context.watch<AppState>();
+    return ListenableBuilder(listenable: app.multilingualTags, builder:(context, _) {
+    final active = app.multilingualTags.active;
+    final s = app.settings;
+    if (active == null && (!s.tagServerEnabled || !s.mcpForCapsule)) return const SizedBox.shrink();
+    final labels = generateScreenTextFor(s.language);
     return Column(children: [
       TextField(
-          decoration: const InputDecoration(labelText: 'MCP'),
+          decoration: InputDecoration(labelText: active == null ? 'MCP' :
+              '${labels.tagSearchLabel} · ${tagPackNames[active]}'),
           onChanged: query),
       if (busy) const LinearProgressIndicator(),
       Wrap(
           children: tags
               .map((tag) => ActionChip(
-                  label: Text(tag.tag),
+                  label: Text(tag.localizedDescription && (tag.description?.isNotEmpty ?? false)
+                      ? '${tag.description} · ${tag.tag}' : tag.tag),
                   onPressed: () => widget.onPick(tag.tag)))
               .toList())
-    ]);
+    ]);});
   }
 }

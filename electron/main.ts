@@ -1,4 +1,4 @@
-import {installMultilingualTagPack,multilingualTagStatus} from "./ipc/multilingual-tags";
+import {browseMultilingualTags,relatedMultilingualTags,installMultilingualTagPack,multilingualTagStatus,searchMultilingualTags,lookupMultilingualTags} from "./ipc/multilingual-tags";
 import { windowTrayText } from "../src/window-tray-text";
 import {runComicPromptRequest, cancelComicPromptRequest} from './ipc/nai';
 import {getPromptTemplateLibrary, mutatePromptTemplateLibrary} from './ipc/template-library';
@@ -124,7 +124,7 @@ import {
   clearAitagCache,
   cacheOnlineGalleryImage,
 } from "./ipc/aitag-cache";
-import { clearOnlineGalleryDataCache, downloadOnlineGalleryImages, getOnlineGalleryDetail, searchOnlineGallery, selectOnlineGalleryDownloadDir } from "./ipc/online-gallery";
+import { clearOnlineGalleryDataCache, downloadOnlineGalleryImages, getOnlineGalleryDetail, searchOnlineGallery, selectOnlineGalleryDownloadDir, readNaxGallery } from "./ipc/online-gallery";
 import {
   artistLabModelStatus,
   artistStylePreview,
@@ -1149,6 +1149,7 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
   );
   ipcMain.handle("aitag:cache-stats", () => aitagCacheStats());
   ipcMain.handle("aitag:clear-cache", () => clearAitagCache());
+  ipcMain.handle("online-gallery:nax-page", (_event, collection:unknown,page:unknown) => readNaxGallery(collection,page));
   ipcMain.handle("online-gallery:search", (_event, request: unknown) => searchOnlineGallery(request));
   ipcMain.handle("online-gallery:detail", (_event, request: unknown) => getOnlineGalleryDetail(request));
   ipcMain.handle("online-gallery:download-images", (_event, request: unknown) => downloadOnlineGalleryImages(request));
@@ -1399,6 +1400,10 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
     (_event, scope: import("../src/types").ArtistStyleCatalogScope, query: string, offset: number, limit: number) =>
       artistStyleCatalog(scope, query, offset, limit),
   );
+  ipcMain.handle("tag-pack:browse", (_event, group:unknown,query:unknown,page:unknown,sort?:unknown) => browseMultilingualTags(group,query,page,sort));
+  ipcMain.handle("tag-pack:related", (_event, tags:unknown, limit?:unknown) => relatedMultilingualTags(tags,limit) ?? []);
+  ipcMain.handle("tag-pack:search", (_event, query: unknown, limit?: number) => typeof query === "string" ? searchMultilingualTags(query,limit) ?? [] : []);
+  ipcMain.handle("tag-pack:lookup", (_event, tags: unknown) => Array.isArray(tags) ? lookupMultilingualTags(tags).map(({query: _query, ...row}) => row) : []);
   ipcMain.handle("tag-pack:status", () => multilingualTagStatus());
   ipcMain.handle("tag-pack:install", (_event,lang:unknown,source:unknown) => installMultilingualTagPack(lang,source));
   ipcMain.handle("resource-database:overview", () => getResourceDatabaseOverview());

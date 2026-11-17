@@ -1,4 +1,5 @@
 import {manageModalPortal,motionReduced} from '../motion-system';
+import './close-window-choice.css';
 let confirmationId=0;
 import {useAppStore} from '../store';
 import {featureKey,featureText} from '../feature-text';
@@ -11,24 +12,22 @@ export function confirmAction(message: string, title = "请确认", choice?: Con
   return showConfirmation(message, title, choice, signal, buttonLabels).then(result => result === "confirm");
 }
 
-export async function confirmWindowClose(text: { closeDetail: string; closeTitle: string; remember: string; hide: string; quit: string; cancel: string; trayHint?: string; quitHint?: string; cancelHint?: string }) {
+export async function confirmWindowClose(text: { closeDetail: string; closeTitle: string; remember: string; hide: string; closeQuit: string; cancel: string }) {
   let remember = false;
   const result = await showConfirmation(text.closeDetail, text.closeTitle, {
     label: text.remember, onChange: checked => { remember = checked; },
-  }, undefined, { confirm: text.hide, alternative: text.quit, cancel: text.cancel, localized: true }, {
+  }, undefined, { confirm: text.hide, alternative: text.closeQuit, cancel: text.cancel, localized: true }, {
     variant: "close-choice",
-    hints: { confirm: text.trayHint, alternative: text.quitHint, cancel: text.cancelHint },
   });
   const action = result === "confirm" ? "tray" : result === "alternative" ? "quit" : "cancel";
   return { action, remember: action !== "cancel" && remember } as const;
 }
 
 type ConfirmationOptions = {
-  /** close-choice: three stacked, explicitly labelled actions guarded against
+  /** Window close actions are guarded against
    *  carried-over clicks (double-click on the window close button, a press
    *  that started on another control, or key repeat). */
   variant?: "close-choice";
-  hints?: { confirm?: string; alternative?: string; cancel?: string };
 };
 
 /** Pointer activations this soon after the dialog opens are treated as carry-over. */
@@ -40,8 +39,9 @@ function showConfirmation(message: string, title: string, choice?: ConfirmationC
     let settled = false;
     let release=()=>{},enterFrame=0;
     const titleId=`app-confirm-title-${++confirmationId}`;
+    const closeChoice = options.variant === "close-choice";
     const backdrop = document.createElement("div");
-    backdrop.className = "app-confirm-backdrop";
+    backdrop.className = closeChoice ? "app-confirm-backdrop is-window-close" : "app-confirm-backdrop";
     backdrop.innerHTML = `
       <section class="app-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="${titleId}" aria-describedby="${titleId}-detail" tabindex="-1">
         <h3 id="${titleId}"></h3>
@@ -51,11 +51,12 @@ function showConfirmation(message: string, title: string, choice?: ConfirmationC
           <button type="button" class="btn btn-primary primary" data-result="confirm"></button>
         </div>
       </section>`;
+    if (closeChoice) backdrop.querySelector(".app-confirm-dialog")?.classList.add("is-close-choice");
     const heading = backdrop.querySelector("h3");
     const body = backdrop.querySelector("p");
     const option=choice?document.createElement('label'):null;
     if(option && choice){
-      option.className='checkbox-line';
+      option.className=closeChoice?'checkbox-line close-choice-remember':'checkbox-line';
       const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=false;
       const text=document.createElement('span');text.textContent=choice.label;
       checkbox.addEventListener('change',()=>choice.onChange(checkbox.checked));
@@ -69,27 +70,10 @@ function showConfirmation(message: string, title: string, choice?: ConfirmationC
       backdrop.querySelector('[data-result="confirm"]')?.before(alternative);
     }
     const titleKey=featureKey(title),messageKey=featureKey(message);
-    const closeChoice = options.variant === "close-choice";
-    if (closeChoice) {
-      backdrop.querySelector(".app-confirm-dialog")?.classList.add("is-close-choice");
-      const actions = backdrop.querySelector(".app-confirm-actions");
-      const confirmButton = backdrop.querySelector('[data-result="confirm"]');
-      const cancelButton = backdrop.querySelector('[data-result="cancel"]');
-      if (actions && confirmButton && cancelButton) {
-        actions.append(confirmButton);
-        if (alternative) actions.append(alternative);
-        actions.append(cancelButton);
-      }
-    }
     const openedAt = performance.now();
     let pressed: Element | null = null;
-    const setLabel = (button: Element | null, label: string, hint?: string) => {
-      if (!button) return;
-      if (!closeChoice || !hint) { button.textContent = label; return; }
-      const wrap = document.createElement("span"); wrap.className = "close-choice-label";
-      const strong = document.createElement("strong"); strong.textContent = label;
-      const small = document.createElement("small"); small.textContent = hint;
-      wrap.append(strong, small); button.replaceChildren(wrap);
+    const setLabel = (button: Element | null, label: string) => {
+      if (button) button.textContent = label;
     };
     const render=()=>{
       const language=useAppStore.getState().settings?.language;
@@ -97,9 +81,9 @@ function showConfirmation(message: string, title: string, choice?: ConfirmationC
       if (heading) heading.textContent = localized(title, titleKey);
       if (body) body.textContent = localized(message, messageKey);
       if(option && choice)option.querySelector('span')!.textContent=localized(choice.label);
-      setLabel(backdrop.querySelector('[data-result="cancel"]'), localized(buttonLabels?.cancel??'取消'), options.hints?.cancel);
-      setLabel(backdrop.querySelector('[data-result="confirm"]'), localized(buttonLabels?.confirm??'确认'), options.hints?.confirm);
-      if (alternative && buttonLabels?.alternative) setLabel(alternative, localized(buttonLabels.alternative), options.hints?.alternative);
+      setLabel(backdrop.querySelector('[data-result="cancel"]'), localized(buttonLabels?.cancel??'取消'));
+      setLabel(backdrop.querySelector('[data-result="confirm"]'), localized(buttonLabels?.confirm??'确认'));
+      if (alternative && buttonLabels?.alternative) setLabel(alternative, localized(buttonLabels.alternative));
     };
     render();const unsubscribe=useAppStore.subscribe(render);
     const finish = (value: ConfirmationResult) => {

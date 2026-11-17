@@ -1,0 +1,21 @@
+import {expect, it, vi} from "vitest";
+const lookup = vi.hoisted(()=>vi.fn());
+vi.mock("./multilingual-tags",()=>({lookupMultilingualTags: lookup}));
+import {dictionaryQueryTerms, localDictionaryGuidance, promptDictionaryMatches} from "./prompt-local-dictionary";
+it("retrieves exact canonical or translated hints without treating dictionary hits as image facts",()=>{
+ const example="画一个有双马尾和蓝色眼睛的人";
+ expect(dictionaryQueryTerms(example)).toContain("双马尾");
+ expect(dictionaryQueryTerms(example)).toContain("蓝色眼睛");
+ expect(dictionaryQueryTerms("海".repeat(20000)).length).toBeLessThanOrEqual(480);
+ const row={query:"双马尾",tag:"twintails",description:"双马尾",count:12,category:0,localizedDescription:true};
+ lookup.mockReturnValue([row]);
+ expect(localDictionaryGuidance("tags",example)).toContain('"twintails"');
+ expect(localDictionaryGuidance("tags",example)).toContain("do not add new facts");
+ expect(lookup).toHaveBeenLastCalledWith(expect.arrayContaining(["双马尾"]),true);
+ expect(promptDictionaryMatches("mixed","1.2::twintails, solo::, unknown word")).toEqual([{tag:"twintails",description:"双马尾",count:12,category:0,localizedDescription:true}]);
+ expect(lookup).toHaveBeenLastCalledWith(["twintails","solo","unknown word"]);
+ lookup.mockClear();
+ expect(localDictionaryGuidance("natural",example)).toBe("");
+ expect(promptDictionaryMatches("natural","twintails")).toEqual([]);
+ expect(lookup).not.toHaveBeenCalled();
+});

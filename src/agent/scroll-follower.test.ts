@@ -15,3 +15,13 @@ it('one latest click stays pinned through delayed image and disclosure layout gr
  f.intentUp();expect(follow).toBe(false);f.latest();expect(el.scrollTop).toBe(600);flush();el.scrollHeight=1500;f.scrolled();f.pin();flush();expect(el.scrollTop).toBe(1100);expect(follow).toBe(true);
  f.intentUp();el.scrollTop=40;el.scrollHeight=1700;f.pin();flush();expect(el.scrollTop).toBe(40);expect(follow).toBe(false);f.dispose();
 });
+
+it('keeps the welcome at the top, yet follows new messages after it disappears',()=>{
+ const el={scrollTop:0,clientHeight:150,scrollHeight:320},frames=new Map<number,()=>void>();
+ let n=0,welcome=false,following=true;
+ const f=createStudioScrollFollower(el,fn=>{frames.set(++n,fn);return n;},id=>frames.delete(id),v=>following=v,()=>!welcome);
+ const flush=()=>{const work=[...frames.values()];frames.clear();work.forEach(fn=>fn());};
+ f.pin();welcome=true;flush();expect(el.scrollTop).toBe(0);
+ f.restore(true);f.pin();expect(frames.size).toBe(0);expect(following).toBe(true);
+ welcome=false;el.scrollHeight=600;f.pin();flush();expect(el.scrollTop).toBe(450);f.dispose();
+});

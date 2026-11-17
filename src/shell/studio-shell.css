@@ -652,6 +652,10 @@ html body button.dock-strip-tab:active {
   text-align: center;
 }
 
+/* Cap only the floating drawer's width; it never reflows the canvas or its content. */
+.studio-shell .persistent-workbench-view {
+  --history-overlay-width: min(var(--history-drawer-w, 340px), max(220px, calc(100vw - var(--ws-left, 360px) - 330px)));
+}
 /* ── Right History & Materials Floating Popover (`悬浮弹窗`) ───────────── */
 .studio-shell .history-rail.is-floating-popover {
   display: flex !important;
@@ -660,7 +664,7 @@ html body button.dock-strip-tab:active {
   top: 4px;
   bottom: 4px;
   right: 48px;
-  width: min(var(--history-drawer-w, 340px), calc(100% - 64px));
+  width: min(var(--history-overlay-width), calc(100% - 64px));
   z-index: calc(var(--z-raised) + 6);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
@@ -1567,13 +1571,6 @@ html body .shell-palette button.shell-palette-item.active .shell-palette-item-ic
 .studio-shell .lazy-tool-loading { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--text-secondary); font-size: 13px; }
 .lazy-tool-spinner { width: 16px; height: 16px; border-radius: 999px; border: 2px solid var(--border); border-top-color: var(--accent); animation: shell-spin .8s linear infinite; }
 @keyframes shell-spin { to { transform: rotate(360deg); } }
-
-.app-confirm-dialog.is-close-choice { width: min(460px, calc(100vw - 32px)); }
-.app-confirm-dialog.is-close-choice .app-confirm-actions { display: grid; grid-template-columns: 1fr; gap: 8px; }
-.app-confirm-dialog.is-close-choice .app-confirm-actions .btn { justify-content: flex-start; min-height: 44px; height: auto; padding: 8px 12px; text-align: left; white-space: normal; }
-.app-confirm-dialog.is-close-choice .close-choice-label { display: grid; gap: 2px; }
-.app-confirm-dialog.is-close-choice .close-choice-label small { opacity: .8; font-size: 12px; }
-.app-confirm-dialog.is-close-choice [data-result="alternative"] { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
 
 /* ── Directional Keyframes ─────────────────────────────────────────────── */
 @keyframes qf-panel-slide-right {

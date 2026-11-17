@@ -23,7 +23,7 @@ vi.mock("./local-media-protocol", () => ({
   toLocalMediaUrl: (file: string) => `local://${path.basename(file)}`,
 }));
 
-import { cacheAitagImage } from "./aitag-cache";
+import { cacheAitagImage,cacheOnlineGalleryImage } from "./aitag-cache";
 
 let root = "";
 
@@ -79,4 +79,13 @@ describe("AITag image cache", () => {
     expect(axiosGet.mock.calls.length).toBe(callsBefore + 1);
     expect(fs.readFileSync(cacheFile).subarray(0, 4).toString("ascii")).toBe("RIFF");
   });
+});
+
+it("uses the NAX media context with no redirects and rejects other NAX image hosts",async()=>{
+ const valid="https://cdn.zele.st/data/NAX/Images/danbooru-hair-tags-v5/bob.webp";
+ await expect(cacheOnlineGalleryImage("nax",valid)).resolves.toMatch(/^local:/);
+ expect(axiosGet).toHaveBeenCalledWith(valid,expect.objectContaining({maxRedirects:0,headers:expect.objectContaining({Referer:"https://nax.moe/"})}));
+ const calls=axiosGet.mock.calls.length;
+ await expect(cacheOnlineGalleryImage("nax",valid.replace("cdn.zele.st","example.invalid"))).rejects.toThrow("Invalid NAX image");
+ expect(axiosGet.mock.calls).toHaveLength(calls);
 });

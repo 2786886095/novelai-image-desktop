@@ -9,7 +9,7 @@ export function fmtCount(n: number): string {
 
 // Word characters for autocomplete. Includes CJK so Chinese input (e.g. "蓝眼")
 // triggers the 灵感胶囊 suggestions, plus latin word chars and hyphen.
-const WORD_CHAR = /[\w㐀-鿿-]/;
+const WORD_CHAR = /[\p{L}\p{M}\p{N}_-]/u;
 
 /** The "word" immediately left of the cursor and where it starts. */
 export function wordAtCursor(text: string, cursor: number): { word: string; start: number } {

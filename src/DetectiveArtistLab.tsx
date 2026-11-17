@@ -1,3 +1,5 @@
+import {ToolWaypoints} from "./components/ToolWaypoints";
+import {toolWorkspaceText} from "./tool-workspace-text";
 import {PreviewImageViewer, type PreviewImage} from "./components/PreviewImageViewer";
 import {useFeatureText} from "./feature-i18n";
 import { useEffect, useRef, useState } from "react";
@@ -123,7 +125,8 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
   const waitedSeconds = Math.max(180,(snapshot?.retryWaitSeconds ?? 0)+60);
   return <main className="artist-lab target-artist-lab">
     <header className="artist-lab-hero"><div><h2>{ft("目标画风自动迭代 · Artist Detective")}</h2><p>{ft("本地画风模型检索、筛选与评分；使用 NAI 4.5 Full 实际生成，按多个 Seed 复测画师组合。")}</p></div><Button onClick={onBack}>{ft("返回画风实验室")}</Button></header>
-    <section className="artist-lab-config-grid">
+    <ToolWaypoints label={toolWorkspaceText(language).target} items={[["setup",ft("生成与搜索参数")],["run",toolWorkspaceText(language).run],["results",toolWorkspaceText(language).results,!snapshot?.candidates.length]]}/>
+    <section className="artist-lab-config-grid" data-tool-anchor="setup" tabIndex={-1}>
       <article className="artist-lab-panel target-panel" {...(active ? {} : imagePasteProps(paths => choose(paths[0])))}>
         <h3>{ft("目标图片")}</h3>{draft.target ? <img onDoubleClick={()=>setPreview({images:[{src:draft.target!.fileUrl,alt:draft.target!.name}],index:0})} src={draft.target.fileUrl} alt={draft.target.name} /> : <div className="artist-target-empty">{ft("选择或粘贴参考图")}</div>}
         <Button disabled={active} onClick={() => void choose()}>{draft.target ? ft("更换图片") : ft("选择图片")}</Button>
@@ -224,7 +227,7 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
         </section>
       </article>
     </section>
-    <section className="artist-lab-actions">
+    <section className="artist-lab-actions" data-tool-anchor="run" tabIndex={-1}>
       {snapshot?.running ? <Button variant="danger" disabled={busy} onClick={() => void action(() => window.naiDesktop.artistDetectiveStop())}>{ft("停止（保留当前请求结果）")}</Button>
         : <Button variant="primary" disabled={active || !runtimeVerified || !draft.target || !draft.prompt.trim()} onClick={() => void action(() => window.naiDesktop.artistDetectiveStart({ image: draft.target!.filePath, prompt: draft.prompt, style: draft.style, budget: draft.budget, parameters: draft.parameters, lockedArtists:parseDetectiveArtists(draft.lockedArtistText) }))}>{snapshot?.directory ? recoveryText.newRun : ft("开始自动迭代")}</Button>}
       {!snapshot?.running && snapshot?.recovery?.supported && snapshot.recovery.manifestSha256 && <Button disabled={active} onClick={()=>void action(()=>window.naiDesktop.artistDetectiveResume({directory:snapshot.directory!,manifestSha256:snapshot.recovery!.manifestSha256!,pendingRequestHash:snapshot.recovery!.pendingRequestHash}))}>{recoveryText.resume}</Button>}
@@ -251,7 +254,7 @@ export default function DetectiveArtistLab({ onBack }: { onBack: () => void }) {
     {!snapshot?.running && snapshot?.recovery?.requiresPaidReplayConfirmation && <p role="status">{recoveryText.warning}</p>}
     {snapshot?.outputWarning&&<p role="status">{ft(snapshot.outputWarning)}</p>}
     {(error || snapshot?.message) && <p className="artist-error" role="alert">{ft(error || snapshot?.message || "")}</p>}
-    {!!snapshot?.candidates.length && <section className="artist-gallery-section"><h3>{snapshot.candidates[0].phase === "finalists" ? ft("最终候选 · 4 个新 Seed 的平均相似度") : ft("搜索候选 · 2 个固定 Seed 的平均相似度")}</h3><div className="artist-candidate-grid">{snapshot.candidates.map((item, i) => <article className="artist-candidate done" key={item.image + item.phase}>
+    {!!snapshot?.candidates.length && <section className="artist-gallery-section" data-tool-anchor="results" tabIndex={-1}><h3>{snapshot.candidates[0].phase === "finalists" ? ft("最终候选 · 4 个新 Seed 的平均相似度") : ft("搜索候选 · 2 个固定 Seed 的平均相似度")}</h3><div className="artist-candidate-grid tool-results-scroll" role="region" aria-label={toolWorkspaceText(language).results} tabIndex={0}>{snapshot.candidates.map((item, i) => <article className="artist-candidate done" key={item.image + item.phase}>
       <header className="artist-candidate-header"><b>#{i + 1} · {item.score.toFixed(4)}</b><span>{ft(item.phase === 'finalists' ? '最终复测' : '搜索候选')}</span></header>
       <div className="artist-candidate-media"><img onDoubleClick={()=>setPreview({images:snapshot!.candidates.map(c=>({src:c.image,alt:c.prompt})),index:i})} src={item.image} alt={ft('画风候选 {number}',{number:i+1})} loading="lazy" /></div>
       <div className="artist-string-block"><code>{item.prompt}</code></div>

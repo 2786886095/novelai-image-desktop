@@ -319,7 +319,7 @@ class AppState extends ChangeNotifier {
   final NaiApi api;
   final Storage storage;
   final OfflineTagStore offlineTags;
-  final multilingualTags = MultilingualTagPacks();
+  final MultilingualTagPacks multilingualTags;
   final CompletedImagePreloader _preloadCompletedImage;
   final Future<http.Client> Function(AppSettings, Uri, ProxyScope)? compatibleClientFactory;
 
@@ -328,14 +328,17 @@ class AppState extends ChangeNotifier {
     Storage? storage,
     MobileTemplateLibrary? templateLibrary,
     OfflineTagStore? offlineTags,
+    MultilingualTagPacks? multilingualTags,
     CompletedImagePreloader? preloadCompletedImage,
     this.compatibleClientFactory,
   })  : api = api ?? NovelAiAccountApi(NovelAiAccounts.shared),
         storage = storage ?? NovelAiAccountStorage(NovelAiAccounts.shared),
         templateLibrary = templateLibrary ?? MobileTemplateLibrary(),
         offlineTags = offlineTags ?? OfflineTagStore(),
+        multilingualTags = multilingualTags ?? MultilingualTagPacks(),
         _preloadCompletedImage =
             preloadCompletedImage ?? preloadCompletedFileImage {
+    this.api.multilingualTagPacks = this.multilingualTags;
     if (this.storage is NovelAiAccountStorage) {
       naiAccounts.hostBusy = () => busy || _naiOperationCount > 0 || generationQueueRunning || queueAdding ||
           (this.api is NovelAiAccountApi && (this.api as NovelAiAccountApi).inFlight);
@@ -3659,6 +3662,20 @@ class AppState extends ChangeNotifier {
       present,
       limit: limit,
     );
+    final themes = installed.isEmpty ? relatedPromptTags(prompt, limit: limit) :
+        installed.map((item) => RelatedPromptTag(item.tag, item.description)).toList();
+    List<TagPackExactHit>? labels;
+    try {
+      labels = await multilingualTags.lookupExact(themes.map((item) => item.tag));
+    } catch (_) {
+      return const [];
+    }
+    if (labels != null) {
+      final byKey = {for (final row in labels) row.query: row.entry};
+      return [for (final item in themes)
+        if (byKey[MultilingualTagPacks.key(item.tag)] case final entry?)
+          RelatedPromptTag(entry.tag.replaceAll('_',' '), entry.description)];
+    }
     if (installed.isNotEmpty) {
       return installed
           .map((item) => RelatedPromptTag(

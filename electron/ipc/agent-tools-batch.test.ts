@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ generate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ generate: vi.fn(), searchDictionary: vi.fn() }));
 vi.mock('./nai', () => ({ generateImage: mocks.generate }));
 vi.mock('./store', () => ({ getSettings: () => ({}) }));
 vi.mock('./agent-store', () => ({}));
 vi.mock('./danbooru-tags', () => ({}));
+vi.mock('./multilingual-tags', () => ({searchMultilingualTags:mocks.searchDictionary}));
 vi.mock('./online-gallery', () => ({}));
 vi.mock('./reference-presets', () => ({}));
 import { executeAgentTool } from './agent-tools';
@@ -48,4 +49,14 @@ describe('batch generation retains completed results on failure', () => {
     expect(result.generatedImages).toHaveLength(3);
     expect(mocks.generate).toHaveBeenCalledTimes(3);
   });
+});
+
+it('the in-app Agent returns the active dictionary translations and never silently uses another source', async () => {
+  const hit = {tag:'blue_eyes', description:'蓝眼', count:42, category:0, localizedDescription:true};
+  const search = () => executeAgentTool({tool:'langbai_search_tags',args:{query:'蓝眼',limit:2}},()=>{});
+  mocks.searchDictionary.mockReturnValueOnce([hit]).mockReturnValueOnce([]).mockReturnValueOnce(null);
+  expect(await search()).toMatchObject({ok:true,data:[hit]});
+  expect(await search()).toMatchObject({ok:true,data:[]});
+  expect(await search()).toMatchObject({ok:false,title:expect.stringContaining('下载并启用')});
+  expect(mocks.searchDictionary).toHaveBeenLastCalledWith('蓝眼',2);
 });

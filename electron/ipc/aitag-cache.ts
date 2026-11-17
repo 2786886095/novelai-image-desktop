@@ -1,5 +1,6 @@
 import { galleryImageHeaders, galleryImageExtension } from "../../src/gallery-download";
 import { app } from "electron";
+import {naxMediaUrl} from "../../src/nax-gallery";
 import { galleryGet, galleryImageSlot } from "./gallery-network";
 import { createHash } from "crypto";
 import { promises as fs } from "fs";
@@ -12,7 +13,7 @@ const AUTOMATIC_PRUNE_INTERVAL_MS = 30 * 60_000;
 let lastAutomaticPruneAt = 0;
 let automaticPruneInFlight: Promise<void> | null = null;
 const imageRequests = new Map<string, Promise<string>>();
-type GalleryImageSource = "aitag" | "danbooru" | "safebooru" | "gelbooru" | "quicktag" | "tags-gallery";
+type GalleryImageSource = "aitag" | "danbooru" | "safebooru" | "gelbooru" | "quicktag" | "tags-gallery" | "nax";
 
 function isSupportedImageBuffer(bytes: Buffer) {
   return galleryImageExtension(bytes) !== null || (bytes.length >= 12
@@ -91,7 +92,7 @@ export async function pruneAitagCache(rawDays: unknown) {
 }
 
 function safeGallerySource(value: unknown): GalleryImageSource {
-  return value === "danbooru" || value === "safebooru" || value === "gelbooru" || value === "quicktag" || value === "tags-gallery"
+  return value === "danbooru" || value === "safebooru" || value === "gelbooru" || value === "quicktag" || value === "tags-gallery" || value === "nax"
     ? value
     : "aitag";
 }
@@ -101,6 +102,7 @@ async function cacheGalleryImage(rawSource: unknown, rawUrl: unknown, rawDays?: 
   void ensureAutomaticPrune(rawDays).catch(() => undefined);
   const url = safeImageUrl(rawUrl);
   const source = safeGallerySource(rawSource);
+  if(source==="nax"&&!naxMediaUrl(rawUrl))throw Error("Invalid NAX image source");
   const dir = cacheDir();
   const target = path.join(dir, cacheName(url));
   const force = rawForce === true;
@@ -128,6 +130,7 @@ async function cacheGalleryImage(rawSource: unknown, rawUrl: unknown, rawDays?: 
       // main process with the matching source context and expose only a
       // validated cached file through the allow-listed local media protocol.
       headers: galleryImageHeaders(source),
+      ...(source==="nax"?{maxRedirects:0}:{}),
     }));
     const bytes = Buffer.from(response.data);
     const contentType = String(response.headers?.["content-type"] ?? "").toLowerCase();

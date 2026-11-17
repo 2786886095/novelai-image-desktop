@@ -1,3 +1,4 @@
+import {pageUi} from "./desktop-page-ui";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Button, SelectMenuCompat } from "./components/ui";
 import { Icon } from "./components/icons";
@@ -227,6 +228,7 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query.trim().toLowerCase());
   const [limit, setLimit] = useState(PAGE_SIZE);
+  const [introOpen,setIntroOpen]=useState(false);
   const [updating, setUpdating] = useState(false);
   const [message, setMessage] = useState("");
   const selectBook = (value: string) => {
@@ -345,7 +347,7 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
       </header>
 
       {introduction.length > 0 ? (
-        <details className="prompt-codex-introduction" open>
+        <details className="prompt-codex-introduction" open={introOpen} onToggle={event=>setIntroOpen(event.currentTarget.open)}>
           <summary>
             <span>
               <b>{text.introduction}</b>
@@ -374,6 +376,7 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
         <div className="prompt-codex-book-tabs">
           <button
             className={bookId === "all" ? "active" : ""}
+            aria-pressed={bookId==="all"}
             onClick={() => selectBook("all")}
           >
             {text.all}
@@ -382,6 +385,7 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
             <button
               key={book.id}
               className={bookId === book.id ? "active" : ""}
+              aria-pressed={bookId===book.id}
               onClick={() => selectBook(book.id)}
             >
               {book.title}
@@ -420,14 +424,13 @@ export default function PromptCodex({ onBack }: { onBack: () => void }) {
               ))}
             </SelectMenuCompat>
           </label>
-          <b>
-            {filtered.length} {text.results}
-          </b>
+          <output aria-live="polite">{filtered.length} {text.results}</output>
+          <Button disabled={!query&&bookId==="regular"&&category==="all"&&section==="all"} onClick={()=>{setQuery("");selectBook("regular");setCategory("all");setSection("all");setLimit(PAGE_SIZE);}}>{pageUi(language).reset}</Button>
         </div>
       </section>
 
       {message ? <div className="prompt-codex-message">{message}</div> : null}
-      <section className="prompt-codex-results">
+      <section className="prompt-codex-results tool-results-scroll" tabIndex={0} aria-label={text.results}>
         {filtered.slice(0, limit).map((entry) => (
           <article key={entry.id} className="prompt-codex-entry">
             <header>

@@ -6,6 +6,7 @@ import {clampFocusedInpaintDrag,clipInpaintRegion,type InpaintRegion} from './fo
 import {RangeInput} from './components/RangeInput';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "./components/icons";
+import { Button } from "./components/ui";
 import { droppedImagePath, hasDraggedFiles } from "./drag-drop";
 import {
   INPAINT_BRUSH_DIRECT_MAX,
@@ -54,6 +55,7 @@ export function InpaintCanvas() {
   const workflow=workflowText(language);
   const automaticComparison=useAppStore(s=>normalizeAutomaticComparison(s.settings?.automaticComparison).inpaint);
   const workbenchImage = useAppStore((state) => state.workbenchImage);
+  const loadWorkbenchImage = useAppStore((state) => state.loadWorkbenchImage);
   const currentImage = useAppStore((state) => state.currentImage);
   const comparisonBeforeImage = useAppStore((state) => state.comparisonBeforeImage);
   const comparisonSurface = useAppStore((state) => state.comparisonSurface);
@@ -599,7 +601,13 @@ export function InpaintCanvas() {
             <span>{t("inpaint.dropToLoad")}</span>
           </div>
         )}
-        <div className="inpaint-empty">{t("inpaint.empty")}</div>
+        <div className="coming-soon">
+          <div className="coming-soon-icon" aria-hidden="true"><Icon name="brush" /></div>
+          <h2>{t("inpaint.empty")}</h2>
+          <Button variant="primary" className="workbench-empty-action" onClick={() => void loadWorkbenchImage()}>
+            <Icon name="folderOpen" aria-hidden="true" />{t("workbench.load")}
+          </Button>
+        </div>
       </main>
     );
   }
@@ -616,6 +624,7 @@ export function InpaintCanvas() {
           <span>{t("inpaint.dropToLoad")}</span>
         </div>
       )}
+      <div className="inpaint-toolbar-viewport" role="region" aria-label={t("inpaint.brushSize")} tabIndex={0} inert={restoringEdit ? true : undefined}>
       <div className="inpaint-mask-toolbar" inert={restoringEdit ? true : undefined}>
         {editSession && currentImage?.id === editSession.resultId ? (
           <button type="button" className="btn" data-testid="inpaint-return-edit"
@@ -677,7 +686,7 @@ export function InpaintCanvas() {
         </label>
         <RangeInput
           className="inpaint-toolbar-range"
-          
+
           min={INPAINT_BRUSH_SLIDER_MIN}
           max={INPAINT_BRUSH_SLIDER_MAX}
           step={1}
@@ -764,6 +773,7 @@ export function InpaintCanvas() {
         >
           <Icon name="fitScreen" />
         </button>
+      </div>
       </div>
       <div className="inpaint-stage" ref={stageRef} onWheel={handleStageWheel}>
         <img

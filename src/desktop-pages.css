@@ -1,0 +1,99 @@
+/* Workflow-specific desktop content; neither shell owns these components. */
+html .app-shell .generation-run-quote { display:grid; min-inline-size:0; }
+html .app-shell .generation-run-quote .cost-card { margin:0; }
+html .app-shell .prompt-workflow-nav {
+  display:flex; flex-wrap:wrap; gap:6px; position:sticky; top:0; z-index:2;
+  background:var(--bg-panel); padding:4px 0 8px; border-bottom:1px solid var(--border);
+}
+html .app-shell .prompt-workbench-output { max-block-size:38dvh; overflow:auto; resize:vertical; }
+html .app-shell .prompt-workbench-history { display:grid; gap:8px; min-inline-size:0; }
+html .app-shell :is(.prompt-workbench-history,[data-prompt-workbench="result"]):focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+html .app-shell .inpaint-toolbar-viewport {
+  max-inline-size:calc(100% - 16px); align-self:center; flex:none; overflow:auto hidden;
+  overscroll-behavior-inline:contain; border-radius:var(--radius-md); scrollbar-width:thin;
+}
+html .app-shell .inpaint-toolbar-viewport .inpaint-mask-toolbar {
+  display:flex; flex-wrap:nowrap; justify-content:flex-start; width:max-content; max-width:none;
+  overflow:visible; box-shadow:none;
+}
+html .app-shell .inpaint-toolbar-viewport .inpaint-mask-toolbar > * { flex-shrink:0; }
+html .app-shell .ai-log-panel { overflow:hidden; gap:12px; }
+html .app-shell .ai-log-head,html .app-shell .ai-log-filters { flex:none; }
+html .app-shell .ai-log-filters {
+  display:flex; align-items:center; flex-wrap:wrap; gap:6px; padding-block-end:8px; border-block-end:1px solid var(--border);
+}
+
+html .app-shell .ai-log-filters [aria-pressed="true"] { border-color:var(--accent); color:var(--accent); }
+html .app-shell .ai-log-filters output { color:var(--text-secondary); white-space:nowrap; }
+html .app-shell .ai-log-list { overflow:auto; min-block-size:0; flex:1; }
+html .app-shell .ai-log-load-error { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+html .app-shell .ai-log-pre { max-block-size:38dvh; overflow:auto; }
+html .app-shell .metadata-inspection-workspace { display:grid; min-inline-size:0; gap:14px; align-items:start; }
+html .app-shell .metadata-inspection-data { display:grid; min-inline-size:0; gap:12px; }
+html .app-shell .metadata-inspection-workspace.is-inspecting .metadata-drop.has-image {
+  display:flex; flex-direction:column; align-items:flex-start; text-align:start;
+}
+html .app-shell .metadata-inspection-workspace.is-inspecting .metadata-drop img {
+  width:100%; max-width:none; height:auto; max-height:min(44dvh,400px); object-fit:contain;
+}
+html .app-shell .metadata-batch-queue { border:1px solid var(--border); border-radius:var(--radius-sm); padding:9px 12px; }
+html .app-shell .metadata-batch-queue ol { max-block-size:180px; overflow:auto; }
+html .app-shell .metadata-batch-queue li { padding:3px 8px; overflow-wrap:anywhere; }
+html .app-shell .metadata-batch-queue li small { margin-inline-start:10px; color:var(--text-secondary); }
+html .app-shell .metadata-batch-progress { display:flex; gap:8px; align-items:center; }
+html .app-shell .metadata-batch-progress progress { flex:1; }
+html .app-shell .tool-card[hidden] { display:none; }
+html .app-shell .tavern-attachment-tray { max-width:min(100%,820px); width:100%; margin-inline:auto; min-inline-size:0; display:grid; gap:4px; }
+html .app-shell .tavern-attachment-count { color:var(--text-secondary); font-size:var(--font-size-min); }
+html .app-shell .tavern-draft-attachments > span { flex:0 0 auto; }
+html .app-shell .tavern-draft-attachments { scrollbar-width:thin; overscroll-behavior-inline:contain; padding-bottom:3px; }
+html .app-shell .tavern-draft-attachments button { width:30px; height:30px; }
+html .app-shell .works-density { display:flex; flex-wrap:wrap; align-items:center; gap:8px; color:var(--text-secondary); }
+
+html .app-shell .works-grid[data-thumbnail-density="0"] { grid-template-columns:repeat(auto-fill,minmax(min(100%,96px),1fr)); }
+html .app-shell .works-grid[data-thumbnail-density="1"] { grid-template-columns:repeat(auto-fill,minmax(min(100%,144px),1fr)); }
+html .app-shell .works-grid[data-thumbnail-density="2"] { grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr)); }
+html .app-shell .works-preview-meta { flex-wrap:wrap; align-items:center; }
+html .app-shell .reference-preset-card .reference-preset-image-frame { aspect-ratio:4/3; min-block-size:0; }
+html .app-shell .reference-preset-card-actions { flex-wrap:wrap; }
+html .app-shell .reference-preset-card .reference-preset-image-frame img { width:100%; height:100%; object-fit:contain; }
+html .app-shell .aitag-image-loading[data-image-failed] { display:grid; align-content:center; justify-items:center; gap:5px; padding:8px; text-align:center; overflow-wrap:anywhere; }
+html .app-shell .settings-nav-search { margin:3px 5px 8px; min-width:0; inline-size:calc(100% - 10px); }
+html .onboarding-progress { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:3px 9px; min-inline-size:0; }
+html .onboarding-progress > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+html .onboarding-progress .dots { grid-column:1/-1; display:grid; grid-template-columns:repeat(8,minmax(8px,1fr)); }
+html .onboarding-progress .dots i { block-size:4px; border-radius:10px; background:var(--border-strong); }
+html .onboarding-progress .dots i.active { background:var(--accent); }
+html .app-shell :is(.favorites-empty,.style-library-empty) { display:grid; justify-items:start; gap:8px; padding-block:10px; }
+@media (min-width:800px) {
+  html .app-shell .metadata-inspection-workspace.is-inspecting { grid-template-columns:minmax(220px,1fr) minmax(0,2fr); }
+}
+
+/* Preserve every confirm action, including cancel, for long translated copy. */
+html .app-confirm-dialog:not(.is-close-choice) { max-block-size:calc(100dvh - 24px); overflow:auto; }
+html .app-confirm-dialog:not(.is-close-choice) > p { white-space:pre-wrap; overflow-wrap:anywhere; }
+html .app-confirm-dialog:not(.is-close-choice) .app-confirm-actions { display:flex; flex-wrap:wrap; gap:8px; }
+html .app-shell .generation-quote-guest > summary { color:var(--text-secondary); cursor:pointer; padding:5px 8px; }
+
+html .app-shell .pi-draft-attachment-count { margin:0 0 5px; color:var(--pi-muted); font-size:var(--font-size-min); }
+html .app-shell .pi-attachments:not(.pi-file-attachments) { overscroll-behavior-inline:contain; scrollbar-width:thin; }
+html .app-shell .pi-attachments:not(.pi-file-attachments) .pi-icon { inline-size:32px; min-block-size:32px; }
+
+/* Compact controls shared by both themes. No image preview styles here. */
+html .app-shell .studio-mini-segments {display:inline-flex;align-items:stretch;gap:3px;padding:3px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-input);}
+html .app-shell .studio-mini-segments > button {min-height:30px;min-width:36px;padding:3px 9px;border:1px solid transparent;border-radius:var(--radius-sm);box-shadow:none;background:transparent;color:var(--text-secondary);}
+html .app-shell .studio-mini-segments > button:hover {background:var(--bg-hover);color:var(--text-primary);}
+html .app-shell .studio-mini-segments > button[aria-pressed="true"] {background:var(--bg-canvas);border-color:var(--border-strong,var(--border));color:var(--accent);}
+html .app-shell .studio-mini-segments > button:focus-visible {outline:2px solid var(--accent);outline-offset:-2px;}
+html .app-shell .ai-log-filters {justify-content:flex-start;gap:10px;}
+html .app-shell .ai-log-search {display:flex;align-items:center;gap:8px;flex:1 1 240px;max-inline-size:420px;min-inline-size:0;min-height:38px;padding-inline:11px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-input);color:var(--text-secondary);}
+html .app-shell .ai-log-search > svg {flex:none;width:15px;height:15px;}
+html .app-shell .ai-log-search input[type="search"] {min-width:0;width:100%;height:36px;padding:0;border:0;outline:none!important;box-shadow:none!important;background:transparent;color:var(--text-primary);font:inherit;}
+html .app-shell .ai-log-search:focus-within {border-color:var(--accent);box-shadow:var(--focus-ring);}
+html .app-shell .ai-log-filter-status {display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+html .app-shell .ai-log-filters output {font-variant-numeric:tabular-nums;}
+html .app-shell .cost-card {border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-panel);box-shadow:none;gap:6px;}
+html .app-shell .cost-card .cost-primary {justify-self:start;max-inline-size:100%;width:auto;height:auto;line-height:1.4;padding:3px 8px;border-radius:var(--radius-sm);white-space:normal;text-align:start;}
+html .app-shell .cost-card.cost-card-unavailable .cost-primary {background:var(--bg-input);border:1px solid var(--border);color:var(--text-secondary);}
+html .app-shell .cost-card.cost-warn {border-color:var(--danger);}
+html .app-shell .cost-card.cost-free {background:color-mix(in srgb, var(--success, #24a164) 10%, var(--bg-panel));}

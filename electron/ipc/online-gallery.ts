@@ -3,6 +3,7 @@ import { galleryImageHeaders, validateGalleryImage, MAX_GALLERY_IMAGE_BYTES } fr
 import { quickCatalogNavigation, quickResolveCollection, quickCollectionType, quickCategories, quickLink, quickMatch, quickSafe, quickSourceUrl } from "../../src/quicktag";
 import { type AxiosRequestConfig } from "axios";
 import { galleryGet, optionalGalleryValue } from "./gallery-network";
+import {naxCollectionUrl,parseNaxAlbumPage,type NaxAlbumPage} from "../../src/nax-gallery";
 import { createHash } from "crypto";
 import { dialog } from "electron";
 import { mkdir, open, rm } from "fs/promises";
@@ -682,7 +683,20 @@ export async function getOnlineGalleryDetail(raw: unknown): Promise<OnlineGaller
   return fetchQuickDetail(request);
 }
 
+const naxCache=new Map<string,{at:number; pending:Promise<NaxAlbumPage>}>();
+export async function readNaxGallery(collection:unknown,page:unknown=1):Promise<NaxAlbumPage> {
+ const url=naxCollectionUrl(collection,page),key=url.href;
+ const prior=naxCache.get(key);
+ if(prior&&Date.now()-prior.at<10*60_000)return prior.pending;
+ if(naxCache.size>=16)naxCache.delete(naxCache.keys().next().value!);
+ const pending=galleryGet<string>(key,{responseType:"text",timeout:15000,maxRedirects:0,maxContentLength:8*1024*1024,
+   headers:{Accept:"text/html","User-Agent":USER_AGENT}}).then(response=>parseNaxAlbumPage(response.data,String(collection),Number(page)));
+ naxCache.set(key,{at:Date.now(),pending});
+ try{return await pending;}catch(error){if(naxCache.get(key)?.pending===pending)naxCache.delete(key);throw error;}
+}
+
 export function clearOnlineGalleryDataCache() {
+  naxCache.clear();
   quickCatalogCache = null;
   quickCodexCache.clear();
   requestCache.clear();

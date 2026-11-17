@@ -39,6 +39,7 @@ import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../prompts/capsule_data.dart';
 import '../prompts/prompt_tools.dart';
+import '../tags/multilingual_tag_packs.dart';
 import '../references/reference_catalog.dart';
 import '../references/reference_presets.dart';
 import '../services/nai_api.dart';
@@ -2620,12 +2621,25 @@ class _CapsulePickerSheet extends StatefulWidget {
 class _CapsulePickerSheetState extends State<_CapsulePickerSheet> {
   int categoryIndex = 0;
   int subgroupIndex = 0;
+  String? _labelKey;
+  Future<Map<String,String>>? _labelQuery;
+
+  Future<Map<String,String>> _lookupCapsuleLabels(MultilingualTagPacks pack, Iterable<String> tags) async {
+    try {
+      final hits = await pack.lookupExact(tags);
+      return {for (final hit in hits ?? <TagPackExactHit>[])
+        if (hit.entry.description.isNotEmpty) hit.query: hit.entry.description};
+    } catch (_) {
+      return const {};
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final category = widget.categories[categoryIndex];
     final subgroup = category.subgroups[subgroupIndex];
-    final settings = context.watch<AppState>().settings;
+    final app = context.watch<AppState>();
+    final settings = app.settings;
     final text = generateScreenTextFor(settings.language);
     final language = settings.language;
     return SafeArea(
@@ -2690,7 +2704,14 @@ class _CapsulePickerSheetState extends State<_CapsulePickerSheet> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                 children: [
                   McpCapsuleSuggestions(onPick:(tag)=>Navigator.of(context).pop(_CapsulePick(tag,category.isNegative))),
-                  Wrap(
+                  ListenableBuilder(listenable:app.multilingualTags,builder:(context, _) {
+                  final key = '${app.multilingualTags.active}:$categoryIndex:$subgroupIndex';
+                  if (_labelKey != key) {
+                    _labelKey = key;
+                    _labelQuery = _lookupCapsuleLabels(app.multilingualTags, subgroup.tags.map((tag) => tag.tag));
+                  }
+                  return FutureBuilder<Map<String,String>>(key:ValueKey(key),future:_labelQuery,
+                    builder:(context, snapshot) => Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: subgroup.tags
@@ -2708,7 +2729,7 @@ class _CapsulePickerSheetState extends State<_CapsulePickerSheet> {
                                   ),
                                   if (tag.label.isNotEmpty)
                                     Text(
-                                      localizedTagLabel(
+                                      snapshot.data?[MultilingualTagPacks.key(tag.tag)] ?? localizedTagLabel(
                                         language,
                                         tag.tag,
                                         sourceLabel: tag.label,
@@ -2728,7 +2749,7 @@ class _CapsulePickerSheetState extends State<_CapsulePickerSheet> {
                               ),
                             ))
                         .toList(),
-                  ),
+                  ));}),
                 ],
               ),
             ),

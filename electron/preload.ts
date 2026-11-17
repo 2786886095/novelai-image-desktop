@@ -134,7 +134,11 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("resource-database:pause", id),
   restorePreviousResourceDatabase: (id: ResourceDatabaseId, confirmed = false): Promise<ResourceDatabaseDownloadResult> =>
     ipcRenderer.invoke("resource-database:restore-previous", id, confirmed),
+  searchMultilingualTags: (query: string,limit?: number) => ipcRenderer.invoke("tag-pack:search",query,limit),
+  lookupMultilingualTags: (tags: readonly string[]) => ipcRenderer.invoke("tag-pack:lookup",tags),
   multilingualTagStatus: () => ipcRenderer.invoke("tag-pack:status"),
+  browseMultilingualTags: (group:string,query:string,page:number,sort?:import("../shared/multilingual-tag-pack-contract").TagPackSort) => ipcRenderer.invoke("tag-pack:browse",group,query,page,sort),
+  relatedMultilingualTags: (tags:string[],limit?:number) => ipcRenderer.invoke("tag-pack:related",tags,limit),
   installMultilingualTagPack: (language: import("../shared/multilingual-tag-pack-contract").TagPackLanguage, source:"use"|"file"|"download") => ipcRenderer.invoke("tag-pack:install",language,source),
   openResourceDatabaseDirectory: (): Promise<{ ok: boolean; message?: string }> =>
     ipcRenderer.invoke("resource-database:open-directory"),
@@ -288,6 +292,7 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.invoke("aitag:cache-image", url, retentionDays, force),
   aitagCacheStats: () => ipcRenderer.invoke("aitag:cache-stats"),
   aitagClearCache: () => ipcRenderer.invoke("aitag:clear-cache"),
+  readNaxGallery: (collection:string,page:number) => ipcRenderer.invoke("online-gallery:nax-page",collection,page),
   onlineGallerySearch: (request: import("../src/online-gallery").OnlineGallerySearchRequest) =>
     ipcRenderer.invoke("online-gallery:search", request),
   onlineGalleryDetail: (request: import("../src/online-gallery").OnlineGalleryDetailRequest) =>

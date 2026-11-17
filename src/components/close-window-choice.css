@@ -1,0 +1,31 @@
+/* Only the window-close prompt; shared by the classic and redesigned layouts. */
+.app-confirm-dialog.is-close-choice {
+  width: min(460px, calc(100vw - 36px));
+}
+.app-confirm-backdrop.is-window-close.is-visible { backdrop-filter: blur(3px); }
+.app-confirm-dialog.is-close-choice .close-choice-remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 27px;
+  margin: 9px 0 0;
+  color: var(--text-secondary);
+}
+.app-confirm-dialog.is-close-choice .close-choice-remember input { margin: 0; }
+.app-confirm-dialog.is-close-choice .app-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 13px;
+  padding-top: 13px;
+  border-top: 1px solid var(--border);
+}
+.app-confirm-dialog.is-close-choice .app-confirm-actions > button {
+  min-height: 36px;
+  padding: 6px 11px;
+  justify-content: center;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.app-confirm-dialog.is-close-choice .app-confirm-actions > .primary { font-weight: 600; }

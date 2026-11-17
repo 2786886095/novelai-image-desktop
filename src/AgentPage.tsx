@@ -1,3 +1,4 @@
+import { pageUi } from "./desktop-page-ui";
 import { supportsNAIMediumEffort } from "./types";
 import { EffortControl } from "./components/EffortControl";
 import { compatibleProposalHint } from "./tavern/compatible-proposal";
@@ -1147,10 +1148,13 @@ export default function AgentPage() {
             </div>
           ) : null}
           {conversation?.draftAttachments.length ? (
-            <div className="tavern-draft-attachments">
+            <div className="tavern-attachment-tray" aria-label={pageUi(language).attachments}>
+              <span className="tavern-attachment-count" role="status">{pageUi(language).attachments} · {conversation.draftAttachments.length}</span>
+              <div className="tavern-draft-attachments">
               {conversation.draftAttachments.map((item) => (
-                <span key={item.id}>{item.fileUrl && item.kind === "image" ? <img src={item.fileUrl} alt="" /> : <AttachmentIcon />}<b>{item.name}</b><button onClick={async () => setWorkspace((await window.naiDesktop.deleteAgentAttachment(conversation.id, item.id)).workspace)}><CloseIcon /></button></span>
+                <span key={item.id}>{item.fileUrl && item.kind === "image" ? <img src={item.fileUrl} alt="" /> : <AttachmentIcon />}<b title={item.name}>{item.name}</b><button type="button" aria-label={pageUi(language).removeAttachment+": "+item.name} title={pageUi(language).removeAttachment} onClick={async () => setWorkspace((await window.naiDesktop.deleteAgentAttachment(conversation.id, item.id)).workspace)}><CloseIcon /></button></span>
               ))}
+              </div>
             </div>
           ) : null}
           <div {...imagePasteProps(paths => attach(paths), true)} className="tavern-composer-shell" ref={composerShellRef}>

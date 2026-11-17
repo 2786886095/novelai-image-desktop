@@ -1,4 +1,5 @@
-import {activeTagPack} from "./multilingual-tags";
+import {activeTagPack,searchMultilingualTags} from "./multilingual-tags";
+import {localDictionaryGuidance,promptDictionaryMatches} from "./prompt-local-dictionary";
 import { sanitizeGroupFolderName } from "./history-file-path";
 import {removePngGenerationMetadata, removePngMetadataChunks} from './png-privacy';
 import {localGenerationTime} from "./history-generation-time";
@@ -110,7 +111,6 @@ import {
   setToken,
   updateHistoryItem,
 } from "./store";
-import { TAG_DICTIONARY } from "../data/tag-dictionary";
 import { mcpSearch, mcpListTools } from "./mcp-client";
 import {configuredMcpTagTools} from "../../src/mcp-tools";
 import { searchDanbooru } from "./danbooru-tags";
@@ -3356,15 +3356,6 @@ async function queryTagServer(
   return [];
 }
 
-function mergeTagHints(prompt: string, hints: TagSuggestion[]) {
-  const hintTags = hints
-    .map((hint) => hint.tag)
-    .filter(Boolean)
-    .join(", ");
-  return hintTags ? mergePrompt(prompt, hintTags) : prompt;
-}
-
-
 export async function testTagServer(
   query: string,
 ): Promise<{ ok: boolean; message: string; tags: TagSuggestion[] }> {
@@ -3427,7 +3418,23 @@ function stripIdentityTagsForFeaturePrompt(prompt: string): string {
     .join(", ");
 }
 
-export async function reversePromptImage(
+type OfflineTagEvidence = { tagMatches?: TagSuggestion[] };
+function withTagEvidence<T extends {ok:boolean;variants?:{namePrompt:string;featurePrompt:string}}>(
+  result: T, mode: string, primary?: string,
+): T & OfflineTagEvidence {
+  if (result.ok) {
+    const tagMatches = promptDictionaryMatches(mode, primary, result.variants?.namePrompt, result.variants?.featurePrompt);
+    if (tagMatches.length) return {...result, tagMatches};
+  }
+  return result;
+}
+
+export async function reversePromptImage(...args: Parameters<typeof reversePromptImageCore>) {
+  const result = await reversePromptImageCore(...args);
+  return withTagEvidence(result, args[1] ?? "tags", result.prompt);
+}
+
+async function reversePromptImageCore(
   imageBase64: string,
   mode: "tags" | "natural" | "mixed" = "tags",
   scope: string = "full",
@@ -3443,6 +3450,7 @@ export async function reversePromptImage(
   warnings?: string[];
 }> {
   const settings = getSettings();
+  const dictionaryHint = localDictionaryGuidance(mode, hint);
   const safeScope = (
     ["full", "character", "object", "scene"].includes(scope) ? scope : "full"
   ) as ReversePromptScope;
@@ -3457,6 +3465,7 @@ export async function reversePromptImage(
   const userScopeText = [
     `反推范围：${scopeLabel}`,
     hint.trim() ? `目标/角色提示：${hint.trim()}` : "",
+    dictionaryHint,
     `请严格只围绕“${scopeLabel}”输出结果。`,
   ]
     .filter(Boolean)
@@ -3724,10 +3733,7 @@ export async function convertComicPanels(
   const out: ComicConvertResult["panels"] = [];
   let fallbackCount = 0;
   for (const panel of request.panels) {
-    const tagHints =
-      edition==='2.0.0' || mode === "natural" || !settings.mcpForConvert
-        ? []
-        : await queryTagServer(panel.cnPrompt, 16, settings);
+    const panelDictionaryHint = localDictionaryGuidance(mode, panel.cnPrompt);
     const userText = [
       `Output mode: ${mode}`,
       "Global story prompt:",
@@ -3759,9 +3765,7 @@ export async function convertComicPanels(
         ? panel.previousPrompts.join("\n")
         : "(none)",
       edition==='1.0.0'?modeUserInstruction(mode, "convert", false, targetModel):"",
-      tagHints.length
-        ? `Candidate tags: ${tagHints.map((x) => x.tag).join(", ")}`
-        : "",
+      panelDictionaryHint,
     ].join("\n\n");
     if(edition==='2.0.0') {
       const result=await convertPromptTextV2(userText,mode,false,targetModel,undefined,settings,`漫画分镜转换 #${panel.index} · ${targetModel} · 技能${edition} · ${mode}`);
@@ -3804,7 +3808,7 @@ export async function convertComicPanels(
     }
     out.push({
       panelId: panel.panelId,
-      enPrompt: mode === "natural" ? content : mergeTagHints(content, tagHints),
+      enPrompt: content,
     });
   }
   const failed = out.filter((p) => p.error).length;
@@ -4413,14 +4417,19 @@ async function convertPromptTextV2(
     const template=selectPromptSkillTemplate({edition,targetModel,task:'convert',mode,legacyTemplate:'',overrides:settings.convertPromptTemplatesV2});
     const system=injectDshImageAiSystemPrompt({task:'convert',enabled:settings.reverseConvertDshEnabled,mode:settings.reverseConvertDshMode,
       sharedPreset:selectedImageTaskPromptPreset(settings.reverseConvertPromptPresets,settings.convertSystemPromptPresetId??settings.reverseConvertPromptPresetId,'convert'),
-      systemPrompt:[renderPromptSkillTemplate(template,'<provided in the user message>'),prepared?.systemSuffix,PROMPT_SKILL_V2_RUNTIME,promptSkillKnownCharacterInstruction(knownCharacter)].filter(Boolean).join('\n\n')});
+      systemPrompt:[renderPromptSkillTemplate(template,'<provided in the user message>'),prepared?.systemSuffix,PROMPT_SKILL_V2_RUNTIME,promptSkillKnownCharacterInstruction(knownCharacter),localDictionaryGuidance(mode,chineseText)].filter(Boolean).join('\n\n')});
     const reply=await callConvertApi(system,prepared?.userText??chineseText,7000,label??`${assistant?'提示词'+(assistant.kind==='optimize'?'优化':'助手'):'文字转换'} · ${targetModel} · 技能${edition} · ${mode}`,true,false,knownCharacter,settings,undefined,true);
     if(!reply.ok)return {ok:false,message:'转换失败，已保留原提示词：'+reply.message};
     try{const parsed=parsePromptSkillV2Response(reply.content??'',mode,knownCharacter,validationWarningOnly&&!assistant);return {ok:true,result:parsed.prompt,variants:parsed.variants,warnings:parsed.warnings,message:parsed.warnings.some(warning=>warning.startsWith('检查未通过'))?'转换完成（有检查警告）：结果已保留，请自行核对':'转换完成：仅格式与可计数单元检查，来源事实需人工复核'};}
     catch(error){return {ok:false,message:'提示词未通过技能2.0.0检查，已保留原提示词，未提交生图：'+(error instanceof Error?error.message:String(error))};}
 }
 
-export async function convertPromptText(
+export async function convertPromptText(...args: Parameters<typeof convertPromptTextCore>) {
+  const result = await convertPromptTextCore(...args);
+  return withTagEvidence(result, args[1] ?? "tags", result.result);
+}
+
+async function convertPromptTextCore(
   chineseText: string,
   mode: "tags" | "natural" | "mixed" = "tags",
   knownCharacter = false,
@@ -4436,6 +4445,7 @@ export async function convertPromptText(
   message: string;
 }> {
   const settings = getSettings();
+  const dictionaryHint = localDictionaryGuidance(mode, chineseText);
   const requestedEdition=normalizePromptSkillVersion(skillVersion??(assistant?settings.promptAssistantSkillVersion:settings.convertPromptSkillVersion));
   const edition=assistant&&requestedEdition==='3.0.0'?'2.0.0':requestedEdition;
   if(edition==='3.0.0') {
@@ -4443,7 +4453,7 @@ export async function convertPromptText(
     let selected:ReturnType<typeof resolveTemplateLibrarySlot>;
     try{selected=resolveTemplateLibrarySlot(`image.convert.${mode}`);}catch(error){return {ok:false,message:'模板库不可用，已保留原提示词：'+(error instanceof Error?error.message:String(error))};}
     const template=selectPromptSkillTemplate({edition,targetModel:templateVersion,task:'convert',mode,legacyTemplate:'',librarySlot:selected});
-    const system=[renderPromptSkillTemplate(template,'<provided in the user message>'),PROMPT_SKILL_V3_RUNTIME,promptSkillKnownCharacterInstruction(knownCharacter)].join('\n\n');
+    const system=[renderPromptSkillTemplate(template,'<provided in the user message>'),PROMPT_SKILL_V3_RUNTIME,promptSkillKnownCharacterInstruction(knownCharacter),dictionaryHint].filter(Boolean).join('\n\n');
     const reply=await callConvertApi(system,chineseText,7000,`文字转换 · ${templateVersion} · 技能3.0.0 · ${mode}`,true,false,knownCharacter,settings,undefined,true);
     if(!reply.ok)return {ok:false,message:'转换失败，已保留原提示词：'+reply.message};
     if(isComicPromptRefusal(reply.content??''))return {ok:false,message:'模型未返回可用提示词，已保留原提示词'};
@@ -4484,6 +4494,7 @@ export async function convertPromptText(
     systemPrompt: [
       baseSystemPrompt,
       assistance?.systemSuffix,
+      dictionaryHint,
       knownCharacterRuntimeInstruction(
         mode,
         "convert",
@@ -5439,74 +5450,13 @@ export function cancelGeneration() {
   return { ok: true };
 }
 
-function localSuggestTags(prompt: string): TagSuggestion[] {
-  const query = prompt.trim().toLowerCase().replace(/_/g, " ");
-  if (!query) return [];
-  const isCjk = /[㐀-鿿]/.test(query);
-
-  return TAG_DICTIONARY.map((item) => {
-    // Chinese input matches Chinese keywords; latin input matches tag/aliases.
-    const terms = isCjk
-      ? [item.zh, ...(item.keywords ?? [])]
-      : [item.tag, ...(item.aliases ?? [])].map((x) =>
-          x.toLowerCase().replace(/_/g, " "),
-        );
-    let score = 0;
-    for (const term of terms) {
-      const t = term.toLowerCase();
-      if (t === query) score = Math.max(score, 3);
-      else if (t.startsWith(query)) score = Math.max(score, 2);
-      else if (t.includes(query)) score = Math.max(score, 1);
-    }
-    return { item, score };
-  })
-    .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score || b.item.count - a.item.count)
-    .slice(0, 12)
-    .map(({ item }) => ({
-      tag: item.tag,
-      count: item.count,
-      category: item.category,
-      description: item.zh,
-    }));
-}
-
-/** Tag autocomplete — calls NAI suggest-tags endpoint, with local fallback when API is unavailable. */
+/** The suggestion surface uses the same selected offline dictionary as the capsule.
+ * Never consume a paid/MCP quota or silently replace it with a stale dataset. */
 export async function suggestTags(
-  model: string,
+  _model: string,
   prompt: string,
 ): Promise<TagSuggestion[]> {
-  const token = getToken();
-  if (!prompt.trim()) return [];
-  // Prefer the local Danbooru index when the user has downloaded it: it is
-  // offline, Chinese-aware, has full tag coverage and real post counts.
-  const danbooru = await searchDanbooru(prompt, 12);
-  if (danbooru.length > 0 || activeTagPack()) return danbooru;
-  const fallback = localSuggestTags(prompt);
-  const serverTags = await queryTagServer(prompt, 12);
-  if (serverTags.length > 0) return serverTags;
-  if (!token) return fallback;
-  const settings = getSettings();
-  const apiBaseUrl = tokenSafeBaseUrl(
-    settings.apiBaseUrl,
-    "https://api.novelai.net",
-  );
-  try {
-    const res = await axios.get(
-      `${apiBaseUrl}/ai/generate-image/suggest-tags`,
-      {
-        params: { model, prompt },
-        headers: { Authorization: `Bearer ${token}` },
-        timeout: 5000,
-        ...proxyConfig("nai"),
-      maxRedirects: currentNaiAccount() ? 0 : undefined,
-      },
-    );
-    const tags = (res.data?.tags ?? []) as TagSuggestion[];
-    return tags.length > 0 ? tags : fallback;
-  } catch {
-    return fallback;
-  }
+  return searchMultilingualTags(prompt, 12) ?? [];
 }
 
 /**

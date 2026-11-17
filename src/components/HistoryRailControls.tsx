@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { swallowCanvasClickOnDismiss } from '../shell/dock-state';
 import { useAppStore } from '../store';
 import { historyRailText, HISTORY_MIN_WIDTH, HISTORY_MAX_WIDTH } from '../workspace-history';
@@ -159,7 +159,6 @@ export function HistoryRailPane({ children }: { children: ReactNode }) {
     ref={ref}
     id="history-rail-pane"
     className={`history-rail is-floating-popover${hidden ? ' is-collapsed' : ' is-open'}`}
-    style={{ '--history-drawer-w': `${activeWidth}px` } as CSSProperties}
     aria-hidden={hidden}
   >
     {!hidden && (

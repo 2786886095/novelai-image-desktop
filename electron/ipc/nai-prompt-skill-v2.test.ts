@@ -2,9 +2,23 @@ import {afterAll,beforeAll,beforeEach,describe,expect,it,vi} from 'vitest';
 import {createServer,type Server} from 'node:http';
 import type {AddressInfo} from 'node:net';
 import {PNG} from 'pngjs';
+import {mkdtempSync} from 'node:fs';
+import {rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {DatabaseSync} from 'node:sqlite';
+import {closeTagPackReader} from './tag-pack-reader';
 import type {AppSettings} from '../../src/types';
 import fixtures from '../../src/data/prompt-skill-audit-fixtures.json';
 import {PROMPT_CUSTOM_TEMPLATE_V2,PROMPT_OPTIMIZE_TEMPLATE_V2} from '../../src/data/prompt-edit-templates';
+const offline=vi.hoisted(()=>({file:""}));
+vi.mock('./multilingual-tags',async original=>{
+ const actual=await original<typeof import('./multilingual-tags')>();
+ return {...actual,
+  lookupMultilingualTags:(keys:string[],translated=false)=>offline.file?actual.lookupTagPackDatabase(offline.file,keys,translated):[],
+  searchMultilingualTags:(query:string,limit:number)=>offline.file?actual.searchTagPackDatabase(offline.file,query,limit):null,
+ };
+});
 const settingsRef=vi.hoisted(()=>({current:{} as Partial<AppSettings>}));
 vi.mock('./store',()=>({addHistory:vi.fn(),ensureHistoryGroup:vi.fn(),getAccountSummary:vi.fn(()=>({hasToken:false})),getHistoryGroups:vi.fn(()=>[]),getSettings:()=>settingsRef.current,getToken:vi.fn(()=>''),setAccountSummary:vi.fn(),setToken:vi.fn(),updateHistoryItem:vi.fn()}));
 // Real axios and an actual 127.0.0.1 HTTP server exercise the serialized body.
@@ -100,4 +114,37 @@ describe('v2 actual loopback AI requests',()=>{
  for(const entry of ['reverse','convert'] as const)it(`${entry} does not retry empty-length or malformed-density output to fabricate facts`,async()=>{
   response={choices:[{message:{content:''},finish_reason:'length'}]};expect((await call(entry)).ok).toBe(false);expect(requests).toHaveLength(1);
  });
+});
+
+it('shares the selected offline SQLite between autocomplete, text conversion and image-only reverse',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'studio-prompt-lookup-'));
+ offline.file=join(dir,'local.sqlite');
+ try{
+  const db=new DatabaseSync(offline.file);
+  try{
+   db.exec("CREATE TABLE terms(tag,key,translated,translated_key,category,count)");
+   db.prepare("INSERT INTO terms VALUES (?,?,?,?,?,?)").run("blue_eyes","blue eyes","蓝眼","蓝眼",0,1234);
+  }finally{db.close();}
+  const expected={tag:'blue_eyes',description:'蓝眼',category:0,count:1234,localizedDescription:true};
+  expect(await nai.suggestTags('nai-diffusion-5-full','蓝眼')).toEqual([expected]);
+  expect(await nai.suggestTags('nai-diffusion-5-full','NOT-IN-THE-PACK')).toEqual([]);
+  expect(requests).toHaveLength(0);
+  settingsRef.current.mcpForConvert=true;
+  settingsRef.current.mcpForReverse=true;
+  response=answer('1girl, 1.15::blue_eyes::');
+  const converted=await nai.convertPromptText('画一个蓝眼的人','tags',false,'v5',undefined,'2.0.0');
+  expect(converted.ok).toBe(true);
+  expect(converted.result).toBe('1girl, 1.15::blue_eyes::');
+  expect(converted.tagMatches).toEqual([expected]);
+  expect(requests).toHaveLength(1);
+  expect(requests[0].body.messages[0].content).toContain('Offline dictionary spellings');
+  expect(requests[0].body.messages[0].content).toContain('"blue_eyes"');
+  expect(requests[0].body.messages[1].content).toBe('画一个蓝眼的人');
+  const reversed=await nai.reversePromptImage(image,'tags','full','',false,'v5','2.0.0');
+  expect(reversed.ok).toBe(true);
+  expect(reversed.prompt).toBe('1girl, 1.15::blue_eyes::');
+  expect(reversed.tagMatches).toEqual([expected]);
+  expect(requests).toHaveLength(2);
+  expect(requests[1].body.messages[1].content[0].image_url.url).toMatch(/^data:image/);
+ }finally{closeTagPackReader(offline.file);offline.file='';await rm(dir,{recursive:true,force:true});}
 });

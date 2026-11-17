@@ -1,5 +1,6 @@
+import {ToolWaypoints} from "./components/ToolWaypoints";
 import { useRef, useState } from "react";
-import { Button } from "./components/ui";
+import { Button, SelectMenuCompat } from "./components/ui";
 import { useAppStore } from "./store";
 import { artistIndexLimit, formatLookupPrompt, matchesArtist, mergeArtistIndex, parseArtistBatch, readArtistIndex,
   type ArtistHit, type ArtistIndexRow, type ArtistPreview, type ArtistProfile } from "./artist-lookup";
@@ -108,7 +109,12 @@ export default function ArtistLookup({onBack}: {onBack: () => void}) {
   return <main className="artist-lab artist-lookup">
     <header className="artist-lab-hero"><div><h2>{t("画师链接查询","Artist profile lookup")}</h2>
       <p>{t("用 Pixiv／X 链接找 Danbooru 画师 Tag，再组合成 NovelAI 提示词。","Find Danbooru artist tags from Pixiv/X profiles and build a NovelAI prompt.")}</p></div><Button onClick={onBack}>{t("返回工具首页","Back to tools")}</Button></header>
-    <section className="artist-lookup-panel">
+    <ToolWaypoints label={t("画师链接查询","Artist profile lookup")} items={[
+      ["query",t("画师链接或名称","Artist profiles or names")],
+      ["matches",t("匹配结果","Matches"),!results.length],
+      ["prompt",t("画师串","Artist prompt"),!prompt],
+    ]}/>
+    <section className="artist-lookup-panel" data-tool-anchor="query" tabIndex={-1}>
       <label htmlFor="artist-lookup-input">{t("画师链接或名称","Artist profiles or names")}</label>
       <textarea id="artist-lookup-input" rows={3} value={input} maxLength={12000} disabled={busy} onChange={e => setInput(e.target.value)}
         placeholder="https://www.pixiv.net/users/123&#10;https://x.com/artist_name" />
@@ -127,6 +133,9 @@ export default function ArtistLookup({onBack}: {onBack: () => void}) {
       </details>
       <div role="status" aria-live="polite">{notice}</div>
     </section>
+    {results.length>0&&<section className="artist-lookup-result-stack" data-tool-anchor="matches" tabIndex={-1} aria-label={t("匹配结果","Matches")}>
+    <div className="tool-lookup-summary" role="status">{t("匹配结果","Matches")} · {results.filter(row=>row.hits.length>0).length} / {results.length}</div>
+    <div className="tool-results-scroll" tabIndex={0} role="region" aria-label={t("匹配结果","Matches")}>
     {results.map(({profile,hits,failed}) => <section className="artist-lookup-panel" key={profile.key}>
       <h3>{profile.value}</h3>
       {failed && <p>{t("Danbooru 暂不可用，以下仅显示本地记录。","Danbooru is unavailable; showing local entries only.")}</p>}
@@ -150,9 +159,10 @@ export default function ArtistLookup({onBack}: {onBack: () => void}) {
           : <p>{t("没有可预览的普通级作品。","No general-rated previews available.")}</p>)}
       </div>)}
     </section>)}
-    {prompt && <section className="artist-lookup-panel">
+    </div></section>}
+    {prompt && <section className="artist-lookup-panel" data-tool-anchor="prompt" tabIndex={-1}>
       <h3>{t("画师串","Artist prompt")}</h3>
-      <label>{t("输出格式","Output format")} <select value={v5 ? "5" : "4.5"} onChange={e => setV5(e.target.value === "5")}><option value="5">NAI V5</option><option value="4.5">NAI 4.5</option></select></label>
+      <label className="field"><span>{t("输出格式","Output format")}</span><SelectMenuCompat aria-label={t("输出格式","Output format")} value={v5 ? "5" : "4.5"} onChange={e => setV5(e.target.value === "5")}><option value="5">NAI V5</option><option value="4.5">NAI 4.5</option></SelectMenuCompat></label>
       {unique.filter(hit => Object.hasOwn(selected,hit.tag)).map(hit => <label key={hit.tag} className="artist-lookup-weight">{hit.tag} · {t("权重","Weight")}
         <input type="number" min=".01" max="5" step=".01" value={Number.isNaN(selected[hit.tag]) ? "" : selected[hit.tag]} onChange={e => setSelected(prev => ({...prev,[hit.tag]:e.target.valueAsNumber}))}
           onBlur={() => setSelected(prev => ({...prev,[hit.tag]:Math.min(5,Math.max(.01,prev[hit.tag] || 1))}))}/></label>)}

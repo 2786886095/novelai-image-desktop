@@ -1,0 +1,93 @@
+/* Argon desktop UI pass. Shared control treatment; no grid/rail widths or
+   positioning from one layout are applied to the other. */
+.app-shell[data-studio-surface] { --studio-heading-gap: 8px; --studio-action-gap: 8px; }
+.desktop-workspace-skip {
+  position: fixed;
+  inset-block-start: 44px;
+  inset-inline-start: 12px;
+  transform: translateY(-150vh);
+  z-index: var(--z-overlay);
+  padding: 7px 13px;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.desktop-workspace-skip:focus { transform: none; }
+.app-shell[data-studio-surface] :is(.panel-head-copy,.history-title-copy,.ai-log-head > div:first-child,.works-header > div:first-child,.online-gallery-title-line h2,.settings-page h2) {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.app-shell[data-studio-surface] :is(.panel-head-actions,.history-group-actions,.ai-log-actions,.works-actions,.works-toolbar,.gallery-favorites-filters,.online-gallery-inline-actions,.queue-panel-actions,.char-row-actions,.settings-form .row-actions) {
+  gap: var(--studio-heading-gap);
+  min-inline-size: 0;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.app-shell[data-studio-surface] :is(.panel-scroll,.ai-log-list,.gallery-favorites-body,.settings-nav) {
+  scrollbar-gutter: stable;
+}
+.app-shell[data-studio-surface] :is(.field,.settings-nav,.history-filters,.works-toolbar,.gallery-favorites-filters,.online-gallery-search-row) :is(button,input,select,textarea):focus-visible {
+  scroll-margin-block: 8px;
+}
+.app-shell[data-studio-surface] :is(.works-empty,.ai-log-empty,.history-empty,.vibe-empty,.account-allowance-empty) {
+  color: var(--text-secondary);
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+.app-shell[data-studio-surface] :is(.convert-header,.ai-log-head,.panel-head,.works-header,.online-gallery-title-line) :is(h2,strong) {
+  text-wrap: balance;
+}
+.app-shell[data-studio-surface] :is(.ai-log-pre,.texttool-history-item-head,.panel-scroll .field textarea) {
+  overflow-wrap: anywhere;
+}
+.app-shell[data-studio-surface] :is(.metadata-inspector,.online-gallery-search-row,.gallery-favorites-filters,.settings-form) > * { min-inline-size: 0; }
+html body :is(.app-confirm-actions,.style-preset-actions,.vibe-header-actions,.char-row-actions,.settings-modal > footer) > .btn {
+  max-inline-size: 100%;
+  word-break: normal;
+}
+/* The moving tab indicator is the only underline; focus remains independent. */
+.generation-run-details { display: contents; }
+@media (max-height: 690px) {
+  .app-shell[data-desktop-layout="classic"] .left-panel:has(.generation-run-footer) > .panel-scroll {
+    min-block-size: min(110px, 22dvh);
+  }
+  .app-shell[data-desktop-layout="classic"] .generation-run-footer {
+    min-block-size: 0;
+    flex: 0 1 auto;
+    padding-block: 6px;
+    gap: 5px;
+    grid-template-rows: minmax(28px, auto) minmax(0, auto);
+  }
+  .app-shell[data-desktop-layout="classic"] .generation-run-details {
+    display: grid;
+    gap: 6px;
+    min-block-size: 0;
+    max-block-size: clamp(42px, 12dvh, 78px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+  .app-shell[data-desktop-layout="classic"] .generation-run-footer .run-state-pane.active .run-state-pane-inner {
+    max-block-size: clamp(38px, 14dvh, 90px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .app-shell[data-desktop-layout="classic"] .generation-run-footer .run-button-row {
+    position: sticky;
+    inset-block-end: 0;
+    background: var(--bg-panel);
+  }
+}
+.app-shell[data-desktop-layout="redesign"] .dock-strip-tab .dock-strip-label { text-overflow: ellipsis; }
+@media (max-width: 1040px) {
+  .app-shell[data-studio-surface] :is(.works-actions,.ai-log-actions,.online-gallery-inline-actions,.history-group-actions) > button { min-inline-size: 0; }
+}
+/* Menu selection may change color and glyph, not label placement. */
+html body .select-menu-popover .disclosure-options > button.select-menu-option[role="option"] {
+  justify-content: space-between;
+  text-align: start;
+}
+.workbench-empty-action { margin-block-start: 10px; }
+@media (forced-colors: active) {
+  .app-shell[data-studio-surface] :is(button,input,select,textarea):focus-visible { outline: 2px solid Highlight; }
+}

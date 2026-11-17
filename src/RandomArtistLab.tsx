@@ -1,3 +1,4 @@
+import {ToolWaypoints} from "./components/ToolWaypoints";
 import { confirmAction } from "./components/confirm";
 import { deleteFavoriteImageText } from "./shell/shell-text";
 import {PreviewImageViewer} from './components/PreviewImageViewer';
@@ -1267,7 +1268,8 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
   return <>
   <main ref={scrollRef} className="artist-lab random-artist-lab">
     <header className="artist-lab-hero"><div><h2>{text.title}</h2><p>{text.subtitle}</p></div><Button onClick={onBack}>{text.back}</Button></header>
-    <section className="artist-lab-panel random-pool-summary">
+    <ToolWaypoints label={text.title} items={[["pool",selectionText.title],["plan",text.preview],["results",favoriteFolderLabel]]}/>
+    <section className="artist-lab-panel random-pool-summary" data-tool-anchor="pool" tabIndex={-1}>
       <div>
         <h3>{selectionText.title}</h3>
         <strong>{loading ? selectionText.load : interpolate(text.ready, { count: onlinePool.length })}</strong>
@@ -1564,15 +1566,15 @@ export default function RandomArtistLab({ onBack }: { onBack: () => void }) {
         <Button className="artist-weight-tuner-submit" variant="primary" disabled={running || !session.weightTuneInput.trim()} onClick={() => void runWeightTuning()}>{tuneText.generate}</Button>
       </div>
     </details>
-    <section className="artist-lab-panel artist-queue-panel"><div className="artist-section-heading"><div><h3>{text.preview}</h3><small>{text.previewHint}</small></div><div className="artist-preview-actions"><b>{interpolate(text.pairSummary, { pairs: planned.length, images: plannedComparisons.length })}</b></div></div>{planned.length === 0 ? <div className="artist-queue-empty">{text.empty}</div> : <ol className="artist-combination-queue">{planned.map((recipe, index) => <li key={recipe.id}><span>#{String(index + 1).padStart(2, "0")}</span><div><b className="artist-ab-label">{text.variantPlain}</b><code>{formatArtistCardTags({ prompt: recipe.basePrompt })}</code>{renderFranchiseTerms(recipe)}{session.mutateAuxiliary && <><b className="artist-ab-label">{text.variantMutated}</b><code>{formatArtistCardTags(recipe)}</code>{renderMutationTerms(recipe)}</>}</div></li>)}</ol>}</section>
-    <section className="artist-result-toolbar">
+    <section className="artist-lab-panel artist-queue-panel" data-tool-anchor="plan" tabIndex={-1}><div className="artist-section-heading"><div><h3>{text.preview}</h3><small>{text.previewHint}</small></div><div className="artist-preview-actions"><b>{interpolate(text.pairSummary, { pairs: planned.length, images: plannedComparisons.length })}</b></div></div>{planned.length === 0 ? <div className="artist-queue-empty">{text.empty}</div> : <ol className="artist-combination-queue">{planned.map((recipe, index) => <li key={recipe.id}><span>#{String(index + 1).padStart(2, "0")}</span><div><b className="artist-ab-label">{text.variantPlain}</b><code>{formatArtistCardTags({ prompt: recipe.basePrompt })}</code>{renderFranchiseTerms(recipe)}{session.mutateAuxiliary && <><b className="artist-ab-label">{text.variantMutated}</b><code>{formatArtistCardTags(recipe)}</code>{renderMutationTerms(recipe)}</>}</div></li>)}</ol>}</section>
+    <section className="artist-result-toolbar" data-tool-anchor="results" tabIndex={-1}>
       <div className="artist-result-actions"><Button onClick={() => void draw(false)} disabled={running || pool.length === 0}><Icon name="dice" />{text.draw}</Button>{running ? <Button variant="danger" onClick={() => { cancelRef.current = true; void window.naiDesktop.cancel(); }}>{text.stop}</Button> : <Button variant="primary" disabled={loading || pool.length === 0} onClick={() => void run(false)}>{text.generate}</Button>}<Button disabled={running || likedArtists.length === 0} onClick={() => void draw(true)}>{text.refine}</Button><span>{running ? interpolate(text.running, { done: batchDone, total: session.results.length }) : message}</span></div>
       <nav className="artist-result-tabs" aria-label={`${text.preview} / ${favoriteFolderLabel}`}>
-        <button type="button" className={!showFavorites ? "active" : ""} onClick={() => switchGallery(false)}><span>{text.preview}</span><b>{session.results.length}</b></button>
-        <button type="button" className={showFavorites ? "active" : ""} onClick={() => switchGallery(true)}><span>{favoriteFolderLabel}</span><b>{session.favorites.length}</b></button>
+        <button type="button" className={!showFavorites ? "active" : ""} aria-pressed={!showFavorites} onClick={() => switchGallery(false)}><span>{text.preview}</span><b>{session.results.length}</b></button>
+        <button type="button" className={showFavorites ? "active" : ""} aria-pressed={showFavorites} onClick={() => switchGallery(true)}><span>{favoriteFolderLabel}</span><b>{session.favorites.length}</b></button>
       </nav>
     </section>
-    {!showFavorites && session.results.length > 0 && <section className="artist-candidate-grid">{session.results.map((result) => renderCard(result))}</section>}
+    {!showFavorites && session.results.length > 0 && <section className="artist-candidate-grid tool-results-scroll" tabIndex={0} aria-label={text.preview}>{session.results.map((result) => renderCard(result))}</section>}
     {showFavorites && <section className="artist-lab-panel artist-favorites-panel">
       <div className="artist-section-heading">
         <div><h3>{favoriteFolderLabel}</h3><small>{text.favoritesHint}</small></div>

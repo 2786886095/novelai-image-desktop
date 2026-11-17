@@ -1,3 +1,5 @@
+import {toolWorkspaceText} from "./tool-workspace-text";
+import {ToolWaypoints} from "./components/ToolWaypoints";
 import { loadStyleTagDrawState, normalizeStyleTagDrawState, type StyleTagDrawState } from "./style-tag-draw-state";
 import { styleTagDrawText } from "./style-tag-draw-text";
 import {PreviewImageViewer} from './components/PreviewImageViewer';
@@ -873,7 +875,7 @@ export default function V5ArtistWeightRepair({
   const previewItems=(showFavorites?favorites:results).filter(item=>item.image);
   const completed = results.filter((item) => item.status === "done" || item.status === "failed").length;
   return <>
-    <main className="artist-lab v5-artist-repair artist-string-tool">
+    <main className="artist-lab v5-artist-repair artist-string-tool" data-artist-workspace={drawMode?"draw":"repair"}>
       <header className="artist-lab-hero v5-artist-repair-hero">
         <div>
           <span>{drawMode ? "V5 ARTIST DRAW" : "V4.5 → V5"}</span>
@@ -883,13 +885,18 @@ export default function V5ArtistWeightRepair({
         <Button onClick={onBack}>{text.back}</Button>
       </header>
 
+      <ToolWaypoints label={drawMode?text.drawPageTitle:text.title} items={[
+        ["editor",drawMode?text.drawTitle:text.input],
+        ["generator",toolWorkspaceText(language).generation],
+        ["results",text.results+" / "+text.favorites],
+      ]}/>
       {!drawMode && (
         <>
           <section className="artist-lab-panel v5-artist-repair-card evidence">
             <div className="v5-artist-repair-note-icon"><Icon name="info" /></div>
             <div><b>{text.noteTitle}</b><p>{text.note}</p><small>{text.safe}</small></div>
           </section>
-          <section className="artist-lab-panel v5-artist-repair-card editor">
+          <section className="artist-lab-panel v5-artist-repair-card editor" data-tool-anchor="editor" tabIndex={-1}>
             <div className="v5-artist-repair-section-head"><div><b>{text.strategy}</b><span>×0.333–0.5</span></div></div>
             <div className="v5-artist-repair-editors">
               <label className="source"><span>{text.input}</span><textarea value={input} placeholder={text.inputHint} onChange={(event) => { setInput(event.target.value); setOutput(""); }} /></label>
@@ -915,7 +922,7 @@ export default function V5ArtistWeightRepair({
       )}
 
       {drawMode && (
-          <section className="artist-lab-panel v5-artist-repair-card v5-weight-draw-panel">
+          <section className="artist-lab-panel v5-artist-repair-card v5-weight-draw-panel" data-tool-anchor="editor" tabIndex={-1}>
             <div className="v5-weight-draw-heading">
               <div><h3>{text.drawTitle}</h3><p>{text.drawHint}</p></div>
               <Button variant="ghost" onClick={restoreDefaults}><Icon name="refresh" /> {text.reset}</Button>
@@ -999,7 +1006,7 @@ export default function V5ArtistWeightRepair({
           </section>
       )}
 
-      <details className="artist-lab-panel v5-artist-repair-card random-generation-settings v5-draw-generation-settings" open>
+      <details className="artist-lab-panel v5-artist-repair-card random-generation-settings v5-draw-generation-settings" data-tool-anchor="generator" tabIndex={-1} open>
             <summary>
               <span><b>{paramText.title}</b><small>{paramText.hint}</small></span>
               <span className="random-generation-header-actions">
@@ -1035,18 +1042,18 @@ export default function V5ArtistWeightRepair({
             </div>
       </details>
 
-      <section className="artist-result-toolbar artist-string-result-toolbar">
+      <section className="artist-result-toolbar artist-string-result-toolbar" data-tool-anchor="results" tabIndex={-1}>
         <div className="artist-result-actions">
           {drawMode ? <Button onClick={draw} disabled={running}><Icon name="dice" />{text.draw}</Button> : <Button onClick={repair} disabled={running}><Icon name="dice" />{text.run}</Button>}
           {running ? <Button variant="danger" onClick={() => { cancelRef.current = true; void window.naiDesktop.cancel(); }}>{text.stop}</Button> : <Button variant="primary" onClick={() => void generateBatch()} disabled={!batchReady || results.length === 0}>{text.generate}</Button>}
           {!drawMode && <Button disabled={!output} onClick={() => void copyCandidate(output, "first-output")}>{copiedAction === "first-output" ? text.copied : text.copy}</Button>}
           <span className={message === text.drawNone || message === text.none ? "warning" : ""}>{running ? interpolate(text.generating, { done: completed, total: results.length }) : message}</span>
         </div>
-        <nav className="artist-result-tabs artist-string-result-tabs" aria-label={`${text.results} / ${text.favorites}`}><button type="button" className={!showFavorites ? "active" : ""} onClick={() => setShowFavorites(false)}><span>{text.results}</span><b>{results.length}</b></button><button type="button" className={showFavorites ? "active" : ""} onClick={() => { setFavorites(loadArtistFavorites(favoriteCollection)); setShowFavorites(true); }}><span>{text.favorites}</span><b>{favorites.length}</b></button></nav>
+        <nav className="artist-result-tabs artist-string-result-tabs" aria-label={`${text.results} / ${text.favorites}`}><button type="button" className={!showFavorites ? "active" : ""} aria-pressed={!showFavorites} onClick={() => setShowFavorites(false)}><span>{text.results}</span><b>{results.length}</b></button><button type="button" className={showFavorites ? "active" : ""} aria-pressed={showFavorites} onClick={() => { setFavorites(loadArtistFavorites(favoriteCollection)); setShowFavorites(true); }}><span>{text.favorites}</span><b>{favorites.length}</b></button></nav>
         <small className="artist-result-library-note">{text.sharedFavorites}</small>
       </section>
-      {!showFavorites && (results.length > 0 ? <section className="artist-candidate-grid v5-draw-grid">{results.map((item) => renderCandidate(item))}</section> : <div className="artist-queue-empty v5-draw-empty">{drawMode ? text.noResults : text.repairNoResults}</div>)}
-      {showFavorites && (favorites.length > 0 ? <section className="artist-candidate-grid v5-draw-grid">{favorites.map((item) => renderCandidate(item, true))}</section> : <div className="artist-queue-empty v5-draw-empty">{text.noFavorites}</div>)}
+      {!showFavorites && (results.length > 0 ? <section className="artist-candidate-grid v5-draw-grid" data-tool-results-scroll="" tabIndex={0} aria-label={text.results}>{results.map((item) => renderCandidate(item))}</section> : <div className="artist-queue-empty v5-draw-empty">{drawMode ? text.noResults : text.repairNoResults}</div>)}
+      {showFavorites && (favorites.length > 0 ? <section className="artist-candidate-grid v5-draw-grid" data-tool-results-scroll="" tabIndex={0} aria-label={text.favorites}>{favorites.map((item) => renderCandidate(item, true))}</section> : <div className="artist-queue-empty v5-draw-empty">{text.noFavorites}</div>)}
     </main>
     {drawStylePreview && <AppPortal><aside
       className={`artist-style-reference-popover ${drawStylePreview.status}`}

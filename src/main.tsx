@@ -16,6 +16,9 @@ import "./layout-motion.css";
 import "./studio-interactions.css";
 import "./studio-typography.css";
 import "./studio-controls.css";
+import "./studio-desktop-polish.css";
+import "./desktop-pages.css";
+import "./desktop-tool-workspaces.css";
 import "./typography.css";
 import {FavoritesNoticeSupport} from "./components/LocalFavorites";
 import {McpEventSupport} from "./components/McpServerSettings";
@@ -24,7 +27,6 @@ import {confirmWindowClose} from './components/confirm';
 import {windowTrayText} from './window-tray-text';
 import {useAppStore} from './store';
 import {installTaskTracker} from './shell/task-tracker';
-import {shellText} from './shell/shell-text';
 attachDesktopLayoutStyles(document, classicStyles, redesignedStyles, shellStyles + "\n" + paletteStyles);
 
 installStudioAgent();
@@ -44,8 +46,7 @@ function RendererReady() {
       const text = windowTrayText(language);
       void api.acknowledgeCloseChoice(requestId).then(async accepted => {
         if (!accepted) return;
-        const hints = shellText(language).closeConfirm;
-        const { action, remember } = await confirmWindowClose({ ...text, trayHint: hints.trayHint, quitHint: hints.quitHint, cancelHint: hints.cancelHint });
+        const { action, remember } = await confirmWindowClose(text);
         api.sendCloseChoice(requestId, action, remember);
       }).catch(() => api.sendCloseChoice(requestId, "cancel", false));
     });

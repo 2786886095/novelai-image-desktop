@@ -1,3 +1,4 @@
+import { pageUi } from "./desktop-page-ui";
 import {GallerySaveStyleButton} from "./StyleLibrary";
 import { useGalleryReturn } from "./use-gallery-return";
 import {GalleryFavoriteButton,GalleryFavoritesButton} from './components/GalleryFavorites';
@@ -8,7 +9,7 @@ import {PreviewImageViewer} from './components/PreviewImageViewer';
 import {Icon} from './components/icons';
 import { formatAitagFailure } from "./aitag-error";
 import { galleryDownloadFeedback } from "./gallery-download";
-import {NAX_ATTRIBUTION,NAX_COLLECTIONS} from "./nax-gallery";
+import {NAX_ATTRIBUTION,NAX_COLLECTIONS,NAX_MODELS,NAX_PAGE_COPY,NAX_NATIVE_COPY,NAX_TAG_COPY,naxExperimentCopy,type NaxAlbumPage,type NaxImage} from "./nax-gallery";
 import quickTagLabels from "../shared/quicktag-ui.json";
 import { quickCharacters } from "./quicktag";
 import { QuickTagNavigation } from "./QuickTagNavigation";
@@ -378,6 +379,7 @@ function formatText(value: string, replacements: Record<string, string | number>
 }
 
 function localizedGallerySourceLabel(source: OnlineGallerySourceId, text: GalleryText) {
+  if(source==="nax") return "NAX · nax.moe";
   if (source === "artist-ranking") return text.artistTitle;
   return onlineGallerySourceInfo(source).label;
 }
@@ -1235,6 +1237,7 @@ function ExternalGallery({
 }
 
 function AitagCachedImage({ src, onError, ...props }: ImgHTMLAttributes<HTMLImageElement> & { src: string }) {
+  const language=useAppStore(s=>s.settings?.language);
   const [resolved, setResolved] = useState("");
   const [failed, setFailed] = useState(false);
   const retryRef = useRef(false);
@@ -1277,7 +1280,7 @@ function AitagCachedImage({ src, onError, ...props }: ImgHTMLAttributes<HTMLImag
   };
   return resolved && !failed
     ? <img {...props} decoding="async" src={resolved} onError={handleError} />
-    : <span ref={placeholderRef} className="aitag-image-loading">{failed ? "—" : "AITag"}</span>;
+    : <span ref={placeholderRef} className="aitag-image-loading" data-image-failed={failed||undefined} role={failed?"img":undefined} aria-label={failed?pageUi(language).imageUnavailable:undefined}>{failed ? <><Icon name="images" /> {pageUi(language).imageUnavailable}</> : "AITag"}</span>;
 }
 
 function favoriteFromAitag(work:AitagWorkSummary,images:{url:string;thumb:string}[],prompt=''):GalleryFavorite{return {source:'aitag',id:String(work.id),title:work.title,author:work.userId,sourceUrl:`${AITAG_SITE_URL}/i/${work.id}`,prompt,negativePrompt:'',createdAt:work.createDate,score:work.totalBookmarks,images,savedAt:Date.now()};}
@@ -1336,6 +1339,138 @@ function WorkCard({
       </button><GalleryFavoriteButton item={favoriteFromAitag(work,imageUrl?[{url:imageUrl,thumb:imageUrl}]:[])} prepare={async()=>{const detail=await loadDetail(work.id);return favoriteFromAitag(work,detail.images.map(i=>({url:aitagImageUrl(config,i),thumb:aitagImageUrl(config,i)})),detail.images[0]?.promptText||'');}}/>
     </article>
   );
+}
+
+type NaxUiLanguage = ReturnType<typeof normalizeAppLanguage>;
+
+function NaxCopyTagButton({tag,language}:{tag:string;language:NaxUiLanguage}) {
+  const busy=useRef(false);
+  const [copying,setCopying]=useState(false);
+  const [copy,copied,failed]=NAX_TAG_COPY[language];
+  async function handleCopy() {
+    if(!tag||busy.current)return;
+    busy.current=true;
+    setCopying(true);
+    const state=useAppStore.getState();
+    const notify=(message:string)=>{
+      const current=useAppStore.getState();
+      if(current.activeTab===state.activeTab)current.setToast(message);
+    };
+    try {
+      await navigator.clipboard.writeText(tag);
+      notify(copied);
+    }catch{notify(failed);}
+    finally{busy.current=false;setCopying(false);}
+  }
+  return <button type="button" className="btn secondary nax-copy-tag" disabled={!tag} aria-disabled={copying||!tag}
+    onClick={()=>void handleCopy()}><Icon name="copy" aria-hidden="true"/>{copy}</button>;
+}
+
+function NaxAlbumImageCard({item,language,text,onOpen}:{
+  item:NaxImage; language:NaxUiLanguage;text:GalleryText;onOpen:()=>void;
+}) {
+  return <li className="nax-image-entry">
+    <button type="button" className="nax-image-card" onClick={onOpen} aria-label={item.tag}>
+      <span className="nax-image-thumb"><OnlineCachedImage source="nax" text={text} src={item.url}
+        alt={item.tag} loading="lazy"/></span>
+    </button>
+    <div className="nax-image-meta"><strong title={item.tag}>{item.tag}</strong>
+      <NaxCopyTagButton tag={item.tag} language={language}/></div>
+  </li>;
+}
+
+function NaxGallery({sourcePicker,language,text}:{
+  sourcePicker: ReactNode; language: ReturnType<typeof normalizeAppLanguage>; text: GalleryText;
+}) {
+  const [model,setModel] = useState<(typeof NAX_MODELS)[number]>("V5");
+  const [collection,setCollection]=useState("");
+  const [chapter,setChapter]=useState(1),[page,setPage]=useState(1),[retry,setRetry]=useState(0);
+  const [loaded,setLoaded]=useState<{key:string; value?:NaxAlbumPage}>();
+  const [zoom,setZoom]=useState<number|null>(null);
+  const [eyebrow,description,modelLabel,collectionsLabel,,attribution] = NAX_PAGE_COPY[language];
+  const [view,back,sourceSection,notice,error] = NAX_NATIVE_COPY[language];
+  const rows = NAX_COLLECTIONS.filter(row => row.model === model);
+  const row=NAX_COLLECTIONS.find(item=>item.id===collection);
+  const key=collection+"|"+chapter+"|"+retry;
+  const album=loaded?.key===key?loaded.value:undefined;
+  const chapters=loaded?.value?.collection===collection?loaded?.value?.chapters??[]:[];
+  const pageSize=24;
+  const total=Math.max(1,Math.ceil((album?.images.length??0)/pageSize));
+  const items=album?.images.slice((page-1)*pageSize,page*pageSize)??[];
+  const selected=zoom===null?undefined:items[zoom];
+  useEffect(()=>{
+    if(!collection)return;
+    let active=true;
+    void window.naiDesktop.readNaxGallery(collection,chapter).then(value=>{
+      if(active)setLoaded({key,value});
+    }).catch(()=>{if(active)setLoaded({key});});
+    return ()=>{active=false;};
+  },[collection,chapter,key]);
+  return <main className="aitag-page nax-experiments">
+    <header className="aitag-header nax-experiments-header">
+      <div className="nax-experiments-intro">
+        <span className="nax-eyebrow">{eyebrow}</span>
+        <h2>{NAX_ATTRIBUTION.name}</h2>
+        <p>{description}</p>
+      </div>
+      {sourcePicker}
+    </header>
+    {!row ? <section className="aitag-search-panel nax-collections" aria-labelledby="nax-collections-title">
+      <div className="nax-collections-toolbar">
+        <div><h3 id="nax-collections-title">{collectionsLabel}</h3><small aria-live="polite">NAI Diffusion {model} · {rows.length} / {NAX_COLLECTIONS.length}</small></div>
+        <div className="nax-model-picker" role="group" aria-label={modelLabel}>
+          {NAX_MODELS.map(value => <button key={value} type="button" className="btn secondary" aria-pressed={value===model}
+            onClick={() => setModel(value)}>{value}</button>)}
+        </div>
+      </div>
+      <ul className="nax-collection-grid">
+        {rows.map(row => {
+          const [title,detail] = naxExperimentCopy(row.id,language);
+          return <li key={row.id}><button className="nax-collection-entry" type="button" data-nax-collection={row.id}
+            onClick={() => {setChapter(1);setPage(1);setCollection(row.id);}}>
+            <span className="nax-entry-copy"><strong>{title}</strong><span>{detail}</span></span>
+            <Icon name="chevronRight" aria-hidden="true"/>
+          </button></li>;
+        })}
+      </ul>
+    </section> : <section className="aitag-search-panel nax-collections nax-album" aria-labelledby="nax-album-title">
+      <div className="nax-collections-toolbar">
+        <div><h3 id="nax-album-title">{naxExperimentCopy(row.id,language)[0]}</h3>
+          <small>NAI Diffusion {row.model} · {notice}</small></div>
+        <button className="btn secondary" type="button" onClick={()=>{setZoom(null);setCollection("");}}>{back}</button>
+      </div>
+      {chapters.length>1&&<SelectMenu className="nax-chapter" ariaLabel={sourceSection} label={sourceSection} value={String(chapter)}
+        options={chapters.map(item=>({value:String(item.page),label:item.label||String(item.page)}))}
+        onChange={value=>{setChapter(Number(value));setPage(1);setZoom(null);}}/>}
+      {loaded?.key!==key ? <p role="status">{formatText(text.loadingSource,{source:"NAX"})}</p>
+       : !album ? <div role="alert"><p>{error}</p><button className="btn secondary" type="button" onClick={()=>setRetry(n=>n+1)}>{language==="zh-CN"?"重试":language==="zh-TW"?"重試":language==="ja-JP"?"再試行":language==="ko-KR"?"재시도":"Retry"}</button></div>
+       : <>
+        <ul className="nax-image-grid" aria-label={view}>
+          {items.map((item,i)=><NaxAlbumImageCard key={item.url} item={item} language={language} text={text}
+            onOpen={()=>setZoom(i)}/>)}
+        </ul>
+        {total>1&&<nav className="aitag-pagination" aria-label={text.choosePage}>
+          <button type="button" className="btn secondary" disabled={page===1} onClick={()=>setPage(x=>x-1)}>{text.previous}</button>
+          <b aria-live="polite">{page} / {total}</b>
+          <GalleryPageNumberInput page={page} pageCount={total} disabled={false} text={text} onChange={setPage}/>
+          <button type="button" className="btn secondary" disabled={page===total} onClick={()=>setPage(x=>x+1)}>{text.next}</button>
+        </nav>}
+       </>}
+    </section>}
+    <footer className="nax-experiments-source">
+      <span>{attribution.replace("{author}",NAX_ATTRIBUTION.author)} · nax.moe · {NAX_ATTRIBUTION.license}</span>
+    </footer>
+    {selected&&zoom!==null&&<AppPortal><div className="modal-backdrop artist-ranking-lightbox-backdrop" onClick={()=>setZoom(null)}>
+      <section className="artist-ranking-lightbox nax-lightbox" role="dialog" aria-modal="true" aria-label={selected.tag} onClick={event=>event.stopPropagation()}>
+        <button type="button" className="artist-ranking-lightbox-close" aria-label={text.closePreview} title={text.closePreview} onClick={()=>setZoom(null)}><Icon name="close"/></button>
+        <PreviewImageViewer images={items.map(item=>({src:item.url,alt:item.tag}))} index={zoom} onIndex={setZoom} favoriteAction={null}
+          renderImage={<OnlineCachedImage key={selected.url} source="nax" text={text} src={selected.url} alt={selected.tag}/>}
+          onBackgroundClick={()=>setZoom(null)}/>
+        <footer className="gallery-preview-actions"><span>{selected.tag}</span>
+          <NaxCopyTagButton tag={selected.tag} language={language}/></footer>
+      </section>
+    </div></AppPortal>}
+  </main>;
 }
 
 export default function AitagGallery({ onBack }: { onBack?: () => void }) {
@@ -1595,16 +1730,7 @@ export default function AitagGallery({ onBack }: { onBack?: () => void }) {
   }, [config.availableMonths, config.availableYears, sort, text]);
 
   if (gallerySource === "nax") {
-    return <main className="aitag-page">
-      <header className="aitag-header online-gallery-header">
-        <div><div className="online-gallery-title-line"><h2>{NAX_ATTRIBUTION.name}</h2><GallerySourcePicker value="nax" onChange={setGallerySource} text={text} /></div>
-          <p><button type="button" className="btn secondary compact" onClick={()=>void window.naiDesktop.openExternal(NAX_ATTRIBUTION.url)}>{text.openSourceSite}</button>
-            {" · "}{NAX_ATTRIBUTION.author} · <button type="button" className="btn secondary compact" onClick={()=>void window.naiDesktop.openExternal(NAX_ATTRIBUTION.licenseUrl)}>{NAX_ATTRIBUTION.license}</button></p></div>
-      </header>
-      {["V5","V4.5","V4"].map(model=><section className="aitag-search-panel" key={model}><h3>NAI Diffusion {model}</h3><div className="tool-card-grid">
-        {NAX_COLLECTIONS.filter(row=>row.model===model).map(row=><button key={row.id} type="button" className="tool-card ready" onClick={()=>void window.naiDesktop.openExternal(row.url)}><b>{row.title}</b><small>nax.moe ↗</small></button>)}
-      </div></section>)}
-    </main>;
+    return <NaxGallery language={language} text={text} sourcePicker={<GallerySourcePicker value="nax" onChange={setGallerySource} text={text}/>}/>;
   }
   if (gallerySource === "artist-ranking") {
     return <ArtistRankingGallery onSourceChange={setGallerySource} onBack={onBack} text={text} />;

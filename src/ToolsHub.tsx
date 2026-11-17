@@ -1,3 +1,4 @@
+import { pageUi } from "./desktop-page-ui";
 import {comicComposerText} from './comic/comic-composer-text';
 import { createElement, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import { getToolsHubText } from "./i18n";
@@ -197,11 +198,13 @@ export default function ToolsHub() {
     onPointerDown: () => warmTool(tool),
   }), [warmTool]);
 
+  const copy=pageUi(language);
   const metadataText = metadataToolLabels(language);
   const back = () => setActiveTool("hub");
   if (activeTool !== "hub") {
     const title = activeTool === "promptCodex" ? codexText.title : text.title;
     return (
+      <div className="tool-workspace-host" data-active-tool={activeTool}>
       <Suspense fallback={<ToolLoading title={title} />}>
         {activeTool === "comfyuiLocal" && window.naiComfy ? <ComfyLocalTool onBack={back} /> : null}
         {activeTool === "imageMetadataEdit" ? <ImageMetadataTool onBack={back} /> : null}
@@ -214,6 +217,7 @@ export default function ToolsHub() {
         {activeTool === "v5ArtistRepair" ? <V5ArtistWeightRepair onBack={back} /> : null}
         {activeTool === "artistStringDraw" ? <ArtistStringWeightDraw onBack={back} /> : null}
       </Suspense>
+      </div>
     );
   }
 
@@ -223,16 +227,16 @@ export default function ToolsHub() {
         <div><span className="eyebrow">{text.eyebrow}</span><h2>{text.title}</h2><p>{text.subtitle}</p></div>
       </section>
       <section className="tool-card-grid">
-        <button type="button" className="tool-card ready" {...toolCardHandlers("imageMetadataEdit")} onClick={() => setActiveTool("imageMetadataEdit")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.imageMetadataEdit} /></i><b>{metadataText[0]}</b></span><span>{metadataText[1]}</span><small>{text.ready}</small></button>
-        {window.naiComfy ? <button type="button" className="tool-card ready" {...toolCardHandlers("comfyuiLocal")} onClick={() => setActiveTool("comfyuiLocal")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.comfyuiLocal} /></i><b>{text.comfyLocalTitle}</b></span><span>{text.comfyLocalDesc}</span><small>{text.ready}</small></button> : null}
-        <button type="button" className="tool-card ready" {...toolCardHandlers("japaneseComic")} onClick={() => setActiveTool("japaneseComic")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.japaneseComic} /></i><b>{japaneseComicText.newToolTitle}</b></span><span>{japaneseComicText.newToolDescription}</span><small>{text.ready}</small></button>
-        <button type="button" className="tool-card ready" {...toolCardHandlers("comic")} onClick={() => setActiveTool("comic")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.comic} /></i><b>{text.comicTitle}</b></span><span>{text.comicDesc}</span><small>{text.ready}</small></button>
-        <button type="button" className="tool-card ready" {...toolCardHandlers("promptCodex")} onClick={() => setActiveTool("promptCodex")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.promptCodex} /></i><b>{codexText.title}</b></span><span>{codexText.desc}</span><small>{text.ready}</small></button>
-        <button type="button" className="tool-card ready" {...toolCardHandlers("redraw")} onClick={() => setActiveTool("redraw")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.redraw} /></i><b>{text.batchTitle}</b></span><span>{text.batchDesc}</span><small>{text.ready}</small></button>
-        <button type="button" className="tool-card ready" {...toolCardHandlers("artistLookup")} onClick={() => setActiveTool("artistLookup")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.artistLookup} /></i><b>{String(language ?? "zh-CN").startsWith("zh") ? "画师链接查询" : "Artist profile lookup"}</b></span><span>Pixiv / X · Danbooru · NovelAI</span><small>{text.ready}</small></button>
-        {isWindows ? <button type="button" className="tool-card ready" {...toolCardHandlers("artistLab")} onClick={() => setActiveTool("artistLab")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.artistLab} /></i><b>{text.artistLabTitle}</b></span><span>{text.artistLabDesc}</span><small>{text.ready}</small></button> : null}
-        <button type="button" className="tool-card ready" {...toolCardHandlers("v5ArtistRepair")} onClick={() => setActiveTool("v5ArtistRepair")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.v5ArtistRepair} /></i><b>{text.v5ArtistRepairTitle}</b></span><span>{text.v5ArtistRepairDesc}</span><small>{text.ready}</small></button>
-        <button type="button" className="tool-card ready" {...toolCardHandlers("artistStringDraw")} onClick={() => setActiveTool("artistStringDraw")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.artistStringDraw} /></i><b>{text.artistStringDrawTitle}</b></span><span>{text.artistStringDrawDesc}</span><small>{text.ready}</small></button>
+        <button type="button" className="tool-card ready" data-tool-card="imageMetadataEdit" {...toolCardHandlers("imageMetadataEdit")} onClick={() => setActiveTool("imageMetadataEdit")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.imageMetadataEdit} /></i><b>{metadataText[0]}</b></span><span>{metadataText[1]}</span><small>{text.ready}</small></button>
+        {window.naiComfy ? <button type="button" className="tool-card ready" data-tool-card="comfyuiLocal" {...toolCardHandlers("comfyuiLocal")} onClick={() => setActiveTool("comfyuiLocal")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.comfyuiLocal} /></i><b>{text.comfyLocalTitle}</b></span><span>{text.comfyLocalDesc}</span><small>{text.ready}</small></button> : null}
+        <button type="button" className="tool-card ready" data-tool-card="japaneseComic" {...toolCardHandlers("japaneseComic")} onClick={() => setActiveTool("japaneseComic")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.japaneseComic} /></i><b>{japaneseComicText.newToolTitle}</b></span><span>{japaneseComicText.newToolDescription}</span><small>{text.ready}</small></button>
+        <button type="button" className="tool-card ready" data-tool-card="comic" {...toolCardHandlers("comic")} onClick={() => setActiveTool("comic")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.comic} /></i><b>{text.comicTitle}</b></span><span>{text.comicDesc}</span><small>{text.ready}</small></button>
+        <button type="button" className="tool-card ready" data-tool-card="promptCodex" {...toolCardHandlers("promptCodex")} onClick={() => setActiveTool("promptCodex")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.promptCodex} /></i><b>{codexText.title}</b></span><span>{codexText.desc}</span><small>{text.ready}</small></button>
+        <button type="button" className="tool-card ready" data-tool-card="redraw" {...toolCardHandlers("redraw")} onClick={() => setActiveTool("redraw")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.redraw} /></i><b>{text.batchTitle}</b></span><span>{text.batchDesc}</span><small>{text.ready}</small></button>
+        <button type="button" className="tool-card ready" data-tool-card="artistLookup" {...toolCardHandlers("artistLookup")} onClick={() => setActiveTool("artistLookup")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.artistLookup} /></i><b>{copy.artistLookup}</b></span><span>Pixiv / X · Danbooru · NovelAI</span><small>{text.ready}</small></button>
+        {isWindows ? <button type="button" className="tool-card ready" data-tool-card="artistLab" {...toolCardHandlers("artistLab")} onClick={() => setActiveTool("artistLab")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.artistLab} /></i><b>{text.artistLabTitle}</b></span><span>{text.artistLabDesc}</span><small>{text.ready}</small></button> : null}
+        <button type="button" className="tool-card ready" data-tool-card="v5ArtistRepair" {...toolCardHandlers("v5ArtistRepair")} onClick={() => setActiveTool("v5ArtistRepair")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.v5ArtistRepair} /></i><b>{text.v5ArtistRepairTitle}</b></span><span>{text.v5ArtistRepairDesc}</span><small>{text.ready}</small></button>
+        <button type="button" className="tool-card ready" data-tool-card="artistStringDraw" {...toolCardHandlers("artistStringDraw")} onClick={() => setActiveTool("artistStringDraw")}><span className="tool-card-heading"><i><Icon name={TOOL_ICONS.artistStringDraw} /></i><b>{text.artistStringDrawTitle}</b></span><span>{text.artistStringDrawDesc}</span><small>{text.ready}</small></button>
       </section>
     </main>
   );

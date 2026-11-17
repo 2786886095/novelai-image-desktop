@@ -1,6 +1,6 @@
 import {useEffect,useState} from "react";
 import {TAG_PACK_LANGUAGES,TAG_PACK_MANIFEST,TAG_PACK_NAMES,tagPackLanguage,type TagPackLanguage,type TagPackStatus} from "../shared/multilingual-tag-pack-contract";
-import {Button} from "./components/ui";
+import {Button,SelectMenuCompat} from "./components/ui";
 import {useAppStore} from "./store";
 const labels={
  "zh-CN":["离线 Tag 词库","数据更新","当前词库","未安装","下载并启用","导入已下载词包","启用已安装词包","正在安装…","安装未完成，原词库不变。请检查网络后重试。"],
@@ -27,7 +27,7 @@ export default function TagPackSettings({onChanged}:{onChanged?:()=>void}){
   }catch{setError(true);}finally{setBusy(false);}
  }
  return <section className="settings-form"><label className="field">{l[0]}
-  <select value={chosen} disabled={busy} onChange={e=>choose(e.target.value as TagPackLanguage)}>{TAG_PACK_LANGUAGES.map(x=><option key={x} value={x}>{TAG_PACK_NAMES[x]}</option>)}</select></label>
+  <SelectMenuCompat aria-label={l[0]} value={chosen} disabled={busy} onChange={e=>choose(e.target.value as TagPackLanguage)}>{TAG_PACK_LANGUAGES.map(x=><option key={x} value={x}>{TAG_PACK_NAMES[x]}</option>)}</SelectMenuCompat></label>
   <p className="field-hint">{l[1]}: {TAG_PACK_MANIFEST.updatedAt} · {TAG_PACK_MANIFEST.packs[chosen].count.toLocaleString()} · {(TAG_PACK_MANIFEST.packs[chosen].size/1024**2).toFixed(1)} MiB</p>
   <p role="status">{l[2]}: {state?.active?TAG_PACK_NAMES[state.active]:l[3]}</p>
   <div className="row-actions"><Button disabled={busy} onClick={()=>void apply(state?.installed.includes(chosen)?"use":"download")}>{busy?l[7]:state?.installed.includes(chosen)?l[6]:l[4]}</Button>

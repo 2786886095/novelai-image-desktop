@@ -17,3 +17,13 @@
 @keyframes compact-dialog-in { from {opacity:0;transform:translateY(6px);} to {opacity:1;transform:translateY(0);} }
 @media (pointer:coarse) { .compact-icon-button,.prompt-toolbar-row.compact-prompt-toolbar .prompt-tool-btn { width:44px;height:44px;min-height:44px;flex-basis:44px; }.compact-furry-switch {min-height:44px;} }
 
+
+.compact-capsule-dialog .compact-weight-gesture { color:var(--text-secondary); font-size:12px; margin:0 0 8px; }
+.compact-current-tags .compact-weight-step { display:inline-flex; gap:1px; flex:none; }
+.compact-current-tags .compact-weight-step button { min-width:22px; min-height:24px; border-radius:var(--radius-sm); }
+.compact-current-tags .compact-weight-tag { display:inline-flex; align-items:baseline; gap:3px; min-width:0; flex:0 1 auto; overflow-wrap:anywhere; color:var(--text-primary); text-align:start; user-select:none; cursor:default; }
+.compact-current-tags .compact-weight-tag small { white-space:nowrap; color:var(--text-secondary); font-variant-numeric:tabular-nums; }
+.compact-current-tags .compact-weight-tag:active,.compact-current-tags .compact-weight-step button:hover:not(:disabled) { background:var(--bg-input); }
+.compact-current-tags .compact-weight-step button:disabled { opacity:.35; cursor:default; }
+
+.compact-current-tags [data-capsule-wheel] { cursor:ns-resize; }

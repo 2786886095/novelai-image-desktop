@@ -51,7 +51,8 @@ import {
   reversePromptImage,
   upscaleImg,
 } from "./nai";
-import { artistStyleCatalog, searchDanbooru } from "./danbooru-tags";
+import { artistStyleCatalog } from "./danbooru-tags";
+import { searchMultilingualTags } from "./multilingual-tags";
 import { searchOnlineGallery } from "./online-gallery";
 import { listReferencePresets } from "./reference-presets";
 import { getHistory, getHistoryGroups, getSettings, setSetting } from "./store";
@@ -375,8 +376,8 @@ export async function executeAgentTool(
       case "langbai_search_tags": {
         const query = text(args.query, 300);
         const limit = Math.trunc(finite(args.limit, 20, 1, 100));
-        const items=await searchDanbooru(query,limit);
-        return response(true, `本地 Tag 检索：${query}`, items);
+        const items=searchMultilingualTags(query,limit);
+        return items === null ? response(false, "尚未启用离线 Tag 词包，请在软件设置中下载并启用", []) : response(true, `本地 Tag 检索：${query}`, items);
       }
       case "langbai_search_artist_styles": {
         const query = text(args.query, 300);
