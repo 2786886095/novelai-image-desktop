@@ -3431,6 +3431,7 @@ function GeneratePanel({openSettings}:{openSettings:()=>void}) {
 
   if(imageProvider==='openai-images') return <CompatibleGenerationPanel openSettings={openSettings} />;
 
+  const costPreview = <FeatureCostCard label={t("cost.beforeRun")} feature="generate" />;
   const batchFields = <>
     <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
     <CommittedNumberInput
@@ -3500,13 +3501,14 @@ function GeneratePanel({openSettings}:{openSettings:()=>void}) {
           </button>
         </div>
 
+        {!redesign && costPreview}
       </div>
       <AccountAndRunButton
         label={batchCount > 1 ? f("generate.batchRun", { count: batchCount }) : t("generate.run")}
         onRun={() => void generate()}
         openSettings={openSettings}
         model={model}
-        costPreview={<FeatureCostCard label={t("cost.beforeRun")} feature="generate" />}
+        costPreview={redesign ? costPreview : undefined}
         allowQueue
       />
     </>
@@ -3529,6 +3531,7 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
   const generateI2I = useAppStore((state) => state.generateI2I);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
+  const costPreview = <FeatureCostCard label={t("cost.beforeRun")} feature="i2i" />;
   const batchFields = <>
     <CommittedNumberInput label={t("generate.batchCount")} value={batchCount} min={1} max={999} normalize={(value) => Math.max(1, Math.min(999, Math.round(value)))} onCommit={setBatchCount} />
     <CommittedNumberInput
@@ -3562,13 +3565,14 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
           <div className="batch-inline-grid">{batchFields}</div>
         </> : batchFields}
         
+        {!redesign && costPreview}
       </div>
       <AccountAndRunButton
         label={batchCount > 1 ? f("generate.batchRun", { count: batchCount }) : t("i2i.run")}
         onRun={() => void generateI2I()}
         openSettings={openSettings}
         model={model}
-        costPreview={<FeatureCostCard label={t("cost.beforeRun")} feature="i2i" />}
+        costPreview={redesign ? costPreview : undefined}
       />
     </>
   );

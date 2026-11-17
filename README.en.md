@@ -23,7 +23,7 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-On the first launch after updating on Windows, preview both layouts side by side and keep or change your current layout. You can switch later under Settings → Appearance → Desktop layout. Artist Detective can vary each pinned artist’s weight within an optional range while continuing to search other artists. Leave the range blank to keep the original weight.
+In the Classic desktop layout, text-to-image and image-to-image cost previews are back at the end of the left parameter panel. Redesign still shows the preview above Generate; without an account, expand the cost estimate section there.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

@@ -11,10 +11,19 @@ describe("desktop workbench page changes",()=>{
   }
   expect(pageUi("unknown").searchTools).toBeTruthy();
  });
- it("keeps the original quote calculation and single quote component adjacent to run",()=>{
+ it("keeps one quote per panel: classic uses the scrolling parameters and redesign keeps the footer",()=>{
   const app=get("./App.tsx");
-  expect(app).toContain('costPreview={<FeatureCostCard label={t("cost.beforeRun")} feature="generate" />}');
-  expect(app).toContain('costPreview={<FeatureCostCard label={t("cost.beforeRun")} feature="i2i" />}');
+  for(const [panel,feature] of [["GeneratePanel","generate"],["I2IPanel","i2i"]]){
+   const body=app.split(`function ${panel}(`)[1]?.split("// ──")[0]??"";
+   const scrollStart=body.indexOf('<div className="panel-scroll">');
+   const footerStart=body.indexOf("<AccountAndRunButton");
+   expect(footerStart).toBeGreaterThan(scrollStart);
+   const scroll=body.slice(scrollStart,footerStart);
+   expect(scroll).toMatch(/\{!redesign && costPreview\}\s*<\/div>\s*$/);
+   expect(body.slice(footerStart)).toContain('costPreview={redesign ? costPreview : undefined}');
+   expect(body.match(/<FeatureCostCard/g)).toHaveLength(1);
+   expect(body).toContain(`feature="${feature}"`);
+  }
   expect(app.match(/\.quoteAnlas\(/g)).toHaveLength(1);
  });
  it("does not share selectors between shell definitions or replace underlying capabilities",()=>{
