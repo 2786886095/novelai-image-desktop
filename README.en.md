@@ -23,7 +23,7 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-In the Classic desktop layout, text-to-image and image-to-image cost previews are back at the end of the left parameter panel. Redesign still shows the preview above Generate; without an account, expand the cost estimate section there.
+Windows: Artist Detective no longer clips artist strings and action buttons in multi-row results. View, copy or apply a candidate’s weighted artist tags in either desktop layout.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

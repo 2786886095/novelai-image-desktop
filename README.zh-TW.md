@@ -23,7 +23,7 @@ NovelAI 圖像創作工作臺，介面支援簡體中文、繁體中文、英語
 
 ## 本次更新
 
-桌面經典介面的文生圖和圖生圖費用預覽移回左側參數區末尾。新版位置不變，仍在生成按鈕上方；未設定帳號時，可展開「生成前扣費」查看。
+修正 Windows 畫風迭代候選較多時，畫師串和底部按鈕遭裁切的問題。在經典版與新版皆可查看完整畫師串、複製或套用到生成。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
