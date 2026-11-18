@@ -4,15 +4,15 @@ import {setTimeout as sleep} from 'node:timers/promises';
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import {assertV298CloudNativeRun} from './release-platform-contract.mjs';
-const sha='3238ed10cc02b910768e3887bb28c9865613f740';
+const sha='0770b270b2b9e7ee948637b77b290d4784284531';
 const old='c7e3c194e90e9a8d4494d04604518ec5c5d86de5';
 const tag='v2.9.8';
 const repo='2786886095/novelai-image-desktop';
 const inputs=[
- ['build.yml','44239823456'],
- ['build-mobile.yml','44239833113'],
- ['feature-acceptance.yml','44239837836'],
- ['image-metadata.yml','44239828167'],
+ ['build.yml','44241350480'],
+ ['build-mobile.yml','44241359282'],
+ ['feature-acceptance.yml','44241363931'],
+ ['image-metadata.yml','44241355179'],
 ];
 const run=(command,...args)=>execFileSync(command,args,{encoding:'utf8',timeout:60000,maxBuffer:16*1024*1024}).trim();
 const gh=(...args)=>run('gh',...args);
