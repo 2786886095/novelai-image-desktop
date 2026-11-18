@@ -25,6 +25,8 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 Windows: Artist Detective no longer clips artist strings and action buttons in multi-row results. View, copy or apply a candidate’s weighted artist tags in either desktop layout.
 
+Personal Codex entries now stay readable instead of collapsing to thin lines.
+
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
 ## Quick start

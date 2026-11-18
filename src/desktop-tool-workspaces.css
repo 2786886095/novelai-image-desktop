@@ -55,6 +55,10 @@ html .tool-workspace-host .tool-metadata-report {max-block-size:30dvh;overflow:a
 html .tool-workspace-host .artist-lookup-result-stack {display:grid;gap:8px;min-inline-size:0;}
 html .tool-workspace-host .artist-lookup-result-stack > .tool-results-scroll {display:grid;gap:8px;}
 html .tool-workspace-host .comfy-works-search > input {min-inline-size:min(100%,230px);flex:1 1 260px;}
+/* Keep full prompt cards in each row; scroll the result list instead of shrinking its entries. */
+html .tool-workspace-host .prompt-codex-results.tool-results-scroll {
+  grid-auto-rows: max-content;
+}
 html .tool-workspace-host .prompt-codex-filter-row > output {white-space:nowrap;}
 html .tool-workspace-host .tool-comic-overview > span:last-child {overflow-wrap:anywhere;}
 html .settings-modal .settings-finder {display:grid;gap:5px;padding:0 5px 9px;position:sticky;top:0;z-index:1;background:var(--bg-panel);}

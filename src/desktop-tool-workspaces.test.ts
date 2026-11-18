@@ -17,6 +17,10 @@ describe("desktop tool workspace changes",()=>{
   const chrome=source("./app/AppChrome.tsx");
   for(const handler of ["toggleStreamPreview","openInExplorer","openSettings","openExternal"])expect(chrome).toContain(handler);
  });
+ it("sizes Personal Codex scroll rows to the complete entry in either desktop layout",()=>{
+  expect(source("./PromptCodex.tsx")).toContain('className="prompt-codex-results tool-results-scroll"');
+  expect(source("./desktop-tool-workspaces.css")).toMatch(/\.prompt-codex-results\.tool-results-scroll\s*\{\s*grid-auto-rows:\s*max-content;/);
+ });
  it("provides labels for five locales",()=>{
   for(const locale of ["zh-CN","zh-TW","en-US","ja-JP","ko-KR"])expect(Object.values(toolWorkspaceText(locale)).every(Boolean)).toBe(true);
  });

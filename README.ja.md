@@ -25,6 +25,8 @@
 
 Windows の画風反復で候補が複数行になると、作家タグと操作ボタンが見切れる問題を修正しました。どちらのレイアウトでも重み付きタグを確認、コピー、生成に適用できます。
 
+個人法典の項目が横線に潰れて読めなくなる問題も修正しました。
+
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
 ## はじめ方

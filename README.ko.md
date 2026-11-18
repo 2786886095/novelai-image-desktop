@@ -25,6 +25,8 @@
 
 Windows에서 화풍 탐색 결과가 여러 줄일 때 작가 태그와 버튼이 잘리던 문제를 수정했습니다. 두 레이아웃 모두에서 가중치가 적용된 작가 태그를 확인하고 복사하거나 생성에 적용할 수 있습니다.
 
+개인 법전의 항목이 가느다란 선으로만 표시되던 문제도 수정했습니다.
+
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
 ## 빠른 시작
