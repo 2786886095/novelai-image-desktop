@@ -417,8 +417,16 @@ class LiveGenerator(NovelAIGenerator):
             error = json.loads(old_error.read_text(encoding="utf-8"))
             if not isinstance(error.get("status"), int) or not 400 <= error["status"] <= 599:
                 raise ValueError("Invalid legacy transport diagnostic")
-            atomic_json(root / "transport-errors" / old_error.name.replace(".error.json", ".json"), error)
-            old_error.unlink()
+            current = root / "transport-errors" / old_error.name.replace(".error.json", ".json")
+            if current.exists():
+                # On resume the current-format record owns the last attempt.
+                # Retain stale legacy diagnostics without granting replay permission.
+                history = root / "transport-history"
+                history.mkdir(exist_ok=True)
+                old_error.rename(history / f"legacy-{uuid.uuid4()}.json")
+            else:
+                atomic_json(current, error)
+                old_error.unlink()
         super().__init__(root, None, catalog, max_renders=budget)
         self.token, self.check, self.progress = token, check, progress
         self.request_url = generation_request_url(image_base_url)

@@ -153,20 +153,48 @@ class TransportTests(unittest.TestCase):
         with patch.object(live.time, "time", return_value=0):
             self.assertEqual(self.gen.retry_seconds("Thu, 01 Jan 1970 00:03:00 GMT", 0), 180)
 
-    def test_legacy_429_sidecar_migrates_before_upstream_spool_load(self):
+    def migrate_legacy(self, make_error, current=None):
         record = self.gen.store.prepare(self.body)
         marker = self.root / "spool/requests" / (record["request_hash"] + ".json")
         live.atomic_json(marker, record)
         legacy = marker.with_suffix(".error.json")
-        live.atomic_json(legacy, {"status": 429})
+        live.atomic_json(legacy, make_error(record["request_hash"]))
+        if current is not None:
+            live.atomic_json(self.root / "spool/transport-errors" / marker.name, current)
         self.gen.client.close()
         self.gen = live.LiveGenerator(self.root / "spool", self.catalog, 1, "FIXTURE_NOT_A_CREDENTIAL", lambda: None, lambda *a, **k: None)
         self.gen.client.close()
         self.assertFalse(legacy.exists())
+        return record["request_hash"]
+
+    def test_legacy_status_only_is_migrated_but_not_authority_to_resend(self):
+        self.migrate_legacy(lambda key: {"status": 429})
         self.transport(lambda _: self.image_response())
-        with patch.object(live.time, "sleep"):
+        with self.assertRaisesRegex(RuntimeError, "not automatically resending") as err:
+            self.gen.generate([self.body])
+        self.assertTrue(err.exception.resume_details["requiresPaidReplayConfirmation"])
+        self.assertEqual(self.calls, [])
+
+    @staticmethod
+    def definite_limit(key):
+        return {"status": 429, "reason": "rate_limited", "request_hash": key,
+                "pendingRequestHash": key, "requiresPaidReplayConfirmation": False}
+
+    def test_migrated_bound_rejection_allows_one_retry(self):
+        self.migrate_legacy(self.definite_limit)
+        self.transport(lambda _: self.image_response())
+        with patch.object(self.gen, "wait"):
             self.assertEqual(len(self.gen.generate([self.body])), 1)
         self.assertEqual(len(self.calls), 1)
+
+    def test_legacy_error_cannot_overwrite_current_uncertain_submission(self):
+        current = {"status": "uncertain", "requiresPaidReplayConfirmation": True}
+        key = self.migrate_legacy(self.definite_limit, current)
+        self.assertEqual(json.loads((self.root / "spool/transport-errors" / (key + ".json")).read_text()), current)
+        self.transport(lambda _: self.image_response())
+        with self.assertRaisesRegex(RuntimeError, "not automatically resending"):
+            self.gen.generate([self.body])
+        self.assertEqual(self.calls, [])
 
     def test_budget_and_cancellation_checked_before_request(self):
         self.gen.max_renders = 0
