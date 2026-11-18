@@ -40,6 +40,12 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+        env:
+          ONNXRUNTIME_NODE_INSTALL_CUDA: ${{ runner.os == 'Linux' && 'skip' || '' }}
+      - name: Stage verified Linux ONNX Runtime CUDA binaries
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash scripts/feature-acceptance/prepare-ci-onnx-cuda.sh
       # A fresh Ubuntu runner needs the same sandbox preparation as Build.
       # Keep the real browser gate sandboxed; do not bypass it with --no-sandbox.
       - name: Configure Linux test display and Chromium sandbox (CI only)
