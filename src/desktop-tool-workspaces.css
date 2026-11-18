@@ -40,8 +40,8 @@ html .tool-workspace-host [data-tool-anchor]:focus-visible {outline:2px solid va
 html .tool-workspace-host .tool-results-scroll {
  max-block-size:min(64dvh,672px); min-block-size:0; overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; align-content:start;
 }
-/* Scroll the results, not the contents of each stopped-run candidate. */
-html .tool-workspace-host .target-artist-lab .artist-candidate-grid.tool-results-scroll {
+/* Scroll the result list; image cards and their action footers must keep their content height. */
+html .tool-workspace-host .artist-candidate-grid:is(.tool-results-scroll, [data-tool-results-scroll]) {
   grid-auto-rows: max-content;
 }
 html .tool-workspace-host .tool-results-scroll:focus-visible {outline:2px solid var(--accent);outline-offset:-2px;}
