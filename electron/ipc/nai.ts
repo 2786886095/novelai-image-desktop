@@ -1,4 +1,4 @@
-import {parseV5Storyboard, storyboardSystem} from '../../src/comic/v5-storyboard';
+import {approvedLayoutHint,parseV5Storyboard, storyboardSystem} from '../../src/comic/v5-storyboard';
 import {requestV5Prompt,V5ClassifiedError} from './v5-prompt-transport';
 import {activeTagPack,searchMultilingualTags} from "./multilingual-tags";
 import {localDictionaryGuidance,promptDictionaryMatches} from "./prompt-local-dictionary";
@@ -5470,7 +5470,7 @@ export async function runComicPromptRequest(request:ComicPromptRequest,ownerId?:
   if(request.templateRevision!==undefined&&request.templateRevision!==selected.revision)return {...base,ok:false,code:'stale_template',message:'模板已变化，请重新确认后生成'};
   const metadata={templateRevision:selected.revision,templateName:selected.name,...range};
   const system=request.action==='shorten'?'精简原语言漫画台词到2–12字。保持人物语气和语义，不加解释或引号，只返回一行。':request.action==='storyboard'?storyboardSystem:selected.body.includes('{{input}}')?renderPromptSkillTemplate(selected.body,request.action==='generate'?'<reviewed page provided separately>':request.input):selected.body;
-  const user=comicPromptEnvelope(request.action==='recommend'&&selected.body.includes('{{input}}')?{...request,input:'<provided in selected template>'}:request,range);
+  const user=comicPromptEnvelope(request.action==='recommend'&&selected.body.includes('{{input}}')?{...request,input:'<provided in selected template>'}:request,range)+(request.action==='generate'&&request.format==='jp-page'?approvedLayoutHint(request.approvedPage):'');
   const maxTokens=request.action==='shorten'?128:request.action==='storyboard'?12000:request.action==='recommend'?800:Math.min(16000,1000+range.pages*(request.format==='jp-page'?3000:1500));
   const reply=await callConvertApi(system,user,maxTokens,`漫画提示词 · ${request.format} · ${request.action}`,true,false,false,settings,controller.signal,true,{pages:request.action==='generate'?range.pages:undefined});
   if(controller.signal.aborted)return {...base,...metadata,ok:false,code:'cancelled',message:'已停止本地等待；服务端可能已经处理或计费'};

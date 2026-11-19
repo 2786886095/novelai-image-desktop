@@ -1,8 +1,7 @@
 import {v5Text} from './v5-copy';
-import {layoutIds,type V5Storyboard} from './v5-storyboard';
+import {layoutIds,layoutRows,type V5Storyboard} from './v5-storyboard';
 const labels={position:'格位与大小',camera:'景别与视角',scene:'场景',actors:'人物与视线',action:'动作与表情',balloon:'气泡位置',sfx:'拟声词',transition:'下一格衔接'} as const;
-const patterns=[[1,2],[2,1],[2,2],[1,2,1],[2,1,1],[1,1,2],[2,2,1],[1,2,2],[2,1,2],[2,2,2],[3,1],[1,3],[2,3],[3,2],[1,3,1],[3,1,2],[2,1,3],[2,3,2],[3,2,3],[2,2,2,2]];
-export function LayoutGlyph({id}:{id:string}){const num=Number(id.slice(1));const rows=patterns[num-1]??[2,2];
+export function LayoutGlyph({id}:{id:string}){const num=Number(id.slice(1));const rows=layoutRows[num-1]??[2,2];
 return <svg aria-hidden="true" viewBox="0 0 60 72" width="32" height="38" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="1" y="1" width="58" height="70"/>{id[0]==='L'?rows.map((cols,r)=>Array.from({length:cols},(_,c)=><rect key={r+':'+c} x={2+c*56/cols} y={2+r*68/rows.length} width={56/cols-1} height={68/rows.length-1}/>)):<>{[<path d="M1 46H59M41 46V71"/>,<path d="M32 1V71M32 24H59M1 49H32"/>,<path d="M1 44L59 24M35 33L48 71"/>,<path d="M13 1V71M48 1V71"/>,<rect x="32" y="36" width="23" height="29"/>,<><rect x="3" y="3" width="54" height="34" fill="currentColor"/><path d="M29 39V71"/></>][num-1]}</>}</svg>}
 export function StoryboardReview({board,set,disabled,rerun,compiled,language,shorten}:{shorten:(i:number,j:number,k:number)=>void;language:unknown;board:V5Storyboard;set:(b:V5Storyboard)=>void;disabled:boolean;rerun:(i:number)=>void;compiled:number}){
  const edit=(f:(b:V5Storyboard)=>void)=>{const b=structuredClone(board);f(b);set(b);};

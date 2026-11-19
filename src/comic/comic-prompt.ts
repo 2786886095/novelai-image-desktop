@@ -42,28 +42,45 @@ export function parseComicRecommendation(raw:string) {
 }
 /** Anchored numbering only: never consume 1girl/2girls or inline character pipes. */
 export function cleanComicPageLine(line:string) {return line.trim().replace(/^(?:第\s*\d+\s*页[：:]\s*|(?:page\s+)?\d+[.)、][ \t]+)/i,'').trim();}
+/** Inspect framing once, using the same grammar for parsing and bounded transport continuation. */
+export function comicPageFrame(raw:string) {
+ let text=raw.trim(),brokenFence=false;
+ if(text.startsWith('\x60\x60\x60')){try{text=unfence(text)}catch{
+  const fenced=/^\x60{3}(?:text)?[ \t]*\r?\n(?=<<<PAGES(?:\s|$))/i.exec(text);
+  if(fenced)text=text.slice(fenced[0].length).trim();else brokenFence=true;
+ }}
+ const open=/^<<<PAGES(?:\s+|$)/.exec(text);
+ if(!open)return {state:'bare' as const,body:text,notes:'',invalid:brokenFence||/^<<<PAGES/.test(text)};
+ const rest=text.slice(open[0].length);const note=/(?:^|\r?\n)<<<NOTES(?:[ \t]*\r?\n|$)/m.exec(rest);
+ const pages=(note?rest.slice(0,note.index):rest).trimEnd();
+ const notes=note?rest.slice(note.index+note[0].length).replace(/(?:^|\r?\n)NOTES>>>[ \t]*$/,'').trim():'';
+ const close=/(PAGES>>>|(?<!>)>>>|(?<!\|)\|\|\|)$/.exec(pages);
+ if(close){
+  const body=pages.slice(0,close.index).trim();
+  // A short anonymous closer inside unfinished quoted dialogue isn't a page boundary.
+  const last=body.split(/\r?\n/).at(-1)??'';
+  if(close[1]==='PAGES>>>'||!/\bText:\s*"(?:\\.|[^"\\])*$/i.test(last))
+   return {state:'closed' as const,body,notes,invalid:brokenFence};
+ }
+ return {state:'open' as const,body:pages,notes,invalid:brokenFence};
+}
 export function parseComicPromptPages(raw:string,expected:number,truncated=false) {
- let text=raw.trim(),notes='',invalid=false;
- if(/^```/.test(text)){try{text=unfence(text);}catch{if(/^\x60{3}(?:text)?[ \t]*\r?\n<<<PAGES[ \t]*\r?\n/i.test(text))text=text.slice(text.indexOf('\n')+1);else{invalid=true;truncated=true;}}}
- let body=text;
- if(text.includes('<<<PAGES')) {
-  const match=/^<<<PAGES[ \t]*\r?\n([\s\S]*?)\r?\nPAGES>>>[ \t]*(?:\r?\n([\s\S]*))?$/.exec(text);
-  if(match){body=match[1];truncated=false;notes=(match[2]??'').replace(/^<<<NOTES[ \t]*\r?\n/,'').replace(/\r?\nNOTES>>>[ \t]*$/,'').trim();}
-  else {body=text.replace(/^<<<PAGES[ \t]*\r?\n/,'').split(/\r?\n(?:PAGES>>>|<<<NOTES)/)[0];truncated=true;}
- } else if(/^\s*[{[]/.test(text)) {invalid=true;}
+ const frame=comicPageFrame(raw),body=frame.body,notes=frame.notes;
+ let invalid=frame.invalid||/^\s*[{[]/.test(body);
+ if(frame.state==='closed')truncated=false;else if(frame.state==='open')truncated=true;
  const lines=body.split(/\r?\n/).filter(line=>line.trim()&&!/^\s*(?:#|```|<<<|PAGES>>>|NOTES>>>)/.test(line)).map(cleanComicPageLine).filter(Boolean);
  if(lines.some(line=>!/[a-z]/i.test(line)||/^(?:提示词|角色卡|附注|说明|notes?[:：]|here (?:are|is)\b|sure[,.!]|(?:settings|analysis|character card|prompt)[:：])/i.test(line)))invalid=true;
  // Quotes in descriptions are not delimiters. Repair a single terminal
  // nonempty Text payload only; never swallow another character segment.
  for(let i=0;i<lines.length;i++){
-  lines[i]=lines[i].replace(/(^|,\s*|\|\s*)(Text:\s*"((?:\\.|[^"\\|])+))(?=\s*(?:\||$))/gi,(_all,start,field)=>start+field.trimEnd()+'"');
+  lines[i]=lines[i].replace(/(^|,\s*|\|\s*)(Text:\s*"(?:\\.|[^"\\])*")|(^|,\s*|\|\s*)(Text:\s*"((?:\\.|[^"\\|])+))(?=\s*(?:\||$))/gi,(all,_start,closed,start,field)=>closed?all:start+field.trimEnd()+'"');
   if(/(?:^|,\s*|\|\s*)Text:\s*"(?=\s*(?:\||$))/i.test(lines[i]))invalid=true;
  }
  const countStatus=truncated?'truncated':invalid?'invalid':lines.length===expected?'exact':'mismatch';
  return {lines,notes,raw,expected,countStatus:countStatus as 'exact'|'mismatch'|'truncated'|'invalid'};
 }
 export function comicPromptEnvelope(request:ComicPromptRequest,range:{pages:number;totalPages:number;batchFrom:number}) {
- const format=request.format==='jp-page'?'日式整页：一页是一整页多格漫画；每行一页':'单分镜：一张单格图算一页；每行一页';
+ const format=request.format==='jp-page'?'日式整页：一页是一整页多格漫画；每行一页':'单分镜：一张单格图算一页；每行一页。分镜 JSON 的每个 pages[i].panels 只能有 1 项。只要一页时，选择一个关键瞬间，不把多个镜头塞进同一张图。';
  const input=request.input.replace(/INPUT>>>/g,'INPUT>\u200b>>');
  if(request.action==='shorten')return JSON.stringify({dialogue:request.input});
  if(request.action==='recommend')return `[软件请求 comic-recommend-1] 仅推荐页数，不生成提示词。${format}。范围1至30页。仅输出完整JSON：{"pages":整数,"reason":"简明理由","beats":["每页要点"]}。不调用工具，不声称已生图。\n<<<INPUT\n${input}\nINPUT>>>`;

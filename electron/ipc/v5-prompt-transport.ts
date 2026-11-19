@@ -1,5 +1,5 @@
 import {classifyAiPromptResponse} from './ai-prompt-response';
-import {parseComicPromptPages} from '../../src/comic/comic-prompt';
+import {comicPageFrame,parseComicPromptPages} from '../../src/comic/comic-prompt';
 export class V5ClassifiedError extends Error {}
 type Turn={role:string;content:unknown};
 interface Options{model:string;budget:number;messages:Turn[];pages?:number;signal?:AbortSignal}
@@ -23,8 +23,8 @@ export async function requestV5Prompt(o:Options,send:(messages:Turn[],budget:num
   if(assembled&&chunk.startsWith(assembled))chunk=chunk.slice(assembled.length);
   else if(assembled){for(let n=Math.min(4096,assembled.length,chunk.length);n>=12;n--)if(assembled.endsWith(chunk.slice(0,n))){chunk=chunk.slice(n);break;}}
   assembled+=chunk;
-  const opened=o.pages!==undefined&&/^\s*(?:`{3}[^\n]*\n)?<<<PAGES[ \t]*\r?\n/.test(assembled);
-  const closed=opened&&/^PAGES>>>[ \t]*\r?$/m.test(assembled);
+  const frame=o.pages===undefined?undefined:comicPageFrame(assembled);
+  const opened=frame!==undefined&&frame.state!=='bare',closed=frame?.state==='closed';
   const enough=closed&&parseComicPromptPages(assembled,o.pages!).countStatus==='exact';
   if(enough||(fin!=='length'&&(!opened||closed)))return {data:{choices:[{finish_reason:'stop',message:{content:assembled}}]}};
   if(attempt===2)return {data:{choices:[{finish_reason:'length',message:{content:assembled}}]}};
