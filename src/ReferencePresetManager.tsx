@@ -1,3 +1,4 @@
+import {EditableGroupMenu} from './components/EditableGroupMenu';
 import {PreviewImageViewer} from './components/PreviewImageViewer';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { animateStudioEntry, motionReduced } from "./motion-system";
@@ -232,7 +233,7 @@ export function ReferencePresetQuickSaveDialog({ source, onClose }: { source: Qu
           <div className="reference-preset-quick-body">
             <img src={source.previewUrl} alt="" />
             <label className="field"><span>{text.name}</span><input autoFocus value={name} onChange={(event) => setName(event.target.value)} /></label>
-            <label className="field"><span>{text.group}</span><input list="reference-preset-quick-groups" value={group} placeholder={text.createHint} onChange={(event) => setGroup(event.target.value)} /><datalist id="reference-preset-quick-groups">{groups.map((item) => <option key={item} value={item} label={catalogGroupName(item, language)} />)}</datalist></label>
+        <EditableGroupMenu label={text.group} value={group} onChange={setGroup} placeholder={text.createHint} options={groups.map(item=>({value:item,label:catalogGroupName(item,language)}))}/>
           </div>
           <footer><Button onClick={onClose}>{text.cancel}</Button><Button variant="primary" disabled={busy} onClick={() => void save()}>{text.save}</Button></footer>
         </section>
@@ -479,7 +480,7 @@ export default function ReferencePresetManager({
       </div>}
       <div className="reference-preset-create-fields">
         <label className="field reference-preset-field-wide"><span>{text.name}</span><input autoFocus value={name} onChange={(event) => setName(event.target.value)} /></label>
-        <label className="field reference-preset-field-wide"><span>{text.group}</span><input list="reference-preset-create-groups" value={group} placeholder={text.noGroup} onChange={(event) => setGroup(event.target.value)} /><datalist id="reference-preset-create-groups">{library.groups.map((item) => <option key={item} value={item} />)}</datalist></label>
+        <EditableGroupMenu className="field reference-preset-field-wide" label={text.group} value={group} onChange={setGroup} placeholder={text.noGroup} options={library.groups.map(item=>({value:item,label:item}))}/>
         {kind === "precise" && <div className="field reference-preset-field-wide"><span>{text.typeLabel}</span><SelectMenu value={preciseType} ariaLabel={text.typeLabel} options={[{ value: "character", label: text.character }, { value: "style", label: text.style }, { value: "character&style", label: text.both }]} onChange={(next) => setPreciseType(next as PreciseReferenceType)} /><small>{text.typeHelp}</small></div>}
         <div className="reference-preset-parameter"><NumberInput label={kind === "vibe" ? text.infoLabel : text.preciseStrengthLabel} value={kind === "vibe" ? infoExtracted : strength} min={0} max={1} step={0.01} onChange={kind === "vibe" ? setInfoExtracted : setStrength} /><small>{kind === "vibe" ? text.infoHelp : text.preciseStrengthHelp}</small></div>
         <div className="reference-preset-parameter"><NumberInput label={kind === "vibe" ? text.strengthLabel : text.fidelityLabel} value={kind === "vibe" ? strength : fidelity} min={0} max={1} step={0.01} onChange={kind === "vibe" ? setStrength : setFidelity} /><small>{kind === "vibe" ? text.vibeStrengthHelp : text.fidelityHelp}</small></div>

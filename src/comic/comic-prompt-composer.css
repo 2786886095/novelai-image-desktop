@@ -45,3 +45,9 @@
 html.motion-reduced .comic-composer-segments>button{transition:none}
 
 .v5-story-review{display:grid;gap:.65rem;min-width:0}.v5-story-review label{display:grid;gap:.25rem}.v5-story-review summary{cursor:pointer;padding:.45rem}.v5-story-review details>label{margin:.4rem}.v5-layout-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(3.5rem,1fr));gap:.3rem}.v5-layout-grid button{display:grid;justify-items:center}.v5-layout-grid button[aria-pressed=true]{outline:2px solid currentColor}
+
+/* One field, one visible value; let Studio's shared listbox handle both themes. */
+.comic-template-field{flex:1 1 100%;min-width:0;display:grid;gap:4px}
+.comic-template-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--text-secondary)}
+.comic-template-heading>.btn{padding:4px 8px}
+.comic-template-field>.select-menu-trigger{width:100%;min-width:0}

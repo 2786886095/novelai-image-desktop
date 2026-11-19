@@ -20467,3 +20467,9 @@ html.motion-reduced .workspace { transition: none; }
 .effort-control { min-width:0; margin:10px 0; }
 .effort-control .quality-preset-segments { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .effort-control .quality-preset-segments button { min-width:0; white-space:nowrap; }
+
+/* Group suggestions use the theme listbox while allowing a new name to be typed. */
+.studio-editable-group{position:relative;min-width:0}
+.studio-editable-group input{box-sizing:border-box;width:100%;padding-inline-end:36px}
+.studio-editable-group>button{position:absolute;inset-inline-end:2px;top:2px;bottom:2px;width:32px;display:grid;place-items:center;border:0;background:transparent;color:var(--text-secondary);cursor:pointer}
+.studio-editable-group>button:focus-visible{outline:2px solid var(--accent);outline-offset:-3px}

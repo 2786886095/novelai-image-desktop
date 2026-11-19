@@ -4,7 +4,7 @@ import {getBuiltinTemplates,type TemplateLibraryState} from '../../shared/templa
 const h=vi.hoisted(()=>({slots:[] as any[],cursor:0,effects:[] as Array<()=>void>,settings:{} as any,api:vi.fn(),cancel:vi.fn(),get:vi.fn(),values:new Map<string,string>(),events:new Map<string,()=>void>(),copy:vi.fn()}));
 vi.mock('react',async original=>({...await original<typeof import('react')>(),useId:()=> 'comic-ui-test',useState:(initial:any)=>{const n=h.cursor++;if(!(n in h.slots))h.slots[n]=typeof initial==='function'?initial():initial;return[h.slots[n],(next:any)=>{h.slots[n]=typeof next==='function'?next(h.slots[n]):next;}];},useRef:(initial:any)=>{const n=h.cursor++;return h.slots[n]??={current:initial};},useEffect:(fn:()=>void,deps:any[])=>{const n=h.cursor++,previous=h.slots[n];if(!previous||deps.some((v,i)=>v!==previous[i])){h.slots[n]=deps;h.effects.push(fn);}}}));
 vi.mock('../store',()=>({useAppStore:Object.assign((selector:any)=>selector({settings:h.settings}),{getState:()=>({settings:h.settings})})}));
-vi.mock('../components/ui',()=>({Button:'button'}));vi.mock('../components/icons',()=>({Icon:'icon'}));
+vi.mock('../components/ui',()=>({Button:'button',SelectMenu:'studio-select'}));vi.mock('../components/icons',()=>({Icon:'icon'}));
 import {ComicPromptComposer,comicComposerSettingsContext,readComicComposerDraft,emptyComicComposerDraft} from './ComicPromptComposer';
 const walk=(value:any):ReactElement<Record<string,any>>[]=>Array.isArray(value)?value.flatMap(walk):value&&typeof value==='object'&&'props'in value?[value,...walk(value.props.children)]:[];
 const content=(value:any):string=>Array.isArray(value)?value.map(content).join(''):typeof value==='string'||typeof value==='number'?String(value):value?.props?content(value.props.children):'';
@@ -60,4 +60,15 @@ it('switching recommendation mode while planning is pending preserves the manual
 });
 it('changing the selected template while a request runs preserves the previous output',async()=>{
  const pending=deferred<any>();h.api.mockReturnValue(pending.promise);render();await tick();button('Enter pages manually').props.onClick();button('Create storyboard').props.onClick();await tick();h.get.mockResolvedValue({...library(),revision:'library-2'});pending.resolve(generated(h.api.mock.calls[0][0],Array(4).fill('1girl, old template')));await tick();expect(render().some(n=>n.props.id==='comic-ui-test-result')).toBe(false);expect(content(render())).toContain('An older request finished.');
+});
+
+it('uses Studio menus for the active format and color, without duplicating the active title',async()=>{
+ render();await tick();
+ const menus=()=>render().filter(n=>String(n.type)==='studio-select');
+ const [template,color]=menus();expect(menus()).toHaveLength(2);
+ expect(template.props.options).toHaveLength(4);expect(template.props.options.every((o:any)=>o.value.startsWith('comic.jp-page'))).toBe(true);
+ expect(content(render())).not.toContain(template.props.options[0].label);
+ expect(color.props.options.map((o:any)=>o.value)).toEqual(['color','mono']);color.props.onChange('mono');expect(menus()[1].props.value).toBe('mono');
+ button('Single panel').props.onClick();expect(menus()[0].props.options).toHaveLength(3);expect(menus()[0].props.options.every((o:any)=>o.value.startsWith('comic.single-panel'))).toBe(true);
+ expect(h.api).not.toHaveBeenCalled();
 });
