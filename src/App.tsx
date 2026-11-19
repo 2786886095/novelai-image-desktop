@@ -1,3 +1,7 @@
+import {selectPromptSkillTemplate} from './prompt-skill';
+import type {ModePromptTemplates} from './types';
+import {CONVERT_SYSTEM_PROMPTS,SCOPED_REVERSE_SYSTEM_PROMPTS} from './data/prompt-templates';
+import {V45_CONVERT_SYSTEM_PROMPTS,V45_SCOPED_REVERSE_SYSTEM_PROMPTS} from './data/prompt-templates-v45';
 import type {PromptSkillVersion,ReversePromptTemplateVersion} from './types';
 import {v5Text} from './comic/v5-copy';
 import {promptMetrics} from '../shared/v5-prompt-options';
@@ -3937,6 +3941,73 @@ function PostprocessPanel({ openSettings }: { openSettings: () => void }) {
 
 // ── Inspect panel (AI 反推提示词) ─────────────────────────────────────────────
 // Per-mode system-prompt template editor (used in both 反推 and 转换 settings).
+function ModeTemplateEditor({
+  value,
+  defaults,
+  onChange,
+  title,
+}: {
+  value: ModePromptTemplates;
+  defaults: ModePromptTemplates;
+  onChange: (next: ModePromptTemplates) => void;
+  title?: string;
+}) {
+  const language = useAppStore((state) => state.settings?.language);
+  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
+  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
+  const [mode, setMode] = useState<ReversePromptMode>("tags");
+  const labels: [ReversePromptMode, string][] = [
+    ["tags", t("mode.tags")],
+    ["natural", t("mode.natural")],
+    ["mixed", t("mode.mixed")],
+  ];
+  const override = value?.[mode]?.trim() ?? "";
+  const defaultText = defaults[mode] ?? "";
+  const isCustom = override.length > 0 && override !== defaultText.trim();
+  // Show the built-in default text when there's no override, so it's never hidden.
+  const shown = override.length > 0 ? value[mode] : defaultText;
+  const activeModeLabel = labels.find(([v]) => v === mode)?.[1] ?? t("mode.tags");
+  return (
+    <div className="field">
+      <span className="field-label-row">
+        <strong>{title ?? t("template.editorTitle")}</strong>
+        {t("template.modeSeparated")}
+        <span className={clsx("tpl-state", isCustom && "custom")}>{isCustom ? t("template.custom") : t("template.default")}</span>
+      </span>
+      <div className="mode-selector" style={{ marginBottom: 8 }}>
+        {labels.map(([val, label]) => (
+          <button
+            key={val}
+            type="button"
+            className={clsx("mode-btn", mode === val && "active")}
+            onClick={() => setMode(val)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <textarea
+        className="prompt-box"
+        style={{ minHeight: 160 }}
+        value={shown}
+        onChange={(e) => onChange({ ...value, [mode]: e.target.value })}
+      />
+      <div className="tpl-actions">
+        <button
+          type="button"
+          className="prompt-tool-btn"
+          disabled={override.length > 0 && !isCustom}
+          title={t("template.restoreModeTitle")}
+          onClick={() => onChange({ ...value, [mode]: defaultText })}
+        >
+          {f("template.restoreMode", { mode: activeModeLabel })}
+        </button>
+      </div>
+      <small className="settings-hint">{t("template.modeHint")}</small>
+    </div>
+  );
+}
+
 function SingleTemplateEditor({
   value,
   defaultValue,
@@ -6690,7 +6761,40 @@ export function SettingsModal({ onClose, variant = "modal" }: { onClose: () => v
               <div className="settings-form">
                 <TemplateLibraryPanel settings={settings} onSettingsChanged={refreshSettings}/>
                 <details className="template-library-legacy"><summary>{templateLibraryCopy(settings.language)[31]}</summary>
-                <pre>{JSON.stringify({reverse:settings.reversePromptTemplates,reverseV45:settings.reversePromptTemplatesV45,reverseV2:settings.reversePromptTemplatesV2,convert:settings.convertPromptTemplates,convertV45:settings.convertPromptTemplatesV45,convertV2:settings.convertPromptTemplatesV2},null,2)}</pre>
+                <VersionedModeTemplateEditor
+                  title={t("settings.reverseTemplateTitle")}
+                  values={{
+                    "v4.5": settings.reversePromptTemplatesV45,
+                    v5: settings.reversePromptTemplates,
+                  }}
+                  defaults={{
+                    "v4.5": V45_SCOPED_REVERSE_SYSTEM_PROMPTS,
+                    v5: SCOPED_REVERSE_SYSTEM_PROMPTS,
+                  }}
+                  v2Values={settings.reversePromptTemplatesV2}
+                  v2Defaults={Object.fromEntries((["tags","natural","mixed"] as const).map(mode=>[mode,selectPromptSkillTemplate({edition:"2.0.0",targetModel:"v5",task:"reverse",mode,legacyTemplate:""})])) as unknown as ModePromptTemplates}
+                  onChange={(version, next, edition) => void update(
+                    edition === "2.0.0" ? "reversePromptTemplatesV2" : version === "v4.5" ? "reversePromptTemplatesV45" : "reversePromptTemplates",
+                    next,
+                  )}
+                />
+                <VersionedModeTemplateEditor
+                  title={t("settings.convertTemplateTitle")}
+                  values={{
+                    "v4.5": settings.convertPromptTemplatesV45,
+                    v5: settings.convertPromptTemplates,
+                  }}
+                  defaults={{
+                    "v4.5": V45_CONVERT_SYSTEM_PROMPTS,
+                    v5: CONVERT_SYSTEM_PROMPTS,
+                  }}
+                  v2Values={settings.convertPromptTemplatesV2}
+                  v2Defaults={Object.fromEntries((["tags","natural","mixed"] as const).map(mode=>[mode,selectPromptSkillTemplate({edition:"2.0.0",targetModel:"v5",task:"convert",mode,legacyTemplate:""})])) as unknown as ModePromptTemplates}
+                  onChange={(version, next, edition) => void update(
+                    edition === "2.0.0" ? "convertPromptTemplatesV2" : version === "v4.5" ? "convertPromptTemplatesV45" : "convertPromptTemplates",
+                    next,
+                  )}
+                />
                 <PromptSkillControls allowV3={false} model={settings.promptAssistantTemplateVersion??settings.convertPromptTemplateVersion} edition={skillVersionForModel(settings.promptAssistantSkillVersion,settings.promptAssistantTemplateVersion??settings.convertPromptTemplateVersion)} language={settings.language} onChange={(model,edition)=>{void update("promptAssistantTemplateVersion",model);void update("promptAssistantSkillVersion",edition);}}/>
                 <SingleTemplateEditor
                   title={promptEditorText(settings.language).optimize}
@@ -7218,6 +7322,41 @@ function UpdateBanner() {
       </div>
     </AppPortal> : null}
   </>;
+}
+
+function VersionedModeTemplateEditor({
+  title,
+  values,
+  defaults,
+  v2Values,
+  v2Defaults,
+  onChange,
+}: {
+  title: string;
+  v2Values?: ModePromptTemplates;
+  v2Defaults: ModePromptTemplates;
+  values: Record<ReversePromptTemplateVersion, ModePromptTemplates>;
+  defaults: Record<ReversePromptTemplateVersion, ModePromptTemplates>;
+  onChange: (
+    version: ReversePromptTemplateVersion,
+    next: ModePromptTemplates,
+    edition: PromptSkillVersion,
+  ) => void;
+}) {
+  const language = useAppStore((state) => state.settings?.language);
+  const [version, setVersion] = useState<ReversePromptTemplateVersion>("v5");
+  const [edition,setEdition]=useState<PromptSkillVersion>("2.0.0");
+  return (
+    <div className="versioned-template-editor">
+      <PromptSkillControls allowV3={false} model={version} edition={edition} language={language} onChange={(model,next)=>{setVersion(model);setEdition(next);}}/>
+      <ModeTemplateEditor
+        title={title}
+        value={edition === "2.0.0" ? v2Values ?? {tags:"",natural:"",mixed:""} : values[version]}
+        defaults={edition === "2.0.0" ? v2Defaults : defaults[version]}
+        onChange={(next) => onChange(version, next, edition)}
+      />
+    </div>
+  );
 }
 
 const V5_MIGRATION_NOTICE_KEY = "langbai.notice.v5-model-migration.seen";

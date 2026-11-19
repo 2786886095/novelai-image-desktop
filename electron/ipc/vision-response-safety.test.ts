@@ -10,6 +10,7 @@ const fixture = vi.hoisted(() => ({
     visionApiUrl: "https://vision.fixture.invalid/v1",
     visionApiKey: "FIXTURE_NOT_A_USER_KEY",
     visionApiModel: "fixture-vision",
+    reversePromptSkillVersion:'3.0.0', // exercise V3 bounded transport, independent of legacy custom bodies
     reversePromptTemplates: { tags: "Custom tag caption", natural: "Custom natural caption", mixed: "Custom mixed caption" },
     reverseConvertDshEnabled: false,
   },

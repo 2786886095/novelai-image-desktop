@@ -72,7 +72,7 @@ app.whenReady().then(async()=>{
     await wait('!!document.querySelector(".comic-prompt-composer .comic-composer-content textarea")');
     const library=load('electron/ipc/template-library.js').getPromptTemplateLibrary(),template=library.builtins.find(t=>t.slot==='comic.jp-page');
     assert.equal(Boolean(library.readOnly),false);assert(template,'Actual Japanese template is required');
-    await wait('document.querySelector(".comic-composer-template b")?.textContent==='+JSON.stringify(template.name));
+    await wait('document.querySelector(".comic-composer-template button[aria-haspopup=listbox]")?.textContent.trim()==='+JSON.stringify(template.name+(template.sourceVersion?" · "+template.sourceVersion:"")));
     assert.match(await js('document.querySelector(".japanese-comic-workspace-note")?.textContent||""'),/Separate Japanese comic project/);
     const before=requests.length,input='NATIVE JAPANESE TOOL INDEPENDENT DRAFT';
     await js(`(()=>{const node=document.querySelector('.comic-composer-content textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(node,${JSON.stringify(input)});node.dispatchEvent(new Event('input',{bubbles:true}));node.dispatchEvent(new Event('change',{bubbles:true}));})()`);

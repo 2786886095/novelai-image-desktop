@@ -79,7 +79,7 @@ describe('v2 actual loopback AI requests',()=>{
   const system=body.messages[0].content;expect(system).toContain(`NovelAI V5 Full ${task==='reverse'?'图片反推':'文字转换'}｜${mode==='tags'?'纯Tag':mode==='natural'?'纯自然语言':'混合'}`);
   expect(system).toContain('本次普通模型调用没有可用');expect(system).toContain('合成正例只是格式示范');expect(system).not.toContain('LEGACY_ONLY');
   expect(system).not.toContain('软件内部 JSON 输出协议');expect(system).not.toContain('单人全身图不得只写 pointing');expect(system).not.toContain('{{input}}');expect(system).not.toContain('{{image}}');expect(body).not.toHaveProperty('tools');expect(body).not.toHaveProperty('response_format');
-  if(task==='reverse')expect(body.messages[1].content[0].image_url.url).toMatch(/^data:image\/png;base64,/);else expect(body.messages[1].content).toBe('user facts $& $1');
+  if(task==='reverse')expect(body.messages[1].content[0].image_url.url).toMatch(/^data:image\/jpeg;base64,\/9j\//);else expect(body.messages[1].content).toBe('user facts $& $1');
  });
  for(const entry of ['assistant','optimize'] as const)it(`${entry} inherits v2 conversion and independent editing overlay without a generation request`,async()=>{
   const r=await call(entry);expect(r.ok).toBe(true);expect(requests).toHaveLength(1);const system=requests[0].body.messages[0].content;

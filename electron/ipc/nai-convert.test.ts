@@ -1,3 +1,4 @@
+const fixtureImage='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPoWfQOAAPaAh0jAGgSAAAAAElFTkSuQmCC'; // Valid offline PNG; the real privacy sanitiser must decode it.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppSettings, ComicConvertRequest } from "../../src/types";
 
@@ -198,7 +199,7 @@ describe("convertComicPanels fallback path", () => {
 
     expect((await convertPromptText("蓝发少女", "tags", false)).ok).toBe(true);
     expect(
-      (await reversePromptImage(Buffer.from("fake-image").toString("base64"))).ok,
+      (await reversePromptImage(fixtureImage,"tags")).ok,
     ).toBe(true);
 
     for (const call of axiosMock.post.mock.calls) {
@@ -477,7 +478,7 @@ describe("prompt codex enhancement", () => {
     clearAiCallLog();
 
     const result = await reversePromptImage(
-      Buffer.from("fake-image").toString("base64"),
+      fixtureImage,
       "tags",
       "full",
       "两个女孩拥抱",
@@ -540,7 +541,7 @@ describe('reverse follows live saved templates',()=>{
   const {reversePromptImage}=await import('./nai');const good=envelope();
   axiosMock.post.mockResolvedValueOnce(response(JSON.stringify({namePrompt:good,featurePrompt:{segments:[{units:[{kind:'tag',text:'1girl'}]}]}})))
    .mockResolvedValueOnce(response(JSON.stringify({namePrompt:good,featurePrompt:good})));
-  const result=await reversePromptImage(Buffer.from('fixture-image').toString('base64'),'mixed','full','only visible details',true,'v5');
+  const result=await reversePromptImage(fixtureImage,'mixed','full','only visible details',true,'v5');
   expect(result.ok).toBe(true);expect(result.variants?.namePrompt.split(',')).toHaveLength(60);expect(result.variants?.featurePrompt).toBe('1girl');expect(result.warnings?.join('')).toContain('检查未通过');
   expect(axiosMock.post).toHaveBeenCalledTimes(1);
   const first=axiosMock.post.mock.calls[0][1];
@@ -549,12 +550,12 @@ describe('reverse follows live saved templates',()=>{
  });
  it('stops after three invalid responses instead of returning a short success',async()=>{
   const {reversePromptImage}=await import('./nai');axiosMock.post.mockResolvedValue(response('1girl, solo, cosplay'));
-  const result=await reversePromptImage(Buffer.from('fixture-image').toString('base64'),'mixed','full','',true,'v5');
+  const result=await reversePromptImage(fixtureImage,'mixed','full','',true,'v5');
   expect(result.ok).toBe(false);expect(result.prompt).toBeUndefined();expect(axiosMock.post).toHaveBeenCalledTimes(3);
  });
  it('uses the chosen V4.5 natural template without imposing the V5 contract',async()=>{
   const {reversePromptImage}=await import('./nai');axiosMock.post.mockResolvedValue(response('A woman stands beside the window. Her left hand rests on the frame while she looks towards the viewer.'));
-  const result=await reversePromptImage(Buffer.from('fixture-image').toString('base64'),'natural','full','visible scene',false,'v4.5');
+  const result=await reversePromptImage(fixtureImage,'natural','full','visible scene',false,'v4.5');
   expect(result.ok).toBe(true);expect(axiosMock.post.mock.calls[0][1].messages[0].content).toContain('CUSTOM V45 NATURAL');
   expect(axiosMock.post.mock.calls[0][1].messages[0].content).not.toContain('SAVED V5');
  });
@@ -564,10 +565,10 @@ it('legacy reverse callers without a version follow the live software selection'
  const {reversePromptImage}=await import('./nai');axiosMock.post.mockReset();
  settingsRef.current={visionApiUrl:'https://example.test/v1',visionApiKey:'fixture',visionApiModel:'fixture',reversePromptTemplateVersion:'v4.5',reversePromptTemplatesV45:{tags:'SAVED V45 TAGS',natural:'',mixed:''},reversePromptTemplates:{tags:'WRONG V5',natural:'',mixed:''}};
  axiosMock.post.mockResolvedValue({data:{choices:[{message:{content:'1girl, solo'},finish_reason:'stop'}]}});
- expect((await reversePromptImage(Buffer.from('fixture').toString('base64'),'tags')).ok).toBe(true);
+ expect((await reversePromptImage(fixtureImage,'tags')).ok).toBe(true);
  expect(axiosMock.post.mock.calls[0][1].messages[0].content).toContain('SAVED V45 TAGS');
  settingsRef.current.reversePromptTemplatesV45!.tags='EDITED V45';
- await reversePromptImage(Buffer.from('fixture').toString('base64'),'tags');
+ await reversePromptImage(fixtureImage,'tags');
  expect(axiosMock.post.mock.calls[1][1].messages[0].content).toContain('EDITED V45');
 });
 

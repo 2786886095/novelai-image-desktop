@@ -34,7 +34,9 @@ export function cleanPromptOutput(raw: string) {
   let text = (raw ?? "").trim();
   text = text.replace(/^```(?:text|txt|prompt|markdown)?\s*/i, "").replace(/\s*```$/i, "");
   text = text.replace(/^(?:output|prompt|result|答案|输出|结果)\s*[:：]\s*/i, "");
-  text = text.replace(/^["'“”‘’]+|["'“”‘’]+$/g, "");
+  // Only unwrap matching outer quotes; a sign's quoted words are scene content.
+  const pairs:Record<string,string>={'"':'"',"'":"'","“":"”","‘":"’"};
+  if(text.length>=2&&pairs[text[0]]===text.at(-1))text=text.slice(1,-1);
   text = text.replace(/\\n/g, " ");
   text = text.replace(/\r?\n+/g, " ");
   text = text.replace(/\s+/g, " ");

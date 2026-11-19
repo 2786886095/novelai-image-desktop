@@ -19,10 +19,11 @@ export function normalizePromptSkillSettings(raw:Partial<AppSettings>) {
  const convertModel=raw.convertPromptTemplateVersion==='v4.5'?'v4.5':'v5';
  const assistantModel=raw.promptAssistantTemplateVersion==='v4.5'?'v4.5':raw.promptAssistantTemplateVersion==='v5'?'v5':convertModel;
  const convertCustom=hasCustomLegacySkill(raw.convertPromptTemplates,'convert');
+ const reverseCustom=hasCustomLegacySkill(raw.reversePromptTemplates,'reverse');
  const overlayCustom=!!((raw.promptOptimizeTemplate?.trim()&&!same(raw.promptOptimizeTemplate,PROMPT_OPTIMIZE_TEMPLATE))||(raw.promptAssistantTemplate?.trim()&&!same(raw.promptAssistantTemplate,PROMPT_CUSTOM_TEMPLATE)));
  return {
-  reversePromptSkillVersion:skillVersionForModel(raw.reversePromptSkillVersion,raw.reversePromptTemplateVersion==='v4.5'?'v4.5':'v5','3.0.0'),
-  convertPromptSkillVersion:skillVersionForModel(raw.convertPromptSkillVersion,convertModel,'3.0.0'),
+  reversePromptSkillVersion:skillVersionForModel(raw.reversePromptSkillVersion,raw.reversePromptTemplateVersion==='v4.5'?'v4.5':'v5',reverseCustom?'1.0.0':'3.0.0'),
+  convertPromptSkillVersion:skillVersionForModel(raw.convertPromptSkillVersion,convertModel,convertCustom?'1.0.0':'3.0.0'),
   reversePromptTemplateVersion:raw.reversePromptTemplateVersion==='v4.5'?'v4.5' as const:'v5' as const,convertPromptTemplateVersion:convertModel as ReversePromptTemplateVersion,
   promptAssistantSkillVersion:skillVersionForModel(raw.promptAssistantSkillVersion==='3.0.0'?'2.0.0':raw.promptAssistantSkillVersion,assistantModel,overlayCustom||convertCustom?'1.0.0':'2.0.0'),
   promptAssistantTemplateVersion:assistantModel,
