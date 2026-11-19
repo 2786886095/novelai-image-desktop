@@ -354,7 +354,7 @@ test('appearance witness holds actual accessibility elements and the same absolu
  const poll=s.split('while naming == nil && Date() < namingDeadline {')[1].split('let witnessObservedAt')[0];
  assert(poll.includes('if Date() >= namingDeadline { break }'));
  assert(poll.includes('let includeModal = namingModalQueryCount == 0 && Date() >= modalProbeAfter'));
- assert(poll.includes('nextNamingProbe = probeEndedAt.addingTimeInterval(0.30)'));
+ assert(poll.includes('nextNamingProbe = includeModal ? probeEndedAt : probeEndedAt.addingTimeInterval(0.30)'));
  assert(!poll.includes('namingQueryCount <'),'inline polling must not end on a fixed attempt count');
  assert.match(poll,/includeModal: includeModal, refreshApp: refreshApp,\s*retainedFileFrame: retainedFileFrame, before: namingDeadline/);
  assert(s.includes('"probeTimes": namingProbeTimes'));
@@ -383,14 +383,15 @@ test('appearance witness holds actual accessibility elements and the same absolu
  assert(live.includes('usable(witness.field, viewFrame)')&&live.includes('isSearchField(witness.field)'));
  assert(!/currentNavigationTitle|currentKeyboardDone|\.buttons/.test(body));
  assert(body.includes('owner.textFields.allElementsBoundByAccessibilityElement'));
- // Captured run 42669774045 stops on the old broad OR query; the
- // replacement is typed, starts after inline, and shares the same deadline.
- assert(!/app\.descendants|inlineOrModal|matchQuery/.test(body));
- const a=body.indexOf('let alerts = app.alerts.allElementsBoundByAccessibilityElement');
- const h=body.indexOf('let sheets = app.sheets.allElementsBoundByAccessibilityElement');
- assert(body.indexOf('if let witness = inline.first { return witness }')<a&&a<h);
- assert(body.slice(a,h).includes('guard Date() < deadline else { return nil }'));
- assert(body.slice(h).includes('for owner in alerts + sheets'));
+ // Owner-only projection: no combined unscoped field search. Preserve
+ // inline-first, held-owner uniqueness, within-owner fields and deadline.
+ assert(!/inlineOrModal|matchQuery|app\.textFields/.test(body));
+ const owner=body.indexOf('let owners = app.descendants(matching: .any).matching(ownerPredicate).allElementsBoundByAccessibilityElement');
+ assert(owner>body.indexOf('if let witness = inline.first { return witness }'));
+ assert(body.includes('let ownerTypes = [XCUIElement.ElementType.alert.rawValue, XCUIElement.ElementType.sheet.rawValue]'));
+ assert(body.includes('NSPredicate(format: "elementType IN %@", ownerTypes)'));
+ assert(body.slice(owner).includes('for owner in owners {')&&body.slice(owner).includes('guard Date() < deadline'));
+ assert(!body.includes('let alerts = app.alerts')&&!body.includes('let sheets = app.sheets'));
  assert(s.includes('let witnessObservedAt = Date()'));assert(s.includes('witnessObservedAt < namingDeadline'));
  assert(s.includes('witnessObservedAt.timeIntervalSince(namingStarted)'));assert(s.includes('witnessAloneAuthorizesActions'));
  const accepted=s.indexOf('guard let witness = naming'),capture=s.indexOf('capture("after-new-folder-action")'),full=s.indexOf('let control = try validatedWitnessFlow');

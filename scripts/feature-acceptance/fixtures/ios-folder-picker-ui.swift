@@ -254,11 +254,14 @@ final class FolderPickerUITests: XCTestCase {
     // flows are still checked by the complete validation before any action.
     if let witness = inline.first { return witness }
     guard includeModal, Date() < deadline else { return nil }
-    let alerts = app.alerts.allElementsBoundByAccessibilityElement
-    guard Date() < deadline else { return nil }
-    let sheets = app.sheets.allElementsBoundByAccessibilityElement
+    // An absent Alert followed by an absent Sheet consumed 2.5s on run
+    // 44492833543. Resolve *owners only* in one AX transaction; do not
+    // search generic text fields or combine an unscoped field with a modal.
+    let ownerTypes = [XCUIElement.ElementType.alert.rawValue, XCUIElement.ElementType.sheet.rawValue]
+    let ownerPredicate = NSPredicate(format: "elementType IN %@", ownerTypes)
+    let owners = app.descendants(matching: .any).matching(ownerPredicate).allElementsBoundByAccessibilityElement
     var modalEditors: [NamingEditorWitness] = []
-    for owner in alerts + sheets {
+    for owner in owners {
       guard Date() < deadline else { return nil }
       guard owner.exists && !owner.frame.isEmpty && viewFrame.intersects(owner.frame) else { continue }
       let fields = owner.textFields.allElementsBoundByAccessibilityElement.filter {
@@ -560,7 +563,7 @@ final class FolderPickerUITests: XCTestCase {
       namingProbeTimes.append(["scheduled": nextNamingProbe.timeIntervalSince(namingStarted),
         "started": probeStartedAt.timeIntervalSince(namingStarted),
         "ended": probeEndedAt.timeIntervalSince(namingStarted)])
-      nextNamingProbe = probeEndedAt.addingTimeInterval(0.30)
+      nextNamingProbe = includeModal ? probeEndedAt : probeEndedAt.addingTimeInterval(0.30)
     }
     let witnessObservedAt = Date()
     let withinAppearanceDeadline = witnessObservedAt < namingDeadline
