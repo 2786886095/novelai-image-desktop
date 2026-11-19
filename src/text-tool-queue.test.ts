@@ -199,7 +199,7 @@ describe("advisory prompt conversion warnings", () => {
     useAppStore.setState({ convertInput: "描述", convertMode: "mixed" });
     await useAppStore.getState().runConvertPrompt();
     const state = useAppStore.getState();
-    expect(nai.convertPrompt).toHaveBeenCalledWith("描述", "mixed", false, "v5");
+    expect(nai.convertPrompt).toHaveBeenCalledWith(expect.stringMatching(/全彩[\s\S]*用户输入：\n描述$/u), "mixed", false, "v5");
     expect(state.convertResult).toBe("1girl, A girl stands outside.");
     expect(state.convertJobs[0].status).toBe("done");
     expect(state.convertResultWarnings).toEqual(warnings);

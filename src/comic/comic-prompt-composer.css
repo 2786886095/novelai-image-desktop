@@ -43,3 +43,5 @@
 .japanese-comic-workspace-note{color:var(--text-muted);font-size:12px;line-height:1.6;}
 @media(max-width:700px){.comic-prompt-composer{padding:14px;gap:14px}.comic-composer-header{flex-direction:column;gap:8px}.comic-composer-count-row{grid-template-columns:minmax(0,1fr);gap:12px}.comic-composer-actions>.btn,.comic-composer-segments>button{flex:1 1 auto;min-height:44px}.comic-composer-text-only{display:none}.comic-composer-template>.btn{width:100%}.comic-composer-content>textarea{min-height:130px}}
 html.motion-reduced .comic-composer-segments>button{transition:none}
+
+.v5-story-review{display:grid;gap:.65rem;min-width:0}.v5-story-review label{display:grid;gap:.25rem}.v5-story-review summary{cursor:pointer;padding:.45rem}.v5-story-review details>label{margin:.4rem}.v5-layout-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(3.5rem,1fr));gap:.3rem}.v5-layout-grid button{display:grid;justify-items:center}.v5-layout-grid button[aria-pressed=true]{outline:2px solid currentColor}

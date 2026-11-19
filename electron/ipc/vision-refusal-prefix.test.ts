@@ -1,3 +1,6 @@
+import {PNG} from 'pngjs';
+vi.mock('./template-library',async()=>{const {templates}=await import('../../shared/prompt-skill-catalog-v3.json');return {resolveTemplateLibrarySlot:(slot:string)=>{const v=templates.find(t=>t.slot===slot)!;return {body:v.body,revision:'test',sha256:v.sha256};}};});
+const fixturePng=PNG.sync.write(new PNG({width:2,height:2})).toString('base64');
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const fixture = vi.hoisted(() => ({
   post: vi.fn(),
@@ -14,11 +17,10 @@ vi.mock("./store", () => ({
   setAccountSummary: vi.fn(), setToken: vi.fn(), updateHistoryItem: vi.fn(),
 }));
 import { reversePromptImage } from "./nai";
-import { cleanPromptOutput } from "../../src/prompt-mode";
 beforeEach(() => fixture.post.mockReset());
 const run = (content: string) => {
   fixture.post.mockResolvedValue({ data: { choices: [{ message: { content }, finish_reason: "stop" }] } });
-  return reversePromptImage(Buffer.from("offline fixture").toString("base64"), "natural", "full", "", false, "v5");
+  return reversePromptImage(fixturePng, "natural", "full", "", false, "v5");
 };
 
 describe("assistant refusal prefix versus scene text", () => {
@@ -45,7 +47,7 @@ describe("assistant refusal prefix versus scene text", () => {
     "I can’t help but notice a blue coat in the image.",
   ])("keeps quoted descriptions and cannot-help-but observations: %s", async content => {
     const result = await run(content);
-    expect(result).toMatchObject({ ok: true, prompt: cleanPromptOutput(content) });
+    expect(result).toMatchObject({ ok: true, prompt: content });
     expect(fixture.post).toHaveBeenCalledTimes(1);
   });
 });

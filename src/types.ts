@@ -781,6 +781,7 @@ export interface TagComicCandidate {
 }
 
 export interface TagComicPanel {
+  v5ComicFormat?: 'jp-page'|'single-panel';
   id: string;
   index: number;
   title: string;

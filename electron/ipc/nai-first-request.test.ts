@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {PNG} from 'pngjs';
+vi.mock('./template-library',async()=>{const {templates}=await import('../../shared/prompt-skill-catalog-v3.json');return {resolveTemplateLibrarySlot:(slot:string)=>{const v=templates.find(t=>t.slot===slot)!;return {body:v.body,revision:'test',sha256:v.sha256};}};});
 const fixture=vi.hoisted(()=>({post:vi.fn(),route:vi.fn(),settings:{
  convertApiUrl:'https://convert.fixture.invalid/v1',convertApiKey:'fixture',convertApiModel:'fixture-text',
  visionApiUrl:'https://vision.fixture.invalid/v2',visionApiKey:'fixture',visionApiModel:'fixture-vision',
@@ -14,7 +16,7 @@ const caption='A woman in a blue coat stands by a tree.';
 const success=()=>({data:{choices:[{message:{content:caption},finish_reason:'stop'}]}});
 const call=(kind:'convert'|'reverse')=>kind==='convert'
  ?convertPromptText(caption,'natural',false,'v5')
- :reversePromptImage(Buffer.from('neutral image').toString('base64'),'natural','full','blue coat',false,'v5');
+ :reversePromptImage(PNG.sync.write(new PNG({width:2,height:2})).toString('base64'),'natural','full','blue coat',false,'v5');
 beforeEach(()=>{fixture.post.mockReset();fixture.route.mockReset();clearAiCallLog();fixture.post.mockResolvedValue(success());fixture.route.mockResolvedValue({proxy:false});fixture.settings.convertApiKey='fixture';});
 describe('conversion and reverse first request routing',()=>{
  for(const kind of ['convert','reverse'] as const){

@@ -1,13 +1,9 @@
-import {useState} from 'react';
 import {useAppStore} from '../store';
-import {normalizePromptSkillVersion} from '../prompt-skill';
-import type {AppSettings, PromptSkillVersion, ReversePromptMode, ReversePromptTemplateVersion} from '../types';
-import {PromptSkillControls} from './PromptSkillControls';
+import type {AppSettings, ReversePromptMode} from '../types';
 
 /** The same persisted reverse preference is available at every inline caller. */
 export function reversePromptSelection(settings: AppSettings | null | undefined) {
-  return {model:settings?.reversePromptTemplateVersion === 'v4.5' ? 'v4.5' as const : 'v5' as const,
-    edition:settings?.reversePromptSkillVersion};
+  return {model:'v5' as const,edition:'3.0.0' as const};
 }
 export function reversePromptSelectionIdentity(settings: AppSettings | null | undefined): string {
   return JSON.stringify([reversePromptSelection(settings), settings?.reversePromptTemplates,
@@ -24,19 +20,5 @@ export function callSelectedInlineReverse(image: string, mode: ReversePromptMode
     : window.naiDesktop.reversePrompt(...args,selection.edition);
 }
 export function InlineReversePromptSkillControls({disabled=false}:{disabled?:boolean}) {
-  const settings = useAppStore(state=>state.settings);
-  const [saving,setSaving]=useState(false),[error,setError]=useState('');
-  const selection=reversePromptSelection(settings);
-  async function change(model:ReversePromptTemplateVersion,edition:PromptSkillVersion) {
-    if(disabled||saving)return;setSaving(true);setError('');
-    try {
-      await window.naiDesktop.setSetting('reversePromptTemplateVersion',model);
-      await window.naiDesktop.setSetting('reversePromptSkillVersion',edition);
-      await useAppStore.getState().refreshSettings();
-    } catch(e) {setError(e instanceof Error?e.message:String(e));}
-    finally {setSaving(false);}
-  }
-  return <><PromptSkillControls model={selection.model} edition={normalizePromptSkillVersion(selection.edition)}
-    language={settings?.language} disabled={disabled||saving} onChange={(model,edition)=>void change(model,edition)}/>
-    {error&&<p role="alert">{error}</p>}</>;
+  return <span className="comic-composer-text-only">NovelAI V5 Full · 3.0.0</span>;
 }

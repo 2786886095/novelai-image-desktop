@@ -1,3 +1,5 @@
+import {v5Text} from './comic/v5-copy';
+import {promptMetrics} from '../shared/v5-prompt-options';
 import { pageUi } from "./desktop-page-ui";
 import {settingsSearchText,matchSettingsSection} from "./settings-search";
 import TagPackSettings from "./TagPackSettings";
@@ -46,8 +48,6 @@ import {SlidingPromptToolbar,PromptResizeHandle} from './components/PromptEditor
 import {PromptAssistant} from './components/PromptAssistant';
 import {PromptSkillControls} from './components/PromptSkillControls';
 import {skillVersionForModel} from './prompt-skill-settings';
-import {selectPromptSkillTemplate} from './prompt-skill';
-import type {PromptSkillVersion} from './types';
 import {resolvePromptAssistantMode} from './prompt-assistant';
 import {usePromptHistory} from './use-prompt-history';
 import {promptEditorText} from './prompt-editor-text';
@@ -117,14 +117,6 @@ import {
   NORMALIZE_LABELS,
   type NormalizeOptions,
 } from "./prompt-normalize";
-import {
-  CONVERT_SYSTEM_PROMPTS,
-  SCOPED_REVERSE_SYSTEM_PROMPTS,
-} from "./data/prompt-templates";
-import {
-  V45_CONVERT_SYSTEM_PROMPTS,
-  V45_SCOPED_REVERSE_SYSTEM_PROMPTS,
-} from "./data/prompt-templates-v45";
 import { Button, IconText, AppPortal, Toggle, NumberInput, CommittedNumberInput, SliderInput, SecretInput, SelectMenu, SelectMenuCompat } from "./components/ui";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { confirmAction } from "./components/confirm";
@@ -196,7 +188,6 @@ import {
   type AppSettings,
   type HistoryItem,
   type GenerateParams,
-  type ModePromptTemplates,
   type PromptTemplate,
   type StylePromptPreset,
   type StylePromptPreviewImage,
@@ -204,7 +195,6 @@ import {
   type PromptVariants,
   type ReversePromptMode,
   type ReversePromptScope,
-  type ReversePromptTemplateVersion,
   type TagSuggestion,
   type TextToolHistoryItem,
   type TextToolJob,
@@ -3946,73 +3936,6 @@ function PostprocessPanel({ openSettings }: { openSettings: () => void }) {
 
 // ── Inspect panel (AI 反推提示词) ─────────────────────────────────────────────
 // Per-mode system-prompt template editor (used in both 反推 and 转换 settings).
-function ModeTemplateEditor({
-  value,
-  defaults,
-  onChange,
-  title,
-}: {
-  value: ModePromptTemplates;
-  defaults: ModePromptTemplates;
-  onChange: (next: ModePromptTemplates) => void;
-  title?: string;
-}) {
-  const language = useAppStore((state) => state.settings?.language);
-  const t = useCallback((key: string) => desktopUiText(language, key), [language]);
-  const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
-  const [mode, setMode] = useState<ReversePromptMode>("tags");
-  const labels: [ReversePromptMode, string][] = [
-    ["tags", t("mode.tags")],
-    ["natural", t("mode.natural")],
-    ["mixed", t("mode.mixed")],
-  ];
-  const override = value?.[mode]?.trim() ?? "";
-  const defaultText = defaults[mode] ?? "";
-  const isCustom = override.length > 0 && override !== defaultText.trim();
-  // Show the built-in default text when there's no override, so it's never hidden.
-  const shown = override.length > 0 ? value[mode] : defaultText;
-  const activeModeLabel = labels.find(([v]) => v === mode)?.[1] ?? t("mode.tags");
-  return (
-    <div className="field">
-      <span className="field-label-row">
-        <strong>{title ?? t("template.editorTitle")}</strong>
-        {t("template.modeSeparated")}
-        <span className={clsx("tpl-state", isCustom && "custom")}>{isCustom ? t("template.custom") : t("template.default")}</span>
-      </span>
-      <div className="mode-selector" style={{ marginBottom: 8 }}>
-        {labels.map(([val, label]) => (
-          <button
-            key={val}
-            type="button"
-            className={clsx("mode-btn", mode === val && "active")}
-            onClick={() => setMode(val)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <textarea
-        className="prompt-box"
-        style={{ minHeight: 160 }}
-        value={shown}
-        onChange={(e) => onChange({ ...value, [mode]: e.target.value })}
-      />
-      <div className="tpl-actions">
-        <button
-          type="button"
-          className="prompt-tool-btn"
-          disabled={override.length > 0 && !isCustom}
-          title={t("template.restoreModeTitle")}
-          onClick={() => onChange({ ...value, [mode]: defaultText })}
-        >
-          {f("template.restoreMode", { mode: activeModeLabel })}
-        </button>
-      </div>
-      <small className="settings-hint">{t("template.modeHint")}</small>
-    </div>
-  );
-}
-
 function SingleTemplateEditor({
   value,
   defaultValue,
@@ -4110,6 +4033,8 @@ function ReversePanel() {
   const reversePromptMode = useAppStore((state) => state.reversePromptMode);
   const reversePromptScope = useAppStore((state) => state.reversePromptScope);
   const reversePromptHint = useAppStore((state) => state.reversePromptHint);
+  const v5ContentOnly=useAppStore(s=>s.v5ContentOnly);
+  const v5ReverseBubbles=useAppStore(s=>s.v5ReverseBubbles);
   const reverseKnownCharacter = useAppStore((state) => state.reverseKnownCharacter);
   const reversePromptVariants = useAppStore((state) => state.reversePromptVariants);
   const setReversePromptMode = useAppStore((state) => state.setReversePromptMode);
@@ -4129,13 +4054,12 @@ function ReversePanel() {
   const setParam = useAppStore((state) => state.setParam);
   const setToast = useAppStore((state) => state.setToast);
   const settings = useAppStore((state) => state.settings);
-  const refreshSettings = useAppStore((state) => state.refreshSettings);
   const language = settings?.language;
   const inspectMeta = useAppStore((state) => state.inspectMeta);
   const [dragging, setDragging] = useState(false);
   const fileReadRevision = useRef(0);
   const hasImage = Boolean(inspectImageUrl);
-  const reverseTemplateVersion = settings?.reversePromptTemplateVersion ?? "v5";
+
   const reverseBusy = reverseJobs.some((job) => job.status === "processing");
   useEffect(() => {
     void loadReverseHistory();
@@ -4208,11 +4132,7 @@ function ReversePanel() {
     setToast(t("shared.reusedToGenerate"));
   }
 
-  async function setReverseTemplateVersion(version: "v4.5" | "v5", edition: PromptSkillVersion) {
-    await window.naiDesktop.setSetting("reversePromptTemplateVersion", version);
-    await window.naiDesktop.setSetting("reversePromptSkillVersion", skillVersionForModel(edition,version));
-    await refreshSettings();
-  }
+
 
   // Apply selected template to the reverse prompt result
   function applyTemplate(tpl: PromptTemplate) {
@@ -4259,7 +4179,7 @@ function ReversePanel() {
 
         {hasImage && metadataReport && <MetadataApplyPanel report={metadataReport} language={normalizeAppLanguage(language)} />}
 
-        <PromptSkillControls model={reverseTemplateVersion} edition={skillVersionForModel(settings?.reversePromptSkillVersion,reverseTemplateVersion)} language={language} disabled={reverseBusy} onChange={(model,edition)=>void setReverseTemplateVersion(model,edition).catch(error=>setToast(String(error)))}/>
+        <span className="comic-composer-text-only">NovelAI V5 Full · 3.0.0</span>
 
         <div className="mode-selector">
           {modes.map(([val, label, tip]) => (
@@ -4296,7 +4216,9 @@ function ReversePanel() {
               onChange={(e) => setReversePromptHint(e.target.value)}
             />
           </label>
-          <label className="checkbox-line prompt-character-toggle">
+          <label className="checkbox-line"><input type="checkbox" checked={v5ContentOnly} onChange={e=>useAppStore.setState({v5ContentOnly:e.target.checked})}/>{v5Text(settings?.language,'content')}</label>
+        <label className="checkbox-line"><input type="checkbox" checked={v5ReverseBubbles} onChange={e=>useAppStore.setState({v5ReverseBubbles:e.target.checked})}/>{v5Text(settings?.language,'extract')}</label>
+        <label className="checkbox-line prompt-character-toggle">
             <input
               type="checkbox"
               checked={reverseKnownCharacter}
@@ -4624,6 +4546,8 @@ export function PromptConverterPanel() {
   const setConvertInput = useAppStore((state) => state.setConvertInput);
   const setConvertResult = useAppStore((state) => state.setConvertResult);
   const convertMode = useAppStore((state) => state.convertMode);
+  const v5ConvertMono=useAppStore(s=>s.v5ConvertMono);
+  const v5ConvertBubbles=useAppStore(s=>s.v5ConvertBubbles);
   const convertKnownCharacter = useAppStore((state) => state.convertKnownCharacter);
   const convertResultVariants = useAppStore((state) => state.convertResultVariants);
   const setConvertMode = useAppStore((state) => state.setConvertMode);
@@ -4640,10 +4564,9 @@ export function PromptConverterPanel() {
   const setParam = useAppStore((state) => state.setParam);
   const setToast = useAppStore((state) => state.setToast);
   const settings = useAppStore((state) => state.settings);
-  const refreshSettings = useAppStore((state) => state.refreshSettings);
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
   const language = settings?.language;
-  const convertTemplateVersion = settings?.convertPromptTemplateVersion ?? "v5";
+
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
   const convertBusy = convertJobs.some((job) => job.status === "processing");
@@ -4667,11 +4590,7 @@ export function PromptConverterPanel() {
     setToast(f("prompt.templateApplied", { name: tpl.name }));
   }
 
-  async function setConvertTemplateVersion(version: ReversePromptTemplateVersion, edition: PromptSkillVersion) {
-    await window.naiDesktop.setSetting("convertPromptTemplateVersion", version);
-    await window.naiDesktop.setSetting("convertPromptSkillVersion", skillVersionForModel(edition,version));
-    await refreshSettings();
-  }
+
 
   if(convertTarget==='comic') return <div className="panel-scroll"><div className="convert-header"><strong>{t("convert.title")}</strong><small>{templateCopy[28]}</small></div>{targetPicker}<ComicPromptComposer draftKey="langbai.convert.comic-draft.v1" initialInput={convertInput} language={language}/></div>;
 
@@ -4698,7 +4617,7 @@ export function PromptConverterPanel() {
           />
         </label>
 
-        <PromptSkillControls model={convertTemplateVersion} edition={skillVersionForModel(settings?.convertPromptSkillVersion,convertTemplateVersion)} language={language} disabled={convertBusy} onChange={(model,edition)=>void setConvertTemplateVersion(model,edition).catch(error=>setToast(String(error)))}/>
+        <span className="comic-composer-text-only">NovelAI V5 Full · 3.0.0</span>
 
         <div className="mode-selector">
           {([
@@ -4716,6 +4635,8 @@ export function PromptConverterPanel() {
           ))}
         </div>
 
+        <label className="checkbox-line"><input type="checkbox" checked={v5ConvertMono} onChange={e=>useAppStore.setState({v5ConvertMono:e.target.checked})}/>{v5Text(settings?.language,'mono')}</label>
+        <label className="checkbox-line"><input type="checkbox" checked={v5ConvertBubbles} onChange={e=>useAppStore.setState({v5ConvertBubbles:e.target.checked})}/>{v5Text(settings?.language,'balloons')}</label>
         <label className="checkbox-line prompt-character-toggle">
           <input
             type="checkbox"
@@ -4746,6 +4667,7 @@ export function PromptConverterPanel() {
         {convertResult && (
           <>
             <div className="inspect-result-label" tabIndex={-1} data-prompt-workbench="result">{t("convert.result")}</div>
+            <small title={v5Text(settings?.language,'review')}>{(()=>{const m=promptMetrics(convertResult);return '有效单元 '+m.units+' · '+['结构','服饰颜色','数量','体型'].map((k,i)=>k+(m.flags[i]?'：有匹配':'：待复核')).join(' · ')})()}</small>
             <textarea
               className="prompt-box prompt-workbench-output"
               style={{ minHeight: 130 }}
@@ -6012,7 +5934,6 @@ export function SettingsModal({ onClose, variant = "modal" }: { onClose: () => v
   const settings = useAppStore((state) => state.settings);
   const refreshSettings = useAppStore((state) => state.refreshSettings);
   const setShowOnboarding = useAppStore((state) => state.setShowOnboarding);
-  const [reverseTemplateDefaults, setReverseTemplateDefaults] = useState(SCOPED_REVERSE_SYSTEM_PROMPTS);
   const [showTokenGuide, setShowTokenGuide] = useState(false);
   const [newTplName, setNewTplName] = useState("");
   const [newTplPrefix, setNewTplPrefix] = useState("");
@@ -6039,20 +5960,6 @@ export function SettingsModal({ onClose, variant = "modal" }: { onClose: () => v
   const language = settings?.language;
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
-
-  // Pull the versioned built-in V5 defaults from the main process, never from
-  // current settings — otherwise a user's customization would be treated as
-  // the default by "restore default".
-  useEffect(() => {
-    void window.naiDesktop.getReverseTemplateDefaults().then((defaults) => {
-      if (defaults && (defaults.tags || defaults.natural || defaults.mixed)) {
-        setReverseTemplateDefaults(defaults);
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-  }, []);
 
   useEffect(() => {
     if (section !== "storage") return;
@@ -6768,40 +6675,7 @@ export function SettingsModal({ onClose, variant = "modal" }: { onClose: () => v
               <div className="settings-form">
                 <TemplateLibraryPanel settings={settings} onSettingsChanged={refreshSettings}/>
                 <details className="template-library-legacy"><summary>{templateLibraryCopy(settings.language)[31]}</summary>
-                <VersionedModeTemplateEditor
-                  title={t("settings.reverseTemplateTitle")}
-                  values={{
-                    "v4.5": settings.reversePromptTemplatesV45,
-                    v5: settings.reversePromptTemplates,
-                  }}
-                  defaults={{
-                    "v4.5": V45_SCOPED_REVERSE_SYSTEM_PROMPTS,
-                    v5: reverseTemplateDefaults,
-                  }}
-                  v2Values={settings.reversePromptTemplatesV2}
-                  v2Defaults={Object.fromEntries((["tags","natural","mixed"] as const).map(mode=>[mode,selectPromptSkillTemplate({edition:"2.0.0",targetModel:"v5",task:"reverse",mode,legacyTemplate:""})])) as unknown as ModePromptTemplates}
-                  onChange={(version, next, edition) => void update(
-                    edition === "2.0.0" ? "reversePromptTemplatesV2" : version === "v4.5" ? "reversePromptTemplatesV45" : "reversePromptTemplates",
-                    next,
-                  )}
-                />
-                <VersionedModeTemplateEditor
-                  title={t("settings.convertTemplateTitle")}
-                  values={{
-                    "v4.5": settings.convertPromptTemplatesV45,
-                    v5: settings.convertPromptTemplates,
-                  }}
-                  defaults={{
-                    "v4.5": V45_CONVERT_SYSTEM_PROMPTS,
-                    v5: CONVERT_SYSTEM_PROMPTS,
-                  }}
-                  v2Values={settings.convertPromptTemplatesV2}
-                  v2Defaults={Object.fromEntries((["tags","natural","mixed"] as const).map(mode=>[mode,selectPromptSkillTemplate({edition:"2.0.0",targetModel:"v5",task:"convert",mode,legacyTemplate:""})])) as unknown as ModePromptTemplates}
-                  onChange={(version, next, edition) => void update(
-                    edition === "2.0.0" ? "convertPromptTemplatesV2" : version === "v4.5" ? "convertPromptTemplatesV45" : "convertPromptTemplates",
-                    next,
-                  )}
-                />
+                <pre>{JSON.stringify({reverse:settings.reversePromptTemplates,reverseV45:settings.reversePromptTemplatesV45,reverseV2:settings.reversePromptTemplatesV2,convert:settings.convertPromptTemplates,convertV45:settings.convertPromptTemplatesV45,convertV2:settings.convertPromptTemplatesV2},null,2)}</pre>
                 <PromptSkillControls allowV3={false} model={settings.promptAssistantTemplateVersion??settings.convertPromptTemplateVersion} edition={skillVersionForModel(settings.promptAssistantSkillVersion,settings.promptAssistantTemplateVersion??settings.convertPromptTemplateVersion)} language={settings.language} onChange={(model,edition)=>{void update("promptAssistantTemplateVersion",model);void update("promptAssistantSkillVersion",edition);}}/>
                 <SingleTemplateEditor
                   title={promptEditorText(settings.language).optimize}
@@ -7329,41 +7203,6 @@ function UpdateBanner() {
       </div>
     </AppPortal> : null}
   </>;
-}
-
-function VersionedModeTemplateEditor({
-  title,
-  values,
-  defaults,
-  v2Values,
-  v2Defaults,
-  onChange,
-}: {
-  title: string;
-  v2Values?: ModePromptTemplates;
-  v2Defaults: ModePromptTemplates;
-  values: Record<ReversePromptTemplateVersion, ModePromptTemplates>;
-  defaults: Record<ReversePromptTemplateVersion, ModePromptTemplates>;
-  onChange: (
-    version: ReversePromptTemplateVersion,
-    next: ModePromptTemplates,
-    edition: PromptSkillVersion,
-  ) => void;
-}) {
-  const language = useAppStore((state) => state.settings?.language);
-  const [version, setVersion] = useState<ReversePromptTemplateVersion>("v5");
-  const [edition,setEdition]=useState<PromptSkillVersion>("2.0.0");
-  return (
-    <div className="versioned-template-editor">
-      <PromptSkillControls allowV3={false} model={version} edition={edition} language={language} onChange={(model,next)=>{setVersion(model);setEdition(next);}}/>
-      <ModeTemplateEditor
-        title={title}
-        value={edition === "2.0.0" ? v2Values ?? {tags:"",natural:"",mixed:""} : values[version]}
-        defaults={edition === "2.0.0" ? v2Defaults : defaults[version]}
-        onChange={(next) => onChange(version, next, edition)}
-      />
-    </div>
-  );
 }
 
 const V5_MIGRATION_NOTICE_KEY = "langbai.notice.v5-model-migration.seen";

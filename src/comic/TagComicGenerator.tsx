@@ -903,7 +903,7 @@ export function TagComicGenerator({ onBack,scope='tag-comic' }: { onBack?: () =>
     }));
   }
 
-  async function replacePanels(items: Array<{ title: string; prompt: string }>, expectedRevision=comicStore.read().revision) {
+  async function replacePanels(items: Array<{ title: string; prompt: string }>, expectedRevision=comicStore.read().revision, v5ComicFormat?: "jp-page"|"single-panel") {
     if (!items.length) {
       setToast(copy("noTags"));
       return;
@@ -919,10 +919,13 @@ export function TagComicGenerator({ onBack,scope='tag-comic' }: { onBack?: () =>
       width: project.globalParams.width,
       height: project.globalParams.height,
     };
+    let wideCount=0;const allowWide=(prompt:string)=>{if(!/\b(?:wide shot|full body)\b/i.test(prompt)||wideCount>=Math.floor(items.length/4))return false;wideCount++;return true;};
     if(!setProject(current=>({...current,
+      ...(v5ComicFormat?{sizeMode:'perPanel' as const,globalParams:{...current.globalParams,model:'nai-diffusion-5-full',steps:28,cfgScale:5.5,sampler:'k_euler_ancestral',noiseSchedule:'karras',effort:'high' as const,qualityToggle:false,qualityPreset:'none' as const}}:{}),
       panels: items.map((item, index) => ({
         ...createTagComicPanel(item.prompt, index + 1, item.title),
-        imageSize: project.sizeMode === "perPanel" ? defaultSize : undefined,
+        ...(v5ComicFormat?{v5ComicFormat}:{}),
+        imageSize: v5ComicFormat==='jp-page'?(defaultSize.width===1024&&defaultSize.height===1024?{width:1024,height:1024}:{width:832,height:1216}):v5ComicFormat==='single-panel'?(allowWide(item.prompt)?{width:1216,height:832}:{width:832,height:1216}):project.sizeMode === "perPanel" ? defaultSize : undefined,
       })),
       historyGroupId: undefined,
       preciseReferences: project.preciseReferences.map((reference) => ({
@@ -1476,9 +1479,9 @@ export function TagComicGenerator({ onBack,scope='tag-comic' }: { onBack?: () =>
         ))}
       </nav>
 
-      {step === "import" && japanese && <details className="japanese-comic-composer-disclosure" open={panels.length===0}><summary>{jpCopy.title}</summary><ComicPromptComposer draftKey={JAPANESE_COMIC_DRAFT_KEY} language={language} disabled={Boolean(queue)} onImport={async lines=>{
+      {step === "import" && japanese && <details className="japanese-comic-composer-disclosure" open={panels.length===0}><summary>{jpCopy.title}</summary><ComicPromptComposer draftKey={JAPANESE_COMIC_DRAFT_KEY} language={language} disabled={Boolean(queue)} onImport={async (lines,format)=>{
        const expectedRevision=comicStore.read().revision;
-       return replacePanels(lines.map((prompt,index)=>({title:`Page ${index+1}`,prompt})),expectedRevision);
+       return replacePanels(lines.map((prompt,index)=>({title:`Page ${index+1}`,prompt})),expectedRevision,format);
       }}/></details>}
       {step === "import" && (
         <section className="tag-comic-card tag-comic-import">

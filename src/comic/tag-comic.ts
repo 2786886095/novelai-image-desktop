@@ -1,3 +1,4 @@
+import {promptMetrics} from '../../shared/v5-prompt-options';
 import {
   DEFAULT_PARAMS,
   type GenerateParams,
@@ -352,6 +353,7 @@ export function normalizeTagComicProject(
           String(panel.title ?? ""),
         ),
         id: panel.id || id(),
+        ...(panel.v5ComicFormat==='jp-page'||panel.v5ComicFormat==='single-panel'?{v5ComicFormat:panel.v5ComicFormat}:{}),
         preciseReferences:
           options.trustOutputs && Array.isArray(panel.preciseReferences)
             ? panel.preciseReferences
@@ -562,6 +564,14 @@ export function buildTagComicGenerateRequest(
   panel: TagComicPanel,
 ): TagComicGenerateRequest {
   const params = { ...mergeTagComicParams(project, panel) };
+  let negative=project.globalNegativePrompt;
+  if(panel.v5ComicFormat){
+    if(promptMetrics([project.globalStylePrompt,panel.prompt].join(', ')).textChars>750)throw Error('本页图内文字超过750字符，未提交生图。');
+    Object.assign(params,{model:'nai-diffusion-5-full',effort:'high',qualityToggle:false,qualityPreset:'none'});
+    const drop=new Set(panel.v5ComicFormat==='jp-page'?['multiple views','screentone','halftone','comic','text','chinese text','speech bubble','logo']:/\bText:\s*"/i.test(panel.prompt)?['text','chinese text','speech bubble']:[]);
+    negative=negative.split(',').filter(word=>!drop.has(word.trim().replace(/_/g,' ').toLowerCase())).join(',').trim();
+    params.negativePrompt=negative;
+  }
   const preciseReferences = resolveTagComicPanelReferences(project, panel).flatMap(
     (selection) => {
       const asset = project.preciseReferences.find(
@@ -580,7 +590,7 @@ export function buildTagComicGenerateRequest(
     ...(project.sizeMode === "perPanel" && panel.imageSize ? {imageSize: {...panel.imageSize}} : {}),
     globalStylePrompt: project.globalStylePrompt,
     panelPrompt: panel.prompt,
-    globalNegativePrompt: project.globalNegativePrompt,
+    globalNegativePrompt: negative,
     preciseReferences,
   };
 }

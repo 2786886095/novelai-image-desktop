@@ -1,3 +1,4 @@
+import {v5Input} from '../shared/v5-prompt-options';
 import {promptSkillRequestContext,promptSkillStaleText} from './prompt-skill-settings';
 import { normalizeHistoryWidth, readHistoryCollapsed, HISTORY_COLLAPSE_AT } from './workspace-history';
 import {favoritesText} from './favorites-text';
@@ -244,6 +245,7 @@ interface AppState {
   inspectImagePath: string;
   reversePromptText: string;
   reversePromptWarnings: string[];
+  v5ReverseBubbles:boolean; v5ContentOnly:boolean; v5ConvertMono:boolean; v5ConvertBubbles:boolean;
   reversePromptMode: ReversePromptMode;
   reversePromptScope: ReversePromptScope;
   reversePromptHint: string;
@@ -1014,7 +1016,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   inspectImagePath: "",
   reversePromptText: "",
   reversePromptWarnings: [],
-  reversePromptMode: "tags" as ReversePromptMode,
+  v5ReverseBubbles:false,v5ContentOnly:true,v5ConvertMono:false,v5ConvertBubbles:true,
+  reversePromptMode: "mixed" as ReversePromptMode,
   reversePromptScope: "full" as ReversePromptScope,
   reversePromptHint: "",
   reverseKnownCharacter: false,
@@ -1025,7 +1028,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   convertInput: "",
   convertResult: "",
   convertResultWarnings: [],
-  convertMode: "tags" as ReversePromptMode,
+  convertMode: "mixed" as ReversePromptMode,
   convertKnownCharacter: false,
   convertResultVariants: null,
   convertJobs: [],
@@ -2007,8 +2010,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { inspectImageBase64, inspectImagePath, reversePromptMode, reversePromptScope, reversePromptHint, reverseKnownCharacter } = get();
     const templateVersion = get().settings?.reversePromptTemplateVersion ?? "v5";
     const skillVersion=get().settings?.reversePromptSkillVersion;
+    const {v5ReverseBubbles,v5ContentOnly}=get();
     const requestContext=promptSkillRequestContext(get().settings,'reverse');
-    const unchanged=()=>{const current=get();return current.inspectImageBase64===inspectImageBase64&&current.reversePromptMode===reversePromptMode&&current.reversePromptScope===reversePromptScope&&current.reversePromptHint===reversePromptHint&&current.reverseKnownCharacter===reverseKnownCharacter&&promptSkillRequestContext(current.settings,'reverse')===requestContext;};
+    const unchanged=()=>{const current=get();return current.v5ReverseBubbles===v5ReverseBubbles&&current.v5ContentOnly===v5ContentOnly&&current.inspectImageBase64===inspectImageBase64&&current.reversePromptMode===reversePromptMode&&current.reversePromptScope===reversePromptScope&&current.reversePromptHint===reversePromptHint&&current.reverseKnownCharacter===reverseKnownCharacter&&promptSkillRequestContext(current.settings,'reverse')===requestContext;};
     if (!inspectImageBase64) {
       set({ toast: storeText(get().settings, "toast.needImage") });
       return;
@@ -2028,7 +2032,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ reverseJobs: [job, ...get().reverseJobs] });
     let result;
     try {
-      const args=[inspectImageBase64,reversePromptMode,reversePromptScope,reversePromptHint,reverseKnownCharacter,templateVersion] as const;
+      const args=[inspectImageBase64,reversePromptMode,reversePromptScope,v5Input(reversePromptHint,{contentOnly:v5ContentOnly,bubbles:v5ReverseBubbles?'extract':'ignore'},true),reverseKnownCharacter,templateVersion] as const;
       result = skillVersion===undefined ? await window.naiDesktop.reversePrompt(...args) : await window.naiDesktop.reversePrompt(...args,skillVersion);
     } catch (error) {
       if (!get().reverseJobs.some((j) => j.id === job.id)) return;
@@ -2121,8 +2125,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { convertInput, convertMode, convertKnownCharacter } = get();
     const templateVersion = get().settings?.convertPromptTemplateVersion ?? "v5";
     const skillVersion=get().settings?.convertPromptSkillVersion;
+    const {v5ConvertMono,v5ConvertBubbles}=get();
     const requestContext=promptSkillRequestContext(get().settings,'convert');
-    const unchanged=()=>{const current=get();return current.convertInput===convertInput&&current.convertMode===convertMode&&current.convertKnownCharacter===convertKnownCharacter&&promptSkillRequestContext(current.settings,'convert')===requestContext;};
+    const unchanged=()=>{const current=get();return current.v5ConvertMono===v5ConvertMono&&current.v5ConvertBubbles===v5ConvertBubbles&&current.convertInput===convertInput&&current.convertMode===convertMode&&current.convertKnownCharacter===convertKnownCharacter&&promptSkillRequestContext(current.settings,'convert')===requestContext;};
     if (!convertInput.trim()) {
       set({ toast: storeText(get().settings, "toast.needConvertInput") });
       return;
@@ -2141,7 +2146,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ convertJobs: [job, ...get().convertJobs] });
     let result;
     try {
-      const args=[convertInput,convertMode,convertKnownCharacter,templateVersion] as const;
+      const args=[v5Input(convertInput,{color:v5ConvertMono?'mono':'color',bubbles:v5ConvertBubbles?'extract':'ignore'}),convertMode,convertKnownCharacter,templateVersion] as const;
       result = skillVersion===undefined ? await window.naiDesktop.convertPrompt(...args) : await window.naiDesktop.convertPrompt(...args,undefined,skillVersion);
     } catch (error) {
       if (!get().convertJobs.some((j) => j.id === job.id)) return;

@@ -1,3 +1,5 @@
+import {parseV5Storyboard, storyboardSystem} from '../../src/comic/v5-storyboard';
+import {requestV5Prompt,V5ClassifiedError} from './v5-prompt-transport';
 import {activeTagPack,searchMultilingualTags} from "./multilingual-tags";
 import {localDictionaryGuidance,promptDictionaryMatches} from "./prompt-local-dictionary";
 import { sanitizeGroupFolderName } from "./history-file-path";
@@ -25,7 +27,7 @@ import {normalizePromptSkillVersion,selectPromptSkillTemplate,supportsPromptSkil
 import {resolveTemplateLibrarySlot} from './template-library';
 import {comicPromptEnvelope,parseComicRecommendation,parseComicPromptPages,validateComicPromptRequest,type ComicPromptRequest,type ComicPromptResult} from '../../src/comic/comic-prompt';
 import {parsePromptSkillV2Response,PROMPT_SKILL_V2_RUNTIME,promptSkillKnownCharacterInstruction} from '../../src/prompt-skill-audit';
-import {classifyAiPromptResponse,isExplicitPromptRefusal,visionPromptRequestError,redactAiCredentials} from "./ai-prompt-response";
+import {classifyAiPromptResponse,visionPromptRequestError,redactAiCredentials} from "./ai-prompt-response";
 import { planUpscale } from "../../src/upscale-plan";
 import {matchingVibeEncoding, validateVibeModel} from "../../src/vibe-file";
 import {normalizeNovelAiEndpoint} from '../../src/nai-endpoint';
@@ -99,7 +101,7 @@ import {
 import { inspectImageMetadata, parseImageMeta, parsePngMeta } from "../../src/png-meta";
 import { calculateFeatureAnlasQuote } from "../../src/anlas";
 import { compactRemoteErrorText } from "../../src/error-message";
-import { buildComicLocalPrompt, isComicPromptRefusal } from "../../src/comic/prompt-fallback";
+import { isComicPromptRefusal } from "../../src/comic/prompt-fallback";
 import {
   addHistory,
   ensureHistoryGroup,
@@ -121,22 +123,14 @@ import { injectDshImageAiSystemPrompt } from "./dsh-reverse-convert";
 import { selectedImageTaskPromptPreset } from "../../src/tavern/image-task-preset";
 import {
   CONVERT_SYSTEM_PROMPTS,
-  REVERSE_SYSTEM_PROMPTS,
-  SCOPED_REVERSE_SYSTEM_PROMPTS,
 } from "../../src/data/prompt-templates";
 import {
   V45_CONVERT_SYSTEM_PROMPTS,
-  V45_REVERSE_SYSTEM_PROMPTS,
-  V45_SCOPED_REVERSE_SYSTEM_PROMPTS,
 } from "../../src/data/prompt-templates-v45";
 import {
   buildConvertUserText,
-  buildModeRepairUserText,
   cleanPromptOutput,
   knownCharacterRuntimeInstruction,
-  modeNeedsRepair,
-  modeUserInstruction,
-  modeRepairSystemPrompt,
   parsePromptVariantResponse,
   resolveModePrompt,
 } from "../../src/prompt-mode";
@@ -2898,6 +2892,7 @@ async function callVisionApi(
   record = true,
   jsonRequired = false,
   retryEmpty = true,
+  v5 = false,
 ): Promise<{ ok: boolean; content?: string; message: string }> {
   const settings = getSettings();
   const { visionApiUrl, visionApiKey, visionApiModel } = settings;
@@ -2927,10 +2922,10 @@ async function callVisionApi(
 
   // Resolve the actual endpoint before the first request, not the startup cache
   // shared with other AI providers (which may still be empty or use another PAC rule).
-  const post = async (tokens: number) =>
+  const post = async (tokens: number,messages: {role:string;content:unknown}[]=body.messages,budgetKey="max_tokens") =>
     axios.post(
       `${base}/chat/completions`,
-      { ...body, max_tokens: tokens },
+      { ...body, max_tokens: undefined, [budgetKey]:tokens, messages },
       {
         headers: {
           Authorization: `Bearer ${visionApiKey}`,
@@ -2942,11 +2937,11 @@ async function callVisionApi(
     );
 
   try {
-    let resp = await post(maxTokens);
+    let resp = v5 ? await requestV5Prompt({model,budget:maxTokens,messages:body.messages},(m,n,k)=>post(n,m,k)) : await post(maxTokens);
     let result = classifyAiPromptResponse(resp.data);
     // Reasoning models burn the whole budget on hidden reasoning → empty content
     // with finish_reason "length". Retry once with a much larger budget.
-    if (retryEmpty && !result.ok && result.retryableEmptyLength) {
+    if (!v5 && retryEmpty && !result.ok && result.retryableEmptyLength) {
       resp = await post(Math.max(maxTokens * 8, 32000));
       result = classifyAiPromptResponse(resp.data);
     }
@@ -2981,7 +2976,7 @@ async function callVisionApi(
     }
     return { ok: true, content, message: "成功" };
   } catch (error: any) {
-    const msg = visionPromptRequestError(error);
+    const msg = error instanceof V5ClassifiedError?error.message:visionPromptRequestError(error);
     if (record) {
       recordAiCall({
         label,
@@ -3002,23 +2997,10 @@ async function callVisionApi(
  * make compatible vision endpoints spend most of their time uploading and
  * preprocessing pixels the tagger cannot use. */
 async function prepareVisionImage(imageBase64: string): Promise<{ mime: string; base64: string }> {
-  try {
-    const input = Buffer.from(imageBase64.replace(/^data:image\/[^;]+;base64,/, ""), "base64");
-    const metadata = await sharp(input).metadata();
-    const longest = Math.max(metadata.width ?? 0, metadata.height ?? 0);
-    if (longest <= 1280 && input.length <= 1_500_000) {
-      return { mime: metadata.format === "jpeg" ? "image/jpeg" : "image/png", base64: input.toString("base64") };
-    }
-    const output = await sharp(input)
-      .rotate()
-      .resize({ width: 1280, height: 1280, fit: "inside", withoutEnlargement: true })
-      .flatten({ background: "#ffffff" })
-      .jpeg({ quality: 86, chromaSubsampling: "4:2:0" })
-      .toBuffer();
-    return { mime: "image/jpeg", base64: output.toString("base64") };
-  } catch {
-    return { mime: "image/png", base64: imageBase64.replace(/^data:image\/[^;]+;base64,/, "") };
-  }
+  const input=Buffer.from(imageBase64.replace(/^data:image\/[^;]+;base64,/,''),'base64');
+  // Decode and re-encode even small inputs: never forward EXIF, PNG tEXt or comments.
+  const bytes=await sharp(input,{limitInputPixels:64*1024*1024}).rotate().resize({width:1280,height:1280,fit:'inside',withoutEnlargement:true}).flatten({background:'#ffffff'}).jpeg({quality:90,chromaSubsampling:'4:4:4'}).toBuffer();
+  return {mime:'image/jpeg',base64:bytes.toString('base64')};
 }
 
 async function callConvertApi(
@@ -3032,6 +3014,7 @@ async function callConvertApi(
   settingsSnapshot?: AppSettings,
   signal?: AbortSignal,
   preserveRaw = false,
+  v5?:{pages?:number},
 ): Promise<{ ok: boolean; content?: string; message: string; finishReason?: string }> {
   const settings = settingsSnapshot ?? getSettings();
   const apiUrl = settings.convertApiUrl.trim();
@@ -3057,10 +3040,10 @@ async function callConvertApi(
     ],
   };
 
-  const post = async (tokens: number) =>
+  const post = async (tokens: number,messages: {role:string;content:unknown}[]=body.messages,budgetKey="max_tokens") =>
     axios.post(
       `${base}/chat/completions`,
-      { ...body, max_tokens: tokens },
+      { ...body, max_tokens: undefined, [budgetKey]:tokens, messages },
       {
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -3073,14 +3056,14 @@ async function callConvertApi(
     );
 
   try {
-    let resp = await post(maxTokens);
+    let resp = v5 ? await requestV5Prompt({model,budget:maxTokens,messages:body.messages,pages:v5.pages,signal},(m,n,k)=>post(n,m,k)) : await post(maxTokens);
     let content: string = resp.data?.choices?.[0]?.message?.content ?? "";
     let fin = resp.data?.choices?.[0]?.finish_reason;
     // Reasoning models spend the whole token budget on hidden reasoning tokens
     // and return empty content with finish_reason "length". Retry once with a
     // much larger budget so the actual answer has room (billed per real token,
     // so this only costs more on the genuinely-reasoning case).
-    if (retryEmpty && !content.trim() && fin === "length") {
+    if (!v5 && retryEmpty && !content.trim() && fin === "length") {
       resp = await post(Math.max(maxTokens * 8, 32000));
       content = resp.data?.choices?.[0]?.message?.content ?? "";
       fin = resp.data?.choices?.[0]?.finish_reason;
@@ -3431,12 +3414,12 @@ function withTagEvidence<T extends {ok:boolean;variants?:{namePrompt:string;feat
 
 export async function reversePromptImage(...args: Parameters<typeof reversePromptImageCore>) {
   const result = await reversePromptImageCore(...args);
-  return withTagEvidence(result, args[1] ?? "tags", result.prompt);
+  return withTagEvidence(result, args[1] ?? "mixed", result.prompt);
 }
 
 async function reversePromptImageCore(
   imageBase64: string,
-  mode: "tags" | "natural" | "mixed" = "tags",
+  mode: "tags" | "natural" | "mixed" = "mixed",
   scope: string = "full",
   hint: string = "",
   knownCharacter = false,
@@ -3449,7 +3432,6 @@ async function reversePromptImageCore(
   message: string;
   warnings?: string[];
 }> {
-  const settings = getSettings();
   const dictionaryHint = localDictionaryGuidance(mode, hint);
   const safeScope = (
     ["full", "character", "object", "scene"].includes(scope) ? scope : "full"
@@ -3470,126 +3452,17 @@ async function reversePromptImageCore(
   ]
     .filter(Boolean)
     .join("\n");
-  const safeTemplateVersion = (templateVersion ?? settings.reversePromptTemplateVersion) === "v4.5" ? "v4.5" : "v5";
-  const edition=normalizePromptSkillVersion(skillVersion??settings.reversePromptSkillVersion);
-  if(edition==='3.0.0') {
-    if(!supportsPromptSkillModel(edition,safeTemplateVersion))return {ok:false,message:'技能模板3.0.0仅支持NovelAI V5 Full；V4.5请选1.0.0，已保留原提示词'};
+  const safeTemplateVersion='v5' as const, edition='3.0.0' as const;
     let selected:ReturnType<typeof resolveTemplateLibrarySlot>;
     try{selected=resolveTemplateLibrarySlot(`image.reverse.${mode}`);}catch(error){return {ok:false,message:'模板库不可用，已保留原提示词：'+(error instanceof Error?error.message:String(error))};}
     const template=selectPromptSkillTemplate({edition,targetModel:safeTemplateVersion,task:'reverse',mode,legacyTemplate:'',librarySlot:selected});
     const system=[renderPromptSkillTemplate(template,'<provided in the user message>',true),PROMPT_SKILL_V3_RUNTIME,promptSkillKnownCharacterInstruction(knownCharacter)].join('\n\n');
-    const image=await prepareVisionImage(imageBase64);
-    const reply=await callVisionApi(system,[{type:'image_url',image_url:{url:`data:${image.mime};base64,${image.base64}`,detail:'high'}},{type:'text',text:userScopeText}],7000,`AI反推 · ${safeTemplateVersion} · 技能3.0.0 · ${mode}`,true,knownCharacter,false);
+    let image:Awaited<ReturnType<typeof prepareVisionImage>>;
+    try{image=await prepareVisionImage(imageBase64);}catch{return {ok:false,message:'图片解码失败，未向反推服务发送原文件。'};}
+    const reply=await callVisionApi(system,[{type:'image_url',image_url:{url:`data:${image.mime};base64,${image.base64}`,detail:'high'}},{type:'text',text:userScopeText}],7000,`AI反推 · ${safeTemplateVersion} · 技能3.0.0 · ${mode}`,true,knownCharacter,false,true);
     if(!reply.ok)return {ok:false,message:'反推失败，已保留原提示词：'+reply.message};
-    if(isComicPromptRefusal(reply.content??''))return {ok:false,message:'模型未返回可用提示词，已保留原提示词'};
     try{const parsed=parsePromptSkillV3Response(reply.content??'',knownCharacter);return {ok:true,...parsed,message:'反推完成：使用所选3.0.0原稿；图像事实请人工复核'};}
     catch(error){return {ok:false,message:'反推结果不可用，已保留原提示词：'+(error instanceof Error?error.message:String(error))};}
-  }
-  if(edition==='2.0.0') {
-    if(!supportsPromptSkillModel(edition,safeTemplateVersion))return {ok:false,message:'技能模板2.0.0仅支持NovelAI V5 Full；V4.5请选1.0.0，已保留原提示词'};
-    const template=selectPromptSkillTemplate({edition,targetModel:safeTemplateVersion,task:'reverse',mode,legacyTemplate:'',overrides:settings.reversePromptTemplatesV2});
-    const system=injectDshImageAiSystemPrompt({task:'reverse',enabled:settings.reverseConvertDshEnabled,mode:settings.reverseConvertDshMode,
-      sharedPreset:selectedImageTaskPromptPreset(settings.reverseConvertPromptPresets,settings.reverseSystemPromptPresetId??settings.reverseConvertPromptPresetId,'reverse'),
-      systemPrompt:[renderPromptSkillTemplate(template,'<provided in the user message>',true),PROMPT_SKILL_V2_RUNTIME,promptSkillKnownCharacterInstruction(knownCharacter)].filter(Boolean).join('\n\n')});
-    const image=await prepareVisionImage(imageBase64);
-    const reply=await callVisionApi(system,[{type:'image_url',image_url:{url:`data:${image.mime};base64,${image.base64}`,detail:'high'}},{type:'text',text:userScopeText+'\n请依据实际上传图片与所选2.0.0模板输出。'}],7000,`AI反推 · ${safeTemplateVersion} · 技能${edition} · ${mode}`,true,knownCharacter,false);
-    if(!reply.ok)return {ok:false,message:'反推失败，已保留原提示词：'+reply.message};
-    try{const parsed=parsePromptSkillV2Response(reply.content??'',mode,knownCharacter,true);return {ok:true,...parsed,message:parsed.warnings.some(warning=>warning.startsWith('检查未通过'))?'反推完成（有检查警告）：结果已保留，请自行核对':'反推完成：仅格式与可计数单元检查，来源事实需人工复核'};}
-    catch(error){return {ok:false,message:'反推未通过技能2.0.0检查，已保留原提示词：'+(error instanceof Error?error.message:String(error))};}
-  }
-
-  const builtInTemplates =
-    safeTemplateVersion === "v4.5"
-      ? safeScope === "full"
-        ? V45_REVERSE_SYSTEM_PROMPTS
-        : V45_SCOPED_REVERSE_SYSTEM_PROMPTS
-      : safeScope === "full"
-        ? REVERSE_SYSTEM_PROMPTS
-        : SCOPED_REVERSE_SYSTEM_PROMPTS;
-  const reconstructionInstruction = `\n反推必须以“可复现画面”为目标，而不是只做粗略识别。输出前逐项核对：主体数量与身份、背景颜色/复杂度、全身或半身取景、视角、人物在画面中的大小与位置、双腿姿势、左右手臂各自的方向/弯曲/指向、手势、头部朝向、注视和表情。\nTag 模式按“人数与构图 → 身份 → 外貌服装 → 姿势动作 → 背景”排序。优先输出图中能直接观察到、能稳定复现构图的成熟 Danbooru Tag，不要用“电影感”“精美光影”等主观修饰替代白色背景、全身、站立、分腿、伸臂、指向等事实。单人全身图不得只写 pointing：若可见，必须同时保留 1girl、solo、white background/simple background、full body、standing、spread legs/legs apart、outstretched arm、pointing、looking at viewer、smile 等互不冲突的成熟 Tag；已知角色必须保留准确的 Danbooru 身份 Tag。左右关系没有可靠 Tag 时可用最短英文短语补足。不要把 standing wide stance 误写成坐姿语义，也不要臆造图中不存在的背景、动作或光照。`;
-  const systemPrompt = injectDshImageAiSystemPrompt({
-    task: "reverse",
-    // Task output templates and imported system presets are separate layers.
-    // A custom template must not silently disable the selected system preset.
-    enabled: settings.reverseConvertDshEnabled,
-    mode: settings.reverseConvertDshMode,
-    sharedPreset: selectedImageTaskPromptPreset(
-      settings.reverseConvertPromptPresets,
-      settings.reverseSystemPromptPresetId ?? settings.reverseConvertPromptPresetId,
-      "reverse",
-    ),
-    systemPrompt: [
-    resolveModePrompt(
-      mode,
-      safeTemplateVersion === "v5"
-        ? settings.reversePromptTemplates
-        : settings.reversePromptTemplatesV45,
-      settings.visionSystemPrompt,
-      builtInTemplates,
-    )
-      .replace(/\{\{input\}\}/g, userScopeText)
-      .replace(/\{\{image\}\}/g, "<uploaded image>"),
-    knownCharacterRuntimeInstruction(
-      mode,
-      "reverse",
-      knownCharacter,
-      safeTemplateVersion,
-    ),
-    reconstructionInstruction,
-    ].join("\n\n"),
-  });
-
-  const preparedVisionImage = await prepareVisionImage(imageBase64);
-  const firstUserContent = [
-    {
-      type: "image_url",
-      image_url: {
-        url: `data:${preparedVisionImage.mime};base64,${preparedVisionImage.base64}`,
-        detail: "high",
-      },
-    },
-    {
-      type: "text",
-      text: [
-        userScopeText,
-        "",
-        "Generate the prompt for this image.",
-        "",
-        modeUserInstruction(
-          mode,
-          "reverse",
-          knownCharacter,
-          safeTemplateVersion,
-        ),
-      ].join("\n"),
-    },
-  ];
-
-  // Read the saved template, not a hard-coded abbreviated character caption.
-  const selectedTemplate = resolveModePrompt(mode,
-    safeTemplateVersion === "v5" ? settings.reversePromptTemplates : settings.reversePromptTemplatesV45,
-    settings.visionSystemPrompt, builtInTemplates);
-  const protocol = reverseTemplateProtocol(selectedTemplate, mode, knownCharacter);
-  const effectiveSystem = systemPrompt + (protocol ? "\n\n" + protocol.instruction : "");
-  let feedback = "";
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const contentForAttempt = feedback ? [...firstUserContent, {type:"text", text:
-      `上次结果未通过模板校验：${feedback}。请重新对照同一图片输出完整结果。仅修正格式、数量和比例；不要新增图中不可见内容。`}] : firstUserContent;
-    const result = await callVisionApi(effectiveSystem, contentForAttempt,
-      knownCharacter ? 7000 : 4000,
-      `AI 反推 · ${safeTemplateVersion} · ${mode} · ${scopeLabel}`, true, !!protocol);
-    if (!result.ok) return {ok:false,message:`反推失败：${result.message}`};
-    try {
-      if (protocol) {const parsed=protocol.parse(result.content??'','',{validationWarningOnly:true});return {ok:true,...parsed,message:parsed.warnings.length?'反推完成（有检查警告）：结果已保留，请自行核对':'反推成功'};}
-      const parsed = parsePromptVariantResponse(result.content ?? "", knownCharacter);
-      const outputs = knownCharacter ? [parsed.variants?.namePrompt,parsed.variants?.featurePrompt] : [parsed.primary];
-      if(outputs.some(value=>!value?.trim()||value.length>60000||isExplicitPromptRefusal(value)||/^(?:信息不足|模式能力不足|无法完成|我无法|抱歉|对不起)/u.test(value.trim())))
-        throw Error('模型未返回完整可用结果，已保留原提示词');
-      const warnings=outputs.some(value=>modeNeedsRepair(mode,value!))?['检查未通过，已保留结果供手动确认：输出格式可能不符合所选模式']:[];
-      return {ok:true,prompt:parsed.primary,variants:parsed.variants,warnings,message:warnings.length?'反推完成（有检查警告）：结果已保留，请自行核对':'反推成功'};
-    } catch(error) {feedback=error instanceof Error ? error.message : String(error);}
-  }
-  return {ok:false,message:`反推未通过模板校验，已保留原提示词：${feedback}`};
 }
 
 const CJK_RE = /[一-鿿぀-ゟ゠-ヿ]/;
@@ -3695,45 +3568,13 @@ export async function convertComicPanels(
   catch { return {ok:false,message:"漫画分镜请求无法读取。",panels:[]}; }
   if (!Array.isArray(request?.panels) || !request.panels.length)
     return { ok: false, message: "没有需要转换的分镜。", panels: [] };
-  // One immutable batch: settings/slots/provider and every panel/context field.
-  const settings = structuredClone(getSettings());
-  const targetModel=request.templateVersion!==undefined?request.templateVersion:settings.convertPromptTemplateVersion!==undefined?settings.convertPromptTemplateVersion:'v5';
-  const edition=request.skillVersion!==undefined?request.skillVersion:settings.convertPromptSkillVersion!==undefined?settings.convertPromptSkillVersion:'1.0.0';
-  const reject=(message:string):ComicConvertResult=>({ok:false,message,panels:request.panels.map(panel=>({panelId:panel.panelId,enPrompt:'',error:message}))});
-  if(targetModel!=='v4.5'&&targetModel!=='v5')return reject('不支持的生图模型模板版本，未请求转换API。');
-  if(edition!=='1.0.0'&&edition!=='2.0.0')return reject('不支持的技能版本，未请求转换API。');
-  if(!supportsPromptSkillModel(edition,targetModel))return reject('技能模板2.0.0仅支持NovelAI V5 Full；V4.5请选1.0.0，未请求转换API。');
-  const mode=request.mode;
-  if(mode!=='tags'&&mode!=='natural'&&mode!=='mixed')return reject('不支持的提示词模式，未请求转换API。');
-  if (!settings.convertApiKey.trim() || !settings.convertApiUrl.trim()) {
-    if(edition==='2.0.0')return reject('技能2.0.0需要配置转换API；未使用旧版本地模板兜底。');
-    return {
-      ok: true,
-      message: `未配置转换 API，已使用本地模板兜底生成 ${request.panels.length} 镜英文提示词（技能1.0.0 · ${targetModel}）；建议配置转换模型以获得更精确的剧情画面。`,
-      panels: request.panels.map((panel) => ({
-        panelId: panel.panelId,
-        enPrompt: buildComicLocalPrompt(request, panel),
-      })),
-    };
-  }
-  const systemPrompt = edition==='1.0.0' ? [
-    resolveModePrompt(
-      mode,
-      targetModel==='v4.5'?settings.convertPromptTemplatesV45:settings.convertPromptTemplates,
-      settings.convertSystemPrompt,
-      targetModel==='v4.5'?V45_CONVERT_SYSTEM_PROMPTS:CONVERT_SYSTEM_PROMPTS,
-    ),
-    "",
-    "你正在为连续漫画生成 NovelAI 生图提示词。必须保持角色、服装、地点、时间线和关键道具前后一致。",
-    "每次只输出当前分镜的最终英文提示词，不要解释，不要 Markdown。",
-    "必须参考全局设定、参考图反推描述、上一个/当前/下一个中文分镜描述，保持同一角色、场景、物品的英文表达一致。",
-    "避免色情、裸露、夸张身体特写。",
-  ].join("\n") : '';
-
-  const out: ComicConvertResult["panels"] = [];
-  let fallbackCount = 0;
-  for (const panel of request.panels) {
-    const panelDictionaryHint = localDictionaryGuidance(mode, panel.cnPrompt);
+  const settings=structuredClone(getSettings()),mode=request.mode;
+  const out:ComicConvertResult['panels']=[];
+  if(!['mixed','natural','tags'].includes(mode)||!settings.convertApiKey?.trim()||!settings.convertApiUrl?.trim())return {ok:false,message:'请检查提示词模式和转换 API；不会使用本地示例替代。',panels:[]};
+  let system:string;
+  try{system=[renderPromptSkillTemplate(resolveTemplateLibrarySlot(`image.convert.${mode}`).body,'<provided in user message>'),PROMPT_SKILL_V3_RUNTIME].join('\n');}
+  catch(error){return {ok:false,message:String(error),panels:[]};}
+  for(const panel of request.panels){
     const userText = [
       `Output mode: ${mode}`,
       "Global story prompt:",
@@ -3764,59 +3605,15 @@ export async function convertComicPanels(
       panel.previousPrompts.length
         ? panel.previousPrompts.join("\n")
         : "(none)",
-      edition==='1.0.0'?modeUserInstruction(mode, "convert", false, targetModel):"",
-      panelDictionaryHint,
-    ].join("\n\n");
-    if(edition==='2.0.0') {
-      const result=await convertPromptTextV2(userText,mode,false,targetModel,undefined,settings,`漫画分镜转换 #${panel.index} · ${targetModel} · 技能${edition} · ${mode}`);
-      out.push(result.ok&&result.result
-        ? {panelId:panel.panelId,enPrompt:result.result}
-        : {panelId:panel.panelId,enPrompt:'',error:result.message});
-      continue;
-    }
-    const result = await callConvertApi(
-      systemPrompt,
-      userText,
-      4096,
-      `漫画分镜转换 #${panel.index}`,
-      true, true, false, settings,
-    );
-    if (!result.ok) {
-      fallbackCount += 1;
-      out.push({
-        panelId: panel.panelId,
-        enPrompt: buildComicLocalPrompt(request, panel),
-        error: undefined,
-      });
-      continue;
-    }
-    let content = cleanPromptOutput(result.content ?? "");
-    if (modeNeedsRepair(mode, content)) {
-      const repaired = await callConvertApi(
-        modeRepairSystemPrompt(mode, targetModel),
-        buildModeRepairUserText(mode, panel.cnPrompt, content),
-        900,
-        `漫画分镜转换修复 #${panel.index}`,
-        true, true, false, settings,
-      );
-      if (repaired.ok && repaired.content)
-        content = cleanPromptOutput(repaired.content);
-    }
-    if (!content.trim() || isComicPromptRefusal(content)) {
-      fallbackCount += 1;
-      content = buildComicLocalPrompt(request, panel);
-    }
-    out.push({
-      panelId: panel.panelId,
-      enPrompt: content,
-    });
+      localDictionaryGuidance(mode,panel.cnPrompt),
+    ].join('\n\n');
+    const reply=await callConvertApi(system,userText,7000,`漫画分镜转换 #${panel.index}`,true,false,false,settings,undefined,true,{});
+    try{if(!reply.ok||isComicPromptRefusal(reply.content??''))throw Error(reply.message||'未返回有效提示词');
+      const parsed=parsePromptSkillV3Response(reply.content??'',false);out.push({panelId:panel.panelId,enPrompt:parsed.prompt});
+    }catch(e){out.push({panelId:panel.panelId,enPrompt:'',error:e instanceof Error?e.message:String(e)});}
   }
-  const failed = out.filter((p) => p.error).length;
-  return {
-    ok: failed < out.length,
-    message: `转换完成：成功 ${out.length - failed}，失败 ${failed}${fallbackCount ? `；其中 ${fallbackCount} 镜使用本地模板兜底` : ""}（技能${edition} · ${targetModel}）。${edition==='2.0.0'?'仅格式与可计数单元检查，来源事实需人工复核。':''}`,
-    panels: out,
-  };
+  const n=out.filter(p=>!p.error).length;
+  return {ok:n>0,panels:out,message:`V5 分镜转换：成功 ${n}，失败 ${out.length-n}`};
 }
 
 const COMIC_CONSISTENCY_CHUNK_SIZE = 6;
@@ -4399,7 +4196,7 @@ function isInsideDir(child: string, parent: string): boolean {
 }
 
 /** Shared V2 request/parser path. A comic batch supplies one captured config. */
-async function convertPromptTextV2(
+async function runLegacyAssistantEdit(
   chineseText: string,
   mode: "tags" | "natural" | "mixed",
   knownCharacter: boolean,
@@ -4426,12 +4223,12 @@ async function convertPromptTextV2(
 
 export async function convertPromptText(...args: Parameters<typeof convertPromptTextCore>) {
   const result = await convertPromptTextCore(...args);
-  return withTagEvidence(result, args[1] ?? "tags", result.result);
+  return withTagEvidence(result, args[1] ?? "mixed", result.result);
 }
 
 async function convertPromptTextCore(
   chineseText: string,
-  mode: "tags" | "natural" | "mixed" = "tags",
+  mode: "tags" | "natural" | "mixed" = "mixed",
   knownCharacter = false,
   templateVersion: "v4.5" | "v5" = "v5",
   assistant?: PromptEditRequest,
@@ -4447,20 +4244,20 @@ async function convertPromptTextCore(
   const settings = getSettings();
   const dictionaryHint = localDictionaryGuidance(mode, chineseText);
   const requestedEdition=normalizePromptSkillVersion(skillVersion??(assistant?settings.promptAssistantSkillVersion:settings.convertPromptSkillVersion));
-  const edition=assistant&&requestedEdition==='3.0.0'?'2.0.0':requestedEdition;
+  const edition=assistant?(requestedEdition==='3.0.0'?'2.0.0':requestedEdition):'3.0.0';
+  if(!assistant)templateVersion='v5';
   if(edition==='3.0.0') {
     if(!supportsPromptSkillModel(edition,templateVersion))return {ok:false,message:'技能模板3.0.0仅支持NovelAI V5 Full；V4.5请选1.0.0'};
     let selected:ReturnType<typeof resolveTemplateLibrarySlot>;
     try{selected=resolveTemplateLibrarySlot(`image.convert.${mode}`);}catch(error){return {ok:false,message:'模板库不可用，已保留原提示词：'+(error instanceof Error?error.message:String(error))};}
     const template=selectPromptSkillTemplate({edition,targetModel:templateVersion,task:'convert',mode,legacyTemplate:'',librarySlot:selected});
     const system=[renderPromptSkillTemplate(template,'<provided in the user message>'),PROMPT_SKILL_V3_RUNTIME,promptSkillKnownCharacterInstruction(knownCharacter),dictionaryHint].filter(Boolean).join('\n\n');
-    const reply=await callConvertApi(system,chineseText,7000,`文字转换 · ${templateVersion} · 技能3.0.0 · ${mode}`,true,false,knownCharacter,settings,undefined,true);
+    const reply=await callConvertApi(system,chineseText,7000,`文字转换 · ${templateVersion} · 技能3.0.0 · ${mode}`,true,false,knownCharacter,settings,undefined,true,{});
     if(!reply.ok)return {ok:false,message:'转换失败，已保留原提示词：'+reply.message};
-    if(isComicPromptRefusal(reply.content??''))return {ok:false,message:'模型未返回可用提示词，已保留原提示词'};
     try{const parsed=parsePromptSkillV3Response(reply.content??'',knownCharacter);return {ok:true,result:parsed.prompt,variants:parsed.variants,warnings:parsed.warnings,message:'转换完成：使用所选3.0.0原稿'};}
     catch(error){return {ok:false,message:'转换结果不可用，已保留原提示词：'+(error instanceof Error?error.message:String(error))};}
   }
-  if(edition==='2.0.0') return convertPromptTextV2(chineseText,mode,knownCharacter,templateVersion,assistant,settings,undefined,true);
+  if(edition==='2.0.0') return runLegacyAssistantEdit(chineseText,mode,knownCharacter,templateVersion,assistant,settings,undefined,true);
 
   let assistance: ReturnType<typeof preparePromptAssistance> | undefined;
   if (assistant !== undefined) {
@@ -5672,10 +5469,10 @@ export async function runComicPromptRequest(request:ComicPromptRequest,ownerId?:
   const selected=resolveTemplateLibrarySlot(`comic.${request.format}`);
   if(request.templateRevision!==undefined&&request.templateRevision!==selected.revision)return {...base,ok:false,code:'stale_template',message:'模板已变化，请重新确认后生成'};
   const metadata={templateRevision:selected.revision,templateName:selected.name,...range};
-  const system=selected.body.includes('{{input}}')?renderPromptSkillTemplate(selected.body,request.input):selected.body;
-  const user=comicPromptEnvelope(selected.body.includes('{{input}}')?{...request,input:'<provided in selected template>'}:request,range);
-  const maxTokens=request.action==='recommend'?800:Math.min(16000,1000+range.pages*(request.format==='jp-page'?3000:1500));
-  const reply=await callConvertApi(system,user,maxTokens,`漫画提示词 · ${request.format} · ${request.action}`,true,false,false,settings,controller.signal,true);
+  const system=request.action==='shorten'?'精简原语言漫画台词到2–12字。保持人物语气和语义，不加解释或引号，只返回一行。':request.action==='storyboard'?storyboardSystem:selected.body.includes('{{input}}')?renderPromptSkillTemplate(selected.body,request.action==='generate'?'<reviewed page provided separately>':request.input):selected.body;
+  const user=comicPromptEnvelope(request.action==='recommend'&&selected.body.includes('{{input}}')?{...request,input:'<provided in selected template>'}:request,range);
+  const maxTokens=request.action==='shorten'?128:request.action==='storyboard'?12000:request.action==='recommend'?800:Math.min(16000,1000+range.pages*(request.format==='jp-page'?3000:1500));
+  const reply=await callConvertApi(system,user,maxTokens,`漫画提示词 · ${request.format} · ${request.action}`,true,false,false,settings,controller.signal,true,{pages:request.action==='generate'?range.pages:undefined});
   if(controller.signal.aborted)return {...base,...metadata,ok:false,code:'cancelled',message:'已停止本地等待；服务端可能已经处理或计费'};
   const raw=reply.content??'';
   if(resolveTemplateLibrarySlot(`comic.${request.format}`).revision!==selected.revision)return {...base,...metadata,ok:false,raw,code:'stale_template',message:'请求期间模板已变化，旧结果仅保留原文，不自动使用'};
@@ -5684,6 +5481,11 @@ export async function runComicPromptRequest(request:ComicPromptRequest,ownerId?:
    return {...base,...metadata,...parsed,ok:false,raw,code:'request_failed',message:reply.message};
   }
   if(isComicPromptRefusal(raw))return {...base,...metadata,ok:false,raw,code:'parse_failed',message:'转换服务未返回漫画提示词，未提交生图'};
+  if(request.action==='shorten'){const line=raw.trim();if(!line||/[\r\n]/.test(line)||Array.from(line).length>12)return {...base,...metadata,ok:false,raw,code:'parse_failed',message:'无法在12字内精简，原台词已保留。'};return {...base,...metadata,ok:true,shortened:line,message:'台词已精简，可继续编辑。'};}
+  if(request.action==='storyboard'){
+   try{return {...base,...metadata,ok:true,storyboard:parseV5Storyboard(raw,range.totalPages,request.format==='single-panel'),message:'请审阅分镜和气泡，再确认编译'};}
+   catch(error){return {...base,...metadata,ok:false,raw,code:'parse_failed',message:error instanceof Error?error.message:'分镜数据无效'};}
+  }
   if(request.action==='recommend'){
    try{return {...base,...metadata,...parseComicRecommendation(raw),ok:true,raw,message:'已从转换API获得推荐页数，可自行调整'};}
    catch(error){return {...base,...metadata,ok:false,raw,code:'parse_failed',message:error instanceof Error?error.message:String(error)};}

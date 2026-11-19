@@ -374,6 +374,7 @@ function createTools(options: McpServerOptions): ToolDef[] {
     templateVersion: { type: "string", enum: ["v4.5", "v5"] },
     skillVersion: { type: "string", enum: ["1.0.0", "2.0.0", "3.0.0"] },
   };
+  const generationTemplate = {...textTemplate,templateVersion:{type:'string',enum:['v5']},skillVersion:{type:'string',enum:['3.0.0']},color:{type:'string',enum:['color','mono']},bubbles:{type:'string',enum:['ignore','extract']}};
   const templateSlot = { type: "string", enum: [
     "image.reverse.tags", "image.reverse.natural", "image.reverse.mixed",
     "image.convert.tags", "image.convert.natural", "image.convert.mixed",
@@ -476,13 +477,13 @@ function createTools(options: McpServerOptions): ToolDef[] {
     {
       name: "convert_prompt", title: "Convert a prompt with Studio",
       description: "Use the configured conversion API and the chosen Studio template. May incur provider charges; does not generate images.",
-      inputSchema: schema({ ...textTemplate, text: { type: "string", minLength: 1, maxLength: 100000 }, knownCharacter: { type: "boolean" }, confirmed }, ["text", "confirmed"]),
+      inputSchema: schema({ ...generationTemplate, text: { type: "string", minLength: 1, maxLength: 100000 }, knownCharacter: { type: "boolean" }, confirmed }, ["text", "confirmed"]),
       annotations: PAID, run: ({ confirmed: _confirmed, ...args }, ctx) => agentResult("langbai_convert_prompt", args, ctx),
     },
     {
       name: "reverse_prompt", title: "Read a prompt from an image with Studio",
       description: "Send the chosen image to the configured reverse API. May incur provider charges; use read_image_metadata to inspect local embedded data instead.",
-      inputSchema: schema({ ...textTemplate, image: IMAGE_REF, hint: { type: "string", maxLength: 1000 },
+      inputSchema: schema({ ...generationTemplate, contentOnly:{type:'boolean'}, image: IMAGE_REF, hint: { type: "string", maxLength: 1000 },
         knownCharacter: { type: "boolean" }, scope: { type: "string", enum: ["full", "character", "object", "scene"] }, confirmed }, ["image", "confirmed"]),
       annotations: PAID, run: async ({ image, confirmed: _confirmed, ...args }, ctx) => {
         ctx.signal.throwIfAborted();
@@ -494,10 +495,10 @@ function createTools(options: McpServerOptions): ToolDef[] {
       name: "plan_comic_prompts", title: "Recommend comic pages or draft page prompts",
       description: "Use Studio's selected comic template and configured conversion API. One prompt line per page; never generates images. May incur conversion API charges.",
       inputSchema: schema({
-        action: { type: "string", enum: ["recommend", "generate"] },
+        action: { type: "string", enum: ["recommend", "storyboard", "generate", "shorten"] },
         format: { type: "string", enum: ["jp-page", "single-panel"] },
         input: { type: "string", minLength: 1, maxLength: 20000 },
-        pages: limit(8), totalPages: limit(30), batchFrom: limit(30),
+        pages: limit(1), totalPages: limit(30), batchFrom: limit(30), approvedPage:{type:"string",maxLength:40000,description:"Reviewed script for this page, required for generate"}, color:{type:"string",enum:["color","mono"]},
         continuity: { type: "string", maxLength: 20000 }, templateRevision: { type: "string", maxLength: 200 }, confirmed,
       }, ["action", "format", "input", "confirmed"]),
       annotations: PAID,

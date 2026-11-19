@@ -16,15 +16,13 @@ export function skillVersionForModel(edition:unknown,model:ReversePromptTemplate
 /** Read legacy selections before defaults merge; keep genuine user edits in their
  * original 1.0.0 slots. New edition slots never consume or erase those edits. */
 export function normalizePromptSkillSettings(raw:Partial<AppSettings>) {
- const reverseModel=raw.reversePromptTemplateVersion==='v4.5'?'v4.5':'v5';
  const convertModel=raw.convertPromptTemplateVersion==='v4.5'?'v4.5':'v5';
  const assistantModel=raw.promptAssistantTemplateVersion==='v4.5'?'v4.5':raw.promptAssistantTemplateVersion==='v5'?'v5':convertModel;
- const reverseCustom=hasCustomLegacySkill(raw.reversePromptTemplates,'reverse');
  const convertCustom=hasCustomLegacySkill(raw.convertPromptTemplates,'convert');
  const overlayCustom=!!((raw.promptOptimizeTemplate?.trim()&&!same(raw.promptOptimizeTemplate,PROMPT_OPTIMIZE_TEMPLATE))||(raw.promptAssistantTemplate?.trim()&&!same(raw.promptAssistantTemplate,PROMPT_CUSTOM_TEMPLATE)));
  return {
-  reversePromptSkillVersion:skillVersionForModel(raw.reversePromptSkillVersion,reverseModel,reverseCustom?'1.0.0':'2.0.0'),
-  convertPromptSkillVersion:skillVersionForModel(raw.convertPromptSkillVersion,convertModel,convertCustom?'1.0.0':'2.0.0'),
+  reversePromptSkillVersion:'3.0.0' as const,convertPromptSkillVersion:'3.0.0' as const,
+  reversePromptTemplateVersion:'v5' as const,convertPromptTemplateVersion:'v5' as const,
   promptAssistantSkillVersion:skillVersionForModel(raw.promptAssistantSkillVersion==='3.0.0'?'2.0.0':raw.promptAssistantSkillVersion,assistantModel,overlayCustom||convertCustom?'1.0.0':'2.0.0'),
   promptAssistantTemplateVersion:assistantModel,
  };

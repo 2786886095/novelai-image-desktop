@@ -12,7 +12,7 @@ vi.mock("electron", () => ({
   dialog: { showMessageBox: async () => ({ response: fixture.approve ? 1 : 0 }) },
 }));
 vi.mock("./agent-tools", () => ({ executeAgentTool: vi.fn(), agentGenerationInput: vi.fn(), agentInpaintInput: vi.fn() }));
-vi.mock("./nai", () => ({ quoteAnlasCost: vi.fn(), refreshStoredAccount: vi.fn() }));
+vi.mock("./nai", () => ({ quoteAnlasCost: vi.fn(), refreshStoredAccount: vi.fn(), runComicPromptRequest: vi.fn(async r=>({ok:true,action:r.action,page:r.approvedPage})),cancelComicPromptRequest:vi.fn() }));
 
 function makePng(prompt?: string) {
   const png = new PNG({ width: 2, height: 2 });
@@ -153,6 +153,8 @@ it("creates and moves groups, previews exact metadata rules, and finds character
     expect((await call("read_prompt_template", { slot: "comic.jp-page", kind: "convert" })).result.isError).toBe(true);
     expect((await call("convert_prompt", { text: "local fixture" })).error.code).toBe(-32602);
     expect((await call("plan_comic_prompts", { action: "recommend", input: "local fixture", format: "jp-page" })).error.code).toBe(-32602);
+    const reviewed=await data("plan_comic_prompts",{action:"generate",format:"jp-page",input:"fixture",batchFrom:2,totalPages:2,pages:1,approvedPage:"reviewed dialogue",confirmed:true});
+    expect(reviewed).toMatchObject({action:"generate",page:"reviewed dialogue"});
     expect((await call("prepare_generation", { historyGroupId: "invalid" })).result.isError).toBe(true);
     const bridge = await import("./agent-tools");
     vi.mocked(bridge.agentGenerationInput).mockImplementation((_request, args) => ({

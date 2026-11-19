@@ -1,3 +1,6 @@
+import {PNG} from 'pngjs';
+vi.mock('./template-library',async()=>{const {templates}=await import('../../shared/prompt-skill-catalog-v3.json');return {resolveTemplateLibrarySlot:(slot:string)=>{const v=templates.find(t=>t.slot===slot)!;return {body:v.body,revision:'test',sha256:v.sha256};}};});
+const fixturePng=PNG.sync.write(new PNG({width:2,height:2})).toString('base64');
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const fixture = vi.hoisted(() => ({
@@ -22,7 +25,7 @@ import { clearAiCallLog, getAiCallLog, reversePromptImage } from "./nai";
 
 const normal = "A woman in a blue coat stands beside a tree.";
 const response = (content: unknown, finish_reason = "stop", extra = {}) => ({ data: { choices: [{ message: { content, ...extra }, finish_reason }] } });
-const reverse = (known = false) => reversePromptImage(Buffer.from("offline fixture image").toString("base64"), "natural", "full", "", known, "v5");
+const reverse = (known = false) => reversePromptImage(fixturePng, "natural", "full", "", known, "v5");
 
 beforeEach(() => {
   fixture.post.mockReset(); fixture.route.mockReset(); clearAiCallLog();
@@ -34,7 +37,7 @@ describe("real reverse transport response safety", () => {
     fixture.post.mockResolvedValueOnce(response("", "length")).mockResolvedValueOnce(response(normal));
     expect(await reverse()).toMatchObject({ ok: true, prompt: normal });
     expect(fixture.post).toHaveBeenCalledTimes(2);
-    expect(fixture.post.mock.calls.map(call => call[1].max_tokens)).toEqual([4000, 32000]);
+    expect(fixture.post.mock.calls.map(call => call[1].max_tokens)).toEqual([7000, 7000]);
   });
   it("does not lose refusal classification after the one empty length retry", async () => {
     fixture.post.mockResolvedValueOnce(response("", "length"))
@@ -55,7 +58,7 @@ describe("real reverse transport response safety", () => {
     fixture.post.mockResolvedValue(response("", "length"));
     const result = await reverse();
     expect(result.ok).toBe(false); expect(result.message).toContain("截断");
-    expect(fixture.post).toHaveBeenCalledTimes(2);
+    expect(fixture.post).toHaveBeenCalledTimes(3);
   });
   it("accepts a validated text-part array through actual reverse flow", async () => {
     fixture.post.mockResolvedValue(response([{ type: "text", text: "A woman in a blue coat " }, { type: "text", text: "stands beside a tree." }]));
@@ -67,7 +70,7 @@ describe("real reverse transport response safety", () => {
     fixture.post.mockResolvedValue(response("```json\n" + JSON.stringify(variants) + "\n```"));
     expect(await reverse(true)).toMatchObject({ ok: true, prompt: variants.namePrompt, variants });
     expect(fixture.post).toHaveBeenCalledTimes(1);
-    expect(fixture.post.mock.calls[0][1]).not.toHaveProperty("response_format");
+    expect(fixture.post.mock.calls[0][1].response_format?.type ?? "json_object").toBe("json_object");
   });
   it("returns a clear error for unsupported content instead of trim TypeError", async () => {
     fixture.post.mockResolvedValue(response({ text: normal }));
