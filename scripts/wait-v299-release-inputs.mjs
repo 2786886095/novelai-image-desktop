@@ -13,6 +13,7 @@ const inputs=[
  ['build-mobile.yml','44463868130'],
  ['feature-acceptance.yml','44463850901'],
  ['image-metadata.yml','44463857167'],
+ ['ios-folder-native-diagnostic.yml','44463872815'],
 ];
 const run=(command,...args)=>execFileSync(command,args,{encoding:'utf8',timeout:60000,maxBuffer:16*1024*1024}).trim();
 // Only retry read-only API/network errors. Never retry publishing or a failed assertion.
