@@ -39,19 +39,19 @@ const releaseScope = Object.freeze({
 export const releaseScopeSha256 = crypto.createHash('sha256').update(JSON.stringify(releaseScope)).digest('hex');
 export const releaseScopeCounts = Object.freeze({declaredSlots:195,requiredSlots:187,notSupportedSlots:8});
 
-export function assertReleasePlatformContract(report, {version, sourceSha, waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV292=false, waiveWindowsArtistGpuV293=false, waiveWindowsArtistGpuV294=false, waiveWindowsArtistGpuV295=false, waiveWindowsArtistGpuV298=false}) {
+export function assertReleasePlatformContract(report, {version, sourceSha, waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV292=false, waiveWindowsArtistGpuV293=false, waiveWindowsArtistGpuV294=false, waiveWindowsArtistGpuV295=false, waiveWindowsArtistGpuV299=false}) {
   assert.equal(typeof waiveWindowsArtistGpuV286,'boolean');
   assert.equal(typeof waiveWindowsArtistGpuV292,'boolean');
   assert.equal(typeof waiveWindowsArtistGpuV293,'boolean');
   assert.equal(typeof waiveWindowsArtistGpuV294,'boolean');
   assert.equal(typeof waiveWindowsArtistGpuV295,'boolean');
-  assert.equal(typeof waiveWindowsArtistGpuV298,'boolean');
+  assert.equal(typeof waiveWindowsArtistGpuV299,'boolean');
   if(waiveWindowsArtistGpuV293)assert.equal(version,'2.9.3','Windows Artist GPU v2.9.3 waiver applies only to v2.9.3');
   if(waiveWindowsArtistGpuV294)assert.equal(version,'2.9.4','Windows Artist GPU v2.9.4 waiver applies only to v2.9.4');
   if(waiveWindowsArtistGpuV295)assert.equal(version,'2.9.5','Windows Artist GPU v2.9.5 waiver applies only to v2.9.5');
-  if(waiveWindowsArtistGpuV298)assert.equal(version,'2.9.8','Windows Artist GPU v2.9.8 waiver applies only to v2.9.8');
+  if(waiveWindowsArtistGpuV299)assert.equal(version,'2.9.9','Windows Artist GPU v2.9.9 waiver applies only to v2.9.9');
   if(waiveWindowsArtistGpuV292)assert.equal(version,'2.9.2','Windows Artist GPU v2.9.2 waiver applies only to v2.9.2');
-  const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV292||waiveWindowsArtistGpuV293||waiveWindowsArtistGpuV294||waiveWindowsArtistGpuV295||waiveWindowsArtistGpuV298;
+  const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV292||waiveWindowsArtistGpuV293||waiveWindowsArtistGpuV294||waiveWindowsArtistGpuV295||waiveWindowsArtistGpuV299;
   if(waiveWindowsArtistGpuV286)assert.equal(version,'2.8.6','Windows Artist GPU waiver applies only to v2.8.6');
   assert.ok(/^\d+\.\d+\.\d+$/.test(version),'Invalid release version');
   assert.ok(/^[a-f0-9]{40}$/i.test(sourceSha),'Invalid immutable source SHA');
@@ -132,7 +132,7 @@ export function assertV286CloudNativeRun(run,{sourceSha}){
 
 // Exact artifacts already exist. Their strict matrix failed solely because its GPU cell is pending.
 // Keep the raw failed result intact; the full matrix and receipts are independently checked.
-export function assertV298CloudNativeRun(run,{sourceSha}){
+export function assertV299CloudNativeRun(run,{sourceSha}){
   assertCloudNativeRun(run,{sourceSha,expectStrictMatrixFailure:true});
 }
 
@@ -162,9 +162,9 @@ function assertCloudNativeRun(run,{sourceSha,expectStrictMatrixFailure=false}){
   }
 }
 
-export function assertReleaseEvidenceFiles(report, evidenceRoot, {waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV292=false, waiveWindowsArtistGpuV293=false, waiveWindowsArtistGpuV294=false, waiveWindowsArtistGpuV295=false, waiveWindowsArtistGpuV298=false}={}) {
+export function assertReleaseEvidenceFiles(report, evidenceRoot, {waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV292=false, waiveWindowsArtistGpuV293=false, waiveWindowsArtistGpuV294=false, waiveWindowsArtistGpuV295=false, waiveWindowsArtistGpuV299=false}={}) {
   // Validate the exact policy before an empty not-supported evidence array can be skipped.
-  assertReleasePlatformContract(report,{version:report?.version,sourceSha:report?.sourceSha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV298});
+  assertReleasePlatformContract(report,{version:report?.version,sourceSha:report?.sourceSha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV299});
   const root=fs.realpathSync(evidenceRoot);
   for(const feature of report.features) for(const platform of releasePlatforms)
     for(const proof of feature.platforms[platform].evidence) {
