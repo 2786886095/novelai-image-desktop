@@ -69,7 +69,7 @@
 | `search_artist_styles` | 搜索本地画风与画师标签 | 新增 |
 | `related_offline_tags` | 按最多 12 个原 Tag 或唯一译名，查找本地共现候选，并用已启用的词包校验及翻译；不联网、不重复返回输入标签。 | 已有 |
 | `browse_nax_collection` | 只读访问 NAX 公共合集（`collectionId` 必填，可选 `chapter` 分册、`page` 界面页），返回每页最多 24 项对照图片及出处；只连接固定原站和图床，不启动浏览器。 | 已有 |
-| `search_tags` | 按英文原 Tag 或当前离线词包翻译搜索，返回原 Tag、翻译和使用量；可选排序：`relevance`（默认，精确匹配优先）、`popular`（使用量）、`alphabetical`（原 Tag 名）。不发起网络请求。桌面共用只读 SQLite 连接及有界缓存，不需要 Python 服务。未启用词包时提示先下载，不回退旧库或网络。 | 已有 |
+| `search_tags` | 按英文原 Tag 或当前离线词包翻译搜索，返回原 Tag、翻译和使用量；可选排序：`relevance`（默认，完整匹配 → 开头匹配 → 中间或末尾的片段；英文原 Tag 和词包译名均可检索）、`popular`（使用量）、`alphabetical`（原 Tag 名）。不发起网络请求。桌面共用只读 SQLite 连接及有界缓存，不需要 Python 服务。未启用词包时提示先下载，不回退旧库或网络。 | 已有 |
 | `convert_prompt` | 调用配置的转换服务；Tag/混合模式的词汇提示只查当前离线词包；需确认，模型请求可能计费 | 新增 |
 | `reverse_prompt` | 调用配置的图片反推服务；词汇提示及结果中的 `tagMatches` 来自选定离线词包，不改变原提示词。需确认，模型请求可能计费 | 新增 |
 | `plan_comic_prompts` | 推荐页数或生成逐页提示词，不提交生图；可能计费 | 新增 |

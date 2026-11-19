@@ -80,3 +80,34 @@ it("sorts before pagination and keeps translated prefix and category constraints
  expect(searchTagPackDatabase(file,"blue",3,"popular").map(x=>x.tag)).toEqual(["blue_z","blue_a","blue q00"]);
  expect(searchTagPackDatabase(file,"blue",3,"alphabetical").map(x=>x.tag)).toEqual(["blue","blue_a","blue q00"]);
 });
+
+it("finds Chinese and English fragments, keeping exact > prefix > interior across pagination",()=>{
+ const make=(tag:string,tr:string,count:number):Row=>[tag,tag.replaceAll("_"," "),tr,tr,0,count];
+ const rows=[
+  make("angle","构图",1),make("angle_front","构图示例",2),
+  make("dutch_angle","荷兰角/斜角构图",999),
+  ...Array.from({length:28},(_,i)=>make("wide_angle_"+i,"宽幅构图"+i,50-i)),
+  make("percent_sign","百分号%",1),make("other","不相关",501)
+ ];
+ const file=createDb(rows),index=path.join(path.dirname(file),"groups.bin");
+ const selected=[1,3],all=rows.map((_,i)=>i+1);
+ const counts=Object.fromEntries([["all",rows.length],...Array.from({length:17},(_,i)=>[String(i).padStart(2,"0"),i===0?2:0])]);
+ const meta=Buffer.from(JSON.stringify({version:TAG_PACK_MANIFEST.updatedAt,rows:rows.length,counts}));
+ const header=Buffer.alloc(8);header.write("LBT1");header.writeUInt32LE(meta.length,4);
+ const ids=Buffer.alloc((all.length+selected.length)*4);[...all,...selected].forEach((id,i)=>ids.writeUInt32LE(id,i*4));
+ fs.writeFileSync(index,Buffer.concat([header,meta,ids]));
+ for(const word of ["构图","angle"]){
+  const first=browseTagPackDatabase(file,index,"all",word,0),next=browseTagPackDatabase(file,index,"all",word,1);
+  expect(first.total).toBe(31);expect(first.rows.map(r=>r.tag).slice(0,3)).toEqual(["angle","angle_front","dutch_angle"]);
+  const words=[...first.rows,...next.rows].map(r=>r.tag);
+  expect(new Set(words).size).toBe(31);
+  expect(searchTagPackDatabase(file,word,200).map(r=>r.tag)).toEqual(words);
+  expect(searchTagPackDatabase(file,word,1)[0].tag).toBe("angle");
+  expect(browseTagPackDatabase(file,index,"00",word,0).rows.map(r=>r.tag)).toEqual(["angle","dutch_angle"]);
+  expect(browseTagPackDatabase(file,index,"all",word,0,"popular").rows[0].tag).toBe("dutch_angle");
+ }
+ expect(searchTagPackDatabase(file,"斜角构",2)[0].tag).toBe("dutch_angle");
+ expect(searchTagPackDatabase(file,"ＵＴＣＨ_ＡＮＧ",2)[0].tag).toBe("dutch_angle");
+ expect(searchTagPackDatabase(file,"%",10).map(r=>r.tag)).toEqual(["percent_sign"]);
+ expect(lookupTagPackDatabase(file,["斜角构","utch ang"],true)).toEqual([]);
+});

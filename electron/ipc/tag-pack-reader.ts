@@ -6,13 +6,19 @@ import type { TagSuggestion } from "../../src/types";
 export type TagDictionaryMatch = TagSuggestion & { query: string };
 type Row = { tag: string; translated: string; count: number; category: number };
 type Ranked = Row & { priority: number };
-type Matched = {id:number;count:number;tag:string;exact:boolean};
+type Matched = {id:number;count:number;tag:string;priority:0|1|2};
+// Match SQLite BINARY order when finalizing a tied cutoff in JavaScript.
+function compareTag(a:string,b:string){
+ if(a===b)return 0;
+ if(/[\uD800-\uDFFF]/.test(a+b))return Buffer.compare(Buffer.from(a),Buffer.from(b));
+ return a<b?-1:1;
+}
 function orderMatches(a:Matched,b:Matched,sort:TagPackSort) {
  if(sort==="alphabetical") {
   const k=fold(a.tag),j=fold(b.tag);
   return (k<j?-1:k>j?1:0)||b.count-a.count||a.id-b.id;
  }
- return (sort==="relevance"?Number(b.exact)-Number(a.exact):0)||b.count-a.count||a.tag.localeCompare(b.tag)||a.id-b.id;
+ return (sort==="relevance"?a.priority-b.priority:0)||b.count-a.count||compareTag(a.tag,b.tag)||a.id-b.id;
 }
 const columns = ["key", "translated_key"] as const;
 type Column = typeof columns[number];
@@ -91,6 +97,10 @@ class TagPackReader {
   private pageRow:StatementSync;
   private alphabeticIds:Uint32Array|undefined;
   private readonly alphabeticGroups=new Lru<Uint32Array>(5);
+  private readonly totalMatches:StatementSync;
+  private readonly totals=new Lru<number>(96);
+  private readonly contains:StatementSync;
+  private readonly topContains:StatementSync;
   private matching:Record<Column,StatementSync>;
   private readonly exactLabels = new Lru<Row | null>(2048);
 
@@ -100,6 +110,12 @@ class TagPackReader {
       this.db.exec("PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA cache_size=-4096");
       this.statements={key:prepare(this.db,"key"),translated_key:prepare(this.db,"translated_key")};
       this.pageRow=this.db.prepare("SELECT "+rowFields+" FROM terms WHERE rowid=?");
+      // instr is literal (unlike LIKE), so %, _ after folding, and punctuation
+      // are not wildcard patterns. Keep exact label resolution on its own path.
+      const contained=" FROM terms WHERE instr(key,?)>0 OR instr(translated_key,?)>0";
+      this.totalMatches=this.db.prepare("SELECT count(*) AS n"+contained);
+      this.contains=this.db.prepare("SELECT rowid AS id,count,tag"+contained);
+      this.topContains=this.db.prepare("SELECT "+rowFields+contained+" ORDER BY count DESC,tag LIMIT ?");
       this.matching={
         key:this.db.prepare("SELECT rowid AS id,count,tag,key AS term FROM terms WHERE key>=? AND key<?"),
         translated_key:this.db.prepare("SELECT rowid AS id,count,tag,translated_key AS term FROM terms WHERE translated_key>=? AND translated_key<?"),
@@ -131,7 +147,13 @@ class TagPackReader {
       const prefix=this.statements[col].prefix.all(word,upper,remaining,word,upper,remaining) as unknown as Row[];
       for(const row of prefix)if(!byTag.has(row.tag))byTag.set(row.tag,{...row,priority:1});
     }
-    const result=[...byTag.values()].sort((a,b)=>a.priority-b.priority||b.count-a.count||a.tag.localeCompare(b.tag))
+    // A full prefix page already outranks every infix candidate.
+    if(byTag.size<n){
+      for(const row of this.topContains.all(word,word,n) as unknown as Row[]){
+        if(!byTag.has(row.tag))byTag.set(row.tag,{...row,priority:2});
+      }
+    }
+    const result=[...byTag.values()].sort((a,b)=>a.priority-b.priority||b.count-a.count||compareTag(a.tag,b.tag))
       .slice(0,n).map(suggestion);
     this.searches.set(cacheKey,result);
     return result.map(row=>({...row}));
@@ -145,9 +167,13 @@ class TagPackReader {
       for(const row of this.matching[column].iterate(word,upper)) {
         const {id,count,tag,term}=row as unknown as {id:number;count:number;tag:string;term:string};
         if(members&&!members.has(id))continue;
-        const exact=term===word;
-        if(!best.has(id)||exact)best.set(id,{id,count,tag,exact});
+        const priority=term===word?0:1;
+        if(!best.has(id)||priority===0)best.set(id,{id,count,tag,priority});
       }
+    }
+    for(const row of this.contains.iterate(word,word)){
+      const {id,count,tag}=row as unknown as {id:number;count:number;tag:string};
+      if(!best.has(id)&&(!members||members.has(id)))best.set(id,{id,count,tag,priority:2});
     }
     return [...best.values()];
   }
@@ -156,6 +182,16 @@ class TagPackReader {
     const index=browseIndex(path), listed=index.groups.get(group);
     if(!listed)return {rows:[],total:0,page:0};
     const word=fold(query.slice(0,255));
+    // Autocomplete opens on page zero. Count literally matched rows, but do not
+    // allocate and sort hundreds of thousands of IDs just to display 24 tags.
+    if(word && group==="all" && page===0 && sort==="relevance"){
+      let total=this.totals.get(word);
+      if(total===undefined){
+        total=Number(this.totalMatches.get(word,word)?.n);
+        this.totals.set(word,total);
+      }
+      return {rows:total?this.search(word,TAG_BROWSE_PAGE_SIZE,sort):[],total,page:0};
+    }
     let ids:readonly number[]|Uint32Array=listed;
     if(word){
       const cacheKey=[path,group,word,sort].join("\0");

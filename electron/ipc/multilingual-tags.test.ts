@@ -58,7 +58,7 @@ it("verifies the pack before activation and returns translated offline results o
   expect(lookupMultilingualTags(["蓝色眼睛"],true)[0]?.tag).toBe("blue_eyes");
   const list=(await rpc("tools/list",{})).tools;
   expect(list.find((t:{name:string})=>t.name==="search_tags").annotations.openWorldHint).toBe(false);
-  for(const query of ["blue_eyes","蓝色"]){
+  for(const query of ["blue_eyes","蓝色","眼睛","ue_ey"]){
    const result=await rpc("tools/call",{name:"search_tags",arguments:{query,limit:1}});
    expect(JSON.parse(result.content[0].text)).toEqual([{tag:"blue_eyes",description:"蓝色眼睛",category:0,count:1234,localizedDescription:true}]);
   }
