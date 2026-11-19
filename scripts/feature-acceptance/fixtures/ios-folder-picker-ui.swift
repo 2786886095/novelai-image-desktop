@@ -590,35 +590,33 @@ final class FolderPickerUITests: XCTestCase {
     // second appearance wait. No outer allowance or timeout is increased.
     let namingStarted = Date()
     let namingDeadline = namingStarted.addingTimeInterval(5)
-    // Give the keyboard its first transition, then give the live AX query
-    // time for both enumeration and hit-testing: on two runners starting the
-    // live query at 4.55s left less time than a single snapshot required.
-    // The ready deadline and full safety checks are unchanged.
-    let namingPolls: [(offset: TimeInterval, includeModal: Bool)] = [
-      (0.8, false), (1.9, false), (2.8, true)
-    ]
+    // One bounded modal fallback early, then keep observing the *inline*
+    // TextView until the original deadline. Run 44479338576 spent its last
+    // two seconds querying Alert/Sheet and never re-read Files' inline editor.
+    let firstNamingProbe = namingStarted.addingTimeInterval(0.8)
+    let modalProbeAfter = namingStarted.addingTimeInterval(1.4)
     var naming: NamingEditorWitness?
     var namingQueryCount = 0
     var namingModalQueryCount = 0
     var namingFreshQueryCount = 0
     var namingProbeTimes: [[String: Double]] = []
-    for poll in namingPolls {
-      if naming != nil || Date() >= namingDeadline { break }
-      let delay = namingStarted.addingTimeInterval(poll.offset).timeIntervalSinceNow
-      // Do not block XCTest's main thread while the remote Files keyboard
-      // transitions. Keep the same absolute probe offsets and deadline.
+    var nextNamingProbe = firstNamingProbe
+    while naming == nil && Date() < namingDeadline {
+      let delay = nextNamingProbe.timeIntervalSinceNow
       try await suspendPickerPoll(delay)
       if Date() >= namingDeadline { break }
       namingQueryCount += 1
-      if poll.includeModal { namingModalQueryCount += 1 }
+      let includeModal = namingModalQueryCount == 0 && Date() >= modalProbeAfter
+      if includeModal { namingModalQueryCount += 1 }
       if retainedFileFrame != nil { namingFreshQueryCount += 1 }
       let probeStartedAt = Date()
-      naming = try currentNamingEditor(app, pickerFileView, namingViewFrame, includeModal: poll.includeModal,
+      naming = try currentNamingEditor(app, pickerFileView, namingViewFrame, includeModal: includeModal,
         retainedFileFrame: retainedFileFrame, before: namingDeadline)
       let probeEndedAt = Date()
-      namingProbeTimes.append(["scheduled": poll.offset,
+      namingProbeTimes.append(["scheduled": nextNamingProbe.timeIntervalSince(namingStarted),
         "started": probeStartedAt.timeIntervalSince(namingStarted),
         "ended": probeEndedAt.timeIntervalSince(namingStarted)])
+      nextNamingProbe = probeEndedAt.addingTimeInterval(0.10)
     }
     let witnessObservedAt = Date()
     let withinAppearanceDeadline = witnessObservedAt < namingDeadline
