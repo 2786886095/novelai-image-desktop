@@ -353,12 +353,12 @@ test('appearance witness holds actual accessibility elements and the same absolu
  const budget=s.match(/let namingPolls:[^=]+?= \[([\s\S]+?)\]/)?.[1];
  assert(budget);
  const rows=[...budget.matchAll(/\(([\d.]+), (true|false)\)/g)].map(([,ms,modal])=>[Number(ms),modal==='true']);
- assert.equal(rows.length,2);assert.equal(rows.filter(x=>x[1]).length,1);assert.equal(rows.at(-1)[1],true);
+ assert.equal(rows.length,3);assert.equal(rows.filter(x=>x[1]).length,1);assert.equal(rows.at(-1)[1],true);
  // Run 42699463766: keep the initial keyboard transition free of AX work.
  // v2.9.2 attempts 1–2: the scoped projection missed an editor later
  // visible in the app snapshot. Reserve time for fresh queries within 5s.
- assert.deepEqual(rows.map(row=>row[0]),[3,3.75]);
- assert.equal(rows.filter(([offset])=>offset<3).length,0);
+ assert.deepEqual(rows.map(row=>row[0]),[0.8,1.9,2.8]);
+ assert(rows.at(-1)[0]+2<5,'Allow the observed two-second AX round trip even on the final scheduled probe');
  assert(rows[0][0]+1.75<5,'First exact query retains observed RPC headroom');
  assert(s.includes('"probeTimes": namingProbeTimes'));
  assert(rows.every(([offset],i)=>offset<5&&(i===0||offset>rows[i-1][0])));

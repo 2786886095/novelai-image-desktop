@@ -17,7 +17,9 @@ final class FolderPickerUITests: XCTestCase {
             userInfo: [NSLocalizedDescriptionKey: message])
   }
   private func capture(_ label: String) {
-    if let app = target {
+    if label == "final-picker-state", let app = target {
+      // Expensive full accessibility-tree dumps belong on the failure path.
+      // Successful steps retain their screenshot; functional observations are unchanged.
       let tree = XCTAttachment(string: app.debugDescription)
       tree.name = label + "-actual-accessibility-tree"
       tree.lifetime = .keepAlways
@@ -588,12 +590,12 @@ final class FolderPickerUITests: XCTestCase {
     // second appearance wait. No outer allowance or timeout is increased.
     let namingStarted = Date()
     let namingDeadline = namingStarted.addingTimeInterval(5)
-    // Avoid querying during the keyboard transition. Give the live AX query
+    // Give the keyboard its first transition, then give the live AX query
     // time for both enumeration and hit-testing: on two runners starting the
     // live query at 4.55s left less time than a single snapshot required.
     // The ready deadline and full safety checks are unchanged.
     let namingPolls: [(offset: TimeInterval, includeModal: Bool)] = [
-      (3.0, false), (3.75, true)
+      (0.8, false), (1.9, false), (2.8, true)
     ]
     var naming: NamingEditorWitness?
     var namingQueryCount = 0
