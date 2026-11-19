@@ -80,6 +80,12 @@ final class OutputFolderBridge: NSObject, UIDocumentPickerDelegate, UIAdaptivePr
     let picker = UIDocumentPickerViewController(documentTypes: ["public.folder"], in: .open)
     picker.delegate = self
     picker.allowsMultipleSelection = false
+    // On a phone an adaptive sheet leaves the presenting Flutter settings
+    // hierarchy under Files, even while its inline editor and keyboard are open.
+    // Present only the system picker to accessibility; retain iPad adaptation.
+    if controller.traitCollection.userInterfaceIdiom == .phone {
+      picker.modalPresentationStyle = .fullScreen
+    }
     picker.presentationController?.delegate = self
     controller.present(picker, animated: true) {
       picker.presentationController?.delegate = self
