@@ -498,7 +498,10 @@ test('owned icon spends the open window on one global identity and live scoped/f
 test('folder probes use the live inline editor from the first query; a detached Files collection cannot block it', () => {
  const s=swiftSource();
  const body=s.split('private func currentNamingEditor(')[1].split('private func validatedWitnessFlow(')[0];
- assert(body.includes('app.textViews.matching(exactID).allElementsBoundByAccessibilityElement'));
+ assert(body.includes('app.collectionViews.matching(NSPredicate(format: "identifier == %@", "File View")).descendants(matching: .textView)'));
+ assert(body.includes('.matching(exactID).allElementsBoundByAccessibilityElement'));
+ for(const marker of ['lookupReturned','literalMatches','hitTestReturned','geometryReturned']) assert(body.includes('timing["'+marker+'"]'));
+ assert(body.includes('guard hit, Date() < deadline else { continue }'));
  assert(!body.includes('fileView?.descendants') && !body.includes('refreshApp'));
  assert(!s.includes('currentNamingEditor(app, pickerFileView'));
  assert(body.includes('let matches = retainedFileFrame == nil ? [] :'));

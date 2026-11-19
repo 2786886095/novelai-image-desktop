@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import UniformTypeIdentifiers
 import Foundation
 import Darwin
 
@@ -77,7 +78,15 @@ final class OutputFolderBridge: NSObject, UIDocumentPickerDelegate, UIAdaptivePr
       result(FlutterError(code: "output_folder_version", message: "Directory selection requires iOS 13 or newer", details: nil)); return
     }
     pending = result
-    let picker = UIDocumentPickerViewController(documentTypes: ["public.folder"], in: .open)
+    // Hand keyboard ownership to Files rather than leaving a Flutter editor
+    // active behind the native controller. Never change system keyboard defaults.
+    controller.view.endEditing(true)
+    let picker: UIDocumentPickerViewController
+    if #available(iOS 14.0, *) {
+      picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: false)
+    } else {
+      picker = UIDocumentPickerViewController(documentTypes: ["public.folder"], in: .open)
+    }
     picker.delegate = self
     picker.allowsMultipleSelection = false
     // On a phone an adaptive sheet leaves the presenting Flutter settings

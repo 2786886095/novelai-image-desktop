@@ -46,3 +46,12 @@ test('iOS12 host source contract: only local ENOENT is missing; provider errors 
   assert.match(read, /code: missing \? "output_image_missing" : "output_folder_read"/);
   assert.match(read, /Original history was retained/);
 });
+
+test('current iOS requests a real in-place directory after yielding app text focus; older folder grants are retained', () => {
+  const flow = source.slice(source.indexOf('pending = result'),source.indexOf('func documentPickerWasCancelled'));
+  assert.ok(flow.indexOf('controller.view.endEditing(true)') < flow.indexOf('controller.present(picker'));
+  assert.match(flow, /if #available\(iOS 14.0, \*\)/);
+  assert.ok(flow.includes('forOpeningContentTypes: [.folder], asCopy: false'));
+  assert.ok(flow.includes('documentTypes: ["public.folder"], in: .open'));
+  assert.ok(source.includes('url.startAccessingSecurityScopedResource()'));
+});

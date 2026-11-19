@@ -214,7 +214,7 @@ final class FolderPickerUITests: XCTestCase {
   }
 
   private func currentNamingEditor(_ app: XCUIApplication, _ viewFrame: CGRect,
-                                   includeModal: Bool, retainedFileFrame: CGRect?, before deadline: Date) throws -> NamingEditorWitness? {
+                                   includeModal: Bool, retainedFileFrame: CGRect?, before deadline: Date, timing: inout [String: Double], since start: Date) throws -> NamingEditorWitness? {
     func bound(_ field: XCUIElement, _ owner: XCUIElement?, _ inline: Bool,
                _ identifier: String, _ frame: CGRect) -> NamingEditorWitness {
       return NamingEditorWitness(field: field, modalOwner: owner, isInline: inline,
@@ -229,7 +229,10 @@ final class FolderPickerUITests: XCTestCase {
     // Re-query the exact native TextView from the live tree on every observation;
     // no unscoped field, stale geometry alone or post-deadline result qualifies.
     let matches = retainedFileFrame == nil ? [] :
-      app.textViews.matching(exactID).allElementsBoundByAccessibilityElement
+      app.collectionViews.matching(NSPredicate(format: "identifier == %@", "File View")).descendants(matching: .textView)
+        .matching(exactID).allElementsBoundByAccessibilityElement
+    timing["lookupReturned"] = Date().timeIntervalSince(start)
+    timing["literalMatches"] = Double(matches.count)
     guard matches.count <= 1 else { throw fail("Ambiguous literal inline editor identities") }
     var inline: [NamingEditorWitness] = []
     for field in matches {
@@ -237,8 +240,12 @@ final class FolderPickerUITests: XCTestCase {
       // Enumeration is the existence observation; the exact TextView ID and
       // enabled state are in that same snapshot. Read real hit-testing and
       // bounds now, and revalidate the held object before any action below.
-      guard field.isHittable else { continue }
+      let hit = field.isHittable
+      timing["hitTestReturned"] = Date().timeIntervalSince(start)
+      timing["hittable"] = hit ? 1 : 0
+      guard hit, Date() < deadline else { continue }
       let frame = field.frame
+      timing["geometryReturned"] = Date().timeIntervalSince(start)
       if !frame.isEmpty && viewFrame.contains(frame) &&
          retainedFileFrame?.contains(CGPoint(x: frame.midX, y: frame.midY)) == true {
         inline.append(bound(field, nil, true, identifier, frame))
@@ -551,12 +558,14 @@ final class FolderPickerUITests: XCTestCase {
       if includeModal { namingModalQueryCount += 1 }
       if retainedFileFrame != nil { namingFreshQueryCount += 1 }
       let probeStartedAt = Date()
+      var phases: [String: Double] = [:]
       naming = try currentNamingEditor(app, namingViewFrame, includeModal: includeModal,
-        retainedFileFrame: retainedFileFrame, before: namingDeadline)
+        retainedFileFrame: retainedFileFrame, before: namingDeadline, timing: &phases, since: namingStarted)
       let probeEndedAt = Date()
-      namingProbeTimes.append(["scheduled": nextNamingProbe.timeIntervalSince(namingStarted),
-        "started": probeStartedAt.timeIntervalSince(namingStarted),
-        "ended": probeEndedAt.timeIntervalSince(namingStarted)])
+      phases["scheduled"] = nextNamingProbe.timeIntervalSince(namingStarted)
+      phases["started"] = probeStartedAt.timeIntervalSince(namingStarted)
+      phases["ended"] = probeEndedAt.timeIntervalSince(namingStarted)
+      namingProbeTimes.append(phases)
       nextNamingProbe = includeModal ? probeEndedAt : probeEndedAt.addingTimeInterval(0.30)
     }
     let witnessObservedAt = Date()
