@@ -1,3 +1,4 @@
+import {normalizeV5Output,type V5OutputOptions} from './comic/v5-output';
 import catalog from '../shared/prompt-skill-catalog.json';
 import catalogV3 from '../shared/prompt-skill-catalog-v3.json';
 import comicCatalog from '../shared/comic-template-catalog.json';
@@ -68,11 +69,11 @@ export function selectComicTemplate(format:'jp-page'|'single-panel',librarySlot?
  return {...item,body:librarySlot?.body??item.body,name:librarySlot?.name??item.title,sha256:librarySlot?.sha256??item.sha256,revision:librarySlot?.revision??item.sha256};
 }
 /** V3 has no v2 fixed density audit. Preserve the supplied template's own rules. */
-export function parsePromptSkillV3Response(raw:string,knownCharacter=false) {
+export function parsePromptSkillV3Response(raw:string,knownCharacter=false,output?:V5OutputOptions) {
  const input=raw.trim(),fence=/^```(?:json|text|txt)?[ \t]*\r?\n([\s\S]*?)\r?\n```$/i.exec(input);
  if(input.startsWith('```')&&!fence)throw Error('提示词代码围栏未完整闭合');
  const text=fence?fence[1].trim():input;
- const validate=(value:unknown)=>{if(typeof value!=='string'||!value.trim())throw Error('提示词为空');if(/^(?:信息不足|模式能力不足|无法完成|我无法|抱歉)/.test(value.trim()))throw Error(value.trim());const body=value.split(/\r?\n/).filter(line=>!/^\s*#/.test(line)).join('\n').trim();if(!body)throw Error('结果只有元信息，没有提示词');return body;};
+ const validate=(value:unknown)=>{if(typeof value!=='string'||!value.trim())throw Error('提示词为空');if(/^(?:信息不足|模式能力不足|无法完成|我无法|抱歉)/.test(value.trim()))throw Error(value.trim());const body=value.split(/\r?\n/).filter(line=>!/^\s*#/.test(line)).join('\n').trim();if(!body)throw Error('结果只有元信息，没有提示词');return output?normalizeV5Output(body,output):body;};
  if(!knownCharacter)return {prompt:validate(text),variants:undefined,warnings:[] as string[]};
  const value=JSON.parse(text);const namePrompt=validate(value.namePrompt),featurePrompt=validate(value.featurePrompt);
  return {prompt:namePrompt,variants:{namePrompt,featurePrompt},warnings:[] as string[]};

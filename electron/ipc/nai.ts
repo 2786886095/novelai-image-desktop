@@ -1,3 +1,4 @@
+import {v5MonoRequested} from '../../shared/v5-prompt-options';
 import {approvedLayoutHint,parseV5Storyboard, storyboardSystem} from '../../src/comic/v5-storyboard';
 import {requestV5Prompt,V5ClassifiedError} from './v5-prompt-transport';
 import {activeTagPack,searchMultilingualTags} from "./multilingual-tags";
@@ -3461,7 +3462,7 @@ async function reversePromptImageCore(
     try{image=await prepareVisionImage(imageBase64);}catch{return {ok:false,message:'图片解码失败，未向反推服务发送原文件。'};}
     const reply=await callVisionApi(system,[{type:'image_url',image_url:{url:`data:${image.mime};base64,${image.base64}`,detail:'high'}},{type:'text',text:userScopeText}],7000,`AI反推 · ${safeTemplateVersion} · 技能3.0.0 · ${mode}`,true,knownCharacter,false,true);
     if(!reply.ok)return {ok:false,message:'反推失败，已保留原提示词：'+reply.message};
-    try{const parsed=parsePromptSkillV3Response(reply.content??'',knownCharacter);return {ok:true,...parsed,message:'反推完成：使用所选3.0.0原稿；图像事实请人工复核'};}
+    try{const parsed=parsePromptSkillV3Response(reply.content??'',knownCharacter,{mono:v5MonoRequested(hint)});return {ok:true,...parsed,message:'反推完成：使用所选3.0.0原稿；图像事实请人工复核'};}
     catch(error){return {ok:false,message:'反推结果不可用，已保留原提示词：'+(error instanceof Error?error.message:String(error))};}
 }
 
@@ -3609,7 +3610,7 @@ export async function convertComicPanels(
     ].join('\n\n');
     const reply=await callConvertApi(system,userText,7000,`漫画分镜转换 #${panel.index}`,true,false,false,settings,undefined,true,{});
     try{if(!reply.ok||isComicPromptRefusal(reply.content??''))throw Error(reply.message||'未返回有效提示词');
-      const parsed=parsePromptSkillV3Response(reply.content??'',false);out.push({panelId:panel.panelId,enPrompt:parsed.prompt});
+      const parsed=parsePromptSkillV3Response(reply.content??'',false,{});out.push({panelId:panel.panelId,enPrompt:parsed.prompt});
     }catch(e){out.push({panelId:panel.panelId,enPrompt:'',error:e instanceof Error?e.message:String(e)});}
   }
   const n=out.filter(p=>!p.error).length;
@@ -4254,7 +4255,7 @@ async function convertPromptTextCore(
     const system=[renderPromptSkillTemplate(template,'<provided in the user message>'),PROMPT_SKILL_V3_RUNTIME,promptSkillKnownCharacterInstruction(knownCharacter),dictionaryHint].filter(Boolean).join('\n\n');
     const reply=await callConvertApi(system,chineseText,7000,`文字转换 · ${templateVersion} · 技能3.0.0 · ${mode}`,true,false,knownCharacter,settings,undefined,true,{});
     if(!reply.ok)return {ok:false,message:'转换失败，已保留原提示词：'+reply.message};
-    try{const parsed=parsePromptSkillV3Response(reply.content??'',knownCharacter);return {ok:true,result:parsed.prompt,variants:parsed.variants,warnings:parsed.warnings,message:'转换完成：使用所选3.0.0原稿'};}
+    try{const parsed=parsePromptSkillV3Response(reply.content??'',knownCharacter,{mono:v5MonoRequested(chineseText)});return {ok:true,result:parsed.prompt,variants:parsed.variants,warnings:parsed.warnings,message:'转换完成：使用所选3.0.0原稿'};}
     catch(error){return {ok:false,message:'转换结果不可用，已保留原提示词：'+(error instanceof Error?error.message:String(error))};}
   }
   if(edition==='2.0.0') return runLegacyAssistantEdit(chineseText,mode,knownCharacter,templateVersion,assistant,settings,undefined,true);
@@ -5490,7 +5491,7 @@ export async function runComicPromptRequest(request:ComicPromptRequest,ownerId?:
    try{return {...base,...metadata,...parseComicRecommendation(raw),ok:true,raw,message:'已从转换API获得推荐页数，可自行调整'};}
    catch(error){return {...base,...metadata,ok:false,raw,code:'parse_failed',message:error instanceof Error?error.message:String(error)};}
   }
-  const parsed=parseComicPromptPages(raw,range.pages,reply.finishReason==='length');
+  const parsed=parseComicPromptPages(raw,range.pages,reply.finishReason==='length',{jp:request.format==='jp-page',mono:request.color==='mono'});
   return {...base,...metadata,...parsed,ok:parsed.countStatus==='exact',code:parsed.countStatus==='exact'?undefined:'parse_failed',message:parsed.countStatus==='exact'?'本批提示词已生成；确认导入后仍需手动生图':`结果${parsed.countStatus==='truncated'?'疑似截断':'格式或页数不匹配'}：期望${range.pages}页，实际${parsed.lines.length}行。原文已保留，不自动导入`};
  }catch(error){return {...base,ok:false,code:controller.signal.aborted?'cancelled':'network',message:controller.signal.aborted?'已停止本地等待；服务端可能已计费':redactAiCredentials(error instanceof Error?error.message:String(error),[getSettings().convertApiKey])};}
  finally{if(comicPromptControllers.get(key)===controller)comicPromptControllers.delete(key);}

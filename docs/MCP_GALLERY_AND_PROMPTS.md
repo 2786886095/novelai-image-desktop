@@ -81,6 +81,6 @@
 
 ### v2.9.9 候选：V5 文本接口
 
-- `convert_prompt` / `reverse_prompt`：目标 V5 Full，技能 3.0.0；模式 mixed / tags / natural。color=color|mono、bubbles=ignore|extract；反推另有 contentOnly。已知角色可请求双版本。反推只向视觉 API 提交重新编码的像素。
+- `convert_prompt` / `reverse_prompt`：目标 V5 Full，技能 3.0.0；模式 mixed / tags / natural。color=color|mono、bubbles=ignore|extract；反推另有 contentOnly。已知角色可请求双版本。黑白输出把对白外的常见色相转为灰阶；保留引号内原文。整页分镜按格分段，无台词允许空的气泡字段。以上是本地结果处理，不额外发起生成请求。反推只向视觉 API 提交重新编码的像素。
 - `plan_comic_prompts`：先用 action=storyboard，传剧本、format 和 totalPages。审阅返回的 pages 与 characters 后，action=generate，指定 batchFrom、pages=1 和 approvedPage；一页一请求，重编译用相同页号。可选 recommend 只推荐页数。每次均需 confirmed；仅调用文字模型，不代替生图确认。
 - 单条台词精简：`plan_comic_prompts(action=shorten)` 发送单句，不发送整部剧本。超长或多行回复不替换原句。
