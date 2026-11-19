@@ -426,63 +426,6 @@ final class FolderPickerUITests: XCTestCase {
         "oneAttempt": true,           "secondsRemainingAfterAction": deadline.timeIntervalSinceNow,
 "navigationOrCommitGuaranteed": false], options: [.sortedKeys]), as: UTF8.self))
   }
-  // Warm UIKit’s software keyboard on the disposable picker before measuring
-  // the separate New Folder action. Do not type into search or create anything.
-  private func preparePickerKeyboard(_ app: XCUIApplication, _ providerLabels: [String]) throws {
-    let viewFrame = app.frame
-    let barID = NSPredicate(format: "identifier == %@", "FullDocumentManagerViewControllerNavigationBar")
-    let bars = app.navigationBars.matching(barID).allElementsBoundByAccessibilityElement.filter {
-      $0.exists && !$0.frame.isEmpty && viewFrame.contains($0.frame)
-    }
-    guard bars.count <= 1 else { throw fail("Ambiguous provider navigation bar during keyboard preparation") }
-    guard let bar = bars.first else { return }
-    let searches = bar.searchFields.allElementsBoundByAccessibilityElement.filter {
-      isSearchField($0) && usable($0, viewFrame) && bar.frame.contains($0.frame)
-    }
-    guard searches.count <= 1 else { throw fail("Ambiguous provider search field during keyboard preparation") }
-    guard let search = searches.first else { return }
-    guard let providerTitle = try currentNavigationTitle(app), providerLabels.contains(providerTitle) else { return }
-    try tap(search, "prepare-picker-software-keyboard")
-    let keyboard = app.keyboards.firstMatch
-    let keyboardAppeared = keyboard.waitForExistence(timeout: 4)
-    // iOS exposes the active search scrim as an Other inside the exact
-    // DocumentManager search container, not a generic Cancel button.
-    let searchContainerID = NSPredicate(format: "identifier == %@", "DOCSearchControllerContainerViewIdentifier")
-    let dismissLabel = NSPredicate(format: "label IN %@", ["Activate to dismiss", "轻点关闭", "啟用以關閉"])
-    let searchContainers = app.otherElements.matching(searchContainerID).allElementsBoundByAccessibilityElement.filter {
-      $0.exists && !$0.frame.isEmpty && viewFrame.contains($0.frame)
-    }
-    guard searchContainers.count == 1, let container = searchContainers.first else {
-      throw fail("No unique active document search container")
-    }
-    let dismissers = container.children(matching: .other).matching(dismissLabel)
-      .allElementsBoundByAccessibilityElement.filter { usable($0, viewFrame) && container.frame.contains($0.frame) }
-    guard dismissers.count <= 1 else { throw fail("Ambiguous dismissal controls inside the active document search container") }
-    if let dismiss = dismissers.first {
-      try tap(dismiss, "leave-picker-search-without-editing")
-      guard container.waitForNonExistence(timeout: 3) else { throw fail("Document search stayed active after dismissal") }
-    } else {
-      // Some simulator runtimes expose the scrim in AX but not as hittable.
-      // The same native navigation bar still exposes its real provider Back.
-      let backID = NSPredicate(format: "identifier == %@", "BackButton")
-      let backs = bar.children(matching: .button).matching(backID)
-        .allElementsBoundByAccessibilityElement.filter { usable($0, viewFrame) && bar.frame.contains($0.frame) }
-      guard backs.count == 1 else { throw fail("No unique provider Back while document search is active") }
-      try tap(backs[0], "leave-picker-search-via-provider-back")
-      guard container.waitForNonExistence(timeout: 3) else { throw fail("Document search stayed active after provider Back") }
-      if try currentNavigationTitle(app) != providerTitle {
-        guard let providerLocation = find(app, [providerTitle]) else { throw fail("Original local provider was not offered after provider Back") }
-        try tap(providerLocation, "reopen-original-local-provider-after-keyboard-preparation")
-      }
-    }
-    // The bound search container is already gone. In 42708724609 checking
-    // that old accessibility identity again after opening the provider hung.
-    guard try waitForNavigationTitle(app, [providerTitle]) else {
-      throw fail("Provider navigation title was not restored after keyboard preparation")
-    }
-    print("IOS_FOLDER_PICKER_KEYBOARD_PREPARATION:\(keyboardAppeared)")
-  }
-
   private func tap(_ element: XCUIElement, _ action: String, before deadline: Date? = nil) throws {
     guard element.exists && element.isHittable && element.isEnabled else {
       throw fail("Observed UI control unavailable: " + action)
@@ -572,7 +515,8 @@ final class FolderPickerUITests: XCTestCase {
     }
     capture("observed-external-local-provider")
     let providerLabels = providers.flatMap { $0.1 }
-    try preparePickerKeyboard(app, providerLabels)
+    // Stay in the observed local provider. Focusing Files search then backing
+    // out can discard its enumeration before the New Folder action.
     let namingViewFrame = app.frame
     let pickerFileView = try observedPickerFileView(app, namingViewFrame)
     let retainedFileFrame = pickerFileView?.frame

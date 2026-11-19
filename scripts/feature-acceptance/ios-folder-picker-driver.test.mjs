@@ -460,25 +460,16 @@ test('owned icon is at most one later attempt under original10s; no diagnostic c
  let attempts=0;let performed=0;let used=false;for(let i=0;i<3;i++){if(!used){used=true;attempts++;performed++;}}assert.equal(attempts,1);assert.equal(performed,1);
 });
 
-test('picker keyboard preparation only focuses and cancels native search before the unchanged New Folder timing gate',()=>{
- const s=swiftSource(),prep=s.split('private func preparePickerKeyboard(')[1].split('private func tap(')[0];
- assert(prep.includes('FullDocumentManagerViewControllerNavigationBar'));
- for(const token of ['bar.searchFields','app.keyboards.firstMatch','DOCSearchControllerContainerViewIdentifier','container.children(matching: .other)','dismissers.count <= 1','backs.count == 1','bar.children(matching: .button)','find(app, [providerTitle])','container.waitForNonExistence(timeout: 3)','waitForNavigationTitle(app, [providerTitle])'])assert(prep.includes(token),token);
- const branch=prep.indexOf('if let dismiss = dismissers.first');
- const back=prep.indexOf('try tap(backs[0], "leave-picker-search-via-provider-back")');
- const reopen=prep.indexOf('try tap(providerLocation, "reopen-original-local-provider-after-keyboard-preparation")');
- const waits=[...prep.matchAll(/container\.waitForNonExistence\(timeout: 3\)/g)].map(m=>m.index);
- assert.equal(waits.length,2);
- assert(branch<waits[0]&&waits[0]<back&&back<waits[1]&&waits[1]<reopen);
- assert(reopen<prep.indexOf('waitForNavigationTitle(app, [providerTitle])'));
- assert(!/typeText|namingDeadline|FileManager|nativePid/.test(prep));
- const warm=s.indexOf('try preparePickerKeyboard(app, providerLabels)');
- assert(warm>=0&&warm<s.indexOf('try tap(newFolder, "new-folder-via-system-picker")')&&warm<s.indexOf('let namingDeadline = namingStarted.addingTimeInterval(5)'));
+test('real folder flow does not navigate out of local provider or warm search before creating the nonce folder',()=>{
+ const s=swiftSource();const path=s.split('capture("observed-external-local-provider")')[1].split('let namingStarted = Date()')[0];
+ assert(path.includes('observedPickerFileView(app, namingViewFrame)'));
+ assert(path.includes('try tap(newFolder, "new-folder-via-system-picker")'));
+ assert(!/searchFields|preparePickerKeyboard|BackButton|providerLocation|Thread.sleep|FileManager/.test(path));
+ assert(s.includes('let namingDeadline = namingStarted.addingTimeInterval(5)'));
 });
 
-
 test('unlabeled folder image fallback remains bound to one existing exact-nonce AX carrier, not a global or ambiguous image',()=>{
- const s=swiftSource(),b=s.split('private func finishInlineNameViaOwnedIcon(')[1].split('private func preparePickerKeyboard(')[0];
+ const s=swiftSource(),b=s.split('private func finishInlineNameViaOwnedIcon(')[1].split('private func tap(')[0];
  const relevant=['scopedValue == folder','if namedIcons.isEmpty','carrierImages.count <= 1','image.identifier.isEmpty && image.label.isEmpty','cellFrame.contains(frame)','frame.maxY <= editorFrame.minY','let confirmed = witness.field.value as? String, confirmed == folder','try tap(icon, "finish-inline-name-via-owned-folder-icon", before: deadline)'];
  let pos=-1;for(const token of relevant){const i=b.indexOf(token);assert(i>pos,token);pos=i;}
  assert(b.includes('unique-unlabeled-owned-image'));assert(!b.includes('app.images'));
@@ -486,7 +477,7 @@ test('unlabeled folder image fallback remains bound to one existing exact-nonce 
 
 
 test('only the unique live image owned by the nonce folder can supply one actual center hit; no software success inferred',()=>{
- const s=swiftSource(),body=s.split('private func finishInlineNameViaOwnedIcon(')[1].split('private func preparePickerKeyboard(')[0];
+ const s=swiftSource(),body=s.split('private func finishInlineNameViaOwnedIcon(')[1].split('private func tap(')[0];
  assert.equal((s.match(/\.coordinate\(/g)||[]).length,1);
  const start=body.indexOf('if icon.isHittable');const guarded=body.slice(start);
  for(const token of ['namedIcons.isEmpty','observedIconIdentifier.isEmpty','icon.frame == observedIconFrame','observedIconFrame.maxY <= editorFrame.minY','!overlays.contains','guard Date() < deadline','ownedCenter.tap()'])assert(guarded.includes(token),token);
@@ -495,7 +486,7 @@ test('only the unique live image owned by the nonce folder can supply one actual
 });
 
 test('owned icon spends the open window on one global identity and live scoped/final checks',()=>{
- const s=swiftSource(),b=s.split('private func finishInlineNameViaOwnedIcon(')[1].split('private func preparePickerKeyboard(')[0];
+ const s=swiftSource(),b=s.split('private func finishInlineNameViaOwnedIcon(')[1].split('private func tap(')[0];
  const lookup=b.slice(b.indexOf('let global ='),b.indexOf('guard global.count'));
  assert(!/filter|usable\(|isHittable/.test(lookup));
  assert.equal((b.match(/usable\(witness\.field, viewFrame\)/g)||[]).length,1);
