@@ -356,15 +356,15 @@ test('appearance witness holds actual accessibility elements and the same absolu
  assert(poll.includes('let includeModal = namingModalQueryCount == 0 && Date() >= modalProbeAfter'));
  assert(poll.includes('nextNamingProbe = includeModal ? probeEndedAt : probeEndedAt.addingTimeInterval(0.30)'));
  assert(!poll.includes('namingQueryCount <'),'inline polling must not end on a fixed attempt count');
- assert.match(poll,/includeModal: includeModal, refreshApp: refreshApp,\s*retainedFileFrame: retainedFileFrame, before: namingDeadline/);
+ assert.match(poll,/includeModal: includeModal,\s*retainedFileFrame: retainedFileFrame, before: namingDeadline/);
  assert(s.includes('"probeTimes": namingProbeTimes'));
  assert(s.includes('"queryCount": namingQueryCount')&&s.includes('"modalQueryCount": namingModalQueryCount'));
  for(const literal of ['identifier == %@ AND enabled == YES','field.isHittable','viewFrame.contains(frame)'])assert(body.includes(literal));
  assert(!body.includes('field.exists')&&!body.includes('field.isEnabled')&&!body.includes('field.label.lowercased()'));
- assert(body.includes('fileView?.descendants(matching: .textView)'));
- assert(body.includes('let useFreshProjection = refreshApp && retainedFileFrame != nil'));
- assert(!body.includes('useFreshProjection = includeModal'));
- assert(poll.includes('if refreshApp && retainedFileFrame != nil { namingFreshQueryCount += 1 }'));
+ assert(!body.includes('fileView?.descendants(matching: .textView)'));
+ assert(body.includes('retainedFileFrame == nil ? [] :'));
+ assert(!body.includes('refreshApp'));
+ assert(poll.includes('if retainedFileFrame != nil { namingFreshQueryCount += 1 }'));
  assert(body.includes('.matching(exactID).allElementsBoundByAccessibilityElement'));
  assert(!body.includes('app.cells'));
  const bind=s.split('private func observedPickerFileView(')[1].split('private func currentNamingEditor(')[0];
@@ -373,7 +373,7 @@ test('appearance witness holds actual accessibility elements and the same absolu
  assert(bind.includes('visible.count <= 1'));
  assert(s.indexOf('let pickerFileView = try observedPickerFileView(app, namingViewFrame)')<
         s.indexOf('try tap(newFolder, "new-folder-via-system-picker")'));
- assert(poll.includes('currentNamingEditor(app, pickerFileView, namingViewFrame'));
+ assert(poll.includes('currentNamingEditor(app, namingViewFrame'));
  assert(poll.includes('try await suspendPickerPoll(delay)')&&!poll.includes('Thread.sleep'));
  assert(s.includes('@MainActor\n  func testSelectRealExternalNonceFolder() async throws'));
  const suspension=s.split('private func suspendPickerPoll(')[1].split('@MainActor')[0];
@@ -495,12 +495,13 @@ test('owned icon spends the open window on one global identity and live scoped/f
  assert(b.includes('secondsRemainingAfterAction'));
 });
 
-test('folder probes prefer scoped reads with periodic fresh literal AX recovery and geometry checks', () => {
+test('folder probes use the live inline editor from the first query; a detached Files collection cannot block it', () => {
  const s=swiftSource();
  const body=s.split('private func currentNamingEditor(')[1].split('private func validatedWitnessFlow(')[0];
- assert.match(body,/let useFreshProjection = refreshApp && retainedFileFrame != nil/);
- assert(s.includes('let refreshApp = namingQueryCount % 3 == 0'));
- assert.match(body,/if useFreshProjection \{\s*matches = app\.textViews\.matching\(exactID\)\.allElementsBoundByAccessibilityElement\s*\} else \{/);
+ assert(body.includes('app.textViews.matching(exactID).allElementsBoundByAccessibilityElement'));
+ assert(!body.includes('fileView?.descendants') && !body.includes('refreshApp'));
+ assert(!s.includes('currentNamingEditor(app, pickerFileView'));
+ assert(body.includes('let matches = retainedFileFrame == nil ? [] :'));
  assert.match(body,/retainedFileFrame\?\.contains\(CGPoint\(x: frame\.midX, y: frame\.midY\)\) == true/);
  assert.match(body,/guard matches\.count <= 1/);
  assert.match(body,/identifier == %@ AND enabled == YES/);

@@ -213,8 +213,8 @@ final class FolderPickerUITests: XCTestCase {
     return visible.first
   }
 
-  private func currentNamingEditor(_ app: XCUIApplication, _ fileView: XCUIElement?, _ viewFrame: CGRect,
-                                   includeModal: Bool, refreshApp: Bool, retainedFileFrame: CGRect?, before deadline: Date) throws -> NamingEditorWitness? {
+  private func currentNamingEditor(_ app: XCUIApplication, _ viewFrame: CGRect,
+                                   includeModal: Bool, retainedFileFrame: CGRect?, before deadline: Date) throws -> NamingEditorWitness? {
     func bound(_ field: XCUIElement, _ owner: XCUIElement?, _ inline: Bool,
                _ identifier: String, _ frame: CGRect) -> NamingEditorWitness {
       return NamingEditorWitness(field: field, modalOwner: owner, isInline: inline,
@@ -223,18 +223,13 @@ final class FolderPickerUITests: XCTestCase {
     }
     let identifier = "DOC.inlineRenameField"
     let exactID = NSPredicate(format: "identifier == %@ AND enabled == YES", identifier)
-    // Most observations query only the previously bound native collection.
-    // A live whole-app projection can recover a replaced collection, but
-    // continuously snapshotting Flutter + Files + keyboard competes with the
-    // provider's first cell render. Neither projection authorizes typing.
-    let useFreshProjection = refreshApp && retainedFileFrame != nil
-    let matches: [XCUIElement]
-    if useFreshProjection {
-      matches = app.textViews.matching(exactID).allElementsBoundByAccessibilityElement
-    } else {
-      matches = fileView?.descendants(matching: .textView)
-        .matching(exactID).allElementsBoundByAccessibilityElement ?? []
-    }
+    // The Files extension replaces its collection on create. In run 44568907934
+    // the first snapshot rooted at the pre-create AX object took 6.96 seconds
+    // alone. Keep its verified viewport, never resolve that old object again.
+    // Re-query the exact native TextView from the live tree on every observation;
+    // no unscoped field, stale geometry alone or post-deadline result qualifies.
+    let matches = retainedFileFrame == nil ? [] :
+      app.textViews.matching(exactID).allElementsBoundByAccessibilityElement
     guard matches.count <= 1 else { throw fail("Ambiguous literal inline editor identities") }
     var inline: [NamingEditorWitness] = []
     for field in matches {
@@ -245,7 +240,7 @@ final class FolderPickerUITests: XCTestCase {
       guard field.isHittable else { continue }
       let frame = field.frame
       if !frame.isEmpty && viewFrame.contains(frame) &&
-         (!useFreshProjection || retainedFileFrame?.contains(CGPoint(x: frame.midX, y: frame.midY)) == true) {
+         retainedFileFrame?.contains(CGPoint(x: frame.midX, y: frame.midY)) == true {
         inline.append(bound(field, nil, true, identifier, frame))
       }
     }
@@ -554,10 +549,9 @@ final class FolderPickerUITests: XCTestCase {
       namingQueryCount += 1
       let includeModal = namingModalQueryCount == 0 && Date() >= modalProbeAfter
       if includeModal { namingModalQueryCount += 1 }
-      let refreshApp = namingQueryCount % 3 == 0
-      if refreshApp && retainedFileFrame != nil { namingFreshQueryCount += 1 }
+      if retainedFileFrame != nil { namingFreshQueryCount += 1 }
       let probeStartedAt = Date()
-      naming = try currentNamingEditor(app, pickerFileView, namingViewFrame, includeModal: includeModal, refreshApp: refreshApp,
+      naming = try currentNamingEditor(app, namingViewFrame, includeModal: includeModal,
         retainedFileFrame: retainedFileFrame, before: namingDeadline)
       let probeEndedAt = Date()
       namingProbeTimes.append(["scheduled": nextNamingProbe.timeIntervalSince(namingStarted),
