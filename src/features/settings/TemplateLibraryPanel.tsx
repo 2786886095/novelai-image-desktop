@@ -37,7 +37,7 @@ export function TemplateLibraryPanel({settings,onSettingsChanged}:{settings:AppS
  const [copyName,setCopyName]=useState(''),[imports,setImports]=useState<TemplateImportEntry[]>([]),[importWarnings,setImportWarnings]=useState<string[]>([]),[activateImport,setActivateImport]=useState(true);
  const effective=resolveTemplateSlot(slot,library),viewRef=preview??effective.ref;
  const custom=viewRef.kind==='custom'?library.custom.find(row=>row.id===viewRef.id&&row.slot===slot):undefined;
- const builtin=library.builtins.find(row=>row.slot===slot);
+ const builtin=library.builtins.find(row=>row.slot===slot&&row.id===viewRef.id)??library.builtins.find(row=>row.slot===slot);
  const display=custom??builtin,body=custom?(drafts[custom.id]?.body??custom.body):(display?.body??'');
  const name=custom?(drafts[custom.id]?.name??custom.name):copyName;
  const hasUnsaved=Boolean(custom&&(body!==custom.body||name!==custom.name));
@@ -86,7 +86,7 @@ export function TemplateLibraryPanel({settings,onSettingsChanged}:{settings:AppS
     <h4>{templateSlotLabel(slot,settings.language)}</h4>
     <p className="template-library__active">{t[27]}：{effective.name}{oldEdition?` · ${t[46]}`:''}</p>
     <label className="field"><span>{t[11]}</span><SelectMenuCompat disabled={busy} value={refValue(viewRef)} onChange={e=>{const [kind,...ids]=e.target.value.split(':');setPreview({kind:kind as 'builtin'|'custom',id:ids.join(':')});setCopyName('');}}>
-     {builtin&&<option value={refValue({kind:'builtin',id:builtin.id})}>{t[12]} · {templateSlotLabel(slot,settings.language)}</option>}
+     {library.builtins.filter(row=>row.slot===slot).map(row=><option key={row.id} value={refValue({kind:'builtin',id:row.id})}>{t[12]} · {row.id.includes('@')?row.name:templateSlotLabel(slot,settings.language)}</option>)}
      {library.custom.filter(row=>row.slot===slot).map(row=><option key={row.id} value={refValue({kind:'custom',id:row.id})}>{t[13]} · {row.name}</option>)}
     </SelectMenuCompat></label>
     <label className="field"><span>{t[39]} · {body.length.toLocaleString()} {t[40]}</span><textarea className="template-library__body" aria-label={t[39]} spellCheck={false} readOnly={!custom||busy} value={body} onChange={e=>updateDraft({body:e.target.value})}/></label>

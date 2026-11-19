@@ -20,7 +20,7 @@ for(const mode of ['tags','mixed','natural'] as const)it(`reverse V2 ${mode} del
  content=mode==='natural'?'A cat sleeps.':'red cup';
  const r=await nai.reversePromptImage(image,mode,'full','只描述可见物体',false,'v5','2.0.0');
  expect(r.ok).toBe(true);expect(r.prompt).toBe(content);expect(r.warnings?.join('')).toContain('检查未通过');expect(requests).toHaveLength(1);
- expect(requests[0].body.messages[1].content[0].image_url.url).toMatch(/^data:image\/png;base64,/);
+ expect(requests[0].body.messages[1].content[0].image_url.url).toMatch(/^data:image\/jpeg;base64,\/9j\//);
 });
 for(const mode of ['tags','mixed'] as const)it(`reverse legacy ${mode} preserves typed short draft without count repair calls`,async()=>{
  ref.settings.reversePromptTemplates={tags:'有效语义单元 50–150',mixed:'有效语义单元 50–150；Tag 65–75%',natural:''};

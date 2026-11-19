@@ -1302,7 +1302,7 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
         text,
         (mode as "tags" | "natural" | "mixed") ?? "tags",
         knownCharacter,
-        templateVersion === "v4.5" ? "v4.5" : "v5",
+        templateVersion === "v4.5" || templateVersion === "v5" ? templateVersion : undefined,
         assistant,
         skillVersion,
       ),

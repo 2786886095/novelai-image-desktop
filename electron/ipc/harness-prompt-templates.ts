@@ -20,8 +20,8 @@ export function templateSelection(settings:AppSettings,args:Args={}) {
   const version=args.templateVersion??(editing?settings.promptAssistantTemplateVersion??settings.convertPromptTemplateVersion:kind==='convert'?settings.convertPromptTemplateVersion:settings.reversePromptTemplateVersion)??'v5';
   if(version!=='v5'&&version!=='v4.5')throw Error('模板版本需要 v5 或 v4.5');
   if(args.skillVersion!==undefined&&!['1.0.0','2.0.0','3.0.0'].includes(String(args.skillVersion)))throw Error('技能版本需要 1.0.0、2.0.0 或 3.0.0');
-  const skillVersion=normalizePromptSkillVersion(args.skillVersion??(editing?settings.promptAssistantSkillVersion:kind==='convert'?settings.convertPromptSkillVersion:settings.reversePromptSkillVersion));
-  if(!supportsPromptSkillModel(skillVersion,version))throw Error('2.0.0 仅适用于 NovelAI V5 Full；V4.5 请选择 1.0.0');
+  const skillVersion=normalizePromptSkillVersion(args.skillVersion??(editing?settings.promptAssistantSkillVersion:kind==='convert'?settings.convertPromptSkillVersion:settings.reversePromptSkillVersion),version==='v4.5'?'1.0.0':editing?'2.0.0':'3.0.0');
+  if(!supportsPromptSkillModel(skillVersion,version))throw Error('2.0.0 / 3.0.0 仅适用于 NovelAI V5 Full；V4.5 请选择 1.0.0');
   if(editing&&skillVersion==='3.0.0')throw Error('提示词助手不提供3.0.0叠加模板，请使用2.0.0');
   if(!editing&&skillVersion==='3.0.0'){
     const selected=resolveTemplateLibrarySlot(`image.${kind as 'convert'|'reverse'}.${mode as ReversePromptMode}`);

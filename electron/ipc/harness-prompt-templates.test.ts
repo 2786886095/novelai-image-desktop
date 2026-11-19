@@ -1,7 +1,7 @@
 import {it,expect} from 'vitest';
 import {createPromptTemplateTools,templateSelection} from './harness-prompt-templates';
 import type {AppSettings} from '../../src/types';
-const settings=()=>({convertMode:'tags',reversePromptMode:'natural',convertPromptTemplateVersion:'v5',reversePromptTemplateVersion:'v4.5',convertPromptTemplates:{mixed:'live mixed',tags:'live tags',natural:'live prose'},reversePromptTemplatesV45:{mixed:'image mixed'},savedStylePrompt:'fixed style',savedNegativePrompt:'fixed negative'} as AppSettings);
+const settings=()=>({convertPromptSkillVersion:'1.0.0',reversePromptSkillVersion:'1.0.0',convertMode:'tags',reversePromptMode:'natural',convertPromptTemplateVersion:'v5',reversePromptTemplateVersion:'v4.5',convertPromptTemplates:{mixed:'live mixed',tags:'live tags',natural:'live prose'},reversePromptTemplatesV45:{mixed:'image mixed'},savedStylePrompt:'fixed style',savedNegativePrompt:'fixed negative'} as AppSettings);
 it('defaults Agent to mixed; resolves live software template by kind/version without legacy fallback',()=>{
  const s=settings();expect(templateSelection(s).body).toBe('live mixed');
  expect(templateSelection(s,{kind:'reverse'}).body).toBe('image mixed');
@@ -10,6 +10,7 @@ it('defaults Agent to mixed; resolves live software template by kind/version wit
  expect(templateSelection(s).source).toBe('builtin');
  expect(()=>templateSelection(s,{kind:'bad'})).toThrow();expect(()=>templateSelection(s,{mode:'bad'})).toThrow();
 });
+it('MCP inherits independent editions and explicit overrides never change Studio settings',()=>{const s=settings();s.convertPromptSkillVersion='2.0.0';expect(templateSelection(s,{kind:'convert'}).skillVersion).toBe('2.0.0');expect(templateSelection(s,{kind:'reverse'}).skillVersion).toBe('1.0.0');expect(templateSelection(s,{kind:'convert',skillVersion:'1.0.0'}).body).toBe('live mixed');expect(s.convertPromptSkillVersion).toBe('2.0.0');expect(()=>templateSelection(s,{kind:'reverse',skillVersion:'3.0.0'})).toThrow();});
 it('import/switch/reset uses software settings, rejects stale writes, and preserves other modes, style and negatives',()=>{
  let s=settings();const writes:string[]=[];
  const service=createPromptTemplateTools(()=>s,(key,value)=>{writes.push(key);s={...s,[key]:value}});

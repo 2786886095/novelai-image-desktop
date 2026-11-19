@@ -145,7 +145,7 @@ it("creates and moves groups, previews exact metadata rules, and finds character
 
     expect(await data("list_history_groups", {})).toMatchObject({ groups: expect.arrayContaining([ocean, other]), ungrouped: "__ungrouped" });
     const templates = await data("list_prompt_templates", {});
-    expect(templates.total).toBe(8);
+    expect(templates.total).toBe(13);
     expect(templates.items.every((row: Record<string, unknown>) => !("body" in row))).toBe(true);
     const comic = await data("read_prompt_template", { slot: "comic.jp-page" });
     expect(comic.body.length).toBeGreaterThan(100);
@@ -165,6 +165,6 @@ it("creates and moves groups, previews exact metadata rules, and finds character
     expect(bridge.executeAgentTool).not.toHaveBeenCalled();
     const { quoteAnlasCost } = await import("./nai");
     expect(quoteAnlasCost).not.toHaveBeenCalled();
-    console.log("MCP_EXPANSION=groups,8_templates,template_body,protected_text_calls,explicit_group_and_parameters,no_generation_or_quote");
+    console.log("MCP_EXPANSION=groups,13_templates,template_body,protected_text_calls,explicit_group_and_parameters,no_generation_or_quote");
   } finally { await handle.close(); }
 }, 25_000);

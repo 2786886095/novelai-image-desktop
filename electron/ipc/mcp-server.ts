@@ -374,7 +374,7 @@ function createTools(options: McpServerOptions): ToolDef[] {
     templateVersion: { type: "string", enum: ["v4.5", "v5"] },
     skillVersion: { type: "string", enum: ["1.0.0", "2.0.0", "3.0.0"] },
   };
-  const generationTemplate = {...textTemplate,templateVersion:{type:'string',enum:['v5']},skillVersion:{type:'string',enum:['3.0.0']},color:{type:'string',enum:['color','mono']},bubbles:{type:'string',enum:['ignore','extract']}};
+  const generationTemplate = {...textTemplate,color:{type:'string',enum:['color','mono']},bubbles:{type:'string',enum:['ignore','extract']}};
   const templateSlot = { type: "string", enum: [
     "image.reverse.tags", "image.reverse.natural", "image.reverse.mixed",
     "image.convert.tags", "image.convert.natural", "image.convert.mixed",
@@ -498,7 +498,7 @@ function createTools(options: McpServerOptions): ToolDef[] {
         action: { type: "string", enum: ["recommend", "storyboard", "generate", "shorten"] },
         format: { type: "string", enum: ["jp-page", "single-panel"] },
         input: { type: "string", minLength: 1, maxLength: 20000 },
-        pages: limit(1), totalPages: limit(30), batchFrom: limit(30), approvedPage:{type:"string",maxLength:40000,description:"Reviewed script for this page, required for generate"}, color:{type:"string",enum:["color","mono"]},
+        pages: limit(1), totalPages: limit(30), batchFrom: limit(30), templateId:{type:"string",maxLength:180,description:"Optional version ID in this comic format; omit to follow Studio"}, approvedPage:{type:"string",maxLength:40000,description:"Reviewed script for this page, required for generate"}, color:{type:"string",enum:["color","mono"]},
         continuity: { type: "string", maxLength: 20000 }, templateRevision: { type: "string", maxLength: 200 }, confirmed,
       }, ["action", "format", "input", "confirmed"]),
       annotations: PAID,

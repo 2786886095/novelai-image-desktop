@@ -2032,7 +2032,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ reverseJobs: [job, ...get().reverseJobs] });
     let result;
     try {
-      const args=[inspectImageBase64,reversePromptMode,reversePromptScope,v5Input(reversePromptHint,{contentOnly:v5ContentOnly,bubbles:v5ReverseBubbles?'extract':'ignore'},true),reverseKnownCharacter,templateVersion] as const;
+      const args=[inspectImageBase64,reversePromptMode,reversePromptScope,skillVersion&&skillVersion!=='3.0.0'?reversePromptHint:v5Input(reversePromptHint,{contentOnly:v5ContentOnly,bubbles:v5ReverseBubbles?'extract':'ignore'},true),reverseKnownCharacter,templateVersion] as const;
       result = skillVersion===undefined ? await window.naiDesktop.reversePrompt(...args) : await window.naiDesktop.reversePrompt(...args,skillVersion);
     } catch (error) {
       if (!get().reverseJobs.some((j) => j.id === job.id)) return;
@@ -2146,7 +2146,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ convertJobs: [job, ...get().convertJobs] });
     let result;
     try {
-      const args=[v5Input(convertInput,{color:v5ConvertMono?'mono':'color',bubbles:v5ConvertBubbles?'extract':'ignore'}),convertMode,convertKnownCharacter,templateVersion] as const;
+      const args=[skillVersion&&skillVersion!=='3.0.0'?convertInput:v5Input(convertInput,{color:v5ConvertMono?'mono':'color',bubbles:v5ConvertBubbles?'extract':'ignore'}),convertMode,convertKnownCharacter,templateVersion] as const;
       result = skillVersion===undefined ? await window.naiDesktop.convertPrompt(...args) : await window.naiDesktop.convertPrompt(...args,undefined,skillVersion);
     } catch (error) {
       if (!get().convertJobs.some((j) => j.id === job.id)) return;

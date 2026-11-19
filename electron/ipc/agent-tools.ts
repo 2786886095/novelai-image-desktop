@@ -608,12 +608,12 @@ export async function executeAgentTool(
         return response(result.ok, result.ok ? "导演工具完成" : "导演工具失败", result, images);
       }
       case "langbai_reverse_prompt": {
-        const template = templateSelection(getSettings(), {...args, templateVersion:'v5',skillVersion:'3.0.0',kind: "reverse"});
+        const template = templateSelection(getSettings(), {...args,kind: "reverse"});
         const result = await reversePromptImage(
           readBase64(attachmentForRequest(request, args.attachmentId).filePath),
           template.mode,
           ["full", "character", "object", "scene"].includes(String(args.scope)) ? String(args.scope) : "full",
-          v5Input(text(args.hint, 1_000),{color:args.color==='mono'?'mono':'color',bubbles:args.bubbles==='extract'?'extract':'ignore',contentOnly:args.contentOnly!==false},true),
+          template.skillVersion!=='3.0.0'?text(args.hint,1_000):v5Input(text(args.hint, 1_000),{color:args.color==='mono'?'mono':'color',bubbles:args.bubbles==='extract'?'extract':'ignore',contentOnly:args.contentOnly!==false},true),
           bool(args.knownCharacter),
           template.templateVersion as "v4.5" | "v5",
           template.skillVersion,
@@ -621,9 +621,9 @@ export async function executeAgentTool(
         return response(result.ok, result.ok ? "图片反推完成" : "图片反推失败", {...result, template: {kind: template.kind, mode: template.mode, version: template.templateVersion, skillVersion:template.skillVersion, source: template.source, bodySha256:template.bodySha256}});
       }
       case "langbai_convert_prompt": {
-        const template = templateSelection(getSettings(), {...args, templateVersion:'v5',skillVersion:'3.0.0',kind: "convert"});
+        const template = templateSelection(getSettings(), {...args,kind: "convert"});
         const result = await convertPromptText(
-          v5Input(text(args.text),{color:args.color==='mono'?'mono':'color',bubbles:args.bubbles==='ignore'?'ignore':'extract'}),
+          template.skillVersion!=='3.0.0'?text(args.text):v5Input(text(args.text),{color:args.color==='mono'?'mono':'color',bubbles:args.bubbles==='ignore'?'ignore':'extract'}),
           template.mode,
           bool(args.knownCharacter),
           template.templateVersion as "v4.5" | "v5",

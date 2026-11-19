@@ -138,8 +138,9 @@ export function createPromptTemplateLibraryStore(root:string|(()=>string),option
       data.quarantine.push(...incoming.quarantine);data.revision+=1;persist(loaded.target,data,expectedRevision);return {ok:true,state:get(),addedIds};
     }catch(error){return {ok:false,code:error instanceof Error&&error.message==='TEMPLATE_LIBRARY_STALE'?'stale':'invalid',message:error instanceof Error?error.message:String(error),state:get()};}
   }
-  return {get,mutate,exportBackup,mergeBackup,resolve:(slot:TemplateSlot)=>{
+  return {get,mutate,exportBackup,mergeBackup,resolve:(slot:TemplateSlot,id?:string)=>{
     const current=get();if(current.readOnly)throw Error('模板库不可读取，未静默改用内置模板。请先恢复模板库文件或在设置中排查。');
+    if(id!==undefined){const row=[...current.builtins,...current.custom].find(t=>t.id===id&&t.slot===slot);if(!row)throw Error('模板版本不存在或与漫画格式不匹配');current.selection={...current.selection,[slot]:{kind:current.builtins.some(t=>t.id===id)?'builtin':'custom',id}};}
     const selected=current.selection[slot],resolved=resolveTemplateSlot(slot,current);
     if(selected&&(selected.kind!==resolved.ref.kind||selected.id!==resolved.ref.id))throw Error('选用的模板已失效，未静默改用内置模板。请在设置中重新选择或恢复默认。');
     return resolved;
@@ -149,6 +150,6 @@ let defaultStore:ReturnType<typeof createPromptTemplateLibraryStore>|undefined;
 function currentStore(){return defaultStore??=(createPromptTemplateLibraryStore(()=>{const root=app?.getPath?.('userData');if(!root)throw Error('Electron userData 尚不可用。');return root;}));}
 export function getPromptTemplateLibrary(){return currentStore().get();}
 export function mutatePromptTemplateLibrary(request:TemplateLibraryMutation){return currentStore().mutate(request);}
-export function resolveTemplateLibrarySlot(slot:TemplateSlot){return currentStore().resolve(slot);}
+export function resolveTemplateLibrarySlot(slot:TemplateSlot,id?:string){return currentStore().resolve(slot,id);}
 export function exportPromptTemplateLibraryBackup(){return currentStore().exportBackup();}
 export function mergePromptTemplateLibraryBackup(raw:Buffer|string,expectedRevision:string){return currentStore().mergeBackup(raw,expectedRevision);}

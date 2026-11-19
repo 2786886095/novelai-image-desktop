@@ -8,7 +8,7 @@ export const COMIC_BATCH_LIMIT: Record<ComicPromptFormat, number> = {'jp-page':1
 export const COMIC_ENVELOPE_VERSION = 'comic-gen-1';
 export interface ComicPromptRequest {
  requestId:string; action:'recommend'|'storyboard'|'generate'|'shorten'; format:ComicPromptFormat; input:string;
- approvedPage?:string; color?:'color'|'mono'; pages?:number; totalPages?:number; batchFrom?:number; continuity?:string; templateRevision?:string;
+ templateId?:string; approvedPage?:string; color?:'color'|'mono'; pages?:number; totalPages?:number; batchFrom?:number; continuity?:string; templateRevision?:string;
 }
 export interface ComicPromptResult {
  ok:boolean; requestId:string; action:ComicPromptRequest['action']; format:ComicPromptFormat; message:string;
@@ -22,6 +22,7 @@ export function validateComicPromptRequest(value:ComicPromptRequest):{pages:numb
  if(!value||typeof value!=='object'||typeof value.requestId!=='string'||!value.requestId||value.requestId.length>120||!isComicPromptFormat(value.format)||!['recommend','storyboard','generate','shorten'].includes(value.action))throw Error('漫画提示词请求无效');
  if(typeof value.input!=='string'||!value.input.trim()||value.input.length>MAX_COMIC_INPUT_CHARS)throw Error('请填写内容，最多20000字');
  if(value.continuity!==undefined&&(typeof value.continuity!=='string'||value.continuity.length>20000))throw Error('连续性摘要过长');
+ if(value.templateId!==undefined&&(typeof value.templateId!=='string'||!value.templateId.trim()||value.templateId.length>180))throw Error('模板版本 ID 无效');
  if(value.templateRevision!==undefined&&(typeof value.templateRevision!=='string'||value.templateRevision.length>200))throw Error('模板版本无效');
  if(value.action==='shorten'){if(value.input.length>750)throw Error('单条气泡不可超过750字符');return {pages:1,totalPages:1,batchFrom:1};}
  if(value.action==='recommend')return {pages:1,totalPages:1,batchFrom:1};

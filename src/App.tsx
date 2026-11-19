@@ -1,3 +1,4 @@
+import type {PromptSkillVersion,ReversePromptTemplateVersion} from './types';
 import {v5Text} from './comic/v5-copy';
 import {promptMetrics} from '../shared/v5-prompt-options';
 import { pageUi } from "./desktop-page-ui";
@@ -4052,8 +4053,15 @@ function ReversePanel() {
   const deleteReverseHistoryItem = useAppStore((state) => state.deleteReverseHistoryItem);
   const clearReverseHistory = useAppStore((state) => state.clearReverseHistory);
   const setParam = useAppStore((state) => state.setParam);
+
+  async function setReverseTemplateVersion(version: "v4.5" | "v5", edition: PromptSkillVersion) {
+    await window.naiDesktop.setSetting("reversePromptTemplateVersion", version);
+    await window.naiDesktop.setSetting("reversePromptSkillVersion", skillVersionForModel(edition,version));
+    await useAppStore.getState().refreshSettings();
+  }
   const setToast = useAppStore((state) => state.setToast);
   const settings = useAppStore((state) => state.settings);
+  const reverseTemplateVersion = settings?.reversePromptTemplateVersion ?? "v5";
   const language = settings?.language;
   const inspectMeta = useAppStore((state) => state.inspectMeta);
   const [dragging, setDragging] = useState(false);
@@ -4179,7 +4187,7 @@ function ReversePanel() {
 
         {hasImage && metadataReport && <MetadataApplyPanel report={metadataReport} language={normalizeAppLanguage(language)} />}
 
-        <span className="comic-composer-text-only">NovelAI V5 Full · 3.0.0</span>
+        <PromptSkillControls model={reverseTemplateVersion} edition={skillVersionForModel(settings?.reversePromptSkillVersion,reverseTemplateVersion)} language={language} disabled={reverseBusy} onChange={(model,edition)=>void setReverseTemplateVersion(model,edition).catch(error=>setToast(String(error)))}/>
 
         <div className="mode-selector">
           {modes.map(([val, label, tip]) => (
@@ -4216,8 +4224,8 @@ function ReversePanel() {
               onChange={(e) => setReversePromptHint(e.target.value)}
             />
           </label>
-          <label className="checkbox-line"><input type="checkbox" checked={v5ContentOnly} onChange={e=>useAppStore.setState({v5ContentOnly:e.target.checked})}/>{v5Text(settings?.language,'content')}</label>
-        <label className="checkbox-line"><input type="checkbox" checked={v5ReverseBubbles} onChange={e=>useAppStore.setState({v5ReverseBubbles:e.target.checked})}/>{v5Text(settings?.language,'extract')}</label>
+          {(settings?.reversePromptSkillVersion??'3.0.0')==='3.0.0'&&<label className="checkbox-line"><input type="checkbox" checked={v5ContentOnly} onChange={e=>useAppStore.setState({v5ContentOnly:e.target.checked})}/>{v5Text(settings?.language,'content')}</label>}
+        {(settings?.reversePromptSkillVersion??'3.0.0')==='3.0.0'&&<label className="checkbox-line"><input type="checkbox" checked={v5ReverseBubbles} onChange={e=>useAppStore.setState({v5ReverseBubbles:e.target.checked})}/>{v5Text(settings?.language,'extract')}</label>}
         <label className="checkbox-line prompt-character-toggle">
             <input
               type="checkbox"
@@ -4562,8 +4570,15 @@ export function PromptConverterPanel() {
   const deleteConvertHistoryItem = useAppStore((state) => state.deleteConvertHistoryItem);
   const clearConvertHistory = useAppStore((state) => state.clearConvertHistory);
   const setParam = useAppStore((state) => state.setParam);
+
+  async function setConvertTemplateVersion(version: ReversePromptTemplateVersion, edition: PromptSkillVersion) {
+    await window.naiDesktop.setSetting("convertPromptTemplateVersion", version);
+    await window.naiDesktop.setSetting("convertPromptSkillVersion", skillVersionForModel(edition,version));
+    await useAppStore.getState().refreshSettings();
+  }
   const setToast = useAppStore((state) => state.setToast);
   const settings = useAppStore((state) => state.settings);
+  const convertTemplateVersion = settings?.convertPromptTemplateVersion ?? "v5";
   const templates: PromptTemplate[] = settings?.promptTemplates ?? [];
   const language = settings?.language;
 
@@ -4617,7 +4632,7 @@ export function PromptConverterPanel() {
           />
         </label>
 
-        <span className="comic-composer-text-only">NovelAI V5 Full · 3.0.0</span>
+        <PromptSkillControls model={convertTemplateVersion} edition={skillVersionForModel(settings?.convertPromptSkillVersion,convertTemplateVersion)} language={language} disabled={convertBusy} onChange={(model,edition)=>void setConvertTemplateVersion(model,edition).catch(error=>setToast(String(error)))}/>
 
         <div className="mode-selector">
           {([
@@ -4635,8 +4650,8 @@ export function PromptConverterPanel() {
           ))}
         </div>
 
-        <label className="checkbox-line"><input type="checkbox" checked={v5ConvertMono} onChange={e=>useAppStore.setState({v5ConvertMono:e.target.checked})}/>{v5Text(settings?.language,'mono')}</label>
-        <label className="checkbox-line"><input type="checkbox" checked={v5ConvertBubbles} onChange={e=>useAppStore.setState({v5ConvertBubbles:e.target.checked})}/>{v5Text(settings?.language,'balloons')}</label>
+        {(settings?.convertPromptSkillVersion??'3.0.0')==='3.0.0'&&<label className="checkbox-line"><input type="checkbox" checked={v5ConvertMono} onChange={e=>useAppStore.setState({v5ConvertMono:e.target.checked})}/>{v5Text(settings?.language,'mono')}</label>}
+        {(settings?.convertPromptSkillVersion??'3.0.0')==='3.0.0'&&<label className="checkbox-line"><input type="checkbox" checked={v5ConvertBubbles} onChange={e=>useAppStore.setState({v5ConvertBubbles:e.target.checked})}/>{v5Text(settings?.language,'balloons')}</label>}
         <label className="checkbox-line prompt-character-toggle">
           <input
             type="checkbox"

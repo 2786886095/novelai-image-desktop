@@ -15,11 +15,13 @@ function instance(options:Parameters<typeof createPromptTemplateLibraryStore>[1]
 function invoke(store:ReturnType<typeof instance>,request:Omit<TemplateLibraryMutation,'expectedRevision'>|Record<string,unknown>){return store.mutate({...request,expectedRevision:store.get().revision} as TemplateLibraryMutation);}
 
 describe('independent prompt-template library',()=>{
- it('lists all eight immutable builtins with original bodies and source versions',()=>{
-  const store=instance(),s=store.get();expect(s.builtins).toHaveLength(8);expect(s.custom).toEqual([]);expect(fs.existsSync(path.join(root,'prompt-template-library.json'))).toBe(false);
+ it('lists eight current originals plus five distinct same-format historical revisions',()=>{
+  const store=instance(),s=store.get();expect(s.builtins.filter(t=>!t.id.includes("@"))).toHaveLength(8);expect(s.builtins).toHaveLength(13);expect(s.custom).toEqual([]);expect(fs.existsSync(path.join(root,'prompt-template-library.json'))).toBe(false);
   expect(s.builtins.filter(t=>t.slot.startsWith('image.'))).toHaveLength(6);expect(s.builtins.find(t=>t.slot==='comic.jp-page')?.sourceVersion).toBe('4.1');expect(s.builtins.find(t=>t.slot==='comic.single-panel')?.sourceVersion).toBe('1.0');
   for(const b of s.builtins)expect(b.sha256).toBe(sha(b.body));
  });
+ it('persists each comic format independently; per-call override never mutates the active version',()=>{const store=instance();const s=store.get();const jp=s.builtins.filter(t=>t.slot==='comic.jp-page'),sp=s.builtins.filter(t=>t.slot==='comic.single-panel');expect([jp.length,sp.length]).toEqual([4,3]);for(const t of [jp[1],sp[2]]){expect(store.mutate({action:'select',slot:t.slot,ref:{kind:'builtin',id:t.id},expectedRevision:store.get().revision}).ok).toBe(true);}
+  expect(instance().resolve(jp[1].slot).sha256).toBe(jp[1].sha256);expect(instance().resolve(sp[2].slot).sha256).toBe(sp[2].sha256);expect(instance().resolve(jp[0].slot,jp[0].id).sha256).toBe(jp[0].sha256);expect(instance().resolve(jp[0].slot).sha256).toBe(jp[1].sha256);expect(()=>store.resolve(jp[1].slot,sp[2].id)).toThrow();});
  it('parses TXT and MD as full data, preserves dollars, and normalizes only BOM/CRLF',()=>{
   const r=parseTemplateImport('\uFEFF# instructions\r\n{{input}} $1 $&\r\n','full.md','image.convert.mixed');expect(r.entries[0].body).toBe('# instructions\n{{input}} $1 $&\n');expect(r.entries[0].name).toBe('full');
   expect(parseTemplateImport('  all text  \n','full.txt','comic.jp-page').entries[0].body).toBe('  all text  \n');

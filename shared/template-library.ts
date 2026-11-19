@@ -1,4 +1,5 @@
 import imageCatalog from './prompt-skill-catalog-v3.json';
+import comicHistory from './comic-template-history.json';
 import comicCatalog from './comic-template-catalog.json';
 
 export const TEMPLATE_SLOTS = [
@@ -65,7 +66,7 @@ export function getBuiltinTemplates():BuiltinPromptTemplate[] {
     if(!isTemplateSlot(item.slot))throw Error('内置模板槽位无效。');
     return {id:item.id,slot:item.slot,name:item.title,title:item.title,body:item.body,sha256:item.sha256,sourceFile:item.sourceFile,
       ...('sourceVersion' in item ? {sourceVersion:String(item.sourceVersion)} : {skillVersion:'3.0.0'})};
-  });
+  }).concat(comicHistory.map(t=>{if(!isTemplateSlot(t.slot))throw Error('无效历史槽位');return {...t,slot:t.slot};}));
 }
 export function resolveTemplateSlot(slot:TemplateSlot,state:TemplateLibraryState):ResolvedLibrarySlot {
   if(!isTemplateSlot(slot))throw Error('模板槽位无效。');
@@ -73,9 +74,9 @@ export function resolveTemplateSlot(slot:TemplateSlot,state:TemplateLibraryState
   if(!builtin)throw Error('内置模板不存在。');
   const ref=state.selection[slot];
   const custom=ref?.kind==='custom'?state.custom.find(item=>item.id===ref.id&&item.slot===slot):undefined;
-  const selected=custom??builtin;
+  const selected=custom??(ref?.kind==='builtin'?state.builtins.find(t=>t.slot===slot&&t.id===ref.id):undefined)??builtin;
   return {slot,ref:{kind:custom?'custom':'builtin',id:selected.id},name:selected.name,body:selected.body,sha256:selected.sha256,
-    source:custom?'custom':'builtin',...(!custom&&builtin.sourceVersion?{sourceVersion:builtin.sourceVersion}:{}),revision:state.revision};
+    source:custom?'custom':'builtin',...('sourceVersion' in selected&&selected.sourceVersion?{sourceVersion:selected.sourceVersion}:{}),revision:state.revision};
 }
 function recordSlot(value:Record<string,unknown>,fallback:TemplateSlot):TemplateSlot {
   if(value.slot!==undefined){if(!isTemplateSlot(value.slot))throw Error('JSON 模板槽位无效。');return value.slot;}
