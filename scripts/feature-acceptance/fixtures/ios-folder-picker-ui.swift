@@ -4,6 +4,11 @@ import Foundation
 // Built in an external host project. It never launches/terminates Runner,
 // invokes its bridge, edits defaults/bookmarks, or supplies a synthetic grant.
 final class FolderPickerUITests: XCTestCase {
+  // This is setup only: no application interaction or acceptance result.
+  func testWarmIndependentRunner() {
+    print("IOS_PICKER_RUNNER_WARM_ONLY")
+  }
+
   private var target: XCUIApplication?
   private var actions: [[String: String]] = []
 
@@ -537,8 +542,11 @@ final class FolderPickerUITests: XCTestCase {
     ]
     var localProvider: String?
     for attempt in 0..<6 {
+      // Reading bar geometry / titles is an XCTest RPC. Read once for this snapshot;
+      // after a tap, still require a fresh, verified navigation title.
+      let snapshotTitle = try currentNavigationTitle(app)
       for (canonical, labels) in providers {
-        if let title = try currentNavigationTitle(app), labels.contains(title) {
+        if let title = snapshotTitle, labels.contains(title) {
           localProvider = canonical
           break
         }

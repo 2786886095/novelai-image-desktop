@@ -521,3 +521,13 @@ test('both bounded naming probes use a fresh literal AX projection when Files ge
  assert.match(s,/let control = try validatedWitnessFlow\(app, providerLabels, witness\)/);
  assert.match(s,/"freshAppProjectionProbed": namingFreshQueryCount > 0/);
 });
+
+test('cold XCTest startup is separate from the bounded, real folder-selection test',()=>{
+ const driver=fs.readFileSync(new URL('./ios-folder-picker-driver.mjs',import.meta.url),'utf8');
+ const fixture=fs.readFileSync(new URL('./fixtures/ios-folder-picker-ui.swift',import.meta.url),'utf8');
+ const warm=driver.indexOf('-only-testing:FolderPickerUITests/FolderPickerUITests/testWarmIndependentRunner');
+ assert(warm>0 && warm<driver.indexOf('return createIosFolderPickerObserver'));
+ const run=driver.indexOf('-only-testing:FolderPickerUITests/FolderPickerUITests/testSelectRealExternalNonceFolder');
+ assert(run>driver.indexOf("observedPidBefore=await observePid('BEFORE')") && run<driver.indexOf("observedPidAfter=await observePid('AFTER')"));
+ assert.match(fixture,/func testWarmIndependentRunner\(\)\s*\{\s*print\("IOS_PICKER_RUNNER_WARM_ONLY"\)\s*\}/);
+});

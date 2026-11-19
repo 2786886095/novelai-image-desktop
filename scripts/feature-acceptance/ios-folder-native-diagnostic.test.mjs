@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import {load} from 'js-yaml';
 const file=new URL('../../.github/workflows/ios-folder-native-diagnostic.yml',import.meta.url);
-const text=fs.readFileSync(file,'utf8'),workflow=load(text);
+const text=fs.readFileSync(file,'utf8').replaceAll('\r\n','\n'),workflow=load(text);
 const expectedPaths=[
  '.github/workflows/ios-folder-native-diagnostic.yml',
  'scripts/feature-acceptance/ios-folder-native-diagnostic.test.mjs',

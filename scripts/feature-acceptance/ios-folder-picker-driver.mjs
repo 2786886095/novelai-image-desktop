@@ -126,6 +126,13 @@ export async function prepareIosFolderPickerDriver(options){
  if(!fs.statSync(processObserver).isFile()||fs.statSync(processObserver).size<=0)throw Error('Fresh host process observer binary missing');
  run(['xcodebuild','build-for-testing','-project',project,'-scheme','FolderPickerUITests','-configuration','Debug','-sdk','iphonesimulator','-destination','id='+device,'-derivedDataPath',path.join(root,'DerivedData'),'CODE_SIGNING_ALLOWED=NO'],300000);
  const products=path.join(root,'DerivedData','Build','Products');const tests=fs.readdirSync(products).filter(n=>n.endsWith('.xctestrun'));if(tests.length!==1)throw Error('Exactly one freshly built XCTest configuration required');
+ // Start the XCTest service, install the separate runner and establish the first
+ // simulator test session BEFORE Flutter requests a folder. No picker/app access,
+ // grant or acceptance marker is possible in this single-method warm-up.
+ const warm=run(['xcodebuild','test-without-building','-xctestrun',path.join(products,tests[0]),'-destination','id='+device,
+  '-only-testing:FolderPickerUITests/FolderPickerUITests/testWarmIndependentRunner',
+  '-resultBundlePath',path.join(root,'warmup.xcresult'),'-parallel-testing-enabled','NO'],180000);
+ if(!warm.includes('IOS_PICKER_RUNNER_WARM_ONLY')||!warm.includes('** TEST SUCCEEDED **'))throw Error('Independent XCTest runner did not finish its cold launch');
  return createIosFolderPickerObserver({...options,root,products,testRun:tests[0],locale,actualLanguages,actualLocale,processObserver});
 }
 
@@ -179,7 +186,7 @@ export function createIosFolderPickerObserver(options,{execute=asyncCommand,now=
    observedPidBefore=await observePid('BEFORE');if(observedPidBefore!==begin.nativePid)throw Error('Actual Simulator application PID differs from native BEGIN before picker actions');
    const env={...environment};for(const k of Object.keys(env))if(/API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i.test(k))delete env[k];
    const values={STUDIO_SOURCE_SHA:sourceSha,STUDIO_PROFILE_SHA:profileSha,STUDIO_NATIVE_PID:String(begin.nativePid),STUDIO_NONCE:request.nonce,STUDIO_FOLDER_NAME:request.requiredFolderName,STUDIO_APP_ID:appId};for(const[k,v]of Object.entries(values))env['TEST_RUNNER_'+k]=v;
-   const argv=['xcodebuild','test-without-building','-xctestrun',path.join(products,testRun),'-destination','id='+device,'-resultBundlePath',path.join(root,'selection.xcresult'),'-testLanguage','en','-testRegion','US','-test-timeouts-enabled','YES','-default-test-execution-time-allowance','120','-maximum-test-execution-time-allowance','150','-parallel-testing-enabled','NO'];
+   const argv=['xcodebuild','test-without-building','-xctestrun',path.join(products,testRun),'-only-testing:FolderPickerUITests/FolderPickerUITests/testSelectRealExternalNonceFolder','-destination','id='+device,'-resultBundlePath',path.join(root,'selection.xcresult'),'-testLanguage','en','-testRegion','US','-test-timeouts-enabled','YES','-default-test-execution-time-allowance','120','-maximum-test-execution-time-allowance','150','-parallel-testing-enabled','NO'];
    const uiTimeout=Math.min(140000,remaining()-10000);if(uiTimeout<=0)throw Error('Insufficient remaining real picker UI budget');
    const r=await checked(argv,uiTimeout,'UI_COMMAND.json',env);
    result=assertIosPickerUiResult(r.stdout+'\n'+r.stderr,{sourceSha,profileSha,nativePid:begin.nativePid,request,appId});
