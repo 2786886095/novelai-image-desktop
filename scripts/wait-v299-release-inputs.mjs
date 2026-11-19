@@ -4,18 +4,27 @@ import {setTimeout as sleep} from 'node:timers/promises';
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import {assertV299CloudNativeRun} from './release-platform-contract.mjs';
-const sha='73f4b811f51f6beb0d5ea0b011cfe62ffd03a783';
+const sha='6956793cd3b2944f82348a7391f72a879d2cc1b3';
 const old='0770b270b2b9e7ee948637b77b290d4784284531';
 const tag='v2.9.9';
 const repo='2786886095/novelai-image-desktop';
 const inputs=[
- ['build.yml','44436682771'],
- ['build-mobile.yml','44436692235'],
- ['feature-acceptance.yml','44436696783'],
- ['image-metadata.yml','44436687328'],
+ ['build.yml','44458113366'],
+ ['build-mobile.yml','44458116915'],
+ ['feature-acceptance.yml','44458105664'],
+ ['image-metadata.yml','44458109488'],
 ];
 const run=(command,...args)=>execFileSync(command,args,{encoding:'utf8',timeout:60000,maxBuffer:16*1024*1024}).trim();
-const gh=(...args)=>run('gh',...args);
+// Only retry read-only API/network errors. Never retry publishing or a failed assertion.
+const gh=(...args)=>{
+ for(let i=0;;i++){
+  try{return run('gh',...args);}catch(error){
+   const detail=String(error.stderr??error.message);
+   if(i>=3 || !/unexpected end of JSON input|unexpected EOF|TLS handshake timeout|connection reset|HTTP 50[234]/i.test(detail))throw error;
+   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,2000*(i+1));
+  }
+ }
+};
 const git=(...args)=>run('git',...args);
 const peek=(ref)=>git('ls-remote','origin',ref).split('\t')[0];
 const version=JSON.parse(fs.readFileSync('package.json','utf8')).version;
