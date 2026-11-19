@@ -537,3 +537,11 @@ test('accepts actual Xcode test-without-building success text only after a count
  assert.doesNotThrow(()=>assertColdPickerWarmup(proof));
  for(const bad of [proof.replace('EXECUTE SUCCEEDED','EXECUTE FAILED'),proof.replace('0 failures','1 failure'),proof.replace('WARM_ONLY','MISSING'),proof.replace('1 test','0 tests')])assert.throws(()=>assertColdPickerWarmup(bad));
 });
+
+test('cold launch budget only covers the installed independent host, not real picker time',()=>{
+ const s=fs.readFileSync(new URL('./ios-folder-picker-driver.mjs',import.meta.url),'utf8');
+ const install=s.indexOf("['xcrun','simctl','install',device,host]"), read=s.indexOf("['xcrun','simctl','listapps',device]"), warm=s.indexOf('const warm=run(');
+ assert(install>0 && read>install && warm>read);
+ assert(s.slice(warm,s.indexOf('assertColdPickerWarmup(warm)')).includes('360000'));
+ assert(s.includes('Math.min(140000,remaining()-10000)'));
+});

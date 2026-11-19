@@ -129,9 +129,19 @@ export async function prepareIosFolderPickerDriver(options){
  // Start the XCTest service, install the separate runner and establish the first
  // simulator test session BEFORE Flutter requests a folder. No picker/app access,
  // grant or acceptance marker is possible in this single-method warm-up.
+ // Install the separately built test host while outside the Flutter request.
+ // A newly booted simulator may report Booted while its application installer is
+ // still cold. Explicitly install and read back this bundle before starting XCTest.
+ const host=path.join(products,'Debug-iphonesimulator','FolderPickerUITests-Runner.app');
+ const hostId=run(['/usr/libexec/PlistBuddy','-c','Print :CFBundleIdentifier',path.join(host,'Info.plist')],15000).trim();
+ if(!/^[A-Za-z0-9.-]+\.xctrunner$/.test(hostId)||hostId===appId)throw Error('Unexpected independent XCTest bundle identifier');
+ run(['xcrun','simctl','install',device,host],180000);
+ const installed=run(['xcrun','simctl','listapps',device],20000);
+ const bundleKeys=installed.split(/\r?\n/).map(line=>/^\s*"([^"]+)"\s*=\s*\{\s*$/.exec(line)?.[1]);
+ if(bundleKeys.filter(id=>id===hostId).length!==1)throw Error('Independent XCTest host not installed on selected simulator');
  const warm=run(['xcodebuild','test-without-building','-xctestrun',path.join(products,tests[0]),'-destination','id='+device,
   '-only-testing:FolderPickerUITests/FolderPickerUITests/testWarmIndependentRunner',
-  '-resultBundlePath',path.join(root,'warmup.xcresult'),'-parallel-testing-enabled','NO'],180000);
+  '-resultBundlePath',path.join(root,'warmup.xcresult'),'-parallel-testing-enabled','NO'],360000);
  assertColdPickerWarmup(warm);
  return createIosFolderPickerObserver({...options,root,products,testRun:tests[0],locale,actualLanguages,actualLocale,processObserver});
 }
