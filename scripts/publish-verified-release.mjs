@@ -21,9 +21,9 @@ if(waiveWindowsArtistGpu){
  if((waiveWindowsArtistGpuV286&&version!=='2.8.6')||(waiveWindowsArtistGpuV292&&version!=='2.9.2')||(waiveWindowsArtistGpuV293&&version!=='2.9.3')||(waiveWindowsArtistGpuV294&&version!=='2.9.4')||(waiveWindowsArtistGpuV295&&version!=='2.9.5')||(waiveWindowsArtistGpuV299&&version!=='2.9.9')||!/^\d+$/.test(nativeRun??''))throw Error('Explicit version-bound cloud acceptance workflow is required');
  const run=JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs']));
  if(waiveWindowsArtistGpuV299){
-  if(sha!=='3aad7ee70ab80370f8d945ceeac254ad3769e343'||nativeRun!=='44458358575'||process.env.BUILD_RUN!=='44458366149'||process.env.MOBILE_RUN!=='44458369968')throw Error('v2.9.9 waiver requires the pinned accepted source and artifact runs');
+  if(sha!=='860cc73ad90db1a3e50765a27c40f053ea7c9c89'||nativeRun!=='44463850901'||process.env.BUILD_RUN!=='44463863496'||process.env.MOBILE_RUN!=='44463868130')throw Error('v2.9.9 waiver requires the pinned accepted source and artifact runs');
   assertV299CloudNativeRun(run,{sourceSha:sha});
-  if(process.env.METADATA_RUN!=='44458362523')throw Error('Pinned metadata regression required');
+  if(process.env.METADATA_RUN!=='44463857167')throw Error('Pinned metadata regression required');
   const metadata=JSON.parse(call('gh',['run','view',process.env.METADATA_RUN,'--json','headSha,status,conclusion,jobs']));
   if(metadata.headSha!==sha||metadata.status!=='completed'||metadata.conclusion!=='success'||metadata.jobs.length!==4||metadata.jobs.some(job=>job.status!=='completed'||job.conclusion!=='success'))throw Error('All same-source image metadata regression jobs must pass');
  }else assertV286CloudNativeRun(run,{sourceSha:sha});

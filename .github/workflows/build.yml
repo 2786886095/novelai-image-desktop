@@ -357,7 +357,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@v5
         with:
-          ref: 3aad7ee70ab80370f8d945ceeac254ad3769e343
+          ref: 860cc73ad90db1a3e50765a27c40f053ea7c9c89
           path: release-source
           fetch-depth: 0
           persist-credentials: true
@@ -378,23 +378,23 @@ jobs:
           pattern: novelai-image-desktop-*
           path: release-source/release-assets
           merge-multiple: true
-          run-id: '44458366149'
+          run-id: '44463863496'
           github-token: ${{ github.token }}
       - uses: actions/download-artifact@v4
         with:
           name: five-platform-feature-evidence
           path: release-source/release-evidence
-          run-id: '44458358575'
+          run-id: '44463850901'
           github-token: ${{ github.token }}
       - name: Verify exact artifacts and publish v2.9.9
         working-directory: release-source
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          BUILD_RUN: '44458366149'
-          MOBILE_RUN: '44458369968'
-          FEATURE_RUN: '44458358575'
-          METADATA_RUN: '44458362523'
+          BUILD_RUN: '44463863496'
+          MOBILE_RUN: '44463868130'
+          FEATURE_RUN: '44463850901'
+          METADATA_RUN: '44463857167'
           WAIVE_WINDOWS_ARTIST_GPU_V299: 'true'
         run: node ../publisher-policy/scripts/publish-verified-release.mjs
       - name: Fast-forward main and verify the public release
