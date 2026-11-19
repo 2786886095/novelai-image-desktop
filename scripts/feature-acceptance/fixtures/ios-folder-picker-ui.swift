@@ -214,7 +214,7 @@ final class FolderPickerUITests: XCTestCase {
   }
 
   private func currentNamingEditor(_ app: XCUIApplication, _ fileView: XCUIElement?, _ viewFrame: CGRect,
-                                   includeModal: Bool, retainedFileFrame: CGRect?, before deadline: Date) throws -> NamingEditorWitness? {
+                                   includeModal: Bool, refreshApp: Bool, retainedFileFrame: CGRect?, before deadline: Date) throws -> NamingEditorWitness? {
     func bound(_ field: XCUIElement, _ owner: XCUIElement?, _ inline: Bool,
                _ identifier: String, _ frame: CGRect) -> NamingEditorWitness {
       return NamingEditorWitness(field: field, modalOwner: owner, isInline: inline,
@@ -223,12 +223,11 @@ final class FolderPickerUITests: XCTestCase {
     }
     let identifier = "DOC.inlineRenameField"
     let exactID = NSPredicate(format: "identifier == %@ AND enabled == YES", identifier)
-    // Files can replace the collection's AX subtree when entering rename.
-    // Probe the current app first, with the literal enabled ID and geometry
-    // of the previously witnessed native File View. Use the held collection
-    // only when that geometric bound is unavailable. This remains a
-    // read-only witness, not authority to interact with a matching field.
-    let useFreshProjection = retainedFileFrame != nil
+    // Most observations query only the previously bound native collection.
+    // A live whole-app projection can recover a replaced collection, but
+    // continuously snapshotting Flutter + Files + keyboard competes with the
+    // provider's first cell render. Neither projection authorizes typing.
+    let useFreshProjection = refreshApp && retainedFileFrame != nil
     let matches: [XCUIElement]
     if useFreshProjection {
       matches = app.textViews.matching(exactID).allElementsBoundByAccessibilityElement
@@ -552,15 +551,16 @@ final class FolderPickerUITests: XCTestCase {
       namingQueryCount += 1
       let includeModal = namingModalQueryCount == 0 && Date() >= modalProbeAfter
       if includeModal { namingModalQueryCount += 1 }
-      if retainedFileFrame != nil { namingFreshQueryCount += 1 }
+      let refreshApp = namingQueryCount % 3 == 0
+      if refreshApp && retainedFileFrame != nil { namingFreshQueryCount += 1 }
       let probeStartedAt = Date()
-      naming = try currentNamingEditor(app, pickerFileView, namingViewFrame, includeModal: includeModal,
+      naming = try currentNamingEditor(app, pickerFileView, namingViewFrame, includeModal: includeModal, refreshApp: refreshApp,
         retainedFileFrame: retainedFileFrame, before: namingDeadline)
       let probeEndedAt = Date()
       namingProbeTimes.append(["scheduled": nextNamingProbe.timeIntervalSince(namingStarted),
         "started": probeStartedAt.timeIntervalSince(namingStarted),
         "ended": probeEndedAt.timeIntervalSince(namingStarted)])
-      nextNamingProbe = probeEndedAt.addingTimeInterval(0.10)
+      nextNamingProbe = probeEndedAt.addingTimeInterval(0.30)
     }
     let witnessObservedAt = Date()
     let withinAppearanceDeadline = witnessObservedAt < namingDeadline
