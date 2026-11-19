@@ -4,16 +4,16 @@ import {setTimeout as sleep} from 'node:timers/promises';
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import {assertV299CloudNativeRun} from './release-platform-contract.mjs';
-const sha='83f007da2ebed0929ee7dcec50ed8862bd665812';
+const sha='26a2a4e64328782e32c7f087c50c570f3bb6fd03';
 const old='0770b270b2b9e7ee948637b77b290d4784284531';
 const tag='v2.9.9';
 const repo='2786886095/novelai-image-desktop';
 const inputs=[
- ['build.yml','44562908781'],
- ['build-mobile.yml','44562883585'],
- ['feature-acceptance.yml','44562866886'],
- ['image-metadata.yml','44562993741'],
- ['ios-folder-native-diagnostic.yml','44562843854'],
+ ['build.yml','44566219873'],
+ ['build-mobile.yml','44566218194'],
+ ['feature-acceptance.yml','44566218264'],
+ ['image-metadata.yml','44566210810'],
+ ['ios-folder-native-diagnostic.yml','44566214413'],
 ];
 const run=(command,...args)=>execFileSync(command,args,{encoding:'utf8',timeout:60000,maxBuffer:16*1024*1024}).trim();
 // Only retry read-only API/network errors. Never retry publishing or a failed assertion.
