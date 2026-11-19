@@ -28,9 +28,7 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 
 ## 本次更新
 
-修复 Windows 画风迭代候选较多时，画师串和底部按钮被裁切的问题。在经典版与新版均可查看完整画师串、复制或应用到生成。
-
-个人法典也不再将条目压缩成空白横线。
+桌面工作台现在可以按英文 Tag 或当前词包译名的中间、末尾片段检索。结果按完整匹配、开头匹配、其他片段排序。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
