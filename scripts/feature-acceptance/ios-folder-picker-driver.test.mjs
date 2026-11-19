@@ -1,6 +1,6 @@
 // Host policy/source-shape tests only: no Simulator/XCTest success is claimed.
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
-import {validateIosFolderRequest,assertIosPickerUiResult,iosPickerProject,iosPickerScheme,prepareIosFolderPickerDriver,iosSimulatorAppPid,bindIosSimulatorProcess,iosHostProcessIdentity} from './ios-folder-picker-driver.mjs';
+import {assertColdPickerWarmup,validateIosFolderRequest,assertIosPickerUiResult,iosPickerProject,iosPickerScheme,prepareIosFolderPickerDriver,iosSimulatorAppPid,bindIosSimulatorProcess,iosHostProcessIdentity} from './ios-folder-picker-driver.mjs';
 import {iosSimulatorLocalePaths}from './create-disposable-ios-simulator.mjs';
 import {fullFeatureProfiles}from './full-feature-profiles.mjs';import{mobileScenarioInventories}from './mobile-scenario-inventory.mjs';import{mobileNativeEntries,selectMobileNativeEntries}from './mobile-entry-specs.mjs';
 const sourceSha='a'.repeat(40),profileSha='b'.repeat(64),nativePid=5317,nonce='5317-1793240012345678';
@@ -530,4 +530,10 @@ test('cold XCTest startup is separate from the bounded, real folder-selection te
  const run=driver.indexOf('-only-testing:FolderPickerUITests/FolderPickerUITests/testSelectRealExternalNonceFolder');
  assert(run>driver.indexOf("observedPidBefore=await observePid('BEFORE')") && run<driver.indexOf("observedPidAfter=await observePid('AFTER')"));
  assert.match(fixture,/func testWarmIndependentRunner\(\)\s*\{\s*print\("IOS_PICKER_RUNNER_WARM_ONLY"\)\s*\}/);
+});
+
+test('accepts actual Xcode test-without-building success text only after a counted warm-up',()=>{
+ const proof='IOS_PICKER_RUNNER_WARM_ONLY\n Executed 1 test, with 0 failures (0 unexpected) in 1.515 (1.519) seconds\n** TEST EXECUTE SUCCEEDED **\n';
+ assert.doesNotThrow(()=>assertColdPickerWarmup(proof));
+ for(const bad of [proof.replace('EXECUTE SUCCEEDED','EXECUTE FAILED'),proof.replace('0 failures','1 failure'),proof.replace('WARM_ONLY','MISSING'),proof.replace('1 test','0 tests')])assert.throws(()=>assertColdPickerWarmup(bad));
 });

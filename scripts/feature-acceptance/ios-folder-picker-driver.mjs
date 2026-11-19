@@ -132,12 +132,20 @@ export async function prepareIosFolderPickerDriver(options){
  const warm=run(['xcodebuild','test-without-building','-xctestrun',path.join(products,tests[0]),'-destination','id='+device,
   '-only-testing:FolderPickerUITests/FolderPickerUITests/testWarmIndependentRunner',
   '-resultBundlePath',path.join(root,'warmup.xcresult'),'-parallel-testing-enabled','NO'],180000);
- if(!warm.includes('IOS_PICKER_RUNNER_WARM_ONLY')||!warm.includes('** TEST SUCCEEDED **'))throw Error('Independent XCTest runner did not finish its cold launch');
+ assertColdPickerWarmup(warm);
  return createIosFolderPickerObserver({...options,root,products,testRun:tests[0],locale,actualLanguages,actualLocale,processObserver});
 }
 
 // Keep draining Flutter machine events while real OS commands run. The factory
 // is exported for host process regressions, not as device acceptance evidence.
+export function assertColdPickerWarmup(log){
+ const lines=log.split(/\r?\n/).map(s=>s.trim());
+ if(!lines.includes('IOS_PICKER_RUNNER_WARM_ONLY') ||
+    !lines.some(s=>/^Executed 1 test, with 0 failures \(0 unexpected\)/.test(s)) ||
+    !lines.some(s=>/^\*\* TEST (?:EXECUTE )?SUCCEEDED \*\*$/.test(s)))
+   throw Error('Independent XCTest runner did not finish its cold launch');
+}
+
 export function createIosFolderPickerObserver(options,{execute=asyncCommand,now=Date.now,canonicalize=fs.realpathSync.native}={}){
  const {sourceSha,profileSha,appId,device,environment=process.env,root,products,testRun,locale,actualLanguages,actualLocale,processObserver}=options;
  let begin=null,request=null,promise=null,result=null,firstError=null;
