@@ -111,3 +111,15 @@ it("finds Chinese and English fragments, keeping exact > prefix > interior acros
  expect(searchTagPackDatabase(file,"%",10).map(r=>r.tag)).toEqual(["percent_sign"]);
  expect(lookupTagPackDatabase(file,["斜角构","utch ang"],true)).toEqual([]);
 });
+
+it("unions topic members with literal hits before paging and never treats a topic as an exact translation",()=>{
+ const file=createDb([
+  ["dutch_angle","dutch angle","斜角构图","斜角构图",0,1],
+  ["from_above","from above","俯视","俯视",0,900],
+  ["close-up","close-up","特写","特写",0,800],
+  ["commentary","commentary","作者说明","作者说明",5,9999],
+ ]);
+ expect(searchTagPackDatabase(file,"构图",20).map(x=>x.tag)).toEqual(["dutch_angle","from_above","close-up"]);
+ expect(searchTagPackDatabase(file,"構圖",20,"popular").map(x=>x.tag)).toEqual(["from_above","close-up","dutch_angle"]);
+ expect(lookupTagPackDatabase(file,["构图"],true)).toEqual([]);
+});

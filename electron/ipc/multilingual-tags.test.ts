@@ -34,11 +34,12 @@ it("verifies the pack before activation and returns translated offline results o
  insert.run("maid","maid","女仆","女仆",0,5);
  insert.run("maid_alpha","maid alpha","女仆甲","女仆甲",0,20);
  insert.run("maid_zeta","maid zeta","女仆乙","女仆乙",0,60);
+ insert.run("from_above","from above","俯视","俯视",0,12);
  insert.run("apron","apron","围裙","围裙",0,42);
  db.close();
  const raw=fs.readFileSync(sqlite),good=gzipSync(raw),sha=(b:Buffer)=>createHash("sha256").update(b).digest("hex");
  const pack=TAG_PACK_MANIFEST.packs["zh-CN"], original={...pack};
- Object.assign(pack,{size:good.length,sha256:sha(good),databaseSize:raw.length,databaseSha256:sha(raw),count:5});
+ Object.assign(pack,{size:good.length,sha256:sha(good),databaseSize:raw.length,databaseSha256:sha(raw),count:6});
  const token="fixture-only-local-auth";
  const mcp=await startMcpServer({port:0,token,window:()=>null});
   async function rpc(method:string,params:unknown){
@@ -82,6 +83,8 @@ it("verifies the pack before activation and returns translated offline results o
   expect(collections.source.author).toBe("u/Carlyone");
   expect(collections.items.map((x:{model:string})=>x.model)).toEqual(["V5","V4.5"]);
   expect(fixture.network).not.toHaveBeenCalled();
+  const topicResult=await rpc("tools/call",{name:"search_tags",arguments:{query:"构图",limit:10}});
+  expect(JSON.parse(topicResult.content[0].text)).toEqual([{tag:"from_above",description:"俯视",category:0,count:12,localizedDescription:true}]);
   const browseNax=list.find((t:{name:string})=>t.name==="browse_nax_collection");
   expect(browseNax.annotations.openWorldHint).toBe(true);
   const invalid=await rpc("tools/call",{name:"browse_nax_collection",arguments:{collectionId:"unknown"}});

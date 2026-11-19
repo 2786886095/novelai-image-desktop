@@ -796,7 +796,7 @@ function createTools(options: McpServerOptions): ToolDef[] {
     {
       name: "search_tags",
       title: "Search Danbooru tags",
-      description: "Search the active offline tag dictionary by canonical tag or translation, including interior and suffix fragments. Relevance ranks exact matches before prefixes and other substrings; results contain the original tag, translation and usage count. No remote API quota is used.",
+      description: "Search the active offline tag dictionary by canonical tag or translation, including interior and suffix fragments. Relevance ranks exact matches before prefixes and other substrings, then related tags for recognized topics (such as composition); results contain the original tag, translation and usage count. No remote API quota is used.",
       inputSchema: schema({ query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 100 }, sort: {type:"string",enum:["relevance","popular","alphabetical"]} }, ["query"]),
       annotations: { readOnlyHint: true, openWorldHint: false },
       run: async (raw) => {

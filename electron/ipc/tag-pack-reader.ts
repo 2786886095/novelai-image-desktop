@@ -1,3 +1,4 @@
+import { relatedTagsForTopic } from "../../shared/related-tag-topics";
 import { readFileSync, statSync } from "node:fs";
 import {TAG_PACK_MANIFEST,TAG_BROWSE_GROUPS,TAG_BROWSE_PAGE_SIZE,type TagPackPage,type TagPackSort} from "../../shared/multilingual-tag-pack-contract";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
@@ -6,7 +7,7 @@ import type { TagSuggestion } from "../../src/types";
 export type TagDictionaryMatch = TagSuggestion & { query: string };
 type Row = { tag: string; translated: string; count: number; category: number };
 type Ranked = Row & { priority: number };
-type Matched = {id:number;count:number;tag:string;priority:0|1|2};
+type Matched = {id:number;count:number;tag:string;priority:0|1|2|3};
 // Match SQLite BINARY order when finalizing a tied cutoff in JavaScript.
 function compareTag(a:string,b:string){
  if(a===b)return 0;
@@ -99,6 +100,7 @@ class TagPackReader {
   private readonly alphabeticGroups=new Lru<Uint32Array>(5);
   private readonly totalMatches:StatementSync;
   private readonly totals=new Lru<number>(96);
+  private readonly topicRows:StatementSync;
   private readonly contains:StatementSync;
   private readonly topContains:StatementSync;
   private matching:Record<Column,StatementSync>;
@@ -113,6 +115,7 @@ class TagPackReader {
       // instr is literal (unlike LIKE), so %, _ after folding, and punctuation
       // are not wildcard patterns. Keep exact label resolution on its own path.
       const contained=" FROM terms WHERE instr(key,?)>0 OR instr(translated_key,?)>0";
+      this.topicRows=this.db.prepare("SELECT rowid AS id,count,tag FROM terms WHERE tag IN (SELECT value FROM json_each(?))");
       this.totalMatches=this.db.prepare("SELECT count(*) AS n"+contained);
       this.contains=this.db.prepare("SELECT rowid AS id,count,tag"+contained);
       this.topContains=this.db.prepare("SELECT "+rowFields+contained+" ORDER BY count DESC,tag LIMIT ?");
@@ -131,7 +134,7 @@ class TagPackReader {
     const cacheKey=[n,word,sort].join("\0");
     const current=this.searches.get(cacheKey);
     if(current)return current.map(row=>({...row}));
-    if (sort!=="relevance") {
+    if (sort!=="relevance" || relatedTagsForTopic(word)) {
       const hits=this.matches(word).sort((a,b)=>orderMatches(a,b,sort)).slice(0,n)
         .map(({id})=>this.pageRow.get(id) as unknown as Row).map(suggestion);
       this.searches.set(cacheKey,hits);
@@ -175,6 +178,13 @@ class TagPackReader {
       const {id,count,tag}=row as unknown as {id:number;count:number;tag:string};
       if(!best.has(id)&&(!members||members.has(id)))best.set(id,{id,count,tag,priority:2});
     }
+    const related=relatedTagsForTopic(word);
+    if(related){
+      for(const row of this.topicRows.iterate(JSON.stringify([...related]))){
+        const {id,count,tag}=row as unknown as {id:number;count:number;tag:string};
+        if(!best.has(id)&&(!members||members.has(id)))best.set(id,{id,count,tag,priority:3});
+      }
+    }
     return [...best.values()];
   }
 
@@ -184,7 +194,7 @@ class TagPackReader {
     const word=fold(query.slice(0,255));
     // Autocomplete opens on page zero. Count literally matched rows, but do not
     // allocate and sort hundreds of thousands of IDs just to display 24 tags.
-    if(word && group==="all" && page===0 && sort==="relevance"){
+    if(word && !relatedTagsForTopic(word) && group==="all" && page===0 && sort==="relevance"){
       let total=this.totals.get(word);
       if(total===undefined){
         total=Number(this.totalMatches.get(word,word)?.n);
