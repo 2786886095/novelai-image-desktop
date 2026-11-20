@@ -1,1 +1,19 @@
 .role-bulk-panel{display:grid;min-width:0;gap:.65rem;margin-block-start:.6rem}.role-bulk-panel p,.role-bulk-panel ol{margin:0}.role-bulk-actions{display:flex;gap:.4rem;flex-wrap:wrap}.role-bulk-preview{max-height:12rem;overflow:auto;border:1px solid var(--border);border-radius:.5rem;padding:.5rem .8rem .5rem 2rem}.role-bulk-preview li{white-space:pre-wrap;overflow-wrap:anywhere}.role-bulk-preview small{display:block}.role-bulk-panel summary{cursor:pointer}.role-bulk textarea{resize:vertical;max-width:100%}
+
+dialog.role-bulk-dialog {
+  box-sizing: border-box;
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  padding: 0;
+  width: min(42rem, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100dvh - 2rem);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  color: var(--text-primary);
+}
+dialog.role-bulk-dialog:not([open]) { display: none; }
+dialog.role-bulk-dialog::backdrop { background: rgb(15 15 25 / 38%); }
+.role-bulk-dialog > .role-bulk-scroll { padding: .85rem 1.25rem; margin: 0; overflow-y: auto; overscroll-behavior: contain; }
+.role-bulk-dialog > footer { gap: .75rem; align-items: center; }
+.role-bulk-dialog > footer [role=status] { margin-inline-end: auto; overflow-wrap: anywhere; }
