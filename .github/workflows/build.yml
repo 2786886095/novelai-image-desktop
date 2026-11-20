@@ -328,24 +328,14 @@ jobs:
           test "${{ inputs.verified_build_run }}" = 44746219032
           test "${{ inputs.mobile_run }}" = 44746225000
           test "${{ inputs.feature_run }}" = 44746230248
+          for id in 44746219032 44746225000; do
+            gh run view "$id" --json headSha,status,conclusion | jq -e '.headSha=="a3cd315029c2bc4314d5a112d3e132806392c693" and .status=="completed" and .conclusion=="success"'
+          done
           for i in $(seq 1 210); do
-            ready=true
-            for id in 44746219032 44746225000 44746230248; do
-              observed=$(gh run view "$id" --json headSha,status,conclusion,attempt,jobs) || { ready=false; break; }
-              jq -e '.headSha == "a3cd315029c2bc4314d5a112d3e132806392c693"' <<<"$observed" >/dev/null
-              [[ $(jq -r .status <<<"$observed") == completed ]] || { ready=false; break; }
-              if [[ $id == 44746230248 ]]; then
-                # The independent coordinator may retry failed jobs. Never accept another failing job.
-                unexpected=$(jq '[.jobs[]|select(.conclusion!="success" and .name!="windows-artist-local-proof" and .name!="full-client-feature-matrix" and .name!="ios-components (os)")] | length' <<<"$observed")
-                if (( unexpected )); then ready=false; break; fi
-              else
-                [[ $(jq -r .conclusion <<<"$observed") == success ]] || { ready=false; break; }
-              fi
-            done
-            if $ready; then break; fi
+            if python3 scripts/v301-complementary-runs.py verify; then exit 0; fi
             sleep 60
           done
-          $ready || { echo 'Other required gates are not ready; release remains unpublished.'; exit 1; }
+          exit 1
       - uses: actions/download-artifact@v4
         with:
           pattern: novelai-image-desktop-*
@@ -386,19 +376,17 @@ jobs:
           test "${{ inputs.mobile_run }}" = 44746225000
           test "${{ inputs.verified_build_run }}" = 44746219032
           git merge-base --is-ancestor "$app" "$GITHUB_SHA"
-          git diff --exit-code "$app" "$GITHUB_SHA" -- . ':!.github/workflows/build.yml' ':!scripts/release-platform-contract.mjs' ':!scripts/publish-verified-release.mjs' ':!scripts/v300-folder-review.mjs' ':!scripts/v300-folder-review.test.mjs'
+          git diff --exit-code "$app" "$GITHUB_SHA" -- . ':!.github/workflows/build.yml' ':!scripts/release-platform-contract.mjs' ':!scripts/publish-verified-release.mjs' ':!scripts/v300-folder-review.mjs' ':!scripts/v300-folder-review.test.mjs' ':!scripts/v301-complementary-runs.py'
           git checkout --detach "$app"
           for f in scripts/{v300-folder-review,release-platform-contract,publish-verified-release}.mjs; do git show "$GITHUB_SHA:$f" > "$f"; done
-      - name: Download original iOS OS group observations
+          git show "$GITHUB_SHA:scripts/v301-complementary-runs.py" > scripts/v301-complementary-runs.py
+      - name: Rebuild matrix from original results and verified Android replacements
         if: inputs.reviewed_v301_role_release
-        uses: actions/download-artifact@v4
-        with:
-          name: native-components-ios-os-a3cd315029c2bc4314d5a112d3e132806392c693
-          path: reviewed-ios-os
-          run-id: 44746230248
-          github-token: ${{ github.token }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/v301-complementary-runs.py prepare
       - name: Download complete same-source five-platform feature evidence
-        if: inputs.feature_run != ''
+        if: inputs.feature_run != '' && !inputs.reviewed_v301_role_release
         uses: actions/download-artifact@v4
         with:
           name: five-platform-feature-evidence
