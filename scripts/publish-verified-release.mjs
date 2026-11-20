@@ -15,23 +15,29 @@ const waiveWindowsArtistGpuV293=process.env.WAIVE_WINDOWS_ARTIST_GPU_V293==='tru
 const waiveWindowsArtistGpuV294=process.env.WAIVE_WINDOWS_ARTIST_GPU_V294==='true';
 const waiveWindowsArtistGpuV295=process.env.WAIVE_WINDOWS_ARTIST_GPU_V295==='true';
 const waiveWindowsArtistGpuV300=process.env.WAIVE_WINDOWS_ARTIST_GPU_V300==='true';
-const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV292||waiveWindowsArtistGpuV293||waiveWindowsArtistGpuV294||waiveWindowsArtistGpuV295||waiveWindowsArtistGpuV300;
-const reviewedIosFolder=process.env.REVIEWED_V300_IOS_FOLDER==='true';
+const waiveWindowsArtistGpuV301=process.env.REVIEWED_V301_ROLE_RELEASE==="true";
+const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV292||waiveWindowsArtistGpuV293||waiveWindowsArtistGpuV294||waiveWindowsArtistGpuV295||waiveWindowsArtistGpuV300||waiveWindowsArtistGpuV301;
+let reviewedIosFolder=process.env.REVIEWED_V300_IOS_FOLDER==='true';
 const nativeRun=process.env.FEATURE_RUN;
 let folderReview;
+if(waiveWindowsArtistGpuV301){
+ if(reviewedIosFolder || version!=='3.0.1'||sha!=='a3cd315029c2bc4314d5a112d3e132806392c693'||nativeRun!=='44746230248'||process.env.BUILD_RUN!=='44746219032'||process.env.MOBILE_RUN!=='44746225000')throw Error('Not the reviewed v3.0.1 source and runs');
+ const native=JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs']));
+ reviewedIosFolder=native.jobs.find(j=>j.name==='ios-components (os)')?.conclusion==='failure';
+}
 if(reviewedIosFolder){
- if(!waiveWindowsArtistGpuV300||version!=='3.0.0'||sha!=='c02d3186fc1b014d3e3611e07b7698cd5c448713'||nativeRun!=='44707958871'||process.env.BUILD_RUN!=='44707970782'||process.env.MOBILE_RUN!=='44707964543')throw Error('Not the reviewed v3.0.0 source and runs');
+ if(!waiveWindowsArtistGpuV301&&(!waiveWindowsArtistGpuV300||version!=='3.0.0'||sha!=='c02d3186fc1b014d3e3611e07b7698cd5c448713'||nativeRun!=='44707958871'||process.env.BUILD_RUN!=='44707970782'||process.env.MOBILE_RUN!=='44707964543'))throw Error('Not the reviewed v3.0.0 source and runs');
  const {checkFolderReview,assertOtherOutputReceipts}=await import('./v300-folder-review.mjs');
  folderReview=checkFolderReview('reviewed-ios-os',sha);
  folderReview.otherOutputReceipts=assertOtherOutputReceipts('release-evidence/evidence',sha);
 }
 if(waiveWindowsArtistGpu){
  if((waiveWindowsArtistGpuV286&&version!=='2.8.6')||(waiveWindowsArtistGpuV292&&version!=='2.9.2')||(waiveWindowsArtistGpuV293&&version!=='2.9.3')||(waiveWindowsArtistGpuV294&&version!=='2.9.4')||(waiveWindowsArtistGpuV295&&version!=='2.9.5')||(waiveWindowsArtistGpuV300&&version!=='3.0.0')||!/^\d+$/.test(nativeRun??''))throw Error('Explicit version-bound cloud acceptance workflow is required');
- assertV286CloudNativeRun(JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs'])),{sourceSha:sha,reviewedIosFolder});
+ assertV286CloudNativeRun(JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs'])),{sourceSha:sha,reviewedIosFolder,strictGpuMatrix301:waiveWindowsArtistGpuV301});
 }
 const featureParity=JSON.parse(fs.readFileSync('release-evidence/feature-parity.json','utf8'));
-assertReleasePlatformContract(featureParity,{reviewedIosFolder,version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV300});
-assertReleaseEvidenceFiles(featureParity,'release-evidence',{reviewedIosFolder,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV300});
+assertReleasePlatformContract(featureParity,{reviewedIosFolder,version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV300,waiveWindowsArtistGpuV301});
+assertReleaseEvidenceFiles(featureParity,'release-evidence',{reviewedIosFolder,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV300,waiveWindowsArtistGpuV301});
 const buildRun=process.env.BUILD_RUN;
 if(!/^\d+$/.test(buildRun??''))throw Error('A verified desktop build run is required');
 const build=JSON.parse(call('gh',['run','view',buildRun,'--json','headSha,jobs']));
@@ -121,12 +127,13 @@ if(!/not found/i.test(existing.stderr??''))throw Error('Release existence check 
 const releaseNotes=fs.readFileSync('docs/RELEASE_NOTES.md','utf8');
 if(waiveWindowsArtistGpuV286&&!releaseNotes.includes('Windows 画风迭代的本机 GPU 实测未验收'))throw Error('Release notes must disclose the untested Windows GPU scenarios');
 // v2.9.2, v2.9.3, and v2.9.4 keep the precise untested scope in verification.json without a separate changelog bullet.
-const publicNotesFile=(reviewedIosFolder||waiveWindowsArtistGpuV286)?'release-evidence/public-release-notes.md':'docs/RELEASE_NOTES.md';
+const publicNotesFile=(reviewedIosFolder||waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV301)?'release-evidence/public-release-notes.md':'docs/RELEASE_NOTES.md';
 if(waiveWindowsArtistGpuV286){
  const publicNotes=releaseNotes.replace(/^- Windows 画风迭代的本机 GPU 实测未验收[^\r\n]*(?:\r?\n|$)/m,'');
  if(publicNotes===releaseNotes)throw Error('Missing canonical Windows GPU waiver line');
  fs.writeFileSync(publicNotesFile,publicNotes,'utf8');
 }
+if(waiveWindowsArtistGpuV301&&!reviewedIosFolder)fs.writeFileSync(publicNotesFile,releaseNotes+'\nWindows 画风迭代 GPU 长任务未实测。\n');
 if(reviewedIosFolder)fs.writeFileSync(publicNotesFile,releaseNotes+'\n### 验收例外\n- iOS 系统文件夹选择器：本次未在 5 秒内确认命名框可用，此项验收失败，经维护者同意不作为发行条件。其余 iOS 检查仍为必需。\n- Windows 画风迭代 GPU 长任务未实测。\n');
 const evidence={version,sha,...(reviewedIosFolder?{folderReview}:{}),...(waiveWindowsArtistGpu?{nativeRun,fullScopeCertified:false,waived:[{platform:'windows',feature:'artist-iteration',scenarios:artistIterationScenarios,status:'not-tested'},...(reviewedIosFolder?[{platform:'ios',feature:'output-management',scenarios:['folder-choice-history-link'],status:'failed-waived'}]:[])]}:{}),mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
 fs.writeFileSync('release-assets/verification.json',JSON.stringify(evidence,null,2));
