@@ -339,6 +339,8 @@ jobs:
         run: node scripts/publish-verified-release.mjs
 
   publish-v299-explicit-gpu-waiver:
+    env:
+      ACCEPT_V299_IOS_FOLDER_FAILURE: '44671957989'
     if: github.event_name == 'workflow_dispatch' && inputs.publish_v299_gpu_waiver && !inputs.candidate_build_only && !inputs.publish_after_verification
     runs-on: ubuntu-latest
     timeout-minutes: 180

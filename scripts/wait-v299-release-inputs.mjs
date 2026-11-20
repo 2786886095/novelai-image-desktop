@@ -39,16 +39,17 @@ if (process.argv[2]==='--sync-main') {
  assert.equal(latest.target_commitish,sha);
  assert.equal(latest.draft,false);
  assert.equal(latest.prerelease,false);
- assert.equal(latest.body.replaceAll('\r\n','\n').trim(),fs.readFileSync('docs/RELEASE_NOTES.md','utf8').replaceAll('\r\n','\n').trim());
+ assert.equal(latest.body.replaceAll('\r\n','\n').trim(),fs.readFileSync('release-evidence/public-release-notes.md','utf8').replaceAll('\r\n','\n').trim());
  assert.equal(peek('refs/tags/'+tag),sha);
  const receipt=JSON.parse(fs.readFileSync('release-assets/verification.json','utf8'));
  assert.equal(receipt.sha,sha);
  assert.equal(receipt.fullScopeCertified,false);
- assert.equal(receipt.waived.length,1);
+ assert.equal(receipt.waived.length,2);
+ assert.equal(receipt.waived[1].status,'failed');assert.equal(receipt.waived[1].platform,'ios');assert.deepEqual(receipt.waived[1].scenarios,['folder-choice-history-link']);
  assert.equal(receipt.waived[0].status,'not-tested');
  assert.equal(receipt.waived[0].feature,'artist-iteration');
  assert.equal(receipt.waived[0].platform,'windows');
- assert.equal(receipt.releaseScopeSummary.verifiedSlots,186);
+ assert.equal(receipt.releaseScopeSummary.verifiedSlots,185);
  assert.equal(receipt.releaseScopeSummary.pendingSlots,1);
  for(const a of receipt.assets){
   const published=latest.assets.find(b=>b.name===a.name);
@@ -62,8 +63,16 @@ if (process.argv[2]==='--sync-main') {
  }
  assert.equal(peek('refs/heads/main'),old,'Main advanced: never force overwrite');
  git('merge-base','--is-ancestor',old,sha);
- git('push','origin',sha+':refs/heads/main');
- assert.equal(peek('refs/heads/main'),sha);
+ fs.copyFileSync('release-evidence/public-release-notes.md','docs/RELEASE_NOTES.md');
+ const summaries={'README.md':'手机端导入图片可选择用途。上次确认勾选的参数项会保留，值来自本次图片。','README.zh-TW.md':'手機版匯入圖片時可選擇用途。會保留上次確認勾選的參數項目，數值取自本次圖片。','README.en.md':'On mobile, choose how to use an imported image. Checked parameter fields are remembered; their values come from the new image.','README.ja.md':'モバイル版では画像の読み込み時に用途を選べます。前回選択した項目を記憶し、値は今回の画像から読み取ります。','README.ko.md':'모바일에서 가져온 이미지의 용도를 선택할 수 있습니다. 마지막으로 선택한 항목을 기억하고 값은 새 이미지에서 읽습니다.'};
+ for(const [file,note] of Object.entries(summaries)){
+  const oldText=fs.readFileSync(file,'utf8');const text=oldText.replace(/^(# Langbai NovelAI Studio[^\r\n]*\r?\n)/m,'$1\n'+note+'\n');
+  assert.notEqual(text,oldText);fs.writeFileSync(file,text);
+ }
+ git('add','--','docs/RELEASE_NOTES.md',...Object.keys(summaries));
+ git('-c','user.name=github-actions[bot]','-c','user.email=41898282+github-actions[bot]@users.noreply.github.com','commit','-m','Document mobile imports and known limitations for the current release');
+ const docsSha=git('rev-parse','HEAD');assert.equal(git('rev-parse','HEAD^'),sha);
+ git('push','origin',docsSha+':refs/heads/main');assert.equal(peek('refs/heads/main'),docsSha);
  const current=JSON.parse(gh('api','repos/'+repo));
  assert.equal(current.default_branch,'main');
  assert.equal(current.homepage,'https://github.com/'+repo+'/releases/latest');
@@ -93,7 +102,12 @@ for(let i=0;i<200;i++){
    // This strict aggregate may fail only for the deliberately missing hardware proof.
    // The original matrix and every source-bound receipt are revalidated by the publisher.
    assertV299CloudNativeRun(native,{sourceSha:sha});
-  }else assert.equal(evidence.conclusion,'success',workflow+' must pass before publication');
+  }else if(workflow==='ios-folder-native-diagnostic.yml'){
+   assert.equal(process.env.ACCEPT_V299_IOS_FOLDER_FAILURE,'44671957989');
+   assert.equal(id,'44671958088');assert.equal(evidence.run_attempt,2);assert.equal(evidence.conclusion,'failure');
+   const jobs=JSON.parse(gh('api','repos/'+repo+'/actions/runs/'+id+'/jobs')).jobs;
+   assert.equal(jobs.length,1);assert.equal(String(jobs[0].id),'136083786359');assert.equal(jobs[0].conclusion,'failure');
+ }else assert.equal(evidence.conclusion,'success',workflow+' must pass before publication');
  }
  if(!pending){
   assert.equal(peek('refs/heads/main'),old,'Main changed during release checks');

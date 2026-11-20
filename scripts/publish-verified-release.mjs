@@ -120,13 +120,18 @@ if(!/not found/i.test(existing.stderr??''))throw Error('Release existence check 
 const releaseNotes=fs.readFileSync('docs/RELEASE_NOTES.md','utf8');
 if(waiveWindowsArtistGpuV286&&!releaseNotes.includes('Windows 画风迭代的本机 GPU 实测未验收'))throw Error('Release notes must disclose the untested Windows GPU scenarios');
 // v2.9.2, v2.9.3, and v2.9.4 keep the precise untested scope in verification.json without a separate changelog bullet.
-const publicNotesFile=waiveWindowsArtistGpuV286?'release-evidence/public-release-notes.md':'docs/RELEASE_NOTES.md';
+const folderFailure=waiveWindowsArtistGpuV299 && process.env.ACCEPT_V299_IOS_FOLDER_FAILURE==='44671957989' && sha==='ddc5a089dbc71b2e06012eaa688f1a2c51cb841e';
+const publicNotesFile=folderFailure?'release-evidence/public-release-notes.md':waiveWindowsArtistGpuV286?'release-evidence/public-release-notes.md':'docs/RELEASE_NOTES.md';
 if(waiveWindowsArtistGpuV286){
  const publicNotes=releaseNotes.replace(/^- Windows 画风迭代的本机 GPU 实测未验收[^\r\n]*(?:\r?\n|$)/m,'');
  if(publicNotes===releaseNotes)throw Error('Missing canonical Windows GPU waiver line');
  fs.writeFileSync(publicNotesFile,publicNotes,'utf8');
 }
-const evidence={version,sha,...(waiveWindowsArtistGpuV299?{metadataRun:process.env.METADATA_RUN}:{}),...(waiveWindowsArtistGpu?{nativeRun,fullScopeCertified:false,waived:[{platform:'windows',feature:'artist-iteration',scenarios:artistIterationScenarios,status:'not-tested'}]}:{}),mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
+if(folderFailure){
+ const notes=releaseNotes.trimEnd()+'\n- 手机端导入图片时可选择用途，并可逐项应用元数据；下次默认沿用上次确认的勾选，不复用上一张图的值。\n\n### 已知限制\n\n- iOS 系统文件夹选择器：新建文件夹后，原生验收和独立复测均未能在 5 秒内确认可用的命名框。此项未通过，按维护者授权发布；不等于所有设备都不能新建文件夹。\n- Windows 画风迭代 GPU 长任务未实测。\n';
+ fs.writeFileSync(publicNotesFile,notes);
+}
+const evidence={version,sha,...(waiveWindowsArtistGpuV299?{metadataRun:process.env.METADATA_RUN}:{}),...(waiveWindowsArtistGpu?{nativeRun,fullScopeCertified:false,waived:[{platform:'windows',feature:'artist-iteration',scenarios:artistIterationScenarios,status:'not-tested'},...(folderFailure?[{platform:'ios',feature:'output-management',scenarios:['folder-choice-history-link'],status:'failed',deadlineSeconds:5,nativeRun,independentRun:'44671958088',independentAttempt:2}]:[])]}:{}),mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
 fs.writeFileSync('release-assets/verification.json',JSON.stringify(evidence,null,2));
 call('gh',['release','create',tag,...files,'release-assets/verification.json','--target',sha,'--draft','--title',`Langbai NovelAI Studio ${tag}`,'--notes-file',publicNotesFile]);
 const draft=JSON.parse(call('gh',['release','view',tag,'--json','isDraft,assets']));
