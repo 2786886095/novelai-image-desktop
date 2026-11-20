@@ -48,6 +48,10 @@ on:
         description: v2.9.5 only; skip local Windows Artist GPU proof and require all other hosted checks
         type: boolean
         default: false
+      reviewed_v300_ios_folder:
+        description: Publish only the reviewed v3.0.0 application commit with the observed ios_folder1 failure and no other iOS exception
+        type: boolean
+        default: false
       waive_windows_artist_gpu_v300:
         description: v3.0.0 only; skip local Windows Artist GPU proof and require all other hosted checks
         type: boolean
@@ -317,6 +321,28 @@ jobs:
           merge-multiple: true
           run-id: ${{ inputs.verified_build_run || github.run_id }}
           github-token: ${{ github.token }}
+      - name: Bind reviewed v3.0.0 binaries and test evidence to their original source
+        if: inputs.reviewed_v300_ios_folder
+        shell: bash
+        run: |
+          set -euo pipefail
+          app=c02d3186fc1b014d3e3611e07b7698cd5c448713
+          test "${{ inputs.waive_windows_artist_gpu_v300 }}" = true
+          test "${{ inputs.feature_run }}" = 44707958871
+          test "${{ inputs.mobile_run }}" = 44707964543
+          test "${{ inputs.verified_build_run }}" = 44707970782
+          git merge-base --is-ancestor "$app" "$GITHUB_SHA"
+          git diff --exit-code "$app" "$GITHUB_SHA" -- . ':!.github/workflows/build.yml' ':!scripts/release-platform-contract.mjs' ':!scripts/publish-verified-release.mjs' ':!scripts/v300-folder-review.mjs' ':!scripts/v300-folder-review.test.mjs'
+          git checkout --detach "$app"
+          for f in scripts/{v300-folder-review,release-platform-contract,publish-verified-release}.mjs; do git show "$GITHUB_SHA:$f" > "$f"; done
+      - name: Download original iOS OS group observations
+        if: inputs.reviewed_v300_ios_folder
+        uses: actions/download-artifact@v4
+        with:
+          name: native-components-ios-os-c02d3186fc1b014d3e3611e07b7698cd5c448713
+          path: reviewed-ios-os
+          run-id: 44707958871
+          github-token: ${{ github.token }}
       - name: Download complete same-source five-platform feature evidence
         if: inputs.feature_run != ''
         uses: actions/download-artifact@v4
@@ -328,6 +354,7 @@ jobs:
       - name: Verify mobile source, versions, signatures and installer hashes; then publish
         env:
           GH_TOKEN: ${{ github.token }}
+          REVIEWED_V300_IOS_FOLDER: ${{ inputs.reviewed_v300_ios_folder }}
           FEATURE_RUN: ${{ inputs.feature_run }}
           WAIVE_WINDOWS_ARTIST_GPU_V286: ${{ inputs.waive_windows_artist_gpu_v286 }}
           WAIVE_WINDOWS_ARTIST_GPU_V292: ${{ inputs.waive_windows_artist_gpu_v292 }}

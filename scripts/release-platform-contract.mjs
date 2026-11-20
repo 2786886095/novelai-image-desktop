@@ -39,7 +39,9 @@ const releaseScope = Object.freeze({
 export const releaseScopeSha256 = crypto.createHash('sha256').update(JSON.stringify(releaseScope)).digest('hex');
 export const releaseScopeCounts = Object.freeze({declaredSlots:195,requiredSlots:187,notSupportedSlots:8});
 
-export function assertReleasePlatformContract(report, {version, sourceSha, waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV292=false, waiveWindowsArtistGpuV293=false, waiveWindowsArtistGpuV294=false, waiveWindowsArtistGpuV295=false, waiveWindowsArtistGpuV300=false}) {
+const reviewedSource = 'c02d3186fc1b014d3e3611e07b7698cd5c448713';
+export function assertReleasePlatformContract(report, {version, sourceSha, waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV292=false, waiveWindowsArtistGpuV293=false, waiveWindowsArtistGpuV294=false, waiveWindowsArtistGpuV295=false, waiveWindowsArtistGpuV300=false,reviewedIosFolder=false}) {
+  if(reviewedIosFolder)assert.ok(waiveWindowsArtistGpuV300 && version==='3.0.0' && sourceSha===reviewedSource,'Folder review scope differs');
   assert.equal(typeof waiveWindowsArtistGpuV286,'boolean');
   assert.equal(typeof waiveWindowsArtistGpuV292,'boolean');
   assert.equal(typeof waiveWindowsArtistGpuV293,'boolean');
@@ -99,6 +101,13 @@ export function assertReleasePlatformContract(report, {version, sourceSha, waive
           assert.deepEqual(result[key],[],key);
         continue;
       }
+      if(reviewedIosFolder && platform==='ios' && feature.id==='output-management'){
+        assert.equal(result.status,'partial');
+        assert.deepEqual(result.requiredScenarios,['managed-write-no-clobber','folder-choice-history-link','invalid-outside-paths-no-delete']);
+        assert.deepEqual(result.missingScenarios,['folder-choice-history-link']);
+        assert.deepEqual([...result.completedScenarios].sort(),['invalid-outside-paths-no-delete','managed-write-no-clobber']);
+        continue; // these two receipts are independently verified by assertOtherOutputReceipts
+      }
       assert.equal(result?.status,'verified',`${feature.id}/${platform} is not accepted`);
       assert.ok(Array.isArray(result.evidence) && result.evidence.length>0,
         `${feature.id}/${platform} has no execution evidence`);
@@ -120,16 +129,17 @@ export function assertReleasePlatformContract(report, {version, sourceSha, waive
   for(const [field,value] of Object.entries(releaseScopeCounts))
     assert.equal(report.summary?.[field],value,'Scoped summary differs: '+field);
   const waived=waiveWindowsArtistGpu?1:0;
-  assert.equal(report.summary.verifiedSlots,releaseScopeCounts.requiredSlots-waived,'Required scoped feature coverage is incomplete');
-  assert.equal(report.summary.partialSlots,0);assert.equal(report.summary.pendingSlots,waived);
-  if(waived)assert.equal(report.summary.missingScenarioSlots,artistIterationScenarios.length);
+  assert.equal(report.summary.verifiedSlots,releaseScopeCounts.requiredSlots-waived-Number(reviewedIosFolder),'Required scoped feature coverage is incomplete');
+  assert.equal(report.summary.partialSlots,Number(reviewedIosFolder));assert.equal(report.summary.pendingSlots,waived);
+  if(waived)assert.equal(report.summary.missingScenarioSlots,artistIterationScenarios.length+Number(reviewedIosFolder));
   return {platforms:releasePlatforms.length,features:releaseFeatures.length};
 }
 
-export function assertV286CloudNativeRun(run,{sourceSha}){
+export function assertV286CloudNativeRun(run,{sourceSha,reviewedIosFolder=false}){
   assert.equal(run?.headSha,sourceSha,'Cloud acceptance source differs');
   assert.equal(run?.status,'completed','Cloud acceptance still running');
-  assert.equal(run?.conclusion,'success','Cloud acceptance did not succeed');
+  if(reviewedIosFolder)assert.equal(sourceSha,reviewedSource);
+  assert.equal(run?.conclusion,reviewedIosFolder?'failure':'success','Cloud acceptance did not succeed');
   const parts=['core','text','library','os','metadata','gallery','japanese','generation','ui','workflows'];
   const required=[
     'desktop-components (windows-latest)','desktop-components (macos-15)','desktop-components (ubuntu-24.04)',
@@ -140,13 +150,15 @@ export function assertV286CloudNativeRun(run,{sourceSha}){
   assert.deepEqual(run.jobs.map(job=>job.name).sort(),[...required,gpu].sort(),'Cloud acceptance job inventory differs');
   for(const job of run.jobs){
     assert.equal(job.status,'completed',job.name);
-    assert.equal(job.conclusion,job.name===gpu?'skipped':'success',job.name);
+    const reason=reviewedIosFolder && ({'ios-components (os)':'Run independently counted component and client-scenario entries','full-client-feature-matrix':'Verify all required cloud cells and preserve the exact matrix'})[job.name];
+    assert.equal(job.conclusion,reason?'failure':job.name===gpu?'skipped':'success',job.name);
+    if(reason)assert.deepEqual(job.steps.filter(s=>s.conclusion==='failure').map(s=>s.name),[reason]);
   }
 }
 
-export function assertReleaseEvidenceFiles(report, evidenceRoot, {waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV292=false, waiveWindowsArtistGpuV293=false, waiveWindowsArtistGpuV294=false, waiveWindowsArtistGpuV295=false, waiveWindowsArtistGpuV300=false}={}) {
+export function assertReleaseEvidenceFiles(report, evidenceRoot, {waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV292=false, waiveWindowsArtistGpuV293=false, waiveWindowsArtistGpuV294=false, waiveWindowsArtistGpuV295=false, waiveWindowsArtistGpuV300=false,reviewedIosFolder=false}={}) {
   // Validate the exact policy before an empty not-supported evidence array can be skipped.
-  assertReleasePlatformContract(report,{version:report?.version,sourceSha:report?.sourceSha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV300});
+  assertReleasePlatformContract(report,{version:report?.version,sourceSha:report?.sourceSha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV300,reviewedIosFolder});
   const root=fs.realpathSync(evidenceRoot);
   for(const feature of report.features) for(const platform of releasePlatforms)
     for(const proof of feature.platforms[platform].evidence) {

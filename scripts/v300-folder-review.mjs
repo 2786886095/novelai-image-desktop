@@ -1,0 +1,49 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import {assertScenarioReceipt} from './feature-acceptance/full-feature-profiles.mjs';
+
+const source = 'c02d3186fc1b014d3e3611e07b7698cd5c448713';
+const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
+const read = (dir, file) => JSON.parse(fs.readFileSync(path.join(dir,file),'utf8'));
+export function checkFolderReview(dir,sha) {
+  assert.equal(sha,source);
+  const group = read(dir,'CI_COMPONENT_COMMANDS.json');
+  assert.equal(group.sourceSha,sha); assert.equal(group.platform,'ios'); assert.equal(group.entryGroup,'os');
+  assert.equal(group.exitStatus,1);
+  const names = ['os6','ios_update2','ios_folder1'];
+  assert.deepEqual(group.selectedEntries,names); assert.deepEqual(group.entries.map(e=>e.entry),names);
+  for(const [i,row] of group.entries.entries()){
+    const failed = row.entry==='ios_folder1';
+    assert.equal(row.sourceQualified,true);assert.equal(row.expectedChecks,[6,2,1][i]);
+    assert.equal(row.status,failed?'failed':'passed');assert.equal(row.nativeExitStatus,Number(failed));assert.equal(row.exitStatus,Number(failed));
+    if(!failed){
+      const receipt = read(dir,row.entry+'/native-mobile-scenarios-receipt.json');
+      assertScenarioReceipt(receipt,{sourceSha:sha,platform:'ios'});
+      assert.equal(receipt.checks.length,row.expectedChecks);
+    }
+  }
+  const failure=read(dir,'ios_folder1/native-mobile-receipt.json');
+  assert.equal(failure.entry,'ios_folder1');assert.equal(failure.sourceSha,sha);assert.equal(failure.exitStatus,1);
+  const cmd=read(dir,'ios_folder1/ios-picker-host/UI_COMMAND.json');
+  const line=cmd.stdout.split(/\r?\n/).find(s=>s.startsWith('IOS_FOLDER_NAMING_EDITOR_WITNESS:'));
+  assert.ok(line);const w=JSON.parse(line.slice(line.indexOf(':')+1));
+  assert.equal(w.sourceSha,sha);assert.equal(w.appearanceDeadlineSeconds,5);
+  assert.equal(w.withinAppearanceDeadline,false);assert.ok(w.elapsedSeconds>=5 && Number.isFinite(w.elapsedSeconds));
+  return {run:'44707958871',job:'136192164695',sourceSha:sha,entry:'ios_folder1',status:'failed-waived',
+    observedSeconds:w.elapsedSeconds,deadlineSeconds:5,otherGroupEntries:names.slice(0,2),
+    groupReceiptSha256:digest(fs.readFileSync(path.join(dir,'CI_COMPONENT_COMMANDS.json')))};
+}
+export function assertOtherOutputReceipts(dir,sha){
+  assert.equal(sha,source);const found=new Map();
+  for(const file of fs.readdirSync(dir)){
+    if(!/^[a-f0-9]{64}\.json$/.test(file))continue;
+    const r=read(dir,file);if(r.schema!=='client-feature-scenarios/v1'||r.platform!=='ios'||!r.checks?.some(c=>c.feature==='output-management'))continue;
+    assert.equal(digest(fs.readFileSync(path.join(dir,file)))+'.json',file);
+    assertScenarioReceipt(r,{sourceSha:sha,platform:'ios'});
+    for(const c of r.checks.filter(c=>c.feature==='output-management'))found.set(c.scenario,file);
+  }
+  assert.deepEqual([...found.keys()].sort(),['invalid-outside-paths-no-delete','managed-write-no-clobber']);
+  return Object.fromEntries(found);
+}
