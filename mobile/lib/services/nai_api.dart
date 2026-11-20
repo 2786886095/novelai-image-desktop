@@ -2787,7 +2787,7 @@ String _v5BaseCaption(String raw,String suffix,bool auto,List<CharCaptionItem> c
     final words=groups.expand((g)=>reverse?g.reversed:g).toList();
     if(words.isNotEmpty){
       final prefix=base.replaceFirst(RegExp(r'[\s,]+$'),'');
-      base=[if(prefix.isNotEmpty)prefix,'teXt: '+words.join('\n\n')].join(', ');
+      base=[if(prefix.isNotEmpty)prefix,"teXt: ${words.join('\n\n')}"].join(', ');
     }
   }
   return base+rest;
