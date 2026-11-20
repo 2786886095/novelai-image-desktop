@@ -23,9 +23,9 @@ export function RoleBulkEditor({current,limit,apply}:{current:CharCaption[];limi
  const t=bulkLabels(settings?.language??"zh-CN");
  const [open,setOpen]=useState(false),[draft,setDraft]=useState(()=>{try{return localStorage.getItem(draftKey)??""}catch{return ""}});
  const [brief,setBrief]=useState(""),[name,setName]=useState(""),[msg,setMsg]=useState(""),[okDelete,setOkDelete]=useState(false),[busy,setBusy]=useState(false);
- const file=useRef<HTMLInputElement>(null),dialog=useRef<HTMLDialogElement>(null);
+ const file=useRef<HTMLInputElement>(null),dialog=useRef<HTMLDialogElement>(null),launcher=useRef<HTMLElement>(null);
  const titleId=useId(),dialogId=useId();
- const dismiss=()=>{setOkDelete(false);setMsg("");setOpen(false);};
+ const dismiss=()=>{dialog.current?.close();setOkDelete(false);setMsg("");setOpen(false);launcher.current?.querySelector("button")?.focus({preventScroll:true});};
  useLayoutEffect(()=>{
    if(!open||!dialog.current)return;
    const el=dialog.current;
@@ -43,7 +43,7 @@ export function RoleBulkEditor({current,limit,apply}:{current:CharCaption[];limi
    await window.naiDesktop.setSetting("positivePromptPresets",[...all,preset]);
    await refresh();setName("");setMsg(t.saved+": "+preset.name);
  }catch(e){setMsg(String(e))}finally{setBusy(false)}}
- return <section className="role-bulk-launcher" aria-label={t.title}>
+ return <section ref={launcher} className="role-bulk-launcher" aria-label={t.title}>
  <Button aria-haspopup="dialog" aria-expanded={open} aria-controls={open?dialogId:undefined} disabled={!limit} onClick={()=>setOpen(true)}>{t.title}</Button>
  {open&&createPortal(<dialog ref={dialog} id={dialogId} data-studio-portal className="modal role-bulk role-bulk-dialog" aria-modal="true" aria-labelledby={titleId}
    onCancel={e=>{e.preventDefault();dismiss();}}
