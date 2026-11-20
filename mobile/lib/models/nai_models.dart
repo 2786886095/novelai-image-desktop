@@ -145,6 +145,7 @@ class GenerateParams {
   String seedMode;
   int ucPreset;
   String effort;
+  bool autoAppendQuotedText;
   String qualityPreset;
   bool qualityToggle;
   bool transparentBackground;
@@ -172,6 +173,7 @@ class GenerateParams {
     this.seedMode = 'random',
     this.ucPreset = 2,
     this.effort = 'high',
+    this.autoAppendQuotedText = true,
     this.qualityPreset = 'standard',
     this.qualityToggle = true,
     this.transparentBackground = false,
@@ -228,6 +230,7 @@ class GenerateParams {
         'seedMode': seedMode,
         'ucPreset': ucPreset,
         'effort': effort,
+        'autoAppendQuotedText': autoAppendQuotedText,
         'qualityPreset': qualityPreset,
         'qualityToggle': qualityToggle,
         'transparentBackground': transparentBackground,
@@ -254,6 +257,7 @@ class GenerateParams {
         seed: _intValue(j['seed'], 0),
         seedMode: _stringValue(j['seedMode'], 'random'),
         ucPreset: _intValue(j['ucPreset'], 2),
+        autoAppendQuotedText: j['autoAppendQuotedText'] != false,
         qualityPreset: _qualityPresetValue(
           j['qualityPreset'],
           _boolValue(j['qualityToggle'], true) ? 'standard' : 'none',
@@ -316,6 +320,7 @@ class GenerateParams {
       seed: seed.clamp(0, 0xffffffff).toInt(),
       seedMode: seedMode == 'fixed' ? 'fixed' : 'random',
       ucPreset: ucPreset.clamp(0, 3).toInt(),
+      autoAppendQuotedText: autoAppendQuotedText,
       qualityPreset: normalizedQualityPreset,
       qualityToggle: normalizedQualityPreset != 'none',
       transparentBackground: normalizedModel.startsWith('nai-diffusion-5') &&

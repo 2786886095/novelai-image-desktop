@@ -160,8 +160,8 @@ it("creates and moves groups, previews exact metadata rules, and finds character
     vi.mocked(bridge.agentGenerationInput).mockImplementation((_request, args) => ({
       params: { ...DEFAULT_PARAMS, ...args }, extras: { historyGroupId: String(args.historyGroupId ?? "") },
     }));
-    const previewArgs = { positivePrompt: "neutral fixture", historyGroupId: ocean.id, transparentBackground: true, fileNamePrefix: "group-test", smea: true };
-    expect(await data("prepare_generation", previewArgs)).toMatchObject({ historyGroupId: ocean.id, params: { transparentBackground: true, fileNamePrefix: "group-test", smea: true } });
+    const previewArgs = { autoAppendQuotedText: false, positivePrompt: "neutral fixture", historyGroupId: ocean.id, transparentBackground: true, fileNamePrefix: "group-test", smea: true };
+    expect(await data("prepare_generation", previewArgs)).toMatchObject({ historyGroupId: ocean.id, params: { autoAppendQuotedText: false, transparentBackground: true, fileNamePrefix: "group-test", smea: true } });
     expect(bridge.executeAgentTool).not.toHaveBeenCalled();
     const { quoteAnlasCost } = await import("./nai");
     expect(quoteAnlasCost).not.toHaveBeenCalled();

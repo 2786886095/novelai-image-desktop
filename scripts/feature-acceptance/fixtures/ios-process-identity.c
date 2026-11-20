@@ -114,6 +114,14 @@ static int clock_ms(clockid_t clock, uint64_t *out) {
 }
 
 int main(int argc, char **argv) {
+  // Host tool startup only. Never accepts a target PID/path or issues a witness.
+  if (argc == 2 && strcmp(argv[1], "--check-loader") == 0) {
+    struct proc_bsdinfo self;
+    if (!read_info(getpid(), &self) || CFGetTypeID(CFSTR("ready")) != CFStringGetTypeID())
+      return fail("observer self check");
+    puts("HOST_OBSERVER_READY_ONLY");
+    return 0;
+  }
   if (argc != 4 || !argv[1][0] || !argv[3][0]) return fail("exact PID, Simulator data root and deadline required");
   for (const char *c = argv[1]; *c; c++) {
     if (*c < '0' || *c > '9') return fail("nondecimal PID refused");

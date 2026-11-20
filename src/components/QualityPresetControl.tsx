@@ -20,6 +20,7 @@ export function QualityPresetControl({
   transparentBackground,
   onChange,
   onTransparentChange,
+  autoAppendQuotedText = true, onQuotedTextChange,
   className,
   compact = false,
 }: {
@@ -29,6 +30,8 @@ export function QualityPresetControl({
   transparentBackground: boolean;
   onChange: (value: QualityPreset) => void;
   onTransparentChange: (value: boolean) => void;
+  autoAppendQuotedText?: boolean;
+  onQuotedTextChange?: (value: boolean) => void;
   className?: string;
   compact?: boolean;
 }) {
@@ -112,6 +115,9 @@ export function QualityPresetControl({
           );
         })}
       </div>
+      {v5 && onQuotedTextChange && <label className="quality-preset-explanation">
+        <input type="checkbox" checked={autoAppendQuotedText} onChange={(e) => onQuotedTextChange(e.currentTarget.checked)} /> {t("quality.quotedText")}
+      </label>}
       <small className="quality-preset-explanation">
         {selected === "none"
           ? t("quality.noneDesc")

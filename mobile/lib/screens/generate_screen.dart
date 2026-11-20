@@ -3067,6 +3067,10 @@ class _ParamControls extends StatelessWidget {
             (x) => x.transparentBackground = value,
           ),
         ),
+        if (p.isV5)
+          SwitchListTile(contentPadding: EdgeInsets.zero, title: Text(t('quality.quotedText')),
+            value: p.autoAppendQuotedText,
+            onChanged: (v) => state.setParam((x) => x.autoAppendQuotedText = v)),
         if (p.supportsVariety)
           SwitchListTile(
               contentPadding: EdgeInsets.zero,

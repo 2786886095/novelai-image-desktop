@@ -493,7 +493,7 @@ function BatchParamFields({
           language={language}
           model={value.model}
           value={value.qualityPreset}
-          transparentBackground={value.transparentBackground}
+          transparentBackground={value.transparentBackground} autoAppendQuotedText={value.autoAppendQuotedText !== false} onQuotedTextChange={(autoAppendQuotedText) => onPatch({ autoAppendQuotedText })}
           onChange={(qualityPreset) =>
             onPatch({ qualityPreset, qualityToggle: qualityPreset !== "none" })
           }

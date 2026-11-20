@@ -508,6 +508,21 @@ function mergePrompt(...segments: string[]) {
   return result.join(", ");
 }
 
+// Preserve the text payload verbatim: commas inside lettering are not tag delimiters.
+function v5TextParts(raw: string, auto: boolean) {
+  const words: string[] = [];
+  const tokens = /"((?:\\.|[^"\\])*)"|“([^”]*)”|(?:^|[\s,;|])Text\s*:/gi;
+  for (const m of raw.matchAll(tokens)) {
+    const word = m[1] ?? m[2];
+    if (word === undefined) {
+      const base = raw.slice(0, m.index).replace(/[\s,]+$/, "");
+      return { base, tail: raw.slice(m.index).replace(/^[\s,;|]+/, ""), manual: true };
+    }
+    if (auto && word.trim()) words.push(word.replace(/\\"/g, '"'));
+  }
+  return { base: raw, tail: words.length ? "Text: " + words.join("\n\n") : "", manual: false };
+}
+
 type CharCaptionMode = "structured" | "pipe";
 
 function finiteClamped(value: number, fallback: number) {
@@ -583,23 +598,27 @@ export function buildPayload(
     ? (...segments: string[]) => segments.filter(segment => segment !== "").join(", ")
     : mergePrompt;
   const replay = !mediumEffort && params.metadataReplay?.model === params.model ? params.metadataReplay : undefined;
-  const basePrompt = merge(params.stylePrompt, params.positivePrompt);
+  const rawPrompt = [params.stylePrompt, params.positivePrompt].filter(Boolean).join(", ");
+  const lettering = isNAIV5Model(params.model) && !params.preservePromptText && !replay
+    ? v5TextParts(rawPrompt, params.autoAppendQuotedText !== false) : undefined;
+  const joinBase = lettering?.tail ? (...parts: string[]) => parts.filter(Boolean).join(", ") : merge;
+  const basePrompt = lettering?.tail ? lettering.base : merge(params.stylePrompt, params.positivePrompt);
   // In the official client, Furry is a mode for every V4+ checkpoint rather
   // than a separate V4/V5 model. It is represented by placing `fur dataset,`
   // at the very start of the prompt. Keep the dedicated Furry V3 unchanged.
   const modePrompt =
     extras?.modelMode === "furry" && isV4Plus(params.model) &&
     !/(?:^|,\s*)fur dataset(?:\s*,|$)/i.test(basePrompt)
-      ? merge("fur dataset", basePrompt)
+      ? joinBase("fur dataset", basePrompt)
       : basePrompt;
   const qualityPreset = params.qualityPreset ?? (params.qualityToggle ? "standard" : "none");
   const transparentBackground = isNAIV5Model(params.model) && params.transparentBackground;
-  const qualityPrompt = merge(
+  const qualityPrompt = joinBase(
     modePrompt,
-    qualityTags(params.model, qualityPreset, modePrompt),
+    qualityTags(params.model, qualityPreset, lettering?.manual ? rawPrompt : modePrompt),
   );
   const effectivePrompt = transparentBackground
-    ? merge(qualityPrompt, "transparent background")
+    ? joinBase(qualityPrompt, "transparent background")
     : qualityPrompt;
   const effectiveNegative = merge(
     params.negativePrompt,
@@ -607,10 +626,11 @@ export function buildPayload(
   );
   const v4Plus = isV4Plus(params.model);
   const cleanedCharCaptions = normalizedCharCaptions(extras, params.model, params.preservePromptText).map(c => mediumEffort ? { ...c, negativePrompt: "" } : c);
-  const inputPrompt =
+  const inputBody =
     charCaptionMode === "pipe"
       ? withPipeCharCaptions(effectivePrompt, cleanedCharCaptions)
       : effectivePrompt;
+  const inputPrompt = [inputBody, lettering?.tail].filter(Boolean).join(" ");
 
   // Defensive clamp: NovelAI rejects CFG above its supported range. Dimensions
   // are snapped in the UI (img2img/inpaint override them with image-matched
@@ -690,8 +710,7 @@ export function buildPayload(
     parameters.use_coords = useCoords;
     parameters.v4_prompt = {
       caption: {
-        base_caption:
-          charCaptionMode === "pipe" ? inputPrompt : effectivePrompt,
+        base_caption: inputPrompt,
         char_captions: useStructuredChars ? charCaptionsPayload : [],
       },
       use_coords: useCoords,

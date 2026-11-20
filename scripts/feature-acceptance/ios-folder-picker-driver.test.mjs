@@ -539,3 +539,11 @@ test('cold launch budget only covers the installed independent host, not real pi
  assert(s.slice(warm,s.indexOf('assertColdPickerWarmup(warm)')).includes('360000'));
  assert(s.includes('Math.min(140000,remaining()-10000)'));
 });
+
+test('host loader preflight has no device/PID inputs and cannot emit acceptance evidence',()=>{
+ const driver=fs.readFileSync(new URL('./ios-folder-picker-driver.mjs',import.meta.url),'utf8');
+ const c=fs.readFileSync(new URL('./fixtures/ios-process-identity.c',import.meta.url),'utf8');
+ const ready=c.split('strcmp(argv[1], "--check-loader") == 0) {')[1].split('return 0;')[0];
+ assert(ready.includes('read_info(getpid(), &self)') && !ready.includes('IOS_PROCESS_IDENTITY:'));
+ assert(driver.indexOf("run([processObserver,'--check-loader'],15000)") < driver.indexOf('return createIosFolderPickerObserver'));
+});

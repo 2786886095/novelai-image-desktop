@@ -166,6 +166,7 @@ Map<String, dynamic> _generationProperties() => {
       'ucPreset': _integer('负面预设', 0, 3),
       'effort': _string('V5 Full Effort: medium=14 steps/Euler Ancestral, no custom UC or CFG Rescale; keep count unchanged', ['medium', 'high']),
       'qualityPreset': _string('质量预设', ['standard', 'light', 'none']),
+      'autoAppendQuotedText': {'type': 'boolean'},
       'transparentBackground': {'type': 'boolean'},
       'smea': {'type': 'boolean'},
       'smeaDyn': {'type': 'boolean'},
@@ -1048,6 +1049,7 @@ class AgentToolExecutor {
       if (const {'standard', 'light', 'none'}.contains(args['qualityPreset'])) {
         params.qualityPreset = args['qualityPreset'].toString();
       }
+      if (args['autoAppendQuotedText'] is bool) params.autoAppendQuotedText = args['autoAppendQuotedText'] == true;
       if (args['transparentBackground'] is bool) {
         params.transparentBackground = args['transparentBackground'] == true;
       }

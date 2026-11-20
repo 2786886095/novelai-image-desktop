@@ -6,6 +6,25 @@ void main() {
   final api = NaiApi();
   final settings = AppSettings(proxyMode: 'direct');
 
+  test('V5 quoted lettering is final, saved, and never doubled', () async {
+    final p=GenerateParams(positivePrompt:'sign "疯狂星期四v50:" and “A,  B”',transparentBackground:true);
+    Future<String> prompt() async {
+      final result=await api.buildPayload('unused', settings, p, 42, GenerateExtras());
+      expect(result['parameters']['v4_prompt']['caption']['base_caption'], result['input']);
+      return result['input'] as String;
+    }
+    expect(await prompt(), endsWith('no text, transparent background Text: 疯狂星期四v50:\n\nA,  B'));
+    p.autoAppendQuotedText=false;
+    expect(GenerateParams.fromJson(p.toJson()).autoAppendQuotedText,isFalse);
+    expect(await prompt(), isNot(contains('Text:')));
+    p.positivePrompt='sign "X", teXt: A,  B:';
+    expect(await prompt(),endsWith('teXt: A,  B:'));
+    p.autoAppendQuotedText=true;
+    expect(RegExp('text:',caseSensitive:false).allMatches(await prompt()).length,1);
+    p.model='nai-diffusion-4-5-full';p.positivePrompt='sign "X"';
+    expect(await prompt(),isNot(contains('Text:')));
+  });
+
   test('new-user defaults use Human Focus with Variety disabled', () async {
     final defaults = GenerateParams();
     final payload = await api.buildPayload(

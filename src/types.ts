@@ -202,6 +202,7 @@ export interface GenerateParams {
   seedMode: "fixed" | "random";
   ucPreset: UcPreset;
   /** Official quality-tag preset. Light is currently available on V5 only. */
+  autoAppendQuotedText?: boolean;
   qualityPreset: QualityPreset;
   /** Legacy compatibility alias written by releases before qualityPreset. */
   qualityToggle: boolean;
@@ -230,6 +231,7 @@ export const DEFAULT_PARAMS: GenerateParams = {
   seed: 0,
   seedMode: "random",
   ucPreset: 2,
+  autoAppendQuotedText: true,
   qualityPreset: "standard",
   qualityToggle: true,
   transparentBackground: false,
@@ -305,6 +307,7 @@ export function normalizeGenerateParams(value?: Partial<GenerateParams> | null):
     seed: Math.min(MAX_NAI_SEED, Math.max(0, seed)),
     seedMode: source.seedMode === "fixed" ? "fixed" : "random",
     ucPreset: Math.min(3, Math.max(0, ucPreset)) as UcPreset,
+    autoAppendQuotedText: source.autoAppendQuotedText !== false,
     qualityPreset,
     qualityToggle: qualityPreset !== "none",
     transparentBackground:

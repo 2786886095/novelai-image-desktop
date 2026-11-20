@@ -765,6 +765,8 @@ function QualityAndTransparencyControls({ compact = false }: { compact?: boolean
       compact={compact}
       onChange={(value) => setParam("qualityPreset", value)}
       onTransparentChange={(value) => setParam("transparentBackground", value)}
+      autoAppendQuotedText={params.autoAppendQuotedText !== false}
+      onQuotedTextChange={(value) => setParam("autoAppendQuotedText", value)}
     />
   );
 }

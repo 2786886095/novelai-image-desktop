@@ -141,7 +141,7 @@ async function resolveImage(value: unknown, label = "image"): Promise<ResolvedIm
 const PASSTHROUGH_FIELDS = [
   "positivePrompt", "negativePrompt", "stylePrompt", "model", "width", "height", "steps", "cfgScale",
   "cfgRescale", "sampler", "noiseSchedule", "seed", "seedMode", "ucPreset", "qualityPreset", "effort",
-  "variety", "transparentBackground", "fileNamePrefix", "smea", "smeaDyn", "modelMode",
+  "variety", "autoAppendQuotedText", "transparentBackground", "fileNamePrefix", "smea", "smeaDyn", "modelMode",
 ] as const;
 
 /** Translate MCP arguments into the in-app Agent tool's argument shape. */
@@ -270,6 +270,7 @@ const GENERATION_PROPS: Json = {
   variety: { type: "boolean" },
   smea: { type: "boolean", description: "Only effective on compatible legacy models." },
   smeaDyn: { type: "boolean", description: "Only effective on compatible legacy models." },
+  autoAppendQuotedText: { type: "boolean", description: "V5: append quoted base-prompt lettering as a final Text: block. Omit to use the saved setting (default on)." },
   transparentBackground: { type: "boolean", description: "V5 alpha output." },
   fileNamePrefix: { type: "string", maxLength: 80 },
   modelMode: { type: "string", enum: ["anime", "furry"] },

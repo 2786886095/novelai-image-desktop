@@ -2493,7 +2493,7 @@ function TagComicQualityFields({
       language={language}
       model={params.model}
       value={params.qualityPreset}
-      transparentBackground={params.transparentBackground}
+      transparentBackground={params.transparentBackground} autoAppendQuotedText={params.autoAppendQuotedText !== false} onQuotedTextChange={(value) => patch("autoAppendQuotedText", value)}
       onChange={(qualityPreset) => {
         patch("qualityPreset", qualityPreset);
         patch("qualityToggle", qualityPreset !== "none");

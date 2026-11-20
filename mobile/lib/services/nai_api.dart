@@ -882,7 +882,10 @@ class NaiApi {
     validateNaiReferenceExtras(params, extras);
     params = params.effectiveEffort();
     seed = seed.clamp(1, 0xffffffff).toInt();
-    final basePrompt = _merge(params.stylePrompt, params.positivePrompt);
+    final rawPrompt = [params.stylePrompt, params.positivePrompt].where((s) => s.isNotEmpty).join(', ');
+    final lettering = params.isV5 ? _v5TextParts(rawPrompt, params.autoAppendQuotedText) : (base: rawPrompt, tail: '', manual: false);
+    String joinBase(String a, String b) => lettering.tail.isEmpty ? _merge(a, b) : [a,b].where((s) => s.isNotEmpty).join(', ');
+    final basePrompt = lettering.tail.isNotEmpty ? lettering.base : _merge(params.stylePrompt, params.positivePrompt);
     // NovelAI V4+ shares the Anime checkpoint in Furry mode. The official
     // frontend activates the furry dataset by prepending this tag; Furry V3 is
     // already a dedicated checkpoint and must not receive it.
@@ -891,16 +894,16 @@ class NaiApi {
             .hasMatch(basePrompt);
     final modePrompt =
         settings.modelMode == 'furry' && params.isV4Plus && !hasFurryDataset
-            ? _merge('fur dataset', basePrompt)
+            ? joinBase('fur dataset', basePrompt)
             : basePrompt;
     final qualityPreset = params.qualityPreset;
-    final qualityPrompt = _merge(
+    final qualityPrompt = joinBase(
       modePrompt,
-      _qualityTags(params.model, qualityPreset, modePrompt),
+      _qualityTags(params.model, qualityPreset, lettering.manual ? rawPrompt : modePrompt),
     );
     final transparentBackground = params.isV5 && params.transparentBackground;
     final effectivePrompt = transparentBackground
-        ? _merge(qualityPrompt, 'transparent background')
+        ? joinBase(qualityPrompt, 'transparent background')
         : qualityPrompt;
     final effectiveNegative = _merge(
         params.negativePrompt, _ucPresetText(params.model, params.ucPreset));
@@ -943,12 +946,13 @@ class NaiApi {
             .where((caption) => caption.enabled && caption.prompt.trim().isNotEmpty)
             .take(params.maxCharacterPrompts)
             .any((caption) => caption.useCoords);
-    final inputPrompt = structuredCharacters || charCaptions.isEmpty
+    final inputBody = structuredCharacters || charCaptions.isEmpty
         ? effectivePrompt
         : [
             effectivePrompt,
             ...charCaptions.map((caption) => caption['char_caption'] as String),
           ].where((value) => value.trim().isNotEmpty).join(' | ');
+    final inputPrompt = [inputBody, lettering.tail].where((s) => s.isNotEmpty).join(' ');
 
     // NovelAI's V5 frontend fixes the schedule to Karras and hides the
     // selector. Keep mobile payloads byte-for-byte compatible with that rule
@@ -2729,4 +2733,18 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
 String _truncatedChatText(dynamic data) {
   final content=data['choices'][0]['message']['content'];
   return content is String?content:content is List?content.map((p)=>p['text'] as String).join():'';
+}
+
+({String base, String tail, bool manual}) _v5TextParts(String raw, bool auto) {
+  final words = <String>[];
+  final tokens = RegExp(r'"((?:\\.|[^"\\])*)"|“([^”]*)”|(?:^|[\s,;|])Text\s*:', caseSensitive: false);
+  for (final m in tokens.allMatches(raw)) {
+    final word = m.group(1) ?? m.group(2);
+    if (word == null) {
+      return (base: raw.substring(0,m.start).replaceFirst(RegExp(r'[\s,]+$'), ''),
+        tail: raw.substring(m.start).replaceFirst(RegExp(r'^[\s,;|]+'), ''), manual: true);
+    }
+    if (auto && word.trim().isNotEmpty) words.add(word.replaceAll(r'\"','"'));
+  }
+  return (base: raw, tail: words.isEmpty ? '' : 'Text: '+words.join('\n\n'), manual: false);
 }

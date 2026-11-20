@@ -14,7 +14,7 @@ export const STUDIO_WRITABLE:Record<string,Record<string,FieldRule>>={
     width:num(64,4096,64),height:num(64,4096,64),steps:num(1,50,1),cfgScale:num(0,10),cfgRescale:num(0,1),
     sampler:choice(...NAI_SAMPLERS.map(x=>x.value)),noiseSchedule:choice('native','karras','exponential'),
     seed:num(0,0xffffffff,1),seedMode:choice('random','fixed'),ucPreset:choice(0,1,2,3),
-    qualityPreset:choice('standard','light','none'),qualityToggle:bool,transparentBackground:bool,
+    qualityPreset:choice('standard','light','none'),autoAppendQuotedText:bool,qualityToggle:bool,transparentBackground:bool,
     smea:bool,smeaDyn:bool,variety:bool,fileNamePrefix:{type:'string',max:100},
   },
   workbench:{

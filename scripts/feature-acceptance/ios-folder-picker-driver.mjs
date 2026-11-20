@@ -124,6 +124,9 @@ export async function prepareIosFolderPickerDriver(options){
  const processSource=path.join(root,'ios-process-identity.c'),processObserver=path.join(root,'ios-process-identity');fs.copyFileSync(processFixture,processSource);
  run(['xcrun','--sdk','macosx','clang','-std=c11','-Wall','-Wextra','-Werror','-O2',processSource,'-lproc','-framework','CoreFoundation','-o',processObserver],30000);
  if(!fs.statSync(processObserver).isFile()||fs.statSync(processObserver).size<=0)throw Error('Fresh host process observer binary missing');
+ // First execution may page in the freshly linked host binary. This does not
+ // read Runner or the simulator; both real libproc observations keep their 5s limit.
+ if(run([processObserver,'--check-loader'],15000).trim()!=='HOST_OBSERVER_READY_ONLY')throw Error('Host observer failed its loader self-check');
  run(['xcodebuild','build-for-testing','-project',project,'-scheme','FolderPickerUITests','-configuration','Debug','-sdk','iphonesimulator','-destination','id='+device,'-derivedDataPath',path.join(root,'DerivedData'),'CODE_SIGNING_ALLOWED=NO'],300000);
  const products=path.join(root,'DerivedData','Build','Products');const tests=fs.readdirSync(products).filter(n=>n.endsWith('.xctestrun'));if(tests.length!==1)throw Error('Exactly one freshly built XCTest configuration required');
  // Start the XCTest service, install the separate runner and establish the first

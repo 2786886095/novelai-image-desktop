@@ -172,6 +172,7 @@ export function buildAgentGenerationInput(
     ...(args.qualityPreset === "standard" || args.qualityPreset === "light" || args.qualityPreset === "none"
       ? { qualityPreset: args.qualityPreset }
       : {}),
+    ...(typeof args.autoAppendQuotedText === "boolean" ? { autoAppendQuotedText: args.autoAppendQuotedText } : {}),
     ...(args.transparentBackground !== undefined
       ? { transparentBackground: boolean(args.transparentBackground, saved.transparentBackground) }
       : {}),

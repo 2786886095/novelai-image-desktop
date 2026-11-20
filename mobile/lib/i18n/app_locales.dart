@@ -273,6 +273,7 @@ const _mobileUiText = <String, Map<String, String>>{
     'quality.lightShort': '轻量',
     'quality.noneShort': '关闭',
     'quality.comparisonHint': '启用后会自动追加到正面提示词末尾；标准强化更明显，轻量仅 V5 可用且干预更少。',
+    'quality.quotedText': '自动将引号内的文字追加到末尾 Text:',
     'quality.standardDesc': '自动追加到正面提示词末尾：very aesthetic、masterpiece、no text。',
     'quality.lightDesc':
         '仅 V5 可用；自动追加到正面提示词末尾：very aesthetic、amazing quality、no text。',
@@ -808,6 +809,7 @@ const _mobileUiText = <String, Map<String, String>>{
     'quality.lightShort': '輕量',
     'quality.noneShort': '關閉',
     'quality.comparisonHint': '啟用後會自動追加到正面提示詞末尾；標準強化較明顯，輕量僅 V5 可用且干預較少。',
+    'quality.quotedText': '自動將引號內的文字附加到末尾 Text:',
     'quality.standardDesc': '自動追加到正面提示詞末尾：very aesthetic、masterpiece、no text。',
     'quality.lightDesc':
         '僅 V5 可用；自動追加到正面提示詞末尾：very aesthetic、amazing quality、no text。',
@@ -1361,6 +1363,7 @@ const _mobileUiText = <String, Map<String, String>>{
     'quality.noneShort': 'None',
     'quality.comparisonHint':
         'Enabled tags are appended to the end of the positive prompt. Standard is stronger; Light is V5-only and less intrusive.',
+    'quality.quotedText': 'Append quoted text as a final Text: block',
     'quality.standardDesc':
         'Appends very aesthetic, masterpiece, and no text to the end of the positive prompt.',
     'quality.lightDesc':
@@ -1938,6 +1941,7 @@ const _mobileUiText = <String, Map<String, String>>{
     'quality.noneShort': 'オフ',
     'quality.comparisonHint':
         '有効にするとポジティブプロンプト末尾へ自動追加します。標準は強め、軽量は V5 専用で干渉を抑えます。',
+    'quality.quotedText': '引用符内の文字を末尾の Text: に追加',
     'quality.standardDesc':
         'ポジティブプロンプト末尾へ very aesthetic、masterpiece、no text を自動追加します。',
     'quality.lightDesc':
@@ -2487,6 +2491,7 @@ const _mobileUiText = <String, Map<String, String>>{
     'quality.noneShort': '끄기',
     'quality.comparisonHint':
         '활성화하면 긍정 프롬프트 끝에 자동 추가됩니다. 표준은 더 강하고, V5 전용 가벼움은 개입을 줄입니다.',
+    'quality.quotedText': '따옴표 안의 글자를 끝에 Text:로 추가',
     'quality.standardDesc':
         '긍정 프롬프트 끝에 very aesthetic, masterpiece, no text를 자동 추가합니다.',
     'quality.lightDesc':

@@ -852,3 +852,24 @@ describe('Effort protocol parity', () => {
     expect(JSON.stringify(params)).toBe(before);
   });
 });
+
+describe("V5 automatic final Text block", () => {
+  const request=(positivePrompt:string, extra:Partial<typeof DEFAULT_PARAMS>={})=>buildPayload({...DEFAULT_PARAMS,model:"nai-diffusion-5-full",positivePrompt,stylePrompt:"",...extra},42);
+  it("copies literal quoted text after every generated tag, never to UC",()=>{
+    const p=request('sign says "疯狂星期四v50:" and “A,  B”',{transparentBackground:true});
+    expect(p.input).toBe('sign says "疯狂星期四v50:" and “A,  B”, very aesthetic, masterpiece, no text, transparent background Text: 疯狂星期四v50:\n\nA,  B');
+    expect(p.parameters.v4_prompt.caption.base_caption).toBe(p.input);
+    expect(p.parameters.negative_prompt).not.toContain("疯狂星期四");
+  });
+  it("retains explicit casing and punctuation once, independent of the toggle",()=>{
+    for(const autoAppendQuotedText of [true,false]){
+      const p=request('poster "one", teXt: Other,  words:',{autoAppendQuotedText});
+      expect(p.input.match(/text:/gi)).toHaveLength(1);
+      expect(p.input.endsWith('teXt: Other,  words:')).toBe(true);
+    }
+  });
+  it("keeps unpaired and empty quotes, off, replay and older models unchanged",()=>{
+    for(const s of ['no quotes','unmatched "text','two ""']) expect(request(s).input).not.toContain('Text:');
+    for(const extra of [{autoAppendQuotedText:false},{preservePromptText:true},{model:"nai-diffusion-4-5-full" as const}]) expect(request('poster "V50"',extra).input).not.toContain('Text:');
+  });
+});

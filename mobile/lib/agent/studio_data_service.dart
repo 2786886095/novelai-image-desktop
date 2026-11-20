@@ -106,6 +106,7 @@ class StudioDataService {
         'qualityPreset': choice(['standard', 'light', 'none']),
         for (final k in [
           'qualityToggle',
+          'autoAppendQuotedText',
           'transparentBackground',
           'smea',
           'smeaDyn',
