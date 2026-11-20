@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -140,15 +141,36 @@ void main() {
         if (source == 'paste') {
           await t.tap(paste);
         } else {
-          await nativeDrop([file.path]);
+          unawaited(nativeDrop([file.path]));
         }
         for (var i = 0;
-            i < 80 && state.workbenchImage?.filePath != file.path;
+            i < 80 && !t.binding.hasScheduledFrame;
             i++) {
           await Future<void>.delayed(const Duration(milliseconds: 10));
         }
       });
       await t.pumpAndSettle();
+      for (var i = 0; i < 50 && find.byKey(const ValueKey('import-use-image')).evaluate().isEmpty; i++) {
+        await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+        await t.pumpAndSettle();
+      }
+      expect(state.workbenchImage, isNull);
+      expect(state.params.positivePrompt, 'edited');
+      await t.tap(find.byKey(const ValueKey('import-use-image')));
+      final selectAll=find.byKey(const ValueKey('import-select-all'));
+      await t.ensureVisible(selectAll);
+      await t.tap(selectAll);
+      await t.pumpAndSettle();
+      final confirm=find.byKey(const ValueKey('confirm-image-import'));
+      expect(t.widget<FilledButton>(confirm).enabled,isTrue);
+      await t.runAsync(() async {
+        await t.tap(confirm);
+        for(var i=0; i<50 && state.workbenchImage==null; i++) {
+          await Future<void>.delayed(const Duration(milliseconds:10));
+        }
+      });
+      await t.pumpAndSettle();
+      expect(state.workbenchImage?.filePath,file.path);
       expect(state.params.positivePrompt, 'restored scene');
       expect(state.params.negativePrompt, 'restored negative');
       expect(state.params.seed, 9876);

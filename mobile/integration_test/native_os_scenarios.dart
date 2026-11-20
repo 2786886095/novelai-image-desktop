@@ -64,12 +64,21 @@ Future<void> runNativeOsScenarios(NativeScenarios suite) async {
     final pasted=await _pastePng();require(digest(pasted)==digest(original),'Native image copy/paste altered original PNG bytes');
     require(digest(await _pastePng(imagesOnly:true))==digest(original),'Image-only Agent paste did not preserve native PNG bytes');
     require(parseImageTextMetadata(pasted)['Comment']?.contains('4294967290')==true,'Native original metadata was not preserved');
+    final staged = await c.app.previewImageImport((await ComposerTransfers.paste()).single);
+    final oldPrompt = c.app.params.positivePrompt;
+    final oldWorkbench = c.app.workbenchImage;
+    require(staged.fields.containsKey('seed') && staged.fields.containsKey('positivePrompt'), 'Native paste did not expose selectable metadata');
+    await c.app.confirmImageImport(staged, ImageImportUse.parameters, {'seed'});
+    require(c.app.params.seed == 4294967290 && c.app.params.positivePrompt == oldPrompt && c.app.workbenchImage == oldWorkbench,
+      'Selective import must apply only the checked seed, not the image or prompt');
+    final remembered = await Storage().getImageImportFields();
+    require(remembered.contains('seed') && !remembered.contains('positivePrompt'), 'Native preference readback lost the selection');
     require(await ImageClipboard.copy(file.path,withOriginalMetadata:false),'Native privacy image copy failed');
     final stripped=await _pastePng(),decoded=image.decodePng(stripped)!;
     require(parseImageTextMetadata(stripped).isEmpty,'Privacy clipboard retains generation metadata');
     require(decoded.width==64&&decoded.height==64,'Privacy clipboard changed image dimensions');
     require(digest(await file.readAsBytes())==digest(original),'Clipboard modified the original file');
-    suite.check('clipboard','png-metadata-copy-paste',{'nativeOriginalBytesSha256':digest(pasted),'nativeStrippedBytesSha256':digest(stripped),'originalMetadataPreserved':true,'privacyMetadataEmpty':true,'sourceByteIdentical':true,'width':decoded.width,'height':decoded.height,'realNativePasteFile':true});
+    suite.check('clipboard','png-metadata-copy-paste',{'nativeOriginalBytesSha256':digest(pasted),'nativeStrippedBytesSha256':digest(stripped),'originalMetadataPreserved':true,'privacyMetadataEmpty':true,'sourceByteIdentical':true,'width':decoded.width,'height':decoded.height,'realNativePasteFile':true,'selectiveImportSeedOnly':true,'selectedFieldsReadBack':true});
 
     final pastedPaths=await ComposerTransfers.paste();require(pastedPaths.length==1,'Clipboard paste file disappeared');
     final nativeRoot=File(pastedPaths.single).parent.parent.path;

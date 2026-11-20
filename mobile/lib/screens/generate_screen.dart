@@ -54,6 +54,7 @@ import 'prompt/android_prompt_editor_page.dart';
 import 'prompt/android_prompt_text.dart';
 import '../ui/zoomable_image.dart';
 import '../widgets/generation_image_transfers.dart';
+import '../widgets/image_import_sheet.dart';
 import 'reference_catalog_panel.dart';
 import 'positive_prompt_preset_sheet.dart';
 import 'prompt_assistant_dialog.dart';
@@ -315,11 +316,9 @@ class GenerateScreen extends StatelessWidget {
   const GenerateScreen({super.key});
 
   Future<void> _pickImage(BuildContext context) async {
-    final picked = await ImagePicker()
-        .pickImage(source: ImageSource.gallery, imageQuality: 100);
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (picked != null && context.mounted) {
-      // Replacing an input image is not a request to restore its generation settings.
-      await context.read<AppState>().setWorkbenchPath(picked.path);
+      await chooseImageImport(context, picked.path);
     }
   }
 

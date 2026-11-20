@@ -57,6 +57,7 @@ class ImportedGenerateParams {
 
   bool get isEmpty =>
       model == null &&
+      effort == null &&
       positivePrompt == null &&
       negativePrompt == null &&
       stylePrompt == null &&
@@ -158,9 +159,9 @@ class ImportedGenerateParams {
         if (skipCfgBelowSigma != null) 'skipCfgBelowSigma': skipCfgBelowSigma!,
       };
 
-  ImportedGenerateParams selecting(Set<String> keys) => ImportedGenerateParams(
+  ImportedGenerateParams selecting(Set<String> keys, {bool coupleModelEffort = true}) => ImportedGenerateParams(
         model: keys.contains('model') ? model : null,
-        effort: keys.contains('model') || keys.contains('effort') ? effort : null,
+        effort: (coupleModelEffort && keys.contains('model')) || keys.contains('effort') ? effort : null,
         positivePrompt: keys.contains('positivePrompt') ? positivePrompt : null,
         negativePrompt: keys.contains('negativePrompt') ? negativePrompt : null,
         stylePrompt: keys.contains('stylePrompt') ? stylePrompt : null,

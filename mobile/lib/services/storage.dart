@@ -830,6 +830,17 @@ class Storage {
     return ReferencePresetImport(groups: groups, presets: imported);
   }
 
+  // Separate from online-gallery filters. Only stable field IDs, never values.
+  static const _importFields = 'workbench_image_import_fields_v1';
+  Future<Set<String>> getImageImportFields() async =>
+      (await _prefs).getStringList(_importFields)?.toSet() ?? <String>{};
+
+  Future<void> setImageImportFields(Set<String> fields) async {
+    if (!await (await _prefs).setStringList(_importFields, fields.toList()..sort())) {
+      throw StateError('Could not save image import field selection.');
+    }
+  }
+
   Future<Set<String>?> getAitagCompatibleParams() async {
     final values = (await _prefs).getStringList(_kAitagCompatibleParams);
     return values?.toSet();

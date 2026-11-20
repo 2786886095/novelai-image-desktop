@@ -8,7 +8,9 @@ import '../i18n/image_actions_text.dart';
 import '../services/composer_transfers.dart';
 import '../state/app_state.dart';
 
-/// Explicit paste/drop only; a gallery-picker replacement stays image-only.
+import 'image_import_sheet.dart';
+
+/// Paste and drop use the same opt-in import as the gallery picker.
 class GenerationImageTransfers extends StatefulWidget {
   final Widget? child;
 
@@ -90,7 +92,7 @@ class _GenerationImageTransfersState extends State<GenerationImageTransfers> {
       for (final path in paths) {
         if (!RegExp(r'\.(png|jpe?g|webp|gif|bmp|avif)$', caseSensitive: false)
             .hasMatch(path)) continue;
-        await context.read<AppState>().importGenerationImage(path);
+        await chooseImageImport(context, path);
         break;
       }
     } catch (error) {

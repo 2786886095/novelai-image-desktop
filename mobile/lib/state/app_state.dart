@@ -62,6 +62,24 @@ import '../services/resource_database_service.dart';
 import '../tags/offline_tag_store.dart';
 import '../tags/multilingual_tag_packs.dart';
 
+enum ImageImportUse { image, vibe, precise, parameters }
+
+class PendingImageImport {
+  final String path;
+  final Uint8List bytes;
+  final (int, int) size;
+  final ImageMetadataReport metadata;
+  final int revision;
+  final Set<String> remembered;
+  PendingImageImport._(this.path, this.bytes, this.size, this.metadata, this.revision, this.remembered);
+
+  Map<String, Object> get fields => {
+    ...metadata.imported.compatibleValuesByKey,
+    if (metadata.characterCaptions.isNotEmpty)
+      'characters': metadata.characterCaptions.map((c) => c.prompt).join('; '),
+  };
+}
+
 // A finished convert/reverse job is already reflected in the result box and
 // history — leaving it in the tracker list just forces a manual ✕ tap.
 const _textToolDoneAutoDismiss = Duration(milliseconds: 1500);
@@ -1336,6 +1354,73 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<PendingImageImport> previewImageImport(String path) async {
+    if (busy) throw StateError('Cannot import during generation.');
+    final revision = ++_workbenchLoadRevision;
+    final bytes = await storage.readImage(path);
+    final size = readImageDimensions(bytes);
+    final report = inspectImageMetadata(await compute(parseImageTextMetadata, bytes));
+    final remembered = await storage.getImageImportFields();
+    if (revision != _workbenchLoadRevision || busy) throw StateError('Image selection changed.');
+    return PendingImageImport._(path, bytes, size, report, revision, remembered);
+  }
+
+  bool canUseImportedImage(PendingImageImport image, ImageImportUse use, Set<String> selected) {
+    if (busy || image.revision != _workbenchLoadRevision) return false;
+    final keys = selected.intersection(image.fields.keys.toSet());
+    final candidate = params.copy();
+    image.metadata.imported.selecting(keys, coupleModelEffort: false).applyTo(candidate);
+    final model = candidate.normalized();
+    final native = settings.imageProvider != 'openai-images' && settings.relayImageProtocol != 'openai-images';
+    return switch(use) {
+      ImageImportUse.image => true,
+      ImageImportUse.vibe => native && model.supportsVibeTransfer && extras.vibeImages.length < 16,
+      ImageImportUse.precise => native && model.supportsPreciseReference,
+      ImageImportUse.parameters => keys.isNotEmpty,
+    };
+  }
+
+  Future<void> confirmImageImport(PendingImageImport image, ImageImportUse use, Set<String> selected) async {
+    final available = image.fields.keys.toSet();
+    final keys = selected.intersection(available);
+    if (!canUseImportedImage(image, use, keys)) throw StateError('Image import is no longer available.');
+    final saved = {...image.remembered.difference(available), ...keys};
+    // No await between the final capability/revision check and state commit.
+    _workbenchLoadRevision++;
+    final report = image.metadata;
+    switch (use) {
+      case ImageImportUse.image:
+        workbenchImportedParams = report.imported.isEmpty ? null : report.imported;
+        workbenchCharacterCaptions = report.characterCaptions;
+        workbenchImage = WorkingImage(filePath: image.path, width: image.size.$1, height: image.size.$2);
+        i2iOriginalImage = workbenchImage;
+        comparisonBefore = comparisonAfter = null;
+        comparisonSurface = null;
+        comparisonAutoOpenPending = false;
+        status = _rt('status.workbenchLoaded');
+      case ImageImportUse.vibe:
+        extras.vibeImages.add(VibeTransferItem(base64: base64Encode(image.bytes), sourcePath: image.path));
+        status = _rt('status.vibeAdded');
+      case ImageImportUse.precise:
+        extras.preciseReferences.add(PreciseReferenceItem(base64: base64Encode(image.bytes),
+          sourcePath: image.path, width: image.size.$1, height: image.size.$2));
+        status = _rt('status.preciseAdded');
+      case ImageImportUse.parameters:
+        break;
+    }
+    if (keys.isNotEmpty) {
+      applyImportedMetadata(report.imported.selecting(keys, coupleModelEffort: false),
+        characterCaptions: keys.contains('characters') ? report.characterCaptions : null,
+        exact: true, preserveMissing: true);
+    } else {
+      notifyListeners();
+      _scheduleGenerationQuote();
+    }
+    if (available.isNotEmpty && !setEquals(saved, image.remembered)) {
+      await storage.setImageImportFields(saved);
+    }
+  }
+
   Future<void> setWorkbenchPath(
     String filePath, {
     bool applyMetadata = false,
@@ -1374,7 +1459,7 @@ class AppState extends ChangeNotifier {
     _scheduleGenerationQuote();
   }
 
-  /// Paste/drop and an explicit favorite apply restore parameters. Picker and
+  /// An explicit favorite apply restores parameters. History and
   /// ordinary history selection deliberately retain the current form values.
   Future<void> importGenerationImage(String path) =>
       setWorkbenchPath(path, applyMetadata: true);
