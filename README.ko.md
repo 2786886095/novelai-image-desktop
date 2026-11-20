@@ -27,7 +27,7 @@ V5는 기본 프롬프트와 활성화된 캐릭터 프롬프트의 따옴표 �
 
 ## 이번 업데이트
 
-데스크톱에서 영어 태그와 선택한 사전의 번역명을 중간이나 끝부분으로도 검색할 수 있습니다. 완전히 일치하는 항목, 앞부분이 일치하는 항목, 그 밖의 부분 일치 순으로 표시합니다.
+예를 들어 `poster "Hello"`를 입력하면 자동 추출을 켠 경우 최종 프롬프트 끝에 `teXt: Hello`가 붙습니다. 끄면 추가되지 않습니다.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

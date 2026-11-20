@@ -27,7 +27,7 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 ## This update
 
-Desktop prompt search now finds fragments inside English tags and translations from the selected offline dictionary. Exact matches come first, followed by prefixes and other substrings.
+For example, with automatic extraction on, `poster "Hello"` appends `teXt: Hello` to the final prompt. Turning it off leaves the prompt unchanged by this feature.
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

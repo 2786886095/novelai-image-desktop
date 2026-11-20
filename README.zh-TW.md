@@ -27,7 +27,7 @@ NovelAI 圖像創作工作臺，介面支援簡體中文、繁體中文、英語
 
 ## 本次更新
 
-桌面工作台現可搜尋英文 Tag 或目前詞包譯名的中間及結尾片段，依完整符合、開頭符合、其他片段排序。
+例如輸入 `poster "Hello"` 時，啟用自動擷取就會在最終提示詞末尾加上 `teXt: Hello`；停用則不會附加。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

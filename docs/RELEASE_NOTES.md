@@ -7,3 +7,7 @@
 - 修复仅针对最终提示词；不能保证模型逐字排印准确。使用未签名的 iOS IPA 需要自行签名，不能直接安装到普通 iPhone。
 
 [下载和本次验收说明](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [当前源码](https://github.com/2786886095/novelai-image-desktop/tree/main) · [历史发行说明](https://github.com/2786886095/novelai-image-desktop/tree/main/docs/history)
+
+### 验收例外
+- iOS 系统文件夹选择器：本次未在 5 秒内确认命名框可用，此项验收失败，经维护者同意不作为发行条件。其余 iOS 检查仍为必需。
+- Windows 画风迭代 GPU 长任务未实测。

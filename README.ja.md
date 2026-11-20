@@ -27,7 +27,7 @@ V5 では、メインプロンプトと有効なキャラクタープロンプ�
 
 ## 今回の更新
 
-デスクトップ版のプロンプト検索で、英語タグや選択中の辞書の訳語を途中・末尾の文字列からも検索できます。完全一致、前方一致、その他の部分一致の順に表示します。
+たとえば `poster "Hello"` と入力すると、自動抽出がオンの場合は最終プロンプトの末尾に `teXt: Hello` が追加されます。オフの場合は追加されません。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 

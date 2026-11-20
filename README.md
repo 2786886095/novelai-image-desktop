@@ -32,7 +32,7 @@ NovelAI 图像创作工作台，界面支持简体中文、繁体中文、英语
 
 ## 本次更新
 
-桌面工作台现在可以按英文 Tag 或当前词包译名的中间、末尾片段检索。结果按完整匹配、开头匹配、其他片段排序。
+例如，输入 `poster "Hello"` 时，开启自动提取就会在最终提示词末尾追加 `teXt: Hello`；关闭则不追加。
 
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
