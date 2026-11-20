@@ -2746,5 +2746,5 @@ String _truncatedChatText(dynamic data) {
     }
     if (auto && word.trim().isNotEmpty) words.add(word.replaceAll(r'\"','"'));
   }
-  return (base: raw, tail: words.isEmpty ? '' : 'Text: '+words.join('\n\n'), manual: false);
+  return (base: raw, tail: words.isEmpty ? '' : "Text: ${words.join('\n\n')}", manual: false);
 }
