@@ -359,8 +359,8 @@ test('appearance witness holds actual accessibility elements and the same absolu
  assert.match(poll,/includeModal: includeModal,\s*retainedFileFrame: retainedFileFrame, before: namingDeadline/);
  assert(s.includes('"probeTimes": namingProbeTimes'));
  assert(s.includes('"queryCount": namingQueryCount')&&s.includes('"modalQueryCount": namingModalQueryCount'));
- for(const literal of ['identifier == %@ AND enabled == YES','field.isHittable','viewFrame.contains(frame)'])assert(body.includes(literal));
- assert(!body.includes('field.exists')&&!body.includes('field.isEnabled')&&!body.includes('field.label.lowercased()'));
+ for(const literal of ['identifier == %@','field.isEnabled','field.isHittable','viewFrame.contains(frame)'])assert(body.includes(literal));
+ assert(!body.includes('field.exists')&&!body.includes('field.label.lowercased()'));
  assert(!body.includes('fileView?.descendants(matching: .textView)'));
  assert(body.includes('retainedFileFrame == nil ? [] :'));
  assert(!body.includes('refreshApp'));
@@ -498,16 +498,19 @@ test('owned icon spends the open window on one global identity and live scoped/f
 test('folder probes use the live inline editor from the first query; a detached Files collection cannot block it', () => {
  const s=swiftSource();
  const body=s.split('private func currentNamingEditor(')[1].split('private func validatedWitnessFlow(')[0];
- assert(body.includes('app.collectionViews.matching(NSPredicate(format: "identifier == %@", "File View")).descendants(matching: .textView)'));
+ assert(body.includes('app.textViews.matching(exactID)'));
  assert(body.includes('.matching(exactID).allElementsBoundByAccessibilityElement'));
- for(const marker of ['lookupReturned','literalMatches','hitTestReturned','geometryReturned']) assert(body.includes('timing["'+marker+'"]'));
+ for(const marker of ['lookupReturned','literalMatches','enabledReturned','hitTestReturned','geometryReturned']) assert(body.includes('timing["'+marker+'"]'));
  assert(body.includes('guard hit, Date() < deadline else { continue }'));
  assert(!body.includes('fileView?.descendants') && !body.includes('refreshApp'));
  assert(!s.includes('currentNamingEditor(app, pickerFileView'));
  assert(body.includes('let matches = retainedFileFrame == nil ? [] :'));
  assert.match(body,/retainedFileFrame\?\.contains\(CGPoint\(x: frame\.midX, y: frame\.midY\)\) == true/);
  assert.match(body,/guard matches\.count <= 1/);
- assert.match(body,/identifier == %@ AND enabled == YES/);
+ assert(body.includes('NSPredicate(format: "identifier == %@", identifier)'));
+ assert(body.includes('guard enabled, Date() < deadline else { continue }'));
+ assert(body.includes('if Date() < deadline && !frame.isEmpty && viewFrame.contains(frame)'));
+ assert(!body.includes('AND enabled == YES') && !body.includes('app.collectionViews'));
  assert.match(s,/let namingDeadline = namingStarted\.addingTimeInterval\(5\)/);
  assert.match(s,/let control = try validatedWitnessFlow\(app, providerLabels, witness\)/);
  assert.match(s,/"freshAppProjectionProbed": namingFreshQueryCount > 0/);

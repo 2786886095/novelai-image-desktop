@@ -222,31 +222,33 @@ final class FolderPickerUITests: XCTestCase {
         frame: [Double(frame.origin.x), Double(frame.origin.y), Double(frame.width), Double(frame.height)])
     }
     let identifier = "DOC.inlineRenameField"
-    let exactID = NSPredicate(format: "identifier == %@ AND enabled == YES", identifier)
+    let exactID = NSPredicate(format: "identifier == %@", identifier)
     // The Files extension replaces its collection on create. In run 44568907934
     // the first snapshot rooted at the pre-create AX object took 6.96 seconds
     // alone. Keep its verified viewport, never resolve that old object again.
     // Re-query the exact native TextView from the live tree on every observation;
     // no unscoped field, stale geometry alone or post-deadline result qualifies.
     let matches = retainedFileFrame == nil ? [] :
-      app.collectionViews.matching(NSPredicate(format: "identifier == %@", "File View")).descendants(matching: .textView)
-        .matching(exactID).allElementsBoundByAccessibilityElement
+      // Remote Files may mount the inline editor outside the collection's AX subtree.
+      // Discover by literal native ID, then enforce eligibility on the held element.
+      app.textViews.matching(exactID).allElementsBoundByAccessibilityElement
     timing["lookupReturned"] = Date().timeIntervalSince(start)
     timing["literalMatches"] = Double(matches.count)
     guard matches.count <= 1 else { throw fail("Ambiguous literal inline editor identities") }
     var inline: [NamingEditorWitness] = []
     for field in matches {
       guard Date() < deadline else { return nil }
-      // Enumeration is the existence observation; the exact TextView ID and
-      // enabled state are in that same snapshot. Read real hit-testing and
-      // bounds now, and revalidate the held object before any action below.
+      let enabled = field.isEnabled
+      timing["enabledReturned"] = Date().timeIntervalSince(start)
+      timing["enabled"] = enabled ? 1 : 0
+      guard enabled, Date() < deadline else { continue }
       let hit = field.isHittable
       timing["hitTestReturned"] = Date().timeIntervalSince(start)
       timing["hittable"] = hit ? 1 : 0
       guard hit, Date() < deadline else { continue }
       let frame = field.frame
       timing["geometryReturned"] = Date().timeIntervalSince(start)
-      if !frame.isEmpty && viewFrame.contains(frame) &&
+      if Date() < deadline && !frame.isEmpty && viewFrame.contains(frame) &&
          retainedFileFrame?.contains(CGPoint(x: frame.midX, y: frame.midY)) == true {
         inline.append(bound(field, nil, true, identifier, frame))
       }
