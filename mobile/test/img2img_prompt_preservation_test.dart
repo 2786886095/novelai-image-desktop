@@ -111,11 +111,20 @@ void main() {
             ? find.descendant(of: androidDock, matching: find.byIcon(Icons.add_photo_alternate_outlined))
             : find.text('Load image');
         await t.ensureVisible(button);
+        await t.runAsync(() => t.tap(button));
+        final imageRole = find.byKey(const ValueKey('import-use-image'));
+        for (var attempt = 0; attempt < 50 && imageRole.evaluate().isEmpty; attempt++) {
+          await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+          await t.pumpAndSettle();
+        }
+        expect(imageRole, findsOneWidget);
+        expect(app.workbenchImage?.filePath, i == 0 ? isNull : paths[i - 1]);
+        await t.tap(imageRole);
+        await t.pumpAndSettle();
+        final apply = find.byKey(const ValueKey('confirm-image-import'));
         await t.runAsync(() async {
-          await t.tap(button);
-          for (var attempt = 0;
-              attempt < 50 && app.workbenchImage?.filePath != paths[i];
-              attempt++) {
+          await t.tap(apply);
+          for (var attempt = 0; attempt < 50 && app.workbenchImage?.filePath != paths[i]; attempt++) {
             await Future<void>.delayed(const Duration(milliseconds: 10));
           }
         });

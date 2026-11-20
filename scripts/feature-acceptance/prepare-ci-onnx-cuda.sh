@@ -39,7 +39,7 @@ else
   # libraries. Do not execute the old image or take any application code from it.
   image="$stage/reference.AppImage"
   ref='https://github.com/2786886095/novelai-image-desktop/releases/download/v2.9.7/Langbai-NovelAI-Studio-2.9.7.AppImage'
-  download --max-filesize 365609421 --output "$image" "$ref"
+  download --retry-all-errors --max-filesize 365609421 --output "$image" "$ref"
   printf '%s  %s\n' 'bd53922e165719ee9dac343d395e42d4cfe8887d9a36ac9c760dcafa94f1f8d3' "$image" | sha256sum --check --status
   if ! command -v unsquashfs >/dev/null; then
     sudo apt-get update -qq && sudo apt-get install -y squashfs-tools
