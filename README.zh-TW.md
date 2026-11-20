@@ -29,6 +29,8 @@ NovelAI 圖像創作工作臺，介面支援簡體中文、繁體中文、英語
 
 例如輸入 `poster "Hello"` 時，啟用自動擷取就會在最終提示詞末尾加上 `teXt: Hello`；停用則不會附加。
 
+桌面版：在「生成 → 角色提示」底部點選 **批次填入**。貼上 AI 回覆或匯入檔案，預覽後再套用；也可以修改現有角色或為角色組合命名並儲存。
+
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
 ## 快速開始

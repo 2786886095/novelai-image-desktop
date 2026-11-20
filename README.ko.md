@@ -29,6 +29,8 @@ V5는 기본 프롬프트와 활성화된 캐릭터 프롬프트의 따옴표 �
 
 예를 들어 `poster "Hello"`를 입력하면 자동 추출을 켠 경우 최종 프롬프트 끝에 `teXt: Hello`가 붙습니다. 끄면 추가되지 않습니다.
 
+데스크톱에서는 생성 화면의 캐릭터 프롬프트 하단에서 **일괄 입력**을 선택하세요. AI 답변을 붙여 넣거나 파일을 가져온 후 미리 보고 적용할 수 있습니다. 기존 캐릭터를 수정하거나 그룹에 이름을 붙여 저장할 수도 있습니다.
+
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
 ## 빠른 시작

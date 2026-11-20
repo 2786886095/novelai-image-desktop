@@ -29,6 +29,8 @@ A NovelAI image-creation workspace with Simplified Chinese, Traditional Chinese,
 
 For example, with automatic extraction on, `poster "Hello"` appends `teXt: Hello` to the final prompt. Turning it off leaves the prompt unchanged by this feature.
 
+On desktop, open **Generate → Character prompts → Bulk fill**. Paste an AI reply or import a file, preview the characters, then apply. You can also revise current characters or save the group by name.
+
 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [Release notes](./docs/RELEASE_NOTES.md)
 
 ## Quick start
