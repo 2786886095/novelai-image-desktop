@@ -302,7 +302,7 @@ jobs:
     needs: [build, mac-intel-smoke]
     if: always() && !inputs.candidate_build_only && github.event_name == 'workflow_dispatch' && inputs.publish_after_verification && (inputs.verified_build_run || (needs.build.result == 'success' && needs.mac-intel-smoke.result == 'success'))
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: ${{ inputs.reviewed_v301_role_release && 240 || 25 }}
     permissions:
       contents: write
       actions: read
@@ -318,6 +318,34 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+      - name: Wait for the three v3.0.1 source runs (waiting does not grant acceptance)
+        if: inputs.reviewed_v301_role_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ inputs.verified_build_run }}" = 44746219032
+          test "${{ inputs.mobile_run }}" = 44746225000
+          test "${{ inputs.feature_run }}" = 44746230248
+          for i in $(seq 1 210); do
+            ready=true
+            for id in 44746219032 44746225000 44746230248; do
+              observed=$(gh run view "$id" --json headSha,status,conclusion,attempt,jobs) || { ready=false; break; }
+              jq -e '.headSha == "a3cd315029c2bc4314d5a112d3e132806392c693"' <<<"$observed" >/dev/null
+              [[ $(jq -r .status <<<"$observed") == completed ]] || { ready=false; break; }
+              if [[ $id == 44746230248 ]]; then
+                # The independent coordinator may retry failed jobs. Never accept another failing job.
+                unexpected=$(jq '[.jobs[]|select(.conclusion!="success" and .name!="windows-artist-local-proof" and .name!="full-client-feature-matrix" and .name!="ios-components (os)")] | length' <<<"$observed")
+                if (( unexpected )); then ready=false; break; fi
+              else
+                [[ $(jq -r .conclusion <<<"$observed") == success ]] || { ready=false; break; }
+              fi
+            done
+            if $ready; then break; fi
+            sleep 60
+          done
+          $ready || { echo 'Other required gates are not ready; release remains unpublished.'; exit 1; }
       - uses: actions/download-artifact@v4
         with:
           pattern: novelai-image-desktop-*
@@ -392,3 +420,19 @@ jobs:
           MOBILE_RUN: ${{ inputs.mobile_run }}
           BUILD_RUN: ${{ inputs.verified_build_run || github.run_id }}
         run: node scripts/publish-verified-release.mjs
+
+      - name: Sync verified release source and multilingual homepage to main
+        if: inputs.reviewed_v301_role_release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh release view v3.0.1 --json isDraft,isPrerelease --jq '(.isDraft or .isPrerelease)')" = false
+          git fetch origin main
+          git merge-base --is-ancestor FETCH_HEAD "$GITHUB_SHA"
+          git push origin "$GITHUB_SHA:refs/heads/main"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          for f in README.md README.en.md README.ja.md README.ko.md README.zh-TW.md; do
+            git show "$GITHUB_SHA:$f" | grep -F 'github.com/2786886095/novelai-image-desktop/releases/latest' >/dev/null
+          done

@@ -19,16 +19,17 @@ const waiveWindowsArtistGpuV301=process.env.REVIEWED_V301_ROLE_RELEASE==="true";
 const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV292||waiveWindowsArtistGpuV293||waiveWindowsArtistGpuV294||waiveWindowsArtistGpuV295||waiveWindowsArtistGpuV300||waiveWindowsArtistGpuV301;
 let reviewedIosFolder=process.env.REVIEWED_V300_IOS_FOLDER==='true';
 const nativeRun=process.env.FEATURE_RUN;
-let folderReview;
+let folderReview, observedIosJob;
 if(waiveWindowsArtistGpuV301){
  if(reviewedIosFolder || version!=='3.0.1'||sha!=='a3cd315029c2bc4314d5a112d3e132806392c693'||nativeRun!=='44746230248'||process.env.BUILD_RUN!=='44746219032'||process.env.MOBILE_RUN!=='44746225000')throw Error('Not the reviewed v3.0.1 source and runs');
  const native=JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs']));
- reviewedIosFolder=native.jobs.find(j=>j.name==='ios-components (os)')?.conclusion==='failure';
+ const osJob=native.jobs.find(j=>j.name==='ios-components (os)');
+ reviewedIosFolder=osJob?.conclusion==='failure';observedIosJob=osJob?.databaseId;
 }
 if(reviewedIosFolder){
  if(!waiveWindowsArtistGpuV301&&(!waiveWindowsArtistGpuV300||version!=='3.0.0'||sha!=='c02d3186fc1b014d3e3611e07b7698cd5c448713'||nativeRun!=='44707958871'||process.env.BUILD_RUN!=='44707970782'||process.env.MOBILE_RUN!=='44707964543'))throw Error('Not the reviewed v3.0.0 source and runs');
  const {checkFolderReview,assertOtherOutputReceipts}=await import('./v300-folder-review.mjs');
- folderReview=checkFolderReview('reviewed-ios-os',sha);
+ folderReview=checkFolderReview('reviewed-ios-os',sha,observedIosJob);
  folderReview.otherOutputReceipts=assertOtherOutputReceipts('release-evidence/evidence',sha);
 }
 if(waiveWindowsArtistGpu){

@@ -7,7 +7,7 @@ import {assertScenarioReceipt} from './feature-acceptance/full-feature-profiles.
 const sources = new Map([['c02d3186fc1b014d3e3611e07b7698cd5c448713',{run:'44707958871',job:'136192164695'}],['a3cd315029c2bc4314d5a112d3e132806392c693',{run:'44746230248',job:'136322152169'}]]);
 const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const read = (dir, file) => JSON.parse(fs.readFileSync(path.join(dir,file),'utf8'));
-export function checkFolderReview(dir,sha) {
+export function checkFolderReview(dir,sha,observedJob) {
   assert.ok(sources.has(sha));
   const group = read(dir,'CI_COMPONENT_COMMANDS.json');
   assert.equal(group.sourceSha,sha); assert.equal(group.platform,'ios'); assert.equal(group.entryGroup,'os');
@@ -31,7 +31,8 @@ export function checkFolderReview(dir,sha) {
   assert.ok(line);const w=JSON.parse(line.slice(line.indexOf(':')+1));
   assert.equal(w.sourceSha,sha);assert.equal(w.appearanceDeadlineSeconds,5);
   assert.equal(w.withinAppearanceDeadline,false);assert.ok(w.elapsedSeconds>=5 && Number.isFinite(w.elapsedSeconds));
-  return {...sources.get(sha),sourceSha:sha,entry:'ios_folder1',status:'failed-waived',
+  const identity={...sources.get(sha)};if(observedJob!==undefined){assert.match(String(observedJob),/^\d+$/);identity.job=String(observedJob);}
+  return {...identity,sourceSha:sha,entry:'ios_folder1',status:'failed-waived',
     observedSeconds:w.elapsedSeconds,deadlineSeconds:5,otherGroupEntries:names.slice(0,2),
     groupReceiptSha256:digest(fs.readFileSync(path.join(dir,'CI_COMPONENT_COMMANDS.json')))};
 }
