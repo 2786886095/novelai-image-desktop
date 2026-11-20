@@ -86,4 +86,4 @@
 - `plan_comic_prompts`：可用 list_prompt_templates 按格式查询 templateId；省略时使用该格式在软件内的选中版本。不能跨格式选用。先用 action=storyboard，传剧本、format 和 totalPages。审阅返回的 pages 与 characters 后，action=generate，指定 batchFrom、pages=1 和 approvedPage；一页一请求，重编译用相同页号。可选 recommend 只推荐页数。每次均需 confirmed；仅调用文字模型，不代替生图确认。
 - 单条台词精简：`plan_comic_prompts(action=shorten)` 发送单句，不发送整部剧本。超长或多行回复不替换原句。
 
-生成工具的可选布尔参数 `autoAppendQuotedText` 与工作台共用：省略时沿用保存的设置（默认开启）。V5 会把正向基础提示中的双引号文字追加为末尾 `Text:` 块，多段之间空一行。显式填写的文字块优先，不重复追加。关闭后仍保留用户原文。
+生成工具的可选布尔参数 `autoAppendQuotedText` 与工作台共用：省略时沿用保存的设置（默认开启）。V5 与官网一样，从基础提示和已启用角色的配对引号（含单引号和「」）提取文字，按角色位置和文字顺序组成 `teXt:` 块，多段之间空一行。任一启用角色已有手写 `Text:` 时也不会另造自动块。标准或轻量质量预设保留 `no text`；关闭自动提取不关闭质量预设。从图片或历史记录复用提示词与采样参数时也遵循此开关。已有的非空手写文字块不重复追加，原文（含空格、标点和换行）保留在质量标签等自动内容之后；关闭自动提取也不会删除手写块。

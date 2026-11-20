@@ -5,6 +5,8 @@ On mobile, choose how to use an imported image. Checked parameter fields are rem
 
 On desktop, switch between Classic and Redesign at any time. The redesigned History & Materials panel floats without moving the canvas. NAX comparisons keep their original aspect ratio and let you copy the current tag in-app.
 
+V5 extracts quoted lettering from the main prompt and enabled character prompts. An existing manual `Text:` block takes precedence.
+
 > [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest) provides the current release notes and actual assets. See the download section for installation limits.
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)

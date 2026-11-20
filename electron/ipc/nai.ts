@@ -508,19 +508,62 @@ function mergePrompt(...segments: string[]) {
   return result.join(", ");
 }
 
-// Preserve the text payload verbatim: commas inside lettering are not tag delimiters.
-function v5TextParts(raw: string, auto: boolean) {
-  const words: string[] = [];
-  const tokens = /"((?:\\.|[^"\\])*)"|“([^”]*)”|(?:^|[\s,;|])Text\s*:/gi;
-  for (const m of raw.matchAll(tokens)) {
-    const word = m[1] ?? m[2];
-    if (word === undefined) {
-      const base = raw.slice(0, m.index).replace(/[\s,]+$/, "");
-      return { base, tail: raw.slice(m.index).replace(/^[\s,;|]+/, ""), manual: true };
-    }
-    if (auto && word.trim()) words.push(word.replace(/\\"/g, '"'));
+// V5 lettering is assembled as caption text, not as comma-separated tags.
+// Preserve the boundary (including its spelling) when inserting a preset.
+const v5Marker = /(?:^|[\s,.:\[\]{}、。])text:(?!:)/i;
+function v5FirstCaptionEnd(raw: string) {
+  let alternatives = false;
+  for (let i = 0; i < raw.length; i++) if (raw[i] === "|") {
+    if (raw[i + 1] === "|") { alternatives = !alternatives; i++; }
+    else if (!alternatives) return i;
   }
-  return { base: raw, tail: words.length ? "Text: " + words.join("\n\n") : "", manual: false };
+  return raw.length;
+}
+function v5QuoteWords(raw: string) {
+  const pairs: Record<string,string> = {'"':'"', "'":"'", "“":"”", "‘":"’", "「":"」"};
+  const words: string[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const open = raw[i], close = pairs[open];
+    if (!close || (open === "'" && i > 0 && !/[\s,.]/.test(raw[i-1]))) continue;
+    let end = raw.indexOf(close,i+1);
+    while (end >= 0 && (close === "'" || close === "’") && /[\p{L}\p{N}]/u.test(raw[end+1]??""))
+      end = raw.indexOf(close,end+1);
+    if (end < 0) continue;
+    const word = raw.slice(i+1,end).trim();
+    if (word) words.push(word);
+    i = end;
+  }
+  return words;
+}
+type LetteringCharacter = {prompt:string;x:number;y:number;useCoords:boolean};
+function v5ReadingOrder(chars: LetteringCharacter[]): LetteringCharacter[] {
+  const byLine = (row: LetteringCharacter[]): LetteringCharacter[] => {
+    if (row.length < 2) return row;
+    let gap = -1, cut = 1;
+    for(let i=1;i<row.length;i++){const dy=row[i].y-row[i-1].y;if(dy>gap){gap=dy;cut=i;}}
+    if (row[row.length-1].y-row[0].y <= 0.15 && gap <= 0.1) return row.sort((a,b)=>a.x-b.x);
+    return [...byLine(row.slice(0,cut)),...byLine(row.slice(cut))];
+  };
+  return chars.some(c=>c.useCoords) ? byLine([...chars].sort((a,b)=>a.y-b.y)) : chars;
+}
+function v5BaseCaption(raw: string, suffix: string, auto: boolean, chars: LetteringCharacter[]) {
+  const end = v5FirstCaptionEnd(raw), rest = raw.slice(end);
+  let base = raw.slice(0,end);
+  if (suffix) {
+    const marker = base.match(v5Marker);
+    const before = marker ? base.slice(0,marker.index!) : base;
+    const leading = before ? before + ", " + suffix : suffix;
+    base = marker ? [leading,...base.split(v5Marker).slice(1)].join(marker[0]) : leading;
+  }
+  if (auto && !v5Marker.test(base+rest) && !chars.some(c=>v5Marker.test(c.prompt))) {
+    const groups = [base,...v5ReadingOrder(chars).map(c=>c.prompt)].map(v5QuoteWords);
+    const text = groups.flat().join("");
+    const eastAsian = text.match(/[\u3000-\u30ff\uff00-\uff9f\u3400-\u4dbf\u4e00-\u9faf]/gu)?.length ?? 0;
+    if (eastAsian > text.length * 0.3) groups.forEach(group=>group.reverse());
+    const words = groups.flat();
+    if (words.length) base = [base.replace(/[\s,]+$/,""),"teXt: "+words.join("\n\n")].filter(Boolean).join(", ");
+  }
+  return base+rest;
 }
 
 type CharCaptionMode = "structured" | "pipe";
@@ -599,38 +642,31 @@ export function buildPayload(
     : mergePrompt;
   const replay = !mediumEffort && params.metadataReplay?.model === params.model ? params.metadataReplay : undefined;
   const rawPrompt = [params.stylePrompt, params.positivePrompt].filter(Boolean).join(", ");
-  const lettering = isNAIV5Model(params.model) && !params.preservePromptText && !replay
-    ? v5TextParts(rawPrompt, params.autoAppendQuotedText !== false) : undefined;
-  const joinBase = lettering?.tail ? (...parts: string[]) => parts.filter(Boolean).join(", ") : merge;
-  const basePrompt = lettering?.tail ? lettering.base : merge(params.stylePrompt, params.positivePrompt);
+  const v5Caption = isNAIV5Model(params.model);
+  const basePrompt = v5Caption ? rawPrompt : merge(params.stylePrompt, params.positivePrompt);
   // In the official client, Furry is a mode for every V4+ checkpoint rather
   // than a separate V4/V5 model. It is represented by placing `fur dataset,`
   // at the very start of the prompt. Keep the dedicated Furry V3 unchanged.
   const modePrompt =
     extras?.modelMode === "furry" && isV4Plus(params.model) &&
     !/(?:^|,\s*)fur dataset(?:\s*,|$)/i.test(basePrompt)
-      ? joinBase("fur dataset", basePrompt)
+      ? (v5Caption ? ["fur dataset",basePrompt].filter(Boolean).join(", ") : merge("fur dataset",basePrompt))
       : basePrompt;
   const qualityPreset = params.qualityPreset ?? (params.qualityToggle ? "standard" : "none");
   const transparentBackground = isNAIV5Model(params.model) && params.transparentBackground;
-  const qualityPrompt = joinBase(
-    modePrompt,
-    qualityTags(params.model, qualityPreset, lettering?.manual ? rawPrompt : modePrompt),
-  );
-  const effectivePrompt = transparentBackground
-    ? joinBase(qualityPrompt, "transparent background")
-    : qualityPrompt;
+  const cleanedCharCaptions = normalizedCharCaptions(extras, params.model, params.preservePromptText).map(c => mediumEffort ? { ...c, negativePrompt: "" } : c);
+  const tags = qualityTags(params.model, qualityPreset, v5Caption ? "" : modePrompt);
+  const effectivePrompt = v5Caption
+    ? v5BaseCaption(modePrompt, [transparentBackground ? "transparent background" : "", tags].filter(Boolean).join(", "),
+        params.autoAppendQuotedText !== false, cleanedCharCaptions)
+    : merge(modePrompt, tags);
   const effectiveNegative = merge(
     params.negativePrompt,
     ucPresetText(params.model, params.ucPreset),
   );
   const v4Plus = isV4Plus(params.model);
-  const cleanedCharCaptions = normalizedCharCaptions(extras, params.model, params.preservePromptText).map(c => mediumEffort ? { ...c, negativePrompt: "" } : c);
-  const inputBody =
-    charCaptionMode === "pipe"
-      ? withPipeCharCaptions(effectivePrompt, cleanedCharCaptions)
-      : effectivePrompt;
-  const inputPrompt = [inputBody, lettering?.tail].filter(Boolean).join(" ");
+  const inputPrompt = charCaptionMode === "pipe"
+    ? withPipeCharCaptions(effectivePrompt, cleanedCharCaptions) : effectivePrompt;
 
   // Defensive clamp: NovelAI rejects CFG above its supported range. Dimensions
   // are snapped in the UI (img2img/inpaint override them with image-matched

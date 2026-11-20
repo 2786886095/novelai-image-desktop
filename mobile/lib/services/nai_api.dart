@@ -883,9 +883,11 @@ class NaiApi {
     params = params.effectiveEffort();
     seed = seed.clamp(1, 0xffffffff).toInt();
     final rawPrompt = [params.stylePrompt, params.positivePrompt].where((s) => s.isNotEmpty).join(', ');
-    final lettering = params.isV5 ? _v5TextParts(rawPrompt, params.autoAppendQuotedText) : (base: rawPrompt, tail: '', manual: false);
-    String joinBase(String a, String b) => lettering.tail.isEmpty ? _merge(a, b) : [a,b].where((s) => s.isNotEmpty).join(', ');
-    final basePrompt = lettering.tail.isNotEmpty ? lettering.base : _merge(params.stylePrompt, params.positivePrompt);
+    final activeCharacters = extras.charCaptions
+        .where((c) => c.enabled && c.prompt.trim().isNotEmpty)
+        .take(params.maxCharacterPrompts)
+        .toList();
+    final basePrompt = params.isV5 ? rawPrompt : _merge(params.stylePrompt, params.positivePrompt);
     // NovelAI V4+ shares the Anime checkpoint in Furry mode. The official
     // frontend activates the furry dataset by prepending this tag; Furry V3 is
     // already a dedicated checkpoint and must not receive it.
@@ -894,17 +896,14 @@ class NaiApi {
             .hasMatch(basePrompt);
     final modePrompt =
         settings.modelMode == 'furry' && params.isV4Plus && !hasFurryDataset
-            ? joinBase('fur dataset', basePrompt)
+            ? (params.isV5 ? ['fur dataset',basePrompt].where((v)=>v.isNotEmpty).join(', ') : _merge('fur dataset',basePrompt))
             : basePrompt;
     final qualityPreset = params.qualityPreset;
-    final qualityPrompt = joinBase(
-      modePrompt,
-      _qualityTags(params.model, qualityPreset, lettering.manual ? rawPrompt : modePrompt),
-    );
+    final tags = _qualityTags(params.model, qualityPreset, params.isV5 ? '' : modePrompt);
     final transparentBackground = params.isV5 && params.transparentBackground;
-    final effectivePrompt = transparentBackground
-        ? joinBase(qualityPrompt, 'transparent background')
-        : qualityPrompt;
+    final effectivePrompt = params.isV5
+        ? _v5BaseCaption(modePrompt,[if(transparentBackground)'transparent background',if(tags.isNotEmpty)tags].join(', '),params.autoAppendQuotedText,activeCharacters)
+        : _merge(modePrompt,tags);
     final effectiveNegative = _merge(
         params.negativePrompt, _ucPresetText(params.model, params.ucPreset));
     final charCaptions = extras.charCaptions
@@ -922,10 +921,6 @@ class NaiApi {
                 }
               ],
             })
-        .toList();
-    final activeCharacters = extras.charCaptions
-        .where((c) => c.enabled && c.prompt.trim().isNotEmpty)
-        .take(params.maxCharacterPrompts)
         .toList();
     final negativeCharCaptions =
         !params.isMediumEffort && activeCharacters.any((c) => c.negativePrompt.trim().isNotEmpty)
@@ -946,13 +941,12 @@ class NaiApi {
             .where((caption) => caption.enabled && caption.prompt.trim().isNotEmpty)
             .take(params.maxCharacterPrompts)
             .any((caption) => caption.useCoords);
-    final inputBody = structuredCharacters || charCaptions.isEmpty
+    final inputPrompt = structuredCharacters || charCaptions.isEmpty
         ? effectivePrompt
         : [
             effectivePrompt,
             ...charCaptions.map((caption) => caption['char_caption'] as String),
           ].where((value) => value.trim().isNotEmpty).join(' | ');
-    final inputPrompt = [inputBody, lettering.tail].where((s) => s.isNotEmpty).join(' ');
 
     // NovelAI's V5 frontend fixes the schedule to Karras and hides the
     // selector. Keep mobile payloads byte-for-byte compatible with that rule
@@ -2735,16 +2729,66 @@ String _truncatedChatText(dynamic data) {
   return content is String?content:content is List?content.map((p)=>p['text'] as String).join():'';
 }
 
-({String base, String tail, bool manual}) _v5TextParts(String raw, bool auto) {
-  final words = <String>[];
-  final tokens = RegExp(r'"((?:\\.|[^"\\])*)"|“([^”]*)”|(?:^|[\s,;|])Text\s*:', caseSensitive: false);
-  for (final m in tokens.allMatches(raw)) {
-    final word = m.group(1) ?? m.group(2);
-    if (word == null) {
-      return (base: raw.substring(0,m.start).replaceFirst(RegExp(r'[\s,]+$'), ''),
-        tail: raw.substring(m.start).replaceFirst(RegExp(r'^[\s,;|]+'), ''), manual: true);
+// The V5 client places presets in the base caption before building the lettering block.
+final _letterMarker = RegExp(r'(?:^|[\s,.:\[\]{}、。])text:(?!:)',caseSensitive:false);
+final _eastAsianLetter = RegExp(r'[\u3000-\u30ff\uff00-\uff9f\u3400-\u4dbf\u4e00-\u9faf]',unicode:true);
+final _letterOrDigit = RegExp(r'[\p{L}\p{N}]',unicode:true);
+List<String> _letterWords(String raw) {
+  const closing = {'"':'"',"'":"'","“":"”","‘":"’","「":"」"};
+  final words=<String>[];
+  for(var i=0;i<raw.length;i++){
+    final open=raw[i], close=closing[open];
+    if(close==null || (open=="'" && i>0 && !RegExp(r'[\s,.]').hasMatch(raw[i-1]))) continue;
+    var end=raw.indexOf(close,i+1);
+    while(end>=0 && (close=="'" || close=="’") && end+1<raw.length && _letterOrDigit.hasMatch(raw[end+1])){
+      end=raw.indexOf(close,end+1);
     }
-    if (auto && word.trim().isNotEmpty) words.add(word.replaceAll(r'\"','"'));
+    if(end<0) continue;
+    final word=raw.substring(i+1,end).trim();
+    if(word.isNotEmpty) words.add(word);
+    i=end;
   }
-  return (base: raw, tail: words.isEmpty ? '' : "Text: ${words.join('\n\n')}", manual: false);
+  return words;
+}
+List<CharCaptionItem> _letterOrder(List<CharCaptionItem> chars) {
+  if(!chars.any((c)=>c.useCoords)) return chars;
+  List<CharCaptionItem> stable(List<CharCaptionItem> src,double Function(CharCaptionItem) axis) {
+    final keys=List.generate(src.length,(i)=>i)..sort((a,b){
+      final cmp=axis(src[a]).compareTo(axis(src[b]));return cmp==0?a.compareTo(b):cmp;});
+    return keys.map((i)=>src[i]).toList();
+  }
+  List<CharCaptionItem> rows(List<CharCaptionItem> group){
+    if(group.length<2)return group;
+    double gap=-1;int cut=1;
+    for(var i=1;i<group.length;i++){final dy=group[i].y-group[i-1].y;if(dy>gap){gap=dy;cut=i;}}
+    if(group.last.y-group.first.y<=0.15 && gap<=0.1)return stable(group,(c)=>c.x);
+    return [...rows(group.sublist(0,cut)),...rows(group.sublist(cut))];
+  }
+  return rows(stable(chars,(c)=>c.y));
+}
+String _v5BaseCaption(String raw,String suffix,bool auto,List<CharCaptionItem> chars){
+  var end=raw.length, alternative=false;
+  for(var i=0;i<raw.length;i++){if(raw[i]!='|')continue;
+    if(i+1<raw.length && raw[i+1]=='|'){alternative=!alternative;i++;}
+    else if(!alternative){end=i;break;}}
+  var base=raw.substring(0,end);final rest=raw.substring(end);
+  if(suffix.isNotEmpty){
+    final marker=_letterMarker.firstMatch(base);
+    final pieces=base.split(_letterMarker);
+    if(marker!=null && marker.start==0 && (pieces.isEmpty || pieces.first.isNotEmpty)){pieces.insert(0,'');}
+    final before=marker==null?base:base.substring(0,marker.start);
+    final leading=before.isEmpty?suffix:'$before, $suffix';
+    base=marker==null?leading:[leading,...pieces.skip(1)].join(marker.group(0)!);
+  }
+  if(auto && !_letterMarker.hasMatch(base+rest) && !chars.any((c)=>_letterMarker.hasMatch(c.prompt))){
+    final groups=[_letterWords(base),..._letterOrder(chars).map((c)=>_letterWords(c.prompt))];
+    final text=groups.expand((g)=>g).join();
+    final reverse=_eastAsianLetter.allMatches(text).length>0.3*text.length;
+    final words=groups.expand((g)=>reverse?g.reversed:g).toList();
+    if(words.isNotEmpty){
+      final prefix=base.replaceFirst(RegExp(r'[\s,]+$'),'');
+      base=[if(prefix.isNotEmpty)prefix,'teXt: '+words.join('\n\n')].join(', ');
+    }
+  }
+  return base+rest;
 }

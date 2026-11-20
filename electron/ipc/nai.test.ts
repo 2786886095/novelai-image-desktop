@@ -270,7 +270,7 @@ describe("official quality and transparency controls", () => {
     });
   });
 
-  it("drops the preset's contradictory no-text tag when Text: is requested", () => {
+  it("retains the official V5 quality preset before a manual lettering directive", () => {
     const payload = buildPayload(
       {
         ...DEFAULT_PARAMS,
@@ -283,7 +283,7 @@ describe("official quality and transparency controls", () => {
 
     expect(payload.input).toContain("Text: 末班车");
     expect(payload.input).toContain("very aesthetic, masterpiece");
-    expect(payload.input).not.toMatch(/(?:^|,\s*)no text(?:,|$)/i);
+    expect(payload.input).toContain("very aesthetic, masterpiece, no text Text: 末班车");
   });
 
   it("requests V5 straight-alpha output when Transparent BG is enabled", () => {
@@ -857,9 +857,50 @@ describe("V5 automatic final Text block", () => {
   const request=(positivePrompt:string, extra:Partial<typeof DEFAULT_PARAMS>={})=>buildPayload({...DEFAULT_PARAMS,model:"nai-diffusion-5-full",positivePrompt,stylePrompt:"",...extra},42);
   it("copies literal quoted text after every generated tag, never to UC",()=>{
     const p=request('sign says "疯狂星期四v50:" and “A,  B”',{transparentBackground:true});
-    expect(p.input).toBe('sign says "疯狂星期四v50:" and “A,  B”, very aesthetic, masterpiece, no text, transparent background Text: 疯狂星期四v50:\n\nA,  B');
+    expect(p.input).toBe('sign says "疯狂星期四v50:" and “A,  B”, transparent background, very aesthetic, masterpiece, no text, teXt: A,  B\n\n疯狂星期四v50:');
     expect(p.parameters.v4_prompt.caption.base_caption).toBe(p.input);
     expect(p.parameters.negative_prompt).not.toContain("疯狂星期四");
+  });
+  it("honors the lettering switch on retained prompts and imported sampling settings",()=>{
+    const model = "nai-diffusion-5-full" as const;
+    const metadataReplay = {model, parameters:{skip_cfg_below_sigma:7}};
+    const raw = 'sign, sign, text "疯狂星期四v50:"';
+    for (const extra of [{preservePromptText:true}, {metadataReplay}, {preservePromptText:true, metadataReplay}]) {
+      const on = request(raw, {...extra, autoAppendQuotedText:true});
+      const off = request(raw, {...extra, autoAppendQuotedText:false});
+      expect(on.input).toBe(off.input + ", teXt: 疯狂星期四v50:");
+      expect(on.parameters.v4_prompt.caption.base_caption).toBe(on.input);
+      expect(off.input).not.toMatch(/\btext:/i);
+      expect(on.parameters.negative_prompt).toBe(off.parameters.negative_prompt);
+      expect(on.parameters.seed).toBe(off.parameters.seed);
+      if (extra.preservePromptText) expect(on.input.startsWith(raw)).toBe(true);
+      if (extra.metadataReplay) expect(on.parameters.skip_cfg_below_sigma).toBe(7);
+      const existing = raw + " teXt: A,  B";
+      expect(request(existing, {...extra, autoAppendQuotedText:true}).input)
+        .toBe(request(existing, {...extra, autoAppendQuotedText:false}).input);
+      expect(request(existing, extra).input.match(/text:/gi)).toHaveLength(1);
+    }
+  });
+  it("keeps imported handwritten lettering verbatim and last, even with pipe characters",()=>{
+    const model = "nai-diffusion-5-full" as const;
+    const tail = "teXt: A,  A, B\n\n第二行";
+    const raw = 'sign "甲", ' + tail;
+    for (const autoAppendQuotedText of [true,false]) {
+      for (const imported of [{preservePromptText:true}, {metadataReplay:{model,parameters:{skip_cfg_below_sigma:7}}},
+        {preservePromptText:true,metadataReplay:{model,parameters:{skip_cfg_below_sigma:7}}}]) {
+        const p = buildPayload({...DEFAULT_PARAMS,model,stylePrompt:"",positivePrompt:raw,transparentBackground:true,
+          qualityPreset:"standard",autoAppendQuotedText,...imported},42,
+          {vibeImages:[],charCaptions:[{prompt:"blue coat",negativePrompt:"",enabled:true,useCoords:false,x:0.5,y:0.5}]},"pipe");
+        expect(p.input).toBe('sign "甲",, transparent background, very aesthetic, masterpiece, no text ' + tail + ' | blue coat');
+        expect(p.parameters.v4_prompt.caption.base_caption).toBe(p.input);
+        if (imported.metadataReplay) expect(p.parameters.skip_cfg_below_sigma).toBe(7);
+      }
+    }
+  });
+  it("does not reinterpret fullwidth punctuation or fill an empty imported marker",()=>{
+    const extra = {preservePromptText:true, autoAppendQuotedText:true};
+    expect(request('sign "甲", Text：乙',extra).input.endsWith("teXt: 甲")).toBe(true);
+    expect(request('sign "甲", Text:',extra).input).toBe('sign "甲",, very aesthetic, masterpiece, no text Text:');
   });
   it("retains explicit casing and punctuation once, independent of the toggle",()=>{
     for(const autoAppendQuotedText of [true,false]){
@@ -868,8 +909,22 @@ describe("V5 automatic final Text block", () => {
       expect(p.input.endsWith('teXt: Other,  words:')).toBe(true);
     }
   });
-  it("keeps unpaired and empty quotes, off, replay and older models unchanged",()=>{
-    for(const s of ['no quotes','unmatched "text','two ""']) expect(request(s).input).not.toContain('Text:');
-    for(const extra of [{autoAppendQuotedText:false},{preservePromptText:true},{model:"nai-diffusion-4-5-full" as const}]) expect(request('poster "V50"',extra).input).not.toContain('Text:');
+  it("keeps unpaired and empty quotes, off and older models unchanged",()=>{
+    for(const s of ['no quotes','unmatched "text','two ""']) expect(request(s).input).not.toMatch(/\btext:/i);
+    for(const extra of [{autoAppendQuotedText:false},{model:"nai-diffusion-4-5-full" as const}]) expect(request('poster "V50"',extra).input).not.toMatch(/\btext:/i);
+  });
+});
+
+describe("official V5 base-caption differential fixtures",()=>{
+  it("matches every captured output for both V5 families, including metadata replay",()=>{
+    const cases=JSON.parse(fs.readFileSync("shared/test-fixtures/v5-official-lettering.json","utf8"));
+    for(const v of cases)for(const model of ["nai-diffusion-5-full","nai-diffusion-5-curated"] as const)for(const replay of [false,true]){
+      const p=buildPayload({...DEFAULT_PARAMS,model,stylePrompt:"",positivePrompt:v.raw,qualityPreset:v.quality,
+        transparentBackground:v.transparent,autoAppendQuotedText:v.on,preservePromptText:replay,
+        ...(replay?{metadataReplay:{model,parameters:{skip_cfg_below_sigma:7}}}:{})},42,
+        {vibeImages:[],charCaptions:v.chars.map((c:{prompt:string;enabled:boolean;center:{x:number;y:number};useCoords:boolean})=>({...c,negativePrompt:"",...c.center}))});
+      expect(p.input).toBe(v.expected);expect(p.parameters.v4_prompt.caption.base_caption).toBe(v.expected);
+      if(replay)expect(p.parameters.skip_cfg_below_sigma).toBe(7);
+    }
   });
 });

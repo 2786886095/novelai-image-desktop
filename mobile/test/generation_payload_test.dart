@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/services/nai_api.dart';
@@ -13,16 +15,29 @@ void main() {
       expect(result['parameters']['v4_prompt']['caption']['base_caption'], result['input']);
       return result['input'] as String;
     }
-    expect(await prompt(), endsWith('no text, transparent background Text: 疯狂星期四v50:\n\nA,  B'));
+    expect(await prompt(), endsWith('transparent background, very aesthetic, masterpiece, no text, teXt: A,  B\n\n疯狂星期四v50:'));
     p.autoAppendQuotedText=false;
     expect(GenerateParams.fromJson(p.toJson()).autoAppendQuotedText,isFalse);
-    expect(await prompt(), isNot(contains('Text:')));
+    expect(await prompt(), isNot(matches(RegExp('text:',caseSensitive:false))));
     p.positivePrompt='sign "X", teXt: A,  B:';
     expect(await prompt(),endsWith('teXt: A,  B:'));
     p.autoAppendQuotedText=true;
     expect(RegExp('text:',caseSensitive:false).allMatches(await prompt()).length,1);
     p.model='nai-diffusion-4-5-full';p.positivePrompt='sign "X"';
-    expect(await prompt(),isNot(contains('Text:')));
+    expect(await prompt(),isNot(matches(RegExp('text:',caseSensitive:false))));
+  });
+
+  test('V5 official quality and text fixture strings match mobile requests',() async {
+    final cases=jsonDecode(File('../shared/test-fixtures/v5-official-lettering.json').readAsStringSync()) as List;
+    for(final model in ['nai-diffusion-5-full','nai-diffusion-5-curated']){
+      for(final c in cases){
+        final p=GenerateParams(model:model,positivePrompt:c['raw'],qualityPreset:c['quality'],transparentBackground:c['transparent'],autoAppendQuotedText:c['on']);
+        final extras=GenerateExtras()..charCaptions=[for(final v in c['chars']) CharCaptionItem(prompt:v['prompt'],enabled:v['enabled'],useCoords:v['useCoords'],x:(v['center']['x'] as num).toDouble(),y:(v['center']['y'] as num).toDouble())];
+        final payload=await api.buildPayload('unused',settings,p,42,extras);
+        expect(payload['input'],c['expected'],reason:'$model / ${c["raw"]} / ${c["quality"]}');
+        expect(payload['parameters']['v4_prompt']['caption']['base_caption'],c['expected']);
+      }
+    }
   });
 
   test('new-user defaults use Human Focus with Variety disabled', () async {
@@ -332,7 +347,7 @@ void main() {
     expect(parameters['tag_hint_qt'], 3);
   });
 
-  test('quality preset omits no text when a Text directive is present',
+  test('V5 keeps the quality preset before a handwritten Text directive',
       () async {
     final payload = await api.buildPayload(
       'unused',
@@ -347,7 +362,7 @@ void main() {
 
     expect(payload['input'], contains('Text: 末班车'));
     expect(payload['input'], contains('very aesthetic, masterpiece'));
-    expect(payload['input'], isNot(contains('no text')));
+    expect(payload['input'], contains('very aesthetic, masterpiece, no text Text: 末班车'));
   });
 
   test('V5 Transparent BG requests straight alpha output', () async {
