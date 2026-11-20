@@ -34,7 +34,8 @@ import { withNaiAccountOperation } from "./nai-accounts-runtime";
 import { bindAgentImageProvider, assertAgentImageProvider, type ImageProviderBinding } from "./agent-image-provider";
 import { agentGenerationInput, agentInpaintInput, executeAgentTool } from "./agent-tools";
 import { quoteAnlasCost, refreshStoredAccount } from "./nai";
-import { getHistory, getHistoryGroups, getSettings } from "./store";
+import {formatBulkRoles, makeBulkPreset, parseBulkRoles} from "../../src/role-bulk";
+import { getHistory, getHistoryGroups, getSettings, setSetting } from "./store";
 import type { GalleryMcpTool } from "./mcp-history-gallery";
 import { MAX_MCP_IMAGE_PIXELS, importMcpImage, looksLikeLocalPath, mcpAttachment, newMcpTempFile, registerMcpFile } from "./mcp-attachments";
 
@@ -793,6 +794,35 @@ function createTools(options: McpServerOptions): ToolDef[] {
         const maskAttachment = await registerMcpFile(maskFile, "mask");
         const preview = await registerMcpFile(previewFile, "maskpreview");
         return ok({ maskId: maskAttachment.id, maskPath: maskAttachment.filePath, previewId: preview.id, previewPath: preview.filePath, coverage: Number((count / selected.length).toFixed(4)) });
+      },
+    },
+    {
+      name: "prepare_character_group",
+      title: "Preview character prompt group",
+      description: "Parse structured role text or load a named character preset by ID from list_prompt_presets. Returns canonical JSON and generation-ready characterPrompts, without changing the workbench or calling a provider. Supply exactly one of text or presetId.",
+      inputSchema: schema({text:{type:"string",maxLength:128000},presetId:{type:"string"},model:{type:"string"}}),
+      annotations: { readOnlyHint: true, openWorldHint: false },
+      run: async raw=>{
+        if((typeof raw.text==="string")===(typeof raw.presetId==="string"))return fail("Supply exactly one of text or presetId");
+        const limit=maxNAICharacterPrompts(String(raw.model??DEFAULT_PARAMS.model));
+        const preset=typeof raw.presetId==="string"?getSettings().positivePromptPresets.find(p=>p.id===raw.presetId):undefined;
+        if(raw.presetId!==undefined&&!preset?.captions?.length)return fail("Character group not found");
+        const rows=parseBulkRoles(preset?.captions?formatBulkRoles(preset.captions):String(raw.text),limit);
+        return ok({normalized:formatBulkRoles(rows),characterPrompts:rows.map(({prompt,negativePrompt})=>({prompt,negativePrompt:negativePrompt??""}))});
+      },
+    },
+    {
+      name: "save_character_group",
+      title: "Save a named character prompt group",
+      description: "Create a new local positive-prompt preset for a complete character group; never overwrites another preset or calls an AI.",
+      inputSchema: schema({name:{type:"string",minLength:1,maxLength:120},text:{type:"string",maxLength:128000},model:{type:"string"}},["name","text"]),
+      annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
+      run:async raw=>{
+        if(typeof raw.text!=="string"||typeof raw.name!=="string")return fail("name and text required");
+        const rows=parseBulkRoles(raw.text,maxNAICharacterPrompts(String(raw.model??DEFAULT_PARAMS.model)));
+        const existing=getSettings().positivePromptPresets;
+        const preset=makeBulkPreset(existing,raw.name,rows);
+        setSetting("positivePromptPresets",[...existing,preset]);return ok({id:preset.id,name:preset.name,count:rows.length});
       },
     },
     {

@@ -125,6 +125,7 @@ import {
 import { Button, IconText, AppPortal, Toggle, NumberInput, CommittedNumberInput, SliderInput, SecretInput, SelectMenu, SelectMenuCompat } from "./components/ui";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { confirmAction } from "./components/confirm";
+import {RoleBulkEditor} from "./components/RoleBulkEditor";
 import {CharacterPresetControls} from './components/CharacterPresetControls';
 import {CharacterNameControl} from './components/CharacterNameControl';
 import { Icon, type IconName } from "./components/icons";
@@ -1340,6 +1341,7 @@ export function CharCaptionsModal({ onClose, closing = false }: { onClose: () =>
         </header>
         <div className="char-body">
           <CharacterPresetControls />
+          {supportsCharacters && <RoleBulkEditor current={charCaptions} limit={maxCharacters} apply={setCharCaptions} />}
           {!supportsCharacters && (
             <div className="status-box bad">
               {t("character.unsupported")}
