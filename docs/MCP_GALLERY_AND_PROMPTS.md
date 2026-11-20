@@ -64,6 +64,8 @@
 | --- | --- | --- |
 | `list_prompt_templates` | 列出图片及漫画模板、选用状态和自定义副本 | 新增 |
 | `read_prompt_template` | 读取指定模板正文或转换、反推、优化、自定义助手的当前模板 | 新增 |
+| `prepare_character_group` | 预览角色组合，返回规范 JSON 和角色提示 | 只读 |
+| `save_character_group` | 保存具名角色组合，不覆盖已有预设 | 本地写入 |
 | `list_prompt_presets` | 查询正面和风格提示词预设 | 新增 |
 | `list_reference_presets` | 查询氛围转移／精准参考预设及引用 ID | 新增 |
 | `search_artist_styles` | 搜索本地画风与画师标签 | 新增 |
