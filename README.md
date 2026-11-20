@@ -1,6 +1,8 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 # Langbai NovelAI Studio
 
+手机端导入图片可选择用途。上次确认勾选的参数项会保留，值来自本次图片。
+
 桌面端可随时切换经典与新版界面。新版右侧「历史与素材」悬浮，不挤动中间画布；NAX 对照图在软件内按原比例显示，可直接复制当前标签。
 
 [简体中文](./README.md) · [繁體中文](./README.zh-TW.md) · [English](./README.en.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)

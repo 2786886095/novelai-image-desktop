@@ -1,6 +1,8 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 # Langbai NovelAI Studio
 
+모바일에서 가져온 이미지의 용도를 선택할 수 있습니다. 마지막으로 선택한 항목을 기억하고 값은 새 이미지에서 읽습니다.
+
 데스크톱에서는 클래식과 새 UI를 언제든지 전환할 수 있습니다. 새 UI의 기록·소재 패널은 캔버스를 밀지 않고 열리며, NAX 비교 이미지는 원래 비율로 표시하고 현재 태그를 복사할 수 있습니다.
 
 > 현재 배포 파일과 릴리스 설명은 [Latest](https://github.com/2786886095/novelai-image-desktop/releases/latest)를 확인하세요. 설치 방법과 제한은 아래 다운로드 영역에 안내되어 있습니다.
