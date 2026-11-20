@@ -1341,7 +1341,6 @@ export function CharCaptionsModal({ onClose, closing = false }: { onClose: () =>
         </header>
         <div className="char-body">
           <CharacterPresetControls />
-          {supportsCharacters && <RoleBulkEditor current={charCaptions} limit={maxCharacters} apply={setCharCaptions} />}
           {!supportsCharacters && (
             <div className="status-box bad">
               {t("character.unsupported")}
@@ -1471,6 +1470,7 @@ export function CharCaptionsModal({ onClose, closing = false }: { onClose: () =>
           </Button>
         </div>
         <footer>
+          {supportsCharacters && <RoleBulkEditor current={charCaptions} limit={maxCharacters} apply={setCharCaptions} />}
           <Button onClick={clearCharCaptions}>
             <IconText icon="⌧">{t("character.clear")}</IconText>
           </Button>
