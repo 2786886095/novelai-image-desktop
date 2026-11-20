@@ -32,6 +32,10 @@ on:
         description: v2.9.5 only; skip local Windows Artist GPU proof and require all other hosted checks
         type: boolean
         default: false
+      waive_windows_artist_gpu_v300:
+        description: v3.0.0 only; skip local Windows Artist GPU proof and require all other hosted checks
+        type: boolean
+        default: false
 
 # This workflow executes all five current release targets and preserves bounded observations.
 # iOS native checks are required; unsigned packaging cannot substitute for functional evidence.
@@ -517,7 +521,7 @@ jobs:
   windows-artist-local-proof:
     # Admit genuine local hardware execution; this job does not run a GPU model.
     # Missing/failed proof leaves the unchanged Windows Artist cell unverified.
-    if: github.event_name == 'workflow_dispatch' && inputs.windows_artist_evidence_commit != '' && !inputs.waive_windows_artist_gpu_v286 && !inputs.waive_windows_artist_gpu_v292 && !inputs.waive_windows_artist_gpu_v293 && !inputs.waive_windows_artist_gpu_v294 && !inputs.waive_windows_artist_gpu_v295
+    if: github.event_name == 'workflow_dispatch' && inputs.windows_artist_evidence_commit != '' && !inputs.waive_windows_artist_gpu_v286 && !inputs.waive_windows_artist_gpu_v292 && !inputs.waive_windows_artist_gpu_v293 && !inputs.waive_windows_artist_gpu_v294 && !inputs.waive_windows_artist_gpu_v295 && !inputs.waive_windows_artist_gpu_v300
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -567,6 +571,7 @@ jobs:
           WAIVE_WINDOWS_ARTIST_GPU_V293: ${{ inputs.waive_windows_artist_gpu_v293 }}
           WAIVE_WINDOWS_ARTIST_GPU_V294: ${{ inputs.waive_windows_artist_gpu_v294 }}
           WAIVE_WINDOWS_ARTIST_GPU_V295: ${{ inputs.waive_windows_artist_gpu_v295 }}
+          WAIVE_WINDOWS_ARTIST_GPU_V300: ${{ inputs.waive_windows_artist_gpu_v300 }}
           WINDOWS_ARTIST_EVIDENCE_COMMIT: ${{ inputs.windows_artist_evidence_commit }}
         run: |
           version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json","utf8")).version')"
@@ -591,6 +596,10 @@ jobs:
             test -z "$WINDOWS_ARTIST_EVIDENCE_COMMIT"
             test "$version" = 2.9.5
             flag=--require-cloud-scope-v295
+          elif [ "$WAIVE_WINDOWS_ARTIST_GPU_V300" = true ]; then
+            test -z "$WINDOWS_ARTIST_EVIDENCE_COMMIT"
+            test "$version" = 3.0.0
+            flag=--require-cloud-scope-v300
           fi
           node scripts/feature-acceptance/build-full-feature-matrix.mjs "$RUNNER_TEMP/all-native-evidence" "$RUNNER_TEMP/full-feature-matrix" "$GITHUB_SHA" "$version" "$flag"
       - uses: actions/upload-artifact@v4
