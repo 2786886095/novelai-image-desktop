@@ -329,8 +329,9 @@ class _PickerState extends State<CapsulePickerSheet> {
                             builder: (context, s) {
                               final pages = ((s.data?.total ?? 0) + 23) ~/ 24;
                               if (pages <= 1 ||
-                                  (!library && query.isEmpty && expanded))
+                                  (!library && query.isEmpty && expanded)) {
                                 return const SizedBox.shrink();
+                              }
                               return Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [

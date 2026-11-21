@@ -231,7 +231,8 @@ class MultilingualTagPacks extends ChangeNotifier {
     final db=await openReadOnlyDatabase(_database(lang).path,singleInstance:false);
     try {
       final topics=topic.map(key).toSet();
-      final clause=topics.isEmpty?'':' OR key IN ('+List.filled(topics.length,'?').join(',')+')';
+      final slots = List.filled(topics.length, '?').join(',');
+      final clause = topics.isEmpty ? '' : ' OR key IN ($slots)';
       final filter=q.isEmpty?'1':'(instr(key,?)>0 OR instr(translated_key,?)>0$clause)';
       final args=<Object?>[if(q.isNotEmpty)...[q,q,...topics]];
       final count=Sqflite.firstIntValue(await db.rawQuery('SELECT count(*) FROM terms WHERE $filter',args))??0;
