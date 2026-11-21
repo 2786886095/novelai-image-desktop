@@ -68,6 +68,14 @@
 | `save_character_group` | 保存具名角色组合，不覆盖已有预设 | 本地写入 |
 | `list_prompt_presets` | 查询正面和风格提示词预设 | 新增 |
 | `list_reference_presets` | 查询氛围转移／精准参考预设及引用 ID | 新增 |
+| `list_style_assets` | 查看画风分组、预设、封面及示例图句柄，支持按组分页 | 新增 |
+| `create_style_group` | 创建或复用画风分组，不影响图库 | 新增 |
+| `move_style_presets` | 预览并批量移动预设到指定分组 | 新增 |
+| `attach_style_images` | 将图片逐项分配为预设封面或示例，不改变生成参数 | 新增 |
+| `list_workbench_references` | 回读当前工作台已挂载的参考图 ID、用途和参数 | 新增 |
+| `set_style_cover` | 将该预设已有的示例图设为封面，不复制、不参与生图 | 新增 |
+| `mount_workbench_reference` | 必须明确选择氛围迁移或精准参考；不生图、不切换模型 | 新增 |
+| `unmount_workbench_reference` | 按用途和 ID 从工作台卸载，不删除图片 | 新增 |
 | `search_artist_styles` | 搜索本地画风与画师标签 | 新增 |
 | `related_offline_tags` | 按最多 12 个原 Tag 或唯一译名，查找本地共现候选，并用已启用的词包校验及翻译；不联网、不重复返回输入标签。 | 已有 |
 | `browse_nax_collection` | 只读访问 NAX 公共合集（`collectionId` 必填，可选 `chapter` 分册、`page` 界面页），返回每页最多 24 项对照图片及出处；只连接固定原站和图床，不启动浏览器。 | 已有 |
@@ -75,6 +83,12 @@
 | `convert_prompt` | 调用配置的转换服务；Tag/混合模式的词汇提示只查当前离线词包；需确认，模型请求可能计费 | 新增 |
 | `reverse_prompt` | 调用配置的图片反推服务；词汇提示及结果中的 `tagMatches` 来自选定离线词包，不改变原提示词。需确认，模型请求可能计费 | 新增 |
 | `plan_comic_prompts` | 推荐页数或生成逐页提示词，不提交生图；可能计费 | 新增 |
+
+### 示例：整理画风与挂载到工作台
+
+1. 用 `list_style_assets` 获取实际预设 ID，需要新组时调用 `create_style_group`。向 `move_style_presets` 传 `{"presetIds":["id1","id2"],"group":"水彩"}`，先看每项的原组和目标组；用相同参数加返回的 `revision` 才写入。无效 ID 或分组不会创建一半的移动。
+2. 使用 `import_image` 返回的 ID、历史图片 ID、参考预设句柄或画风示例句柄。向 `attach_style_images` 传 `{"items":[{"presetId":"id1","image":"图片句柄","role":"cover"},{"presetId":"id2","image":"图片句柄","role":"example"}]}`。同样先预览再带 revision 提交。每批最多 32 项、每个预设最多 9 张；检查每项 ok。设置新封面不会删除旧图。仅作展示，不挂载、不生图。
+3. 只有明确要求参与生成时调用 `mount_workbench_reference`：例如 `{"image":"图片句柄","kind":"precise","type":"style","strength":0.7}`。氛围迁移用 `"kind":"vibe"`。在工作台确认添加后才报告成功。模型不支持、已有冲突参考或正在生成时拒绝，不切换模型、不覆盖底图。超时先用 `list_workbench_references` 回读，不自动重试。用 `unmount_workbench_reference` 可单独移除。MCP 的独立生图调用仍按该调用的显式 references 执行，不自动继承工作台图片。
 
 ### Windows 画风自动迭代
 

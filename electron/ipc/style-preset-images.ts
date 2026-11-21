@@ -99,6 +99,7 @@ export function reconcileStylePromptPreviewImages(
   presetId: string,
   knownImages: StylePromptPreviewImage[] = [],
   userDataRoot = app.getPath("userData"),
+  persistManifest = true,
 ): StylePromptPreviewImage[] {
   const directory = stylePromptPreviewDirectory(presetId, userDataRoot);
   if (!fs.existsSync(directory)) return [];
@@ -125,7 +126,7 @@ export function reconcileStylePromptPreviewImages(
   const images = [...restored.values()]
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
     .slice(0, MAX_PREVIEW_IMAGES);
-  writeManifest(presetId, images, userDataRoot);
+  if (persistManifest) writeManifest(presetId, images, userDataRoot);
   return images;
 }
 
@@ -134,6 +135,7 @@ export function copyStylePromptPreviewImages(
   presetId: string,
   availableSlots: number,
   userDataRoot = app.getPath("userData"),
+  snapshots?: ReadonlyMap<string, Buffer>,
 ): StylePromptPreviewImage[] {
   const directory = stylePromptPreviewDirectory(presetId, userDataRoot);
   fs.mkdirSync(directory, { recursive: true });
@@ -144,13 +146,16 @@ export function copyStylePromptPreviewImages(
   );
   if (count === 0) return [];
   const copied: StylePromptPreviewImage[] = [];
+  try {
   for (const rawPath of sourcePaths.slice(0, count)) {
     const sourcePath = localMediaUrlToPath(rawPath) ?? rawPath;
     const extension = path.extname(sourcePath).toLowerCase();
     if (!SUPPORTED_EXTENSIONS.has(extension) || !fs.existsSync(sourcePath)) continue;
     const id = randomUUID();
     const filePath = path.join(directory, `${id}${extension}`);
-    fs.copyFileSync(sourcePath, filePath, fs.constants.COPYFILE_EXCL);
+    const bytes=snapshots?.get(sourcePath);
+    if(bytes)fs.writeFileSync(filePath,bytes,{flag:"wx"});
+    else fs.copyFileSync(sourcePath, filePath, fs.constants.COPYFILE_EXCL);
     copied.push({
       id,
       name: path.basename(sourcePath),
@@ -161,6 +166,10 @@ export function copyStylePromptPreviewImages(
   }
   writeManifest(presetId, [...existing, ...copied], userDataRoot);
   return copied;
+  } catch(error) {
+    for (const item of copied) fs.rmSync(item.filePath, {force:true});
+    throw error;
+  }
 }
 
 export async function importStylePromptPresetImages(

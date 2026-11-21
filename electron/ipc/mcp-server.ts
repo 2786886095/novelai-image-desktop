@@ -36,6 +36,7 @@ import { agentGenerationInput, agentInpaintInput, executeAgentTool } from "./age
 import { quoteAnlasCost, refreshStoredAccount } from "./nai";
 import {formatBulkRoles, makeBulkPreset, parseBulkRoles} from "../../src/role-bulk";
 import { getHistory, getHistoryGroups, getSettings, setSetting } from "./store";
+import {styleResourceTools} from "./mcp-style-resources";
 import type { GalleryMcpTool } from "./mcp-history-gallery";
 import { MAX_MCP_IMAGE_PIXELS, importMcpImage, looksLikeLocalPath, mcpAttachment, newMcpTempFile, registerMcpFile } from "./mcp-attachments";
 
@@ -671,6 +672,7 @@ function createTools(options: McpServerOptions): ToolDef[] {
       },
     },
     ...galleryTools,
+    ...styleResourceTools(options.window,resolveImage).map(({run,...def})=>({...def,run:async (args:Json)=>ok(await run(args))})),
     {
       name: "read_image_metadata",
       title: "Read image metadata",

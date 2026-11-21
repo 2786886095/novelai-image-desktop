@@ -95,6 +95,19 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   // Local MCP server.
   mcpStatus: () => ipcRenderer.invoke('mcp:status'),
   mcpRegenerateToken: () => ipcRenderer.invoke('mcp:regenerateToken'),
+  onMcpStyleCatalogChanged: (notify:()=>void)=>{
+    const listener=()=>notify();ipcRenderer.on('mcp:style-catalog-changed',listener);
+    return ()=>ipcRenderer.removeListener('mcp:style-catalog-changed',listener);
+  },
+  onMcpWorkbenchReference: (apply:(command:import('../src/mcp-workbench-references').WorkbenchCommand)=>unknown)=>{
+    const listener=(event:Electron.IpcRendererEvent,command:import('../src/mcp-workbench-references').WorkbenchCommand)=>{
+      const port=event.ports[0];if(!port)return;
+      try{port.postMessage({ok:true,result:apply(command)});}
+      catch(e){port.postMessage({ok:false,error:e instanceof Error?e.message:String(e)});}
+      finally{port.close();}
+    };
+    ipcRenderer.on('mcp:workbench-reference',listener);return ()=>ipcRenderer.removeListener('mcp:workbench-reference',listener);
+  },
   onMcpEvent: (callback:(event:{kind:'history'|'history-groups';date?:string;count:number})=>void) => {
     const listener=(_event:Electron.IpcRendererEvent,payload:{kind:'history'|'history-groups';date?:string;count:number})=>callback(payload);
     ipcRenderer.on('mcp:event',listener);return ()=>ipcRenderer.removeListener('mcp:event',listener);

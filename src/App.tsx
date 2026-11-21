@@ -7921,7 +7921,10 @@ function MainPage() {
 }
 
 // ── Root ──
+import {applyWorkbenchReference} from './mcp-workbench-references';
 export default function App() {
+  useEffect(()=>window.naiDesktop.onMcpStyleCatalogChanged?.(()=>{void useAppStore.getState().refreshSettings();}),[]);
+  useEffect(()=>window.naiDesktop.onMcpWorkbenchReference?.(c=>applyWorkbenchReference(useAppStore.getState(),c)),[]);
   const SPLASH_MIN_VISIBLE_MS = 700;
   const [splash, setSplash] = useState(true);
   const bootDone = useAppStore((state) => state.bootDone);
