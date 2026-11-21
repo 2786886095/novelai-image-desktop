@@ -1,5 +1,7 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 
+17 new desktop MCP tools manage artwork, favorites, prompt libraries and reference images in batches. Saving a preset does not mount it; permanent deletion requires approval in the desktop app.
+
 Desktop MCP can organize style presets in batches and set covers or examples. Images are used for generation only when explicitly mounted as workbench references.
 
 Browse curated tags by category and subgroup in the Inspiration Capsule. Search spans the selected dictionary; clearing it returns to your subgroup.
