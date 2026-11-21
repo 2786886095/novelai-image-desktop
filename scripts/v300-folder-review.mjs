@@ -4,7 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {assertScenarioReceipt} from './feature-acceptance/full-feature-profiles.mjs';
 
-const sources = new Map([['c02d3186fc1b014d3e3611e07b7698cd5c448713',{run:'44707958871',job:'136192164695'}],['a3cd315029c2bc4314d5a112d3e132806392c693',{run:'44746230248',job:'136322152169'}]]);
+const sources = new Map([['0b5e4b8268ba03a57706a74c7309bfbe3f928556',{run:'44890842540',job:'136806082172'}],['c02d3186fc1b014d3e3611e07b7698cd5c448713',{run:'44707958871',job:'136192164695'}],['a3cd315029c2bc4314d5a112d3e132806392c693',{run:'44746230248',job:'136322152169'}]]);
 const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const read = (dir, file) => JSON.parse(fs.readFileSync(path.join(dir,file),'utf8'));
 export function checkFolderReview(dir,sha,observedJob) {
