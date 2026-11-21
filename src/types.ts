@@ -1771,6 +1771,7 @@ export interface NaiDesktopApi {
   /** Fork: local MCP server. */
   mcpStatus: () => Promise<McpServerStatus>;
   mcpRegenerateToken: () => Promise<McpServerStatus>;
+  onMcpHistoryCatalogChanged?: (notify:()=>void)=>()=>void;
   onMcpStyleCatalogChanged?: (notify:()=>void)=>()=>void;
   onMcpWorkbenchReference?: (apply:(command:import('./mcp-workbench-references').WorkbenchCommand)=>unknown)=>()=>void;
   onMcpEvent: (callback:(event:{kind:'history'|'history-groups';date?:string;count:number})=>void) => ()=>void;

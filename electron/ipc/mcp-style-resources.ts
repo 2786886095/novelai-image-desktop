@@ -54,6 +54,13 @@ export function styleResourceTools(window:()=>BrowserWindow|null|undefined,resol
   }
   const tool=(name:string,description:string,inputSchema:J,readOnlyHint:boolean,run:(a:J)=>Promise<unknown>)=>({name,title:name,description,inputSchema,annotations:{readOnlyHint,openWorldHint:false},run});
   return [
+    tool('apply_prompt_library_entry','Preview then apply one saved text entry to the current generation workbench. Only affects the designated text field, never mounts images or generates.',shape({kind:{type:'string',enum:['positive','negative','style','chunk']},id:word,mode:{type:'string',enum:['append','replace']},revision},['kind','id','mode']),false,async a=>{
+      const read=()=>{const s=getSettings();const rows=a.kind==='chunk'?s.promptChunks:a.kind==='positive'?s.positivePromptPresets:a.kind==='negative'?s.negativePromptPresets:s.stylePromptPresets;const r=rows.find(x=>x.id===a.id);if(!r)throw Error('预设不存在');if('captions' in r&&Array.isArray(r.captions)&&r.captions.length)throw Error('这是角色组合，请使用 prepare_character_group。');return 'content' in r?r.content:r.prompt;};
+      const slot=a.kind==='style'?'stylePrompt':a.kind==='negative'?'negativePrompt':'positivePrompt',current=await requestWorkbench(window,{op:'prompt',slot}) as {text:string},text=read();
+      const next=a.mode==='replace'||!current.text.trim()?text:current.text+(current.text.trimEnd().endsWith(',')?' ':', ')+text;
+      const rev=revisionOf('applyPrompt',a.id,a.kind,a.mode,current.text,next);if(reviewing(a.revision,rev))return {preview:true,revision:rev,slot,before:current.text,after:next};
+      return requestWorkbench(window,{op:'prompt',slot,expected:current.text,value:next});
+    }),
     tool('list_style_assets','Browse style groups, preset IDs, cover and example handles. Does not mount anything.',shape({group:word,offset:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:100}}),true,async a=>{
       const rows=presets().filter(p=>!a.group||(p.group||'Default')===a.group),i=Number(a.offset??0);
       return {groups:groups(),total:rows.length,items:rows.slice(i,i+Number(a.limit??50)).map(p=>({id:p.id,name:p.name,group:p.group||'Default',images:(p.previewImages??[]).map((x,idx)=>({image:handle(p.id,x.id),name:x.name,cover:idx===styleCoverIndex(p)}))}))};
@@ -104,6 +111,22 @@ export function styleResourceTools(window:()=>BrowserWindow|null|undefined,resol
       setSetting('stylePromptPresets',presets().map(x=>x.id===p.id?{...x,coverImageId:target.id}:x));refresh(window);
       return {presetId:p.id,cover:a.image,affectsGeneration:false};
     }),
+    tool('save_reference_preset','Save a handled image in the reference library without mounting it. Explicit kind required.',shape({name:word,group:word,image,kind,strength:unit,information:unit,fidelity:unit,type:{type:'string',enum:['character','style','character&style']}},['name','image','kind']),false,async a=>{
+      if(!String(a.name).trim()||String(a.name).length>120||String(a.group??'').length>120||a.kind==='vibe'&&(a.fidelity!==undefined||a.type!==undefined)||a.kind==='precise'&&a.information!==undefined)throw Error('无效名称或用途参数。');
+      const im=await source(String(a.image)),{saveReferencePreset}=await import('./reference-presets.js');
+      const r=await saveReferencePreset({name:String(a.name),group:a.group as string|undefined,kind:a.kind as 'precise'|'vibe',base64:im.bytes.toString('base64'),extension:im.mime.split('/')[1],width:im.width,height:im.height,strength:a.strength as number|undefined,infoExtracted:a.information as number|undefined,fidelity:a.fidelity as number|undefined,preciseType:a.type as 'style'|undefined});
+      if(!r.ok||!r.preset)throw Error(r.message??'保存失败');refresh(window);return {id:r.preset.id,image:'reference-preset:'+r.preset.id,group:r.preset.group,mounted:false};
+    }),
+    tool('organize_reference_presets','Batch rename or move reference library entries. Existing images and workbench remain unchanged. Preview, then repeat with revision.',shape({items:list(shape({id:word,name:word,group:{type:'string',maxLength:120}},['id']),64),revision},['items']),false,async a=>{
+      const api=await import('./reference-presets.js');const r=await api.organizeReferencePresets(a.items as {id:string;name?:string;group?:string}[],a.revision as string|undefined);if(r.applied)refresh(window);return r;
+    }),
+    tool('mount_workbench_references','Explicitly mount up to eight image handles as one kind. Validates every image and the combined size before contacting the workbench.',shape({kind,images:list(image,8),strength:unit,information:unit,fidelity:unit,type:{type:'string',enum:['character','style','character&style']}},['kind','images']),false,async a=>{
+      const ids=a.images as string[];if(new Set(ids).size!==ids.length||a.kind==='vibe'&&(a.type!==undefined||a.fidelity!==undefined)||a.kind==='precise'&&a.information!==undefined)throw Error('重复图片或参数与用途不符。');
+      const images=[];let bytes=0;for(const id of ids){const im=await source(id);bytes+=im.bytes.length;if(bytes>24*1024*1024)throw Error('单批最多 24 MiB');images.push({base64:im.bytes.toString('base64'),mime:im.mime,width:im.width,height:im.height});}
+      return requestWorkbench(window,{op:'mountMany',images,kind:a.kind as 'vibe'|'precise',strength:a.strength as number|undefined,information:a.information as number|undefined,fidelity:a.fidelity as number|undefined,type:a.type as WorkbenchCommand['type']});
+    }),
+    tool('update_workbench_references','Edit strengths and kind-specific options for up to 16 existing live references. Validates the whole selection first.',shape({kind,items:list(shape({id:word,type:{type:'string',enum:['character','style','character&style']},strength:unit,fidelity:unit,information:unit},['id']),16)},['kind','items']),false,async a=>requestWorkbench(window,{op:'updateMany',kind:a.kind as 'vibe'|'precise',updates:a.items as WorkbenchCommand['updates']})),
+    tool('unmount_workbench_references','Explicitly unmount a batch by kind and live IDs. Does not delete original images.',shape({kind,ids:list(word,16)},['kind','ids']),false,async a=>requestWorkbench(window,{op:'unmountMany',kind:a.kind as 'vibe'|'precise',updates:(a.ids as string[]).map(id=>({id}))})),
     tool('list_workbench_references','Read actual live workbench reference IDs, kinds and settings, without image bytes.',shape({}),true,async()=>requestWorkbench(window,{op:'list'})),
     tool('mount_workbench_reference','Explicitly attach one image to the live workbench. Never generate, replace a base image, switch models or change presets.',shape({image,kind,type:{type:'string',enum:['character','style','character&style']},strength:unit,information:unit,fidelity:unit},['image','kind']),false,async a=>{
       if(a.kind==='vibe'&&(a.type!==undefined||a.fidelity!==undefined)||a.kind==='precise'&&a.information!==undefined)throw Error('参考参数与用途不符。');

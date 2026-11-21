@@ -13,7 +13,7 @@ app.whenReady().then(()=>{
  assert.equal(app.getPath('userData'),dir);
  setSetting('mcpServerToken',token);setSetting('mcpServerPort',port);setSetting('mcpServerEnabled',true);
  setSetting('stylePromptPresets',['one','two'].map(id=>({id,name:id,group:'Default',prompt:'test',createdAt:new Date().toISOString()})));
- setSetting('lastGenerationState',{...getSettings().lastGenerationState,params:{...require(p.join(src,'src/types.js')).DEFAULT_PARAMS,model:'nai-diffusion-4-5-full',prompt:'unchanged'}});
+ setSetting('lastGenerationState',{...getSettings().lastGenerationState,params:{...require(p.join(src,'src/types.js')).DEFAULT_PARAMS,model:'nai-diffusion-4-5-full',positivePrompt:'unchanged'}});
 }).catch(e=>{console.error(e.message);stop(1);});
 require(p.join(src,'electron/main.js'));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -36,5 +36,6 @@ app.whenReady().then(async()=>{
    const live=await call('list_workbench_references');assert.equal(live[kind][0].id,mounted.id);assert.equal(live[kind][0].strength,.7);assert.equal(live[kind==='vibe'?'precise':'vibe'].length,0);
    await call('unmount_workbench_reference',{kind,id:mounted.id});assert.deepEqual(await call('list_workbench_references'),before);
  }
+ if(process.argv.includes('--resources'))await require('./check-mcp-workspace-resources.cjs')({call,dir,src,port,token,image});
  console.log('ELECTRON_REAL_WORKBENCH_OK: bulk move; attach cover/example; zero implicit references; explicit vibe and precise mount/readback/unmount. No generation.');stop(0);
 }).catch(e=>{console.error(e.stack);stop(1);});

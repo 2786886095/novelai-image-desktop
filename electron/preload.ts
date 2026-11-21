@@ -95,6 +95,10 @@ contextBridge.exposeInMainWorld("naiDesktop", {
   // Local MCP server.
   mcpStatus: () => ipcRenderer.invoke('mcp:status'),
   mcpRegenerateToken: () => ipcRenderer.invoke('mcp:regenerateToken'),
+  onMcpHistoryCatalogChanged: (notify:()=>void)=>{
+    const listener=()=>notify();ipcRenderer.on('mcp:history-catalog-changed',listener);
+    return ()=>ipcRenderer.removeListener('mcp:history-catalog-changed',listener);
+  },
   onMcpStyleCatalogChanged: (notify:()=>void)=>{
     const listener=()=>notify();ipcRenderer.on('mcp:style-catalog-changed',listener);
     return ()=>ipcRenderer.removeListener('mcp:style-catalog-changed',listener);

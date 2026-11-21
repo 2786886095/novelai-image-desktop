@@ -23,7 +23,7 @@
 - `convert_prompt`、`reverse_prompt`、`plan_comic_prompts`：调用现有转换／反推服务。需要调用方确认（`confirmed: true`），服务商可能计费；漫画只返回推荐页数或逐页提示词，不生图。只读图片参数时请使用 `read_image_metadata`。
 - 账号密钥、通用设置写入及未列出的功能没有经由本次扩展暴露。
 
-## 已注册工具清单（29 项）
+## 已注册工具清单（59 项）
 
 “新增／增强”指本轮桌面更新；移动端不提供本地 MCP 服务。
 
@@ -83,6 +83,35 @@
 | `convert_prompt` | 调用配置的转换服务；Tag/混合模式的词汇提示只查当前离线词包；需确认，模型请求可能计费 | 新增 |
 | `reverse_prompt` | 调用配置的图片反推服务；词汇提示及结果中的 `tagMatches` 来自选定离线词包，不改变原提示词。需确认，模型请求可能计费 | 新增 |
 | `plan_comic_prompts` | 推荐页数或生成逐页提示词，不提交生图；可能计费 | 新增 |
+
+### 工作台资源与批处理
+
+| 工具 | 功能 | 操作边界 |
+| --- | --- | --- |
+| `browse_prompt_library` | 分页搜索正面、负面、画风、常用片段的名称和正文 | 只读 |
+| `edit_prompt_library` | 按 ID 批量改名、改正文，或新建；画风支持 0–5 星 | 预览后提交，不改工作台 |
+| `apply_prompt_library_entry` | 将指定条目追加或替换到生成工作台对应文本框 | 预览后提交；不挂图、不生图；含角色的组合用已有角色工具 |
+| `rename_history_group` | 修改历史分组显示名称 | 不搬移磁盘文件 |
+| `rename_history_images` | 批量修改托管作品文件名 | 预览后提交，保留扩展名，逐项返回实际文件名 |
+| `export_history_zip` | 将选中的历史 ID 导出为 ZIP | 用户在桌面选择保存位置，不接受客户端写入路径 |
+| `read_image_metadata_batch` | 批读图片内嵌参数；每项单独报告成功或失败 | 只读；不是 AI 反推 |
+| `list_local_favorites` | 分页列出本地收藏 | 不暴露文件路径 |
+| `favorite_history_images` | 将指定作品批量复制到收藏 | 按内容去重，保留原图 |
+| `manage_local_favorites` | 批量改收藏副本名，或移除收藏记录 | 移除记录须桌面确认，不删除原图或副本 |
+| `save_reference_preset` | 将图片句柄保存为具名的氛围或精准参考预设 | 返回可复用的图片句柄，不挂载 |
+| `organize_reference_presets` | 批量改名、移动参考预设，可指定新分组 | 不改变已挂载参考 |
+| `mount_workbench_references` | 同时挂载最多 8 张图片，须明确选同一用途 | 模型、容量、用途校验失败不挂载 |
+| `update_workbench_references` | 按已挂载 ID 批量调整强度、信息量或类型、保真度 | 先检查全组，不替换底图 |
+| `unmount_workbench_references` | 按用途和 ID 批量卸载 | 不删原图或预设 |
+| `delete_workspace_resources` | 永久删除明确选中的作品，或指定提示词库条目及其专属预览 | 精确预览 + 桌面用户逐批确认，最多 12 项 |
+| `delete_reference_presets` | 永久删除选中的参考预设和库内副本 | 同样需要预览和桌面确认，不卸载工作台图片 |
+
+**调用约定。** 带预览的调用先省略 `revision`；核对返回对象后，以同一组参数带回该值。修改参数或相关记录后必须重新预览。删除弹窗默认取消，无桌面窗口时不能提交；不存在可以代替点击的 `confirmed:true`。磁盘操作查看逐项结果，不要盲目重试整批。整理预设、收藏、读参数不触发生成或反推，不产生 API 费用。
+
+**典型用法。** 把两张作品加入收藏：先调用 `favorite_history_images({"ids":["历史ID1","历史ID2"]})`，再带返回的 revision 提交，用 `list_local_favorites` 核对。把参考图存库后参与生成：先 `save_reference_preset`，需要时再用返回的 `reference-preset:…` 调用 `mount_workbench_references`。在 `list_workbench_references` 读到的才是工作台挂载 ID；卸载不会移除库里的预设。
+
+**本轮盘点边界。** 原有历史搬组、按标签归档、画风批量挂封面、角色组合准备、模板读取、估价和单次生成继续走各自工具。没有新增从 MCP 直接控制任务队列、启动整批付费出图、改写账号／通用设置的接口：它们需要独立的费用确认、任务归属或凭据边界。工程库的跨项目编辑与导入导出不按普通图片文件处理。目录选择、画布手绘和拖拽保留为界面操作；在线收藏不是本地收藏库。不提供任意目录的批量改名或删除。
+
 
 ### 示例：整理画风与挂载到工作台
 

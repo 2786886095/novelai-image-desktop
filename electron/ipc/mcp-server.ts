@@ -36,6 +36,7 @@ import { agentGenerationInput, agentInpaintInput, executeAgentTool } from "./age
 import { quoteAnlasCost, refreshStoredAccount } from "./nai";
 import {formatBulkRoles, makeBulkPreset, parseBulkRoles} from "../../src/role-bulk";
 import { getHistory, getHistoryGroups, getSettings, setSetting } from "./store";
+import {workbenchResourceTools} from './mcp-workbench-resources';
 import {styleResourceTools} from "./mcp-style-resources";
 import type { GalleryMcpTool } from "./mcp-history-gallery";
 import { MAX_MCP_IMAGE_PIXELS, importMcpImage, looksLikeLocalPath, mcpAttachment, newMcpTempFile, registerMcpFile } from "./mcp-attachments";
@@ -672,7 +673,17 @@ function createTools(options: McpServerOptions): ToolDef[] {
       },
     },
     ...galleryTools,
+    ...workbenchResourceTools(options.window).map(({run,...def})=>({...def,run:async (args:Json,ctx:ToolContext)=>ok(await run(args,ctx.signal))})),
     ...styleResourceTools(options.window,resolveImage).map(({run,...def})=>({...def,run:async (args:Json)=>ok(await run(args))})),
+    {
+      name:'read_image_metadata_batch',title:'Read embedded parameters for selected images',
+      description:'Read local embedded metadata by attachment, history or reference-preset IDs. No reverse API or generation. Per-image outcome; oversized results can be fetched individually.',
+      inputSchema:schema({images:{type:'array',items:{type:'string',minLength:1,maxLength:512},minItems:1,maxItems:12}},['images']),annotations:READ,
+      run:async (raw,ctx)=>{const ids=raw.images as string[];if(new Set(ids).size!==ids.length||ids.some(looksLikeLocalPath))throw Error('需要不重复的图片句柄，不能使用路径。');
+        const items=[];for(const id of ids){ctx.signal?.throwIfAborted();try{const im=await resolveImage(id),r=await runAgentTool('langbai_read_image_metadata',{attachmentId:im.id},ctx.signal);
+        if(!r.ok)throw Error(r.output);if(JSON.stringify(r.data??null).length>64000)throw Error('元数据较长，请单独调用 read_image_metadata。');items.push({id,ok:true,data:r.data});}
+        catch(e){items.push({id,ok:false,message:e instanceof Error?e.message:String(e)});}}return ok({items});},
+    },
     {
       name: "read_image_metadata",
       title: "Read image metadata",

@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import { app, dialog } from "electron";
 import fs from "fs/promises";
 import path from "path";
@@ -200,7 +201,7 @@ async function recoverDetachedPresets(
   return [...recovered.values()].slice(0, MAX_PRESETS);
 }
 
-export async function listReferencePresets(
+async function listReferencePresetsUnlocked(
   userDataRoot?: string,
 ): Promise<ReferencePresetLibrary> {
   const target = libraryPath(userDataRoot);
@@ -241,7 +242,7 @@ export async function listReferencePresets(
   }
 }
 
-export async function saveReferencePreset(
+async function saveReferencePresetUnlocked(
   request: ReferencePresetSaveRequest,
   userDataRoot?: string,
 ): Promise<ReferencePresetOperationResult> {
@@ -257,7 +258,7 @@ export async function saveReferencePreset(
   if (!bytes.length || bytes.length > MAX_IMAGE_BYTES) {
     return { ok: false, message: "参考图片为空或超过 50 MB。" };
   }
-  const library = await listReferencePresets(userDataRoot);
+  const library = await listReferencePresetsUnlocked(userDataRoot);
   if (library.presets.length >= MAX_PRESETS) {
     return { ok: false, message: "预设数量已达到上限。" };
   }
@@ -311,11 +312,11 @@ export async function readReferencePreset(
   }
 }
 
-export async function deleteReferencePreset(
+async function deleteReferencePresetUnlocked(
   presetId: string,
   userDataRoot?: string,
 ): Promise<ReferencePresetOperationResult> {
-  const library = await listReferencePresets(userDataRoot);
+  const library = await listReferencePresetsUnlocked(userDataRoot);
   const preset = library.presets.find((item) => item.id === presetId);
   if (!preset) return { ok: true, library };
   const root = path.resolve(rootDirectory(userDataRoot));
@@ -330,25 +331,25 @@ export async function deleteReferencePreset(
   return { ok: true, library: next };
 }
 
-export async function createReferencePresetGroup(
+async function createReferencePresetGroupUnlocked(
   value: string,
   userDataRoot?: string,
 ): Promise<ReferencePresetOperationResult> {
   const name = cleanText(value);
   if (!name) return { ok: false, message: "请输入分组名称。" };
-  const library = await listReferencePresets(userDataRoot);
+  const library = await listReferencePresetsUnlocked(userDataRoot);
   const next = { ...library, groups: [...new Set([...library.groups, name])] };
   await writeLibrary(next, userDataRoot);
   return { ok: true, library: next };
 }
 
-export async function deleteReferencePresetGroup(
+async function deleteReferencePresetGroupUnlocked(
   value: string,
   userDataRoot?: string,
 ): Promise<ReferencePresetOperationResult> {
   const name = cleanText(value);
   if (!name) return { ok: false, message: "请选择要删除的分组。" };
-  const library = await listReferencePresets(userDataRoot);
+  const library = await listReferencePresetsUnlocked(userDataRoot);
   if (!library.groups.includes(name)) return { ok: true, library };
   const next = {
     groups: library.groups.filter((group) => group !== name),
@@ -360,12 +361,12 @@ export async function deleteReferencePresetGroup(
   return { ok: true, library: next };
 }
 
-export async function moveReferencePresetToGroup(
+async function moveReferencePresetToGroupUnlocked(
   presetId: string,
   value: string,
   userDataRoot?: string,
 ): Promise<ReferencePresetOperationResult> {
-  const library = await listReferencePresets(userDataRoot);
+  const library = await listReferencePresetsUnlocked(userDataRoot);
   const preset = library.presets.find((item) => item.id === presetId);
   if (!preset) return { ok: false, message: "找不到该参考图预设。" };
   const group = cleanText(value);
@@ -471,7 +472,7 @@ export async function importReferencePresets(
   return importReferencePresetsFile(result.filePaths[0], userDataRoot);
 }
 
-export async function importReferencePresetsFile(
+async function importReferencePresetsFileUnlocked(
   filePath: string,
   userDataRoot?: string,
 ): Promise<ReferencePresetOperationResult> {
@@ -488,7 +489,7 @@ export async function importReferencePresetsFile(
     if (manifest.format !== FORMAT || Number(manifest.version) !== ARCHIVE_VERSION) {
       throw new Error("Unsupported format");
     }
-    const library = await listReferencePresets(userDataRoot);
+    const library = await listReferencePresetsUnlocked(userDataRoot);
     const imported: ReferencePreset[] = [];
     for (const raw of (manifest.presets ?? []).slice(0, MAX_PRESETS - library.presets.length)) {
       const asset = cleanText(raw.asset, 512).replace(/\\/g, "/");
@@ -518,3 +519,37 @@ export async function importReferencePresetsFile(
     return { ok: false, message: "预设文件无效或已损坏，导入失败。" };
   }
 }
+
+// UI and MCP share the same library index. Serialize read/modify/write including recovery reads.
+let pending:Promise<unknown>=Promise.resolve();
+function serialized<A extends unknown[],R>(fn:(...args:A)=>Promise<R>){return (...args:A):Promise<R>=>{const result=pending.then(()=>fn(...args));pending=result.catch(()=>undefined);return result;};}
+export const listReferencePresets=serialized(listReferencePresetsUnlocked);
+export const saveReferencePreset=serialized(saveReferencePresetUnlocked);
+export const deleteReferencePreset=serialized(deleteReferencePresetUnlocked);
+export const createReferencePresetGroup=serialized(createReferencePresetGroupUnlocked);
+export const deleteReferencePresetGroup=serialized(deleteReferencePresetGroupUnlocked);
+export const moveReferencePresetToGroup=serialized(moveReferencePresetToGroupUnlocked);
+export const importReferencePresetsFile=serialized(importReferencePresetsFileUnlocked);
+
+export const organizeReferencePresets=serialized(async(items:{id:string;name?:string;group?:string}[],revision?:string,userDataRoot?:string)=>{
+  if(!items.length||items.length>64||new Set(items.map(i=>i.id)).size!==items.length)throw Error('无效或重复的选择。');
+  const lib=await listReferencePresetsUnlocked(userDataRoot);
+  const plan=items.map(i=>{const p=lib.presets.find(r=>r.id===i.id);if(!p||i.name===undefined&&i.group===undefined)throw Error('未知预设或空修改。');
+    if(i.name!==undefined&&(!i.name.trim()||i.name.length>120)||i.group!==undefined&&i.group.length>120)throw Error('无效名称。');
+    return {id:p.id,fromName:p.name,fromGroup:p.group,name:i.name?.trim()??p.name,group:i.group?.trim()??p.group};});
+  const token=createHash('sha256').update(JSON.stringify(plan)).digest('hex');if(revision===undefined)return {preview:true,revision:token,items:plan,applied:false};if(revision!==token)throw Error('预览已变化。');
+  const changes=new Map(plan.map(p=>[p.id,p]));await writeLibrary({groups:[...new Set([...lib.groups,...plan.map(p=>p.group).filter(Boolean)])],presets:lib.presets.map(p=>{const c=changes.get(p.id);return c?{...p,group:c.group,name:c.name}:p;})},userDataRoot);
+  return {applied:true,items:plan};
+});
+
+export const deleteReferenceSelection=serialized(async(ids:string[],revision?:string,userDataRoot?:string)=>{
+  if(!ids.length||ids.length>12||new Set(ids).size!==ids.length)throw Error('无效的参考图选择。');
+  const lib=await listReferencePresetsUnlocked(userDataRoot),selected=ids.map(id=>{
+    const r=lib.presets.find(i=>i.id===id);if(!r)throw Error('参考图已不存在。');
+    if(!/^[a-zA-Z0-9_-]+$/.test(id)||path.dirname(path.resolve(r.filePath))!==path.resolve(rootDirectory(userDataRoot))||path.parse(r.filePath).name!==id)throw Error('只允许删除应用管理的参考图。');
+    return r;});
+  const token=createHash('sha256').update(JSON.stringify(selected)).digest('hex'),items=selected.map(({id,name})=>({id,name}));
+  if(revision===undefined)return {items,revision:token,preview:true};if(revision!==token)throw Error('确认期间参考图已变化，未删除。');
+  const results=[];for(const id of ids){try{const r=await deleteReferencePresetUnlocked(id,userDataRoot);results.push({id,ok:r.ok});}catch(e){results.push({id,ok:false,message:String(e)});}}
+  return {revision:token,items,applied:results.every(r=>r.ok),results};
+});

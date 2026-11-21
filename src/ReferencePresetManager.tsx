@@ -297,6 +297,7 @@ export default function ReferencePresetManager({
   }, []);
 
   const refresh = useCallback(async () => setLibrary(await window.naiDesktop.listReferencePresets()), []);
+  useEffect(()=>window.naiDesktop.onMcpStyleCatalogChanged?.(()=>{void refresh();}),[refresh]);
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
     const onImported = () => void refresh();

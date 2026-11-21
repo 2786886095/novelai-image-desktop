@@ -26,6 +26,7 @@ const mocks=new Map([
  ['electron/ipc/harness-prompt-templates.ts',{createPromptTemplateTools:()=>({}),templateSelection:()=>{throw Error('not exercised');}}],
  ['electron/ipc/agent-template-tools.ts',{createTemplateWorkflow:()=>({})}],
  // This budget fixture never mounts a live renderer or accesses a style catalog.
+ ['electron/ipc/mcp-workbench-resources.ts',{workbenchResourceTools:()=>[]}],
  ['electron/ipc/mcp-style-resources.ts',{styleResourceTools:()=>[]}],
  ...['electron/ipc/agent-web-search.ts','electron/ipc/danbooru-tags.ts','electron/ipc/multilingual-tags.ts','electron/ipc/online-gallery.ts','electron/ipc/reference-presets.ts','electron/ipc/agent-store.ts','electron/image-metadata.ts','src/png-meta.ts'].map(f=>[f,{}]),
 ].map(([f,v])=>[resolve(f),v]));
