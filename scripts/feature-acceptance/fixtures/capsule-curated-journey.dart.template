@@ -1,0 +1,40 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
+import 'package:novelai_mobile/prompts/capsule_data.dart';
+import 'package:novelai_mobile/screens/capsule_picker_sheet.dart';
+import 'package:novelai_mobile/state/app_state.dart';
+import 'package:novelai_mobile/tags/multilingual_tag_packs.dart';
+import 'package:provider/provider.dart';
+
+void main(){
+ IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+ testWidgets('curated category survives full dictionary search, sorting and manual jump', (t) async {
+   const fixture=String.fromEnvironment('CAPSULE_QA_PACK_DIR');
+   final pack=MultilingualTagPacks(getRoot:()async=>Directory(fixture));
+   await pack.load();expect(pack.active,'zh-CN');
+   final app=AppState(multilingualTags:pack);app.settings.language='zh-CN';
+   final selected=<String>[];
+   await t.pumpWidget(ChangeNotifierProvider.value(value:app,child:MaterialApp(home:Scaffold(body:CapsulePickerSheet(categories:await loadCapsuleTaxonomy(),onPick:(s,n){selected.add(s);})))));
+   Future<void> until(Finder f)async{for(var i=0;i<125;i++){await t.pump(const Duration(milliseconds:80));if(f.evaluate().isNotEmpty)return;}fail('not found: $f');}
+   final clothes=find.widgetWithText(ChoiceChip,'服饰');
+   await until(clothes);await t.ensureVisible(clothes);await t.tap(clothes);await t.pumpAndSettle();
+   final tops=find.widgetWithText(FilterChip,'上衣');expect(t.widget<FilterChip>(tops).selected,true);
+   final shirt=find.byKey(const ValueKey('capsule-tag:shirt'));
+   await until(shirt);await t.ensureVisible(shirt);await t.tap(shirt);await t.pump();expect(selected,['shirt']);
+   final field=find.byType(TextField).first;
+   await t.enterText(field,'构图');await t.testTextInput.receiveAction(TextInputAction.done);
+   final next=find.byTooltip('下一页');await until(next);await t.ensureVisible(next);await t.tap(next);await t.pump();
+   await until(find.textContaining('2 / '));
+   final pg=find.textContaining('2 / ').first;await t.ensureVisible(pg);await t.tap(pg);await t.pumpAndSettle();
+   await t.enterText(find.byType(TextFormField),'3');await t.testTextInput.receiveAction(TextInputAction.done);await t.pump();
+   await until(find.textContaining('3 / '));
+   await t.enterText(field,'dutch_angle');await until(find.byKey(const ValueKey('capsule-tag:dutch_angle')));
+   await t.tap(find.byIcon(Icons.clear));await t.pumpAndSettle();await until(shirt);expect(t.widget<FilterChip>(tops).selected,true);
+   final lex=await pack.capsulePage('构图',page:0,sort:'alpha'),usage=await pack.capsulePage('构图',page:0,sort:'usage');
+   expect(lex!.rows.map((r)=>r.tag),orderedEquals((lex.rows.map((r)=>r.tag).toList()..sort())));
+   expect(usage!.rows.map((r)=>r.count),orderedEquals((usage.rows.map((r)=>r.count).toList()..sort((a,b)=>b.compareTo(a)))));
+   print('CAPSULE_ANDROID_OK: tops, shirt, full-dictionary composition pages 2/3, dutch_angle, back to tops, usage and alphabetical');
+ },skip:const String.fromEnvironment('CAPSULE_QA_PACK_DIR').isEmpty);
+}

@@ -222,6 +222,26 @@ class MultilingualTagPacks extends ChangeNotifier {
     }
   }
 
+  /// Page across the whole selected language pack, independent of the browsed category.
+  Future<({int total,List<TagPackHit> rows})?> capsulePage(String query,
+      {required int page, required String sort, Iterable<String> topic=const []}) async {
+    await load();
+    final lang=active, q=key(String.fromCharCodes(query.runes.take(255)));
+    if(lang==null)return null;
+    final db=await openReadOnlyDatabase(_database(lang).path,singleInstance:false);
+    try {
+      final topics=topic.map(key).toSet();
+      final clause=topics.isEmpty?'':' OR key IN ('+List.filled(topics.length,'?').join(',')+')';
+      final filter=q.isEmpty?'1':'(instr(key,?)>0 OR instr(translated_key,?)>0$clause)';
+      final args=<Object?>[if(q.isNotEmpty)...[q,q,...topics]];
+      final count=Sqflite.firstIntValue(await db.rawQuery('SELECT count(*) FROM terms WHERE $filter',args))??0;
+      const priority='CASE WHEN key=? OR translated_key=? THEN 0 WHEN instr(key,?)=1 OR instr(translated_key,?)=1 THEN 1 WHEN instr(key,?)>0 OR instr(translated_key,?)>0 THEN 2 ELSE 3 END';
+      final order=sort=='alpha'?'tag':sort=='usage'||q.isEmpty?'count DESC,tag':'$priority,count DESC,tag';
+      final rows=await db.rawQuery('SELECT tag,translated,count,category FROM terms WHERE $filter ORDER BY $order LIMIT 24 OFFSET ?', [...args,if(q.isNotEmpty && sort!='alpha' && sort!='usage')...List.filled(6,q),page.clamp(0,count==0?0:(count-1)~/24)*24]);
+      return (total:count,rows:rows.map((r)=>(tag:r['tag'] as String,description:r['translated'] as String,count:r['count'] as int,category:r['category'] as int)).toList());
+    }finally{await db.close();}
+  }
+
   /// Null means not installed. An empty list is an authoritative offline miss.
   Future<List<TagPackHit>?> search(String input, {int limit = 12}) async {
     await load();

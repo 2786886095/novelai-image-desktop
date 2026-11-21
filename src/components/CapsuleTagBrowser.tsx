@@ -7,6 +7,8 @@ import {fmtCount} from "../text-utils";
 import type {TagSuggestion} from "../types";
 import {Icon} from "./icons";
 import {SelectMenu} from "./ui";
+import {CAPSULE_TAXONOMY,localizedCapsuleCategoryName,localizedCapsuleSubgroupName,localizedTagLabel} from "../prompt-data";
+import {useTagPackLabels} from "../tag-pack-lookup";
 import "../capsule-browser.css";
 
 const categories = {
@@ -105,14 +107,21 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
   const locale=Object.hasOwn(ui,String(language)) ? language as Locale : "zh-CN";
   const l=ui[locale], names=categories[locale], badges=feedback[locale], paging=pagingCopy[locale], ordering=browseCopy[locale];
   const [status,setStatus]=useState<TagPackStatus|null>(null);
-  const [groupIndex,setGroupIndex]=useState(0),[groupPages,setGroupPages]=useState<Record<number,number>>({});
-  const [searchScope,setSearchScope]=useState<"all"|"group">("all");
+  const [groupIndex,setGroupIndex]=useState(-1),[groupPages,setGroupPages]=useState<Record<number,number>>({});
+  const [library,setLibrary]=useState(false),[cat,setCat]=useState(0),[sub,setSub]=useState(0),[curPage,setCurPage]=useState(0);
+  const category=CAPSULE_TAXONOMY[cat], subgroup=category.subgroups[sub];
+  const [expanded,setExpanded]=useState(false);
+  const anyGroup={"zh-CN":"不限分类","zh-TW":"不限分類","en-US":"All categories","ja-JP":"分類を限定しない","ko-KR":"모든 분류"}[locale];
+  const allLabel={"zh-CN":"展开此小类全部标签","zh-TW":"展開此小類全部標籤","en-US":"Show entire subgroup","ja-JP":"小分類をすべて表示","ko-KR":"하위 분류 전체 보기"}[locale];
+  const curated=!query.trim()&&!library;
+  const labels=useTagPackLabels(curated?subgroup.tags.map(t=>t.en):[]);
+  const curatedLabel={"zh-CN":"分类精选","zh-TW":"分類精選","ja-JP":"カテゴリから選ぶ","en-US":"Curated categories","ko-KR":"추천 분류"}[locale];
   const [retry,setRetry]=useState(0);
   const [order,setOrder]=useState<TagPackSort>(()=>tagPackSort(localStorage.getItem(SORT_KEY)));
   const [related,setRelated]=useState<{key:string; rows:TagSuggestion[]}>({key:"",rows:[]});
   function changeOrder(value:string) {
     const next=tagPackSort(value);
-    setGroupPages({});setSearchPage(null);setOrder(next);
+    setGroupPages({});setSearchPage(null);if(!query.trim())setCurPage(0);setOrder(next);
     localStorage.setItem(SORT_KEY,next);
     results.current?.scrollTo({top:0,behavior:"instant"});
   }
@@ -126,12 +135,19 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
   const q=query.trim(), active=status?.active;
   const group=capsuleBrowseGroups[groupIndex];
   const browseGroup=group?.id??"all";
-  const groupId=q&&searchScope==="all"?"all":browseGroup;
+  const groupId=q?"all":browseGroup;
   const searchKey=active ? [active,revision,groupId,q,order].join("\0") : "";
-  const page=q?(searchPage?.key===searchKey?searchPage.index:0):(groupPages[groupIndex]??0);
+  const page=curated?curPage:q?(searchPage?.key===searchKey?searchPage.index:0):(groupPages[groupIndex]??0);
   const requestKey=[searchKey,page,retry].join("\0");
-  const data=result?.key===requestKey?result.data:undefined;
-  const pending=!!active&&result?.key!==requestKey;
+  const curatedRows=useMemo(()=>{
+    if(!curated)return [];
+    const rows=subgroup.tags.map(t=>{const hit=labels.get(tagPackKey(t.en));return {tag:t.en,count:hit?.count??0,category:hit?.category??0,description:hit?.description||localizedTagLabel(t.en,t.zh,active??locale)};});
+    if(order==="popular")rows.sort((a,b)=>b.count-a.count);
+    if(order==="alphabetical")rows.sort((a,b)=>a.tag.localeCompare(b.tag));
+    return rows;
+  },[curated,subgroup,labels,order,active,locale]);
+  const data=curated?{rows:expanded?curatedRows:capsulePage(curatedRows,page).rows,total:curatedRows.length}:result?.key===requestKey?result.data:undefined;
+  const pending=!curated&&!!active&&result?.key!==requestKey;
   const lastForScope=result?.key.startsWith(searchKey+"\0")?result.data:undefined;
   const numPages=Math.max(1,Math.ceil((data?.total??lastForScope?.total??0)/WINDOW_SIZE));
   const selected=useMemo(()=>{
@@ -174,7 +190,7 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
   },[revision,locale]);
 
   useEffect(()=>{
-    if(!active)return;
+    if(!active||curated)return;
     let live=true;
     const timer=window.setTimeout(()=>{
       void window.naiDesktop.browseMultilingualTags(groupId,q,page,order)
@@ -182,7 +198,7 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
         .catch(()=>{if(live)setResult({key:requestKey});});
     },q?150:0);
     return ()=>{live=false;window.clearTimeout(timer);};
-  },[active,groupId,q,page,order,requestKey]);
+  },[active,curated,groupId,q,page,order,requestKey]);
 
   useEffect(()=>{
     if(!open)return;
@@ -209,7 +225,8 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
   }
 
   function changePage(next:number) {
-    if(q)setSearchPage({key:searchKey,index:next});
+    if(curated)setCurPage(next);
+    else if(q)setSearchPage({key:searchKey,index:next});
     else setGroupPages(pages=>({...pages,[groupIndex]:next}));
     results.current?.scrollTo({top:0,behavior:"instant"});
   }
@@ -246,46 +263,48 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
     </div>
 
     {!open&&error&&<p className="capsule-library-empty" role="alert">{l[7]}</p>}
-    {!status ? <p className="capsule-library-empty" role="status">{l[14]}</p> :
-      !active ? <p className="capsule-library-empty">{l[8]}</p> :
-      <div className="capsule-library-browse">
-        <nav className="capsule-library-categories" aria-label={l[13]}>
+    {!q&&<div className="capsule-mode-links">
+      <button type="button" className="capsule-library-more" aria-pressed={!library} onClick={()=>setLibrary(false)}>{curatedLabel}</button>
+      <button type="button" className="capsule-library-more" aria-pressed={library} onClick={()=>{setLibrary(true);setGroupIndex(-1);}}>{paging[0]}{active?" · "+TAG_PACK_MANIFEST.packs[active].count.toLocaleString(locale):""}</button>
+    </div>}
+    {!curated&&!status ? <p className="capsule-library-empty" role="status">{l[14]}</p> :
+      !curated&&!active ? <p className="capsule-library-empty">{l[8]}</p> :
+      <div className={'capsule-library-browse'+(q?' capsule-search-wide':'')}>
+        {!q&&<nav className="capsule-library-categories" aria-label={l[13]}>
+          {curated?CAPSULE_TAXONOMY.map((c,i)=><button key={c.name} type="button" data-curated-cat={c.name} aria-pressed={i===cat} onClick={()=>{setExpanded(false);setCat(i);setSub(0);setCurPage(0);results.current?.scrollTo({top:0});}}>{localizedCapsuleCategoryName(c.name,locale)}</button>):<>
           <button type="button" data-capsule-group="all" aria-pressed={groupIndex<0}
-            onClick={()=>{setGroupIndex(-1);setSearchScope("all");results.current?.scrollTo({top:0});}}>{paging[0]}</button>
+            onClick={()=>{setGroupIndex(-1);results.current?.scrollTo({top:0});}}>{anyGroup}</button>
           {capsuleBrowseGroups.map((entry,i)=><button type="button" key={entry.id} data-capsule-group={entry.id}
-            aria-pressed={i===groupIndex&&(!q||searchScope==="group")} onClick={()=>{setGroupIndex(i);if(q)setSearchScope("group");results.current?.scrollTo({top:0});}}>
-            {names[i]}
-          </button>)}
-        </nav>
+            aria-pressed={i===groupIndex} onClick={()=>{setGroupIndex(i);results.current?.scrollTo({top:0});}}>{names[i]}</button>)}</>}
+        </nav>}
         <div className="capsule-library-pane">
-         <div className="capsule-library-heading"><div><h3>{q?l[10]:group?names[groupIndex]:paging[0]}</h3>
-          <small>{(data??lastForScope)&&<>{(data??lastForScope)!.total.toLocaleString(locale)} {q?paging[6]:paging[7]} · </>}{q?(searchScope==="group"&&group?names[groupIndex]:l[12]):badges[6]}</small></div>
+         {curated&&<div className="capsule-curated-subgroups" role="group" aria-label={localizedCapsuleCategoryName(category.name,locale)}>
+          {category.subgroups.map((sg,i)=><button type="button" className="capsule-library-more" key={sg.name} data-curated-sub={sg.name} aria-pressed={i===sub} onClick={()=>{setExpanded(false);setSub(i);setCurPage(0);results.current?.scrollTo({top:0});}}>{localizedCapsuleSubgroupName(sg.name,locale)}</button>)}</div>}
+         <div className="capsule-library-heading"><div><h3>{q?l[10]:curated?localizedCapsuleSubgroupName(subgroup.name,locale):group?names[groupIndex]:paging[0]}</h3>
+          <small>{(data??lastForScope)&&<>{(data??lastForScope)!.total.toLocaleString(locale)} {q?paging[6]:paging[7]} · </>}{q?l[12]:curated?curatedLabel:badges[6]}</small></div>
           <SelectMenu className="capsule-sort-select" ariaLabel={ordering[0]} label={ordering[0]} value={order}
             options={TAG_PACK_SORTS.map((value,i)=>({value,label:ordering[i+1]}))} onChange={changeOrder}/>
          </div>
-         {q&&group&&<div className="capsule-search-scope" role="group" aria-label={paging[1]}>
-           <button type="button" className="capsule-library-more" aria-pressed={searchScope==="all"} onClick={()=>setSearchScope("all")}>{paging[2]}</button>
-           <button type="button" className="capsule-library-more" aria-pressed={searchScope==="group"} onClick={()=>setSearchScope("group")}>{paging[3]} · {names[groupIndex]}</button>
-         </div>}
          <div ref={results} className="capsule-library-results" data-capsule-search-results={q?"":undefined} aria-busy={pending}>
           {pending?<p className="capsule-library-empty" role="status">{l[14]}</p>:
            !data?<div className="capsule-library-empty" role="alert"><p>{paging[8]}</p><button type="button" className="capsule-library-more" onClick={()=>setRetry(value=>value+1)}>{paging[9]}</button></div>:
            data.rows.length?<TagCards rows={data.rows} selected={selected} badges={badges} onPick={onPick}/>:
            <div className="capsule-library-empty"><p>{l[9]}</p>{q&&<button className="capsule-library-more" type="button" onClick={()=>onPick(q)}>{badges[5]}</button>}</div>}
          </div>
-         {(data??lastForScope)?.total ? <div className="capsule-library-pagination">
+         {curated&&curatedRows.length>WINDOW_SIZE&&<button type="button" className="capsule-library-more" aria-pressed={expanded} onClick={()=>setExpanded(v=>!v)}>{expanded?paging[4]:allLabel} · {curatedRows.length}</button>}
+         {(!curated||!expanded)&&(data??lastForScope)?.total ? <div className="capsule-library-pagination">
           <button type="button" className="capsule-library-more" onClick={()=>changePage(page-1)} disabled={page===0}>{badges[2]}</button>
           <span aria-live="polite">{Math.min(page+1,numPages)} / {numPages}</span>
           <PageNumber page={Math.min(page,numPages-1)} total={numPages} label={paging[4]} go={paging[5]} onChange={changePage}/>
           <button type="button" className="capsule-library-more" onClick={()=>changePage(page+1)} disabled={page+1>=numPages}>{badges[3]}</button>
          </div>:null}
-         <section className="capsule-related-strip" aria-label={ordering[4]}>
+         {selected.size>0&&<section className="capsule-related-strip" aria-label={ordering[4]}>
           <strong><Icon name="link" aria-hidden="true"/>{ordering[4]}</strong>
           {suggestions.length>0 ? <div className="capsule-related-chips">
             {suggestions.map(row=><button key={row.tag} data-capsule-related={row.tag} type="button" className="capsule-library-more" title={row.tag} onClick={()=>onPick(row.tag)}>
               <span>{row.description||row.tag}</span><small>{row.tag}</small></button>)}
           </div> : <small>{seedKey==="[]"?ordering[5]:related.key===relatedKey?ordering[6]:l[14]}</small>}
-         </section>
+         </section>}
         </div>
       </div>}
   </section>;

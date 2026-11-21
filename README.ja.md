@@ -1,4 +1,6 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
+
+インスピレーションカプセルでは、タグを大分類と小分類から選べます。検索は選択中の辞書全体が対象で、検索語を消すと元の小分類に戻ります。
 # Langbai NovelAI Studio
 
 モバイル版では画像の読み込み時に用途を選べます。前回選択した項目を記憶し、値は今回の画像から読み取ります。

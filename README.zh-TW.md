@@ -1,4 +1,6 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
+
+靈感膠囊預設按兩層分類瀏覽；搜尋會查詢整個已選詞庫，清除搜尋後回到原來的小類。
 # Langbai NovelAI Studio
 
 手機版匯入圖片時可選擇用途。會保留上次確認勾選的參數項目，數值取自本次圖片。

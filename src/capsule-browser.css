@@ -254,3 +254,12 @@
   overflow: auto hidden;
 }
 .compact-capsule-dialog .capsule-library-related .prompt-chip-list button { flex: none; max-inline-size: 180px; }
+
+.capsule-mode-links,.capsule-curated-subgroups{display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin-bottom:7px}
+.capsule-curated-subgroups{max-height:25vh;overflow:auto;flex:none}
+.capsule-mode-links [aria-pressed=true],.capsule-curated-subgroups [aria-pressed=true]{color:var(--accent);border-color:currentColor}
+.compact-capsule-dialog .capsule-search-wide{grid-template-columns:minmax(0,1fr)}
+
+/* A single visible focus ring belongs to the combined search control, not the nested input. */
+.compact-capsule-dialog label.capsule-library-search:focus-within{outline:2px solid var(--accent);outline-offset:1px}
+.compact-capsule-dialog label.capsule-library-search input.prompt-chip-search:is(:focus,:focus-visible){outline:0!important;box-shadow:none!important;border:0!important}

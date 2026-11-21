@@ -1,4 +1,6 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
+
+灵感胶囊默认按两级分类浏览；搜索会查整个已选词库，清空后回到刚才的小类。
 # Langbai NovelAI Studio
 
 手机端导入图片可选择用途。上次确认勾选的参数项会保留，值来自本次图片。

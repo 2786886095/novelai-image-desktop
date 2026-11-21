@@ -7,7 +7,7 @@ import '../ui/negative_prompt_library.dart';
 import '../prompts/negative_prompt_library.dart';
 import 'translation_preview_dialog.dart';
 import '../prompts/translation.dart';
-import 'mcp_tools.dart';
+import 'capsule_picker_sheet.dart';
 import 'style_library_screen.dart';
 import 'compatible_images.dart';
 import '../models/style_library.dart';
@@ -39,7 +39,6 @@ import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
 import '../prompts/capsule_data.dart';
 import '../prompts/prompt_tools.dart';
-import '../tags/multilingual_tag_packs.dart';
 import '../references/reference_catalog.dart';
 import '../references/reference_presets.dart';
 import '../services/nai_api.dart';
@@ -2525,15 +2524,8 @@ class _TagSearchBoxState extends State<_TagSearchBox> {
       );
       return;
     }
-    final selected = await showModalBottomSheet<_CapsulePick>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) => _CapsulePickerSheet(categories: categories),
-    );
-    if (selected != null) {
-      widget.onInsert(selected.tag.replaceAll('_', ' '), selected.negative);
-    }
+    await showModalBottomSheet<void>(context: context, isScrollControlled:true, showDragHandle:true,
+      builder: (context)=>CapsulePickerSheet(categories:categories,onPick:widget.onInsert));
   }
 
   @override
@@ -2595,164 +2587,6 @@ class _TagSearchBoxState extends State<_TagSearchBox> {
                     .toList(),
               ),
             ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CapsulePick {
-  final String tag;
-  final bool negative;
-
-  const _CapsulePick(this.tag, this.negative);
-}
-
-class _CapsulePickerSheet extends StatefulWidget {
-  final List<CapsuleCategory> categories;
-
-  const _CapsulePickerSheet({required this.categories});
-
-  @override
-  State<_CapsulePickerSheet> createState() => _CapsulePickerSheetState();
-}
-
-class _CapsulePickerSheetState extends State<_CapsulePickerSheet> {
-  int categoryIndex = 0;
-  int subgroupIndex = 0;
-  String? _labelKey;
-  Future<Map<String,String>>? _labelQuery;
-
-  Future<Map<String,String>> _lookupCapsuleLabels(MultilingualTagPacks pack, Iterable<String> tags) async {
-    try {
-      final hits = await pack.lookupExact(tags);
-      return {for (final hit in hits ?? <TagPackExactHit>[])
-        if (hit.entry.description.isNotEmpty) hit.query: hit.entry.description};
-    } catch (_) {
-      return const {};
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final category = widget.categories[categoryIndex];
-    final subgroup = category.subgroups[subgroupIndex];
-    final app = context.watch<AppState>();
-    final settings = app.settings;
-    final text = generateScreenTextFor(settings.language);
-    final language = settings.language;
-    return SafeArea(
-      child: SizedBox(
-        height: MediaQuery.sizeOf(context).height * 0.84,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Text(
-                text.inspirationCapsules,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  for (var index = 0; index < widget.categories.length; index++)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(localizedCapsuleCategoryName(
-                            language, widget.categories[index].name)),
-                        selected: categoryIndex == index,
-                        onSelected: (_) => setState(() {
-                          categoryIndex = index;
-                          subgroupIndex = 0;
-                        }),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  for (var index = 0;
-                      index < category.subgroups.length;
-                      index++)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: FilterChip(
-                        label: Text(localizedCapsuleSubgroupName(
-                            language, category.subgroups[index].name)),
-                        selected: subgroupIndex == index,
-                        onSelected: (_) =>
-                            setState(() => subgroupIndex = index),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const Divider(height: 17),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                children: [
-                  McpCapsuleSuggestions(onPick:(tag)=>Navigator.of(context).pop(_CapsulePick(tag,category.isNegative))),
-                  ListenableBuilder(listenable:app.multilingualTags,builder:(context, _) {
-                  final key = '${app.multilingualTags.active}:$categoryIndex:$subgroupIndex';
-                  if (_labelKey != key) {
-                    _labelKey = key;
-                    _labelQuery = _lookupCapsuleLabels(app.multilingualTags, subgroup.tags.map((tag) => tag.tag));
-                  }
-                  return FutureBuilder<Map<String,String>>(key:ValueKey(key),future:_labelQuery,
-                    builder:(context, snapshot) => Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: subgroup.tags
-                        .map((tag) => ActionChip(
-                              labelPadding:
-                                  const EdgeInsets.symmetric(horizontal: 6),
-                              label: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    tag.tag.replaceAll('_', ' '),
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600),
-                                  ),
-                                  if (tag.label.isNotEmpty)
-                                    Text(
-                                      snapshot.data?[MultilingualTagPacks.key(tag.tag)] ?? localizedTagLabel(
-                                        language,
-                                        tag.tag,
-                                        sourceLabel: tag.label,
-                                      ),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              onPressed: () => Navigator.pop(
-                                context,
-                                _CapsulePick(tag.tag, category.isNegative),
-                              ),
-                            ))
-                        .toList(),
-                  ));}),
-                ],
-              ),
-            ),
           ],
         ),
       ),

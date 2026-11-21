@@ -1,4 +1,6 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
+
+Browse curated tags by category and subgroup in the Inspiration Capsule. Search spans the selected dictionary; clearing it returns to your subgroup.
 # Langbai NovelAI Studio
 
 On mobile, choose how to use an imported image. Checked parameter fields are remembered; their values come from the new image.
