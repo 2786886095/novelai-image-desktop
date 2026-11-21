@@ -1,5 +1,7 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 
+桌面 MCP 可以批量整理画风预设、设置封面和示例图。预设图片不参与生图；明确指定用途后才会挂载为工作台参考图。
+
 灵感胶囊默认按两级分类浏览；搜索会查整个已选词库，清空后回到刚才的小类。
 # Langbai NovelAI Studio
 

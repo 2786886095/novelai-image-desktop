@@ -1,5 +1,7 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 
+桌面 MCP 可批次整理畫風預設、設定封面和範例圖；只有明確指定用途後才會掛載為工作台參考圖。
+
 靈感膠囊預設按兩層分類瀏覽；搜尋會查詢整個已選詞庫，清除搜尋後回到原來的小類。
 # Langbai NovelAI Studio
 

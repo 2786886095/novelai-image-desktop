@@ -1,5 +1,7 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 
+데스크톱 MCP에서 화풍 프리셋을 일괄 정리하고 표지와 예시 이미지를 설정할 수 있습니다. 용도를 명시한 이미지만 작업대에 참조 이미지로 추가됩니다.
+
 영감 캡슐에서 태그를 대분류와 소분류로 탐색할 수 있습니다. 검색은 선택한 사전 전체를 대상으로 하며, 검색어를 지우면 이전 소분류로 돌아갑니다.
 # Langbai NovelAI Studio
 

@@ -1,5 +1,7 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 
+Desktop MCP can organize style presets in batches and set covers or examples. Images are used for generation only when explicitly mounted as workbench references.
+
 Browse curated tags by category and subgroup in the Inspiration Capsule. Search spans the selected dictionary; clearing it returns to your subgroup.
 # Langbai NovelAI Studio
 
