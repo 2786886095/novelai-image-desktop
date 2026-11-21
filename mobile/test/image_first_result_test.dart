@@ -43,8 +43,10 @@ class FixtureState extends AppState {
     notifyListeners();
   }
 
+  int explicitWorkbenchLoads = 0;
   @override
   Future<void> setWorkbenchFromHistory(HistoryItem item) async {
+    explicitWorkbenchLoads++;
     choose(item);
   }
 }
@@ -197,6 +199,25 @@ void main() {
     await (FontLoader('MaterialIcons')
           ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf')))
         .load();
+  });
+  fixtureTest('mobile regression preview navigation never changes generation input', (tester) async {
+    final state = await mount(tester, const Size(390, 844), 512, 512);
+    await tester.tap(find.byKey(const ValueKey('preview-next')));
+    await tester.pumpAndSettle();
+    expect(state.current!.id, 'fixture-2');
+    expect(state.explicitWorkbenchLoads, 0);
+    expect(state.workbenchImage, isNull);
+    final source = WorkingImage(filePath: state.history.last.filePath, width: 512, height: 512);
+    state.workbenchImage = state.i2iOriginalImage = source;
+    state.markChanged();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('preview-previous')));
+    await tester.pumpAndSettle();
+    expect(state.current!.id, 'fixture-1');
+    expect(find.text('1/2'), findsOneWidget);
+    expect(state.workbenchImage, same(source));
+    expect(state.i2iOriginalImage, same(source));
+    expect(state.explicitWorkbenchLoads, 0);
   });
   fixtureTest('image-first fixed square geometry', (tester) async {
     final state = await mount(tester, const Size(390, 844), 512, 512);

@@ -2346,15 +2346,16 @@ class _PreviewCard extends StatelessWidget {
     final streamText = _streamPreviewText(state.settings.language);
     final current = state.current;
     final work = state.workbenchImage;
-    final path = work?.filePath ?? current?.filePath;
+    final previewInput = state.previewInput;
+    final path = previewInput?.filePath ?? current?.filePath;
     final livePreview = state.generationPreview;
     final history = state.generationPreviewHistory;
     final historyIndex = history.indexWhere((item) => item.filePath == path);
     final paths = historyIndex < 0 ? <String>[if (path != null) path] :
         history.map((item) => item.filePath).toList();
     if (isAndroidRedesign(context)) {
-      final width = livePreview != null ? state.params.width : work?.width ?? current?.width ?? 0;
-      final height = livePreview != null ? state.params.height : work?.height ?? current?.height ?? 0;
+      final width = livePreview != null ? state.params.width : previewInput?.width ?? current?.width ?? 0;
+      final height = livePreview != null ? state.params.height : previewInput?.height ?? current?.height ?? 0;
       final ratio = width > 0 && height > 0 ? width / height : 1.0;
       final available = path != null && ImageFiles.keepVisible(path);
       return Card(key: const ValueKey('android-image-first-result'),
@@ -2377,7 +2378,7 @@ class _PreviewCard extends StatelessWidget {
           imagePaths: livePreview == null && available ? paths : null,
           initialIndex: historyIndex < 0 ? 0 : historyIndex,
           onIndexChanged: livePreview != null || historyIndex < 0 ? null
-            : (index) => state.setWorkbenchFromHistory(history[index]),
+            : (index) => state.previewHistoryResult(history[index]),
           overlay: !state.busy ? null : IgnorePointer(child: livePreview == null
             ? const ColoredBox(color: Colors.black38, child: Center(child: CircularProgressIndicator()))
             : Align(alignment: Alignment.bottomCenter,
@@ -2409,7 +2410,7 @@ class _PreviewCard extends StatelessWidget {
                 imagePaths: paths,
                 initialIndex: historyIndex < 0 ? 0 : historyIndex,
                 onIndexChanged: historyIndex < 0 ? null :
-                    (index) => state.setWorkbenchFromHistory(history[index]),
+                    (index) => state.previewHistoryResult(history[index]),
               )
             else
               Center(child: Padding(padding:const EdgeInsets.all(16),child:Text(path == null ? text.previewEmpty : unavailable,textAlign:TextAlign.center))),
@@ -5488,6 +5489,14 @@ class _CharCard extends StatefulWidget {
 }
 
 class _CharCardState extends State<_CharCard> {
+  final _positive = TextEditingController();
+
+  @override
+  void dispose() {
+    _positive.dispose();
+    super.dispose();
+  }
+
   bool _collapsed = false;
 
   @override
@@ -5497,6 +5506,10 @@ class _CharCardState extends State<_CharCard> {
     String t(String key) => mobileUiTextFor(language, key);
     final collapsed = _collapsed || widget.forceCollapsed;
     final c = s.extras.charCaptions[widget.index];
+    if (_positive.text != c.prompt) {
+      _positive.value = TextEditingValue(text: c.prompt,
+          selection: TextSelection.collapsed(offset: c.prompt.length));
+    }
     final enabledText = characterEnabledLabels(language);
     final characterLabel = mobileUiFormatFor(
       language,
@@ -5568,6 +5581,7 @@ class _CharCardState extends State<_CharCard> {
                   child: Column(
                     children: [
                       PositivePromptPresetButton(
+                          applySingleOnTap: true,
                           currentPrompt: c.prompt,
                           currentCaptions: [c],
                           onApply: (prompt) {
@@ -5583,9 +5597,9 @@ class _CharCardState extends State<_CharCard> {
                             }
                             s.markCharacterChanged();
                           }),
-                      if (!s.params.isMediumEffort) TextFormField(
+                      TextFormField(
                         key: ValueKey('character-prompt-field-${widget.index}'),
-                        initialValue: c.prompt,
+                        controller: _positive,
                         decoration: InputDecoration(
                           labelText: characterLabel,
                           border: const OutlineInputBorder(),

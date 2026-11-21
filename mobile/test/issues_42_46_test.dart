@@ -215,34 +215,22 @@ void main() {
     await t.pumpAndSettle();
     final preview = t.widget<ZoomableImage>(find.byType(ZoomableImage));
     expect(preview.gallery, hasLength(2));
-    await t.runAsync(() async {
-      await t.tap(find.byKey(const ValueKey('preview-next')));
-      for (var i = 0;
-          i < 80 && state.workbenchImage?.filePath != files[2].path;
-          i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-    });
+    await t.tap(find.byKey(const ValueKey('preview-next')));
     await t.pumpAndSettle();
-    expect(state.workbenchImage?.filePath, files[2].path);
+    expect(state.current?.filePath, files[2].path);
+    expect(state.workbenchImage, isNull);
     await t.tap(find.byIcon(Icons.fullscreen));
     await t.pumpAndSettle();
     expect(find.text('2 / 2'), findsOneWidget);
-    await t.runAsync(() async {
-      await t.tap(find.descendant(
+    await t.tap(find.descendant(
           of: find.byType(Dialog), matching: find.byIcon(Icons.chevron_left)));
-      for (var i = 0;
-          i < 80 && state.workbenchImage?.filePath != files[0].path;
-          i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-    });
     await t.pumpAndSettle();
     expect(find.text('1 / 2'), findsOneWidget);
     await t.tap(find.descendant(
         of: find.byType(Dialog), matching: find.byIcon(Icons.close)));
     await t.pumpAndSettle();
-    expect(state.workbenchImage?.filePath, files[0].path);
+    expect(state.current?.filePath, files[0].path);
+    expect(state.workbenchImage, isNull);
     expect(state.params.positivePrompt, 'edited');
     expect(state.params.seed, 42);
     expect(t.widget<ZoomableImage>(find.byType(ZoomableImage)).initialIndex, 0);

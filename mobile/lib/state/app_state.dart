@@ -397,6 +397,16 @@ class AppState extends ChangeNotifier {
   List<ReferencePreset> referencePresets = [];
   HistoryItem? current;
   WorkingImage? workbenchImage;
+  // The displayed result and the input for the next request are independent.
+  bool _showResultInPreview = false;
+  WorkingImage? get previewInput =>
+      _showResultInPreview && current != null ? null : workbenchImage;
+  void previewHistoryResult(HistoryItem item) {
+    if (_showResultInPreview && identical(current, item)) return;
+    current = item;
+    _showResultInPreview = true;
+    notifyListeners();
+  }
   WorkingImage? i2iOriginalImage;
   String i2iSourceMode = 'original';
   String inpaintSourceMode = 'original';
@@ -424,6 +434,7 @@ class AppState extends ChangeNotifier {
       await validateNovelAiNativeImage(bytes);await validateNovelAiNativeImage(session.maskBytes);
       if(decodeImageDimensions(bytes)!=(session.source.width,session.source.height)||decodeImageDimensions(session.maskBytes)!=(session.source.width,session.source.height))throw const FormatException('Original image or mask dimensions changed.');
       if(inpaintEditSession!=session||busy)return false;
+      _showResultInPreview=false;
       workbenchImage=session.source;i2iOriginalImage=session.original;inpaintSourceMode=session.sourceMode;inpaintEngine=session.engine;
       inpaintSizeMode=session.sizeMode;inpaintCustomSize=session.customSize;inpaintRegion=session.region;
       setInpaintEditorData(session.strokes,session.inverted);inpaintEditRevision++;
@@ -871,6 +882,7 @@ class AppState extends ChangeNotifier {
         : (i2iOriginalImage ?? workbenchImage);
     inpaintSourceMode = next;
     if (target != null && target.filePath != workbenchImage?.filePath) {
+      _showResultInPreview = false;
       workbenchImage = target;
       inpaintRegion=null;setInpaintEditorData([],false);inpaintEditRevision++;
     }
@@ -1392,6 +1404,7 @@ class AppState extends ChangeNotifier {
       case ImageImportUse.image:
         workbenchImportedParams = report.imported.isEmpty ? null : report.imported;
         workbenchCharacterCaptions = report.characterCaptions;
+        _showResultInPreview = false;
         workbenchImage = WorkingImage(filePath: image.path, width: image.size.$1, height: image.size.$2);
         i2iOriginalImage = workbenchImage;
         comparisonBefore = comparisonAfter = null;
@@ -1441,6 +1454,7 @@ class AppState extends ChangeNotifier {
     final imported = report.imported;
     workbenchImportedParams = imported.isEmpty ? null : imported;
     workbenchCharacterCaptions = report.characterCaptions;
+    _showResultInPreview = false;
     workbenchImage =
         WorkingImage(filePath: filePath, width: dims.$1, height: dims.$2);
     i2iOriginalImage = workbenchImage;
@@ -4471,7 +4485,8 @@ class AppState extends ChangeNotifier {
     history.insertAll(0, items);
     if (items.isNotEmpty) {
       current = items.first;
-      if (useAsWorkbench) {
+      _showResultInPreview = true;
+      if (useAsWorkbench && workbenchImage != null) {
         workbenchImage = WorkingImage(
           filePath: items.first.filePath,
           width: items.first.width,

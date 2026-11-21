@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:novelai_mobile/screens/positive_prompt_preset_sheet.dart';
 import 'package:provider/provider.dart';
 import 'package:novelai_mobile/screens/generate_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +11,41 @@ import 'package:novelai_mobile/state/app_state.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
+  for (final effort in ['high', 'medium']) {
+    testWidgets('mobile regression tap named positive preset updates current character ($effort)', (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(430, 2800);
+      addTearDown(tester.view.reset);
+      final state = AppState();
+      addTearDown(state.dispose);
+      state.settings.language = 'zh-CN';
+      state.params.model = 'nai-diffusion-5-full';
+      state.params.effort = effort;
+      state.addCharacter();
+      final c = state.extras.charCaptions.single;
+      c.prompt = 'old';
+      c.negativePrompt = 'keep negative';
+      c.useCoords = true;
+      c.x = .25;
+      state.settings.positivePromptPresets = [
+        PositivePromptPreset(id: 'flowers', name: '花开何时', prompt: 'spring flowers', createdAt: 'now')
+      ];
+      await tester.pumpWidget(ChangeNotifierProvider.value(value: state, child: const MaterialApp(home: GenerateScreen())));
+      await tester.pumpAndSettle();
+      final button = find.byWidgetPredicate((w) => w is PositivePromptPresetButton && w.currentCaptions.length == 1);
+      await tester.scrollUntilVisible(button, 400, scrollable: find.byType(Scrollable).first, maxScrolls: 30);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('花开何时').first);
+      await tester.pumpAndSettle();
+      expect(c.prompt, 'spring flowers');
+      expect(c.negativePrompt, 'keep negative');
+      expect(c.x, .25);
+      expect((await Storage().getCharacterPrompts()).single.prompt, 'spring flowers');
+      final field = find.byKey(const ValueKey('character-prompt-field-0'));
+      expect(tester.widget<EditableText>(find.descendant(of: field, matching: find.byType(EditableText))).controller.text,'spring flowers');
+    });
+  }
   testWidgets(
       'editing a visible character field survives a new storage instance',
       (tester) async {

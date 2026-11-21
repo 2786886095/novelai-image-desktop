@@ -9,6 +9,25 @@ import 'package:novelai_mobile/services/storage.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 
 void main() {
+  test('text generation followed by preview and another generation stays text-only', () async {
+    final api = _QueueApi();
+    final state = AppState(api: api, storage: _MemoryStorage())
+      ..account = const AccountSummary(hasToken: true, tierLevel: 1, anlasBalance: 100, hasActiveSubscription: true)
+      ..params.positivePrompt = 'first';
+    final run = state.runTextOrImage();
+    await _waitUntil(() => api.prompts.isNotEmpty);
+    api.firstRequest.complete(([Uint8List.fromList([1, 2, 3])], 11));
+    await run;
+    expect(state.current, isNotNull);
+    expect(state.workbenchImage, isNull);
+    state.previewHistoryResult(state.current!);
+    state.params.positivePrompt = 'second';
+    await state.runTextOrImage();
+    expect(api.prompts, ['first', 'second']);
+    expect(state.history.length, 2);
+    expect(state.workbenchImage, isNull);
+    expect(state.i2iOriginalImage, isNull);
+  });
   test('a job added during generation runs after the active image', () async {
     final api = _QueueApi();
     final storage = _MemoryStorage();

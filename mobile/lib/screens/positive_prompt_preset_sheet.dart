@@ -191,6 +191,7 @@ _PresetText _textFor(String language) {
 class PositivePromptPresetButton extends StatelessWidget {
   final String currentPrompt;
   final ValueChanged<String> onApply;
+  final bool applySingleOnTap;
   final List<CharCaptionItem> currentCaptions;
   final ValueChanged<List<CharCaptionItem>>? onApplyCharacters;
   final bool compact;
@@ -199,6 +200,7 @@ class PositivePromptPresetButton extends StatelessWidget {
     super.key,
     required this.currentPrompt,
     required this.onApply,
+    this.applySingleOnTap = false,
     this.currentCaptions = const [],
     this.onApplyCharacters,
     this.compact = false,
@@ -213,6 +215,7 @@ class PositivePromptPresetButton extends StatelessWidget {
         currentPrompt: currentPrompt,
         onApply: onApply,
         currentCaptions: currentCaptions,
+        applySingleOnTap: applySingleOnTap,
         onApplyCharacters: onApplyCharacters,
       ),
       icon: const Icon(Icons.bookmarks_outlined, size: 18),
@@ -232,6 +235,7 @@ Future<void> showPositivePromptPresetSheet(
   BuildContext context, {
   required String currentPrompt,
   required ValueChanged<String> onApply,
+  bool applySingleOnTap = false,
   List<CharCaptionItem> currentCaptions = const [],
   ValueChanged<List<CharCaptionItem>>? onApplyCharacters,
 }) {
@@ -249,6 +253,7 @@ Future<void> showPositivePromptPresetSheet(
           currentPrompt: currentPrompt,
           onApply: onApply,
           currentCaptions: currentCaptions,
+          applySingleOnTap: applySingleOnTap,
           onApplyCharacters: onApplyCharacters,
         ),
       ),
@@ -259,12 +264,14 @@ Future<void> showPositivePromptPresetSheet(
 class _PositivePromptPresetSheet extends StatefulWidget {
   final String currentPrompt;
   final ValueChanged<String> onApply;
+  final bool applySingleOnTap;
   final List<CharCaptionItem> currentCaptions;
   final ValueChanged<List<CharCaptionItem>>? onApplyCharacters;
 
   const _PositivePromptPresetSheet({
     required this.currentPrompt,
     required this.onApply,
+    this.applySingleOnTap = false,
     this.currentCaptions = const [],
     this.onApplyCharacters,
   });
@@ -494,13 +501,28 @@ class _PositivePromptPresetSheetState
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
+              trailing: widget.applySingleOnTap ? IconButton(
+                tooltip: text.details,
+                icon: const Icon(Icons.info_outline),
+                onPressed: () {
+                  FocusScope.of(context).unfocus();
+                  setState(() {
+                    _selectedId = preset.id;
+                    _activeImageId = preset.previewImages.firstOrNull?.id ?? '';
+                    _message = '';
+                  });
+                  _openDetails();
+                },
+              ) : null,
               onTap: () {
                 FocusScope.of(context).unfocus();
+                if (_applySinglePositive(preset)) return;
                 setState(() {
                   _selectedId = preset.id;
                   _activeImageId = preset.previewImages.firstOrNull?.id ?? '';
                   _message = '';
                 });
+                if (widget.applySingleOnTap) _openDetails();
               },
             ),
           );
@@ -690,12 +712,22 @@ class _PositivePromptPresetSheetState
     );
   }
 
+  bool _applySinglePositive(PositivePromptPreset preset) {
+    if (!widget.applySingleOnTap || preset.captions.length > 1) return false;
+    final prompt = preset.captions.firstOrNull?.prompt ?? preset.prompt;
+    if (prompt.trim().isEmpty) return false;
+    widget.onApply(prompt);
+    Navigator.pop(context);
+    return true;
+  }
+
   Widget _applyButton(
       AppState state, PositivePromptPreset selected, _PresetText text,
       {bool compact = false}) {
     return FilledButton.icon(
       key: const ValueKey('positive-preset-apply'),
       onPressed: () {
+        if (_applySinglePositive(selected)) return;
         if (selected.captions.isNotEmpty) {
           if (selected.captions.length > state.params.maxCharacterPrompts) {
             setState(() =>
