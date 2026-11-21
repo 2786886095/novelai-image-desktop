@@ -48,6 +48,10 @@ on:
         description: v2.9.5 only; skip local Windows Artist GPU proof and require all other hosted checks
         type: boolean
         default: false
+      reviewed_v303_capsule_release:
+        description: Verify the exact capsule release, except local Windows Artist GPU and only the iOS folder naming deadline
+        type: boolean
+        default: false
       reviewed_v302_mobile_release:
         description: Verify the exact mobile fix, except local Windows Artist GPU and only the iOS folder naming deadline
         type: boolean
@@ -306,7 +310,7 @@ jobs:
     needs: [build, mac-intel-smoke]
     if: always() && !inputs.candidate_build_only && github.event_name == 'workflow_dispatch' && inputs.publish_after_verification && (inputs.verified_build_run || (needs.build.result == 'success' && needs.mac-intel-smoke.result == 'success'))
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ (inputs.reviewed_v301_role_release || inputs.reviewed_v302_mobile_release) && 240 || 25 }}
+    timeout-minutes: ${{ (inputs.reviewed_v301_role_release || inputs.reviewed_v302_mobile_release || inputs.reviewed_v303_capsule_release) && 240 || 25 }}
     permissions:
       contents: write
       actions: read
@@ -322,6 +326,40 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+      - name: Wait for exact v3.0.3 native and package jobs
+        if: inputs.reviewed_v303_capsule_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          app=bd7378e8f7a7106158a6cb3e875202510c0afb58
+          test "${{ inputs.verified_build_run }}:${{ inputs.mobile_run }}:${{ inputs.feature_run }}" = 44899253021:44899255689:44899258107
+          test "${{ inputs.reviewed_v300_ios_folder }}:${{ inputs.reviewed_v301_role_release }}:${{ inputs.reviewed_v302_mobile_release }}" = false:false:false
+          git merge-base --is-ancestor "$app" "$GITHUB_SHA"
+          git diff --exit-code "$app" "$GITHUB_SHA" -- . ':!.github/workflows/build.yml' ':!scripts/release-platform-contract.mjs' ':!scripts/publish-verified-release.mjs' ':!scripts/v300-folder-review.mjs'
+          git checkout --detach "$app"
+          for f in scripts/{v300-folder-review,release-platform-contract,publish-verified-release}.mjs; do git show "$GITHUB_SHA:$f" > "$f"; done
+          for i in $(seq 1 195); do
+            pending=0
+            for id in 44899253021 44899255689 44899258107; do
+              json=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id")
+              jq -e --arg sha "$app" '.head_sha==$sha and .event=="workflow_dispatch"' <<<"$json" >/dev/null
+              if [[ "$(jq -r .status <<<"$json")" != completed ]]; then pending=1; continue; fi
+              if [[ "$id" != 44899258107 ]]; then jq -e '.conclusion=="success"' <<<"$json" >/dev/null; fi
+            done
+            if [[ $pending == 0 ]]; then exit 0; fi
+            sleep 60
+          done
+          exit 1
+      - name: Download current iOS folder witnesses (validate if the native OS group failed)
+        if: inputs.reviewed_v303_capsule_release
+        uses: actions/download-artifact@v4
+        with:
+          name: native-components-ios-os-bd7378e8f7a7106158a6cb3e875202510c0afb58
+          path: reviewed-ios-os
+          run-id: 44899258107
+          github-token: ${{ github.token }}
       - name: Wait for exact v3.0.2 native and package jobs
         if: inputs.reviewed_v302_mobile_release
         env:
@@ -435,6 +473,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REVIEWED_V302_MOBILE_RELEASE: ${{ inputs.reviewed_v302_mobile_release }}
+          REVIEWED_V303_CAPSULE_RELEASE: ${{ inputs.reviewed_v303_capsule_release }}
           REVIEWED_V301_ROLE_RELEASE: ${{ inputs.reviewed_v301_role_release }}
           REVIEWED_V300_IOS_FOLDER: ${{ inputs.reviewed_v300_ios_folder }}
           FEATURE_RUN: ${{ inputs.feature_run }}
@@ -449,7 +488,7 @@ jobs:
         run: node scripts/publish-verified-release.mjs
 
       - name: Sync verified release source and multilingual homepage to main
-        if: inputs.reviewed_v301_role_release || inputs.reviewed_v302_mobile_release
+        if: inputs.reviewed_v301_role_release || inputs.reviewed_v302_mobile_release || inputs.reviewed_v303_capsule_release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
