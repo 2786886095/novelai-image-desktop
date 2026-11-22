@@ -22,6 +22,10 @@ Future<void> main()async{
  void check(bool v,String msg){if(!v)throw StateError(msg);steps.add(msg);}
  Finder key(String k)=>find.byKey(ValueKey(k));
  Future<void> tick([int ms=400])async{await t.pump(Duration(milliseconds:ms));await t.pump();}
+ Future<void> until(bool Function() ready,String description)async{
+ final clock=Stopwatch()..start();
+ while(!ready()){if(clock.elapsed>const Duration(seconds:18)){throw StateError('Waiting for '+description+'; steps='+steps.join(','));}await tick(100);}
+ }
  Future<void> locate(Finder f)async{
  if(f.evaluate().isEmpty){
  final scroll=t.state<ScrollableState>(find.byType(Scrollable).first);
@@ -54,24 +58,25 @@ Future<void> main()async{
  await tap(find.text(platformFeatureText('zh-CN','selectAll')));
  if(android){await tap(key('android-gallery-date-filter'));await tap(option('2026-01-01'));}else{await tap(find.text(mobileUiTextFor('zh-CN','gallery.allDates')).first);await tap(find.text('2026-01-01').last);}
  await tap(find.text(platformFeatureText('zh-CN','move')));await tap(find.descendant(of:find.byType(SimpleDialog),matching:find.text('QA Target')));
- final saved=await app.storage.getHistory();check(saved.length==3 && saved.where((v)=>v.groupId=='test-destination').map((v)=>v.id).toSet().containsAll(['A','B']) && saved.singleWhere((v)=>v.id=='C').groupId!='test-destination','gallery-filtered-move-A-B-only-durable');
+ await until(()=>app.history.where((v)=>v.groupId=='test-destination').length==2,'gallery move committed');final saved=await app.storage.getHistory();check(saved.length==3 && saved.where((v)=>v.groupId=='test-destination').map((v)=>v.id).toSet().containsAll(['A','B']) && saved.singleWhere((v)=>v.id=='C').groupId!='test-destination','gallery-filtered-move-A-B-only-durable');
  mount(const Scaffold(body:SafeArea(child:ReferencePresetLibraryPanel(standalone:true,showClose:false,allowedKind:ReferencePresetKind.precise))));await tick();
  await tap(find.text('本机预设'));await tap(key('reference-add-gallery'));await type(key('reference-gallery-search'),'subject-A');check(key('reference-gallery-C').evaluate().isEmpty,'preset-gallery-search-excludes-C');await tap(key('reference-gallery-A'));
  final fields=find.descendant(of:find.byType(AlertDialog),matching:find.byType(TextField));await type(fields.first,'QA Gallery A');
  await tap(find.descendant(of:find.byType(AlertDialog),matching:find.text('保存')));await tick(600);
- final preset=app.referencePresets.firstWhere((v)=>v.name=='QA Gallery A');
+ await until(()=>app.referencePresets.any((v)=>v.name=='QA Gallery A'),'saved QA Gallery A');final preset=app.referencePresets.firstWhere((v)=>v.name=='QA Gallery A');
  check(base64Encode(File(preset.filePath).readAsBytesSync())==base64Encode(File(rows.first.filePath).readAsBytesSync()) && app.extras.preciseReferences.isEmpty && app.extras.vibeImages.isEmpty && app.workbenchImage==null,'gallery-preset-copied-no-auto-apply');
- mount(const Scaffold(key:ValueKey('workbench-picker'),body:SafeArea(child:ReferencePresetLibraryPanel(standalone:false,showClose:false,allowedKind:ReferencePresetKind.precise))));await tick(650);await tap(find.text('QA Gallery A').first);final apply=key('reference-preset-apply-fixed');await locate(apply);check((t.widget(apply) as ButtonStyleButton).onPressed!=null,'apply-button-enabled');await t.tap(apply);await tick(650);
+ mount(const Scaffold(key:ValueKey('workbench-picker'),body:SafeArea(child:ReferencePresetLibraryPanel(standalone:false,showClose:false,allowedKind:ReferencePresetKind.precise))));await tick(650);await tap(find.text('QA Gallery A').first);final apply=key('reference-preset-apply-fixed');await locate(apply);check((t.widget(apply) as ButtonStyleButton).onPressed!=null,'apply-button-enabled');await t.tap(apply);await until(()=>app.extras.preciseReferences.length==1,'workbench received selected precise reference');
  check(app.extras.preciseReferences.length==1 && app.extras.vibeImages.isEmpty && app.workbenchImage==null,'explicit-apply-precise-only');
  final c=app.batchRedraw;await c.load();c.project=BatchRedrawProject.empty(app.params)..items=[for(final h in rows) BatchRedrawItem(id:h.id,name:h.id+'.png',prompt:h.prompt,base64:base64Encode(File(h.filePath).readAsBytesSync()))];
  mount(BatchRedrawScreen(controller:c));await tick(650);
  await tap(key('batch-input-actions-B'));await tap(option('up'));
  check(c.project.items.map((v)=>v.id).join()=='BAC','queue-up-BAC');
  await tap(key('batch-input-actions-A'));await tap(option('down'));
- await c.flush();final reread=await app.storage.getBatchRedrawProject(app.params);
+ await until(()=>c.project.items.map((v)=>v.id).join()=='BCA','input order BCA');await c.flush();final reread=await app.storage.getBatchRedrawProject(app.params);
  check(reread.items.map((v)=>v.id).join()=='BCA' && reread.items.every((v)=>v.prompt=='subject-'+v.id && v.base64==base64Encode(File(rows.singleWhere((h)=>h.id==v.id).filePath).readAsBytesSync())),'queue-down-BCA-persisted-with-original-sources');
  output['passed']=true;
  }catch(e,s){output['passed']=false;output['error']=e.toString();output['stack']=s.toString();}
  await file.writeAsString(jsonEncode(output),flush:true);print('RESOURCES_QUEUE_QA '+jsonEncode(output));}
+
 
 
