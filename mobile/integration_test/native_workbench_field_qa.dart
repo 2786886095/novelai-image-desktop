@@ -26,7 +26,7 @@ Future<void> main() async {
   final steps = <String>[];
   final proof =
       File('${(await getApplicationDocumentsDirectory()).path}/FIELD_QA.json');
-  if(await proof.exists())await proof.delete();
+  if (await proof.exists()) await proof.delete();
   final stopwatch = Stopwatch()..start();
   Future<void> tap(Finder f) async {
     await t.ensureVisible(f);
@@ -126,31 +126,59 @@ Future<void> main() async {
             state.extras.charCaptions.last.negativePrompt == '{fog}' &&
             state.params.positivePrompt == 'global anchor',
         'read-format-save-load-apply-group');
-    runApp(ChangeNotifierProvider.value(value:state,child:const MaterialApp(home: HomeShell())));
-    await t.pump(const Duration(milliseconds:850));
-    Finder key(String k)=>find.byKey(ValueKey(k));
-    final android=Platform.isAndroid;
-    final shell=find.byType(android?AndroidStudioShell:StudioAdaptiveShell);
-    List<StudioDestination> destinations()=>android?(t.widget(shell) as AndroidStudioShell).destinations:(t.widget(shell) as StudioAdaptiveShell).destinations;
-    int active()=>android?(t.widget(shell) as AndroidStudioShell).selectedIndex:(t.widget(shell) as StudioAdaptiveShell).selectedIndex;
-    final names=destinations().map((d)=>d.label).toList();
-    for(final index in [...List.generate(names.length-1,(i)=>i+1),0]) {
-      if(android){await tap(key('android-all-features'));await tap(key('android-open-feature-catalog'));}
-      else{await tap(key('phone-open-more'));}
-      final target=key((android?'android-catalog-':'classic-catalog-')+index.toString());
-      if(!android){
-        final search=key('workbench-feature-search');
-        await tap(search);
-        final element=find.descendant(of:search,matching:find.byType(EditableText)).evaluate().single as StatefulElement;
-        (element.state as EditableTextState).updateEditingValue(TextEditingValue(text:names[index]));
-        FocusManager.instance.primaryFocus?.unfocus();await t.pump(const Duration(milliseconds:300));
+    final navState = AppState();
+    await navState.storage.markNetworkOnboardingSeen();
+    await navState.load();
+    navState.settings.language = 'en-US';
+    runApp(ChangeNotifierProvider.value(
+        value: navState, child: const MaterialApp(home: HomeShell())));
+    await t.pump(const Duration(milliseconds: 850));
+    Finder key(String k) => find.byKey(ValueKey(k));
+    final android = Platform.isAndroid;
+    final shell =
+        find.byType(android ? AndroidStudioShell : StudioAdaptiveShell);
+    List<StudioDestination> destinations() => android
+        ? (t.widget(shell) as AndroidStudioShell).destinations
+        : (t.widget(shell) as StudioAdaptiveShell).destinations;
+    int active() => android
+        ? (t.widget(shell) as AndroidStudioShell).selectedIndex
+        : (t.widget(shell) as StudioAdaptiveShell).selectedIndex;
+    for (var i = 0; i < 50 && shell.evaluate().isEmpty; i++) {
+      await t.pump(const Duration(milliseconds: 100));
+    }
+    final names = destinations().map((d) => d.label).toList();
+    for (final index in [...List.generate(names.length - 1, (i) => i + 1), 0]) {
+      if (android) {
+        await tap(key('android-all-features'));
+        await tap(key('android-open-feature-catalog'));
+      } else {
+        await tap(key('phone-open-more'));
       }
-      if(target.evaluate().isEmpty){
-        final list=find.descendant(of:find.byType(BottomSheet).last,matching:find.byType(Scrollable)).last;
-        await t.scrollUntilVisible(target,200,scrollable:list,maxScrolls:40);
+      final target = key((android ? 'android-catalog-' : 'classic-catalog-') +
+          index.toString());
+      if (!android) {
+        final search = key('workbench-feature-search');
+        await tap(search);
+        final element = find
+            .descendant(of: search, matching: find.byType(EditableText))
+            .evaluate()
+            .single as StatefulElement;
+        (element.state as EditableTextState)
+            .updateEditingValue(TextEditingValue(text: names[index]));
+        FocusManager.instance.primaryFocus?.unfocus();
+        await t.pump(const Duration(milliseconds: 300));
+      }
+      if (target.evaluate().isEmpty) {
+        final list = find
+            .descendant(
+                of: find.byType(BottomSheet).last,
+                matching: find.byType(Scrollable))
+            .last;
+        await t.scrollUntilVisible(target, 200,
+            scrollable: list, maxScrolls: 40);
       }
       await tap(target);
-      check(active()==index,'open:'+names[index]);
+      check(active() == index, 'open:' + names[index]);
     }
     result['passed'] = true;
   } catch (e, s) {
