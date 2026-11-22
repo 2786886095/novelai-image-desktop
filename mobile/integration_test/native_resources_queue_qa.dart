@@ -15,10 +15,19 @@ import 'package:novelai_mobile/i18n/platform_feature_text.dart';
 import 'package:novelai_mobile/i18n/app_locales.dart';
 import 'package:novelai_mobile/state/app_state.dart';
 import 'package:novelai_mobile/ui/studio_theme.dart';
+class ReceiptApp extends AppState {
+ final applyReceipts=<String>[];
+ @override Future<String?> applyReferencePreset(String id) async {
+   applyReceipts.add('entered');
+   final error=await super.applyReferencePreset(id);
+   applyReceipts.add(error??'success');
+   return error;
+ }
+}
 Future<void> main()async{
- final binding=WidgetsFlutterBinding.ensureInitialized(), app=AppState();final t=LiveWidgetController(binding);
+ final binding=WidgetsFlutterBinding.ensureInitialized(), app=ReceiptApp();final t=LiveWidgetController(binding);
  final file=File('${(await getApplicationDocumentsDirectory()).path}/RESOURCES_QUEUE_QA.json');if(file.existsSync())file.deleteSync();
- final output=<String,dynamic>{'os':Platform.operatingSystem},steps=<String>[];output['steps']=steps;
+ final output=<String,dynamic>{'os':Platform.operatingSystem},steps=<String>[];output['steps']=steps;output['applyReceipts']=app.applyReceipts;
  void check(bool v,String msg){if(!v)throw StateError(msg);steps.add(msg);}
  Finder key(String k)=>find.byKey(ValueKey(k));
  Future<void> tick([int ms=400])async{await t.pump(Duration(milliseconds:ms));await t.pump();}
@@ -39,7 +48,7 @@ Future<void> main()async{
  }
  Future<void> tap(Finder f)async{await locate(f);await t.tap(f.hitTestable().first);await tick();}
  Future<void> type(Finder f,String v)async{await locate(f);await t.tap(f.first);await tick(100);final e=find.descendant(of:f.first,matching:find.byType(EditableText));(t.state(e) as EditableTextState).updateEditingValue(TextEditingValue(text:v,selection:TextSelection.collapsed(offset:v.length)));FocusManager.instance.primaryFocus?.unfocus();await tick();}
- void mount(Widget w)=>runApp(ChangeNotifierProvider<AppState>.value(value:app,child:MaterialApp(theme:StudioTheme.light(),home:w)));
+ void mount(Widget w)=>runApp(ChangeNotifierProvider<AppState>.value(value:app,child:MaterialApp(key:UniqueKey(),theme:StudioTheme.light(),home:w)));
  try{
  final root=await getTemporaryDirectory();
  app.settings.language='zh-CN';app.params.model='nai-diffusion-4-5-full';
@@ -59,14 +68,6 @@ Future<void> main()async{
  if(android){await tap(key('android-gallery-date-filter'));await tap(option('2026-01-01'));}else{await tap(find.text(mobileUiTextFor('zh-CN','gallery.allDates')).first);await tap(find.text('2026-01-01').last);}
  await tap(find.text(platformFeatureText('zh-CN','move')));await tap(find.descendant(of:find.byType(SimpleDialog),matching:find.text('QA Target')));
  await until(()=>app.history.where((v)=>v.groupId=='test-destination').length==2,'gallery move committed');final saved=await app.storage.getHistory();check(saved.length==3 && saved.where((v)=>v.groupId=='test-destination').map((v)=>v.id).toSet().containsAll(['A','B']) && saved.singleWhere((v)=>v.id=='C').groupId!='test-destination','gallery-filtered-move-A-B-only-durable');
- mount(const Scaffold(body:SafeArea(child:ReferencePresetLibraryPanel(standalone:true,showClose:false,allowedKind:ReferencePresetKind.precise))));await tick();
- await tap(find.text('本机预设'));await tap(key('reference-add-gallery'));await type(key('reference-gallery-search'),'subject-A');check(key('reference-gallery-C').evaluate().isEmpty,'preset-gallery-search-excludes-C');await tap(key('reference-gallery-A'));
- final fields=find.descendant(of:find.byType(AlertDialog),matching:find.byType(TextField));await type(fields.first,'QA Gallery A');
- await tap(find.descendant(of:find.byType(AlertDialog),matching:find.text('保存')));await tick(600);
- await until(()=>app.referencePresets.any((v)=>v.name=='QA Gallery A'),'saved QA Gallery A');final preset=app.referencePresets.firstWhere((v)=>v.name=='QA Gallery A');
- check(base64Encode(File(preset.filePath).readAsBytesSync())==base64Encode(File(rows.first.filePath).readAsBytesSync()) && app.extras.preciseReferences.isEmpty && app.extras.vibeImages.isEmpty && app.workbenchImage==null,'gallery-preset-copied-no-auto-apply');
- mount(const Scaffold(key:ValueKey('workbench-picker'),body:SafeArea(child:ReferencePresetLibraryPanel(standalone:false,showClose:false,allowedKind:ReferencePresetKind.precise))));await tick(650);await tap(find.text('QA Gallery A').first);final apply=key('reference-preset-apply-fixed');await locate(apply);check((t.widget(apply) as ButtonStyleButton).onPressed!=null,'apply-button-enabled');await t.tap(apply);await until(()=>app.extras.preciseReferences.length==1,'workbench received selected precise reference');
- check(app.extras.preciseReferences.length==1 && app.extras.vibeImages.isEmpty && app.workbenchImage==null,'explicit-apply-precise-only');
  final c=app.batchRedraw;await c.load();c.project=BatchRedrawProject.empty(app.params)..items=[for(final h in rows) BatchRedrawItem(id:h.id,name:h.id+'.png',prompt:h.prompt,base64:base64Encode(File(h.filePath).readAsBytesSync()))];
  mount(BatchRedrawScreen(controller:c));await tick(650);
  await tap(key('batch-input-actions-B'));await tap(option('up'));
@@ -74,9 +75,19 @@ Future<void> main()async{
  await tap(key('batch-input-actions-A'));await tap(option('down'));
  await until(()=>c.project.items.map((v)=>v.id).join()=='BCA','input order BCA');await c.flush();final reread=await app.storage.getBatchRedrawProject(app.params);
  check(reread.items.map((v)=>v.id).join()=='BCA' && reread.items.every((v)=>v.prompt=='subject-'+v.id && v.base64==base64Encode(File(rows.singleWhere((h)=>h.id==v.id).filePath).readAsBytesSync())),'queue-down-BCA-persisted-with-original-sources');
+ mount(const Scaffold(body:SafeArea(child:ReferencePresetLibraryPanel(standalone:true,showClose:false,allowedKind:ReferencePresetKind.precise))));await tick();
+ await tap(find.text('本机预设'));await tap(key('reference-add-gallery'));await type(key('reference-gallery-search'),'subject-A');check(key('reference-gallery-C').evaluate().isEmpty,'preset-gallery-search-excludes-C');await tap(key('reference-gallery-A'));
+ final fields=find.descendant(of:find.byType(AlertDialog),matching:find.byType(TextField));await type(fields.first,'QA Gallery A');
+ await tap(find.descendant(of:find.byType(AlertDialog),matching:find.text('保存')));await tick(600);
+ await until(()=>app.referencePresets.any((v)=>v.name=='QA Gallery A'),'saved QA Gallery A');final preset=app.referencePresets.firstWhere((v)=>v.name=='QA Gallery A');
+ check(base64Encode(File(preset.filePath).readAsBytesSync())==base64Encode(File(rows.first.filePath).readAsBytesSync()) && app.extras.preciseReferences.isEmpty && app.extras.vibeImages.isEmpty && app.workbenchImage==null,'gallery-preset-copied-no-auto-apply');
+ mount(const Scaffold(key:ValueKey('workbench-picker'),body:SafeArea(child:ReferencePresetLibraryPanel(standalone:false,showClose:false,allowedKind:ReferencePresetKind.precise))));await tick(650);await tap(find.text('QA Gallery A').first);final apply=key('reference-preset-apply-fixed');await locate(apply);check((t.widget(apply) as ButtonStyleButton).onPressed!=null,'apply-button-enabled');final ink=find.descendant(of:apply,matching:find.byType(InkWell));await until(()=>ink.hitTestable().evaluate().isNotEmpty,'enabled apply button unobscured');
+ output['targetRect']=t.getRect(apply).toString();await t.tap(ink.hitTestable().first);await until(()=>app.extras.preciseReferences.length==1,'workbench received selected precise reference');
+ check(app.extras.preciseReferences.length==1 && app.extras.vibeImages.isEmpty && app.workbenchImage==null,'explicit-apply-precise-only');
  output['passed']=true;
  }catch(e,s){output['passed']=false;output['error']=e.toString();output['stack']=s.toString();}
  await file.writeAsString(jsonEncode(output),flush:true);print('RESOURCES_QUEUE_QA '+jsonEncode(output));}
+
 
 
 
