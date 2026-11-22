@@ -26,6 +26,8 @@ import '../state/app_state.dart';
 import '../ui/quality_preset_control.dart';
 import '../ui/weight_distribution_controls.dart';
 import 'positive_prompt_preset_sheet.dart';
+import 'generate_screen.dart' show WorkbenchCharacterEditor;
+import '../artist/draw_role_options.dart';
 
 class _RepairDrawResult {
   final ArtistRecipe recipe;
@@ -579,6 +581,22 @@ class _V5ArtistWeightRepairScreenState
   final _negativePrompt = TextEditingController();
   GenerateParams _generationParams = GenerateParams();
   String _message = '';
+  bool _includeRoles = false;
+  List<CharCaptionItem> _roleSnapshot() => artistDrawRoleSnapshot(
+    widget.mode == V5ArtistToolMode.draw && _includeRoles,
+    context.read<AppState>().extras.charCaptions);
+  Widget _roleOption() {
+    final app=context.watch<AppState>(), labels=drawRoleLabels(app.settings.language);
+    final count=artistDrawRoleSnapshot(true, app.extras.charCaptions).length;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start,children:[
+      SwitchListTile(key:const ValueKey('draw-include-characters'),title:Text(labels[0]),
+        subtitle:Text(labels[1]+' · '+count.toString()),value:_includeRoles,
+        onChanged:_running?null:(v)=>setState(()=>_includeRoles=v)),
+      if (_includeRoles) OutlinedButton.icon(key:const ValueKey('draw-edit-characters'),
+        icon:const Icon(Icons.people_outline), label:Text(labels[2]),onPressed:_running?null:()=>Navigator.of(context).push(MaterialPageRoute(builder:(ctx)=>Scaffold(
+          appBar:AppBar(title:Text(labels[2])),body:SafeArea(child:ListView(children:[WorkbenchCharacterEditor()])))))),
+    ]);
+  }
   bool _fixedSeed = true;
   bool _running = false;
   bool _batchReady = false;
@@ -1101,7 +1119,7 @@ class _V5ArtistWeightRepairScreenState
     );
   }
 
-  Future<void> _generateOne(_RepairDrawResult result) async {
+  Future<void> _generateOne(_RepairDrawResult result,List<CharCaptionItem> roles) async {
     final app = context.read<AppState>();
     final fixed = _generationParams.copy()
       ..positivePrompt = _basePrompt.text.trim()
@@ -1118,7 +1136,7 @@ class _V5ArtistWeightRepairScreenState
     try {
       final image = await app.generateArtistLabTemporary(
         panelParams: fixed,
-        panelExtras: GenerateExtras(),
+        panelExtras: GenerateExtras(charCaptions: artistDrawRoleSnapshot(true,roles)),
       );
       if (!mounted) return;
       setState(() {
@@ -1152,9 +1170,10 @@ class _V5ArtistWeightRepairScreenState
       _running = true;
       _cancelled = false;
     });
+    final roles = _roleSnapshot();
     for (final result in _results) {
       if (_cancelled) break;
-      await _generateOne(result);
+      await _generateOne(result,roles);
     }
     if (!mounted) return;
     setState(() {
@@ -1171,7 +1190,7 @@ class _V5ArtistWeightRepairScreenState
   Future<void> _retry(_RepairDrawResult result) async {
     if (_running) return;
     setState(() => _running = true);
-    await _generateOne(result);
+    await _generateOne(result,_roleSnapshot());
     if (mounted) setState(() => _running = false);
   }
 
@@ -1907,6 +1926,7 @@ class _V5ArtistWeightRepairScreenState
                 },
               ),
               const SizedBox(height: 12),
+              if (widget.mode == V5ArtistToolMode.draw) _roleOption(),
               TextField(
                     key: const PageStorageKey<String>('artist-repair-text-basePrompt'),
                     controller: _basePrompt,
@@ -2231,6 +2251,7 @@ class _V5ArtistWeightRepairScreenState
                     },
                   ),
                   const SizedBox(height: 12),
+                  if (widget.mode == V5ArtistToolMode.draw) _roleOption(),
                   TextField(
                     key: const PageStorageKey<String>('artist-repair-text-basePrompt'),
                     controller: _basePrompt,

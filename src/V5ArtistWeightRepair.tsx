@@ -1,3 +1,5 @@
+import { lazy, Suspense } from "react";
+import { drawRoleExtras, drawRoleLabels } from "./artist-draw-roles";
 import {toolWorkspaceText} from "./tool-workspace-text";
 import {ToolWaypoints} from "./components/ToolWaypoints";
 import { loadStyleTagDrawState, normalizeStyleTagDrawState, type StyleTagDrawState } from "./style-tag-draw-state";
@@ -363,6 +365,7 @@ function normalizeDrawGenerationParams(
 
 export type V5ArtistWeightRepairMode = "repair" | "draw";
 
+const DrawCharacterEditor=lazy(()=>import("./App").then(m=>({default:m.CharCaptionsModal})));
 export default function V5ArtistWeightRepair({
   onBack,
   mode = "repair",
@@ -377,6 +380,11 @@ export default function V5ArtistWeightRepair({
   const refreshHistory = useAppStore((state) => state.refreshHistory);
   const deleteHistory = useAppStore((state) => state.deleteHistory);
   const drawMode = mode === "draw";
+  const characterRows = useAppStore((s)=>s.charCaptions);
+  const [includeRoles,setIncludeRoles]=useState(false);
+  const [editRoles,setEditRoles]=useState(false);
+  const roleLabels = drawRoleLabels(language);
+  const rolesForRequest = drawRoleExtras(drawMode && includeRoles, characterRows);
   const favoriteCollection: ArtistFavoriteCollection = drawMode
     ? "artist-string-draw"
     : "v5-repair";
@@ -734,7 +742,7 @@ export default function V5ArtistWeightRepair({
     };
     setResults((current) => current.map((item) => item.id === candidate.id ? { ...item, status: "generating", error: undefined } : item));
     try {
-      const generated = await window.naiDesktop.generateArtistLab(request, { vibeImages: [], charCaptions: [], preciseReferences: [] }, "random");
+      const generated = await window.naiDesktop.generateArtistLab(request, drawRoleExtras(true,rolesForRequest.charCaptions), "random");
       const image = generated.items[0];
       if (!generated.ok || !image) throw new Error(generated.message);
       setResults((current) => current.map((item) => item.id === candidate.id ? { ...item, image, status: "done", generationModel: image.model || generationParams.model } : item));
@@ -997,6 +1005,11 @@ export default function V5ArtistWeightRepair({
               <label><span>{text.weightMax}</span><NumericDraftInput min={0.05} max={10} step={0.05} value={maxWeight} normalize={(value) => Math.round(value * 100) / 100} onCommit={setMaxWeight} /></label>
               <label><span>{text.candidateCount}</span><NumericDraftInput min={1} max={100} step={1} value={candidateCount} normalize={(value) => Math.floor(value)} onCommit={setCandidateCount} /></label>
               <WeightDistributionControls language={language} controlMode={weightControlMode} min={minWeight} max={maxWeight} mode={weightMode} leftDispersion={leftDispersion} rightDispersion={rightDispersion} softBalance={softBalance} onModeChange={setWeightControlMode} onChange={(value) => { if (value.mode != null) setWeightMode(value.mode); if (value.leftDispersion != null) setLeftDispersion(value.leftDispersion); if (value.rightDispersion != null) setRightDispersion(value.rightDispersion); if (value.softBalance != null) setSoftBalance(value.softBalance); }} />
+              <div className="wide" data-testid="draw-roles">
+                <label><input type="checkbox" checked={includeRoles} disabled={running} onChange={e=>setIncludeRoles(e.target.checked)} /> {roleLabels[0]}</label>
+                <small>{roleLabels[1]} · {drawRoleExtras(true,characterRows).charCaptions.length}</small>
+                {includeRoles && <Button disabled={running} onClick={()=>setEditRoles(true)}>{roleLabels[2]}</Button>}
+              </div>
               <div className="positive-prompt-preset-field wide">
                 <div><span>{text.basePrompt}</span><PositivePromptPresetControl value={basePrompt} onApply={setBasePrompt} variant="field" /></div>
                 <textarea aria-label={text.basePrompt} value={basePrompt} onChange={(event) => setBasePrompt(event.target.value)} />
@@ -1054,6 +1067,7 @@ export default function V5ArtistWeightRepair({
       </section>
       {!showFavorites && (results.length > 0 ? <section className="artist-candidate-grid v5-draw-grid" data-tool-results-scroll="" tabIndex={0} aria-label={text.results}>{results.map((item) => renderCandidate(item))}</section> : <div className="artist-queue-empty v5-draw-empty">{drawMode ? text.noResults : text.repairNoResults}</div>)}
       {showFavorites && (favorites.length > 0 ? <section className="artist-candidate-grid v5-draw-grid" data-tool-results-scroll="" tabIndex={0} aria-label={text.favorites}>{favorites.map((item) => renderCandidate(item, true))}</section> : <div className="artist-queue-empty v5-draw-empty">{text.noFavorites}</div>)}
+    {drawMode && editRoles && <Suspense fallback={null}><DrawCharacterEditor onClose={()=>setEditRoles(false)} /></Suspense>}
     </main>
     {drawStylePreview && <AppPortal><aside
       className={`artist-style-reference-popover ${drawStylePreview.status}`}

@@ -42,17 +42,17 @@ jobs:
         working-directory: mobile
         run: |
           flutter pub get
-          flutter build ios --simulator --debug --no-codesign --target integration_test/native_workbench_field_qa.dart
+          flutter build ios --simulator --debug --no-codesign --target integration_test/native_draw_roles_qa.dart
           xcrun simctl bootstatus "$IOS_SIM" -b
           app=build/ios/iphonesimulator/Runner.app
           xcrun simctl install "$IOS_SIM" "$app"
           id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
           xcrun simctl launch "$IOS_SIM" "$id"
           data=$(xcrun simctl get_app_container "$IOS_SIM" "$id" data)
-          for i in {1..80}; do [ -f "$data/Documents/FIELD_QA.json" ] && break; sleep 2; done
-          cp "$data/Documents/FIELD_QA.json" "$RUNNER_TEMP/FIELD_QA.json"
-          cat "$RUNNER_TEMP/FIELD_QA.json"
-          python3 -c 'import json,sys; r=json.load(open(sys.argv[1]));assert r["os"]=="ios" and r["passed"] is True and len([s for s in r["steps"] if s.startswith("open:")])==15 and "read-format-save-load-apply-group" in r["steps"]' "$RUNNER_TEMP/FIELD_QA.json"
+          for i in {1..80}; do [ -f "$data/Documents/DRAW_ROLE_QA.json" ] && break; sleep 2; done
+          cp "$data/Documents/DRAW_ROLE_QA.json" "$RUNNER_TEMP/DRAW_ROLE_QA.json"
+          cat "$RUNNER_TEMP/DRAW_ROLE_QA.json"
+          python3 -c 'import json,sys; r=json.load(open(sys.argv[1]));assert r["os"]=="ios" and r["passed"] is True and "actual-attach-confirm-copies-images-not-workbench-references" in r["steps"] and "batch-uses-frozen-role-and-separate-style" in r["steps"]' "$RUNNER_TEMP/DRAW_ROLE_QA.json"
       - if: always() && env.IOS_SIM != ''
         run: xcrun simctl io "$IOS_SIM" screenshot "$RUNNER_TEMP/ios-field.png"
       - uses: actions/upload-artifact@v4
@@ -60,5 +60,5 @@ jobs:
         with:
           name: ios-device-proof
           path: |
-            ${{ runner.temp }}/FIELD_QA.json
+            ${{ runner.temp }}/DRAW_ROLE_QA.json
             ${{ runner.temp }}/ios-field.png

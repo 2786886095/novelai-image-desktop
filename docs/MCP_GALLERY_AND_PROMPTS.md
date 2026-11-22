@@ -137,3 +137,7 @@
 - 桌面「角色提示 → 批量填充」可复制给外部 AI 的生成或修改指令、读取当前角色、粘贴或导入 UTF-8 JSON/TXT。先显示解析预览，再由用户确认写回。命名保存的是整组角色提示词，不是 AI 指令。
 - `prepare_character_group`：给出 `text` 或已有组合的 `presetId`（二选一），可指定 `model`；仅返回规范 JSON 和可传给生成工具的 `characterPrompts`，不改工作台，不扣费。按位置写回是桌面 UI 的确认操作。
 - `save_character_group`：给出 `name`、`text` 和可选的 `model`，创建具名角色组合；重复名称自动区分，不覆盖已有组合。通过 `list_prompt_presets` 查找已有条目。此操作不触发生成。
+
+### 输入画师串抽卡：角色与画风分栏
+
+界面可选择使用生成页的角色。通过 MCP 复用一条已抽出的候选时，把候选画师串放在 `stylePrompt`；角色逐个放在 `characterPrompts`，用 `prompt`、`negativePrompt` 和可选的 `x/y` 表达。先用 `prepare_generation` 核对角色与参考图计数；不要把角色词拼进画师串。MCP 不因界面开关自动继承角色，也不会仅因预览而生成或扣费。

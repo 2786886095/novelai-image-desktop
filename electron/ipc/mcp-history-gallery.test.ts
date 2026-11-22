@@ -163,6 +163,9 @@ it("creates and moves groups, previews exact metadata rules, and finds character
     const previewArgs = { autoAppendQuotedText: false, positivePrompt: "neutral fixture", historyGroupId: ocean.id, transparentBackground: true, fileNamePrefix: "group-test", smea: true };
     expect(await data("prepare_generation", previewArgs)).toMatchObject({ historyGroupId: ocean.id, params: { autoAppendQuotedText: false, transparentBackground: true, fileNamePrefix: "group-test", smea: true } });
     expect(bridge.executeAgentTool).not.toHaveBeenCalled();
+    vi.mocked(bridge.agentGenerationInput).mockImplementationOnce((await vi.importActual<typeof import("./agent-tools")>("./agent-tools")).agentGenerationInput);
+    const rolePreview = await data("prepare_generation", { model:"nai-diffusion-5-full", positivePrompt:"base subject", stylePrompt:"1.2::artist:qa_artist::", characterPrompts:[{prompt:"scarf",negativePrompt:"hat",x:0.3,y:0.7}] });
+    expect(rolePreview).toMatchObject({params:{stylePrompt:"1.2::artist:qa_artist::"},characterPrompts:[{prompt:"scarf",negativePrompt:"hat",x:0.3,y:0.7}],vibeReferenceCount:0,preciseReferenceCount:0});
     const { quoteAnlasCost } = await import("./nai");
     expect(quoteAnlasCost).not.toHaveBeenCalled();
     console.log("MCP_EXPANSION=groups,13_templates,template_body,protected_text_calls,explicit_group_and_parameters,no_generation_or_quote");

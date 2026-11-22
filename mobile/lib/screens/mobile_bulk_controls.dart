@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/nai_models.dart';
+import '../artist/favorite_style_labels.dart';
 import '../state/app_state.dart';
 import '../ui/studio_dropdown.dart';
 import '../i18n/style_library_text.dart';
@@ -534,7 +535,12 @@ class _MoveStylesState extends State<MoveMobileStylesDialog> {
                             child: Text(g, overflow: TextOverflow.ellipsis))
                     ],
                     onChanged: (v) => setState(() => group = v)),
-              Text(l[10] + ' · ' + ids.length.toString()),
+              Wrap(alignment: WrapAlignment.center,crossAxisAlignment:WrapCrossAlignment.center, children:[
+                Text(l[10] + ' · ' + ids.length.toString() + '/' + widget.styles.length.toString()),
+                TextButton(key:const ValueKey('batch-toggle-visible'),onPressed:widget.styles.isEmpty?null:()=>setState((){
+                  if(ids.length==widget.styles.length){ids.clear();} else {ids.addAll(widget.styles.map((p)=>p.id));}
+                }),child:Text((favoriteStyleLabels[widget.language]??favoriteStyleLabels['en-US']!)[ids.length==widget.styles.length && ids.isNotEmpty?2:1]))
+              ]),
               Expanded(
                   child: ListView.builder(
                       itemCount: widget.styles.length,

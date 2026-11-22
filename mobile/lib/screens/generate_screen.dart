@@ -3352,6 +3352,13 @@ class _SyncedNumberFieldState extends State<_SyncedNumberField> {
       );
 }
 
+/// Same role editor as the generation page, including full-screen prompts and positions.
+class WorkbenchCharacterEditor extends StatelessWidget {
+  const WorkbenchCharacterEditor({super.key});
+  @override
+  Widget build(BuildContext context) => _CharacterPrompts();
+}
+
 class _CharacterPrompts extends StatefulWidget {
   @override
   State<_CharacterPrompts> createState() => _CharacterPromptsState();
