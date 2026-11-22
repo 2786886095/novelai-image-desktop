@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart' show databaseFactoryFfi;
 
 enum ResourceDatabaseId { tagCatalog, cooccurrence }
 
@@ -332,6 +333,17 @@ class ResourceDatabaseService {
     }
   }
 
+  // Android system SQLite can lack FTS5. Both validation (including restore)
+  // and searching must open the catalog with the packaged engine. Keep the
+  // existing driver and path for co-occurrence data and for other platforms.
+  Future<Database> _openResource(ResourceDatabaseId id, File file) {
+    if (Platform.isAndroid && id == ResourceDatabaseId.tagCatalog) {
+      return databaseFactoryFfi.openDatabase(file.path,
+          options: OpenDatabaseOptions(readOnly: true, singleInstance: false));
+    }
+    return openDatabase(file.path, readOnly: true, singleInstance: false);
+  }
+
   Future<Map<String, String>> _validateDatabase(
     ResourceDatabaseDefinition definition,
     File file, {
@@ -345,8 +357,7 @@ class ResourceDatabaseService {
     if (utf8.decode(header, allowMalformed: true) != 'SQLite format 3\u0000') {
       throw const FormatException('Downloaded file is not a SQLite database');
     }
-    final db =
-        await openDatabase(file.path, readOnly: true, singleInstance: false);
+    final db = await _openResource(definition.id, file);
     try {
       Future<Set<String>> columns(String table) async =>
           (await db.rawQuery('PRAGMA table_info($table)'))
@@ -652,8 +663,7 @@ class ResourceDatabaseService {
         .map((token) => '"${token.replaceAll('"', '""')}"*')
         .join(' ');
     if (expression.isEmpty) return const [];
-    final db =
-        await openDatabase(file.path, readOnly: true, singleInstance: false);
+    final db = await _openResource(definition.id, file);
     try {
       final rows = await db.rawQuery('''
         SELECT f.term, f.kind, t.id, t.name, t.category, t.post_count,
@@ -706,8 +716,7 @@ class ResourceDatabaseService {
         resourceDatabaseDefinitions[ResourceDatabaseId.cooccurrence]!;
     final file = await _database(definition);
     if (!file.existsSync()) return const [];
-    final db =
-        await openDatabase(file.path, readOnly: true, singleInstance: false);
+    final db = await _openResource(definition.id, file);
     try {
       final aggregate = <String, int>{};
       for (final tag in normalized) {
