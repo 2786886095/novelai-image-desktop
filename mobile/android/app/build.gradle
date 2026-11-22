@@ -75,7 +75,9 @@ android {
 
     buildTypes {
         debug {
-            if (project.hasProperty('studioAgentQa')) {
+            if (project.hasProperty('studioFieldParityQa')) {
+                applicationIdSuffix = '.fieldparityqa'
+            } else if (project.hasProperty('studioAgentQa')) {
                 applicationIdSuffix = '.agenttest'
             }
         }

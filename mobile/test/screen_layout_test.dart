@@ -369,8 +369,10 @@ void main() {
     if (_android(tester)) {
       await tester.scrollUntilVisible(find.text('参考'), 260,
           scrollable: scrollable);
-      await tester.ensureVisible(find.text('参考'));
-      await tester.tap(find.text('参考'));
+      await Scrollable.ensureVisible(tester.element(find.text('参考')),alignment:.45);
+      await tester.pumpAndSettle();
+      expect(find.text('参考').hitTestable(), findsOneWidget);
+      await tester.tap(find.text('参考').hitTestable());
       await tester.pumpAndSettle();
     }
     await tester.scrollUntilVisible(

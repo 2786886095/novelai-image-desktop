@@ -52,7 +52,7 @@ jobs:
           for i in {1..80}; do [ -f "$data/Documents/FIELD_QA.json" ] && break; sleep 2; done
           cp "$data/Documents/FIELD_QA.json" "$RUNNER_TEMP/FIELD_QA.json"
           cat "$RUNNER_TEMP/FIELD_QA.json"
-          python3 -c 'import json,sys; r=json.load(open(sys.argv[1]));assert r["os"]=="ios" and r["passed"] is True and len(r["steps"])>=4' "$RUNNER_TEMP/FIELD_QA.json"
+          python3 -c 'import json,sys; r=json.load(open(sys.argv[1]));assert r["os"]=="ios" and r["passed"] is True and len([s for s in r["steps"] if s.startswith("open:")])==15 and "read-format-save-load-apply-group" in r["steps"]' "$RUNNER_TEMP/FIELD_QA.json"
       - if: always() && env.IOS_SIM != ''
         run: xcrun simctl io "$IOS_SIM" screenshot "$RUNNER_TEMP/ios-field.png"
       - uses: actions/upload-artifact@v4

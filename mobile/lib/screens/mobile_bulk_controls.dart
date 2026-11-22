@@ -23,7 +23,15 @@ const _copy = {
     '目标分组',
     '选择要移动的画风',
     '已复制',
-    '批量挂示例图'
+    '批量挂示例图',
+    '分组预设与格式',
+    '仅复制新建指令',
+    '规范化为 JSON',
+    '组合名称',
+    '保存预览为组合',
+    '已保存',
+    '保存失败',
+    '复制 AI 修改指令'
   ],
   'zh-TW': [
     '批次填入角色',
@@ -38,7 +46,15 @@ const _copy = {
     '目標群組',
     '選擇要移動的畫風',
     '已複製',
-    '批次附加範例圖'
+    '批次附加範例圖',
+    '群組預設與格式',
+    '僅複製新建指令',
+    '規範化為 JSON',
+    '組合名稱',
+    '將預覽另存為組合',
+    '已儲存',
+    '儲存失敗',
+    '複製 AI 修改指令'
   ],
   'en-US': [
     'Bulk fill characters',
@@ -53,7 +69,15 @@ const _copy = {
     'Destination group',
     'Select styles to move',
     'Copied',
-    'Attach example images'
+    'Attach example images',
+    'Group presets and format',
+    'Copy new-character instructions',
+    'Format as JSON',
+    'Group name',
+    'Save preview as group',
+    'Saved',
+    'Save failed',
+    'Copy AI edit instructions'
   ],
   'ja-JP': [
     'キャラクターを一括入力',
@@ -68,7 +92,15 @@ const _copy = {
     '移動先',
     '移動するスタイルを選択',
     'コピーしました',
-    '見本画像を一括追加'
+    '見本画像を一括追加',
+    'グループと書式',
+    '新規作成指示をコピー',
+    'JSON に整形',
+    'グループ名',
+    'プレビューを保存',
+    '保存しました',
+    '保存できませんでした',
+    'AI 修正指示をコピー'
   ],
   'ko-KR': [
     '캐릭터 일괄 입력',
@@ -83,7 +115,15 @@ const _copy = {
     '대상 그룹',
     '이동할 스타일 선택',
     '복사됨',
-    '예시 이미지 일괄 추가'
+    '예시 이미지 일괄 추가',
+    '그룹 프리셋 및 형식',
+    '새 캐릭터 지시 복사',
+    'JSON으로 정리',
+    '그룹 이름',
+    '미리보기를 그룹으로 저장',
+    '저장됨',
+    '저장 실패',
+    'AI 수정 지시 복사'
   ]
 };
 List<String> mobileBulkLabels(String language) =>
@@ -204,11 +244,14 @@ class MobileRoleBulkDialog extends StatefulWidget {
 
 class _RoleBulkState extends State<MobileRoleBulkDialog> {
   final field = TextEditingController();
+  final presetName = TextEditingController();
+  bool saving = false;
   late final String snapshot = roleSnapshot(context.read<AppState>());
   List<Map<String, String>>? rows;
   String? error;
   @override
   void dispose() {
+    presetName.dispose();
     field.dispose();
     super.dispose();
   }
@@ -247,7 +290,7 @@ class _RoleBulkState extends State<MobileRoleBulkDialog> {
                       if (mounted)
                         msg.showSnackBar(SnackBar(content: Text(l[11])));
                     },
-                    child: Text(l[2])),
+                    child: Text(l[20])),
                 TextButton(
                     onPressed: () {
                       field.text =
@@ -298,6 +341,106 @@ class _RoleBulkState extends State<MobileRoleBulkDialog> {
                         rows = null;
                         error = null;
                       })),
+              ExpansionTile(
+                  key: const ValueKey('bulk-extra'),
+                  tilePadding: EdgeInsets.zero,
+                  title: Text(l[13]),
+                  children: [
+                    Wrap(children: [
+                      TextButton(
+                          onPressed: () async {
+                            final msg = ScaffoldMessenger.of(context);
+                            await Clipboard.setData(ClipboardData(
+                                text:
+                                    'Return only JSON: {"characters":[{"name":"A","prompt":"silver hair","negativePrompt":"hat"}]}. Use 1–$max characters in slot order. Preserve quotes and weights.'));
+                            if (mounted)
+                              msg.showSnackBar(SnackBar(content: Text(l[11])));
+                          },
+                          child: Text(l[14])),
+                      TextButton(
+                          key: const ValueKey('bulk-format'),
+                          onPressed: () {
+                            try {
+                              final list = parseMobileRoles(field.text, max);
+                              setState(() {
+                                field.text = const JsonEncoder.withIndent('  ')
+                                    .convert({'characters': list});
+                                rows = list;
+                                error = null;
+                              });
+                            } on FormatException {
+                              setState(() => error = l[6]);
+                            }
+                          },
+                          child: Text(l[15])),
+                    ]),
+                    for (final preset in app.settings.positivePromptPresets
+                        .where((p) => p.captions?.isNotEmpty ?? false))
+                      ListTile(
+                          dense: true,
+                          title: Text(preset.name),
+                          onTap: () {
+                            final saved = preset.captions!;
+                            if (saved.length > max) {
+                              setState(() => error = l[6]);
+                              return;
+                            }
+                            final list = [
+                              for (final c in saved)
+                                {
+                                  'name': c.name,
+                                  'prompt': c.prompt,
+                                  'negativePrompt': c.negativePrompt
+                                }
+                            ];
+                            setState(() {
+                              field.text = const JsonEncoder.withIndent('  ')
+                                  .convert({'characters': list});
+                              rows = list;
+                              error = null;
+                            });
+                          }),
+                    TextField(
+                        key: const ValueKey('bulk-preset-name'),
+                        controller: presetName,
+                        maxLength: 64,
+                        decoration: InputDecoration(labelText: l[16]),
+                        onChanged: (_) => setState(() {})),
+                    TextButton(
+                        key: const ValueKey('bulk-preset-save'),
+                        onPressed: saving ||
+                                rows == null ||
+                                presetName.text.trim().isEmpty
+                            ? null
+                            : () async {
+                                final list = rows!;
+                                final msg = ScaffoldMessenger.of(context);
+                                setState(() => saving = true);
+                                try {
+                                  await app.savePositivePromptPreset(
+                                      name: presetName.text.trim(),
+                                      prompt: '',
+                                      captions: [
+                                        for (final r in list)
+                                          CharCaptionItem(
+                                              name: r['name'] ?? '',
+                                              prompt: r['prompt']!,
+                                              negativePrompt:
+                                                  r['negativePrompt'] ?? '')
+                                      ]);
+                                  if (mounted) {
+                                    presetName.clear();
+                                    msg.showSnackBar(
+                                        SnackBar(content: Text(l[18])));
+                                  }
+                                } catch (_) {
+                                  if (mounted) setState(() => error = l[19]);
+                                } finally {
+                                  if (mounted) setState(() => saving = false);
+                                }
+                              },
+                        child: Text(l[17])),
+                  ]),
               if (rows != null)
                 for (var i = 0; i < rows!.length; i++)
                   ListTile(

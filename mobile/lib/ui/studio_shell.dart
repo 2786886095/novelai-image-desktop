@@ -273,6 +273,7 @@ class _PhoneShell extends StatelessWidget {
               label: destinations[index].label,
             ),
           NavigationDestination(
+            key:const ValueKey('phone-open-more'),
             icon: const Icon(Icons.apps_outlined),
             selectedIcon: const Icon(Icons.apps),
             label: moreLabel,
@@ -286,12 +287,13 @@ class _PhoneShell extends StatelessWidget {
     FocusManager.instance.primaryFocus?.unfocus();
     final ownerContext = context;
     final primary = order.take(4).toSet();
+    var query = '';
     final target = await showModalBottomSheet<int>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (context) {
+      builder: (context) => StatefulBuilder(builder:(context,update) {
         final size = MediaQuery.sizeOf(context);
         final landscape = size.width > size.height;
         return SafeArea(
@@ -323,6 +325,10 @@ class _PhoneShell extends StatelessWidget {
                         icon: const Icon(Icons.reorder),
                         label: Text(_orderLabels(context).$1),
                       )),
+                  TextField(key:const ValueKey('workbench-feature-search'),
+                    decoration:InputDecoration(isDense:true,prefixIcon:const Icon(Icons.search),
+                      labelText:MaterialLocalizations.of(context).searchFieldLabel),
+                    onChanged:(value)=>update(()=>query=value.trim().toLowerCase())),
                   const SizedBox(height: StudioSpacing.md),
                   Flexible(
                     child: GridView.count(
@@ -335,8 +341,9 @@ class _PhoneShell extends StatelessWidget {
                       childAspectRatio: (landscape ? 1.55 : 1.25)/(MediaQuery.textScalerOf(context).scale(14)/14).clamp(1.0,3.0),
                       children: [
                         for (final index in order)
-                          if (!primary.contains(index))
+                          if (query.isEmpty ? !primary.contains(index) : destinations[index].label.toLowerCase().contains(query))
                             _MoreDestinationButton(
+                              key:ValueKey('classic-catalog-$index'),
                               destination: destinations[index],
                               selected: selectedIndex == index,
                               onPressed: () {
@@ -352,7 +359,7 @@ class _PhoneShell extends StatelessWidget {
             ),
           ),
         );
-      },
+      }),
     );
     if (target != null) {
       FocusManager.instance.primaryFocus?.unfocus();
@@ -415,6 +422,7 @@ class _MoreDestinationButton extends StatelessWidget {
   final VoidCallback onPressed;
 
   const _MoreDestinationButton({
+    super.key,
     required this.destination,
     required this.selected,
     required this.onPressed,
