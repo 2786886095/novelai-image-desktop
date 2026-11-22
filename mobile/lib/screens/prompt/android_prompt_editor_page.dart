@@ -104,6 +104,7 @@ class AndroidPromptEditorPage extends StatefulWidget {
   final bool Function() ownerAlive;
   final bool Function(String snapshot) onRevert;
   final List<PromptToolAction> Function() tools;
+  final PromptToolAction? capsule;
   final Widget Function()? extraTools;
   final Widget Function()? suggestions;
   final PromptEditorRouteScope? routeScope;
@@ -118,6 +119,7 @@ class AndroidPromptEditorPage extends StatefulWidget {
       required this.ownerAlive,
       required this.onRevert,
       required this.tools,
+      this.capsule,
       this.extraTools,
       this.suggestions,
       this.routeScope});
@@ -270,17 +272,16 @@ class _AndroidPromptEditorPageState extends State<AndroidPromptEditorPage> {
             ? chipItems[_selected!]
             : null;
     final tools = <Widget>[
-      Padding(
-        padding: const EdgeInsets.only(right: 6),
-        child: OutlinedButton.icon(
+      if (widget.capsule case final action?)
+        OutlinedButton.icon(
+          key: const ValueKey('android-editor-capsule'),
           onPressed: () {
-            setState(() => _tags = false);
-            _focus.requestFocus();
+            _focus.unfocus();
+            action.onPressed?.call();
           },
-          icon: const Icon(Icons.add, size: 18),
-          label: Text(t('add')),
+          icon: Icon(action.icon, size: 18),
+          label: Text(action.label),
         ),
-      ),
       if (keyboard)
         Padding(
           padding: const EdgeInsets.only(right: 6),
@@ -301,17 +302,23 @@ class _AndroidPromptEditorPageState extends State<AndroidPromptEditorPage> {
             label: Text(t(displayTags ? 'text' : 'tags')),
           ),
         ),
-      for (final action in actions)
-        Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: OutlinedButton.icon(
-                onPressed: action.onPressed == null
-                    ? null
-                    : () async {
-                        if (widget.ownerAlive()) await action.onPressed!();
-                      },
-                icon: Icon(action.icon, size: 18),
-                label: Text(action.label))),
+      if (actions.isNotEmpty)
+        PopupMenuButton<int>(
+          tooltip: t('moreTools'),
+          onSelected: (i) async {
+            if (widget.ownerAlive()) await actions[i].onPressed?.call();
+          },
+          itemBuilder: (context) => [
+            for (var i = 0; i < actions.length; i++)
+              PopupMenuItem<int>(value: i, enabled: actions[i].onPressed != null,
+                child: Builder(builder: (c) => _routes.registerTool(c, Text(actions[i].label)))),
+          ],
+          child: ConstrainedBox(constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.more_horiz), const SizedBox(width: 6), Text(t('moreTools')),
+              ]))),
+        ),
       if (widget.extraTools != null) widget.extraTools!(),
     ];
     return Scaffold(
@@ -432,7 +439,7 @@ class _AndroidPromptEditorPageState extends State<AndroidPromptEditorPage> {
                               _focus.requestFocus();
                             },
                             icon: const Icon(Icons.add),
-                            label: Text(t('add'))),
+                            label: Text(t('enterTags'))),
                       ])
                     : Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),

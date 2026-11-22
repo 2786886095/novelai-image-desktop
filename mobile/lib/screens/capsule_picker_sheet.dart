@@ -11,24 +11,91 @@ import '../tags/capsule_camera_terms.dart';
 
 class CapsulePickerSheet extends StatefulWidget {
   const CapsulePickerSheet(
-      {super.key, required this.categories, required this.onPick});
+      {super.key,
+      required this.categories,
+      required this.onPick,
+      this.fieldTags});
+  // Non-null only when the picker edits one field rather than routing
+  // positive and negative categories to distinct workbench prompts.
+  final Iterable<String>? fieldTags;
   final List<CapsuleCategory> categories;
   final void Function(String, bool) onPick;
   @override
   State<CapsulePickerSheet> createState() => _PickerState();
 }
 
+// Browse aliases share the original tag lists; global search still uses the unmodified corpus.
+List<CapsuleCategory> capsuleBrowseDirectory(List<CapsuleCategory> source) {
+  final clothes = source.where((c) => c.name == '服饰').firstOrNull;
+  return source.map((cat) {
+    if (cat.name != '人物') return cat;
+    final all = [...cat.subgroups, ...?clothes?.subgroups];
+    final byName = {for (final g in all.reversed) g.name: g};
+    final names = <String>{
+      '对象',
+      '体型',
+      '上衣',
+      '下装',
+      '眼睛',
+      '配饰',
+      ...all.map((g) => g.name)
+    };
+    return CapsuleCategory(name: cat.name, subgroups: [
+      for (final n in names)
+        if (byName[n] case final g?) g
+    ]);
+  }).toList();
+}
+
+const _directoryLabels = {
+  'zh-CN': ['分类浏览', '大类', '小类', '角色', '饰品', '全部小类', '收起', '全库列表'],
+  'zh-TW': ['分類瀏覽', '大類', '小類', '角色', '飾品', '全部小類', '收合', '全庫列表'],
+  'en-US': [
+    'Browse categories',
+    'Category',
+    'Subcategory',
+    'Character',
+    'Accessories',
+    'All subcategories',
+    'Show less',
+    'All tags'
+  ],
+  'ja-JP': [
+    '分類から選ぶ',
+    '大分類',
+    '小分類',
+    'キャラクター',
+    'アクセサリー',
+    'すべての小分類',
+    '閉じる',
+    '全タグ一覧'
+  ],
+  'ko-KR': ['분류별 탐색', '대분류', '소분류', '캐릭터', '장신구', '모든 소분류', '접기', '전체 태그 목록']
+};
+
 typedef _Page = ({List<TagPackHit> rows, int total});
 
 class _PickerState extends State<CapsulePickerSheet> {
   final field = TextEditingController();
-  bool expanded = false, library = false;
+  bool expanded = false, library = false, allGroups = false;
+  List<CapsuleCategory>? _source;
+  List<CapsuleCategory> _directory = [];
+  List<CapsuleCategory> get directory {
+    if (!identical(_source, widget.categories)) {
+      _source = widget.categories;
+      _directory = capsuleBrowseDirectory(widget.categories);
+    }
+    return _directory;
+  }
+
   int libPage = 0;
   int ci = 0, si = 0, curPage = 0, searchPage = 0;
   String order = 'relevance', query = '', stamp = '';
   Future<_Page>? data;
   Timer? timer;
-  final chosen = <String>{};
+  String tagKey(String s) => s.trim().toLowerCase().replaceAll(' ', '_');
+  late final chosen =
+      (widget.fieldTags ?? const <String>[]).map(tagKey).toSet();
   Future<List<RelatedPromptTag>>? related;
   @override
   void dispose() {
@@ -122,8 +189,7 @@ class _PickerState extends State<CapsulePickerSheet> {
 
   Future<_Page> load(AppState app, String lang, String q, String sort, int pg,
       int cat, int sub) async {
-    final pack = app.multilingualTags,
-        group = widget.categories[cat].subgroups[sub];
+    final pack = app.multilingualTags, group = directory[cat].subgroups[sub];
     final fold = MultilingualTagPacks.key(q);
     final topic = <String>{};
     if (library && q.isEmpty) {
@@ -251,7 +317,22 @@ class _PickerState extends State<CapsulePickerSheet> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>(), lang = app.settings.language;
-    final c = widget.categories[ci], l = copy(lang);
+    final c = directory[ci], l = copy(lang);
+    final nav = _directoryLabels[lang] ?? _directoryLabels['en-US']!;
+    String catName(CapsuleCategory c) =>
+        c.name == '人物' ? nav[3] : localizedCapsuleCategoryName(lang, c.name);
+    String subName(CapsuleSubgroup g) =>
+        g.name == '配饰' ? nav[4] : localizedCapsuleSubgroupName(lang, g.name);
+    final quick = <int>{
+      ...List.generate(c.subgroups.length.clamp(0, 6), (i) => i),
+      si
+    };
+    void selectSub(int i) => setState(() {
+          si = i;
+          curPage = 0;
+          expanded = false;
+          allGroups = false;
+        });
     final p = query.isEmpty ? (library ? libPage : curPage) : searchPage;
     void change(int v) => setState(() {
           if (query.isEmpty) {
@@ -265,10 +346,11 @@ class _PickerState extends State<CapsulePickerSheet> {
           }
         });
     void pick(String tag) {
+      if (widget.fieldTags != null && chosen.contains(tagKey(tag))) return;
       widget.onPick(
           tag.replaceAll('_', ' '), c.isNegative && query.isEmpty && !library);
       setState(() {
-        chosen.add(tag);
+        chosen.add(tagKey(tag));
         related = app.suggestRelatedPromptTags(chosen.join(', '));
       });
     }
@@ -323,35 +405,6 @@ class _PickerState extends State<CapsulePickerSheet> {
                                           input('');
                                         })),
                             onChanged: input),
-                        FutureBuilder<_Page>(
-                            key: ValueKey('pager-$key'),
-                            future: data,
-                            builder: (context, s) {
-                              final pages = ((s.data?.total ?? 0) + 23) ~/ 24;
-                              if (pages <= 1 ||
-                                  (!library && query.isEmpty && expanded)) {
-                                return const SizedBox.shrink();
-                              }
-                              return Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    IconButton(
-                                        tooltip: l[4],
-                                        onPressed:
-                                            p == 0 ? null : () => change(p - 1),
-                                        icon: const Icon(Icons.chevron_left)),
-                                    TextButton(
-                                        onPressed: () =>
-                                            jump(p, pages, l[6], change),
-                                        child: Text('${p + 1} / $pages')),
-                                    IconButton(
-                                        tooltip: l[5],
-                                        onPressed: p + 1 >= pages
-                                            ? null
-                                            : () => change(p + 1),
-                                        icon: const Icon(Icons.chevron_right))
-                                  ]);
-                            }),
                         Expanded(
                             child: ListView(
                                 key: ValueKey(
@@ -359,43 +412,83 @@ class _PickerState extends State<CapsulePickerSheet> {
                                 children: [
                               if (query.isEmpty &&
                                   app.multilingualTags.active != null)
-                                chips([
-                                  FilterChip(
-                                      label: Text(
-                                          '${l[0].replaceFirst(RegExp(r'搜索|搜尋|Search |を検索| 검색'), '')} · ${app.multilingualTags.count(app.multilingualTags.active!)}'),
-                                      selected: library,
-                                      onSelected: (v) =>
-                                          setState(() => library = v)),
+                                Wrap(spacing: 6, children: [
+                                  for (final mode in [false, true])
+                                    ChoiceChip(
+                                        label: Text(mode ? nav[7] : nav[0]),
+                                        selected: library == mode,
+                                        onSelected: (_) =>
+                                            setState(() => library = mode))
                                 ]),
                               if (query.isEmpty && !library) ...[
-                                chips([
-                                  for (final (i, x)
-                                      in widget.categories.indexed)
-                                    ChoiceChip(
-                                        label: Text(
-                                            localizedCapsuleCategoryName(
-                                                lang, x.name)),
-                                        selected: ci == i,
-                                        onSelected: (_) => setState(() {
-                                              expanded = false;
-                                              ci = i;
-                                              si = 0;
-                                              curPage = 0;
-                                            }))
+                                Row(children: [
+                                  Text(nav[1]),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                      child: StudioDropdownButton<int>(
+                                          key: const ValueKey(
+                                              'capsule-main-category'),
+                                          value: ci,
+                                          isExpanded: true,
+                                          items: [
+                                            for (final (i, x)
+                                                in directory.indexed)
+                                              DropdownMenuItem(
+                                                  value: i,
+                                                  child: Text(catName(x),
+                                                      overflow: TextOverflow
+                                                          .ellipsis))
+                                          ],
+                                          onChanged: (i) {
+                                            if (i != null)
+                                              setState(() {
+                                                ci = i;
+                                                si = 0;
+                                                curPage = 0;
+                                                expanded = false;
+                                                allGroups = false;
+                                              });
+                                          }))
                                 ]),
-                                chips([
-                                  for (final (i, x) in c.subgroups.indexed)
-                                    FilterChip(
-                                        label: Text(
-                                            localizedCapsuleSubgroupName(
-                                                lang, x.name)),
-                                        selected: si == i,
-                                        onSelected: (_) => setState(() {
-                                              expanded = false;
-                                              si = i;
-                                              curPage = 0;
-                                            }))
-                                ])
+                                Align(
+                                    alignment: AlignmentDirectional.centerStart,
+                                    child: Text(
+                                        nav[2] +
+                                            ' · ' +
+                                            catName(c) +
+                                            ' › ' +
+                                            subName(c.subgroups[si]),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleSmall)),
+                                Wrap(spacing: 6, runSpacing: 2, children: [
+                                  for (final (i, g) in c.subgroups.indexed)
+                                    if (allGroups || quick.contains(i))
+                                      ChoiceChip(
+                                          key: ValueKey('capsule-subgroup:' +
+                                              c.name +
+                                              ':' +
+                                              g.name),
+                                          label: Text(subName(g)),
+                                          selected: si == i,
+                                          onSelected: (_) => selectSub(i))
+                                ]),
+                                if (c.subgroups.length > quick.length)
+                                  Align(
+                                      alignment:
+                                          AlignmentDirectional.centerStart,
+                                      child: TextButton(
+                                          key: const ValueKey(
+                                              'capsule-subgroups-more'),
+                                          onPressed: () => setState(
+                                              () => allGroups = !allGroups),
+                                          child: Text(allGroups
+                                              ? nav[6]
+                                              : nav[5] +
+                                                  ' (' +
+                                                  c.subgroups.length
+                                                      .toString() +
+                                                  ')'))),
                               ],
                               Align(
                                   alignment: Alignment.centerRight,
@@ -423,6 +516,42 @@ class _PickerState extends State<CapsulePickerSheet> {
                                         }
                                       })),
                               FutureBuilder<_Page>(
+                                  key: ValueKey('pager-$key'),
+                                  future: data,
+                                  builder: (context, s) {
+                                    final pages =
+                                        ((s.data?.total ?? 0) + 23) ~/ 24;
+                                    if (pages <= 1 ||
+                                        (!library &&
+                                            query.isEmpty &&
+                                            expanded)) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          IconButton(
+                                              tooltip: l[4],
+                                              onPressed: p == 0
+                                                  ? null
+                                                  : () => change(p - 1),
+                                              icon: const Icon(
+                                                  Icons.chevron_left)),
+                                          TextButton(
+                                              onPressed: () =>
+                                                  jump(p, pages, l[6], change),
+                                              child: Text('${p + 1} / $pages')),
+                                          IconButton(
+                                              tooltip: l[5],
+                                              onPressed: p + 1 >= pages
+                                                  ? null
+                                                  : () => change(p + 1),
+                                              icon: const Icon(
+                                                  Icons.chevron_right))
+                                        ]);
+                                  }),
+                              FutureBuilder<_Page>(
                                   key: ValueKey(key),
                                   future: data,
                                   builder: (context, s) {
@@ -446,7 +575,7 @@ class _PickerState extends State<CapsulePickerSheet> {
                                                     () => expanded = !expanded)
                                                 : null,
                                             child: Text(
-                                                '${localizedCapsuleSubgroupName(lang, c.subgroups[si].name)} · ${s.requireData.total}${pages > 1 ? (expanded ? ' ▴' : ' ▾') : ''}')),
+                                                '${subName(c.subgroups[si])} · ${s.requireData.total}${pages > 1 ? (expanded ? ' ▴' : ' ▾') : ''}')),
                                       if (rows.isEmpty)
                                         Text(l[9])
                                       else
@@ -458,12 +587,12 @@ class _PickerState extends State<CapsulePickerSheet> {
                                                 ActionChip(
                                                     key: ValueKey(
                                                         'capsule-tag:${t.tag}'),
-                                                    avatar:
-                                                        chosen.contains(t.tag)
-                                                            ? const Icon(
-                                                                Icons.check,
-                                                                size: 16)
-                                                            : null,
+                                                    avatar: chosen.contains(
+                                                            tagKey(t.tag))
+                                                        ? const Icon(
+                                                            Icons.check,
+                                                            size: 16)
+                                                        : null,
                                                     label: Text(t.description
                                                                 .isEmpty ||
                                                             t.description ==
@@ -479,8 +608,8 @@ class _PickerState extends State<CapsulePickerSheet> {
                                 FutureBuilder<List<RelatedPromptTag>>(
                                     future: related,
                                     builder: (context, s) {
-                                      final items = (s.data ?? []).where(
-                                          (t) => !chosen.contains(t.tag));
+                                      final items = (s.data ?? []).where((t) =>
+                                          !chosen.contains(tagKey(t.tag)));
                                       return items.isEmpty
                                           ? const SizedBox.shrink()
                                           : Column(

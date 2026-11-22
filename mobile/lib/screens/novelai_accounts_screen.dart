@@ -34,7 +34,7 @@ class NovelAiRelayRecommendation extends StatelessWidget {
     constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
     onPressed: () => _openRelayRecommendation(context),
     icon: Image.asset('assets/relay-brand/logo.png', width: 24, height: 24,
-      key: const ValueKey('novelai-relay-logo'), excludeFromSemantics: true),
+      key: const ValueKey('novelai-relay-logo'), semanticLabel: _accountText(context, 'accountRelayRecommendation')),
   ) : Semantics(
     button: true,
     child: Card(

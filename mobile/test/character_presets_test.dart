@@ -43,7 +43,17 @@ void main() {
       expect(c.x, .25);
       expect((await Storage().getCharacterPrompts()).single.prompt, 'spring flowers');
       final field = find.byKey(const ValueKey('character-prompt-field-0'));
+      if (find.byKey(const ValueKey('android-create-workspace')).evaluate().isNotEmpty) {
+        await tester.ensureVisible(field);
+        await tester.tap(field);
+        await tester.pumpAndSettle();
+        final editor = tester.widget<TextField>(find.byKey(const ValueKey('android-fullscreen-prompt-text')));
+        expect(editor.controller!.text, 'spring flowers');
+        await tester.tap(find.text('完成'));
+        await tester.pumpAndSettle();
+      } else {
       expect(tester.widget<EditableText>(find.descendant(of: field, matching: find.byType(EditableText))).controller.text,'spring flowers');
+      }
     });
   }
   testWidgets(
@@ -61,7 +71,14 @@ void main() {
     final field = find.byKey(const ValueKey('character-prompt-field-0'));
     await tester.scrollUntilVisible(field, 400,
         scrollable: find.byType(Scrollable).first, maxScrolls: 12);
-    await tester.enterText(field, 'blue coat, smile');
+    if (find.byKey(const ValueKey('android-create-workspace')).evaluate().isNotEmpty) {
+      await tester.tap(field);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('android-fullscreen-prompt-text')), 'blue coat, smile');
+      await tester.tap(find.text('完成'));
+    } else {
+      await tester.enterText(field, 'blue coat, smile');
+    }
     await tester.pumpAndSettle();
     expect((await Storage().getCharacterPrompts()).single.prompt,
         'blue coat, smile');

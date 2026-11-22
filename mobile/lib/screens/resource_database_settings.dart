@@ -27,6 +27,7 @@ class _ResourceText {
   final String pause;
   final String resume;
   final String source;
+  final String retry, corrupt;
   final String confirmTitle;
   final String confirmBody;
   final String restoreTitle;
@@ -61,6 +62,7 @@ class _ResourceText {
     required this.pause,
     required this.resume,
     required this.source,
+    required this.retry, required this.corrupt,
     required this.confirmTitle,
     required this.confirmBody,
     required this.restoreTitle,
@@ -100,6 +102,7 @@ _ResourceText _resourceText(Object? language) {
         pause: '暫停',
         resume: '繼續',
         source: '來源與授權',
+        retry: '重新下載', corrupt: '下載檔校驗失敗。已捨棄損壞的下載檔，已安裝的資料庫未變更。',
         confirmTitle: '取代本機資料庫？',
         confirmBody: '只有在你確認後才會取代這個本機資源資料庫。圖片、參考圖、預設、歷史與備份資料都不會被覆蓋。',
         restoreTitle: '恢復上一版資料庫？',
@@ -136,6 +139,7 @@ _ResourceText _resourceText(Object? language) {
         pause: 'Pause',
         resume: 'Resume',
         source: 'Source & license',
+        retry: 'Download again', corrupt: 'The download failed verification and was discarded. Installed databases were not changed.',
         confirmTitle: 'Replace the local database?',
         confirmBody:
             'This local resource database is replaced only after you confirm. Images, references, presets, history, and backup data are never overwritten.',
@@ -174,6 +178,7 @@ _ResourceText _resourceText(Object? language) {
         pause: '一時停止',
         resume: '再開',
         source: '配布元とライセンス',
+        retry: '再ダウンロード', corrupt: '破損したダウンロードを破棄しました。インストール済みの DB は変更されていません。',
         confirmTitle: 'ローカル DB を置き換えますか？',
         confirmBody: '確認後にこのリソース DB だけを置き換えます。画像、参照画像、プリセット、履歴、バックアップは上書きしません。',
         restoreTitle: '前の DB を復元しますか？',
@@ -209,6 +214,7 @@ _ResourceText _resourceText(Object? language) {
         pause: '일시 정지',
         resume: '계속',
         source: '출처 및 라이선스',
+        retry: '다시 다운로드', corrupt: '손상된 다운로드를 삭제했습니다. 설치된 DB는 변경되지 않았습니다.',
         confirmTitle: '로컬 DB를 교체할까요?',
         confirmBody:
             '확인한 경우에만 이 리소스 DB를 교체합니다. 이미지, 참조 이미지, 프리셋, 기록과 백업은 덮어쓰지 않습니다.',
@@ -245,6 +251,7 @@ _ResourceText _resourceText(Object? language) {
         pause: '暂停',
         resume: '继续',
         source: '来源与许可',
+        retry: '重新下载', corrupt: '下载包校验失败。已丢弃损坏的下载包，已安装的库未改动。',
         confirmTitle: '替换本地数据库？',
         confirmBody: '只有在你确认后才会替换这个本地资源数据库。图片、参考图、预设、历史和备份数据都不会被覆盖。',
         restoreTitle: '恢复上一版数据库？',
@@ -342,7 +349,10 @@ class _ResourceDatabaseSettingsPanelState
 
   Future<void> _install(
       ResourceDatabaseStatus status, _ResourceText text) async {
-    if (!await _confirm(text.confirmTitle, text.confirmBody, text)) return;
+    final name = status.definition.label;
+    final action = status.installed ? text.replace : text.install;
+    if (!await _confirm('$action · $name', status.installed ? text.confirmBody : status.definition.description, text) || !mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     setState(() => busy.add(status.definition.id));
     try {
       final message = await service.install(status.definition.id);
@@ -353,7 +363,7 @@ class _ResourceDatabaseSettingsPanelState
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.toString())));
+            .showSnackBar(SnackBar(content: Text(error is CorruptResourceDownload ? text.corrupt : error.toString())));
       }
     } finally {
       if (mounted) setState(() => busy.remove(status.definition.id));
@@ -397,7 +407,7 @@ class _ResourceDatabaseSettingsPanelState
         ResourceDownloadPhase.installing => text.installing,
         ResourceDownloadPhase.complete => text.complete,
         ResourceDownloadPhase.paused => text.paused,
-        ResourceDownloadPhase.error => value.message,
+        ResourceDownloadPhase.error => value.message == CorruptResourceDownload.message ? text.corrupt : value.message,
         _ => '',
       };
 
@@ -568,7 +578,7 @@ class _ResourceRow extends StatelessWidget {
         ]),
         if (event != null && event!.phase != ResourceDownloadPhase.idle) ...[
           const SizedBox(height: 10),
-          LinearProgressIndicator(
+          if (active) LinearProgressIndicator(
             value: active && event!.totalBytes > 0 ? event!.percent : null,
           ),
           const SizedBox(height: 5),
@@ -597,7 +607,7 @@ class _ResourceRow extends StatelessWidget {
                   : status.installed
                       ? Icons.sync
                       : Icons.download_outlined),
-              label: Text(status.resumableBytes > 0
+              label: Text(event?.message == CorruptResourceDownload.message ? text.retry : status.resumableBytes > 0
                   ? text.resume
                   : status.installed
                       ? text.replace

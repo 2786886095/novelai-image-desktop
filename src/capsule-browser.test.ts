@@ -1,7 +1,8 @@
 import {readFileSync} from "node:fs";
 import {describe,expect,it} from "vitest";
-import {browseTags,capsuleBrowseGroups} from "./components/CapsuleTagBrowser";
+import {browseTags,capsuleBrowseGroups,capsuleDirectory} from "./components/CapsuleTagBrowser";
 import {TAG_PACK_MANIFEST} from "../shared/multilingual-tag-pack-contract";
+import {CAPSULE_TAXONOMY} from "./prompt-data";
 import snapshot from "../shared/tag-pack-browse.json";
 
 describe("capsule dictionary browse",()=>{
@@ -22,6 +23,18 @@ describe("capsule dictionary browse",()=>{
     const index=new Map([["long hair",hit]]);
     expect(browseTags(capsuleBrowseGroups[1],index)).toEqual([hit]);
     expect(browseTags(capsuleBrowseGroups[1],new Map())).toEqual([]);
+  });
+  it("links the six character shortcuts to the original subgroups without changing the search corpus",()=>{
+    expect(capsuleDirectory.map(x=>x.name)).toEqual(CAPSULE_TAXONOMY.map(x=>x.name));
+    const role=capsuleDirectory.find(x=>x.name==="人物")!;
+    expect(role.subgroups.slice(0,6).map(x=>x.name)).toEqual(["对象","体型","上衣","下装","眼睛","配饰"]);
+    const body=CAPSULE_TAXONOMY.find(x=>x.name==="人物")!, clothes=CAPSULE_TAXONOMY.find(x=>x.name==="服饰")!;
+    expect(body.subgroups.some(g=>g.name==="上衣")).toBe(false);
+    expect(new Set(role.subgroups.map(g=>g.name)).size).toBe(role.subgroups.length);
+    for(const g of [...body.subgroups,...clothes.subgroups]){
+      expect(role.subgroups.find(x=>x.name===g.name)?.tags).toBe(g.tags);
+    }
+    for(const other of CAPSULE_TAXONOMY.filter(c=>c!==body))expect(capsuleDirectory.find(c=>c.name===other.name)).toBe(other);
   });
   it("wires the same capsule browser into general and character prompt tools",()=>{
     const app=readFileSync(new URL("./App.tsx",import.meta.url),"utf-8");

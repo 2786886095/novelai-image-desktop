@@ -8,6 +8,8 @@ import '../prompts/negative_prompt_library.dart';
 import 'translation_preview_dialog.dart';
 import '../prompts/translation.dart';
 import 'capsule_picker_sheet.dart';
+import 'mobile_bulk_controls.dart';
+import 'prompt/prompt_chip_tokenizer.dart';
 import 'style_library_screen.dart';
 import 'compatible_images.dart';
 import '../models/style_library.dart';
@@ -538,9 +540,39 @@ class GenerateScreen extends StatelessWidget {
   static String _appendTag(String prompt, String tag) {
     final t = tag.trim();
     if (t.isEmpty) return prompt;
-    final base = prompt.trim();
-    return base.isEmpty ? '$t, ' : '$base, $t, ';
+    final end = prompt.trimRight();
+    if (end.isEmpty) return '$t, ';
+    final separator = !end.endsWith(',') ? ', ' : end == prompt ? ' ' : '';
+    return '$prompt$separator$t, ';
   }
+}
+
+// Push the route immediately; closing during asset load cannot reopen it.
+class _CapsuleLoader extends StatefulWidget {
+  final void Function(String, bool) onPick;
+  final Iterable<String>? fieldTags;
+  const _CapsuleLoader({required this.onPick, this.fieldTags});
+  @override
+  State<_CapsuleLoader> createState() => _CapsuleLoaderState();
+}
+
+class _CapsuleLoaderState extends State<_CapsuleLoader> {
+  late Future<List<CapsuleCategory>> taxonomy = loadCapsuleTaxonomy();
+  @override
+  Widget build(BuildContext context) => FutureBuilder<List<CapsuleCategory>>(
+    future: taxonomy,
+    builder: (context, result) {
+      if (result.connectionState != ConnectionState.done) {
+        return const SafeArea(child: Padding(padding: EdgeInsets.all(24), child: LinearProgressIndicator()));
+      }
+      if ((result.data ?? []).isEmpty) {
+        final text = generateScreenTextFor(context.read<AppState>().settings.language);
+        return SafeArea(child: TextButton.icon(
+          icon: const Icon(Icons.refresh), label: Text(text.capsuleLoadFailed),
+          onPressed: () => setState(() => taxonomy = loadCapsuleTaxonomy())));
+      }
+      return CapsulePickerSheet(categories: result.requireData, fieldTags: widget.fieldTags, onPick: widget.onPick);
+    });
 }
 
 class _AndroidGenerateLayout extends StatelessWidget {
@@ -564,16 +596,29 @@ class _AndroidGenerateLayout extends StatelessWidget {
       (size.width >= 720 && size.width > size.height);
     final hasPreview = state.current != null || state.workbenchImage != null ||
       state.generationPreview != null || state.busy;
+    void insertWorkbenchTag(String tag, bool negative) => state.setParam((params) {
+      if (negative) {
+        params.negativePrompt = GenerateScreen._appendTag(params.negativePrompt, tag);
+      } else {
+        params.positivePrompt = GenerateScreen._appendTag(params.positivePrompt, tag);
+      }
+    });
     final promptCard = AndroidSectionCard(
       key: const ValueKey('android-create-prompt-card'),
       title: t('prompts'), icon: Icons.notes,
-      trailing: IconButton(tooltip: t('search'), icon: const Icon(Icons.search),
+      trailing: IconButton(tooltip: t('search'), icon: Icon(Icons.search, semanticLabel: t('search')),
         onPressed: () => _androidCreateSheet(context, t('search'), _TagSearchBox(
-          onInsert: (tag, negative) => state.setParam((params) {
-            if (negative) { params.negativePrompt = GenerateScreen._appendTag(params.negativePrompt, tag); }
-            else { params.positivePrompt = GenerateScreen._appendTag(params.positivePrompt, tag); }
-          })))),
+          onInsert: insertWorkbenchTag))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Align(alignment: AlignmentDirectional.centerStart,
+          child: TextButton.icon(
+            key: const ValueKey('android-create-capsule'),
+            icon: const Icon(Icons.auto_awesome_outlined),
+            label: Text(text.inspirationCapsules),
+            onPressed: () => showModalBottomSheet<void>(
+              context: context, isScrollControlled: true, showDragHandle: true,
+              builder: (_) => _CapsuleLoader(onPick: insertWorkbenchTag)),
+          )),
         PromptEditor(label: text.stylePrompt, value: p.stylePrompt, lockKind: 'style',
           onChanged: (value) => state.setParam((x) => x.stylePrompt = value)),
         const SizedBox(height: 10),
@@ -600,7 +645,7 @@ class _AndroidGenerateLayout extends StatelessWidget {
       child: ConstrainedBox(constraints: const BoxConstraints(minHeight: 72),
         child: ListTile(leading: const Icon(Icons.image_outlined),
           title: Text(t('emptyResult')), trailing: IconButton(tooltip: t('import'),
-            onPressed: onPick, icon: const Icon(Icons.add_photo_alternate_outlined))))));
+            onPressed: onPick, icon: Icon(Icons.add_photo_alternate_outlined, semanticLabel: t('import')))))));
     final controls = <Widget>[
       promptCard,
       _AndroidCreateDisclosure(title: t('charactersTitle'), icon: Icons.people_outline,
@@ -705,21 +750,21 @@ class _AndroidCreateDock extends StatelessWidget {
           ])),
           SizedBox(height: 56, child: Row(children: [
             IconButton(tooltip: t('import'), onPressed: state.busy ? null : onPick,
-              icon: const Icon(Icons.add_photo_alternate_outlined)),
+              icon: Icon(Icons.add_photo_alternate_outlined, semanticLabel: t('import'))),
             IconButton(tooltip: '${t('queue')} · $queueCount',
               onPressed: () => _androidCreateSheet(context, t('queue'),
                 Consumer<AppState>(builder: (_, live, __) =>
                   live.generationQueueRunning || live.queueProgress != null || live.generationQueue.isNotEmpty
                     ? _GenerationQueuePanel(state: live) : Text('${t('queue')} · 0'))),
               icon: Badge(isLabelVisible: queueCount > 0, label: Text('$queueCount'),
-                child: const Icon(Icons.playlist_play))),
+                child: Icon(Icons.playlist_play, semanticLabel: t('queue')))),
             if (compact) IconButton(tooltip: t('parameters'),
               onPressed: () => _androidCreateSheet(context, t('parameters'), _ParamControls()),
-              icon: const Icon(Icons.tune)),
+              icon: Icon(Icons.tune, semanticLabel: t('parameters'))),
             if (compact) IconButton(tooltip: t('cost'),
               onPressed: () => _androidCreateSheet(context, t('cost'), Consumer<AppState>(
                 builder: (_, live, __) => _AnlasQuoteBar(state: live))),
-              icon: const Icon(Icons.toll_outlined)),
+              icon: Icon(Icons.toll_outlined, semanticLabel: t('cost'))),
             const SizedBox(width: 4),
             Expanded(child: running ? FilledButton.icon(
               onPressed: state.workbenchImage != null || state.queueAdding ? null : state.enqueueGeneration,
@@ -745,8 +790,7 @@ class PromptEditor extends StatefulWidget {
   final bool showRelatedTags;
   final String? lockKind;
   final bool negativeLibrary;
-  // Translate / normalize / weight tools — only meaningful on the positive
-  // prompt, so style and negative fields opt out.
+  // Network-backed writing assistance is opt-in; local tag tools are field-scoped.
   final bool showTextTools;
   final ValueChanged<String> onChanged;
 
@@ -821,6 +865,11 @@ class PromptEditorState extends State<PromptEditor> {
             return true;
           },
           tools: _androidTools,
+          capsule: PromptToolAction(
+            label: generateScreenTextFor(language).inspirationCapsules,
+            icon: Icons.auto_awesome_outlined,
+            onPressed: () => _openFieldCapsule(routes),
+          ),
           extraTools: () => widget.lockKind == 'negative' || widget.negativeLibrary
             ? NegativePromptLibraryButton(value: controller.text, routeWrapper: routes.registerTool,
                 onApply: (prompt, mode) => _apply(applyNegativePreset(controller.text, prompt, mode)))
@@ -845,6 +894,22 @@ class PromptEditorState extends State<PromptEditor> {
     }
   }
 
+  Future<void> _openFieldCapsule(PromptEditorRouteScope routes) async {
+    bool active() => mounted && _editorOwnerAlive && !routes.isClosed &&
+        identical(routes, _fullscreenRoutes);
+    if (!active()) return;
+    final present = tokenizePromptChips(controller.text)?.map((t) => t.text).toList() ?? <String>[];
+    await routes.wait(showModalBottomSheet<void>(
+      context: context, isScrollControlled: true, showDragHandle: true,
+      builder: (ctx) => routes.registerTool(ctx, _CapsuleLoader(
+        fieldTags: present,
+        onPick: (tag, _) {
+          if (active()) _apply(GenerateScreen._appendTag(controller.text, tag));
+        },
+      )),
+    ));
+  }
+
   List<PromptToolAction> _androidTools() {
     final language = context.read<AppState>().settings.language;
     final text = generateScreenTextFor(language);
@@ -863,9 +928,9 @@ class PromptEditorState extends State<PromptEditor> {
             _setEditorState(() => translationBackup = null);
             _apply(backup);
           }),
-        PromptToolAction(label: text.normalize, icon: Icons.auto_fix_high, onPressed: _openNormalize),
-        PromptToolAction(label: text.weight, icon: Icons.tune, onPressed: _editWeights),
       ],
+      PromptToolAction(label: text.normalize, icon: Icons.auto_fix_high, onPressed: _openNormalize),
+      PromptToolAction(label: text.weight, icon: Icons.tune, onPressed: _editWeights),
       if (hasPromptWildcards(controller.text)) PromptToolAction(label: text.randomPreview,
         icon: Icons.casino_outlined, onPressed: _previewWildcard),
       if (widget.showRelatedTags) PromptToolAction(label: text.relatedTag,
@@ -883,7 +948,7 @@ class PromptEditorState extends State<PromptEditor> {
   void didUpdateWidget(covariant PromptEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (controller.text == widget.value) return;
-    if (_fullscreenOpen && isAndroidRedesign(context)) {
+    if (_fullscreenOpen) {
       final expected = widget.value;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || widget.value != expected || controller.text == expected) return;
@@ -1310,6 +1375,12 @@ class PromptEditorState extends State<PromptEditor> {
           decoration: InputDecoration(
             labelText: widget.label,
             hintText: widget.hintText,
+            suffixIcon: IconButton(
+              key: const ValueKey('prompt-expand'),
+              tooltip: androidPromptText(language, 'expandEditor'),
+              icon: const Icon(Icons.open_in_full),
+              onPressed: openFullscreen,
+            ),
             border: const OutlineInputBorder(),
           ),
           onChanged: (value) {
@@ -1935,6 +2006,39 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
               ));
             }
 
+            final copy = styleLibraryText(state.settings.language);
+            Future<void> createArtist() async {
+              String name = '', prompt = '';
+              final group = _selectedGroup == 'all' ? 'Default' : _selectedGroup;
+              final accepted = await showDialog<bool>(
+                context: sheetContext,
+                builder: (dialog) => StatefulBuilder(builder: (_, refresh) => AlertDialog(
+                  title: Text(copy['newArtist']!),
+                  content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Text(copy['saveOnly']!),
+                    TextField(decoration: InputDecoration(labelText: copy['name']),
+                      onChanged: (v) => refresh(() => name = v)),
+                    TextField(decoration: InputDecoration(labelText: copy['prompt']),
+                      minLines: 2, maxLines: 4, onChanged: (v) => refresh(() => prompt = v)),
+                  ])),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(dialog, false), child: Text(copy['cancel']!)),
+                    FilledButton(onPressed: name.trim().isEmpty || prompt.trim().isEmpty ? null
+                        : () => Navigator.pop(dialog, true), child: Text(copy['save']!)),
+                  ],
+                )),
+              );
+              if (accepted != true || !sheetContext.mounted) return;
+              try {
+                await state.addStylePromptPreset(name: name, prompt: prompt, group: group);
+                if (sheetContext.mounted) ScaffoldMessenger.of(sheetContext).showSnackBar(
+                  SnackBar(content: Text(_fillName(text.stylePresetSaved, name.trim()))));
+              } catch (error) {
+                if (sheetContext.mounted) ScaffoldMessenger.of(sheetContext).showSnackBar(
+                  SnackBar(content: Text(error.toString())));
+              }
+            }
+
             Widget presetTile(StylePromptPreset preset) {
               final selected =
                   preset.prompt.trim() == state.params.stylePrompt.trim();
@@ -1954,7 +2058,16 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                   state.applyStylePromptPreset(preset);
                   Navigator.pop(sheetContext);
                 },
-                trailing: PopupMenuButton<String>(
+                trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  TextButton(
+                    key: ValueKey('append-style-'+preset.id),
+                    onPressed: preset.prompt.trim().isEmpty ? null : () {
+                      state.applyStylePromptPreset(preset, append: true);
+                      Navigator.pop(sheetContext);
+                    },
+                    child: Text(copy['append']!, semanticsLabel: copy['appendStyle']),
+                  ),
+                  PopupMenuButton<String>(
                   popUpAnimationStyle: MediaQuery.disableAnimationsOf(context)
                       ? AnimationStyle.noAnimation
                       : AppMotion.disclosureStyle,
@@ -2026,6 +2139,7 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                     ),
                   ],
                 ),
+                ]),
               );
             }
 
@@ -2047,6 +2161,8 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                             child: Text(labels.manage,
                                 style: Theme.of(context).textTheme.titleLarge),
                           ),
+                          TextButton.icon(onPressed: createArtist, icon: const Icon(Icons.add),
+                            label: Text(copy['newArtist']!)),
                           Text('${state.settings.stylePromptPresets.length}',
                               style: Theme.of(context).textTheme.labelLarge),
                         ],
@@ -2557,7 +2673,7 @@ class _TagSearchBoxState extends State<_TagSearchBox> {
                 OutlinedButton.icon(
                   onPressed: _openCapsules,
                   icon: const Icon(Icons.category_outlined),
-                  label: Text(text.browseCategories),
+                  label: Text(text.inspirationCapsules),
                 ),
                 OutlinedButton.icon(
                   onPressed: () async {
@@ -3282,6 +3398,11 @@ class _CharacterPromptsState extends State<_CharacterPrompts> {
               const SizedBox(height: 8),
               const _CharacterPositionEditor(),
             ],
+            Align(alignment: AlignmentDirectional.centerStart, child: TextButton.icon(
+              key: const ValueKey('mobile-role-bulk'), icon: const Icon(Icons.playlist_add),
+              onPressed: slots != null || s.params.maxCharacterPrompts < 1 ? null : () =>
+                showDialog<void>(context: context, builder: (_) => const MobileRoleBulkDialog()),
+              label: Text(mobileBulkLabels(language)[0]))),
             const CharacterPresetBar(),
             if (slots != null)
               Wrap(
@@ -5340,7 +5461,9 @@ class _CharCardState extends State<_CharCard> {
     String t(String key) => mobileUiTextFor(language, key);
     final collapsed = _collapsed || widget.forceCollapsed;
     final c = s.extras.charCaptions[widget.index];
-    if (_positive.text != c.prompt) {
+    final fullscreenPositive = isAndroidRedesign(context) ||
+        defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android;
+    if (!fullscreenPositive && _positive.text != c.prompt) {
       _positive.value = TextEditingValue(text: c.prompt,
           selection: TextSelection.collapsed(offset: c.prompt.length));
     }
@@ -5431,7 +5554,17 @@ class _CharCardState extends State<_CharCard> {
                             }
                             s.markCharacterChanged();
                           }),
-                      TextFormField(
+                      if (fullscreenPositive)
+                        PromptEditor(
+                          key: ValueKey('character-prompt-field-${widget.index}'),
+                          label: '$characterLabel · ${generateScreenTextFor(language).positivePrompt}',
+                          value: c.prompt,
+                          onChanged: (v) {
+                            c.prompt = v;
+                            s.markCharacterChanged();
+                          },
+                        )
+                      else TextFormField(
                         key: ValueKey('character-prompt-field-${widget.index}'),
                         controller: _positive,
                         decoration: InputDecoration(
@@ -5824,12 +5957,20 @@ class _GenerationQueuePanel extends StatelessWidget {
                       ? '${job.label} · ${text.quoting}'
                       : job.label,
                   pending: job.quotePending,
-                  trailing: IconButton(
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (state.generationQueue.length > 1) PopupMenuButton<int>(
+                      icon: const Icon(Icons.swap_vert), tooltip: styleLibraryText(state.settings.language)['sort'],
+                      onSelected: (delta) => state.movePendingQueueJob(job.id, delta),
+                      itemBuilder: (_) => [
+                        if (job != state.generationQueue.first) PopupMenuItem(value: -1, child: Text(styleLibraryText(state.settings.language)['moveUp']!)),
+                        if (job != state.generationQueue.last) PopupMenuItem(value: 1, child: Text(styleLibraryText(state.settings.language)['moveDown']!)),
+                      ]),
+                    IconButton(
                     tooltip: text.removeFromQueue,
                     visualDensity: VisualDensity.compact,
                     onPressed: () => state.removeQueueJob(job.id),
                     icon: const Icon(Icons.close, size: 18),
-                  ),
+                  )]),
                 ),
             ],
           ],

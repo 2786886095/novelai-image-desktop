@@ -5,6 +5,8 @@ String androidPromptText(String language, String key) {
 
 const _copy = <String, Map<String, String>>{
   'zh-CN': {
+    'expandEditor': '全屏编辑',
+    'enterTags': '输入标签', 'moreTools': '更多工具',
     'prompts': '提示词',
     'text': '文本',
     'tags': '标签',
@@ -48,6 +50,8 @@ const _copy = <String, Map<String, String>>{
     'edit': '编辑',
   },
   'zh-TW': {
+    'expandEditor': '全螢幕編輯',
+    'enterTags': '輸入標籤', 'moreTools': '更多工具',
     'prompts': '提示詞',
     'text': '文字',
     'tags': '標籤',
@@ -91,6 +95,8 @@ const _copy = <String, Map<String, String>>{
     'edit': '編輯',
   },
   'en-US': {
+    'expandEditor': 'Edit full screen',
+    'enterTags': 'Enter tags', 'moreTools': 'More tools',
     'prompts': 'Prompts',
     'text': 'Text',
     'tags': 'Tags',
@@ -135,6 +141,8 @@ const _copy = <String, Map<String, String>>{
     'edit': 'Edit',
   },
   'ja-JP': {
+    'expandEditor': '全画面で編集',
+    'enterTags': 'タグを入力', 'moreTools': 'その他のツール',
     'prompts': 'プロンプト',
     'text': 'テキスト',
     'tags': 'タグ',
@@ -178,6 +186,8 @@ const _copy = <String, Map<String, String>>{
     'edit': '編集',
   },
   'ko-KR': {
+    'expandEditor': '전체 화면에서 편집',
+    'enterTags': '태그 입력', 'moreTools': '도구 더 보기',
     'prompts': '프롬프트',
     'text': '텍스트',
     'tags': '태그',

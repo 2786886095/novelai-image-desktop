@@ -230,11 +230,11 @@ class _AndroidStudioShellState extends State<AndroidStudioShell> {
             onPressed: chrome?.search != null
               ? () => setState(() => _searchOpen = true)
               : () => _showAllFeatures(search: true),
-            icon: const Icon(Icons.search)),
+            icon: Icon(Icons.search, semanticLabel: MaterialLocalizations.of(context).searchFieldLabel)),
         ],
         IconButton(key: const ValueKey('android-all-features'),
           tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
-          onPressed: () => _showPageActions(chrome), icon: const Icon(Icons.more_horiz)),
+          onPressed: () => _showPageActions(chrome), icon: Icon(Icons.more_horiz, semanticLabel: MaterialLocalizations.of(context).moreButtonTooltip)),
       ])),
     ));
   }

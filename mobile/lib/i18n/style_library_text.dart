@@ -1,5 +1,9 @@
 const styleLibraryLabels = {
   "zh-CN": {
+    "newArtist": "新建画师串",
+    "append": "追加",
+    "appendStyle": "追加到风格提示词",
+    "saveOnly": "保存到列表，不改变当前提示词。",
     "title": "风格管理",
     "search": "搜索名称或提示词",
     "all": "全部分类",
@@ -52,6 +56,10 @@ const styleLibraryLabels = {
     "setCover": "设为封面"
   },
   "en-US": {
+    "newArtist": "New artist string",
+    "append": "Append",
+    "appendStyle": "Append to style prompt",
+    "saveOnly": "Save to the list without changing the current prompt.",
     "title": "Styles",
     "search": "Search names or prompts",
     "all": "All categories",
@@ -104,6 +112,10 @@ const styleLibraryLabels = {
     "setCover": "Set as cover"
   },
   "zh-TW": {
+    "newArtist": "新增畫師串",
+    "append": "追加",
+    "appendStyle": "附加至風格提示詞",
+    "saveOnly": "儲存到清單，不變更目前提示詞。",
     "title": "風格管理",
     "search": "搜尋名稱或提示詞",
     "all": "全部分類",
@@ -156,6 +168,10 @@ const styleLibraryLabels = {
     "setCover": "設為封面"
   },
   "ja-JP": {
+    "newArtist": "画師タグ列を新規作成",
+    "append": "追記",
+    "appendStyle": "スタイルプロンプトに追記",
+    "saveOnly": "現在のプロンプトは変更せず、一覧に保存します。",
     "title": "スタイル管理",
     "search": "名前・プロンプトを検索",
     "all": "全カテゴリ",
@@ -208,6 +224,10 @@ const styleLibraryLabels = {
     "setCover": "カバーに設定"
   },
   "ko-KR": {
+    "newArtist": "작가 태그 묶음 만들기",
+    "append": "추가",
+    "appendStyle": "스타일 프롬프트에 덧붙이기",
+    "saveOnly": "현재 프롬프트를 바꾸지 않고 목록에 저장합니다.",
     "title": "스타일 관리",
     "search": "이름 또는 프롬프트 검색",
     "all": "모든 분류",

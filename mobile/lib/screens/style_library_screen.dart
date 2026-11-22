@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import '../models/nai_models.dart';
 import '../models/style_library.dart';
+import 'mobile_bulk_controls.dart';
 import '../state/app_state.dart';
 import '../i18n/style_library_text.dart';
 import '../ui/studio_dropdown.dart';
@@ -232,6 +233,25 @@ class _StyleLibraryScreenState extends State<StyleLibraryScreen> {
                 .toLowerCase()
                 .contains(query.toLowerCase()))
         .toList();
+    Future<void> manage(bool attach) async {
+      final move = await showDialog<MobileStyleMove>(context: context, builder: (_) =>
+        MoveMobileStylesDialog(styles: visible, groups: groups, language: s.language, attach: attach));
+      if (!mounted || move == null) return;
+      if (!attach) { await run(() => state.moveStylePresetsTogether(move.ids, move.group)); return; }
+      await run(() async {
+        final pick = await FilePicker.platform.pickFiles(allowMultiple:true, type:FileType.custom,
+          allowedExtensions:['jpg','jpeg','png','webp']);
+        if (!mounted || pick == null || pick.files.isEmpty) return;
+        final sources = [for(final f in pick.files) if(f.path!=null) (path:f.path!,name:f.name)];
+        if(sources.length!=pick.files.length) throw StateError('Unreadable image');
+        final ok = await showDialog<bool>(context:context,builder:(c)=>AlertDialog(
+          title:Text(mobileBulkLabels(s.language)[12]),
+          content:Text('${t['title']}: ${move.ids.length}\n${t['images']}: ${sources.length} × ${move.ids.length}'),
+          actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:Text(t['cancel']!)),
+          FilledButton(onPressed:()=>Navigator.pop(c,true),child:Text(MaterialLocalizations.of(c).okButtonLabel))]));
+        if(mounted && ok==true) await state.attachStyleExamplesTogether(move.ids,sources);
+      });
+    }
     return Scaffold(
         appBar: workbenchAppBar(context, AppBar(title: studioAppBarTitle(context, Text(t['title']!)), actions: [
           IconButton(
@@ -313,6 +333,11 @@ class _StyleLibraryScreenState extends State<StyleLibraryScreen> {
                             })
                 ]),
                 const StyleSortPicker(),
+                Wrap(children:[
+                  for(final attach in [false,true]) TextButton.icon(
+                    onPressed:busy||visible.isEmpty?null:()=>manage(attach),
+                    icon:Icon(attach?Icons.add_photo_alternate_outlined:Icons.drive_file_move_outline),
+                    label:Text(mobileBulkLabels(s.language)[attach?12:8]))]),
                 if (error != null)
                   Text(error!,
                       style:
@@ -387,6 +412,10 @@ class _StyleLibraryScreenState extends State<StyleLibraryScreen> {
                                                     widget.onApply?.call();
                                                   },
                                             child: Text(t['apply']!)),
+                                        TextButton(onPressed: busy || p.prompt.trim().isEmpty ? null : () {
+                                          state.applyStylePromptPreset(p, append: true);
+                                          widget.onApply?.call();
+                                        }, child: Text(t['appendStyle']!)),
                                         IconButton(
                                             tooltip: t['moveUp'],
                                             onPressed: busy || i == 0

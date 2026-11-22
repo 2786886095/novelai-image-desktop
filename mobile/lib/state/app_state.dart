@@ -1133,6 +1133,54 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
+  // Stage files first; publish all metadata once, without touching generation inputs.
+  Future<void> attachStyleExamplesTogether(Set<String> ids, List<({String path,String name})> files) async {
+    final selected=Set<String>.of(ids), sources=List.of(files);
+    if(selected.isEmpty || sources.isEmpty) return;
+    bool fits(AppSettings s) => selected.every((id){
+      final p=s.stylePromptPresets.where((p)=>p.id==id).firstOrNull;
+      return p!=null && p.previewImages.length+sources.length<=9;
+    });
+    if(!fits(settings)) throw StateError('Selection unavailable or preview limit exceeded (9)');
+    final staged=<String,List<StylePromptPreviewImage>>{};
+    try{
+      for(final id in selected){
+        final images=staged[id]=[];
+        for(final f in sources){
+          final image=await storage.copyStylePromptPreviewImage(presetId:id,sourcePath:f.path,sourceName:f.name);
+          if(image==null) throw FormatException('Unsupported image: '+f.name);
+          images.add(image);
+        }
+      }
+      await updateStyleLibrary((s){
+        if(!fits(s)) throw StateError('Selection changed');
+        for(final p in s.stylePromptPresets){
+          if(selected.contains(p.id)) p.previewImages=[...p.previewImages,...staged[p.id]!];
+        }
+      });
+    }catch(_){
+      for(final entry in staged.entries){
+        for(final image in entry.value){await storage.deleteStylePromptPreviewImage(entry.key,image);}
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> moveStylePresetsTogether(Set<String> ids, String target) {
+    final selected = Set<String>.of(ids);
+    if (selected.isEmpty) return Future.value();
+    return updateStyleLibrary((s) {
+      if (target != 'Default' && !s.stylePromptPresetGroups.contains(target) &&
+          !s.stylePromptPresets.any((p) => p.group == target)) throw StateError('Group unavailable');
+      if (s.stylePromptPresets.where((p) => selected.contains(p.id)).length != selected.length) {
+        throw StateError('Selection changed');
+      }
+      for (final p in s.stylePromptPresets) {
+        if (selected.contains(p.id)) p.group = target;
+      }
+    });
+  }
+
   Future<void> moveStylePromptPreset(String id, String rawGroup) async {
     final group = rawGroup.trim().isEmpty ? 'Default' : rawGroup.trim();
     final preset =
@@ -1192,8 +1240,18 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void applyStylePromptPreset(StylePromptPreset preset) {
-    setParam((params) => params.stylePrompt = preset.prompt);
+  void applyStylePromptPreset(StylePromptPreset preset, {bool append = false}) {
+    if (append && preset.prompt.trim().isEmpty) return;
+    setParam((params) {
+      if (!append) {
+        params.stylePrompt = preset.prompt;
+        return;
+      }
+      final current = params.stylePrompt.trimRight();
+      final extra = preset.prompt.trim();
+      params.stylePrompt = current.isEmpty ? extra
+          : current.endsWith(',') ? '$current $extra' : '$current, $extra';
+    });
     unawaited(updateStyleLibrary((s) {
       final p = s.stylePromptPresets.where((p) => p.id == preset.id).firstOrNull;
       if (p != null) p.usageCount++;
@@ -2704,6 +2762,15 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     }
     } finally { _naiOperationCount--; notifyListeners(); }
+  }
+
+  bool movePendingQueueJob(String id, int delta) {
+    if (delta != -1 && delta != 1) return false;
+    final from = generationQueue.indexWhere((job) => job.id == id), to = from + delta;
+    if (from < 0 || to < 0 || to >= generationQueue.length) return false;
+    generationQueue.insert(to, generationQueue.removeAt(from));
+    notifyListeners();
+    return true;
   }
 
   void removeQueueJob(String id) {

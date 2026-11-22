@@ -440,6 +440,8 @@ class ResourceDatabaseService {
     }
     if (initial == definition.downloadSize) return partial;
 
+    // Publish the new attempt before waiting for DNS, TLS or response headers.
+    _emit(definition, ResourceDownloadPhase.downloading, received: initial);
     Future<http.StreamedResponse> start(http.Client client, int offset) {
       final request = http.Request('GET', Uri.parse(definition.downloadUrl));
       if (offset > 0) request.headers['Range'] = 'bytes=$offset-';
@@ -452,9 +454,9 @@ class ResourceDatabaseService {
     _activeClients[definition.id] = client;
     _checkPaused(definition.id);
     var response = await start(client, initial);
-    if (initial > 0 && response.statusCode != 206) {
+    if (initial > 0 && response.statusCode == 416) {
       client.close();
-      if (partial.existsSync()) await partial.delete();
+      // Keep the saved prefix until the replacement request succeeds.
       initial = 0;
       client = http.Client();
       _activeClients[definition.id] = client;
@@ -462,6 +464,15 @@ class ResourceDatabaseService {
     }
     if (response.statusCode != 200 && response.statusCode != 206) {
       throw http.ClientException('HTTP ${response.statusCode}');
+    }
+    if (response.statusCode == 200) initial = 0;
+    if (response.statusCode == 206) {
+      final hdr = RegExp(r'^bytes (\d+)-(\d+)/(\d+)$').firstMatch(response.headers['content-range'] ?? '');
+      if (hdr == null || int.tryParse(hdr[1]!) != initial ||
+          int.tryParse(hdr[3]!) != definition.downloadSize ||
+          int.parse(hdr[2]!) < initial || int.parse(hdr[2]!) >= definition.downloadSize) {
+        throw const HttpException('Invalid download range; existing progress was retained.');
+      }
     }
     final range = response.headers['content-range'] ?? '';
     final rangeTotal =
@@ -538,8 +549,14 @@ class ResourceDatabaseService {
       _checkPaused(id);
       _emit(definition, ResourceDownloadPhase.verifying,
           received: _length(archive), message: 'Verifying download');
-      await _verifyFile(
-          archive, definition.downloadSize, definition.downloadSha256);
+      try {
+        await _verifyFile(archive, definition.downloadSize, definition.downloadSha256);
+      } on StateError {
+        // A short transfer can be resumed. A complete but invalid archive cannot.
+        if (_length(archive) < definition.downloadSize) rethrow;
+        await archive.delete();
+        throw const CorruptResourceDownload();
+      }
       _checkPaused(id);
       final staged = await _staged(definition);
       if (staged.existsSync()) await staged.delete();
@@ -564,7 +581,16 @@ class ResourceDatabaseService {
           message: 'Validating and replacing database');
       await _validateDatabase(definition, staged, thorough: true);
       _checkPaused(id);_committing.add(id);
-      await _atomicInstall(definition, staged);
+      final live = await _database(definition);
+      // Re-downloading the installed release is not an update: do not rotate
+      // the previous (possibly different) working version out of its backup.
+      if (live.existsSync() && _length(live) == definition.databaseSize &&
+          await _sha256(live) == definition.databaseSha256) {
+        await staged.delete();
+        clearMemoryCache();
+      } else {
+        await _atomicInstall(definition, staged);
+      }
       if(archive.existsSync()){try{await archive.delete();}catch(_){/* Verified live database remains usable. */}}
       _emit(definition, ResourceDownloadPhase.complete,
           received: definition.downloadSize, message: 'Installed');
@@ -783,6 +809,12 @@ class ResourceDatabaseService {
     _cacheHits = 0;
     _cacheMisses = 0;
   }
+}
+
+class CorruptResourceDownload implements Exception {
+  const CorruptResourceDownload();
+  static const message = 'SHA-256/size check failed. Download again; installed databases were not changed.';
+  @override String toString() => message;
 }
 
 class _SingleDigestSink implements Sink<Digest> {

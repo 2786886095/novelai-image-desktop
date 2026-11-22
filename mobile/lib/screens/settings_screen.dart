@@ -537,7 +537,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           OutlinedButton.icon(onPressed:()=>_showTokenGuide(context),
             icon:const Icon(Icons.help_outline),label:const Text('如何获取 API Token')),
           _Section(title: settingsText.reverseSection, children: [
-            _sharedPromptPresetCard(state, reverse: true),
             _TextSetting(
                 label: settingsDetailText.visionApiUrl,
                 value: s.visionApiUrl,
@@ -561,9 +560,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (v) => state.setSecret('vision', v),
               ),
             ),
+            ExpansionTile(title: Text(_sharedPromptPresetText(s.language).title),
+              children: [_sharedPromptPresetCard(state, reverse: true)]),
           ]),
           _Section(title: settingsText.convertSection, children: [
-            _sharedPromptPresetCard(state, reverse: false),
             _TextSetting(
                 label: settingsDetailText.textApiUrl,
                 value: s.convertApiUrl,
@@ -588,6 +588,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (v) => state.setSecret('convert', v),
               ),
             ),
+            ExpansionTile(title: Text(_sharedPromptPresetText(s.language).title),
+              children: [_sharedPromptPresetCard(state, reverse: false)]),
           ]),
           _Section(title: settingsText.tagSection, children: [
             SwitchListTile(

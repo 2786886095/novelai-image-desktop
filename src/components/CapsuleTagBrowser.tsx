@@ -101,6 +101,22 @@ function TagCards({rows,onPick,selected,badges}:{rows:TagSuggestion[];onPick:(ta
   </div>;
 }
 
+// Navigation aliases point at the original arrays; never add duplicate tags to search.
+export const capsuleDirectory = CAPSULE_TAXONOMY.map(category => {
+  if (category.name !== "人物") return category;
+  const clothing = CAPSULE_TAXONOMY.find(c => c.name === "服饰");
+  const groups = [...category.subgroups, ...(clothing?.subgroups ?? [])];
+  const lookup = new Map(groups.slice().reverse().map(g => [g.name, g]));
+  const order = new Set(["对象", "体型", "上衣", "下装", "眼睛", "配饰", ...groups.map(g => g.name)]);
+  return {...category, subgroups: [...order].flatMap(name => lookup.get(name) ?? [])};
+});
+const directoryText = {
+  "zh-CN":["角色","饰品","全部小类","收起小类"], "zh-TW":["角色","飾品","全部小類","收合小類"],
+  "en-US":["Character","Accessories","All subcategories","Show fewer"],
+  "ja-JP":["キャラクター","アクセサリー","すべての小分類","閉じる"],
+  "ko-KR":["캐릭터","장신구","모든 소분류","접기"],
+} as const;
+
 export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,language,selectedPrompt}:{
   query:string;onQueryChange:(text:string)=>void;searchPlaceholder:string;onPick:(tag:string)=>void;language?:unknown;selectedPrompt:string;
 }) {
@@ -109,7 +125,11 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
   const [status,setStatus]=useState<TagPackStatus|null>(null);
   const [groupIndex,setGroupIndex]=useState(-1),[groupPages,setGroupPages]=useState<Record<number,number>>({});
   const [library,setLibrary]=useState(false),[cat,setCat]=useState(0),[sub,setSub]=useState(0),[curPage,setCurPage]=useState(0);
-  const category=CAPSULE_TAXONOMY[cat], subgroup=category.subgroups[sub];
+  const category=capsuleDirectory[cat], subgroup=category.subgroups[sub];
+  const [allSubgroups,setAllSubgroups]=useState(false);
+  const directoryLabels=directoryText[locale];
+  const categoryLabel=(n:string)=>n==="人物"?directoryLabels[0]:localizedCapsuleCategoryName(n,locale);
+  const subgroupLabel=(n:string)=>n==="配饰"?directoryLabels[1]:localizedCapsuleSubgroupName(n,locale);
   const [expanded,setExpanded]=useState(false);
   const anyGroup={"zh-CN":"不限分类","zh-TW":"不限分類","en-US":"All categories","ja-JP":"分類を限定しない","ko-KR":"모든 분류"}[locale];
   const allLabel={"zh-CN":"展开此小类全部标签","zh-TW":"展開此小類全部標籤","en-US":"Show entire subgroup","ja-JP":"小分類をすべて表示","ko-KR":"하위 분류 전체 보기"}[locale];
@@ -271,16 +291,17 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
       !curated&&!active ? <p className="capsule-library-empty">{l[8]}</p> :
       <div className={'capsule-library-browse'+(q?' capsule-search-wide':'')}>
         {!q&&<nav className="capsule-library-categories" aria-label={l[13]}>
-          {curated?CAPSULE_TAXONOMY.map((c,i)=><button key={c.name} type="button" data-curated-cat={c.name} aria-pressed={i===cat} onClick={()=>{setExpanded(false);setCat(i);setSub(0);setCurPage(0);results.current?.scrollTo({top:0});}}>{localizedCapsuleCategoryName(c.name,locale)}</button>):<>
+          {curated?capsuleDirectory.map((c,i)=><button key={c.name} type="button" data-curated-cat={c.name} aria-pressed={i===cat} onClick={()=>{setExpanded(false);setCat(i);setSub(0);setAllSubgroups(false);setCurPage(0);results.current?.scrollTo({top:0});}}>{categoryLabel(c.name)}</button>):<>
           <button type="button" data-capsule-group="all" aria-pressed={groupIndex<0}
             onClick={()=>{setGroupIndex(-1);results.current?.scrollTo({top:0});}}>{anyGroup}</button>
           {capsuleBrowseGroups.map((entry,i)=><button type="button" key={entry.id} data-capsule-group={entry.id}
             aria-pressed={i===groupIndex} onClick={()=>{setGroupIndex(i);results.current?.scrollTo({top:0});}}>{names[i]}</button>)}</>}
         </nav>}
         <div className="capsule-library-pane">
-         {curated&&<div className="capsule-curated-subgroups" role="group" aria-label={localizedCapsuleCategoryName(category.name,locale)}>
-          {category.subgroups.map((sg,i)=><button type="button" className="capsule-library-more" key={sg.name} data-curated-sub={sg.name} aria-pressed={i===sub} onClick={()=>{setExpanded(false);setSub(i);setCurPage(0);results.current?.scrollTo({top:0});}}>{localizedCapsuleSubgroupName(sg.name,locale)}</button>)}</div>}
-         <div className="capsule-library-heading"><div><h3>{q?l[10]:curated?localizedCapsuleSubgroupName(subgroup.name,locale):group?names[groupIndex]:paging[0]}</h3>
+         {curated&&<div className="capsule-curated-subgroups" role="group" aria-label={categoryLabel(category.name)}>
+          {category.subgroups.map((sg,i)=>(allSubgroups||i<6||i===sub)&&<button type="button" className="capsule-library-more" key={sg.name} data-curated-sub={sg.name} aria-pressed={i===sub} onClick={()=>{setExpanded(false);setSub(i);setAllSubgroups(false);setCurPage(0);results.current?.scrollTo({top:0});}}>{subgroupLabel(sg.name)}</button>)}
+          {category.subgroups.length>6&&<button type="button" className="capsule-library-more" data-curated-disclosure="" aria-expanded={allSubgroups} onClick={()=>setAllSubgroups(v=>!v)}>{allSubgroups?directoryLabels[3]:directoryLabels[2]+" ("+category.subgroups.length+")"}</button>}</div>}
+         <div className="capsule-library-heading"><div><h3>{q?l[10]:curated?categoryLabel(category.name)+" › "+subgroupLabel(subgroup.name):group?names[groupIndex]:paging[0]}</h3>
           <small>{(data??lastForScope)&&<>{(data??lastForScope)!.total.toLocaleString(locale)} {q?paging[6]:paging[7]} · </>}{q?l[12]:curated?curatedLabel:badges[6]}</small></div>
           <SelectMenu className="capsule-sort-select" ariaLabel={ordering[0]} label={ordering[0]} value={order}
             options={TAG_PACK_SORTS.map((value,i)=>({value,label:ordering[i+1]}))} onChange={changeOrder}/>
