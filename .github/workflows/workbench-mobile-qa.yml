@@ -14,16 +14,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: {node-version: '24.14.0'}
       - run: npm ci --no-audit --no-fund
-      - run: npm run build
-      - name: Click through production Electron desktop
-        run: QA_OUT="$RUNNER_TEMP/capsule-mac" ./node_modules/.bin/electron scripts/qa-workbench-mac.cjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: mac-window-proof
-          path: |
-            ${{ runner.temp }}/capsule-mac/*.log
-            ${{ runner.temp }}/capsule-mac/*.png
+      - name: Desktop resource and queue behavior (no generation network)
+        run: npm test -- src/works-library.test.ts src/works-batch-state.test.ts src/batch-redraw-queue.test.ts src/generation-queue.test.ts electron/ipc/reference-presets.test.ts electron/ipc/mcp-history-gallery.test.ts
   ios-simulator:
     runs-on: macos-15
     timeout-minutes: 30
@@ -42,17 +34,17 @@ jobs:
         working-directory: mobile
         run: |
           flutter pub get
-          flutter build ios --simulator --debug --no-codesign --target integration_test/native_draw_roles_qa.dart
+          flutter build ios --simulator --debug --no-codesign --target integration_test/native_resources_queue_qa.dart
           xcrun simctl bootstatus "$IOS_SIM" -b
           app=build/ios/iphonesimulator/Runner.app
           xcrun simctl install "$IOS_SIM" "$app"
           id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
           xcrun simctl launch "$IOS_SIM" "$id"
           data=$(xcrun simctl get_app_container "$IOS_SIM" "$id" data)
-          for i in {1..80}; do [ -f "$data/Documents/DRAW_ROLE_QA.json" ] && break; sleep 2; done
-          cp "$data/Documents/DRAW_ROLE_QA.json" "$RUNNER_TEMP/DRAW_ROLE_QA.json"
-          cat "$RUNNER_TEMP/DRAW_ROLE_QA.json"
-          python3 -c 'import json,sys; r=json.load(open(sys.argv[1]));assert r["os"]=="ios" and r["passed"] is True and "actual-attach-confirm-copies-images-not-workbench-references" in r["steps"] and "batch-uses-frozen-role-and-separate-style" in r["steps"]' "$RUNNER_TEMP/DRAW_ROLE_QA.json"
+          for i in {1..80}; do [ -f "$data/Documents/RESOURCES_QUEUE_QA.json" ] && break; sleep 2; done
+          cp "$data/Documents/RESOURCES_QUEUE_QA.json" "$RUNNER_TEMP/RESOURCES_QUEUE_QA.json"
+          cat "$RUNNER_TEMP/RESOURCES_QUEUE_QA.json"
+          python3 -c 'import json,sys; r=json.load(open(sys.argv[1]));assert r["os"]=="ios" and r["passed"] is True and "explicit-apply-precise-only" in r["steps"] and "queue-down-BCA-persisted-with-original-sources" in r["steps"]' "$RUNNER_TEMP/RESOURCES_QUEUE_QA.json"
       - if: always() && env.IOS_SIM != ''
         run: xcrun simctl io "$IOS_SIM" screenshot "$RUNNER_TEMP/ios-field.png"
       - uses: actions/upload-artifact@v4
@@ -60,5 +52,5 @@ jobs:
         with:
           name: ios-device-proof
           path: |
-            ${{ runner.temp }}/DRAW_ROLE_QA.json
+            ${{ runner.temp }}/RESOURCES_QUEUE_QA.json
             ${{ runner.temp }}/ios-field.png

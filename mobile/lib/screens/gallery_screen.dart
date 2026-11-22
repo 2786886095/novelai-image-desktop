@@ -76,11 +76,12 @@ class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserv
   }
   Future<void> _batchMove() async {
     final app=context.read<AppState>();String t(String k)=>platformFeatureText(app.settings.language,k);
+    final targets=Set<String>.of(selected);
     final group=await showDialog<String>(context:context,builder:(ctx)=>SimpleDialog(title:Text(t('move')),children:[
       SimpleDialogOption(onPressed:()=>Navigator.pop(ctx,''),child:Text(mobileUiTextFor(app.settings.language,'gallery.ungrouped'))),
       ...app.groups.map((g)=>SimpleDialogOption(onPressed:()=>Navigator.pop(ctx,g.id),child:Text(g.name)))]));
-    if(group==null || !mounted)return;setState(()=>operating=true);
-    try {await app.moveHistoryItems(Set.of(selected),group.isEmpty?null:group);if(mounted)setState(selected.clear);}
+    if(group==null || !mounted || targets.isEmpty || !selected.containsAll(targets))return;setState(()=>operating=true);
+    try {await app.moveHistoryItems(targets,group.isEmpty?null:group);if(mounted)setState(selected.clear);}
     catch (_) {if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(t('saveFailed'))));}
     finally {if(mounted)setState(()=>operating=false);}
   }
@@ -118,7 +119,7 @@ class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserv
       group = state.selectedGroupId;
       groupInitialized = true;
     }
-    selected.retainAll(state.history.map((h)=>h.id).toSet());
+
     String feature(String k)=>platformFeatureText(language,k);
     final groups = state.groups;
     final dates = state.history.map((item) => item.date).toSet().toList()
@@ -131,6 +132,8 @@ class _GalleryScreenState extends State<GalleryScreen> with WidgetsBindingObserv
                     : item.groupId == group)) &&
             (date.isEmpty || item.date == date))
         .toList();
+    // A hidden item is never a target of a visible batch action.
+    selected.retainAll(history.map((h)=>h.id).toSet());
     if (_usesAndroidGallery(context)) {
       return _buildAndroidGallery(context, state, history, dates);
     }

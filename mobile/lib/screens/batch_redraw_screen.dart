@@ -1,3 +1,4 @@
+import '../i18n/style_library_text.dart';
 import '../ui/compact_workbench.dart';
 import '../images/image_file_access.dart';
 import '../images/coordinated_file_image.dart';
@@ -353,13 +354,20 @@ class _ImportStep extends StatelessWidget {
                 title: Text(item.name,
                     maxLines: 1, overflow: TextOverflow.ellipsis),
                 subtitle: Text(_batchSizePath(project, item)),
-                trailing: IconButton(
-                  tooltip: t('common.remove'),
-                  onPressed: () {
-                    project.items.remove(item);
-                    controller.changed(t('batch.removedImage'));
+                trailing: PopupMenuButton<String>(
+                  key: ValueKey('batch-input-actions-${item.id}'),
+                  enabled: !controller.editing && !controller.busy && !controller.queueRunning,
+                  tooltip: MaterialLocalizations.of(context).showMenuTooltip,
+                  onSelected:(action){
+                    if(controller.editing || controller.busy || controller.queueRunning) return;
+                    if(action=='up' || action=='down'){controller.moveInput(item.id,action=='up'?-1:1);return;}
+                    if(action=='remove' && project.items.remove(item)) controller.changed(t('batch.removedImage'));
                   },
-                  icon: const Icon(Icons.close),
+                  itemBuilder:(_)=>[
+                    PopupMenuItem(value:'up',enabled:project.items.first!=item,child:Text(styleLibraryText(language)['moveUp']!)),
+                    PopupMenuItem(value:'down',enabled:project.items.last!=item,child:Text(styleLibraryText(language)['moveDown']!)),
+                    PopupMenuItem(value:'remove',child:Text(t('common.remove'))),
+                  ],
                 ),
               ),
             ),

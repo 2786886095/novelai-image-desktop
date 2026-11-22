@@ -336,6 +336,15 @@ class BatchRedrawController extends ChangeNotifier {
         notifyListeners();
       }();
 
+  /// Order is editable only before the queue snapshots its jobs.
+  bool moveInput(String id, int delta) {
+    if (_disposed || editing || busy || queueRunning || (delta != -1 && delta != 1)) return false;
+    final from=project.items.indexWhere((item)=>item.id==id), to=from+delta;
+    if (from<0 || to<0 || to>=project.items.length) return false;
+    project.items.insert(to,project.items.removeAt(from));
+    changed();
+    return true;
+  }
   void changed([String? message]) {
     if (message != null) status = message;
     notifyListeners();

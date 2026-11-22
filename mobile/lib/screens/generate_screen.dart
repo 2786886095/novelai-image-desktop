@@ -4285,10 +4285,33 @@ class _ReferencePresetLibraryPanelState
     });
   }
 
-  Future<void> _addPreset(BuildContext context) async {
-    final picked = await ImagePicker()
-        .pickImage(source: ImageSource.gallery, imageQuality: 100);
-    if (picked == null || !context.mounted) return;
+  String _fromLibrary(String lang)=>const {'zh-CN':'从图库添加','zh-TW':'從圖庫新增','en-US':'Add from workbench gallery','ja-JP':'作品一覧から追加','ko-KR':'작품 갤러리에서 추가'}[lang]??'Add from workbench gallery';
+
+  Future<HistoryItem?> _pickHistory(BuildContext context,AppState app) async {
+    final rows=List<HistoryItem>.of(app.history), lang=app.settings.language;
+    var query='';
+    return showDialog<HistoryItem>(context:context,builder:(dialog)=>StatefulBuilder(builder:(c,refresh){
+      final visible=rows.where((h)=>[h.id,h.date,h.prompt,h.filePath.split(RegExp(r'[/\\]')).last].join(' ').toLowerCase().contains(query)).toList();
+      return AlertDialog(title:Text(_fromLibrary(lang)),content:SizedBox(width:460,height:MediaQuery.sizeOf(c).height*.52,child:Column(children:[
+        TextField(key:const ValueKey('reference-gallery-search'),decoration:InputDecoration(hintText:MaterialLocalizations.of(c).searchFieldLabel,prefixIcon:const Icon(Icons.search)),onChanged:(v)=>refresh(()=>query=v.trim().toLowerCase())),
+        Expanded(child:visible.isEmpty?Center(child:Text(mobileUiTextFor(lang,'gallery.empty'))):ListView.builder(itemCount:visible.length,itemBuilder:(_,i){final h=visible[i];return ListTile(key:ValueKey('reference-gallery-'+h.id),
+          leading:SizedBox.square(dimension:52,child:imageFile(File(h.filePath),fit:BoxFit.contain,cacheWidth:112,errorBuilder:(_,__,___)=>const Icon(Icons.broken_image_outlined))),
+          title:Text(h.filePath.split(RegExp(r'[/\\]')).last,maxLines:1,overflow:TextOverflow.ellipsis),subtitle:Text(h.date+' · '+h.prompt,maxLines:1,overflow:TextOverflow.ellipsis),onTap:()=>Navigator.pop(dialog,h));}))
+      ])),actions:[TextButton(onPressed:()=>Navigator.pop(dialog),child:Text(mobileUiTextFor(lang,'common.cancel')))]);
+    }));
+  }
+
+  Future<void> _addPreset(BuildContext context,{bool fromLibrary=false}) async {
+    String? path;
+    final app=context.read<AppState>();
+    try{
+      if(fromLibrary){final item=await _pickHistory(context,app);if(item==null || !context.mounted)return;
+        if(!app.history.any((h)=>h.id==item.id && h.filePath==item.filePath) || !await File(item.filePath).exists())throw const FileSystemException('Image no longer available');
+        path=item.filePath;
+      }else{path=(await ImagePicker().pickImage(source:ImageSource.gallery,imageQuality:100))?.path;}
+    }catch(e){if(context.mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));return;}
+    if(path==null || !context.mounted)return;
+    final sourcePath=path;
     final state = context.read<AppState>();
     final language = state.settings.language;
     String t(String key) => mobileUiTextFor(language, key);
@@ -4325,7 +4348,7 @@ class _ReferencePresetLibraryPanelState
                 children: [
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 220),
-                    child: imageFile(File(picked.path), fit: BoxFit.contain),
+                    child: imageFile(File(sourcePath), fit: BoxFit.contain),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -4478,7 +4501,7 @@ class _ReferencePresetLibraryPanelState
       return;
     }
     final error = await state.saveReferencePresetFromPath(
-      picked.path,
+      sourcePath,
       kind: result,
       name: nameController.text,
       group: groupController.text,
@@ -5223,6 +5246,8 @@ class _ReferencePresetLibraryPanelState
                                         Icons.add_photo_alternate_outlined),
                                     label: Text(t('referencePresets.add')),
                                   ),
+                                  OutlinedButton.icon(key:const ValueKey('reference-add-gallery'),onPressed:_busy || state.history.isEmpty?null:()=>_addPreset(context,fromLibrary:true),
+                                    icon:const Icon(Icons.collections_outlined),label:Text(_fromLibrary(language))),
                                   OutlinedButton.icon(
                                     onPressed:
                                         _busy ? null : () => _import(context),
