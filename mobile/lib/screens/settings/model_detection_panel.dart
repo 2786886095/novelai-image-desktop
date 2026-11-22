@@ -25,7 +25,18 @@ class ModelDetectionPanel extends StatefulWidget {
   State<ModelDetectionPanel> createState() => _ModelDetectionPanelState();
 }
 
-enum _Result { idle, busy, found, empty, config, timeout, auth, http, network }
+enum _Result {
+  idle,
+  busy,
+  found,
+  empty,
+  config,
+  timeout,
+  auth,
+  http,
+  invalidList,
+  network
+}
 
 class _ModelDetectionPanelState extends State<ModelDetectionPanel> {
   var _result = _Result.idle;
@@ -95,6 +106,8 @@ class _ModelDetectionPanelState extends State<ModelDetectionPanel> {
       result = values.isEmpty ? _Result.empty : _Result.found;
     } on TimeoutException {
       result = _Result.timeout;
+    } on ModelListFormatError {
+      result = _Result.invalidList;
     } on ModelListHttpError catch (e) {
       status = e.status;
       result = (status == 401 || status == 403) ? _Result.auth : _Result.http;
@@ -149,6 +162,13 @@ class _ModelDetectionPanelState extends State<ModelDetectionPanel> {
               '접근 거부. API 키와 권한을 확인하세요.'
             ])} (HTTP $_status)',
       _Result.http => '${t.connectionFailed} (HTTP $_status)',
+      _Result.invalidList => tr([
+          '已连接服务，但返回内容不是可用的模型列表。请核对 API 地址。',
+          '已連接服務，但傳回內容不是可用的模型清單。請核對 API 位址。',
+          'Connected, but the response is not a model list. Check the API URL.',
+          '接続しましたが、モデル一覧を読み取れません。API URL を確認してください。',
+          '연결되었지만 모델 목록 형식이 아닙니다. API 주소를 확인하세요.'
+        ]),
       _Result.network => tr([
           '无法读取模型列表，请检查 API 地址、网络和服务是否支持模型列表。',
           '無法讀取模型清單，請檢查 API 位址、網路與服務支援。',

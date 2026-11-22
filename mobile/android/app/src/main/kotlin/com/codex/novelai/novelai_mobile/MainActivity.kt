@@ -343,6 +343,8 @@ class MainActivity : FlutterActivity() {
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "langbai.novelai/network",
+            io.flutter.plugin.common.StandardMethodCodec.INSTANCE,
+            flutterEngine.dartExecutor.binaryMessenger.makeBackgroundTaskQueue(),
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "resolveProxy" -> {
@@ -350,7 +352,7 @@ class MainActivity : FlutterActivity() {
                     try {
                         val proxy = ProxySelector.getDefault()
                             ?.select(URI(target))
-                            ?.firstOrNull { it.type() != Proxy.Type.DIRECT }
+                            ?.firstOrNull() // Respect the system's first choice (including DIRECT).
                         val address = proxy?.address() as? InetSocketAddress
                         if (proxy == null || address == null) {
                             result.success("")

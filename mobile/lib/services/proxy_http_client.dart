@@ -130,11 +130,14 @@ Future<http.Client> createProxyHttpClientForUri(
   AppSettings settings,
   Uri uri, {
   ProxyScope? scope,
+  Duration? routeTimeout,
 }) async {
   final enabled = proxyEnabledForScope(settings, scope);
-  final automaticProxy = enabled && settings.proxyMode == 'auto'
-      ? await resolveSystemProxyRoute(uri.toString())
-      : null;
+  String? automaticProxy;
+  if (enabled && settings.proxyMode == 'auto') {
+    final route = resolveSystemProxyRoute(uri.toString());
+    automaticProxy = await (routeTimeout == null ? route : route.timeout(routeTimeout));
+  }
   return createProxyHttpClient(
     settings,
     scope: scope,

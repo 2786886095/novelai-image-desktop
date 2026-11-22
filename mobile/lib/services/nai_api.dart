@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'model_list_error.dart';
 import '../prompts/prompt_skill_v3.dart';
 import '../prompts/prompt_skill_selection.dart';
@@ -1103,25 +1104,30 @@ class NaiApi {
   Future<List<String>> listModels(
       AppSettings settings, String apiUrl, String apiKey) async {
     if (apiUrl.trim().isEmpty || apiKey.trim().isEmpty) return [];
-    final res = await _withClient(
-      settings,
-      (client) => client.get(
-        Uri.parse('${_base(apiUrl, apiUrl)}/models'),
-        headers: {'Authorization': 'Bearer $apiKey'},
-      ).timeout(const Duration(seconds: 20)),
-      scope: ProxyScope.ai,
-    );
-    if (res.statusCode >= 400) {
+    final uri = _openAiEndpoint(apiUrl, 'models');
+    final res = await _withClient(settings, (client) => client.get(uri,
+        headers: {'Authorization': 'Bearer ${apiKey.trim()}'}),
+        scope: ProxyScope.ai, target: uri, deadline: const Duration(seconds: 20));
+    if (res.statusCode < 200 || res.statusCode >= 300) {
       throw ModelListHttpError(res.statusCode);
     }
-    final data = jsonDecode(res.body);
+    final Object? data;
+    try {
+      data = jsonDecode(utf8.decode(res.bodyBytes));
+    } on FormatException {
+      throw const ModelListFormatError();
+    }
     final raw = data is Map ? data['data'] : data;
-    if (raw is! List) return [];
-    return raw
-        .map((e) => e is String ? e : e['id'])
-        .whereType<String>()
-        .toList()
-      ..sort();
+    if (raw is! List) throw const ModelListFormatError();
+    final ids = <String>{};
+    for (final row in raw) {
+      final id = row is Map ? row['id'] : row;
+      if (id is String && id.trim().isNotEmpty) ids.add(id.trim());
+    }
+    if (raw.isNotEmpty && ids.isEmpty) {
+      throw const ModelListFormatError();
+    }
+    return ids.toList()..sort();
   }
 
   Future<AiTextResult> runTextAi({
@@ -2337,11 +2343,12 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
     final effectiveModel = model.trim().isEmpty ? 'gpt-4o-mini' : model.trim();
     final userSummary = _summarizeAiUser(user);
     try {
+      final uri = _openAiEndpoint(apiUrl, 'chat/completions');
       Future<http.Response> postChat(int tokens) => _withClient(
             settings,
             (client) => client
                 .post(
-                  Uri.parse('${_base(apiUrl, apiUrl)}/chat/completions'),
+                  uri,
                   headers: {
                     'Authorization': 'Bearer $apiKey',
                     'Content-Type': 'application/json'
@@ -2358,9 +2365,8 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
                       {'role': 'user', 'content': user},
                     ],
                   }),
-                )
-                .timeout(const Duration(seconds: 180)),
-            scope: ProxyScope.ai,
+                ),
+            scope: ProxyScope.ai, target: uri, deadline: const Duration(seconds: 180),
           );
 
       var res = await postChat(maxTokens);
@@ -2443,14 +2449,21 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
     AppSettings settings,
     Future<T> Function(http.Client client) action, {
     ProxyScope scope = ProxyScope.nai,
+    Uri? target, Duration? deadline,
   }) async {
+    final elapsed = Stopwatch()..start();
     final requestScope=GenerationScope.current;
     requestScope?.check();
-    final client = createProxyHttpClient(settings, scope: scope);
-    final detach=requestScope?.attach(client.close);
+    final client = target == null ? createProxyHttpClient(settings, scope: scope)
+        : await createProxyHttpClientForUri(settings, target, scope: scope, routeTimeout: deadline);
+    void Function()? detach;
     try {
+      detach = requestScope?.attach(client.close);
       requestScope?.check();
-      final result=await action(client);
+      final remaining = deadline == null ? null : deadline - elapsed.elapsed;
+      if (remaining != null && remaining <= Duration.zero) throw TimeoutException('Request timed out', deadline);
+      final pending = action(client);
+      final result = await (remaining == null ? pending : pending.timeout(remaining));
       requestScope?.check();
       return result;
     } finally {
@@ -2471,6 +2484,24 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
       }
     } catch (_) {}
     return 'Request failed (HTTP ${res.statusCode}).';
+  }
+
+  // Accept either a base URL or a pasted OpenAI-compatible endpoint. Keep
+  // gateway prefixes and query parameters, without appending paths to a query.
+  Uri _openAiEndpoint(String value, String operation) {
+    final uri = Uri.parse(value.trim());
+    if (!uri.hasAuthority || uri.host.isEmpty || uri.userInfo.isNotEmpty ||
+        (uri.scheme != 'https' && uri.scheme != 'http')) {
+      throw const FormatException('Invalid model service URL');
+    }
+    final parts = uri.pathSegments.toList();
+    while (parts.isNotEmpty && parts.last.isEmpty) { parts.removeLast(); }
+    if (parts.isNotEmpty && parts.last == 'models') {
+      parts.removeLast();
+    } else if (parts.length >= 2 && parts[parts.length-2] == 'chat' && parts.last == 'completions') {
+      parts.removeRange(parts.length-2, parts.length);
+    }
+    return uri.replace(pathSegments: [...parts, ...operation.split('/')]).removeFragment();
   }
 
   String _base(String value, String fallback) {
