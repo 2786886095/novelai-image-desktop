@@ -22,7 +22,11 @@ Future<void> main() async {
   state.addCharacter();
   final role = state.extras.charCaptions.last;
   role.prompt = 'solo';
-  role.negativePrompt = 'fog';
+  const rawNegative =
+      'fog, 1.5::red, blue::, poster "A, B"\nText: Keep,  spacing';
+  const adjustedNegative =
+      '{fog}, 1.5::red::, 1.4::blue::, poster "A, B"\nText: Keep,  spacing';
+  role.negativePrompt = rawNegative;
   final steps = <String>[];
   final proof =
       File('${(await getApplicationDocumentsDirectory()).path}/FIELD_QA.json');
@@ -82,7 +86,7 @@ Future<void> main() async {
     await tap(find.byKey(const ValueKey('capsule-tag:shirt')));
     check(
         role.prompt.contains('shirt') &&
-            role.negativePrompt == 'fog' &&
+            role.negativePrompt == rawNegative &&
             state.params.positivePrompt == 'global anchor',
         'capsule-to-selected-role-only');
     Navigator.of(t.element(find.byKey(const ValueKey('capsule-tag:shirt'))))
@@ -92,10 +96,15 @@ Future<void> main() async {
     await openRole('character-negative-field-' + i.toString());
     await tap(find.text('More tools'));
     await tap(find.text(generateScreenTextFor('en-US').weight));
-    await tap(find.byIcon(Icons.add).last);
+    await tap(find.descendant(
+        of: find.widgetWithText(ListTile, 'fog'),
+        matching: find.byIcon(Icons.add)));
+    await tap(find.descendant(
+        of: find.widgetWithText(ListTile, 'blue'),
+        matching: find.byIcon(Icons.remove)));
     await tap(find.widgetWithText(FilledButton, 'Apply'));
     check(
-        role.negativePrompt == '{fog}' &&
+        role.negativePrompt == adjustedNegative &&
             role.prompt.contains('shirt') &&
             state.params.positivePrompt == 'global anchor',
         'weight-to-selected-role-negative-only');
@@ -117,13 +126,14 @@ Future<void> main() async {
     await tap(find.byKey(const ValueKey('bulk-preset-save')));
     check(
         state.settings.positivePromptPresets.any((p) =>
-            p.name == 'QA duo' && p.captions!.last.negativePrompt == '{fog}'),
+            p.name == 'QA duo' &&
+            p.captions!.last.negativePrompt == adjustedNegative),
         'save-named-group-without-changing-role');
     await tap(find.text('QA duo').first);
     await tap(find.widgetWithText(FilledButton, 'Apply'));
     check(
         state.extras.charCaptions.last.prompt.contains('shirt') &&
-            state.extras.charCaptions.last.negativePrompt == '{fog}' &&
+            state.extras.charCaptions.last.negativePrompt == adjustedNegative &&
             state.params.positivePrompt == 'global anchor',
         'read-format-save-load-apply-group');
     final navState = AppState();

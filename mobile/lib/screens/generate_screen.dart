@@ -10,6 +10,7 @@ import '../prompts/translation.dart';
 import 'capsule_picker_sheet.dart';
 import 'mobile_bulk_controls.dart';
 import 'prompt/prompt_chip_tokenizer.dart';
+import 'prompt/field_weights.dart';
 import 'style_library_screen.dart';
 import 'compatible_images.dart';
 import '../models/style_library.dart';
@@ -1060,7 +1061,7 @@ class PromptEditorState extends State<PromptEditor> {
       showDragHandle: true,
       builder: (context) => _registerPromptTool(context, StatefulBuilder(
         builder: (context, setSheetState) {
-          final tags = splitPromptTags(working);
+          final tags = fieldWeights(working);
           return SafeArea(
             child: SizedBox(
               height: MediaQuery.sizeOf(context).height * 0.72,
@@ -1090,33 +1091,30 @@ class PromptEditorState extends State<PromptEditor> {
                             separatorBuilder: (_, __) =>
                                 const Divider(height: 1),
                             itemBuilder: (context, index) {
-                              final parsed = parseWeightedTag(tags[index]);
+                              final parsed = tags[index];
                               return ListTile(
                                 contentPadding: EdgeInsets.zero,
                                 title: Text(parsed.core),
                                 subtitle: Text(
-                                    '×${weightMultiplier(parsed.level).toStringAsFixed(2)}'),
+                                    '×${parsed.weight.toStringAsFixed(2)}'),
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     IconButton(
                                       tooltip: t('generate.decreaseWeight'),
-                                      onPressed: parsed.level <= -5
+                                      onPressed: !parsed.minus
                                           ? null
                                           : () => setSheetState(() {
-                                                working = setTagLevel(working,
-                                                    index, parsed.level - 1);
+                                                working = parsed.move(-1);
                                               }),
                                       icon: const Icon(Icons.remove),
                                     ),
-                                    Text('${parsed.level}'),
                                     IconButton(
                                       tooltip: t('generate.increaseWeight'),
-                                      onPressed: parsed.level >= 5
+                                      onPressed: !parsed.plus
                                           ? null
                                           : () => setSheetState(() {
-                                                working = setTagLevel(working,
-                                                    index, parsed.level + 1);
+                                                working = parsed.move(1);
                                               }),
                                       icon: const Icon(Icons.add),
                                     ),

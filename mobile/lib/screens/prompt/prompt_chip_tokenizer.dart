@@ -20,11 +20,12 @@ class PromptChipToken {
 
 /// A null result means that text mode must be used: grouping is incomplete or
 /// ambiguous. Commas inside escaped/bracketed/numeric-weight groups stay whole.
-List<PromptChipToken>? tokenizePromptChips(String source) {
+List<PromptChipToken>? tokenizePromptChips(String source,
+    {bool smartQuotes = false}) {
   final stack = <String>[];
   final spans = <PromptChipToken>[];
   var begin = 0;
-  var quoted = false;
+  String? closingQuote;
   var weighted = false;
   void append(int end, String separator) {
     final raw = source.substring(begin, end);
@@ -51,11 +52,14 @@ List<PromptChipToken>? tokenizePromptChips(String source) {
       i++;
       continue;
     }
-    if (c == '"') {
-      quoted = !quoted;
+    if (closingQuote != null) {
+      if (c == closingQuote) closingQuote = null;
       continue;
     }
-    if (quoted) continue;
+    if (c == '"' || (smartQuotes && c == '“')) {
+      closingQuote = c == '“' ? '”' : '"';
+      continue;
+    }
     if (c == ':' && i + 1 < source.length && source[i + 1] == ':') {
       if (!weighted &&
           !RegExp(r'[-+]?(?:\d+(?:\.\d+)?|\.\d+)$')
@@ -78,7 +82,7 @@ List<PromptChipToken>? tokenizePromptChips(String source) {
       begin = i + 1;
     }
   }
-  if (stack.isNotEmpty || quoted || weighted) return null;
+  if (stack.isNotEmpty || closingQuote != null || weighted) return null;
   append(source.length, '');
   if (joinPromptChips(spans) != source) return null;
   return List.unmodifiable(spans);
