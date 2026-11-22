@@ -61,7 +61,7 @@ Future<void> main()async{
  await tap(find.descendant(of:find.byType(AlertDialog),matching:find.text('保存')));await tick(600);
  final preset=app.referencePresets.firstWhere((v)=>v.name=='QA Gallery A');
  check(base64Encode(File(preset.filePath).readAsBytesSync())==base64Encode(File(rows.first.filePath).readAsBytesSync()) && app.extras.preciseReferences.isEmpty && app.extras.vibeImages.isEmpty && app.workbenchImage==null,'gallery-preset-copied-no-auto-apply');
- mount(const Scaffold(key:ValueKey('workbench-picker'),body:SafeArea(child:ReferencePresetLibraryPanel(standalone:false,showClose:false,allowedKind:ReferencePresetKind.precise))));await tick(650);await tap(find.text('QA Gallery A').first);await tap(find.text(mobileUiTextFor('zh-CN','referencePresets.applySelected')));await tick();
+ mount(const Scaffold(key:ValueKey('workbench-picker'),body:SafeArea(child:ReferencePresetLibraryPanel(standalone:false,showClose:false,allowedKind:ReferencePresetKind.precise))));await tick(650);await tap(find.text('QA Gallery A').first);final apply=key('reference-preset-apply-fixed');await locate(apply);check((t.widget(apply) as ButtonStyleButton).onPressed!=null,'apply-button-enabled');await t.tap(apply);await tick(650);
  check(app.extras.preciseReferences.length==1 && app.extras.vibeImages.isEmpty && app.workbenchImage==null,'explicit-apply-precise-only');
  final c=app.batchRedraw;await c.load();c.project=BatchRedrawProject.empty(app.params)..items=[for(final h in rows) BatchRedrawItem(id:h.id,name:h.id+'.png',prompt:h.prompt,base64:base64Encode(File(h.filePath).readAsBytesSync()))];
  mount(BatchRedrawScreen(controller:c));await tick(650);
@@ -73,4 +73,5 @@ Future<void> main()async{
  output['passed']=true;
  }catch(e,s){output['passed']=false;output['error']=e.toString();output['stack']=s.toString();}
  await file.writeAsString(jsonEncode(output),flush:true);print('RESOURCES_QUEUE_QA '+jsonEncode(output));}
+
 
