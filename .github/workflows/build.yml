@@ -48,6 +48,10 @@ on:
         description: v2.9.5 only; skip local Windows Artist GPU proof and require all other hosted checks
         type: boolean
         default: false
+      reviewed_v305_resources_release:
+        description: Verify the exact MCP workspace resource release, except local Windows Artist GPU and only the iOS folder naming deadline
+        type: boolean
+        default: false
       reviewed_v304_mcp_release:
         description: Verify the exact MCP style release, except local Windows Artist GPU and only the iOS folder naming deadline
         type: boolean
@@ -314,7 +318,7 @@ jobs:
     needs: [build, mac-intel-smoke]
     if: always() && !inputs.candidate_build_only && github.event_name == 'workflow_dispatch' && inputs.publish_after_verification && (inputs.verified_build_run || (needs.build.result == 'success' && needs.mac-intel-smoke.result == 'success'))
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ (inputs.reviewed_v301_role_release || inputs.reviewed_v302_mobile_release || inputs.reviewed_v303_capsule_release || inputs.reviewed_v304_mcp_release) && 240 || 25 }}
+    timeout-minutes: ${{ (inputs.reviewed_v301_role_release || inputs.reviewed_v302_mobile_release || inputs.reviewed_v303_capsule_release || inputs.reviewed_v304_mcp_release || inputs.reviewed_v305_resources_release) && 240 || 25 }}
     permissions:
       contents: write
       actions: read
@@ -330,6 +334,32 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+      - name: Wait for exact v3.0.5 native and package jobs
+        if: inputs.reviewed_v305_resources_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          app=c6b0890fe71c1bd9c75476e57f39b429cadc1610
+          test "${{ inputs.verified_build_run }}:${{ inputs.mobile_run }}:${{ inputs.feature_run }}" = 44964438876:44964441214:44964443841
+          test "${{ inputs.reviewed_v300_ios_folder }}:${{ inputs.reviewed_v301_role_release }}:${{ inputs.reviewed_v302_mobile_release }}:${{ inputs.reviewed_v303_capsule_release }}:${{ inputs.reviewed_v304_mcp_release }}" = false:false:false:false:false
+          git merge-base --is-ancestor "$app" "$GITHUB_SHA"
+          git diff --exit-code "$app" "$GITHUB_SHA" -- . ':!.github/workflows/build.yml' ':!scripts/release-platform-contract.mjs' ':!scripts/publish-verified-release.mjs' ':!scripts/v300-folder-review.mjs'
+          git checkout --detach "$app"
+          for f in scripts/{v300-folder-review,release-platform-contract,publish-verified-release}.mjs; do git show "$GITHUB_SHA:$f" > "$f"; done
+          for i in $(seq 1 195); do
+            pending=0
+            for id in 44964438876 44964441214 44964443841; do
+              json=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id")
+              jq -e --arg sha "$app" '.head_sha==$sha and .event=="workflow_dispatch"' <<<"$json" >/dev/null
+              if [[ "$(jq -r .status <<<"$json")" != completed ]]; then pending=1; continue; fi
+              if [[ "$id" != 44964443841 ]]; then jq -e '.conclusion=="success"' <<<"$json" >/dev/null; fi
+            done
+            if [[ $pending == 0 ]]; then exit 0; fi
+            sleep 60
+          done
+          exit 1
       - name: Wait for exact v3.0.4 native and package jobs
         if: inputs.reviewed_v304_mcp_release
         env:
@@ -499,6 +529,35 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/v301-complementary-runs.py prepare
+      - name: Download v3.0.5 native evidence by producing job and immutable artifact ID
+        if: inputs.reviewed_v305_resources_release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run=44964443841
+          sha=c6b0890fe71c1bd9c75476e57f39b429cadc1610
+          jobs=$(gh run view "$run" --json headSha,status,jobs)
+          jq -e --arg sha "$sha" '.headSha==$sha and .status=="completed"' <<<"$jobs" >/dev/null
+          fetch_evidence() {
+            local name="$1" jobname="$2" dest="$3" job id digest api
+            job=$(jq -er --arg job "$jobname" '[.jobs[]|select(.name==$job and .status=="completed")]|if length==1 then .[0].databaseId else error("ambiguous producer") end' <<<"$jobs")
+            gh api "repos/$GITHUB_REPOSITORY/actions/jobs/$job/logs" > "$RUNNER_TEMP/producer-$job.log"
+            id=$(grep -F "Artifact $name.zip successfully finalized. Artifact ID " "$RUNNER_TEMP/producer-$job.log" | sed -E 's/.*Artifact ID ([0-9]+).*/\1/')
+            [[ "$id" =~ ^[0-9]+$ ]]
+            api="repos/$GITHUB_REPOSITORY/actions/artifacts/$id"
+            digest=$(gh api "$api" | jq -er --arg sha "$sha" --arg name "$name" --argjson run "$run" 'select(.expired==false and .name==$name and .workflow_run.id==$run and .workflow_run.head_sha==$sha)|.digest|sub("^sha256:";"")')
+            [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
+            grep -F "SHA256 digest of uploaded artifact zip is $digest" "$RUNNER_TEMP/producer-$job.log" >/dev/null
+            gh api "$api/zip" > "$RUNNER_TEMP/evidence-$id.zip"
+            echo "$digest  $RUNNER_TEMP/evidence-$id.zip" | sha256sum --check
+            unzip -q "$RUNNER_TEMP/evidence-$id.zip" -d "$dest"
+          }
+          fetch_evidence five-platform-feature-evidence full-client-feature-matrix release-evidence
+          if jq -e '.jobs[]|select(.name=="ios-components (os)" and .conclusion=="failure")' <<<"$jobs" >/dev/null; then
+            fetch_evidence "native-components-ios-os-$sha" 'ios-components (os)' reviewed-ios-os
+          fi
       - name: Verify and unpack the v3.0.4 native matrix from the completed retry
         if: inputs.reviewed_v304_mcp_release
         shell: bash
@@ -513,7 +572,7 @@ jobs:
           echo "$digest  $RUNNER_TEMP/native-matrix-v304.zip" | sha256sum --check
           unzip -q "$RUNNER_TEMP/native-matrix-v304.zip" -d release-evidence
       - name: Download complete same-source five-platform feature evidence
-        if: inputs.feature_run != '' && !inputs.reviewed_v301_role_release && !inputs.reviewed_v304_mcp_release
+        if: inputs.feature_run != '' && !inputs.reviewed_v301_role_release && !inputs.reviewed_v304_mcp_release && !inputs.reviewed_v305_resources_release
         uses: actions/download-artifact@v4
         with:
           name: five-platform-feature-evidence
@@ -526,6 +585,7 @@ jobs:
           REVIEWED_V302_MOBILE_RELEASE: ${{ inputs.reviewed_v302_mobile_release }}
           REVIEWED_V303_CAPSULE_RELEASE: ${{ inputs.reviewed_v303_capsule_release }}
           REVIEWED_V304_MCP_RELEASE: ${{ inputs.reviewed_v304_mcp_release }}
+          REVIEWED_V305_RESOURCES_RELEASE: ${{ inputs.reviewed_v305_resources_release }}
           REVIEWED_V301_ROLE_RELEASE: ${{ inputs.reviewed_v301_role_release }}
           REVIEWED_V300_IOS_FOLDER: ${{ inputs.reviewed_v300_ios_folder }}
           FEATURE_RUN: ${{ inputs.feature_run }}
@@ -540,7 +600,7 @@ jobs:
         run: node scripts/publish-verified-release.mjs
 
       - name: Sync verified release source and multilingual homepage to main
-        if: inputs.reviewed_v301_role_release || inputs.reviewed_v302_mobile_release || inputs.reviewed_v303_capsule_release || inputs.reviewed_v304_mcp_release
+        if: inputs.reviewed_v301_role_release || inputs.reviewed_v302_mobile_release || inputs.reviewed_v303_capsule_release || inputs.reviewed_v304_mcp_release || inputs.reviewed_v305_resources_release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
