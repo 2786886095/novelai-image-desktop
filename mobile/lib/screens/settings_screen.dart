@@ -1,3 +1,4 @@
+import 'settings/model_detection_panel.dart';
 import '../ui/tag_pack_selector.dart';
 import '../ui/android/android_gate.dart';
 import '../ui/android/android_tokens.dart';
@@ -209,8 +210,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final visionModelCtrl = TextEditingController();
   final convertModelCtrl = TextEditingController();
   bool testingProxy = false;
-  List<String> _detectedModels = [];
-  String _detectedModelKind = '';
   ({int bytes, int files}) _aitagCacheStats = (bytes: 0, files: 0);
   bool _aitagCacheBusy = false;
   String _sharedPromptPresetStatus = '';
@@ -543,24 +542,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 label: settingsDetailText.visionApiUrl,
                 value: s.visionApiUrl,
                 onChanged: (v) => state.setSettings((x) => x.visionApiUrl = v)),
-            _ModelNameField(
-              label: settingsDetailText.visionModel,
-              controller: visionModelCtrl,
-              detectedModels:
-                  _detectedModelKind == 'reverse' ? _detectedModels : const [],
-              pickerTooltip: settingsDetailText.chooseDetectedModel,
-              onChanged: (v) => state.setSettings((x) => x.visionApiModel = v),
-            ),
-            _SecretField(
+            ModelDetectionPanel(
+              key: const ValueKey('reverse-model-detection'),
+              language: s.language,
+              url: s.visionApiUrl,
+              keyController: visionKeyCtrl,
+              fetch: (url, key) => state.api.listModels(state.settings, url, key),
+              modelField: (models) => _ModelNameField(
+                label: settingsDetailText.visionModel,
+                controller: visionModelCtrl,
+                detectedModels: models,
+                pickerTooltip: settingsDetailText.chooseDetectedModel,
+                onChanged: (v) => state.setSettings((x) => x.visionApiModel = v),
+              ),
+              keyField: _SecretField(
                 controller: visionKeyCtrl,
                 labelText: settingsDetailText.visionApiKey,
-                onChanged: (v) => state.setSecret('vision', v)),
-            const SizedBox(height: 8),
-            SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                    onPressed: () => _detect(context, 'reverse'),
-                    child: Text(settingsDetailText.detectModel))),
+                onChanged: (v) => state.setSecret('vision', v),
+              ),
+            ),
           ]),
           _Section(title: settingsText.convertSection, children: [
             _sharedPromptPresetCard(state, reverse: false),
@@ -569,24 +569,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 value: s.convertApiUrl,
                 onChanged: (v) =>
                     state.setSettings((x) => x.convertApiUrl = v)),
-            _ModelNameField(
-              label: settingsDetailText.textModel,
-              controller: convertModelCtrl,
-              detectedModels:
-                  _detectedModelKind == 'convert' ? _detectedModels : const [],
-              pickerTooltip: settingsDetailText.chooseDetectedModel,
-              onChanged: (v) => state.setSettings((x) => x.convertApiModel = v),
-            ),
-            _SecretField(
+            ModelDetectionPanel(
+              key: const ValueKey('convert-model-detection'),
+              language: s.language,
+              url: s.convertApiUrl,
+              keyController: convertKeyCtrl,
+              fetch: (url, key) => state.api.listModels(state.settings, url, key),
+              modelField: (models) => _ModelNameField(
+                label: settingsDetailText.textModel,
+                controller: convertModelCtrl,
+                detectedModels: models,
+                pickerTooltip: settingsDetailText.chooseDetectedModel,
+                onChanged: (v) => state.setSettings((x) => x.convertApiModel = v),
+              ),
+              keyField: _SecretField(
                 controller: convertKeyCtrl,
                 labelText: settingsDetailText.textApiKey,
-                onChanged: (v) => state.setSecret('convert', v)),
-            const SizedBox(height: 8),
-            SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                    onPressed: () => _detect(context, 'convert'),
-                    child: Text(settingsDetailText.detectModel))),
+                onChanged: (v) => state.setSecret('convert', v),
+              ),
+            ),
           ]),
           _Section(title: settingsText.tagSection, children: [
             SwitchListTile(
@@ -1136,35 +1137,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     ));
     return entries;
-  }
-
-  Future<void> _detect(BuildContext context, String kind) async {
-    final state = context.read<AppState>();
-    final detailText = settingsDetailTextFor(state.settings.language);
-    // Drop any previous detection results up front so a re-detect against a
-    // changed URL/key never leaves stale options selectable. The key field
-    // auto-saves on every change, so storage is already current here.
-    setState(() {
-      _detectedModels = [];
-      _detectedModelKind = '';
-    });
-    try {
-      final models = await state.detectModels(kind);
-      if (!context.mounted) return;
-      setState(() {
-        _detectedModels = models;
-        _detectedModelKind = kind;
-      });
-      if (models.isEmpty) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(detailText.noModelList)));
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
-      }
-    }
   }
 
   Future<void> _testProxy() async {

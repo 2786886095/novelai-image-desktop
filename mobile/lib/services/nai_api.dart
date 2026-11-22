@@ -1,3 +1,4 @@
+import 'model_list_error.dart';
 import '../prompts/prompt_skill_v3.dart';
 import '../prompts/prompt_skill_selection.dart';
 import '../prompts/prompt_skill_v2.dart';
@@ -1111,7 +1112,7 @@ class NaiApi {
       scope: ProxyScope.ai,
     );
     if (res.statusCode >= 400) {
-      throw Exception('Model detection failed (HTTP ${res.statusCode})');
+      throw ModelListHttpError(res.statusCode);
     }
     final data = jsonDecode(res.body);
     final raw = data is Map ? data['data'] : data;
