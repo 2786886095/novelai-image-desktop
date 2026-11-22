@@ -543,14 +543,14 @@ jobs:
           fetch_evidence() {
             local name="$1" jobname="$2" dest="$3" job id digest api
             job=$(jq -er --arg job "$jobname" '[.jobs[]|select(.name==$job and .status=="completed")]|if length==1 then .[0].databaseId else error("ambiguous producer") end' <<<"$jobs")
-            gh api "repos/$GITHUB_REPOSITORY/actions/jobs/$job/logs" > "$RUNNER_TEMP/producer-$job.log"
+            gh api --allow-escape-sequences "repos/$GITHUB_REPOSITORY/actions/jobs/$job/logs" > "$RUNNER_TEMP/producer-$job.log"
             id=$(grep -F "Artifact $name.zip successfully finalized. Artifact ID " "$RUNNER_TEMP/producer-$job.log" | sed -E 's/.*Artifact ID ([0-9]+).*/\1/')
             [[ "$id" =~ ^[0-9]+$ ]]
             api="repos/$GITHUB_REPOSITORY/actions/artifacts/$id"
             digest=$(gh api "$api" | jq -er --arg sha "$sha" --arg name "$name" --argjson run "$run" 'select(.expired==false and .name==$name and .workflow_run.id==$run and .workflow_run.head_sha==$sha)|.digest|sub("^sha256:";"")')
             [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
             grep -F "SHA256 digest of uploaded artifact zip is $digest" "$RUNNER_TEMP/producer-$job.log" >/dev/null
-            gh api "$api/zip" > "$RUNNER_TEMP/evidence-$id.zip"
+            gh api --allow-escape-sequences "$api/zip" > "$RUNNER_TEMP/evidence-$id.zip"
             echo "$digest  $RUNNER_TEMP/evidence-$id.zip" | sha256sum --check
             unzip -q "$RUNNER_TEMP/evidence-$id.zip" -d "$dest"
           }
@@ -568,7 +568,7 @@ jobs:
           api="repos/$GITHUB_REPOSITORY/actions/artifacts/14717608997"
           digest=a8d2fd28256fdbb4c0e4afdff08d81eb0374d950a6ece86769a3bd2bd62176f6
           gh api "$api" | jq -e --arg hash "sha256:$digest" '.expired==false and .name=="five-platform-feature-evidence" and .workflow_run.id==44923792104 and .workflow_run.head_sha=="826e5e54105520f32d4aa880caf5a9d7bc5ebe93" and .digest==$hash' >/dev/null
-          gh api "$api/zip" > "$RUNNER_TEMP/native-matrix-v304.zip"
+          gh api --allow-escape-sequences "$api/zip" > "$RUNNER_TEMP/native-matrix-v304.zip"
           echo "$digest  $RUNNER_TEMP/native-matrix-v304.zip" | sha256sum --check
           unzip -q "$RUNNER_TEMP/native-matrix-v304.zip" -d release-evidence
       - name: Download complete same-source five-platform feature evidence
