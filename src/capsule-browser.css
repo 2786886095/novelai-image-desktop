@@ -263,3 +263,13 @@
 /* A single visible focus ring belongs to the combined search control, not the nested input. */
 .compact-capsule-dialog label.capsule-library-search:focus-within{outline:2px solid var(--accent);outline-offset:1px}
 .compact-capsule-dialog label.capsule-library-search input.prompt-chip-search:is(:focus,:focus-visible){outline:0!important;box-shadow:none!important;border:0!important}
+
+.capsule-subgroup-box{flex:none;min-width:0}
+.capsule-subgroup-toggle{width:100%;min-height:28px;display:flex;align-items:center;gap:8px;padding:3px 8px;background:var(--bg-subtle);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer}
+.capsule-subgroup-toggle span{margin-inline-start:auto;font-size:12px;color:var(--text-secondary)}
+.capsule-subgroup-toggle svg{width:14px;height:14px;transition:transform var(--disclosure-close) var(--ease-out)}
+.capsule-subgroup-toggle[aria-expanded=true] svg{transform:rotate(180deg);transition-duration:var(--disclosure-open)}
+.capsule-subgroup-box .capsule-curated-subgroups{max-height:min(16vh,120px);padding:3px;margin:3px 0;overscroll-behavior:contain}
+html.motion-reduced .capsule-subgroup-box :is(.capsule-subgroup-drawer,.capsule-subgroup-toggle svg){transition:none!important}
+@media(prefers-reduced-motion:reduce){.capsule-subgroup-box :is(.capsule-subgroup-drawer,.capsule-subgroup-toggle svg){transition:none!important}}
+.compact-capsule-dialog .capsule-card-names .capsule-usage{font-size:10px;color:var(--text-secondary);font-variant-numeric:tabular-nums}

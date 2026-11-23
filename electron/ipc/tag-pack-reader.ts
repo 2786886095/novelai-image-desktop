@@ -1,3 +1,4 @@
+import { capsuleFacets } from "../../shared/capsule-facets";
 import { relatedTagsForTopic } from "../../shared/related-tag-topics";
 import { readFileSync, statSync } from "node:fs";
 import {TAG_PACK_MANIFEST,TAG_BROWSE_GROUPS,TAG_BROWSE_PAGE_SIZE,type TagPackPage,type TagPackSort} from "../../shared/multilingual-tag-pack-contract";
@@ -189,7 +190,24 @@ class TagPackReader {
   }
 
   page(path:string,group:string,query:string,page:number,sort:TagPackSort):TagPackPage {
-    const index=browseIndex(path), listed=index.groups.get(group);
+    const index=browseIndex(path);
+    const facet = group.startsWith("facet:") && capsuleFacets.find(f=>"facet:"+f.id===group);
+    let listed=index.groups.get(group);
+    if(facet && !query.trim()) {
+      // Keep the pack's existing browsable universe, exclusion rules and relevance order.
+      const pool=index.groups.get("all");
+      if(pool){
+        const key="facet:"+facet.id;
+        let matches=this.pageRanks.get(key);
+        if(!matches){
+          const predicate=facet.words.map(()=>"instr(' ' || key || ' ', ?) > 0").join(" OR ");
+          const rows=this.db.prepare("SELECT rowid AS id FROM terms WHERE category=0 AND ("+predicate+")").all(...facet.words.map(w=>" "+w+" "));
+          const ids=new Set(rows.map(r=>Number(r.id)));
+          matches=Array.from(pool).filter(id=>ids.has(id));this.pageRanks.set(key,matches);
+        }
+        listed=Uint32Array.from(matches);
+      }
+    }
     if(!listed)return {rows:[],total:0,page:0};
     const word=fold(query.slice(0,255));
     // Autocomplete opens on page zero. Count literally matched rows, but do not

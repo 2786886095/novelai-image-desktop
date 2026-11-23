@@ -1,3 +1,4 @@
+import {capsuleFacets} from "../../shared/capsule-facets";
 import {useEffect,useId,useMemo,useRef,useState} from "react";
 import browse from "../../shared/tag-pack-browse.json";
 import {TAG_PACK_LANGUAGES,TAG_PACK_MANIFEST,TAG_PACK_NAMES,TAG_BROWSE_PAGE_SIZE,TAG_PACK_SORTS,tagPackLanguage,tagPackSort,type TagPackSort,type TagPackLanguage,type TagPackStatus,type TagPackPage} from "../../shared/multilingual-tag-pack-contract";
@@ -6,6 +7,7 @@ import {capsuleTagUnits} from "../compact-prompt";
 import {fmtCount} from "../text-utils";
 import type {TagSuggestion} from "../types";
 import {Icon} from "./icons";
+import {AnimatedCollapse} from "./CharacterEditing";
 import {SelectMenu} from "./ui";
 import {CAPSULE_TAXONOMY,localizedCapsuleCategoryName,localizedCapsuleSubgroupName,localizedTagLabel} from "../prompt-data";
 import {useTagPackLabels} from "../tag-pack-lookup";
@@ -51,6 +53,18 @@ const pagingCopy={
   "ko-KR":["전체 태그","검색 범위","전체 사전","현재 분류","페이지 번호","이동","일치 태그","탐색 태그","태그를 불러오지 못했습니다. 다시 시도하세요.","재시도"],
 } as const;
 
+// The faceted library keeps every original dictionary group and its server-side pagination.
+const libraryFamilies = [
+ {id:"common",groups:[0,13]}, {id:"people",groups:[1,2,3,4]}, {id:"clothes",groups:[5,6,7]},
+ {id:"movement",groups:[8,9]}, {id:"scene",groups:[10,11,12]}, {id:"franchise",groups:[14,15,16]},
+] as const;
+const familyNames:Record<Locale,readonly string[]>={
+ "zh-CN":["常用与其他","人物特征","服饰搭配","表情与动作","场景与画面","作品与角色"],
+ "zh-TW":["常用與其他","人物特徵","服飾搭配","表情與動作","場景與畫面","作品與角色"],
+ "en-US":["General","Appearance","Clothing","Expression and action","Scene and composition","Series and characters"],
+ "ja-JP":["一般","人物の特徴","服装","表情と動作","背景と構図","作品とキャラクター"],
+ "ko-KR":["일반","인물 특징","의상","표정과 동작","배경과 구도","작품과 캐릭터"],
+};
 const SORT_KEY="langbai.capsule-tag-sort.v1";
 const browseCopy = {
  "zh-CN":["排序","默认排序","使用量从高到低","Tag 名 A–Z","相关推荐","添加或搜索一个标签，查看常搭配的词。","当前没有可推荐的相关标签。"],
@@ -85,14 +99,14 @@ export function capsulePage<T>(items:readonly T[],page:number) {
   const safe=Math.min(Math.max(0,page),total-1);
   return {rows:items.slice(safe*WINDOW_SIZE,(safe+1)*WINDOW_SIZE),index:safe,total};
 }
-function TagCards({rows,onPick,selected,badges}:{rows:TagSuggestion[];onPick:(tag:string)=>void;selected:ReadonlyMap<string,number>;badges:readonly string[]}) {
+function TagCards({rows,onPick,selected,badges,usage,locale}:{rows:TagSuggestion[];onPick:(tag:string)=>void;selected:ReadonlyMap<string,number>;badges:readonly string[];usage?:string;locale:Locale}) {
   return <div className="capsule-library-grid">
     {rows.map(row => {
       const num=selected.get(tagPackKey(row.tag))??0;
       return <button key={row.tag} type="button" className="capsule-library-tag"
         data-capsule-library-tag={row.tag} data-capsule-picked={num>0||undefined}
         onClick={()=>onPick(row.tag)} title={[row.description,row.tag,fmtCount(row.count),num?badges[0]+" ×"+num:""].filter(Boolean).join(" · ")}>
-        <span className="capsule-card-names"><strong>{row.description || row.tag}</strong><small>{row.tag}</small></span>
+        <span className="capsule-card-names"><strong>{row.description || row.tag}</strong><small>{row.tag}</small>{usage&&<small className="capsule-usage" data-usage-count={row.count} title={row.count.toLocaleString(locale)}>{usage} · {fmtCount(row.count)}</small>}</span>
         <span className="capsule-card-action">
           {num>0?<strong aria-label={badges[0]+" "+num}>{num}</strong>:isCapsuleManagementTag(row.tag)?<small>{badges[1]}</small>:<Icon name="plus"/>}
         </span>
@@ -123,10 +137,16 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
   const locale=Object.hasOwn(ui,String(language)) ? language as Locale : "zh-CN";
   const l=ui[locale], names=categories[locale], badges=feedback[locale], paging=pagingCopy[locale], ordering=browseCopy[locale];
   const [status,setStatus]=useState<TagPackStatus|null>(null);
-  const [groupIndex,setGroupIndex]=useState(-1),[groupPages,setGroupPages]=useState<Record<number,number>>({});
+  const [groupIndex,setGroupIndex]=useState(-1),[groupPages,setGroupPages]=useState<Record<string,number>>({});
   const [library,setLibrary]=useState(false),[cat,setCat]=useState(0),[sub,setSub]=useState(0),[curPage,setCurPage]=useState(0);
   const category=capsuleDirectory[cat], subgroup=category.subgroups[sub];
-  const [allSubgroups,setAllSubgroups]=useState(false);
+  const family=libraryFamilies.find(f=>f.groups.some(i=>i===groupIndex));
+  const [facetChoice,setFacetChoice]=useState("");
+  const facet=capsuleFacets.find(f=>f.id===facetChoice&&f.family===family?.id);
+  const scope=library?"lib:"+family?.id:"cur:"+cat;
+  const [opened,setOpened]=useState<Record<string,boolean>>({});
+  const subOpen=!!opened[scope],subId=useId();
+  const usageLabel={"zh-CN":"使用量","zh-TW":"使用量","en-US":"Uses","ja-JP":"使用数","ko-KR":"사용량"}[locale];
   const directoryLabels=directoryText[locale];
   const categoryLabel=(n:string)=>n==="人物"?directoryLabels[0]:localizedCapsuleCategoryName(n,locale);
   const subgroupLabel=(n:string)=>n==="配饰"?directoryLabels[1]:localizedCapsuleSubgroupName(n,locale);
@@ -148,16 +168,16 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
   const [searchPage,setSearchPage]=useState<{key:string;index:number}|null>(null);
   const [open,setOpen]=useState(false),[busy,setBusy]=useState<TagPackLanguage|null>(null),[error,setError]=useState(false);
   const [result,setResult]=useState<{key:string;data?:TagPackPage}|null>(null);
-  const autoSelected=useRef(false);
+  const autoSelected=useRef<Promise<TagPackStatus>|null>(null);
   const search=useRef<HTMLInputElement>(null),switcher=useRef<HTMLDivElement>(null);
   const trigger=useRef<HTMLButtonElement>(null),results=useRef<HTMLDivElement>(null),menuId=useId();
   const revision=useTagPackRevision();
   const q=query.trim(), active=status?.active;
   const group=capsuleBrowseGroups[groupIndex];
-  const browseGroup=group?.id??"all";
+  const browseGroup=facet?"facet:"+facet.id:group?.id??"all";
   const groupId=q?"all":browseGroup;
   const searchKey=active ? [active,revision,groupId,q,order].join("\0") : "";
-  const page=curated?curPage:q?(searchPage?.key===searchKey?searchPage.index:0):(groupPages[groupIndex]??0);
+  const page=curated?curPage:q?(searchPage?.key===searchKey?searchPage.index:0):(groupPages[browseGroup]??0);
   const requestKey=[searchKey,page,retry].join("\0");
   const curatedRows=useMemo(()=>{
     if(!curated)return [];
@@ -196,14 +216,14 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
     void window.naiDesktop.multilingualTagStatus().then(async next=>{
       if(!live)return;
       setStatus(next);
-      const preferred=tagPackLanguage(locale);
-      if(!next.active&&!next.preferred&&preferred&&next.installed.includes(preferred)&&!autoSelected.current){
-        autoSelected.current=true;
-        const activated=await window.naiDesktop.installMultilingualTagPack(preferred,"use").catch(()=>null);
-        if(live&&activated?.active===preferred){
-          setStatus(activated);
-          window.dispatchEvent(new Event("langbai:multilingual-tags-changed"));
-        }
+      // active.json is authoritative. Repair missing selection from installed packs
+      // without prompting, downloading, or switching an already active language.
+      const preferred=[next.preferred,tagPackLanguage(localStorage.getItem("capsule.last-pack")),tagPackLanguage(locale),...next.installed].find(p=>p&&next.installed.includes(p));
+      if(!next.active && preferred){
+        const req=autoSelected.current??=window.naiDesktop.installMultilingualTagPack(preferred,"use");
+        try{const activated=await req;if(live&&activated.active){setStatus(activated);window.dispatchEvent(new Event("langbai:multilingual-tags-changed"));}}
+        catch{if(live)setError(true);}
+        finally{if(autoSelected.current===req)autoSelected.current=null;}
       }
     }).catch(()=>{if(live)setStatus({active:null,installed:[],updatedAt:TAG_PACK_MANIFEST.updatedAt});});
     return ()=>{live=false;};
@@ -236,6 +256,7 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
     try{
       const next=await window.naiDesktop.installMultilingualTagPack(pack,status.installed.includes(pack)?"use":"download");
       if(next.active!==pack)throw Error("Tag dictionary was not changed");
+      localStorage.setItem("capsule.last-pack",pack);
       setStatus(next);
       window.dispatchEvent(new Event("langbai:multilingual-tags-changed"));
       setOpen(false);
@@ -244,10 +265,11 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
     finally{setBusy(null);}
   }
 
+  const fallbackPack=status?.preferred??tagPackLanguage(localStorage.getItem("capsule.last-pack"))??tagPackLanguage(locale)??"zh-CN";
   function changePage(next:number) {
     if(curated)setCurPage(next);
     else if(q)setSearchPage({key:searchKey,index:next});
-    else setGroupPages(pages=>({...pages,[groupIndex]:next}));
+    else setGroupPages(pages=>({...pages,[browseGroup]:next}));
     results.current?.scrollTo({top:0,behavior:"instant"});
   }
   return <section className="capsule-library">
@@ -285,23 +307,31 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
     {!open&&error&&<p className="capsule-library-empty" role="alert">{l[7]}</p>}
     {!q&&<div className="capsule-mode-links">
       <button type="button" className="capsule-library-more" aria-pressed={!library} onClick={()=>setLibrary(false)}>{curatedLabel}</button>
-      <button type="button" className="capsule-library-more" aria-pressed={library} onClick={()=>{setLibrary(true);setGroupIndex(-1);}}>{paging[0]}{active?" · "+TAG_PACK_MANIFEST.packs[active].count.toLocaleString(locale):""}</button>
+      <button type="button" className="capsule-library-more" aria-pressed={library} onClick={()=>setLibrary(true)}>{paging[0]}{active?" · "+TAG_PACK_MANIFEST.packs[active].count.toLocaleString(locale):""}</button>
     </div>}
     {!curated&&!status ? <p className="capsule-library-empty" role="status">{l[14]}</p> :
-      !curated&&!active ? <p className="capsule-library-empty">{l[8]}</p> :
+      !curated&&!active ? <div className="capsule-library-empty"><button className="capsule-library-more" type="button" disabled={!!busy} onClick={()=>void chooseLanguage(fallbackPack)}>{busy?l[5]:l[4]} · {TAG_PACK_NAMES[fallbackPack]} ({Math.ceil(TAG_PACK_MANIFEST.packs[fallbackPack].size/1024**2)} MiB)</button></div> :
       <div className={'capsule-library-browse'+(q?' capsule-search-wide':'')}>
         {!q&&<nav className="capsule-library-categories" aria-label={l[13]}>
-          {curated?capsuleDirectory.map((c,i)=><button key={c.name} type="button" data-curated-cat={c.name} aria-pressed={i===cat} onClick={()=>{setExpanded(false);setCat(i);setSub(0);setAllSubgroups(false);setCurPage(0);results.current?.scrollTo({top:0});}}>{categoryLabel(c.name)}</button>):<>
+          {curated?capsuleDirectory.map((c,i)=><button key={c.name} type="button" data-curated-cat={c.name} aria-pressed={i===cat} onClick={()=>{if(i===cat)return;setExpanded(false);setCat(i);setSub(0);setCurPage(0);results.current?.scrollTo({top:0});}}>{categoryLabel(c.name)}</button>):<>
           <button type="button" data-capsule-group="all" aria-pressed={groupIndex<0}
-            onClick={()=>{setGroupIndex(-1);results.current?.scrollTo({top:0});}}>{anyGroup}</button>
-          {capsuleBrowseGroups.map((entry,i)=><button type="button" key={entry.id} data-capsule-group={entry.id}
-            aria-pressed={i===groupIndex} onClick={()=>{setGroupIndex(i);results.current?.scrollTo({top:0});}}>{names[i]}</button>)}</>}
+            onClick={()=>{setFacetChoice("");setGroupIndex(-1);results.current?.scrollTo({top:0});}}>{anyGroup}</button>
+          {libraryFamilies.map((f,i)=><button type="button" key={f.id} data-capsule-family={f.id}
+            aria-pressed={family===f} onClick={()=>{if(family!==f){setFacetChoice("");setGroupIndex(f.groups[0]);results.current?.scrollTo({top:0});}}}>{familyNames[locale][i]}</button>)}</>}
         </nav>}
         <div className="capsule-library-pane">
-         {curated&&<div className="capsule-curated-subgroups" role="group" aria-label={categoryLabel(category.name)}>
-          {category.subgroups.map((sg,i)=>(allSubgroups||i<6||i===sub)&&<button type="button" className="capsule-library-more" key={sg.name} data-curated-sub={sg.name} aria-pressed={i===sub} onClick={()=>{setExpanded(false);setSub(i);setAllSubgroups(false);setCurPage(0);results.current?.scrollTo({top:0});}}>{subgroupLabel(sg.name)}</button>)}
-          {category.subgroups.length>6&&<button type="button" className="capsule-library-more" data-curated-disclosure="" aria-expanded={allSubgroups} onClick={()=>setAllSubgroups(v=>!v)}>{allSubgroups?directoryLabels[3]:directoryLabels[2]+" ("+category.subgroups.length+")"}</button>}</div>}
-         <div className="capsule-library-heading"><div><h3>{q?l[10]:curated?categoryLabel(category.name)+" › "+subgroupLabel(subgroup.name):group?names[groupIndex]:paging[0]}</h3>
+         {!q&&(curated||family)&&<div className="capsule-subgroup-box">
+          <button type="button" data-subgroup-toggle="" className="capsule-subgroup-toggle" aria-controls={subId} aria-expanded={subOpen} onClick={()=>setOpened(v=>({...v,[scope]:!v[scope]}))}>
+           <strong>{curated?subgroupLabel(subgroup.name):facet?.labels[locale]??names[groupIndex]}</strong>
+           <span>{subOpen?directoryLabels[3]:directoryLabels[2]} · {curated?category.subgroups.length:(family?.groups.length??0)+capsuleFacets.filter(f=>f.family===family?.id).length}</span><Icon name="chevronDown"/>
+          </button>
+          <AnimatedCollapse id={subId} open={subOpen} className="capsule-subgroup-drawer"><div className="capsule-curated-subgroups">
+           {curated?category.subgroups.map((sg,i)=><button type="button" className="capsule-library-more" key={sg.name} data-curated-sub={sg.name} aria-pressed={i===sub} onClick={()=>{setExpanded(false);setSub(i);setCurPage(0);results.current?.scrollTo({top:0});}}>{subgroupLabel(sg.name)}</button>):<>
+            {family?.groups.map(i=><button type="button" className="capsule-library-more" key={i} data-capsule-group={capsuleBrowseGroups[i].id} aria-pressed={i===groupIndex&&!facet} onClick={()=>{setFacetChoice("");setGroupIndex(i);results.current?.scrollTo({top:0});}}>{names[i]}</button>)}
+            {capsuleFacets.filter(f=>f.family===family?.id).map(f=><button type="button" className="capsule-library-more" key={f.id} data-capsule-facet={f.id} aria-pressed={facet?.id===f.id} onClick={()=>{setFacetChoice(f.id);results.current?.scrollTo({top:0});}}>{f.labels[locale]}</button>)}
+           </>}
+          </div></AnimatedCollapse></div>}
+         <div className="capsule-library-heading"><div><h3>{q?l[10]:curated?categoryLabel(category.name)+" › "+subgroupLabel(subgroup.name):facet?facet.labels[locale]:group?names[groupIndex]:paging[0]}</h3>
           <small>{(data??lastForScope)&&<>{(data??lastForScope)!.total.toLocaleString(locale)} {q?paging[6]:paging[7]} · </>}{q?l[12]:curated?curatedLabel:badges[6]}</small></div>
           <SelectMenu className="capsule-sort-select" ariaLabel={ordering[0]} label={ordering[0]} value={order}
             options={TAG_PACK_SORTS.map((value,i)=>({value,label:ordering[i+1]}))} onChange={changeOrder}/>
@@ -309,7 +339,7 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
          <div ref={results} className="capsule-library-results" data-capsule-search-results={q?"":undefined} aria-busy={pending}>
           {pending?<p className="capsule-library-empty" role="status">{l[14]}</p>:
            !data?<div className="capsule-library-empty" role="alert"><p>{paging[8]}</p><button type="button" className="capsule-library-more" onClick={()=>setRetry(value=>value+1)}>{paging[9]}</button></div>:
-           data.rows.length?<TagCards rows={data.rows} selected={selected} badges={badges} onPick={onPick}/>:
+           data.rows.length?<TagCards usage={curated?undefined:usageLabel} locale={locale} rows={data.rows} selected={selected} badges={badges} onPick={onPick}/>:
            <div className="capsule-library-empty"><p>{l[9]}</p>{q&&<button className="capsule-library-more" type="button" onClick={()=>onPick(q)}>{badges[5]}</button>}</div>}
          </div>
          {curated&&curatedRows.length>WINDOW_SIZE&&<button type="button" className="capsule-library-more" aria-pressed={expanded} onClick={()=>setExpanded(v=>!v)}>{expanded?paging[4]:allLabel} · {curatedRows.length}</button>}

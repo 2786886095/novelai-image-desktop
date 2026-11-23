@@ -82,7 +82,7 @@ export function CapsuleEditor({title,value,onChange,onAdd,onClose,language,child
     close.current();return;
    }
    if(e.key!=='Tab')return;
-   const elements=[...ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),textarea,select,[tabindex="0"]')??[]].filter(el=>el.getClientRects().length);
+   const elements=[...ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),textarea,select,[tabindex="0"]')??[]].filter(el=>!el.closest("[inert]")&&el.getClientRects().length);
    const first=elements[0],last=elements[elements.length-1];
    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}
   };

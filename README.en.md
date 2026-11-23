@@ -1,5 +1,7 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 
+The desktop Inspiration Capsule keeps separate curated and full-library categories. Expand or collapse subcategories, and see usage counts on full-library tag cards.
+
 On desktop and mobile, conversion, image interrogation and agent chats reuse a session ID for OpenCode Go. Other APIs do not receive this header.
 
 On mobile, pick capsule tags for a single character, preview a bulk fill, and save or apply named character groups. Unlisted characters are kept unless you explicitly remove them.
