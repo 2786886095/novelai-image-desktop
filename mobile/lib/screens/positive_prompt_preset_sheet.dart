@@ -945,7 +945,9 @@ class _PositivePromptPresetSheetState
         .where((preset) =>
             query.isEmpty ||
             preset.name.toLowerCase().contains(query) ||
-            preset.prompt.toLowerCase().contains(query))
+            preset.prompt.toLowerCase().contains(query) ||
+            preset.captions.any((c) => [c.name, c.prompt, c.negativePrompt]
+                .any((value) => value.toLowerCase().contains(query))))
         .toList();
     if (_selectedId.isEmpty &&
         state.settings.positivePromptPresets.isNotEmpty) {

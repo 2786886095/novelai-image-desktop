@@ -32,7 +32,9 @@ const _copy = {
     '保存预览为组合',
     '已保存',
     '保存失败',
-    '复制 AI 修改指令'
+    '复制 AI 修改指令',
+    '同时移除预览中未列出的末尾角色',
+    '生成或修改要求（可选）'
   ],
   'zh-TW': [
     '批次填入角色',
@@ -55,7 +57,9 @@ const _copy = {
     '將預覽另存為組合',
     '已儲存',
     '儲存失敗',
-    '複製 AI 修改指令'
+    '複製 AI 修改指令',
+    '同時移除預覽中未列出的末尾角色',
+    '生成或修改要求（選填）'
   ],
   'en-US': [
     'Bulk fill characters',
@@ -78,7 +82,9 @@ const _copy = {
     'Save preview as group',
     'Saved',
     'Save failed',
-    'Copy AI edit instructions'
+    'Copy AI edit instructions',
+    'Also remove trailing characters not in this preview',
+    'Creation or revision instructions (optional)'
   ],
   'ja-JP': [
     'キャラクターを一括入力',
@@ -101,7 +107,9 @@ const _copy = {
     'プレビューを保存',
     '保存しました',
     '保存できませんでした',
-    'AI 修正指示をコピー'
+    'AI 修正指示をコピー',
+    'プレビューにない末尾のキャラクターも削除',
+    '生成または修正の要望（任意）'
   ],
   'ko-KR': [
     '캐릭터 일괄 입력',
@@ -124,7 +132,9 @@ const _copy = {
     '미리보기를 그룹으로 저장',
     '저장됨',
     '저장 실패',
-    'AI 수정 지시 복사'
+    'AI 수정 지시 복사',
+    '미리 보기에 없는 마지막 캐릭터도 삭제',
+    '생성 또는 수정 요청 (선택 사항)'
   ]
 };
 List<String> mobileBulkLabels(String language) =>
@@ -219,7 +229,8 @@ String roleSnapshot(AppState app) => jsonEncode([
       app.extras.charCaptions.map((r) => r.toJson()).toList()
     ]);
 bool fillMobileRoles(
-    AppState app, String snapshot, List<Map<String, String>> rows) {
+    AppState app, String snapshot, List<Map<String, String>> rows,
+    {bool removeTrailing = false}) {
   if (roleSnapshot(app) != snapshot ||
       rows.isEmpty ||
       rows.length > app.params.maxCharacterPrompts) return false;
@@ -233,6 +244,8 @@ bool fillMobileRoles(
     if (r.containsKey('negativePrompt'))
       c.negativePrompt = r['negativePrompt']!;
   }
+  if (removeTrailing && chars.length > rows.length)
+    chars.removeRange(rows.length, chars.length);
   app.markCharacterChanged();
   return true;
 }
@@ -246,12 +259,15 @@ class MobileRoleBulkDialog extends StatefulWidget {
 class _RoleBulkState extends State<MobileRoleBulkDialog> {
   final field = TextEditingController();
   final presetName = TextEditingController();
+  final instructions = TextEditingController();
+  List<Map<String, String>>? confirmedRows;
   bool saving = false;
   late final String snapshot = roleSnapshot(context.read<AppState>());
   List<Map<String, String>>? rows;
   String? error;
   @override
   void dispose() {
+    instructions.dispose();
     presetName.dispose();
     field.dispose();
     super.dispose();
@@ -287,7 +303,12 @@ class _RoleBulkState extends State<MobileRoleBulkDialog> {
                       await Clipboard.setData(ClipboardData(
                           text:
                               'Return only JSON: {"characters":[{"name":"A","prompt":"silver hair","negativePrompt":"hat"}]}. Use 1–$max characters in slot order. Preserve quotes and weights. Current characters: ' +
-                                  jsonEncode(current)));
+                                  jsonEncode(rows == null
+                                      ? current
+                                      : {'characters': rows}) +
+                                  (instructions.text.trim().isEmpty
+                                      ? ''
+                                      : '\n' + instructions.text.trim())));
                       if (mounted)
                         msg.showSnackBar(SnackBar(content: Text(l[11])));
                     },
@@ -347,13 +368,21 @@ class _RoleBulkState extends State<MobileRoleBulkDialog> {
                   tilePadding: EdgeInsets.zero,
                   title: Text(l[13]),
                   children: [
+                    TextField(
+                        controller: instructions,
+                        maxLength: 2000,
+                        decoration: InputDecoration(labelText: l[22])),
                     Wrap(children: [
                       TextButton(
                           onPressed: () async {
                             final msg = ScaffoldMessenger.of(context);
                             await Clipboard.setData(ClipboardData(
                                 text:
-                                    'Return only JSON: {"characters":[{"name":"A","prompt":"silver hair","negativePrompt":"hat"}]}. Use 1–$max characters in slot order. Preserve quotes and weights.'));
+                                    'Return only JSON: {"characters":[{"name":"A","prompt":"silver hair","negativePrompt":"hat"}]}. Use 1–$max characters in slot order. Preserve quotes and weights.' +
+                                        (instructions.text.trim().isEmpty
+                                            ? ''
+                                            : '\n' +
+                                                instructions.text.trim())));
                             if (mounted)
                               msg.showSnackBar(SnackBar(content: Text(l[11])));
                           },
@@ -404,7 +433,7 @@ class _RoleBulkState extends State<MobileRoleBulkDialog> {
                     TextField(
                         key: const ValueKey('bulk-preset-name'),
                         controller: presetName,
-                        maxLength: 64,
+                        maxLength: 120,
                         decoration: InputDecoration(labelText: l[16]),
                         onChanged: (_) => setState(() {})),
                     TextButton(
@@ -420,7 +449,9 @@ class _RoleBulkState extends State<MobileRoleBulkDialog> {
                                 try {
                                   await app.savePositivePromptPreset(
                                       name: presetName.text.trim(),
-                                      prompt: '',
+                                      prompt: list
+                                          .map((r) => r['prompt']!)
+                                          .join('\n'),
                                       captions: [
                                         for (final r in list)
                                           CharCaptionItem(
@@ -442,6 +473,15 @@ class _RoleBulkState extends State<MobileRoleBulkDialog> {
                               },
                         child: Text(l[17])),
                   ]),
+              if (rows != null && rows!.length < app.extras.charCaptions.length)
+                CheckboxListTile(
+                    key: const ValueKey('bulk-remove-trailing'),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                        '${l[21]} (${app.extras.charCaptions.length - rows!.length})'),
+                    value: identical(confirmedRows, rows),
+                    onChanged: (v) => setState(
+                        () => confirmedRows = v == true ? rows : null)),
               if (rows != null)
                 for (var i = 0; i < rows!.length; i++)
                   ListTile(
@@ -481,7 +521,8 @@ class _RoleBulkState extends State<MobileRoleBulkDialog> {
           else
             FilledButton(
                 onPressed: () {
-                  if (!fillMobileRoles(app, base, rows!)) {
+                  if (!fillMobileRoles(app, base, rows!,
+                      removeTrailing: identical(confirmedRows, rows))) {
                     setState(() => error = l[7]);
                     return;
                   }
@@ -535,12 +576,32 @@ class _MoveStylesState extends State<MoveMobileStylesDialog> {
                             child: Text(g, overflow: TextOverflow.ellipsis))
                     ],
                     onChanged: (v) => setState(() => group = v)),
-              Wrap(alignment: WrapAlignment.center,crossAxisAlignment:WrapCrossAlignment.center, children:[
-                Text(l[10] + ' · ' + ids.length.toString() + '/' + widget.styles.length.toString()),
-                TextButton(key:const ValueKey('batch-toggle-visible'),onPressed:widget.styles.isEmpty?null:()=>setState((){
-                  if(ids.length==widget.styles.length){ids.clear();} else {ids.addAll(widget.styles.map((p)=>p.id));}
-                }),child:Text((favoriteStyleLabels[widget.language]??favoriteStyleLabels['en-US']!)[ids.length==widget.styles.length && ids.isNotEmpty?2:1]))
-              ]),
+              Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(l[10] +
+                        ' · ' +
+                        ids.length.toString() +
+                        '/' +
+                        widget.styles.length.toString()),
+                    TextButton(
+                        key: const ValueKey('batch-toggle-visible'),
+                        onPressed: widget.styles.isEmpty
+                            ? null
+                            : () => setState(() {
+                                  if (ids.length == widget.styles.length) {
+                                    ids.clear();
+                                  } else {
+                                    ids.addAll(widget.styles.map((p) => p.id));
+                                  }
+                                }),
+                        child: Text((favoriteStyleLabels[widget.language] ??
+                                favoriteStyleLabels['en-US']!)[
+                            ids.length == widget.styles.length && ids.isNotEmpty
+                                ? 2
+                                : 1]))
+                  ]),
               Expanded(
                   child: ListView.builder(
                       itemCount: widget.styles.length,

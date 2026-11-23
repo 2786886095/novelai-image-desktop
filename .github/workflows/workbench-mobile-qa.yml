@@ -1,10 +1,29 @@
-name: Workbench field QA (no release)
+name: Role and capsule pointer QA (no release)
 on:
   push:
     branches: ['codex/qa-mobile-workbench-1795350068434']
 permissions:
   contents: read
 jobs:
+  mac-window:
+    runs-on: macos-15
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '24.14.0'}
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Click through production Electron desktop
+        run: QA_OUT="$RUNNER_TEMP/capsule-mac" ./node_modules/.bin/electron scripts/qa-workbench-mac.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mac-window-proof
+          path: |
+            ${{ runner.temp }}/capsule-mac/*.log
+            ${{ runner.temp }}/capsule-mac/*.png
   ios-simulator:
     runs-on: macos-15
     timeout-minutes: 30
@@ -23,17 +42,17 @@ jobs:
         working-directory: mobile
         run: |
           flutter pub get
-          flutter build ios --simulator --debug --no-codesign --target integration_test/native_resources_queue_qa.dart
+          flutter build ios --simulator --debug --no-codesign --target integration_test/native_prompt_role_qa.dart
           xcrun simctl bootstatus "$IOS_SIM" -b
           app=build/ios/iphonesimulator/Runner.app
           xcrun simctl install "$IOS_SIM" "$app"
           id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
           xcrun simctl launch "$IOS_SIM" "$id"
           data=$(xcrun simctl get_app_container "$IOS_SIM" "$id" data)
-          for i in {1..80}; do [ -f "$data/Documents/RESOURCES_QUEUE_QA.json" ] && break; sleep 2; done
-          cp "$data/Documents/RESOURCES_QUEUE_QA.json" "$RUNNER_TEMP/RESOURCES_QUEUE_QA.json"
-          cat "$RUNNER_TEMP/RESOURCES_QUEUE_QA.json"
-          python3 -c 'import json,sys; r=json.load(open(sys.argv[1]));assert r["os"]=="ios" and r["passed"] is True and "explicit-apply-precise-only" in r["steps"] and "queue-down-BCA-persisted-with-original-sources" in r["steps"]' "$RUNNER_TEMP/RESOURCES_QUEUE_QA.json"
+          for i in {1..80}; do [ -f "$data/Documents/PROMPT_ROLE_QA.json" ] && break; sleep 2; done
+          cp "$data/Documents/PROMPT_ROLE_QA.json" "$RUNNER_TEMP/PROMPT_ROLE_QA.json"
+          cat "$RUNNER_TEMP/PROMPT_ROLE_QA.json"
+          python3 -c 'import json,sys; r=json.load(open(sys.argv[1]));assert r["os"]=="ios" and r["passed"] is True and "explicit-apply-saved-duo-preserves-order-and-negatives" in r["steps"] and "capsule-updated-only-active-role" in r["steps"]' "$RUNNER_TEMP/PROMPT_ROLE_QA.json"
       - if: always() && env.IOS_SIM != ''
         run: xcrun simctl io "$IOS_SIM" screenshot "$RUNNER_TEMP/ios-field.png"
       - uses: actions/upload-artifact@v4
@@ -41,6 +60,7 @@ jobs:
         with:
           name: ios-device-proof
           path: |
-            ${{ runner.temp }}/RESOURCES_QUEUE_QA.json
+            ${{ runner.temp }}/PROMPT_ROLE_QA.json
             ${{ runner.temp }}/ios-field.png
+
 
