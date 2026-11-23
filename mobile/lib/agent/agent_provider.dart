@@ -1,3 +1,4 @@
+import '../services/opencode_go_session.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -287,8 +288,10 @@ class AgentProviderClient {
             scope: ProxyScope.ai,
           );
     _activeClient = client;
+    final go = goHeaders(uri);
     final request = http.Request('POST', uri)
-      ..headers.addAll({..._headers(apiKey), ...extraHeaders})
+      ..followRedirects = go.isEmpty
+      ..headers.addAll({..._headers(apiKey), ...extraHeaders, ...go})
       ..body = jsonEncode(body);
     try {
       return await client.send(request).timeout(const Duration(seconds: 90));

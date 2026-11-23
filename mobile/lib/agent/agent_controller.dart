@@ -1,3 +1,4 @@
+import '../services/opencode_go_session.dart';
 import '../images/image_file_access.dart';
 import 'template_tools.dart';
 import 'model_selections.dart';
@@ -1139,7 +1140,7 @@ class AgentController extends ChangeNotifier {
       var paidAttempted = false;
       for (var round = 0; round < 8; round++) {
         _throwIfAborted();
-        final turn = await provider.complete(
+        final turn = await withGoConversation(conversation.id, () => provider.complete(
           settings: app.settings,
           apiKey: apiKey,
           messages: messages,
@@ -1149,7 +1150,7 @@ class AgentController extends ChangeNotifier {
             assistant.content += delta;
             _notifyStreaming();
           },
-        );
+        ));
         _throwIfAborted();
         usage.add(turn.usage);
         if (turn.issue != null) {
@@ -1515,7 +1516,7 @@ class AgentController extends ChangeNotifier {
               .firstOrNull ??
           workspace.samplerPresets.first;
       _throwIfAborted();
-      final turn = await provider.complete(
+      final turn = await withGoConversation(conversation.id, () => provider.complete(
         settings: app.settings,
         apiKey: apiKey,
         messages: modelMessages,
@@ -1542,7 +1543,7 @@ class AgentController extends ChangeNotifier {
           );
           _notifyStreaming();
         },
-      );
+      ));
       _throwIfAborted();
       usage.add(turn.usage);
       if (turn.reasoning.isNotEmpty) {
@@ -1585,7 +1586,7 @@ class AgentController extends ChangeNotifier {
             };
             _notify();
           },
-          request: (instruction) => provider.complete(
+          request: (instruction) => withGoConversation(conversation.id, () => provider.complete(
               settings: app.settings,
               apiKey: apiKey,
               messages: [
@@ -1607,7 +1608,7 @@ class AgentController extends ChangeNotifier {
                 'reasoningEffort': conversation.reasoningEffort == 'auto'
                     ? app.settings.agentReasoningEffort
                     : conversation.reasoningEffort
-              }),
+              })),
         );
         if (repair.usage != null) usage.add(repair.usage!);
         final resolved = resolveImagePrompt(repair.raw, base,
@@ -2336,7 +2337,7 @@ class AgentController extends ChangeNotifier {
                   app.settings.agentApiBaseUrl) ||
               apiKey.isNotEmpty)) {
         final transcript = _localSummary(conversation);
-        final turn = await provider.complete(
+        final turn = await withGoConversation(conversation.id, () => provider.complete(
           settings: app.settings,
           apiKey: apiKey,
           tools: const [],
@@ -2357,7 +2358,7 @@ class AgentController extends ChangeNotifier {
             },
           ],
           onDelta: (_) {},
-        );
+        ));
         summary = turn.content.trim();
       }
       if (summary.isEmpty) summary = _localSummary(conversation);

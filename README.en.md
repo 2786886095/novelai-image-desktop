@@ -1,5 +1,7 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 
+On desktop and mobile, conversion, image interrogation and agent chats reuse a session ID for OpenCode Go. Other APIs do not receive this header.
+
 On mobile, pick capsule tags for a single character, preview a bulk fill, and save or apply named character groups. Unlisted characters are kept unless you explicitly remove them.
 
 17 new desktop MCP tools manage artwork, favorites, prompt libraries and reference images in batches. Saving a preset does not mount it; permanent deletion requires approval in the desktop app.

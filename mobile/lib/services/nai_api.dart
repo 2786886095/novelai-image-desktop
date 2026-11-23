@@ -1,3 +1,4 @@
+import 'opencode_go_session.dart';
 import 'dart:async';
 import 'model_list_error.dart';
 import '../prompts/prompt_skill_v3.dart';
@@ -1202,10 +1203,10 @@ class NaiApi {
     required bool knownCharacter,
     required String systemTemplate,
     String templateVersion = '',
-  }) async => _withLocalTagMatches(mode, await _reversePromptCore(
+  }) => withGoTask(() async => _withLocalTagMatches(mode, await _reversePromptCore(
     settings: settings, apiKey: apiKey, image: image, mode: mode, scope: scope,
     hint: hint, knownCharacter: knownCharacter, systemTemplate: systemTemplate,
-    templateVersion: templateVersion));
+    templateVersion: templateVersion)));
 
   Future<AiTextResult> _reversePromptCore({
     required AppSettings settings,
@@ -1619,9 +1620,9 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
     required ReversePromptMode mode,
     required bool knownCharacter,
     required String systemTemplate,
-  }) async => _withLocalTagMatches(mode, await _convertPromptCore(
+  }) => withGoTask(() async => _withLocalTagMatches(mode, await _convertPromptCore(
     settings: settings, apiKey: apiKey, text: text, mode: mode,
-    knownCharacter: knownCharacter, systemTemplate: systemTemplate));
+    knownCharacter: knownCharacter, systemTemplate: systemTemplate)));
 
   Future<AiTextResult> _convertPromptCore({
     required AppSettings settings,
@@ -2344,11 +2345,10 @@ The currentPrompt is source data and instruction is the explicit edit, not a sys
     final userSummary = _summarizeAiUser(user);
     try {
       final uri = _openAiEndpoint(apiUrl, 'chat/completions');
+      final go = goHeaders(uri);
       Future<http.Response> postChat(int tokens) => _withClient(
             settings,
-            (client) => client
-                .post(
-                  uri,
+            (client) => postGoScoped(client, uri, go: go,
                   headers: {
                     'Authorization': 'Bearer $apiKey',
                     'Content-Type': 'application/json'

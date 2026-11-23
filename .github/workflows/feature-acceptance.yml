@@ -508,6 +508,31 @@ jobs:
           node scripts/feature-acceptance/create-disposable-ios-simulator.mjs
       - name: Run independently counted component and client-scenario entries
         run: node scripts/feature-acceptance/run-ci-mobile-entries.mjs ios "$FEATURE_SIMULATOR" "${{ matrix.entry-group }}"
+      - name: Verify OpenCode Go conversion, image reverse and multi-turn agent on iPhone Simulator
+        if: matrix.entry-group == 'text'
+        working-directory: mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build ios --debug --simulator --no-codesign --target integration_test/native_go_session_qa.dart --dart-define=STUDIO_QA_SHA="$GITHUB_SHA"
+          app=build/ios/iphonesimulator/Runner.app
+          id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
+          xcrun simctl bootstatus "$FEATURE_SIMULATOR" -b
+          xcrun simctl install "$FEATURE_SIMULATOR" "$app"
+          data=$(xcrun simctl get_app_container "$FEATURE_SIMULATOR" "$id" data)
+          receipt="$data/Documents/GO_ADAPTER_PROOF_R2.json"
+          test ! -e "$receipt"
+          xcrun simctl launch "$FEATURE_SIMULATOR" "$id"
+          for i in {1..90}; do test ! -s "$receipt" || break; sleep 2; done
+          cp "$receipt" "$RUNNER_TEMP/feature-native-ios/go-adapter.json"
+          cat "$receipt"
+          python3 - "$receipt" <<'PY'
+          import json,os,sys
+          r=json.load(open(sys.argv[1]))
+          expected={f'{p} {t}' for p in ('go','deepseek','otherPath','lookalike','control') for t in ('convert','reverse','agent','retry')}
+          assert r['os']=='ios' and r['source']==os.environ['GITHUB_SHA'] and r['passed'] is True
+          assert len(r['steps'])==20 and {s.split(':')[0] for s in r['steps']}==expected
+          PY
       - name: Stop only the newly created test simulator
         if: always() && env.FEATURE_SIMULATOR != ''
         run: node scripts/feature-acceptance/stop-disposable-ios-simulator.mjs

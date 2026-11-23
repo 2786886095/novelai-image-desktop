@@ -1351,7 +1351,7 @@ async function compactConversationWithController(conversationId: string, control
   emitWorkspace();
   try {
     const turn = process.env.LANGBAI_PI_AGENT !== '0'
-      ? await completeStudioPiSummary({ settings: getSettings(), transcript: plan.transcript, instruction, signal: controller.signal })
+      ? await completeStudioPiSummary({ settings: getSettings(), conversationId: conversation.id, transcript: plan.transcript, instruction, signal: controller.signal })
       : await completeProvider([{ role: "system", content: instruction }, { role: "user", content: plan.transcript }], controller, () => undefined);
     controller.signal.throwIfAborted();
     if (activeRequests.get(conversationId) !== controller) throw new Error("压缩任务已被替换；历史未更改。");

@@ -1,3 +1,4 @@
+import { goHeaders, goSession } from './opencode-go-session';
 import axios from 'axios';
 import { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
@@ -16,9 +17,10 @@ const API = {
 } as const;
 
 /** Preserve the application's PAC/manual/SOCKS proxy route for Pi HTTP calls. */
-export function studioPiFetch(settings: AppSettings): typeof fetch {
+export function studioPiFetch(settings: AppSettings, session = goSession()): typeof fetch {
   return async (input, init) => {
     const request = new Request(input, init);
+    for (const [name,value] of Object.entries(goHeaders(request.url, session))) request.headers.set(name,value);
     // Keep the caller's signal: Request's dependent signal can lose its parent
     // after the temporary Request is collected while the response is streaming.
     const signal = init?.signal !== undefined ? init.signal ?? undefined
@@ -74,8 +76,8 @@ export function studioPiModel(settings: AppSettings): Model<Api> {
   };
 }
 
-export function studioPiStream(settings: AppSettings): StreamFn {
-  const fetch = studioPiFetch(settings);
+export function studioPiStream(settings: AppSettings, conversationId?: string): StreamFn {
+  const fetch = studioPiFetch(settings, goSession(conversationId));
   return async (model, context, options) => {
     const common = { ...options, maxTokens: settings.agentMaxOutputTokens,
       apiKey: settings.agentApiKey.trim() || (!agentProviderRequiresApiKey(settings.agentApiProtocol, settings.agentApiBaseUrl) ? 'local-no-key' : ''), fetch };

@@ -159,7 +159,7 @@ export async function completeStudioPiTurn(options: {
   });
   const result = await runStudioPiAgent({
     model: studioPiModel(options.settings),
-    streamFn: studioPiStream(options.settings),
+    streamFn: studioPiStream(options.settings, options.conversationId),
     systemPrompt: [
       options.sessionOptions?.templateEnabled!==false&&options.configuredSystemPrompt
         ? '[User-selected task system preset]\n'+options.configuredSystemPrompt : '',
@@ -217,10 +217,10 @@ export async function completeStudioPiTurn(options: {
 
 /** Tool-free Pi call: compaction can never execute or approve a Studio action. */
 export async function completeStudioPiSummary(options: {
-  settings: AppSettings; transcript: string; instruction: string; signal: AbortSignal;
+  settings: AppSettings; conversationId?: string; transcript: string; instruction: string; signal: AbortSignal;
 }) {
   const result = await runStudioPiAgent({
-    model: studioPiModel(options.settings), streamFn: studioPiStream(options.settings),
+    model: studioPiModel(options.settings), streamFn: studioPiStream(options.settings, options.conversationId),
     systemPrompt: options.instruction, history: [], text: options.transcript,
     tools: [], authorize: async () => false, signal: options.signal,
   });

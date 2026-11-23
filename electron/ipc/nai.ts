@@ -1,3 +1,4 @@
+import { goHeaders, goSession, withGoTask } from './opencode-go-session';
 import {normalizePromptSkillSettings} from '../../src/prompt-skill-settings';
 import {v5MonoRequested} from '../../shared/v5-prompt-options';
 import {approvedLayoutHint,parseV5Storyboard, storyboardSystem} from '../../src/comic/v5-storyboard';
@@ -2982,12 +2983,15 @@ async function callVisionApi(
 
   // Resolve the actual endpoint before the first request, not the startup cache
   // shared with other AI providers (which may still be empty or use another PAC rule).
+  const sessionHeaders = goHeaders(`${base}/chat/completions`, goSession());
   const post = async (tokens: number,messages: {role:string;content:unknown}[]=body.messages,budgetKey="max_tokens") =>
     axios.post(
       `${base}/chat/completions`,
       { ...body, max_tokens: undefined, [budgetKey]:tokens, messages },
       {
+        ...(sessionHeaders["x-opencode-session"] ? {maxRedirects: 0} : {}),
         headers: {
+          ...sessionHeaders,
           Authorization: `Bearer ${visionApiKey}`,
           "Content-Type": "application/json",
         },
@@ -3100,12 +3104,15 @@ async function callConvertApi(
     ],
   };
 
+  const sessionHeaders = goHeaders(`${base}/chat/completions`, goSession());
   const post = async (tokens: number,messages: {role:string;content:unknown}[]=body.messages,budgetKey="max_tokens") =>
     axios.post(
       `${base}/chat/completions`,
       { ...body, max_tokens: undefined, [budgetKey]:tokens, messages },
       {
+        ...(sessionHeaders["x-opencode-session"] ? {maxRedirects: 0} : {}),
         headers: {
+          ...sessionHeaders,
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
@@ -3473,7 +3480,7 @@ function withTagEvidence<T extends {ok:boolean;variants?:{namePrompt:string;feat
 }
 
 export async function reversePromptImage(...args: Parameters<typeof reversePromptImageCore>) {
-  const result = await reversePromptImageCore(...args);
+  const result = await withGoTask(() => reversePromptImageCore(...args));
   return withTagEvidence(result, args[1] ?? "mixed", result.prompt);
 }
 
@@ -4522,7 +4529,7 @@ async function runLegacyAssistantEdit(
 }
 
 export async function convertPromptText(...args: Parameters<typeof convertPromptTextCore>) {
-  const result = await convertPromptTextCore(...args);
+  const result = await withGoTask(() => convertPromptTextCore(...args));
   return withTagEvidence(result, args[1] ?? "mixed", result.result);
 }
 
