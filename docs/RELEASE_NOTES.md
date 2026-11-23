@@ -8,4 +8,4 @@
 - 单角色正面预设只写入选中的角色正面词，不覆盖负面词或位置。
 - iOS IPA 未签名，普通 iPhone 需自行签名才能安装。
 
-[当前源码](https://github.com/2786886095/novelai-image-desktop/tree/main) · [下载](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [上一版说明](history/RELEASE_NOTES-3.0.5.md)
+[当前源码](https://github.com/2786886095/novelai-image-desktop/tree/main) · [下载](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [历史发行说明](https://github.com/2786886095/novelai-image-desktop/tree/main/docs/history)
