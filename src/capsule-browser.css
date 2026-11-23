@@ -271,5 +271,4 @@
 .capsule-subgroup-toggle[aria-expanded=true] svg{transform:rotate(180deg);transition-duration:var(--disclosure-open)}
 .capsule-subgroup-box .capsule-curated-subgroups{max-height:min(16vh,120px);padding:3px;margin:3px 0;overscroll-behavior:contain}
 html.motion-reduced .capsule-subgroup-box :is(.capsule-subgroup-drawer,.capsule-subgroup-toggle svg){transition:none!important}
-@media(prefers-reduced-motion:reduce){.capsule-subgroup-box :is(.capsule-subgroup-drawer,.capsule-subgroup-toggle svg){transition:none!important}}
 .compact-capsule-dialog .capsule-card-names .capsule-usage{font-size:10px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
