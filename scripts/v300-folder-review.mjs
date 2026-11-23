@@ -4,7 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {assertScenarioReceipt} from './feature-acceptance/full-feature-profiles.mjs';
 
-const sources = new Map([['c6b0890fe71c1bd9c75476e57f39b429cadc1610',{run:'44964443841',job:'137030194306'}],['826e5e54105520f32d4aa880caf5a9d7bc5ebe93',{run:'44923792104',job:'136905339862'}],['bd7378e8f7a7106158a6cb3e875202510c0afb58',{run:'44899258107',job:'136831505933'}],['0b5e4b8268ba03a57706a74c7309bfbe3f928556',{run:'44890842540',job:'136806082172'}],['c02d3186fc1b014d3e3611e07b7698cd5c448713',{run:'44707958871',job:'136192164695'}],['a3cd315029c2bc4314d5a112d3e132806392c693',{run:'44746230248',job:'136322152169'}]]);
+const sources = new Map([['cf47618a53c7dc21a449b6108f080b1d72e8f5ef',{run:'45095168331',job:'137433281758'}],['826e5e54105520f32d4aa880caf5a9d7bc5ebe93',{run:'44923792104',job:'136905339862'}],['bd7378e8f7a7106158a6cb3e875202510c0afb58',{run:'44899258107',job:'136831505933'}],['0b5e4b8268ba03a57706a74c7309bfbe3f928556',{run:'44890842540',job:'136806082172'}],['c02d3186fc1b014d3e3611e07b7698cd5c448713',{run:'44707958871',job:'136192164695'}],['a3cd315029c2bc4314d5a112d3e132806392c693',{run:'44746230248',job:'136322152169'}]]);
 const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const read = (dir, file) => JSON.parse(fs.readFileSync(path.join(dir,file),'utf8'));
 export function checkFolderReview(dir,sha,observedJob) {
