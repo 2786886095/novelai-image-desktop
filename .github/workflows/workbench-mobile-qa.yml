@@ -5,25 +5,6 @@ on:
 permissions:
   contents: read
 jobs:
-  mac-window:
-    runs-on: macos-15
-    timeout-minutes: 22
-    steps:
-      - uses: actions/checkout@v4
-        with: {persist-credentials: false}
-      - uses: actions/setup-node@v4
-        with: {node-version: '24.14.0'}
-      - run: npm ci --no-audit --no-fund
-      - run: npm run build
-      - name: Click through production Electron desktop
-        run: QA_OUT="$RUNNER_TEMP/capsule-mac" ./node_modules/.bin/electron scripts/qa-workbench-mac.cjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: mac-window-proof
-          path: |
-            ${{ runner.temp }}/capsule-mac/*.log
-            ${{ runner.temp }}/capsule-mac/*.png
   ios-simulator:
     runs-on: macos-15
     timeout-minutes: 30

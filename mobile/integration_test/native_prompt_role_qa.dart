@@ -110,7 +110,10 @@ Future<void> main() async {
     editor();
     await tick(800);
     final target = key('character-prompt-field-0');
-    await tap(target);
+    final expand = find.descendant(of: target, matching: key('prompt-expand'));
+    await tap(expand.evaluate().isEmpty ? target : expand);
+    await until(() => key('android-editor-capsule').evaluate().isNotEmpty,
+        'expanded prompt editor');
     await tap(key('android-editor-capsule'));
     final chips = find.descendant(
         of: find.byType(CapsulePickerSheet), matching: find.byType(ActionChip));
