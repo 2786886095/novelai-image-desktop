@@ -19,18 +19,18 @@ const waiveWindowsArtistGpuV301=process.env.REVIEWED_V301_ROLE_RELEASE==="true";
 const waiveWindowsArtistGpuV302=process.env.REVIEWED_V302_MOBILE_RELEASE==='true';
 const waiveWindowsArtistGpuV303=process.env.REVIEWED_V303_CAPSULE_RELEASE==='true';
 const waiveWindowsArtistGpuV304=process.env.REVIEWED_V304_MCP_RELEASE==='true';
-const waiveWindowsArtistGpuV305=process.env.REVIEWED_V305_RESOURCES_RELEASE==='true';
-const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV292||waiveWindowsArtistGpuV293||waiveWindowsArtistGpuV294||waiveWindowsArtistGpuV295||waiveWindowsArtistGpuV300||waiveWindowsArtistGpuV301||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV305;
+const waiveWindowsArtistGpuV306=process.env.REVIEWED_V306_WORKBENCH_RELEASE==='true';
+const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV292||waiveWindowsArtistGpuV293||waiveWindowsArtistGpuV294||waiveWindowsArtistGpuV295||waiveWindowsArtistGpuV300||waiveWindowsArtistGpuV301||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV306;
 let reviewedIosFolder=process.env.REVIEWED_V300_IOS_FOLDER==='true';
 const nativeRun=process.env.FEATURE_RUN;
 let folderReview, observedIosJob, nativeAttempts;
-if(waiveWindowsArtistGpuV305){
- if(reviewedIosFolder||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV301||version!=='3.0.5'||sha!=='c6b0890fe71c1bd9c75476e57f39b429cadc1610'||nativeRun!=='44964443841'||process.env.BUILD_RUN!=='44964438876'||process.env.MOBILE_RUN!=='44964441214')throw Error('Unexpected v3.0.5 source or workflow runs');
+if(waiveWindowsArtistGpuV306){
+ if(reviewedIosFolder||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV301||version!=='3.0.6'||sha!=='637c3777f9ac111b45e9a44901cd76c684c8e680'||nativeRun!=='45094228656'||process.env.BUILD_RUN!=='45094222681'||process.env.MOBILE_RUN!=='45094225778')throw Error('Unexpected v3.0.6 source or workflow runs');
  const run=JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs']));
  const ios=run.jobs.find(job=>job.name==='ios-components (os)');
  reviewedIosFolder=ios?.conclusion==='failure';
  if(reviewedIosFolder)observedIosJob=ios.databaseId;
- assertV286CloudNativeRun(run,{sourceSha:sha,reviewedIosFolder,strictGpuMatrix305:true});
+ assertV286CloudNativeRun(run,{sourceSha:sha,reviewedIosFolder,strictGpuMatrix306:true});
 }
 if(waiveWindowsArtistGpuV304){
  if(reviewedIosFolder||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV301||version!=='3.0.4'||sha!=='826e5e54105520f32d4aa880caf5a9d7bc5ebe93'||nativeRun!=='44923792104'||process.env.BUILD_RUN!=='44923782267'||process.env.MOBILE_RUN!=='44923787166')throw Error('Unexpected v3.0.4 source or workflow runs');
@@ -63,18 +63,18 @@ if(waiveWindowsArtistGpuV301){
  reviewedIosFolder=true;observedIosJob=nativeAttempts.originalIosOsJob;
 }
 if(reviewedIosFolder){
- if(!waiveWindowsArtistGpuV305&&!waiveWindowsArtistGpuV304&&!waiveWindowsArtistGpuV303&&!waiveWindowsArtistGpuV302&&!waiveWindowsArtistGpuV301&&(!waiveWindowsArtistGpuV300||version!=='3.0.0'||sha!=='c02d3186fc1b014d3e3611e07b7698cd5c448713'||nativeRun!=='44707958871'||process.env.BUILD_RUN!=='44707970782'||process.env.MOBILE_RUN!=='44707964543'))throw Error('Not the reviewed v3.0.0 source and runs');
+ if(!waiveWindowsArtistGpuV306&&!waiveWindowsArtistGpuV304&&!waiveWindowsArtistGpuV303&&!waiveWindowsArtistGpuV302&&!waiveWindowsArtistGpuV301&&(!waiveWindowsArtistGpuV300||version!=='3.0.0'||sha!=='c02d3186fc1b014d3e3611e07b7698cd5c448713'||nativeRun!=='44707958871'||process.env.BUILD_RUN!=='44707970782'||process.env.MOBILE_RUN!=='44707964543'))throw Error('Not the reviewed v3.0.0 source and runs');
  const {checkFolderReview,assertOtherOutputReceipts}=await import('./v300-folder-review.mjs');
  folderReview=checkFolderReview('reviewed-ios-os',sha,observedIosJob);
  folderReview.otherOutputReceipts=assertOtherOutputReceipts('release-evidence/evidence',sha);
 }
 if(waiveWindowsArtistGpu){
  if((waiveWindowsArtistGpuV286&&version!=='2.8.6')||(waiveWindowsArtistGpuV292&&version!=='2.9.2')||(waiveWindowsArtistGpuV293&&version!=='2.9.3')||(waiveWindowsArtistGpuV294&&version!=='2.9.4')||(waiveWindowsArtistGpuV295&&version!=='2.9.5')||(waiveWindowsArtistGpuV300&&version!=='3.0.0')||!/^\d+$/.test(nativeRun??''))throw Error('Explicit version-bound cloud acceptance workflow is required');
- if(!waiveWindowsArtistGpuV301&&!waiveWindowsArtistGpuV302&&!waiveWindowsArtistGpuV303&&!waiveWindowsArtistGpuV304&&!waiveWindowsArtistGpuV305)assertV286CloudNativeRun(JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs'])),{sourceSha:sha,reviewedIosFolder,strictGpuMatrix301:waiveWindowsArtistGpuV301,waiveWindowsArtistGpuV302,waiveWindowsArtistGpuV303,waiveWindowsArtistGpuV304,waiveWindowsArtistGpuV305});
+ if(!waiveWindowsArtistGpuV301&&!waiveWindowsArtistGpuV302&&!waiveWindowsArtistGpuV303&&!waiveWindowsArtistGpuV304&&!waiveWindowsArtistGpuV306)assertV286CloudNativeRun(JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs'])),{sourceSha:sha,reviewedIosFolder,strictGpuMatrix301:waiveWindowsArtistGpuV301,waiveWindowsArtistGpuV302,waiveWindowsArtistGpuV303,waiveWindowsArtistGpuV304,waiveWindowsArtistGpuV306});
 }
 const featureParity=JSON.parse(fs.readFileSync('release-evidence/feature-parity.json','utf8'));
-assertReleasePlatformContract(featureParity,{reviewedIosFolder,version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV300,waiveWindowsArtistGpuV301,waiveWindowsArtistGpuV302,waiveWindowsArtistGpuV303,waiveWindowsArtistGpuV304,waiveWindowsArtistGpuV305});
-assertReleaseEvidenceFiles(featureParity,'release-evidence',{reviewedIosFolder,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV300,waiveWindowsArtistGpuV301,waiveWindowsArtistGpuV302,waiveWindowsArtistGpuV303,waiveWindowsArtistGpuV304,waiveWindowsArtistGpuV305});
+assertReleasePlatformContract(featureParity,{reviewedIosFolder,version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV300,waiveWindowsArtistGpuV301,waiveWindowsArtistGpuV302,waiveWindowsArtistGpuV303,waiveWindowsArtistGpuV304,waiveWindowsArtistGpuV306});
+assertReleaseEvidenceFiles(featureParity,'release-evidence',{reviewedIosFolder,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV300,waiveWindowsArtistGpuV301,waiveWindowsArtistGpuV302,waiveWindowsArtistGpuV303,waiveWindowsArtistGpuV304,waiveWindowsArtistGpuV306});
 const buildRun=process.env.BUILD_RUN;
 if(!/^\d+$/.test(buildRun??''))throw Error('A verified desktop build run is required');
 const build=JSON.parse(call('gh',['run','view',buildRun,'--json','headSha,jobs']));
@@ -164,13 +164,13 @@ if(!/not found/i.test(existing.stderr??''))throw Error('Release existence check 
 const releaseNotes=fs.readFileSync('docs/RELEASE_NOTES.md','utf8');
 if(waiveWindowsArtistGpuV286&&!releaseNotes.includes('Windows 画风迭代的本机 GPU 实测未验收'))throw Error('Release notes must disclose the untested Windows GPU scenarios');
 // v2.9.2, v2.9.3, and v2.9.4 keep the precise untested scope in verification.json without a separate changelog bullet.
-const publicNotesFile=(reviewedIosFolder||waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV301||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV305)?'release-evidence/public-release-notes.md':'docs/RELEASE_NOTES.md';
+const publicNotesFile=(reviewedIosFolder||waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV301||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV306)?'release-evidence/public-release-notes.md':'docs/RELEASE_NOTES.md';
 if(waiveWindowsArtistGpuV286){
  const publicNotes=releaseNotes.replace(/^- Windows 画风迭代的本机 GPU 实测未验收[^\r\n]*(?:\r?\n|$)/m,'');
  if(publicNotes===releaseNotes)throw Error('Missing canonical Windows GPU waiver line');
  fs.writeFileSync(publicNotesFile,publicNotes,'utf8');
 }
-if((waiveWindowsArtistGpuV301||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV305)&&!reviewedIosFolder)fs.writeFileSync(publicNotesFile,releaseNotes+'\nWindows 画风迭代 GPU 长任务未实测。\n');
+if((waiveWindowsArtistGpuV301||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV306)&&!reviewedIosFolder)fs.writeFileSync(publicNotesFile,releaseNotes+'\nWindows 画风迭代 GPU 长任务未实测。\n');
 if(reviewedIosFolder)fs.writeFileSync(publicNotesFile,releaseNotes+'\n### 验收例外\n- iOS 系统文件夹选择器：本次未在 5 秒内确认命名框可用，此项验收失败，经维护者同意不作为发行条件。其余 iOS 检查仍为必需。\n- Windows 画风迭代 GPU 长任务未实测。\n');
 const evidence={version,sha,...(nativeAttempts?{nativeAttempts}:{}),...(reviewedIosFolder?{folderReview}:{}),...(waiveWindowsArtistGpu?{nativeRun,fullScopeCertified:false,waived:[{platform:'windows',feature:'artist-iteration',scenarios:artistIterationScenarios,status:'not-tested'},...(reviewedIosFolder?[{platform:'ios',feature:'output-management',scenarios:['folder-choice-history-link'],status:'failed-waived'}]:[])]}:{}),mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
 fs.writeFileSync('release-assets/verification.json',JSON.stringify(evidence,null,2));
