@@ -10,9 +10,17 @@ it('actual studioPiFetch keeps cancellation alive after its temporary Request is
   const declaration = ast.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === 'studioPiFetch');
   expect(declaration).toBeDefined();
   const js = ts.transpileModule(declaration!.getText(ast), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  // The isolated GC worker extracts studioPiFetch without its import graph.
+  // Load its real routing dependency too; do not stub the API-specific behavior.
+  const sessionJs = ts.transpileModule(fs.readFileSync(path.resolve('electron/ipc/opencode-go-session.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  }).outputText;
   const worker = `
 const http=require('node:http'),assert=require('node:assert/strict'),{Readable}=require('node:stream');
 const axios=require(${JSON.stringify(require.resolve('axios'))});
+const {goSession,goHeaders}=(()=>{const exports={};
+${sessionJs}
+return exports;})();
 const proxyConfigForUrl=async()=>({proxy:false});const agentProviderRequiresApiKey=()=>false;
 ${js}
 const controller=new AbortController();let response,timer,abortAt,closeAt,closed=false,count=0;
