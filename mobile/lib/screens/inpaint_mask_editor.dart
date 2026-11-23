@@ -95,6 +95,20 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> with WidgetsBindi
   bool _selectRegion=false;
   InpaintRegion? _region;
   Offset? _regionAnchor;
+  InpaintRegion? _draftRegion;
+  int? _regionPointer;
+
+  Rect? get _clip {
+    final r = _region;
+    return r == null ? null : Rect.fromLTWH(r.x.toDouble(), r.y.toDouble(), r.width.toDouble(), r.height.toDouble());
+  }
+
+  void _restrictInk({required bool inverted}) {
+    final trimmed = restrictInpaintStrokes(_strokes, _clip!, inverted: inverted);
+    _strokes..clear()..addAll(trimmed);
+    _redo.clear();
+    _inverted = false;
+  }
 
   String t(String key) => mobileUiTextFor(widget.language, key);
 
@@ -105,6 +119,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> with WidgetsBindi
     _strokes = copyInpaintStrokes(widget.initialStrokes);
     _region=widget.initialRegion;
     _inverted = widget.initialInverted;
+    if (_clip != null) _restrictInk(inverted: _inverted);
     _brushShape = widget.initialBrushShape;
     _brush =
         normalizeInpaintBrushCells(widget.initialBrush, _brushShape).toDouble();
@@ -195,6 +210,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> with WidgetsBindi
       brushCells: _brush.round(),
       erase: _erase,
       shape: _brushShape,
+      clip: _clip,
       points: [normalized],
     ));
     _activeStroke = _strokes.length - 1;
@@ -229,7 +245,13 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> with WidgetsBindi
   }
 
   void _pointerDown(PointerDownEvent event) {
-    if(_selectRegion){_regionAnchor=_toNormalized(event.localPosition);return;}
+    if (_selectRegion) {
+      if (_regionPointer == null) {
+        _regionAnchor = _toNormalized(event.localPosition);
+        if (_regionAnchor != null) _regionPointer = event.pointer;
+      }
+      return;
+    }
     _pointers[event.pointer] = event.localPosition;
     if (_pointers.length == 1 && !_transformedThisGesture) {
       _drawPointer = event.pointer;
@@ -245,9 +267,10 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> with WidgetsBindi
 
   void _pointerMove(PointerMoveEvent event) {
     if(_selectRegion){
+      if (event.pointer != _regionPointer) return;
       final anchor=_regionAnchor,end=_toNormalized(event.localPosition);if(anchor==null||end==null)return;
       final ax=anchor.dx*widget.image.width,ay=anchor.dy*widget.image.height,ex=end.dx*widget.image.width,ey=end.dy*widget.image.height;
-      setState((){_region=widget.novelAiSelection?clampFocusedInpaintDrag(ax,ay,ex,ey,widget.image.width,widget.image.height):(x:math.min(ax,ex).round(),y:math.min(ay,ey).round(),width:(ax-ex).abs().round(),height:(ay-ey).abs().round());});return;
+      setState((){_draftRegion=widget.novelAiSelection?clampFocusedInpaintDrag(ax,ay,ex,ey,widget.image.width,widget.image.height):(x:math.min(ax,ex).round(),y:math.min(ay,ey).round(),width:(ax-ex).abs().round(),height:(ay-ey).abs().round());});return;
     }
     if (!_pointers.containsKey(event.pointer)) return;
     _pointers[event.pointer] = event.localPosition;
@@ -264,7 +287,20 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> with WidgetsBindi
   }
 
   void _pointerUp(PointerEvent event) {
-    if(_selectRegion){setState((){if((_region?.width??0)<32||(_region?.height??0)<32)_region=null;_regionAnchor=null;});return;}
+    if (_selectRegion) {
+      if (event.pointer != _regionPointer) return;
+      setState(() {
+        final box = _draftRegion;
+        if (event is! PointerCancelEvent && box != null && box.width >= 32 && box.height >= 32) {
+          _region = box;
+          _restrictInk(inverted: _inverted);
+          _refreshPreview();
+          _selectRegion = false;
+        }
+        _regionPointer = null; _regionAnchor = null; _draftRegion = null;
+      });
+      return;
+    }
     setState(() {
       final wasDrawing = _drawPointer == event.pointer;
       if (wasDrawing && !_transformedThisGesture && _activeStroke == null) {
@@ -343,7 +379,7 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> with WidgetsBindi
   }
 
   void _toggleInverted() {
-    setState(() => _inverted = !_inverted);
+    setState(() { if (_clip == null) { _inverted = !_inverted; } else { _restrictInk(inverted: true); } });
     _refreshPreview();
   }
 
@@ -428,9 +464,9 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> with WidgetsBindi
                               ),
                             ),
                           ),
-                        if(_region!=null) Positioned(left:_region!.x/widget.image.width*fitted.width,top:_region!.y/widget.image.height*fitted.height,
-                          width:_region!.width/widget.image.width*fitted.width,height:_region!.height/widget.image.height*fitted.height,
-                          child:IgnorePointer(child:Container(key:const ValueKey('focused-inpaint-region'),decoration:BoxDecoration(border:Border.all(color:Colors.cyan,width:2)),child:Align(alignment:Alignment.topLeft,child:Text('${_region!.width}×${_region!.height}',style:const TextStyle(color:Colors.cyan,fontSize:12)))))),
+                        if((_draftRegion ?? _region) case final box?) Positioned(left:box.x/widget.image.width*fitted.width,top:box.y/widget.image.height*fitted.height,
+                          width:box.width/widget.image.width*fitted.width,height:box.height/widget.image.height*fitted.height,
+                          child:IgnorePointer(child:Container(key:const ValueKey('focused-inpaint-region'),decoration:BoxDecoration(border:Border.all(color:Colors.cyan,width:2)),child:Align(alignment:Alignment.topLeft,child:Text('${box.width}×${box.height}',style:const TextStyle(color:Colors.cyan,fontSize:12)))))),
                         IgnorePointer(
                           child: RepaintBoundary(
                             child: CustomPaint(
@@ -726,6 +762,15 @@ class _InpaintMaskEditorState extends State<InpaintMaskEditor> with WidgetsBindi
             mainAxisSize: MainAxisSize.min,
             children: [
               _modeBar(),
+              if (_selectRegion && _region != null)
+                TextButton.icon(
+                  onPressed: () => setState(() {
+                    _region=null; _draftRegion=null; _regionAnchor=null; _regionPointer=null;
+                    _selectRegion=false;
+                  }),
+                  icon: const Icon(Icons.deselect),
+                  label: Text(inpaintParityText(widget.language,'deselect')),
+                ),
               const SizedBox(height: 4),
               Align(
                 alignment: Alignment.centerLeft,
@@ -1018,7 +1063,7 @@ class InpaintMaskPainter extends CustomPainter {
       canvas.drawRect(Offset.zero & size, Paint()..color = selected);
     }
     for (final stroke in strokes) {
-      if (stroke.points.isEmpty) continue;
+      if (!stroke.solid && stroke.points.isEmpty) continue;
       final rawSelected = !stroke.erase;
       final visiblySelected = inverted ? !rawSelected : rawSelected;
       paintInpaintStroke(

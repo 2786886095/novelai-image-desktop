@@ -153,7 +153,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
 
   Future<void> _runInpaint(AppState state) async {
     final image = state.workbenchImage;
-    if (image == null || (strokes.isEmpty && !inverted)) return;
+    if (image == null || (!inverted && !_rasterFor(image).hasSelection)) return;
     state.setInpaintEditorData(strokes,inverted);
     final mask = await renderInpaintMask(
       strokes: strokes,
@@ -177,7 +177,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
   // Shows the exact binary selection over the source image so coverage can be
   // verified without losing visual context before a paid request.
   Future<void> _previewMask(WorkingImage workbench) async {
-    if (strokes.isEmpty && !inverted) return;
+    if (!inverted && !_rasterFor(workbench).hasSelection) return;
     final raster = _rasterFor(workbench);
     final language = context.read<AppState>().settings.language;
     await showGalleryImagePreview(context,
@@ -257,7 +257,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
               children: [
                 Expanded(
                   child: Text(
-                    '${strokes.isEmpty && !inverted ? mobileUiTextFor(language, 'tools.maskNotEdited') : mobileUiTextFor(language, 'tools.maskReady')} · '
+                    '${!raster.hasSelection && !inverted ? mobileUiTextFor(language, 'tools.maskNotEdited') : mobileUiTextFor(language, 'tools.maskReady')} · '
                     '${mobileUiFormatFor(language, 'tools.maskStrokeCount', {
                           'count': strokes.length
                         })}',
@@ -339,7 +339,7 @@ class _InpaintPanelState extends State<_InpaintPanel> {
   Widget _buildToolbar(AppState state, WorkingImage? workbench) {
     final language = state.settings.language;
     String t(String key) => mobileUiTextFor(language, key);
-    final hasMask = strokes.isNotEmpty || inverted;
+    final hasMask = inverted || (workbench != null && _rasterFor(workbench).hasSelection);
     final compactStyle = OutlinedButton.styleFrom(
       visualDensity: VisualDensity.compact,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

@@ -25,6 +25,22 @@ import { desktopUiText } from "./i18n";
 import { useAppStore } from "./store";
 import { inpaintEditText } from "./inpaint-edit-session";
 
+type MaskSnapshot = { pixels: ImageData; bounds?: InpaintRegion };
+
+function intersectMaskBounds(a: InpaintRegion | undefined, b: InpaintRegion): InpaintRegion {
+  if (!a) return b;
+  const x = Math.max(a.x,b.x), y = Math.max(a.y,b.y);
+  return {x, y, width: Math.max(0,Math.min(a.x+a.width,b.x+b.width)-x),
+    height: Math.max(0,Math.min(a.y+a.height,b.y+b.height)-y)};
+}
+
+function restoreMaskSnapshot(ctx: CanvasRenderingContext2D, snapshot: MaskSnapshot) {
+  const b = snapshot.bounds;
+  if (!b) { ctx.putImageData(snapshot.pixels,0,0); return; }
+  ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
+  if (b.width && b.height) ctx.putImageData(snapshot.pixels,0,0,b.x,b.y,b.width,b.height);
+}
+
 function clampZoom(value: number) {
   return Math.min(8, Math.max(1, value));
 }
@@ -98,8 +114,8 @@ export function InpaintCanvas() {
   const panPointerRef = useRef<number | null>(null);
   const panStartRef = useRef({ clientX: 0, clientY: 0, x: 0, y: 0 });
   const spaceHeldRef = useRef(false);
-  const historyRef = useRef<ImageData[]>([]);
-  const redoRef = useRef<ImageData[]>([]);
+  const historyRef = useRef<MaskSnapshot[]>([]);
+  const redoRef = useRef<MaskSnapshot[]>([]);
   const roundStampCacheRef = useRef(new Map<string, HTMLCanvasElement>());
   const [cursor, setCursor] = useState({ x: 0, y: 0, size: brushSize, visible: false });
   const [previewMaskUrl, setPreviewMaskUrl] = useState("");
@@ -248,6 +264,22 @@ export function InpaintCanvas() {
     exportMask();
   }, [brushColor, exportMask]);
 
+  // Commit in source pixels, not CSS pixels. Preserve undo inside the box, but
+  // never let undo/redo or clearing the selection resurrect discarded pixels.
+  useEffect(() => {
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!region || !ctx || restoringEdit) return;
+    const {x,y,width,height} = region, w=ctx.canvas.width, h=ctx.canvas.height;
+    ctx.clearRect(0,0,w,y);
+    ctx.clearRect(0,y+height,w,h);
+    ctx.clearRect(0,y,x,height);
+    ctx.clearRect(x+width,y,w,height);
+    for (const entry of [...historyRef.current,...redoRef.current]) {
+      entry.bounds = intersectMaskBounds(entry.bounds,region);
+    }
+    exportMask();
+  }, [region, restoringEdit, maskRevision, exportMask]);
+
   const getPoint = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
@@ -344,6 +376,13 @@ export function InpaintCanvas() {
           diameter * INPAINT_MASK_GRID_SIZE,
         );
       };
+      ctx.save();
+      if (region) {
+        const bounds = new Path2D();
+        bounds.rect(region.x, region.y, region.width, region.height);
+        ctx.clip(bounds);
+      }
+      try {
       for (let index = 0; index < events.length; index += 1) {
         const event = events[index];
         const sourcePoint = getPoint(event.clientX, event.clientY);
@@ -369,8 +408,9 @@ export function InpaintCanvas() {
         }
         lastPointRef.current = point;
       }
+      } finally { ctx.restore(); }
     },
-    [brushColor, brushMode, brushShape, brushSize, getPoint],
+    [brushColor, brushMode, brushShape, brushSize, getPoint, region],
   );
 
   // Called once at the start of each new stroke: snapshot the canvas so we can
@@ -379,7 +419,7 @@ export function InpaintCanvas() {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
-    historyRef.current.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    historyRef.current.push({pixels:ctx.getImageData(0, 0, canvas.width, canvas.height)});
     if (historyRef.current.length > 40) historyRef.current.shift();
     setHistoryCount(historyRef.current.length);
     redoRef.current = [];
@@ -392,9 +432,9 @@ export function InpaintCanvas() {
     const ctx = canvas?.getContext("2d");
     const previous = historyRef.current.pop();
     if (!canvas || !ctx || !previous) return;
-    redoRef.current.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    redoRef.current.push({pixels:ctx.getImageData(0, 0, canvas.width, canvas.height)});
     setRedoCount(redoRef.current.length);
-    ctx.putImageData(previous, 0, 0);
+    restoreMaskSnapshot(ctx, previous);
     recolorMaskCanvas(canvas, ctx, brushColor);
     setHistoryCount(historyRef.current.length);
     setShowExportPreview(false);
@@ -407,9 +447,9 @@ export function InpaintCanvas() {
     const ctx = canvas?.getContext("2d");
     const next = redoRef.current.pop();
     if (!canvas || !ctx || !next) return;
-    historyRef.current.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    historyRef.current.push({pixels:ctx.getImageData(0, 0, canvas.width, canvas.height)});
     setHistoryCount(historyRef.current.length);
-    ctx.putImageData(next, 0, 0);
+    restoreMaskSnapshot(ctx, next);
     recolorMaskCanvas(canvas, ctx, brushColor);
     setRedoCount(redoRef.current.length);
     setShowExportPreview(false);

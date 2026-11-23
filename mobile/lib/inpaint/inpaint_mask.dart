@@ -24,11 +24,16 @@ class InpaintStroke {
   final bool erase;
   final InpaintBrushShape shape;
   final List<Offset> points;
+  // Immutable source-pixel bounds, also retained when a selection is removed.
+  final Rect? clip;
+  final bool solid;
 
   InpaintStroke({
     required this.brushCells,
     this.erase = false,
     this.shape = InpaintBrushShape.round,
+    this.clip,
+    this.solid = false,
     List<Offset>? points,
   }) : points = points ?? <Offset>[];
 
@@ -36,12 +41,37 @@ class InpaintStroke {
         brushCells: brushCells,
         erase: erase,
         shape: shape,
+        clip: clip,
+        solid: solid,
         points: List<Offset>.from(points),
       );
 }
 
 List<InpaintStroke> copyInpaintStrokes(Iterable<InpaintStroke> strokes) =>
     strokes.map((stroke) => stroke.copy()).toList(growable: true);
+
+/// Restrict every operation, not only its sampled centres. Intersections make
+/// reselecting a larger box destructive rather than revealing previous ink.
+List<InpaintStroke> restrictInpaintStrokes(
+    List<InpaintStroke> strokes, Rect box,
+    {required bool inverted}) {
+  final result = <InpaintStroke>[
+    if (inverted) InpaintStroke(brushCells: 1, clip: box, solid: true),
+  ];
+  for (final s in strokes) {
+    final clip = s.clip?.intersect(box) ?? box;
+    if (!clip.isEmpty) {
+      result.add(InpaintStroke(
+          brushCells: s.brushCells,
+          erase: inverted != s.erase,
+          shape: s.shape,
+          points: s.points,
+          solid: s.solid,
+          clip: clip));
+    }
+  }
+  return result;
+}
 
 Offset? normalizeCanvasPoint(Offset point, Size canvasSize) {
   if (canvasSize.isEmpty ||
@@ -158,6 +188,8 @@ class InpaintMaskRaster {
   final int columns;
   final int rows;
   final Uint8List _cells;
+  // Only cells split by a non-grid-aligned box need per-pixel coverage.
+  final _edges = <int, Uint8List>{};
 
   InpaintMaskRaster({
     required this.sourceWidth,
@@ -173,22 +205,26 @@ class InpaintMaskRaster {
 
   Size get sourceSize => Size(sourceWidth.toDouble(), sourceHeight.toDouble());
 
-  bool get hasSelection => _cells.any((value) => value != 0);
+  bool get hasSelection =>
+      _edges.isNotEmpty || _cells.any((value) => value != 0);
 
   bool selectedAt(int column, int row) =>
       column >= 0 &&
       row >= 0 &&
       column < columns &&
       row < rows &&
-      _cells[row * columns + column] != 0;
+      (_cells[row * columns + column] != 0 ||
+          _edges.containsKey(row * columns + column));
 
   bool clear() {
     if (!hasSelection) return false;
+    _edges.clear();
     _cells.fillRange(0, _cells.length, 0);
     return true;
   }
 
   void rebuild(Iterable<InpaintStroke> strokes) {
+    _edges.clear();
     _cells.fillRange(0, _cells.length, 0);
     for (final stroke in strokes) {
       applyStroke(stroke);
@@ -204,11 +240,12 @@ class InpaintMaskRaster {
         brushCells: stroke.brushCells,
         erase: stroke.erase,
         shape: stroke.shape,
+        clip: stroke.clip,
         points: [from, to],
       ));
 
   bool applyStroke(InpaintStroke stroke) {
-    if (stroke.points.isEmpty) return false;
+    if (!stroke.solid && stroke.points.isEmpty) return false;
     final selected = !stroke.erase;
     final value = selected ? 255 : 0;
     final brushCells =
@@ -218,11 +255,52 @@ class InpaintMaskRaster {
     void setCell(int column, int row) {
       if (column < 0 || row < 0 || column >= columns || row >= rows) return;
       final index = row * columns + column;
+      final clip = stroke.clip;
+      if (clip != null) {
+        final x = column * 8, y = row * 8;
+        final l = math.max(x, clip.left.toInt()),
+            t = math.max(y, clip.top.toInt());
+        final r = math.min(x + 8, clip.right.toInt()),
+            b = math.min(y + 8, clip.bottom.toInt());
+        if (l >= r || t >= b) return;
+        if (l != x || t != y || r != x + 8 || b != y + 8) {
+          if (!_edges.containsKey(index) && _cells[index] == value) return;
+          final rows = _edges.putIfAbsent(
+              index, () => Uint8List(8)..fillRange(0, 8, _cells[index]));
+          final bits = ((1 << (r - l)) - 1) << (l - x);
+          for (int i = t - y; i < b - y; i++) {
+            final next = selected ? rows[i] | bits : rows[i] & ~bits;
+            if (rows[i] != next) {
+              changed = true;
+              rows[i] = next;
+            }
+          }
+          if (rows.every((v) => v == 0) || rows.every((v) => v == 255)) {
+            _cells[index] = rows.first;
+            _edges.remove(index);
+          }
+          return;
+        }
+      }
+      if (_edges.remove(index) != null) changed = true;
       if (_cells[index] == value) return;
       _cells[index] = value;
       changed = true;
     }
 
+    if (stroke.solid) {
+      final clip = stroke.clip!;
+      for (int row = math.max(0, clip.top.toInt() ~/ 8);
+          row < math.min(rows, (clip.bottom / 8).ceil());
+          row++) {
+        for (int col = math.max(0, clip.left.toInt() ~/ 8);
+            col < math.min(columns, (clip.right / 8).ceil());
+            col++) {
+          setCell(col, row);
+        }
+      }
+      return changed;
+    }
     final samples =
         inpaintGridBrushSamples(stroke, sourceSize, inpaintMaskGridSize);
     if (stroke.shape == InpaintBrushShape.square) {
@@ -263,6 +341,23 @@ class InpaintMaskRaster {
     for (var row = 0; row < rows; row++) {
       var column = 0;
       while (column < columns) {
+        final edge = _edges[row * columns + column];
+        if (edge != null) {
+          final x = column * 8, y = row * 8;
+          for (var dy = 0; dy < 8 && y + dy < sourceHeight; dy++) {
+            final bits = inverted ? 255 ^ edge[dy] : edge[dy];
+            for (var dx = 0; dx < 8 && x + dx < sourceWidth; dx++) {
+              if ((bits & (1 << dx)) == 0) continue;
+              path.addRect(Rect.fromLTRB(
+                  (x + dx) * targetSize.width / sourceWidth,
+                  (y + dy) * targetSize.height / sourceHeight,
+                  (x + dx + 1) * targetSize.width / sourceWidth,
+                  (y + dy + 1) * targetSize.height / sourceHeight));
+            }
+          }
+          column++;
+          continue;
+        }
         final rawSelected = _cells[row * columns + column] != 0;
         final visible = inverted ? !rawSelected : rawSelected;
         if (!visible) {
@@ -272,6 +367,7 @@ class InpaintMaskRaster {
         final start = column;
         column++;
         while (column < columns) {
+          if (_edges.containsKey(row * columns + column)) break;
           final nextRaw = _cells[row * columns + column] != 0;
           if ((inverted ? !nextRaw : nextRaw) == false) break;
           column++;
@@ -312,6 +408,31 @@ void paintInpaintStroke(
   BlendMode blendMode = BlendMode.srcOver,
   double gridSize = inpaintMaskGridSize,
 }) {
+  final clip = stroke.clip;
+  if (clip == null) {
+    _paintGridStroke(canvas, size, stroke, color, blendMode, gridSize);
+    return;
+  }
+  final scale = gridSize / inpaintMaskGridSize;
+  final rect = Rect.fromLTRB(clip.left * scale, clip.top * scale,
+      clip.right * scale, clip.bottom * scale);
+  canvas.save();
+  canvas.clipRect(rect, doAntiAlias: false);
+  if (stroke.solid) {
+    canvas.drawRect(
+        rect,
+        Paint()
+          ..color = color
+          ..blendMode = blendMode
+          ..isAntiAlias = false);
+  } else {
+    _paintGridStroke(canvas, size, stroke, color, blendMode, gridSize);
+  }
+  canvas.restore();
+}
+
+void _paintGridStroke(Canvas canvas, Size size, InpaintStroke stroke,
+    Color color, BlendMode blendMode, double gridSize) {
   if (stroke.points.isEmpty) return;
   final paint = Paint()
     ..color = color

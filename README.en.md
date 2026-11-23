@@ -1,5 +1,7 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 
+Confirming an inpainting selection clears the existing mask outside the box. Brushes and erasers affect only the selected area. Removing or enlarging the selection does not bring back discarded strokes.
+
 The desktop Inspiration Capsule keeps separate curated and full-library categories. Expand or collapse subcategories, and see usage counts on full-library tag cards.
 
 On desktop and mobile, conversion, image interrogation and agent chats reuse a session ID for OpenCode Go. Other APIs do not receive this header.
