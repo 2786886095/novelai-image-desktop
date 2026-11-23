@@ -8,7 +8,7 @@ import 'package:novelai_mobile/i18n/app_locales.dart';
 
 void main() {
   for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
-    testWidgets('scoped weights and fullscreen: ' + platform.name, (t) async {
+    testWidgets('scoped weights and fullscreen: ${platform.name}', (t) async {
       final original = debugDefaultTargetPlatformOverride;
       debugDefaultTargetPlatformOverride = platform;
       final state = AppState();

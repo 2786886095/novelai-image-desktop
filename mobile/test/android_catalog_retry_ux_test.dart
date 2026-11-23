@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -68,12 +69,13 @@ void main() {
               }));
       expect(calls, 1);
       expect(range, scenario == 'corrupt' ? isNull : 'bytes=12-');
-      if (scenario != 'corrupt')
+      if (scenario != 'corrupt') {
         expect(await partial.readAsString(), 'saved prefix');
+      }
       for (final n in existing) {
         expect(await file(n).readAsString(), n);
       }
-      print(
+      debugPrint(
           '$scenario: requests=$calls range=$range, installed/previous/related unchanged');
     });
   }

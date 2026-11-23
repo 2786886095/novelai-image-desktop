@@ -40,7 +40,7 @@ Future<void> main() async {
     while (!ready()) {
       if (clock.elapsed > const Duration(seconds: 18)) {
         throw StateError(
-            'Waiting for ' + description + '; steps=' + steps.join(','));
+            'Waiting for $description; steps=${steps.join(',')}');
       }
       await tick(100);
     }
@@ -60,7 +60,7 @@ Future<void> main() async {
         await tick(60);
       }
     }
-    if (f.evaluate().isEmpty) throw StateError('missing ' + f.toString());
+    if (f.evaluate().isEmpty) throw StateError('missing $f');
     await t.ensureVisible(f.first);
     await tick(170);
   }
@@ -68,7 +68,7 @@ Future<void> main() async {
   Future<void> tap(Finder f) async {
     await locate(f);
     await until(() => f.hitTestable().evaluate().isNotEmpty,
-        'visible touch target ' + f.toString());
+        'visible touch target $f');
     await t.tap(f.hitTestable().first);
     await tick();
   }
@@ -210,7 +210,7 @@ Future<void> main() async {
     await tick();
     final buttons = find.byType(PositivePromptPresetButton);
     await tap(buttons.last);
-    await tap(key('positive-preset-row-' + single.id));
+    await tap(key('positive-preset-row-${single.id}'));
     await until(() => b.prompt == 'silver scarf', 'single applied');
     check(
         b.negativePrompt == 'target negative' &&
@@ -218,7 +218,7 @@ Future<void> main() async {
             app.params.positivePrompt == 'global',
         'single-applied-only-positive-to-chosen-role');
     await tap(buttons.last);
-    await tap(key('positive-preset-row-' + stored.id));
+    await tap(key('positive-preset-row-${stored.id}'));
     await tap(key('positive-preset-apply'));
     await until(() => app.extras.charCaptions.last.prompt == 'green coat',
         'combo applied');
@@ -234,5 +234,5 @@ Future<void> main() async {
     output['stack'] = s.toString();
   }
   await file.writeAsString(jsonEncode(output), flush: true);
-  print('PROMPT_ROLE_QA ' + jsonEncode(output));
+  debugPrint('PROMPT_ROLE_QA ${jsonEncode(output)}');
 }

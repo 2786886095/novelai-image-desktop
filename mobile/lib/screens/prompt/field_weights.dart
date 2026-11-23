@@ -47,13 +47,10 @@ List<FieldWeight> fieldWeights(String input) {
           return write([
             for (var j = 0; j < members.length; j++)
               j != member
-                  ? n[1]! + '::' + members[j].text + '::'
+                  ? '${n[1]!}::${members[j].text}::'
                   : next(direction) == 1
                       ? members[j].text
-                      : next(direction).toString() +
-                          '::' +
-                          members[j].text +
-                          '::'
+                      : '${next(direction)}::${members[j].text}::'
           ].join(', '));
         }));
       }

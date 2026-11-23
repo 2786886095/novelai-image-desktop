@@ -2029,11 +2029,15 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
               if (accepted != true || !sheetContext.mounted) return;
               try {
                 await state.addStylePromptPreset(name: name, prompt: prompt, group: group);
-                if (sheetContext.mounted) ScaffoldMessenger.of(sheetContext).showSnackBar(
+                if (sheetContext.mounted) {
+                  ScaffoldMessenger.of(sheetContext).showSnackBar(
                   SnackBar(content: Text(_fillName(text.stylePresetSaved, name.trim()))));
+                }
               } catch (error) {
-                if (sheetContext.mounted) ScaffoldMessenger.of(sheetContext).showSnackBar(
+                if (sheetContext.mounted) {
+                  ScaffoldMessenger.of(sheetContext).showSnackBar(
                   SnackBar(content: Text(error.toString())));
+                }
               }
             }
 
@@ -2058,7 +2062,7 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                 },
                 trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                   TextButton(
-                    key: ValueKey('append-style-'+preset.id),
+                    key: ValueKey('append-style-${preset.id}'),
                     onPressed: preset.prompt.trim().isEmpty ? null : () {
                       state.applyStylePromptPreset(preset, append: true);
                       Navigator.pop(sheetContext);
@@ -4294,9 +4298,9 @@ class _ReferencePresetLibraryPanelState
       final visible=rows.where((h)=>[h.id,h.date,h.prompt,h.filePath.split(RegExp(r'[/\\]')).last].join(' ').toLowerCase().contains(query)).toList();
       return AlertDialog(title:Text(_fromLibrary(lang)),content:SizedBox(width:460,height:MediaQuery.sizeOf(c).height*.52,child:Column(children:[
         TextField(key:const ValueKey('reference-gallery-search'),decoration:InputDecoration(hintText:MaterialLocalizations.of(c).searchFieldLabel,prefixIcon:const Icon(Icons.search)),onChanged:(v)=>refresh(()=>query=v.trim().toLowerCase())),
-        Expanded(child:visible.isEmpty?Center(child:Text(mobileUiTextFor(lang,'gallery.empty'))):ListView.builder(itemCount:visible.length,itemBuilder:(_,i){final h=visible[i];return ListTile(key:ValueKey('reference-gallery-'+h.id),
+        Expanded(child:visible.isEmpty?Center(child:Text(mobileUiTextFor(lang,'gallery.empty'))):ListView.builder(itemCount:visible.length,itemBuilder:(_,i){final h=visible[i];return ListTile(key:ValueKey('reference-gallery-${h.id}'),
           leading:SizedBox.square(dimension:52,child:imageFile(File(h.filePath),fit:BoxFit.contain,cacheWidth:112,errorBuilder:(_,__,___)=>const Icon(Icons.broken_image_outlined))),
-          title:Text(h.filePath.split(RegExp(r'[/\\]')).last,maxLines:1,overflow:TextOverflow.ellipsis),subtitle:Text(h.date+' · '+h.prompt,maxLines:1,overflow:TextOverflow.ellipsis),onTap:()=>Navigator.pop(dialog,h));}))
+          title:Text(h.filePath.split(RegExp(r'[/\\]')).last,maxLines:1,overflow:TextOverflow.ellipsis),subtitle:Text('${h.date} · ${h.prompt}',maxLines:1,overflow:TextOverflow.ellipsis),onTap:()=>Navigator.pop(dialog,h));}))
       ])),actions:[TextButton(onPressed:()=>Navigator.pop(dialog),child:Text(mobileUiTextFor(lang,'common.cancel')))]);
     }));
   }

@@ -65,15 +65,17 @@ void main() {
           await tap(find.byKey(const ValueKey('capsule-main-category')));
           await tap(find.text(c.name == '人物' ? '角色' : c.name).last);
           final groups = {for (final g in c.subgroups) g.name: g};
-          if (c.name == '人物')
+          if (c.name == '人物') {
             for (final g in cats.firstWhere((c) => c.name == '服饰').subgroups) {
               groups.putIfAbsent(g.name, () => g);
             }
+          }
           for (final group in groups.values) {
             final btn = find.byKey(
-                ValueKey('capsule-subgroup:' + c.name + ':' + group.name));
-            if (btn.evaluate().isEmpty)
+                ValueKey('capsule-subgroup:${c.name}:${group.name}'));
+            if (btn.evaluate().isEmpty) {
               await tap(find.byKey(const ValueKey('capsule-subgroups-more')));
+            }
             await tap(btn);
             final terms = <String, String>{};
             for (final tag in group.tags) {
@@ -91,16 +93,14 @@ void main() {
                   .map((k) => k.value.substring(12))
                   .toList();
               expect(seen, expected.skip(start).take(24).toList(),
-                  reason: c.name + '/' + group.name + ' offset $start');
+                  reason: '${c.name}/${group.name} offset $start');
               pages++;
               rendered += seen.length;
             }
             checked++;
           }
         }
-        print('PASS $platform categories=' +
-            cats.length.toString() +
-            ' paths=$checked pages=$pages tag placements=$rendered');
+        debugPrint('PASS $platform categories=${cats.length} paths=$checked pages=$pages tag placements=$rendered');
       } finally {
         await t.pumpWidget(const SizedBox.shrink());
         await t.pump();
@@ -121,9 +121,10 @@ void main() {
         .setMockMessageHandler('flutter/assets', (msg) async {
       final key = utf8.decode(
           msg!.buffer.asUint8List(msg.offsetInBytes, msg.lengthInBytes));
-      if (key == 'assets/capsule_taxonomy.json')
+      if (key == 'assets/capsule_taxonomy.json') {
         return ByteData.sublistView(utf8.encode(
             '[{"name":"人物","subgroups":[{"name":"对象","tags":[{"en":"solo","zh":"单人"}]}]},{"name":"服饰","subgroups":[{"name":"上衣","tags":[{"en":"shirt","zh":"衬衫"}]}]}]'));
+      }
       final f = File(key);
       return f.existsSync() ? ByteData.sublistView(f.readAsBytesSync()) : null;
     });

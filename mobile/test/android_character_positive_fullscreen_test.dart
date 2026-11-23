@@ -46,7 +46,7 @@ void main() {
       final input = t.widget<TextField>(editor);
       expect(input.controller!.text, b.prompt);
       expect(input.maxLines, isNull);
-      final edited = b.prompt + '\nEND';
+      final edited = '${b.prompt}\nEND';
       await t.enterText(editor, edited);
       await t.pump();
       await t.tap(find.text('完成'));

@@ -351,7 +351,8 @@ class _ResourceDatabaseSettingsPanelState
       ResourceDatabaseStatus status, _ResourceText text) async {
     final name = status.definition.label;
     final action = status.installed ? text.replace : text.install;
-    if (!await _confirm('$action · $name', status.installed ? text.confirmBody : status.definition.description, text) || !mounted) return;
+    if (!await _confirm('$action · $name', status.installed ? text.confirmBody : status.definition.description, text)) return;
+    if (!mounted) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     setState(() => busy.add(status.definition.id));
     try {

@@ -40,7 +40,7 @@ Future<void> main()async{
  final next=(scroll.position.pixels+240).clamp(0.0,scroll.position.maxScrollExtent).toDouble(); if(next==scroll.position.pixels)break;
  scroll.position.jumpTo(next);await tick(60);}
  }
- if(f.evaluate().isEmpty)throw StateError('missing '+f.toString());
+ if(f.evaluate().isEmpty)throw StateError('missing $f');
  await t.ensureVisible(f.first);await tick(170);
  }
  Future<void> tap(Finder f)async{await locate(f);await t.tap(f.hitTestable().first);await tick();}
@@ -63,10 +63,10 @@ Future<void> main()async{
  final items=[for(final id in ['A','B','C']) StylePromptPreset(id:id,name:id,prompt:id,createdAt:'now')];app.settings.stylePromptPresets=items;app.settings.stylePromptPresetGroups=['Target'];
  Set<String>? selected;
  mount(Scaffold(body:Builder(builder:(ctx)=>Center(child:TextButton(onPressed:()async{
- final picked=await showDialog<MobileStyleMove>(context:ctx,builder:(_)=>MoveMobileStylesDialog(attach:true,styles:items.take(2).toList(),groups:['Target'],language:'en-US'));
+ final picked=await showDialog<MobileStyleMove>(context:ctx,builder:(_)=>MoveMobileStylesDialog(attach:true,styles:items.take(2).toList(),groups:const ['Target'],language:'en-US'));
  if(picked!=null)selected=picked.ids;
  },child:const Text('open batch'))))));await tick();await tap(find.text('open batch'));final toggle=key('batch-toggle-visible');await tap(toggle);check(t.widgetList<CheckboxListTile>(find.byType(CheckboxListTile)).every((w)=>w.value==true),'select-all-visible');await tap(toggle);check(t.widgetList<CheckboxListTile>(find.byType(CheckboxListTile)).every((w)=>w.value==false),'clear-selection');await tap(toggle); await tap(find.byType(FilledButton).last);check(selected!=null && selected!.length==2 && !selected!.contains('C'),'bulk-choice-excludes-hidden');await app.moveStylePresetsTogether(selected!,'Target');check(items[2].group!='Target' && app.settings.stylePromptPresets.where((p)=>p.group=='Target').length==2,'filtered-two-moved-other-unchanged'); final img=File('${(await getTemporaryDirectory()).path}/draw-qa-source.png');await img.writeAsBytes(base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aLokAAAAASUVORK5CYII='));
- FilePicker.platform=FixturePicker(img);app.settings.language='en-US';for(final s in app.settings.stylePromptPresets){s.name=s.id=='C'?'hidden C':'visible '+s.id;}
+ FilePicker.platform=FixturePicker(img);app.settings.language='en-US';for(final s in app.settings.stylePromptPresets){s.name=s.id=='C'?'hidden C':'visible ${s.id}';}
  mount(const StyleLibraryScreen());await tick(500);
  final search=find.byWidgetPredicate((w)=>w is TextField && w.decoration?.prefixIcon is Icon && (w.decoration?.prefixIcon as Icon).icon==Icons.search);
  await type(search,'visible');final attach=find.text(mobileBulkLabels('en-US')[12]);await tap(attach.first);await tap(toggle);
@@ -76,5 +76,5 @@ Future<void> main()async{
  final styles=app.settings.stylePromptPresets;check(styles.where((v)=>v.id!='C').every((v)=>v.previewImages.length==1 && File(v.previewImages.single.filePath).existsSync()) && styles.singleWhere((v)=>v.id=='C').previewImages.isEmpty && app.extras.vibeImages.isEmpty && app.extras.preciseReferences.isEmpty && app.workbenchImage==null,'actual-attach-confirm-copies-images-not-workbench-references');
  output['interceptedRequests']=app.rows.length;output['passed']=true;
  }catch(e,s){output['passed']=false;output['error']=e.toString();output['stack']=s.toString();}
- await file.writeAsString(jsonEncode(output),flush:true);print('DRAW_ROLE_QA '+jsonEncode(output));
+ await file.writeAsString(jsonEncode(output),flush:true);debugPrint('DRAW_ROLE_QA ${jsonEncode(output)}');
 }

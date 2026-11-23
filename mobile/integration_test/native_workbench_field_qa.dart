@@ -35,8 +35,9 @@ Future<void> main() async {
   Future<void> tap(Finder f) async {
     await t.ensureVisible(f);
     await t.pump(const Duration(milliseconds: 120));
-    if (f.hitTestable().evaluate().isEmpty)
-      throw StateError('Not hittable: ' + f.toString());
+    if (f.hitTestable().evaluate().isEmpty) {
+      throw StateError('Not hittable: $f');
+    }
     await t.tap(f);
     await t.pump(const Duration(milliseconds: 440));
   }
@@ -48,23 +49,25 @@ Future<void> main() async {
 
   Future<void> openRole(String key) async {
     final f = find.byKey(ValueKey(key));
-    if (f.evaluate().isEmpty)
+    if (f.evaluate().isEmpty) {
       await t.scrollUntilVisible(f, 220,
           scrollable: find.byType(Scrollable).first, maxScrolls: 70);
+    }
     await t.ensureVisible(f);
     await t.pump(const Duration(milliseconds: 200));
-    if (Platform.isIOS)
+    if (Platform.isIOS) {
       await tap(find.descendant(
           of: f, matching: find.byKey(const ValueKey('prompt-expand'))));
-    else
+    } else {
       await tap(f);
+    }
     check(
         find
                 .byKey(const ValueKey('android-fullscreen-prompt-text'))
                 .evaluate()
                 .length ==
             1,
-        'fullscreen:' + key);
+        'fullscreen:$key');
   }
 
   final Map<String, dynamic> result = {
@@ -77,7 +80,7 @@ Future<void> main() async {
     await t.pump(const Duration(seconds: 1));
     await t.pump();
     final i = state.extras.charCaptions.length - 1;
-    await openRole('character-prompt-field-' + i.toString());
+    await openRole('character-prompt-field-$i');
     await tap(find.byKey(const ValueKey('android-editor-capsule')));
     await tap(find.byWidgetPredicate((w) =>
         w is ChoiceChip &&
@@ -93,7 +96,7 @@ Future<void> main() async {
         .pop();
     await t.pump(const Duration(milliseconds: 450));
     await tap(find.text('Done'));
-    await openRole('character-negative-field-' + i.toString());
+    await openRole('character-negative-field-$i');
     await tap(find.text('More tools'));
     await tap(find.text(generateScreenTextFor('en-US').weight));
     await tap(find.descendant(
@@ -127,7 +130,7 @@ Future<void> main() async {
     check(
         state.settings.positivePromptPresets.any((p) =>
             p.name == 'QA duo' &&
-            p.captions!.last.negativePrompt == adjustedNegative),
+            p.captions.last.negativePrompt == adjustedNegative),
         'save-named-group-without-changing-role');
     await tap(find.text('QA duo').first);
     await tap(find.widgetWithText(FilledButton, 'Apply'));
@@ -188,7 +191,7 @@ Future<void> main() async {
             scrollable: list, maxScrolls: 40);
       }
       await tap(target);
-      check(active() == index, 'open:' + names[index]);
+      check(active() == index, 'open:${names[index]}');
     }
     result['passed'] = true;
   } catch (e, s) {
@@ -198,5 +201,5 @@ Future<void> main() async {
   }
   result['ms'] = stopwatch.elapsedMilliseconds;
   await proof.writeAsString(jsonEncode(result), flush: true);
-  print('FIELD_QA ' + jsonEncode(result));
+  debugPrint('FIELD_QA ${jsonEncode(result)}');
 }

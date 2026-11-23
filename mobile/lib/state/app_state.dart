@@ -1148,7 +1148,7 @@ class AppState extends ChangeNotifier {
         final images=staged[id]=[];
         for(final f in sources){
           final image=await storage.copyStylePromptPreviewImage(presetId:id,sourcePath:f.path,sourceName:f.name);
-          if(image==null) throw FormatException('Unsupported image: '+f.name);
+          if(image==null) throw FormatException('Unsupported image: ${f.name}');
           images.add(image);
         }
       }

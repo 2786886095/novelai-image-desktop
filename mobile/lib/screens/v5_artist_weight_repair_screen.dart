@@ -590,11 +590,11 @@ class _V5ArtistWeightRepairScreenState
     final count=artistDrawRoleSnapshot(true, app.extras.charCaptions).length;
     return Column(crossAxisAlignment: CrossAxisAlignment.start,children:[
       SwitchListTile(key:const ValueKey('draw-include-characters'),title:Text(labels[0]),
-        subtitle:Text(labels[1]+' · '+count.toString()),value:_includeRoles,
+        subtitle:Text('${labels[1]} · $count'),value:_includeRoles,
         onChanged:_running?null:(v)=>setState(()=>_includeRoles=v)),
       if (_includeRoles) OutlinedButton.icon(key:const ValueKey('draw-edit-characters'),
         icon:const Icon(Icons.people_outline), label:Text(labels[2]),onPressed:_running?null:()=>Navigator.of(context).push(MaterialPageRoute(builder:(ctx)=>Scaffold(
-          appBar:AppBar(title:Text(labels[2])),body:SafeArea(child:ListView(children:[WorkbenchCharacterEditor()])))))),
+          appBar:AppBar(title:Text(labels[2])),body:SafeArea(child:ListView(children:const [WorkbenchCharacterEditor()])))))),
     ]);
   }
   bool _fixedSeed = true;

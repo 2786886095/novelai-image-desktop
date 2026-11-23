@@ -440,7 +440,7 @@ class _PickerState extends State<CapsulePickerSheet> {
                                                           .ellipsis))
                                           ],
                                           onChanged: (i) {
-                                            if (i != null)
+                                            if (i != null) {
                                               setState(() {
                                                 ci = i;
                                                 si = 0;
@@ -448,16 +448,13 @@ class _PickerState extends State<CapsulePickerSheet> {
                                                 expanded = false;
                                                 allGroups = false;
                                               });
+                                            }
                                           }))
                                 ]),
                                 Align(
                                     alignment: AlignmentDirectional.centerStart,
                                     child: Text(
-                                        nav[2] +
-                                            ' · ' +
-                                            catName(c) +
-                                            ' › ' +
-                                            subName(c.subgroups[si]),
+                                        '${nav[2]} · ${catName(c)} › ${subName(c.subgroups[si])}',
                                         style: Theme.of(context)
                                             .textTheme
                                             .titleSmall)),
@@ -465,10 +462,7 @@ class _PickerState extends State<CapsulePickerSheet> {
                                   for (final (i, g) in c.subgroups.indexed)
                                     if (allGroups || quick.contains(i))
                                       ChoiceChip(
-                                          key: ValueKey('capsule-subgroup:' +
-                                              c.name +
-                                              ':' +
-                                              g.name),
+                                          key: ValueKey('capsule-subgroup:${c.name}:${g.name}'),
                                           label: Text(subName(g)),
                                           selected: si == i,
                                           onSelected: (_) => selectSub(i))
@@ -484,11 +478,7 @@ class _PickerState extends State<CapsulePickerSheet> {
                                               () => allGroups = !allGroups),
                                           child: Text(allGroups
                                               ? nav[6]
-                                              : nav[5] +
-                                                  ' (' +
-                                                  c.subgroups.length
-                                                      .toString() +
-                                                  ')'))),
+                                              : '${nav[5]} (${c.subgroups.length})'))),
                               ],
                               Align(
                                   alignment: Alignment.centerRight,

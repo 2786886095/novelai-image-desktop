@@ -186,16 +186,18 @@ List<Map<String, String>> parseMobileRoles(String input, int max) {
       final h = hdr.firstMatch(line), n = neg.firstMatch(line);
       if (h != null) {
         index = num(h[1]!);
-        if (index < 1 || index > max || groups.containsKey(index))
+        if (index < 1 || index > max || groups.containsKey(index)) {
           throw const FormatException();
+        }
         field = 'prompt';
         groups[index] = {field: h[2]!.replaceFirst(pos, '')};
       } else if (n != null) {
         if (n[1]!.isNotEmpty) index = num(n[1]!);
         final row = groups[index];
         field = 'negativePrompt';
-        if (row == null || row.containsKey(field))
+        if (row == null || row.containsKey(field)) {
           throw const FormatException();
+        }
         row[field] = n[2]!;
       } else if (line.trim().isNotEmpty) {
         final row = groups[index];
@@ -211,8 +213,9 @@ List<Map<String, String>> parseMobileRoles(String input, int max) {
   }
   final value = jsonDecode(raw);
   final rows = value is Map ? value['characters'] : value;
-  if (rows is! List || rows.isEmpty || rows.length > max)
+  if (rows is! List || rows.isEmpty || rows.length > max) {
     throw const FormatException();
+  }
   return rows.map((r) {
     if (r is! Map ||
         r['prompt'] is! String ||
@@ -241,11 +244,13 @@ bool fillMobileRoles(
     final c = chars[i], r = rows[i];
     c.prompt = r['prompt']!;
     if (r.containsKey('name')) c.name = r['name']!;
-    if (r.containsKey('negativePrompt'))
+    if (r.containsKey('negativePrompt')) {
       c.negativePrompt = r['negativePrompt']!;
+    }
   }
-  if (removeTrailing && chars.length > rows.length)
+  if (removeTrailing && chars.length > rows.length) {
     chars.removeRange(rows.length, chars.length);
+  }
   app.markCharacterChanged();
   return true;
 }
@@ -302,15 +307,14 @@ class _RoleBulkState extends State<MobileRoleBulkDialog> {
                       final msg = ScaffoldMessenger.of(context);
                       await Clipboard.setData(ClipboardData(
                           text:
-                              'Return only JSON: {"characters":[{"name":"A","prompt":"silver hair","negativePrompt":"hat"}]}. Use 1–$max characters in slot order. Preserve quotes and weights. Current characters: ' +
-                                  jsonEncode(rows == null
+                              'Return only JSON: {"characters":[{"name":"A","prompt":"silver hair","negativePrompt":"hat"}]}. Use 1–$max characters in slot order. Preserve quotes and weights. Current characters: ${jsonEncode(rows == null
                                       ? current
-                                      : {'characters': rows}) +
-                                  (instructions.text.trim().isEmpty
+                                      : {'characters': rows})}${instructions.text.trim().isEmpty
                                       ? ''
-                                      : '\n' + instructions.text.trim())));
-                      if (mounted)
+                                      : '\n${instructions.text.trim()}'}'));
+                      if (mounted) {
                         msg.showSnackBar(SnackBar(content: Text(l[11])));
+                      }
                     },
                     child: Text(l[20])),
                 TextButton(
@@ -338,14 +342,16 @@ class _RoleBulkState extends State<MobileRoleBulkDialog> {
                         final bytes =
                             file.bytes ?? await File(file.path!).readAsBytes();
                         final value = utf8.decode(bytes);
-                        if (value.length > 128000)
+                        if (value.length > 128000) {
                           throw const FormatException();
-                        if (mounted)
+                        }
+                        if (mounted) {
                           setState(() {
                             field.text = value;
                             rows = null;
                             error = null;
                           });
+                        }
                       } catch (_) {
                         if (mounted) setState(() => error = l[6]);
                       }
@@ -378,13 +384,12 @@ class _RoleBulkState extends State<MobileRoleBulkDialog> {
                             final msg = ScaffoldMessenger.of(context);
                             await Clipboard.setData(ClipboardData(
                                 text:
-                                    'Return only JSON: {"characters":[{"name":"A","prompt":"silver hair","negativePrompt":"hat"}]}. Use 1–$max characters in slot order. Preserve quotes and weights.' +
-                                        (instructions.text.trim().isEmpty
+                                    'Return only JSON: {"characters":[{"name":"A","prompt":"silver hair","negativePrompt":"hat"}]}. Use 1–$max characters in slot order. Preserve quotes and weights.${instructions.text.trim().isEmpty
                                             ? ''
-                                            : '\n' +
-                                                instructions.text.trim())));
-                            if (mounted)
+                                            : '\n${instructions.text.trim()}'}'));
+                            if (mounted) {
                               msg.showSnackBar(SnackBar(content: Text(l[11])));
+                            }
                           },
                           child: Text(l[14])),
                       TextButton(
@@ -405,12 +410,12 @@ class _RoleBulkState extends State<MobileRoleBulkDialog> {
                           child: Text(l[15])),
                     ]),
                     for (final preset in app.settings.positivePromptPresets
-                        .where((p) => p.captions?.isNotEmpty ?? false))
+                        .where((p) => p.captions.isNotEmpty))
                       ListTile(
                           dense: true,
                           title: Text(preset.name),
                           onTap: () {
-                            final saved = preset.captions!;
+                            final saved = preset.captions;
                             if (saved.length > max) {
                               setState(() => error = l[6]);
                               return;
@@ -487,12 +492,7 @@ class _RoleBulkState extends State<MobileRoleBulkDialog> {
                   ListTile(
                       dense: true,
                       title: Text(
-                          '#' +
-                              (i + 1).toString() +
-                              ' ' +
-                              (rows![i]['name'] ?? '') +
-                              ' ' +
-                              rows![i]['prompt']!,
+                          '#${i + 1} ${rows![i]['name'] ?? ''} ${rows![i]['prompt']!}',
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis),
                       subtitle: rows![i]['negativePrompt'] == null
@@ -569,7 +569,7 @@ class _MoveStylesState extends State<MoveMobileStylesDialog> {
                     value: group ?? '',
                     isExpanded: true,
                     items: [
-                      DropdownMenuItem(value: '', child: Text('—')),
+                      const DropdownMenuItem(value: '', child: Text('—')),
                       for (final g in widget.groups)
                         DropdownMenuItem(
                             value: g,
@@ -580,11 +580,7 @@ class _MoveStylesState extends State<MoveMobileStylesDialog> {
                   alignment: WrapAlignment.center,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text(l[10] +
-                        ' · ' +
-                        ids.length.toString() +
-                        '/' +
-                        widget.styles.length.toString()),
+                    Text('${l[10]} · ${ids.length}/${widget.styles.length}'),
                     TextButton(
                         key: const ValueKey('batch-toggle-visible'),
                         onPressed: widget.styles.isEmpty

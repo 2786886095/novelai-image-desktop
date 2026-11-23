@@ -52,7 +52,7 @@ void main() {
       final x = find.widgetWithText(ChoiceChip, n);
       expect(x, findsOneWidget, reason: n);
       expect(x.hitTestable(), findsOneWidget,
-          reason: 'visible without sideways swiping: ' + n);
+          reason: 'visible without sideways swiping: $n');
     }
     await t.tap(find.widgetWithText(ChoiceChip, '上衣'));
     await t.pumpAndSettle();
@@ -60,7 +60,7 @@ void main() {
         .firstWhere((c) => c.name == '服饰')
         .subgroups
         .firstWhere((g) => g.name == '上衣');
-    final first = find.byKey(ValueKey('capsule-tag:' + tops.tags.first.tag));
+    final first = find.byKey(ValueKey('capsule-tag:${tops.tags.first.tag}'));
     expect(first, findsOneWidget);
     expect(find.byKey(const ValueKey('capsule-tag:1girl')), findsNothing);
     await t.enterText(find.byType(TextField).first, 'qa_global');
@@ -91,7 +91,7 @@ void main() {
         .firstWhere((c) => c.name == '服饰')
         .subgroups
         .firstWhere((g) => g.name == '下装');
-    expect(find.byKey(ValueKey('capsule-tag:' + bottom.tags.first.tag)),
+    expect(find.byKey(ValueKey('capsule-tag:${bottom.tags.first.tag}')),
         findsOneWidget);
     expect(find.byKey(const ValueKey('capsule-tag:1girl')), findsNothing);
   });

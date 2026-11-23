@@ -241,7 +241,7 @@ class _StyleLibraryScreenState extends State<StyleLibraryScreen> {
       await run(() async {
         final pick = await FilePicker.platform.pickFiles(allowMultiple:true, type:FileType.custom,
           allowedExtensions:['jpg','jpeg','png','webp']);
-        if (!mounted || pick == null || pick.files.isEmpty) return;
+        if (!context.mounted || pick == null || pick.files.isEmpty) return;
         final sources = [for(final f in pick.files) if(f.path!=null) (path:f.path!,name:f.name)];
         if(sources.length!=pick.files.length) throw StateError('Unreadable image');
         final ok = await showDialog<bool>(context:context,builder:(c)=>AlertDialog(

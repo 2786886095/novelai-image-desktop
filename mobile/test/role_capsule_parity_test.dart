@@ -40,7 +40,7 @@ void main() {
     await t.pumpAndSettle();
     final count =
         find.byKey(const ValueKey('positive-preset-row-old')).evaluate().length;
-    print('matched groups by role negative: ' + count.toString());
+    debugPrint('matched groups by role negative: $count');
     expect(count, 1);
     await t.pumpWidget(const SizedBox());
     app.dispose();
