@@ -38,8 +38,9 @@ Future<void> main() async {
   runApp(const SizedBox.shrink());
   void expect(dynamic value, dynamic spec) {
     final m = wrapMatcher(spec);
-    if (!m.matches(value, <dynamic, dynamic>{}))
-      throw StateError('Native QA mismatch: ' + m.toString());
+    if (!m.matches(value, <dynamic, dynamic>{})) {
+      throw StateError('Native QA mismatch: $m');
+    }
   }
 
   final labels = <String>[];
