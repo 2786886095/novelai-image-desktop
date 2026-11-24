@@ -31,12 +31,13 @@ void main() {
         final image = (await codec.getNextFrame()).image;
         final bytes =
             (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!;
-        for (var y = 0; y < 40; y++)
+        for (var y = 0; y < 40; y++) {
           for (var x = 0; x < 40; x++) {
             expect(bytes.getUint8((y * 40 + x) * 4),
                 x >= 16 && x < 29 && y >= 7 && y < 31 ? 255 : 0,
                 reason: '$shape at ($x,$y)');
           }
+        }
         image.dispose();
         codec.dispose();
       }
@@ -108,7 +109,7 @@ void main() {
       final pixels =
           (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!;
       var inside = 0, outside = 0;
-      for (var y = 0; y < 512; y++)
+      for (var y = 0; y < 512; y++) {
         for (var x = 0; x < 512; x++) {
           if (pixels.getUint8((y * 512 + x) * 4) == 0) continue;
           if (x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height) {
@@ -117,11 +118,12 @@ void main() {
             outside++;
           }
         }
+      }
       image.dispose();
       codec.dispose();
       return (inside, outside);
     });
-    print('mask: inside=${counts!.$1}, outside=${counts.$2}');
+    debugPrint('mask: inside=${counts!.$1}, outside=${counts.$2}');
     expect(counts.$1, greaterThan(0));
     expect(counts.$2, 0);
   });

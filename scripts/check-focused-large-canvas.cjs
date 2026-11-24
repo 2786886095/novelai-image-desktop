@@ -93,10 +93,14 @@ app.whenReady().then(async()=>{
  await js(`(()=>{const e=document.createElement('style');e.textContent='.inpaint-base-img,.inpaint-mask-canvas,.inpaint-region-overlay{width:960px!important;height:540px!important}';document.head.append(e)})()`);
  await js('window.fixture.reset("openai")');await wait();const transition=await drag({x:800,y:500},{x:2400,y:1400});
  check('OpenAI transition fixture physically selects an uncapped 1600x900 rectangle',transition.committed.engine==='openai'&&transition.committed.region?.width===1600&&transition.committed.region?.height===900,transition.committed);
- await js('window.fixture.store.setState({inpaintMask:"synthetic-transition-mask"});window.fixtureSettingsReply={language:"zh-CN",inpaintEngine:"novelai",automaticComparison:{}}');const switchBefore=await snap();
+ // Paint real ink in the overlap: a store-only placeholder has no pixels for a region change to retain.
+ const rect=await js('document.querySelector("canvas.inpaint-mask-canvas").getBoundingClientRect().toJSON()');
+ const ink={x:rect.x+rect.width*1600/3840,y:rect.y+rect.height*950/2160};
+ await mouse('mousePressed',ink.x,ink.y,{selector:'canvas.inpaint-mask-canvas'});await mouse('mouseReleased',ink.x,ink.y);
+ await js('window.fixtureSettingsReply={language:"zh-CN",inpaintEngine:"novelai",automaticComparison:{}}');const switchBefore=await snap();
  await js('window.fixture.store.getState().refreshSettings()');await wait();const switched=await snap();
  check('real refreshSettings immediately synchronizes NovelAI state, visible ROI and planner',switched.engine==='novelai'&&legal(switched.region)&&switched.overlayVisual?.paintVisible&&JSON.stringify(switched.region)===JSON.stringify(switched.overlay)&&JSON.stringify(switched.region)===JSON.stringify(switched.plan.region)&&switched.calls.some(c=>c.kind==='getSettings'),switched);
- check('engine transition preserves the existing mask, saved custom dimensions and 4K canvas',switched.mask===switchBefore.mask&&JSON.stringify(switched.custom)===JSON.stringify(switchBefore.custom)&&switched.canvas.width===3840&&switched.canvas.height===2160,{before:switchBefore,after:switched});
+ check('engine transition preserves the existing mask, saved custom dimensions and 4K canvas',typeof switchBefore.mask==='string'&&switchBefore.mask.length>0&&switched.mask===switchBefore.mask&&JSON.stringify(switched.custom)===JSON.stringify(switchBefore.custom)&&switched.canvas.width===3840&&switched.canvas.height===2160,{before:switchBefore,after:switched});
  await win.webContents.capturePage().then(i=>fs.writeFileSync(path.join(output,'engine-switch-4k.png'),i.toPNG()));
  const previousQuotes=switched.calls.filter(c=>c.kind==='quote').length,previousSubmits=switched.calls.filter(c=>c.kind==='inpaint').length;
  await js('window.fixture.store.getState().inpaint()');await wait();const switchedSubmit=await snap(),switchQuote=switchedSubmit.calls.filter(c=>c.kind==='quote').at(-1),switchWire=switchedSubmit.calls.filter(c=>c.kind==='inpaint').at(-1);
