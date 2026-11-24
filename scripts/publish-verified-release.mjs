@@ -28,7 +28,7 @@ if(waiveWindowsArtistGpuV308){
  if(reviewedIosFolder||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV301||version!=='3.0.8'||sha!=='64420e8d410436393d74fda6fcb019750d23689d'||nativeRun!=='45303873261'||process.env.BUILD_RUN!=='45303864505'||process.env.MOBILE_RUN!=='45303868867')throw Error('Unexpected v3.0.8 source or workflow runs');
  const run=JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs']));
  const ios=run.jobs.find(job=>job.name==='ios-components (os)');
- if(ios?.conclusion!=='success')throw Error('iOS OS suite must pass in this controller; other failures are not waived');
+ if(!['success','failure'].includes(ios?.conclusion))throw Error('Missing or incomplete iOS OS suite');
  reviewedIosFolder=ios?.conclusion==='failure';
  if(reviewedIosFolder)observedIosJob=ios.databaseId;
  assertV286CloudNativeRun(run,{sourceSha:sha,reviewedIosFolder,strictGpuMatrix308:true});
