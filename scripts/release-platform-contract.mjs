@@ -44,14 +44,14 @@ const reviewed301 = 'a3cd315029c2bc4314d5a112d3e132806392c693';
 const reviewed302 = '0b5e4b8268ba03a57706a74c7309bfbe3f928556';
 const reviewed303 = 'bd7378e8f7a7106158a6cb3e875202510c0afb58';
 const reviewed304 = '826e5e54105520f32d4aa880caf5a9d7bc5ebe93';
-const reviewed305 = 'c6b0890fe71c1bd9c75476e57f39b429cadc1610';
-export function assertReleasePlatformContract(report, {version, sourceSha, waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV292=false, waiveWindowsArtistGpuV293=false, waiveWindowsArtistGpuV294=false, waiveWindowsArtistGpuV295=false, waiveWindowsArtistGpuV300=false,waiveWindowsArtistGpuV301=false,waiveWindowsArtistGpuV302=false,waiveWindowsArtistGpuV303=false,waiveWindowsArtistGpuV304=false,waiveWindowsArtistGpuV305=false,reviewedIosFolder=false}) {
+const reviewed308 = '64420e8d410436393d74fda6fcb019750d23689d';
+export function assertReleasePlatformContract(report, {version, sourceSha, waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV292=false, waiveWindowsArtistGpuV293=false, waiveWindowsArtistGpuV294=false, waiveWindowsArtistGpuV295=false, waiveWindowsArtistGpuV300=false,waiveWindowsArtistGpuV301=false,waiveWindowsArtistGpuV302=false,waiveWindowsArtistGpuV303=false,waiveWindowsArtistGpuV304=false,waiveWindowsArtistGpuV308=false,reviewedIosFolder=false}) {
   if(waiveWindowsArtistGpuV301)assert.ok(version==='3.0.1' && sourceSha===reviewed301,'Unexpected v3.0.1 source');
   if(waiveWindowsArtistGpuV302)assert.ok(version==='3.0.2' && sourceSha===reviewed302,'Unexpected v3.0.2 source');
   if(waiveWindowsArtistGpuV303)assert.ok(version==='3.0.3' && sourceSha===reviewed303,'Unexpected v3.0.3 source');
   if(waiveWindowsArtistGpuV304)assert.ok(version==='3.0.4' && sourceSha===reviewed304,'Unexpected v3.0.4 source');
-  if(waiveWindowsArtistGpuV305)assert.ok(version==='3.0.5' && sourceSha===reviewed305,'Unexpected v3.0.5 source');
-  if(reviewedIosFolder)assert.ok(waiveWindowsArtistGpuV305 || waiveWindowsArtistGpuV304 || waiveWindowsArtistGpuV303 || waiveWindowsArtistGpuV302 || waiveWindowsArtistGpuV301 || (waiveWindowsArtistGpuV300 && version==='3.0.0' && sourceSha===reviewedSource),'Folder review scope differs');
+  if(waiveWindowsArtistGpuV308)assert.ok(version==='3.0.8' && sourceSha===reviewed308,'Unexpected v3.0.8 source');
+  if(reviewedIosFolder)assert.ok(waiveWindowsArtistGpuV308 || waiveWindowsArtistGpuV304 || waiveWindowsArtistGpuV303 || waiveWindowsArtistGpuV302 || waiveWindowsArtistGpuV301 || (waiveWindowsArtistGpuV300 && version==='3.0.0' && sourceSha===reviewedSource),'Folder review scope differs');
   assert.equal(typeof waiveWindowsArtistGpuV286,'boolean');
   assert.equal(typeof waiveWindowsArtistGpuV292,'boolean');
   assert.equal(typeof waiveWindowsArtistGpuV293,'boolean');
@@ -63,7 +63,7 @@ export function assertReleasePlatformContract(report, {version, sourceSha, waive
   if(waiveWindowsArtistGpuV295)assert.equal(version,'2.9.5','Windows Artist GPU v2.9.5 waiver applies only to v2.9.5');
   if(waiveWindowsArtistGpuV300)assert.equal(version,'3.0.0','Windows Artist GPU v3.0.0 waiver applies only to v3.0.0');
   if(waiveWindowsArtistGpuV292)assert.equal(version,'2.9.2','Windows Artist GPU v2.9.2 waiver applies only to v2.9.2');
-  const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV292||waiveWindowsArtistGpuV293||waiveWindowsArtistGpuV294||waiveWindowsArtistGpuV295||waiveWindowsArtistGpuV300||waiveWindowsArtistGpuV301||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV305;
+  const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV292||waiveWindowsArtistGpuV293||waiveWindowsArtistGpuV294||waiveWindowsArtistGpuV295||waiveWindowsArtistGpuV300||waiveWindowsArtistGpuV301||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV308;
   if(waiveWindowsArtistGpuV286)assert.equal(version,'2.8.6','Windows Artist GPU waiver applies only to v2.8.6');
   assert.ok(/^\d+\.\d+\.\d+$/.test(version),'Invalid release version');
   assert.ok(/^[a-f0-9]{40}$/i.test(sourceSha),'Invalid immutable source SHA');
@@ -145,16 +145,16 @@ export function assertReleasePlatformContract(report, {version, sourceSha, waive
   return {platforms:releasePlatforms.length,features:releaseFeatures.length};
 }
 
-export function assertV286CloudNativeRun(run,{sourceSha,reviewedIosFolder=false,strictGpuMatrix301=false,strictGpuMatrix302=false,strictGpuMatrix303=false,strictGpuMatrix304=false,strictGpuMatrix305=false}){
+export function assertV286CloudNativeRun(run,{sourceSha,reviewedIosFolder=false,strictGpuMatrix301=false,strictGpuMatrix302=false,strictGpuMatrix303=false,strictGpuMatrix304=false,strictGpuMatrix308=false}){
   assert.equal(run?.headSha,sourceSha,'Cloud acceptance source differs');
   assert.equal(run?.status,'completed','Cloud acceptance still running');
   if(strictGpuMatrix301)assert.equal(sourceSha,reviewed301);
   if(strictGpuMatrix302)assert.equal(sourceSha,reviewed302);
   if(strictGpuMatrix303)assert.equal(sourceSha,reviewed303);
   if(strictGpuMatrix304)assert.equal(sourceSha,reviewed304);
-  if(strictGpuMatrix305)assert.equal(sourceSha,reviewed305);
-  if(reviewedIosFolder&&!strictGpuMatrix301&&!strictGpuMatrix302&&!strictGpuMatrix303&&!strictGpuMatrix304&&!strictGpuMatrix305)assert.equal(sourceSha,reviewedSource);
-  assert.equal(run?.conclusion,(reviewedIosFolder||strictGpuMatrix301||strictGpuMatrix302||strictGpuMatrix303||strictGpuMatrix304||strictGpuMatrix305)?'failure':'success','Cloud acceptance did not succeed');
+  if(strictGpuMatrix308)assert.equal(sourceSha,reviewed308);
+  if(reviewedIosFolder&&!strictGpuMatrix301&&!strictGpuMatrix302&&!strictGpuMatrix303&&!strictGpuMatrix304&&!strictGpuMatrix308)assert.equal(sourceSha,reviewedSource);
+  assert.equal(run?.conclusion,(reviewedIosFolder||strictGpuMatrix301||strictGpuMatrix302||strictGpuMatrix303||strictGpuMatrix304||strictGpuMatrix308)?'failure':'success','Cloud acceptance did not succeed');
   const parts=['core','text','library','os','metadata','gallery','japanese','generation','ui','workflows'];
   const required=[
     'desktop-components (windows-latest)','desktop-components (macos-15)','desktop-components (ubuntu-24.04)',
@@ -165,15 +165,15 @@ export function assertV286CloudNativeRun(run,{sourceSha,reviewedIosFolder=false,
   assert.deepEqual(run.jobs.map(job=>job.name).sort(),[...required,gpu].sort(),'Cloud acceptance job inventory differs');
   for(const job of run.jobs){
     assert.equal(job.status,'completed',job.name);
-    const reason=(reviewedIosFolder || ((strictGpuMatrix301 || strictGpuMatrix302 || strictGpuMatrix303 || strictGpuMatrix304 || strictGpuMatrix305) && job.name==='full-client-feature-matrix')) && ({'ios-components (os)':'Run independently counted component and client-scenario entries','full-client-feature-matrix':'Verify all required cloud cells and preserve the exact matrix'})[job.name];
+    const reason=(reviewedIosFolder || ((strictGpuMatrix301 || strictGpuMatrix302 || strictGpuMatrix303 || strictGpuMatrix304 || strictGpuMatrix308) && job.name==='full-client-feature-matrix')) && ({'ios-components (os)':'Run independently counted component and client-scenario entries','full-client-feature-matrix':'Verify all required cloud cells and preserve the exact matrix'})[job.name];
     assert.equal(job.conclusion,reason?'failure':job.name===gpu?'skipped':'success',job.name);
     if(reason)assert.deepEqual(job.steps.filter(s=>s.conclusion==='failure').map(s=>s.name),[reason]);
   }
 }
 
-export function assertReleaseEvidenceFiles(report, evidenceRoot, {waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV292=false, waiveWindowsArtistGpuV293=false, waiveWindowsArtistGpuV294=false, waiveWindowsArtistGpuV295=false, waiveWindowsArtistGpuV300=false,waiveWindowsArtistGpuV301=false,waiveWindowsArtistGpuV302=false,waiveWindowsArtistGpuV303=false,waiveWindowsArtistGpuV304=false,waiveWindowsArtistGpuV305=false,reviewedIosFolder=false}={}) {
+export function assertReleaseEvidenceFiles(report, evidenceRoot, {waiveWindowsArtistGpuV286=false, waiveWindowsArtistGpuV292=false, waiveWindowsArtistGpuV293=false, waiveWindowsArtistGpuV294=false, waiveWindowsArtistGpuV295=false, waiveWindowsArtistGpuV300=false,waiveWindowsArtistGpuV301=false,waiveWindowsArtistGpuV302=false,waiveWindowsArtistGpuV303=false,waiveWindowsArtistGpuV304=false,waiveWindowsArtistGpuV308=false,reviewedIosFolder=false}={}) {
   // Validate the exact policy before an empty not-supported evidence array can be skipped.
-  assertReleasePlatformContract(report,{version:report?.version,sourceSha:report?.sourceSha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV300,waiveWindowsArtistGpuV301,waiveWindowsArtistGpuV302,waiveWindowsArtistGpuV303,waiveWindowsArtistGpuV304,waiveWindowsArtistGpuV305,reviewedIosFolder});
+  assertReleasePlatformContract(report,{version:report?.version,sourceSha:report?.sourceSha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV300,waiveWindowsArtistGpuV301,waiveWindowsArtistGpuV302,waiveWindowsArtistGpuV303,waiveWindowsArtistGpuV304,waiveWindowsArtistGpuV308,reviewedIosFolder});
   const root=fs.realpathSync(evidenceRoot);
   for(const feature of report.features) for(const platform of releasePlatforms)
     for(const proof of feature.platforms[platform].evidence) {
