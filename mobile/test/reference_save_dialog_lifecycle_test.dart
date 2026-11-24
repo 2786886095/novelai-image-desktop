@@ -115,6 +115,9 @@ void main() {
             }
             await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text(action == 'cancel' ? '取消' : '保存')));
             await tester.pump();
+            // Saving begins only after DialogRoute.completed; finish its pop animation before waiting on file I/O.
+            await tester.pumpAndSettle();
+            expect(find.byType(AlertDialog), findsNothing);
             if (action == 'save') {
               for (var attempt = 0; app.referencePresets.isEmpty && attempt < 200; attempt++) {
                 await tester.runAsync(() async => Future<void>.delayed(const Duration(milliseconds: 20)));

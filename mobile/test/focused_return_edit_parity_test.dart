@@ -60,7 +60,18 @@ void main(){
   var g=await tester.startGesture(rect.topLeft+const Offset(2,2));await g.moveTo(rect.bottomRight-const Offset(2,2));await g.up();await tester.pump();
   final label=tester.widget<Text>(find.descendant(of:find.byKey(const ValueKey('focused-inpaint-region')),matching:find.byType(Text))).data!;
   final dims=label.split('×').map(int.parse).toList();expect(dims[0]*dims[1],lessThanOrEqualTo(589824));
-  g=await tester.startGesture(rect.center);await g.moveBy(Offset(rect.width/3840*24,rect.height/2160*24));await g.up();await tester.pump();expect(find.byKey(const ValueKey('focused-inpaint-region')),findsNothing);expect(tester.takeException(),isNull);
+  // A valid selection returns to paint mode. Explicitly start a new draft.
+  final selector=find.byKey(const ValueKey('select-inpaint-region'));
+  expect(tester.widget<IconButton>(selector).isSelected,isFalse);
+  await tester.tap(selector);await tester.pump();
+  g=await tester.startGesture(rect.center);await g.moveBy(Offset(rect.width/3840*24,rect.height/2160*24));await g.up();await tester.pump();
+  final kept=tester.widget<Text>(find.descendant(of:find.byKey(const ValueKey('focused-inpaint-region')),matching:find.byType(Text))).data;
+  expect(kept,label,reason:'An undersized draft must not replace or delete a committed region');
+  await tester.tap(find.text('Deselect region'));await tester.pump();
+  expect(find.byKey(const ValueKey('focused-inpaint-region')),findsNothing);
+  await tester.tap(selector);await tester.pump();
+  g=await tester.startGesture(rect.center);await g.moveBy(Offset(rect.width/3840*24,rect.height/2160*24));await g.up();await tester.pump();
+  expect(find.byKey(const ValueKey('focused-inpaint-region')),findsNothing);expect(tester.takeException(),isNull);
  });
  testWidgets('actual return-edit button restores mask and keeps it editable',(tester)async{
   tester.view.devicePixelRatio=1;tester.view.physicalSize=const Size(900,900);addTearDown(tester.view.reset);
