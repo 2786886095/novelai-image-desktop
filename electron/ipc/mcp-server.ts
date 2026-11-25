@@ -1,3 +1,4 @@
+import { naiEnhancePreset, NAI_ENHANCE_PRESETS } from "../../src/nai-enhance";
 import { PRECISE_REFERENCE_TYPES, preciseReferenceType } from "../../src/types";
 import {NAX_ATTRIBUTION,searchNaxCollections} from "../../src/nax-gallery";
 import {searchMultilingualTags,relatedMultilingualTags} from "./multilingual-tags";
@@ -253,6 +254,13 @@ function imagesFrom(result: AgentToolBridgeResponse) {
 }
 
 // ── tool schemas ─────────────────────────────────────────────────────────────
+const ENHANCE_MAGNITUDE = { type: "integer", minimum: 1, maximum: NAI_ENHANCE_PRESETS.length, description: "Official Enhance preset. Sets both strength and noise, overriding individual values." };
+
+function mcpEnhanceSettings(raw: Json) {
+  if (raw.enhanceMagnitude === undefined) return undefined;
+  return { enhanceMagnitude: Number(raw.enhanceMagnitude), ...naiEnhancePreset(raw.enhanceMagnitude) };
+}
+
 const IMAGE_REF = { type: "string", description: "Absolute local file path (PNG/JPG/WebP), a history attachmentId, or an ID returned by import_image/make_mask." };
 const GENERATION_PROPS: Json = {
   positivePrompt: { type: "string", description: "Base prompt. Put per-character tags in characterPrompts. V5 supports `Text: ...` for rendered lettering." },
@@ -397,12 +405,12 @@ function createTools(options: McpServerOptions): ToolDef[] {
     {
       name: "prepare_generation", title: "Preview effective generation parameters",
       description: "Resolve the exact normalized generation settings without generating, switching accounts, or querying the balance. Reference image bytes are never returned.",
-      inputSchema: schema({ ...GENERATION_PROPS, count: limit(8) }), annotations: { ...READ, readOnlyHint: false },
+      inputSchema: schema({ ...GENERATION_PROPS, enhanceMagnitude: ENHANCE_MAGNITUDE, count: limit(8) }), annotations: { ...READ, readOnlyHint: false },
       run: async (raw, ctx) => {
         ctx.signal.throwIfAborted();
         const args = await toAgentArgs(raw);
         const { params, extras } = agentGenerationInput(agentRequest(args), args);
-        return ok({ params, modelMode: extras.modelMode, historyGroupId: extras.historyGroupId ?? null,
+        return ok({ params, enhance: mcpEnhanceSettings(raw), modelMode: extras.modelMode, historyGroupId: extras.historyGroupId ?? null,
           characterPrompts: extras.charCaptions ?? [], vibeReferenceCount: extras.vibeImages?.length ?? 0,
           preciseReferenceCount: extras.preciseReferences?.length ?? 0, count: raw.count ?? 1 });
       },
@@ -558,16 +566,18 @@ function createTools(options: McpServerOptions): ToolDef[] {
       inputSchema: schema({
         ...GENERATION_PROPS,
         image: IMAGE_REF,
+        enhanceMagnitude: ENHANCE_MAGNITUDE,
         strength: { type: "number", minimum: 0, maximum: 1, description: "0.3–0.5 keeps composition, 0.6–0.8 changes more. Default 0.5." },
         noise: { type: "number", minimum: 0, maximum: 1 },
       }, ["image", "positivePrompt"]),
       annotations: PAID,
       run: async (raw, ctx) => {
         const image = await resolveImage(raw.image);
-        const strength = num(raw.strength, 0.5, 0, 1);
-        const args = withSourceSize({ ...(await toAgentArgs(raw)), attachmentId: image.id, strength, noise: num(raw.noise, 0, 0, 1), groupName: "MCP 图生图", fileNamePrefix: str(raw.fileNamePrefix) || "mcp-i2i" }, image);
+        const preset = mcpEnhanceSettings(raw);
+        const strength = preset?.strength ?? num(raw.strength, 0.5, 0, 1);
+        const args = withSourceSize({ ...(await toAgentArgs(raw)), attachmentId: image.id, strength, noise: num(raw.noise, 0, 0, 1), ...preset, groupName: "MCP 图生图", fileNamePrefix: str(raw.fileNamePrefix) || "mcp-i2i" }, image);
         const { params, extras } = agentGenerationInput(agentRequest(args), args);
-        return imageOperation("langbai_redraw_image", args, { feature: "i2i", params, extras, i2iParams: { ...DEFAULT_I2I_PARAMS, strength } }, ctx, raw.syncWorkbench === true);
+        return imageOperation("langbai_redraw_image", args, { feature: "i2i", params, extras, i2iParams: { ...DEFAULT_I2I_PARAMS, strength, ...preset } }, ctx, raw.syncWorkbench === true);
       },
     },
     {
@@ -632,10 +642,11 @@ function createTools(options: McpServerOptions): ToolDef[] {
       name: "estimate_cost",
       title: "Estimate Anlas cost",
       description: "Quote an operation without running it. Same arguments as the corresponding tool plus `operation`.",
-      inputSchema: { type: "object", properties: { operation: { type: "string", enum: ["generate", "img2img", "inpaint", "upscale"] }, ...GENERATION_PROPS, image: IMAGE_REF, count: { type: "integer" }, strength: { type: "number" }, inpaintModel: { type: "string", enum: NAI_INPAINT_MODELS.map((item) => item.value) }, scale: { type: "integer" } }, required: ["operation"], additionalProperties: true },
+      inputSchema: { type: "object", properties: { operation: { type: "string", enum: ["generate", "img2img", "inpaint", "upscale"] }, ...GENERATION_PROPS, image: IMAGE_REF, enhanceMagnitude: ENHANCE_MAGNITUDE, count: { type: "integer" }, strength: { type: "number" }, inpaintModel: { type: "string", enum: NAI_INPAINT_MODELS.map((item) => item.value) }, scale: { type: "integer" } }, required: ["operation"], additionalProperties: true },
       annotations: READ,
       run: async (raw) => {
         const operation = str(raw.operation);
+        if (raw.enhanceMagnitude !== undefined && operation !== "img2img") throw new Error("enhanceMagnitude requires operation img2img");
         let request: AnlasQuoteRequest;
         if (operation === "upscale") {
           const image = await resolveImage(raw.image);
@@ -649,7 +660,7 @@ function createTools(options: McpServerOptions): ToolDef[] {
             request = { feature: "inpaint", params, extras, inpaintModel, inpaintStrength: strength, image: { width: image.width ?? 0, height: image.height ?? 0 } };
           } else {
             const { params, extras } = agentGenerationInput(agentRequest(args), args);
-            request = { feature: "i2i", params, extras, i2iParams: { ...DEFAULT_I2I_PARAMS, strength } };
+            request = { feature: "i2i", params, extras, i2iParams: { ...DEFAULT_I2I_PARAMS, strength, ...mcpEnhanceSettings(raw) } };
           }
         } else {
           const args = await toAgentArgs({ positivePrompt: "quote", ...raw });

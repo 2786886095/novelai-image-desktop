@@ -34,6 +34,18 @@ function extras():GenerateExtras{return {vibeImages:[],charCaptions:[
  {prompt:'girl, red coat',negativePrompt:'red hair',useCoords:true,x:0.25,y:0.4},
  {prompt:'boy, blue coat',negativePrompt:'blue hair',useCoords:true,x:0.75,y:0.6},
  ],preciseReferences:[{base64:png(32,48).toString('base64'),type:'character&style',strength:0.8,fidelity:0.7}]};}
+it.each([
+  [1, .2, 0], [2, .4, 0], [3, .5, 0], [4, .6, 0], [5, .7, .1],
+])('sends official Enhance magnitude %i through desktop and MCP redraw paths', async (level, strength, noise) => {
+  const stale = { strength: .11, noise: .9, enhanceMagnitude: level };
+  await generateI2I(params, { ...stale, extraNoiseSeed: 17 });
+  await redrawImage({ ...stale, params, imageBase64: mask(), groupName: 'fixture', fileNamePrefix: 'test' });
+  expect(fixture.post.mock.calls).toHaveLength(2);
+  for (const [, body] of fixture.post.mock.calls) {
+    expect(body.parameters).toMatchObject({ strength, noise });
+  }
+});
+
 function multipart(body:any){
  expect(typeof body?.getBuffer).toBe('function');const result=new Map<string,Buffer>();
  const boundary=body.getBoundary(),wire=body.getBuffer().toString('latin1');

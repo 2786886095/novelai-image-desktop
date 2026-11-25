@@ -510,7 +510,7 @@ class AppState extends ChangeNotifier {
   // main generate/i2i prompt automatically.
   String inpaintPositivePrompt = '';
   int upscaleScale = 2;
-  int enhanceMagnitude = 5;
+  int enhanceMagnitude = 2;
   int enhanceScale = 1;
   String directorTool = 'bg-removal';
   ReversePromptMode reverseMode = ReversePromptMode.tags;
@@ -2850,7 +2850,8 @@ class AppState extends ChangeNotifier {
     if (notify) notifyListeners();
   }
 
-  Future<void> generateI2I({String comparisonTool='generate:i2i'}) async {
+  Future<void> generateI2I({String comparisonTool='generate:i2i', I2IParams? enhanceParams}) async {
+    final runParams = enhanceParams ?? i2i;
     if (_naiChanging) throw StateError('账号正在切换，未提交请求');
     _naiOperationCount++;
     try {
@@ -2886,8 +2887,8 @@ class AppState extends ChangeNotifier {
           extras: initialExtras,
           batchCount: total,
           imageToImage: true,
-          upscaledEnhance: i2i.upscaledEnhance,
-          strength: i2i.strength,
+          upscaledEnhance: runParams.upscaledEnhance,
+          strength: runParams.strength,
           alreadyEncodedVibes:
               api.countCachedVibes(initialParams.model, initialExtras),
           preciseReferenceCount: initialExtras.preciseReferences.length,
@@ -2900,8 +2901,8 @@ class AppState extends ChangeNotifier {
         extras: initialExtras,
         batchCount: total,
         imageToImage: true,
-        upscaledEnhance: i2i.upscaledEnhance,
-        strength: i2i.strength,
+        upscaledEnhance: runParams.upscaledEnhance,
+        strength: runParams.strength,
         alreadyEncodedVibes:
             api.countCachedVibes(initialParams.model, initialExtras),
         preciseReferenceCount: initialExtras.preciseReferences.length,
@@ -2991,11 +2992,11 @@ class AppState extends ChangeNotifier {
           ));
           try {
             final (images, seed) = await api.img2img(
-                token, settings, taskParams, initialExtras.copy(), image, i2i);
+                token, settings, taskParams, initialExtras.copy(), image, runParams);
             if (images.isEmpty) throw Exception(_rt('error.i2iNoImages'));
             final items = <HistoryItem>[];
             for (final bytes in images) {
-              final actualSize = i2i.upscaledEnhance
+              final actualSize = runParams.upscaledEnhance
                   ? decodeImageDimensions(bytes)
                   : (taskParams.width, taskParams.height);
               items.add(await storage.saveImage(bytes, taskParams, seed,
@@ -3092,15 +3093,11 @@ class AppState extends ChangeNotifier {
     }
     final previousWidth = params.width;
     final previousHeight = params.height;
-    final previousStrength = i2i.strength;
-    final previousNoise = i2i.noise;
     final previousSizeMode = i2iSizeMode;
     final previousSourceMode = i2iSourceMode;
     i2iSourceMode = 'latest';
     final officialMax =
         enhanceScale == 0 && params.model.startsWith('nai-diffusion-5-');
-    final previousMax = i2i.upscaledEnhance;
-    i2i.upscaledEnhance = officialMax;
     final target = adaptiveNaiImageSize(
       source.width *
           (officialMax
@@ -3121,20 +3118,15 @@ class AppState extends ChangeNotifier {
       ..width = target.$1
       ..height = target.$2;
     i2iSizeMode = 'custom';
-    i2i
-      ..strength = min(0.82, 0.18 + enhanceMagnitude.clamp(1, 10) * 0.064)
-      ..noise = min(0.5, enhanceMagnitude.clamp(1, 10) * 0.045);
+    final preset = I2IParams.enhance(enhanceMagnitude,
+        upscaledEnhance: officialMax, extraNoiseSeed: i2i.extraNoiseSeed);
     notifyListeners();
     try {
-      await generateI2I(comparisonTool:'generate:enhance');
+      await generateI2I(comparisonTool:'generate:enhance', enhanceParams: preset);
     } finally {
-      i2i.upscaledEnhance = previousMax;
       params
         ..width = previousWidth
         ..height = previousHeight;
-      i2i
-        ..strength = previousStrength
-        ..noise = previousNoise;
       i2iSizeMode = previousSizeMode;
       i2iSourceMode = previousSourceMode;
       notifyListeners();

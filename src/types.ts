@@ -352,6 +352,7 @@ export interface WorkingImage {
 }
 
 export interface I2IParams {
+  enhanceMagnitude?: number;
   upscaledEnhance?: boolean;
   strength: number;
   noise: number;
@@ -360,6 +361,7 @@ export interface I2IParams {
 
 /** One image's batch-redraw (img2img) request, sent per image to the main process. */
 export interface BatchRedrawRequest {
+  enhanceMagnitude?: number;
   runId?: string;
   imageServiceBinding?: string;
   imageBase64: string; // source image (pure base64)

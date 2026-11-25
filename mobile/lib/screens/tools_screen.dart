@@ -920,8 +920,8 @@ class _EnhancePanel extends StatelessWidget {
             label: '增强幅度',
             value: s.enhanceMagnitude.toDouble(),
             min: 1,
-            max: 10,
-            divisions: 9,
+            max: naiEnhancePresets.length.toDouble(),
+            divisions: naiEnhancePresets.length - 1,
             display: '${s.enhanceMagnitude}',
             onChanged: (value) {
               s.enhanceMagnitude = value.round();

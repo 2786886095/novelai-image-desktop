@@ -681,9 +681,7 @@ class NaiApi {
       if (i2i.upscaledEnhance && params.model.startsWith('nai-diffusion-5-')) {
         p['upscaled_enhance'] = true;
       }
-      // Keep NovelAI's transport field for compatibility after removing the
-      // ineffective UI control, but always send the default value.
-      p['noise'] = 0;
+      p['noise'] = i2i.requestNoise;
       p['extra_noise_seed'] =
           i2i.extraNoiseSeed > 0 ? i2i.extraNoiseSeed : randomSeed();
       return payload;

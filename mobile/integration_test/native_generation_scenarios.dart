@@ -99,9 +99,10 @@ Future<void> _run()async{
     require(submitted()==beforeInvalid&&digest(await source.readAsBytes())==sourceHash,'Invalid I2I mutated source/submitted');
     suite.check('image-to-image','invalid-image-no-mutation',{'invalidBytesRejectedBeforePost':true,'sourceHashUnchanged':true});
 
-    await reset();app.enhanceScale=2;app.enhanceMagnitude=4;
+    await reset();app.enhanceScale=2;app.enhanceMagnitude=5;
     final oldSize=[app.params.width,app.params.height],oldStrength=app.i2i.strength;
     await app.enhance();final enhanced=app.history.first;
+    require(lastGenerate()['parameters']['strength']==.7 && lastGenerate()['parameters']['noise']==.1, 'Enhance magnitude 5 request');
     require(enhanced.width==128&&enhanced.height==128&&im.decodeImage(await File(enhanced.filePath).readAsBytes())!.width==128,'Enhance scale output');
     require(app.params.width==oldSize[0]&&app.params.height==oldSize[1]&&app.i2i.strength==oldStrength,'Enhance leaked temporary parameters');
     suite.check('enhance','scale-output-valid',{'original':[64,64],'output':[128,128],'temporaryParamsRestored':true,'actualHttp':true});

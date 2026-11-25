@@ -6,11 +6,12 @@ const output={fixture:'local loopback; fake account and executor; no paid API ca
 if(!output.mcpAvailable){console.log(JSON.stringify(output,null,2));process.exit(1);}
 const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'langbai-mcp-check-'));
 let settings={mcpServerEnabled:false,mcpServerPort:39280,mcpServerToken:'',mcpMaxAnlasPerCall:0,imageProvider:'novelai',lastGenerationState:{params:{}}},quote={ok:true,amount:0,source:'fixture',balance:20,message:'fixture quote'},calls=0,active=0,maxActive=0,quoteHook=()=>{};
+let redrawArgs, quotedRequest;
 const mock={
  'electron':{app:{getPath:()=>tmp}},
  './store':{getSettings:()=>settings,getHistory:()=>[]},
- './nai':{quoteAnlasCost:async()=>{await quoteHook();return quote;},refreshStoredAccount:async()=>({tierName:'fixture',anlasBalance:20})},
- './agent-tools':{agentGenerationInput:(_r,args)=>({params:{model:'nai-diffusion-4-5-full',...args},extras:{}}),executeAgentTool:async(r)=>{if(r.tool==='langbai_generate_image'){calls++;active++;maxActive=Math.max(maxActive,active);await new Promise(r=>setTimeout(r,12));active--;}return{ok:true,title:'fixture executor',data:{items:[]},output:''};}}
+ './nai':{quoteAnlasCost:async(request)=>{quotedRequest=request;await quoteHook();return quote;},refreshStoredAccount:async()=>({tierName:'fixture',anlasBalance:20})},
+ './agent-tools':{agentGenerationInput:(_r,args)=>({params:{model:'nai-diffusion-4-5-full',...args},extras:{}}),executeAgentTool:async(r)=>{if(r.tool==='langbai_redraw_image')redrawArgs=r.args;if(r.tool==='langbai_generate_image'){calls++;active++;maxActive=Math.max(maxActive,active);await new Promise(r=>setTimeout(r,12));active--;}return{ok:true,title:'fixture executor',data:{items:[]},output:''};}}
 };
 const cache={};function load(file){file=path.resolve(file);if(cache[file])return cache[file].exports;const m={exports:{}};cache[file]=m;
  const r=(id)=>{if(mock[id])return mock[id];if(id.startsWith('.')){let p=path.resolve(path.dirname(file),id.replace(/\.js$/,'.ts'));if(!path.extname(p))p+='.ts';return load(p);}return req(id);};
@@ -59,6 +60,20 @@ const rpc=(method,params={})=>({jsonrpc:'2.0',id:1,method,params});
  const sse=await send(gen(),{Accept:'application/json, text/event-stream'});assert(sse.text.includes('event: message'));check('tool response supports SSE');
  const png=path.join(tmp,'source.png');await sharp({create:{width:32,height:24,channels:3,background:'#00ff00'}}).png().toFile(png);
  const imported=await att.importMcpImage(png);assert.equal(imported.width,32);assert.equal(att.mcpAttachment(imported.id).filePath,imported.filePath);assert.equal((await att.importMcpImage(png)).id,imported.id);
+ for(const name of ['img2img','prepare_generation','estimate_cost']){
+   const field=list.find(tool=>tool.name===name).inputSchema.properties.enhanceMagnitude;
+   assert.equal(field.minimum,1);assert.equal(field.maximum,5);
+ }
+ const invoke=async(name,args)=>(await send(rpc('tools/call',{name,arguments:args}))).body;
+ const enhance={image:imported.id,positivePrompt:'fixture',enhanceMagnitude:5};
+ const preview=(await invoke('prepare_generation',{enhanceMagnitude:5})).result;
+ assert.deepEqual(JSON.parse(preview.content[0].text).enhance,{enhanceMagnitude:5,strength:.7,noise:.1});
+ assert(!(await invoke('estimate_cost',{...enhance,operation:'img2img'})).result.isError);
+ assert.equal(quotedRequest.i2iParams.strength,.7);
+ assert(!(await invoke('img2img',enhance)).result.isError);
+ assert.equal(redrawArgs.enhanceMagnitude,5);assert.equal(redrawArgs.strength,.7);assert.equal(redrawArgs.noise,.1);
+ assert.equal((await invoke('img2img',{...enhance,enhanceMagnitude:6})).error.code,-32602);
+ check('Enhance preset listed, previewed, quoted and dispatched; invalid level refused');
  await fs.promises.unlink(png);assert(fs.existsSync(imported.filePath));check('image import: validated immutable copy, content ID, lookup');
  const webp=path.join(tmp,'source.webp');await sharp({create:{width:32,height:24,channels:3,background:'#00ff00'}}).webp().toFile(webp);assert.equal((await att.importMcpImage(webp)).mime,'image/webp');
  const bad=path.join(tmp,'fake.png');fs.writeFileSync(bad,'not an image');await assert.rejects(()=>att.importMcpImage(bad));

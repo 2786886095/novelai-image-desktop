@@ -548,6 +548,7 @@ export async function executeAgentTool(
           params,
           strength: finite(args.strength, DEFAULT_I2I_PARAMS.strength, 0, 1),
           noise: finite(args.noise, DEFAULT_I2I_PARAMS.noise, 0, 1),
+          enhanceMagnitude: args.enhanceMagnitude === undefined ? undefined : Number(args.enhanceMagnitude),
           extras,
           groupName: text(args.groupName, 80) || "Agent 重绘",
           fileNamePrefix: text(args.fileNamePrefix, 80) || "agent-redraw",

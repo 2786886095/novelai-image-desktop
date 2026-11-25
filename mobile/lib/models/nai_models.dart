@@ -796,7 +796,22 @@ class GenerationQueueProgress {
       );
 }
 
+const naiEnhancePresets = <({double strength, double noise})>[
+  (strength: 0.2, noise: 0),
+  (strength: 0.4, noise: 0),
+  (strength: 0.5, noise: 0),
+  (strength: 0.6, noise: 0),
+  (strength: 0.7, noise: 0.1),
+];
+
 class I2IParams {
+  final int? enhanceMagnitude;
+  double get requestNoise => enhanceMagnitude == null ? 0 : naiEnhancePresets[enhanceMagnitude! - 1].noise;
+
+  I2IParams.enhance(int magnitude, {required this.upscaledEnhance, required this.extraNoiseSeed})
+      : enhanceMagnitude = magnitude,
+        strength = naiEnhancePresets[magnitude - 1].strength,
+        noise = naiEnhancePresets[magnitude - 1].noise;
   bool upscaledEnhance;
   double strength;
   double noise;
@@ -805,7 +820,7 @@ class I2IParams {
       {this.upscaledEnhance = false,
       this.strength = 0.7,
       this.noise = 0,
-      this.extraNoiseSeed = 0});
+      this.extraNoiseSeed = 0}) : enhanceMagnitude = null;
 }
 
 class AugmentOptions {

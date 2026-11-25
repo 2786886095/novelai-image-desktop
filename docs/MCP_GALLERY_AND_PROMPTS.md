@@ -10,6 +10,8 @@
 2. 在 `generate_image`、`img2img` 或 `inpaint` 指定 `historyGroupId`。只影响当前请求；不指定时继承工作台，`__ungrouped` 则只保存到日期目录。
 3. `prepare_generation` 可预览规范化参数、角色提示词和参考图数量，不提交生成或查余额；`estimate_cost` 用于单独估价。支持模型、尺寸、Seed、步数、采样器、CFG、Effort、角色、参考图、文件名前缀、透明背景、SMEA 及模型模式等选项；以当前模型支持的能力为准。
 
+在 `img2img` 中传入 `enhanceMagnitude`（整数 1–5）可使用官网增强预设。五档的（强度，噪声）依次为（0.2，0）、（0.4，0）、（0.5，0）、（0.6，0）、（0.7，0.1）。选档后会覆盖单独传入的 `strength` 和 `noise`。`prepare_generation` 返回选档参数，`estimate_cost` 使用相同档位估价（`operation: "img2img"`）。
+
 ## 整理已保存图片
 
 桌面「历史与素材」「作品」及 MCP 的 `move_history_images` 使用同一移动逻辑：保留原日期，把图片移到 `保存目录/原日期/目标分组`；设为未分组时回到日期目录。同名不覆盖，图片内容和历史 ID 不变。旧版只改过分组、磁盘位置未更新的图片，可手动对该图片重选目标分组，或用 `move_history_images` 重新指定当前组。本次不在启动时扫描或搬移整个图库；不移动配置保存目录之外的文件。

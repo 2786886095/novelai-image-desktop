@@ -26,6 +26,25 @@ Future<(NovelAiAccounts, NovelAiAccount)> relayVault() async {
 }
 
 void main() {
+  test('Enhance sends the five official parameter pairs; plain img2img ignores stale noise', () async {
+    final (vault, _) = await relayVault();
+    final inputs = <(num, num)>[];
+    final api = NovelAiAccountApi(vault, clientFactory: (_, __) => MockClient((r) async {
+      final p = jsonDecode(r.body)['parameters'];
+      inputs.add((p['strength'] as num, p['noise'] as num));
+      return http.Response.bytes(png, 200);
+    }));
+    for (final i2i in [
+      for (var level = 1; level <= 5; level++)
+        I2IParams.enhance(level, upscaledEnhance: false, extraNoiseSeed: 0),
+      I2IParams(strength: .3, noise: .9),
+    ]) {
+      await api.img2img('relay-B', AppSettings(), GenerateParams(width: 64, height: 64, positivePrompt: 'test'),
+          GenerateExtras(), png, i2i);
+    }
+    expect(inputs, [(0.2, 0), (0.4, 0), (0.5, 0), (0.6, 0), (0.7, 0.1), (0.3, 0)]);
+  });
+
   test(
       'selected relay refreshes declared read-only route; generation remains one POST and no official fallback',
       () async {

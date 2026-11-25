@@ -1,3 +1,4 @@
+import { naiEnhancePreset } from "./nai-enhance";
 import {v5Input} from '../shared/v5-prompt-options';
 import {promptSkillRequestContext,promptSkillStaleText} from './prompt-skill-settings';
 import { normalizeHistoryWidth, readHistoryCollapsed, HISTORY_COLLAPSE_AT } from './workspace-history';
@@ -411,7 +412,7 @@ interface AppState {
   removeQueueJob: (id: string) => void;
   clearQueue: () => void;
   toggleQueueCollapsed: () => void;
-  generateI2I: () => Promise<void>;
+  generateI2I: (enhanceMagnitude?: number) => Promise<void>;
   inpaint: () => Promise<void>;
   /** Inpaint with OpenAI Images edits (provider billing, no Anlas). */
   openaiInpaint: () => Promise<void>;
@@ -2700,7 +2701,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }).catch(() => undefined);
   },
 
-  async generateI2I() {
+  async generateI2I(enhanceMagnitude) {
     const state = get();
     if (!requireToken(set, state.account.hasToken, state.settings)) return;
     if (!state.workbenchImage) {
@@ -2719,7 +2720,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       ? state.i2iOriginalImage ?? state.workbenchImage
       : state.workbenchImage;
     const initialExtras = buildExtras(state);
-    const initialI2IParams = { ...state.i2iParams };
+    const initialI2IParams = enhanceMagnitude === undefined ? { ...state.i2iParams }
+      : { ...state.i2iParams, ...naiEnhancePreset(enhanceMagnitude), enhanceMagnitude };
     const outputSize = state.i2iSizeMode === "adaptive"
       ? adaptiveNAIImageSize(sourceImage.width, sourceImage.height, state.params)
       : { width: state.params.width, height: state.params.height };

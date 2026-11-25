@@ -367,7 +367,7 @@ class NovelAiAccountApi extends NaiApi {
         final parameters = payload['parameters'] as Map<String, dynamic>;
         parameters['image'] = base64Encode(preparedImage);
         parameters['strength'] = strength.clamp(0, 1);
-        parameters['noise'] = 0;
+        parameters['noise'] = i2i.requestNoise;
         parameters['extra_noise_seed'] =
             noiseSeed > 0 ? noiseSeed : randomSeed();
         if (enhance && p.model.startsWith('nai-diffusion-5-')) {

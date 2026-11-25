@@ -1,3 +1,4 @@
+import { naiEnhancePreset, NAI_ENHANCE_PRESETS } from "./nai-enhance";
 import {selectPromptSkillTemplate} from './prompt-skill';
 import type {ModePromptTemplates} from './types';
 import {CONVERT_SYSTEM_PROMPTS,SCOPED_REVERSE_SYSTEM_PROMPTS} from './data/prompt-templates';
@@ -3784,7 +3785,8 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
   const setI2ISourceMode = useAppStore(state => state.setI2ISourceMode);
   const setI2ISizeMode = useAppStore((state) => state.setI2ISizeMode);
   const generateI2I = useAppStore((state) => state.generateI2I);
-  const [magnitude, setMagnitude] = useState(3);
+  const [magnitude, setMagnitude] = useState(2);
+  const preset = naiEnhancePreset(magnitude);
   const [enhanceScale, setEnhanceScale] = useState<1 | 2 | "max">(1);
   const t = useCallback((key: string) => desktopUiText(language, key), [language]);
   const f = useCallback((key: string, values: Record<string, unknown>) => desktopUiFormat(language, key, values), [language]);
@@ -3802,23 +3804,16 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
       params,
     );
     if (!isMax && enhanceScale === 2 && requestedTarget.exceedsLimit) return;
-    const previous = { width: params.width, height: params.height, strength: i2iParams.strength, noise: i2iParams.noise, sizeMode: i2iSizeMode, upscaledEnhance: i2iParams.upscaledEnhance, sourceMode: i2iSourceMode };
+    const previous = { width: params.width, height: params.height, sizeMode: i2iSizeMode, upscaledEnhance: i2iParams.upscaledEnhance, sourceMode: i2iSourceMode };
     const target = officialMax ? inputSize : isMax ? adaptiveNAIImageSize(workbenchImage.width * 2, workbenchImage.height * 2, params) : adaptiveNAIImageSize(workbenchImage.width * (enhanceScale as number), workbenchImage.height * (enhanceScale as number), params);
     setI2ISourceMode("latest");
     setI2IParam("upscaledEnhance", officialMax);
     setI2ISizeMode("custom");
     applyParams({ width: target.width, height: target.height });
-    // Official Enhance is prompt-aware, but conservative defaults must keep the
-    // source pose/composition. The old 0.50/0.225 midpoint behaved like a
-    // redraw and routinely replaced limbs, expressions and framing.
-    setI2IParam("strength", Math.min(0.48, 0.10 + magnitude * 0.034));
-    setI2IParam("noise", Math.min(0.22, 0.018 + magnitude * 0.014));
     try {
-      await generateI2I();
+      await generateI2I(magnitude);
     } finally {
       applyParams({ width: previous.width, height: previous.height });
-      setI2IParam("strength", previous.strength);
-      setI2IParam("noise", previous.noise);
       setI2IParam("upscaledEnhance", previous.upscaledEnhance);
       setI2ISourceMode(previous.sourceMode);
       setI2ISizeMode(previous.sizeMode);
@@ -3842,7 +3837,7 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
       <div className="panel-scroll">
         <AutomaticComparisonControl surface="generate:enhance" />
         <WorkbenchImageUpload />
-        <SliderInput label={f("enhance.magnitude", { value: magnitude })} value={magnitude} min={1} max={10} step={1} onChange={setMagnitude} />
+        <SliderInput label={f("enhance.magnitude", { value: magnitude })} value={magnitude} min={1} max={NAI_ENHANCE_PRESETS.length} step={1} onChange={setMagnitude} />
         <small className="field-hint">{t("enhance.explain")}</small>
         <div className="field">
           <span>{t("enhance.scale")}</span>
@@ -3853,7 +3848,7 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
           </div>
         </div>
         {workbenchImage && target ? <div className={clsx("info-card", outputTooLarge && "limit-card")}><strong>{t("enhance.outputSize")}</strong><span>{workbenchImage.width}×{workbenchImage.height} → {target.width}×{target.height}</span><small>{outputTooLarge ? outputLimitReason : t("enhance.outputHint")}</small></div> : null}
-        <FeatureCostCard label={t("cost.beforeRun")} feature="i2i" sizeOverride={officialMax ? inputSize : target ?? undefined} i2iOverride={{ strength: Math.min(0.48, 0.10 + magnitude * 0.034), upscaledEnhance: officialMax }} />
+        <FeatureCostCard label={t("cost.beforeRun")} feature="i2i" sizeOverride={officialMax ? inputSize : target ?? undefined} i2iOverride={{ ...preset, upscaledEnhance: officialMax }} />
       </div>
       <AccountAndRunButton label={f("enhance.run", { scale: isMax ? "MAX" : enhanceScale }).replace(/MAX\s*[×x]/, "MAX")} onRun={() => void runEnhance()} openSettings={openSettings} disabled={outputTooLarge} disabledReason={outputLimitReason} />
     </>

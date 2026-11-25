@@ -1,3 +1,4 @@
+import { naiEnhancePreset } from "../../src/nai-enhance";
 import { goHeaders, goSession, withGoTask } from './opencode-go-session';
 import {normalizePromptSkillSettings} from '../../src/prompt-skill-settings';
 import {v5MonoRequested} from '../../shared/v5-prompt-options';
@@ -4913,7 +4914,8 @@ export async function generateI2I(
       params.width,
       params.height,
     ).toString("base64");
-    const strength = clamp01(i2i.strength, 0.7);
+    const preset = i2i.enhanceMagnitude === undefined ? undefined : naiEnhancePreset(i2i.enhanceMagnitude);
+    const strength = preset?.strength ?? clamp01(i2i.strength, 0.7);
     const applyI2I = (payload: ReturnType<typeof buildPayload>) => {
       payload.action = "img2img";
       payload.parameters.image = base64Image;
@@ -4921,9 +4923,7 @@ export async function generateI2I(
       if (i2i.upscaledEnhance && params.model.startsWith("nai-diffusion-5-")) {
         payload.parameters.upscaled_enhance = true;
       }
-      // The UI no longer exposes this ineffective control. Keep the field for
-      // API compatibility, but always send the official/default value.
-      payload.parameters.noise = 0;
+      payload.parameters.noise = preset?.noise ?? 0;
       // NOTE: the unofficial SDK's nested `img2img` descriptor was dropped — it
       // is unverified and the same change regressed inpaint. We keep the standard
       // flat strength/noise img2img payload plus the source-resize fix above.
@@ -5021,7 +5021,8 @@ async function redrawImageRequest(
       job.controller.signal,
       beforeSubmit,
     );
-    const strength = clamp01(request.strength, 0.4);
+    const preset = request.enhanceMagnitude === undefined ? undefined : naiEnhancePreset(request.enhanceMagnitude);
+    const strength = preset?.strength ?? clamp01(request.strength, 0.4);
     const group = ensureHistoryGroup(request.groupName);
     const groupOverride = {
       groupId: group.id,
@@ -5032,7 +5033,7 @@ async function redrawImageRequest(
       payload.action = "img2img";
       payload.parameters.image = base64Image;
       payload.parameters.strength = strength;
-      payload.parameters.noise = 0;
+      payload.parameters.noise = preset?.noise ?? 0;
       payload.parameters.extra_noise_seed = crypto.randomInt(1, 2_147_483_647);
       return payload;
     };
