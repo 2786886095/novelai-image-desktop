@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "workerSha256": "3e5a299bc07282e036b727ca6a7fb36449d70531fc0e6a1fcfd74a68c705775a",
+  "workerSha256": "90d4f5acfea16554a606ee8c1aceda248e5663cb47aa378bd072dab85e3da454",
   "hostSha256": "157a9d73fbbe894bf703290e343663f711a8b6b533bacc97b461374f4a411830",
   "sources": [
     {
@@ -17,7 +17,7 @@
     },
     {
       "file": "shared/official-metadata-assets.ts",
-      "sha256": "bdc4c1d4cd99487dfb63e8e03bc94391375fe34a71fd9f7ca4373787a817605c"
+      "sha256": "bd157f59edca90d3683b88149862cb208747b2f1fc402aa98770f8bb98823c45"
     }
   ]
 }
