@@ -48,8 +48,8 @@ on:
         description: v2.9.5 only; skip local Windows Artist GPU proof and require all other hosted checks
         type: boolean
         default: false
-      reviewed_v305_resources_release:
-        description: Verify the exact MCP workspace resource release, except local Windows Artist GPU and only the iOS folder naming deadline
+      reviewed_v309_reference_release:
+        description: Verify the pinned V5 reference update; omit local Windows Artist GPU proof only and require successful iOS OS receipt
         type: boolean
         default: false
       reviewed_v304_mcp_release:
@@ -318,7 +318,7 @@ jobs:
     needs: [build, mac-intel-smoke]
     if: always() && !inputs.candidate_build_only && github.event_name == 'workflow_dispatch' && inputs.publish_after_verification && (inputs.verified_build_run || (needs.build.result == 'success' && needs.mac-intel-smoke.result == 'success'))
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ (inputs.reviewed_v301_role_release || inputs.reviewed_v302_mobile_release || inputs.reviewed_v303_capsule_release || inputs.reviewed_v304_mcp_release || inputs.reviewed_v305_resources_release) && 240 || 25 }}
+    timeout-minutes: ${{ (inputs.reviewed_v301_role_release || inputs.reviewed_v302_mobile_release || inputs.reviewed_v303_capsule_release || inputs.reviewed_v304_mcp_release || inputs.reviewed_v309_reference_release) && 240 || 25 }}
     permissions:
       contents: write
       actions: read
@@ -334,15 +334,15 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - name: Wait for exact v3.0.5 native and package jobs
-        if: inputs.reviewed_v305_resources_release
+      - name: Wait for exact v3.0.9 native and package jobs
+        if: inputs.reviewed_v309_reference_release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          app=c6b0890fe71c1bd9c75476e57f39b429cadc1610
-          test "${{ inputs.verified_build_run }}:${{ inputs.mobile_run }}:${{ inputs.feature_run }}" = 44964438876:44964441214:44964443841
+          app=df4a622754673873f4eea82d286328b08d89b004
+          test "${{ inputs.verified_build_run }}:${{ inputs.mobile_run }}:${{ inputs.feature_run }}" = 45525813914:45525815334:45525813712
           test "${{ inputs.reviewed_v300_ios_folder }}:${{ inputs.reviewed_v301_role_release }}:${{ inputs.reviewed_v302_mobile_release }}:${{ inputs.reviewed_v303_capsule_release }}:${{ inputs.reviewed_v304_mcp_release }}" = false:false:false:false:false
           git merge-base --is-ancestor "$app" "$GITHUB_SHA"
           git diff --exit-code "$app" "$GITHUB_SHA" -- . ':!.github/workflows/build.yml' ':!scripts/release-platform-contract.mjs' ':!scripts/publish-verified-release.mjs' ':!scripts/v300-folder-review.mjs'
@@ -350,16 +350,35 @@ jobs:
           for f in scripts/{v300-folder-review,release-platform-contract,publish-verified-release}.mjs; do git show "$GITHUB_SHA:$f" > "$f"; done
           for i in $(seq 1 195); do
             pending=0
-            for id in 44964438876 44964441214 44964443841; do
+            for id in 45525813914 45525815334 45525813712; do
               json=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id")
               jq -e --arg sha "$app" '.head_sha==$sha and .event=="workflow_dispatch"' <<<"$json" >/dev/null
               if [[ "$(jq -r .status <<<"$json")" != completed ]]; then pending=1; continue; fi
-              if [[ "$id" != 44964443841 ]]; then jq -e '.conclusion=="success"' <<<"$json" >/dev/null; fi
+              if [[ "$id" != 45525813712 ]]; then jq -e '.conclusion=="success"' <<<"$json" >/dev/null; fi
             done
             if [[ $pending == 0 ]]; then exit 0; fi
             sleep 60
           done
           exit 1
+      - name: Require the fresh iOS simulator OpenCode Go receipt
+        if: inputs.reviewed_v309_reference_release
+        uses: actions/download-artifact@v4
+        with:
+          name: native-components-ios-text-df4a622754673873f4eea82d286328b08d89b004
+          path: reviewed-go-ios
+          run-id: 45525813712
+          github-token: ${{ github.token }}
+      - name: Check all three native Go flows, retries and non-Go controls
+        if: inputs.reviewed_v309_reference_release
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p,=Path('reviewed-go-ios').rglob('go-adapter.json')
+          r=json.loads(p.read_text())
+          assert r['os']=='ios' and r['source']=='df4a622754673873f4eea82d286328b08d89b004' and r['passed'] is True
+          assert len(r['steps'])==20 and {s.split(':')[0] for s in r['steps']}=={p+' '+t for p in ('go','deepseek','otherPath','lookalike','control') for t in ('convert','reverse','agent','retry')}
+          PY
       - name: Wait for exact v3.0.4 native and package jobs
         if: inputs.reviewed_v304_mcp_release
         env:
@@ -529,15 +548,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/v301-complementary-runs.py prepare
-      - name: Download v3.0.5 native evidence by producing job and immutable artifact ID
-        if: inputs.reviewed_v305_resources_release
+      - name: Download v3.0.9 native evidence by producing job and immutable artifact ID
+        if: inputs.reviewed_v309_reference_release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          run=44964443841
-          sha=c6b0890fe71c1bd9c75476e57f39b429cadc1610
+          run=45525813712
+          sha=df4a622754673873f4eea82d286328b08d89b004
           jobs=$(gh run view "$run" --json headSha,status,jobs)
           jq -e --arg sha "$sha" '.headSha==$sha and .status=="completed"' <<<"$jobs" >/dev/null
           fetch_evidence() {
@@ -572,7 +591,7 @@ jobs:
           echo "$digest  $RUNNER_TEMP/native-matrix-v304.zip" | sha256sum --check
           unzip -q "$RUNNER_TEMP/native-matrix-v304.zip" -d release-evidence
       - name: Download complete same-source five-platform feature evidence
-        if: inputs.feature_run != '' && !inputs.reviewed_v301_role_release && !inputs.reviewed_v304_mcp_release && !inputs.reviewed_v305_resources_release
+        if: inputs.feature_run != '' && !inputs.reviewed_v301_role_release && !inputs.reviewed_v304_mcp_release && !inputs.reviewed_v309_reference_release
         uses: actions/download-artifact@v4
         with:
           name: five-platform-feature-evidence
@@ -585,7 +604,7 @@ jobs:
           REVIEWED_V302_MOBILE_RELEASE: ${{ inputs.reviewed_v302_mobile_release }}
           REVIEWED_V303_CAPSULE_RELEASE: ${{ inputs.reviewed_v303_capsule_release }}
           REVIEWED_V304_MCP_RELEASE: ${{ inputs.reviewed_v304_mcp_release }}
-          REVIEWED_V305_RESOURCES_RELEASE: ${{ inputs.reviewed_v305_resources_release }}
+          REVIEWED_V309_REFERENCE_RELEASE: ${{ inputs.reviewed_v309_reference_release }}
           REVIEWED_V301_ROLE_RELEASE: ${{ inputs.reviewed_v301_role_release }}
           REVIEWED_V300_IOS_FOLDER: ${{ inputs.reviewed_v300_ios_folder }}
           FEATURE_RUN: ${{ inputs.feature_run }}
@@ -600,7 +619,7 @@ jobs:
         run: node scripts/publish-verified-release.mjs
 
       - name: Sync verified release source and multilingual homepage to main
-        if: inputs.reviewed_v301_role_release || inputs.reviewed_v302_mobile_release || inputs.reviewed_v303_capsule_release || inputs.reviewed_v304_mcp_release || inputs.reviewed_v305_resources_release
+        if: inputs.reviewed_v301_role_release || inputs.reviewed_v302_mobile_release || inputs.reviewed_v303_capsule_release || inputs.reviewed_v304_mcp_release || inputs.reviewed_v309_reference_release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -609,9 +628,9 @@ jobs:
           tag="v$(node -p 'require("./package.json").version')"
           test "$(gh release view "$tag" --json isDraft,isPrerelease --jq '(.isDraft or .isPrerelease)')" = false
           git fetch origin main
-          git merge-base --is-ancestor FETCH_HEAD "$GITHUB_SHA"
-          git push origin "$GITHUB_SHA:refs/heads/main"
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor FETCH_HEAD df4a622754673873f4eea82d286328b08d89b004
+          git push origin "df4a622754673873f4eea82d286328b08d89b004:refs/heads/main"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "df4a622754673873f4eea82d286328b08d89b004"
           for f in README.md README.en.md README.ja.md README.ko.md README.zh-TW.md; do
             git show "$GITHUB_SHA:$f" | grep -F 'github.com/2786886095/novelai-image-desktop/releases/latest' >/dev/null
           done
