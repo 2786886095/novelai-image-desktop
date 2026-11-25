@@ -305,7 +305,7 @@ const GENERATION_PROPS: Json = {
   preciseReferences: {
     type: "array",
     maxItems: 16,
-    description: "V4.5 and V5 precise references, +5 Anlas per reference per output. V5 supports costume, strength up to 5 and same-outfit variants. Fidelity applies to V4.5. V5 inpainting is unsupported.",
+    description: "V4.5 and V5 precise references, +5 Anlas per reference per output. V5 supports costume, strength up to 5 and same-outfit variants. Fidelity applies to V4.5. V5 Full needs High effort for precise references. V5 inpainting is unsupported.",
     items: {
       type: "object",
       properties: {
@@ -919,7 +919,7 @@ const INSTRUCTIONS = [
   "Langbai NovelAI Studio (local). Images are generated with the user's NovelAI account and saved to Studio history.",
   "Omitted generation fields inherit the current workbench (see get_state); characterPrompts and references are never inherited.",
   "Every image argument accepts an absolute local path, so reference sheets can be used directly.",
-  "V5 supports preciseReferences on generation and img2img. Vibe Transfer and inpainting with preciseReferences require another supported model.",
+  "V5 supports preciseReferences on generation and img2img. Full requires High effort; switch back to High or remove precise references before using Med. Vibe Transfer and inpainting with preciseReferences require another supported model.",
   "Inpaint supports characterPrompts and model-compatible references. V4.5 precise references cannot be combined with Vibe Transfer. Use make_mask + view_image(previewPath) first.",
   "Paid calls are refused when the Anlas estimate exceeds the user's per-call limit; check with estimate_cost. Never retry a paid call blindly — inspect list_history first.",
 ].join("\n");

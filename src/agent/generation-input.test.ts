@@ -8,6 +8,13 @@ import {
 } from "./generation-input";
 
 describe("agent generation input", () => {
+  it("rejects Med with inherited or explicit references and allows Med after removal", () => {
+    const params = {...DEFAULT_PARAMS, model:"nai-diffusion-5-full" as const};
+    const extras = {vibeImages:[],charCaptions:[],preciseReferences:[{base64:"fixture",type:"character" as const,strength:1,fidelity:1}]};
+    expect(() => buildAgentGenerationInput({effort:"medium"},{params,extras})).toThrow(/High/);
+    expect(() => buildAgentGenerationInput({effort:"medium",preciseReferences:[{attachmentId:"fixture"}]},{params})).toThrow(/High/);
+    expect(buildAgentGenerationInput({effort:"medium",preciseReferences:[]},{params,extras}).params.effort).toBe("medium");
+  });
   it("supports advanced parameters and attachment-backed generation controls", () => {
     const result = buildAgentGenerationInput({
       model: "nai-diffusion-4-5-full",

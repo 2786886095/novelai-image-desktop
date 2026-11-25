@@ -6,6 +6,7 @@ import {
   maxNAICharacterPrompts,
   normalizeGenerateParams,
   normalizeNAIBaseModel,
+  MED_PRECISE_MESSAGE, isNAIMediumEffort,
   supportsNAICharacterPrompts,
   supportsNAIPreciseReference,
   preciseReferenceType,
@@ -205,8 +206,8 @@ export function buildAgentGenerationInput(
   }
 
   if (Array.isArray(args.preciseReferences)) {
-    if (args.preciseReferences.length > 0 && !supportsNAIPreciseReference(params.model)) {
-      throw new Error(`${params.model} 不支持精准参考图。`);
+    if (args.preciseReferences.length > 0 && !supportsNAIPreciseReference(params.model, params.effort)) {
+      throw new Error(isNAIMediumEffort(params) ? MED_PRECISE_MESSAGE : `${params.model} 不支持精准参考图。`);
     }
     extras.preciseReferences = list(args.preciseReferences, 16).map((item) => {
       const attachmentId = text(item.attachmentId, 200);
@@ -247,5 +248,6 @@ export function buildAgentGenerationInput(
   extras.modelMode = modelMode;
   extras.historyGroupId = historyGroupId || undefined;
 
+  if (extras.preciseReferences?.length && isNAIMediumEffort(params)) throw new Error(MED_PRECISE_MESSAGE);
   return { params, extras };
 }

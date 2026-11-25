@@ -1,5 +1,7 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 
+Enhance uses the five NovelAI Magnitude presets. V5 Full keeps attached Precise References when you select Med. Switch back to High to use them, or remove them to generate on Med.
+
 V5 generation and img2img support Precise Reference, including outfit references and the option to prefer the same outfit. The app fits the entire reference on the canvas with white padding as needed. On desktop you can enter the reference strength directly. Switch to V4.5 in the reference panel to use Vibe Transfer.
 
 Confirming an inpainting selection clears the existing mask outside the box. Brushes and erasers affect only the selected area. Removing or enlarging the selection does not bring back discarded strokes.

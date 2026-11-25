@@ -915,7 +915,8 @@ export function VibeTransferModal({ onClose, focusSection, closing = false }: { 
   const model = useAppStore((state) => state.activeTab === "inpaint" ? state.inpaintModel : state.params.model);
   const vf = vibeFileLabels(language);
   const v5 = isNAIV5Model(model);
-  const preciseSupported = supportsNAIPreciseReference(model);
+  const effort = useAppStore(state => state.params.effort);
+  const preciseSupported = supportsNAIPreciseReference(model, effort);
   const vibeSupported = supportsNAIVibeTransfer(model);
   const presetText = referencePresetTextFor(language);
   const [showPresetLibrary, setShowPresetLibrary] = useState(false);
@@ -1071,7 +1072,7 @@ export function VibeTransferModal({ onClose, focusSection, closing = false }: { 
 
           <h3 className="vibe-section-title" data-vibe-section="precise">
             {t("reference.preciseTitle")}
-            {!preciseSupported && <span className="vibe-hint">{t("reference.preciseUnsupported")}</span>}
+            {!preciseSupported && <span className="vibe-hint">{t(isNAIMediumEffort({model, effort}) && !model.endsWith("-inpainting") ? "reference.preciseMedium" : "reference.preciseUnsupported")}</span>}
           </h3>
           <p className="vibe-hint">{t("reference.preciseHint")}</p>
           {preciseReferences.length === 0 && <p className="vibe-empty">{t("reference.emptyPrecise")}</p>}
@@ -3230,6 +3231,7 @@ function AccountAndRunButton({
   model,
   costPreview,
   allowQueue = false,
+  usesPreciseReferences = false,
   disabled = false,
   disabledReason = "",
 }: {
@@ -3239,6 +3241,7 @@ function AccountAndRunButton({
   model?: string;
   costPreview?: React.ReactNode;
   allowQueue?: boolean;
+  usesPreciseReferences?: boolean;
   disabled?: boolean;
   disabledReason?: string;
 }) {
@@ -3267,6 +3270,8 @@ function AccountAndRunButton({
     ? Math.round(Math.min(100, Math.max(0, account.opusUsage.isNegative ? 0 : account.opusUsage.percent)) * 10) / 10
     : null;
   const params = useAppStore(state => state.params);
+  const hasPrecise = useAppStore(state => state.settings?.imageProvider !== "openai-images" && state.preciseReferences.length > 0);
+  const mediumBlocked = usesPreciseReferences && hasPrecise && isNAIMediumEffort(params);
   const remainingImages = usagePercent === null ? null : estimateOpusImages(params, usagePercent);
   const refillPercent = account.opusUsage && account.opusUsage.timeUntilNextPercent > 0
     ? Math.round((86_400 / account.opusUsage.timeUntilNextPercent) * 10) / 10
@@ -3349,6 +3354,7 @@ function AccountAndRunButton({
       </div>
       {costPreview && <div className="generation-run-quote">{account.hasToken ? costPreview : <details className="generation-quote-guest"><summary>{t("cost.beforeRun")}</summary>{costPreview}</details>}</div>}
       </div>
+      {mediumBlocked && <div className="run-disabled-reason" role="status">{t("reference.preciseMedium")}</div>}
       {!account.hasToken ? (
         <Button variant="primary" className="full" onClick={openSettings}>
           <IconText icon={<Icon name="key" />}>{t("account.setupFirst")}</IconText>
@@ -3371,7 +3377,7 @@ function AccountAndRunButton({
                   variant="primary"
                   className="full queue-add-button"
                   onClick={() => void enqueueGeneration()}
-                  disabled={queueAdding}
+                  disabled={queueAdding || mediumBlocked}
                 >
                   {queueAdding
                     ? t("account.addingQueueCost")
@@ -3399,7 +3405,7 @@ function AccountAndRunButton({
           >
             <div className="run-state-pane-inner">
               {disabled && disabledReason ? <div className="run-disabled-reason">{disabledReason}</div> : null}
-              <Button variant="primary" className="full" onClick={onRun} disabled={disabled}>
+              <Button variant="primary" className="full" onClick={onRun} disabled={disabled || mediumBlocked}>
                 <IconText icon="▶">{label}</IconText>
               </Button>
             </div>
@@ -3508,7 +3514,7 @@ function GeneratePanel({openSettings}:{openSettings:()=>void}) {
       </div>
       <AccountAndRunButton
         label={batchCount > 1 ? f("generate.batchRun", { count: batchCount }) : t("generate.run")}
-        onRun={() => void generate()}
+        usesPreciseReferences onRun={() => void generate()}
         openSettings={openSettings}
         model={model}
         costPreview={redesign ? costPreview : undefined}
@@ -3572,7 +3578,7 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
       </div>
       <AccountAndRunButton
         label={batchCount > 1 ? f("generate.batchRun", { count: batchCount }) : t("i2i.run")}
-        onRun={() => void generateI2I()}
+        usesPreciseReferences onRun={() => void generateI2I()}
         openSettings={openSettings}
         model={model}
         costPreview={redesign ? costPreview : undefined}
@@ -3850,7 +3856,7 @@ function EnhancePanel({ openSettings }: { openSettings: () => void }) {
         {workbenchImage && target ? <div className={clsx("info-card", outputTooLarge && "limit-card")}><strong>{t("enhance.outputSize")}</strong><span>{workbenchImage.width}×{workbenchImage.height} → {target.width}×{target.height}</span><small>{outputTooLarge ? outputLimitReason : t("enhance.outputHint")}</small></div> : null}
         <FeatureCostCard label={t("cost.beforeRun")} feature="i2i" sizeOverride={officialMax ? inputSize : target ?? undefined} i2iOverride={{ ...preset, upscaledEnhance: officialMax }} />
       </div>
-      <AccountAndRunButton label={f("enhance.run", { scale: isMax ? "MAX" : enhanceScale }).replace(/MAX\s*[×x]/, "MAX")} onRun={() => void runEnhance()} openSettings={openSettings} disabled={outputTooLarge} disabledReason={outputLimitReason} />
+      <AccountAndRunButton label={f("enhance.run", { scale: isMax ? "MAX" : enhanceScale }).replace(/MAX\s*[×x]/, "MAX")} usesPreciseReferences onRun={() => void runEnhance()} openSettings={openSettings} disabled={outputTooLarge} disabledReason={outputLimitReason} />
     </>
   );
 }

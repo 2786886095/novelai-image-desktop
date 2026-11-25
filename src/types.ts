@@ -100,7 +100,10 @@ export function supportsNAIModelMode(model: string, mode: ModelMode): boolean {
   return normalized === "nai-diffusion-furry-3" || isNAIV4PlusModel(normalized);
 }
 
-export function supportsNAIPreciseReference(model: string): boolean {
+export const MED_PRECISE_MESSAGE = "Med 不支持精准参考。要使用参考图，请切回 High；要用 Med 生成，请移除精准参考图。";
+
+export function supportsNAIPreciseReference(model: string, effort?: NAIEffort): boolean {
+  if (isNAIMediumEffort({model, effort})) return false;
   const normalized = normalizeNAIBaseModel(model);
   return normalized.startsWith("nai-diffusion-4-5-") ||
     (isNAIV5Model(model) && !model.endsWith("-inpainting"));

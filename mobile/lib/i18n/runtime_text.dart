@@ -18,6 +18,7 @@ const _runtimeText = <String, Map<String, String>>{
     'error.inpaintNoImages': '重绘成功但没有图片',
     'error.directorNoImages': '后期处理成功但没有图片',
     'error.preciseV45Only': '当前模型或重绘模式不支持精准参考。',
+    'error.preciseMedium': 'Med 不支持精准参考。要使用参考图，请切回 High；要用 Med 生成，请移除精准参考图。',
     'error.preciseV45OnlyPeriod': '当前模型或重绘模式不支持精准参考。',
     'error.vibeUnsupportedV5': 'NovelAI V5 首发暂不支持氛围迁移，请切换到 V4.5 或移除氛围图。',
     'error.readFile': '无法读取文件',
@@ -245,6 +246,7 @@ const _runtimeText = <String, Map<String, String>>{
     'error.inpaintNoImages': '重繪成功但沒有圖片',
     'error.directorNoImages': '後期處理成功但沒有圖片',
     'error.preciseV45Only': '目前模型或重繪模式不支援精準參考。',
+    'error.preciseMedium': 'Med 不支援精準參考。要使用參考圖，請切回 High；要使用 Med 生成，請移除精準參考圖。',
     'error.preciseV45OnlyPeriod': '目前模型或重繪模式不支援精準參考。',
     'error.vibeUnsupportedV5': 'NovelAI V5 首發暫不支援氛圍遷移，請切換至 V4.5 或移除氛圍圖。',
     'error.readFile': '無法讀取檔案',
@@ -472,6 +474,7 @@ const _runtimeText = <String, Map<String, String>>{
     'error.inpaintNoImages': 'Inpaint succeeded but returned no images',
     'error.directorNoImages': 'Postprocess succeeded but returned no images',
     'error.preciseV45Only': 'Precise Reference is unavailable for this model or inpainting mode.',
+    'error.preciseMedium': 'Med does not support Precise Reference. Switch to High to use your references, or remove them to generate on Med.',
     'error.preciseV45OnlyPeriod': 'Precise Reference is unavailable for this model or inpainting mode.',
     'error.vibeUnsupportedV5':
         'Vibe Transfer is not part of the NovelAI V5 launch. Switch to V4.5 or remove vibe images.',
@@ -758,6 +761,7 @@ const _runtimeText = <String, Map<String, String>>{
     'error.inpaintNoImages': '再描画は成功しましたが画像がありません',
     'error.directorNoImages': '後処理は成功しましたが画像がありません',
     'error.preciseV45Only': 'このモデルまたはインペイントモードでは精密参照を使用できません。',
+    'error.preciseMedium': 'Med では精密参照を使用できません。参照画像を使うには High に戻すか、Med で生成するには参照画像を外してください。',
     'error.preciseV45OnlyPeriod': 'このモデルまたはインペイントモードでは精密参照を使用できません。',
     'error.vibeUnsupportedV5':
         'NovelAI V5 初期リリースは Vibe Transfer に未対応です。V4.5へ切り替えるか画像を削除してください。',
@@ -998,6 +1002,7 @@ const _runtimeText = <String, Map<String, String>>{
     'error.inpaintNoImages': '리드로우는 성공했지만 이미지가 없습니다',
     'error.directorNoImages': '후처리는 성공했지만 이미지가 없습니다',
     'error.preciseV45Only': '이 모델 또는 인페인트 모드에서는 정밀 참조를 사용할 수 없습니다.',
+    'error.preciseMedium': 'Med에서는 정밀 참조를 사용할 수 없습니다. 참조 이미지를 쓰려면 High로 전환하고, Med로 생성하려면 정밀 참조 이미지를 제거하세요.',
     'error.preciseV45OnlyPeriod': '이 모델 또는 인페인트 모드에서는 정밀 참조를 사용할 수 없습니다.',
     'error.vibeUnsupportedV5':
         'NovelAI V5 초기 릴리스에는 Vibe Transfer가 포함되지 않았습니다. V4.5로 전환하거나 이미지를 제거하세요.',

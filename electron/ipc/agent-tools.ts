@@ -368,7 +368,7 @@ export async function executeAgentTool(
           referenceCapabilities: {
             maxCharacterPrompts: maxNAICharacterPrompts(params.model),
             vibeTransfer: supportsNAIVibeTransfer(params.model),
-            preciseReference: supportsNAIPreciseReference(params.model),
+            preciseReference: supportsNAIPreciseReference(params.model, params.effort),
             attachmentIdsRequiredForAgentReferences: true,
           },
           ...agentImageProviderState(settings),

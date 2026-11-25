@@ -1,7 +1,7 @@
-import {isNAIV5Model,preciseCaption,supportsNAIPreciseReference,supportsNAIVibeTransfer,type PreciseReferenceType} from './types';
+import {MED_PRECISE_MESSAGE,isNAIMediumEffort,type NAIEffort,isNAIV5Model,preciseCaption,supportsNAIPreciseReference,supportsNAIVibeTransfer,type PreciseReferenceType} from './types';
 import type {VibeTransferImage,PreciseReferenceImage} from './types';
 type ReferenceState={
-  bootDone:boolean; activeTab:string; inpaintModel:string; params:{model:string;positivePrompt?:string;negativePrompt?:string;stylePrompt?:string};setParam?:(key:'positivePrompt'|'negativePrompt'|'stylePrompt',value:string)=>void; settings?:{imageProvider?:string;inpaintEngine?:string}|null;
+  bootDone:boolean; activeTab:string; inpaintModel:string; params:{model:string;effort?:NAIEffort;positivePrompt?:string;negativePrompt?:string;stylePrompt?:string};setParam?:(key:'positivePrompt'|'negativePrompt'|'stylePrompt',value:string)=>void; settings?:{imageProvider?:string;inpaintEngine?:string}|null;
   isGenerating:boolean; vibeImages:VibeTransferImage[]; preciseReferences:PreciseReferenceImage[];
   addVibeImage(image:VibeTransferImage):boolean;addPreciseReference(image:PreciseReferenceImage):void;
   updateVibeImage?(id:string,patch:Partial<Pick<VibeTransferImage,'strength'|'infoExtracted'>>):void;
@@ -59,7 +59,8 @@ export function applyWorkbenchReference(s:ReferenceState, c:WorkbenchCommand){
   }
   if(c.op!=='mount'||!c.base64||!c.mime)throw Error('缺少图片。');
   const compatible=s.activeTab==='inpaint'?s.settings?.inpaintEngine==='openai':s.settings?.imageProvider==='openai-images';
-  if(compatible||!(c.kind==='vibe'?supportsNAIVibeTransfer(model):supportsNAIPreciseReference(model)))throw Error('当前模型不支持这种参考图；未更改模型或底图。');
+  if(c.kind==='precise' && isNAIMediumEffort({model,effort:s.params.effort}))throw Error(MED_PRECISE_MESSAGE);
+  if(compatible||!(c.kind==='vibe'?supportsNAIVibeTransfer(model):supportsNAIPreciseReference(model,s.params.effort)))throw Error('当前模型不支持这种参考图；未更改模型或底图。');
   if((c.kind==='vibe'?s.preciseReferences:s.vibeImages).length)throw Error('不能混用氛围迁移和精准参考；请先明确移除已有参考。');
   if(list.length>=16)throw Error('参考图数量已达上限。');
   const id=crypto.randomUUID(),common={id,base64:c.base64,previewUrl:'data:'+c.mime+';base64,'+c.base64,strength:c.strength??1};

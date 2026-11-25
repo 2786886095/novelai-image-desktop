@@ -59,6 +59,7 @@ import {
   isNAIMediumEffort,
   normalizeNAIBaseModel,
   NAI_INPAINT_MODELS,
+  MED_PRECISE_MESSAGE,
   supportsNAIPreciseReference,
   preciseCaption,
   v5ReferenceSize,
@@ -629,6 +630,7 @@ export function buildPayload(
   extras?: GenerateExtras,
   charCaptionMode: CharCaptionMode = "structured",
 ) {
+  if (extras?.preciseReferences?.length && isNAIMediumEffort(params)) throw new Error(MED_PRECISE_MESSAGE);
   // Persisted/imported JSON is untrusted at the process boundary. Keep the one
   // intentional inpaint model override while normalizing every other field.
   const inpaintModel = NAI_INPAINT_MODELS.some((item) => item.value === params.model)
@@ -791,7 +793,7 @@ export function buildPayload(
   // the director_reference_* fields with a type (character/style/character&style),
   // strength, and secondary strength derived from fidelity (1 - fidelity).
   const preciseRefs = extras?.preciseReferences ?? [];
-  if (v4Plus && supportsNAIPreciseReference(params.model) && preciseRefs.length > 0) {
+  if (v4Plus && supportsNAIPreciseReference(params.model, params.effort) && preciseRefs.length > 0) {
     // Confirmed against the official client's real request (F12 HAR): V4.5 precise
     // references are uploaded as multipart BINARY parts named director_ref_N (done
     // in postGenerateImage); the JSON references them via
@@ -1013,9 +1015,9 @@ export async function prepareExtras(
   // Prepare each image for the selected reference encoder before submission.
   let preciseReferences = extras.preciseReferences;
   if (preciseReferences && preciseReferences.length > 0) {
-    if (!supportsNAIPreciseReference(params.model)) {
+    if (!supportsNAIPreciseReference(params.model, params.effort)) {
       throw new Error(
-        "此模型或局部重绘模式不支持精准参考。",
+        isNAIMediumEffort(params) ? MED_PRECISE_MESSAGE : "此模型或局部重绘模式不支持精准参考。",
       );
     }
     preciseReferences = await Promise.all(preciseReferences.map(async (ref, index) => ({
@@ -1637,6 +1639,10 @@ export async function quoteAnlasCost(
     };
   }
 
+  if ((request.feature === "generate" || request.feature === "i2i") && request.params &&
+      request.extras?.preciseReferences?.length && isNAIMediumEffort(request.params)) {
+    return { ok: false, source: "unavailable", message: MED_PRECISE_MESSAGE };
+  }
   // Managed account metadata comes only from its bound snapshot. A renderer
   // summary (even with hasToken) must not inherit another account's Opus/balance.
   const account = boundAccount
@@ -1708,7 +1714,7 @@ export async function quoteAnlasCost(
   // The request-price payload intentionally contains no reference images. Its
   // response is the base price, not a reference-inclusive total. Keep this
   // canonical quote complete so UI and MCP budget guards need no surcharge.
-  const preciseReferenceCount = supportsNAIPreciseReference(request.params.model)
+  const preciseReferenceCount = supportsNAIPreciseReference(request.params.model, request.params.effort)
     ? request.extras?.preciseReferences?.length ?? 0 : 0;
   const preciseReferenceCost = 5 * preciseReferenceCount * samples;
   const amount = officialPerRequest * samples + preciseReferenceCost;
@@ -4129,7 +4135,8 @@ function comicReferencesToExtras(
   const usable = request.references.filter(
     (ref) => ref.base64 && ref.useForGeneration !== false,
   );
-  const supportsPrecise = supportsNAIPreciseReference(request.params.model);
+  if (isNAIMediumEffort(request.params) && usable.some(ref => ref.kind !== "vibe")) throw new Error(MED_PRECISE_MESSAGE);
+  const supportsPrecise = supportsNAIPreciseReference(request.params.model, request.params.effort);
   if (usable.some(ref => ref.kind === "vibe") && !supportsNAIVibeTransfer(request.params.model)) {
     throw new Error("所选模型不支持氛围迁移。");
   }

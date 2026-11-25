@@ -1,4 +1,4 @@
-import { effectiveNAIEffortParams, isNAIMediumEffort, isNAIV5Model } from "./types";
+import { MED_PRECISE_MESSAGE, effectiveNAIEffortParams, isNAIMediumEffort, isNAIV5Model } from "./types";
 import { planUpscale } from "./upscale-plan";
 import { maxNAIEnhanceSize } from "./nai-dimensions";
 import {
@@ -82,6 +82,7 @@ export function calculateImageGenerationAnlas({
   /** How many of the vibe references are already encoded+cached (no re-charge). */
   alreadyEncodedVibes?: number;
 }): AnlasQuoteResult {
+  if (extras?.preciseReferences?.length && isNAIMediumEffort(params)) return { ok: false, source: "unavailable", message: MED_PRECISE_MESSAGE };
   const effective = effectiveNAIEffortParams(params);
   const samples = positiveInt(batchCount, 1);
   const width = positiveInt(params.width, 512);
@@ -140,7 +141,7 @@ export function calculateImageGenerationAnlas({
   // generated image, so both the reference count and output count apply.
   // Only charge models whose current frontend capability map exposes the feature.
   const preciseCount = extras?.preciseReferences?.length ?? 0;
-  if (v4Plus && supportsNAIPreciseReference(params.model) && preciseCount > 0) {
+  if (v4Plus && supportsNAIPreciseReference(params.model, params.effort) && preciseCount > 0) {
     const preciseCost = 5 * preciseCount * samples;
     total += preciseCost;
     details.push(`Precise reference: 5 Anlas x ${preciseCount} reference(s) x ${samples} image(s) = ${preciseCost}.`);

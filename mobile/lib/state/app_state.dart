@@ -2676,6 +2676,11 @@ class AppState extends ChangeNotifier {
     _naiOperationCount++;
     try {
     if (!generationQueueRunning || !busy || queueAdding) return;
+    if (mediumPreciseWarning case final warning?) {
+      status = warning;
+      notifyListeners();
+      return;
+    }
     if (params.positivePrompt.trim().isEmpty) {
       status = _rt('status.enqueuePositiveRequired');
       notifyListeners();
@@ -3691,7 +3696,11 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  String? get mediumPreciseWarning => params.isMediumEffort && extras.preciseReferences.isNotEmpty &&
+      settings.imageProvider != 'openai-images' ? _rt('error.preciseMedium') : null;
+
   String? _referenceValidationError() {
+    if (mediumPreciseWarning != null) return mediumPreciseWarning;
     if (extras.vibeImages.isNotEmpty && !params.supportsVibeTransfer) {
       return _rt('error.vibeUnsupportedV5');
     }

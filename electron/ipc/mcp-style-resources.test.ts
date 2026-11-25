@@ -13,7 +13,7 @@ import {startMcpServer} from './mcp-server';
 import {galleryMcpForWindow} from './mcp-history-gallery-runtime';
 it('authenticated tools/list and tools/call keep gallery assets, base image and explicit live references independent',async()=>{
   fx.dir=fs.mkdtempSync(path.join(os.tmpdir(),'mcp-styles-'));
-  const state={bootDone:true,settings:{imageProvider:'novelai'},activeTab:'generate',isGenerating:false,inpaintModel:'',params:{model:'nai-diffusion-4-5-full',prompt:'unchanged'},baseImage:'unchanged',
+  const state={bootDone:true,settings:{imageProvider:'novelai'},activeTab:'generate',isGenerating:false,inpaintModel:'',params:{model:'nai-diffusion-4-5-full',effort:'high' as 'medium'|'high',prompt:'unchanged'},baseImage:'unchanged',
     vibeImages:[] as VibeTransferImage[],preciseReferences:[] as PreciseReferenceImage[],
     addVibeImage(i:VibeTransferImage){this.vibeImages.push(i);return true;},addPreciseReference(i:PreciseReferenceImage){this.preciseReferences.push(i);},
     removeVibeImage(id:string){this.vibeImages=this.vibeImages.filter(i=>i.id!==id);},removePreciseReference(id:string){this.preciseReferences=this.preciseReferences.filter(i=>i.id!==id);}};
@@ -62,6 +62,10 @@ it('authenticated tools/list and tools/call keep gallery assets, base image and 
     state.params.model='nai-diffusion-5-full';await expect(call('mount_workbench_reference',{image,kind:'vibe'})).rejects.toThrow();
     const outfit = await call('mount_workbench_reference',{image,kind:'precise',type:'costume',strength:4.25});
     expect((await call('list_workbench_references')).precise).toMatchObject([{id:outfit.id,type:'costume',strength:4.25}]);
+    state.params.effort = 'medium';
+    await expect(call('mount_workbench_reference',{image, kind:'precise'})).rejects.toThrow(/High/);
+    expect(await call('list_workbench_references')).toMatchObject({precise:[{id:outfit.id}]});
+    state.params.effort = 'high';
     await call('unmount_workbench_reference',{kind:'precise',id:outfit.id});
     state.params.model='nai-diffusion-4-5-full';state.isGenerating=true;await expect(call('mount_workbench_reference',{image,kind:'vibe'})).rejects.toThrow();state.isGenerating=false;
     const vibe=await call('mount_workbench_reference',{image,kind:'vibe',information:0.6});expect((await call('list_workbench_references')).vibe).toEqual([{id:vibe.id,strength:1,infoExtracted:0.6}]);

@@ -1,5 +1,5 @@
 import type {ComicImageService,GenerateResult,TagComicGenerateRequest,TagComicProject} from '../types';
-import {supportsNAIPreciseReference} from '../types';
+import {MED_PRECISE_MESSAGE,isNAIMediumEffort,supportsNAIPreciseReference} from '../types';
 import type {ComicProjectStore} from './project-store';
 import {buildTagComicGenerateRequest} from './tag-comic';
 import {commitComicCandidateResult} from './candidate-result';
@@ -20,7 +20,7 @@ export function prepareComicTasks(project:TagComicProject,tasks:ComicQueueTask[]
   if(project.sizeMode==='perPanel'&&!panel.imageSize)throw Error('请先补全逐格尺寸');
   const request=buildTagComicGenerateRequest(project,panel);
   if(!request.panelPrompt.trim())throw Error(`第${panel.index}格提示词为空`);
-  if(request.preciseReferences.length&&!supportsNAIPreciseReference(request.params.model))throw Error('当前分镜模型不支持精确参考图');
+  if(request.preciseReferences.length&&!supportsNAIPreciseReference(request.params.model, request.params.effort))throw Error(isNAIMediumEffort(request.params) ? MED_PRECISE_MESSAGE : '当前分镜模型不支持精确参考图');
   return {...task,request:structuredClone(request)};
  });
 }

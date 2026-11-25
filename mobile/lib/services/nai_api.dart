@@ -153,6 +153,9 @@ void validateNaiReferenceExtras(GenerateParams params, GenerateExtras extras) {
       0, 'Precise Reference and Vibe Transfer cannot be used together.',
     );
   }
+  if (extras.preciseReferences.isNotEmpty && params.isMediumEffort) {
+    throw const NaiHttpException(0, 'Precise Reference requires High effort. Switch to High or remove the reference images.');
+  }
   if (extras.preciseReferences.isNotEmpty &&
       !params.supportsPreciseReference) {
     throw const NaiHttpException(

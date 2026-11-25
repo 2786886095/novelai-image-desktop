@@ -36,6 +36,7 @@ class AnlasQuote {
   });
 
   AnlasQuote asRelayReference(Object? language) {
+    if (!ok) return this;
     final text = relayAnlasBillingText(language, amount);
     return AnlasQuote(
       ok: ok, amount: amount, source: source, balance: balance,
@@ -91,6 +92,9 @@ AnlasQuote calculateImageGenerationAnlas({
   Object? language,
 }) {
   final samples = max(1, batchCount.floor());
+  if (params.isMediumEffort && (preciseReferenceCount > 0 || extras?.preciseReferences.isNotEmpty == true)) {
+    return AnlasQuote(ok: false, source: AnlasQuoteSource.unavailable, message: _at(language, 'error.preciseMedium'));
+  }
   final size = upscaledEnhance
       ? maxNaiEnhanceSize(params.width, params.height)
       : (width: params.width, height: params.height);

@@ -46,6 +46,17 @@ it.each([
   }
 });
 
+it('blocks Med before quote or generation and retains references for High', async () => {
+  const med: GenerateParams = {...params, model:'nai-diffusion-5-full', effort:'medium'};
+  const references = extras();
+  expect(await quoteAnlasCost({feature:'generate', params:med, extras:references, account:{hasToken:true}}))
+    .toMatchObject({ok:false, message:expect.stringContaining('High')});
+  expect((await generateImage(med,references)).message).toContain('High');
+  expect(fixture.post).not.toHaveBeenCalled();
+  await generateImage({...med,effort:'high'},references);
+  expect(fixture.post).toHaveBeenCalledOnce();
+});
+
 function multipart(body:any){
  expect(typeof body?.getBuffer).toBe('function');const result=new Map<string,Buffer>();
  const boundary=body.getBoundary(),wire=body.getBuffer().toString('latin1');

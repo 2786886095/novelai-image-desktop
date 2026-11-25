@@ -25,7 +25,7 @@ class NaiOption {
 }
 
 const appName = 'Langbai NovelAI Studio';
-const appVersion = '3.0.9';
+const appVersion = '3.1.0';
 
 const naiModels = <NaiOption>[
   NaiOption(
@@ -201,7 +201,7 @@ class GenerateParams {
       model.startsWith('nai-diffusion-4') ||
       model.startsWith('nai-diffusion-5');
   bool get isV45 => model.startsWith('nai-diffusion-4-5');
-  bool get supportsPreciseReference => isV45 || (isV5 && !model.endsWith('-inpainting'));
+  bool get supportsPreciseReference => isV45 || (isV5 && !isMediumEffort && !model.endsWith('-inpainting'));
   String get v45VibeModel => model.contains('curated')
       ? 'nai-diffusion-4-5-curated'
       : 'nai-diffusion-4-5-full';

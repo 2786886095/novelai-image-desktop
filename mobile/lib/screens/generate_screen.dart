@@ -37,6 +37,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../billing/anlas.dart';
 import '../i18n/anlas_billing_text.dart';
+import '../i18n/runtime_text.dart';
 import '../ui/effort_control.dart';
 import '../i18n/app_locales.dart';
 import '../models/nai_models.dart';
@@ -740,6 +741,7 @@ class _AndroidCreateDock extends StatelessWidget {
         decoration: BoxDecoration(border: Border(top: BorderSide(color: colors.outline))),
         padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (state.mediumPreciseWarning case final warning?) Text(warning),
           if (!compact) SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
             TextButton.icon(onPressed: () => _androidCreateSheet(context, t('parameters'), _ParamControls()),
               icon: const Icon(Icons.tune, size: 18), label: Text(largeText ? t('parameters') : '${p.width} × ${p.height}')),
@@ -2863,6 +2865,7 @@ class _ParamControls extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         EffortControl(model: p.model, value: p.effort, language: language, onChanged: (value) => state.setParam((x) => x.effort = value)),
+        if (state.mediumPreciseWarning case final warning?) Text(warning),
         const GenerationSizeControls(),
         const SizedBox(height: 12),
         if (!p.isMediumEffort) StudioDropdownButtonFormField<String>(
@@ -3862,7 +3865,7 @@ class _ReferenceControls extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.warning_amber_rounded),
               title: Text(t('generate.preciseUnsupportedTitle')),
-              subtitle: Text(t('generate.preciseUnsupportedSubtitle')),
+              subtitle: Text(state.params.isMediumEffort ? runtimeTextFor(state.settings.language, 'error.preciseMedium') : t('generate.preciseUnsupportedSubtitle')),
             ),
           for (var index = 0; index < extras.preciseReferences.length; index++)
             _PreciseReferenceRow(index: index),
@@ -5822,7 +5825,14 @@ class _PrimaryRunButton extends StatelessWidget {
     final text = generateScreenTextFor(state.settings.language);
     return FilledButton.icon(
       onPressed:
-          state.busy || !state.account.hasToken ? null : state.runTextOrImage,
+          state.busy || !state.account.hasToken ? null : () {
+            final warning = state.mediumPreciseWarning;
+            if (warning != null) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(warning)));
+              return;
+            }
+            state.runTextOrImage();
+          },
       icon: Icon(
           state.workbenchImage == null ? Icons.play_arrow : Icons.image_search),
       label: Text(

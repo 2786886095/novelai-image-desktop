@@ -832,7 +832,7 @@ export function TagComicGenerator({ onBack,scope='tag-comic' }: { onBack?: () =>
   const projectV5 = isNAIV5Model(project.globalParams.model);
   const panelV5 = activePanel && isNAIV5Model(mergeTagComicParams(project, activePanel).model);
   const preciseModelSupported = !compatible && supportsNAIPreciseReference(
-    project.globalParams.model,
+    project.globalParams.model, project.globalParams.effort,
   );
 
   useEffect(() => {

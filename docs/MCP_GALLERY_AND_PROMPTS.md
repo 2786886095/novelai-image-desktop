@@ -121,7 +121,7 @@
 2. 使用 `import_image` 返回的 ID、历史图片 ID、参考预设句柄或画风示例句柄。向 `attach_style_images` 传 `{"items":[{"presetId":"id1","image":"图片句柄","role":"cover"},{"presetId":"id2","image":"图片句柄","role":"example"}]}`。同样先预览再带 revision 提交。每批最多 32 项、每个预设最多 9 张；检查每项 ok。设置新封面不会删除旧图。仅作展示，不挂载、不生图。
 3. 只有明确要求参与生成时调用 `mount_workbench_reference`：例如 `{"image":"图片句柄","kind":"precise","type":"style","strength":0.7}`。氛围迁移用 `"kind":"vibe"`。在工作台确认添加后才报告成功。模型不支持、已有冲突参考或正在生成时拒绝，不切换模型、不覆盖底图。超时先用 `list_workbench_references` 回读，不自动重试。用 `unmount_workbench_reference` 可单独移除。MCP 的独立生图调用仍按该调用的显式 references 执行，不自动继承工作台图片。
 
-V5 Full / Curated 的生成与图生图支持精准参考。每张输出按每张参考图加收 5 Anlas。生成参数 `preciseReferences[].type` 和工作台挂载工具的 `type` 均支持 `costume`（服装）、`character_mainoutfit`（角色并优先相同服装）、`character&style_anyoutfit`（角色与画风且允许换装）。`character` 允许换装，`character&style` 优先相同服装，`style` 只参考画风。V5 强度范围 0–5，V4.5 强度范围 0–1 并支持 `fidelity`。V5 局部重绘不支持精准参考，氛围迁移可使用 V4.5。[NovelAI 官方公告](https://journal.novelai.net/precise-reference-v5/)
+V5 Full 的精准参考需要 High；Curated 也支持精准参考。切换到 Med 后，工作室保留已挂载的参考图。切回 High 可继续使用，移除精准参考图后可用 Med 生成。MCP 预览、估价和生成会拒绝 Med 搭配精准参考。每张输出按每张参考图加收 5 Anlas。生成参数 `preciseReferences[].type` 和工作台挂载工具的 `type` 均支持 `costume`（服装）、`character_mainoutfit`（角色并优先相同服装）、`character&style_anyoutfit`（角色与画风且允许换装）。`character` 允许换装，`character&style` 优先相同服装，`style` 只参考画风。V5 强度范围 0–5，V4.5 强度范围 0–1 并支持 `fidelity`。V5 局部重绘不支持精准参考，氛围迁移可使用 V4.5。[NovelAI 官方公告](https://journal.novelai.net/precise-reference-v5/)
 
 桌面与 MCP 生图共用参考图预处理。V5 和 V4.5 各自选择目标尺寸，等比缩放保留整图，比例不符时居中补白。
 

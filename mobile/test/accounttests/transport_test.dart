@@ -26,6 +26,21 @@ Future<(NovelAiAccounts, NovelAiAccount)> relayVault() async {
 }
 
 void main() {
+  test('Med rejects precise images before posting and allows High with the same images', () async {
+    final (vault, _) = await relayVault();
+    var posts = 0;
+    final api = NovelAiAccountApi(vault, clientFactory: (_, __) => MockClient((r) async {
+      posts++;
+      return http.Response.bytes(png, 200);
+    }));
+    final p = GenerateParams(model:'nai-diffusion-5-full', effort:'medium', positivePrompt:'test');
+    final refs = GenerateExtras(preciseReferences:[PreciseReferenceItem(base64:base64Encode(png))]);
+    await expectLater(api.generate('relay-B', AppSettings(), p, refs), throwsA(predicate((e) => e.toString().contains('High'))));
+    expect(posts, 0);
+    p.effort = 'high';
+    await api.generate('relay-B', AppSettings(), p, refs);
+    expect(posts, 1);
+  });
   test('Enhance sends the five official parameter pairs; plain img2img ignores stale noise', () async {
     final (vault, _) = await relayVault();
     final inputs = <(num, num)>[];
