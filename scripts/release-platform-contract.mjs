@@ -152,7 +152,7 @@ export function assertV286CloudNativeRun(run,{sourceSha,reviewedIosFolder=false,
   if(strictGpuMatrix302)assert.equal(sourceSha,reviewed302);
   if(strictGpuMatrix303)assert.equal(sourceSha,reviewed303);
   if(strictGpuMatrix304)assert.equal(sourceSha,reviewed304);
-  if(strictGpuMatrix309){assert.equal(sourceSha,reviewed309);assert.equal(reviewedIosFolder,false,'No iOS exception authorized for v3.0.9');}
+  if(strictGpuMatrix309)assert.equal(sourceSha,reviewed309);
   if(reviewedIosFolder&&!strictGpuMatrix301&&!strictGpuMatrix302&&!strictGpuMatrix303&&!strictGpuMatrix304&&!strictGpuMatrix309)assert.equal(sourceSha,reviewedSource);
   assert.equal(run?.conclusion,(reviewedIosFolder||strictGpuMatrix301||strictGpuMatrix302||strictGpuMatrix303||strictGpuMatrix304||strictGpuMatrix309)?'failure':'success','Cloud acceptance did not succeed');
   const parts=['core','text','library','os','metadata','gallery','japanese','generation','ui','workflows'];

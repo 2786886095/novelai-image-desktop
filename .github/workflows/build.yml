@@ -49,7 +49,7 @@ on:
         type: boolean
         default: false
       reviewed_v309_reference_release:
-        description: Verify the pinned V5 reference update; omit local Windows Artist GPU proof only and require successful iOS OS receipt
+        description: Verify the pinned V5 reference update; omit local Windows Artist GPU proof and accept only an evidenced repeat of the iOS naming timeout
         type: boolean
         default: false
       reviewed_v304_mcp_release:

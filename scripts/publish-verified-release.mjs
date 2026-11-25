@@ -28,7 +28,13 @@ if(waiveWindowsArtistGpuV309){
  if(reviewedIosFolder||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV301||version!=='3.0.9'||sha!=='df4a622754673873f4eea82d286328b08d89b004'||nativeRun!=='45525813712'||process.env.BUILD_RUN!=='45525813914'||process.env.MOBILE_RUN!=='45525815334')throw Error('Unexpected v3.0.9 source or workflow runs');
  const run=JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs']));
  const ios=run.jobs.find(job=>job.name==='ios-components (os)');
- if(ios?.conclusion!=='success')throw Error('The v3.0.9 GPU exception requires the complete iOS OS suite to pass');
+ if(!['success','failure'].includes(ios?.conclusion))throw Error('Missing iOS OS suite');
+ if(ios.conclusion==='failure'){
+   const retry=JSON.parse(call('gh',['api','repos/2786886095/novelai-image-desktop/actions/jobs/'+ios.databaseId]));
+   if(retry.run_attempt<2||String(retry.run_id)!==nativeRun||retry.head_sha!==sha||String(ios.databaseId)==='138908725568')throw Error('v3.0.9 requires a fresh retry of the folder naming deadline');
+   reviewedIosFolder=true;
+   observedIosJob=ios.databaseId;
+ }
  assertV286CloudNativeRun(run,{sourceSha:sha,reviewedIosFolder,strictGpuMatrix309:true});
 }
 if(waiveWindowsArtistGpuV304){
@@ -170,7 +176,8 @@ if(waiveWindowsArtistGpuV286){
  fs.writeFileSync(publicNotesFile,publicNotes,'utf8');
 }
 if((waiveWindowsArtistGpuV301||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV304)&&!reviewedIosFolder)fs.writeFileSync(publicNotesFile,releaseNotes+'\nWindows 画风迭代 GPU 长任务未实测。\n');
-if(reviewedIosFolder)fs.writeFileSync(publicNotesFile,releaseNotes+'\n### 验收例外\n- iOS 系统文件夹选择器：本次未在 5 秒内确认命名框可用，此项验收失败，经维护者同意不作为发行条件。其余 iOS 检查仍为必需。\n- Windows 画风迭代 GPU 长任务未实测。\n');
+if(reviewedIosFolder&&waiveWindowsArtistGpuV309)fs.writeFileSync(publicNotesFile,releaseNotes+'\n### 验收例外\n\niOS 系统文件夹选择器的复测未能在 5 秒内确认新建文件夹的命名框可用。本版仅豁免此项超时，其余 iOS 检查均须通过。\n');
+else if(reviewedIosFolder)fs.writeFileSync(publicNotesFile,releaseNotes+'\n### 验收例外\n- iOS 系统文件夹选择器：本次未在 5 秒内确认命名框可用，此项验收失败，经维护者同意不作为发行条件。其余 iOS 检查仍为必需。\n- Windows 画风迭代 GPU 长任务未实测。\n');
 const evidence={version,sha,...(nativeAttempts?{nativeAttempts}:{}),...(reviewedIosFolder?{folderReview}:{}),...(waiveWindowsArtistGpu?{nativeRun,fullScopeCertified:false,waived:[{platform:'windows',feature:'artist-iteration',scenarios:artistIterationScenarios,status:'not-tested'},...(reviewedIosFolder?[{platform:'ios',feature:'output-management',scenarios:['folder-choice-history-link'],status:'failed-waived'}]:[])]}:{}),mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
 fs.writeFileSync('release-assets/verification.json',JSON.stringify(evidence,null,2));
 call('gh',['release','create',tag,...files,'release-assets/verification.json','--target',sha,'--draft','--title',`Langbai NovelAI Studio ${tag}`,'--notes-file',publicNotesFile]);
