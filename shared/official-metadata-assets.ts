@@ -12,8 +12,8 @@ export const OFFICIAL_METADATA_ASSETS = [
   { id: "webp-wrapper", url: "https://novelai.net/_next/static/chunks/40c0kcr1hnr6b.js?dpl=2e9f80b-43264994153-1", bytes: 18258, sha256: "5a796bc117ad066c8df14c527753d6ea2e654be10da58df83377c80bddbff8e9", kind: "script" },
   { id: "alpha-helper", url: "https://novelai.net/_next/static/chunks/2gk65nl2bm8-4.js?dpl=2e9f80b-43264994153-1", bytes: 59519, sha256: "311c69db72807ae4663efa6feff9cc6154b6b02892ff75b88f36a68d8451cfbb", kind: "slice" },
   { id: "buffer-runtime", url: "https://novelai.net/_next/static/chunks/0miy8r9k9748n.js?dpl=2e9f80b-43264994153-1", bytes: 33169, sha256: "a96bd4c1bea039c3de62bbbbe6b9394e7bc6797018f12e769cf75c6d033de8c1", kind: "script" },
-  { id: "png-wasm", url: "https://novelai.net/_next/static/media/squoosh_png_bg.35bzug4-gdaxi.wasm?dpl=2e9f80b-43264994153-1", bytes: 181088, sha256: "263d6e658808a74b72a1a99c5cc1d619237e70c150db6e41d5d84d3d117ab9be", kind: "wasm" },
-  { id: "webp-wasm", url: "https://novelai.net/_next/static/media/webp_dec.17wqxm7heilu7.wasm?dpl=2e9f80b-43264994153-1", bytes: 137960, sha256: "30fb52fa2a80166d25ba7debf902218904ba1f05ccce9f959f722beff9e2f344", kind: "wasm" },
+  { id: "png-wasm", url: "https://novelai.net/_next/static/media/squoosh_png_bg.35bzug4-gdaxi.wasm", bytes: 181088, sha256: "263d6e658808a74b72a1a99c5cc1d619237e70c150db6e41d5d84d3d117ab9be", kind: "wasm" },
+  { id: "webp-wasm", url: "https://novelai.net/_next/static/media/webp_dec.17wqxm7heilu7.wasm", bytes: 137960, sha256: "30fb52fa2a80166d25ba7debf902218904ba1f05ccce9f959f722beff9e2f344", kind: "wasm" },
 ] as const;
 
 export type OfficialMetadataAssetId = (typeof OFFICIAL_METADATA_ASSETS)[number]["id"];
