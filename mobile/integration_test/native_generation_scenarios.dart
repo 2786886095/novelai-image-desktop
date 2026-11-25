@@ -156,8 +156,11 @@ Future<void> _run()async{
     final prices=<String,int>{};for(final count in [1,2,5]){final quote=calculateImageGenerationAnlas(params:app.params,batchCount:2,preciseReferenceCount:count,forcePaid:true);require(quote.amount==baseQuote+count*2*5,'Precise count/sample cost');prices['$count']=quote.amount!;}
     require(jsonEncode(pp['director_reference_strength_values'])=='[0.7,0.7,0.7]','Precise strength');
     suite.check('precise-reference','multi-ref-cost-payload',{'twoSamplesPrices':prices,'costPerReferencePerSample':5,'multipartAndTypesMatched':true});
+    final v5 = app.params.copy()..model='nai-diffusion-5-full';
+    await api.generate(syntheticToken,app.settings,v5,GenerateExtras(preciseReferences:refs));
+    require(lastGenerate()['model']==v5.model && lastGenerate()['parameters']['director_reference_images_cached'].length==refs.length,'V5 precise model or references changed');
     final beforePrecise=wires.length;
-    await fails(()=>api.generate(syntheticToken,app.settings,app.params.copy()..model='nai-diffusion-5-full',GenerateExtras(preciseReferences:refs)),'Unsupported precise accepted');
+    await fails(()=>api.generate(syntheticToken,app.settings,app.params.copy()..model='nai-diffusion-4-full',GenerateExtras(preciseReferences:refs)),'Unsupported precise accepted');
     await fails(()=>api.generate(syntheticToken,app.settings,app.params,GenerateExtras(preciseReferences:refs,vibeImages:[VibeTransferItem(base64:base64Encode(sourceBytes))])),'Mixed references accepted');
     require(wires.length==beforePrecise,'Rejected precise encoded or submitted');
     app.extras.preciseReferences=[refs.first];app.removePreciseReference(0);require(app.extras.preciseReferences.isEmpty,'Precise clear');
