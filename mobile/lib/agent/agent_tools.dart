@@ -207,15 +207,15 @@ Map<String, dynamic> _generationProperties() => {
       },
       'preciseReferences': {
         'type': 'array',
-        'description': '由 attachmentId 指定的 V4.5 精准参考图',
+        'description': '由 attachmentId 指定的 V5 / V4.5 精准参考图',
         'maxItems': 16,
         'items': {
           'type': 'object',
           'additionalProperties': false,
           'properties': {
             'attachmentId': _string('图片 attachmentId'),
-            'type': _string('参考类型', ['character', 'style', 'character&style']),
-            'strength': _number('参考强度', 0, 1),
+            'type': _string('参考类型', ['character', 'style', 'character&style','costume','character_mainoutfit','character&style_anyoutfit']),
+            'strength': _number('参考强度（V5 最高 5）', 0, 5),
             'fidelity': _number('保真度', 0, 1),
           },
           'required': ['attachmentId'],
@@ -1116,14 +1116,14 @@ class AgentToolExecutor {
       for (final item in _recordList(args['preciseReferences'], 16)) {
         final attachment =
             _findAttachment(_text(item['attachmentId']), available);
-        final type = const {'character', 'style', 'character&style'}
+        final type = const {'character', 'style', 'character&style','costume','character_mainoutfit','character&style_anyoutfit'}
                 .contains(item['type'])
             ? item['type'].toString()
             : 'character';
         items.add(PreciseReferenceItem(
           base64: await _attachmentBase64(item['attachmentId'], available),
           type: type,
-          strength: _double(item['strength'], 1, 0, 1),
+          strength: _double(item['strength'], 1, 0, app.params.isV5 ? 5 : 1),
           fidelity: _double(item['fidelity'], 1, 0, 1),
           sourcePath: attachment.filePath,
           width: attachment.width ?? 0,

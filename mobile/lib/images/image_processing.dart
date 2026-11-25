@@ -349,22 +349,21 @@ PreparedDirectorImage prepareDirectorImage(
   );
 }
 
-/// Prepares a V4.5 precise (director) reference image the way the reference
-/// implementations do: fit the source into the closest official director size
-/// (1024x1536 / 1472x1472 / 1536x1024), letterbox onto an opaque WHITE canvas,
-/// and drop the alpha channel (RGB, 3 channels). Sending the raw image — wrong
-/// size or with an alpha channel — is what produces the screentone / halftone
-/// (halftone / hatching) texture on the output; a BLACK letterbox reads as
-/// image content and is itself a source of that artifact (matches desktop's
-/// electron/ipc/nai.ts prepareDirectorReferenceImage, fixed there for the
-/// same reason).
-Uint8List prepareDirectorReferenceImage(Uint8List bytes) {
-  final source = image_lib.decodeImage(bytes, frame: 0);
-  if (source == null) {
-    throw const FormatException('Could not read precise reference image');
+(int, int) _directorReferenceSize(int width, int height, bool v5) {
+  if (v5) {
+    final aspect = log(width / height);
+    var best = (1024, 1024);
+    var distance = aspect.abs();
+    for (var long = 1088; long <= 4096; long += 64) {
+      final short = (1048576 ~/ long ~/ 64) * 64;
+      final candidate = width >= height ? (long, short) : (short, long);
+      final delta = (aspect - log(candidate.$1 / candidate.$2)).abs();
+      if (delta < distance) { best = candidate; distance = delta; }
+    }
+    return best;
   }
   const sizes = <(int, int)>[(1024, 1536), (1472, 1472), (1536, 1024)];
-  final aspect = source.width / source.height;
+  final aspect = width / height;
   var target = sizes.first;
   var best = double.infinity;
   for (final size in sizes) {
@@ -374,7 +373,16 @@ Uint8List prepareDirectorReferenceImage(Uint8List bytes) {
       target = size;
     }
   }
-  final (targetWidth, targetHeight) = target;
+  return target;
+}
+
+/// Fits the entire reference on the model's canvas, with opaque white padding.
+Uint8List prepareDirectorReferenceImage(Uint8List bytes, {bool v5 = false}) {
+  final source = image_lib.decodeImage(bytes, frame: 0);
+  if (source == null) {
+    throw const FormatException('Could not read precise reference image');
+  }
+  final (targetWidth, targetHeight) = _directorReferenceSize(source.width, source.height, v5);
   final scale = min(targetWidth / source.width, targetHeight / source.height);
   final fitWidth = max(1, (source.width * scale).round());
   final fitHeight = max(1, (source.height * scale).round());

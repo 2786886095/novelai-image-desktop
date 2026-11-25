@@ -1,3 +1,5 @@
+import { desktopUiText } from "./i18n";
+import { OUTFIT_REFERENCE_TYPES } from "./types";
 import {EditableGroupMenu} from './components/EditableGroupMenu';
 import {PreviewImageViewer} from './components/PreviewImageViewer';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -482,8 +484,8 @@ export default function ReferencePresetManager({
       <div className="reference-preset-create-fields">
         <label className="field reference-preset-field-wide"><span>{text.name}</span><input autoFocus value={name} onChange={(event) => setName(event.target.value)} /></label>
         <EditableGroupMenu className="field reference-preset-field-wide" label={text.group} value={group} onChange={setGroup} placeholder={text.noGroup} options={library.groups.map(item=>({value:item,label:item}))}/>
-        {kind === "precise" && <div className="field reference-preset-field-wide"><span>{text.typeLabel}</span><SelectMenu value={preciseType} ariaLabel={text.typeLabel} options={[{ value: "character", label: text.character }, { value: "style", label: text.style }, { value: "character&style", label: text.both }]} onChange={(next) => setPreciseType(next as PreciseReferenceType)} /><small>{text.typeHelp}</small></div>}
-        <div className="reference-preset-parameter"><NumberInput label={kind === "vibe" ? text.infoLabel : text.preciseStrengthLabel} value={kind === "vibe" ? infoExtracted : strength} min={0} max={1} step={0.01} onChange={kind === "vibe" ? setInfoExtracted : setStrength} /><small>{kind === "vibe" ? text.infoHelp : text.preciseStrengthHelp}</small></div>
+        {kind === "precise" && <div className="field reference-preset-field-wide"><span>{text.typeLabel}</span><SelectMenu value={preciseType} ariaLabel={text.typeLabel} options={[{ value: "character", label: text.character }, { value: "style", label: text.style }, { value: "character&style", label: text.both }, ...OUTFIT_REFERENCE_TYPES.map(value => ({ value, label: desktopUiText(language, `reference.type.${value}`) }))]} onChange={(next) => setPreciseType(next as PreciseReferenceType)} /><small>{text.typeHelp}</small></div>}
+        <div className="reference-preset-parameter"><NumberInput label={kind === "vibe" ? text.infoLabel : text.preciseStrengthLabel} value={kind === "vibe" ? infoExtracted : strength} min={0} max={kind === "precise" ? 5 : 1} step={0.01} onChange={kind === "vibe" ? setInfoExtracted : setStrength} /><small>{kind === "vibe" ? text.infoHelp : text.preciseStrengthHelp}</small></div>
         <div className="reference-preset-parameter"><NumberInput label={kind === "vibe" ? text.strengthLabel : text.fidelityLabel} value={kind === "vibe" ? strength : fidelity} min={0} max={1} step={0.01} onChange={kind === "vibe" ? setStrength : setFidelity} /><small>{kind === "vibe" ? text.vibeStrengthHelp : text.fidelityHelp}</small></div>
       </div>
       <Button className="reference-preset-save" variant="primary" disabled={busy} onClick={() => void save()}>{group ? text.saveCurrent : text.save}</Button>

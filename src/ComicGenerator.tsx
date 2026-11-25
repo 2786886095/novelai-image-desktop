@@ -38,6 +38,8 @@ import {
   NAI_UC_PRESETS,
   isNAIV4PlusModel,
   isNAIV5Model,
+  v45VibeModel,
+  OUTFIT_REFERENCE_TYPES,
   supportsNAINoiseScheduleControl,
   supportsNAIVariety,
   type BatchExportFile,
@@ -527,10 +529,11 @@ function BatchParamFields({
 }
 
 function BatchPrecisePicker({
-  refs,
+  v5, refs,
   onChange,
   onOpenPresets,
 }: {
+  v5: boolean;
   refs: PreciseReferenceItem[];
   onChange: (next: PreciseReferenceItem[]) => void;
   onOpenPresets: () => void;
@@ -601,9 +604,11 @@ function BatchPrecisePicker({
                 <option value="character&style">
                   {t("batch.ref.characterStyle")}
                 </option>
+                {OUTFIT_REFERENCE_TYPES.filter(type => v5 || type === r.type).map(type =>
+                  <option key={type} value={type}>{t(`reference.type.${type}`)}</option>)}
               </SelectMenuCompat>
-              <CommittedNumberInput label={t("batch.ref.strength")} value={r.strength} min={0} max={1} step={0.05} normalize={(value) => Math.max(0, Math.min(1, value))} onCommit={(value) => onChange(refs.map((x, j) => j === i ? { ...x, strength: value } : x))} />
-              <CommittedNumberInput label={t("batch.ref.fidelity")} value={r.fidelity} min={0} max={1} step={0.05} normalize={(value) => Math.max(0, Math.min(1, value))} onCommit={(value) => onChange(refs.map((x, j) => j === i ? { ...x, fidelity: value } : x))} />
+              <CommittedNumberInput label={t("batch.ref.strength")} value={r.strength} min={0} max={v5 ? 5 : 1} step={0.05} normalize={(value) => Math.max(0, Math.min(v5 ? 5 : 1, value))} onCommit={(value) => onChange(refs.map((x, j) => j === i ? { ...x, strength: value } : x))} />
+              {!v5 && <CommittedNumberInput label={t("batch.ref.fidelity")} value={r.fidelity} min={0} max={1} step={0.05} normalize={(value) => Math.max(0, Math.min(1, value))} onCommit={(value) => onChange(refs.map((x, j) => j === i ? { ...x, fidelity: value } : x))} />}
               <button
                 className="vibe-remove"
                 onClick={() => onChange(refs.filter((_, j) => j !== i))}
@@ -619,10 +624,12 @@ function BatchPrecisePicker({
 }
 
 function BatchVibePicker({
+  switchModel,
   vibes,
   onChange,
   onOpenPresets,
 }: {
+  switchModel?: () => void;
   vibes: VibeTransferItem[];
   onChange: (next: VibeTransferItem[]) => void;
   onOpenPresets: () => void;
@@ -644,6 +651,7 @@ function BatchVibePicker({
       <div className="batch-ref-head">
         <span>{t("batch.ref.vibeTitle")}</span>
         <div className="batch-ref-head-actions">
+          {switchModel && <Button variant="secondary" onClick={switchModel}>{t("reference.switchVibeModel")}</Button>}
           <Button variant="secondary" onClick={onOpenPresets}>{presetText.open}</Button>
           <FilePicker compact buttonLabel={t("batch.ref.add")}
             multiple
@@ -1516,11 +1524,15 @@ export function BatchRedraw({ onBack }: { onBack?: () => void }) {
             onPatch={(p) => patch({ globalParams: { ...globalParams, ...p } })}
           />
           <BatchPrecisePicker
+            v5={isNAIV5Model(globalParams.model)}
             refs={project.preciseReferences}
             onChange={(next) => patch({ preciseReferences: next })}
             onOpenPresets={() => setShowReferencePresets(true)}
           />
           <BatchVibePicker
+            switchModel={isNAIV5Model(globalParams.model) ? () => patch({
+              globalParams: { ...globalParams, model: v45VibeModel(globalParams.model) },
+            }) : undefined}
             vibes={project.vibeImages}
             onChange={(next) => patch({ vibeImages: next })}
             onOpenPresets={() => setShowReferencePresets(true)}

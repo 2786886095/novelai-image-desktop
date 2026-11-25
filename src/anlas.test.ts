@@ -115,7 +115,7 @@ describe("official Anlas pricing", () => {
     expect(twoRefs.amount).toBe(20); // 5 Anlas x 2 references x 2 images
   });
 
-  it("does not estimate a Precise Reference surcharge on V5", () => {
+  it("charges 5 Anlas per V5 reference and output", () => {
     const quote = calculateImageGenerationAnlas({
       params: DEFAULT_PARAMS,
       account: opusAccount,
@@ -126,7 +126,7 @@ describe("official Anlas pricing", () => {
         preciseReferences: [{ base64: "", type: "character", strength: 1, fidelity: 1 }],
       },
     });
-    expect((quote.details ?? []).join("\n")).not.toContain("Precise reference");
+    expect(quote.amount).toBe(10);
   });
 
   it("uses the official upscale pixel tier", () => {

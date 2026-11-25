@@ -102,15 +102,16 @@ export function supportsNAIModelMode(model: string, mode: ModelMode): boolean {
 
 export function supportsNAIPreciseReference(model: string): boolean {
   const normalized = normalizeNAIBaseModel(model);
-  // NovelAI's V5 launch does not include Precise Reference. Keep this
-  // capability separate from the V4+/structured-prompt capability so adding a
-  // new base model cannot accidentally send Director Reference fields to an
-  // unsupported backend again.
-  return normalized.startsWith("nai-diffusion-4-5-");
+  return normalized.startsWith("nai-diffusion-4-5-") ||
+    (isNAIV5Model(model) && !model.endsWith("-inpainting"));
 }
 
 export function supportsNAICharacterPrompts(model: string): boolean {
   return isNAIV4PlusModel(model);
+}
+
+export function v45VibeModel(model: string) {
+  return model.includes("curated") ? "nai-diffusion-4-5-curated" : "nai-diffusion-4-5-full";
 }
 
 export function supportsNAIVibeTransfer(model: string): boolean {
@@ -393,12 +394,40 @@ export interface VibeTransferImage extends VibeTransferItem {
 
 /** NovelAI V4.5/V5 Precise (Director) Reference — distinct from Vibe Transfer.
  * Sent over IPC; the main process emits director_reference_* fields. */
-export type PreciseReferenceType = "character" | "style" | "character&style";
+export const OUTFIT_REFERENCE_TYPES = ["costume", "character_mainoutfit", "character&style_anyoutfit"] as const;
+export const PRECISE_REFERENCE_TYPES = ["character", "style", "character&style", ...OUTFIT_REFERENCE_TYPES] as const;
+export type PreciseReferenceType = typeof PRECISE_REFERENCE_TYPES[number];
+
+export function preciseReferenceType(value: unknown): PreciseReferenceType {
+  return PRECISE_REFERENCE_TYPES.find(type => type === value) ?? "character";
+}
+
+export function preciseCaption(type: PreciseReferenceType, v5: boolean) {
+  if (v5) return type;
+  if (type === "costume") throw new Error("Outfit Reference requires V5.");
+  if (type === "character_mainoutfit") return "character";
+  if (type === "character&style_anyoutfit") return "character&style";
+  return type;
+}
+
+/** Official V5 buckets use a 64px grid and at most one megapixel. */
+export function v5ReferenceSize(width: number, height: number) {
+  const aspect = Math.log(width / height);
+  let best = { width: 1024, height: 1024 };
+  let distance = Math.abs(aspect);
+  for (let long = 1088; long <= 4096; long += 64) {
+    const short = Math.floor(1024 * 1024 / long / 64) * 64;
+    const candidate = width >= height ? { width: long, height: short } : { width: short, height: long };
+    const delta = Math.abs(aspect - Math.log(candidate.width / candidate.height));
+    if (delta < distance) { best = candidate; distance = delta; }
+  }
+  return best;
+}
 export interface PreciseReferenceItem {
   base64: string; // pure base64 (resized to an official reference resolution in main)
   type: PreciseReferenceType; // -> director_reference_descriptions[].caption.base_caption
-  strength: number; // 0.0 – 1.0 -> director_reference_strength_values
-  fidelity: number; // 0.0 – 1.0 -> secondary = round(1 - fidelity, 2)
+  strength: number; // V4.5: 0–1; V5: 0–5
+  fidelity: number; // V4.5: secondary = 1 - fidelity; V5: secondary = 0
   /** Legacy persisted compatibility field. NovelAI's Precise Reference UI only
    * exposes Strength and Fidelity; the main process always sends 1.0. */
   informationExtracted?: number;

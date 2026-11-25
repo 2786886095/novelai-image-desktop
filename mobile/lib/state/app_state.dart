@@ -1963,7 +1963,7 @@ class AppState extends ChangeNotifier {
           filePath: path,
           createdAt: DateTime.now().toIso8601String(),
           infoExtracted: infoExtracted.clamp(0, 1).toDouble(),
-          strength: strength.clamp(0, 1).toDouble(),
+          strength: strength.clamp(0, kind == ReferencePresetKind.precise ? 5 : 1).toDouble(),
           preciseType: preciseType,
           fidelity: fidelity.clamp(0, 1).toDouble(),
           informationExtracted: informationExtracted.clamp(0, 1).toDouble(),

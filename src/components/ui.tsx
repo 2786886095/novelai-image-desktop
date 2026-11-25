@@ -557,13 +557,16 @@ export function CommittedNumberInput({
 }) {
   const [draft, setDraft] = useState(String(value));
 
+  const cancelEdit = useRef(false);
+
   useEffect(() => {
     setDraft(String(value));
   }, [value]);
 
   const commit = () => {
     const parsed = Number(draft);
-    const next = Number.isFinite(parsed) ? normalize(parsed) : value;
+    const next = !cancelEdit.current && draft.trim() && Number.isFinite(parsed) ? normalize(parsed) : value;
+    cancelEdit.current = false;
     setDraft(String(next));
     if (next !== value) onCommit(next);
   };
@@ -585,7 +588,7 @@ export function CommittedNumberInput({
             event.preventDefault();
             event.currentTarget.blur();
           } else if (event.key === "Escape") {
-            setDraft(String(value));
+            cancelEdit.current = true;
             event.currentTarget.blur();
           }
         }}
@@ -600,6 +603,7 @@ export function SliderInput({
   min,
   max,
   step,
+  editable = false,
   onChange,
 }: {
   label: string;
@@ -607,22 +611,30 @@ export function SliderInput({
   min: number;
   max: number;
   step: number;
+  editable?: boolean;
   onChange: (value: number) => void;
 }) {
+  const range = (
+    <RangeInput aria-label={label} value={value} min={min} max={max} step={step}
+      onChange={(event) => onChange(Number(event.target.value))} />
+  );
+  if (editable) {
+    return (
+      <div className="slider-field slider-field-editable">
+        <CommittedNumberInput label={label} value={value} min={min} max={max} step={step}
+          normalize={(next) => {
+            const bounded = Math.min(max, Math.max(min, next));
+            return Number((min + Math.round((bounded - min) / step) * step).toFixed(10));
+          }}
+          onCommit={onChange} />
+        {range}
+      </div>
+    );
+  }
   return (
     <label className="slider-field">
-      <span>
-        {label}
-        <strong>{value}</strong>
-      </span>
-      <RangeInput
-        
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
+      <span>{label}<strong>{value}</strong></span>
+      {range}
     </label>
   );
 }

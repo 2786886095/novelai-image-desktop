@@ -17,9 +17,8 @@ const _runtimeText = <String, Map<String, String>>{
     'error.i2iNoImages': '图生图成功但没有图片',
     'error.inpaintNoImages': '重绘成功但没有图片',
     'error.directorNoImages': '后期处理成功但没有图片',
-    'error.preciseV45Only': '精准参考当前仅支持 NovelAI V4.5；V5 首发尚未开放，请切换模型或移除精准参考图',
-    'error.preciseV45OnlyPeriod':
-        '精准参考当前仅支持 NovelAI V4.5；V5 首发尚未开放，请切换模型或移除精准参考图。',
+    'error.preciseV45Only': '当前模型或重绘模式不支持精准参考。',
+    'error.preciseV45OnlyPeriod': '当前模型或重绘模式不支持精准参考。',
     'error.vibeUnsupportedV5': 'NovelAI V5 首发暂不支持氛围迁移，请切换到 V4.5 或移除氛围图。',
     'error.readFile': '无法读取文件',
     'error.readReference': '无法读取参考图，请换用有效的 PNG、JPG 或 WebP 图片',
@@ -245,9 +244,8 @@ const _runtimeText = <String, Map<String, String>>{
     'error.i2iNoImages': '圖生圖成功但沒有圖片',
     'error.inpaintNoImages': '重繪成功但沒有圖片',
     'error.directorNoImages': '後期處理成功但沒有圖片',
-    'error.preciseV45Only': '精準參考目前僅支援 NovelAI V4.5；V5 首發尚未開放，請切換模型或移除精準參考圖',
-    'error.preciseV45OnlyPeriod':
-        '精準參考目前僅支援 NovelAI V4.5；V5 首發尚未開放，請切換模型或移除精準參考圖。',
+    'error.preciseV45Only': '目前模型或重繪模式不支援精準參考。',
+    'error.preciseV45OnlyPeriod': '目前模型或重繪模式不支援精準參考。',
     'error.vibeUnsupportedV5': 'NovelAI V5 首發暫不支援氛圍遷移，請切換至 V4.5 或移除氛圍圖。',
     'error.readFile': '無法讀取檔案',
     'error.readReference': '無法讀取參考圖，請換用有效的 PNG、JPG 或 WebP 圖片',
@@ -473,10 +471,8 @@ const _runtimeText = <String, Map<String, String>>{
     'error.i2iNoImages': 'Img2Img succeeded but returned no images',
     'error.inpaintNoImages': 'Inpaint succeeded but returned no images',
     'error.directorNoImages': 'Postprocess succeeded but returned no images',
-    'error.preciseV45Only':
-        'Precise Reference currently supports NovelAI V4.5 only. It is not part of the V5 launch; switch models or remove precise references',
-    'error.preciseV45OnlyPeriod':
-        'Precise Reference currently supports NovelAI V4.5 only. It is not part of the V5 launch; switch models or remove precise references.',
+    'error.preciseV45Only': 'Precise Reference is unavailable for this model or inpainting mode.',
+    'error.preciseV45OnlyPeriod': 'Precise Reference is unavailable for this model or inpainting mode.',
     'error.vibeUnsupportedV5':
         'Vibe Transfer is not part of the NovelAI V5 launch. Switch to V4.5 or remove vibe images.',
     'error.readFile': 'Could not read the file',
@@ -761,10 +757,8 @@ const _runtimeText = <String, Map<String, String>>{
     'error.i2iNoImages': 'Img2Img は成功しましたが画像がありません',
     'error.inpaintNoImages': '再描画は成功しましたが画像がありません',
     'error.directorNoImages': '後処理は成功しましたが画像がありません',
-    'error.preciseV45Only':
-        '精密参照は現在 NovelAI V4.5 のみ対応し、V5 初期リリースでは未対応です。モデルを切り替えるか画像を削除してください',
-    'error.preciseV45OnlyPeriod':
-        '精密参照は現在 NovelAI V4.5 のみ対応し、V5 初期リリースでは未対応です。モデルを切り替えるか画像を削除してください。',
+    'error.preciseV45Only': 'このモデルまたはインペイントモードでは精密参照を使用できません。',
+    'error.preciseV45OnlyPeriod': 'このモデルまたはインペイントモードでは精密参照を使用できません。',
     'error.vibeUnsupportedV5':
         'NovelAI V5 初期リリースは Vibe Transfer に未対応です。V4.5へ切り替えるか画像を削除してください。',
     'error.readFile': 'ファイルを読み込めません',
@@ -1003,10 +997,8 @@ const _runtimeText = <String, Map<String, String>>{
     'error.i2iNoImages': 'Img2Img는 성공했지만 이미지가 없습니다',
     'error.inpaintNoImages': '리드로우는 성공했지만 이미지가 없습니다',
     'error.directorNoImages': '후처리는 성공했지만 이미지가 없습니다',
-    'error.preciseV45Only':
-        '정밀 참조는 현재 NovelAI V4.5만 지원하며 V5 초기 릴리스에는 포함되지 않았습니다. 모델을 바꾸거나 이미지를 제거하세요',
-    'error.preciseV45OnlyPeriod':
-        '정밀 참조는 현재 NovelAI V4.5만 지원하며 V5 초기 릴리스에는 포함되지 않았습니다. 모델을 바꾸거나 이미지를 제거하세요.',
+    'error.preciseV45Only': '이 모델 또는 인페인트 모드에서는 정밀 참조를 사용할 수 없습니다.',
+    'error.preciseV45OnlyPeriod': '이 모델 또는 인페인트 모드에서는 정밀 참조를 사용할 수 없습니다.',
     'error.vibeUnsupportedV5':
         'NovelAI V5 초기 릴리스에는 Vibe Transfer가 포함되지 않았습니다. V4.5로 전환하거나 이미지를 제거하세요.',
     'error.readFile': '파일을 읽을 수 없습니다',

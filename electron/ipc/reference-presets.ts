@@ -1,3 +1,4 @@
+import { preciseReferenceType } from "../../src/types";
 import {createHash} from 'node:crypto';
 import { app, dialog } from "electron";
 import fs from "fs/promises";
@@ -6,7 +7,6 @@ import { randomUUID } from "crypto";
 import { toLocalMediaUrl } from "./local-media-protocol";
 import JSZip from "jszip";
 import type {
-  PreciseReferenceType,
   ReferencePreset,
   ReferencePresetExportRequest,
   ReferencePresetLibrary,
@@ -84,10 +84,7 @@ function serializablePreset(preset: ReferencePreset | Omit<ReferencePreset, "fil
 
 function normalizePreset(raw: Record<string, unknown>, filePath: string) {
   const kind = raw.kind === "precise" ? "precise" : "vibe";
-  const preciseType: PreciseReferenceType =
-    raw.preciseType === "style" || raw.preciseType === "character&style"
-      ? raw.preciseType
-      : "character";
+  const preciseType = preciseReferenceType(raw.preciseType);
   const name = cleanText(raw.name);
   if (!name) return null;
   return publicPreset({
@@ -98,7 +95,7 @@ function normalizePreset(raw: Record<string, unknown>, filePath: string) {
     filePath,
     createdAt: cleanText(raw.createdAt, 64) || new Date().toISOString(),
     infoExtracted: numberIn(raw.infoExtracted, 1),
-    strength: numberIn(raw.strength, 1),
+    strength: numberIn(raw.strength, 1, 0, kind === "precise" ? 5 : 1),
     preciseType,
     fidelity: numberIn(raw.fidelity, 1),
     informationExtracted: numberIn(raw.informationExtracted, 1),

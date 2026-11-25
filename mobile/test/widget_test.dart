@@ -15,7 +15,7 @@ void main() {
     final v5 = GenerateParams(model: 'nai-diffusion-5-full');
     expect(v5.isV5, isTrue);
     expect(v5.isV4Plus, isTrue);
-    expect(v5.supportsPreciseReference, isFalse);
+    expect(v5.supportsPreciseReference, isTrue);
     expect(v5.supportsVibeTransfer, isFalse);
     expect(v5.maxCharacterPrompts, 32);
     final v45 = GenerateParams(model: 'nai-diffusion-4-5-full');

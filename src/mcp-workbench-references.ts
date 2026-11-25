@@ -1,4 +1,4 @@
-import {supportsNAIPreciseReference,supportsNAIVibeTransfer,type PreciseReferenceType} from './types';
+import {isNAIV5Model,preciseCaption,supportsNAIPreciseReference,supportsNAIVibeTransfer,type PreciseReferenceType} from './types';
 import type {VibeTransferImage,PreciseReferenceImage} from './types';
 type ReferenceState={
   bootDone:boolean; activeTab:string; inpaintModel:string; params:{model:string;positivePrompt?:string;negativePrompt?:string;stylePrompt?:string};setParam?:(key:'positivePrompt'|'negativePrompt'|'stylePrompt',value:string)=>void; settings?:{imageProvider?:string;inpaintEngine?:string}|null;
@@ -30,6 +30,13 @@ export function applyWorkbenchReference(s:ReferenceState, c:WorkbenchCommand){
   if(s.isGenerating)throw Error('生成中，不能改变工作台参考图。');
   if(c.kind!=='vibe'&&c.kind!=='precise')throw Error('必须指定 vibe 或 precise。');
   const list=c.kind==='vibe'?s.vibeImages:s.preciseReferences;
+  if(c.op==='mount'||c.op==='mountMany'||c.op==='updateMany'){
+    const maximum = c.kind === 'precise' && isNAIV5Model(model) ? 5 : 1;
+    for(const ref of c.op === 'updateMany' ? c.updates ?? [] : [c]){
+      if(ref.strength !== undefined && !(ref.strength >= 0 && ref.strength <= maximum)) throw Error('参考强度超出模型范围。');
+      if(c.kind === 'precise' && ref.type) preciseCaption(ref.type,isNAIV5Model(model));
+    }
+  }
   if(c.op==='mountMany'){
     const images=c.images;if(!images?.length||images.length>8||list.length+images.length>16||images.some(i=>!i.base64||!i.mime))throw Error('批量挂载超过限制或图片无效。');
     const ids:string[]=[];try{for(const im of images){const r=applyWorkbenchReference(s,{...c,...im,op:'mount',images:undefined}) as {id:string};ids.push(r.id);}}

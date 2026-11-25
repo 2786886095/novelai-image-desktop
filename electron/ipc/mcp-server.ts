@@ -1,3 +1,4 @@
+import { PRECISE_REFERENCE_TYPES, preciseReferenceType } from "../../src/types";
 import {NAX_ATTRIBUTION,searchNaxCollections} from "../../src/nax-gallery";
 import {searchMultilingualTags,relatedMultilingualTags} from "./multilingual-tags";
 // Local Model Context Protocol server.
@@ -176,8 +177,8 @@ async function toAgentArgs(raw: Json): Promise<Json> {
   if (Array.isArray(raw.preciseReferences)) {
     args.preciseReferences = await Promise.all(raw.preciseReferences.map(record).map(async (item) => ({
       attachmentId: (await resolveImage(item.image, "preciseReferences[].image")).id,
-      type: item.type === "style" || item.type === "character&style" ? item.type : "character",
-      strength: num(item.strength, 1, 0, 1),
+      type: preciseReferenceType(item.type),
+      strength: num(item.strength, 1, 0, 5),
       fidelity: num(item.fidelity, 1, 0, 1),
     })));
   }
@@ -257,7 +258,7 @@ const GENERATION_PROPS: Json = {
   positivePrompt: { type: "string", description: "Base prompt. Put per-character tags in characterPrompts. V5 supports `Text: ...` for rendered lettering." },
   negativePrompt: { type: "string", description: "Base undesired content. Omitted = inherit the workbench value." },
   stylePrompt: { type: "string", description: "Style prompt merged before the base prompt. Omitted = inherit the workbench value; \"\" clears it." },
-  model: { type: "string", enum: NAI_MODELS.map((item) => item.value), description: "Omitted = workbench model. Precise/vibe references require nai-diffusion-4-5-*." },
+  model: { type: "string", enum: NAI_MODELS.map((item) => item.value), description: "Omitted = workbench model. V5 supports precise reference for generation and img2img." },
   width: { type: "integer", minimum: 64, maximum: 2048, description: "Multiple of 64." },
   height: { type: "integer", minimum: 64, maximum: 2048, description: "Multiple of 64." },
   steps: { type: "integer", minimum: 1, maximum: 50 },
@@ -296,13 +297,13 @@ const GENERATION_PROPS: Json = {
   preciseReferences: {
     type: "array",
     maxItems: 16,
-    description: "Precise (character/style) references. Only NovelAI Diffusion 4.5 supports them; adds 5 Anlas per image.",
+    description: "V4.5 and V5 precise references, +5 Anlas per reference per output. V5 supports costume, strength up to 5 and same-outfit variants. Fidelity applies to V4.5. V5 inpainting is unsupported.",
     items: {
       type: "object",
       properties: {
         image: IMAGE_REF,
-        type: { type: "string", enum: ["character", "style", "character&style"] },
-        strength: { type: "number", minimum: 0, maximum: 1 },
+        type: { type: "string", enum: [...PRECISE_REFERENCE_TYPES] },
+        strength: { type: "number", minimum: 0, maximum: 5 },
         fidelity: { type: "number", minimum: 0, maximum: 1 },
       },
       required: ["image"],
@@ -553,7 +554,7 @@ function createTools(options: McpServerOptions): ToolDef[] {
     {
       name: "img2img",
       title: "Image to image",
-      description: "Redraw an existing image (keeps composition at low strength). Supports characterPrompts and, on NovelAI 4.5, preciseReferences — the way to pull faces toward reference sheets. Output size defaults to the source aspect.",
+      description: "Redraw an existing image (keeps composition at low strength). Supports characterPrompts and, on NovelAI V5 and V4.5, preciseReferences — the way to pull faces toward reference sheets. Output size defaults to the source aspect.",
       inputSchema: schema({
         ...GENERATION_PROPS,
         image: IMAGE_REF,
@@ -907,7 +908,7 @@ const INSTRUCTIONS = [
   "Langbai NovelAI Studio (local). Images are generated with the user's NovelAI account and saved to Studio history.",
   "Omitted generation fields inherit the current workbench (see get_state); characterPrompts and references are never inherited.",
   "Every image argument accepts an absolute local path, so reference sheets can be used directly.",
-  "V5 has no precise reference / vibe transfer: for face fidelity, compose with V5 then img2img with model nai-diffusion-4-5-full + preciseReferences (strength ~0.5).",
+  "V5 supports preciseReferences on generation and img2img. Vibe Transfer and inpainting with preciseReferences require another supported model.",
   "Inpaint supports characterPrompts and model-compatible references. V4.5 precise references cannot be combined with Vibe Transfer. Use make_mask + view_image(previewPath) first.",
   "Paid calls are refused when the Anlas estimate exceeds the user's per-call limit; check with estimate_cost. Never retry a paid call blindly — inspect list_history first.",
 ].join("\n");

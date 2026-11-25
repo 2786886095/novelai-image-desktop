@@ -224,6 +224,9 @@ AnlasQuote calculateInpaintAnlas({
       message: _at(language, 'anlas.loadInpaintImage'),
     );
   }
+  if (extras?.preciseReferences.isNotEmpty == true && !(params.copy()..model = inpaintModel).supportsPreciseReference) {
+    return AnlasQuote(ok: false, source: AnlasQuoteSource.unavailable, message: _at(language, 'error.preciseV45Only'));
+  }
   final quoteParams = params.copy()
     ..model = inpaintModel.replaceFirst(RegExp(r'-inpainting$'), '')
     ..width = max(64, (params.width / 64).ceil() * 64)

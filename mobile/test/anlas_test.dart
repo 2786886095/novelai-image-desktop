@@ -69,14 +69,14 @@ void main() {
     expect(quote.amount, 20);
   });
 
-  test('V5 never estimates a Precise Reference surcharge', () {
+  test('V5 charges per reference per output', () {
     final quote = calculateImageGenerationAnlas(
       params: GenerateParams(model: 'nai-diffusion-5-full'),
       account: opusAccount,
       batchCount: 2,
       preciseReferenceCount: 2,
     );
-    expect(quote.details.join('\n'), isNot(contains('精准参考')));
+    expect(quote.amount, 20);
   });
 
   test('official price parser accepts direct and nested response shapes', () {

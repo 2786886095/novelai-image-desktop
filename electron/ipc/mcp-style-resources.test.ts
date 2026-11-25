@@ -6,10 +6,11 @@ const fx=vi.hoisted(()=>({dir:'',settings:{stylePromptPresetGroups:['Default'],s
 vi.mock('electron',()=>({app:{getPath:()=>fx.dir},MessageChannelMain:class{
   port1=Object.assign(new EventEmitter(),{start(){},close(){}});port2={postMessage:(data:unknown)=>this.port1.emit('message',{data})};
 }}));
-vi.mock('./store',()=>({getSettings:()=>fx.settings,setSetting:(k:string,v:unknown)=>Object.assign(fx.settings,{[k]:v}),getHistory:()=>[]}));
+vi.mock('./store',()=>({getSettings:()=>fx.settings,setSetting:(k:string,v:unknown)=>Object.assign(fx.settings,{[k]:v}),getHistory:()=>[],ensureHistoryGroup:vi.fn(),applyMcpHistoryMoves:vi.fn()}));
 vi.mock('./agent-tools',()=>({executeAgentTool:vi.fn(),agentGenerationInput:vi.fn(),agentInpaintInput:vi.fn()}));
 vi.mock('./nai',()=>({quoteAnlasCost:vi.fn(),refreshStoredAccount:vi.fn()}));
 import {startMcpServer} from './mcp-server';
+import {galleryMcpForWindow} from './mcp-history-gallery-runtime';
 it('authenticated tools/list and tools/call keep gallery assets, base image and explicit live references independent',async()=>{
   fx.dir=fs.mkdtempSync(path.join(os.tmpdir(),'mcp-styles-'));
   const state={bootDone:true,settings:{imageProvider:'novelai'},activeTab:'generate',isGenerating:false,inpaintModel:'',params:{model:'nai-diffusion-4-5-full',prompt:'unchanged'},baseImage:'unchanged',
@@ -22,11 +23,16 @@ it('authenticated tools/list and tools/call keep gallery assets, base image and 
       expect(channel).toBe('mcp:workbench-reference');if(c.op==='mount')mountEvents++;
       try{port.postMessage({ok:true,result:applyWorkbenchReference(state,c)});}catch(e){port.postMessage({ok:false,error:String(e)});}
     }}};
-  const h=await startMcpServer({token:'fixture',port:0,window:()=>win as never});
+  const h=await startMcpServer({token:'fixture',port:0,window:()=>win as never,galleryTools:galleryMcpForWindow(()=>win as never)});
   async function rpc(method:string,params:unknown){return (await(await fetch('http://127.0.0.1:'+h.port+'/mcp',{method:'POST',headers:{Authorization:'Bearer fixture','Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})})).json()).result;}
   async function call(name:string,args:unknown={}){const r=await rpc('tools/call',{name,arguments:args});if(r.isError)throw Error(r.content[0].text);return JSON.parse(r.content[0].text);}
   try{
-    const names=(await rpc('tools/list',{})).tools.map((t:{name:string})=>t.name);
+    const listed = (await rpc('tools/list',{})).tools;
+    const names = listed.map((t:{name:string})=>t.name);
+    const documented = [...fs.readFileSync('docs/MCP_GALLERY_AND_PROMPTS.md', 'utf8').matchAll(/^\| `([a-z0-9_]+)` \|/gm)].map(row => row[1]);
+    expect([...names].sort()).toEqual(documented.sort());
+    expect(listed.find((tool:{name:string}) => tool.name === 'generate_image').inputSchema.properties.preciseReferences.items.properties)
+      .toMatchObject({type:{enum:expect.arrayContaining(['costume','character_mainoutfit','character&style_anyoutfit'])},strength:{maximum:5}});
     expect(names).toEqual(expect.arrayContaining(['list_style_assets','move_style_presets','attach_style_images','mount_workbench_reference','unmount_workbench_reference','list_workbench_references','create_style_group']));
     await call('create_style_group',{name:'水彩'});expect((await call('create_style_group',{name:'水彩'})).created).toBe(false);
     const move={presetIds:['p1','p2'],group:'水彩'},mv=await call('move_style_presets',move);
@@ -54,6 +60,9 @@ it('authenticated tools/list and tools/call keep gallery assets, base image and 
     await expect(call('mount_workbench_reference',{image,kind:'vibe'})).rejects.toThrow();
     await call('unmount_workbench_reference',{kind:'precise',id:mounted.id});expect(fs.existsSync(p1.previewImages![0].filePath)).toBe(true);
     state.params.model='nai-diffusion-5-full';await expect(call('mount_workbench_reference',{image,kind:'vibe'})).rejects.toThrow();
+    const outfit = await call('mount_workbench_reference',{image,kind:'precise',type:'costume',strength:4.25});
+    expect((await call('list_workbench_references')).precise).toMatchObject([{id:outfit.id,type:'costume',strength:4.25}]);
+    await call('unmount_workbench_reference',{kind:'precise',id:outfit.id});
     state.params.model='nai-diffusion-4-5-full';state.isGenerating=true;await expect(call('mount_workbench_reference',{image,kind:'vibe'})).rejects.toThrow();state.isGenerating=false;
     const vibe=await call('mount_workbench_reference',{image,kind:'vibe',information:0.6});expect((await call('list_workbench_references')).vibe).toEqual([{id:vibe.id,strength:1,infoExtracted:0.6}]);
     expect(state.baseImage).toBe('unchanged');expect(state.params.prompt).toBe('unchanged');expect(p1.prompt).toBe('unedited');expect(catalogEvents).toBe(4);

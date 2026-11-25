@@ -3815,6 +3815,13 @@ class _ReferenceControls extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.info_outline),
               title: Text(t('generate.vibeUnsupportedV5')),
+              subtitle: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton(
+                  onPressed: () => state.setParam((p) => p.model = p.v45VibeModel),
+                  child: Text(t('generate.switchVibeModel')),
+                ),
+              ),
             ),
           Wrap(spacing: 8, children: [
             OutlinedButton(
@@ -3856,14 +3863,6 @@ class _ReferenceControls extends StatelessWidget {
               leading: const Icon(Icons.warning_amber_rounded),
               title: Text(t('generate.preciseUnsupportedTitle')),
               subtitle: Text(t('generate.preciseUnsupportedSubtitle')),
-              trailing: TextButton(
-                onPressed: () => state.setParam((params) {
-                  params.model = params.model.contains('curated')
-                      ? 'nai-diffusion-4-5-curated'
-                      : 'nai-diffusion-4-5-full';
-                }),
-                child: Text(t('generate.switchV45')),
-              ),
             ),
           for (var index = 0; index < extras.preciseReferences.length; index++)
             _PreciseReferenceRow(index: index),
@@ -4030,7 +4029,11 @@ class _PreciseReferenceRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 StudioDropdownButtonFormField<String>(
-                  value: item.type,
+                  value: switch (item.type) {
+                    'character_mainoutfit' => 'character',
+                    'character&style_anyoutfit' => 'character&style',
+                    _ => item.type,
+                  },
                   isExpanded: true,
                   decoration: InputDecoration(
                     labelText: t('generate.referenceType'),
@@ -4046,6 +4049,8 @@ class _PreciseReferenceRow extends StatelessWidget {
                     DropdownMenuItem(
                         value: 'character&style',
                         child: Text(t('generate.refType.both'))),
+                    if (state.params.isV5 || item.type == 'costume')
+                      DropdownMenuItem(value: 'costume', child: Text(t('generate.refType.costume'))),
                   ],
                   onChanged: (value) => value == null
                       ? null
@@ -4059,18 +4064,27 @@ class _PreciseReferenceRow extends StatelessWidget {
                         height: 1.35,
                       ),
                 ),
+                if (state.params.isV5 && item.type.startsWith('character'))
+                  SwitchListTile(
+                    title: Text(t('generate.refType.preferSameOutfit')),
+                    value: item.type == 'character_mainoutfit' || item.type == 'character&style',
+                    onChanged: (enabled) => state.updatePreciseReference(index,
+                      type: item.type.startsWith('character&style')
+                        ? (enabled ? 'character&style' : 'character&style_anyoutfit')
+                        : (enabled ? 'character_mainoutfit' : 'character')),
+                  ),
                 _Slider(
                   label: t('generate.strengthLabel'),
                   help: t('generate.preciseStrengthHelp'),
-                  value: item.strength,
+                  value: item.strength.clamp(0, state.params.isV5 ? 5 : 1).toDouble(),
                   min: 0,
-                  max: 1,
+                  max: state.params.isV5 ? 5 : 1,
                   divisions: 100,
                   display: item.strength.toStringAsFixed(2),
                   onChanged: (value) =>
                       state.updatePreciseReference(index, strength: value),
                 ),
-                _Slider(
+                if (!state.params.isV5) _Slider(
                   label: t('generate.fidelityLabel'),
                   help: t('generate.fidelityHelp'),
                   value: item.fidelity,
@@ -4081,7 +4095,7 @@ class _PreciseReferenceRow extends StatelessWidget {
                   onChanged: (value) =>
                       state.updatePreciseReference(index, fidelity: value),
                 ),
-                Text(mobileUiFormatFor(language, 'generate.autoOfficialSize',
+                if (!state.params.isV5) Text(mobileUiFormatFor(language, 'generate.autoOfficialSize',
                     {'width': item.width, 'height': item.height})),
               ],
             ),
@@ -4414,6 +4428,8 @@ class _ReferencePresetLibraryPanelState
                         DropdownMenuItem(
                             value: 'character&style',
                             child: Text(t('generate.refType.both'))),
+                        for (final type in ['costume', 'character_mainoutfit', 'character&style_anyoutfit'])
+                          DropdownMenuItem(value: type, child: Text(t('generate.refType.$type'))),
                       ],
                       onChanged: (value) => setDialogState(
                         () => preciseType = value ?? 'character',
@@ -4442,7 +4458,7 @@ class _ReferencePresetLibraryPanelState
                         ? infoExtracted
                         : strength,
                     min: 0,
-                    max: 1,
+                    max: kind == ReferencePresetKind.precise ? 5 : 1,
                     divisions: 100,
                     display: (kind == ReferencePresetKind.vibe
                             ? infoExtracted

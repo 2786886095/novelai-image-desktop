@@ -81,7 +81,7 @@ describe("agent generation input", () => {
 
     expect(() => buildAgentGenerationInput({
       positivePrompt: "test",
-      model: "nai-diffusion-5-full",
+      model: "nai-diffusion-4-full",
       preciseReferences: [{ attachmentId: "image" }],
     }, {}, () => "base64")).toThrow("不支持精准参考图");
   });

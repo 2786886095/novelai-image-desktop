@@ -1,3 +1,4 @@
+import {PRECISE_REFERENCE_TYPES} from '../../src/types';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
@@ -17,7 +18,7 @@ export async function readComicReferences(request:TagComicGenerateRequest,root:s
  const refs=request.preciseReferences??[];if(!Array.isArray(refs)||refs.length>5)throw Error('漫画参考图数量无效');
  const output:PreciseReferenceItem[]=[];
  for(const ref of refs){
-  if(!['character','style','character&style'].includes(ref.type)||![ref.strength,ref.fidelity,ref.informationExtracted].every(x=>typeof x==='number'&&Number.isFinite(x)&&x>=0&&x<=1))throw Error('漫画参考图参数无效');
+  if(!PRECISE_REFERENCE_TYPES.includes(ref.type)||!Number.isFinite(ref.strength)||ref.strength<0||ref.strength>5||![ref.fidelity,ref.informationExtracted].every(x=>typeof x==='number'&&Number.isFinite(x)&&x>=0&&x<=1))throw Error('漫画参考图参数无效');
   try{const {bytes}=await readComicImage(ref.filePath,root);output.push({base64:bytes.toString('base64'),type:ref.type,strength:ref.strength,fidelity:ref.fidelity,informationExtracted:ref.informationExtracted});}
   catch{throw Error('所选漫画参考图不存在、损坏或目录不匹配；请重新导入或取消选用。尚未提交生图。');}
  }

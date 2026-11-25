@@ -59,7 +59,7 @@ class ComicReferenceAsset {
         name: json['name']?.toString() ?? 'reference',
         filePath: json['filePath']?.toString() ?? '',
         type: _referenceType(json['type']),
-        strength: _referenceValue(json['strength']),
+        strength: _referenceValue(json['strength'], 5),
         fidelity: _referenceValue(json['fidelity']),
         informationExtracted: _referenceValue(json['informationExtracted']),
         scope: switch (json['scope']?.toString()) {
@@ -104,19 +104,19 @@ class ComicPanelReference {
         referenceId: json['referenceId']?.toString() ?? '',
         enabled: json['enabled'] != false,
         type: _referenceType(json['type']),
-        strength: _referenceValue(json['strength']),
+        strength: _referenceValue(json['strength'], 5),
         fidelity: _referenceValue(json['fidelity']),
         informationExtracted: _referenceValue(json['informationExtracted']),
       );
 }
 
 String _referenceType(Object? value) =>
-    value == 'style' || value == 'character&style'
+    const {'style','character&style','costume','character_mainoutfit','character&style_anyoutfit'}.contains(value)
         ? value.toString()
         : 'character';
 
-double _referenceValue(Object? value) =>
-    ((value as num?)?.toDouble() ?? 1).clamp(0, 1).toDouble();
+double _referenceValue(Object? value, [double maximum = 1]) =>
+    ((value as num?)?.toDouble() ?? 1).clamp(0, maximum).toDouble();
 
 class ComicPanelRangeException implements Exception {
   final String code;

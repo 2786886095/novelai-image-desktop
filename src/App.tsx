@@ -187,6 +187,7 @@ import {
   supportsNAINoiseScheduleControl,
   supportsNAIPreciseReference,
   supportsNAIVibeTransfer,
+  v45VibeModel,
   supportsNAIVariety,
   type AnlasQuoteFeature,
   type ModelMode,
@@ -910,11 +911,9 @@ export function VibeTransferModal({ onClose, focusSection, closing = false }: { 
   const updatePreciseReference = useAppStore((state) => state.updatePreciseReference);
   const clearPreciseReferences = useAppStore((state) => state.clearPreciseReferences);
   const setToast = useAppStore((state) => state.setToast);
-  const setParam = useAppStore((state) => state.setParam);
-  const activeTab = useAppStore((state) => state.activeTab);
-  const setInpaintModel = useAppStore((state) => state.setInpaintModel);
   const model = useAppStore((state) => state.activeTab === "inpaint" ? state.inpaintModel : state.params.model);
   const vf = vibeFileLabels(language);
+  const v5 = isNAIV5Model(model);
   const preciseSupported = supportsNAIPreciseReference(model);
   const vibeSupported = supportsNAIVibeTransfer(model);
   const presetText = referencePresetTextFor(language);
@@ -928,18 +927,14 @@ export function VibeTransferModal({ onClose, focusSection, closing = false }: { 
     }
   }, []);
 
-  const switchToV45 = () => {
-    if (activeTab === "inpaint") {
-      setInpaintModel(model.includes("curated") ? "nai-diffusion-4-5-curated-inpainting" : "nai-diffusion-4-5-full-inpainting");
-      return;
+  function switchVibeModel() {
+    const state = useAppStore.getState();
+    if (state.activeTab === "inpaint") {
+      state.setInpaintModel(`${v45VibeModel(state.inpaintModel)}-inpainting`);
+    } else {
+      state.setParam("model", v45VibeModel(state.params.model));
     }
-    setParam(
-      "model",
-      model.includes("curated")
-        ? "nai-diffusion-4-5-curated"
-        : "nai-diffusion-4-5-full",
-    );
-  };
+  }
 
   function handleVibeFile(file: File, infoExtracted: number, strength: number) {
     const reader = new FileReader();
@@ -1029,6 +1024,9 @@ export function VibeTransferModal({ onClose, focusSection, closing = false }: { 
             {t("reference.vibeTitle")}
             {!vibeSupported && <span className="vibe-hint">{t("reference.vibeUnsupportedV5")}</span>}
           </h3>
+          {!vibeSupported && <Button variant="secondary" onClick={switchVibeModel}>
+            {t("reference.switchVibeModel")}
+          </Button>}
           {vibeImages.length === 0 && <p className="vibe-empty">{t("reference.emptyVibe")}</p>}
           {vibeImages.map((img) => (
             <div className="vibe-row" key={img.id}>
@@ -1050,6 +1048,7 @@ export function VibeTransferModal({ onClose, focusSection, closing = false }: { 
                 </fieldset>
                 <div className="reference-control">
                   <SliderInput
+                    editable
                     label={t("reference.strength")}
                     value={img.strength}
                     min={0}
@@ -1073,11 +1072,6 @@ export function VibeTransferModal({ onClose, focusSection, closing = false }: { 
             {t("reference.preciseTitle")}
             {!preciseSupported && <span className="vibe-hint">{t("reference.preciseUnsupported")}</span>}
           </h3>
-          {!preciseSupported && (
-            <Button className="vibe-switch-model" onClick={switchToV45}>
-              {t("reference.switchV45")}
-            </Button>
-          )}
           <p className="vibe-hint">{t("reference.preciseHint")}</p>
           {preciseReferences.length === 0 && <p className="vibe-empty">{t("reference.emptyPrecise")}</p>}
           {preciseReferences.map((ref) => (
@@ -1087,27 +1081,35 @@ export function VibeTransferModal({ onClose, focusSection, closing = false }: { 
                 <label className="field">
                   <span>{t("reference.type")}</span>
                   <SelectMenuCompat
-                    value={ref.type}
+                    value={ref.type === "character_mainoutfit" ? "character" : ref.type === "character&style_anyoutfit" ? "character&style" : ref.type}
                     onChange={(e) => updatePreciseReference(ref.id, { type: e.target.value as PreciseReferenceType })}
                   >
-                    {(["character", "style", "character&style"] as PreciseReferenceType[]).map((type) => (
+                    {(["character", "style", "character&style", ...(v5 || ref.type === "costume" ? ["costume"] : [])] as PreciseReferenceType[]).map((type) => (
                       <option key={type} value={type}>{t(`reference.type.${type}`)}</option>
                     ))}
                   </SelectMenuCompat>
                   <small className="reference-control-help">{t("reference.typeHelp")}</small>
                 </label>
+                {v5 && ref.type.startsWith("character") && <label className="reference-outfit-toggle">
+                  <input type="checkbox" checked={ref.type === "character_mainoutfit" || ref.type === "character&style"}
+                    onChange={e => updatePreciseReference(ref.id, { type: ref.type.startsWith("character&style")
+                      ? (e.target.checked ? "character&style" : "character&style_anyoutfit")
+                      : (e.target.checked ? "character_mainoutfit" : "character") })} />
+                  {t("reference.type.preferSameOutfit")}
+                </label>}
                 <div className="reference-control">
                   <SliderInput
+                    editable
                     label={t("reference.preciseStrength")}
-                    value={ref.strength}
+                    value={Math.min(ref.strength, v5 ? 5 : 1)}
                     min={0}
-                    max={1}
+                    max={v5 ? 5 : 1}
                     step={0.01}
                     onChange={(v) => updatePreciseReference(ref.id, { strength: v })}
                   />
                   <p>{t("reference.preciseStrengthHelp")}</p>
                 </div>
-                <div className="reference-control">
+                {!v5 && <div className="reference-control">
                   <SliderInput
                     label={t("reference.fidelity")}
                     value={ref.fidelity}
@@ -1117,8 +1119,9 @@ export function VibeTransferModal({ onClose, focusSection, closing = false }: { 
                     onChange={(v) => updatePreciseReference(ref.id, { fidelity: v })}
                   />
                   <p>{t("reference.fidelityHelp")}</p>
-                </div>
+                </div>}
                 {(() => {
+                  if (v5) return null;
                   const rec = recommendPreciseSize(ref.srcWidth, ref.srcHeight);
                   if (!rec) return null;
                   return (

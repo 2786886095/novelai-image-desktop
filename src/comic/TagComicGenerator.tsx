@@ -1,3 +1,4 @@
+import { desktopUiText } from "../i18n";
 import {toolWorkspaceText} from "../tool-workspace-text";
 import {ComicPromptComposer} from './ComicPromptComposer';
 import {comicComposerText} from './comic-composer-text';
@@ -25,6 +26,7 @@ import {
   NAI_MODELS,
   NAI_SAMPLERS,
   isNAIV5Model,
+  OUTFIT_REFERENCE_TYPES,
   supportsNAIPreciseReference,
   type GenerateParams,
   type TagComicPanel,
@@ -107,7 +109,7 @@ const COPY = {
     panelSize: "本分镜尺寸",
     useProjectSize: "使用项目全局尺寸",
     preciseHeading: "全局精准参考图",
-    preciseHint: "参考图会复制到项目资源目录。最多 5 张，仅 NovelAI V4.5 可用。",
+    preciseHint: "参考图会复制到项目资源目录。最多 5 张，支持 NovelAI V4.5 / V5。",
     preciseUpload: "添加精准参考图",
     preciseEmpty: "尚未添加精准参考图。",
     preciseCharacter: "角色",
@@ -121,8 +123,6 @@ const COPY = {
     precisePanelHeading: "本分镜使用的精准参考",
     precisePanelHint: "勾选后可为当前分镜单独调整类型、强度和保真度。",
     preciseReset: "恢复全局值",
-    preciseV45Only: "精准参考当前只能用于 NovelAI V4.5；V5 首发尚未开放。",
-    switchV45: "切换项目到 V4.5",
     preciseImportFailed: "精准参考图导入失败：{message}",
     preciseScope: "应用范围",
     preciseScopeAll: "全部分镜",
@@ -239,7 +239,7 @@ const COPY = {
     panelSize: "本分鏡尺寸",
     useProjectSize: "使用專案全域尺寸",
     preciseHeading: "全域精準參考圖",
-    preciseHint: "參考圖會複製到專案資源目錄。最多 5 張，僅 NovelAI V4.5 可用。",
+    preciseHint: "參考圖會複製到專案資源目錄。最多 5 張，支援 NovelAI V4.5 / V5。",
     preciseUpload: "加入精準參考圖",
     preciseEmpty: "尚未加入精準參考圖。",
     preciseCharacter: "角色",
@@ -253,8 +253,6 @@ const COPY = {
     precisePanelHeading: "本分鏡使用的精準參考",
     precisePanelHint: "勾選後可為目前分鏡單獨調整類型、強度與保真度。",
     preciseReset: "恢復全域值",
-    preciseV45Only: "精準參考目前只能用於 NovelAI V4.5；V5 首發尚未開放。",
-    switchV45: "切換專案至 V4.5",
     preciseImportFailed: "精準參考圖匯入失敗：{message}",
     preciseScope: "套用範圍",
     preciseScopeAll: "全部分鏡",
@@ -375,7 +373,7 @@ const COPY = {
     panelSize: "Panel size",
     useProjectSize: "Use project size",
     preciseHeading: "Global precise references",
-    preciseHint: "References are copied into project resources. Up to 5; NovelAI V4.5 only.",
+    preciseHint: "References are copied into project resources. Up to 5; NovelAI V4.5 / V5.",
     preciseUpload: "Add precise references",
     preciseEmpty: "No precise references added.",
     preciseCharacter: "Character",
@@ -389,8 +387,6 @@ const COPY = {
     precisePanelHeading: "Precise references for this panel",
     precisePanelHint: "Select references and tune type, strength, and fidelity for this panel.",
     preciseReset: "Reset to global",
-    preciseV45Only: "Precise Reference currently requires NovelAI V4.5; it is not part of the V5 launch.",
-    switchV45: "Switch project to V4.5",
     preciseImportFailed: "Could not import precise reference: {message}",
     preciseScope: "Apply to",
     preciseScopeAll: "All panels",
@@ -510,7 +506,7 @@ const COPY = {
     panelSize: "このコマのサイズ",
     useProjectSize: "プロジェクト全体のサイズを使用",
     preciseHeading: "共通精密参照画像",
-    preciseHint: "参照画像はプロジェクト資源へコピーされます。最大5枚、NovelAI V4.5 のみ対応です。",
+    preciseHint: "参照画像はプロジェクト資源へコピーされます。最大5枚、NovelAI V4.5 / V5 対応です。",
     preciseUpload: "精密参照画像を追加",
     preciseEmpty: "精密参照画像はありません。",
     preciseCharacter: "キャラクター",
@@ -524,8 +520,6 @@ const COPY = {
     precisePanelHeading: "このコマの精密参照",
     precisePanelHint: "選択後、このコマだけ種類・強度・忠実度を調整できます。",
     preciseReset: "共通値に戻す",
-    preciseV45Only: "精密参照は現在 NovelAI V4.5 のみ対応し、V5 初期リリースでは未対応です。",
-    switchV45: "プロジェクトを V4.5 に切り替える",
     preciseImportFailed: "精密参照画像を読み込めません：{message}",
     preciseScope: "適用範囲",
     preciseScopeAll: "すべてのコマ",
@@ -646,7 +640,7 @@ const COPY = {
     panelSize: "이 컷 크기",
     useProjectSize: "프로젝트 전체 크기 사용",
     preciseHeading: "전체 정밀 참조 이미지",
-    preciseHint: "참조 이미지는 프로젝트 리소스에 복사됩니다. 최대 5장, NovelAI V4.5만 지원합니다.",
+    preciseHint: "참조 이미지는 프로젝트 리소스에 복사됩니다. 최대 5장, NovelAI V4.5 / V5 지원합니다.",
     preciseUpload: "정밀 참조 추가",
     preciseEmpty: "추가된 정밀 참조가 없습니다.",
     preciseCharacter: "캐릭터",
@@ -660,8 +654,6 @@ const COPY = {
     precisePanelHeading: "이 컷의 정밀 참조",
     precisePanelHint: "선택 후 이 컷의 유형, 강도, 충실도를 개별 조정할 수 있습니다.",
     preciseReset: "전체 값으로 복원",
-    preciseV45Only: "정밀 참조는 현재 NovelAI V4.5에서만 지원되며 V5 초기 릴리스에는 포함되지 않았습니다.",
-    switchV45: "프로젝트를 V4.5로 전환",
     preciseImportFailed: "정밀 참조를 가져오지 못했습니다: {message}",
     preciseScope: "적용 범위",
     preciseScopeAll: "모든 컷",
@@ -837,6 +829,8 @@ export function TagComicGenerator({ onBack,scope='tag-comic' }: { onBack?: () =>
     selectedCandidate(panel),
   ).length;
   const presetText = referencePresetTextFor(language);
+  const projectV5 = isNAIV5Model(project.globalParams.model);
+  const panelV5 = activePanel && isNAIV5Model(mergeTagComicParams(project, activePanel).model);
   const preciseModelSupported = !compatible && supportsNAIPreciseReference(
     project.globalParams.model,
   );
@@ -1617,23 +1611,6 @@ export function TagComicGenerator({ onBack,scope='tag-comic' }: { onBack?: () =>
                 <p>{copy("preciseHint")}</p>
               </div>
               <div className="tag-comic-reference-actions">
-                {!compatible && !preciseModelSupported && (
-                  <Button
-                    variant="secondary"
-                    onClick={() =>
-                      patchProject({
-                        globalParams: {
-                          ...project.globalParams,
-                          model: project.globalParams.model.includes("curated")
-                            ? "nai-diffusion-4-5-curated"
-                            : "nai-diffusion-4-5-full",
-                        },
-                      })
-                    }
-                  >
-                    {copy("switchV45")}
-                  </Button>
-                )}
                 <Button
                   variant="secondary"
                   disabled={!preciseModelSupported || project.preciseReferences.length >= 5}
@@ -1682,17 +1659,18 @@ export function TagComicGenerator({ onBack,scope='tag-comic' }: { onBack?: () =>
                         <option value="character">{copy("preciseCharacter")}</option>
                         <option value="style">{copy("preciseStyle")}</option>
                         <option value="character&style">{copy("preciseBoth")}</option>
+                        {OUTFIT_REFERENCE_TYPES.filter(type => projectV5 || type === reference.type).map(type => <option key={type} value={type}>{desktopUiText(language, `reference.type.${type}`)}</option>)}
                       </SelectMenuCompat>
                       <label>
                         <span>{copy("preciseStrength")} · {reference.strength.toFixed(2)}</span>
-                        <RangeInput  min={0} max={1} step={0.01} value={reference.strength}
+                        <RangeInput  min={0} max={projectV5 ? 5 : 1} step={0.01} value={reference.strength}
                           onChange={(event) => patchPreciseReference(reference.id, { strength: Number(event.target.value) })} />
                       </label>
-                      <label>
+                      {!projectV5 && <label>
                         <span>{copy("preciseFidelity")} · {reference.fidelity.toFixed(2)}</span>
                         <RangeInput  min={0} max={1} step={0.01} value={reference.fidelity}
                           onChange={(event) => patchPreciseReference(reference.id, { fidelity: Number(event.target.value), informationExtracted: Number(event.target.value) })} />
-                      </label>
+                      </label>}
                       <div className="tag-comic-reference-scope">
                         <span>{copy("preciseScope")}</span>
                         <div role="group">
@@ -1982,17 +1960,18 @@ export function TagComicGenerator({ onBack,scope='tag-comic' }: { onBack?: () =>
                                 <option value="character">{copy("preciseCharacter")}</option>
                                 <option value="style">{copy("preciseStyle")}</option>
                                 <option value="character&style">{copy("preciseBoth")}</option>
+                        {OUTFIT_REFERENCE_TYPES.filter(type => panelV5 || type === selection.type).map(type => <option key={type} value={type}>{desktopUiText(language, `reference.type.${type}`)}</option>)}
                               </SelectMenuCompat>
                               <label>
                                 <span>{copy("preciseStrength")} · {selection.strength.toFixed(2)}</span>
-                                <RangeInput  min={0} max={1} step={0.01} value={selection.strength}
+                                <RangeInput  min={0} max={panelV5 ? 5 : 1} step={0.01} value={selection.strength}
                                   onChange={(event) => patchPanelReference(activePanel.id, asset.id, { strength: Number(event.target.value) })} />
                               </label>
-                              <label>
+                              {!panelV5 && <label>
                                 <span>{copy("preciseFidelity")} · {selection.fidelity.toFixed(2)}</span>
                                 <RangeInput  min={0} max={1} step={0.01} value={selection.fidelity}
                                   onChange={(event) => patchPanelReference(activePanel.id, asset.id, { fidelity: Number(event.target.value), informationExtracted: Number(event.target.value) })} />
-                              </label>
+                              </label>}
                               <Button variant="ghost" onClick={() =>
                                 clearPanelReferenceOverride(activePanel.id, asset.id)
                               }>

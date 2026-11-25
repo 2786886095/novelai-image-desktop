@@ -59,6 +59,8 @@ import {
   normalizeNAIBaseModel,
   NAI_INPAINT_MODELS,
   supportsNAIPreciseReference,
+  preciseCaption,
+  v5ReferenceSize,
   supportsNAIVibeTransfer,
   supportsNAIVariety,
   MAX_NAI_DIRECTOR_INPUT_PIXELS,
@@ -569,8 +571,8 @@ function v5BaseCaption(raw: string, suffix: string, auto: boolean, chars: Letter
 
 type CharCaptionMode = "structured" | "pipe";
 
-function finiteClamped(value: number, fallback: number) {
-  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
+function finiteClamped(value: number, fallback: number, maximum = 1) {
+  return Number.isFinite(value) ? Math.min(maximum, Math.max(0, value)) : fallback;
 }
 
 function normalizedCharCaptions(extras: GenerateExtras | undefined, model: string, preserveText = false) {
@@ -784,7 +786,7 @@ export function buildPayload(
     );
   }
 
-  // Precise / Director Reference — V4.5 only. Distinct from Vibe Transfer: uses
+  // Precise / Director Reference for V4.5 and V5. Distinct from Vibe Transfer: uses
   // the director_reference_* fields with a type (character/style/character&style),
   // strength, and secondary strength derived from fidelity (1 - fidelity).
   const preciseRefs = extras?.preciseReferences ?? [];
@@ -811,14 +813,14 @@ export function buildPayload(
     );
     parameters.normalize_reference_strength_multiple = true;
     parameters.director_reference_descriptions = preciseRefs.map((r) => ({
-      caption: { base_caption: r.type || "character&style", char_captions: [] },
+      caption: { base_caption: preciseCaption(r.type || "character&style", v5), char_captions: [] },
       legacy_uc: false,
     }));
     parameters.director_reference_strength_values = preciseRefs.map((r) =>
-      round2(clamp01(r.strength, 1)),
+      round2(finiteClamped(r.strength, 1, v5 ? 5 : 1)),
     );
     parameters.director_reference_secondary_strength_values = preciseRefs.map(
-      (r) => round2(clamp01(1 - r.fidelity, 0)),
+      (r) => v5 ? 0 : round2(clamp01(1 - r.fidelity, 0)),
     );
     // NovelAI's Precise Reference UI exposes only Strength and Fidelity.
     // Keep this compatibility transport field fixed instead of presenting a
@@ -871,14 +873,7 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-// Precise/Director reference: accept ANY size and replicate the OFFICIAL client
-// preprocessing (per https://docs.novelai.net/en/image/precisereference): the
-// feature "always uses one of those three image sizes" — 1024×1536 / 1472×1472 /
-// 1536×1024 — and a smaller/bigger image is "upscaled/downscaled AND padded" to
-// reach one of them. We pick the size whose ASPECT RATIO is closest to the
-// source (so padding is minimal — the earlier grid artifacts came from forcing
-// every image into 1024×1536, which over-padded landscapes), scale to fit, then
-// black-pad the remainder. No cropping.
+// V4.5 uses three reference canvases. V5 selects from its own size grid.
 const DIRECTOR_REFERENCE_SIZES: Array<{ width: number; height: number }> = [
   { width: 1024, height: 1536 },
   { width: 1472, height: 1472 },
@@ -888,6 +883,7 @@ const DIRECTOR_REFERENCE_SIZES: Array<{ width: number; height: number }> = [
 function prepareDirectorReferenceImage(
   rawBase64: string,
   index: number,
+  v5: boolean,
 ): string {
   const image = nativeImage.createFromBuffer(Buffer.from(rawBase64, "base64"));
   if (image.isEmpty()) {
@@ -902,17 +898,14 @@ function prepareDirectorReferenceImage(
     );
   }
 
-  // Pick the official target whose aspect ratio best matches the source.
   const sourceAspect = width / height;
-  const target = DIRECTOR_REFERENCE_SIZES.reduce((best, candidate) => {
+  const target = v5 ? v5ReferenceSize(width, height) : DIRECTOR_REFERENCE_SIZES.reduce((best, candidate) => {
     const bestDiff = Math.abs(best.width / best.height - sourceAspect);
-    const candidateDiff = Math.abs(
-      candidate.width / candidate.height - sourceAspect,
-    );
+    const candidateDiff = Math.abs(candidate.width / candidate.height - sourceAspect);
     return candidateDiff < bestDiff ? candidate : best;
   }, DIRECTOR_REFERENCE_SIZES[0]);
 
-  // Scale to FIT inside the target (preserve aspect), then center on a black canvas.
+  // Fit the entire reference inside the model's canvas.
   const scale = Math.min(target.width / width, target.height / height);
   const fitW = Math.max(1, Math.round(width * scale));
   const fitH = Math.max(1, Math.round(height * scale));
@@ -1016,14 +1009,12 @@ export async function prepareExtras(
     extras = {...extras, vibeImages: await Promise.all(extras.vibeImages.map(async ref => matchingVibeEncoding(ref, params.model) ? ref : ({...ref, base64:(await processableImage(Buffer.from(stripBase64Prefix(ref.base64), "base64"))).toString("base64")})))};
   }
 
-  // Precise/director references: any size accepted, preprocessed to the nearest
-  // of NovelAI's three official sizes (scale-to-fit + black pad), matching the
-  // official client.
+  // Prepare each image for the selected reference encoder before submission.
   let preciseReferences = extras.preciseReferences;
   if (preciseReferences && preciseReferences.length > 0) {
     if (!supportsNAIPreciseReference(params.model)) {
       throw new Error(
-        "精准参考当前仅支持 NovelAI V4.5；V5 首发尚未开放该功能。请切换到 V4.5 Full/Curated，或移除精准参考图。",
+        "此模型或局部重绘模式不支持精准参考。",
       );
     }
     preciseReferences = await Promise.all(preciseReferences.map(async (ref, index) => ({
@@ -1031,6 +1022,7 @@ export async function prepareExtras(
       base64: prepareDirectorReferenceImage(
         (await processableImage(Buffer.from(stripBase64Prefix(ref.base64), "base64"))).toString("base64"),
         index,
+        isNAIV5Model(params.model),
       ),
     })));
   }
@@ -4136,17 +4128,9 @@ function comicReferencesToExtras(
   const usable = request.references.filter(
     (ref) => ref.base64 && ref.useForGeneration !== false,
   );
-  // Precise/Director references are only available on V4.5 models. V5 also
-  // lacks Vibe Transfer at launch, so never convert a V5 precise reference into
-  // another unsupported transport.
   const supportsPrecise = supportsNAIPreciseReference(request.params.model);
-  if (
-    usable.length > 0 &&
-    isNAIV5Model(request.params.model)
-  ) {
-    throw new Error(
-      "精准参考当前仅支持 NovelAI V4.5；V5 首发尚未开放该功能。请切换漫画项目模型到 V4.5，或移除参考图。",
-    );
+  if (usable.some(ref => ref.kind === "vibe") && !supportsNAIVibeTransfer(request.params.model)) {
+    throw new Error("所选模型不支持氛围迁移。");
   }
 
   const vibeImages: VibeTransferItem[] = [];
@@ -4159,7 +4143,7 @@ function comicReferencesToExtras(
       preciseReferences.push({
         base64,
         type: preciseType,
-        strength: clamp01(Number(ref.strength) || 1, 1),
+        strength: finiteClamped(Number(ref.strength), 1, isNAIV5Model(request.params.model) ? 5 : 1),
         fidelity: clamp01(Number(ref.infoExtracted) || 1, 1),
       });
     } else {
@@ -5121,6 +5105,9 @@ export async function inpaintImage(
   try {
     if (extras?.preciseReferences?.length && extras.vibeImages?.length) {
       throw new Error("精准参考不能与氛围迁移同时使用，请移除其中一种参考。");
+    }
+    if (extras?.preciseReferences?.length && !supportsNAIPreciseReference(inpaintModel)) {
+      throw new Error("所选局部重绘模型不支持精准参考。");
     }
     const { buffer } = await readWorkbenchImage();
     const focused = region ? prepareFocusedInpaintInput(bufferToPng(buffer),Buffer.from(stripBase64Prefix(maskBase64),'base64'),region) : null;

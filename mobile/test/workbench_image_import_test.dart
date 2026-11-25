@@ -74,11 +74,14 @@ void main() {
       'reference roles respect effective model, preserve working image, and do not generate',
       () async {
     final b = await app.previewImageImport(first.path);
-    expect(app.canUseImportedImage(b, ImageImportUse.precise, {}), isFalse);
+    expect(app.canUseImportedImage(b, ImageImportUse.precise, {}), isTrue);
     expect(app.canUseImportedImage(b, ImageImportUse.vibe, {}), isFalse);
-    await expectLater(app.confirmImageImport(b, ImageImportUse.precise, {}),
-        throwsStateError);
-    await app.confirmImageImport(b, ImageImportUse.precise, {'model'});
+    await app.confirmImageImport(b, ImageImportUse.precise, {});
+    expect(app.params.model, 'nai-diffusion-5-full');
+    expect(app.extras.preciseReferences.single.sourcePath, first.path);
+    app.removePreciseReference(0);
+    final withModel = await app.previewImageImport(first.path);
+    await app.confirmImageImport(withModel, ImageImportUse.precise, {'model'});
     expect(app.extras.preciseReferences.single.base64,
         base64Encode(first.readAsBytesSync()));
     final c = await app.previewImageImport(plain.path);

@@ -137,6 +137,29 @@ void main() {
     expect(decodeImageDimensions(restored), (200, 100));
   });
 
+  test('V5 keeps the four corners of a panoramic reference and pads vertically', () {
+    final source = image_lib.Image(width: 128, height: 4);
+    for (final pixel in source) {
+      pixel
+        ..r = pixel.x < 64 ? 255 : 0
+        ..g = pixel.y < 2 ? 255 : 0
+        ..b = 0;
+    }
+    final prepared = prepareDirectorReferenceImage(image_lib.encodePng(source), v5: true);
+    final decoded = image_lib.decodePng(prepared)!;
+    expect((decoded.width, decoded.height), (4096, 256));
+    (int, int, int) rgb(int x, int y) {
+      final pixel = decoded.getPixel(x, y);
+      return (pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
+    }
+    expect(rgb(0, 0), (255, 255, 255));
+    expect(rgb(4095, 255), (255, 255, 255));
+    expect(rgb(0, 64), (255, 255, 0));
+    expect(rgb(4095, 64), (0, 255, 0));
+    expect(rgb(0, 191), (255, 0, 0));
+    expect(rgb(4095, 191), (0, 0, 0));
+  });
+
   test('director reference preparation pads with white, not black', () {
     // A black letterbox reads as image content to NovelAI and is itself a
     // source of screentone/halftone artifacts on the output — pick a source

@@ -158,26 +158,23 @@ void main() {
     expect(prompt['char_captions'], hasLength(32));
   });
 
-  test('V5 rejects Precise Reference before any request can be sent', () async {
+  test('V5 uses outfit captions, V5 strength, and neutral secondary strength', () async {
     final extras = GenerateExtras(
       preciseReferences: const [
         PreciseReferenceItem(
           base64:
               'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-          type: 'character',
+          type: 'costume', strength: 4.25, fidelity: 0.5,
         ),
       ],
     );
-    expect(
-      () => api.buildPayload(
-        'unused',
-        settings,
-        GenerateParams(model: 'nai-diffusion-5-full'),
-        123,
-        extras,
-      ),
-      throwsA(isA<NaiHttpException>()),
-    );
+    final payload = await api.buildPayload('unused', settings, GenerateParams(model: 'nai-diffusion-5-full'), 123, extras);
+    final p = payload['parameters'] as Map;
+    expect(p['director_reference_strength_values'], [4.25]);
+    expect(p['director_reference_secondary_strength_values'], [0]);
+    expect(p['director_reference_descriptions'][0]['caption']['base_caption'], 'costume');
+    expect(p['director_reference_images_cached'], hasLength(1));
+    await expectLater(api.buildPayload('unused', settings, GenerateParams(model: 'nai-diffusion-5-full-inpainting'), 123, extras), throwsA(isA<NaiHttpException>()));
   });
 
   test('Furry mode keeps V5 Full and prefixes the official dataset tag once',

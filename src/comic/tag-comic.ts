@@ -1,3 +1,4 @@
+import { preciseReferenceType } from "../types";
 import {promptMetrics} from '../../shared/v5-prompt-options';
 import {
   DEFAULT_PARAMS,
@@ -224,9 +225,9 @@ function normalizeCandidate(
   };
 }
 
-function referenceNumber(value: unknown, fallback: number) {
+function referenceNumber(value: unknown, fallback: number, maximum = 1) {
   const number = Number(value);
-  return Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : fallback;
+  return Number.isFinite(number) ? Math.max(0, Math.min(maximum, number)) : fallback;
 }
 
 function normalizeReferenceAsset(
@@ -234,17 +235,14 @@ function normalizeReferenceAsset(
   legacyPanelIds: string[],
 ): TagComicReferenceAsset | null {
   if (!raw.id || !raw.filePath || !raw.fileUrl) return null;
-  const type =
-    raw.type === "style" || raw.type === "character&style"
-      ? raw.type
-      : "character";
+  const type = preciseReferenceType(raw.type);
   return {
     id: raw.id,
     name: String(raw.name || "reference"),
     filePath: raw.filePath,
     fileUrl: raw.fileUrl,
     type,
-    strength: referenceNumber(raw.strength, 1),
+    strength: referenceNumber(raw.strength, 1, 5),
     fidelity: referenceNumber(raw.fidelity, 1),
     informationExtracted: referenceNumber(raw.informationExtracted, 1),
     scope:
@@ -262,15 +260,12 @@ function normalizePanelReference(
   available: Set<string>,
 ): TagComicPanelReference | null {
   if (!raw.referenceId || !available.has(raw.referenceId)) return null;
-  const type =
-    raw.type === "style" || raw.type === "character&style"
-      ? raw.type
-      : "character";
+  const type = preciseReferenceType(raw.type);
   return {
     referenceId: raw.referenceId,
     enabled: raw.enabled !== false,
     type,
-    strength: referenceNumber(raw.strength, 1),
+    strength: referenceNumber(raw.strength, 1, 5),
     fidelity: referenceNumber(raw.fidelity, 1),
     informationExtracted: referenceNumber(raw.informationExtracted, 1),
   };

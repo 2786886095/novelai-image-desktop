@@ -486,6 +486,9 @@ class _PreciseReferenceSection extends StatelessWidget {
                                       DropdownMenuItem(
                                           value: 'character&style',
                                           child: Text(t('comic.preciseBoth'))),
+                                      for (final type in ['costume','character_mainoutfit','character&style_anyoutfit'])
+                                      if (controller.project.globalParams.isV5 || reference.type == type)
+                                        DropdownMenuItem(value: type, child: Text(t('generate.refType.$type'))),
                                     ],
                                     onChanged: (value) {
                                       reference.type = value ?? 'character';
@@ -494,13 +497,14 @@ class _PreciseReferenceSection extends StatelessWidget {
                                   ),
                                   _ReferenceSlider(
                                     label: t('comic.preciseStrength'),
+                                    maximum: controller.project.globalParams.isV5 ? 5 : 1,
                                     value: reference.strength,
                                     onChanged: (value) {
                                       reference.strength = value;
                                       controller.changed();
                                     },
                                   ),
-                                  _ReferenceSlider(
+                                  if (!controller.project.globalParams.isV5) _ReferenceSlider(
                                     label: t('comic.preciseFidelity'),
                                     value: reference.fidelity,
                                     onChanged: (value) {
@@ -637,7 +641,9 @@ class _ReferenceSlider extends StatelessWidget {
   final String label;
   final double value;
   final ValueChanged<double> onChanged;
+  final double maximum;
   const _ReferenceSlider({
+    this.maximum = 1,
     required this.label,
     required this.value,
     required this.onChanged,
@@ -649,7 +655,7 @@ class _ReferenceSlider extends StatelessWidget {
         children: [
           Text('$label · ${value.toStringAsFixed(2)}',
               style: Theme.of(context).textTheme.labelSmall),
-          Slider(value: value, min: 0, max: 1, onChanged: onChanged),
+          Slider(value: value.clamp(0, maximum).toDouble(), min: 0, max: maximum, onChanged: onChanged),
         ],
       );
 }
@@ -1083,7 +1089,10 @@ class _PanelPreciseReferences extends StatelessWidget {
                               DropdownMenuItem(
                                   value: 'character&style',
                                   child: Text(t('comic.preciseBoth'))),
-                            ],
+                              for (final type in ['costume','character_mainoutfit','character&style_anyoutfit'])
+                                      if (controller.paramsFor(panel).isV5 || selection.type == type)
+                                        DropdownMenuItem(value: type, child: Text(t('generate.refType.$type'))),
+                                    ],
                             onChanged: (value) {
                               controller.updatePanelReference(panel, asset,
                                   type: value ?? 'character');
@@ -1091,13 +1100,14 @@ class _PanelPreciseReferences extends StatelessWidget {
                           ),
                           _ReferenceSlider(
                             label: t('comic.preciseStrength'),
-                            value: selection.strength,
+                            maximum: controller.paramsFor(panel).isV5 ? 5 : 1,
+                                    value: selection.strength,
                             onChanged: (value) {
                               controller.updatePanelReference(panel, asset,
                                   strength: value);
                             },
                           ),
-                          _ReferenceSlider(
+                          if (!controller.paramsFor(panel).isV5) _ReferenceSlider(
                             label: t('comic.preciseFidelity'),
                             value: selection.fidelity,
                             onChanged: (value) {

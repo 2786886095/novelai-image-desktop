@@ -159,12 +159,12 @@ class ComicActions {
     for (final entry in _object(raw).entries) {
       final k = entry.key, v = entry.value;
       if (k == 'type') {
-        if (!['character', 'style', 'character&style'].contains(v)) {
+        if (!['character', 'style', 'character&style','costume','character_mainoutfit','character&style_anyoutfit'].contains(v)) {
           throw StateError('参考类型无效');
         }
       } else if (['strength', 'fidelity', 'informationExtracted'].contains(k)) {
-        if (v is! num || !v.isFinite || v < 0 || v > 1) {
-          throw StateError('参考强度须为0–1');
+        if (v is! num || !v.isFinite || v < 0 || v > (k == 'strength' ? 5 : 1)) {
+          throw StateError('参考参数超出范围');
         }
       } else if (panel && k == 'enabled') {
         if (v is! bool) throw StateError('enabled须为布尔值');

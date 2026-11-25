@@ -115,7 +115,7 @@ async function check(name,fn){try{const evidence=await fn();checks.push({name,pa
   reset('nai-diffusion-5-full');const input=agent.agentGenerationInput(request('langbai_generate_image',{}),{preciseReferences:[],vibeReferences:[]});assert.equal(input.extras.preciseReferences.length,0);assert.equal(input.extras.vibeImages.length,0);return {precise:0,vibes:0};
  });
  await check('nonempty-reference-unsupported-by-actual-target-remains-rejected',async()=>{
-  reset();const result=await runAgent({inpaintModel:'nai-diffusion-5-full-inpainting',preciseReferences:precise});assert.equal(result.ok,false);assert.match(result.output,/nai-diffusion-5-full 不支持精准参考图/);assert.equal(calls.length,0);return {backendCalls:0,error:result.output};
+  reset();const result=await runAgent({inpaintModel:'nai-diffusion-5-full-inpainting',preciseReferences:precise});assert.equal(result.ok,false);assert.match(result.output,/nai-diffusion-5-full-inpainting 不支持精准参考图/);assert.equal(calls.length,0);return {backendCalls:0,error:result.output};
  });
  await check('invalid-explicit-inpaint-model-is-rejected-before-backend',async()=>{
   reset();const result=await runAgent({inpaintModel:'fixture-not-a-model'});assert.equal(result.ok,false);assert.equal(calls.length,0);return {backendCalls:0,error:result.output};

@@ -691,6 +691,17 @@ class _BatchReferenceEditor extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
+        if (!project.globalParams.supportsVibeTransfer)
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton(
+              onPressed: () {
+                project.globalParams.model = project.globalParams.v45VibeModel;
+                controller.changed();
+              },
+              child: Text(t('generate.switchVibeModel')),
+            ),
+          ),
         for (var index = 0; index < project.vibeImages.length; index++)
           _BatchVibeRow(index: index),
         Align(
@@ -704,7 +715,7 @@ class _BatchReferenceEditor extends StatelessWidget {
         const Divider(height: 24),
         Align(
           alignment: Alignment.centerLeft,
-          child: Text(t('batch.preciseOnlyV45')),
+          child: Text(t('generate.preciseReference')),
         ),
         for (var index = 0; index < project.preciseReferences.length; index++)
           _BatchPreciseRow(index: index),
@@ -806,6 +817,7 @@ class _BatchPreciseRow extends StatelessWidget {
     final language = context.watch<AppState>().settings.language;
     String t(String key) => mobileUiTextFor(language, key);
     final item = controller.project.preciseReferences[index];
+    final v5 = controller.project.globalParams.isV5;
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Row(
@@ -832,6 +844,8 @@ class _BatchPreciseRow extends StatelessWidget {
                       value: 'character&style',
                       child: Text(t('generate.refType.both')),
                     ),
+                    for (final type in ['costume','character_mainoutfit','character&style_anyoutfit'])
+                      if (v5 || item.type == type) DropdownMenuItem(value: type, child: Text(t('generate.refType.$type'))),
                   ],
                   onChanged: (value) => value == null
                       ? null
@@ -839,16 +853,16 @@ class _BatchPreciseRow extends StatelessWidget {
                 ),
                 _BatchSlider(
                   label: t('generate.referenceStrength'),
-                  value: item.strength,
+                  value: item.strength.clamp(0, v5 ? 5 : 1).toDouble(),
                   min: 0,
-                  max: 1,
+                  max: v5 ? 5 : 1,
                   divisions: 20,
                   onChanged: (value) => controller.updatePreciseReference(
                     index,
                     strength: value,
                   ),
                 ),
-                _BatchSlider(
+                if (!v5) _BatchSlider(
                   label: t('generate.fidelityLabel'),
                   value: item.fidelity,
                   min: 0,

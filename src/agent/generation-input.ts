@@ -8,6 +8,9 @@ import {
   normalizeNAIBaseModel,
   supportsNAICharacterPrompts,
   supportsNAIPreciseReference,
+  preciseReferenceType,
+  preciseCaption,
+  isNAIV5Model,
   supportsNAIVibeTransfer,
   type GenerateExtras,
   type GenerateParams,
@@ -125,6 +128,7 @@ export function buildAgentInpaintInput(
     ...args,
     model: normalizeNAIBaseModel(inpaintModel),
   }, defaults, resolveAttachmentBase64);
+  if (input.extras.preciseReferences?.length && !supportsNAIPreciseReference(inpaintModel)) throw new Error(`${inpaintModel} 不支持精准参考图。`);
   return { ...input, inpaintModel };
 }
 
@@ -208,13 +212,11 @@ export function buildAgentGenerationInput(
       const attachmentId = text(item.attachmentId, 200);
       if (!attachmentId) throw new Error("精准参考图缺少 attachmentId。");
       if (!resolveAttachmentBase64) throw new Error("当前运行时无法读取参考图附件。");
-      const type = item.type === "style" || item.type === "character&style"
-        ? item.type
-        : "character";
+      const type = preciseCaption(preciseReferenceType(item.type), isNAIV5Model(params.model));
       return {
         base64: resolveAttachmentBase64(attachmentId),
         type,
-        strength: finite(item.strength, 1, 0, 1),
+        strength: finite(item.strength, 1, 0, isNAIV5Model(params.model) ? 5 : 1),
         fidelity: finite(item.fidelity, 1, 0, 1),
         informationExtracted: 1,
       };

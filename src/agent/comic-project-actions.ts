@@ -1,5 +1,6 @@
 import type {ComicProjectStore} from '../comic/project-store';
 import {createTagComicPanel,createTagComicProject,normalizeTagComicProject,parseTagComicImport,parseTagComicSizeImport,TAG_COMIC_SIZE_PRESETS} from '../comic/tag-comic';
+import {PRECISE_REFERENCE_TYPES} from '../types';
 import type {GenerateParams,TagComicPanel,TagComicProject,TagComicReferenceAsset,TagComicPanelReference} from '../types';
 import {projectStudioData,STUDIO_WRITABLE,validateStudioPatch} from '../studio-agent-contract';
 import {validateComicAction} from './comic-project-contract';
@@ -33,8 +34,8 @@ export function portableComicProject(project:TagComicProject){
 }
 function referencePatch(raw:unknown,project:TagComicProject,panel=false){
  const patch:Record<string,unknown>={};for(const [key,value] of Object.entries(object(raw))){
-  if(key==='type'){if(!['character','style','character&style'].includes(String(value)))throw Error('参考类型无效');}
-  else if(['strength','fidelity','informationExtracted'].includes(key)){if(typeof value!=='number'||!Number.isFinite(value)||value<0||value>1)throw Error('参考强度须为0–1');}
+  if(key==='type'){if(!PRECISE_REFERENCE_TYPES.some(type=>type===value))throw Error('参考类型无效');}
+  else if(['strength','fidelity','informationExtracted'].includes(key)){if(typeof value!=='number'||!Number.isFinite(value)||value<0||value>(key==='strength'?5:1))throw Error('参考参数超出范围');}
   else if(panel&&key==='enabled'){if(typeof value!=='boolean')throw Error('enabled 须为布尔值');}
   else if(!panel&&key==='scope'){if(!['all','include','exclude'].includes(String(value)))throw Error('参考范围无效');}
   else if(!panel&&key==='scopePanelIds'){if(!Array.isArray(value)||new Set(value).size!==value.length||value.some(id=>!project.panels.some(p=>p.id===id)))throw Error('参考范围须使用当前工程的有效分镜ID');}

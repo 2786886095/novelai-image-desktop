@@ -2333,6 +2333,23 @@ button { user-select: none; }
 }
 .vibe-row-sliders { display: grid; gap: 9px; }
 .vibe-row-sliders .slider-field { margin: 0; }
+.slider-field-editable > .field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6rem;
+  align-items: center;
+  margin: 0;
+}
+.slider-field-editable input[type="number"] {
+  min-width: 0;
+  appearance: textfield;
+}
+.slider-field-editable input[type="number"]::-webkit-inner-spin-button,
+.slider-field-editable input[type="number"]::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+.reference-outfit-toggle,
+.reference-outfit-toggle input[type="checkbox"] { cursor: pointer; }
 .reference-control { min-width: 0; display: grid; gap: 4px; }
 .reference-control > p,
 .reference-control-help {

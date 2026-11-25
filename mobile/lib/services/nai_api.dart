@@ -157,9 +157,11 @@ void validateNaiReferenceExtras(GenerateParams params, GenerateExtras extras) {
       !params.supportsPreciseReference) {
     throw const NaiHttpException(
       0,
-      'Precise Reference is currently supported only by NovelAI V4.5. '
-      'V5 did not launch with this feature. Switch to V4.5 Full/Curated or remove precise references.',
+      'Precise Reference is unavailable for this model or inpainting mode.',
     );
+  }
+  if (!params.isV5 && extras.preciseReferences.any((ref) => ref.type == 'costume')) {
+    throw const NaiHttpException(0, 'Outfit Reference requires V5.');
   }
   if (extras.vibeImages.isNotEmpty && !params.supportsVibeTransfer) {
     throw const NaiHttpException(
@@ -1047,16 +1049,11 @@ class NaiApi {
 
     final precise = extras.preciseReferences;
     if (params.supportsPreciseReference && precise.isNotEmpty) {
-      // Confirmed against the official client's real request (multipart HAR):
-      // precise references are uploaded as binary parts (director_ref_N) in
-      // _sendGenerate; the JSON references them via director_reference_images_cached
-      // and base_caption carries the TYPE. The old director_reference_images:[base64]
-      // in a JSON POST is silently ignored — the image was never applied (which is
-      // why precise reference had no effect). Each image is preprocessed to an
-      // opaque RGB official size; we keep that base64 here only as the byte source.
-      final processed = await Future.wait(precise.map((item) async =>
-          base64Encode(prepareDirectorReferenceImage(await processingImageBytes(
-              base64Decode(_stripBase64(item.base64)))))));
+      // The multipart encoder needs both references to named parts and the image bytes.
+      final processed = await Future.wait(precise.map((item) async {
+        final bytes = await processingImageBytes(base64Decode(_stripBase64(item.base64)));
+        return base64Encode(prepareDirectorReferenceImage(bytes, v5: params.isV5));
+      }));
       parameters['director_reference_images'] = processed;
       parameters['director_reference_images_cached'] = [
         for (var i = 0; i < processed.length; i++)
@@ -1070,16 +1067,21 @@ class NaiApi {
       parameters['director_reference_descriptions'] = precise
           .map((item) => {
                 'caption': {
-                  'base_caption': item.type.isEmpty ? 'character' : item.type,
+                  'base_caption': switch (item.type) {
+                    '' => 'character',
+                    'character_mainoutfit' when !params.isV5 => 'character',
+                    'character&style_anyoutfit' when !params.isV5 => 'character&style',
+                    _ => item.type,
+                  },
                   'char_captions': <Object>[],
                 },
                 'legacy_uc': false,
               })
           .toList();
       parameters['director_reference_strength_values'] =
-          precise.map((item) => _round2(item.strength.clamp(0, 1))).toList();
+          precise.map((item) => _round2(item.strength.clamp(0, params.isV5 ? 5 : 1))).toList();
       parameters['director_reference_secondary_strength_values'] = precise
-          .map((item) => _round2(1 - item.fidelity.clamp(0, 1)))
+          .map((item) => params.isV5 ? 0.0 : _round2(1 - item.fidelity.clamp(0, 1)))
           .toList();
       parameters['director_reference_information_extracted'] =
           precise.map((_) => 1.0).toList();

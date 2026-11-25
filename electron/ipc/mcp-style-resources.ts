@@ -1,3 +1,4 @@
+import {PRECISE_REFERENCE_TYPES} from '../../src/types';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -111,7 +112,8 @@ export function styleResourceTools(window:()=>BrowserWindow|null|undefined,resol
       setSetting('stylePromptPresets',presets().map(x=>x.id===p.id?{...x,coverImageId:target.id}:x));refresh(window);
       return {presetId:p.id,cover:a.image,affectsGeneration:false};
     }),
-    tool('save_reference_preset','Save a handled image in the reference library without mounting it. Explicit kind required.',shape({name:word,group:word,image,kind,strength:unit,information:unit,fidelity:unit,type:{type:'string',enum:['character','style','character&style']}},['name','image','kind']),false,async a=>{
+    tool('save_reference_preset','Save a handled image in the reference library without mounting it. Explicit kind required.',shape({name:word,group:word,image,kind,strength:{...unit,maximum:5},information:unit,fidelity:unit,type:{type:'string',enum:[...PRECISE_REFERENCE_TYPES]}},['name','image','kind']),false,async a=>{
+      if(a.kind==='vibe' && Number(a.strength)>1)throw Error('Vibe strength exceeds 1');
       if(!String(a.name).trim()||String(a.name).length>120||String(a.group??'').length>120||a.kind==='vibe'&&(a.fidelity!==undefined||a.type!==undefined)||a.kind==='precise'&&a.information!==undefined)throw Error('无效名称或用途参数。');
       const im=await source(String(a.image)),{saveReferencePreset}=await import('./reference-presets.js');
       const r=await saveReferencePreset({name:String(a.name),group:a.group as string|undefined,kind:a.kind as 'precise'|'vibe',base64:im.bytes.toString('base64'),extension:im.mime.split('/')[1],width:im.width,height:im.height,strength:a.strength as number|undefined,infoExtracted:a.information as number|undefined,fidelity:a.fidelity as number|undefined,preciseType:a.type as 'style'|undefined});
@@ -120,15 +122,15 @@ export function styleResourceTools(window:()=>BrowserWindow|null|undefined,resol
     tool('organize_reference_presets','Batch rename or move reference library entries. Existing images and workbench remain unchanged. Preview, then repeat with revision.',shape({items:list(shape({id:word,name:word,group:{type:'string',maxLength:120}},['id']),64),revision},['items']),false,async a=>{
       const api=await import('./reference-presets.js');const r=await api.organizeReferencePresets(a.items as {id:string;name?:string;group?:string}[],a.revision as string|undefined);if(r.applied)refresh(window);return r;
     }),
-    tool('mount_workbench_references','Explicitly mount up to eight image handles as one kind. Validates every image and the combined size before contacting the workbench.',shape({kind,images:list(image,8),strength:unit,information:unit,fidelity:unit,type:{type:'string',enum:['character','style','character&style']}},['kind','images']),false,async a=>{
+    tool('mount_workbench_references','Explicitly mount up to eight image handles as one kind. Validates every image and the combined size before contacting the workbench.',shape({kind,images:list(image,8),strength:{...unit,maximum:5},information:unit,fidelity:unit,type:{type:'string',enum:[...PRECISE_REFERENCE_TYPES]}},['kind','images']),false,async a=>{
       const ids=a.images as string[];if(new Set(ids).size!==ids.length||a.kind==='vibe'&&(a.type!==undefined||a.fidelity!==undefined)||a.kind==='precise'&&a.information!==undefined)throw Error('重复图片或参数与用途不符。');
       const images=[];let bytes=0;for(const id of ids){const im=await source(id);bytes+=im.bytes.length;if(bytes>24*1024*1024)throw Error('单批最多 24 MiB');images.push({base64:im.bytes.toString('base64'),mime:im.mime,width:im.width,height:im.height});}
       return requestWorkbench(window,{op:'mountMany',images,kind:a.kind as 'vibe'|'precise',strength:a.strength as number|undefined,information:a.information as number|undefined,fidelity:a.fidelity as number|undefined,type:a.type as WorkbenchCommand['type']});
     }),
-    tool('update_workbench_references','Edit strengths and kind-specific options for up to 16 existing live references. Validates the whole selection first.',shape({kind,items:list(shape({id:word,type:{type:'string',enum:['character','style','character&style']},strength:unit,fidelity:unit,information:unit},['id']),16)},['kind','items']),false,async a=>requestWorkbench(window,{op:'updateMany',kind:a.kind as 'vibe'|'precise',updates:a.items as WorkbenchCommand['updates']})),
+    tool('update_workbench_references','Edit strengths and kind-specific options for up to 16 existing live references. Validates the whole selection first.',shape({kind,items:list(shape({id:word,type:{type:'string',enum:[...PRECISE_REFERENCE_TYPES]},strength:{...unit,maximum:5},fidelity:unit,information:unit},['id']),16)},['kind','items']),false,async a=>requestWorkbench(window,{op:'updateMany',kind:a.kind as 'vibe'|'precise',updates:a.items as WorkbenchCommand['updates']})),
     tool('unmount_workbench_references','Explicitly unmount a batch by kind and live IDs. Does not delete original images.',shape({kind,ids:list(word,16)},['kind','ids']),false,async a=>requestWorkbench(window,{op:'unmountMany',kind:a.kind as 'vibe'|'precise',updates:(a.ids as string[]).map(id=>({id}))})),
     tool('list_workbench_references','Read actual live workbench reference IDs, kinds and settings, without image bytes.',shape({}),true,async()=>requestWorkbench(window,{op:'list'})),
-    tool('mount_workbench_reference','Explicitly attach one image to the live workbench. Never generate, replace a base image, switch models or change presets.',shape({image,kind,type:{type:'string',enum:['character','style','character&style']},strength:unit,information:unit,fidelity:unit},['image','kind']),false,async a=>{
+    tool('mount_workbench_reference','Explicitly attach one image to the live workbench. Never generate, replace a base image, switch models or change presets.',shape({image,kind,type:{type:'string',enum:[...PRECISE_REFERENCE_TYPES]},strength:{...unit,maximum:5},information:unit,fidelity:unit},['image','kind']),false,async a=>{
       if(a.kind==='vibe'&&(a.type!==undefined||a.fidelity!==undefined)||a.kind==='precise'&&a.information!==undefined)throw Error('参考参数与用途不符。');
       const im=await source(String(a.image));return requestWorkbench(window,{op:'mount',kind:a.kind as WorkbenchCommand['kind'],type:a.type as WorkbenchCommand['type'],strength:a.strength as number|undefined,information:a.information as number|undefined,fidelity:a.fidelity as number|undefined,base64:im.bytes.toString('base64'),mime:im.mime,width:im.width,height:im.height});
     }),

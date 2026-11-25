@@ -543,13 +543,13 @@ describe("V4 character prompt payload", () => {
       },
       123,
       {
-        vibeImages: [{ base64: b64("vibe"), infoExtracted: 1, strength: 1 }],
+        vibeImages: [],
         charCaptions,
         preciseReferences: [{
           base64: b64("precise"),
-          type: "character",
-          strength: 1,
-          fidelity: 1,
+          type: "costume",
+          strength: 4.25,
+          fidelity: 0.5,
         }],
       },
     );
@@ -563,28 +563,31 @@ describe("V4 character prompt payload", () => {
     expect(payload.parameters.dynamic_thresholding).toBe(false);
     expect(payload.parameters.skip_cfg_above_sigma).toBeNull();
     expect(payload.parameters.reference_image_multiple).toBeUndefined();
-    expect(payload.parameters.director_reference_images).toBeUndefined();
+    expect(payload.parameters.director_reference_images_cached).toHaveLength(1);
+    expect(payload.parameters.director_reference_strength_values).toEqual([4.25]);
+    expect(payload.parameters.director_reference_secondary_strength_values).toEqual([0]);
+    expect(payload.parameters.director_reference_descriptions).toMatchObject([{ caption: { base_caption: "costume" } }]);
     expect(payload.parameters.v4_negative_prompt.legacy_uc).toBe(false);
     expect(prompt.caption.char_captions).toHaveLength(32);
   });
 
-  it("keeps Precise Reference limited to V4.5 while V5 remains a structured-prompt model", () => {
+  it("supports both V5 models and V4.5 inpainting", () => {
     expect(supportsNAIPreciseReference("nai-diffusion-4-5-full")).toBe(true);
     expect(supportsNAIPreciseReference("nai-diffusion-4-5-curated-inpainting")).toBe(true);
-    expect(supportsNAIPreciseReference("nai-diffusion-5-full")).toBe(false);
-    expect(supportsNAIPreciseReference("nai-diffusion-5-curated")).toBe(false);
+    expect(supportsNAIPreciseReference("nai-diffusion-5-full")).toBe(true);
+    expect(supportsNAIPreciseReference("nai-diffusion-5-curated")).toBe(true);
   });
 
-  it("rejects V5 Precise Reference before building or posting a generation request", async () => {
+  it("rejects unsupported legacy models before processing reference images", async () => {
     await expect(
-      prepareExtras(DEFAULT_PARAMS, {
+      prepareExtras({...DEFAULT_PARAMS, model: "nai-diffusion-4-full"}, {
         vibeImages: [],
         charCaptions: [],
         preciseReferences: [
           { base64: b64("precise"), type: "character", strength: 1, fidelity: 1 },
         ],
       }),
-    ).rejects.toThrow(/仅支持 NovelAI V4\.5/);
+    ).rejects.toThrow(/不支持精准参考/);
   });
 
   it("uses the current V5 checkpoint in Furry mode and prefixes the official dataset tag once", () => {

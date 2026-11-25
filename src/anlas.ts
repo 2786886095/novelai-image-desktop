@@ -246,6 +246,9 @@ export function calculateFeatureAnlasQuote({
   }
   if (feature === "inpaint") {
     const model = (inpaintModel?.replace(/-inpainting$/, "") || params.model) as NAIModel;
+    if (extras?.preciseReferences?.length && !supportsNAIPreciseReference(inpaintModel || model + "-inpainting")) {
+      return { ok: false, source: "unavailable", message: "所选局部重绘模型不支持精准参考。" };
+    }
     const inpaintParams = {
       ...params,
       model,

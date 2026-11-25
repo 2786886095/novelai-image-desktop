@@ -48,7 +48,7 @@ it('removes comic reference metadata with backup without deleting any image',()=
 it('reference mutations reject path injection, wrong panel IDs and numeric clamping',()=>{
  const f=fixture();f.call('comic.panels.append',{text:'forest'});f.store.update(p=>({...p,preciseReferences:[{id:'ref',name:'ref',filePath:'one.png',fileUrl:'fixture://ref',type:'character',strength:1,fidelity:1,informationExtracted:1,scope:'all',scopePanelIds:[]}]}));
  const before=JSON.stringify(f.store.read().project);
- for(const patch of [{filePath:'C:/private'},{strength:2},{type:'anything'},{scopePanelIds:['missing']},{scopePanelIds:[f.store.read().project.panels[0].id,f.store.read().project.panels[0].id]}])expect(()=>f.call('comic.references.update',{id:'ref',patch})).toThrow();
+ for(const patch of [{filePath:'C:/private'},{strength:5.1},{type:'anything'},{scopePanelIds:['missing']},{scopePanelIds:[f.store.read().project.panels[0].id,f.store.read().project.panels[0].id]}])expect(()=>f.call('comic.references.update',{id:'ref',patch})).toThrow();
  expect(JSON.stringify(f.store.read().project)).toBe(before);
 });
 it('resetting a per-panel reference restores scope inheritance rather than disabling it',()=>{
