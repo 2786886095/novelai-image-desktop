@@ -10,6 +10,11 @@ on:
       - mobile/test/native_failure_diagnostics_test.dart
       - .github/workflows/android-native-fixture-diagnostic.yml
   workflow_dispatch:
+    inputs:
+      text_only:
+        description: Run the Android text acceptance group in isolation
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -21,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        entry-group: [core, os, ui]
+        entry-group: ${{ fromJSON(inputs.text_only && '["text"]' || '["core","os","ui"]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -124,6 +129,7 @@ jobs:
             exit 1
           fi
           "$emulator" -accel-check
+      - uses: ./.github/actions/android-maven
       - name: Prepare fixed Android image with bounded archive recovery
         run: node scripts/feature-acceptance/prepare-android-image.mjs
       - name: Fresh disposable Android Emulator journeys

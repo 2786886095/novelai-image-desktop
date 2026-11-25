@@ -1,0 +1,22 @@
+import org.gradle.api.artifacts.repositories.MavenArtifactRepository
+
+// The Flutter Gradle plugin is an included build with its own repositories.
+if (System.getenv('STUDIO_CI_MAVEN_MIRROR') == '1') {
+    def useMirror = { repositories ->
+        repositories.withType(MavenArtifactRepository).all { repository ->
+            if (repository.url?.toString()?.replaceAll('/+$', '') in [
+                'https://repo.maven.apache.org/maven2', 'https://repo1.maven.org/maven2'
+            ]) {
+                repository.setUrl('https://maven-central.storage-download.googleapis.com/maven2/')
+            }
+        }
+    }
+    gradle.beforeSettings { settings ->
+        useMirror(settings.pluginManagement.repositories)
+        useMirror(settings.dependencyResolutionManagement.repositories)
+    }
+    gradle.beforeProject { project ->
+        useMirror(project.buildscript.repositories)
+        useMirror(project.repositories)
+    }
+}

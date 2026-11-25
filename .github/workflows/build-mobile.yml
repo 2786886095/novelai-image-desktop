@@ -125,6 +125,8 @@ jobs:
           channel: stable
           cache: true
 
+      - uses: ./.github/actions/android-maven
+
       - name: Install dependencies
         run: flutter pub get
 
@@ -257,6 +259,8 @@ jobs:
           flutter-version: '3.24.0'
           channel: stable
           cache: true
+
+      - uses: ./.github/actions/android-maven
 
       - name: Install dependencies
         run: flutter pub get

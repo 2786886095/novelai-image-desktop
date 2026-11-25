@@ -388,6 +388,7 @@ jobs:
             exit 1
           fi
           "$emulator" -accel-check
+      - uses: ./.github/actions/android-maven
       - name: Prepare fixed Android image with bounded archive recovery
         run: node scripts/feature-acceptance/prepare-android-image.mjs
       - name: Stage checksum-verified Gradle wrapper distribution

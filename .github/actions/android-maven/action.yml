@@ -1,0 +1,23 @@
+name: Android Maven dependency recovery
+description: Reuse Gradle modules and recover APK dependency downloads from Maven Central rate limits.
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches/modules-2/files-2.1
+          ~/.gradle/caches/modules-2/metadata-2.*
+        key: android-maven-v1-${{ runner.os }}-${{ runner.arch }}-flutter324-${{ hashFiles('mobile/android/**/*.gradle', 'mobile/android/gradle/wrapper/gradle-wrapper.properties', 'mobile/pubspec.lock') }}
+    - name: Install runner-local APK build recovery
+      shell: bash
+      run: |
+        set -euo pipefail
+        bash "$GITHUB_ACTION_PATH/test.sh"
+        bin="$RUNNER_TEMP/studio-android-maven/bin"
+        init="${GRADLE_USER_HOME:-$HOME/.gradle}/init.d"
+        mkdir -p "$bin" "$init"
+        echo "STUDIO_REAL_FLUTTER=$(command -v flutter)" >> "$GITHUB_ENV"
+        install -m 0755 "$GITHUB_ACTION_PATH/flutter-apk.sh" "$bin/flutter"
+        install -m 0644 "$GITHUB_ACTION_PATH/central-mirror.gradle" "$init/studio-central-mirror.gradle"
+        echo "$bin" >> "$GITHUB_PATH"
