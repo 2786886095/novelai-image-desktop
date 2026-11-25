@@ -799,7 +799,7 @@ describe("desktop UI consistency guards", () => {
       source.indexOf("function DirectorPanel"),
     );
     const guard = panel.indexOf("if (!isMax && enhanceScale === 2 && requestedTarget.exceedsLimit) return;");
-    const request = panel.indexOf("await generateI2I()");
+    const request = panel.indexOf("await generateI2I(magnitude)");
     expect(guard).toBeGreaterThan(-1);
     expect(request).toBeGreaterThan(guard);
     expect(panel).toContain("disabled={outputTooLarge}");

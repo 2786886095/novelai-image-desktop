@@ -3270,7 +3270,7 @@ function AccountAndRunButton({
     ? Math.round(Math.min(100, Math.max(0, account.opusUsage.isNegative ? 0 : account.opusUsage.percent)) * 10) / 10
     : null;
   const params = useAppStore(state => state.params);
-  const hasPrecise = useAppStore(state => state.settings?.imageProvider !== "openai-images" && state.preciseReferences.length > 0);
+  const hasPrecise = useAppStore(state => state.settings?.imageProvider !== "openai-images" && Boolean(state.preciseReferences?.length));
   const mediumBlocked = usesPreciseReferences && hasPrecise && isNAIMediumEffort(params);
   const remainingImages = usagePercent === null ? null : estimateOpusImages(params, usagePercent);
   const refillPercent = account.opusUsage && account.opusUsage.timeUntilNextPercent > 0
