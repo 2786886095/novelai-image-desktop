@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {execFileSync,spawnSync} from 'node:child_process';
-import {assertReleasePlatformContract,assertReleaseEvidenceFiles,assertV286CloudNativeRun,artistIterationScenarios} from './release-platform-contract.mjs';
+import {assertReleasePlatformContract,assertReleaseEvidenceFiles,assertV286CloudNativeRun,usesStandingReleaseWaivers,artistIterationScenarios} from './release-platform-contract.mjs';
 import {assertDesktopMetadataGates,assertMobileMetadataGates} from './image-metadata-release-contract.mjs';
 import {assertFivePlatformMobileRun,assertReleaseArtifactScope,assertUnsignedIosPackage,unsignedIosIpaInspectionPython,supplementalArtifactPolicyId,supplementalArtifactPolicySha256} from './release-artifact-scope.mjs';
 const call=(command,args)=>execFileSync(command,args,{encoding:'utf8',timeout:600000,maxBuffer:8*1024*1024}).trim();
@@ -20,10 +20,25 @@ const waiveWindowsArtistGpuV302=process.env.REVIEWED_V302_MOBILE_RELEASE==='true
 const waiveWindowsArtistGpuV303=process.env.REVIEWED_V303_CAPSULE_RELEASE==='true';
 const waiveWindowsArtistGpuV304=process.env.REVIEWED_V304_MCP_RELEASE==='true';
 const waiveWindowsArtistGpuV305=process.env.REVIEWED_V305_RESOURCES_RELEASE==='true';
-const waiveWindowsArtistGpu=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV292||waiveWindowsArtistGpuV293||waiveWindowsArtistGpuV294||waiveWindowsArtistGpuV295||waiveWindowsArtistGpuV300||waiveWindowsArtistGpuV301||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV305;
+const legacyGpuWaiver=waiveWindowsArtistGpuV286||waiveWindowsArtistGpuV292||waiveWindowsArtistGpuV293||waiveWindowsArtistGpuV294||waiveWindowsArtistGpuV295||waiveWindowsArtistGpuV300||waiveWindowsArtistGpuV301||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV305;
 let reviewedIosFolder=process.env.REVIEWED_V300_IOS_FOLDER==='true';
 const nativeRun=process.env.FEATURE_RUN;
 let folderReview, observedIosJob, nativeAttempts;
+const standingPolicy = usesStandingReleaseWaivers(version);
+let skippedArtistGpu = false;
+if (standingPolicy) {
+  if (legacyGpuWaiver || reviewedIosFolder || !/^\d+$/.test(nativeRun ?? '')) {
+    throw Error('Use a same-source native workflow run for the standing release policy');
+  }
+  const run = JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,workflowName,jobs']));
+  if (run.workflowName !== 'Native Client Feature Acceptance') throw Error('Unexpected feature workflow');
+  const ios = run.jobs.find(job => job.name === 'ios-components (os)');
+  skippedArtistGpu = run.jobs.find(job => job.name === 'windows-artist-local-proof')?.conclusion === 'skipped';
+  reviewedIosFolder = ios?.conclusion === 'failure';
+  observedIosJob = ios?.databaseId;
+  assertV286CloudNativeRun(run, {sourceSha:sha, standingPolicy, skippedArtistGpu, reviewedIosFolder});
+}
+const waiveWindowsArtistGpu = legacyGpuWaiver || skippedArtistGpu;
 if(waiveWindowsArtistGpuV305){
  if(reviewedIosFolder||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV301||version!=='3.0.5'||sha!=='c6b0890fe71c1bd9c75476e57f39b429cadc1610'||nativeRun!=='44964443841'||process.env.BUILD_RUN!=='44964438876'||process.env.MOBILE_RUN!=='44964441214')throw Error('Unexpected v3.0.5 source or workflow runs');
  const run=JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs']));
@@ -63,23 +78,23 @@ if(waiveWindowsArtistGpuV301){
  reviewedIosFolder=true;observedIosJob=nativeAttempts.originalIosOsJob;
 }
 if(reviewedIosFolder){
- if(!waiveWindowsArtistGpuV305&&!waiveWindowsArtistGpuV304&&!waiveWindowsArtistGpuV303&&!waiveWindowsArtistGpuV302&&!waiveWindowsArtistGpuV301&&(!waiveWindowsArtistGpuV300||version!=='3.0.0'||sha!=='c02d3186fc1b014d3e3611e07b7698cd5c448713'||nativeRun!=='44707958871'||process.env.BUILD_RUN!=='44707970782'||process.env.MOBILE_RUN!=='44707964543'))throw Error('Not the reviewed v3.0.0 source and runs');
+ if(!standingPolicy&&!waiveWindowsArtistGpuV305&&!waiveWindowsArtistGpuV304&&!waiveWindowsArtistGpuV303&&!waiveWindowsArtistGpuV302&&!waiveWindowsArtistGpuV301&&(!waiveWindowsArtistGpuV300||version!=='3.0.0'||sha!=='c02d3186fc1b014d3e3611e07b7698cd5c448713'||nativeRun!=='44707958871'||process.env.BUILD_RUN!=='44707970782'||process.env.MOBILE_RUN!=='44707964543'))throw Error('Not the reviewed v3.0.0 source and runs');
  const {checkFolderReview,assertOtherOutputReceipts}=await import('./v300-folder-review.mjs');
- folderReview=checkFolderReview('reviewed-ios-os',sha,observedIosJob);
+ folderReview=checkFolderReview('reviewed-ios-os',sha,observedIosJob,standingPolicy ? nativeRun : undefined);
  folderReview.otherOutputReceipts=assertOtherOutputReceipts('release-evidence/evidence',sha);
 }
-if(waiveWindowsArtistGpu){
+if(legacyGpuWaiver){
  if((waiveWindowsArtistGpuV286&&version!=='2.8.6')||(waiveWindowsArtistGpuV292&&version!=='2.9.2')||(waiveWindowsArtistGpuV293&&version!=='2.9.3')||(waiveWindowsArtistGpuV294&&version!=='2.9.4')||(waiveWindowsArtistGpuV295&&version!=='2.9.5')||(waiveWindowsArtistGpuV300&&version!=='3.0.0')||!/^\d+$/.test(nativeRun??''))throw Error('Explicit version-bound cloud acceptance workflow is required');
  if(!waiveWindowsArtistGpuV301&&!waiveWindowsArtistGpuV302&&!waiveWindowsArtistGpuV303&&!waiveWindowsArtistGpuV304&&!waiveWindowsArtistGpuV305)assertV286CloudNativeRun(JSON.parse(call('gh',['run','view',nativeRun,'--json','headSha,status,conclusion,jobs'])),{sourceSha:sha,reviewedIosFolder,strictGpuMatrix301:waiveWindowsArtistGpuV301,waiveWindowsArtistGpuV302,waiveWindowsArtistGpuV303,waiveWindowsArtistGpuV304,waiveWindowsArtistGpuV305});
 }
 const featureParity=JSON.parse(fs.readFileSync('release-evidence/feature-parity.json','utf8'));
-assertReleasePlatformContract(featureParity,{reviewedIosFolder,version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV300,waiveWindowsArtistGpuV301,waiveWindowsArtistGpuV302,waiveWindowsArtistGpuV303,waiveWindowsArtistGpuV304,waiveWindowsArtistGpuV305});
-assertReleaseEvidenceFiles(featureParity,'release-evidence',{reviewedIosFolder,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV300,waiveWindowsArtistGpuV301,waiveWindowsArtistGpuV302,waiveWindowsArtistGpuV303,waiveWindowsArtistGpuV304,waiveWindowsArtistGpuV305});
+assertReleasePlatformContract(featureParity,{standingPolicy,skippedArtistGpu,reviewedIosFolder,version,sourceSha:sha,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV300,waiveWindowsArtistGpuV301,waiveWindowsArtistGpuV302,waiveWindowsArtistGpuV303,waiveWindowsArtistGpuV304,waiveWindowsArtistGpuV305});
+assertReleaseEvidenceFiles(featureParity,'release-evidence',{standingPolicy,skippedArtistGpu,reviewedIosFolder,waiveWindowsArtistGpuV286,waiveWindowsArtistGpuV292,waiveWindowsArtistGpuV293,waiveWindowsArtistGpuV294,waiveWindowsArtistGpuV295,waiveWindowsArtistGpuV300,waiveWindowsArtistGpuV301,waiveWindowsArtistGpuV302,waiveWindowsArtistGpuV303,waiveWindowsArtistGpuV304,waiveWindowsArtistGpuV305});
 const buildRun=process.env.BUILD_RUN;
 if(!/^\d+$/.test(buildRun??''))throw Error('A verified desktop build run is required');
 const build=JSON.parse(call('gh',['run','view',buildRun,'--json','headSha,jobs']));
 assertDesktopMetadataGates(build);
-if(waiveWindowsArtistGpu&&build.headSha!==sha)throw Error('Desktop installers require the exact accepted source');
+if((standingPolicy||waiveWindowsArtistGpu)&&build.headSha!==sha)throw Error('Desktop installers require the exact accepted source');
 const desktopJobs=build.jobs.filter(job=>job.name.startsWith('build ('));
 if(desktopJobs.length!==3||desktopJobs.some(job=>job.conclusion!=='success')||!build.jobs.some(job=>job.name==='mac-intel-smoke'&&job.conclusion==='success'))throw Error('All desktop builds and native Intel verification must pass');
 const windows=desktopJobs.find(job=>job.name.includes('windows'));
@@ -96,7 +111,7 @@ const mobileRun=process.env.MOBILE_RUN;
 if(!/^\d+$/.test(mobileRun??''))throw Error('A verified mobile workflow run is required');
 const mobile=JSON.parse(call('gh',['run','view',mobileRun,'--json','status,conclusion,headSha,jobs']));
 assertFivePlatformMobileRun(mobile);
-if(waiveWindowsArtistGpu&&mobile.headSha!==sha)throw Error('Mobile installers require the exact accepted source');
+if((standingPolicy||waiveWindowsArtistGpu)&&mobile.headSha!==sha)throw Error('Mobile installers require the exact accepted source');
 assertMobileMetadataGates(mobile);
 call('git',['diff','--exit-code',mobile.headSha,sha,'--','mobile','shared','package.json','package-lock.json','scripts/build-mobile-metadata-runtime.mjs','scripts/prepare-agent-presentation.cjs']);
 call('gh',['run','download',mobileRun,'-n','novelai-mobile-android-apk','-D','mobile-assets/android']);
@@ -171,8 +186,18 @@ if(waiveWindowsArtistGpuV286){
  fs.writeFileSync(publicNotesFile,publicNotes,'utf8');
 }
 if((waiveWindowsArtistGpuV301||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV305)&&!reviewedIosFolder)fs.writeFileSync(publicNotesFile,releaseNotes+'\nWindows 画风迭代 GPU 长任务未实测。\n');
-if(reviewedIosFolder)fs.writeFileSync(publicNotesFile,releaseNotes+'\n### 验收例外\n- iOS 系统文件夹选择器：本次未在 5 秒内确认命名框可用，此项验收失败，经维护者同意不作为发行条件。其余 iOS 检查仍为必需。\n- Windows 画风迭代 GPU 长任务未实测。\n');
-const evidence={version,sha,...(nativeAttempts?{nativeAttempts}:{}),...(reviewedIosFolder?{folderReview}:{}),...(waiveWindowsArtistGpu?{nativeRun,fullScopeCertified:false,waived:[{platform:'windows',feature:'artist-iteration',scenarios:artistIterationScenarios,status:'not-tested'},...(reviewedIosFolder?[{platform:'ios',feature:'output-management',scenarios:['folder-choice-history-link'],status:'failed-waived'}]:[])]}:{}),mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
+if(standingPolicy && reviewedIosFolder) fs.writeFileSync(publicNotesFile,releaseNotes+'\n- iOS 系统文件夹命名框的 5 秒确认超时已按长期发行规则豁免。\n');
+else if(reviewedIosFolder)fs.writeFileSync(publicNotesFile,releaseNotes+'\n### 验收例外\n- iOS 系统文件夹选择器：本次未在 5 秒内确认命名框可用，此项验收失败，经维护者同意不作为发行条件。其余 iOS 检查仍为必需。\n- Windows 画风迭代 GPU 长任务未实测。\n');
+const waived = [];
+if (waiveWindowsArtistGpu) {
+  waived.push({platform:'windows', feature:'artist-iteration', scenarios:artistIterationScenarios, status:'not-tested'});
+}
+if (reviewedIosFolder) {
+  waived.push({platform:'ios', feature:'output-management', scenarios:['folder-choice-history-link'], status:'failed-waived'});
+}
+const evidence={version,sha,...(nativeAttempts?{nativeAttempts}:{}),...(reviewedIosFolder?{folderReview}:{}),
+ ...(waived.length ? {nativeRun, fullScopeCertified:false, waived} : {}),
+ mobileTemplateAssets,releaseScopeId:featureParity.releaseScopeId,releasePlatforms:featureParity.platforms,releaseScopeSummary:featureParity.summary,supplementalArtifactPolicyId,supplementalArtifactPolicySha256,iosPackage:iosPackageReceipt,buildRun,desktopSourceSha:build.headSha,mobileRun,mobileSourceSha:mobile.headSha,signingHash,assets:files.map(file=>({name:path.basename(file),size:fs.statSync(file).size,sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}))};
 fs.writeFileSync('release-assets/verification.json',JSON.stringify(evidence,null,2));
 call('gh',['release','create',tag,...files,'release-assets/verification.json','--target',sha,'--draft','--title',`Langbai NovelAI Studio ${tag}`,'--notes-file',publicNotesFile]);
 const draft=JSON.parse(call('gh',['release','view',tag,'--json','isDraft,assets']));

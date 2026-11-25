@@ -7,8 +7,14 @@ import {assertScenarioReceipt} from './feature-acceptance/full-feature-profiles.
 const sources = new Map([['c6b0890fe71c1bd9c75476e57f39b429cadc1610',{run:'44964443841',job:'137030194306'}],['826e5e54105520f32d4aa880caf5a9d7bc5ebe93',{run:'44923792104',job:'136905339862'}],['bd7378e8f7a7106158a6cb3e875202510c0afb58',{run:'44899258107',job:'136831505933'}],['0b5e4b8268ba03a57706a74c7309bfbe3f928556',{run:'44890842540',job:'136806082172'}],['c02d3186fc1b014d3e3611e07b7698cd5c448713',{run:'44707958871',job:'136192164695'}],['a3cd315029c2bc4314d5a112d3e132806392c693',{run:'44746230248',job:'136322152169'}]]);
 const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const read = (dir, file) => JSON.parse(fs.readFileSync(path.join(dir,file),'utf8'));
-export function checkFolderReview(dir,sha,observedJob) {
-  assert.ok(sources.has(sha));
+export function checkFolderReview(dir,sha,observedJob,releaseRun) {
+  if (releaseRun !== undefined) {
+    assert.match(sha, /^[a-f0-9]{40}$/);
+    assert.match(String(releaseRun), /^\d+$/);
+    assert.match(String(observedJob), /^\d+$/);
+  } else {
+    assert.ok(sources.has(sha));
+  }
   const group = read(dir,'CI_COMPONENT_COMMANDS.json');
   assert.equal(group.sourceSha,sha); assert.equal(group.platform,'ios'); assert.equal(group.entryGroup,'os');
   assert.equal(group.exitStatus,1);
@@ -31,13 +37,24 @@ export function checkFolderReview(dir,sha,observedJob) {
   assert.ok(line);const w=JSON.parse(line.slice(line.indexOf(':')+1));
   assert.equal(w.sourceSha,sha);assert.equal(w.appearanceDeadlineSeconds,5);
   assert.equal(w.withinAppearanceDeadline,false);assert.ok(w.elapsedSeconds>=5 && Number.isFinite(w.elapsedSeconds));
-  const identity={...sources.get(sha)};if(observedJob!==undefined){assert.match(String(observedJob),/^\d+$/);identity.job=String(observedJob);}
+  if (releaseRun !== undefined) {
+    const failures = cmd.stdout.split(/\r?\n/).filter(line => / : (failed:|XCTAssert)/.test(line));
+    assert.equal(failures.length, 1, 'Expected only one XCTest assertion');
+    assert.match(failures[0], /Usable naming editor witness arrived after original5s appearance deadline/);
+    assert.ok(w.editorFound === true || w.probeTimes.some(probe => probe.literalMatches === 1),
+      'The naming control must have been observed');
+  }
+  const identity = releaseRun === undefined ? {...sources.get(sha)} : {run:String(releaseRun)};
+  if (observedJob !== undefined) {
+    assert.match(String(observedJob), /^\d+$/);
+    identity.job = String(observedJob);
+  }
   return {...identity,sourceSha:sha,entry:'ios_folder1',status:'failed-waived',
     observedSeconds:w.elapsedSeconds,deadlineSeconds:5,otherGroupEntries:names.slice(0,2),
     groupReceiptSha256:digest(fs.readFileSync(path.join(dir,'CI_COMPONENT_COMMANDS.json')))};
 }
 export function assertOtherOutputReceipts(dir,sha){
-  assert.ok(sources.has(sha));const found=new Map();
+  assert.match(sha,/^[a-f0-9]{40}$/);const found=new Map();
   for(const file of fs.readdirSync(dir)){
     if(!/^[a-f0-9]{64}\.json$/.test(file))continue;
     const r=read(dir,file);if(r.schema!=='client-feature-scenarios/v1'||r.platform!=='ios'||!r.checks?.some(c=>c.feature==='output-management'))continue;

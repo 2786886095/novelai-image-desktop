@@ -334,6 +334,14 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+      - name: Select release policy from the checked-out source
+        id: policy
+        run: |
+          node --input-type=module -e "
+            import {usesStandingReleaseWaivers} from './scripts/release-platform-contract.mjs';
+            import fs from 'node:fs';
+            console.log('standing=' + usesStandingReleaseWaivers(JSON.parse(fs.readFileSync('package.json')).version));
+          " >> "$GITHUB_OUTPUT"
       - name: Wait for exact v3.0.5 native and package jobs
         if: inputs.reviewed_v305_resources_release
         env:
@@ -529,15 +537,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/v301-complementary-runs.py prepare
-      - name: Download v3.0.5 native evidence by producing job and immutable artifact ID
-        if: inputs.reviewed_v305_resources_release
+      - name: Download native release evidence by producing job and immutable artifact ID
+        if: steps.policy.outputs.standing == 'true' || inputs.reviewed_v305_resources_release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          FEATURE_RUN: ${{ inputs.feature_run }}
         run: |
           set -euo pipefail
-          run=44964443841
-          sha=c6b0890fe71c1bd9c75476e57f39b429cadc1610
+          [[ "$FEATURE_RUN" =~ ^[0-9]+$ ]]
+          run="$FEATURE_RUN"
+          sha="$(git rev-parse HEAD)"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run" | jq -e --arg sha "$sha" '.head_sha==$sha and .status=="completed" and .path==".github/workflows/feature-acceptance.yml"' >/dev/null
           jobs=$(gh run view "$run" --json headSha,status,jobs)
           jq -e --arg sha "$sha" '.headSha==$sha and .status=="completed"' <<<"$jobs" >/dev/null
           fetch_evidence() {
@@ -572,7 +583,7 @@ jobs:
           echo "$digest  $RUNNER_TEMP/native-matrix-v304.zip" | sha256sum --check
           unzip -q "$RUNNER_TEMP/native-matrix-v304.zip" -d release-evidence
       - name: Download complete same-source five-platform feature evidence
-        if: inputs.feature_run != '' && !inputs.reviewed_v301_role_release && !inputs.reviewed_v304_mcp_release && !inputs.reviewed_v305_resources_release
+        if: steps.policy.outputs.standing != 'true' && inputs.feature_run != '' && !inputs.reviewed_v301_role_release && !inputs.reviewed_v304_mcp_release && !inputs.reviewed_v305_resources_release
         uses: actions/download-artifact@v4
         with:
           name: five-platform-feature-evidence

@@ -160,3 +160,19 @@ test('v2.8.6 cloud waiver rejects any failed or skipped hosted job',()=>{
  assert.throws(()=>assertV286CloudNativeRun({...run,headSha:'b'.repeat(40)},{sourceSha}));
  assert.throws(()=>assertV286CloudNativeRun({...run,jobs:run.jobs.slice(1)},{sourceSha}));
 });
+
+test('standing waivers are independent and admit only the declared missing scenarios', () => {
+  for (const skippedArtistGpu of [false, true]) {
+    for (const reviewedIosFolder of [false, true]) {
+      const data = items().filter(item => !skippedArtistGpu || !item.windowsArtistProof);
+      const ios = data.find(item => item.receipt.platform === 'ios').receipt;
+      if (reviewedIosFolder) ios.checks = ios.checks.filter(check => check.scenario !== 'folder-choice-history-link');
+      const options = {version:'3.1.0', sourceSha, standingPolicy:true, skippedArtistGpu, reviewedIosFolder};
+      const report = buildFullFeatureMatrix({...options, receipts:data});
+      assertReleasePlatformContract(report, options);
+      assert.equal(report.releaseScopeCertified, !skippedArtistGpu && !reviewedIosFolder);
+      ios.checks = ios.checks.filter(check => check.scenario !== 'managed-write-no-clobber');
+      assert.throws(() => assertReleasePlatformContract(buildFullFeatureMatrix({...options,receipts:data}), options));
+    }
+  }
+});
