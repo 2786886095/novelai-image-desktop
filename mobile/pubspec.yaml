@@ -107,6 +107,7 @@ flutter:
     - assets/ig5/
     - assets/metadata/
     - assets/tags/multilingual-tag-packs.json
+    - assets/tags/legacy-tag-pack-sizes.json
     - assets/ui-fonts/
     - assets/capsule_taxonomy.json
     - assets/prompt_templates.json

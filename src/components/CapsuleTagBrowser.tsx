@@ -1,7 +1,7 @@
 import {capsuleFacets} from "../../shared/capsule-facets";
 import {useEffect,useId,useMemo,useRef,useState} from "react";
 import browse from "../../shared/tag-pack-browse.json";
-import {TAG_PACK_LANGUAGES,TAG_PACK_MANIFEST,TAG_PACK_NAMES,TAG_BROWSE_PAGE_SIZE,TAG_PACK_SORTS,tagPackLanguage,tagPackSort,type TagPackSort,type TagPackLanguage,type TagPackStatus,type TagPackPage} from "../../shared/multilingual-tag-pack-contract";
+import {packUpdateLabel,TAG_PACK_LANGUAGES,TAG_PACK_MANIFEST,TAG_PACK_NAMES,TAG_BROWSE_PAGE_SIZE,TAG_PACK_SORTS,tagPackLanguage,tagPackSort,type TagPackSort,type TagPackLanguage,type TagPackStatus,type TagPackPage} from "../../shared/multilingual-tag-pack-contract";
 import {tagPackKey,useTagPackRevision} from "../tag-pack-lookup";
 import {capsuleTagUnits} from "../compact-prompt";
 import {fmtCount} from "../text-utils";
@@ -251,7 +251,7 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
 
   async function chooseLanguage(pack:TagPackLanguage) {
     if(!status || busy)return;
-    if(pack===status.active){setOpen(false);search.current?.focus();return;}
+    if(pack===status.active&&!status.outdated?.[pack]){setOpen(false);search.current?.focus();return;}
     setError(false); setBusy(pack);
     try{
       const next=await window.naiDesktop.installMultilingualTagPack(pack,status.installed.includes(pack)?"use":"download");
@@ -293,7 +293,7 @@ export function CapsuleTagBrowser({query,onQueryChange,searchPlaceholder,onPick,
               return <button type="button" key={pack} data-capsule-pack-language={pack} aria-pressed={current}
                 disabled={!status||!!busy} onClick={()=>void chooseLanguage(pack)}>
                 <span>{TAG_PACK_NAMES[pack]}</span>
-                <small>{busy===pack?l[5]:current?l[2]:status?.installed.includes(pack)?l[3]:
+                <small>{busy===pack?l[5]:status?.outdated?.[pack]?packUpdateLabel(locale):current?l[2]:status?.installed.includes(pack)?l[3]:
                   [l[4],Math.round(TAG_PACK_MANIFEST.packs[pack].size/1024**2)+" MiB"].join(" · ")}</small>
               </button>;
             })}

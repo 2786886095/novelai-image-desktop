@@ -69,14 +69,14 @@ function prepare(db: DatabaseSync, column: Column) {
 
 type BrowseIndex={groups:Map<string,Uint32Array>;members:Map<string,Set<number>>};
 let cachedBrowse: {path:string;data:BrowseIndex}|undefined;
-function browseIndex(path:string):BrowseIndex {
+function browseIndex(path:string,version:string):BrowseIndex {
   if(cachedBrowse?.path===path)return cachedBrowse.data;
   const buf=readFileSync(path);
   if(buf.toString("ascii",0,4)!=="LBT1")throw Error("Bad tag group index");
   const length=buf.readUInt32LE(4);
   if(length>4096||buf.length>8*1024*1024)throw Error("Invalid tag group index size");
   const meta=JSON.parse(buf.toString("utf8",8,8+length));
-  if(meta.version!==TAG_PACK_MANIFEST.updatedAt||!Number.isSafeInteger(meta.rows)||meta.rows<1)throw Error("Wrong tag group index version");
+  if(meta.version!==version||!Number.isSafeInteger(meta.rows)||meta.rows<1)throw Error("Wrong tag group index version");
   const groups=new Map<string,Uint32Array>();
   let offset=8+length;
   for(const group of TAG_BROWSE_GROUPS){
@@ -189,8 +189,8 @@ class TagPackReader {
     return [...best.values()];
   }
 
-  page(path:string,group:string,query:string,page:number,sort:TagPackSort):TagPackPage {
-    const index=browseIndex(path);
+  page(path:string,group:string,query:string,page:number,sort:TagPackSort,indexVersion:string):TagPackPage {
+    const index=browseIndex(path,indexVersion);
     const facet = group.startsWith("facet:") && capsuleFacets.find(f=>"facet:"+f.id===group);
     let listed=index.groups.get(group);
     if(facet && !query.trim()) {
@@ -301,8 +301,8 @@ export function searchTagPackDatabase(file: string, query: string, limit: number
   return readerFor(file).search(word,n,sort);
 }
 
-export function browseTagPackDatabase(file:string,index:string,group:string,query:string,page:number,sort:TagPackSort="relevance"):TagPackPage {
-  return readerFor(file).page(index,group,query,page,sort);
+export function browseTagPackDatabase(file:string,index:string,group:string,query:string,page:number,sort:TagPackSort="relevance",indexVersion=TAG_PACK_MANIFEST.updatedAt):TagPackPage {
+  return readerFor(file).page(index,group,query,page,sort,indexVersion);
 }
 
 export function lookupTagPackDatabase(file: string, input: readonly string[], includeTranslation=false): TagDictionaryMatch[] {

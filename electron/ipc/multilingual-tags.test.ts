@@ -114,3 +114,29 @@ it("keeps verified archive offline and resumes without another full transfer",as
   expect(fs.readFileSync(file,'utf8')).toBe('abcd');
  } finally {fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+it('an update preserves the selected language, old lookup and file until the new pack is verified', async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'legacy-active-'));const save=fixture.dir;
+ const prevInput=fixture.input;fixture.dir=root;
+ const dir=path.join(root,'resources','multilingual-tags');fs.mkdirSync(dir,{recursive:true});
+ const {default:sizes}=await import('../../shared/legacy-tag-pack-sizes.json');
+ const original=sizes['2026-11-16']['zh-CN'];const pack=TAG_PACK_MANIFEST.packs['zh-CN'];const oldPack={...pack};
+ try{
+  const old=path.join(dir,'tags-2026-11-16-zh-CN.sqlite');
+  const db=new DatabaseSync(old);db.exec("CREATE TABLE info(language TEXT,updated_at TEXT); INSERT INTO info VALUES('zh-CN','2026-11-16');CREATE TABLE terms(tag TEXT PRIMARY KEY,key TEXT,translated TEXT,translated_key TEXT,category INTEGER,count INTEGER);INSERT INTO terms VALUES('hair','hair','旧译','旧译',0,10)");
+  db.close();sizes['2026-11-16']['zh-CN']=fs.statSync(old).size;fs.writeFileSync(path.join(dir,'active.json'),JSON.stringify('zh-CN'));
+  // Native versioned filenames, live read handles, actual SQLite, no network.
+  expect(multilingualTagStatus()).toMatchObject({active:'zh-CN',outdated:{'zh-CN':'2026-11-16'},installed:[]});
+  expect(lookupMultilingualTags(['hair'])[0].description).toBe('旧译');
+  fixture.input=path.join(root,'bad.gz');fs.writeFileSync(fixture.input,'bad');
+  await expect(installMultilingualTagPack('zh-CN','file')).rejects.toThrow();
+  expect(lookupMultilingualTags(['hair'])[0].description).toBe('旧译');
+  const fresh=path.join(root,'fresh.sqlite');fs.copyFileSync(old,fresh);const next=new DatabaseSync(fresh);
+  next.exec("UPDATE info SET updated_at='2026-11-26'; UPDATE terms SET translated='新译'");next.close();
+  const raw=fs.readFileSync(fresh),gz=gzipSync(raw),hash=(v:Buffer)=>createHash('sha256').update(v).digest('hex');
+  Object.assign(pack,{size:gz.length,sha256:hash(gz),databaseSize:raw.length,databaseSha256:hash(raw)});
+  fs.writeFileSync(fixture.input,gz);const updated=await installMultilingualTagPack('zh-CN','file');
+  expect(updated.active).toBe('zh-CN');expect(updated.installed).toContain('zh-CN');expect(updated.outdated?.['zh-CN']).toBeUndefined();
+  expect(lookupMultilingualTags(['hair'])[0].description).toBe('新译');expect(fs.existsSync(old)).toBe(true);
+ }finally{closeTagPackReader();Object.assign(pack,oldPack);sizes['2026-11-16']['zh-CN']=original;fixture.input=prevInput;fixture.dir=save;fs.rmSync(root,{recursive:true,force:true});}
+});

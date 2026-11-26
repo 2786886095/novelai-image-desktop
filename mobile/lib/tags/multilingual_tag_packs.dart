@@ -40,7 +40,8 @@ class MultilingualTagPacks extends ChangeNotifier {
   Map<String, dynamic> _packs = {};
   String updatedAt = '';
   String? active;
-  final installed = <String>{};
+  final installed = <String>{}; // Current revision only.
+  final outdated = <String,String>{};
   bool busy = false;
   double? progress;
   String? error;
@@ -61,17 +62,27 @@ class MultilingualTagPacks extends ChangeNotifier {
       updatedAt = m['updatedAt'] as String;
       _packs = m['packs'] as Map<String, dynamic>;
       _root = await _getRoot();
+      final legacy = jsonDecode(await rootBundle.loadString('assets/tags/legacy-tag-pack-sizes.json')) as Map<String,dynamic>;
+      final dates = legacy.keys.toList()..sort((a,b)=>b.compareTo(a));
       for (final lang in tagPackNames.keys) {
         final file = _database(lang);
         if (await file.exists() &&
             await file.length() == _packs[lang]['databaseSize']) {
           installed.add(lang);
+        } else {
+          for (final date in dates) {
+            final old = File('${_root.path}/tags-$date-$lang.sqlite');
+            if (await old.exists() && await old.length() == legacy[date][lang]) {
+              outdated[lang]=date;
+              break;
+            }
+          }
         }
       }
       final selection = File('${_root.path}/active.json');
       if (await selection.exists()) {
         final lang = jsonDecode(await selection.readAsString());
-        if (installed.contains(lang)) active = lang as String;
+        if (lang is String && (installed.contains(lang) || outdated.containsKey(lang))) active = lang;
       }
     } catch (e) {
       // A corrupt activation file must not prevent switching dictionaries.
@@ -93,6 +104,11 @@ class MultilingualTagPacks extends ChangeNotifier {
 
   File _database(String lang) => File(
       '${_root.path}/${(_packs[lang]['file'] as String).replaceFirst(RegExp(r"\.gz$"), "")}');
+
+  File _readableDatabase(String lang) {
+    final date=outdated[lang];
+    return date==null?_database(lang):File('${_root.path}/tags-$date-$lang.sqlite');
+  }
 
   Future<void> install(
       String lang, http.Client Function() clientFactory) async {
@@ -162,6 +178,7 @@ class MultilingualTagPacks extends ChangeNotifier {
       final next = File('${work.path}/active.json');
       await next.writeAsString(jsonEncode(lang), flush: true);
       await next.rename('${_root.path}/active.json');
+      outdated.remove(lang);
       active = lang;
     } catch (e) {
       if (retryNumber != 0) interruptedLanguage = null;
@@ -279,7 +296,7 @@ class MultilingualTagPacks extends ChangeNotifier {
     await load();
     final lang=active, q=key(String.fromCharCodes(query.runes.take(255)));
     if(lang==null)return null;
-    final db=await openReadOnlyDatabase(_database(lang).path,singleInstance:false);
+    final db=await openReadOnlyDatabase(_readableDatabase(lang).path,singleInstance:false);
     try {
       final topics=topic.map(key).toSet();
       final slots = List.filled(topics.length, '?').join(',');
@@ -307,7 +324,7 @@ class MultilingualTagPacks extends ChangeNotifier {
         .replaceAll(RegExp(r'\s+'), ' ');
     if (word.isEmpty) return const [];
     final db =
-        await openReadOnlyDatabase(_database(lang).path, singleInstance: false);
+        await openReadOnlyDatabase(_readableDatabase(lang).path, singleInstance: false);
     try {
       final n = limit.clamp(1, 200);
       final byTag = <String, Map<String, Object?>>{};
@@ -366,7 +383,7 @@ class MultilingualTagPacks extends ChangeNotifier {
     final keys = terms.map(key).where((t) => t.isNotEmpty && t.length <= 255)
         .toSet().take(480).toList();
     if (keys.isEmpty) return const [];
-    final db = await openReadOnlyDatabase(_database(lang).path, singleInstance: false);
+    final db = await openReadOnlyDatabase(_readableDatabase(lang).path, singleInstance: false);
     try {
       final found = <String, TagPackHit>{};
       for (final col in ['key', if (translations) 'translated_key']) {

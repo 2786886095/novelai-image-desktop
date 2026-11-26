@@ -1,5 +1,7 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 
+Already using an older four-language dictionary? Select its language under Offline Tag dictionary in Settings and choose Update dictionary. No data reset is needed.
+
 Desktop tag downloads honor system-trusted certificates. Mobile dictionaries resume interrupted transfers automatically and show saved progress. Android artist draws no longer open to a gray screen when restoring empty favorites.
 
 Android now opens the Danbooru tag catalog with the SQLite library shipped in the app. Desktop and mobile can resume dictionary downloads and try another source without losing progress when a server returns the wrong byte range.

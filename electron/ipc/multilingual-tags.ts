@@ -1,3 +1,4 @@
+import oldSizes from "../../shared/legacy-tag-pack-sizes.json";
 import {app,dialog} from "electron";
 import {openTagAsset} from "./tag-asset-download";
 import {createHash,randomUUID} from "node:crypto";
@@ -21,30 +22,48 @@ const selection=()=>path.join(root(),"active.json");
 function installed(lang:TagPackLanguage){
  try{return existsSync(dbPath(lang))&&statSync(dbPath(lang)).size===TAG_PACK_MANIFEST.packs[lang].databaseSize;}catch{return false;}
 }
+// Keep the originally installed, verified file readable while staging its replacement.
+const legacyDates=Object.keys(oldSizes).sort().reverse() as (keyof typeof oldSizes)[];
+const oldPath=(lang:TagPackLanguage,date:string)=>path.join(root(),`tags-${date}-${lang}.sqlite`);
+function previousVersion(lang:TagPackLanguage){
+ for(const date of legacyDates){
+  try{const stat=statSync(oldPath(lang,date));if(stat.isFile() && stat.size===oldSizes[date][lang])return date;}catch{/* not installed */}
+ }
+ return null;
+}
+function readablePack(lang:TagPackLanguage){
+ if(installed(lang))return {file:dbPath(lang),legacy:null};
+ const legacy=previousVersion(lang);return legacy?{file:oldPath(lang,legacy),legacy}:null;
+}
 function preferredTagPack():TagPackLanguage|null {
  try{return tagPackLanguage(JSON.parse(readFileSync(selection(),"utf8")));}catch{return null;}
 }
 export function activeTagPack():TagPackLanguage|null{
  const lang=preferredTagPack();
- return lang&&installed(lang)?lang:null;
+ return lang&&readablePack(lang)?lang:null;
 }
 export function multilingualTagStatus():TagPackStatus {
- return {active:activeTagPack(),installed:TAG_PACK_LANGUAGES.filter(installed),updatedAt:TAG_PACK_MANIFEST.updatedAt,preferred:preferredTagPack()};
+ const outdated:NonNullable<TagPackStatus["outdated"]>={};
+ for(const lang of TAG_PACK_LANGUAGES){const version=readablePack(lang)?.legacy;if(version)outdated[lang]=version;}
+ return {...(Object.keys(outdated).length?{outdated}:{}),active:activeTagPack(),installed:TAG_PACK_LANGUAGES.filter(installed),updatedAt:TAG_PACK_MANIFEST.updatedAt,preferred:preferredTagPack()};
 }
 export function browseMultilingualTags(group:unknown,query:unknown,page:unknown,sort?:unknown){
  const lang=activeTagPack();
  if(!lang||typeof group!=="string"||typeof query!=="string"||typeof page!=="number")return {rows:[],total:0,page:0};
- return browseTagPackDatabase(dbPath(lang),path.join(app.getAppPath(),"shared","tag-pack-groups.bin"),group,query,page,tagPackSort(sort));
+ const pack=readablePack(lang)!;
+ // The two archived dictionaries have identical rowid/tag/count sequences.
+ const index=pack.legacy?"tag-pack-groups-20261116.bin":"tag-pack-groups.bin";
+ return browseTagPackDatabase(pack.file,path.join(app.getAppPath(),"shared",index),group,query,page,tagPackSort(sort),pack.legacy?"2026-11-16":TAG_PACK_MANIFEST.updatedAt);
 }
 /** Null means no selected library; [] is an authoritative offline miss. */
 export function searchMultilingualTags(query:string,limit=20,sort?:unknown):TagSuggestion[]|null {
  const lang=activeTagPack();if(!lang)return null;
- return searchTagPackDatabase(dbPath(lang),query,limit,tagPackSort(sort));
+ return searchTagPackDatabase(readablePack(lang)!.file,query,limit,tagPackSort(sort));
 }
 export function lookupMultilingualTags(input: readonly string[], includeTranslation = false): TagDictionaryMatch[] {
  const lang = activeTagPack();
  if (!lang) return [];
- return lookupTagPackDatabase(dbPath(lang), input, includeTranslation);
+ return lookupTagPackDatabase(readablePack(lang)!.file, input, includeTranslation);
 }
 
 /** Rank suggestions locally, and use the active dictionary as the sole display/translation source. */
@@ -52,7 +71,7 @@ export function relatedMultilingualTags(input:unknown,limit:unknown=8):TagSugges
  const lang=activeTagPack();if(!lang)return null;
  if(!Array.isArray(input))return [];
  const seeds=input.slice(0,12).filter((item):item is string=>typeof item==="string").map(item=>item.slice(0,128));
- const file=dbPath(lang);
+ const file=readablePack(lang)!.file;
  const anchors=lookupTagPackDatabase(file,seeds,true).map(item=>item.tag);
  if(!anchors.length)return [];
  const cap=typeof limit==="number"&&Number.isInteger(limit)?Math.max(1,Math.min(20,limit)):8;

@@ -83,6 +83,7 @@ const _text = {
     '네트워크 연결을 확인하고 다시 시도하세요.'
   ],
 };
+String _updateLabel(String language)=>const {'zh-CN':'更新词库','zh-TW':'更新詞庫','en-US':'Update dictionary','ja-JP':'辞書を更新','ko-KR':'사전 업데이트'}[language]??'更新词库';
 List<String> _labels(String language) => _text[language] ?? _text['zh-CN']!;
 String tagPackSelectorTitle(String language) => _labels(language).first;
 
@@ -164,7 +165,9 @@ class _TagPackSelectorState extends State<TagPackSelector> {
                                       : Icons.radio_button_unchecked,
                                   size: 18),
                               const SizedBox(width: 8),
-                              Expanded(child: Text(entry.value)),
+                              Expanded(child: Text(store.outdated.containsKey(entry.key)
+                                ? '${entry.value} · ${_updateLabel(app.settings.language)}'
+                                : entry.value)),
                               Text(
                                   '${(store.size(entry.key) / 1048576).toStringAsFixed(1)} MiB',
                                   style: theme.textTheme.labelSmall),
@@ -185,8 +188,10 @@ class _TagPackSelectorState extends State<TagPackSelector> {
                       if (store.busy && store.interruptedLanguage == lang && store.retryNumber > 0)
                         Semantics(liveRegion: true, child: Text(
                           '${l[store.retainedBytes > 0 ? 9 : 10]}（${store.retryNumber}/${MultilingualTagPacks.maxRetries}）')),
+                      if (store.outdated.containsKey(lang))
+                        Text('${tagPackNames[lang]}: ${store.outdated[lang]} → ${store.updatedAt}'),
                       FilledButton(
-                        onPressed: store.busy || store.active == lang
+                        onPressed: store.busy || (store.active == lang && !store.outdated.containsKey(lang))
                             ? null
                             : () => store.install(
                                 lang,
@@ -194,7 +199,7 @@ class _TagPackSelectorState extends State<TagPackSelector> {
                                     scope: ProxyScope.update, routeTimeout: const Duration(seconds: 10)))),
                         child: Text(store.busy
                             ? l[6]
-                            : store.installed.contains(lang)
+                            : store.outdated.containsKey(lang) ? _updateLabel(app.settings.language) : store.installed.contains(lang)
                                 ? l[5]
                                 : l[4]),
                       ),
