@@ -10,7 +10,7 @@ describe("capsule dictionary browse",()=>{
     expect(snapshot.updatedAt).toBe(TAG_PACK_MANIFEST.updatedAt);
     expect(capsuleBrowseGroups).toHaveLength(17);
     capsuleBrowseGroups.forEach((g,i)=>{
-      expect(g.source).toMatch(new RegExp("^"+String(i).padStart(2,"0")+"_.*_20261116\\.csv$"));
+      expect(g.source).toMatch(new RegExp("^"+String(i).padStart(2,"0")+"_.*_"+TAG_PACK_MANIFEST.updatedAt.replaceAll("-","")+"\\.csv$"));
       expect(g.sha256).toMatch(/^[a-f0-9]{64}$/);
       expect(g.tags).toHaveLength(snapshot.previewLimit);
       expect(new Set(g.tags).size).toBe(g.tags.length);

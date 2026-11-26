@@ -1,3 +1,5 @@
+import 'package:novelai_mobile/screens/tools_hub_screen.dart';
+import 'package:novelai_mobile/ui/android/android_tokens.dart';
 import 'package:novelai_mobile/services/artist_catalog_service.dart';
 import 'dart:math';
 import 'dart:async';
@@ -130,6 +132,27 @@ void main() {
     await mount();
     expect(tester.takeException(), isNull);
     expect(find.byKey(const ValueKey('artist-pool-source')), findsOneWidget);
+  });
+
+  testWidgets('Android restores an empty artist favorites folder without a gray page',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'artist_lab_random_v1_showFavorites': true});
+    final state = AppState();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(ChangeNotifierProvider.value(value: state,
+      child: MaterialApp(theme: androidStudioTheme(StudioTheme.dark()),
+        home: const ToolsHubScreen())));
+    for (var i = 0; i < 2; i++) {
+      final tool = find.text('随机画师串抽卡');
+      await tester.ensureVisible(tool);
+      await tester.tap(tool);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('还没有收藏的画师串。'), findsOneWidget);
+      expect(find.byType(ErrorWidget), findsNothing);
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.pumpAndSettle();
+    }
   });
 
   for (final model in [

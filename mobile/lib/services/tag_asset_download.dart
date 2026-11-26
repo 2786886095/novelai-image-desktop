@@ -5,10 +5,10 @@ import 'package:http/http.dart' as http;
 const _assetIds = {
   'tag_catalog.db': 533720512,
   'cooccurrence-v2.db.gz': 525243775,
-  'tags-2026-11-16-zh-CN.sqlite.gz': 754870215,
-  'tags-2026-11-16-zh-TW.sqlite.gz': 754870218,
-  'tags-2026-11-16-ja-JP.sqlite.gz': 754870221,
-  'tags-2026-11-16-ko-KR.sqlite.gz': 754870222,
+  'tags-2026-11-26-zh-CN.sqlite.gz': 796598090,
+  'tags-2026-11-26-zh-TW.sqlite.gz': 796598089,
+  'tags-2026-11-26-ja-JP.sqlite.gz': 796598087,
+  'tags-2026-11-26-ko-KR.sqlite.gz': 796598088,
 };
 const _cdn = 'release-assets.githubusercontent.com';
 const _storage = 'releaseassetproduction.blob.core.windows.net';

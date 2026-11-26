@@ -1,4 +1,7 @@
 import axios from "axios";
+import { request as secureRequest, type RequestOptions } from "node:https";
+import type { IncomingMessage } from "node:http";
+import { getCACertificates } from "node:tls";
 import type { Readable } from "node:stream";
 import { proxyConfigForUrl } from "./proxy";
 import { getSettings } from "./store";
@@ -6,14 +9,25 @@ import { getSettings } from "./store";
 const assetIds: Record<string, number> = {
   "tag_catalog.db": 533720512,
   "cooccurrence-v2.db.gz": 525243775,
-  "tags-2026-11-16-zh-CN.sqlite.gz": 754870215,
-  "tags-2026-11-16-zh-TW.sqlite.gz": 754870218,
-  "tags-2026-11-16-ja-JP.sqlite.gz": 754870221,
-  "tags-2026-11-16-ko-KR.sqlite.gz": 754870222,
+  "tags-2026-11-26-zh-CN.sqlite.gz": 796598090,
+  "tags-2026-11-26-zh-TW.sqlite.gz": 796598089,
+  "tags-2026-11-26-ja-JP.sqlite.gz": 796598087,
+  "tags-2026-11-26-ko-KR.sqlite.gz": 796598088,
 };
 const cdn = "release-assets.githubusercontent.com";
 const storage = "releaseassetproduction.blob.core.windows.net";
 const allowed = new Set(["github.com", "api.github.com", cdn, "objects.githubusercontent.com", storage]);
+
+// Electron's Node HTTP adapter does not automatically use the OS trust store.
+// Set trust per TLS connection, including the destination side of proxy tunnels;
+// never change the process defaults, hostname verification or redirect policy.
+let tagRoots: string[] | undefined;
+export const tagAssetTransport = {
+  request(options: RequestOptions, callback: (response: IncomingMessage) => void) {
+    tagRoots ??= [...new Set([...getCACertificates("default"), ...getCACertificates("system")])];
+    return secureRequest({ ...options, ca: tagRoots, rejectUnauthorized: true }, callback);
+  },
+};
 
 export async function openTagAsset(url: string, size: number, signal = new AbortController().signal, offset = 0) {
   const canonical = new URL(url);
@@ -34,7 +48,7 @@ export async function openTagAsset(url: string, size: number, signal = new Abort
     try {
       const response = await axios.get<Readable>(target.href, {
         ...await proxyConfigForUrl("update", target.origin + target.pathname, getSettings()),
-        responseType: "stream", timeout: 30_000, maxRedirects: 0, signal,
+        transport: tagAssetTransport, responseType: "stream", timeout: 30_000, maxRedirects: 0, signal,
         maxContentLength: size, validateStatus: () => true,
         headers: { Accept: "application/octet-stream", ...(offset ? { Range: `bytes=${offset}-` } : {}) },
       });
