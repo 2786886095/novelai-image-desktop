@@ -6790,7 +6790,7 @@ button.prompt-chip-head {
 .style-preset-menu-item {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px;
+  grid-template-columns: minmax(0, 1fr) 32px 32px;
   align-items: center;
   gap: 2px;
   min-width: 0;
@@ -19641,7 +19641,7 @@ button.prompt-chip-head::after,
 .tavern-shared-style-menu .style-folder > header > button:first-child > svg:first-child { width: 17px; height: 17px; color: var(--accent); }
 .tavern-shared-style-menu .style-folder > header > button:first-child > svg:last-child { width: 16px; height: 16px; transition: transform 160ms ease; }
 .tavern-shared-style-menu .style-folder.expanded > header > button:first-child > svg:last-child { transform: rotate(90deg); }
-.tavern-style-preset-menu-item { grid-template-columns: minmax(0, 1fr); }
+.tavern-style-preset-menu-item { grid-template-columns: minmax(0, 1fr) 32px; }
 .tavern-style-preset-menu-item > button:first-child small svg { width: 14px; height: 14px; }
 .tavern-shared-style-menu .style-preset-hover-preview {
   left: auto;

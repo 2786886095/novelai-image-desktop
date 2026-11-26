@@ -1,3 +1,4 @@
+import {appendStylePrompt} from "./tavern/style-draw";
 import { pageUi } from "./desktop-page-ui";
 import {confirmAction} from './components/confirm';
 import {FilePicker} from './components/FilePicker';
@@ -52,7 +53,13 @@ export default function StyleLibrary(){
  }
  const fresh=(name='',prompt=''):StylePromptPreset=>({id:crypto.randomUUID(),name,prompt,group:group||'Default',createdAt:new Date().toISOString(),rating:0,usageCount:0,previewImages:[]});
  async function cancel(){if(draft){const original=items.find(p=>p.id===draft.id);for(const im of draft.previewImages??[])if(!original?.previewImages?.some(x=>x.id===im.id))await window.naiDesktop.deleteStylePromptPresetImage(draft.id,im.id);}setDraft(null);setBatch(false);}
- async function apply(p:StylePromptPreset){await countStyleUse(p.id);useAppStore.getState().setParam('stylePrompt',p.prompt);useAppStore.getState().setActiveTab('generate');}
+ async function apply(p:StylePromptPreset,append=false){
+  const s=useAppStore.getState();
+  s.setParam('stylePrompt',append?appendStylePrompt(s.params.stylePrompt,p.prompt):p.prompt);
+  if(!append)s.setActiveTab('generate');
+  await countStyleUse(p.id);
+  if(append)s.setToast(t.appendStyle+': '+p.name);
+ }
  async function reorder(id:string,target:string){await changeStyles(all=>moveStyle(all,id,target,visible.map(p=>p.id)));await setStyleSort('custom');}
  async function save(){if(!draft?.name.trim()||!draft.prompt.trim()||!ratingValid)return;const value={...draft,coverImageId:draft.previewImages?.[styleCoverIndex(draft)]?.id,rating,name:draft.name.trim(),prompt:draft.prompt.trim()};const old=items.find(x=>x.id===value.id);
   await changeStyles(all=>all.some(p=>p.id===value.id)?all.map(p=>p.id===value.id?{...p,...value,usageCount:p.usageCount,sortOrder:p.sortOrder}:p):[...all,value]);
@@ -75,7 +82,7 @@ export default function StyleLibrary(){
  {!draft&&!batch&&<div className="style-library-list">{visible.length===0&&<div className="style-library-empty"><p>{query||group?pageUi(settings?.language).noMatch:t.empty}</p>{query||group?<Button onClick={()=>{setQuery("");setGroup("");}}>{pageUi(settings?.language).reset}</Button>:<Button onClick={()=>edit(fresh())}>{t.new}</Button>}</div>}{visible.map((p,i)=><article key={p.id} className={`style-library-card ${drag===p.id?'is-dragging':''} ${over===p.id?'is-drop-target':''}`} onDragOver={e=>{if(drag){e.preventDefault();setOver(p.id);}}} onDrop={e=>{e.preventDefault();if(drag)void run(()=>reorder(drag,p.id));setDrag('');setOver('');}}>
  <button className="style-library-handle" aria-label={`${t.drag}: ${p.name}`} draggable={!busy} onDragStart={e=>{setDrag(p.id);e.dataTransfer.setData('text/plain',p.id);e.dataTransfer.effectAllowed='move';e.dataTransfer.setDragImage(e.currentTarget.parentElement!,20,20);}} onDragEnd={()=>{setDrag('');setOver('');}}><span aria-hidden="true">≡</span></button>
  <div className="style-library-preview-group" role="group" aria-label={`${t.images}: ${p.name}`}><div className="style-library-preview-grid">{p.previewImages?.length?<button aria-label={`${t.images}: ${p.name} · ${styleCoverIndex(p)+1}/${p.previewImages.length}`} onClick={()=>setPreview({preset:p,index:styleCoverIndex(p)})}><img src={p.previewImages[styleCoverIndex(p)].fileUrl} alt={p.previewImages[styleCoverIndex(p)].name} loading="lazy"/></button>:<span className="style-library-empty-preview"><Icon name="images"/></span>}</div>{!!p.previewImages?.length&&<small>{t.images} · {p.previewImages.length}</small>}</div><div className="style-library-info"><h3>{p.name}</h3><small>{p.group} · {t.rating} {p.rating??0}/5 · {t.uses} {p.usageCount??0}</small><p>{p.prompt}</p></div>
- <div className="style-library-actions"><Button disabled={busy} onClick={()=>edit(p)}>{t.edit}</Button><Button disabled={busy} onClick={()=>void run(()=>apply(p))}>{t.apply}</Button><Button aria-label={`${t.moveUp}: ${p.name}`} disabled={busy||i===0} onClick={()=>void run(()=>reorder(p.id,visible[i-1].id))}>↑</Button><Button aria-label={`${t.moveDown}: ${p.name}`} disabled={busy||i===visible.length-1} onClick={()=>void run(()=>reorder(p.id,visible[i+1].id))}>↓</Button><Button variant="danger" disabled={busy} onClick={async()=>{if(await confirmAction(t.confirmDelete,t.delete))void run(async()=>{await changeStyles(all=>all.filter(x=>x.id!==p.id));await window.naiDesktop.deleteStylePromptPresetImages(p.id);});}}>{t.delete}</Button></div></article>)}</div>}
+ <div className="style-library-actions"><Button disabled={busy} onClick={()=>edit(p)}>{t.edit}</Button><Button disabled={busy} onClick={()=>void run(()=>apply(p))}>{t.apply}</Button><Button disabled={busy} onClick={()=>void run(()=>apply(p,true))}>{t.appendStyle}</Button><Button aria-label={`${t.moveUp}: ${p.name}`} disabled={busy||i===0} onClick={()=>void run(()=>reorder(p.id,visible[i-1].id))}>↑</Button><Button aria-label={`${t.moveDown}: ${p.name}`} disabled={busy||i===visible.length-1} onClick={()=>void run(()=>reorder(p.id,visible[i+1].id))}>↓</Button><Button variant="danger" disabled={busy} onClick={async()=>{if(await confirmAction(t.confirmDelete,t.delete))void run(async()=>{await changeStyles(all=>all.filter(x=>x.id!==p.id));await window.naiDesktop.deleteStylePromptPresetImages(p.id);});}}>{t.delete}</Button></div></article>)}</div>}
  {preview&&<div className="style-image-lightbox" role="dialog" aria-modal="true" onClick={e=>{if(e.target===e.currentTarget)setPreview(null);}}><button aria-label={t.close} onClick={()=>setPreview(null)}>×</button><PreviewImageViewer images={preview.preset.previewImages!.map(im=>({src:im.fileUrl,alt:im.name}))} index={preview.index} onIndex={index=>setPreview({...preview,index})} onBackgroundClick={()=>setPreview(null)}/></div>}
  </main>;
 }

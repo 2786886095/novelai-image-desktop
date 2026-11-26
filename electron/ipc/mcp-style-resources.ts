@@ -1,3 +1,4 @@
+import {appendStylePrompt} from '../../src/tavern/style-draw';
 import {PRECISE_REFERENCE_TYPES} from '../../src/types';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -58,7 +59,7 @@ export function styleResourceTools(window:()=>BrowserWindow|null|undefined,resol
     tool('apply_prompt_library_entry','Preview then apply one saved text entry to the current generation workbench. Only affects the designated text field, never mounts images or generates.',shape({kind:{type:'string',enum:['positive','negative','style','chunk']},id:word,mode:{type:'string',enum:['append','replace']},revision},['kind','id','mode']),false,async a=>{
       const read=()=>{const s=getSettings();const rows=a.kind==='chunk'?s.promptChunks:a.kind==='positive'?s.positivePromptPresets:a.kind==='negative'?s.negativePromptPresets:s.stylePromptPresets;const r=rows.find(x=>x.id===a.id);if(!r)throw Error('预设不存在');if('captions' in r&&Array.isArray(r.captions)&&r.captions.length)throw Error('这是角色组合，请使用 prepare_character_group。');return 'content' in r?r.content:r.prompt;};
       const slot=a.kind==='style'?'stylePrompt':a.kind==='negative'?'negativePrompt':'positivePrompt',current=await requestWorkbench(window,{op:'prompt',slot}) as {text:string},text=read();
-      const next=a.mode==='replace'||!current.text.trim()?text:current.text+(current.text.trimEnd().endsWith(',')?' ':', ')+text;
+      const next=a.mode==='replace'?text:a.kind==='style'?appendStylePrompt(current.text,text):!current.text.trim()?text:current.text+(current.text.trimEnd().endsWith(',')?' ':', ')+text;
       const rev=revisionOf('applyPrompt',a.id,a.kind,a.mode,current.text,next);if(reviewing(a.revision,rev))return {preview:true,revision:rev,slot,before:current.text,after:next};
       return requestWorkbench(window,{op:'prompt',slot,expected:current.text,value:next});
     }),

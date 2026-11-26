@@ -13,7 +13,7 @@ import {startMcpServer} from './mcp-server';
 import {galleryMcpForWindow} from './mcp-history-gallery-runtime';
 it('authenticated tools/list and tools/call keep gallery assets, base image and explicit live references independent',async()=>{
   fx.dir=fs.mkdtempSync(path.join(os.tmpdir(),'mcp-styles-'));
-  const state={bootDone:true,settings:{imageProvider:'novelai'},activeTab:'generate',isGenerating:false,inpaintModel:'',params:{model:'nai-diffusion-4-5-full',effort:'high' as 'medium'|'high',prompt:'unchanged'},baseImage:'unchanged',
+  const state={bootDone:true,settings:{imageProvider:'novelai'},activeTab:'generate',isGenerating:false,inpaintModel:'',params:{model:'nai-diffusion-4-5-full',effort:'high' as 'medium'|'high',prompt:'unchanged',stylePrompt:'ink， '},setParam(k:string,v:string){Object.assign(this.params,{[k]:v});},baseImage:'unchanged',
     vibeImages:[] as VibeTransferImage[],preciseReferences:[] as PreciseReferenceImage[],
     addVibeImage(i:VibeTransferImage){this.vibeImages.push(i);return true;},addPreciseReference(i:PreciseReferenceImage){this.preciseReferences.push(i);},
     removeVibeImage(id:string){this.vibeImages=this.vibeImages.filter(i=>i.id!==id);},removePreciseReference(id:string){this.preciseReferences=this.preciseReferences.filter(i=>i.id!==id);}};
@@ -34,6 +34,13 @@ it('authenticated tools/list and tools/call keep gallery assets, base image and 
     expect(listed.find((tool:{name:string}) => tool.name === 'generate_image').inputSchema.properties.preciseReferences.items.properties)
       .toMatchObject({type:{enum:expect.arrayContaining(['costume','character_mainoutfit','character&style_anyoutfit'])},strength:{maximum:5}});
     expect(names).toEqual(expect.arrayContaining(['list_style_assets','move_style_presets','attach_style_images','mount_workbench_reference','unmount_workbench_reference','list_workbench_references','create_style_group']));
+    for(const prefix of ['ink','ink, unedited']){
+      const args={kind:'style',id:'p2',mode:'append'};
+      const p=await call('apply_prompt_library_entry',args);
+      expect(p.after).toBe(prefix+', unedited');
+      await call('apply_prompt_library_entry',{...args,revision:p.revision});
+      expect(state.params.stylePrompt).toBe(p.after);
+    }
     await call('create_style_group',{name:'水彩'});expect((await call('create_style_group',{name:'水彩'})).created).toBe(false);
     const move={presetIds:['p1','p2'],group:'水彩'},mv=await call('move_style_presets',move);
     expect(fx.settings.stylePromptPresets.map(p=>p.group)).toEqual(['Default','Default']);

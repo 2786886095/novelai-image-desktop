@@ -1,5 +1,6 @@
 {
   "zh-CN": {
+    "appendStyle": "追加到风格提示词",
     "title": "风格管理",
     "search": "搜索名称或提示词",
     "all": "全部分类",
@@ -50,6 +51,7 @@
     "setCover": "设为封面"
   },
   "en-US": {
+    "appendStyle": "Append to style prompt",
     "title": "Styles",
     "search": "Search names or prompts",
     "all": "All categories",
@@ -100,6 +102,7 @@
     "setCover": "Set as cover"
   },
   "zh-TW": {
+    "appendStyle": "追加到風格提示詞",
     "title": "風格管理",
     "search": "搜尋名稱或提示詞",
     "all": "全部分類",
@@ -150,6 +153,7 @@
     "setCover": "設為封面"
   },
   "ja-JP": {
+    "appendStyle": "スタイルプロンプトに追記",
     "title": "スタイル管理",
     "search": "名前・プロンプトを検索",
     "all": "全カテゴリ",
@@ -200,6 +204,7 @@
     "setCover": "カバーに設定"
   },
   "ko-KR": {
+    "appendStyle": "스타일 프롬프트에 덧붙이기",
     "title": "스타일 관리",
     "search": "이름 또는 프롬프트 검색",
     "all": "모든 분류",

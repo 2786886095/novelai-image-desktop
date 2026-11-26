@@ -1,3 +1,4 @@
+import '../i18n/style_library_text.dart';
 import '../images/image_file_access.dart';
 import '../images/coordinated_file_image.dart';
 import '../ui/effort_control.dart';
@@ -3159,6 +3160,7 @@ class _AgentScreenState extends State<AgentScreen> {
     final style = TextEditingController(text: character.visual.stylePrompt);
     String? styleBeforeLibrary;
     String? styleAfterLibrary;
+    bool appendPreset = false;
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -3168,6 +3170,11 @@ class _AgentScreenState extends State<AgentScreen> {
             width: 640,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
+                SwitchListTile(
+                  value: appendPreset,
+                  onChanged: (v) => setDialogState(() => appendPreset = v),
+                  title: Text(styleLibraryText(controller.app.settings.language)['appendStyle']!),
+                ),
                 StudioDropdownButtonFormField<String>(
                   value: null,
                   isExpanded: true,
@@ -3187,7 +3194,9 @@ class _AgentScreenState extends State<AgentScreen> {
                         .where((item) => item.id == id)
                         .firstOrNull;
                     if (preset != null) {
-                      setDialogState(() => style.text = preset.prompt);
+                      setDialogState(() => style.text = appendPreset
+                          ? appendStylePrompt(style.text, preset.prompt)
+                          : preset.prompt);
                     }
                   },
                 ),

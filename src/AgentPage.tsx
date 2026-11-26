@@ -1,3 +1,5 @@
+import {appendStylePrompt} from "./tavern/style-draw";
+import styleLabels from "../shared/style-library-ui.json";
 import { pageUi } from "./desktop-page-ui";
 import { supportsNAIMediumEffort } from "./types";
 import { EffortControl } from "./components/EffortControl";
@@ -2569,6 +2571,12 @@ function ImagePanel({ workspace, conversation, character, defaults, stylePresets
                                 <span>{preset.name}</span>
                                 {(preset.previewImages ?? []).length ? <small><ImageIcon />{(preset.previewImages ?? []).length}/9</small> : <small>{tx("noReference")}</small>}
                               </button>
+                              <button type="button" className="style-preset-more" title={styleLabels[normalizeAppLanguage(language)].appendStyle}
+                                aria-label={styleLabels[normalizeAppLanguage(language)].appendStyle + ": " + preset.name} onClick={() => {
+                                  const next = appendStylePrompt(userPromptDraft.style, preset.prompt);
+                                  editUserPromptDraft("style", next);
+                                  updateVisual({stylePrompt: next});
+                                }}>＋</button>
                             </div>
                           ))}
                         </div></AnimatedCollapse>

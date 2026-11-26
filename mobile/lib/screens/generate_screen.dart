@@ -2067,7 +2067,7 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                     key: ValueKey('append-style-${preset.id}'),
                     onPressed: preset.prompt.trim().isEmpty ? null : () {
                       state.applyStylePromptPreset(preset, append: true);
-                      Navigator.pop(sheetContext);
+                      setSheetState(() {});
                     },
                     child: Text(copy['append']!, semanticsLabel: copy['appendStyle']),
                   ),
@@ -2169,9 +2169,13 @@ class _StylePresetControlsState extends State<_StylePresetControls> {
                             label: Text(copy['newArtist']!)),
                           Text('${state.settings.stylePromptPresets.length}',
                               style: Theme.of(context).textTheme.labelLarge),
+                          CloseButton(onPressed: () => Navigator.pop(sheetContext)),
                         ],
                       ),
                     ),
+                    if (state.params.stylePrompt.isNotEmpty)
+                      Padding(padding: const EdgeInsets.symmetric(horizontal: 18),
+                        child: Text(state.params.stylePrompt, maxLines: 2, overflow: TextOverflow.ellipsis)),
                     const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 16),
                         child: StyleSortPicker()),

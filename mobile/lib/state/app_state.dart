@@ -1,3 +1,4 @@
+import '../agent/style_draw.dart' show appendStylePrompt;
 import 'package:http/http.dart' as http;
 import '../prompts/template_library.dart';
 import '../images/image_file_access.dart';
@@ -1260,10 +1261,7 @@ class AppState extends ChangeNotifier {
         params.stylePrompt = preset.prompt;
         return;
       }
-      final current = params.stylePrompt.trimRight();
-      final extra = preset.prompt.trim();
-      params.stylePrompt = current.isEmpty ? extra
-          : current.endsWith(',') ? '$current $extra' : '$current, $extra';
+      params.stylePrompt = appendStylePrompt(params.stylePrompt, preset.prompt);
     });
     unawaited(updateStyleLibrary((s) {
       final p = s.stylePromptPresets.where((p) => p.id == preset.id).firstOrNull;

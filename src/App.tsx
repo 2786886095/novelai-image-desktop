@@ -63,7 +63,8 @@ import {CompactIconButton,FurryModeSwitch,ResolutionPicker,CapsuleEditor} from "
 import {useFeatureText} from "./feature-i18n";
 import {localizeStoreMessage} from './store-i18n';
 import {CompletionSoundSettings} from "./components/CompletionSoundSettings";
-import StyleLibrary, { confirmStyleGroupDeletion } from "./StyleLibrary";
+import {appendStylePrompt} from "./tavern/style-draw";
+import StyleLibrary, { confirmStyleGroupDeletion, styleText } from "./StyleLibrary";
 import {sortStyles} from "./style-library";
 import {countStyleUse} from "./style-library-client";
 import { planUpscale } from "./upscale-plan";
@@ -1910,13 +1911,15 @@ export function PromptAndParams({
     setStylePresetMenuOpen(true);
   }
 
-  async function applyStylePromptPreset(id: string) {
-    setSelectedStylePresetId(id);
+  async function applyStylePromptPreset(id: string, append = false) {
     const preset = stylePromptPresets.find((item) => item.id === id);
     if (!preset) return;
-    setStylePresetMenuOpen(false);
-    setHoveredStylePresetId("");
-    setPromptField("stylePrompt", preset.prompt);
+    if (!append) {
+      setSelectedStylePresetId(id);
+      setStylePresetMenuOpen(false);
+      setHoveredStylePresetId("");
+    }
+    setPromptField("stylePrompt", append ? appendStylePrompt(useAppStore.getState().params.stylePrompt, preset.prompt) : preset.prompt);
     await countStyleUse(preset.id);
     setToast(f("prompt.stylePresetApplied", { name: preset.name }));
   }
@@ -2330,6 +2333,9 @@ export function PromptAndParams({
                           <Icon name="eye" /> {(preset.previewImages ?? []).length}/9
                         </small>
                       </button>
+                      <button type="button" className="style-preset-more" title={styleText(settings?.language).appendStyle}
+                        aria-label={styleText(settings?.language).appendStyle + ": " + preset.name}
+                        onClick={() => void applyStylePromptPreset(preset.id, true)}><Icon name="plus" /></button>
                       <button type="button" className="style-preset-more" title={t("prompt.styleMove")} aria-label={f("prompt.styleMoveTo", { name: preset.name })} onClick={() => setStylePresetActionId((current) => current === preset.id ? "" : preset.id)}><Icon name="moreHorizontal" /></button>
                       {stylePresetActionId === preset.id && (
                         <div className="style-preset-item-popover">

@@ -63,6 +63,13 @@ describe("native image continuity contract", () => {
   it("holds invalid candidate out of the next image state", () => {const pending={...base,id:"bad",continuity:{reviewRequired:true,changes:[]}};expect(latestImageState([message("old",base),message("pending",pending)])?.id).toBe("base");});
   it("does not use later images when regenerating an older reply",()=>expect(latestImageState([message("old",base),message("target"),message("future",{...base,id:"future"})],undefined,"target")?.id).toBe("base"));
   it("restores each alternative reply's own prompt",()=>{const m={...message("reply",base),swipes:["one","two"],swipeIndex:0,imageProposalSwipes:[base,{...base,id:"two",positivePrompt:"blue shirt"}]};selectImageSwipe(m,1);expect(m.imageProposal?.positivePrompt).toBe("blue shirt");selectImageSwipe(m,0);expect(m.imageProposal?.positivePrompt).toBe(base.positivePrompt);});
+  it("appends successive styles without changing their internal syntax",()=>{
+    for(const left of ["ink","ink,","ink， ", "ink, , "])
+      for(const right of ["wash",", wash"," ， ,wash"])
+        expect(appendStylePrompt(left,right)).toBe("ink, wash");
+    expect(appendStylePrompt(appendStylePrompt("","1.2::ink, paper::,"),", wash")).toBe("1.2::ink, paper::, wash");
+    expect(appendStylePrompt("ink, ", " , ")).toBe("ink, ");
+  });
   it("draws reproducibly without changing the input pool or fixed style",()=>{const pool=["watercolor","lineart","soft lighting"];const copy=[...pool];const a=drawStyleTags(pool,["lineart"],1,0.2,1.2,42);expect(a).toBe(drawStyleTags(pool,["lineart"],1,0.2,1.2,42));expect(a).toContain("::lineart::");expect(pool).toEqual(copy);expect(appendStylePrompt("1.2::artist:name::",a)).toBe("1.2::artist:name::, "+a);});
   it("leaves an empty style empty until the user applies something",()=>{expect(appendStylePrompt("","")).toBe("");expect(drawStyleTags([],[],3,.2,1.2,1)).toBe("");expect(drawStyleTags(["lineart"],[],1,0,0,0)).toBe("0::lineart::");});
 });

@@ -14,6 +14,15 @@ module.exports=async function({call,dir,src,port,token,image}){
   const ids=v.items.map(i=>i.id);await commit('edit_prompt_library',{kind,items:[{id:ids[0],name:'resource A',...(kind==='style'?{rating:5}:{})},{id:ids[1],text:'changed'}]});
   const found=await call('browse_prompt_library',{kind,query:'resource A'});assert.equal(found.items[0].id,ids[0]);if(kind==='style')assert.equal(found.items[0].rating,5);
   const arg={kind,id:ids[0],mode:'replace'};const preview=await call('apply_prompt_library_entry',arg);assert.equal(preview.slot,kind==='negative'?'negativePrompt':kind==='style'?'stylePrompt':'positivePrompt');if(kind==='chunk')assert.equal(preview.before,'unchanged');await commit('apply_prompt_library_entry',arg);assert.equal((await call('apply_prompt_library_entry',arg)).before,'red flower');
+  if(kind==='style'){
+   await commit('edit_prompt_library',{kind,items:[{id:ids[1],text:', blue bird,'}]});
+   const append={kind,id:ids[1],mode:'append'};
+   for(const expected of ['red flower, blue bird,','red flower, blue bird, blue bird,']){
+    assert.equal((await call('apply_prompt_library_entry',append)).after,expected);
+    await commit('apply_prompt_library_entry',append);
+    assert.equal((await call('apply_prompt_library_entry',arg)).before,expected);
+   }
+  }
  }
  console.log('PASS 4 text libraries: create, rename, edit, page, stale refusal, live prompt preview / apply / readback');
  const refs=await call('list_workbench_references');const one=await call('save_reference_preset',{kind:'vibe',name:'ref-A',image}),two=await call('save_reference_preset',{kind:'precise',name:'ref-B',image});assert.deepEqual(await call('list_workbench_references'),refs);

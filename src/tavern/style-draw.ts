@@ -14,6 +14,8 @@ export function drawStyleTags(tags: string[], pinned: string[], count: number, m
   return chosen.map((tag) => `${(Math.round((low + random() * (high - low)) * 100) / 100).toFixed(2).replace(/\.?0+$/, "")}::${tag}::`).join(", ");
 }
 export function appendStylePrompt(base: string, addition: string): string {
-  if (!addition.trim()) return base;
-  return base.trim() ? base + (base.trimEnd().endsWith(",") ? " " : ", ") + addition : addition;
+  const right = addition.replace(/^[\s,，]+/u, "");
+  if (!right) return base;
+  const left = base.replace(/[\s,，]+$/u, "");
+  return left ? left + ", " + right : right;
 }

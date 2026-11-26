@@ -30,8 +30,8 @@ String drawStyleTags(List<String> tags, List<String> pinned, int count,
 }
 
 String appendStylePrompt(String base, String addition) {
-  if (addition.trim().isEmpty) return base;
-  return base.trim().isEmpty
-      ? addition
-      : '$base${base.trimRight().endsWith(',') ? ' ' : ', '}$addition';
+  final right = addition.replaceFirst(RegExp(r'^[\s,，]+'), '');
+  if (right.isEmpty) return base;
+  final left = base.replaceFirst(RegExp(r'[\s,，]+$'), '');
+  return left.isEmpty ? right : '$left, $right';
 }

@@ -25,6 +25,21 @@ void main() {
     expect(preset.toJson()['previewImages'], hasLength(9));
   });
 
+  test('replace keeps exact text; append normalizes only the join', () async {
+    SharedPreferences.setMockInitialValues({});
+    final app = AppState();
+    StylePromptPreset preset(String s) => StylePromptPreset.fromJson({
+      'id': s, 'name': s, 'prompt': s, 'createdAt': '',
+    });
+    app.applyStylePromptPreset(preset('1.2::ink, paper::, '));
+    app.applyStylePromptPreset(preset('， , wash,'), append: true);
+    app.applyStylePromptPreset(preset('soft'), append: true);
+    expect(app.params.stylePrompt, '1.2::ink, paper::, wash, soft');
+    app.applyStylePromptPreset(preset('solo,'));
+    expect(app.params.stylePrompt, 'solo,');
+    await app.updateStyleLibrary((_) {});
+  });
+
   test('legacy style prompt preset loads with an empty image collection', () {
     final preset = StylePromptPreset.fromJson({
       'id': 'legacy',
