@@ -22,3 +22,24 @@ test('v3.0.1 exemptions are source-bound and do not require claiming that the pi
  r.jobs.find(j=>j.name==='ios-components (ui)').conclusion='failure';assert.throws(()=>verify(false));
  assert.throws(()=>assertV286CloudNativeRun(fixture(),{sourceSha:sha,strictGpuMatrix301:true}));
 });
+
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {zstdCompressSync} from 'node:zlib';
+import {focusedFailureTree} from './v300-folder-review.mjs';
+test('late witness requires a referenced, unique, focused nonempty editor in the same PID, not an arbitrary dump',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'picker-review-'));
+ try {
+  const id=c=>'0~'+c.repeat(86)+'==';const file=c=>path.join(dir,'data.'+id(c));
+  const header="Attributes: Application, 0xabc, pid: 42, label: 'Langbai Studio'";
+  const line="  TextView, 0xdef, {{3.0, 4.0}, {19.0, 6.0}}, identifier: 'DOC.inlineRenameField', value: untitled folder, Keyboard Focused";
+  const write=(text,name='final-picker-state-actual-accessibility-tree')=>{
+   fs.writeFileSync(file('a'),zstdCompressSync(Buffer.from(text)));
+   fs.writeFileSync(file('b'),zstdCompressSync(Buffer.from('K4:name[S6:StringK2:_vV44:'+name+']K10:payloadRef[S9:ReferenceK2:id[S6:StringK2:_vV90:'+id('a')+']]K11:payloadSize[S3:IntK2:_vV3:'+Buffer.byteLength(text)+']')));
+  };
+  const text=header+'\n'+line;write(text);assert.equal(focusedFailureTree(dir,42)?.kind,'post-timeout-focused-editor');assert.equal(focusedFailureTree(dir,43),null);
+  for(const invalid of [text.replace('Keyboard Focused','Not Focused'),text.replace('19.0','0.0'),text.replace('DOC.inlineRenameField','UISearchBarTextField'),text+'\n'+line]){write(invalid);assert.equal(focusedFailureTree(dir,42),null);}
+  write(text,'unrelated-attachment');assert.equal(focusedFailureTree(dir,42),null);
+ } finally {fs.rmSync(dir,{recursive:true,force:true});}
+});

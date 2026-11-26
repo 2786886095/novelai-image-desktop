@@ -1,5 +1,7 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 
+Desktop tag downloads honor system-trusted certificates. Mobile dictionaries resume interrupted transfers automatically and show saved progress. Android artist draws no longer open to a gray screen when restoring empty favorites.
+
 Android now opens the Danbooru tag catalog with the SQLite library shipped in the app. Desktop and mobile can resume dictionary downloads and try another source without losing progress when a server returns the wrong byte range.
 
 V5 generation and img2img support Precise Reference, including outfit references and the option to prefer the same outfit. The app fits the entire reference on the canvas with white padding as needed. On desktop you can enter the reference strength directly. Switch to V4.5 in the reference panel to use Vibe Transfer.
