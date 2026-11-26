@@ -41,7 +41,7 @@ class TagAssetClient extends http.BaseClient {
 }
 
 Future<http.StreamedResponse> openTagAsset(http.Client client, Uri canonical,
-    {int offset = 0, void Function()? checkActive}) async {
+    {required int size, int offset = 0, void Function()? checkActive}) async {
   final paths = canonical.pathSegments;
   final id = _assetIds[paths.last];
   final candidates = [
@@ -80,7 +80,16 @@ Future<http.StreamedResponse> openTagAsset(http.Client client, Uri canonical,
       if ((status == 200 || status == 206) &&
           !RegExp(r'json|text/html', caseSensitive: false)
               .hasMatch(response.headers['content-type'] ?? '')) {
-        return response;
+        final partial = status == 206;
+        final validRange = !partial ||
+            response.headers['content-range'] == 'bytes $offset-${size - 1}/$size';
+        if (validRange && (response.contentLength == null ||
+            response.contentLength == size - (partial ? offset : 0))) {
+          return response;
+        }
+        await response.stream.listen((_) {}).cancel();
+        failures.add('${uri.host}: unexpected file length or download range');
+        continue;
       }
       if (offset > 0 && status == 416) return response;
       await response.stream.listen((_) {}).cancel();

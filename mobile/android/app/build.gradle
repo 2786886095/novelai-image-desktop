@@ -75,14 +75,20 @@ android {
 
     buildTypes {
         debug {
-            if (project.hasProperty('studioFieldParityQa')) {
+            if (project.hasProperty('studioTagDownloadQa')) {
+                applicationIdSuffix = '.tagdownloadqa'
+                manifestPlaceholders['studioAppLabel'] = 'Langbai Studio 标签测试版'
+            } else if (project.hasProperty('studioFieldParityQa')) {
                 applicationIdSuffix = '.fieldparityqa'
             } else if (project.hasProperty('studioAgentQa')) {
                 applicationIdSuffix = '.agenttest'
             }
         }
         release {
-            if (project.hasProperty('studioPresetListCandidate')) {
+            if (project.hasProperty('studioTagDownloadQa')) {
+                applicationIdSuffix = '.tagdownloadqa'
+                manifestPlaceholders['studioAppLabel'] = 'Langbai Studio 标签测试版'
+            } else if (project.hasProperty('studioPresetListCandidate')) {
                 applicationIdSuffix = '.presetlistcandidate'
                 manifestPlaceholders['studioAppLabel'] = 'Langbai Studio Preset List Test'
             } else if (project.hasProperty('studioIssue86Candidate')) {

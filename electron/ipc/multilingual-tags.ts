@@ -71,6 +71,32 @@ async function copyVerified(input:AsyncIterable<Uint8Array>,dest:string,size:num
  },createWriteStream(dest,{flags:"wx",mode:0o600}));
  if(length!==size||hash.digest("hex")!==sha)throw Error("Tag pack checksum or size mismatch");
 }
+// Keep transport bytes separate from the installed database and active language.
+export async function resumeTagPack(url:string, archive:string, size:number, sha:string) {
+ let offset=0;
+ try { offset=(await fs.stat(archive)).size; }
+ catch(e){ if((e as NodeJS.ErrnoException).code!=='ENOENT')throw e; }
+ if(offset>size){await fs.unlink(archive);offset=0;}
+ let file=archive;
+ try{
+  if(offset<size){
+   let response=await openTagAsset(url,size,undefined,offset);
+   const restart=response.status===416;
+   if(restart){response.data.destroy();response=await openTagAsset(url,size);}
+   if(offset && (restart||response.status===200)){file=archive+'.restart';offset=0;}
+   let received=offset;
+   await pipeline(response.data,async function*(chunks:AsyncIterable<Uint8Array>){
+    for await(const b of chunks){received+=b.byteLength;if(received>size)throw Error('Tag pack exceeds expected size');yield b;}
+   },createWriteStream(file,{flags:offset?'a':'w',mode:0o600}));
+   if(received!==size)throw Error('Incomplete tag pack download; retry to continue');
+  }
+  const hash=createHash('sha256');
+  for await(const b of createReadStream(file))hash.update(b);
+  if(hash.digest('hex')!==sha){await fs.unlink(file);throw Error('Tag pack checksum mismatch');}
+  if(file!==archive)await fs.rename(file,archive);
+ }finally{if(file!==archive)await fs.rm(file,{force:true}).catch(()=>{});}
+}
+
 async function selectInstalled(lang:TagPackLanguage){
  const tmp=selection()+"-"+randomUUID()+".tmp";
  try{await fs.writeFile(tmp,JSON.stringify(lang),{flag:"wx",mode:0o600});await fs.rename(tmp,selection());}
@@ -87,22 +113,21 @@ export async function installMultilingualTagPack(value:unknown, input:unknown):P
    if(!installed(lang))throw Error("Selected language is not installed");
   }else{
    const pack=TAG_PACK_MANIFEST.packs[lang];
-   let stream:AsyncIterable<Uint8Array>;
+   let archive=temp;
+   await fs.mkdir(root(),{recursive:true});
    if(input==="file"){
     const file=await dialog.showOpenDialog({properties:["openFile"],filters:[{name:"Tag pack",extensions:["gz"]}]});
     if(file.canceled||!file.filePaths.length)return multilingualTagStatus();
     if((await fs.stat(file.filePaths[0])).size!==pack.size)throw Error("File size does not match the selected language pack");
-    stream=createReadStream(file.filePaths[0]);
+    await copyVerified(createReadStream(file.filePaths[0]),temp,pack.size,pack.sha256);
    }else{
     // Dataset assets are distributed separately from the MIT source. Pin the
     // release name and verify bytes before decompression or making it active.
     const url="https://github.com/2786886095/novelai-image-desktop/releases/download/tag-packs-"+TAG_PACK_MANIFEST.updatedAt+"/"+pack.file;
-    const response=await openTagAsset(url,pack.size);
-    stream=response.data;
+    archive=path.join(root(),pack.file+'.part');
+    await resumeTagPack(url,archive,pack.size,pack.sha256);
    }
-   await fs.mkdir(root(),{recursive:true});
-   await copyVerified(stream,temp,pack.size,pack.sha256);
-   const unpacked=createReadStream(temp).pipe(createGunzip());
+   const unpacked=createReadStream(archive).pipe(createGunzip());
    await copyVerified(unpacked,dbTemp,pack.databaseSize,pack.databaseSha256);
    const db=new DatabaseSync(dbTemp,{readOnly:true});
    try{
@@ -113,6 +138,7 @@ export async function installMultilingualTagPack(value:unknown, input:unknown):P
    // Release SQLite handles before replacing a downloaded pack on Windows.
    closeTagPackReader(destination);
    renameSync(dbTemp,destination);
+   if(input==='download')await fs.rm(archive,{force:true}).catch(()=>{});
   }
   await selectInstalled(lang);
   return multilingualTagStatus();

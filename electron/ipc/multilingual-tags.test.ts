@@ -2,6 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {createHash} from "node:crypto";
+import {Readable} from "node:stream";
+import {resumeTagPack} from "./multilingual-tags";
 import {gzipSync} from "node:zlib";
 import {DatabaseSync} from "node:sqlite";
 import {afterAll,expect,it,vi} from "vitest";
@@ -96,4 +98,19 @@ it("verifies the pack before activation and returns translated offline results o
   expect(JSON.parse(album.content[0].text)).toMatchObject({source:{author:"u/Carlyone"},chapter:2,page:1,images:[{tag:"bob cut",url}]});
   expect(fixture.network).toHaveBeenCalledExactlyOnceWith("https://nax.moe/?gallery="+id+"&sort=date&page=2",expect.any(Object));
  }finally{Object.assign(pack,original);await mcp.close();}
+});
+
+it("keeps verified archive offline and resumes without another full transfer",async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'studio-resume-'));
+ const file=path.join(dir,'pack.part'),url='https://github.com/example/repo/releases/download/tag/tag_catalog.db';
+ const hash=createHash('sha256').update('abcd').digest('hex');
+ try {
+  fs.writeFileSync(file,'ab');
+  fixture.network.mockReset().mockResolvedValueOnce({status:206,headers:{'content-range':'bytes 2-3/4'},data:Readable.from([Buffer.from('cd')])});
+  await resumeTagPack(url,file,4,hash);
+  expect(fixture.network.mock.calls[0][1].headers.Range).toBe('bytes=2-');
+  await resumeTagPack(url,file,4,hash);
+  expect(fixture.network).toHaveBeenCalledTimes(1);
+  expect(fs.readFileSync(file,'utf8')).toBe('abcd');
+ } finally {fs.rmSync(dir,{recursive:true,force:true});}
 });

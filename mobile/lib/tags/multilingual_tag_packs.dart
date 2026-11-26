@@ -107,14 +107,13 @@ class MultilingualTagPacks extends ChangeNotifier {
       if (!installed.contains(lang)) {
         final pack = _packs[lang] as Map<String, dynamic>;
         client = clientFactory();
-        final archive = File('${work.path}/pack.gz');
+        final archive = File('${_root.path}/${pack['file']}.part');
         final database = File('${work.path}/pack.sqlite');
         final compressedSize = pack['size'] as int;
-        final stream =
-            await _download(client, updatedAt, pack['file'] as String);
+
         var lastPercent = -1;
-        await copyVerified(
-            stream, archive, compressedSize, pack['sha256'] as String,
+        await resumeTagPack(client, updatedAt, pack['file'] as String,
+            archive, compressedSize, pack['sha256'] as String,
             onBytes: (bytes) {
           final percent = (bytes * 100 ~/ compressedSize);
           if (percent == lastPercent) return;
@@ -144,6 +143,7 @@ class MultilingualTagPacks extends ChangeNotifier {
         }
         await database.rename(_database(lang).path);
         installed.add(lang);
+        try { await archive.delete(); } on FileSystemException { /* Installed copy is valid. */ }
       }
       final next = File('${work.path}/active.json');
       await next.writeAsString(jsonEncode(lang), flush: true);
@@ -162,12 +162,47 @@ class MultilingualTagPacks extends ChangeNotifier {
     }
   }
 
-  static Future<Stream<List<int>>> _download(
-      http.Client client, String stamp, String name) async {
+  static Future<void> resumeTagPack(http.Client client, String stamp, String name,
+      File archive, int size, String expected, {void Function(int)? onBytes}) async {
     final url = Uri.https('github.com',
         '/2786886095/novelai-image-desktop/releases/download/tag-packs-$stamp/$name');
-    final response = await openTagAsset(client, url);
-    return response.stream.timeout(const Duration(seconds: 60));
+    var offset = await archive.exists() ? await archive.length() : 0;
+    if (offset > size) { await archive.delete(); offset = 0; }
+    var file = archive;
+    try {
+      if (offset < size) {
+        var response = await openTagAsset(client, url, size: size, offset: offset);
+        final restart = response.statusCode == 416;
+        if (restart) {
+          await response.stream.listen((_) {}).cancel();
+          response = await openTagAsset(client, url, size: size);
+        }
+        if (offset > 0 && (restart || response.statusCode == 200)) {
+          file = File('${archive.path}.restart');
+          offset = 0;
+        }
+        final sink = file.openWrite(mode: offset == 0 ? FileMode.write : FileMode.append);
+        var received = offset;
+        try {
+          await sink.addStream(response.stream.timeout(const Duration(seconds: 60)).map((chunk) {
+            received += chunk.length;
+            if (received > size) throw const FormatException('Tag pack exceeds expected size');
+            onBytes?.call(received);
+            return chunk;
+          }));
+        } finally {
+          await sink.close();
+        }
+        if (received != size) throw const HttpException('Incomplete tag pack download; retry to continue');
+      }
+      if ((await sha256.bind(file.openRead()).first).toString() != expected) {
+        await file.delete();
+        throw const FormatException('Tag pack checksum mismatch.');
+      }
+      if (file.path != archive.path) await file.rename(archive.path);
+    } finally {
+      if (file.path != archive.path && await file.exists()) await file.delete();
+    }
   }
 
   @visibleForTesting

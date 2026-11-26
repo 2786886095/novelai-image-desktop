@@ -63,7 +63,7 @@ void main() {
       await expectLater(ResourceDatabaseService.shared.install(id, clientFactory: client),
           throwsA(anything));
       expect(requests.map((r) => r.host), [
-        'github.com', if (scenario != 'badRange') 'api.github.com',
+        'github.com', 'api.github.com',
       ]);
       expect(ranges, everyElement(scenario == 'corrupt' ? isNull : 'bytes=12-'));
       if (scenario != 'corrupt') {

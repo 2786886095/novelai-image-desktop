@@ -1,6 +1,6 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 
-For consecutive image-to-image runs, choose the original image to keep using the file you loaded, or the latest result to redraw the image you just generated. The input thumbnail and adaptive dimensions follow your selection. Tag downloads use the update proxy for each host and try an alternate route if the primary connection fails. Select a style to replace the prompt or append several in order, with one comma between styles.
+Android now opens the Danbooru tag catalog with the SQLite library shipped in the app. Desktop and mobile can resume dictionary downloads and try another source without losing progress when a server returns the wrong byte range.
 
 V5 generation and img2img support Precise Reference, including outfit references and the option to prefer the same outfit. The app fits the entire reference on the canvas with white padding as needed. On desktop you can enter the reference strength directly. Switch to V4.5 in the reference panel to use Vibe Transfer.
 

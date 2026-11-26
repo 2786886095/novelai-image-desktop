@@ -109,6 +109,10 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         officialMetadata = OfficialMetadataBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         composerFiles = ComposerFiles(this, flutterEngine.dartExecutor.binaryMessenger)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "langbai.novelai/catalog_sqlite").setMethodCallHandler { call, result ->
+            if (call.method == "libraryPath") result.success(File(applicationInfo.nativeLibraryDir, "libsqlite3.so").absolutePath)
+            else result.notImplemented()
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,"langbai.novelai/app_update").setMethodCallHandler { call,result ->
             when(call.method) {
                 "status" -> result.success(updateInstaller.status())

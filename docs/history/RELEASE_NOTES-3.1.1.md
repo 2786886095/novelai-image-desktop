@@ -1,0 +1,15 @@
+# 发行说明
+
+## v3.1.1 — 多风格追加、图生图重绘来源与标签库下载修复
+
+- 桌面和手机的风格选择器保留原有的替换操作，也可逐个追加预设。追加只在两个风格交界处使用一个英文逗号，不改动提示词内部的权重和标点。
+- 桌面端修复了选「始终使用原图」后仍可能提交最新结果的问题。连续重绘使用最初载入的原图，切到「使用最新结果」后使用刚生成的图片。同一批次的输入在提交时确定。
+- 手机端修复了切回原图后仍沿用上一张结果尺寸，以及切到「使用最新结果」时可能选中较早结果的问题。图生图面板的缩略图显示下次实际使用的输入，自适应尺寸也按该图计算。
+
+- 基础 Danbooru 标签目录、相关标签数据库和多语言离线词库下载时，会针对每个地址应用更新代理设置。连接主线路失败时自动尝试备用线路，完成大小及 SHA-256 校验后才安装。下载失败时可在界面查看具体原因。
+
+Windows、macOS、Linux 和 Android 用户可从发行附件手动下载对应平台包。iOS IPA 未签名，普通 iPhone 需自行签名后安装。
+
+[当前源码](https://github.com/2786886095/novelai-image-desktop/tree/main) · [下载](https://github.com/2786886095/novelai-image-desktop/releases/latest) · [历史发行说明](https://github.com/2786886095/novelai-image-desktop/tree/main/docs/history)
+
+[GitHub Release](https://github.com/2786886095/novelai-image-desktop/releases/tag/v3.1.1) · 2026-11-26T05:47:33Z

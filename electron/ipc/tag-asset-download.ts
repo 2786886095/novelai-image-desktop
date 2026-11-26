@@ -38,7 +38,15 @@ export async function openTagAsset(url: string, size: number, signal = new Abort
         maxContentLength: size, validateStatus: () => true,
         headers: { Accept: "application/octet-stream", ...(offset ? { Range: `bytes=${offset}-` } : {}) },
       });
-      if ([200, 206].includes(response.status) && !/(json|text\/html)/i.test(String(response.headers["content-type"]))) return response;
+      if ([200, 206].includes(response.status) && !/(json|text\/html)/i.test(String(response.headers["content-type"]))) {
+        const partial = response.status === 206;
+        const length = response.headers["content-length"];
+        const validRange = !partial || response.headers["content-range"] === `bytes ${offset}-${size - 1}/${size}`;
+        if (validRange && (length == null || Number(length) === size - (partial ? offset : 0))) return response;
+        response.data.destroy();
+        failures.push(`${target.hostname}: unexpected file length or download range`);
+        continue;
+      }
       if (offset && response.status === 416) return response;
       response.data.destroy();
       if ([301, 302, 303, 307, 308].includes(response.status) && response.headers.location && seen.size < 8) {

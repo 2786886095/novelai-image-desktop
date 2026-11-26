@@ -301,6 +301,7 @@ async function downloadToPartial(definition: ResourceDefinition) {
     return destination;
   }
   let response = await openTagAsset(definition.downloadUrl, definition.downloadSize, controller.signal, initialBytes);
+  const requestedOffset = initialBytes;
   if (response.status === 416) {
     response.data.destroy();
     response = await openTagAsset(definition.downloadUrl, definition.downloadSize, controller.signal);
@@ -321,7 +322,9 @@ async function downloadToPartial(definition: ResourceDefinition) {
   active.total = rangeTotal || initialBytes + contentLength || definition.downloadSize;
   let lastEmit = 0;
   const source = response.data as NodeJS.ReadableStream & AsyncIterable<Buffer>;
-  const destinationStream = createWriteStream(destination, { flags: initialBytes > 0 ? "a" : "w" });
+  const writePath = requestedOffset && !initialBytes ? destination+'.restart' : destination;
+  try {
+  const destinationStream = createWriteStream(writePath, { flags: initialBytes > 0 ? "a" : "w" });
   await pipeline(source as any, async function* (chunks: AsyncIterable<Uint8Array>) {
       for await (const chunk of chunks) {
         checkDownloadStopped(definition.id);
@@ -338,6 +341,13 @@ async function downloadToPartial(definition: ResourceDefinition) {
         yield bytes;
       }
     }, destinationStream);
+  if (writePath !== destination) {
+    await verifyDownloadedFile(definition, writePath, definition.downloadSize, definition.downloadSha256);
+    await fs.rename(writePath, destination);
+  }
+  } finally {
+    if (writePath !== destination) await fs.rm(writePath,{force:true}).catch(()=>{});
+  }
   progress(definition.id, "verifying", active.received, active.total, 0, "正在校验文件");
   return destination;
 }
@@ -387,10 +397,12 @@ export async function downloadResourceDatabase(
   }
   if (resourceOperations.has(id)) return { ok: false, message: "该资源正在处理" };
   resourceOperations.set(id,'download');pausedDownloads.delete(id);
+  let verifiedArchive = false;
   try {
     const archive = await downloadToPartial(definition);
     checkDownloadStopped(id);
     await verifyDownloadedFile(definition, archive, definition.downloadSize, definition.downloadSha256);
+    verifiedArchive = true;
     checkDownloadStopped(id);
     const staged = stagedPath(definition);
     await fs.rm(staged, { force: true });
@@ -405,7 +417,12 @@ export async function downloadResourceDatabase(
     progress(id, "installing", definition.downloadSize, definition.downloadSize, 0, "正在验证并替换数据库");
     await validateDatabase(definition, staged, true);
     checkDownloadStopped(id);committing.add(id);
-    await atomicallyInstall(definition, staged);
+    const live = databasePath(definition);
+    if (await fileSize(live) === definition.databaseSize && await sha256(live) === definition.databaseSha256) {
+      await fs.rm(staged, {force:true});
+    } else {
+      await atomicallyInstall(definition, staged);
+    }
     await fs.rm(archive, { force: true }).catch(()=>undefined);
     progress(id, "complete", definition.downloadSize, definition.downloadSize, 0, "安装完成");
     return { ok: true, message: `${definition.label}已安全安装；旧数据库已保留为可回滚副本。` };
@@ -414,7 +431,7 @@ export async function downloadResourceDatabase(
     const message = paused ? "下载已暂停，可稍后继续。" : error instanceof Error ? error.message : String(error);
     if (!paused) {
       await fs.rm(stagedPath(definition), { force: true }).catch(() => undefined);
-      if (await fileSize(partialPath(definition)) >= definition.downloadSize) {
+      if (!verifiedArchive && await fileSize(partialPath(definition)) >= definition.downloadSize) {
         await fs.rm(partialPath(definition), { force: true }).catch(() => undefined);
       }
     }

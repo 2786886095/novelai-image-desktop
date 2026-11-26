@@ -30,3 +30,11 @@ it("rejects unrelated redirects before connecting", async () => {
   await expect(openTagAsset(url,10)).rejects.toThrow(/host/);
   expect(get).toHaveBeenCalledTimes(1);
 });
+
+it('bad Content-Range falls back without losing resume offset',async()=>{
+
+ for(const r of ['bytes 0-9/10','bytes 4-9/10']) get.mockResolvedValueOnce({status:206,headers:{'content-range':r},data:Readable.from(['fixture'])});
+ const r=await openTagAsset('https://github.com/example/test/releases/download/tag/tag_catalog.db',10,undefined,4);
+ console.log('RANGE',r.headers['content-range'],'requests',get.mock.calls.length);expect(r.headers['content-range']).toBe('bytes 4-9/10');
+ expect(get.mock.calls.map(c=>c[1]?.headers?.Range)).toEqual(['bytes=4-','bytes=4-']);
+});

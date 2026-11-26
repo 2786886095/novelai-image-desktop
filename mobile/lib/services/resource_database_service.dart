@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ffi' show DynamicLibrary;
+import 'package:flutter/services.dart' show MethodChannel;
+import 'package:sqlite3/open.dart' as sqlite;
 import 'dart:math';
 
 import 'proxy_http_client.dart';
@@ -12,7 +15,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart' show databaseFactoryFfi;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart' show createDatabaseFactoryFfi;
 
 enum ResourceDatabaseId { tagCatalog, cooccurrence }
 
@@ -340,9 +343,23 @@ class ResourceDatabaseService {
   // Android system SQLite can lack FTS5. Both validation (including restore)
   // and searching must open the catalog with the packaged engine. Keep the
   // existing driver and path for co-occurrence data and for other platforms.
-  Future<Database> _openResource(ResourceDatabaseId id, File file) {
+  DatabaseFactory? _catalogEngine;
+  static const _nativeCatalog = MethodChannel('langbai.novelai/catalog_sqlite');
+  static DatabaseFactory _factoryForLibrary(String path) =>
+      createDatabaseFactoryFfi(ffiInit: () {
+        sqlite.open.overrideFor(sqlite.OperatingSystem.android, () => DynamicLibrary.open(path));
+      });
+
+  Future<Database> _openResource(ResourceDatabaseId id, File file) async {
     if (Platform.isAndroid && id == ResourceDatabaseId.tagCatalog) {
-      return databaseFactoryFfi.openDatabase(file.path,
+      if (_catalogEngine == null) {
+        final path = await _nativeCatalog.invokeMethod<String>('libraryPath');
+        if (path == null || !p.isAbsolute(path) || !File(path).existsSync()) {
+          throw StateError('安装包缺少 SQLite 全文搜索组件；已保留标签下载文件，请更新客户端。');
+        }
+        _catalogEngine ??= _factoryForLibrary(path);
+      }
+      return _catalogEngine!.openDatabase(file.path,
           options: OpenDatabaseOptions(readOnly: true, singleInstance: false));
     }
     return openDatabase(file.path, readOnly: true, singleInstance: false);
@@ -451,8 +468,9 @@ class ResourceDatabaseService {
         settings!, uri, scope: ProxyScope.update, routeTimeout: const Duration(seconds: 10)));
     _activeClients[definition.id] = client;
     Future<http.StreamedResponse> start(int offset) => openTagAsset(
-        client, Uri.parse(definition.downloadUrl), offset: offset,
+        client, Uri.parse(definition.downloadUrl), size: definition.downloadSize, offset: offset,
         checkActive: () => _checkPaused(definition.id));
+    final requestedOffset = initial;
     var response = await start(initial);
     if (initial > 0 && response.statusCode == 416) {
       await response.stream.listen((_) {}).cancel();
@@ -478,8 +496,10 @@ class ResourceDatabaseService {
     var received = initial;
     final startedAt = DateTime.now();
     var lastEmit = DateTime.fromMillisecondsSinceEpoch(0);
-    final output =
-        partial.openWrite(mode: initial > 0 ? FileMode.append : FileMode.write);
+    final writeFile = requestedOffset > 0 && initial == 0
+        ? File('${partial.path}.restart') : partial;
+    try {
+    final output = writeFile.openWrite(mode: initial > 0 ? FileMode.append : FileMode.write);
     try {
       await for (final chunk
           in response.stream.timeout(const Duration(minutes: 2))) {
@@ -504,9 +524,16 @@ class ResourceDatabaseService {
         }
       }
       await output.flush();
-      return partial;
     } finally {
       await output.close();
+    }
+    if (writeFile.path != partial.path) {
+      await _verifyFile(writeFile, definition.downloadSize, definition.downloadSha256);
+      await writeFile.rename(partial.path);
+    }
+    return partial;
+    } finally {
+      if (writeFile.path != partial.path && await writeFile.exists()) await writeFile.delete();
       client.close();
       _activeClients.remove(definition.id);
     }
