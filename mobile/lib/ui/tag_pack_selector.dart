@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/proxy_http_client.dart';
+import '../services/tag_asset_download.dart';
 import '../state/app_state.dart';
 import '../tags/multilingual_tag_packs.dart';
 
@@ -166,8 +167,8 @@ class _TagPackSelectorState extends State<TagPackSelector> {
                             ? null
                             : () => store.install(
                                 lang,
-                                () => createProxyHttpClient(app.settings,
-                                    scope: ProxyScope.update)),
+                                () => TagAssetClient((uri) => createProxyHttpClientForUri(app.settings, uri,
+                                    scope: ProxyScope.update, routeTimeout: const Duration(seconds: 10)))),
                         child: Text(store.busy
                             ? l[6]
                             : store.installed.contains(lang)
@@ -178,7 +179,7 @@ class _TagPackSelectorState extends State<TagPackSelector> {
                     if (store.error != null)
                       Semantics(
                           liveRegion: true,
-                          child: Text(l[7],
+                          child: Text('${l[7]} ${store.error}',
                               style:
                                   TextStyle(color: theme.colorScheme.error))),
                   ],

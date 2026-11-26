@@ -17,7 +17,7 @@ import type {
   ResourceDatabaseStatus,
   TagSuggestion,
 } from "../../src/types";
-import { proxyConfig } from "./proxy";
+import { openTagAsset } from "./tag-asset-download";
 import { artistStyleExactNames } from "./artist-style-taxonomy";
 
 type ResourceDefinition = {
@@ -300,28 +300,20 @@ async function downloadToPartial(definition: ResourceDefinition) {
     progress(definition.id, "verifying", initialBytes, definition.downloadSize, 0, "继续校验已完成的下载");
     return destination;
   }
-  let response = await axios.get<NodeJS.ReadableStream>(definition.downloadUrl, {
-    responseType: "stream",
-    timeout: 120_000,
-    signal: controller.signal,
-    headers: initialBytes > 0 ? { Range: `bytes=${initialBytes}-` } : undefined,
-    maxContentLength: definition.downloadSize + 1024,
-    maxBodyLength: definition.downloadSize + 1024,
-    ...proxyConfig("update"),
-  });
-  if (initialBytes > 0 && response.status !== 206) {
-    await fs.rm(destination, { force: true });
+  let response = await openTagAsset(definition.downloadUrl, definition.downloadSize, controller.signal, initialBytes);
+  if (response.status === 416) {
+    response.data.destroy();
+    response = await openTagAsset(definition.downloadUrl, definition.downloadSize, controller.signal);
     initialBytes = 0;
-    active.initialBytes = 0;
-    active.received = 0;
-    response = await axios.get<NodeJS.ReadableStream>(definition.downloadUrl, {
-      responseType: "stream",
-      timeout: 120_000,
-      signal: controller.signal,
-      maxContentLength: definition.downloadSize + 1024,
-      maxBodyLength: definition.downloadSize + 1024,
-      ...proxyConfig("update"),
-    });
+  }
+  if (response.status === 200) initialBytes = 0;
+  active.initialBytes = active.received = initialBytes;
+  if (response.status === 206) {
+    const match = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(String(response.headers["content-range"] ?? ""));
+    if (!match || Number(match[1]) !== initialBytes || Number(match[2]) !== definition.downloadSize - 1 || Number(match[3]) !== definition.downloadSize) {
+      response.data.destroy();
+      throw Error("下载范围不符，已保留原有进度");
+    }
   }
   const contentRange = String(response.headers["content-range"] ?? "");
   const rangeTotal = Number(contentRange.match(/\/(\d+)$/)?.[1] ?? 0);
@@ -335,6 +327,7 @@ async function downloadToPartial(definition: ResourceDefinition) {
         checkDownloadStopped(definition.id);
         const bytes = Buffer.from(chunk as Uint8Array);
         active.received += bytes.length;
+        if (active.received > definition.downloadSize) throw Error("下载超过资源大小");
         const now = Date.now();
         if (now - lastEmit >= 120) {
           const elapsed = Math.max(0.1, (now - active.startedAt) / 1000);
@@ -417,7 +410,7 @@ export async function downloadResourceDatabase(
     progress(id, "complete", definition.downloadSize, definition.downloadSize, 0, "安装完成");
     return { ok: true, message: `${definition.label}已安全安装；旧数据库已保留为可回滚副本。` };
   } catch (error) {
-    const paused = axios.isCancel(error) || (error instanceof Error && error.name === "CanceledError");
+    const paused = pausedDownloads.has(id) || axios.isCancel(error) || (error instanceof Error && error.name === "CanceledError");
     const message = paused ? "下载已暂停，可稍后继续。" : error instanceof Error ? error.message : String(error);
     if (!paused) {
       await fs.rm(stagedPath(definition), { force: true }).catch(() => undefined);

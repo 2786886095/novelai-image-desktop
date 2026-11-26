@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import '../services/tag_asset_download.dart';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -99,7 +100,6 @@ class MultilingualTagPacks extends ChangeNotifier {
     _notify();
     Directory? staging;
     http.Client? client;
-    Timer? deadline;
     try {
       await _root.create(recursive: true);
       final work = await _root.createTemp('install-');
@@ -107,7 +107,6 @@ class MultilingualTagPacks extends ChangeNotifier {
       if (!installed.contains(lang)) {
         final pack = _packs[lang] as Map<String, dynamic>;
         client = clientFactory();
-        deadline = Timer(const Duration(minutes: 6), client.close);
         final archive = File('${work.path}/pack.gz');
         final database = File('${work.path}/pack.sqlite');
         final compressedSize = pack['size'] as int;
@@ -153,7 +152,6 @@ class MultilingualTagPacks extends ChangeNotifier {
     } catch (e) {
       error = e.toString();
     } finally {
-      deadline?.cancel();
       client?.close();
       try {
         await staging?.delete(recursive: true);
@@ -166,34 +164,10 @@ class MultilingualTagPacks extends ChangeNotifier {
 
   static Future<Stream<List<int>>> _download(
       http.Client client, String stamp, String name) async {
-    var url = Uri.https('github.com',
+    final url = Uri.https('github.com',
         '/2786886095/novelai-image-desktop/releases/download/tag-packs-$stamp/$name');
-    for (var i = 0; i < 4; i++) {
-      if (url.scheme != 'https' ||
-          url.userInfo.isNotEmpty ||
-          url.port != 443 ||
-          !{
-            'github.com',
-            'release-assets.githubusercontent.com',
-            'objects.githubusercontent.com'
-          }.contains(url.host)) {
-        throw const FormatException('Unexpected download host.');
-      }
-      final request = http.Request('GET', url)..followRedirects = false;
-      final response =
-          await client.send(request).timeout(const Duration(seconds: 30));
-      if (response.statusCode == 200) return response.stream;
-      // Cancel immediately: never consume arbitrary redirect/error bodies.
-      await response.stream.listen((_) {}).cancel();
-      final redirect = response.headers['location'];
-      if (redirect == null ||
-          !{301, 302, 303, 307, 308}.contains(response.statusCode)) {
-        throw HttpException(
-            'Tag pack download failed: HTTP ${response.statusCode}');
-      }
-      url = url.resolve(redirect);
-    }
-    throw const FormatException('Too many redirects.');
+    final response = await openTagAsset(client, url);
+    return response.stream.timeout(const Duration(seconds: 60));
   }
 
   @visibleForTesting

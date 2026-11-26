@@ -3,6 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'proxy_http_client.dart';
+import 'storage.dart';
+import 'tag_asset_download.dart';
+
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
@@ -442,25 +446,18 @@ class ResourceDatabaseService {
 
     // Publish the new attempt before waiting for DNS, TLS or response headers.
     _emit(definition, ResourceDownloadPhase.downloading, received: initial);
-    Future<http.StreamedResponse> start(http.Client client, int offset) {
-      final request = http.Request('GET', Uri.parse(definition.downloadUrl));
-      if (offset > 0) request.headers['Range'] = 'bytes=$offset-';
-      request.headers['User-Agent'] =
-          'Langbai-NovelAI-Studio-Mobile/Resource-Database';
-      return client.send(request).timeout(const Duration(minutes: 2));
-    }
-
-    var client = http.Client();
+    final settings = await Storage().getSettings();
+    final client = TagAssetClient((uri) => createProxyHttpClientForUri(
+        settings, uri, scope: ProxyScope.update, routeTimeout: const Duration(seconds: 10)));
     _activeClients[definition.id] = client;
-    _checkPaused(definition.id);
-    var response = await start(client, initial);
+    Future<http.StreamedResponse> start(int offset) => openTagAsset(
+        client, Uri.parse(definition.downloadUrl), offset: offset,
+        checkActive: () => _checkPaused(definition.id));
+    var response = await start(initial);
     if (initial > 0 && response.statusCode == 416) {
-      client.close();
-      // Keep the saved prefix until the replacement request succeeds.
+      await response.stream.listen((_) {}).cancel();
       initial = 0;
-      client = http.Client();
-      _activeClients[definition.id] = client;
-      response = await start(client, 0);
+      response = await start(0);
     }
     if (response.statusCode != 200 && response.statusCode != 206) {
       throw http.ClientException('HTTP ${response.statusCode}');
@@ -489,8 +486,9 @@ class ResourceDatabaseService {
         if (_paused.contains(definition.id)) {
           throw const _PausedDownload();
         }
-        output.add(chunk);
         received += chunk.length;
+        if (received > definition.downloadSize) throw const FormatException('Download exceeds declared size');
+        output.add(chunk);
         final now = DateTime.now();
         if (now.difference(lastEmit).inMilliseconds >= 120) {
           final elapsed =

@@ -140,6 +140,7 @@ export default function ResourceDatabaseSettings({ language }: { language: AppLa
                   <div className={`resource-progress ${event?.phase ?? "downloading"}`}>
                     <div><span>{event ? resourcePhaseText(language, event.phase) : resourceText(language, "preparing")}</span><strong>{percent.toFixed(1)}%</strong></div>
                     <progress max={100} value={percent} />
+                    {event?.phase === "error" && event.message && <small role="alert">{event.message}</small>}
                     <small>{event ? `${formatBytes(event.receivedBytes)} / ${formatBytes(event.totalBytes)} · ${formatSpeed(event.speedBytesPerSecond)}` : resourceText(language, "prepareDownload")}</small>
                   </div>
                 ) : null}

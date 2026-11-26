@@ -16,21 +16,21 @@ export default function TagPackSettings({onChanged}:{onChanged?:()=>void}){
  const language=useAppStore(s=>s.settings?.language);
  const l=labels[language as keyof typeof labels]??labels["zh-CN"];
  const [chosen,choose]=useState<TagPackLanguage>(()=>tagPackLanguage(language)??"zh-CN");
- const [state,setState]=useState<TagPackStatus|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(false);
+ const [state,setState]=useState<TagPackStatus|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
  useEffect(()=>{let active=true;void window.naiDesktop.multilingualTagStatus?.().then(s=>{if(active){setState(s);if(s.active)choose(s.active);}}).catch(()=>{});return()=>{active=false;};},[]);
  async function apply(action:"download"|"use"){
-  setBusy(true);setError(false);
+  setBusy(true);setError("");
   try{
    setState(await window.naiDesktop.installMultilingualTagPack(chosen,action));
    onChanged?.();
    window.dispatchEvent(new Event("langbai:multilingual-tags-changed"));
-  }catch{setError(true);}finally{setBusy(false);}
+  }catch(e){setError(e instanceof Error ? e.message : String(e));}finally{setBusy(false);}
  }
  return <section className="settings-form"><label className="field">{l[0]}
   <SelectMenuCompat aria-label={l[0]} value={chosen} disabled={busy} onChange={e=>choose(e.target.value as TagPackLanguage)}>{TAG_PACK_LANGUAGES.map(x=><option key={x} value={x}>{TAG_PACK_NAMES[x]}</option>)}</SelectMenuCompat></label>
   <p className="field-hint">{l[1]}: {TAG_PACK_MANIFEST.updatedAt} · {TAG_PACK_MANIFEST.packs[chosen].count.toLocaleString()} · {(TAG_PACK_MANIFEST.packs[chosen].size/1024**2).toFixed(1)} MiB</p>
   <p role="status">{l[2]}: {state?.active?TAG_PACK_NAMES[state.active]:l[3]}</p>
   <div className="row-actions"><Button disabled={busy} onClick={()=>void apply(state?.installed.includes(chosen)?"use":"download")}>{busy?l[7]:state?.installed.includes(chosen)?l[6]:l[4]}</Button>
-  </div>{error&&<p role="alert">{l[8]}</p>}
+  </div>{error&&<p role="alert">{l[8]} {error}</p>}
  </section>;
 }

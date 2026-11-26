@@ -1,5 +1,5 @@
 import {app,dialog} from "electron";
-import axios from "axios";
+import {openTagAsset} from "./tag-asset-download";
 import {createHash,randomUUID} from "node:crypto";
 import fs from "node:fs/promises";
 import {createReadStream,createWriteStream,existsSync,readFileSync,renameSync,statSync} from "node:fs";
@@ -9,7 +9,6 @@ import {DatabaseSync} from "node:sqlite";
 import {createGunzip} from "node:zlib";
 import {TAG_PACK_LANGUAGES,TAG_PACK_MANIFEST,tagPackLanguage,tagPackSort,type TagPackLanguage,type TagPackStatus} from "../../shared/multilingual-tag-pack-contract";
 import type {TagSuggestion} from "../../src/types";
-import {proxyConfig} from "./proxy";
 import {relatedResourceTags} from "./resource-databases";
 import {relatedTags} from "../../src/related-tags";
 import {browseTagPackDatabase,closeTagPackReader,lookupTagPackDatabase,searchTagPackDatabase,type TagDictionaryMatch} from "./tag-pack-reader";
@@ -98,7 +97,7 @@ export async function installMultilingualTagPack(value:unknown, input:unknown):P
     // Dataset assets are distributed separately from the MIT source. Pin the
     // release name and verify bytes before decompression or making it active.
     const url="https://github.com/2786886095/novelai-image-desktop/releases/download/tag-packs-"+TAG_PACK_MANIFEST.updatedAt+"/"+pack.file;
-    const response=await axios.get(url,{...proxyConfig("update"),responseType:"stream",timeout:30_000,signal:AbortSignal.timeout(300_000),maxRedirects:3});
+    const response=await openTagAsset(url,pack.size);
     stream=response.data;
    }
    await fs.mkdir(root(),{recursive:true});
