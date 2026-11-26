@@ -55,7 +55,7 @@ export async function inspectAndroidForeground({adb, device, appId, command, pha
   if (!/dumped to:\s*\/data\/local\/tmp\/acceptance-window\.xml/.test(dumped)) {
     const error = Error('Native window dump did not confirm a fresh hierarchy; stale XML is not accepted.');
     // This remains an error for all direct/runtime callers. Only preflight may
-    // recognize this exact transient after it actually closed a launcher ANR.
+    // retry this exact transient while waiting for a fresh emulator hierarchy.
     if (!dumped && dump.stderr.trim() === 'ERROR: null root node returned by UiTestAutomationBridge.' &&
         !dump.signal && !dump.timedOut && !dump.outputOverflow) error.code = 'ANDROID_LAUNCHER_NULL_HIERARCHY';
     throw error;
@@ -147,10 +147,10 @@ export async function prepareAndroidNative({adb, device, appId, command, phase =
     try {
       result = await inspectAndroidForeground({adb, device, appId, command: boundedCommand, phase, currentFocusOnly: true});
     } catch (error) {
-      if (!closedLauncherAnr || error.code !== 'ANDROID_LAUNCHER_NULL_HIERARCHY') throw error;
+      if (error.code !== 'ANDROID_LAUNCHER_NULL_HIERARCHY') throw error;
       if (++nullHierarchyAttempts > 3) throw Error('Launcher recovery null hierarchy retry budget exhausted.');
       stable = 0;
-      phase({stage: 'not-ready', reason: 'launcher-recovery-null-root', attempt: nullHierarchyAttempts, maxAttempts: 3});
+      phase({stage: 'not-ready', reason: closedLauncherAnr ? 'launcher-recovery-null-root' : 'emulator-startup-null-root', attempt: nullHierarchyAttempts, maxAttempts: 3});
       await sleep(Math.min(500, Math.max(0, deadline - now())));
       continue;
     }

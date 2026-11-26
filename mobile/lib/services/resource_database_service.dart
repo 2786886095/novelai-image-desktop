@@ -434,7 +434,7 @@ class ResourceDatabaseService {
     }
   }
 
-  Future<File> _downloadToPartial(ResourceDatabaseDefinition definition) async {
+  Future<File> _downloadToPartial(ResourceDatabaseDefinition definition, http.Client Function()? clientFactory) async {
     final partial = await _partial(definition);
     _checkPaused(definition.id);
     var initial = _length(partial);
@@ -446,9 +446,9 @@ class ResourceDatabaseService {
 
     // Publish the new attempt before waiting for DNS, TLS or response headers.
     _emit(definition, ResourceDownloadPhase.downloading, received: initial);
-    final settings = await Storage().getSettings();
-    final client = TagAssetClient((uri) => createProxyHttpClientForUri(
-        settings, uri, scope: ProxyScope.update, routeTimeout: const Duration(seconds: 10)));
+    final settings = clientFactory == null ? await Storage().getSettings() : null;
+    final client = clientFactory?.call() ?? TagAssetClient((uri) => createProxyHttpClientForUri(
+        settings!, uri, scope: ProxyScope.update, routeTimeout: const Duration(seconds: 10)));
     _activeClients[definition.id] = client;
     Future<http.StreamedResponse> start(int offset) => openTagAsset(
         client, Uri.parse(definition.downloadUrl), offset: offset,
@@ -538,12 +538,12 @@ class ResourceDatabaseService {
     }
   }
 
-  Future<String> install(ResourceDatabaseId id) async {
+  Future<String> install(ResourceDatabaseId id, {http.Client Function()? clientFactory}) async {
     final definition = resourceDatabaseDefinitions[id]!;
     if (_operations.containsKey(id)) throw StateError('Resource operation already running');
     _operations[id]='download';_paused.remove(id);
     try {
-      final archive = await _downloadToPartial(definition);
+      final archive = await _downloadToPartial(definition, clientFactory);
       _checkPaused(id);
       _emit(definition, ResourceDownloadPhase.verifying,
           received: _length(archive), message: 'Verifying download');

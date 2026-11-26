@@ -42,33 +42,30 @@ void main() {
       final partial = file('tag_catalog.db.part'),
           id = ResourceDatabaseId.tagCatalog;
       await partial.writeAsString('saved prefix');
-      int calls = 0;
-      String? range;
+      final requests = <Uri>[];
+      final ranges = <String?>[];
+      http.Client client() => MockClient((req) async {
+        requests.add(req.url);
+        ranges.add(req.headers['range']);
+        return scenario == 'badRange'
+            ? http.Response('oops', 206, headers: {'content-range': 'bytes 0-3/46772224'})
+            : http.Response('Unavailable', 503);
+      });
       if (scenario == 'corrupt') {
         final f = await partial.open(mode: FileMode.append);
         await f.truncate(resourceDatabaseDefinitions[id]!.downloadSize);
         await f.close();
+        await expectLater(ResourceDatabaseService.shared.install(id, clientFactory: client),
+            throwsA(predicate((e) => e.toString().contains('SHA-256'))));
+        expect(await partial.exists(), false);
+        expect(requests, isEmpty);
       }
-      await http.runWithClient(() async {
-        if (scenario == 'corrupt') {
-          await expectLater(ResourceDatabaseService.shared.install(id),
-              throwsA(predicate((e) => e.toString().contains('SHA-256'))));
-          expect(await partial.exists(), false);
-          expect(calls, 0);
-        }
-        await expectLater(
-            ResourceDatabaseService.shared.install(id), throwsA(anything));
-      },
-          () => MockClient((req) async {
-                calls++;
-                range = req.headers['range'];
-                return scenario == 'badRange'
-                    ? http.Response('oops', 206,
-                        headers: {'content-range': 'bytes 0-3/46772224'})
-                    : http.Response('Unavailable', 503);
-              }));
-      expect(calls, 1);
-      expect(range, scenario == 'corrupt' ? isNull : 'bytes=12-');
+      await expectLater(ResourceDatabaseService.shared.install(id, clientFactory: client),
+          throwsA(anything));
+      expect(requests.map((r) => r.host), [
+        'github.com', if (scenario != 'badRange') 'api.github.com',
+      ]);
+      expect(ranges, everyElement(scenario == 'corrupt' ? isNull : 'bytes=12-'));
       if (scenario != 'corrupt') {
         expect(await partial.readAsString(), 'saved prefix');
       }
@@ -76,7 +73,7 @@ void main() {
         expect(await file(n).readAsString(), n);
       }
       debugPrint(
-          '$scenario: requests=$calls range=$range, installed/previous/related unchanged');
+          '$scenario: requests=${requests.length} ranges=$ranges, installed/previous/related unchanged');
     });
   }
 }

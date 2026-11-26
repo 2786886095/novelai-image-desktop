@@ -193,13 +193,16 @@ test('J exact null-root failure recovers only through a labelled synthetic conti
   assert.equal(f.phases.at(-1).stableObservations,2);
   assert(!f.phases.some(x=>'checks' in x||x.stage==='CHECK'||x.stage==='DONE'));
 });
-test('initial preflight and direct runtime inspect still reject exact null-root without reading stale XML', async()=>{
-  for(const call of [prepareAndroidNative,inspectAndroidForeground]){
-    const f=readinessFixture({steps:[{dump:readinessNullDump}]});
-    await assert.rejects(call(f.options),/fresh hierarchy/);
-    assert.equal(f.commands.filter(x=>x.args.startsWith('shell cat ')).length,0);
-    assert.equal(f.phases.some(x=>x.stage==='not-ready'||x.stage==='ready'),false);
-  }
+test('initial preflight retries a null root and requires two fresh windows; runtime rejects it', async()=>{
+  const startup=readinessFixture({steps:[{dump:readinessNullDump},{},{}]});
+  await prepareAndroidNative(startup.options);
+  assert.equal(startup.dumps,3);
+  assert.equal(startup.commands.filter(x=>x.args.startsWith('shell cat ')).length,2);
+  assert.equal(startup.phases.filter(x=>x.reason==='emulator-startup-null-root').length,1);
+  assert.equal(startup.phases.at(-1).stableObservations,2);
+  const runtime=readinessFixture({steps:[{dump:readinessNullDump}]});
+  await assert.rejects(inspectAndroidForeground(runtime.options),/fresh hierarchy/);
+  assert.equal(runtime.commands.filter(x=>x.args.startsWith('shell cat ')).length,0);
 });
 test('launcher recovery permits at most three exact null-root retry decisions and never refreshes them',async()=>{
  const f=readinessFixture({timeoutMs:45000,steps:[{xml:readinessLauncher},{dump:readinessNullDump}]});
