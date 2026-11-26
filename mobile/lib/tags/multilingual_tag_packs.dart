@@ -44,6 +44,10 @@ class MultilingualTagPacks extends ChangeNotifier {
   bool busy = false;
   double? progress;
   String? error;
+  static const maxRetries = 3;
+  int retryNumber = 0;
+  int retainedBytes = 0;
+  String? interruptedLanguage;
 
   int size(String lang) => (_packs[lang] as Map?)?['size'] as int? ?? 0;
   int count(String lang) => (_packs[lang] as Map?)?['count'] as int? ?? 0;
@@ -95,6 +99,8 @@ class MultilingualTagPacks extends ChangeNotifier {
     await load();
     if (busy || !_packs.containsKey(lang)) return;
     busy = true;
+    retryNumber = retainedBytes = 0;
+    interruptedLanguage = null;
     progress = null;
     error = null;
     _notify();
@@ -114,13 +120,21 @@ class MultilingualTagPacks extends ChangeNotifier {
         var lastPercent = -1;
         await resumeTagPack(client, updatedAt, pack['file'] as String,
             archive, compressedSize, pack['sha256'] as String,
-            onBytes: (bytes) {
+            onInterrupted: (next, saved) {
+          retryNumber = next;
+          retainedBytes = saved;
+          interruptedLanguage = lang;
+          lastPercent = -1;
+          progress = saved / compressedSize;
+          _notify();
+        }, onBytes: (bytes) {
           final percent = (bytes * 100 ~/ compressedSize);
           if (percent == lastPercent) return;
           progress = bytes / compressedSize;
           lastPercent = percent;
           _notify();
         });
+        interruptedLanguage = null;
         progress = null;
         _notify();
         await copyVerified(
@@ -150,6 +164,7 @@ class MultilingualTagPacks extends ChangeNotifier {
       await next.rename('${_root.path}/active.json');
       active = lang;
     } catch (e) {
+      if (retryNumber != 0) interruptedLanguage = null;
       error = e.toString();
     } finally {
       client?.close();
@@ -163,7 +178,26 @@ class MultilingualTagPacks extends ChangeNotifier {
   }
 
   static Future<void> resumeTagPack(http.Client client, String stamp, String name,
-      File archive, int size, String expected, {void Function(int)? onBytes}) async {
+      File archive, int size, String expected, {void Function(int)? onBytes,
+      void Function(int nextRetry, int savedBytes)? onInterrupted}) async {
+    for (var retries = 0; ; retries++) {
+      try {
+        await _downloadAttempt(client, stamp, name, archive, size, expected, onBytes);
+        return;
+      } on RetryableTagDownload {
+        // Re-read the durable prefix, not the last progress callback: a server
+        // ignoring Range may have been streaming into a separate restart file.
+        final saved = await archive.exists() ? await archive.length() : 0;
+        final exhausted = retries >= maxRetries;
+        onInterrupted?.call(exhausted ? 0 : retries + 1, saved);
+        if (exhausted) rethrow;
+        await Future<void>.delayed(Duration(seconds: 1 << retries));
+      }
+    }
+  }
+
+  static Future<void> _downloadAttempt(http.Client client, String stamp, String name,
+      File archive, int size, String expected, void Function(int)? onBytes) async {
     final url = Uri.https('github.com',
         '/2786886095/novelai-image-desktop/releases/download/tag-packs-$stamp/$name');
     var offset = await archive.exists() ? await archive.length() : 0;
@@ -181,19 +215,27 @@ class MultilingualTagPacks extends ChangeNotifier {
           file = File('${archive.path}.restart');
           offset = 0;
         }
-        final sink = file.openWrite(mode: offset == 0 ? FileMode.write : FileMode.append);
+        final output = await file.open(mode: offset == 0 ? FileMode.write : FileMode.append);
         var received = offset;
         try {
-          await sink.addStream(response.stream.timeout(const Duration(seconds: 60)).map((chunk) {
+          // Separate network errors from local write/flush failures. IOSink.addStream
+          // closes itself on stream errors, which used to mask the cause as File closed.
+          final body = response.stream.timeout(const Duration(seconds: 60)).handleError((Object e) {
+            if (e is SocketException || e is HttpException || e is TimeoutException || e is http.ClientException) {
+              throw RetryableTagDownload('Interrupted download: ${e.runtimeType}');
+            }
+            throw e;
+          });
+          await for (final chunk in body) {
+            if (received + chunk.length > size) throw const FormatException('Tag pack exceeds expected size');
+            await output.writeFrom(chunk);
             received += chunk.length;
-            if (received > size) throw const FormatException('Tag pack exceeds expected size');
             onBytes?.call(received);
-            return chunk;
-          }));
+          }
         } finally {
-          await sink.close();
+          await output.close();
         }
-        if (received != size) throw const HttpException('Incomplete tag pack download; retry to continue');
+        if (received != size) throw const RetryableTagDownload('Incomplete tag pack download');
       }
       if ((await sha256.bind(file.openRead()).first).toString() != expected) {
         await file.delete();

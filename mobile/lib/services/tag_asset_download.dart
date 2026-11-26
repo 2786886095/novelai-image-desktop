@@ -40,6 +40,11 @@ class TagAssetClient extends http.BaseClient {
   }
 }
 
+/// The request can be repeated without changing certificate or host checks.
+class RetryableTagDownload extends HttpException {
+  const RetryableTagDownload(super.message);
+}
+
 Future<http.StreamedResponse> openTagAsset(http.Client client, Uri canonical,
     {required int size, int offset = 0, void Function()? checkActive}) async {
   final paths = canonical.pathSegments;
@@ -54,6 +59,7 @@ Future<http.StreamedResponse> openTagAsset(http.Client client, Uri canonical,
   ];
   final seen = <Uri>{};
   final failures = <String>[];
+  var temporaryFailure = false;
   for (var i = 0; i < candidates.length; i++) {
     checkActive?.call();
     final uri = candidates[i];
@@ -104,12 +110,20 @@ Future<http.StreamedResponse> openTagAsset(http.Client client, Uri canonical,
           candidates.insert(i + 2, next.replace(host: _storage));
         }
       } else {
+        if (status == 408 || status == 429 || (status >= 500 && status < 600)) {
+          temporaryFailure = true;
+        }
         failures.add('${uri.host}: HTTP $status');
       }
     } on Exception catch (error) {
       checkActive?.call();
+      if (error is SocketException || error is TimeoutException || error is http.ClientException || error is HttpException) {
+        temporaryFailure = true;
+      }
       failures.add('${uri.host}: ${error.runtimeType}');
     }
   }
-  throw HttpException('Tag download failed (${failures.join(", ")})');
+  final message = 'Tag download failed (${failures.join(", ")})';
+  if (temporaryFailure) throw RetryableTagDownload(message);
+  throw HttpException(message);
 }
