@@ -64,7 +64,8 @@ import {useFeatureText} from "./feature-i18n";
 import {localizeStoreMessage} from './store-i18n';
 import {CompletionSoundSettings} from "./components/CompletionSoundSettings";
 import {appendStylePrompt} from "./tavern/style-draw";
-import StyleLibrary, { confirmStyleGroupDeletion, styleText } from "./StyleLibrary";
+import styleLabels from "../shared/style-library-ui.json";
+import StyleLibrary, { confirmStyleGroupDeletion } from "./StyleLibrary";
 import {sortStyles} from "./style-library";
 import {countStyleUse} from "./style-library-client";
 import { planUpscale } from "./upscale-plan";
@@ -2333,8 +2334,8 @@ export function PromptAndParams({
                           <Icon name="eye" /> {(preset.previewImages ?? []).length}/9
                         </small>
                       </button>
-                      <button type="button" className="style-preset-more" title={styleText(settings?.language).appendStyle}
-                        aria-label={styleText(settings?.language).appendStyle + ": " + preset.name}
+                      <button type="button" className="style-preset-more" title={styleLabels[normalizeAppLanguage(settings?.language)].appendStyle}
+                        aria-label={styleLabels[normalizeAppLanguage(settings?.language)].appendStyle + ": " + preset.name}
                         onClick={() => void applyStylePromptPreset(preset.id, true)}><Icon name="plus" /></button>
                       <button type="button" className="style-preset-more" title={t("prompt.styleMove")} aria-label={f("prompt.styleMoveTo", { name: preset.name })} onClick={() => setStylePresetActionId((current) => current === preset.id ? "" : preset.id)}><Icon name="moreHorizontal" /></button>
                       {stylePresetActionId === preset.id && (
