@@ -400,7 +400,7 @@ class AppState extends ChangeNotifier {
   // The displayed result and the input for the next request are independent.
   bool _showResultInPreview = false;
   WorkingImage? get previewInput =>
-      _showResultInPreview && current != null ? null : workbenchImage;
+      _showResultInPreview && current != null ? null : i2iInputImage;
   void previewHistoryResult(HistoryItem item) {
     if (_showResultInPreview && identical(current, item)) return;
     current = item;
@@ -408,7 +408,16 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
   WorkingImage? i2iOriginalImage;
+  WorkingImage? _latestI2IResult;
   String i2iSourceMode = 'original';
+
+  WorkingImage? get i2iInputImage {
+    if (workbenchImage == null) return null;
+    return i2iSourceMode == 'original'
+        ? i2iOriginalImage ?? workbenchImage
+        : _latestI2IResult ?? workbenchImage;
+  }
+
   String inpaintSourceMode = 'original';
   String inpaintEngine = 'novelai';
   InpaintRegion? inpaintRegion;
@@ -435,6 +444,7 @@ class AppState extends ChangeNotifier {
       if(decodeImageDimensions(bytes)!=(session.source.width,session.source.height)||decodeImageDimensions(session.maskBytes)!=(session.source.width,session.source.height))throw const FormatException('Original image or mask dimensions changed.');
       if(inpaintEditSession!=session||busy)return false;
       _showResultInPreview=false;
+      _latestI2IResult=null;
       workbenchImage=session.source;i2iOriginalImage=session.original;inpaintSourceMode=session.sourceMode;inpaintEngine=session.engine;
       inpaintSizeMode=session.sizeMode;inpaintCustomSize=session.customSize;inpaintRegion=session.region;
       setInpaintEditorData(session.strokes,session.inverted);inpaintEditRevision++;
@@ -871,6 +881,8 @@ class AppState extends ChangeNotifier {
 
   void setI2ISourceMode(String value) {
     i2iSourceMode = value == 'latest' ? 'latest' : 'original';
+    _showResultInPreview = false;
+    _scheduleGenerationQuote();
     _scheduleToolStatePersist();
     notifyListeners();
   }
@@ -884,13 +896,14 @@ class AppState extends ChangeNotifier {
     if (target != null && target.filePath != workbenchImage?.filePath) {
       _showResultInPreview = false;
       workbenchImage = target;
+      _latestI2IResult = null;
       inpaintRegion=null;setInpaintEditorData([],false);inpaintEditRevision++;
     }
     notifyListeners();
   }
 
   (int, int) get i2iOutputSize {
-    final image = workbenchImage;
+    final image = i2iInputImage;
     if (image == null || i2iSizeMode == 'custom') {
       return (params.width, params.height);
     }
@@ -1465,6 +1478,7 @@ class AppState extends ChangeNotifier {
         _showResultInPreview = false;
         workbenchImage = WorkingImage(filePath: image.path, width: image.size.$1, height: image.size.$2);
         i2iOriginalImage = workbenchImage;
+        _latestI2IResult = null;
         comparisonBefore = comparisonAfter = null;
         comparisonSurface = null;
         comparisonAutoOpenPending = false;
@@ -1516,6 +1530,7 @@ class AppState extends ChangeNotifier {
     workbenchImage =
         WorkingImage(filePath: filePath, width: dims.$1, height: dims.$2);
     i2iOriginalImage = workbenchImage;
+    _latestI2IResult = null;
     comparisonBefore=null;comparisonAfter=null;comparisonSurface=null;comparisonAutoOpenPending=false;
     if (applyMetadata && !imported.isEmpty) {
       applyImportedMetadata(
@@ -1551,6 +1566,7 @@ class AppState extends ChangeNotifier {
     _workbenchLoadRevision++;
     workbenchImage = null;
     i2iOriginalImage = null;
+    _latestI2IResult = null;
     workbenchImportedParams = null;
     workbenchCharacterCaptions = const [];
     status = _rt('status.workbenchCleared');
@@ -2867,11 +2883,10 @@ class AppState extends ChangeNotifier {
       }
       final referenceError = _referenceValidationError();
       if (referenceError != null) throw Exception(referenceError);
-      final source = i2iSourceMode == 'original'
-          ? (i2iOriginalImage ?? workbenchImage)
-          : workbenchImage;
+      final source = enhanceParams == null ? i2iInputImage : workbenchImage;
       if (source == null) throw Exception(_rt('error.workbenchRequired'));
-      final image = await storage.readImage(source.filePath);
+      final sourceRevision = _workbenchLoadRevision;
+      i2iOriginalImage ??= source;
       final total = batchCount.clamp(1, 999);
       final initialBatchIntervalSeconds =
           total > 1 ? normalizeBatchIntervalSeconds(batchIntervalSeconds) : 0;
@@ -2884,6 +2899,7 @@ class AppState extends ChangeNotifier {
           ..width = size.$1
           ..height = size.$2;
       }
+      final image = await storage.readImage(source.filePath);
       final before = await _authorizeQuotedRun(
         token,
         (fresh) => calculateImageGenerationAnlas(
@@ -3019,7 +3035,9 @@ class AppState extends ChangeNotifier {
               height: items.first.height,
             );
             await _commitCompletedHistory(items,
-                useAsWorkbench: i2iSourceMode == 'latest');
+                useAsWorkbench: i2iSourceMode == 'latest',
+                sourceRevision: sourceRevision,
+                latestI2IResult: enhanceParams == null ? comparisonAfter : null);
             completed += items.length;
           } on GenerationCancelledException {
             _cancelGenerationRequested = true;
@@ -4321,6 +4339,7 @@ class AppState extends ChangeNotifier {
     for(final path in paths){unawaited(imageFileProvider(File(path)).evict());}
     if(current!=null && ids.contains(current!.id))current=history.firstOrNull;
     if(paths.contains(workbenchImage?.filePath)){_workbenchLoadRevision++;workbenchImage=null;}
+    if(paths.contains(_latestI2IResult?.filePath))_latestI2IResult=null;
     if(paths.contains(i2iOriginalImage?.filePath))i2iOriginalImage=null;
     if(paths.contains(comparisonBefore?.filePath)||paths.contains(comparisonAfter?.filePath)) {
       comparisonBefore=null;comparisonAfter=null;comparisonSurface=null;comparisonAutoOpenPending=false;
@@ -4351,6 +4370,7 @@ class AppState extends ChangeNotifier {
     if (workbenchImage != null && changed.containsKey(workbenchImage!.filePath)) _workbenchLoadRevision++;
     workbenchImage = rebind(workbenchImage);
     i2iOriginalImage = rebind(i2iOriginalImage);
+    _latestI2IResult = rebind(_latestI2IResult);
     comparisonBefore = rebind(comparisonBefore);
     comparisonAfter = rebind(comparisonAfter);
   }
@@ -4555,6 +4575,7 @@ class AppState extends ChangeNotifier {
       current = items.first;
       _showResultInPreview = true;
       if (useAsWorkbench && workbenchImage != null) {
+        _latestI2IResult = null;
         workbenchImage = WorkingImage(
           filePath: items.first.filePath,
           width: items.first.width,
@@ -4578,10 +4599,14 @@ class AppState extends ChangeNotifier {
   Future<void> _commitCompletedHistory(
     List<HistoryItem> items, {
     bool useAsWorkbench = false,
+    int? sourceRevision,
+    WorkingImage? latestI2IResult,
   }) async {
     await _preloadCompletedItems(items);
     if (_compatibleDisposed) return;
-    _prependHistory(items, useAsWorkbench: useAsWorkbench);
+    final sameInput = sourceRevision == null || sourceRevision == _workbenchLoadRevision;
+    if (sameInput && latestI2IResult != null) _latestI2IResult = latestI2IResult;
+    _prependHistory(items, useAsWorkbench: sameInput && useAsWorkbench);
   }
 
   static (int, int) readImageDimensions(Uint8List b) {

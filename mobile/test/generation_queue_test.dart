@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novelai_mobile/models/nai_models.dart';
 import 'package:novelai_mobile/services/nai_api.dart';
@@ -28,6 +29,40 @@ void main() {
     expect(state.workbenchImage, isNull);
     expect(state.i2iOriginalImage, isNull);
   });
+  test('next redraw uses the selected image bytes and its adaptive size', () async {
+    final api = _SourceApi();
+    final state = AppState(api: api, storage: _SourceStorage(),
+        preloadCompletedImage: (_) async {})
+      ..account = const AccountSummary(hasToken: true, tierLevel: 1,
+          anlasBalance: 100, hasActiveSubscription: true)
+      ..params.positivePrompt = 'fixture';
+    const original = WorkingImage(filePath: 'original.png', width: 1024, height: 512);
+    state.workbenchImage = state.i2iOriginalImage = original;
+    final originalSize = state.i2iOutputSize;
+    state.setI2ISourceMode('latest');
+    state.setI2ISizeMode('custom');
+    state.params.width = state.params.height = 768;
+    await state.runTextOrImage();
+    state.setI2ISizeMode('adaptive');
+    state.setI2ISourceMode('original');
+    final selectedPath = state.previewInput?.filePath;
+    await state.runTextOrImage();
+    await state.runTextOrImage();
+    state.clearComparison();
+    state.setI2ISourceMode('latest');
+    await state.runTextOrImage();
+    // The result preview can be browsed independently of the next request.
+    state.previewHistoryResult(state.history.last);
+    state.setI2ISourceMode('original');
+    await state.runTextOrImage();
+    debugPrint('redraw input ids=${api.ids} second size=${api.sizes[1]} '
+        'original size=$originalSize selected preview=$selectedPath');
+    expect(api.ids, [0, 0, 0, 3, 0]);
+    expect(api.sizes[1], originalSize);
+    expect(selectedPath, original.filePath);
+    state.dispose();
+  });
+
   test('a job added during generation runs after the active image', () async {
     final api = _QueueApi();
     final storage = _MemoryStorage();
@@ -251,5 +286,26 @@ class _MemoryStorage extends Storage {
       groupId: groupId,
       params: params.toJson(),
     );
+  }
+}
+
+class _SourceApi extends _QueueApi {
+  final ids = <int>[];
+  final sizes = <(int, int)>[];
+
+  @override
+  Future<(List<Uint8List>, int)> img2img(String token, AppSettings settings,
+      GenerateParams params, GenerateExtras extras, Uint8List bytes, I2IParams i2i) async {
+    ids.add(bytes.single);
+    sizes.add((params.width, params.height));
+    return ([Uint8List.fromList([ids.length])], ids.length);
+  }
+}
+
+class _SourceStorage extends _MemoryStorage {
+  @override
+  Future<Uint8List> readImage(String path, {int maxBytes = 64 * 1024 * 1024}) async {
+    final value = path == 'original.png' ? 0 : int.parse(RegExp(r'memory-(\d+)').firstMatch(path)!.group(1)!);
+    return Uint8List.fromList([value]);
   }
 }

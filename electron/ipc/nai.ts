@@ -1939,20 +1939,20 @@ function readImageDimensions(buf: Buffer): { width: number; height: number } {
   return { width: 0, height: 0 };
 }
 
-export async function readWorkbenchImage(): Promise<{
+export async function readWorkbenchImage(sourcePath = workbenchImagePath): Promise<{
   base64: string;
   buffer: Buffer;
   image: WorkingImage;
 }> {
-  if (!workbenchImagePath) throw new Error("请先加载图片。");
-  const buffer = await processableImage(await fs.readFile(workbenchImagePath));
+  if (!sourcePath) throw new Error("请先加载图片。");
+  const buffer = await processableImage(await fs.readFile(sourcePath));
   const dims = readImageDimensions(buffer);
   return {
     base64: buffer.toString("base64"),
     buffer,
     image: {
-      filePath: workbenchImagePath,
-      fileUrl: toLocalMediaUrl(workbenchImagePath),
+      filePath: sourcePath,
+      fileUrl: toLocalMediaUrl(sourcePath),
       width: dims.width,
       height: dims.height,
     },
@@ -4888,13 +4888,14 @@ export async function generateI2I(
   params: GenerateParams,
   i2i: I2IParams,
   extras?: GenerateExtras,
+  sourcePath = workbenchImagePath,
 ): Promise<GenerateResult> {
   params = normalizeGenerateParams(params);
   const token = getToken();
   if (!token) return { ok: false, message: "请先配置 API Token。", items: [] };
   if (!params.positivePrompt.trim())
     return { ok: false, message: "请输入正面提示词。", items: [] };
-  if (!workbenchImagePath)
+  if (!sourcePath)
     return { ok: false, message: "请先加载参考图片。", items: [] };
   logInfo(
     `img2img: model=${params.model} size=${params.width}x${params.height} strength=${i2i?.strength}`,
@@ -4915,7 +4916,7 @@ export async function generateI2I(
     // Resize the source to the requested output dimensions — NovelAI's img2img
     // expects the input image to match width×height; sending an arbitrary size
     // risks a 400/500 or a misaligned composition.
-    const { buffer: workbenchBuffer } = await readWorkbenchImage();
+    const { buffer: workbenchBuffer } = await readWorkbenchImage(sourcePath);
     const base64Image = resizeImageBufferToPng(
       workbenchBuffer,
       params.width,

@@ -1222,8 +1222,8 @@ ipcMain.handle("artistDetective:downloadDirectory", () => detectiveDownloadDirec
     deleteArtistLabTemporary(filePath),
   );
   ipcMain.handle("artistLab:clearTemporary", () => clearArtistLabTemporary());
-  accountBoundHandle("nai:generateI2I", (_event, params, i2i: I2IParams, extras) =>
-    generateI2I(params, i2i, extras),
+  accountBoundHandle("nai:generateI2I", (_event, params, i2i: I2IParams, extras, sourcePath?: string) =>
+    generateI2I(params, i2i, extras, sourcePath),
   );
   accountBoundHandle("nai:batchRedrawPrepare", (_event, requests: BatchRedrawRequest[]) => prepareBatchImageService(requests));
   accountBoundHandle("nai:batchRedrawCancel", (_event, runId: string) => cancelBatchRedraw(runId));

@@ -2105,6 +2105,7 @@ export interface NaiDesktopApi {
     params: GenerateParams,
     i2i: I2IParams,
     extras: GenerateExtras,
+    sourcePath?: string,
   ) => Promise<GenerateResult>;
   redrawImage: (request: BatchRedrawRequest) => Promise<GenerateResult>;
   batchRedrawPrepare: (requests: BatchRedrawRequest[]) => Promise<ComicImageService>;

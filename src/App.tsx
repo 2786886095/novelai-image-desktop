@@ -104,7 +104,7 @@ const OnlineGalleryPage = lazy(loadOnlineGalleryPage);
 const AgentPage = lazy(loadAgentPage);
 const InpaintCanvas = lazy(loadInpaintCanvas);
 const MetadataInspector = lazy(loadMetadataInspector);
-import { useAppStore } from "./store";
+import { selectI2IInput, useAppStore } from "./store";
 import { fmtCount, wordAtCursor } from "./text-utils";
 import {TAG_BROWSE_PAGE_SIZE,TAG_PACK_NAMES,type TagPackLanguage} from "../shared/multilingual-tag-pack-contract";
 import {useTagPackRevision} from "./tag-pack-lookup";
@@ -1641,7 +1641,7 @@ export function PromptAndParams({
 }) {
   const params = useAppStore((state) => state.params);
   const setParam = useAppStore((state) => state.setParam);
-  const workbenchImage = useAppStore((state) => state.workbenchImage);
+  const workbenchImage = useAppStore((state) => imageToImage ? selectI2IInput(state) : state.workbenchImage);
   const i2iSizeMode = useAppStore((state) => state.i2iSizeMode);
   const setI2ISizeMode = useAppStore((state) => state.setI2ISizeMode);
   const promptTab = useAppStore((state) => state.promptTab);
@@ -2653,9 +2653,9 @@ function PromptNormalizeModal({
 }
 
 // ── Workbench image upload ────────────────────────────────────────────────────
-function WorkbenchImageUpload() {
+function WorkbenchImageUpload({ imageToImage = false }: { imageToImage?: boolean } = {}) {
   const language = useAppStore((state) => state.settings?.language);
-  const workbenchImage = useAppStore((state) => state.workbenchImage);
+  const workbenchImage = useAppStore((state) => imageToImage ? selectI2IInput(state) : state.workbenchImage);
   const loadWorkbenchImage = useAppStore((state) => state.loadWorkbenchImage);
   const loadWorkbenchFromPath = useAppStore((state) => state.loadWorkbenchFromPath);
   const clearWorkbenchImage = useAppStore((state) => state.clearWorkbenchImage);
@@ -2732,7 +2732,7 @@ function FeatureCostCard({
   const inpaintMask = useAppStore((state) => state.inpaintMask);
   const upscaleScale = useAppStore((state) => state.upscaleScale);
   const directorTool = useAppStore((state) => state.directorTool);
-  const workbenchImage = useAppStore((state) => state.workbenchImage);
+  const workbenchImage = useAppStore((state) => feature === "i2i" && !i2iOverride ? selectI2IInput(state) : state.workbenchImage);
   const vibeCount = useAppStore((state) => state.vibeImages.length);
   const preciseCount = useAppStore((state) => state.preciseReferences.length);
   const isGenerating = useAppStore((state) => state.isGenerating);
@@ -3556,7 +3556,7 @@ function I2IPanel({ openSettings }: { openSettings: () => void }) {
     <>
       <div className="panel-scroll">
         <AutomaticComparisonControl surface="generate:i2i" />
-        <WorkbenchImageUpload />
+        <WorkbenchImageUpload imageToImage />
         <div className="field">
           <span>{t("inpaint.nextSource")}</span>
           <div className="mode-buttons i2i-source-policy" role="group" aria-label={t("inpaint.nextSourceLabel")}>

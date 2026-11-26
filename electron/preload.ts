@@ -371,7 +371,8 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     params: GenerateParams,
     i2i: I2IParams,
     extras: GenerateExtras,
-  ) => ipcRenderer.invoke("nai:generateI2I", params, i2i, extras),
+    sourcePath?: string,
+  ) => ipcRenderer.invoke("nai:generateI2I", params, i2i, extras, sourcePath),
   batchRedrawPrepare: (requests: BatchRedrawRequest[]) => ipcRenderer.invoke("nai:batchRedrawPrepare",requests),
   batchRedrawCancel: (runId: string) => ipcRenderer.invoke("nai:batchRedrawCancel",runId),
   redrawImage: (request: BatchRedrawRequest) =>

@@ -130,3 +130,18 @@ it.each([{refs:0,samples:1},{refs:1,samples:1},{refs:2,samples:1},{refs:5,sample
  expect(payload.parameters.director_reference_images).toBeUndefined();
  expect(payload.parameters.reference_image_multiple ?? []).toHaveLength(0);
 });
+
+it('redraw sends pixels from the selected original or result', async () => {
+  const original = path.join(root, 'source.png');
+  const latest = path.join(root, 'latest.png');
+  fs.writeFileSync(latest, png(512, 512, 231));
+  expect((await loadImageFromPath(latest)).ok).toBe(true);
+  const pixels: number[] = [];
+  for (const source of [original, original, latest, original]) {
+    await generateI2I(params, {strength:.6, noise:0, extraNoiseSeed:17}, undefined, source);
+    const body = fixture.post.mock.calls.at(-1)![1];
+    pixels.push(PNG.sync.read(Buffer.from(body.parameters.image, 'base64')).data[0]);
+  }
+  console.log('Request pixels (original=150, result=231):', pixels.join(','));
+  expect(pixels).toEqual([150, 150, 231, 150]);
+});

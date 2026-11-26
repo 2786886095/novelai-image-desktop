@@ -183,6 +183,7 @@ interface AppState {
   inputPreviewAnchor: InputPreviewAnchor | null;
   /** First image explicitly loaded by the user for the current img2img session. */
   i2iOriginalImage: WorkingImage | null;
+  i2iLatestImage: WorkingImage | null;
   /** Choose whether the next redraw starts from the original or the latest result. */
   i2iSourceMode: "original" | "latest";
   /** Choose whether the next inpaint run starts from the original or latest result. */
@@ -484,6 +485,7 @@ function rebindHistoryImageReferences(state: AppState, rows: readonly HistoryIte
     currentImage:record(state.currentImage),
     inputPreviewAnchor:anchor && anchorResult!==anchor.result ? {...anchor,result:anchorResult} : anchor,
     workbenchImage:working(state.workbenchImage),i2iOriginalImage:working(state.i2iOriginalImage),
+    i2iLatestImage:working(state.i2iLatestImage),
     comparisonBeforeImage:working(state.comparisonBeforeImage),
   };
 }
@@ -953,6 +955,12 @@ function persistGenerationState(get: () => AppState) {
   void window.naiDesktop.setSetting("lastGenerationState", buildLastGenerationState(state));
 }
 
+export function selectI2IInput(state: AppState) {
+  if (!state.workbenchImage) return null;
+  return (state.i2iSourceMode === "original" ? state.i2iOriginalImage : state.i2iLatestImage)
+    ?? state.workbenchImage;
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   bootDone: false,
   bootError: null,
@@ -977,6 +985,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   workbenchImage: null,
   inputPreviewAnchor: null,
   i2iOriginalImage: null,
+  i2iLatestImage: null,
   i2iSourceMode: "original",
   inpaintSourceMode: "original",
   comparisonBeforeImage: null, comparisonAutoOpenRequest: null,
@@ -1504,6 +1513,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         workbenchImage: result.image,
         i2iOriginalImage: result.image,
+        i2iLatestImage: null,
         inputPreviewAnchor: {result: get().currentImage},
         comparisonBeforeImage: null, comparisonAutoOpenRequest: null,
         inpaintMask: null, inpaintRegion: null,
@@ -1551,6 +1561,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (options?.silent || get().isGenerating) {
         set({
           workbenchImage: result.image,
+          i2iLatestImage: get().i2iLatestImage?.filePath === filePath ? result.image : null,
           inpaintMask: null, inpaintRegion: null,
           maskRevision: get().maskRevision + 1,
         });
@@ -1563,6 +1574,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         workbenchImage: result.image,
         i2iOriginalImage: result.image,
+        i2iLatestImage: null,
         inputPreviewAnchor: {result: get().currentImage},
         comparisonBeforeImage: null, comparisonAutoOpenRequest: null,
         inpaintMask: null, inpaintRegion: null,
@@ -1598,6 +1610,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       workbenchImage: null,
   inputPreviewAnchor: null,
       i2iOriginalImage: null,
+      i2iLatestImage: null,
       comparisonBeforeImage: null, comparisonAutoOpenRequest: null,
       inpaintMask: null, inpaintRegion: null,
       maskRevision: get().maskRevision + 1,
@@ -1679,6 +1692,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const restored = result.image;
       pendingInpaintEditRestore = { revision, previous, sessionId: session.id };
       set({ workbenchImage: restored,
+        i2iLatestImage: null,
         i2iOriginalImage: session.originalImage ? (session.originalImage.filePath === restored.filePath ? restored : { ...session.originalImage }) : null,
         inpaintSourceMode: session.sourceMode, inpaintMask: session.maskBase64,
         inpaintRegion: session.region ? { ...session.region } : null,
@@ -2704,7 +2718,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   async generateI2I(enhanceMagnitude) {
     const state = get();
     if (!requireToken(set, state.account.hasToken, state.settings)) return;
-    if (!state.workbenchImage) {
+    const sourceImage = enhanceMagnitude === undefined ? selectI2IInput(state) : state.workbenchImage;
+    if (!sourceImage) {
       set({ toast: storeText(state.settings, "toast.needReference"), statusText: storeText(state.settings, "status.needImage") });
       return;
     }
@@ -2716,9 +2731,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const initialBatchIntervalSeconds = initialTotal > 1
       ? normalizeBatchIntervalSeconds(state.batchIntervalSeconds)
       : 0;
-    const sourceImage = state.i2iSourceMode === "original"
-      ? state.i2iOriginalImage ?? state.workbenchImage
-      : state.workbenchImage;
+    const originalImage = state.i2iOriginalImage ?? sourceImage;
     const initialExtras = buildExtras(state);
     const initialI2IParams = enhanceMagnitude === undefined ? { ...state.i2iParams }
       : { ...state.i2iParams, ...naiEnhancePreset(enhanceMagnitude), enhanceMagnitude };
@@ -2736,6 +2749,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       isGenerating: true,
       activeGenerationRunId: runId,
+      i2iOriginalImage: originalImage,
       generationPhase: "preparing",
       generationPreview: null,
       currentAnlasSpent: null,
@@ -2824,6 +2838,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           runParams,
           initialI2IParams,
           initialExtras,
+          sourceImage.filePath,
         );
       } catch (error) {
         result = {
@@ -2838,10 +2853,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       showPartialImages(set, get, result, { compareBefore: sourceImage, comparisonSurface: state.activeCanvasSurface });
       if (result.ok && result.items.length > 0) {
         completed += 1;
+        const sameInput = get().i2iOriginalImage?.filePath === originalImage.filePath;
+        if (sameInput) {
+          set({ i2iLatestImage: result.items[0] });
+        }
         await refreshAfterImageInBackground(set, get, result.items[0], {
           compareBefore: sourceImage,
           comparisonSurface: state.activeCanvasSurface,
-          loadWorkbench: state.i2iSourceMode === "latest",
+          loadWorkbench: state.i2iSourceMode === "latest" && get().i2iSourceMode === "latest" && sameInput,
         });
       } else {
         failed += 1;

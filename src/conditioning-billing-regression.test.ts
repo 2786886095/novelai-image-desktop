@@ -86,3 +86,22 @@ it('keeps a queued operation conditioning snapshot identical to its quote',async
  await useAppStore.getState().enqueueGeneration();const quote=desktop.quoteAnlas.mock.calls[0][0],job=useAppStore.getState().generationQueue[0];
  expect(job.params).toBe(quote.params);expect(job.extras).toBe(quote.extras);expect(job.extras.charCaptions).toHaveLength(1);expect(job.extras.preciseReferences).toHaveLength(1);
 });
+
+it('keeps the selected redraw source across consecutive submissions and mode changes', async () => {
+  const desktop = setup();
+  let sequence = 0;
+  desktop.generateI2I.mockImplementation(async (params: typeof DEFAULT_PARAMS) => {
+    const id = String(++sequence);
+    return {ok:true, message:'fixture', items:[{...source, id, filePath:id+'.png',
+      params, model:params.model, date:'2000-01-01', createdAt:'2000-01-01T00:00:00Z', actualSeed:1}]};
+  });
+  desktop.loadImageFromPath.mockImplementation(async (filePath:string) =>
+    ({ok:true, image:{...source, filePath}}));
+  for (const mode of ['latest','original','original','latest','original'] as const) {
+    useAppStore.getState().setI2ISourceMode(mode);
+    await useAppStore.getState().generateI2I();
+  }
+  expect(desktop.generateI2I.mock.calls.map((call:unknown[]) => call[3])).toEqual([
+    source.filePath, source.filePath, source.filePath, '3.png', source.filePath,
+  ]);
+});

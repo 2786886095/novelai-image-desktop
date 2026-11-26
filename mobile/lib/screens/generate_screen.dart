@@ -3062,7 +3062,7 @@ class _I2IControls extends StatelessWidget {
     final s = context.watch<AppState>();
     final text = generateScreenTextFor(s.settings.language);
     String t(String key) => mobileUiTextFor(s.settings.language, key);
-    final source = s.workbenchImage;
+    final source = s.i2iInputImage;
     final output = s.i2iOutputSize;
     return Card(
       child: Padding(
@@ -3093,9 +3093,12 @@ class _I2IControls extends StatelessWidget {
             ),
             if (source != null) ...[
               const SizedBox(height: 6),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
+              Row(children: [
+                SizedBox.square(dimension: 48, child: imageFile(File(source.filePath),
+                    fit: BoxFit.contain, cacheWidth: 120,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined))),
+                const SizedBox(width: 8),
+                Expanded(child: Text(
                   s.i2iSizeMode == 'adaptive'
                       ? mobileUiFormatFor(
                           s.settings.language,
@@ -3111,8 +3114,8 @@ class _I2IControls extends StatelessWidget {
                           {'output': '${output.$1}×${output.$2}'},
                         ),
                   style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
+                )),
+              ]),
             ],
             const SizedBox(height: 10),
             Align(
