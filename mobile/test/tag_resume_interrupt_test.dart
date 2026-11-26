@@ -25,12 +25,8 @@ void main() {
           contentLength: 2, headers: {'content-range': 'bytes 2-3/4'});
     });
     final digest = sha256.convert(utf8.encode('abcd')).toString();
-    try {
-      await MultilingualTagPacks.resumeTagPack(
-          client, 'stamp', 'fixture', file, 4, digest);
-    } finally {
-      print('OBSERVED ranges=$ranges saved=${await file.readAsString()}');
-    }
+    await MultilingualTagPacks.resumeTagPack(
+        client, 'stamp', 'fixture', file, 4, digest);
     expect(ranges, [null, 'bytes=2-']);
     expect(await file.readAsString(), 'abcd');
   });
@@ -72,8 +68,9 @@ void main() {
     final ranges = <String?>[], saved = <int>[];
     final client = MockClient.streaming((req, _) async {
       ranges.add(req.headers['range']);
-      if (ranges.length == 1)
+      if (ranges.length == 1) {
         return http.StreamedResponse(Stream.value([97]), 200, contentLength: 4);
+      }
       return http.StreamedResponse(Stream.value([99, 100]), 206,
           contentLength: 2, headers: {'content-range': 'bytes 2-3/4'});
     });
