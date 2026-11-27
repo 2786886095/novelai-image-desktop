@@ -13,7 +13,7 @@ function fixture(redesign:boolean){
  const state={history:['A','B'].map(id=>({id,fileUrl:id,filePath:id})),isGenerating:true,historyDates:[],historyGroups:[],settings:{},selectImage:vi.fn()};
  let cursor=0;const slots:any[]=[];
  const deps={React,useAppStore:(select:any)=>select(state),useState:(initial:any)=>{const i=cursor++;if(i>=slots.length)slots[i]=initial;return [slots[i],(v:any)=>{slots[i]=typeof v==='function'?v(slots[i]):v;}];},
-  useCallback:(v:any)=>v,useRef:()=>({current:null}),useVirtualizer:()=>({}),desktopUiText:(_:unknown,k:string)=>k,desktopUiFormat:()=>'',dockText:()=>({}),favoritesText:()=>({}),clsx:()=>'',ImagePreviewDialog:'dialog-fixture',Icon:'icon-fixture',SelectMenu:'select-fixture',ConvertedHistoryRestoreButton:'restore-fixture',HistoryItemMenu:'menu-fixture'};
+  useCallback:(v:any)=>v,useRef:()=>({current:null}),useVirtualizer:()=>({getTotalSize:()=>0,getVirtualItems:()=>[]}),desktopUiText:(_:unknown,k:string)=>k,desktopUiFormat:()=>'',dockText:()=>({}),favoritesText:()=>({}),clsx:()=>'',ImagePreviewDialog:'dialog-fixture',Icon:'icon-fixture',SelectMenu:'select-fixture',ConvertedHistoryRestoreButton:'restore-fixture',HistoryItemMenu:'menu-fixture'};
  const renderPanel=new Function(...Object.keys(deps),code+';return HistoryPanel;')(...Object.values(deps));
  function render(){cursor=0;const nodes:any[]=[];function visit(x:any){if(Array.isArray(x)){x.forEach(visit);return;}if(x?.props){nodes.push(x);visit(x.props.children);}}visit(renderPanel({redesign}));
  return {thumbs:nodes.filter(n=>n.type==='button'&&n.props['aria-label']==='history.thumbAlt'),dialog:nodes.find(n=>n.type==='dialog-fixture')?.props};}
@@ -25,6 +25,16 @@ describe.each([false,true])('history rail while generating (redesign=%s)',redesi
    let d=render().dialog;expect(d).toBeDefined();expect(d.images[d.index].src).toBe('B');
    d.onIndex(0);state.history=[{id:'new',fileUrl:'new',filePath:'new'},...state.history];state.isGenerating=false;
    d=render().dialog;expect(d.images[d.index].src).toBe('A');expect(d.images.length).toBe(2);
+   d.onClose();expect(render().dialog).toBeUndefined();expect(state.selectImage).not.toHaveBeenCalled();
+ });
+ it('keeps the clicked old image when the 115th result arrives',()=>{
+   const {state,render}=fixture(redesign);
+   state.history=Array.from({length:114},(_,i)=>({id:String(i+1),fileUrl:'old-'+(i+1),filePath:'image-'+(i+1)+'.png'}));
+   const thumbs=render().thumbs;expect(thumbs).toHaveLength(114);thumbs[86].props.onClick();
+   let d=render().dialog;expect(d.images[d.index].src).toBe('old-87');
+   state.history=[{id:'115',fileUrl:'new',filePath:'new.png'},...state.history];state.isGenerating=false;
+   d=render().dialog;expect(d.images[d.index].src).toBe('old-87');expect(d.images).toHaveLength(114);
+   d.onIndex(87);d=render().dialog;expect(d.images[d.index].src).toBe('old-88');
    d.onClose();expect(render().dialog).toBeUndefined();expect(state.selectImage).not.toHaveBeenCalled();
  });
  it('retains the original thumbnail selection when idle',()=>{
