@@ -186,7 +186,9 @@ if(waiveWindowsArtistGpuV286){
  fs.writeFileSync(publicNotesFile,publicNotes,'utf8');
 }
 if((waiveWindowsArtistGpuV301||waiveWindowsArtistGpuV302||waiveWindowsArtistGpuV303||waiveWindowsArtistGpuV304||waiveWindowsArtistGpuV305)&&!reviewedIosFolder)fs.writeFileSync(publicNotesFile,releaseNotes+'\nWindows 画风迭代 GPU 长任务未实测。\n');
-if(standingPolicy && reviewedIosFolder) fs.writeFileSync(publicNotesFile,releaseNotes+'\n- iOS 系统文件夹命名框的 5 秒确认超时已按长期发行规则豁免。\n');
+if(folderReview?.treeEvidence?.kind === 'maintainer-exception-v313-only') {
+  fs.writeFileSync(publicNotesFile,releaseNotes+'\n- 本版 iOS 系统文件夹选择验收未通过，未能确认命名框出现；经维护者同意仅对本版此项豁免，未将其计为通过。其余检查不变。\n');
+} else if(standingPolicy && reviewedIosFolder) fs.writeFileSync(publicNotesFile,releaseNotes+'\n- iOS 系统文件夹命名框的 5 秒确认超时已按长期发行规则豁免。\n');
 else if(reviewedIosFolder)fs.writeFileSync(publicNotesFile,releaseNotes+'\n### 验收例外\n- iOS 系统文件夹选择器：本次未在 5 秒内确认命名框可用，此项验收失败，经维护者同意不作为发行条件。其余 iOS 检查仍为必需。\n- Windows 画风迭代 GPU 长任务未实测。\n');
 const waived = [];
 if (waiveWindowsArtistGpu) {

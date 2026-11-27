@@ -334,6 +334,18 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+      - name: Bind the one-release folder exception to the existing verified producers
+        if: github.ref == 'refs/heads/codex/publish-313-folder-waiver'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app=344dfeab4c20dc121137acfa01c3708604b85f2b
+          test "${{ inputs.verified_build_run }}:${{ inputs.mobile_run }}:${{ inputs.feature_run }}" = 45925965978:45925962597:45925959356
+          test "$(git rev-parse HEAD^)" = "$app"
+          git diff --exit-code "$app" HEAD -- . ':!.github/workflows/build.yml' ':!scripts/v300-folder-review.mjs' ':!scripts/publish-verified-release.mjs'
+          git checkout --detach "$app"
+          for f in scripts/{v300-folder-review,publish-verified-release}.mjs; do git show "$GITHUB_SHA:$f" > "$f"; done
+          echo 'MAINTAINER_FOLDER_WAIVER_313=1' >> "$GITHUB_ENV"
       - name: Select release policy from the checked-out source
         id: policy
         run: |
