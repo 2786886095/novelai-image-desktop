@@ -3,7 +3,7 @@ import fs from 'node:fs';
 const read=(p:string)=>fs.readFileSync(p,'utf8');
 it('history thumbnails no longer use a wrapping click-intercepting toolbar',()=>{
  const app=read('src/App.tsx');expect(app).toContain('<HistoryItemMenu src={item.fileUrl}');expect(app).not.toContain('<div className="history-item-controls"');
- expect(app).toContain('aria-label={t("history.thumbAlt")} onClick={() => selectImage(item)}');
+ expect(app).toContain('<button type="button" aria-label={t("history.thumbAlt")} onClick={() => openHistoryItem(item)}>');
 });
 it('the more menu closes without preventing an outside image click, and preserves delete confirmation',()=>{
  const menu=read('src/components/HistoryItemMenu.tsx');expect(menu).toContain("document.addEventListener('pointerdown',outside,true)");
