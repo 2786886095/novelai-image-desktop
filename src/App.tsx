@@ -78,7 +78,8 @@ import {AutomaticComparisonControl} from './components/AutomaticComparisonContro
 import {normalizeAutomaticComparison} from './automatic-comparison';
 import {normalizeCharacterCaptions} from "./character-presets";
 import {AnimatedCollapse, CharacterPositionMarker, CharacterEnabledToggle, characterEnabledLabels, characterEditLabels, useCharacterReorder} from './components/CharacterEditing';
-import {PreviewImageViewer} from './components/PreviewImageViewer';
+import {PreviewImageViewer, type PreviewImage} from './components/PreviewImageViewer';
+import {ImagePreviewDialog} from './components/ImagePreviewDialog';
 import {HistoryImagePicker, historyPickerText} from './components/HistoryImagePicker';
 import { characterPresetText } from './character-presets';
 import { credentialIssueMessage } from "./credential-status";
@@ -5790,6 +5791,20 @@ function HistoryPanel({ redesign }: { redesign: boolean }) {
     { kind: "item" | "group"; id: string; initial: string; title: string; label: string } | null
   >(null);
   const [filePathTarget,setFilePathTarget]=useState<string>();
+  const [historyPreview, setHistoryPreview] = useState<{ images: PreviewImage[]; index: number } | null>(null);
+  function openHistoryItem(item: HistoryItem) {
+    if (!isGenerating) {
+      selectImage(item);
+      return;
+    }
+    // A finished task can prepend results while the viewer is open. Keep the
+    // visible list independent of both that refresh and the workbench inputs.
+    const index = history.findIndex(entry => entry.id === item.id);
+    if (index >= 0) setHistoryPreview({
+      images: history.map(entry => ({ src: entry.fileUrl, alt: entry.filePath.split(/[\\/]/).pop() || t("history.thumbAlt") })),
+      index,
+    });
+  }
   const historyScrollRef = useRef<HTMLDivElement>(null);
   const virtualizeHistory = history.length >= 80 && !isGenerating;
   const historyRowVirtualizer = useVirtualizer({
@@ -5853,7 +5868,7 @@ function HistoryPanel({ redesign }: { redesign: boolean }) {
 
   const renderHistoryItem = (item: HistoryItem) => (
     <div className="history-item" key={item.id}>
-      <button type="button" aria-label={t("history.thumbAlt")} onClick={() => selectImage(item)}>
+      <button type="button" aria-label={t("history.thumbAlt")} onClick={() => openHistoryItem(item)}>
         <div className="history-thumb-frame">
           <img
             src={item.fileUrl}
@@ -5993,6 +6008,11 @@ function HistoryPanel({ redesign }: { redesign: boolean }) {
           </div>
         ) : history.map(renderHistoryItem)}
       </div>
+      {historyPreview && <ImagePreviewDialog
+        images={historyPreview.images} index={historyPreview.index}
+        onIndex={index => setHistoryPreview(current => current && ({ ...current, index }))}
+        onClose={() => setHistoryPreview(null)}
+      />}
       {filePathTarget!==undefined&&<FilePathDialog path={filePathTarget} title={t("history.viewFilePath")} copyLabel={t("aiLog.copy")} copiedLabel={t("convert.copied")} closeLabel={t("common.close")} unavailable={t("history.pathUnavailable")} onClose={()=>setFilePathTarget(undefined)}/>}
       {renameTarget && (
         <InputModal
