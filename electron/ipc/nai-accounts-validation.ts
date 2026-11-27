@@ -1,4 +1,5 @@
 import axios from 'axios';
+import {normalizeNovelAiEndpoint} from '../../src/nai-endpoint';
 import {parseNaiAccountSummary} from './nai-account-summary';
 import {normalizeNaiAccountInput,validateAccountProfile,novelAiRelayModelIds,novelAiRelayModelsUrl,relayModelIds,type NaiAccountRoute,type NaiAccountInput,type NaiAccountValidationResult} from '../../src/nai-accounts';
 import {proxyConfigForUrl} from './proxy';
@@ -30,6 +31,12 @@ export async function validateNaiAccountReadOnly(input:NaiAccountInput,preserveL
  const protocol=relay?account.relayProtocol:undefined;
  const modelsOnly=protocol==='models'||protocol==='openai-images';
  const reads:{url:string;route:NaiAccountRoute}[]=[];
+ if(relay&&!modelsOnly){
+  // Match generation's native base after validating the original URL. Never
+  // rewrite OpenAI-compatible model discovery or an explicit /v1 route.
+  account={...account,apiBaseUrl:normalizeNovelAiEndpoint(account.apiBaseUrl,''),
+   imageBaseUrl:normalizeNovelAiEndpoint(account.imageBaseUrl,'')};
+ }
  if(!modelsOnly){
   reads.push({url:account.imageBaseUrl.replace(/\/+$/,'')+'/user/data',route:'/user/data'});
   if(relay)reads.push({url:account.apiBaseUrl.replace(/\/+$/,'')+'/user/subscription',route:'/user/subscription'});

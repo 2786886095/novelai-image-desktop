@@ -1,5 +1,7 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 
+Desktop relay generation now preserves API path prefixes and recognizes image data even with a mislabeled stream. Account verification checks read access only; ambiguous gateway errors do not trigger another submission.
+
 Already using an older four-language dictionary? Select its language under Offline Tag dictionary in Settings and choose Update dictionary. No data reset is needed.
 
 Desktop tag downloads honor system-trusted certificates. Mobile dictionaries resume interrupted transfers automatically and show saved progress. Android artist draws no longer open to a gray screen when restoring empty favorites.

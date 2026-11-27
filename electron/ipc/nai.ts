@@ -183,7 +183,7 @@ function tokenSafeBaseUrl(rawUrl: string, fallback: string): string {
     if(selected.relayProtocol==='openai-images')throw Error('当前中转站使用 OpenAI 兼容生图，仅支持文生图；未请求 NovelAI 原生接口。');
     const expected=fallback==='https://api.novelai.net'?selected.apiBaseUrl:selected.imageBaseUrl;
     if(normalizeBaseUrl(rawUrl, '')!==normalizeBaseUrl(expected, '')) throw Error('账户绑定接口不匹配；未回退到其他主机。');
-    return expected.replace(/\/+$/,'');
+    return normalizeBaseUrl(expected, '');
   }
   const resolved = normalizeBaseUrl(rawUrl, fallback);
   if (isOfficialNaiHost(resolved)) {
@@ -2604,11 +2604,15 @@ export async function consumeGenerateImageStream(
   const msgpackDecoder = new NaiStreamFrameDecoder();
   const sseDecoder = new NaiSseFrameDecoder();
   const finals = new Map<number, Buffer>();
-  let mode: "unknown" | "msgpack" | "sse" | "zip" = contentType.toLowerCase().includes("text/event-stream")
-    ? "sse"
-    : "unknown";
+  let mode: "unknown" | "msgpack" | "sse" | "zip" | "image" = "unknown";
   let prefix = Buffer.alloc(0);
-  const zipChunks: Buffer[] = [];
+  const binaryChunks: Buffer[] = [];
+  let binaryBytes = 0;
+  const appendBinary = (chunk: Buffer) => {
+    binaryBytes += chunk.length;
+    if (binaryBytes > (mode === "image" ? MAX_IMAGE_BYTES : MAX_NAI_GENERATION_RESPONSE_BYTES)) throw invalidFinal();
+    binaryChunks.push(chunk);
+  };
   let previewStarted = false;
   let lastPreviewAt = 0;
   let finalBytes = 0;
@@ -2682,34 +2686,38 @@ export async function consumeGenerateImageStream(
       if (mode === "unknown") {
         prefix = prefix.length ? Buffer.concat([prefix, chunk]) : chunk;
         if (prefix.length < 4) continue;
-        const textualPrefix = prefix.subarray(0, Math.min(prefix.length, 32)).toString("utf8").replace(/^\uFEFF/, "").trimStart();
+        // A relay may return the finished image even on its streaming route.
+        // Wait for the full PNG/WebP signature if a network chunk split it.
+        if ((prefix.readUInt32BE(0) === 0x89504e47 && prefix.length < 8) ||
+            (prefix.readUInt32BE(0) === 0x52494646 && prefix.length < 12)) continue;
         const framedLength = prefix.readUInt32BE(0);
-        mode = prefix[0] === 0x50 && prefix[1] === 0x4b
+        mode = nativeImageBytes(prefix) ? "image" : prefix[0] === 0x50 && prefix[1] === 0x4b
           ? "zip"
-          : /^(?:event|data|id|retry)\s*:|^:/.test(textualPrefix)
-            ? "sse"
-            : framedLength > 0 && framedLength <= 128 * 1024 * 1024
-              ? "msgpack"
-              : "sse";
-        if (mode === "zip") zipChunks.push(prefix);
+          : framedLength > 0 && framedLength <= 128 * 1024 * 1024
+            ? "msgpack"
+            : "sse";
+        if (mode === "zip" || mode === "image") appendBinary(prefix);
         else if (mode === "sse") await consumeFrames(sseDecoder.push(prefix));
         else await consumeFrames(msgpackDecoder.push(prefix));
         prefix = Buffer.alloc(0);
         continue;
       }
 
-      if (mode === "zip") {
-        zipChunks.push(chunk);
+      if (mode === "zip" || mode === "image") {
+        appendBinary(chunk);
         continue;
       }
       if (mode === "sse") await consumeFrames(sseDecoder.push(chunk));
       else await consumeFrames(msgpackDecoder.push(chunk));
     }
 
-    if (mode === "zip") return extractImages(Buffer.concat(zipChunks), signal);
+    if (mode === "zip" || mode === "image") return extractImages(Buffer.concat(binaryChunks, binaryBytes), signal);
     if (mode === "sse") await consumeFrames(sseDecoder.finish());
     if (finals.size === 0) {
-      throw new Error("流式生成结束，但没有收到最终图片。为避免重复扣费，未自动重发请求。");
+      const type = contentType.split(";", 1)[0].trim().toLowerCase();
+      const hint = type === "text/html" ? "接口返回了网页，请核对生图 API 地址。" :
+        type === "application/json" ? "接口返回了 JSON，请核对中转接口类型。" : "";
+      throw new Error("流式生成结束，但没有收到最终图片。" + hint + "为避免重复扣费，未自动重发请求。");
     }
     return complete();
   } catch (error: any) {
@@ -2727,9 +2735,9 @@ export async function consumeGenerateImageStream(
           throw frameError;
         }
       }
-      if (mode === "zip" && zipChunks.length > 0) {
+      if (mode === "zip" && binaryChunks.length > 0) {
         try {
-          const images = await extractImages(Buffer.concat(zipChunks), signal);
+          const images = await extractImages(Buffer.concat(binaryChunks), signal);
           if (images.length > 0) {
             logInfo(`stream transport closed after complete ZIP; recovered ${images.length} image(s)`);
             return images;
@@ -2798,8 +2806,7 @@ async function postGenerateImageStream(
       const body = await readStreamErrorText(error);
       if (
         [404, 405, 415, 501].includes(status) ||
-        isStreamingNotAllowedMessage(body) ||
-        isStreamingNotAllowedMessage(error?.message)
+        ([400, 403, 422].includes(status) && isStreamingNotAllowedMessage(body))
       ) {
         logInfo(`stream preview unavailable; using ZIP response (HTTP ${status || "n/a"})`);
         return null;
@@ -2820,7 +2827,7 @@ async function postGenerateImageStream(
       String(response.headers?.["content-type"] ?? ""),
       signal,
     ).catch((error: any) => {
-      if (!error?.streamPreviewStarted && isStreamingNotAllowedMessage(error?.message)) return null;
+      if (error?.naiStreamFrameError && !error.streamPreviewStarted && isStreamingNotAllowedMessage(error.message)) return null;
       throw error;
     });
   };
@@ -5518,7 +5525,9 @@ function handleGenerateError(error: any, prefix: string): GenerateResult {
   const status = error?.response?.status;
   const selectedRelay=currentNaiAccount()?.method==='relay';
   const relayRoute=selectedRelay?['/ai/generate-image-stream','/ai/generate-image','/ai/upscale','/ai/augment-image','/ai/encode-vibe'].find(p=>String(error?.config?.url??'').endsWith(p)):undefined;
-  const detail = relayRoute ? (status?'服务端拒绝请求':'网络请求失败或超时') : responseErrorText(error) || error?.message || "未知错误";
+  const detail = relayRoute === '/ai/generate-image' && status === 404
+    ? '未找到生图接口。请核对中转站的生图地址、路径前缀和接口类型；账户验证不检查生图权限。'
+    : relayRoute ? (status?'服务端拒绝请求':'网络请求失败或超时') : responseErrorText(error) || error?.message || "未知错误";
   logError(`${prefix}${status ? `（HTTP ${status}）` : ""}`, detail);
   const failureKind =
     status === 401 || status === 403

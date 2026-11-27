@@ -110,3 +110,25 @@ it('real HTTP ZIP and disk writes retain the first image after a later filesyste
  try{const result=await generateImage(params);expect(result.ok).toBe(false);await assertSaved(result,1);expect(posts).toBe(1);expect(state.history).toHaveBeenCalledExactlyOnceWith(result.items);}
  finally{server.closeAllConnections();await new Promise<void>((resolve,reject)=>server.close(e=>e?reject(e):resolve()));}
 });
+
+it.each(['raw','zip fallback','ambiguous gateway error'])('local relay end-to-end: %s',async scenario=>{
+ const client=(await vi.importActual<typeof import('axios')>('axios')).default;
+ const routes:string[]=[];const prefix='/customer/a';
+ const server=http.createServer((req,res)=>{
+   routes.push(req.method+' '+req.url);req.resume();
+   if(scenario==='ambiguous gateway error'){res.writeHead(502);res.end('streaming is not allowed');return;}
+   if(scenario==='zip fallback' && req.url?.endsWith('-stream')){res.writeHead(404);res.end();return;}
+   res.writeHead(200,{'Content-Type':scenario==='raw'?'application/octet-stream':'application/zip'});
+   res.end(scenario==='raw'?images[0]:zip);
+ });
+ await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+ try{
+   const addr=server.address();if(!addr||typeof addr==='string')throw Error('missing fixture port');
+   state.settings.imageBaseUrl='http://127.0.0.1:'+addr.port+prefix+'/ai/generate-image';
+   state.settings.streamPreviewEnabled=true;state.post.mockImplementation((...args:Parameters<typeof client.post>)=>client.post(...args));
+   const result=await generateImage(params,undefined,{onPreview:()=>{}});
+   expect(routes).toEqual(['POST '+prefix+'/ai/generate-image-stream',...(scenario==='zip fallback'?['POST '+prefix+'/ai/generate-image']:[])]);
+   if(scenario==='ambiguous gateway error'){expect(result.ok).toBe(false);expect(state.history).not.toHaveBeenCalled();}
+   else{expect(result.ok,result.message).toBe(true);await assertSaved(result,scenario==='raw'?1:3);expect(state.history).toHaveBeenCalledOnce();}
+ }finally{server.closeAllConnections();await new Promise<void>((resolve,reject)=>server.close(e=>e?reject(e):resolve()));}
+});
