@@ -1,5 +1,7 @@
 <!-- release-summary: current-version-only; downloads: Latest -->
 
+While an image is generating on desktop, click an earlier image in History to zoom and browse. New results do not interrupt the preview; close it to return to the canvas.
+
 Desktop relay generation now preserves API path prefixes and recognizes image data even with a mislabeled stream. Account verification checks read access only; ambiguous gateway errors do not trigger another submission.
 
 Already using an older four-language dictionary? Select its language under Offline Tag dictionary in Settings and choose Update dictionary. No data reset is needed.
